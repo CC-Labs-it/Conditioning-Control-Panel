@@ -87,6 +87,15 @@ namespace ConditioningControlPanel.Services.Bark
         private DateTime _safetyHoldUntilUtc = DateTime.MinValue;
         private DateTime _lastUserMessageUtc = DateTime.MinValue;
 
+        // WPF BarkState.cs:30-45: cumulative blinks and the current face-loss interval.
+        private long _blinkCount;
+        private DateTime? _faceLostSinceUtc;
+        public long BlinkCount => System.Threading.Interlocked.Read(ref _blinkCount);
+        public void RegisterBlink() => System.Threading.Interlocked.Increment(ref _blinkCount);
+        public void FaceLost() { lock (_gate) _faceLostSinceUtc ??= Now; }
+        public void FaceFound() { lock (_gate) _faceLostSinceUtc = null; }
+        public double FaceLostSeconds { get { lock (_gate) return _faceLostSinceUtc is { } since ? (Now - since).TotalSeconds : 0; } }
+
         // WPF BarkState's rolling mod-switch and avatar-click windows, the counters a source on this head feeds.
         private readonly List<DateTime> _modSwitches = new(), _avatarClicks = new();
         public void RegisterModSwitch() => Register(_modSwitches, 64);
@@ -321,6 +330,8 @@ namespace ConditioningControlPanel.Services.Bark
                 case "achievements_all_unlocked":
                 case "all_skills_unlocked":
                     try { return LiveField?.Invoke(field.ToLowerInvariant()) ?? false; } catch { return false; }
+                case "blink_count": return (double)BlinkCount;
+                case "face_lost_sec": return FaceLostSeconds;
                 case "session_running": return CoreSession.IsSessionRunning;
                 case "mod_switches_60s": return ModSwitchesWithin(RapidModSwitchWindow);
                 case "clicks_60s": return AvatarClicksWithin(RapidClickWindow);
@@ -332,8 +343,8 @@ namespace ConditioningControlPanel.Services.Bark
                 case "phase_name":
                 case "phase_is_deepener":
                     try { return LiveField?.Invoke(field.ToLowerInvariant()); } catch { return null; }
-                // ponytail: blink_count, face_lost_sec, refocus, setup_idle_sec, days_away and instant_relaunch
-                // are read only by triggers with no source here (webcam, SessionSetupReady, SessionRefocused).
+                // ponytail: refocus, setup_idle_sec, days_away and instant_relaunch are read only by
+                // triggers with no source here (SessionSetupReady, SessionRefocused); they land with those sources.
                 case "master_volume": return (double)s.MasterVolume;
                 case "mute": return s.MasterVolume == 0;
                 case "player_level": return (double)s.PlayerLevel;

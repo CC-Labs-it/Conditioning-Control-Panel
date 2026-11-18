@@ -66,6 +66,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 x.Buttons.Close.IsVisible = close;
                 x.Buttons.SetMuted(_userMuted);
                 x.Buttons.Row.IsVisible = true;
+                if (_browser != null) LiftControls(x);
             }
         }
 

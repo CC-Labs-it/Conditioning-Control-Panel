@@ -35,6 +35,34 @@ public sealed class WindowsCameraTests
         Assert.Empty(WindowsCameras.EnumerateOrEmpty(() => throw new InvalidOperationException("fake driver")));
     }
 
+    [Fact]
+    public void PickerFallsBackOnlyWhenDirectShowIsEmpty()
+    {
+        var mf = new[] { new WindowsCameras.WebcamDevice(0, "First"), new WindowsCameras.WebcamDevice(1, "Second") };
+        var ds = new[] { new WindowsCameras.WebcamDevice(0, "DirectShow") };
+        Assert.Equal(mf, WindowsCameras.EnumerateWithFallback(() => Array.Empty<WindowsCameras.WebcamDevice>(), () => mf));
+        Assert.Same(ds, WindowsCameras.EnumerateWithFallback(() => ds, () => throw new Exception()));
+        Assert.Empty(WindowsCameras.EnumerateWithFallback(() => Array.Empty<WindowsCameras.WebcamDevice>(), () => throw new TimeoutException()));
+        Assert.Empty(WindowsCameras.EnumerateWithFallback(() => Array.Empty<WindowsCameras.WebcamDevice>(), () => throw new InvalidOperationException()));
+    }
+
+    [Fact]
+    public void QuestProbeUsesStrictWindowsListsAndLinuxProbe()
+    {
+        WindowsCameras.WebcamDevice[] empty = [];
+        WindowsCameras.WebcamDevice[] one = [new(0, "Camera")];
+        bool Probe(Func<System.Collections.Generic.IReadOnlyList<WindowsCameras.WebcamDevice>> ds,
+            Func<System.Collections.Generic.IReadOnlyList<WindowsCameras.WebcamDevice>> mf) =>
+            WindowsCameras.CameraPresent(true, ds, mf, () => throw new Exception());
+        Assert.True(Probe(() => one, () => throw new Exception()));
+        Assert.True(Probe(() => empty, () => one));
+        Assert.False(Probe(() => empty, () => empty));
+        Assert.Throws<InvalidOperationException>(() => Probe(() => throw new InvalidOperationException(), () => empty));
+        Assert.Throws<TimeoutException>(() => Probe(() => empty, () => throw new TimeoutException()));
+        Assert.True(WindowsCameras.CameraPresent(false, () => throw new Exception(), () => throw new Exception(), () => true));
+        Assert.False(WindowsCameras.CameraPresent(false, () => throw new Exception(), () => throw new Exception(), () => false));
+    }
+
     [Theory]
     [InlineData(true, false, VideoCaptureAPIs.V4L2)]
     [InlineData(false, true, VideoCaptureAPIs.DSHOW)]

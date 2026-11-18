@@ -605,6 +605,106 @@ public sealed class CompanionBarkHeadTests
         Assert.Equal("first play", spoken());
     });
 
+    private sealed class WebcamBarkClock : System.TimeProvider
+    {
+        private global::System.DateTimeOffset _now = global::System.DateTimeOffset.UtcNow;
+        public override System.DateTimeOffset GetUtcNow() => _now;
+        public void Advance(System.TimeSpan by) => _now += by;
+    }
+
+    [Theory]
+    [InlineData("Blink")]
+    [InlineData("MouthOpen")]
+    [InlineData("TongueOut")]
+    [InlineData("LongStare")]
+    [InlineData("FaceLost")]
+    [InlineData("FaceFound")]
+    [InlineData("TrackingStateChanged")]
+    public void WebcamEventsReachBarksAndDetach(string trigger) => WithSeamsRestored(settings =>
+    {
+        BarkHead.Stop();
+        var rule = Rule(trigger, "camera");
+        rule.ClassRaw = "safety";
+        rule.Conditions = trigger switch
+        {
+            "Blink" => new() { ["blink_count_gte"] = 2 },
+            "FaceFound" => new() { ["face_lost_sec_gt"] = 0 },
+            "TrackingStateChanged" => new() { ["state"] = WebcamTracker.Instance.State.ToString() },
+            _ => null,
+        };
+        var e = Seeded(rule, out _);
+        var clock = new WebcamBarkClock();
+        e.Clock = clock;
+        int count = 0;
+        e.BarkSpoken += (_, _) => count++;
+        var camera = WebcamTracker.Instance;
+        System.Action fire = trigger switch
+        {
+            "Blink" => camera.RaiseBlinkForTest,
+            "MouthOpen" => camera.RaiseMouthForTest,
+            "TongueOut" => camera.RaiseTongueForTest,
+            "LongStare" => camera.RaiseLongStareForTest,
+            "FaceLost" => camera.RaiseFaceLostForTest,
+            "FaceFound" => camera.RaiseFaceFoundForTest,
+            _ => camera.RaiseStateForTest,
+        };
+        try
+        {
+            BarkHead.WireSources(e);
+            if (trigger == "Blink") { fire(); Assert.Equal(0, count); }
+            if (trigger == "FaceFound") { camera.RaiseFaceLostForTest(); clock.Advance(System.TimeSpan.FromSeconds(2)); }
+            fire();
+            Assert.Equal(1, count);
+            if (trigger == "FaceFound") Assert.Equal(0, e.FaceLostSeconds);
+            BarkHead.Stop();
+            if (trigger == "FaceFound") { e.FaceLost(); clock.Advance(System.TimeSpan.FromSeconds(2)); }
+            fire();
+            Assert.Equal(1, count);
+        }
+        finally { BarkHead.Stop(); }
+    });
+
+    [Fact]
+    public void WebcamStateBarksCaptureTransitionsAndIgnoreCalibration() => WithSeamsRestored(settings =>
+    {
+        BarkHead.Stop();
+        var camera = WebcamTracker.Instance;
+        var original = camera.State;
+        var calibration = camera.Calibration;
+        var denied = Rule("TrackingStateChanged", "denied", ("state", "CameraDenied"));
+        var inUse = Rule("TrackingStateChanged", "in use", ("state", "CameraInUse"));
+        denied.ClassRaw = inUse.ClassRaw = "safety";
+        var e = new BarkEngine(() => new BarkRuleSet(new[] { denied, inUse }));
+        BarkHead.Seed(e);
+        e.Start();
+        var spoken = new List<string>();
+        e.BarkSpoken += (_, line) => spoken.Add(line);
+        try
+        {
+            camera.SetTrackingState(ConditioningControlPanel.Services.WebcamTrackingState.Stopped);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            BarkHead.WireSources(e);
+            camera.SetTrackingState(ConditioningControlPanel.Services.WebcamTrackingState.CameraDenied);
+            camera.SetTrackingState(ConditioningControlPanel.Services.WebcamTrackingState.CameraInUse);
+            camera.SetTrackingState(ConditioningControlPanel.Services.WebcamTrackingState.CameraInUse);
+            camera.SetCalibrationLive(calibration);
+            Assert.Empty(spoken);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { "denied", "in use" }, spoken);
+            BarkHead.Stop();
+            camera.SetTrackingState(ConditioningControlPanel.Services.WebcamTrackingState.CameraDenied);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, spoken.Count);
+        }
+        finally
+        {
+            BarkHead.Stop();
+            camera.SetTrackingState(original);
+            camera.SetCalibrationLive(calibration);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        }
+    });
+
     private static BarkRule Rule(string trigger, string line, (string Key, object Value)? condition = null) => new()
     {
         Id = "t_" + trigger, Trigger = trigger, VariantPool = new() { new BarkVariant(line) },
