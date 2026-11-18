@@ -154,6 +154,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             var list = new List<IPossessionEffect>();
             foreach (var e in PossessionRuntime.CreateAll()) list.Add(new DirectedHeadEffect(e));
             list.Add(new RetitleEffect());
+            list.Add(new RetitleHeadingEffect());
             list.Add(new DokiDialogEffect());
             list.Add(new DeleteDialogEffect());
             list.Add(new DodgeEffect());
@@ -168,6 +169,8 @@ namespace ConditioningControlPanel.Avalonia.Possession
             list.Add(new GlitchPortraitEffect());
             list.Add(new StealCardEffect());
             list.Add(new ToastEffect());
+            list.Add(new SwapEffect());
+            list.Add(new GhostCursorEffect());
             return list;
         }
 
