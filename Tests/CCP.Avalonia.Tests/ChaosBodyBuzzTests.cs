@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using CCP.Avalonia.Testing;
@@ -40,6 +41,28 @@ public class ChaosBodyBuzzTests
         }
     }
 
+    [Fact]
+    public Task ShockwaveTestIsolatesAndRestoresIncomingBubbles() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var bubbles = BubbleOverlay.Field.Bubbles;
+        var before = bubbles.ToArray();
+        var incoming = new AmbientBubble { X = 5000, Y = 5000, Size = 20, Popping = true };
+        try
+        {
+            bubbles.Clear();
+            bubbles.Add(incoming);
+            await ShockwaveSelectsRendererAndCancelsHops(false);
+            Assert.Single(bubbles);
+            Assert.Same(incoming, bubbles[0]);
+            Assert.True(incoming.Popping);
+        }
+        finally
+        {
+            bubbles.Clear();
+            bubbles.AddRange(before);
+        }
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -56,6 +79,8 @@ public class ChaosBodyBuzzTests
         var composited = ChaosSkiaFxOverlay.Composited;
         var fieldChecks = ChaosFieldFxOverlay.SkipPlatformChecksForTests;
         var language = LocalizationManager.Instance.CurrentLanguage;
+        var incomingBubbles = BubbleOverlay.Field.Bubbles.ToArray();
+        BubbleOverlay.Field.Bubbles.Clear();
         try
         {
             settings.ChaosSkiaFxEnabled = skia;
@@ -92,7 +117,9 @@ public class ChaosBodyBuzzTests
         }
         finally
         {
-            BubbleOverlay.EndChaos(); BubbleOverlay.Field.Bubbles.Clear();
+            BubbleOverlay.EndChaos();
+            BubbleOverlay.Field.Bubbles.Clear();
+            BubbleOverlay.Field.Bubbles.AddRange(incomingBubbles);
             ChaosFieldFxOverlay.CloseActive(); ChaosFieldFxOverlay.SkipPlatformChecksForTests = fieldChecks;
             LocalizationManager.Instance.SetLanguage(language);
             ChaosSkiaFxOverlay.CloseActive(); ChaosEStimOverlay.CloseActive();

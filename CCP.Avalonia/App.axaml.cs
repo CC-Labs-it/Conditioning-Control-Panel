@@ -922,6 +922,18 @@ namespace ConditioningControlPanel.Avalonia
             settings.PendingPresetReinstalls.Clear();
         }
 
+        // WPF App.xaml.cs:2797-2798: migrate legacy personality settings at startup.
+        // Runs once on this head (owner decision 2026-11-15-personality-migration-once, docs/avalonia-decisions.html):
+        // WPF re-runs it every launch and reverts a later default pick with spice on. Latch lives here, not in Core.
+        internal static void MigrateLegacyPersonalityOnce(SettingsService settings)
+        {
+            var s = settings.Current;
+            if (s.PersonalityLegacyMigrated) return;
+            s.PersonalityLegacyMigrated = true; // persisted by migration or the next save
+            if (s.SlutModeEnabled || s.CompanionPrompt?.UseCustomPrompt == true)
+                PersonalityService.Shared.MigrateFromLegacy(s);
+        }
+
         private async Task StartDesktop(Func<double, string, Task> step)
         {
             await step(0.0, "Starting...");
@@ -959,6 +971,7 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.BrowserVideoSurface.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
+                MigrateLegacyPersonalityOnce(Settings);
                 Platform.WallpaperHead.Initialize();
                 // WPF App.xaml.cs:2928: launch only sweeps retention on disk (creates nothing, arms no timer);
                 // the ledger starts when awareness turns on. No observer feeds it on this head yet.
