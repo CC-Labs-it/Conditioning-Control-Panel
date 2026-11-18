@@ -22,16 +22,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows;
 public partial class MainShellWindow
 {
     private ILeashService? _askService;
+    private bool _leashAsksActive;
     private readonly HashSet<string> _seenLeashOffers = new();
     private readonly List<LeashOffer> _waitingLeashAsks = new();
     private readonly List<LeashEvent> _heldLeashNotices = new();
 
     private void InitializeLeashAsks()
     {
+        _leashAsksActive = true;
         LeashAskWindow.CurrentClosed += OnLeashAskClosed;
         LeashAskWindow.OfferShown += OnLeashOfferShown;
         Closed += (_, _) =>
         {
+            _leashAsksActive = false;
             LeashAskWindow.CurrentClosed -= OnLeashAskClosed;
             LeashAskWindow.OfferShown -= OnLeashOfferShown;
             if (_askService != null) { _askService.SnapshotChanged -= OnLeashAskSnapshot; _askService.EventArrived -= OnLeashEvent; }
@@ -46,6 +49,7 @@ public partial class MainShellWindow
     // WPF rebinds every two seconds and retries asks when a panel or launcher returns.
     internal void RebindLeashAsks()
     {
+        if (!_leashAsksActive) return;
         var next = LeashHead.Service;
         if (!ReferenceEquals(next, _askService))
         {
@@ -94,7 +98,7 @@ public partial class MainShellWindow
     // The ask and the snap share one overlay slot: a waiting ask holds while either is up.
     private void TryShowLeashAsk()
     {
-        if (_waitingLeashAsks.Count == 0 || LeashAskWindow.Current != null) return;
+        if (!_leashAsksActive || _waitingLeashAsks.Count == 0 || LeashAskWindow.Current != null) return;
         var owner = LeashOwner();
         if (owner is not { IsVisible: true } || owner.WindowState == WindowState.Minimized) return;
         var offer = _waitingLeashAsks[0];

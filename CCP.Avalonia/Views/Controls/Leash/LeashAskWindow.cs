@@ -99,6 +99,8 @@ public sealed class LeashAskWindow : Window
             Current = null;
             CurrentClosed?.Invoke();
         };
+        // Reserve the overlay before Show, which can dispatch another retry (WPF LeashSurfaces.cs:239).
+        Current = w;
         try
         {
             if (owner is { IsVisible: true }) w.Show(owner);
@@ -107,10 +109,11 @@ public sealed class LeashAskWindow : Window
         }
         catch (Exception ex)
         {
+            if (ReferenceEquals(Current, w)) Current = null;
             Serilog.Log.Debug("[Leash] overlay window failed: {E}", ex.Message);
             return false;
         }
-        Current = w;
+        if (!ReferenceEquals(Current, w) || !w.IsVisible) return false;
         w.PlayThud();
         return true;
     }
