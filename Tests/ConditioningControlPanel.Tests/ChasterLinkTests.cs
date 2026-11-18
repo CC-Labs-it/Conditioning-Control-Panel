@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel.Services.Chaster;
@@ -107,6 +109,32 @@ public class ChasterLinkTests : IDisposable
         Assert.Empty(_broker.Bodies);
 
         await _browser.GetStringAsync(Callback + "?code=the-code&state=" + state);
+        Assert.Equal(LinkOutcome.Linked, await flow);
+    }
+
+    [Theory]
+    [InlineData("127.0.0.1")]
+    [InlineData("[::1]")]
+    public async Task Both_loopback_addresses_survive_rejected_states_and_deliver_the_final_page(string address)
+    {
+        var (flow, state) = Start();
+        async Task<string> Send(string query)
+        {
+            using var client = new TcpClient();
+            await client.ConnectAsync(IPAddress.Parse(address.Trim('[', ']')), ChasterService.LoopbackPort)
+                .WaitAsync(TimeSpan.FromSeconds(5));
+            var stream = client.GetStream();
+            var request = Encoding.ASCII.GetBytes($"GET /callback/?{query} HTTP/1.1\r\nHost: localhost:{ChasterService.LoopbackPort}\r\nConnection: close\r\n\r\n");
+            await stream.WriteAsync(request);
+            using var reader = new StreamReader(stream, Encoding.UTF8);
+            var response = await reader.ReadToEndAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.StartsWith("HTTP/1.1 200", response);
+            return response;
+        }
+        Assert.Contains("Not linked", await Send("code=stolen&state=wrong"));
+        Assert.Contains("Not linked", await Send("code=stolen&state=stillwrong"));
+        Assert.False(flow.IsCompleted);
+        Assert.Contains("Linked", await Send("code=the-code&state=" + state));
         Assert.Equal(LinkOutcome.Linked, await flow);
     }
 
