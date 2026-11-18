@@ -38,9 +38,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (OnlineHelp is { IsVisible: true } help) LeashHelpButton.Pin(help);
         }
 
-        /// <summary>WPF ScrolllerCredit.HomeLink.</summary>
-        internal const string ScrolllerHome = "https://scrolller.com";
-
         /// <summary>Hooks the meter's clock, "Nice", the credit link and the "?" help. Idempotent.</summary>
         internal void WireOnlineMeter()
         {
@@ -121,21 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             catch (Exception ex) { Log.Debug("Official note Nice: {E}", ex.Message); }
         }
 
-        /// <summary>WPF ScrolllerCredit.OpenHome: refused under Strict Lock, a Lockdown or a Chaos run (a browser
-        /// coming up over them would be a way out).</summary>
-        internal static bool OpenScrolllerHome()
-        {
-            try
-            {
-                if (!CanOpenScrolllerHome(CoreSettings.Current?.StrictLockEnabled == true,
-                        ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true,
-                        ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsActive)) return false;
-                return ExternalOpener.Open(ScrolllerHome);
-            }
-            catch (Exception ex) { Log.Debug("Scrolller home open failed: {E}", ex.Message); return false; }
-        }
-
-        /// <summary>WPF ScrolllerCredit.CanOpenLink.</summary>
-        internal static bool CanOpenScrolllerHome(bool strict, bool lockdown, bool chaos) => !strict && !lockdown && !chaos;
+        private void ScrolllerLink_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
+            => ScrolllerCreditLine.OpenHome();
     }
 }
