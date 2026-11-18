@@ -1269,8 +1269,10 @@ public sealed class KeywordAudioRuntimeTests
     {
         KeywordTriggerHead.Stop();
         Assert.False(KeywordTriggerHead.Engine.IsActive);
-        _ = new MainShellWindow();   // WPF MainWindow.xaml.cs:341 starts the service at boot
-        Assert.True(KeywordTriggerHead.Engine.IsActive);
+        var shell = new MainShellWindow();   // WPF MainWindow.xaml.cs:341 starts the service at boot
+        // Closed, or its language handler outlives the test and breaks later language tests (restack r2-b016).
+        try { Assert.True(KeywordTriggerHead.Engine.IsActive); }
+        finally { shell.Close(); }
     });
 
     /// <summary>WPF b9368d963 KeywordTriggerService.DispatchMergedAsync: a keyword never plays inside a panic's quiet.</summary>
