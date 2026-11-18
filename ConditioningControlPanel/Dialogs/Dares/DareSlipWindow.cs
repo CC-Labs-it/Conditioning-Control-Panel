@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
@@ -15,10 +16,11 @@ using ConditioningControlPanel.Services.Friends;
 namespace ConditioningControlPanel.Dialogs.Dares;
 
 /// <summary>
-/// THE SLIP: one sentence that writes itself one blank at a time (DARES-HANDOFF "The slip"). Only the
-/// blank in hand shows its options in the tray under it; a filled blank is a coloured chip, icon first,
-/// and a tap on it opens that blank again. Send hands the slip to <c>App.Dares.CreateAsync</c>; a slip
-/// with a dare on it comes back as Writing with the <c>/bet write</c> line to copy into Discord.
+/// THE SLIP: one sentence that writes itself one blank at a time (DARES-HANDOFF "The slip"), on the
+/// pink betting slip of the owner's mockup. Only the blank in hand shows its options in the tray
+/// under the slip; a filled blank is a handwritten fill in its kind's colour, and a tap on it opens
+/// that blank again. Send hands the slip to <c>App.Dares.CreateAsync</c>; a slip with a dare on it
+/// comes back as Writing with the <c>/bet write</c> line to copy into Discord.
 /// The rules are <see cref="DareSlipRules"/>; this window only draws and forwards presses.
 /// </summary>
 public sealed class DareSlipWindow : Window
@@ -30,9 +32,10 @@ public sealed class DareSlipWindow : Window
     private readonly DareDraft _d = new();
     private readonly Border _card;
     private readonly StackPanel _body = new();
-    private readonly Grid _slip = new();
-    private readonly StackPanel _sentence = new();
-    private readonly StackPanel _tray = new() { Margin = new Thickness(0, 14, 0, 0) };
+    private readonly Grid _slip;
+    private readonly Grid _paper;
+    private readonly StackPanel _sentence = new() { MinHeight = 176 };
+    private readonly StackPanel _tray = new() { Margin = new Thickness(0, 16, 0, 0), MinHeight = 150 };
     private readonly HashSet<DareStep> _filled = new();
     private bool _sending;
     private DareCreateOutcome? _result;
@@ -45,20 +48,9 @@ public sealed class DareSlipWindow : Window
         _friends = friends;
         _tiers = tiers;
         if (who != null) { _d.Who = who; _d.WhoTier = TierOf(who.Id); }
-        _card = DareLook.Shell(this, 560);
+        _card = DareLook.Shell(this, 660);
         _card.Tag = "dares-slip-window";
-
-        var slipFace = new Border
-        {
-            Background = FriendsLook.Frozen(FriendsLook.Rgb(0x23, 0x16, 0x40)),
-            BorderBrush = FriendsLook.LineBrush,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(12),
-            Padding = new Thickness(16, 14, 16, 16),
-            MinHeight = 120,
-            Child = _sentence,
-        };
-        _slip.Children.Add(slipFace);
+        _slip = DareLook.Slip(DareLook.SlipHead(Loc.Get("dares_slip_title"), "dares_help_numbers", Leave), _sentence, out _paper);
 
         if (DareIntro.Seen()) ShowComposer();
         else _card.Child = DareIntro.Build(ShowComposer);
@@ -88,7 +80,6 @@ public sealed class DareSlipWindow : Window
     private void ShowComposer()
     {
         _body.Children.Clear();
-        _body.Children.Add(DareLook.Head(Loc.Get("dares_slip_title"), "dares_help_numbers", Leave));
         _body.Children.Add(_slip);
         _body.Children.Add(_tray);
         _card.Child = _body;
@@ -108,7 +99,7 @@ public sealed class DareSlipWindow : Window
         RenderTray(cur);
     }
 
-    /// <summary>A chip that just filled pops in; the rest stay still.</summary>
+    /// <summary>A fill that just landed pops in; the rest stay still.</summary>
     private void PopNewChips(FrameworkElement view)
     {
         var now = new HashSet<DareStep>();
@@ -159,11 +150,7 @@ public sealed class DareSlipWindow : Window
         if (cur == null) { RenderSend(); return; }
 
         var step = cur.Value;
-        var ask = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        ask.Children.Add(FriendsLook.Label(Loc.Get(DareSlipRules.AskKey(step, _d.Type)).ToUpperInvariant(), 10.5,
-            FriendsLook.DimBrush, FriendsLook.Mono));
-        if (DareSlipRules.HelpFor(step, _d) is { } help) ask.Children.Add(DareLook.Help(help));
-        _tray.Children.Add(ask);
+        _tray.Children.Add(DareLook.Ask(Loc.Get(DareSlipRules.AskKey(step, _d.Type)), DareSlipRules.HelpFor(step, _d)));
 
         var tiles = new WrapPanel { Tag = "dares-tray:" + step };
         _tray.Children.Add(tiles);
@@ -172,7 +159,7 @@ public sealed class DareSlipWindow : Window
         {
             case DareStep.Who:
                 foreach (var f in _friends) tiles.Children.Add(FriendTile(f));
-                if (_friends.Count == 0) tiles.Children.Add(DareLook.Words(Loc.Get("dares_no_friends"), 12.5, FriendsLook.MutedBrush, wrap: true));
+                if (_friends.Count == 0) tiles.Children.Add(DareLook.Words(Loc.Get("dares_no_friends"), 18, DareLook.ChalkBrush, wrap: true));
                 break;
             case DareStep.How:
                 foreach (var t in new[] { DareType.Cant, DareType.Duel })
@@ -189,8 +176,8 @@ public sealed class DareSlipWindow : Window
                 break;
             case DareStep.When:
                 foreach (var w in Enum.GetValues<DareDeadline>())
-                    tiles.Children.Add(DareLook.Choice(Loc.Get(DareSlipRules.WhenKey(w)), DareLook.ToneColor(DareTone.When),
-                        Loc.Get("dares_tip_when"), () => Press(() => DareSlipRules.SetDeadline(_d, w)), "dares-when:" + DareGrammar.Wire(w)));
+                    tiles.Children.Add(DareLook.Choice(Loc.Get(DareSlipRules.WhenKey(w)), Loc.Get("dares_tip_when"),
+                        () => Press(() => DareSlipRules.SetDeadline(_d, w)), "dares-when:" + DareGrammar.Wire(w)));
                 break;
             case DareStep.Mine:
             case DareStep.Theirs:
@@ -219,12 +206,11 @@ public sealed class DareSlipWindow : Window
     private void AddTargets(DareKind k)
     {
         var row = new WrapPanel { Margin = new Thickness(0, 2, 0, 0), Tag = "dares-targets" };
-        var c = DareLook.ToneColor(DareSlipRules.ToneOf(k));
         foreach (var t in DareSlipRules.TargetsFor(_d.Type, k))
         {
             var label = k == DareKind.Session ? Loc.Get(DareSlipRules.TargetLabelKey(t)) : t;
             var target = t;
-            var chip = DareLook.Choice(label, c, Loc.Get(DareSlipRules.TipOf(k)), () => Press(() => DareSlipRules.PickTarget(_d, target)), "dares-target:" + t);
+            var chip = DareLook.Choice(label, Loc.Get(DareSlipRules.TipOf(k)), () => Press(() => DareSlipRules.PickTarget(_d, target)), "dares-target:" + t);
             row.Children.Add(chip);
             DareLook.PopIn(chip);
         }
@@ -234,11 +220,10 @@ public sealed class DareSlipWindow : Window
     private void AddAmounts(DareStakeKind k)
     {
         var row = new WrapPanel { Margin = new Thickness(0, 2, 0, 0), Tag = "dares-amounts" };
-        var c = DareLook.ToneColor(DareSlipRules.ToneOf(k));
         foreach (var a in DareGrammar.AmountsFor(k))
         {
             var amount = a;
-            var chip = DareLook.Choice(DareSlipRules.StakeText(new DareStake(k, a), 0, Loc.Get), c, Loc.Get(DareSlipRules.TipOf(k)),
+            var chip = DareLook.Choice(DareSlipRules.StakeText(new DareStake(k, a), 0, Loc.Get), Loc.Get(DareSlipRules.TipOf(k)),
                 () => Press(() => DareSlipRules.PickAmount(_d, amount)), "dares-amount:" + a);
             row.Children.Add(chip);
             DareLook.PopIn(chip);
@@ -247,90 +232,43 @@ public sealed class DareSlipWindow : Window
     }
 
     private Button FriendTile(DareFriend f)
-    {
-        var sp = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-        var av = FriendsLook.Avatar(f.Name, f.AvatarUrl, 36);
-        av.HorizontalAlignment = HorizontalAlignment.Center;
-        sp.Children.Add(av);
-        var name = DareLook.Words(f.Name, 12.5, FriendsLook.TextBrush);
-        name.HorizontalAlignment = HorizontalAlignment.Center;
-        name.MaxWidth = 90;
-        name.Margin = new Thickness(0, 5, 0, 0);
-        sp.Children.Add(name);
-        bool on = _d.Who?.Id == f.Id;
-        var b = FriendsLook.Pill(sp, on ? FriendsLook.ButtonHoverBrush : FriendsLook.ButtonBrush, FriendsLook.TextBrush,
-            on ? FriendsLook.LilacBrush : FriendsLook.Line2Brush, 12, new Thickness(10, 9, 10, 8));
-        b.MinWidth = 86;
-        b.Margin = new Thickness(0, 0, 8, 8);
-        b.ToolTip = f.Name;
-        b.Tag = "dares-who:" + f.Id;
-        b.Click += (_, _) => Press(() => DareSlipRules.SetWho(_d, f, TierOf(f.Id)));
-        return b;
-    }
+        => DareLook.FaceTile(f.Name, f.AvatarUrl, _d.Who?.Id == f.Id,
+            () => Press(() => DareSlipRules.SetWho(_d, f, TierOf(f.Id))), "dares-who:" + f.Id);
 
     /// <summary>The camera explained in pictures: we look a few times a second and add up the time;
     /// seen 80% = pass; it runs on this PC; only the seconds leave it.</summary>
     private static FrameworkElement CameraHow()
     {
-        var box = new Border
-        {
-            BorderBrush = FriendsLook.Line2Brush,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(12, 10, 12, 10),
-            Margin = new Thickness(0, 4, 0, 0),
-            Background = DareLook.Tint(FriendsLook.Ground, 0x80),
-            Tag = "dares-camera-how",
-        };
-        var sp = new StackPanel();
-        sp.Children.Add(HowRow("", Loc.Get("dares_cam_look")));
-        var ticks = new UniformGrid { Rows = 1, Columns = 30, Height = 12, Margin = new Thickness(0, 0, 10, 0), Width = 170 };
-        var miss = new HashSet<int> { 4, 11, 12, 20, 27 };
-        for (int i = 0; i < 30; i++)
-            ticks.Children.Add(new Border
-            {
-                Margin = new Thickness(0.8, 0, 0.8, 0),
-                CornerRadius = new CornerRadius(1.5),
-                Background = miss.Contains(i) ? Brushes.Transparent : FriendsLook.MintBrush,
-                BorderBrush = FriendsLook.DimBrush,
-                BorderThickness = new Thickness(miss.Contains(i) ? 1 : 0),
-            });
-        var pass = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 8) };
+        var pass = new Grid();
+        pass.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        pass.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        var ticks = DareLook.Ticks(30, new HashSet<int> { 4, 11, 12, 20, 27 });
+        ticks.MinWidth = 150;
         pass.Children.Add(ticks);
-        pass.Children.Add(DareLook.Words(Loc.Get("dares_cam_pass"), 12.5, FriendsLook.TextBrush));
-        sp.Children.Add(pass);
-        sp.Children.Add(HowRow("", Loc.Get("dares_cam_local")));   // DeviceLaptopNoPic
-        box.Child = sp;
-        return box;
-    }
-
-    private static FrameworkElement HowRow(string glyph, string text)
-    {
-        var g = new Grid();
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var icon = DareLook.Glyph(glyph, 15, FriendsLook.MintBrush);
-        icon.Margin = new Thickness(0, 0, 10, 0);
-        g.Children.Add(icon);
-        var t = DareLook.Words(text, 12.5, FriendsLook.TextBrush, wrap: true);
-        Grid.SetColumn(t, 1);
-        g.Children.Add(t);
-        return g;
+        var label = DareLook.Words(Loc.Get("dares_cam_pass"), 18, DareLook.ChalkBrush);
+        label.Margin = new Thickness(10, 0, 0, 0);
+        Grid.SetColumn(label, 1);
+        pass.Children.Add(label);
+        return DareLook.HowBox(
+            DareLook.HowRow(DareLook.Icon("eye", 24, DareLook.ChalkBrush), Loc.Get("dares_cam_look")),
+            pass,
+            DareLook.HowRow(DareLook.Icon("pc", 24, DareLook.ChalkBrush), Loc.Get("dares_cam_local")));
     }
 
     // ---- send -------------------------------------------------------------------------
 
     private void RenderSend()
     {
-        var row = new StackPanel { Orientation = Orientation.Horizontal };
-        var send = DareLook.Big(Loc.Get("dares_send"), FriendsLook.Pink, () => _ = SendAsync(), "dares-send");
+        var row = new WrapPanel();
+        var send = DareLook.Big(Loc.Get("dares_send"), DareBig.Hot, () => _ = SendAsync(), "dares-send");
         send.IsEnabled = !_sending;
         row.Children.Add(send);
         if (DareSlipRules.ToSlip(_d) is { } slip && DareSlipRules.HasDare(slip))
         {
-            var note = DareLook.Words(Loc.Get("dares_send_dare_note"), 12, FriendsLook.MutedBrush, wrap: true);
-            note.MaxWidth = 300;
-            note.Margin = new Thickness(4, 0, 0, 8);
+            var note = DareLook.Words(Loc.Get("dares_send_dare_note"), 17, DareLook.MutedBrush, wrap: true);
+            note.MaxWidth = 320;
+            note.Margin = new Thickness(4, 12, 0, 8);
+            note.VerticalAlignment = VerticalAlignment.Top;
             row.Children.Add(note);
         }
         _tray.Children.Add(row);
@@ -351,14 +289,14 @@ public sealed class DareSlipWindow : Window
         {
             FriendsSfx.Sent();
             _result = r;
-            _slip.Children.Add(DareLook.Stamp(Loc.Get("dares_stamp_sent"), FriendsLook.Pink));
+            _paper.Children.Add(DareLook.Stamp(Loc.Get("dares_stamp_sent")));
             Render();
         }
         else
         {
             FriendsSfx.Denied();
             Render();
-            var why = DareLook.Words(Loc.Get(DareCardRules.CreateKey(r.Status)), 12.5, FriendsLook.GoldBrush, wrap: true);
+            var why = DareLook.Words(Loc.Get(DareCardRules.CreateKey(r.Status)), 18, DareLook.WarnBrush, wrap: true);
             why.Tag = "dares-send-result";
             _tray.Children.Add(why);
         }
@@ -368,50 +306,53 @@ public sealed class DareSlipWindow : Window
     private void RenderResult()
     {
         var r = _result!;
-        var line = DareLook.Words(Loc.Get(DareCardRules.CreateKey(r.Status)), 13, FriendsLook.MintBrush, wrap: true);
+        var line = DareLook.Words(Loc.Get(DareCardRules.CreateKey(r.Status)), 21, DareLook.ChalkBrush, wrap: true);
         line.Tag = "dares-send-result";
         _tray.Children.Add(line);
         if (r.Status == DareCreateStatus.Writing && !string.IsNullOrEmpty(r.WriteCode))
         {
             var cmd = DareCardRules.WriteLine(r.WriteCode!);
-            var g = new Grid { Margin = new Thickness(0, 8, 0, 4) };
+            var g = new Grid { Margin = new Thickness(0, 10, 0, 6) };
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var text = new TextBox
+            {
+                Text = cmd,
+                IsReadOnly = true,
+                BorderThickness = new Thickness(0),
+                Background = Brushes.Transparent,
+                Foreground = DareLook.ChalkBrush,
+                FontFamily = FriendsLook.Mono,
+                FontSize = 14,
+                VerticalAlignment = VerticalAlignment.Center,
+                Tag = "dares-write-line",
+            };
+            AutomationProperties.SetName(text, cmd);
             var box = new Border
             {
-                Background = FriendsLook.Frozen(FriendsLook.Ground),
-                BorderBrush = FriendsLook.Line2Brush,
+                Background = DareLook.Tint(Colors.Black, 0x4D),
+                BorderBrush = DareLook.MutedBrush,
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(6),
-                Padding = new Thickness(10, 6, 10, 6),
-                Child = new TextBox
-                {
-                    Text = cmd,
-                    IsReadOnly = true,
-                    BorderThickness = new Thickness(0),
-                    Background = Brushes.Transparent,
-                    Foreground = FriendsLook.TextBrush,
-                    FontFamily = FriendsLook.Mono,
-                    FontSize = 13,
-                    Tag = "dares-write-line",
-                },
+                Padding = new Thickness(10, 7, 10, 7),
+                VerticalAlignment = VerticalAlignment.Top,
+                Child = text,
             };
             g.Children.Add(box);
             var copied = Loc.Get("dares_copied");
-            var copy = DareLook.Choice(Loc.Get("dares_copy"), FriendsLook.Lilac, null, () => { }, "dares-copy");
-            copy.Margin = new Thickness(8, 0, 0, 0);
-            copy.Click += (_, _) =>
+            Button? copy = null;
+            copy = DareLook.Choice(Loc.Get("dares_copy"), null, () =>
             {
-                try { Clipboard.SetText(cmd); copy.Content = DareLook.Words(copied, 14, FriendsLook.MintBrush); FriendsSfx.Click(); }
+                try { Clipboard.SetText(cmd); DareLook.SetChoiceText(copy!, copied); FriendsSfx.Click(); }
                 catch { /* clipboard busy; the line is still selectable */ }
-            };
+            }, "dares-copy");
+            copy.Margin = new Thickness(10, 2, 0, 0);
             Grid.SetColumn(copy, 1);
             g.Children.Add(copy);
             _tray.Children.Add(g);
         }
         var done = DareLook.Quiet(Loc.Get("dares_close"), null, Leave, "dares-done");
-        done.Margin = new Thickness(0, 8, 0, 0);
-        done.HorizontalAlignment = HorizontalAlignment.Left;
+        done.Margin = new Thickness(0, 10, 0, 0);
         _tray.Children.Add(done);
     }
 

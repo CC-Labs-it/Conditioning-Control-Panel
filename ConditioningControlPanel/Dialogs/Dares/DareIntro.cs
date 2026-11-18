@@ -3,7 +3,6 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using ConditioningControlPanel.Controls.Dares;
-using ConditioningControlPanel.Controls.Friends;
 using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Dialogs.Dares;
@@ -11,7 +10,8 @@ namespace ConditioningControlPanel.Dialogs.Dares;
 /// <summary>
 /// The first-time card: four picture steps, a word under each, one button (DARES-HANDOFF "an intro
 /// infographic card the first time someone opens Dares"). Shown inside whichever Dares window opens
-/// first (the slip or an offer), once, remembered as a marker file beside the settings.
+/// first (the slip or an offer), once, remembered as a marker file beside the settings. Drawn on the
+/// same pink slip as the composer, the steps as the tray's coloured discs.
 /// </summary>
 internal static class DareIntro
 {
@@ -39,57 +39,40 @@ internal static class DareIntro
     public static FrameworkElement Build(Action onDone)
     {
         var sp = new StackPanel { Tag = "dares-intro" };
-        sp.Children.Add(DareLook.Head(Loc.Get("dares_intro_title"), null, null));
-        var row = new Grid { Margin = new Thickness(0, 4, 0, 14) };
+        var row = new Grid { Margin = new Thickness(0, 6, 0, 6) };
         for (int i = 0; i < Steps.Length * 2 - 1; i++)
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = i % 2 == 0 ? new GridLength(1, GridUnitType.Star) : GridLength.Auto });
         for (int i = 0; i < Steps.Length; i++)
         {
             var (tone, key) = Steps[i];
-            var c = DareLook.ToneColor(tone);
             var cell = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
-            var disc = new Border
-            {
-                Width = 58,
-                Height = 58,
-                CornerRadius = new CornerRadius(29),
-                Background = DareLook.Tint(c, 0x30),
-                BorderBrush = FriendsLook.Frozen(c),
-                BorderThickness = new Thickness(2),
-                Child = new TextBlock
-                {
-                    Text = DareLook.ToneGlyph(tone),
-                    FontFamily = DareLook.GlyphFont,
-                    FontSize = 24,
-                    Foreground = FriendsLook.Frozen(c),
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                },
-            };
+            var disc = DareLook.Disc(tone);
+            disc.HorizontalAlignment = HorizontalAlignment.Center;
             cell.Children.Add(disc);
-            var n = DareLook.Words((i + 1).ToString(), 10, FriendsLook.DimBrush);
-            n.HorizontalAlignment = HorizontalAlignment.Center;
-            n.Margin = new Thickness(0, 4, 0, 0);
+            var n = DareLook.Hand((i + 1).ToString(), 24, DareLook.InkBrush, center: true);
+            n.Margin = new Thickness(0, 6, 0, 2);
             cell.Children.Add(n);
-            var w = DareLook.Words(Loc.Get(key), 12.5, FriendsLook.TextBrush, wrap: true);
+            var w = DareLook.Words(Loc.Get(key), 19, DareLook.PrintBrush, wrap: true);
             w.TextAlignment = TextAlignment.Center;
             w.HorizontalAlignment = HorizontalAlignment.Center;
-            w.MaxWidth = 90;
+            w.MaxWidth = 110;
             cell.Children.Add(w);
             Grid.SetColumn(cell, i * 2);
             row.Children.Add(cell);
             DareLook.CardIn(cell);
             if (i < Steps.Length - 1)
             {
-                var arrow = DareLook.Glyph("", 12, FriendsLook.DimBrush);   // Forward
-                arrow.Margin = new Thickness(2, 0, 2, 30);
+                var arrow = DareLook.Icon("arrow", 22, DareLook.PrintBrush);
+                arrow.Opacity = 0.55;
+                arrow.VerticalAlignment = VerticalAlignment.Top;
+                arrow.Margin = new Thickness(2, 12, 2, 0);
                 Grid.SetColumn(arrow, i * 2 + 1);
                 row.Children.Add(arrow);
             }
         }
-        sp.Children.Add(row);
-        var go = DareLook.Big(Loc.Get("dares_intro_go"), FriendsLook.Mint, () => { MarkSeen(); onDone(); }, "dares-intro-go");
-        go.HorizontalAlignment = HorizontalAlignment.Center;
+        sp.Children.Add(DareLook.Slip(DareLook.SlipHead(Loc.Get("dares_intro_title"), null, null), row, out _));
+        var go = DareLook.Big(Loc.Get("dares_intro_go"), DareBig.Go, () => { MarkSeen(); onDone(); }, "dares-intro-go");
+        go.Margin = new Thickness(0, 18, 0, 0);
         sp.Children.Add(go);
         return sp;
     }

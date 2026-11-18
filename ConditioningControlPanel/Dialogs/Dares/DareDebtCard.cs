@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Shapes;
 using ConditioningControlPanel.Controls.Dares;
-using ConditioningControlPanel.Controls.Friends;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Dares;
 using ConditioningControlPanel.Services.Friends;
@@ -17,7 +18,8 @@ namespace ConditioningControlPanel.Dialogs.Dares;
 /// CCP (the card comes back next launch). It never starts anything on its own: a Lockdown stake walks
 /// through its consent prompt first (and one more on a PC that starts CCP with Windows), then
 /// <c>StartLockdown</c> runs the real Lockdown. At launch it is a modal on the startup ladder
-/// (DaresLanding); from the strip it opens as a plain card.
+/// (DaresLanding); from the strip it opens as a plain card. Drawn as the mockup's lockcard: a light
+/// card on the violet desk, the stake as a handwritten fill.
 /// </summary>
 public sealed class DareDebtCard : Window
 {
@@ -27,7 +29,7 @@ public sealed class DareDebtCard : Window
     private readonly DareBet _bet;
     private readonly Border _card;
     private readonly StackPanel _body = new();
-    private readonly Grid _slip = new();
+    private Grid _slip = new();
     private readonly Queue<string> _consent = new();
     private bool _busy;
 
@@ -45,7 +47,7 @@ public sealed class DareDebtCard : Window
     {
         _svc = svc;
         _bet = bet;
-        _card = DareLook.Shell(this, 520);
+        _card = DareLook.Shell(this, 580);
         _card.Tag = "dares-debt-card";
         BuildCard();
         DareLook.CardIn(_card);
@@ -83,62 +85,56 @@ public sealed class DareDebtCard : Window
     /// <summary>A debt card is on screen (the landing does not stack a second one).</summary>
     internal static bool IsUp => _open != null;
 
-    private void Frame(string title, string? help)
+    /// <summary>A fresh frame: the desk heading and an empty lockcard; returns the card's inside.</summary>
+    private StackPanel Frame(string title, string? help)
     {
         _body.Children.Clear();
-        _body.Children.Add(DareLook.Head(title, help, null));
+        _body.Children.Add(DareLook.DeskHead(title, help));
+        _slip = DareLook.LockCard(out var inner);
+        _body.Children.Add(_slip);
         _card.Child = _body;
+        return inner;
     }
 
+    /// <summary>"You lost to Moth. You owe [20 min Lockdown]", the stake as a handwritten fill.</summary>
     private FrameworkElement OweLine()
     {
         var stake = _bet.MyStake;
         int n = stake.Kind == DareStakeKind.Dare ? stake.DareNumber : 0;
         var seg = new DareSeg(DareSegKind.Chip, DareSlipRules.StakeText(stake, n, Loc.Get), DareStep.Mine,
             DareSlipRules.ToneOf(stake.Kind), DareSlipRules.TipOf(stake.Kind));
-        var row = new WrapPanel();
-        row.Children.Add(DareLook.Words(Loc.GetF("dares_debt_lost", _bet.Friend.Name), 16, FriendsLook.TextBrush));
-        row.Children.Add(DareLook.Chip(seg, null));
-        var face = new Border
-        {
-            Background = FriendsLook.Frozen(FriendsLook.Rgb(0x23, 0x16, 0x40)),
-            BorderBrush = FriendsLook.LineBrush,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(12),
-            Padding = new Thickness(16, 14, 16, 16),
-            Child = row,
-        };
-        _slip.Children.Clear();
-        _slip.Children.Add(face);
-        return _slip;
+        return DareLook.Line(Loc.GetF("dares_debt_lost", _bet.Friend.Name), DareLook.Fill(seg, null), 21, DareLook.CardInkBrush, 44);
     }
 
-    private void BuildCard()
+    private StackPanel BuildCard()
     {
-        Frame(Loc.Get("dares_debt_title"), null);
-        _body.Children.Add(OweLine());
+        var inner = Frame(Loc.Get("dares_debt_title"), null);
+        inner.Children.Add(OweLine());
 
         if (_bet.Debt?.RetryUsed == true)
-            _body.Children.Add(Line(Loc.Get("dares_debt_retry"), FriendsLook.GoldBrush, "dares-debt-retry"));
-        _body.Children.Add(Line(Loc.Get("dares_debt_soft"), FriendsLook.MutedBrush, "dares-debt-soft"));
+            inner.Children.Add(Line(Loc.Get("dares_debt_retry"), DareLook.WarnOnCardBrush, "dares-debt-retry"));
+        var soft = Line(Loc.Get("dares_debt_soft"), DareLook.CardInkBrush, "dares-debt-soft");
+        soft.Opacity = 0.7;
+        inner.Children.Add(soft);
 
-        var row = new WrapPanel { Margin = new Thickness(0, 12, 0, 0), Tag = "dares-debt-buttons" };
+        var row = new WrapPanel { Margin = new Thickness(0, 14, 0, 0), Tag = "dares-debt-buttons" };
         var kind = _bet.MyStake.Kind;
-        row.Children.Add(DareLook.Big(Loc.Get(DareCardRules.PayKey(kind)), FriendsLook.Mint, OnPay, "dares-pay"));
-        var renounce = new StackPanel { Orientation = Orientation.Horizontal };
-        renounce.Children.Add(DareLook.Quiet(Loc.Get("dares_renounce"), Loc.Get("dares_renounce_sub"), () => _ = ActAsync(DareOp.Renounce), "dares-renounce"));
-        var help = DareLook.Help("dares_help_renounce");
-        help.Margin = new Thickness(-4, 0, 8, 8);
+        row.Children.Add(DareLook.Big(Loc.Get(DareCardRules.PayKey(kind)), DareBig.Go, OnPay, "dares-pay"));
+        var renounce = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Top };
+        renounce.Children.Add(DareLook.Quiet(Loc.Get("dares_renounce"), Loc.Get("dares_renounce_sub"), () => _ = ActAsync(DareOp.Renounce), "dares-renounce", onCard: true));
+        var help = DareLook.Help("dares_help_renounce", DareLook.CardInkBrush);
+        help.Margin = new Thickness(-6, 0, 12, 10);
         renounce.Children.Add(help);
         row.Children.Add(renounce);
-        row.Children.Add(DareLook.Quiet(Loc.Get("dares_close_ccp"), Loc.Get("dares_close_ccp_sub"), OnCloseApp, "dares-close-ccp"));
-        _body.Children.Add(row);
+        row.Children.Add(DareLook.Quiet(Loc.Get("dares_close_ccp"), Loc.Get("dares_close_ccp_sub"), OnCloseApp, "dares-close-ccp", onCard: true));
+        inner.Children.Add(row);
+        return inner;
     }
 
-    private static TextBlock Line(string text, System.Windows.Media.Brush fg, string tag)
+    private static TextBlock Line(string text, Brush fg, string tag)
     {
-        var t = DareLook.Words(text, 12.5, fg, wrap: true);
-        t.Margin = new Thickness(0, 10, 0, 0);
+        var t = DareLook.Words(text, 17, fg, wrap: true);
+        t.Margin = new Thickness(0, 8, 0, 0);
         t.Tag = tag;
         return t;
     }
@@ -156,9 +152,10 @@ public sealed class DareDebtCard : Window
     {
         if (_consent.Count == 0) { _ = ActAsync(DareCardRules.PayOp(_bet.MyStake.Kind)); return; }
         var step = _consent.Dequeue();
+        StackPanel inner;
         if (step == "lockdown")
         {
-            Frame(Loc.Get("dares_ld_title"), "dares_help_lockdown");
+            inner = Frame(Loc.Get("dares_ld_title"), "dares_help_lockdown");
             var list = new StackPanel { Tag = "dares-consent-lockdown" };
             // The real Lockdown turns the panic key off only when the player's own Lockdown setting
             // says so (hard rule 6: Dares never forces it), so the consent says what will happen.
@@ -166,30 +163,33 @@ public sealed class DareDebtCard : Window
             list.Children.Add(Bullet(Loc.GetF(panicOff ? "dares_ld_length" : "dares_ld_length_panic", _bet.MyStake.Amount)));
             list.Children.Add(Bullet(Loc.Get("dares_ld_phrase")));
             list.Children.Add(Bullet(Loc.Get("dares_ld_early")));
-            _body.Children.Add(list);
+            inner.Children.Add(list);
         }
         else
         {
-            Frame(Loc.Get("dares_ld_startup_title"), null);
-            var t = Line(Loc.Get("dares_ld_startup_body"), FriendsLook.TextBrush, "dares-consent-startup");
-            _body.Children.Add(t);
+            inner = Frame(Loc.Get("dares_ld_startup_title"), null);
+            var t = Line(Loc.Get("dares_ld_startup_body"), DareLook.CardInkBrush, "dares-consent-startup");
+            t.FontSize = 20;
+            t.Margin = new Thickness(0);
+            inner.Children.Add(t);
         }
-        var row = new WrapPanel { Margin = new Thickness(0, 14, 0, 0) };
-        row.Children.Add(DareLook.Big(Loc.Get("dares_ld_sure"), FriendsLook.Mint, () => { FriendsSfx.Click(); NextConsentOrPay(); }, "dares-consent-yes"));
-        row.Children.Add(DareLook.Quiet(Loc.Get("dares_not_now"), null, () => { FriendsSfx.Dismiss(); _consent.Clear(); BuildCard(); }, "dares-consent-no"));
-        _body.Children.Add(row);
-        DareLook.CardIn(_body);
+        var row = new WrapPanel { Margin = new Thickness(0, 16, 0, 0) };
+        row.Children.Add(DareLook.Big(Loc.Get("dares_ld_sure"), DareBig.Go, () => { FriendsSfx.Click(); NextConsentOrPay(); }, "dares-consent-yes"));
+        row.Children.Add(DareLook.Quiet(Loc.Get("dares_not_now"), null, () => { FriendsSfx.Dismiss(); _consent.Clear(); BuildCard(); }, "dares-consent-no", onCard: true));
+        inner.Children.Add(row);
+        DareLook.CardIn(_slip);
     }
 
+    /// <summary>One consent line: a small ink disc, the words in print.</summary>
     private static FrameworkElement Bullet(string text)
     {
-        var g = new Grid { Margin = new Thickness(0, 4, 0, 4) };
+        var g = new Grid { Margin = new Thickness(0, 3, 0, 3) };
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var dot = DareLook.Glyph(DareLook.ToneGlyph(DareTone.Lockdown), 12, FriendsLook.Frozen(DareLook.ToneColor(DareTone.Lockdown)));
-        dot.Margin = new Thickness(0, 0, 10, 0);
+        var dot = new Ellipse { Width = 7, Height = 7, Fill = DareLook.InkBrush, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(2, 11, 12, 0) };
         g.Children.Add(dot);
-        var t = DareLook.Words(text, 13.5, FriendsLook.TextBrush, wrap: true);
+        var t = DareLook.Words(text, 21, DareLook.CardInkBrush, wrap: true);
+        t.LineHeight = 30;
         Grid.SetColumn(t, 1);
         g.Children.Add(t);
         return g;
@@ -208,8 +208,8 @@ public sealed class DareDebtCard : Window
         if (r != DareActResult.Done)
         {
             FriendsSfx.Denied();
-            BuildCard();
-            _body.Children.Add(Line(Loc.Get(DareCardRules.ActKey(r)), FriendsLook.GoldBrush, "dares-debt-result"));
+            var again = BuildCard();
+            again.Children.Add(Line(Loc.Get(DareCardRules.ActKey(r)), DareLook.WarnOnCardBrush, "dares-debt-result"));
             return r;
         }
         // The Lockdown takes the screen now; the card steps out of its way at once.
@@ -229,14 +229,15 @@ public sealed class DareDebtCard : Window
             text = key == "dares_debt_claimed" ? Loc.GetF(key, _bet.Friend.Name) : Loc.Get(key);
             stampWord = Loc.Get("dares_stamp_paid");
         }
-        Frame(Loc.Get("dares_debt_title"), null);
-        _body.Children.Add(OweLine());
-        _slip.Children.Add(DareLook.Stamp(stampWord, op == DareOp.Renounce ? FriendsLook.Muted : FriendsLook.Mint));
-        _body.Children.Add(Line(text, FriendsLook.MintBrush, "dares-debt-result"));
-        var close = DareLook.Quiet(Loc.Get("dares_close"), null, () => DareLook.FadeOutThen(this, Close), "dares-done");
-        close.Margin = new Thickness(0, 12, 0, 0);
-        close.HorizontalAlignment = HorizontalAlignment.Left;
-        _body.Children.Add(close);
+        var inner = Frame(Loc.Get("dares_debt_title"), null);
+        inner.Children.Add(OweLine());
+        _slip.Children.Add(DareLook.Stamp(stampWord, grey: op == DareOp.Renounce));
+        var done = Line(text, DareLook.GoodOnCardBrush, "dares-debt-result");
+        done.FontSize = 20;
+        inner.Children.Add(done);
+        var close = DareLook.Quiet(Loc.Get("dares_close"), null, () => DareLook.FadeOutThen(this, Close), "dares-done", onCard: true);
+        close.Margin = new Thickness(0, 14, 0, 0);
+        inner.Children.Add(close);
         return r;
     }
 

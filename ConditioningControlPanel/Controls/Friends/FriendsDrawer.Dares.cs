@@ -41,7 +41,7 @@ public sealed partial class FriendsDrawer
     {
         mi.Foreground = FriendsLook.PinkBrush;
         mi.FontWeight = FontWeights.SemiBold;
-        mi.Icon = DareLook.Glyph(DareLook.ToneGlyph(DareTone.Dare), 13, FriendsLook.PinkBrush);
+        mi.Icon = DareLook.Icon("envelope", 18, FriendsLook.PinkBrush, null, 1.9);
         var snap = DaresSnap();
         if (!DareCardRules.CanDare(snap, ServerClock.UtcNow) && snap.Me.BannedUntil is DateTimeOffset until)
         {
@@ -103,8 +103,10 @@ public sealed partial class FriendsDrawer
         _daresBox.Children.Add(head);
         if (banned)
         {
-            var b = DareLook.Words(Loc.GetF("dares_banned_until", snap.Me.BannedUntil!.Value.ToLocalTime().ToString("ddd d MMM HH:mm")),
-                11.5, FriendsLook.GoldBrush, wrap: true);
+            var b = FriendsLook.Label(Loc.GetF("dares_banned_until", snap.Me.BannedUntil!.Value.ToLocalTime().ToString("ddd d MMM HH:mm")),
+                11.5, FriendsLook.GoldBrush, FriendsLook.Display);
+            b.TextWrapping = TextWrapping.Wrap;
+            b.TextTrimming = TextTrimming.None;
             b.Margin = new Thickness(8, 0, 8, 4);
             b.Tag = "dares-banned";
             _daresBox.Children.Add(b);
@@ -143,26 +145,21 @@ public sealed partial class FriendsDrawer
             top.Inlines.Add(new System.Windows.Documents.Run(" · " + Loc.Get("dares_ended_early")) { Foreground = FriendsLook.GoldBrush });
         mid.Children.Add(top);
 
-        // What it is about, short: the kind's icon and the "what" words.
-        var what = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
+        // What it is about, short: a small handwritten fill, the kind's icon and colour.
         var tone = DareSlipRules.ToneOf(bet.What.Kind);
         int.TryParse(bet.What.Kind == DareKind.Dare ? bet.What.Target : null, out var wn);
-        var gl = DareLook.Glyph(DareLook.ToneGlyph(tone), 11, FriendsLook.Frozen(DareLook.ToneColor(tone)));
-        gl.Margin = new Thickness(0, 0, 5, 0);
-        what.Children.Add(gl);
-        what.Children.Add(FriendsLook.Label(DareSlipRules.WhatText(bet.Type, bet.What, wn, Loc.Get), 11.5, FriendsLook.MutedBrush));
+        var what = DareLook.Fill(new DareSeg(DareSegKind.Chip, DareSlipRules.WhatText(bet.Type, bet.What, wn, Loc.Get), DareStep.What,
+            tone, DareSlipRules.TipOf(bet.What.Kind)), null, small: true);
+        what.Margin = new Thickness(0, 4, 0, 0);
         mid.Children.Add(what);
 
         if (state == DareRowState.Running) mid.Children.Add(Progress(bet));
         if (state is DareRowState.IOwe or DareRowState.TheyOwe)
         {
             var stake = state == DareRowState.IOwe ? bet.MyStake : bet.TheirStake;
-            var words = Loc.GetF(state == DareRowState.IOwe ? "dares_i_owe" : "dares_they_owe",
-                DareSlipRules.StakeText(stake, stake.DareNumber, Loc.Get));
-            var owe = FriendsLook.Label(words, 11.5, FriendsLook.Frozen(DareLook.ToneColor(DareSlipRules.ToneOf(stake.Kind))));
-            owe.Margin = new Thickness(0, 2, 0, 0);
-            owe.Tag = "dares-owe";
-            mid.Children.Add(owe);
+            mid.Children.Add(OweRow(Loc.Get(state == DareRowState.IOwe ? "dares_i_owe" : "dares_they_owe"),
+                new DareSeg(DareSegKind.Chip, DareSlipRules.StakeText(stake, stake.DareNumber, Loc.Get), DareStep.Mine,
+                    DareSlipRules.ToneOf(stake.Kind), DareSlipRules.TipOf(stake.Kind))));
         }
         Grid.SetColumn(mid, 1);
         g.Children.Add(mid);
@@ -198,6 +195,28 @@ public sealed partial class FriendsDrawer
         return row;
     }
 
+    /// <summary>"I owe [fill]": the template's words around a small handwritten fill of the stake.</summary>
+    private static FrameworkElement OweRow(string template, DareSeg stake)
+    {
+        var row = new WrapPanel { Margin = new Thickness(0, 4, 0, 0), Tag = "dares-owe" };
+        int at = template.IndexOf("{0}", StringComparison.Ordinal);
+        string before = at < 0 ? template : template.Substring(0, at), after = at < 0 ? "" : template.Substring(at + 3);
+        if (before.Trim().Length > 0)
+        {
+            var b = FriendsLook.Label(before.Trim(), 11.5, FriendsLook.TextBrush, FriendsLook.Display);
+            b.Margin = new Thickness(0, 0, 5, 0);
+            row.Children.Add(b);
+        }
+        row.Children.Add(DareLook.Fill(stake, null, small: true));
+        if (after.Trim().Length > 0)
+        {
+            var a = FriendsLook.Label(after.Trim(), 11.5, FriendsLook.TextBrush, FriendsLook.Display);
+            a.Margin = new Thickness(5, 0, 0, 0);
+            row.Children.Add(a);
+        }
+        return row;
+    }
+
     private static Brush StateBrush(DareRowState s) => s switch
     {
         DareRowState.Offer or DareRowState.IOwe => FriendsLook.PinkBrush,
@@ -228,15 +247,17 @@ public sealed partial class FriendsDrawer
         }
         var (key, args) = DareCardRules.Left(bet.EndsAt - ServerClock.UtcNow);
         var left = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 0) };
-        var clock = DareLook.Glyph(DareLook.ToneGlyph(DareTone.Minutes), 10, FriendsLook.DimBrush);
+        var clock = DareLook.Icon("clock", 15, FriendsLook.MutedBrush);
         clock.Margin = new Thickness(0, 0, 4, 0);
         left.Children.Add(clock);
         left.Children.Add(FriendsLook.Label(Loc.GetF(key, args), 10.5, FriendsLook.DimBrush, FriendsLook.Mono));
         if (bet.Camera)
         {
-            var eye = DareLook.Glyph(DareLook.ToneGlyph(DareTone.CameraOn), 10, FriendsLook.MintBrush);
+            var eye = DareLook.Icon("eye", 16, FriendsLook.MintBrush);
             eye.Margin = new Thickness(8, 0, 0, 0);
+            eye.IsHitTestVisible = true;
             eye.ToolTip = Loc.Get("dares_help_camera");
+            System.Windows.Automation.AutomationProperties.SetName(eye, Loc.Get("dares_help_camera"));
             left.Children.Add(eye);
         }
         sp.Children.Add(left);
