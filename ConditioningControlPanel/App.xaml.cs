@@ -588,6 +588,9 @@ namespace ConditioningControlPanel
         /// <summary>The friends feed ("What happened"): the lines App.Friends raises, per account, kept on disk.</summary>
         public static Services.Friends.FriendsFeed? FriendsFeed { get; private set; }
 
+        /// <summary>DARES: temporary seam for the UI lane; lane C owns the real line.</summary>
+        public static Services.Dares.IDaresService? Dares { get; private set; }
+
         /// <summary>THE LEASH (2026-09-26): rides the friends poll. Null until startup builds it
         /// and after exit; every caller guards with <c>App.Leash?.</c>. The UI reaches it through
         /// <c>Controls.Leash.LeashLocator</c>, which this wiring sets once both lanes merge.</summary>
