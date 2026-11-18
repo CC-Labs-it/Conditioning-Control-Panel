@@ -100,6 +100,126 @@ public sealed class JustDropWindowTests
 
     private static GameWindow? Open() => GameWindow.OpenForTests(GameWindow.JustDropId);
 
+    private static global::Avalonia.Platform.Screen FrameScreen(PixelRect bounds, bool primary)
+    {
+        var screen = (global::Avalonia.Platform.Screen)Activator.CreateInstance(typeof(global::Avalonia.Platform.PlatformScreen),
+            new object[] { new global::Avalonia.Platform.PlatformHandle(new IntPtr(bounds.X + 1), "headless-test") })!;
+        typeof(global::Avalonia.Platform.Screen).GetProperty("Bounds")!.SetValue(screen, bounds);
+        typeof(global::Avalonia.Platform.Screen).GetProperty("WorkingArea")!.SetValue(screen, bounds);
+        typeof(global::Avalonia.Platform.Screen).GetProperty("Scaling")!.SetValue(screen, 1d);
+        typeof(global::Avalonia.Platform.Screen).GetProperty("IsPrimary")!.SetValue(screen, primary);
+        return screen;
+    }
+
+    private static void Fullscreen(GameWindow window, bool on) => typeof(GameWindow)
+        .GetMethod("SetJustDropFullscreen", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, new object[] { on });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void FullscreenRestoresMovedFrameAndMaximizedState(bool maximized) => Run(shell =>
+    {
+        var old = ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride;
+        ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = _ => new[] { FrameScreen(new PixelRect(0, 0, 1600, 900), true) };
+        try
+        {
+            JustDropService.SetServerEnabledForTests(true);
+            shell.ShowTab("justdrop");
+            var w = Open()!;
+            w.Position = new PixelPoint(120, 80); w.Width = 800; w.Height = 600;
+            Dispatcher.UIThread.RunJobs();
+            if (maximized) { w.WindowState = global::Avalonia.Controls.WindowState.Maximized; w.Position = new PixelPoint(0, 0); }
+            Fullscreen(w, true); Fullscreen(w, false);
+            Assert.Equal(maximized ? global::Avalonia.Controls.WindowState.Maximized : global::Avalonia.Controls.WindowState.Normal, w.WindowState);
+            if (maximized) w.WindowState = global::Avalonia.Controls.WindowState.Normal;
+            Assert.Equal(new PixelPoint(120, 80), w.Position);
+            Assert.Equal(800, w.Width); Assert.Equal(600, w.Height);
+        }
+        finally { ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = old; }
+    });
+
+    [Theory]
+    [InlineData(800, 600, 400, 150, 800, 600)]
+    [InlineData(1800, 1000, 0, 0, 1600, 900)]
+    public void RemovedScreenCentersRememberedFrame(int width, int height, int x, int y, int expectedWidth, int expectedHeight) => Run(shell =>
+    {
+        var old = ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride;
+        var primary = FrameScreen(new PixelRect(0, 0, 1600, 900), true);
+        var secondary = FrameScreen(new PixelRect(1600, 0, 1600, 900), false);
+        var screens = new[] { primary, secondary };
+        ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = _ => screens;
+        try
+        {
+            JustDropService.SetServerEnabledForTests(true); shell.ShowTab("justdrop");
+            var w = Open()!; w.Position = new PixelPoint(2000, 100); w.Width = width; w.Height = height;
+            Dispatcher.UIThread.RunJobs(); Fullscreen(w, true); screens = new[] { primary }; Fullscreen(w, false);
+            Assert.Equal(new PixelPoint(x, y), w.Position); Assert.Equal(expectedWidth, w.Width); Assert.Equal(expectedHeight, w.Height);
+        }
+        finally { ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = old; }
+    });
+
+    [Theory]
+    [InlineData(1000, 700, 1000, 700, 1600, 0)]
+    [InlineData(2000, 1200, 1360, 765, 1920, 217)]
+    public void ShopDefaultUsesPrimarySizeClampedToPanelScreen(int screenWidth, int screenHeight,
+        int expectedWidth, int expectedHeight, int expectedX, int expectedY) => Run(shell =>
+    {
+        var old = ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride;
+        ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = _ => new[] {
+            FrameScreen(new PixelRect(0, 0, 1600, 900), true),
+            FrameScreen(new PixelRect(1600, 0, screenWidth, screenHeight), false) };
+        try
+        {
+            shell.Position = new PixelPoint(1700, 100);
+            JustDropService.SetServerEnabledForTests(true); shell.ShowTab("justdrop");
+            var w = Open()!;
+            Assert.Equal(expectedWidth, w.Width); Assert.Equal(expectedHeight, w.Height);
+            Assert.Equal(new PixelPoint(expectedX, expectedY), w.Position);
+        }
+        finally { ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = old; }
+    });
+
+    [Fact]
+    public void ReplayStartsOnPanelScreenAndExitsToDefault() => Run(shell =>
+    {
+        var old = ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride;
+        ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = _ => new[] {
+            FrameScreen(new PixelRect(0, 0, 1600, 900), true), FrameScreen(new PixelRect(1600, 0, 1600, 900), false) };
+        try
+        {
+            shell.Position = new PixelPoint(1800, 100);
+            var w = GameWindow.LaunchJustDropReplay("order", shell)!;
+            Assert.True(w.Position.X >= 1600);
+            Fullscreen(w, false);
+            Assert.Equal(new PixelPoint(1720, 67), w.Position); Assert.Equal(1360, w.Width); Assert.Equal(765, w.Height);
+        }
+        finally { ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = old; }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void StraddlingPanelUsesScreenContainingMostOfWindow(bool replay) => Run(shell =>
+    {
+        var old = ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride;
+        ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = _ => new[] {
+            FrameScreen(new PixelRect(0, 0, 1600, 900), true), FrameScreen(new PixelRect(1600, 0, 1600, 900), false) };
+        try
+        {
+            shell.Position = new PixelPoint(1500, 100);
+            shell.Width = 800; shell.Height = 600;
+            Dispatcher.UIThread.RunJobs();
+            JustDropService.SetServerEnabledForTests(true);
+            GameWindow w;
+            if (replay) w = GameWindow.LaunchJustDropReplay("order", shell)!;
+            else { shell.ShowTab("justdrop"); w = Open()!; }
+            Assert.True(w.Position.X >= 1600);
+            if (replay) Fullscreen(w, false);
+            Assert.Equal(new PixelPoint(1720, 67), w.Position);
+        }
+        finally { ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = old; }
+    });
+
     [Fact]
     public void ShopAndReplayStayIndependentWhenThePanelIsMinimizedOrHidden() => Run(shell =>
     {
