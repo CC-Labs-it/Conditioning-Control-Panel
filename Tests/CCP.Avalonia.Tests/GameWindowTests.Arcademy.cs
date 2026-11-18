@@ -1,9 +1,10 @@
 using System;
+using System.Collections.Generic;
 using Avalonia.Threading;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
-using Newtonsoft.Json.Linq;
 using ConditioningControlPanel.Avalonia.Views.Games;
+using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -27,6 +28,58 @@ public sealed partial class GameWindowTests
             Assert.DoesNotContain(new SettingsService().Current.RemoteSubLibrary, e => e.Name == "hypno");
             Assert.Equal("library", (string?)frame!["type"]);
             Assert.Empty((JArray)frame["subLibrary"]!);
+        }
+        finally { w.Close(); }
+    });
+
+    [Fact]
+    public void Arcademy_Settings_AllowKnownAndRefuseUnknown() => Run((_, _) =>
+    {
+        var w = new GameWindow(new GameWindow.Game("arcademy", "title", "arcademy/index.html"));
+        try
+        {
+            CoreSettings.Current.ArcademyAudioMute = false;
+            CoreSettings.Current.ArcademySettingsJson = "{}";
+            w.HandleMessage("{\"type\":\"set-setting\",\"key\":\"unknown\",\"value\":true}");
+            Assert.Equal("{}", CoreSettings.Current.ArcademySettingsJson);
+            w.HandleMessage("{\"type\":\"set-setting\",\"key\":\"audioMute\",\"value\":true}");
+            Assert.True(CoreSettings.Current.ArcademyAudioMute);
+        }
+        finally { w.Close(); }
+    });
+
+    [Fact]
+    public void Arcademy_Keybinds_AreStoredAndMalformedInputDoesNotEraseThem() => Run((_, _) =>
+    {
+        var w = new GameWindow(new GameWindow.Game("arcademy", "title", "arcademy/index.html"));
+        try
+        {
+            w.HandleMessage("{\"type\":\"set-setting\",\"key\":\"keybinds\",\"value\":{\"jump\":\"J\"}}");
+            Assert.Equal("J", (string?)JObject.Parse(CoreSettings.Current.ArcademyKeybindsJson)["jump"]);
+            w.HandleMessage("{\"type\":\"set-setting\",\"key\":\"keybinds\",\"value\":\"bad\"}");
+            Assert.Equal("J", (string?)JObject.Parse(CoreSettings.Current.ArcademyKeybindsJson)["jump"]);
+        }
+        finally { w.Close(); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Arcademy_Keybinds_RefusalEchoesStoredValue(bool oversized) => Run((_, _) =>
+    {
+        var w = new GameWindow(new GameWindow.Game("arcademy", "title", "arcademy/index.html"));
+        try
+        {
+            CoreSettings.Current.ArcademyKeybindsJson = "{\"jump\":\"J\"}";
+            var frames = new List<JObject>();
+            w.Posted += json => frames.Add(JObject.Parse(json));
+            JToken value = oversized ? new JObject { ["jump"] = new string('x', 7001) } : new JValue("bad");
+            w.HandleMessage(new JObject { ["type"] = "set-setting", ["key"] = "keybinds", ["value"] = value }.ToString());
+            var reply = Assert.Single(frames);
+            Assert.Equal("setting", (string?)reply["type"]);
+            Assert.Equal("keybinds", (string?)reply["key"]);
+            Assert.Equal("J", (string?)reply["value"]?["jump"]);
+            Assert.Equal("J", (string?)JObject.Parse(CoreSettings.Current.ArcademyKeybindsJson)["jump"]);
         }
         finally { w.Close(); }
     });
