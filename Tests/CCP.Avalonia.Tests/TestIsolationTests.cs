@@ -465,6 +465,28 @@ public class TestIsolationTests
         });
 
     [Fact]
+    public async System.Threading.Tasks.Task SpokenSafeWordTestRestoresPremiumAndPanicBeforeAssemblyCleanup()
+    {
+        var settings = CoreSettings.Current;
+        var premium = CoreEntitlement.HasPremiumProvider;
+        var panic = settings.PanicKeyEnabled;
+        System.Func<bool> sentinel = () => false;
+        try
+        {
+            CoreEntitlement.HasPremiumProvider = sentinel;
+            settings.PanicKeyEnabled = false;
+            await new VoiceCommandsTests().TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown();
+            Assert.Same(sentinel, CoreEntitlement.HasPremiumProvider);
+            Assert.False(settings.PanicKeyEnabled);
+        }
+        finally
+        {
+            CoreEntitlement.HasPremiumProvider = premium;
+            settings.PanicKeyEnabled = panic;
+        }
+    }
+
+    [Fact]
     public void PrivacyRingTestRestoresProviderAndLeavesRunningEngineAlone() => AvaloniaTestDispatcher.Run(() =>
     {
         var provider = CoreSettings.ServiceProvider;
