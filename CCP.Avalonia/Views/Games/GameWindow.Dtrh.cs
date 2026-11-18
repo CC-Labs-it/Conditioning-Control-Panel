@@ -12,8 +12,7 @@
 // meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.spirals / ccp.content / ccp.mod origins, bark routing, sfx,
 // fire-payload, freeze/mute (native video), vn-speaking, haptics, report-bug, session stats,
 // achievements bubble credit, RevealService.Sync, crash sentinel, EMI desk fires, the audio-web pack request,
-// tucking the panel to the tray. WebHost has no process-failed signal;
-// the heartbeat watch recovers silent ready pages only, not failures before ready.
+// tucking the panel to the tray. Browser failures and silent ready pages share recovery.
 // Slice D: favorites + asset-stats (engagement history, #3727), the saved Loom spirals (loom-list and loom-*, #3949).
 using System;
 using System.IO;
@@ -444,6 +443,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (_dtrhRecoveryQueued) return "recovering";
             if (!DtrhHeartbeatRule.ShouldRecover(IsReady, _dtrhExiting, _dtrhRunActive, nowUtc - _dtrhLastHeartbeatUtc))
                 return "ok";
+            return RecoverDtrh("heartbeat-silent");
+        }
+
+        // WPF DtrhHostService.cs:990-1013: browser failure also recovers before page ready.
+        private string RecoverDtrh(string reason)
+        {
+            if (_closing || _dtrhExiting) return "idle";
+            if (_dtrhRecoveryQueued) return "recovering";
             _dtrhRecoveryQueued = true;
             int panicEpoch = _dtrhPanicEpoch;
             // WPF DtrhHostService.cs:997-1013 Recover dispatches before disposing. A panic/close queued ahead of this wins.
@@ -452,7 +459,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 if (_closing || _dtrhExiting || panicEpoch != _dtrhPanicEpoch) return;
                 bool retry = !DtrhRelaunchedOnce;
                 if (retry) DtrhRelaunchedOnce = true;
-                Log.Warning("DtrhHost: heartbeat silent - {Action}", retry ? "relaunching once" : "giving up");
+                Log.Warning("DtrhHost: recovery ({Reason}) - {Action}", reason, retry ? "relaunching once" : "giving up");
                 Close(); // stops the timer and banks the last snapshot
                 if (retry && panicEpoch == _dtrhPanicEpoch)
                 {

@@ -188,6 +188,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             Spec = spec;
             Web = new WebHost();
+            if (spec.Id == DtrhId) Web.BrowserProcessFailed += () => RecoverDtrh("process-failed");
             if (spec.Id == FypId) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
             if (spec.Id == "loom") Web.EnvironmentRequested += ConfigureLoomEnvironment;
             // Before Load/Show can create the native environment (WPF Pbp host :200-215).

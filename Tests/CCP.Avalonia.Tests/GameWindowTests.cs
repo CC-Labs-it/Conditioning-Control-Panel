@@ -2186,6 +2186,29 @@ public sealed partial class GameWindowTests
         finally { w.Close(); }
     });
     [Fact]
+    public void Dtrh_BrowserFailure_RecoversOnceAndPanicCancelsQueuedRecovery() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var w = GameWindow.Launch("dtrh")!;
+        w.Web.OnBrowserProcessFailed(); // before ready
+        w.Web.OnBrowserProcessFailed();
+        Dispatcher.UIThread.RunJobs();
+        var replacement = GameWindow.OpenForTests("dtrh");
+        Assert.NotNull(replacement);
+        Assert.NotSame(w, replacement);
+        replacement.Web.OnBrowserProcessFailed();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+
+        GameWindow.DtrhRelaunchedOnce = false;
+        w = GameWindow.Launch("dtrh")!;
+        w.Web.OnBrowserProcessFailed();
+        PanicSurfaces.All.Single(x => x.Id == "games").Stop(MainShellWindow.Current!);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.False(GameWindow.DtrhRelaunchedOnce);
+    });
+
+    [Fact]
     public void Dtrh_Heartbeat_RelaunchesOnceAndStopsWatching() => RunDtrh(lab: true, (_, xp, _, _) =>
     {
         var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
