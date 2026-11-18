@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Animation;
@@ -149,11 +150,15 @@ public sealed class SpiralGentleWindowFadeTests
         {
             host.Show();
             SpiralOverlay.CloseAll();
+            // CloseAll retires an in-flight decode but does not cancel its worker. Settle it before
+            // starting this test so its completion cannot hand off to a second decode for our path.
+            await SettleDecodes();
+            SpiralOverlay.CloseAll();
             SpiralOverlay.SkipPlatformChecksForTests = true;
             CoreSession.IsEngineRunningProvider = null;
             (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize, s.GentleVisuals, s.GentleFadeSeconds) = (true, path, false, true, 0.5);
             SpiralOverlay.Refresh(host);
-            if (SpiralOverlay.Decoding is { } decode) await decode;
+            await SettleDecodes();
             Assert.True(SpiralOverlay.IsAnimating);
             SpiralOverlay.Tick();
             var old = Assert.Single(SpiralOverlay.Shown);
@@ -169,7 +174,7 @@ public sealed class SpiralGentleWindowFadeTests
             Assert.True(old.IsVisible);
             s.SpiralEnabled = true;
             SpiralOverlay.Refresh(host);
-            if (SpiralOverlay.Decoding is { } restart) await restart;
+            await SettleDecodes();
             var current = Assert.Single(SpiralOverlay.Shown);
             Assert.NotSame(old, current);
             Assert.True(old.IsVisible);
@@ -188,6 +193,73 @@ public sealed class SpiralGentleWindowFadeTests
             dir.Delete(true);
         }
     });
+
+    [Fact]
+    public Task StaleDecodeHandsOffToTheCurrentGif() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var dir = Directory.CreateTempSubdirectory("spiral-stale-fade-");
+        var stalePath = Path.Combine(dir.FullName, "old.gif");
+        var currentPath = Path.Combine(dir.FullName, "current.gif");
+        File.WriteAllBytes(stalePath, Convert.FromBase64String(TinyGif));
+        File.Copy(stalePath, currentPath);
+        var provider = CoreSettings.ServiceProvider;
+        var checks = SpiralOverlay.SkipPlatformChecksForTests;
+        var engine = CoreSession.IsEngineRunningProvider;
+        var host = new Window();
+        using var release = new ManualResetEventSlim();
+        var entered = new[] { new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously),
+                              new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously) };
+        Task[] holders = Array.Empty<Task>();
+        try
+        {
+            SpiralOverlay.CloseAll();
+            await SettleDecodes();
+            SpiralOverlay.CloseAll();
+            var service = new SettingsService();
+            CoreSettings.ServiceProvider = () => service;
+            var s = service.Current;
+            (s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize) = (true, stalePath, false);
+            SpiralOverlay.SkipPlatformChecksForTests = true;
+            CoreSession.IsEngineRunningProvider = null;
+            host.Show();
+            holders = entered.Select(ready => Task.Run(() => SpiralOverlay.RunGatedDecode(() =>
+            {
+                ready.TrySetResult(true);
+                release.Wait();
+                return 0;
+            }))).ToArray();
+            await Task.WhenAll(entered.Select(ready => ready.Task)).WaitAsync(TimeSpan.FromSeconds(15));
+            SpiralOverlay.Refresh(host);
+            var stale = Assert.IsAssignableFrom<Task>(SpiralOverlay.Decoding);
+            SpiralOverlay.CloseAll();
+            s.SpiralPath = currentPath;
+            SpiralOverlay.Refresh(host);
+            Assert.Same(stale, SpiralOverlay.Decoding);
+            release.Set();
+            await SettleDecodes();
+            Assert.True(SpiralOverlay.IsShowing);
+            Assert.True(SpiralOverlay.IsAnimating);
+            Assert.Equal(currentPath, SpiralOverlay.SourcePath());
+        }
+        finally
+        {
+            release.Set();
+            await Task.WhenAll(holders);
+            SpiralOverlay.CloseAll();
+            await SettleDecodes();
+            host.Close();
+            SpiralOverlay.SkipPlatformChecksForTests = checks;
+            CoreSession.IsEngineRunningProvider = engine;
+            CoreSettings.ServiceProvider = provider;
+            dir.Delete(true);
+        }
+    });
+
+    // A stale decode can start a new decode on completion. Await the handoff as well.
+    private static async Task SettleDecodes()
+    {
+        while (SpiralOverlay.Decoding is { } pending) await pending;
+    }
 
     private sealed class OnDispose(Action action) : IDisposable { public void Dispose() => action(); }
 }
