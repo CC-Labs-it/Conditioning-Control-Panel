@@ -3167,6 +3167,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _enhancement!.MediaSource = "";
             MarkDirty();
             RefreshLinkedFilesUi();
+            ++_previewGeneration;
+            TeardownPreview();
+            DisposeLocalAudio();
+            _waveformPeaks = null;
+            _hasWaveformDuration = false;
+            UpdateWaveformPath();
             ShowPlaceholder();
             ScheduleValidation();
         }

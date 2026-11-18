@@ -61,6 +61,32 @@ public sealed class DeeperRowsTests
     });
 
     [Fact]
+    public Task ClearingLinkedMediaStopsBrowserPreview() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var model = new Enhancement { MediaType = MediaTypes.Video, MediaSource = "https://www.tiktok.com/@a/video/1" };
+        var editor = new DeeperEditorWindow(model, null);
+        try
+        {
+            editor.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(editor.BrowserPreview.IsVisible);
+            editor.BrowserPreview.Source = new Uri(model.MediaSource);
+            typeof(DeeperEditorWindow).GetField("_browserNavigated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(editor, true);
+            Click(editor.FindControl<Button>("BtnLinkedMediaClear")!);
+            Dispatcher.UIThread.RunJobs();
+            var dialog = Assert.Single(editor.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>());
+            dialog.Close(true);
+            for (var i = 0; i < 20 && model.MediaSource != ""; i++)
+                await Task.Delay(10);
+            Assert.Equal("", model.MediaSource);
+            Assert.Equal("about:blank", editor.BrowserPreview.Source!.AbsoluteUri);
+            Assert.True(editor.PreviewPlaceholder.IsVisible);
+        }
+        finally { editor.ForceClose(); }
+    });
+
+    [Fact]
     public Task PreviewFromPlayerOwnedEditorReusesOwner() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
