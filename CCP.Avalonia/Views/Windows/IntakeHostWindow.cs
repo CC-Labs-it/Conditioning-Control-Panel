@@ -72,6 +72,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Web.EnvironmentRequested += Views.Games.GameWindow.ConfigureHostedPageMotion;
             Content = Web;
             Web.WindowsBrowserArguments = "--autoplay-policy=no-user-gesture-required";
+            // WPF IntakeHostService: its own profile (browser_data_intake). The autoplay argument must never
+            // share the games' hosted-motion folder: WebView2 refuses one folder opened with two argument sets.
+            Web.WindowsUserDataFolder = Path.Combine(CorePaths.UserData, "browser_data_avalonia_intake");
             Web.NativeFullscreenEntered += () => SetPageFullscreen(true);
             Web.NativeFullscreenExited += () => SetPageFullscreen(false);
             // The remembered mode belongs to a page-entered fullscreen only; any other exit drops it.
