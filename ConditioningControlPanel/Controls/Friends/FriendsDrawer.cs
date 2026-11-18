@@ -532,7 +532,13 @@ public sealed partial class FriendsDrawer : Border
         outer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         outer.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        var top = new Grid();
+        // The row's own header says what a right-click holds (owner 2026-11-18: the Dare door was hard
+        // to find); never the open card under it, where the hint would sit over the buttons.
+        var top = new Grid
+        {
+            Background = Brushes.Transparent,
+            ToolTip = Loc.Get(DaresOpen() ? "friends_row_tip_dare" : "friends_row_tip"),
+        };
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(38) });
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });

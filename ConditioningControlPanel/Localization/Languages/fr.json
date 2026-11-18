@@ -7549,6 +7549,8 @@
   "friends_menu_remove": "Retirer l'ami",
   "friends_menu_block": "Bloquer",
   "friends_menu_report": "Signaler",
+  "friends_row_tip_dare": "Clic droit : défi, couper les petits coups, retirer, bloquer ou signaler.",
+  "friends_row_tip": "Clic droit : couper les petits coups, retirer, bloquer ou signaler.",
   "friends_menu_report_spam": "Spam",
   "friends_menu_report_harassment": "Harcèlement",
   "friends_menu_report_underage": "Semble mineur",

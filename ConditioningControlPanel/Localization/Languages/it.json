@@ -7897,6 +7897,8 @@
   "friends_menu_remove": "Rimuovi dagli amici",
   "friends_menu_block": "Blocca",
   "friends_menu_report": "Segnala",
+  "friends_row_tip_dare": "Clic destro: sfida, silenzia punzecchiate, rimuovi, blocca o segnala.",
+  "friends_row_tip": "Clic destro: silenzia punzecchiate, rimuovi, blocca o segnala.",
   "friends_menu_report_spam": "Spam",
   "friends_menu_report_harassment": "Molestie",
   "friends_menu_report_underage": "Sembra minorenne",

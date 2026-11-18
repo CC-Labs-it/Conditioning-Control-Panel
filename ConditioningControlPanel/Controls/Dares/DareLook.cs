@@ -779,10 +779,13 @@ internal static class DareLook
     /// <paramref name="compact"/> = the friend card's word stamps: 15 px print, the border in
     /// <paramref name="edge"/>, no shadow, a real press onto the base edge, and <paramref name="on"/>
     /// drawn pressed in with an ink outline (ON IS PRESSED IN). The default draws the Dares tray's chip.</summary>
+    /// <summary>A compact choice's word size before any shrink to fit.</summary>
+    public const double CompactWord = 15;
+
     public static Button Choice(string label, string? tip, Action onClick, string tag,
         bool compact = false, Color? edge = null, bool on = false)
     {
-        var t = Words(label, compact ? 15 : 19, B(CardInk), weight: FontWeights.Bold);
+        var t = Words(label, compact ? CompactWord : 19, B(CardInk), weight: FontWeights.Bold);
         Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
         var rest = on ? WhiteBrush : TileBrush;
         var move = new TranslateTransform(0, on ? 2.5 : 0);

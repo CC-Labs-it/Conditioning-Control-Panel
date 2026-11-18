@@ -8304,6 +8304,8 @@
   "friends_menu_remove": "Remove friend",
   "friends_menu_block": "Block",
   "friends_menu_report": "Report",
+  "friends_row_tip_dare": "Right-click to dare, mute pokes, remove, block or report.",
+  "friends_row_tip": "Right-click to mute pokes, remove, block or report.",
   "friends_menu_report_spam": "Spam",
   "friends_menu_report_harassment": "Harassment",
   "friends_menu_report_underage": "Looks underage",

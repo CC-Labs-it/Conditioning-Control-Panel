@@ -7549,6 +7549,8 @@
   "friends_menu_remove": "フレンドから外す",
   "friends_menu_block": "ブロック",
   "friends_menu_report": "通報",
+  "friends_row_tip_dare": "右クリック：賭け、つつきをミュート、外す、ブロック、通報",
+  "friends_row_tip": "右クリック：つつきをミュート、外す、ブロック、通報",
   "friends_menu_report_spam": "スパム",
   "friends_menu_report_harassment": "嫌がらせ",
   "friends_menu_report_underage": "未成年に見える",

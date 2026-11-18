@@ -7549,6 +7549,8 @@
   "friends_menu_remove": "친구 삭제",
   "friends_menu_block": "차단",
   "friends_menu_report": "신고",
+  "friends_row_tip_dare": "우클릭: 내기, 찌르기 음소거, 삭제, 차단, 신고",
+  "friends_row_tip": "우클릭: 찌르기 음소거, 삭제, 차단, 신고",
   "friends_menu_report_spam": "스팸",
   "friends_menu_report_harassment": "괴롭힘",
   "friends_menu_report_underage": "미성년자로 보임",

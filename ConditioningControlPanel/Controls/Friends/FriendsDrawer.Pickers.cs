@@ -195,6 +195,44 @@ public sealed partial class FriendsDrawer
 
     private static readonly string[] WatchTabs = { "catalogue", "flavour", "ht" };
 
+    /// <summary>
+    /// The watch switch's words share one size: the size at which the longest one fits its cell
+    /// (DareLook.Choice compact shrinks each word on its own, which made one cell read smaller).
+    /// </summary>
+    private static void EvenOutWords(Panel cells)
+    {
+        var words = new List<(TextBlock Text, Border Face)>();
+        foreach (var child in cells.Children)
+            if (child is DependencyObject d && FindWord(d) is { } w) words.Add(w);
+        if (words.Count == 0) return;
+        const double baseSize = DareLook.CompactWord;
+        double scale = 1;
+        foreach (var (text, face) in words)
+        {
+            // A switch cell is narrow: slimmer sides leave the word more room before it shrinks.
+            face.Padding = new Thickness(4, face.Padding.Top, 4, face.Padding.Bottom);
+            var room = face.ActualWidth - face.Padding.Left - face.Padding.Right - face.BorderThickness.Left - face.BorderThickness.Right;
+            if (room <= 0) return;   // not laid out yet
+            text.FontSize = baseSize;
+            text.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            if (text.DesiredSize.Width > room) scale = Math.Min(scale, room / text.DesiredSize.Width);
+        }
+        var size = Math.Floor(baseSize * scale * 2) / 2;   // half-point steps, never larger than the stock size
+        foreach (var (text, _) in words) text.FontSize = size;
+    }
+
+    /// <summary>A compact choice's word and the face around it (Button > Grid > Border > Viewbox > TextBlock).</summary>
+    private static (TextBlock, Border)? FindWord(DependencyObject root)
+    {
+        if (root is Viewbox { Child: TextBlock t, Parent: Border face }) return (t, face);
+        if (root is ContentControl { Content: DependencyObject c }) return FindWord(c);
+        if (root is Decorator { Child: { } dc }) return FindWord(dc);
+        if (root is Panel p)
+            foreach (var ch in p.Children)
+                if (ch is DependencyObject cd && FindWord(cd) is { } hit) return hit;
+        return null;
+    }
+
     private FrameworkElement BuildWatchPicker(Friend f)
     {
         var sp = new StackPanel { Tag = "friends-picker:watch" };
@@ -207,6 +245,8 @@ public sealed partial class FriendsDrawer
             b.Margin = new Thickness(tabs.Children.Count == 0 ? 0 : 3, 0, tabs.Children.Count == WatchTabs.Length - 1 ? 0 : 3, 6);
             tabs.Children.Add(b);
         }
+        // One size for all three: a long word ("Geschmack") shrinking alone looked like a different button.
+        tabs.SizeChanged += (_, _) => EvenOutWords(tabs);
         sp.Children.Add(tabs);
 
         switch (_watchTab)
