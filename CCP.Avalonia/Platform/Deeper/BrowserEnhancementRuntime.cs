@@ -69,6 +69,7 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
                 voice = live(path, gain, Finish);
                 if (voice != null && !finished) settings.PropertyChanged += Follow;
                 stopPlayer = voice == null ? () => { } : voice.Dispose;
+                if (voice == null) Finish(); // a clip that never started must not hold the duck
             }
             else stopPlayer = CoreAudio.PlayStoppable(path, gain, "deeper", onFinished: Finish);
             stop = () => { try { stopPlayer(); } finally { Finish(); } };
