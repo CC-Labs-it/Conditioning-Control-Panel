@@ -5893,6 +5893,8 @@
   "tooltip_super_pool_size": "마우스가 멈춰 있는 동안 소용돌이가 커지는 크기입니다.",
   "super_pool_centred": "가운데 고정",
   "tooltip_super_pool_centred": "소용돌이가 최대 크기로 화면 가운데에 머물고 마우스를 따라가지 않습니다.",
+  "super_moving_pops": "움직이는 효과가 버블과 플래시 이미지를 터뜨림",
+  "tooltip_super_moving_pops": "켜기: 튀는 글자와 소용돌이가 닿은 버블을 터뜨리고 플래시 이미지를 깨뜨립니다. 끄기: 밀고 끌어당기기는 하지만 아무것도 터뜨리지 않습니다.",
   "super_pool_drags": "끌어당김",
   "tooltip_super_pool_drags": "소용돌이가 끌어당겨 돌리는 것: 안개, 이미지, 버블.",
   "super_pool_drags_fog": "안개",

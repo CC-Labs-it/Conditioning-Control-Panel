@@ -386,6 +386,19 @@
                                            VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                            FontSize="13" FontWeight="Bold"/>
                             </Grid>
+                            <!-- Moving effects pop: one setting, also in the Whirlpool box. Off = the word sweeps nothing. -->
+                            <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_super_moving_pops}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{loc:Str super_moving_pops}" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" Margin="0,0,12,0"/>
+                                <CheckBox Grid.Column="1" x:Name="ChkScrawlPops" feat:OptionSection.Setting="MovingEffectsPop"
+                                          Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                          Checked="ChkScrawlPops_Changed" Unchecked="ChkScrawlPops_Changed"/>
+                            </Grid>
                         </StackPanel>
                     </ctl:SuperBox>
                 </StackPanel>

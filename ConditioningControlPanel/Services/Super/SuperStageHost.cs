@@ -146,6 +146,7 @@ public static class SuperStageHost
         // The gold-box options, read live so a slider moves the effect at once.
         var set = App.Settings?.Current;
         Stage.DragsFog = set?.WhirlpoolDragsFog != false;
+        Stage.MovingPops = set?.MovingEffectsPop == true;
         Stage.DragsPictures = set?.WhirlpoolDragsPictures != false;
         Stage.DragsBubbles = set?.WhirlpoolDragsBubbles != false;
         Stage.Pool.ReachScale = WhirlpoolOptions.ReachScale(set?.WhirlpoolSize ?? WhirlpoolOptions.SizeDefault);

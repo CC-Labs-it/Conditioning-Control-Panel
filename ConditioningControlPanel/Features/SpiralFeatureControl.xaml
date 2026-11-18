@@ -298,6 +298,20 @@
                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                   Checked="ChkPoolCentred_Changed" Unchecked="ChkPoolCentred_Changed"/>
                     </Grid>
+                    <!-- Moving effects pop: one setting, also in the Scrawl box. Off = the pool pulls but never eats. -->
+                    <Grid x:Name="PoolPopsRow" Height="36" Background="Transparent"
+                          ToolTip="{loc:Str tooltip_super_moving_pops}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{loc:Str super_moving_pops}" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" Margin="0,0,12,0"/>
+                        <CheckBox Grid.Column="1" x:Name="ChkPoolPops" feat:OptionSection.Setting="MovingEffectsPop"
+                                  Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                  Checked="ChkPoolPops_Changed" Unchecked="ChkPoolPops_Changed"/>
+                    </Grid>
                     <!-- What the pool drags in: three switches on one row, all on by default. -->
                     <Grid x:Name="PoolDragsRow" Height="36" Background="Transparent"
                           ToolTip="{loc:Str tooltip_super_pool_drags}">

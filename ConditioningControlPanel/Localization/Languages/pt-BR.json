@@ -5893,6 +5893,8 @@
   "tooltip_super_pool_size": "O quanto o redemoinho cresce enquanto o mouse fica parado.",
   "super_pool_centred": "Ficar no centro",
   "tooltip_super_pool_centred": "O redemoinho fica no centro da tela em tamanho máximo e não segue mais o mouse.",
+  "super_moving_pops": "Efeitos em movimento estouram bolhas e imagens flash",
+  "tooltip_super_moving_pops": "Ligado: a palavra que quica e o redemoinho estouram as bolhas e quebram as imagens flash que tocam. Desligado: eles ainda empurram e puxam, mas não estouram nem quebram nada.",
   "super_pool_drags": "Puxa",
   "tooltip_super_pool_drags": "O que o redemoinho puxa e faz girar: a névoa, as imagens, as bolhas.",
   "super_pool_drags_fog": "Névoa",

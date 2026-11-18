@@ -6453,6 +6453,8 @@
   "tooltip_super_pool_size": "How big the pool grows while the mouse rests.",
   "super_pool_centred": "Stay centered",
   "tooltip_super_pool_centred": "The pool sits in the middle of the screen at full size and no longer follows the mouse.",
+  "super_moving_pops": "Moving effects pop bubbles and flash images",
+  "tooltip_super_moving_pops": "On: the bouncing word and the Whirlpool pop bubbles and break flash images they touch. Off: they still push and pull, but pop and break nothing.",
   "super_pool_drags": "Drags in",
   "tooltip_super_pool_drags": "What the pool pulls in and winds around: the fog, pictures, bubbles.",
   "super_pool_drags_fog": "Fog",

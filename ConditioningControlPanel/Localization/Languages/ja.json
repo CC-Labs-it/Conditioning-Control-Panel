@@ -5893,6 +5893,8 @@
   "tooltip_super_pool_size": "マウスを止めているあいだに渦が育つ大きさ。",
   "super_pool_centred": "中央に固定",
   "tooltip_super_pool_centred": "渦は最大の大きさで画面の中央にとどまり、マウスを追いかけません。",
+  "super_moving_pops": "動くエフェクトでバブルとフラッシュ画像を割る",
+  "tooltip_super_moving_pops": "オン: 跳ねる文字と渦が、触れたバブルを割り、フラッシュ画像を壊します。オフ: 押したり引き寄せたりはしますが、何も割りません。",
   "super_pool_drags": "引きこむもの",
   "tooltip_super_pool_drags": "渦が引きこんで回すもの：霧、画像、バブル。",
   "super_pool_drags_fog": "霧",
