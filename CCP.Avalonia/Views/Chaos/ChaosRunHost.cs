@@ -204,6 +204,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         public static void StartRun(ChaosRunConfig? config = null, bool isRestart = false)
         {
             if (_active) return;
+            CloseLoadoutSidebar();
             if (!isRestart) SeasonFeatureTracking.Track(CoreSettings.Current, ConditioningControlPanel.Models.SeasonFeatureKeys.ChaosMode, ev => App.FeatureDayLog?.Note(ev), DateTime.UtcNow);
             try
             {
@@ -216,6 +217,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _lastHeatTint = -1;
                 _hud = new ChaosHudWindow(_state);
                 _hud.Show();
+                RefreshSidebarLoadout();   // WPF ChaosModeService.cs:342, countdown loadout
                 _overlay = ChaosOverlayWindow.ForRun();
                 _overlay.OnRunAgain = RunAgain;
                 _overlay.OnDismissed = OnOverlayClosed;
@@ -263,6 +265,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ChaosAnnouncerOverlay.Announce(boon.Name, ChaosAnnounceKind.Mantra, artKey: boon.Id);
             }
             ChaosRunEffects.ApplyLifetimeBoons(_state);
+            RefreshSidebarLoadout();   // WPF :445, lock in the loadout at SINK
             ChaosSkiaFxOverlay.EnsureCreated();   // WPF ChaosModeService.cs:412, idle run-start prewarm
             _hud?.SetPreRunExpanded(false);
             _hud?.SetClockVisible(_state.ShowWaveTimer);
@@ -1249,6 +1252,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Panic / app exit: close everything, no recap, no payout. Safe when idle.</summary>
         public static void ForceShutdown()
         {
+            CloseLoadoutSidebar();
             ChaosUnlockCardOverlay.CloseActive();
             ChaosAnnouncerOverlay.CloseActive();   // WPF :3177; also clears a queue left by an idle caller
             ChaosCursorGlowOverlay.CloseActive();   // WPF ForceShutdown :3183
