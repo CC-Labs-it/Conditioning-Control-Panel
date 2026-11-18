@@ -58,6 +58,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public Func<Uri, bool>? AllowNavigation { get; set; }
         internal bool SuppressNewWindows { get; set; }
+        internal Action<Uri?>? PopupRequested { get; set; }
         internal event Action? BrowserProcessFailed;
         internal event Action? BrowserStartupFailed;
         /// <summary>Per-host native settings, run on the UI thread once for every engine the view builds
@@ -552,6 +553,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         // WPF BrowserService.cs:538-562: handled even when blocked, never a second OS window.
         internal bool OnBrowserPopup(Uri? target)
         {
+            if (PopupRequested is { } popup) { popup(target); return true; }
             if (!RouteBrowserPopups) return false;
             if (target is not { IsAbsoluteUri: true }) return true;
             if (ConditioningControlPanel.Services.Browser.BrowserPopupRule.ShouldBlock(
