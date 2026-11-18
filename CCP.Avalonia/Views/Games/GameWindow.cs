@@ -212,16 +212,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 SizeChanged += (_, _) => CaptureDtrhWindowedFrame();
                 PropertyChanged += (_, e) => { if (e.Property == WindowStateProperty) OnDtrhWindowStateChanged(); };
             }
-            Opened += (_, _) => { lock (Open) { if (!Open.Contains(this)) Open.Add(this); } if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); StartBreakoutAccessWatch(); };
+            Opened += (_, _) => { lock (Open) { if (!Open.Contains(this)) Open.Add(this); } if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); if (Spec.Id == "arcademy") StartArcademyWatch(); StartBreakoutAccessWatch(); };
             Activated += (_, _) => { FunnelPageMessage.OnAppActivated(); ResumeBreakoutAfterPanic(DateTime.Now); };   // WPF's Application.Activated covers every window
             Closing += (_, _) => { _closing = true; _backRoomFx?.CancelAll(); CancelRaceFetch(); };
-            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); if (Spec.Id == FypId) { DisableFypEyes(); CloseFypVisit(); } StopBreakoutAccessWatch(); DisposeBreakoutMedia(); _raceRooms.Clear(); };
+            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); StopArcademyWatch(); if (Spec.Id == FypId) { DisableFypEyes(); CloseFypVisit(); } StopBreakoutAccessWatch(); DisposeBreakoutMedia(); _raceRooms.Clear(); };
             // WPF BackRoom/BackRoomHostService.cs:390,792: Breakout presence lasts until close.
             if (spec.Id == BreakoutDemoId || spec.Id == "breakout")
             {
                 Opened += (_, _) => FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);
                 Closed += (_, _) => FriendsHead.Service?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);
             }
+            if (spec.Id == "goon") { Opened += (_, _) => StartGoonWatch(); Closed += (_, _) => StopGoonWatch(); }
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
             if (spec.Id == FypId)
             {
@@ -482,6 +483,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         internal static void CloseAllForPanic()
         {
+            _goonPanicEpoch++;
             _dtrhPanicEpoch++; // also cancels a recovery whose Closed callback re-enters panic
             GameWindow[] all;
             lock (Open) all = Open.ToArray();
