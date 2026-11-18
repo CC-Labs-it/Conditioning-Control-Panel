@@ -27,4 +27,8 @@ public interface IDaresService
 
     /// <summary>Preview only: end a running bet now (deadline reached). No-op on the real service.</summary>
     Task SettleNowAsync(string betId, CancellationToken ct = default) => Task.CompletedTask;
+
+    /// <summary>The camera check right now (a camera bet counting): watching, held off by the player's
+    /// own stop, or unavailable (no consent or no device). Idle otherwise.</summary>
+    DareCameraState Camera => DareCameraState.Idle;
 }

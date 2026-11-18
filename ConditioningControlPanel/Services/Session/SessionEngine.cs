@@ -455,6 +455,9 @@ namespace ConditioningControlPanel.Services
                     _sessionStartStrictLock
                 );
 
+                // Dares: a finished session of a difficulty (CONTRACT "Counting", session).
+                Dares.DareTaps.RaiseSessionFinished(_currentSession.Difficulty);
+
                 try
                 {
                     SessionCompleted?.Invoke(this, new SessionCompletedEventArgs(
