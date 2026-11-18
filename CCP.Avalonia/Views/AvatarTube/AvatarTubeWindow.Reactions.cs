@@ -1,5 +1,9 @@
 using System;
 using System.Threading.Tasks;
+using System.Linq;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using ConditioningControlPanel.Services.Companion;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Awareness;
@@ -40,6 +44,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         {
             // OnOpened runs on every Hide/Show, OnClosed once: a second += outlived the window.
             DetachAwareness();
+            FlashOverlay.Clicked += OnFlashClicked;
             App.WindowAwareness.ActivityChanged += OnActivityChanged;
             App.WindowAwareness.StillOnActivity += OnStillOnActivity;
             App.WindowAwareness.Start();
@@ -47,8 +52,22 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         private void DetachAwareness()
         {
+            FlashOverlay.Clicked -= OnFlashClicked;
             App.WindowAwareness.ActivityChanged -= OnActivityChanged;
             App.WindowAwareness.StillOnActivity -= OnStillOnActivity;
+        }
+
+        // WPF AvatarTubeWindow.Reactions.cs:515-523: one in three clicks.
+        private void OnFlashClicked() => ReactToFlashClick(_random.Next(3));
+
+        internal void ReactToFlashClick(int roll)
+        {
+            if (ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced() || roll != 0) return;
+            var phrases = CompanionPhraseEditorDialog.LoadPhrases()
+                .Where(p => p.Category == "FlashClicked" && p.IsEnabled).ToArray();
+            if (phrases.Length == 0) return;
+            var phrase = phrases[_random.Next(phrases.Length)];
+            Giggle(phrase.Text, phraseAudioPath: phrase.AudioFilePath ?? CompanionEventAudio.Resolve(phrase.Text));
         }
 
         /// <summary>WPF gates shared by both handlers: startup cooldown, bubble up, category.</summary>
