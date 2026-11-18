@@ -5,6 +5,10 @@ server validates against a fixed grammar. Names and pictures are server-resolved
 opt-in and defaults off. This file is the authority for both halves: `proxy/friends.js` +
 `proxy/friends-routes.js` in CC-Labs-llc/CCP-Server and `Services/Friends/*` here.
 
+Sparkles never move between players on this wire or the leash's. The one exception, by owner call
+(2026-11-18), is a paid `sp` debt of a Dare (`Services/Dares/CONTRACT.md`, "Sparkles"): the loser's
+Sparkles go to the winner, in full, through the server.
+
 ## Door
 
 Every op is `POST /v2/friends/<op>` with JSON `{ unified_id, ... }` and the account token in
