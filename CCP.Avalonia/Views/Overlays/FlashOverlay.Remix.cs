@@ -83,7 +83,7 @@ internal static partial class FlashOverlay
         }
         try { foreach (var index in targets)
         {
-            if (Active.Count >= Cap(CoreSettings.Current, ambient)) { capped = true; break; }
+            if (OnScreen >= Cap(CoreSettings.Current, ambient)) { capped = true; break; }
             var screen = screens[index];
             var b = screen.Bounds;
             var (x, y, w, h) = JackpotRemixRoll.CentredGeometry(b.X, b.Y, b.Width, b.Height, frames[0].PixelSize.Width, frames[0].PixelSize.Height);
