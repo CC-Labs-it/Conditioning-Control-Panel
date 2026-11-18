@@ -25,9 +25,11 @@ internal sealed partial class GameWindow
 
     partial void HandleGoonMessage(JObject message, ref bool handled)
     {
+        if (HandleGoonInbox(message)) { handled = true; return; }
         switch ((string?)message["type"])
         {
             case "ready":
+                BootGoonInbox();
                 _goonBeat = _goonPaintMove = _goonTick = GoonUtcNow();
                 _goonPaint = null;
                 break; // the shared ready handler owns init until the Goon init slice lands
