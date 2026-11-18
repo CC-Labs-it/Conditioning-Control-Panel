@@ -554,7 +554,27 @@ public sealed class SessionRunnerTests : IDisposable
     }
 
     [Fact]
-    public void Ledger_IsPersistedBeforeTheSessionOverrides()
+    public void Ledger_IsPersistedBeforeTheSessionOverrides() => VerifyLedgerPersistence();
+
+    [Fact]
+    public void LedgerPersistenceDoesNotDeleteAnotherWritersTemporaryFile()
+    {
+        var otherFile = Path.Combine(CorePaths.UserData, "settings.json." + Guid.NewGuid().ToString("N") + ".tmp");
+        Directory.CreateDirectory(CorePaths.UserData);
+        using var held = new FileStream(otherFile, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        try
+        {
+            VerifyLedgerPersistence();
+            Assert.True(File.Exists(otherFile));
+        }
+        finally
+        {
+            held.Dispose();
+            if (File.Exists(otherFile)) File.Delete(otherFile);
+        }
+    }
+
+    private void VerifyLedgerPersistence()
     {
         var old = CoreSettings.ServiceProvider;
         // A private settings file, not the sandbox's shared CorePaths.UserData/settings.json: another
