@@ -99,7 +99,7 @@ public sealed record DaresSnapshot(bool Available, DaresMe Me, IReadOnlyList<Dar
 
 /// <summary>What a create came back with. <see cref="WriteCode"/> is set with
 /// <see cref="DareCreateStatus.Writing"/>: the sender types <c>/bet write code:&lt;code&gt;</c> in Discord.</summary>
-public enum DareCreateStatus { Sent, Writing, NotFriends, Banned, FriendBanned, Limit, DiscordNeeded, LockdownNotOk, Refused, Off, TryLater }
+public enum DareCreateStatus { Sent, Writing, NotFriends, Banned, FriendBanned, Limit, DiscordNeeded, LockdownNotOk, Refused, Off, TryLater, LockdownNeedsSub }
 
 public sealed record DareCreateOutcome(DareCreateStatus Status, string? Id = null, string? WriteCode = null);
 
@@ -108,4 +108,4 @@ public sealed record DareCreateOutcome(DareCreateStatus Status, string? Id = nul
 /// the real Lockdown after the UI's consent prompts and reports served / ended early).</summary>
 public enum DareOp { Accept, Pass, Cancel, Pay, StartLockdown, DidIt, Tick, Renounce }
 
-public enum DareActResult { Done, Gone, Banned, Limit, LockdownBusy, NeedsChaster, Refused, Off, TryLater }
+public enum DareActResult { Done, Gone, Banned, Limit, LockdownBusy, NeedsChaster, Refused, Off, TryLater, LockdownNeedsSub }
