@@ -114,7 +114,7 @@ export function createBloom({ view }) {
   const prev = view.render;
   view.render = () => {
     const t0 = performance.now();
-    if (!live) {
+    if (!live || view.isLowPower?.()) {
       prev();
       push(cost.off, performance.now() - t0);
       return;

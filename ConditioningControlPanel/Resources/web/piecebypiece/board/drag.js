@@ -33,7 +33,7 @@ import * as THREE from 'three';
 import { worldToSquare, squareToWorld } from './scene.js';
 import { createMarkers } from './markers.js';
 import { readCastles, castleAlias } from '../game/castle-hint.js';
-import { isClick, holdOffset, clickTarget } from './hand.js';
+import { isClick, holdOffset, clickTarget, startPress } from './hand.js';
 
 /** Every number the hand is made of. One place, on purpose. */
 export const TUNING = Object.freeze({
@@ -386,7 +386,7 @@ export function createDrag({ view, pieces, anim, bus, game, jiggle = null }) {
     held.userData.held = true;
     held.userData.busy = true;
     if (jiggle) jiggle.grab(held);   // lifted off the board, so the tip sags
-    press = { x: ev.clientX, y: ev.clientY, t: performance.now(), far: 0 };
+    press = startPress(ev);
     pending = true;                  // ... until he travels, or outstays a click
 
     // The cursor drags along a plane at the height the grabbed spot rides at.

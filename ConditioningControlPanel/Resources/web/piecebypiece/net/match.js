@@ -579,6 +579,9 @@ export function createOnlineMatch({
       bus.emit('check', { side: played.turn });
     }
 
+    // Show the applied position before exposing the next online turn.
+    board.settleMove?.();
+
     // The referee may see a mate or a stalemate before the server's event says
     // so. The board shows it either way; the server's word still arrives and
     // finish() is idempotent, so the two never fight.
