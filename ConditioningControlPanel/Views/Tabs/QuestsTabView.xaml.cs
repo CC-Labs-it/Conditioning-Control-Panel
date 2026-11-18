@@ -34,6 +34,8 @@ namespace ConditioningControlPanel.Views.Tabs
             DailyCard2.NavigateRequested += OnDailyCardNavigateRequested;
             WeeklyQuestCard.MouseLeftButtonDown += (_, _) => _weeklyPressArmed = _weeklyNavigable;
             WeeklyQuestCard.MouseLeftButtonUp += OnWeeklyCardMouseUp;
+            WeeklyQuestCard.MouseEnter += (_, _) => { if (_weeklyNavigable) SetWeeklyHover(true); };
+            WeeklyQuestCard.MouseLeave += (_, _) => SetWeeklyHover(false);
 
             InitDepth();
         }
@@ -47,18 +49,25 @@ namespace ConditioningControlPanel.Views.Tabs
         private void OnDailyCardNavigateRequested(object? sender, EventArgs e)
         {
             if (sender is Controls.DailyQuestCard card && Window.GetWindow(this) is MainWindow mw)
+            {
+                QuestSfx.Open();
                 mw.OpenDailyQuestDestination(card.Slot);
+            }
         }
 
         private bool _weeklyNavigable;
         private bool _weeklyPressArmed; // the press began on the card (a drag ending here must not navigate)
+        private bool _weeklyHoverOn;
 
         /// <summary>The weekly card is a door only when its quest has a single home and is not done.
-        /// A plain card keeps the arrow cursor.</summary>
+        /// A plain card keeps the arrow cursor and shows no lift, rim or go hint.</summary>
         internal void SetWeeklyNavigable(bool on)
         {
             _weeklyNavigable = on;
             WeeklyQuestCard.Cursor = on ? Cursors.Hand : null;
+            if (!on) _weeklyPressArmed = false;
+            if (!on) SetWeeklyHover(false);
+            else if (WeeklyQuestCard.IsMouseOver) SetWeeklyHover(true);
         }
 
         private void OnWeeklyCardMouseUp(object sender, MouseButtonEventArgs e)
@@ -68,7 +77,34 @@ namespace ConditioningControlPanel.Views.Tabs
             if (!armed || !_weeklyNavigable || !WeeklyQuestCard.IsMouseOver
                 || Window.GetWindow(this) is not MainWindow mw) return;
             e.Handled = true;
+            QuestSfx.Open();
             mw.OpenWeeklyQuestDestination();
+        }
+
+        /// <summary>Hover on the weekly door (2026-11-18): the daily cards' lift, a light gold rim
+        /// and the go hint. In and out on the same clock; Motion Off snaps.</summary>
+        internal void SetWeeklyHover(bool on)
+        {
+            // Only on a change: RefreshQuestUI re-reads the door on every tick, and a hover that
+            // replayed its entrance each time would twitch under a still pointer.
+            if (on == _weeklyHoverOn) return;
+            _weeklyHoverOn = on;
+            try
+            {
+                MotionFx.HoverLift(WeeklyQuestCard, on);
+                Controls.QuestGoHint.Set(WeeklyGoHint, on);
+
+                if (!MotionFx.AllowTransitions)
+                {
+                    WeeklyHoverRim.BeginAnimation(OpacityProperty, null);
+                    WeeklyHoverRim.Opacity = on ? 1 : 0;
+                    return;
+                }
+                int ms = Services.Safety.GentleVisuals.RiseMs(on ? Controls.QuestGoHint.InMs : Controls.QuestGoHint.OutMs);
+                WeeklyHoverRim.BeginAnimation(OpacityProperty,
+                    new DoubleAnimation(on ? 1 : 0, TimeSpan.FromMilliseconds(ms)));
+            }
+            catch (Exception ex) { App.Logger?.Debug("Weekly quest hover: {E}", ex.Message); }
         }
 
         private void QuestsTabView_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
