@@ -10,8 +10,8 @@
 // Slice C: heartbeat recovery (one relaunch per app session).
 // ponytail: slice game-dtrh-host-d, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
 // meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.spirals / ccp.content / ccp.mod origins, bark routing, sfx,
-// fire-payload, freeze/mute (native video), vn-speaking, haptics, report-bug, session stats,
-// achievements bubble credit, RevealService.Sync, crash sentinel, EMI desk fires, the audio-web pack request,
+// fire-payload, freeze/mute (native video), vn-speaking, haptics, session stats,
+// achievements bubble credit, RevealService.Sync, EMI desk fires, the audio-web pack request,
 // tucking the panel to the tray. Browser failures and silent ready pages share recovery.
 // Slice D: favorites + asset-stats (engagement history, #3727), the saved Loom spirals (loom-list and loom-*, #3949).
 using System;
@@ -21,6 +21,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Features;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
@@ -51,6 +52,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         // need neither a profile write nor process-wide engagement history.
         internal static Func<int, System.Collections.Generic.List<string>> DtrhFavorites = DtrhAssetStatsStore.TopAssets;
         internal static Action<JObject> DtrhMergeAssetStats = DtrhAssetStatsStore.Merge;
+
+        internal Action<string> DtrhRunStartedBark = difficulty =>
+            BarkHead.Engine?.Raise("ChaosRunStarted", c => c.Set("difficulty", difficulty));
+        internal Action<int, string> DtrhRunCompletedBark = (xp, difficulty) =>
+            BarkHead.Engine?.Raise("ChaosRunCompleted", c => c.Set("xp", (double)xp).Set("difficulty", difficulty)
+                .Set("runs_completed", (double)ChaosMeta.State.RunsCompleted).Set("rank", ChaosRanks.NameLower(ChaosMeta.RankIndex)));
 
         private bool IsDtrh => string.Equals(Spec.Id, DtrhId, StringComparison.OrdinalIgnoreCase);
         private bool _dtrhRunActive, _dtrhExiting;
@@ -153,10 +160,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     _dtrhRunActive = true;
                     _dtrhLastProgress = null;
                     _dtrhRunStartedUtc = DtrhUtcNow();
+                    var difficulty = (string?)o["difficulty"] ?? "Gentle";
+                    try { ChaosCrashSentinel.Mark($"mode=dtrh-web diff={difficulty}"); }
+                    catch (Exception ex) { Log.Debug("DtrhHost sentinel: {E}", ex.Message); }
+                    try { DtrhRunStartedBark(difficulty); }
+                    catch (Exception ex) { Log.Debug("DtrhHost start bark: {E}", ex.Message); }
                     Log.Information("DtrhHost: run started (diff={D}, mode={M})", (string?)o["difficulty"] ?? "Gentle", (string?)o["mode"]);
                     return true;
                 case "run-ended":
                     OnDtrhRunEnded(o, fromTeardown: false);
+                    return true;
+                case "report-bug":
+                    try { _ = new BugReportWindow().ShowDialogSafe(this); }
+                    catch (Exception ex) { Log.Warning("DtrhHost.report-bug: {E}", ex.Message); }
                     return true;
                 case "exit":
                     _dtrhExiting = true;
@@ -410,7 +426,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 double finalXp = booking.BaseXp * skillMult;
                 long previousBest = ChaosMeta.State.BestScore;
                 int sparksEarned = DtrhBankSparks(booking.RewardInput(o), booking.Payout.CountsAsRun);
-                CoreProgression.AddXP(booking.BaseXp, "Chaos");   // WPF AddXP(baseXp, XPSource.Chaos)
+                try { CoreProgression.AddXP(booking.BaseXp, "Chaos"); }   // WPF AddXP(baseXp, XPSource.Chaos)
+                catch (Exception ex) { Log.Debug("DtrhHost payout AddXP: {E}", ex.Message); }
+                if (!fromTeardown)
+                {
+                    try { DtrhRunCompletedBark((int)finalXp, booking.Difficulty); }
+                    catch (Exception ex) { Log.Debug("DtrhHost completion bark: {E}", ex.Message); }
+                    try { ChaosCrashSentinel.Clear(); }
+                    catch (Exception ex) { Log.Debug("DtrhHost sentinel: {E}", ex.Message); }
+                }
                 ChaosRank? rankUp = null;
                 var nowRank = ChaosRanks.For(ChaosMeta.State.RunsCompleted);
                 if ((int)nowRank > ChaosMeta.State.LastRankSeen) rankUp = nowRank;
