@@ -14,6 +14,7 @@ using ConditioningControlPanel.Avalonia.Tours;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Fyp.Online;
 using ConditioningControlPanel.Localization;
 using Xunit;
 namespace CCP.Avalonia.Tests;
@@ -44,17 +45,18 @@ public sealed class FeatureIntroUpgradeTests
     public Task MissingNotesStaySilentWithoutSpendingCancelledUpgrade(bool cancelled) => Run("old-version", async shell =>
     {
         CoreReleaseContent.PatchNotesProvider = () => "";
-        shell.UpgradeDelay = _ => throw new InvalidOperationException("missing notes must not wait");
         if (cancelled) MainShellWindow.StopUpgradeIntroForPanic(shell);
         await shell.ShowWhatsNewIfNeeded();
         Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
         Assert.Equal(cancelled ? "old-version" : CoreReleaseContent.AppVersion, CoreSettings.Current.LastSeenVersion);
         Assert.False(StartupLadder.ModalPending);
+        Assert.False(LadderBusy());
     });
     [Fact]
     public Task UpgradeHoldsCardsAndStampsOnlyAfterDismissal() => Run("old-version", async shell =>
     {
         var showing = shell.ShowWhatsNewIfNeeded();
+        await Step();
         var news = Assert.Single(shell.OwnedWindows.OfType<WhatsNewDialog>());
         Assert.True(MainShellWindow.IsStartupDialogShowing);
         Assert.Equal("old-version", CoreSettings.Current.LastSeenVersion);
@@ -71,62 +73,113 @@ public sealed class FeatureIntroUpgradeTests
         Assert.Empty(shell.OwnedWindows.OfType<FeatureIntroPopup>());
         news.Close();
         await showing;
+        await Step();
         Assert.False(MainShellWindow.IsStartupDialogShowing);
         Assert.Equal(CoreReleaseContent.AppVersion, CoreSettings.Current.LastSeenVersion);
         await shell.ShowWhatsNewIfNeeded();
         Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
     });
     [Fact]
-    public Task BusyStartupAbandonsUnspent() => Run("old-version", async shell =>
+    public Task UpgradeTakesPriorityThirtyTurnOnStartupLadder() => Run("old-version", async shell =>
     {
-        MainShellWindow.IsStartupDialogShowing = true;
-        var delays = new List<TimeSpan>();
-        shell.UpgradeDelay = delay => { delays.Add(delay); return Task.CompletedTask; };
-        await shell.ShowWhatsNewIfNeeded(); // stepped delay reaches the WPF five-minute deadline
-        Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
-        Assert.Equal("old-version", CoreSettings.Current.LastSeenVersion);
-        Assert.True(MainShellWindow.IsStartupDialogShowing); // somebody else's flag stays theirs
-        Assert.Equal(TimeSpan.FromMilliseconds(750), delays[0]);
-        Assert.Equal(601, delays.Count);
-        Assert.All(delays.Skip(1), delay => Assert.Equal(TimeSpan.FromMilliseconds(500), delay));
-    });
-    [Fact]
-    public Task LauncherHoldDoesNotSpendUpgradeDeadline() => Run("old-version", async shell =>
-    {
-        StartupLadder.Hold();
-        var polls = 0;
-        shell.UpgradeDelay = delay =>
-        {
-            if (delay == TimeSpan.FromMilliseconds(500) && ++polls == 610)
-                StartupLadder.Release();
-            return Task.CompletedTask;
-        };
+        // WPF Marquee.cs:342 / AppUpdater.cs:201 / FirstRun.cs:62: wizard 20, What's New 30, update 80.
+        var order = new List<string>();
+        StartupLadder.EnqueueModal("update-available", 80, () => { order.Add("update"); return Task.CompletedTask; });
         var showing = shell.ShowWhatsNewIfNeeded();
-        Assert.Equal(610, polls);
+        StartupLadder.EnqueueModal("first-run-wizard", 20, () => { order.Add("wizard"); return Task.CompletedTask; });
+        Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
+        await Step();
+        Assert.Equal(new[] { "wizard" }, order);
+        await Step();
         var news = Assert.Single(shell.OwnedWindows.OfType<WhatsNewDialog>());
-        Assert.Equal("old-version", CoreSettings.Current.LastSeenVersion);
+        Assert.Equal(new[] { "wizard" }, order);
         news.Close();
         await showing;
+        await Step();
+        await Step();
+        Assert.Equal(new[] { "wizard", "update" }, order);
         Assert.Equal(CoreReleaseContent.AppVersion, CoreSettings.Current.LastSeenVersion);
     });
 
     [Fact]
-    public Task LauncherReleaseDoesNotBypassAgeGate() => Run("old-version", async shell =>
+    public Task OnlineLicenceWaitsForQueuedUpgrade() => Run("old-version", async shell =>
     {
-        CoreSettings.Current.HasAcceptedAgeVerification = false;
-        StartupLadder.Hold();
-        var polls = 0;
-        shell.UpgradeDelay = delay =>
+        // WPF Marquee.cs:342 and OnlineMeter.cs:468 queue notes at 30, licence at 40.
+        var official = ScrolllerPolicy.Official;
+        var enabled = ScrolllerPolicy.Enabled;
+        var cap = ScrolllerPolicy.MaxClipShortSide;
+        TaskCompletionSource? poll = null;
+        try
         {
-            if (delay == TimeSpan.FromMilliseconds(500) && ++polls == 610)
-                StartupLadder.Release();
-            return Task.CompletedTask;
-        };
+            ScrolllerPolicy.Official = true;
+            ScrolllerPolicy.Apply(true, cap);
+            CoreSettings.Current.MediaSource = "online";
+            CoreSettings.Current.RemoteMediaConsented = true;
+            CoreSettings.Current.ScrolllerOfficialNoteSeen = false;
+            shell.OnlineLicenceDelay = delay => delay == TimeSpan.FromMilliseconds(750)
+                ? Task.CompletedTask : (poll = new TaskCompletionSource()).Task;
+            var upgrade = shell.ShowWhatsNewIfNeeded();
+            var state = OnlineMeterHead.Now();
+            Assert.True(state.ShowOfficialNote);
+            shell.OfferOnlineLicenceCard(state);
+            Assert.Empty(shell.OwnedWindows.OfType<OnlineLicenceCard>());
+            Assert.NotNull(poll); // the licence is waiting during the upgrade's settle
+            for (var i = 0; i < 610; i++)
+            {
+                var previousPoll = poll!;
+                previousPoll.SetResult();
+                for (var j = 0; j < 5; j++) await Task.Yield();
+                Assert.False(shell.OnlineLicenceTask!.IsCompleted); // its own deadline is not spent
+                Assert.NotSame(previousPoll, poll);
+            }
+            await Step();
+            var news = Assert.Single(shell.OwnedWindows.OfType<WhatsNewDialog>());
+            poll!.SetResult();
+            for (var i = 0; i < 5; i++) await Task.Yield();
+            Assert.Empty(shell.OwnedWindows.OfType<OnlineLicenceCard>());
+            news.Close();
+            await upgrade;
+            await Step();
+            poll!.SetResult();
+            for (var i = 0; i < 5; i++) await Task.Yield();
+            var licence = Assert.Single(shell.OwnedWindows.OfType<OnlineLicenceCard>());
+            Assert.False(CoreSettings.Current.ScrolllerOfficialNoteSeen);
+            licence.Close();
+            await shell.OnlineLicenceTask!;
+            Assert.True(CoreSettings.Current.ScrolllerOfficialNoteSeen);
+        }
+        finally
+        {
+            MainShellWindow.CloseOnlineLicenceCardForPanic(shell);
+            poll?.TrySetResult();
+            ScrolllerPolicy.Official = official;
+            ScrolllerPolicy.Apply(enabled, cap);
+        }
+    });
+
+    [Fact]
+    public Task BusyStartupAbandonsUnspent() => Run("old-version", async shell =>
+    {
+        MainShellWindow.IsStartupDialogShowing = true;
         var showing = shell.ShowWhatsNewIfNeeded();
-        Assert.Equal(1209, polls);
+        await Step();
+        var clock = (StartupLadder.TestClock)StartupLadder.Time;
+        for (var i = 0; i < (int)(StartupLadder.ModalMaxWait / StartupLadder.ModalPoll); i++)
+        { clock.Advance(StartupLadder.ModalPoll); for (var j = 0; j < 5; j++) await Task.Yield(); }
         await showing;
         Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
-        Assert.False(CoreSettings.Current.HasAcceptedAgeVerification);
+        Assert.Equal("old-version", CoreSettings.Current.LastSeenVersion);
+        Assert.True(MainShellWindow.IsStartupDialogShowing); // somebody else's flag stays theirs
+    });
+
+    [Fact]
+    public Task UnacceptedAgeGateLeavesUpgradeUnspent() => Run("old-version", async shell =>
+    {
+        CoreSettings.Current.HasAcceptedAgeVerification = false;
+        var showing = shell.ShowWhatsNewIfNeeded();
+        await Step();
+        await showing;
+        Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
         Assert.Equal("old-version", CoreSettings.Current.LastSeenVersion);
     });
 
@@ -136,21 +189,17 @@ public sealed class FeatureIntroUpgradeTests
     public Task ParkedUpgradeStopsOnPanicOrClose(bool close) => Run("old-version", async shell =>
     {
         StartupLadder.Hold();
-        var waiting = new TaskCompletionSource();
-        var calls = 0;
-        shell.UpgradeDelay = _ => ++calls == 1 ? Task.CompletedTask : waiting.Task;
         CoreSettings.Current.StrictLockEnabled = true;
         CoreSettings.Current.LockdownForceStrictLock = true;
         var showing = shell.ShowWhatsNewIfNeeded();
-        Assert.Equal(2, calls);
+        await Step();
         if (close) shell.Close();
         else PanicSurfaces.All.Single(s => s.Id == "upgrade-intro").Stop(shell);
         StartupLadder.Release();
-        waiting.SetResult();
-        await Task.Yield();
+        await Step();
         Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
         await showing;
-        Assert.Equal(2, calls); // cancellation ends the poll without scheduling another delay
+        Assert.False(LadderBusy());
         Assert.Equal("old-version", CoreSettings.Current.LastSeenVersion);
         Assert.False(StartupLadder.ModalPending);
         Assert.True(CoreSettings.Current.StrictLockEnabled);
@@ -162,17 +211,14 @@ public sealed class FeatureIntroUpgradeTests
     [InlineData(true)]
     public Task PanicClosesUpgradeAndReleasesModalGate(bool tray) => Run("old-version", async shell =>
     {
-        var settle = new TaskCompletionSource();
-        shell.UpgradeDelay = _ => settle.Task;
         var showing = shell.ShowWhatsNewIfNeeded();
         FeatureIntroPopup.ShowWhenStartupSettles("lockdown", shell, "play");
-        settle.SetResult();
-        await Task.Yield();
-        Dispatcher.UIThread.RunJobs();
+        await Step();
         Assert.Single(shell.OwnedWindows.OfType<WhatsNewDialog>());
         PanicSurfaces.All.Single(s => s.Id == "upgrade-intro").Stop(tray ? null : shell);
         Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
         await showing;
+        await Step();
         ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromSeconds(5));
         StartupLadder.PumpHeld(); // panic parked the offer instead of presenting it
         Dispatcher.UIThread.RunJobs();
@@ -193,7 +239,8 @@ public sealed class FeatureIntroUpgradeTests
     [Fact]
     public Task RealShellOpenedCallbackReachesUpgradeDialog() => Run("old-version", async shell =>
     {
-        Dispatcher.UIThread.RunJobs();
+        await Step();
+        await Step();
         var news = Assert.Single(shell.OwnedWindows.OfType<WhatsNewDialog>());
         Assert.True(MainShellWindow.IsStartupDialogShowing);
         news.Close();
@@ -204,51 +251,45 @@ public sealed class FeatureIntroUpgradeTests
     [Fact]
     public Task QueuedUpgradeDefersFeatureCardWithoutSpendingIt() => Run("old-version", async shell =>
     {
-        var settle = new TaskCompletionSource();
-        shell.UpgradeDelay = _ => settle.Task;
         var showing = shell.ShowWhatsNewIfNeeded();
         FeatureIntroPopup.ShowWhenStartupSettles("lockdown", shell, "play");
         Assert.False(StartupLadder.Inbox.Contains("intro:lockdown"));
         Assert.DoesNotContain("lockdown", CoreSettings.Current.SeenFeatureIntros);
         Assert.Empty(shell.OwnedWindows.OfType<FeatureIntroPopup>());
         Assert.Empty(((StartupLadder.TestClock)StartupLadder.Time).Timers); // WPF modal defer never arms a watch
-        settle.SetResult();
-        await Task.Yield();
-        Dispatcher.UIThread.RunJobs();
+        await Step();
         var news = Assert.Single(shell.OwnedWindows.OfType<WhatsNewDialog>());
         ((StartupLadder.TestClock)StartupLadder.Time).Advance(TimeSpan.FromSeconds(3));
-        Assert.True(StartupLadder.ModalPending);
+        Assert.True(LadderBusy());
         Assert.False(StartupLadder.Inbox.Contains("intro:lockdown"));
         Assert.DoesNotContain("lockdown", CoreSettings.Current.SeenFeatureIntros);
         Assert.Empty(shell.OwnedWindows.OfType<FeatureIntroPopup>());
         news.Close();
         await showing;
-        Assert.False(StartupLadder.ModalPending);
-        Dispatcher.UIThread.RunJobs();
+        await Step();
+        Assert.False(LadderBusy());
         Assert.Single(shell.OwnedWindows.OfType<FeatureIntroPopup>());
         Assert.Contains("lockdown", CoreSettings.Current.SeenFeatureIntros);
     });
     [Fact]
     public Task PanicWhileWaitingNeverOpensOrSpendsUpgrade() => Run("old-version", async shell =>
     {
-        var settle = new TaskCompletionSource();
-        shell.UpgradeDelay = _ => settle.Task;
         var showing = shell.ShowWhatsNewIfNeeded();
+        Dispatcher.UIThread.RunJobs(); // the ladder has selected the notes and is settling
         PanicSurfaces.All.Single(s => s.Id == "upgrade-intro").Stop(shell);
         Assert.False(StartupLadder.ModalPending);
-        settle.SetResult();
         await showing;
+        await Step();
         Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
         Assert.Equal("old-version", CoreSettings.Current.LastSeenVersion);
-        Assert.False(StartupLadder.ModalPending);
+        Assert.False(LadderBusy());
     });
     [Fact]
     public Task CurrentVersionSkipsSettleAndModal() => Run(null, async shell =>
     {
-        shell.UpgradeDelay = _ => throw new InvalidOperationException("current version must stay silent");
         await shell.ShowWhatsNewIfNeeded();
         Assert.Empty(shell.OwnedWindows.OfType<WhatsNewDialog>());
-        Assert.False(StartupLadder.ModalPending);
+        Assert.False(LadderBusy());
     });
     [Fact]
     public Task TourButtonStartsUpgradeTourAfterModalCloses() => Run("old-version", async shell =>
@@ -257,10 +298,11 @@ public sealed class FeatureIntroUpgradeTests
         global::ConditioningControlPanel.Avalonia.Tours.TutorialHead.ResetForTests();
         TutorialHeadHooks.ShellProvider = () => shell;
         var showing = shell.ShowWhatsNewIfNeeded();
+        await Step();
         var news = Assert.Single(shell.OwnedWindows.OfType<WhatsNewDialog>());
         news.FindControl<Button>("BtnTour")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         await showing;
-        Dispatcher.UIThread.RunJobs();
+        await Step();
         Assert.False(MainShellWindow.IsStartupDialogShowing);
         Assert.NotNull(global::ConditioningControlPanel.Avalonia.Tours.TutorialHead.ShellOverlay);
         global::ConditioningControlPanel.Avalonia.Tours.TutorialHead.OnPanic();
@@ -280,6 +322,7 @@ public sealed class FeatureIntroUpgradeTests
     {
         LocalizationManager.Instance.SetLanguage(language);
         var showing = shell.ShowWhatsNewIfNeeded();
+        await Step();
         var news = Assert.Single(shell.OwnedWindows.OfType<WhatsNewDialog>());
         Assert.Equal(title.Replace("{0}", CoreReleaseContent.AppVersion), news.FindControl<TextBlock>("TxtTitle")!.Text);
         Assert.Equal(tour, news.FindControl<TextBlock>("TourLabel")!.Text);
@@ -304,6 +347,7 @@ public sealed class FeatureIntroUpgradeTests
         Assert.Empty(clock.Timers);
         Assert.False(dismissed); // panic is not the user's dismiss action
         await showing;
+        Dispatcher.UIThread.RunJobs(); // the cancelled ladder drains before the next offer
         // A new offer after cancellation must not be opened by the stale queued tick.
         var opened = false;
         StartupLadder.PresentOrInbox(new() { Key = "new-offer", Open = () => opened = true });
@@ -384,6 +428,16 @@ public sealed class FeatureIntroUpgradeTests
         return Task.CompletedTask;
     });
 
+    private static bool LadderBusy() => StartupLadder.World(StartupLadder.Time.GetUtcNow().UtcDateTime).LadderBusy;
+
+    private static async Task Step()
+    {
+        Dispatcher.UIThread.RunJobs();
+        ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupLadder.ModalSettle);
+        for (var i = 0; i < 5; i++) await Task.Yield();
+        Dispatcher.UIThread.RunJobs();
+    }
+
     private static Task Run(string? previous, Func<MainShellWindow, Task> body, bool detachStartup = true, bool desktop = false) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current == null)
@@ -406,7 +460,7 @@ public sealed class FeatureIntroUpgradeTests
         FeatureIntroPopup.ResetForTests();
         var shell = new MainShellWindow();
         if (detachStartup) shell.Opened -= shell.OnUpgradeShellOpened;
-        shell.UpgradeDelay = _ => Task.CompletedTask;
+        StartupLadder.ModalWindowReady = () => shell.IsVisible;
         // The initialized headless app forbids the lifetime setter; restore its backing field below.
         var lifetimeField = typeof(Application).GetField("_applicationLifetime", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
         var lifetime = lifetimeField.GetValue(Application.Current);
