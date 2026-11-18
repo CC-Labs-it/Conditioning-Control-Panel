@@ -8,10 +8,11 @@ namespace ConditioningControlPanel.Services.Companion
     /// The settings half of WPF 7.1.5 <c>Services/Companion/CompanionService.cs</c>, same numbers: switching
     /// (:185), the perk XP modifier (:226), companion XP and its level loop (:276), the Brain Parasite drain
     /// (:393) and active time (:429). The head owns the timers and the reactions. Named apart from WPF's type.
-    /// ponytail: the autonomy bonus's IsActionInProgress waits for an autonomy service.
     /// </summary>
     public static class CompanionCore
     {
+        public static Func<bool>? AutonomyActionInProgress { get; set; }
+
         public const double DrainXpPerTick = 3.0;          // WPF DRAIN_XP_PER_TICK
         public const double DrainIntervalSeconds = 2.0;    // WPF DRAIN_INTERVAL_SECONDS
 
@@ -89,7 +90,7 @@ namespace ConditioningControlPanel.Services.Companion
             var id = ActiveCompanion;
             var progress = s.ActiveCompanionProgress;
             if (progress.IsMaxLevel) return;
-            var modifier = CalculateXPModifier(ActivePerk, false, s.StrictLockEnabled, !s.PanicKeyEnabled,
+            var modifier = CalculateXPModifier(ActivePerk, AutonomyActionInProgress?.Invoke() == true, s.StrictLockEnabled, !s.PanicKeyEnabled,
                 s.AttentionChecksEnabled, s.PinkFilterEnabled ? s.PinkFilterOpacity : 0);
             var finalAmount = baseAmount * modifier;
             Log.Debug("Companion XP: {Companion} +{Amount:F1} (base: {Base}, modifier: {Modifier:F2}x, source: {Source})",
