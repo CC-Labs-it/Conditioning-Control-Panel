@@ -28,7 +28,13 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
     public void StopOneShotFlashes() { }
     public void StopOneShotSubliminals() => Views.Overlays.SubliminalWhisperShow.StopOneShots();
 
-    private void PlayAudio(string path, float volume, bool duckOtherAudio)
+    // WPF AudioService.PlaySound (:856): a live clip whose gain follows the master dial (:897). Null without
+    // the LibVLC player (tests, probes): the plain stoppable one-shot then plays at the start gain.
+    internal static Func<Func<string, float, Action, MindWipePlayer.IVoice?>?> LiveClipPlayer = () =>
+        LibVlcAudio.Instance is { } vlc ? (path, gain, finished) => vlc.PlaySound(path, gain,
+            _ => ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("sound", path, CoreEngine.IsRunning, false, DateTime.Now), finished) : null;
+
+    private void PlayAudio(string path, int volumePercent, bool duckOtherAudio)
     {
         lock (_audioGate)
         {
@@ -39,17 +45,32 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
             var generation = CoreAudio.DuckGeneration;
             Action? stop = null;
             bool finished = false;
+            var settings = CoreSettings.Current;
+            MindWipePlayer.IVoice? voice = null;
+            void Follow(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+            {
+                if (e.PropertyName == nameof(settings.MasterVolume) && voice is { } v) v.Volume = CoreAudio.SoundGain(volumePercent, settings.MasterVolume);
+            }
             void Finish()
             {
                 lock (_audioGate)
                 {
                     if (finished) return;
                     finished = true;
+                    settings.PropertyChanged -= Follow;
                     if (stop != null) _audioStops.Remove(stop);
                     if (ducked) CoreAudio.Unduck(generation);
                 }
             }
-            var stopPlayer = CoreAudio.PlayStoppable(path, volume, "deeper", onFinished: Finish);
+            var gain = CoreAudio.SoundGain(volumePercent, settings.MasterVolume);
+            Action stopPlayer;
+            if (LiveClipPlayer() is { } live)
+            {
+                voice = live(path, gain, Finish);
+                if (voice != null && !finished) settings.PropertyChanged += Follow;
+                stopPlayer = voice == null ? () => { } : voice.Dispose;
+            }
+            else stopPlayer = CoreAudio.PlayStoppable(path, gain, "deeper", onFinished: Finish);
             stop = () => { try { stopPlayer(); } finally { Finish(); } };
             if (!finished) _audioStops.Add(stop);
         }
@@ -80,7 +101,7 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
                 break;
             case PlayAudioAction audio when !string.IsNullOrEmpty(audio.Path):
                 var path = Path.IsPathRooted(audio.Path) ? audio.Path : Path.Combine(CorePaths.EffectiveAssets, audio.Path);
-                if (File.Exists(path)) PlayAudio(path, CoreAudio.SoundGain(audio.Volume, CoreSettings.Current.MasterVolume), audio.DuckOtherAudio);
+                if (File.Exists(path)) PlayAudio(path, audio.Volume, audio.DuckOtherAudio);
                 break;
             case ScreenShakeAction shake: Views.Deeper.ScreenShake.Shake(shake.Intensity, shake.DurationMs); break;
             case TriggerHapticAction haptic: await Haptic(haptic); break;
