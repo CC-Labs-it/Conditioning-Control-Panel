@@ -10,7 +10,8 @@
  * nothing is written to a save or a replay. A right press that starts OFF the
  * board, a middle press, and shift + right (pan) still belong to the camera;
  * only a right press that lands on a square is taken, and the camera never
- * sees it.
+ * sees it. With "Right-click arrows" off in Options (game/preferences.js
+ * `arrows`) boot.js reports the board as blocked, so the camera keeps them all.
  *
  * A right release the board never hears (alt-tab or an overlay while held, let
  * go outside the window) must not leave the arrow open: any other press, lost
