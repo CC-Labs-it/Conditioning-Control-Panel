@@ -907,7 +907,7 @@ public class BouncingTextService : IDisposable
         }
 
         // Scrawl stamps are built in the words' font and size: start the walls over when either moves
-        if (_scrawl != null && (_scrawlFont != _currentFont || _scrawlSize != _currentFontSize))
+        if (_scrawl != null && (_scrawlFont != _currentFont || _scrawlSize != ScrawlStampFontSize()))
         {
             DisableScrawl();
             EnableScrawl();
@@ -974,7 +974,7 @@ public class BouncingTextService : IDisposable
     private Models.MotionLevel _scrawlMotion = Models.MotionLevel.Full;
     private int _scrawlSlam = SuperCore.ScrawlOptions.SlamDefault;   // the option box's slam strength, read each frame
     private string _scrawlFont = "";
-    private int _scrawlSize;
+    private double _scrawlSize;
     private double _scrawlDpi = 1.0;
 
     private void OnSuperChanged(Super.SuperEffect effect)
@@ -999,9 +999,9 @@ public class BouncingTextService : IDisposable
             double ppd = dpiSource != null ? VisualTreeHelper.GetDpi(dpiSource).PixelsPerDip : 1.0;
             _scrawlDpi = GetDpiScale();
             _scrawlMotion = MotionFx.Level;
-            _scrawl = new Super.ScrawlScene(family, _currentFontSize, ppd);
+            _scrawlSize = ScrawlStampFontSize();
+            _scrawl = new Super.ScrawlScene(family, _scrawlSize, ppd);
             _scrawlFont = _currentFont;
-            _scrawlSize = _currentFontSize;
             foreach (var w in _windows) w.AttachScrawl(_scrawl);
             _scrawlHook = new GlobalMouseHook { LeftDown = OnScrawlDown };
             _scrawlHook.Start();
@@ -1030,16 +1030,30 @@ public class BouncingTextService : IDisposable
         }
     }
 
+    /// <summary>The font size stamps are built at: the words' size times the Stamp size option.</summary>
+    private double ScrawlStampFontSize()
+        => _currentFontSize * SuperCore.ScrawlOptions.ClampStampSize(
+            App.Settings?.Current?.ScrawlStampSize ?? SuperCore.ScrawlOptions.StampSizeDefault) / 100.0;
+
     private void TickScrawl(double dt)
     {
+        // The Stamp size slider moved: stamps are built per size, so the walls start over.
+        if (_scrawlSize != ScrawlStampFontSize())
+        {
+            DisableScrawl();
+            EnableScrawl();
+            if (_scrawl == null) return;
+        }
         var scene = _scrawl!;
         _scrawlMotion = MotionFx.Level;
         // The option box (SuperCore.ScrawlOptions), read live so a slider moves the walls at once.
         var so = App.Settings?.Current;
         _scrawlSlam = SuperCore.ScrawlOptions.ClampSlam(so?.ScrawlSlam ?? SuperCore.ScrawlOptions.SlamDefault);
         scene.Configure(SuperCore.ScrawlOptions.ClampStampSeconds(so?.ScrawlStampSeconds ?? SuperCore.ScrawlOptions.StampSecondsDefault),
-            SuperCore.ScrawlOptions.ClampStampCap(so?.ScrawlStampCap ?? SuperCore.ScrawlOptions.StampCapDefault),
-            SuperCore.ScrawlOptions.ShakeFactor(_scrawlSlam, Safety.GentleVisuals.On));
+            SuperCore.ScrawlOptions.EffectiveCap(so?.ScrawlStampCap ?? SuperCore.ScrawlOptions.StampCapDefault,
+                _scrawlSize / BASE_FONT_SIZE * 100.0, _logos.Count),
+            SuperCore.ScrawlOptions.ShakeFactor(_scrawlSlam, Safety.GentleVisuals.On),
+            cornerLabel: so?.BouncingTextFxCornerBurst != false);
         scene.Tick(dt, _scrawlMotion, so?.LockdownPhotosafe == true);
         bool live = scene.IsLive;
         foreach (var w in _windows) w.UpdateScrawl(scene.ShakeX, scene.ShakeY, live);

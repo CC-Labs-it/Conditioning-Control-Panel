@@ -64,6 +64,7 @@ namespace ConditioningControlPanel.Features
                 TxtPoolEvery.Text = Loc.GetF("super_pool_every_value", s.WhirlpoolNewEvery);
                 SliderPoolSize.Value = s.WhirlpoolSize;
                 TxtPoolSize.Text = $"{s.WhirlpoolSize}%";
+                ChkPoolCentred.IsChecked = s.WhirlpoolStayCentred;
                 ChkPoolDragsFog.IsChecked = s.WhirlpoolDragsFog;
                 ChkPoolDragsPictures.IsChecked = s.WhirlpoolDragsPictures;
                 ChkPoolDragsBubbles.IsChecked = s.WhirlpoolDragsBubbles;
@@ -115,6 +116,16 @@ namespace ConditioningControlPanel.Features
             if (s == null) return;
             s.WhirlpoolSize = (int)(Math.Round(e.NewValue / 5) * 5);
             TxtPoolSize.Text = $"{s.WhirlpoolSize}%";
+            App.Settings?.Save();
+        }
+
+        // SuperStageHost reads it each step.
+        private void ChkPoolCentred_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_poolLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.WhirlpoolStayCentred = ChkPoolCentred.IsChecked ?? false;
             App.Settings?.Save();
         }
 

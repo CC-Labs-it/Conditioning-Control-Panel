@@ -1319,6 +1319,8 @@ namespace ConditioningControlPanel.Services
                 // Super Afterglow words are drawn text too.
                 if (_afterglow?.Layer is { IsActive: true } glow)
                     rects.AddRange(glow.GetActiveTextRectsPx());
+                // The Afterglow line (the V2 the star lights today) has its own layer.
+                rects.AddRange(Compositor.AfterglowLineLayer.GetActiveTextRectsPx());
             }
             catch (Exception ex)
             {

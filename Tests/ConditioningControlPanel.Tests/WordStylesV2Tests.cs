@@ -142,7 +142,7 @@ public class WordStylesV2Tests
     {
         var root = Root();
         var steam = File.ReadAllText(Path.Combine(root, "ConditioningControlPanel", "Services", "Compositor", "SteamLayer.cs"));
-        Assert.Contains("screen.Words, colour, Face, Looks.WornWordStyle.Current, Looks.WornWordStyle.Motion);", steam);
+        Assert.Contains("screen.Words, colour, AfterglowLineLayer.FaceNow(), Looks.WornWordStyle.Current, Looks.WornWordStyle.Motion);", steam);
         var line = File.ReadAllText(Path.Combine(root, "ConditioningControlPanel", "Services", "Compositor", "AfterglowLineLayer.cs"));
         Assert.Contains("fromX, fromY, style, Looks.WornWordStyle.Motion);", line);
         // Both draws keep the classic path for Classic.

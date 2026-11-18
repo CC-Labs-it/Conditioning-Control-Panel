@@ -3025,6 +3025,16 @@ namespace ConditioningControlPanel.Models
         // switch mirrored IsActive, so it dropped and popped back on its own and
         // never survived a restart (#1116). The switch now reads this flag and
         // the status line underneath says whether the engine is actually running.
+        // The player stopped the camera by hand (Stop tracker, Ctrl+Alt+K): the next launch leaves it
+        // off even with Focus Gaze on (tier-2 report, 7.3.2: it came back at every start). Cleared when
+        // they start the camera or switch Focus Gaze on themselves.
+        private bool _cameraHeldOff;
+        public bool CameraHeldOff
+        {
+            get => _cameraHeldOff;
+            set { _cameraHeldOff = value; OnPropertyChanged(); }
+        }
+
         private bool _focusGazeEnabled;
         public bool FocusGazeEnabled
         {
@@ -5641,6 +5651,14 @@ namespace ConditioningControlPanel.Models
         {
             get => _whirlpoolSize;
             set { _whirlpoolSize = SuperCore.WhirlpoolOptions.ClampSize(value); OnPropertyChanged(); }
+        }
+
+        // Whirlpool: sits in the middle of the screen at full size instead of under the cursor.
+        private bool _whirlpoolStayCentred;
+        public bool WhirlpoolStayCentred
+        {
+            get => _whirlpoolStayCentred;
+            set { _whirlpoolStayCentred = value; OnPropertyChanged(); }
         }
 
         // Whirlpool: seconds a Loom spiral holds before it melts into a new one ("Always new" only).
@@ -10644,6 +10662,14 @@ namespace ConditioningControlPanel.Models
         {
             get => _scrawlStampCap;
             set { _scrawlStampCap = SuperCore.ScrawlOptions.ClampStampCap(value); OnPropertyChanged(); }
+        }
+
+        // Scrawl: stamp size in percent of the bouncing text size.
+        private int _scrawlStampSize = SuperCore.ScrawlOptions.StampSizeDefault;
+        public int ScrawlStampSize
+        {
+            get => _scrawlStampSize;
+            set { _scrawlStampSize = SuperCore.ScrawlOptions.ClampStampSize(value); OnPropertyChanged(); }
         }
 
         // Scrawl: slam strength in percent; 0 = a click on a word is never taken.
