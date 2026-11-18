@@ -4,7 +4,6 @@
 // Head differences (WebHost = NativeWebView): the cage runs after each load and each second (no document-created
 // injection); messages ride the engine's invokeCSharpAction string carrier (same 'leash-ended'/'leash-error'); a local
 // file plays from a page written under the user data; no HTTP status, so only no engine or a media error fail it.
-// ponytail: the refusal's LeashFx.Denied sound lands with the leash fx unit.
 using System;
 using System.IO;
 using System.Net;
@@ -16,6 +15,8 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Services.Leash;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using F = ConditioningControlPanel.Avalonia.Views.Controls.FriendsDrawer;
@@ -121,8 +122,9 @@ internal sealed class LeashPunishWindow : Window
         return b;
     }
     private string TitleText() => Loc.GetF(_locked ? "leash_punish_title" : "leash_task_title", _holder);
-    // WPF says "hold {key} 5 s to cut"; hold-to-cut is not on this head yet, so the hint names the Cut button.
-    private string HintText() => Loc.Get(_locked ? "leash_ask_p_cut" : "leash_task_close_hint");
+    private string HintText() => !_locked ? Loc.Get("leash_task_close_hint")
+        : LeashHead.WaylandSession ? Loc.Get("leash_self_cut_wayland")
+        : Loc.GetF("leash_punish_hold", LeashHoldToCut.KeyLabel(CoreSettings.Current.PanicKey));
     /// <summary>The head's Cut leash. The window goes first so nothing is left caged while the service works.</summary>
     internal void CutFromWindow()
     {
@@ -162,6 +164,7 @@ internal sealed class LeashPunishWindow : Window
     {
         var w = Current;
         if (w == null) return;
+        LeashSound.StopRefusal();
         w._allowClose = true;
         try { w.Close(); } catch { }
         if (ReferenceEquals(Current, w)) Current = null;
@@ -265,6 +268,7 @@ internal sealed class LeashPunishWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         base.OnClosed(e);
+        LeashSound.StopRefusal();
         if (ReferenceEquals(Current, this)) Current = null;
         _refuseTimer?.Stop();
         _shake?.Stop();
@@ -286,6 +290,7 @@ internal sealed class LeashPunishWindow : Window
             (_title.Foreground, _hint.Foreground) = (F.Text, F.Muted);
         };
         _refuseTimer.Start();
+        LeashSound.RefusedClose(DateTime.UtcNow); // WPF LeashPunishWindow.cs:361
         var level = CoreSettings.Current?.MotionLevel ?? Models.MotionLevel.Full;
         if (level != Models.MotionLevel.Off) Shake(level == Models.MotionLevel.Reduced ? 7.0 : 16.0);
     }

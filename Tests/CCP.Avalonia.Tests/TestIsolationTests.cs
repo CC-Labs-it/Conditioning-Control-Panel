@@ -18,6 +18,80 @@ namespace CCP.Avalonia.Tests;
 /// seams that leaked before (PLAYBOOK P02) and really puts each one back.</summary>
 public class TestIsolationTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void LeftoverShellIsClosedEvenWhenLockdownOrTrayVetoesUserClose(bool lockdown) =>
+        CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+        {
+            var old = ConditioningControlPanel.Services.LockdownService.Current;
+            var ld = new ConditioningControlPanel.Services.LockdownService();
+            var active = typeof(ConditioningControlPanel.Services.LockdownService).GetField("_isActive",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            var oldSandboxed = ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.TraySandboxed;
+            var shell = new ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow();
+            var closed = false;
+            shell.Closed += (_, _) => closed = true;
+            try
+            {
+                shell.Show();
+                if (lockdown)
+                {
+                    active.SetValue(ld, true);
+                    ConditioningControlPanel.Services.LockdownService.Current = ld;
+                }
+                else
+                {
+                    ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.TraySandboxed = () => true;
+                    shell.CreateTray();
+                    shell.TrayHostPresent = () => true;
+                }
+                var listeners = typeof(ConditioningControlPanel.Avalonia.Views.Controls.Leash.LeashAskWindow)
+                    .GetField("CurrentClosed", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+                bool Listening() => ((System.Delegate?)listeners.GetValue(null))?.GetInvocationList()
+                    .Any(handler => ReferenceEquals(handler.Target, shell)) == true;
+                Assert.True(Listening());
+                shell.Close();
+                Assert.False(closed); // A real user close is refused or hides the window.
+                OpenWindows.CloseLeftovers();
+                Assert.True(closed);
+                Assert.False(Listening()); // The old shell must not open offers in later tests.
+            }
+            finally
+            {
+                shell.MarkExitRequestedForTest();
+                shell.Close();
+                shell.Tray?.Dispose();
+                active.SetValue(ld, false);
+                ConditioningControlPanel.Services.LockdownService.Current = old;
+                ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.TraySandboxed = oldSandboxed;
+                ld.Dispose();
+            }
+        });
+
+    [Fact]
+    public void EmiOfferProbesAreInstalledBeforeTheSnapshot()
+    {
+        var ask = ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.AskSituationProbe;
+        var effect = ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.EffectFeasibleProbe;
+        Assert.NotNull(ask);
+        Assert.NotNull(effect);
+        var snapshot = ProcessStateSnapshot.Take();
+        try
+        {
+            ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.AskSituationProbe = null;
+            ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.EffectFeasibleProbe = null;
+            snapshot.Restore();
+            Assert.Same(ask, ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.AskSituationProbe);
+            Assert.Same(effect, ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.EffectFeasibleProbe);
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.AskSituationProbe = ask;
+            ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.EffectFeasibleProbe = effect;
+        }
+    }
+
     [Fact]
     public void MotionPreferenceCacheIsRestoredWithItsTimestamp() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
     {
@@ -70,6 +144,37 @@ public class TestIsolationTests
     {
         public override global::System.DateTimeOffset GetUtcNow() => new(2026, 1, 1, 0, 0, 0, global::System.TimeSpan.Zero);
     }
+
+    [Fact]
+    public void VideoQuarantineIsRestored() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        var field = typeof(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost).GetField("_videoQuarantineUntilUtc",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var original = field.GetValue(null);
+        try
+        {
+            var snapshot = ProcessStateSnapshot.Take();
+            field.SetValue(null, System.DateTime.MaxValue);
+            snapshot.Restore();
+            Assert.Equal(original, field.GetValue(null));
+        }
+        finally { field.SetValue(null, original); }
+    });
+
+    [Fact]
+    public void SnapshotRestoresTheBrowserVideoClaim() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.EndWebVideo();
+        var snapshot = ProcessStateSnapshot.Take();
+        try
+        {
+            ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.BeginWebVideoTakeover();
+            Assert.True(ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.WebVideoClaimed);
+            snapshot.Restore();
+            Assert.False(ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.WebVideoClaimed);
+        }
+        finally { ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.EndWebVideo(); }
+    });
 
     [Fact]
     public void HeadlessBootstrapIncludesShippedFontFallbacks() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
@@ -715,4 +820,41 @@ public class TestIsolationTests
         }
         Assert.Equal(before, File.Exists(settingsFile) ? File.ReadAllText(settingsFile) : null);
     }
+
+    /// <summary>BarkHead.Seed points static seams at the real EMI desk and tube. The hook must undo all of
+    /// them after any seeding test, not only those some test file happens to assign by hand.</summary>
+    [Fact]
+    public void BarkHeadSeedIsUndoneByTheSnapshot() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        System.Func<object?>[] seams =
+        {
+            () => ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire,
+            () => ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe,
+            () => ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.IdleLineVoiced,
+            () => ConditioningControlPanel.Services.Chaos.ChaosLessons.FirstTimeBark,
+        };
+        var before = seams.Select(s => s()).ToArray();
+        var snapshot = ProcessStateSnapshot.Take(repairLateWrites: false);
+        BarkHead.Seed(new ConditioningControlPanel.Services.Bark.BarkEngine());
+        Assert.All(seams, s => Assert.NotNull(s()));
+        snapshot.Restore();
+        for (int i = 0; i < seams.Length; i++) Assert.Same(before[i], seams[i]());
+    });
+
+    [Fact]
+    public void ToastLastLineIsRestoredByProcessSnapshot() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        var field = typeof(ConditioningControlPanel.Avalonia.Possession.ToastEffect).GetField("_lastLine",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var original = field.GetValue(null);
+        try
+        {
+            field.SetValue(null, "before");
+            var snapshot = ProcessStateSnapshot.Take();
+            field.SetValue(null, "after");
+            snapshot.Restore();
+            Assert.Equal("before", field.GetValue(null));
+        }
+        finally { field.SetValue(null, original); }
+    });
 }

@@ -10,10 +10,13 @@ using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
+using System.IO.Enumeration;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Tests;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -48,6 +51,114 @@ public sealed class ModCreatorBarksTests
         typeof(ModCreatorWindow).GetMethod("WriteSideFilesTo", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(w, new object[] { root });
         return JArray.Parse(File.ReadAllText(FileAt(root)));
     }
+
+    [Fact]
+    public void BaseManifestPickersSelectValuesAndMissingManifestLeavesTextFields() => Run((w, root) =>
+    {
+        var manifest = Path.Combine(SourceRoots.RepoRoot, "Assets", "sounds", "companion_audio", "bark_rules.json");
+        var rules = JArray.Parse(File.ReadAllText(manifest)).OfType<JObject>().ToArray();
+        var trigger = rules.Select(r => r.Value<string>("trigger")).First(v => !string.IsNullOrWhiteSpace(v))!;
+        var id = rules.Select(r => r.Value<string>("id")).First(v => !string.IsNullOrWhiteSpace(v))!;
+        w.BarkBaseManifestPath = manifest;
+        Click(w, "mod_barks_add");
+        var card = Card(w);
+        var boxes = card.GetLogicalDescendants().OfType<TextBox>().ToList();
+        var pickers = card.GetLogicalDescendants().OfType<ComboBox>().ToList();
+        var triggerPicker = pickers.Single(c => Equals(c.Tag, "bark_trigger_picker"));
+        var idPicker = pickers.Single(c => Equals(c.Tag, "bark_id_picker"));
+        Assert.True(triggerPicker.IsVisible); Assert.False(idPicker.IsVisible);
+        triggerPicker.SelectedItem = trigger; Assert.Equal(trigger, boxes[1].Text);
+        card.GetLogicalDescendants().OfType<CheckBox>().Single(c => Equals(c.Content, Loc.Get("mod_barks_override"))).IsChecked = true;
+        Assert.False(triggerPicker.IsVisible); Assert.True(idPicker.IsVisible);
+        idPicker.SelectedItem = id; Assert.False(boxes[0].IsVisible);
+        Variants(card).GetLogicalDescendants().OfType<TextBox>().Single().Text = "line";
+        Assert.Equal(id, Export(w, root)[0].Value<string>("id"));
+        w.ClearBarksSection();
+        w.BarkBaseManifestPath = Path.Combine(root, "absent.json");
+        Click(w, "mod_barks_add"); card = Card(w);
+        Assert.False(card.GetLogicalDescendants().OfType<ComboBox>().Single(c => Equals(c.Tag, "bark_trigger_picker")).IsVisible);
+        card.GetLogicalDescendants().OfType<CheckBox>().Single(c => Equals(c.Content, Loc.Get("mod_barks_override"))).IsChecked = true;
+        Assert.False(card.GetLogicalDescendants().OfType<ComboBox>().Single(c => Equals(c.Tag, "bark_id_picker")).IsVisible);
+        card.GetLogicalDescendants().OfType<TextBox>().First().Text = "custom";
+        Variants(card).GetLogicalDescendants().OfType<TextBox>().Single().Text = "line";
+        Assert.Equal("custom", Export(w, Path.Combine(root, "fallback"))[0].Value<string>("id"));
+        File.WriteAllText(w.BarkBaseManifestPath, "broken");
+        Assert.Empty(ModCreatorWindow.ReadBarkPickerItems(w.BarkBaseManifestPath).Ids);
+    });
+
+    [Theory]
+    [InlineData("BASE.ONE", "base.one")]
+    [InlineData("unknown.rule", "unknown.rule")]
+    public void LoadedOverrideSelectsItsIdAndExportUsesSelection(string loadedId, string selectedId) => Run((w, root) =>
+    {
+        var manifest = Path.Combine(root, "base.json");
+        File.WriteAllText(manifest, "[{id:'base.one',trigger:'Event'},{id:'base.two',trigger:'Other'}]");
+        w.BarkBaseManifestPath = manifest;
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+        File.WriteAllText(FileAt(root), $"[{{id:'{loadedId}',variant_pool:['line']}}]");
+        w.LoadBarksFrom(root);
+        var card = Card(w);
+        var idBox = card.GetLogicalDescendants().OfType<TextBox>().First();
+        var picker = card.GetLogicalDescendants().OfType<ComboBox>().Single(c => Equals(c.Tag, "bark_id_picker"));
+        Assert.False(idBox.IsVisible);
+        Assert.True(picker.IsVisible);
+        Assert.Equal(selectedId, picker.SelectedItem);
+        Assert.Equal(selectedId, Export(w, Path.Combine(root, "loaded"))[0].Value<string>("id"));
+        picker.SelectedItem = "base.two";
+        idBox.Text = "different";
+        Assert.Equal("base.two", Export(w, Path.Combine(root, "selected"))[0].Value<string>("id"));
+        card.GetLogicalDescendants().OfType<CheckBox>().Single(c => Equals(c.Content, Loc.Get("mod_barks_override"))).IsChecked = false;
+        Assert.True(idBox.IsVisible);
+        Assert.False(picker.IsVisible);
+    });
+
+    [Fact]
+    public void OverrideExportUsesSelectedIdInsteadOfEditableNewRuleId() => Run((w, root) =>
+    {
+        w.BarkBaseManifestPath = Path.Combine(root, "base.json");
+        File.WriteAllText(w.BarkBaseManifestPath, "[{id:'base.one',trigger:'Event'}]");
+        Click(w, "mod_barks_add");
+        var card = Card(w);
+        card.GetLogicalDescendants().OfType<CheckBox>().Single(c => Equals(c.Content, Loc.Get("mod_barks_override"))).IsChecked = true;
+        var picker = card.GetLogicalDescendants().OfType<ComboBox>().Single(c => Equals(c.Tag, "bark_id_picker"));
+        picker.SelectedItem = "base.one";
+        card.GetLogicalDescendants().OfType<TextBox>().First().Text = "different";
+        Variants(card).GetLogicalDescendants().OfType<TextBox>().Single().Text = "line";
+        Assert.Equal("base.one", Export(w, root)[0].Value<string>("id"));
+    });
+
+    [Fact]
+    public void LoadedOverrideWithWhitespaceIdIsSkipped() => Run((w, root) =>
+    {
+        w.BarkBaseManifestPath = Path.Combine(root, "base.json");
+        File.WriteAllText(w.BarkBaseManifestPath, "[{id:'base.one',trigger:'Event'}]");
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+        var rules = new JArray(
+            new JObject { ["id"] = "  ", ["variant_pool"] = new JArray("bad") },
+            new JObject { ["id"] = "base.one", ["variant_pool"] = new JArray("good") });
+        File.WriteAllText(FileAt(root), rules.ToString());
+        w.LoadBarksFrom(root);
+        var picker = Card(w).GetLogicalDescendants().OfType<ComboBox>().Single(c => Equals(c.Tag, "bark_id_picker"));
+        Assert.Equal("  ", picker.SelectedItem);
+        var exported = Export(w, Path.Combine(root, "out"));
+        Assert.Equal("base.one", Assert.Single(exported).Value<string>("id"));
+        Assert.Equal(Loc.GetF("mod_barks_skipped", 1, Loc.Get("mod_barks_no_id")), w.FindControl<TextBlock>("TxtStatus")!.Text);
+    });
+
+    [Fact]
+    public void LoadedOverrideUsesFreeTextWhenManifestIsAbsent() => Run((w, root) =>
+    {
+        w.BarkBaseManifestPath = Path.Combine(root, "absent.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+        File.WriteAllText(FileAt(root), "[{id:'custom',variant_pool:['line']}]");
+        w.LoadBarksFrom(root);
+        var card = Card(w);
+        var idBox = card.GetLogicalDescendants().OfType<TextBox>().First();
+        Assert.True(idBox.IsVisible);
+        Assert.Equal("custom", idBox.Text);
+        idBox.Text = "changed";
+        Assert.Equal("changed", Export(w, Path.Combine(root, "out"))[0].Value<string>("id"));
+    });
 
     [Fact]
     public void IncompleteRulesAreReportedAndReportSurvivesExportStatus() => Run((w, root) =>
@@ -86,6 +197,7 @@ public sealed class ModCreatorBarksTests
     [Fact]
     public void OverrideEmitsOnlyIdAndPoolAndRemoveAndResetClearState() => Run((w, root) =>
     {
+        w.BarkBaseManifestPath = Path.Combine(root, "absent.json");
         Click(w, "mod_barks_add");
         var card = Card(w);
         card.GetLogicalDescendants().OfType<CheckBox>().Single(c => Equals(c.Content, Loc.Get("mod_barks_override"))).IsChecked = true;
@@ -241,6 +353,7 @@ public sealed class ModCreatorBarksTests
     [Fact]
     public void FreshRuleExportedThenChangedToOverrideExportsOnlyOverlayFields() => Run((w, root) =>
     {
+        w.BarkBaseManifestPath = Path.Combine(root, "absent.json");
         Click(w, "mod_barks_add");
         var card = Card(w);
         var boxes = card.GetLogicalDescendants().OfType<TextBox>().ToList();
@@ -264,6 +377,7 @@ public sealed class ModCreatorBarksTests
     [Fact]
     public void LoadedRuleChangedToOverrideKeepsBackingFields() => Run((w, root) =>
     {
+        w.BarkBaseManifestPath = Path.Combine(root, "absent.json");
         Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
         File.WriteAllText(FileAt(root), "[{id:'loaded',trigger:'Event',conditions:{level_gte:10},future:42,variant_pool:['line']}]");
         w.LoadBarksFrom(root);
@@ -434,6 +548,74 @@ public sealed class ModCreatorBarksTests
             Assert.Equal(10, rule["conditions"]!.Value<int>("level_gte"));
         }
         else { Assert.Null(rule["mood"]); Assert.Null(rule["conditions"]); }
+    });
+
+    [Fact]
+    public void BarkAudioLabelsAndAttachmentsRoundTrip() => Run((w, root) =>
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+        File.WriteAllText(FileAt(root), "[{id:'Rule',trigger:'Event',variant_pool:['text',{text:'missing',audio:'rule_1.mp3'}]}]");
+        w.LoadBarksFrom(root);
+        var variants = Variants(Card(w));
+        Assert.Contains(variants.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.Get("mod_barks_text_only"));
+        Assert.Contains(variants.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == Loc.GetF("mod_mantra_missing_fmt", "rule_1.mp3"));
+        var source = Path.Combine(root, "input.mp3"); File.WriteAllText(source, "audio");
+        var cards = (System.Collections.IList)typeof(ModCreatorWindow).GetField("_barkCards", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(w)!;
+        var row = (StackPanel)variants.Children[0];
+        typeof(ModCreatorWindow).GetMethod("AttachBarkAudio", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(w, new[] { cards[0], row, source });
+        var output = Path.Combine(root, "out");
+        var rules = Export(w, output);
+        Assert.Equal("rule_2.mp3", rules[0]["variant_pool"]![0]!["audio"]!.Value<string>());
+        Assert.Equal("audio", File.ReadAllText(Path.Combine(Path.GetDirectoryName(FileAt(output))!, "rule_2.mp3")));
+        Assert.False(File.Exists(Path.Combine(Path.GetDirectoryName(FileAt(output))!, "rule_1.mp3")));
+    });
+
+    [Fact]
+    public void LoadedBarkPreviewUsesSharedPanicStop() => Run((w, root) =>
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+        var clip = Path.Combine(Path.GetDirectoryName(FileAt(root))!, "clip.mp3");
+        File.WriteAllText(clip, "audio");
+        File.WriteAllText(FileAt(root), "[{id:'rule',trigger:'Event',variant_pool:[{text:'line',audio:'clip.mp3'}]}]");
+        var old = ConditioningControlPanel.CoreAudio.PlayStoppableProvider;
+        var stops = 0; string? played = null;
+        ConditioningControlPanel.CoreAudio.PlayStoppableProvider = (path, _, _, _, _) => { played = path; return () => stops++; };
+        try
+        {
+            w.LoadBarksFrom(root);
+            var play = Variants(Card(w)).GetLogicalDescendants().OfType<Button>().Single(b => b.Content is ConditioningControlPanel.Avalonia.Controls.IconGlyph);
+            Assert.True(play.IsVisible);
+            play.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(clip, played);
+            typeof(ModCreatorWindow).GetMethod("StopPreviewsForPanic", BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, null);
+            Assert.Equal(1, stops);
+        }
+        finally { ConditioningControlPanel.CoreAudio.PlayStoppableProvider = old; }
+    });
+
+    [Fact]
+    public void BarkAttachPickerOffersEveryMp3CaseAndAttachesMixedCaseFile() => Run((w, root) =>
+    {
+        var path = Path.Combine(root, "clip.MP3"); File.WriteAllText(path, "audio");
+        var file = DispatchProxy.Create<IStorageFile, NewEnhancementSourceTests.ItemProxy>();
+        ((NewEnhancementSourceTests.ItemProxy)(object)file).PathValue = new Uri(path);
+        var provider = DispatchProxy.Create<IStorageProvider, NewEnhancementSourceTests.PickerProxy>();
+        var picker = (NewEnhancementSourceTests.PickerProxy)(object)provider; picker.Result = file;
+        using var scope = NewEnhancementSourceTests.BindStorageProvider(new NewEnhancementSourceTests.Factory(provider));
+        Directory.CreateDirectory(Path.GetDirectoryName(FileAt(root))!);
+        File.WriteAllText(FileAt(root), "[{id:'Rule',trigger:'Event',variant_pool:['text']}]");
+        w.Show();
+        w.LoadBarksFrom(root);
+        Click(Variants(Card(w)), "mod_event_attach");
+        Dispatcher.UIThread.RunJobs();
+        var patterns = Assert.IsType<FilePickerOpenOptions>(picker.Options).FileTypeFilter!.Single().Patterns!;
+        foreach (var name in new[] { "x.mp3", "x.mP3", "x.Mp3", "x.MP3" })
+            Assert.Contains(patterns, pattern => FileSystemName.MatchesSimpleExpression(pattern, name, ignoreCase: false));
+        Assert.DoesNotContain(patterns, pattern => FileSystemName.MatchesSimpleExpression(pattern, "x.wav", ignoreCase: false));
+        var output = Path.Combine(root, "out");
+        var rules = Export(w, output);
+        Assert.Equal("rule_1.mp3", rules[0]["variant_pool"]![0]!["audio"]!.Value<string>());
+        Assert.Equal("audio", File.ReadAllText(Path.Combine(Path.GetDirectoryName(FileAt(output))!, "rule_1.mp3")));
     });
 
 }
