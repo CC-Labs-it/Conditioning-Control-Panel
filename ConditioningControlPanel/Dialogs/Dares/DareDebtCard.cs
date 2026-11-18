@@ -160,7 +160,10 @@ public sealed class DareDebtCard : Window
         {
             Frame(Loc.Get("dares_ld_title"), "dares_help_lockdown");
             var list = new StackPanel { Tag = "dares-consent-lockdown" };
-            list.Children.Add(Bullet(Loc.GetF("dares_ld_length", _bet.MyStake.Amount)));
+            // The real Lockdown turns the panic key off only when the player's own Lockdown setting
+            // says so (hard rule 6: Dares never forces it), so the consent says what will happen.
+            var panicOff = App.Settings?.Current?.LockdownDisablePanicKey == true;
+            list.Children.Add(Bullet(Loc.GetF(panicOff ? "dares_ld_length" : "dares_ld_length_panic", _bet.MyStake.Amount)));
             list.Children.Add(Bullet(Loc.Get("dares_ld_phrase")));
             list.Children.Add(Bullet(Loc.Get("dares_ld_early")));
             _body.Children.Add(list);

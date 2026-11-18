@@ -83,7 +83,10 @@ public sealed class DareOfferCard : Window, Services.Startup.IPassiveStartupSurf
             var icon = DareLook.Glyph(DareLook.ToneGlyph(DareTone.Lockdown), 14, FriendsLook.Frozen(DareLook.ToneColor(DareTone.Lockdown)));
             icon.Margin = new Thickness(0, 0, 8, 0);
             consent.Children.Add(icon);
-            var t = DareLook.Words(Loc.GetF("dares_offer_consent", bet.MyStake.Amount), 12.5, FriendsLook.TextBrush, wrap: true);
+            // Panic is off only when the player's own Lockdown setting says so (Dares never forces it).
+            var panicOff = App.Settings?.Current?.LockdownDisablePanicKey == true;
+            var t = DareLook.Words(Loc.GetF(panicOff ? "dares_offer_consent" : "dares_offer_consent_panic", bet.MyStake.Amount),
+                12.5, FriendsLook.TextBrush, wrap: true);
             t.MaxWidth = 400;
             consent.Children.Add(t);
             consent.Children.Add(DareLook.Help("dares_help_lockdown"));
