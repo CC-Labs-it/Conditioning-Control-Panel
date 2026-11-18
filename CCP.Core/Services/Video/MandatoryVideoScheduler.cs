@@ -644,7 +644,12 @@ namespace ConditioningControlPanel.Services
         {
             Penalties = 0;
             CoreBubbles.Resume();   // WPF Cleanup: App.Bubbles?.Resume() - not before a verdict replay
-            if (_running && CoreSettings.Current.FlashEnabled) CoreFlash.Start();
+            if (_running && CoreSettings.Current.FlashEnabled)
+            {
+                var flashWasRunning = CoreFlash.IsRunning;
+                CoreFlash.Start();
+                if (flashWasRunning) CoreDiscord.Service?.SetFlashActivity(); // WPF Cleanup:7955-7964
+            }
             else CoreDiscord.Service?.SetIdleActivity(); // WPF Cleanup:7962
             if (_running) ScheduleNext();
         }

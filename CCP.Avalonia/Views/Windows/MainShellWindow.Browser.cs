@@ -353,6 +353,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var patreon = page.FindControl<Image>("ProfilePatreonTierBadge");
                 if (patreon != null) patreon.IsVisible = false;
 
+                var badge = page.FindControl<Image>("ProfilePatreonBadge");
+                if (badge != null) badge.IsVisible = false;
+                var banner = page.FindControl<Border>("ProfilePatreonTierBanner");
+                if (banner != null) banner.IsVisible = false;
                 SetProfileViewingSelf(true);
             }
             catch (Exception ex) { Log.Debug("ClearProfileViewer: {E}", ex.Message); }

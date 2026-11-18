@@ -137,6 +137,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private Action? _audioEnded, _audioFailed;
         private int _videoLoad;
         private static readonly List<EnhancementPlayerWindow> OpenPlayers = new();
+        internal static bool IsAnyEnhancementRunning => OpenPlayers.Any(p => p._deeperEngine?.IsRunning == true);
         private string? _audioPath;
         private int _audioLoad;
         private bool _audioDurationRemembered;
@@ -915,6 +916,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void LoadLocalVideo(string path)
         {
             StopAudio(); InvalidateWaveform(); EndVideoWatch(); ++_videoLoad; _pollDisabled = false;
+            _currentSec = _durationSec = 0; // WPF BindVideoSource (xaml.cs:1430): a fresh BrowserVideoTimeSource starts at 0 (BrowserVideoTimeSource.cs:33).
             try
             {
                 ShowMediaPaneFor(MediaTypes.Video);
@@ -947,11 +949,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 // hands LocalPath back in a form that only matches after normalisation.
                 var full = System.IO.Path.GetFullPath(path);
                 _videoBrowser.AllowNavigation = u => u.IsFile && DeeperPreview.PathsEqual(u.LocalPath, full);
+                TickDeeper(bindVideo: true); // WPF binds the enhancement before navigation.
                 _videoBrowser.Source = new Uri(full);
                 _videoNavigated = true;
             }
             catch (Exception ex)
             {
+                StopDeeper();
                 Log.Warning(ex, "EnhancementPlayer: local video load failed");
                 _txtVideoStatus.Text = Loc.Get("deeper_player_video_no_video");
             }
@@ -960,6 +964,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void LoadVideoUrl(string url)
         {
             StopAudio(); InvalidateWaveform(); EndVideoWatch(); ++_videoLoad; _pollDisabled = false;
+            _currentSec = _durationSec = 0; // WPF BindVideoSource (xaml.cs:1430): a fresh BrowserVideoTimeSource starts at 0 (BrowserVideoTimeSource.cs:33).
             try
             {
                 _txtVideoStatus.Text = Loc.Get("deeper_player_video_loading");
@@ -987,11 +992,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
                 // WPF's NavigationStarting (xaml.cs:1796): every later hop passes the same fence.
                 _videoBrowser.AllowNavigation = DeeperPreview.IsAllowedPreviewHost;
+                TickDeeper(bindVideo: true); // WPF binds the enhancement before navigation.
                 _videoBrowser.Source = uri;
                 _videoNavigated = true;
             }
             catch (Exception ex)
             {
+                StopDeeper();
                 Log.Warning(ex, "EnhancementPlayer: video load failed");
                 _txtVideoStatus.Text = Loc.Get("deeper_player_video_no_video");
             }
@@ -1039,6 +1046,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // letting the poll correct it would show ⏸ / LIVE / "Playing" in the meantime, and on
             // a page that never grows a video element it would never be corrected at all.
             var want = !_isPlaying;
+            if (want) TickDeeper(bindVideo: true); // WPF rebinds after Stop before Play.
             var load = _videoLoad;
             var result = await _videoBrowser.InvokeScriptAsync(
                 DeeperPreview.Invoke(want ? "l.play();" : "l.pause();"));
