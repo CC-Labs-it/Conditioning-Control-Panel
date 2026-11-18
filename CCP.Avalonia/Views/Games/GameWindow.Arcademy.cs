@@ -3,6 +3,7 @@
 using System;
 using Avalonia.Threading;
 using Newtonsoft.Json.Linq;
+using ConditioningControlPanel.Services.Fyp;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Games
@@ -41,6 +42,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     break;
                 case "assets-request":
                     PostArcademyAssetsUnavailable(message);
+                    handled = true;
+                    break;
+                case "library-remove":
+                    FypRules.RemoveLibrarySub(CoreSettings.Current, (string?)message["name"] ?? (string?)message["sub"]);
+                    Post(new { type = "library", subLibrary = FypRules.BuildLibraryPayload(CoreSettings.Current) });
                     handled = true;
                     break;
                 case "class-started":

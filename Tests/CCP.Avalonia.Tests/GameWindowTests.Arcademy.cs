@@ -1,5 +1,8 @@
 using System;
 using Avalonia.Threading;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Services;
+using Newtonsoft.Json.Linq;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using Xunit;
 
@@ -7,6 +10,27 @@ namespace CCP.Avalonia.Tests;
 
 public sealed partial class GameWindowTests
 {
+    [Fact]
+    public void Arcademy_LibraryRemove_PersistsAndPushesReplacement() => Run((_, _) =>
+    {
+        var s = CoreSettings.Current;
+        s.TryAddLibrarySub("hypno");
+        var w = new GameWindow(new GameWindow.Game("arcademy", "launcher_game_arcademy_title", "arcademy/index.html"));
+        JObject? frame = null;
+        w.Posted += json => frame = JObject.Parse(json);
+        try
+        {
+            w.HandleMessage("{\"type\":\"library-remove\",\"name\":\"hypno\"}");
+            Assert.DoesNotContain(s.RemoteSubLibrary, e => e.Name == "hypno");
+            Assert.True(CoreSettings.Service!.HasPendingSave);
+            CoreSettings.Service.SaveImmediate();
+            Assert.DoesNotContain(new SettingsService().Current.RemoteSubLibrary, e => e.Name == "hypno");
+            Assert.Equal("library", (string?)frame!["type"]);
+            Assert.Empty((JArray)frame["subLibrary"]!);
+        }
+        finally { w.Close(); }
+    });
+
     [Fact]
     public void Arcademy_Heartbeat_UsesClassDeadlineAndStopsOnClose() => Run((_, _) =>
     {
