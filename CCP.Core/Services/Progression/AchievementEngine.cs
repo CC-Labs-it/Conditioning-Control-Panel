@@ -183,6 +183,15 @@ internal sealed class AchievementEngine
             if (level >= milestone) TryUnlock(id);
     }
 
+    /// <summary>WPF AchievementService.cs:345-357: retroactive launch streak awards.</summary>
+    public void CheckDailyMaintenance()
+    {
+        if (Progress.ConsecutiveDays >= AchievementRules.DailyMaintenanceConsecutiveDays)
+            TryUnlock("daily_maintenance");
+        if (Progress.ConsecutiveDays >= AchievementRules.ThirtyDayDollConsecutiveDays)
+            TryUnlock("thirty_day_doll");
+    }
+
     /// <summary>A bubble-count answer: the correct-answer streak (mathematicians_nightmare) and the totals.</summary>
     public void TrackBubbleCountResult(bool correct)
     {
