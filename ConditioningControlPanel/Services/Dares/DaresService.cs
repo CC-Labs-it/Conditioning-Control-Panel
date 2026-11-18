@@ -165,14 +165,15 @@ public sealed class DaresService : IDaresService, IDisposable
             }
             case DareStakeKind.Lock:
             {
-                int booked = stake.Amount * 60;
                 if (!_lockBooked.Contains(bet.Id))
                 {
                     if (!_host.ChasterReady()) return DareActResult.NeedsChaster;
-                    booked = _host.BookLockSeconds(stake.Amount * 60);
+                    // The tab's own limits may take fewer seconds; a tab that took none paid nothing.
+                    if (_host.BookLockSeconds(stake.Amount * 60) <= 0) return DareActResult.NeedsChaster;
                     _lockBooked.Add(bet.Id);
                 }
-                var r = DaresParse.Act(await _api.CallAsync("pay", new JObject { ["id"] = bet.Id, ["booked"] = booked }, ct));
+                // The server reads `booked` as a yes (the minutes are on the player's own tab), never a number.
+                var r = DaresParse.Act(await _api.CallAsync("pay", new JObject { ["id"] = bet.Id, ["booked"] = true }, ct));
                 if (r is DareActResult.Done or DareActResult.Gone) _lockBooked.Remove(bet.Id);
                 return r;
             }

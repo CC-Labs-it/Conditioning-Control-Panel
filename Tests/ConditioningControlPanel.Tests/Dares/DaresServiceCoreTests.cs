@@ -159,7 +159,7 @@ public class DaresServiceCoreTests
         Assert.Equal(1200, host.Booked);
         Assert.Equal(DareActResult.Done, await svc.ActAsync("b1", DareOp.Pay));
         Assert.Equal(1200, host.Booked);
-        Assert.Equal(1200, api.LastBody("pay").Value<int>("booked"));
+        Assert.True(api.LastBody("pay").Value<bool>("booked"));
     }
 
     [Fact]

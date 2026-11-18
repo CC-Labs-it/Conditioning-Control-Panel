@@ -65,7 +65,7 @@ until `banned_until`), and the other side is told. Nothing else.
 | `pass` | `{ id }` | `{ ok }` |
 | `cancel` | `{ id }` | `{ ok }` (sender, while `writing` or `sent`) |
 | `report` | `{ id, count, seen_s?, counted_s? }` | `{ ok, bet:B }` |
-| `pay` | `{ id, booked? }` | `{ ok, status, sp? }` status `paid` `gone` `refused`; `sp` = the payer's new balance after an `sp` debt (adopt it: a debited receipt may lower SkillPoints) |
+| `pay` | `{ id, booked? }` (`booked: true` = a lock stake's minutes are already on the payer's own tab; a boolean, never seconds) | `{ ok, status, sp? }` status `paid` `gone` `refused`; `sp` = the payer's new balance after an `sp` debt (adopt it: a debited receipt may lower SkillPoints) |
 | `start` | `{ id }` | `{ ok, status }` (`lockdown` debt -> `serving`) |
 | `served` | `{ id, outcome }` | `{ ok, status }` outcome `served` -> `paid`; `ended_early` -> `owed` again the first time (one retry, `retry_used`), `paid` with `ended_early:true` the second |
 | `did` | `{ id }` | `{ ok }` (`dare` debt -> `claimed`) |
