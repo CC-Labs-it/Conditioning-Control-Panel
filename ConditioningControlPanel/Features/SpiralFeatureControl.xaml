@@ -312,7 +312,7 @@
                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                   Checked="ChkPoolPops_Changed" Unchecked="ChkPoolPops_Changed"/>
                     </Grid>
-                    <!-- What the pool drags in: three switches on one row, all on by default. -->
+                    <!-- What the pool drags in: four switches on one row, all on by default (words: owner 2026-11-18). -->
                     <Grid x:Name="PoolDragsRow" Height="36" Background="Transparent"
                           ToolTip="{loc:Str tooltip_super_pool_drags}">
                         <Grid.ColumnDefinitions>
@@ -334,6 +334,10 @@
                             <TextBlock Text="{loc:Str super_pool_drags_bubbles}" FontSize="12"
                                        Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="14,0,6,0"/>
                             <CheckBox x:Name="ChkPoolDragsBubbles" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                      Checked="ChkPoolDrags_Changed" Unchecked="ChkPoolDrags_Changed"/>
+                            <TextBlock Text="{loc:Str super_pool_drags_words}" FontSize="12"
+                                       Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="14,0,6,0"/>
+                            <CheckBox x:Name="ChkPoolDragsWords" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                       Checked="ChkPoolDrags_Changed" Unchecked="ChkPoolDrags_Changed"/>
                         </StackPanel>
                     </Grid>
