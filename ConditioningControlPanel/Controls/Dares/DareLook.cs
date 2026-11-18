@@ -771,7 +771,8 @@ internal static class DareLook
         return b;
     }
 
-    /// <summary>An amount or deadline chip: a light pill, bold print, tabular figures.</summary>
+    /// <summary>An amount or deadline choice: a small light card like the tiles (square corners and a
+    /// coloured base edge, never an oval: owner 2026-11-18), bold print, tabular figures.</summary>
     public static Button Choice(string label, string? tip, Action onClick, string tag)
     {
         var t = Words(label, 19, B(CardInk), weight: FontWeights.Bold);
@@ -780,13 +781,13 @@ internal static class DareLook
         {
             Background = TileBrush,
             BorderBrush = TileEdgeBrush,
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(99),
-            Padding = new Thickness(16, 5, 16, 6),
+            BorderThickness = new Thickness(1, 1, 1, 4),
+            CornerRadius = new CornerRadius(7),
+            Padding = new Thickness(14, 6, 14, 5),
             Child = t,
         };
         var g = new Grid();
-        g.Children.Add(ShadowUnder(TileBrush, new CornerRadius(99), new Thickness(8, 6, 8, 1), 7, 3, 0.4));
+        g.Children.Add(ShadowUnder(TileBrush, new CornerRadius(7), new Thickness(8, 6, 8, 1), 7, 3, 0.4));
         g.Children.Add(face);
         var b = Bare(g, label);
         b.Margin = new Thickness(0, 0, 8, 8);
