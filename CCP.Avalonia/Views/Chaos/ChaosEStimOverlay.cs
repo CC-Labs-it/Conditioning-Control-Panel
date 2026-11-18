@@ -298,7 +298,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         internal static void RaiseActive()
         {
-            if (_active is { IsVisible: true } w) ChaosEStimOverlay.RaiseWindow(w);
+            if (_active is { } w)
+            {
+                if (!CoreSettings.Current.ChaosPinOnTop) w.Topmost = false;
+                else if (w.IsVisible) ChaosEStimOverlay.RaiseWindow(w);
+            }
         }
 
         /// <summary>Charges armed: show the halo and follow the cursor. Safe from any thread.</summary>
@@ -311,7 +315,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 w._start = ChaosEStimOverlay.Clock.GetTimestamp();
                 w.Step();   // snap to the cursor before the first frame
                 if (!w.IsVisible) w.Show();
-                ChaosEStimOverlay.RaiseWindow(w);
+                if (CoreSettings.Current.ChaosPinOnTop) ChaosEStimOverlay.RaiseWindow(w);
+                else w.Topmost = false;
                 w._follow.Start();
             }
             catch (Exception ex) { Log.Debug("ChaosEStimGlow.Arm: {E}", ex.Message); }
@@ -343,7 +348,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             SystemDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Background = Brushes.Transparent;
-            Topmost = true;
+            Topmost = CoreSettings.Current.ChaosPinOnTop;
             ShowInTaskbar = false;
             ShowActivated = false;
             CanResize = false;
@@ -380,7 +385,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (ChaosEStimOverlay.SkipPlatformChecksForTests) return true;
             var at = ReadPointer()?.At ?? default;
             int size = (int)Math.Ceiling(M.HaloWindow * DesktopScaling);
-            if (!X11Overlay.SetClickThrough(this, true) | !X11Overlay.SetOverrideRedirect(this, new PixelRect(at.X, at.Y, size, size)))
+            if (!ChaosEStimOverlay.SetClickThrough(this, true) | !ChaosEStimOverlay.SetOverrideRedirect(this, new PixelRect(at.X, at.Y, size, size), false, Topmost))
             {
                 Log.Warning("ChaosEStimGlow: the platform refused a click-through topmost overlay, no halo");
                 return false;

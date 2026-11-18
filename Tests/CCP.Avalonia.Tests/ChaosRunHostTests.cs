@@ -1181,6 +1181,31 @@ public sealed class ChaosRunHostTests
     }
 
     [Fact]
+    public async Task PanicSurfaceClosesHudInputRegion()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                var hud = ChaosRunHost.Hud!;
+                int calls = 0;
+                hud.InputRegionOverride = _ => calls++;
+                hud.SetPreRunExpanded(true);
+                Assert.True(calls > 0);
+                ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(x => x.Id == "chaos").Stop(null);
+                Assert.False(hud.IsVisible);
+                int stopped = calls;
+                hud.SetPreRunExpanded(true);
+                Assert.Equal(stopped, calls);
+            }
+            finally { ChaosRunHost.ForceShutdown(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task Panic_during_the_countdown_and_mid_run_ends_the_run()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
@@ -1545,6 +1570,33 @@ public sealed class ChaosRunHostTests
                     { VariantId = "pink", IsLive = true, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() });
                 BubbleOverlay.Press(c, c.CenterX, c.CenterY);
                 Assert.Equal((1, "nofocus"), (state.Detonated, c.BrokenReason));
+            }
+            finally { ChaosRunHost.ForceShutdown(); BubbleOverlay.Field.Clock = () => DateTime.UtcNow; FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Held_snap_banks_lifetime_channel_seconds()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.State!.Focus = 100;
+                var now = DateTime.UnixEpoch;
+                BubbleOverlay.Field.Clock = () => now;
+                var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                    { VariantId = "pink", IsLive = true, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() });
+                BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                now = now.AddMilliseconds(1100);
+                BubbleOverlay.Field.Step();
+                Assert.True(b.DefusedViaChannel);
+                Assert.Equal(1.1, ChaosMeta.State.TotalChannelSeconds, 6);
             }
             finally { ChaosRunHost.ForceShutdown(); BubbleOverlay.Field.Clock = () => DateTime.UtcNow; FreshMeta(); }
             return Task.CompletedTask;
