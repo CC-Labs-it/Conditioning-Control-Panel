@@ -865,6 +865,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private Task<bool>? _allFramesInstall;
         // WebView2-only document-start hook; callers retain their own fallback on other engines.
         internal string? WindowsDocumentStartScript { get; set; }
+        internal bool HostedPageMotion { get; set; }
+        // WebKitGTK has no --force-prefers-reduced-motion (WPF ChaosWebViewHost.cs:1440): every
+        // prefers-reduced-motion feature in matchMedia and in style sheets (rules, @import, link/style
+        // media) is rewritten to an always-true (grid:0) or always-false (grid) feature.
+        // shortcut: sheets built with insertRule, adoptedStyleSheets or shadow roots keep the OS value; no shipped page uses them.
+        internal const string MotionScript = @"(()=>{const reduce=__REDUCE__;
+const re=/\(\s*prefers-reduced-motion\s*(?::\s*(reduce|no-preference)\s*)?\)/gi;
+const fix=t=>String(t).replace(re,(_,v)=>((v||'reduce').toLowerCase()==='reduce')===reduce?'(grid:0)':'(grid)');
+const media=m=>{if(m&&/prefers-reduced-motion/i.test(m.mediaText))m.mediaText=fix(m.mediaText);};
+const walk=rules=>{for(const r of rules){media(r.media);if(r.styleSheet)sheet(r.styleSheet);if(r.cssRules)walk(r.cssRules);}};
+const sheet=s=>{media(s.media);try{walk(s.cssRules);}catch(e){}};
+const scan=()=>{for(const s of document.styleSheets)sheet(s);};
+const mm=window.matchMedia.bind(window);
+window.matchMedia=function(q){return mm(fix(q));};
+const styled=n=>n&&(n.nodeName==='STYLE'||n.nodeName==='LINK');
+new MutationObserver(ms=>{if(ms.some(m=>styled(m.target)||styled(m.target.parentNode)||[...m.addedNodes].some(styled)))scan();}).observe(document,{childList:true,subtree:true,characterData:true});
+document.addEventListener('load',e=>{if(styled(e.target))scan();},true);
+document.addEventListener('DOMContentLoaded',scan);})();";
+        private Task<bool>? _motionInstall;
+        internal Func<string, Task<bool>>? MotionScriptInstaller { get; set; }
         internal Func<string, Task>? DocumentStartInstaller { get; set; }
 
         internal async Task PrepareScrolllerGate(int engine, bool gated)
@@ -889,6 +909,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             {
                 _allFramesInstall ??= InstallAllFramesAsync(frameScript);
                 await BoundedNativeStep(_allFramesInstall, "all-frame document-start script");
+                if (Stale()) return;
+            }
+            if (HostedPageMotion && OperatingSystem.IsLinux())
+            {
+                var reduce = ConditioningControlPanel.CoreSettings.Current.MotionLevel == ConditioningControlPanel.Models.MotionLevel.Off;
+                var motionScript = MotionScript.Replace("__REDUCE__", reduce ? "true" : "false");
+                _motionInstall ??= MotionScriptInstaller?.Invoke(motionScript) ?? Platform.WebViewCarrier.InstallAsync(_web?.TryGetPlatformHandle(), motionScript);
+                await BoundedNativeStep(_motionInstall, "motion install");
                 if (Stale()) return;
             }
             if (WindowsDocumentStartScript is { } script && (OperatingSystem.IsWindows() || DocumentStartInstaller != null))
@@ -967,6 +995,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _loadedOnThisEngine = false;
             _carrierInstall = null;
             _allFramesInstall = null;
+            _motionInstall = null;
             _gateReport = 0;
             if (_panicBlank) NavigatePanicBlank();
             var engine = ++_scrolllerEngine;

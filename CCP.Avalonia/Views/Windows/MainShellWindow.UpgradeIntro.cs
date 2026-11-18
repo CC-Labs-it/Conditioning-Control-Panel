@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
+using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows;
@@ -15,6 +16,7 @@ public partial class MainShellWindow
     private bool _upgradeCancelled;
     private WhatsNewDialog? _upgradeDialog;
     private TaskCompletionSource? _upgradeTurn;
+    internal Action<string, object?> UpgradeFire = (moment, context) => EmiDeskService.Instance.Fire(moment, context);
 
     private void ArmUpgradeIntro()
     {
@@ -39,6 +41,10 @@ public partial class MainShellWindow
         var version = CoreReleaseContent.AppVersion;
         var previous = CoreSettings.Current.LastSeenVersion;
         if (previous == version) return Task.CompletedTask;
+        // WPF MainWindow.Marquee.cs:330-331: fire before any version stamp or modal wait. Once per shell:
+        // the _upgradeOffered guard above refuses a second call.
+        if (!string.IsNullOrEmpty(previous))
+            try { UpgradeFire("afterUpdate", new { target = version }); } catch { }
         var notes = CoreReleaseContent.PatchNotes;
         try
         {

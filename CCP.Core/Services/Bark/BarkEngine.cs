@@ -335,9 +335,16 @@ namespace ConditioningControlPanel.Services.Bark
                 case "session_running": return CoreSession.IsSessionRunning;
                 case "mod_switches_60s": return ModSwitchesWithin(RapidModSwitchWindow);
                 case "clicks_60s": return AvatarClicksWithin(RapidClickWindow);
-                // ponytail: session_elapsed_sec, phase_*, pauses/refocus, setup_idle_sec,
-                // days_away and instant_relaunch are read only by triggers with no source here (session engine,
-                // webcam, SessionSetupReady, SessionStarted); they land with those sources.
+                // WPF :1428-1482: the session reads are live, never the fire's context (the head's runner).
+                case "session_elapsed_sec":
+                case "session_phase_index":
+                case "session_planned_min":
+                case "pauses_this_session":
+                case "phase_name":
+                case "phase_is_deepener":
+                    try { return LiveField?.Invoke(field.ToLowerInvariant()); } catch { return null; }
+                // ponytail: refocus, setup_idle_sec, days_away and instant_relaunch are read only by
+                // triggers with no source here (SessionSetupReady, SessionRefocused); they land with those sources.
                 case "master_volume": return (double)s.MasterVolume;
                 case "mute": return s.MasterVolume == 0;
                 case "player_level": return (double)s.PlayerLevel;

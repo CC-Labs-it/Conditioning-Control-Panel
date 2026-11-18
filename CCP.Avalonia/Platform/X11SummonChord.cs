@@ -41,7 +41,6 @@ internal static class X11SummonChord
     [DllImport(LibX11)] private static extern int XUngrabKey(IntPtr display, int keycode, uint modifiers, IntPtr window);
     [DllImport(LibX11)] private static extern int XSync(IntPtr display, bool discard);
     [DllImport(LibX11)] private static extern int XFlush(IntPtr display);
-    [DllImport(LibX11)] private static extern byte XKeysymToKeycode(IntPtr display, ulong keysym);
     [DllImport(LibX11)] private static extern int XRefreshKeyboardMapping(IntPtr mappingEvent);
     [DllImport(LibX11)] private static extern IntPtr XSetErrorHandler(IntPtr handler);
     [DllImport("libc", SetLastError = true)] private static extern int poll([In, Out] PollFd[] fds, ulong nfds, int timeout);
@@ -85,7 +84,7 @@ internal static class X11SummonChord
             {
                 if (!EnsureDisplay()) return false;
                 UngrabLocked(id);
-                int code = XKeysymToKeycode(_display, X11PanicKey.KeysymOf(key));
+                int code = X11PanicKey.KeycodeOf(_display, key);
                 if (code == 0) { Log.Warning("[EmiDesk] chord key '{Key}' has no X keycode", key); return false; }
                 uint mask = ((mods & ChordMods.Ctrl) != 0 ? ControlMask : 0) | ((mods & ChordMods.Alt) != 0 ? Mod1Mask : 0)
                           | ((mods & ChordMods.Shift) != 0 ? ShiftMask : 0) | ((mods & ChordMods.Win) != 0 ? Mod4Mask : 0);

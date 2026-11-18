@@ -7,6 +7,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Automation;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
@@ -27,6 +30,49 @@ namespace CCP.Avalonia.Tests;
 /// </summary>
 public sealed class SectionTabStripShellTests
 {
+    [Fact]
+    public async Task TrayAndPillsMatchWpfDetails()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var strip = new SectionTabStrip { MotionOverride = MotionLevel.Off };
+            var window = new Window { Content = strip };
+            try
+            {
+                window.Show();
+                var layers = ((Panel)strip.Track.Parent!).Children.OfType<Border>().Take(4).ToArray();
+                Assert.Equal(4, layers.Length);
+                strip.Show(NavSections.Settings, "settings");
+                Assert.All(layers, layer => Assert.False(layer.IsVisible));
+                foreach (var section in new[] { NavSections.Studio, NavSections.Companion, NavSections.Play, NavSections.Social, NavSections.You, NavSections.Library })
+                {
+                    strip.Show(section, null);
+                    Assert.All(layers, layer => Assert.True(layer.IsVisible));
+                    Assert.NotEmpty(strip.PillKeys);
+                    foreach (var key in strip.PillKeys)
+                    {
+                        var part = strip.Part(key)!;
+                        var label = part.Label;
+                        var width = new FormattedText(label.Text ?? "", System.Globalization.CultureInfo.CurrentUICulture,
+                            FlowDirection.LeftToRight, new Typeface(label.FontFamily, label.FontStyle, FontWeight.ExtraBold, label.FontStretch),
+                            label.FontSize, Brushes.White).WidthIncludingTrailingWhitespace;
+                        Assert.True(label.MinWidth >= width);
+                        Assert.Equal(TextAlignment.Center, label.TextAlignment);
+                        Assert.Equal(500, ToolTip.GetShowDelay(part.Pill));
+                        Assert.Equal($"{Loc.Get(NavSections.Find(section)!.LabelKey)} {Loc.Get("nav_crumb_sep")} {label.Text}",
+                            AutomationProperties.GetHelpText(part.Pill));
+                    }
+                }
+            }
+            finally { window.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
     [Theory]
     [InlineData(MotionLevel.Off)]
     [InlineData(MotionLevel.Reduced)]
