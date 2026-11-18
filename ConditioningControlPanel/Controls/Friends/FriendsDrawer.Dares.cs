@@ -154,6 +154,8 @@ public sealed partial class FriendsDrawer
         mid.Children.Add(what);
 
         if (state == DareRowState.Running) mid.Children.Add(Progress(bet));
+        else if (DareCardRules.CameraSettled(bet) is { } final)
+            mid.Children.Add(CameraLine(Loc.GetF(final.Key, final.Args), final.Below, null));
         if (state is DareRowState.IOwe or DareRowState.TheyOwe)
         {
             var stake = state == DareRowState.IOwe ? bet.MyStake : bet.TheirStake;
@@ -227,7 +229,7 @@ public sealed partial class FriendsDrawer
 
     /// <summary>A running bet: the bar(s) and the time left. A "can't" has one bar (the receiver's
     /// count against the target); a duel has both, against the leader.</summary>
-    private FrameworkElement Progress(DareBet bet)
+    internal static FrameworkElement Progress(DareBet bet)
     {
         var sp = new StackPanel { Margin = new Thickness(0, 4, 0, 0), Tag = "dares-progress" };
         var c = DareLook.ToneColor(DareSlipRules.ToneOf(bet.What.Kind));
@@ -261,7 +263,32 @@ public sealed partial class FriendsDrawer
             left.Children.Add(eye);
         }
         sp.Children.Add(left);
+        // My own camera share, under the bar: amber with one hint below the pass bar, mint at or above.
+        if (DareCardRules.CameraRunning(bet) is { } cam)
+            sp.Children.Add(CameraLine(Loc.GetF(cam.Key, cam.Args), cam.Below, cam.Below ? Loc.Get(DareCardRules.CameraHintKey) : null));
         return sp;
+    }
+
+    /// <summary>"camera 41% (needs 60%)" in the strip's mono, and the hint under it when there is one.</summary>
+    private static FrameworkElement CameraLine(string text, bool below, string? hint)
+    {
+        var brush = below ? FriendsLook.GoldBrush : FriendsLook.MintBrush;
+        var box = new StackPanel { Margin = new Thickness(0, 3, 0, 0), Tag = below ? "dares-camera-seen:below" : "dares-camera-seen:ok" };
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        var eye = DareLook.Icon(below ? "eyeoff" : "eye", 15, brush);
+        eye.Margin = new Thickness(0, 0, 4, 0);
+        row.Children.Add(eye);
+        row.Children.Add(FriendsLook.Label(text, 10.5, brush, FriendsLook.Mono));
+        box.Children.Add(row);
+        if (hint != null)
+        {
+            var h = FriendsLook.Label(hint, 11, FriendsLook.TextBrush, FriendsLook.Display);
+            h.TextWrapping = TextWrapping.Wrap;
+            h.TextTrimming = TextTrimming.None;
+            h.Margin = new Thickness(19, 1, 0, 0);
+            box.Children.Add(h);
+        }
+        return box;
     }
 
     private static FrameworkElement BarRow(string? label, double fraction, string count, Color c)

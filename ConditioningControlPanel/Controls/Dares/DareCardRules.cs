@@ -93,6 +93,7 @@ public static class DareCardRules
         DareCreateStatus.LockdownNotOk or DareCreateStatus.LockdownNeedsSub => "dares_create_lockdown_needs_sub",
         DareCreateStatus.Refused => "dares_refused",
         DareCreateStatus.Off => "dares_off",
+        DareCreateStatus.Short => "dares_create_short",
         _ => "dares_try_later",
     };
 
@@ -108,8 +109,38 @@ public static class DareCardRules
         DareActResult.LockdownNeedsSub => "dares_act_lockdown_needs_sub",
         DareActResult.Refused => "dares_refused",
         DareActResult.Off => "dares_off",
+        DareActResult.Short => "dares_act_short",
         _ => "dares_try_later",
     };
+
+    /// <summary>Can I cover my own stake on this offer? Only a Sparkles stake asks; an unknown balance
+    /// (null) leaves it to the server, which answers <c>short</c>.</summary>
+    public static bool CanCover(DareBet b, int? balance)
+        => b.MyStake.Kind != DareStakeKind.Sp || balance == null || b.MyStake.Amount <= balance.Value;
+
+    // ---- the camera share -------------------------------------------------------------
+
+    /// <summary>The line under a running camera bet's progress, for MY side only: the key, its
+    /// arguments (seen, needed) and whether it sits below the bar (amber, with the hint) or at or
+    /// above it (mint). Null when the bet has no camera, is not running, or nothing is counted yet.</summary>
+    public static (string Key, object[] Args, bool Below)? CameraRunning(DareBet b)
+    {
+        if (!b.Camera || b.State != DareState.Running || b.MyCameraSeen is not int seen) return null;
+        var need = DareGrammar.CameraPassPercent;
+        return ("dares_cam_seen", new object[] { seen, need }, seen < need);
+    }
+
+    /// <summary>A settled camera bet's last word on my side: "camera 41%, needed 60%". Null when
+    /// nothing was counted for me.</summary>
+    public static (string Key, object[] Args, bool Below)? CameraSettled(DareBet b)
+    {
+        if (!b.Camera || b.State != DareState.Settled || b.MyCameraSeen is not int seen) return null;
+        var need = DareGrammar.CameraPassPercent;
+        return ("dares_cam_seen_final", new object[] { seen, need }, seen < need);
+    }
+
+    /// <summary>The one short hint under a camera line that sits below the bar.</summary>
+    public const string CameraHintKey = "dares_cam_hint";
 
     /// <summary>The line a sender copies into Discord to write the slip's dares.</summary>
     public static string WriteLine(string code) => "/bet write code:" + code;

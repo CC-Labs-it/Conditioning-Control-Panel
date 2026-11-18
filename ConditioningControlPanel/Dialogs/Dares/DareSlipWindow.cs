@@ -220,11 +220,23 @@ public sealed class DareSlipWindow : Window
     private void AddAmounts(DareStakeKind k)
     {
         var row = new WrapPanel { Margin = new Thickness(0, 2, 0, 0), Tag = "dares-amounts" };
+        var balance = Balance();
+        var side = DareSlipRules.Current(_d) ?? DareStep.Mine;
         foreach (var a in DareGrammar.AmountsFor(k))
         {
             var amount = a;
             var chip = DareLook.Choice(DareSlipRules.StakeText(new DareStake(k, a), 0, Loc.Get), Loc.Get(DareSlipRules.TipOf(k)),
-                () => Press(() => DareSlipRules.PickAmount(_d, amount)), "dares-amount:" + a);
+                () => Press(() => DareSlipRules.PickAmount(_d, amount, balance)), "dares-amount:" + a);
+            if (!DareSlipRules.AmountCovered(k, side, a, balance))
+            {
+                // Greyed, never hidden: the player sees the amounts and why one is out of reach.
+                var have = Loc.GetF("dares_sp_have", balance!.Value);
+                chip.IsEnabled = false;
+                chip.Tag = "dares-amount:" + a + ":short";
+                ToolTipService.SetShowOnDisabled(chip, true);
+                chip.ToolTip = have;
+                AutomationProperties.SetHelpText(chip, have);
+            }
             row.Children.Add(chip);
             DareLook.PopIn(chip);
         }
@@ -236,7 +248,7 @@ public sealed class DareSlipWindow : Window
             () => Press(() => DareSlipRules.SetWho(_d, f, TierOf(f.Id))), "dares-who:" + f.Id);
 
     /// <summary>The camera explained in pictures: we look a few times a second and add up the time;
-    /// seen 80% = pass; it runs on this PC; only the seconds leave it.</summary>
+    /// seen 60% = pass; it runs on this PC; only the seconds leave it.</summary>
     private static FrameworkElement CameraHow()
     {
         var pass = new Grid();
@@ -375,6 +387,11 @@ public sealed class DareSlipWindow : Window
     }
 
     private int? TierOf(string friendId) => _tiers != null && _tiers.TryGetValue(friendId, out var t) ? t : null;
+
+    private int? Balance()
+    {
+        try { return _svc.Sparkles; } catch { return null; }
+    }
 
     private DaresMe Me()
     {

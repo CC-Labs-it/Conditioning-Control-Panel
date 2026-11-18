@@ -178,11 +178,20 @@ public static class DareSlipRules
         SetStake(d, new DareStake(k));
     }
 
-    public static void PickAmount(DareDraft d, int amount)
+    /// <summary>An amount chip. <paramref name="balance"/> is my Sparkles (null = unknown): a Sparkles
+    /// amount on my own stake above it cannot be picked (<see cref="AmountCovered"/>).</summary>
+    public static void PickAmount(DareDraft d, int amount, int? balance = null)
     {
         if (d.Pending is not DareStakeKind k || !DareGrammar.AmountsFor(k).Contains(amount)) return;
+        if (Current(d) is { } side && !AmountCovered(k, side, amount, balance)) return;
         SetStake(d, new DareStake(k, amount));
     }
+
+    /// <summary>A Sparkles stake must be covered when it is put up: on MY stake an amount above my
+    /// balance is greyed. The friend's stake stays open (the server checks theirs at accept), and an
+    /// unknown balance leaves it to the server too.</summary>
+    public static bool AmountCovered(DareStakeKind k, DareStep side, int amount, int? balance)
+        => k != DareStakeKind.Sp || side != DareStep.Mine || balance == null || amount <= balance.Value;
 
     private static void SetStake(DareDraft d, DareStake s)
     {

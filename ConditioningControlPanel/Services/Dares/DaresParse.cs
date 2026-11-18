@@ -95,6 +95,7 @@ public static class DaresParse
 
         var counts = o["counts"] as JObject;
         var pass = o["camera_pass"] as JObject;
+        var seen = o["camera_seen"] as JObject;
         DareDebt? debt = null;
         if (o["debt"] is JObject dbt && DareGrammar.ParseDebtState(Str(dbt["state"])) is { } ds)
             debt = new DareDebt(ds, dbt.Value<bool?>("retry_used") == true, dbt.Value<bool?>("ended_early") == true);
@@ -107,8 +108,16 @@ public static class DaresParse
             IntOr(counts?["from"], 0), IntOr(counts?["to"], 0),
             BoolOrNull(pass?["from"]), BoolOrNull(pass?["to"]),
             debt, at, TimeOrNull(o["accepted_at"]), TimeOrNull(o["settled_at"]),
-            DareGrammar.ParseSide(Str(o["renounced_by"])));
+            DareGrammar.ParseSide(Str(o["renounced_by"])))
+        {
+            FromCameraSeen = PercentOrNull(seen?["from"]),
+            ToCameraSeen = PercentOrNull(seen?["to"]),
+        };
     }
+
+    /// <summary>A whole percent clamped to 0-100, or null when absent, null or not a number.</summary>
+    internal static int? PercentOrNull(JToken? t) =>
+        t is JValue { Type: JTokenType.Integer or JTokenType.Float } v ? Math.Clamp((int)Math.Floor(v.Value<double>()), 0, 100) : null;
 
     public static DareStake? Stake(JObject? o)
     {
@@ -129,6 +138,7 @@ public static class DaresParse
         {
             DareActResult.Off => DareCreateStatus.Off,
             DareActResult.TryLater => DareCreateStatus.TryLater,
+            DareActResult.Short => DareCreateStatus.Short,
             _ => DareCreateStatus.Refused,
         });
         var status = Str(reply["status"]) switch
@@ -141,6 +151,7 @@ public static class DaresParse
             "limit" => DareCreateStatus.Limit,
             "discord_needed" => DareCreateStatus.DiscordNeeded,
             "lockdown_needs_sub" => DareCreateStatus.LockdownNeedsSub,
+            "short" => DareCreateStatus.Short,
             _ => DareCreateStatus.Refused,
         };
         return new DareCreateOutcome(status, Str(reply["id"]), Str(reply["write_code"]));
@@ -160,6 +171,7 @@ public static class DaresParse
             "limit" => DareActResult.Limit,
             "lockdown_busy" => DareActResult.LockdownBusy,
             "lockdown_needs_sub" => DareActResult.LockdownNeedsSub,
+            "short" => DareActResult.Short,
             _ => DareActResult.Refused,
         };
     }
@@ -171,6 +183,7 @@ public static class DaresParse
         "too_fast" or "busy" => DareActResult.TryLater,
         "gone" or "not_found" => DareActResult.Gone,
         "banned" => DareActResult.Banned,
+        "short" => DareActResult.Short,
         _ => DareActResult.Refused,
     };
 

@@ -28,6 +28,7 @@ public class DareLookShotTests
         public event Action? Changed { add { } remove { } }
         public DaresSnapshot Snapshot { get; set; } = DareUiTestKit.Snap();
         public bool IsPreview => true;
+        public int? Sparkles { get; set; }
         public Task RefreshAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task<DareCreateOutcome> CreateAsync(string friendId, DareSlip slip, CancellationToken ct = default)
             => Task.FromResult(new DareCreateOutcome(DareCreateStatus.Sent));
@@ -167,6 +168,40 @@ public class DareLookShotTests
                     strip.Children.Add(f);
                 }
                 Shot(strip, 300, dir, "10-drawer-fills");
+
+                // 7.3.5: my camera share under a running bet, below the bar and at or above it.
+                foreach (var (name, share) in new[] { ("11-running-camera-below", 41), ("12-running-camera-ok", 72) })
+                {
+                    var running = DareUiTestKit.Bet(me: DareSide.To, camera: true, toCount: 180, what: new DareWhat(DareKind.Pics, "500"))
+                        with { ToCameraSeen = share, FromCameraSeen = 5 };
+                    var panel = new Border
+                    {
+                        Background = ConditioningControlPanel.Controls.Friends.FriendsLook.PanelBrush,
+                        Padding = new Thickness(46, 10, 14, 10),
+                        Child = ConditioningControlPanel.Controls.Friends.FriendsDrawer.Progress(running),
+                    };
+                    Shot(panel, 320, dir, name);
+                }
+
+                // 7.3.5: my own Sparkles amounts above the balance are greyed; the friend's stay open.
+                svc.Sparkles = 150;
+                var w13 = Make<DareSlipWindow>(svc, DareUiTestKit.Moth, friends, null);
+                d = w13.Draft;
+                DareSlipRules.SetType(d, DareType.Cant);
+                DareSlipRules.PickKind(d, DareKind.Pics);
+                DareSlipRules.PickTarget(d, DareSlipRules.TargetsFor(DareType.Cant, DareKind.Pics)[1]);
+                DareSlipRules.SetDeadline(d, DareDeadline.Today);
+                DareSlipRules.PickStakeKind(d, DareStakeKind.Sp);
+                Call(w13, "Render");
+                Shot(w13, dir, "13-slip-amounts-short");
+
+                var shortOffer = DareUiTestKit.Bet(me: DareSide.To, state: DareState.Sent,
+                    from: new DareStake(DareStakeKind.Sp, 100), to: new DareStake(DareStakeKind.Sp, 200));
+                svc.Snapshot = DareUiTestKit.Snap(shortOffer);
+                var w14 = Make<DareOfferCard>(svc, shortOffer);
+                Call(w14, "AnswerAsync", DareOp.Accept);
+                Shot(w14, dir, "14-offer-short");
+                svc.Sparkles = null;
             }
             finally { DareIntro.Seen = seen; }
         });

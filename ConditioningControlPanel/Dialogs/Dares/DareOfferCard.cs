@@ -65,6 +65,11 @@ public sealed class DareOfferCard : Window, Services.Startup.IPassiveStartupSurf
 
     private DareBet? Current() => Find(_svc, _betId);
 
+    private int? Balance()
+    {
+        try { return _svc.Sparkles; } catch { return null; }
+    }
+
     private void Build(DareBet bet)
     {
         _body.Children.Clear();
@@ -121,6 +126,13 @@ public sealed class DareOfferCard : Window, Services.Startup.IPassiveStartupSurf
     internal async Task<DareActResult> AnswerAsync(DareOp op)
     {
         if (_busy) return DareActResult.TryLater;
+        // A Sparkles stake I cannot cover is worded here, never sent (an unknown balance still goes to the server).
+        if (op == DareOp.Accept && Current() is { } bet && !DareCardRules.CanCover(bet, Balance()))
+        {
+            FriendsSfx.Denied();
+            ShortNote();
+            return DareActResult.Short;
+        }
         _busy = true;
         DareActResult r;
         try { r = await _svc.ActAsync(_betId, op); }
@@ -155,6 +167,23 @@ public sealed class DareOfferCard : Window, Services.Startup.IPassiveStartupSurf
             if (IsVisible) Leave();
         };
         t.Start();
+    }
+
+    /// <summary>The short line over the buttons, once; Pass stays, Accept goes quiet.</summary>
+    private void ShortNote()
+    {
+        var buttons = _body.Children.OfType<FrameworkElement>().FirstOrDefault(e => (e.Tag as string) == "dares-offer-buttons");
+        if (buttons == null || _body.Children.OfType<FrameworkElement>().Any(e => (e.Tag as string) == "dares-offer-short")) return;
+        var t = DareLook.Words(Loc.Get(DareCardRules.ActKey(DareActResult.Short)), 19, DareLook.WarnBrush, wrap: true);
+        t.Margin = new Thickness(0, 16, 0, 0);
+        t.Tag = "dares-offer-short";
+        _body.Children.Insert(_body.Children.IndexOf(buttons), t);
+        if (buttons is Panel p && p.Children.OfType<Button>().FirstOrDefault(b => (b.Tag as string) == "dares-accept") is { } accept)
+        {
+            accept.IsEnabled = false;
+            ToolTipService.SetShowOnDisabled(accept, true);
+            accept.ToolTip = t.Text;
+        }
     }
 
     private void Swap(string line, bool good)

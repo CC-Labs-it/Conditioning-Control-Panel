@@ -31,4 +31,8 @@ public interface IDaresService
     /// <summary>The camera check right now (a camera bet counting): watching, held off by the player's
     /// own stop, or unavailable (no consent or no device). Idle otherwise.</summary>
     DareCameraState Camera => DareCameraState.Idle;
+
+    /// <summary>The player's Sparkles, for greying a stake they cannot cover. Null = unknown: the UI
+    /// then offers everything and the server answers <c>short</c>.</summary>
+    int? Sparkles => null;
 }

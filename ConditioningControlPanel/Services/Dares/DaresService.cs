@@ -95,6 +95,8 @@ public sealed class DaresService : IDaresService, IDisposable
 
     public DareCameraState Camera => CameraProbe?.Invoke() ?? DareCameraState.Idle;
 
+    public int? Sparkles => _host.Sparkles();
+
     /// <summary>Raised after each successful state read with the bets, so the meter hooks can wake.</summary>
     public event Action? BetsRead;
 

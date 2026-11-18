@@ -71,6 +71,13 @@ public sealed record DareBet(
     DateTimeOffset? SettledAt,
     DareSide? RenouncedBy)
 {
+    /// <summary>Whole percent (0-100) of counted time the camera saw each side; null = no camera,
+    /// nothing counted yet, or an old server that does not send <c>camera_seen</c>.</summary>
+    public int? FromCameraSeen { get; init; }
+    public int? ToCameraSeen { get; init; }
+
+    public int? MyCameraSeen => Me == DareSide.From ? FromCameraSeen : ToCameraSeen;
+
     /// <summary>The side that lost, when settled with a winner.</summary>
     public DareSide? Loser => Winner == null ? null : Winner == DareSide.From ? DareSide.To : DareSide.From;
 
@@ -99,7 +106,7 @@ public sealed record DaresSnapshot(bool Available, DaresMe Me, IReadOnlyList<Dar
 
 /// <summary>What a create came back with. <see cref="WriteCode"/> is set with
 /// <see cref="DareCreateStatus.Writing"/>: the sender types <c>/bet write code:&lt;code&gt;</c> in Discord.</summary>
-public enum DareCreateStatus { Sent, Writing, NotFriends, Banned, FriendBanned, Limit, DiscordNeeded, LockdownNotOk, Refused, Off, TryLater, LockdownNeedsSub }
+public enum DareCreateStatus { Sent, Writing, NotFriends, Banned, FriendBanned, Limit, DiscordNeeded, LockdownNotOk, Refused, Off, TryLater, LockdownNeedsSub, Short }
 
 public sealed record DareCreateOutcome(DareCreateStatus Status, string? Id = null, string? WriteCode = null);
 
@@ -108,4 +115,4 @@ public sealed record DareCreateOutcome(DareCreateStatus Status, string? Id = nul
 /// the real Lockdown after the UI's consent prompts and reports served / ended early).</summary>
 public enum DareOp { Accept, Pass, Cancel, Pay, StartLockdown, DidIt, Tick, Renounce }
 
-public enum DareActResult { Done, Gone, Banned, Limit, LockdownBusy, NeedsChaster, Refused, Off, TryLater, LockdownNeedsSub }
+public enum DareActResult { Done, Gone, Banned, Limit, LockdownBusy, NeedsChaster, Refused, Off, TryLater, LockdownNeedsSub, Short }

@@ -60,8 +60,8 @@ until `banned_until`), and the other side is told. Nothing else.
 | op | body | reply |
 |---|---|---|
 | `state` | `{}` | `{ ok, me:{ banned_until, discord, sp_won_today }, bets:[B] }` (`sp_won_today` is an info counter only; the client never depends on it) |
-| `create` | `{ to, slip, tz_min }` | `{ ok, status, id?, write_code? }` status: `sent` `writing` `not_friends` `banned` `friend_banned` `limit` `discord_needed` `lockdown_needs_sub` `refused` |
-| `accept` | `{ id }` | `{ ok, status }` status: `running` `gone` `banned` `limit` `lockdown_busy` `lockdown_needs_sub` |
+| `create` | `{ to, slip, tz_min }` | `{ ok, status, id?, write_code? }` status: `sent` `writing` `not_friends` `banned` `friend_banned` `limit` `discord_needed` `lockdown_needs_sub` `short` `refused` |
+| `accept` | `{ id }` | `{ ok, status }` status: `running` `gone` `banned` `limit` `lockdown_busy` `lockdown_needs_sub` `short` |
 | `pass` | `{ id }` | `{ ok }` |
 | `cancel` | `{ id }` | `{ ok }` (sender, while `writing` or `sent`) |
 | `report` | `{ id, count, seen_s?, counted_s? }` | `{ ok, bet:B }` |
@@ -74,7 +74,7 @@ until `banned_until`), and the other side is told. Nothing else.
 
 `B` = `{ id, role:"from"|"to", friend:{ id, name, avatar }, type, what, deadline, ends_at, camera,
 stakes:{ from, to }, dares:[{ n, by }], state, winner:"from"|"to"|null, counts:{ from, to },
-camera_pass:{ from, to }, debt:{ state, retry_used, ended_early } | null, at, accepted_at,
+camera_pass:{ from, to }, camera_seen:{ from, to } (whole percent of counted, null = no camera or nothing counted; old servers omit it), debt:{ state, retry_used, ended_early } | null, at, accepted_at,
 settled_at, renounced_by:"from"|"to"|null }`. Newest first, open bets plus the last 20 finished.
 Times are ISO strings from the server clock; the client reads them through `ServerClock`.
 
@@ -93,7 +93,7 @@ reports; in `duel` both do.
 - `dare` (what): 0 until the loser presses "I did it" (that goes through `did` after settle; a `cant`
   dare is settled at the deadline by the RECEIVER's own `report { count: 1 }` = "I did it").
 - Camera: while a camera bet runs and its counting is live, the client samples presence every
-  500 ms and sums `counted_s` (time counted) and `seen_s` (time a face was seen). Pass = seen >= 80%
+  500 ms and sums `counted_s` (time counted) and `seen_s` (time a face was seen). Pass = seen >= 60% (was 80% until 2026-11-18)
   of counted. No picture leaves the PC; only the two numbers are sent.
 
 Settlement: `cant` settles early when the receiver's count reaches the target with a camera pass
@@ -113,7 +113,9 @@ sits under `user.backroom` so `/v2/user/sync` reads it as spend and merge-accoun
 `lockdown` debt at a time (`lockdown_busy`), offers lapse after 24 h. A `lockdown` stake needs the
 side that would owe it at effective tier >= 1 (Basic or Prime): `create` answers `lockdown_needs_sub`
 when either lockdown stake sits on a tier-0 side, and `accept` re-checks the receiver and answers the
-same (owner 2026-11-18; replaces the old `lockdown_ok` rule, which is gone). A `dare` anywhere on a slip needs the sender's Discord linked
+same (owner 2026-11-18; replaces the old `lockdown_ok` rule, which is gone). A Sparkles stake must be covered when it is put up: `create` answers `short`
+when the sender has fewer Sparkles than their own `sp` stake, `accept` answers `short` when the
+receiver has fewer than theirs (2026-11-18; the slip greys my own amounts above my balance). A `dare` anywhere on a slip needs the sender's Discord linked
 (`discord_needed`); its words are written with `/bet write code:<write_code>` (6 chars, 30 min).
 
 ## Discord

@@ -160,6 +160,8 @@ public sealed class PreviewDaresService : IDaresService, IDisposable
     /// <summary>The preview wallet. Never the real balance.</summary>
     public int PreviewSp => _data.Sp;
 
+    public int? Sparkles => _data.Sp;
+
     public DaresSnapshot Snapshot { get; private set; } = DaresSnapshot.Dark;
 
     public void Start()
@@ -186,6 +188,7 @@ public sealed class PreviewDaresService : IDaresService, IDisposable
         if (OpenCount() >= DareGrammar.MaxOpenBets) return Done(new DareCreateOutcome(DareCreateStatus.Limit));
         if ((s.FromStake.Kind == DareStakeKind.Lockdown && !_mySub()) || (s.ToStake.Kind == DareStakeKind.Lockdown && !DareSlipCheck.LockdownTierOk(who.Tier)))
             return Done(new DareCreateOutcome(DareCreateStatus.LockdownNeedsSub));
+        if (s.FromStake.Kind == DareStakeKind.Sp && _data.Sp < s.FromStake.Amount) return Done(new DareCreateOutcome(DareCreateStatus.Short));
 
         var writing = DareSlipCheck.HasDare(s);
         var id = "pv" + (++_data.Seq).ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -210,6 +213,7 @@ public sealed class PreviewDaresService : IDaresService, IDisposable
                 if (!b.IsOfferToMe) { r = DareActResult.Gone; break; }
                 if (Banned(now)) { r = DareActResult.Banned; break; }
                 if (b.ToStake.Kind == DareStakeKind.Lockdown && !_mySub()) { r = DareActResult.LockdownNeedsSub; break; }
+                if (b.ToStake.Kind == DareStakeKind.Sp && _data.Sp < b.ToStake.Amount) { r = DareActResult.Short; break; }
                 row.Bet = Run(b, now);
                 break;
             case DareOp.Pass:
@@ -425,9 +429,25 @@ public sealed class PreviewDaresService : IDaresService, IDisposable
                 theirs = Math.Max(theirs, (int)Math.Floor(goal * row.Pace * frac));
             }
         }
-        return b.Me == DareSide.From
+        var climbed = b.Me == DareSide.From
             ? b with { FromCount = Math.Max(b.FromCount, mine), ToCount = theirs }
             : b with { ToCount = Math.Max(b.ToCount, mine), FromCount = theirs };
+        return b.Camera
+            ? climbed with { FromCameraSeen = FakeSeen(b, DareSide.From, at), ToCameraSeen = FakeSeen(b, DareSide.To, at) }
+            : climbed;
+    }
+
+    /// <summary>The preview's camera share: drifts either side of the pass bar so the card line shows
+    /// both colours. Null for a side that does not count (the sender of a "can't") and for the first
+    /// seconds, the way the server sends null while nothing is counted. Display only: settling still
+    /// reads the real meter.</summary>
+    internal static int? FakeSeen(DareBet b, DareSide side, DateTimeOffset at)
+    {
+        if (!b.Camera || (b.Type == DareType.Cant && side == DareSide.From)) return null;
+        var secs = (at - (b.AcceptedAt ?? b.At)).TotalSeconds;
+        if (secs < 2) return null;
+        var phase = side == DareSide.From ? 0 : 1.7;
+        return Math.Clamp((int)Math.Round(DareGrammar.CameraPassPercent + 22 * Math.Sin(secs / 15 + phase)), 0, 100);
     }
 
     private bool MyCameraPass(DareBet b)

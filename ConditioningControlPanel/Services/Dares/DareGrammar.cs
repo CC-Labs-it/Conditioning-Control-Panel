@@ -19,7 +19,11 @@ public static class DareGrammar
     public static readonly IReadOnlyList<int> LockdownMinutes = new[] { 10, 20, 30 };
 
     public const int CameraSampleMs = 500;
-    public const double CameraPassFraction = 0.8;
+    /// <summary>Seen at least this share of counted time = pass (0.8 until 2026-11-18, owner call).</summary>
+    public const double CameraPassFraction = 0.6;
+
+    /// <summary><see cref="CameraPassFraction"/> as the whole percent the cards print.</summary>
+    public static int CameraPassPercent => (int)Math.Round(CameraPassFraction * 100);
     public const int MaxOpenBets = 5;
     public const int SpWinCapPerDay = 500;
     public static readonly TimeSpan RenounceBan = TimeSpan.FromDays(7);

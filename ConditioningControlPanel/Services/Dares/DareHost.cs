@@ -27,6 +27,9 @@ public interface IDareHost
     /// <summary>A debited receipt from <c>pay</c>: adopt <paramref name="sp"/> through the wallet rule.</summary>
     void AdoptSp(string account, int sp);
 
+    /// <summary>The player's Sparkles right now, or null when unknown (the server still decides).</summary>
+    int? Sparkles() => null;
+
     bool LockdownActive { get; }
 
     /// <summary>Starts the REAL Lockdown (the same Activate the Lockdown card calls). False when it did not start.</summary>
@@ -108,6 +111,11 @@ public sealed class AppDareHost : IDareHost
             SparklesLedger.Write(s, next, SparkleSource.Stake);
             App.Settings.Save();
         }));
+    }
+
+    public int? Sparkles()
+    {
+        try { return App.Settings?.Current?.SkillPoints; } catch { return null; }
     }
 
     public bool LockdownActive => App.Lockdown?.IsActive == true;
