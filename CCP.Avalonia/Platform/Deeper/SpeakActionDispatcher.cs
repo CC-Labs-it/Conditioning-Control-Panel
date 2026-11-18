@@ -45,9 +45,13 @@ internal sealed class SpeakActionDispatcher : IActionDispatcher, IEnhancementRun
         }
     }
 
-    public void ResetOverlayBands() { }
-    public void StopOneShotFlashes() { }
-    public void StopOneShotSubliminals() => Views.Overlays.SubliminalWhisperShow.StopSpeak();
+    public void ResetOverlayBands() { StopAll(); (_other as IEnhancementRunCleanup)?.ResetOverlayBands(); }
+    public void StopOneShotFlashes() => (_other as IEnhancementRunCleanup)?.StopOneShotFlashes();
+    public void StopOneShotSubliminals()
+    {
+        Views.Overlays.SubliminalWhisperShow.StopSpeak();
+        (_other as IEnhancementRunCleanup)?.StopOneShotSubliminals();
+    }
 
     internal void StopAll()
     {
