@@ -180,17 +180,17 @@ public sealed class PreviewDaresService : IDaresService, IDisposable
     {
         var now = _now();
         if (_friend(friendId) is not { } who) return Done(new DareCreateOutcome(DareCreateStatus.NotFriends));
-        var s = DareSlipRules.Numbered(slip);
-        if (!DareSlipRules.IsValid(s)) return Done(new DareCreateOutcome(DareCreateStatus.Refused));
+        var s = DareSlipCheck.Numbered(slip);
+        if (!DareSlipCheck.IsValid(s)) return Done(new DareCreateOutcome(DareCreateStatus.Refused));
         if (Banned(now)) return Done(new DareCreateOutcome(DareCreateStatus.Banned));
         if (OpenCount() >= DareGrammar.MaxOpenBets) return Done(new DareCreateOutcome(DareCreateStatus.Limit));
-        if ((s.FromStake.Kind == DareStakeKind.Lockdown && !_mySub()) || (s.ToStake.Kind == DareStakeKind.Lockdown && !DareSlipRules.LockdownTierOk(who.Tier)))
+        if ((s.FromStake.Kind == DareStakeKind.Lockdown && !_mySub()) || (s.ToStake.Kind == DareStakeKind.Lockdown && !DareSlipCheck.LockdownTierOk(who.Tier)))
             return Done(new DareCreateOutcome(DareCreateStatus.LockdownNeedsSub));
 
-        var writing = DareSlipRules.HasDare(s);
+        var writing = DareSlipCheck.HasDare(s);
         var id = "pv" + (++_data.Seq).ToString(System.Globalization.CultureInfo.InvariantCulture);
         var bet = new DareBet(id, DareSide.From, new DareFriend(friendId, who.Name, null), s.Type, s.What, s.Deadline,
-            now + Compressed(s.Deadline), s.Camera, s.FromStake, s.ToStake, DareSlipRules.Seals(s),
+            now + Compressed(s.Deadline), s.Camera, s.FromStake, s.ToStake, DareSlipCheck.Seals(s),
             writing ? DareState.Writing : DareState.Sent, null, 0, 0, null, null, null, now, null, null, null);
         _data.Rows.Insert(0, new Row { Bet = bet, Pace = _pace ?? 0.6 + _rng.NextDouble() * 0.8, Due = now + (writing ? FriendActsAfter : AcceptAfter), FriendTier = who.Tier });
         Commit();

@@ -134,17 +134,17 @@ public class DaresApiCoreTests
     {
         var slip = new DareSlip(DareType.Cant, new DareWhat(DareKind.Dare, null), DareDeadline.Today,
             new DareStake(DareStakeKind.Dare), new DareStake(DareStakeKind.Lockdown, 20), Camera: true);
-        var n = DareSlipRules.Numbered(slip);
+        var n = DareSlipCheck.Numbered(slip);
         Assert.Equal("1", n.What.Target);
         Assert.Equal(2, n.FromStake.DareNumber);
         Assert.False(n.Camera);
-        Assert.True(DareSlipRules.IsValid(n));
+        Assert.True(DareSlipCheck.IsValid(n));
         var wire = DaresParse.SlipToWire(n);
         Assert.Equal(1, wire["what"]!.Value<int>("target"));
         Assert.Equal(2, wire["stakes"]!["from"]!.Value<int>("n"));
         Assert.Equal(20, wire["stakes"]!["to"]!.Value<int>("amount"));
         Assert.DoesNotContain("text", wire.ToString());
-        var seals = DareSlipRules.Seals(slip);
+        var seals = DareSlipCheck.Seals(slip);
         Assert.Equal(new[] { new DareSeal(1, DareSide.To), new DareSeal(2, DareSide.From) }, seals);
     }
 
@@ -153,13 +153,13 @@ public class DaresApiCoreTests
     {
         var ok = new DareSlip(DareType.Cant, new DareWhat(DareKind.Pics, "250"), DareDeadline.ThreeHours,
             new DareStake(DareStakeKind.Sp, 100), new DareStake(DareStakeKind.Lock, 10), true);
-        Assert.True(DareSlipRules.IsValid(ok));
-        Assert.False(DareSlipRules.IsValid(ok with { What = new DareWhat(DareKind.Pics, "251") }));
-        Assert.False(DareSlipRules.IsValid(ok with { FromStake = new DareStake(DareStakeKind.Sp, 99) }));
-        Assert.False(DareSlipRules.IsValid(ok with { What = new DareWhat(DareKind.Bubbles, null) }));
-        Assert.False(DareSlipRules.IsValid(ok with { Type = DareType.Duel }));
-        Assert.True(DareSlipRules.IsValid(ok with { Type = DareType.Duel, What = new DareWhat(DareKind.Bubbles, null), Camera = false }));
-        Assert.False(DareSlipRules.LockdownTierOk(0));
-        Assert.True(DareSlipRules.LockdownTierOk(1));
+        Assert.True(DareSlipCheck.IsValid(ok));
+        Assert.False(DareSlipCheck.IsValid(ok with { What = new DareWhat(DareKind.Pics, "251") }));
+        Assert.False(DareSlipCheck.IsValid(ok with { FromStake = new DareStake(DareStakeKind.Sp, 99) }));
+        Assert.False(DareSlipCheck.IsValid(ok with { What = new DareWhat(DareKind.Bubbles, null) }));
+        Assert.False(DareSlipCheck.IsValid(ok with { Type = DareType.Duel }));
+        Assert.True(DareSlipCheck.IsValid(ok with { Type = DareType.Duel, What = new DareWhat(DareKind.Bubbles, null), Camera = false }));
+        Assert.False(DareSlipCheck.LockdownTierOk(0));
+        Assert.True(DareSlipCheck.LockdownTierOk(1));
     }
 }

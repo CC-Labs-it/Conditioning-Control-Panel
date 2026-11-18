@@ -10,7 +10,7 @@ namespace ConditioningControlPanel.Services.Dares;
 /// sealed dare. The server checks all of it again; this keeps the client from sending a slip it would
 /// refuse. Pure.
 /// </summary>
-public static class DareSlipRules
+public static class DareSlipCheck
 {
     /// <summary>The same slip with every dare numbered in order of appearance.</summary>
     public static DareSlip Numbered(DareSlip slip)

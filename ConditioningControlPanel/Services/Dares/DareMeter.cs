@@ -155,7 +155,7 @@ public sealed class DareMeter
     {
         lock (_gate)
             foreach (var t in _data.Bets.Values)
-                if (t.Kind == DareKind.Session && InWindow(t, now) && t.Value < 1 && DareSlipRules.SessionMakes(difficulty, t.Target))
+                if (t.Kind == DareKind.Session && InWindow(t, now) && t.Value < 1 && DareSlipCheck.SessionMakes(difficulty, t.Target))
                 {
                     t.Value = 1;
                     _dirty = true;

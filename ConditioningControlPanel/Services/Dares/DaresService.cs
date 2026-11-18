@@ -108,8 +108,8 @@ public sealed class DaresService : IDaresService, IDisposable
     {
         if (!CheckAccount(out _)) return new DareCreateOutcome(DareCreateStatus.TryLater);
         if (string.IsNullOrEmpty(friendId) || slip == null) return new DareCreateOutcome(DareCreateStatus.Refused);
-        var numbered = DareSlipRules.Numbered(slip);
-        if (!DareSlipRules.IsValid(numbered)) return new DareCreateOutcome(DareCreateStatus.Refused);
+        var numbered = DareSlipCheck.Numbered(slip);
+        if (!DareSlipCheck.IsValid(numbered)) return new DareCreateOutcome(DareCreateStatus.Refused);
         var reply = await _api.CallAsync("create", new JObject
         {
             ["to"] = friendId,
