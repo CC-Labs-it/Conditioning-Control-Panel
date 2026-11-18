@@ -168,6 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     window.ShowRaceCard(room, failed: raceShell == false);
                 }
                 else window.Load(Server(), room);
+                if (spec.Id == JustDropId) window.CenterJustDrop(panel ?? Windows.MainShellWindow.Current ?? (global::Avalonia.Visual)window);
                 window.Show();
                 // WPF ChaosWebViewHost.cs:904-1013 AttachMainWindowGlue: the shop window is owned by the panel.
                 if (spec.Id == JustDropId && (panel ?? Windows.MainShellWindow.Current) is { } shell)
@@ -190,7 +191,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Web = new WebHost();
             if (spec.Id == DtrhId) Web.BrowserProcessFailed += () => RecoverDtrh("process-failed");
             if (spec.Id == "goon") Web.InjectCarrier = true; // before the native view or first navigation
-            if (spec.Id == FypId || spec.Id == JustDropId) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
+            if (spec.Id == FypId || spec.Id == JustDropId || IsRace || IsGlassroad) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
+            if (IsGlassroad) Web.BrowserProcessUnresponsive += () => _grUnresponsive = true;
             if (spec.Id == "loom") Web.EnvironmentRequested += ConfigureLoomEnvironment;
             // Before Load/Show can create the native environment (WPF Pbp host :200-215).
             if (spec.Id == PbpId) Web.EnvironmentRequested += ConfigurePbpEnvironment;
@@ -216,7 +218,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             }
             Opened += (_, _) => { lock (Open) { if (!Open.Contains(this)) Open.Add(this); } if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); if (Spec.Id == "arcademy") StartArcademyWatch(); StartBreakoutAccessWatch(); };
             Activated += (_, _) => { FunnelPageMessage.OnAppActivated(); ResumeBreakoutAfterPanic(DateTime.Now); };   // WPF's Application.Activated covers every window
-            Closing += (_, _) => { _closing = true; _backRoomFx?.CancelAll(); CancelRaceFetch(); };
+            Closing += (_, _) => { _closing = true; _backRoomFx?.CancelAll(); if (IsBreakout) StopBreakoutHaptic(); CancelRaceFetch(); };
             Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); StopArcademyWatch(); if (Spec.Id == FypId) { DisableFypEyes(); CloseFypVisit(); } StopBreakoutAccessWatch(); DisposeBreakoutMedia(); _raceRooms.Clear(); };
             // WPF BackRoom/BackRoomHostService.cs:390,792: Breakout presence lasts until close.
             if (spec.Id == BreakoutDemoId || spec.Id == "breakout")
@@ -252,6 +254,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         Dispatcher.UIThread.Post(() => { if (_fypGhosted && WindowState == WindowState.Minimized) ExitFypGhost(); });
                 };
                 Closed += (_, _) => ExitFypGhost();
+            }
+            if (spec.Id == JustDropId)
+            {
+                Opened += (_, _) => CaptureJustDropFrame();
+                PositionChanged += (_, _) => CaptureJustDropFrame();
+                SizeChanged += (_, _) => CaptureJustDropFrame();
             }
             if (spec.Id == JustDropId) Closed += (_, _) =>
             {
@@ -349,6 +357,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (IsGlassroad && HandleGlassroad(o)) return;
             switch ((string?)o["type"])
             {
+                case "haptic" when IsBreakout:
+                    HandleBreakoutHaptic(o);
+                    break;
                 case "room-option" when IsBreakout:
                     HandleBreakoutOption(o);   // #3921
                     break;
@@ -387,6 +398,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     break;
                 case "station-close" when IsBreakout:
                     _backRoomFx?.ReleaseStation((string?)o["station"] ?? "");
+                    if ((string?)o["station"] == "breakout") StopBreakoutHaptic();
                     break;
                 case "fx" when IsBreakout:
                     if (!_shellExiting && !_closing && !_roomMinimized) FireRoomFx(o);
@@ -410,6 +422,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case "exit":
                     // The page winds down and answers exit-done; WPF's ArmExitWatchdog closes it anyway.
                     _backRoomFx?.CancelAll();
+                    if (IsBreakout) StopBreakoutHaptic();
                     _shellExiting = true;   // on its way out: it no longer keeps an Escape (GameWindow.Escape.cs)
                     DispatcherTimer.RunOnce(Close, TimeSpan.FromMilliseconds(1200));
                     break;
