@@ -782,7 +782,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         private static DateTime _heavyUntilUtc = DateTime.MinValue;
+        private static DateTime _videoQuarantineUntilUtc = DateTime.MinValue;
         private static MandatoryVideoScheduler? _runVideo;
+        internal static MandatoryVideoScheduler? RunVideo => _runVideo;
+        private static ChaosVideoGuard? _videoGuard;
 
         // WPF ChaosModeService.cs:503-504,2164-2174,2260: a mandatory video that ends mid-run keeps
         // the heavy gate shut 3 s more (never shortening an existing floor).
@@ -790,25 +793,49 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             UnhookRunVideo();
             _runVideo = CoreEngine.Video;
-            if (_runVideo != null) _runVideo.VideoEnded += OnVideoEndedDuringRun;
+            if (_runVideo != null)
+            {
+                _videoGuard = new ChaosVideoGuard(_runVideo, () => BubbleOverlay.Field.Clock(), () =>
+                {
+                    try { ChaosLessons.Tick("porn_dvd"); }
+                    catch (Exception ex) { Log.Debug(ex, "Chaos video lesson failed"); }
+                });
+                _runVideo.VideoStarted += OnVideoStartedDuringRun;
+                _runVideo.VideoEnded += OnVideoEndedDuringRun;
+            }
         }
+
+        private static void OnVideoStartedDuringRun() => _videoGuard?.Started();
 
         internal static void OnVideoEndedDuringRun()
         {
+            _videoGuard?.Ended();
             var until = BubbleOverlay.Field.Clock().AddSeconds(3);
             if (until > _heavyUntilUtc) _heavyUntilUtc = until;
+            if (until > _videoQuarantineUntilUtc) _videoQuarantineUntilUtc = until;
         }
 
         private static void UnhookRunVideo()
         {
             // Unsubscribe the captured publisher even if CoreEngine.Video has since changed.
-            if (_runVideo != null) _runVideo.VideoEnded -= OnVideoEndedDuringRun;
+            if (_videoGuard?.Stop() == true)
+            {
+                var until = BubbleOverlay.Field.Clock().AddSeconds(3);
+                if (until > _videoQuarantineUntilUtc) _videoQuarantineUntilUtc = until;
+            }
+            _videoGuard = null;
+            if (_runVideo != null)
+            {
+                _runVideo.VideoStarted -= OnVideoStartedDuringRun;
+                _runVideo.VideoEnded -= OnVideoEndedDuringRun;
+            }
             _runVideo = null;
         }
 
         internal static Random AmbientRng = new();
         private static bool HeavyEffectActive => CoreEngine.Video?.IsPlaying == true
-            || ChaosGifCascadeOverlay.IsRaining || BubbleOverlay.Field.Clock() < _heavyUntilUtc;
+            || _videoGuard?.Armed == true || ChaosGifCascadeOverlay.IsRaining
+            || BubbleOverlay.Field.Clock() < _heavyUntilUtc || BubbleOverlay.Field.Clock() < _videoQuarantineUntilUtc;
 
         // WPF ChaosModeService.cs:2155-2156,2295-2322: drop overlapping heavy
         // detonations, including during the off-thread pool pick, without queuing.
@@ -835,6 +862,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 Log.Information("Chaos: dropped {Kind} detonation: a heavy effect is already running", payload.Kind);
                 _state?.PushEvent(Loc.GetF("chaos_heavy_fizzle", payload.DisplayName));
                 return;
+            }
+            if (payload is VideoPayload video && _spawning)
+            {
+                // A missing run-owned service must not fall back to an unowned dashboard tape.
+                video.ChaosToken = _videoGuard?.Arm() ?? -1;
+                if (_videoGuard != null) _heavyUntilUtc = now.AddSeconds(VideoPayload.SEGMENT_SEC + 3);
             }
             if (payload.Kind == EffectBubblePayloadKind.GifCascade)
                 _heavyUntilUtc = now.AddSeconds(GifCascadePayload.DURATION_SEC + 5);
@@ -928,6 +961,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 else KeepChromeTopmost();
             }
             double elapsed = ChaosRunEngine.Advance(_state);
+            if (_videoGuard?.Tick(_state.RunDurationSec - elapsed <= 3) == true)
+                _state.PushEvent(Loc.Get("chaos_tape_snaps"));
             if (_state.Config.ScriptedFirstRun && TickScriptedDraft()) return;
             UpdateHeatTint();
             if (_freezeRemainingSec > 0)

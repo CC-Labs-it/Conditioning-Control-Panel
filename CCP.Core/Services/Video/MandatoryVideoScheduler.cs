@@ -89,6 +89,7 @@ namespace ConditioningControlPanel.Services
         private volatile bool _running, _playing;
         private bool _videoFreeze;   // this clip played a Freeze: its end finishes it (Reset or cancel)
         private int _retryGeneration, _noVideosShown;
+        private int _chaosGeneration, _chaosToken, _playingChaosToken, _cascadeChaosToken, _bubbleChaosToken;
 
         /// <summary>The library came back empty for the first time this launch (WPF's "no videos"
         /// guidance dialog). Raised on the UI thread.</summary>
@@ -131,6 +132,38 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>The head may queue a trigger behind another fullscreen interaction.</summary>
         public Func<Action, bool>? DeferTrigger { get; set; }
+
+        /// <summary>WPF VideoService.cs:241-262: identify a request through every deferred handoff.</summary>
+        public int ClaimChaosVideoToken()
+        {
+            _chaosToken = ++_chaosGeneration;
+            if (_chaosToken == 0) _chaosToken = ++_chaosGeneration;
+            return _chaosToken;
+        }
+
+        /// <summary>Cancel only the request owned by this token, including a tape in pre-roll.</summary>
+        public void CancelChaosVideo(int token)
+        {
+            if (token == 0 || token != _chaosToken) return;
+            _chaosToken = 0; bool retry = _retryChaosToken == token; _retryChaosToken = 0;
+            if (_cascadeChaosToken == token) DropDefer();
+            if (_bubbleChaosToken == token) { Dispose(ref _bubbleWait); _bubbleChaosToken = 0; _waitEndsRun = false; }
+            if (_playingChaosToken == token) ForceCleanup();
+            else if (retry && !_playing) { _retryGeneration++; Penalties = 0; if (!Services.Safety.PanicAftermath.TriggersSilenced()) { CoreBubbles.Resume(); if (_running) ScheduleNext(); } }
+        }
+
+        private int _segmentToken, _retryChaosToken;
+        private int _segmentSeconds;
+        public int PlayingChaosToken => _playingChaosToken;
+        public int FinishedChaosToken { get; private set; }
+        public bool NaturalEnding { get; private set; }
+        public int RandomSegmentSeconds => _playingChaosToken != 0 && _playingChaosToken == _segmentToken ? _segmentSeconds : 0;
+        public void ArmRandomSegment(int token, int seconds)
+        {
+            if (token == 0 || token != _chaosToken) return;
+            _segmentToken = token;
+            _segmentSeconds = Math.Max(1, seconds);
+        }
 
         public bool IsRunning => _running;
         /// <summary>A video is in pre-roll or on screen (WPF <c>_videoPlaying</c>).</summary>
@@ -375,9 +408,14 @@ namespace ConditioningControlPanel.Services
         /// <paramref name="path"/> plays that clip instead of a pick (WPF PlaySpecificVideo).
         /// Scheduled ticks pass <paramref name="scheduled"/> so a cascade-held replay rechecks feature enablement.</summary>
         public bool Trigger(bool? strictOverride = null, string? path = null, bool userInitiated = false, bool userEarned = false,
-            bool scheduled = false, bool silentIfEmpty = false, bool freezeBeforePreroll = false)
+            bool scheduled = false, bool silentIfEmpty = false, bool freezeBeforePreroll = false, int chaosToken = 0)
         {
-            if (DeferTrigger?.Invoke(() => Trigger(strictOverride, path)) == true) return true;
+            if (chaosToken != 0 && chaosToken != _chaosToken) return false;
+            if (DeferTrigger?.Invoke(() =>
+            {
+                if (chaosToken == 0) Trigger(strictOverride, path);
+                else Trigger(strictOverride, path, userInitiated, userEarned, scheduled, silentIfEmpty, freezeBeforePreroll, chaosToken);
+            }) == true) return true;
             if (_playing)
                 return _host.IsFloating(IsStrict) && _host.IsFloating(strictOverride ?? CoreSettings.Current.StrictLockEnabled)
                     && _host.TryFloatingTrigger(userInitiated);
@@ -408,7 +446,9 @@ namespace ConditioningControlPanel.Services
                             return;
                         }
                         replay = DropDefer();
-                        if (!Trigger(strictOverride, path, userInitiated, userEarned, scheduled) && !_playing)
+                        if (!(chaosToken == 0
+                            ? Trigger(strictOverride, path, userInitiated, userEarned, scheduled)
+                            : Trigger(strictOverride, path, userInitiated, userEarned, scheduled, silentIfEmpty, freezeBeforePreroll, chaosToken)) && !_playing)
                         {
                             if (replay) AfterEnd();
                             else if (_running) ScheduleNext(); // preserve the base empty-library re-arm
@@ -426,6 +466,7 @@ namespace ConditioningControlPanel.Services
                     }
                 }), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
                 _cascadeDefer = pending;
+                _cascadeChaosToken = chaosToken;
                 // ponytail: the existing head exposes IsRaining, not WPF RunWhenClear. Poll
                 // off-thread, dispatch the replay; keep one absolute 90 s ceiling per request.
                 pending.Change(TimeSpan.FromMilliseconds(250), Timeout.InfiniteTimeSpan);
@@ -460,7 +501,7 @@ namespace ConditioningControlPanel.Services
             // WPF VideoService.cs:2305-2313 queues one video before picking or taking effects.
             if (_host.BubbleCountActive)
             {
-                WaitForBubbleCount(strictOverride, path, _running);
+                WaitForBubbleCount(strictOverride, path, _running && chaosToken == 0, chaosToken);
                 return true;
             }
             var specific = path != null;   // WPF PlaySpecificVideo freezes even behind a bubble count
@@ -485,6 +526,7 @@ namespace ConditioningControlPanel.Services
                 (specific || !(CoreEngine.BubbleCount?.IsBusy ?? false));
             IsStrict = strictOverride ?? CoreSettings.Current.StrictLockEnabled;
             _playing = true;
+            _playingChaosToken = chaosToken; _retryChaosToken = 0;
             _retryGeneration++;   // WPF PlayVideo CancelPendingRetry: a new clip retires any pending verdict replay
             AttentionSpawned = AttentionHits = 0;
             // WPF VideoService.cs:2587-2630: Freeze, 800 ms, then PlayVideo's 1.3 s pre-roll.
@@ -571,6 +613,13 @@ namespace ConditioningControlPanel.Services
         /// Trainer's -25 XP); the Chaster "video" note is the head's, it knows whether a frame showed.</summary>
         public void Ended(bool renderedFrame = false)
         {
+            NaturalEnding = true;
+            try { EndedCore(renderedFrame); }
+            finally { NaturalEnding = false; }
+        }
+
+        private void EndedCore(bool renderedFrame)
+        {
             if (!_playing) return;
             var s = CoreSettings.Current;
             var verdict = Evaluate(s.AttentionChecksEnabled, AttentionSpawned, AttentionHits, _random.NextDouble());
@@ -604,24 +653,25 @@ namespace ConditioningControlPanel.Services
 
             Penalties++;
             var mercy = Penalties >= s.MercyAfterFails && s.MercySystemEnabled;   // #1145: 2..10, default 3
-            var strict = IsStrict;
+            var strict = IsStrict; var retryToken = _playingChaosToken;
             var gen = ++_retryGeneration;
+            if (!mercy && retryToken != 0) { _retryChaosToken = retryToken; _playingChaosToken = 0; } // The verdict close is not the end of this run.
             Finish();
             _host.ShowMessage(mercy ? AttentionVerdict.Mercy : verdict, mercy ? 2500 : 2000, () =>
             {
-                if (gen != _retryGeneration) return;   // stopped or replaced while the message was up
+                if (gen != _retryGeneration || (retryToken != 0 && retryToken != _chaosToken)) return;   // stopped or replaced while the message was up
                 if (mercy) { AfterEnd(); return; }
                 // WPF VideoService.cs:5964-5965: retry directly, retaining strictness and the prior clip fallback.
                 // An attention retry is part of the current run, so it must not enter the feed hold.
                 var retryPath = PickNext() ?? LastVideoPath;
-                if (retryPath == null || !Trigger(strict, retryPath)) AfterEnd();
+                if (retryPath == null || !Trigger(strict, retryPath, chaosToken: retryToken)) { _retryChaosToken = 0; AfterEnd(); }
                 else if (_cascadeDefer != null && !_playing) _deferIsReplay = true;   // held behind GIF rain
                 // WPF VideoService.cs:7930-7968: a failed replay must finish the run, even after queueing.
                 else if (_bubbleWait != null && !_playing) _waitEndsRun = true;
             });
         }
 
-        private void WaitForBubbleCount(bool? strict, string? path, bool scheduled)
+        private void WaitForBubbleCount(bool? strict, string? path, bool scheduled, int chaosToken = 0)
         {
             ITimer? created = null;
             created = _time.CreateTimer(_ => { var mine = created; CoreDispatch.Post(() =>
@@ -639,10 +689,10 @@ namespace ConditioningControlPanel.Services
                     }
                     if (_host.BubbleCountActive)
                     {
-                        WaitForBubbleCount(strict, path, scheduled);
+                        WaitForBubbleCount(strict, path, scheduled, chaosToken);
                         _waitEndsRun = endsRun;
                     }
-                    else if (!Trigger(strict, path, scheduled: scheduled))
+                    else if (!Trigger(strict, path, scheduled: scheduled, userEarned: chaosToken != 0, silentIfEmpty: chaosToken != 0, chaosToken: chaosToken))
                     {
                         if (endsRun) AfterEnd();
                         else if (scheduled) ScheduleNext();
@@ -658,15 +708,18 @@ namespace ConditioningControlPanel.Services
                 }
             }); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             _bubbleWait = created;
+            _bubbleChaosToken = chaosToken;
             created.Change(BubbleCountScheduler.QueuePoll, Timeout.InfiniteTimeSpan);
         }
 
         /// <summary>WPF ForceCleanup: close without scheduling a replacement.</summary>
         public void ForceCleanup()
         {
+            _chaosToken = 0; _retryChaosToken = 0;
             _feedDefer.Reset(); // A panic cannot leave a held trigger behind.
             Dispose(ref _bubbleWait);
             _waitEndsRun = false;
+            _bubbleChaosToken = 0;
             var heldReplay = DropDefer();
             _retryGeneration++;
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
@@ -688,6 +741,7 @@ namespace ConditioningControlPanel.Services
         {
             var replay = _deferIsReplay && _cascadeDefer != null;
             _deferIsReplay = false;
+            _cascadeChaosToken = 0;
             Dispose(ref _cascadeDefer);
             return replay;
         }
@@ -697,6 +751,8 @@ namespace ConditioningControlPanel.Services
             Dispose(ref _preroll);
             if (!_playing) { PackVideos?.CleanupTemps(); return false; }
             _playing = false;
+            FinishedChaosToken = _playingChaosToken;
+            _playingChaosToken = 0;
             IsStrict = false;
             ShowingPath = null;
             double watched = 0;
@@ -716,6 +772,7 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex) { Log.Debug("FunScript stop hook failed: {Error}", ex.Message); }
             try { VideoEnded?.Invoke(); }
             catch (Exception ex) { Log.Debug("VideoEnded handler failed: {Error}", ex.Message); }
+            finally { FinishedChaosToken = 0; }
             return true;
         }
 

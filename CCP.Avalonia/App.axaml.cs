@@ -483,6 +483,19 @@ namespace ConditioningControlPanel.Avalonia
         internal static void FireChaosPayload(Services.Chaos.EffectPayload payload)
         {
             var host = Views.Chaos.ChaosRunHost.Overlay;
+            if (payload is Services.Chaos.VideoPayload video)
+            {
+                var scheduler = video.ChaosToken != 0 ? Views.Chaos.ChaosRunHost.RunVideo : CoreEngine.Video;
+                if (scheduler == null) return;
+                try
+                {
+                    if (video.ChaosToken != 0)
+                        scheduler.ArmRandomSegment(video.ChaosToken, (int)Services.Chaos.VideoPayload.SEGMENT_SEC);
+                    scheduler.Trigger(userEarned: true, silentIfEmpty: true, chaosToken: video.ChaosToken);
+                }
+                catch (Exception ex) { Serilog.Log.Information(ex, "Chaos video payload failed"); scheduler.CancelChaosVideo(video.ChaosToken); }
+                return;
+            }
             if (payload is Services.Chaos.FlashPayload flash)
             {
                 if (host != null)
