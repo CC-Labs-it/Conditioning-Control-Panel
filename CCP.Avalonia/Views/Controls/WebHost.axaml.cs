@@ -60,6 +60,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal bool SuppressNewWindows { get; set; }
         internal event Action? BrowserProcessFailed;
         internal event Action? BrowserStartupFailed;
+        internal event Action? BrowserProcessUnresponsive;
+        internal void OnBrowserProcessUnresponsive() => BrowserProcessUnresponsive?.Invoke();
         /// <summary>Per-host native settings, run on the UI thread once for every engine the view builds
         /// (Spiral's WebView2 chrome switches). A throwing hook is logged, never fatal.</summary>
         internal Action<IPlatformHandle?>? ConfigureNative { get; set; }
@@ -586,7 +588,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             {
                 void Failed() { if (ReferenceEquals(_web, native)) OnBrowserProcessFailed(); }
                 _failureWatch = FailureWatchFactory?.Invoke(native, Failed)
-                    ?? Platform.TrailerBrowserPolicy.Attach(native.TryGetPlatformHandle(), Failed);
+                    ?? Platform.TrailerBrowserPolicy.Attach(native.TryGetPlatformHandle(), Failed, BrowserProcessUnresponsive == null ? null : () => { if (ReferenceEquals(_web, native)) OnBrowserProcessUnresponsive(); });
             }
             catch (Exception ex)
             {

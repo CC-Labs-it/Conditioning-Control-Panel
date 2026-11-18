@@ -191,7 +191,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Web = new WebHost();
             if (spec.Id == DtrhId) Web.BrowserProcessFailed += () => RecoverDtrh("process-failed");
             if (spec.Id == "goon") Web.InjectCarrier = true; // before the native view or first navigation
-            if (spec.Id == FypId || spec.Id == JustDropId) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
+            if (spec.Id == FypId || spec.Id == JustDropId || IsRace || IsGlassroad) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
+            if (IsGlassroad) Web.BrowserProcessUnresponsive += () => _grUnresponsive = true;
             if (spec.Id == "loom") Web.EnvironmentRequested += ConfigureLoomEnvironment;
             // Before Load/Show can create the native environment (WPF Pbp host :200-215).
             if (spec.Id == PbpId) Web.EnvironmentRequested += ConfigurePbpEnvironment;
