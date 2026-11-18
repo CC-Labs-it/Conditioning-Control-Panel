@@ -142,6 +142,40 @@ public sealed class LeashAskTests
         });
 
     [Fact]
+    public void AskHelpOpensTheLeashedExplainer() =>
+        Run((_, page, _, _) =>
+        {
+            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            var ask = LeashAskWindow.Current!;
+            LeashGateCardTests.Click(Tagged<Button>(ask.Card, "leash-help:ask"));
+            var explain = Assert.Single(ask.OwnedWindows.OfType<LeashExplainWindow>());
+            try
+            {
+                Assert.True(explain.IsVisible);
+                Assert.Equal(4, explain.GetLogicalDescendants().OfType<Border>().Count(b => (b.Tag as string)?.StartsWith("leash-explain-panel:") == true));
+            }
+            finally { explain.Close(); }
+        });
+
+    [Fact]
+    public void ManualLookBeforeServiceRebindDoesNotReopenTheSameOffer() =>
+        Run((shell, page, wire, _) =>
+        {
+            var service = LeashHead.Service;
+            LeashHead.Service = null;
+            shell.RebindLeashAsks();
+            LeashHead.Service = service;
+            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            var ask = LeashAskWindow.Current!;
+            shell.RebindLeashAsks(); // the timer binds after the manual Look
+            wire.Reply = new JObject { ["ok"] = true, ["status"] = "gone" };
+            LeashGateCardTests.Click(Tagged<Button>(ask.Card, "leash-ask-no"));
+            Assert.NotNull(LeashAskWindow.Current);
+            LeashGateCardTests.Click(Tagged<Button>(ask.Card, "leash-ask-no"));
+            Assert.Null(LeashAskWindow.Current);
+        });
+
+    [Fact]
     public void AnAnswerThatDidNotGoThroughKeepsTheCardOpenAndSaysWhy() =>
         Run((shell, page, wire, _) =>
         {
