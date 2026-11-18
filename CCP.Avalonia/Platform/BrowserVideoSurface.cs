@@ -49,7 +49,7 @@ internal sealed class BrowserVideoSurface : IDisposable
     private readonly Func<string, Task<string?>> _execute;
     private readonly string _id = Guid.NewGuid().ToString("N");
     private DispatcherTimer? _startup;
-    private bool _closed, _loaded, _primary, _paused;
+    private bool _closed, _loaded, _primary, _paused, _failed;
     private string _url = "";
     internal BrowserVideoSurface(Func<string, Task<string?>>? execute = null) {
         _execute = execute ?? View.InvokeScriptAsync;
@@ -77,7 +77,7 @@ internal sealed class BrowserVideoSurface : IDisposable
         catch { if (!_closed) Fail(); }
     }
     internal void Receive(string body) {
-        if (_closed || !_loaded) return;
+        if (_closed || _failed || !_loaded) return;
         try {
             using var json = JsonDocument.Parse(body);
             var message = json.RootElement;
@@ -85,8 +85,8 @@ internal sealed class BrowserVideoSurface : IDisposable
             switch (message.GetProperty("type").GetString())
             {
                 case "playing": Playing = true; _startup?.Stop(); break;
-                case "error": Message?.Invoke(message);
-                    Fail(message.TryGetProperty("code", out var e) && e.TryGetInt32(out var code) && code is >= 1 and <= 4 or 100 or 101); return;
+                case "error":
+                    FailWithMessage(message.TryGetProperty("code", out var e) && e.TryGetInt32(out var code) && code is >= 1 and <= 4 or 100 or 101, message); return;
             }
             Message?.Invoke(message);
         }
@@ -96,9 +96,12 @@ internal sealed class BrowserVideoSurface : IDisposable
     }
     internal string SessionId => _id;
     internal bool StartupArmed => _startup?.IsEnabled == true;
-    private void Fail(bool mediaFailure = false) {
-        if (_closed) return;
+    private void Fail(bool mediaFailure = false) => FailWithMessage(mediaFailure, null);
+    private void FailWithMessage(bool mediaFailure, JsonElement? message) {
+        if (_closed || _failed) return;
+        _failed = true;
         _startup?.Stop();
+        if (message is { } error) Message?.Invoke(error);
         Failed?.Invoke(mediaFailure);
     }
     // WPF BrowserVideoEngine.cs:960-971 and player.js doPause/doResume: a host pause before the first frame is
@@ -112,7 +115,7 @@ internal sealed class BrowserVideoSurface : IDisposable
     internal void Resume()
     {
         _paused = false;
-        if (!Playing && !_closed) _startup?.Start();
+        if (!Playing && !_closed && !_failed) _startup?.Start();
         Control("window.ccpVideo?.resume();");
     }
     internal void Seek(long milliseconds) => Control($"window.ccpVideo?.seek({Math.Max(0, milliseconds)});");

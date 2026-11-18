@@ -48,6 +48,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>The host's own clock inside a descent (P08); tests step it.</summary>
         internal static Func<DateTime> DtrhUtcNow = () => DateTime.UtcNow;
 
+        internal static Action<GameWindow, int> DtrhCreditBubbles = (window, count) => window.CreditRaceBubbles(count);
+
         // WPF DtrhHostService.cs:314,403. Keep the store at the head boundary so bridge tests
         // need neither a profile write nor process-wide engagement history.
         internal static Func<int, System.Collections.Generic.List<string>> DtrhFavorites = DtrhAssetStatsStore.TopAssets;
@@ -435,6 +437,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     try { ChaosCrashSentinel.Clear(); }
                     catch (Exception ex) { Log.Debug("DtrhHost sentinel: {E}", ex.Message); }
                 }
+                // WPF DtrhHostService.cs:648-656: include run bubbles in achievements and quests.
+                try
+                {
+                    int bubbles = (int?)o["sessionStats"]?["bubblesPopped"] ?? 0;
+                    if (bubbles > 0) DtrhCreditBubbles(this, bubbles);
+                }
+                catch (Exception ex) { Log.Debug("DtrhHost bubble credit: {E}", ex.Message); }
                 ChaosRank? rankUp = null;
                 var nowRank = ChaosRanks.For(ChaosMeta.State.RunsCompleted);
                 if ((int)nowRank > ChaosMeta.State.LastRankSeen) rankUp = nowRank;

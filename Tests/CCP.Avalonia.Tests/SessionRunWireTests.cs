@@ -574,6 +574,7 @@ public sealed class SessionRunWireTests
 
     private sealed class NoVideoHost : IMandatoryVideoHost
     {
+        public int FloatingLimit => 1; public int FloatingUp => 0;
         public void Show(string path, bool strict) { }
         public double CloseAll() => 0;
         public void ShowMessage(AttentionVerdict verdict, int ms, System.Action then) { }

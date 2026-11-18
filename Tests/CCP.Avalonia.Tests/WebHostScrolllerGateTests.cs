@@ -39,6 +39,20 @@ public sealed class WebHostScrolllerGateTests
     });
 
     [Fact]
+    public Task BrowserInstallsFrameReporterBeforeNavigation() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var page = new ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView();
+        var web = page.FindControl<WebHost>("BrowserWebHost")!;
+        string? installed = null;
+        web.AllFramesDocumentStartInstaller = script => { installed = script; return Task.FromResult(true); };
+        web.NewScrolllerEngine();
+        await web.PrepareScrolllerGate(1, true);
+        Assert.Equal(ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.FrameMediaScript, installed);
+        Assert.Contains("window.top.postMessage", installed);
+        Assert.True(web.ScrolllerGate);
+    });
+
+    [Fact]
     public Task AllFrameScriptInstallsBeforeNavigationOncePerEngine() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var pending = new TaskCompletionSource<bool>();

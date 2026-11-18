@@ -1074,17 +1074,14 @@ namespace ConditioningControlPanel.Avalonia
                 SeedSubliminalFeatureUse();
                 CoreSubliminal.CustomShowProvider = text => Views.Overlays.SubliminalWhisperShow.Custom(text);
                 CoreSubliminal.BambiFreezeProvider = Views.Overlays.SubliminalWhisperShow.Freeze;
-                CoreSubliminal.RunStateChanged = running =>
-                {
-                    if (running) return;
-                    Views.Overlays.SubliminalWhisperShow.StopAll();
-                    global::Avalonia.Threading.Dispatcher.UIThread.Post(Views.Overlays.SubliminalOverlay.CloseAll);
-                };
+                CoreSubliminal.RunStateChanged = Views.Overlays.SubliminalWhisperShow.RunStateChanged;
                 CoreBouncingText.StartAction = () =>
                 {
                     if (desktop.MainWindow is { } host) Views.Overlays.BouncingTextOverlay.Start(host);
                 };
                 CoreBouncingText.StopAction = Views.Overlays.BouncingTextOverlay.Stop;
+                CoreBouncingText.IsRunningProvider = () => Views.Overlays.BouncingTextOverlay.IsRunning;
+                CoreBubbles.IsRunningProvider = () => Views.Overlays.BubbleOverlay.IsRunning;
                 Views.Overlays.CornerGifOverlay.Seed(() => desktop.MainWindow);   // the corner-GIF surface seam
                 CoreBouncingText.RefreshAction = Views.Overlays.BouncingTextOverlay.Refresh;
                 CoreBouncingText.RestartAction = Views.Overlays.BouncingTextOverlay.Restart;

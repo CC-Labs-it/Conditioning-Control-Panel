@@ -38,10 +38,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// are paused by the Core scheduler.
     /// Missing against WPF: off-thread player rescue and LibVLC retire/quarantine
     /// (a Stop that hangs in native code still hangs the UI thread), the gaze
-    /// attention input and no-activate z-order.
+    /// attention input and remaining z-order parity.
     /// </summary>
     internal sealed partial class MandatoryVideoOverlay : IMandatoryVideoHost
     {
+        public bool BrowserMediaBlocksScheduledVideo => Views.Windows.LockCardWindow.WebVideoClaimed
+            || (CoreSettings.Current.ProtectBrowserVideoPlayback && Views.Tabs.SettingsTabView.InterruptingBrowserMediaBusy);
+
         public bool FeedOwnsTheScreen => Dispatcher.UIThread.Invoke(global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow.IsForYouOnScreen);
 
         public void Freeze() => SubliminalWhisperShow.FreezeForVideo();
@@ -56,6 +59,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private Action? _refreshFloating;
         internal Action<Window> ApplyFloatingPassive { get; set; } = X11Overlay.SetPassive;
+        internal Action<Window> DenyVideoMouseActivate { get; set; } = w => Win32Window.DenyMouseActivate(w);
+        internal Action<Window> MakeVideoNonActivating { get; set; } = Win32Window.MakeNonActivating;
         /// <summary>One screen's window: blurred fill + scrim, the clip, and the attention plane.</summary>
         internal sealed record Surface(Window Window, Image Fill, Border Scrim, Image Video, Canvas Layer, Border Grace, TextBlock Countdown, VideoButtons Buttons, Panel Picture, FloatingVideoReveal? Reveal = null)
         {
@@ -200,8 +205,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal double FillMs { get; private set; }
         internal int FillCount { get; private set; }
 
+        internal Func<double?> VideoMinutes = () => App.Achievements?.Progress?.TotalVideoMinutes;
+        internal Action FirstVideoMoment = () => Views.Windows.EmiDesk.EmiDeskService.Instance.Fire("firstVideoEver", null);
+
         public void Show(string path, bool strict) => Dispatcher.UIThread.Invoke(() =>
         {
+            // WPF VideoService.cs:3174-3185: offer the moment before either playback route.
+            try { if (VideoMinutes() <= 0) FirstVideoMoment(); }
+            catch (Exception ex) { Log.Debug(ex, "First video moment failed"); }
             _healUsed = false;   // WPF PlayVideo: one output heal per clip; the heal's replay keeps it spent
             _forceLibVlc = false;   // each clip gets one browser attempt
             _capSpent = 0;
@@ -506,7 +517,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     w.Closed += (_, _) => _refreshFloating -= floatingFrame.Refresh;
                 };
             }
-            else Place(w, screen);
+            else
+            {
+                Place(w, screen);
+                w.Opened += (_, _) =>
+                {
+                    DenyVideoMouseActivate(w);
+                    if (Chaos.ChaosRunHost.IsActive) MakeVideoNonActivating(w);
+                };
+            }
             void OnKey(KeyEventArgs e)
             {
                 // WPF main 642a040e9e (#1594 #1595): a floating video leaves Escape alone unless it is the panic key.

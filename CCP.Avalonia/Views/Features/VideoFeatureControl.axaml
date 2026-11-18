@@ -313,13 +313,13 @@
 
                             <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
-                            <!-- Phase 3 placeholder copy — voice-pass at ship. -->
-                            <Grid Height="34" Background="Transparent" ToolTip.Tip="Look at a target for ~1s instead of clicking. Same hit, same reward.">
+                            <!-- WPF VideoFeatureControl.xaml:363-372. -->
+                            <Grid x:Name="VideoGazeRow" Height="34" Background="Transparent" ToolTip.Tip="{loc:Str tooltip_stare_to_click}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Stare to click" FontSize="13" FontWeight="SemiBold"
+                                <TextBlock Grid.Column="0" x:Name="VideoGazeLabel" Text="{loc:Str setting_stare_to_click}" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkVideoGazeClick"
                                           Theme="{StaticResource ToggleStyle}" VerticalAlignment="Center"/>
