@@ -1,4 +1,10 @@
 {
+  "chaos_sidebar_empty_toy": "空玩具口袋",
+  "chaos_sidebar_empty_accessory": "空配饰口袋",
+  "chaos_sidebar_empty_desc": "点击前往玩偶屋购物。",
+  "chaos_sidebar_left_behind": "留下了：{0}",
+  "chaos_debug_add_sparks": "+500 火花",
+  "chaos_tape_snaps": "录像带突然中断",
   "chaos_bonus_first_taste": "初次品尝",
   "chaos_bonus_first_snap": "初次弹响",
   "chaos_bonus_first_whisper": "初次低语",
@@ -140,6 +146,7 @@
   "chaos_event_sin_bonus": "接受罪孽 (+{0:0.00}x)",
   "chaos_event_sin_shielded": "蜡烛消除了负面效果",
   "chaos_event_sin_resistance": "你说了愿意 (+1 抵抗)",
+  "chaos_announce_depth": "深度 {0}",
   "chaos_announce_resist": "抗性 +1",
   "chaos_first_sin_demo": "这一次，第一项罪会受到保护",
   "chaos_duo_demo": "一张金色卡牌。你的玩具学会了相互配合。",

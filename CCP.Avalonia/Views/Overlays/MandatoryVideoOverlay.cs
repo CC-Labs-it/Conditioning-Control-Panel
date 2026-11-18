@@ -96,8 +96,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (!_cutStartChosen && _playback.IsPlaying && _playback.IsSeekable && _playback.Length > 0)
             {
                 _cutStartChosen = true;
-                var start = CoreSettings.Current.VideoCutRandomStart
-                    ? VideoLengthCapRules.StartOffsetMs(CoreSettings.Current.VideoMaxDurationSeconds, _playback.Length, CutRandom) : 0;
+                var segment = Scheduler.RandomSegmentSeconds;
+                var start = segment > 0 ? VideoLengthCapRules.StartOffsetMs(segment, _playback.Length, CutRandom)
+                    : CoreSettings.Current.VideoCutRandomStart
+                        ? VideoLengthCapRules.StartOffsetMs(CoreSettings.Current.VideoMaxDurationSeconds, _playback.Length, CutRandom) : 0;
                 if (start > 0)
                 {
                     _playback.Time = start;
@@ -225,7 +227,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             FirstFrameMs = -1;
             _floatingOnScreen = false;
             _watchedMs = 0;
-            _cutClock = CoreSettings.Current.VideoMaxDurationSeconds > 0 ? new VideoPlaybackClock() : null;
+            _cutClock = CoreSettings.Current.VideoMaxDurationSeconds > 0 || Scheduler.RandomSegmentSeconds > 0 ? new VideoPlaybackClock() : null;
             _cutStartChosen = false;
             FillMs = FillCount = 0;
             _graceConsumed = false;   // WPF PlayVideo: one grace pause per clip, replays included
