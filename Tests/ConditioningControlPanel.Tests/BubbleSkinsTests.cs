@@ -25,6 +25,23 @@ public class BubbleSkinsTests
     }
 
     [Fact]
+    public void A_lock_bubble_never_wears_a_skin_and_every_other_bubble_keeps_it()
+    {
+        Assert.Equal(Models.BuiltInMods.LockedId, BubbleSkinChoice.LockModId);
+        foreach (var id in BubbleSkinIds.All)
+        {
+            Assert.Equal(BubbleSkinIds.Soap, BubbleSkinChoice.ForBubble(id, carriesLock: true));
+            Assert.Equal(BubbleSkinChoice.Resolve(id), BubbleSkinChoice.ForBubble(id, carriesLock: false));
+            // Soap is what gives the lock bubble the normal pop: no skin clips of its own.
+            Assert.False(BubbleSkinSounds.HasOwnPop(BubbleSkinChoice.ForBubble(id, carriesLock: true)));
+        }
+        Assert.True(BubbleSkinChoice.CarriesLock(BubbleSkinChoice.LockModId, modSuppliesBubbleArt: true));
+        Assert.False(BubbleSkinChoice.CarriesLock(BubbleSkinChoice.LockModId, modSuppliesBubbleArt: false));   // no lock art on disk = the plain bubble
+        Assert.False(BubbleSkinChoice.CarriesLock("builtin-drone", modSuppliesBubbleArt: true));
+        Assert.False(BubbleSkinChoice.CarriesLock(null, modSuppliesBubbleArt: true));
+    }
+
+    [Fact]
     public void Interior_is_deterministic_capped_inside_the_glass_and_still_under_off()
     {
         var a = new SkinPrim[BubbleSkins.MaxInterior];

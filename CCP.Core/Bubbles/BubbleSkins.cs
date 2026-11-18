@@ -51,6 +51,20 @@ public static class BubbleSkinChoice
         var id = requested?.Trim().ToLowerInvariant();
         return BubbleSkinIds.IsDrawn(id) ? id! : BubbleSkinIds.Soap;
     }
+
+    /// <summary>The mod whose own bubble picture carries a lock (Locked; the head's BuiltInMods.LockedId).</summary>
+    public const string LockModId = "builtin-locked";
+
+    /// <summary>True when a new bubble will wear the lock picture: the Locked mod is active AND its
+    /// own bubble art is on disk. Without the art the bubble is the plain one, so it is no lock bubble.</summary>
+    public static bool CarriesLock(string? activeModId, bool modSuppliesBubbleArt)
+        => modSuppliesBubbleArt && string.Equals(activeModId, LockModId, StringComparison.Ordinal);
+
+    /// <summary>Owner rule (2026-11-18): a lock bubble never wears a bought skin. It stays the normal
+    /// bubble with its lock inside, and soap also gives it the normal pop and sound. Every other bubble
+    /// keeps the worn skin.</summary>
+    public static string ForBubble(string? skin, bool carriesLock)
+        => carriesLock ? BubbleSkinIds.Soap : Resolve(skin);
 }
 
 /// <summary>Heart: <see cref="HeartBody"/> is the heart itself (R = its scale, Alpha = the beat 0..1);

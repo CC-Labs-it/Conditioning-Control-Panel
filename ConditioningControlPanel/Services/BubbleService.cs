@@ -1306,7 +1306,7 @@ public partial class BubbleService : IDisposable
         if (spec == null)
             return new Bubble(screen, _bubbleImage, _random, OnPop, OnMiss, OnDestroy, isClickable,
                               ambientMotion: AmbientBubbleMotion.RollForSpawn(_random),
-                              skin: BubbleCore.BubbleSkinChoice.Current());
+                              skin: SkinForNewBubble());
         // Trigger bubbles ride the shared ambient host like plain bubbles (hook-based pops via the
         // UsesHost/HostHitClickable snapshots). forceWindowMode was a relic of the host being
         // chaos-run-only: the per-pop layered-window Show/Close it forced was the residual "small
@@ -1325,7 +1325,22 @@ public partial class BubbleService : IDisposable
                               OnFrothPopped(b);   // Super Froth: the parts it took in, then its ring
                           },
                           forceWindowMode: !hostUp, ambientTrigger: true,
-                          skin: BubbleCore.BubbleSkinChoice.Current());
+                          skin: SkinForNewBubble());
+    }
+
+    /// <summary>The worn skin, unless this bubble wears the Locked mod's lock picture: that one stays
+    /// the normal bubble, pop and sound included (<see cref="BubbleCore.BubbleSkinChoice.ForBubble"/>).</summary>
+    private static string SkinForNewBubble()
+    {
+        bool carriesLock = false;
+        try
+        {
+            var modId = App.Mods?.ActiveModId;
+            carriesLock = BubbleCore.BubbleSkinChoice.CarriesLock(modId,
+                modId == BubbleCore.BubbleSkinChoice.LockModId && ModResourceResolver.HasActiveModOverride("bubble.png"));
+        }
+        catch (Exception ex) { Diag.Swallowed(ex, "lock bubble skin"); }
+        return BubbleCore.BubbleSkinChoice.ForBubble(BubbleCore.BubbleSkinChoice.Current(), carriesLock);
     }
 
     /// <summary>
