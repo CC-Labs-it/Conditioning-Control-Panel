@@ -18,9 +18,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
     /// the hover x and the settings switch all route here, so none of them owns her twice.</para>
     ///
     /// <para>ponytail: not here yet, each a named WPF member: other offers and
-    /// backSoon/weekend/bedtime beats, the nudge machine, the
-    /// knock (<c>TryKnock</c>) and the tube hand-off wiring (the <c>TubeDeskVisibility</c> rule itself is in
-    /// CCP.Core; only the head call that hides/restores the desk is missing). The system-wide chord
+    /// backSoon/weekend/bedtime beats and the nudge machine. Not ported because WPF never reaches
+    /// them: the knock (<c>TryKnock</c>; its only caller <c>MainWindow.QueueEmiKnock</c> has no call
+    /// site) and the tube hand-off (<c>SetTubeEmiVisible</c> has no caller; the <c>TubeDeskVisibility</c>
+    /// rule itself is in CCP.Core). The system-wide chord
     /// (<c>ApplyHotkey</c>) is here, grabbed through Platform/X11SummonChord.</para>
     /// </summary>
     internal sealed partial class EmiDeskService
@@ -299,6 +300,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             UnregisterChord();
             HotkeyArmed = false;
+        }
+
+        /// <summary>
+        /// QA ONLY, WPF EmiDeskService.cs:1392: wipe the onboarding latches and nudge counts. WPF then
+        /// re-arms its nudge machine; this head has none yet, so the reset is the whole replay here.
+        /// </summary>
+        public void ResetOnboarding()
+        {
+            EmiState.ResetOnboarding();
+            Log.Information("[EmiDesk] onboarding replayed (QA)");
         }
 
         /// <summary>The mute question. A seam only so a test can hold the prompt open.</summary>
