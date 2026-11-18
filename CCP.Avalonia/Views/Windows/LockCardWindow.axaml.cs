@@ -1215,6 +1215,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             || CoreEngine.Video?.IsPlaying == true || CoreEngine.BubbleCount?.IsBusy == true
             || Overlays.MandatoryVideoOverlay.Instance.Messages.Count != 0;
 
+        internal static bool InteractionBusy => !_replaying && (OtherInteractionActive || _pending.Count != 0);
+        internal static bool DeferQuiz(Action run) => Dispatcher.UIThread.Invoke(() => Defer("quiz", run));
+        internal static void DropQuiz() => Dispatcher.UIThread.Invoke(() =>
+        {
+            var keep = _pending.Where(item => item.Type != "quiz").ToArray();
+            _pending.Clear();
+            foreach (var item in keep) _pending.Enqueue(item);
+            if (_pending.Count == 0) { _pendingTimer?.Stop(); _pendingTimer = null; }
+        });
+
         internal static bool DeferVideo(Action run) => Dispatcher.UIThread.Invoke(() => Defer("video", run));
         internal static bool DeferBubble(Action run) => Dispatcher.UIThread.Invoke(() => Defer("bubble", run));
 

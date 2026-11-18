@@ -143,6 +143,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             }, RoutingStrategies.Tunnel);
         }
 
+        internal Action? JustDropActivatePanelForTests;
+
         internal static GameWindow? LaunchJustDropReplay(string code, Windows.MainShellWindow shell)
         {
             if (string.IsNullOrWhiteSpace(code)) return null;
@@ -159,7 +161,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             window.Closed += (_, _) =>
             {
                 if (duck && shell.IsVisible && shell.WindowState == global::Avalonia.Controls.WindowState.Minimized)
-                    shell.WindowState = state;
+                {
+                    shell.WindowState = state == WindowState.Maximized ? WindowState.Maximized : WindowState.Normal;
+                    if (window.JustDropActivatePanelForTests is { } activate) activate();
+                    else shell.Activate();
+                }
             };
             window.Show();
             if (duck) { shell.WindowState = global::Avalonia.Controls.WindowState.Minimized; window.Activate(); }

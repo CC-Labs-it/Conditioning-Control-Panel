@@ -2,7 +2,9 @@
 // Registration and page init are deliberately left for the host slice.
 using System;
 using Avalonia.Threading;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using ConditioningControlPanel.Services.Fyp;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Games
@@ -34,10 +36,50 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             switch ((string?)message["type"])
             {
+                case "set-setting":
+                    handled = true;
+                    var key = ((string?)message["key"] ?? "").Trim();
+                    var value = message["value"];
+                    var settings = CoreSettings.Current;
+                    object? echo;
+                    switch (key)
+                    {
+                        case "keybinds":
+                            if (value is JObject binds && binds.ToString(Formatting.None).Length <= 7000)
+                            {
+                                settings.ArcademyKeybindsJson = binds.ToString(Formatting.None);
+                                echo = binds;
+                            }
+                            else
+                            {
+                                // WPF ArcademyHostService.cs:3492-3509 echoes the stored object on refusal.
+                                try { echo = JObject.Parse(settings.ArcademyKeybindsJson); }
+                                catch { echo = null; }
+                            }
+                            break;
+                        case "audioMute" when value?.Type == JTokenType.Boolean:
+                            settings.ArcademyAudioMute = (bool)value;
+                            echo = settings.ArcademyAudioMute;
+                            break;
+                        default:
+                            return;
+                    }
+                    CoreSettings.Save();
+                    Post(new { type = "setting", key, value = echo });
+                    break;
                 case "ready":
                 case "heartbeat":
                 case "pong":
                     _arcademyLastBeat = ArcademyUtcNow();
+                    break;
+                case "assets-request":
+                    PostArcademyAssetsUnavailable(message);
+                    handled = true;
+                    break;
+                case "library-remove":
+                    FypRules.RemoveLibrarySub(CoreSettings.Current, (string?)message["name"] ?? (string?)message["sub"]);
+                    Post(new { type = "library", subLibrary = FypRules.BuildLibraryPayload(CoreSettings.Current) });
+                    handled = true;
                     break;
                 case "class-started":
                     _arcademyClassActive = true;

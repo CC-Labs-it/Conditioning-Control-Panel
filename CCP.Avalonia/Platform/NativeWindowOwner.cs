@@ -84,17 +84,18 @@ internal static class NativeWindowOwner
     [ComImport, Guid("56FDF344-FD6D-11d0-958A-006097C9A090")]
     private class TaskbarListCoClass { }
 
-    internal static void RepairVisibility(Window window)
+    internal static bool RepairVisibility(Window window)
     {
         // WPF ChaosWebViewHost.cs:1106-1110: deliberate hide/minimize is not a cascade to heal.
-        if (!window.IsVisible || window.WindowState == WindowState.Minimized) return;
+        if (!window.IsVisible || window.WindowState == WindowState.Minimized) return false;
         var handle = window.TryGetPlatformHandle();
         bool win32 = X11Overlay.BackendOf(handle) == OverlayBackend.Win32;
         bool nativeVisible = NativeVisibleForTests?.Invoke(window)
             ?? (win32 && IsWindowVisible(handle!.Handle));
-        if (nativeVisible) return;
-        if (ShowForTests is { } show) { show(window); return; }
-        if (SetForTests is not null) return;
-        if (win32) ShowWindow(handle!.Handle, 8); // SW_SHOWNA
+        if (nativeVisible) return false;
+        if (ShowForTests is { } show) { show(window); return true; }
+        if (SetForTests is not null || !win32) return false;
+        ShowWindow(handle!.Handle, 8); // SW_SHOWNA
+        return IsWindowVisible(handle.Handle);
     }
 }
