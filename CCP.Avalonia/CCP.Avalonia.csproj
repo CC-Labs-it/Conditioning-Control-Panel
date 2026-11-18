@@ -40,6 +40,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\ConditioningControlPanel\Services\Speech\SileroVadGate.cs" Link="Platform\SileroVadGate.cs" />
     <Compile Include="..\ConditioningControlPanel\Services\ChromeFxNav.cs" Link="Services\ChromeFxNav.cs" />
     <!-- Where a subliminal card sits while a mandatory video is up (ccp-bugs #1422): pure z-order rule, one source for both heads. -->
     <Compile Include="..\ConditioningControlPanel\Services\Subliminal\SubliminalOverVideo.cs" Link="Services\Subliminal\SubliminalOverVideo.cs" />
@@ -76,6 +77,9 @@
     <!-- Vosk speech (Core SpeechEngine): the head references it itself so libvosk ships with it.
          Vosk.targets picks the native lib by the BUILD machine's OS; build Linux releases on Linux. -->
     <PackageReference Include="Vosk" Version="0.3.38" />
+    <PackageReference Include="org.k2fsa.sherpa.onnx" Version="1.13.3" />
+    <PackageReference Include="org.k2fsa.sherpa.onnx.runtime.win-x64" Version="1.13.3" />
+    <PackageReference Include="org.k2fsa.sherpa.onnx.runtime.linux-x64" Version="1.13.3" />
     <!-- DPAPI for the Windows secret store (Platform/SecretStore.cs), same package WPF uses. -->
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
     <!-- Same file sink and version WPF ships (ConditioningControlPanel.csproj:130). -->
