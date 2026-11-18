@@ -166,6 +166,83 @@ public sealed class BrowserFullscreenGateTests
         Assert.Contains("private void ExitBrowserFullscreen()\n        {\n            // A queued enter from the page dies with any exit (panic, teardown, Esc), and a pending\n            // maximize of the host stands down.\n            _browserFsGate.Clear();", browser);
     }
 
+    // ---- a takeover whose player started late (7.3.1 tester report on #1649) ----
+
+    [Fact]
+    public void ALateTakeoverAsk_StillHoldsItsEnter()
+    {
+        var gate = new BrowserFullscreenGate();
+        gate.ArmTakeover(0);
+        // The player was started by hand a minute later: the arm from the injection is long gone.
+        long late = BrowserFullscreenGate.TakeoverArmMs + 60_000;
+        Assert.True(gate.NoteTakeoverAsk(late));
+        PageRequest(gate, true, late + 20);
+        Assert.True(gate.Take());
+        Assert.True(gate.NoteEnterApplied(late + 40));
+        PageRequest(gate, false, late + 300);      // the reparent knocks the page out
+        Assert.Null(gate.Take());
+        Assert.True(gate.HoldsExit(late + 300));
+    }
+
+    [Fact]
+    public void AnAskWithNoTakeover_ArmsNothing()
+    {
+        var gate = new BrowserFullscreenGate();
+        Assert.False(gate.NoteTakeoverAsk(0));     // a page posting the message on its own
+        PageRequest(gate, true, 10);
+        Assert.True(gate.Take());
+        Assert.False(gate.NoteEnterApplied(20));
+        Assert.False(gate.HoldsExit(30));
+    }
+
+    [Fact]
+    public void AnAskAfterAnExit_ArmsNothing()
+    {
+        var gate = new BrowserFullscreenGate();
+        gate.ArmTakeover(0);
+        gate.Clear();                              // Esc, panic, teardown, EndWebVideoTakeover
+        Assert.False(gate.NoteTakeoverAsk(100));
+        Assert.False(gate.NoteEnterApplied(200));
+        Assert.False(gate.HoldsExit(200));
+    }
+
+    [Fact]
+    public void AnAskAfterTheTakeoverEntered_ArmsNothing()
+    {
+        var gate = new BrowserFullscreenGate();
+        gate.ArmTakeover(0);
+        Assert.True(gate.NoteEnterApplied(100));
+        Assert.False(gate.NoteTakeoverAsk(200));
+        Assert.False(gate.NoteEnterApplied(300));
+    }
+
+    [Fact]
+    public void AnAsk_NeverShortensTheArm_AndRunsOut()
+    {
+        var gate = new BrowserFullscreenGate();
+        gate.ArmTakeover(0);
+        Assert.True(gate.NoteTakeoverAsk(10));
+        Assert.True(gate.NoteEnterApplied(BrowserFullscreenGate.TakeoverArmMs));
+
+        gate.ArmTakeover(0);
+        long late = BrowserFullscreenGate.TakeoverArmMs + 1_000;
+        gate.NoteTakeoverAsk(late);
+        Assert.False(gate.NoteEnterApplied(late + BrowserFullscreenGate.TakeoverAskMs + 1));
+    }
+
+    [Fact]
+    public void TheTakeoverScript_AnnouncesItsAsk_AndTheHostListens()
+    {
+        var browser = File.ReadAllText(Path.Combine(SourceRoot(), "MainWindow", "MainWindow.Browser.cs"))
+            .Replace("\r\n", "\n");
+        // The announcement sits inside goFullscreen, after the stopped check and before the request.
+        int stopped = browser.IndexOf("if (window._ccpTakeoverStopped) return;\n                                // Tell the host", StringComparison.Ordinal);
+        int ask = browser.IndexOf("type: 'fsAsk'", StringComparison.Ordinal);
+        int request = browser.IndexOf("const req = video.requestFullscreen();", StringComparison.Ordinal);
+        Assert.True(stopped > 0 && ask > stopped && request > ask);
+        Assert.Contains("_browserFsGate.NoteTakeoverAsk(Environment.TickCount64)", browser);
+    }
+
     private static string SourceRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

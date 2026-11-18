@@ -931,6 +931,9 @@ namespace ConditioningControlPanel
                             };
                             const goFullscreen = () => {
                                 if (window._ccpTakeoverStopped) return;
+                                // Tell the host this ask is the takeover's, however late it
+                                // comes (a player started by hand has no deadline).
+                                try { window.chrome.webview.postMessage(JSON.stringify({ type: 'fsAsk' })); } catch (_) {}
                                 if (video.requestFullscreen) {
                                     const req = video.requestFullscreen();
                                     if (req && req.catch) req.catch(reportFsDenied);
@@ -1165,6 +1168,13 @@ namespace ConditioningControlPanel
                 }
                 // ccp-bugs #1492: the page refused the takeover's fullscreen request. The payload
                 // is page state only (error name, connected, visibility, activation).
+                else if (message.Contains("\"type\":\"fsAsk\""))
+                {
+                    // The takeover script is asking for fullscreen now: its enter is app-started
+                    // even when playback began long after the script went in (#1649).
+                    var live = _browserFsGate.NoteTakeoverAsk(Environment.TickCount64);
+                    App.Logger?.Information("Web takeover asks for fullscreen (armed = {Armed})", live);
+                }
                 else if (message.Contains("\"type\":\"fsDenied\""))
                 {
                     App.Logger?.Warning("Web takeover fullscreen refused by the page: {Detail}",
@@ -2935,9 +2945,11 @@ namespace ConditioningControlPanel
             if (_browser?.WebView == null) return;
 
             // A late fullscreen event from the stopped page must not reopen a topmost host.
-            if (isFullscreen && Services.Browser.RemoteBrowserStopRule.HideBrowser(
-                RemoteControlOverlay.Visibility == Visibility.Visible, _remoteBrowserVideoActive))
+            if (isFullscreen && Services.Browser.RemoteBrowserStopRule.RefuseFullscreen(
+                RemoteControlOverlay.Visibility == Visibility.Visible, _remoteBrowserVideoActive,
+                _browserFsGate.TakeoverArmed(Environment.TickCount64)))
             {
+                App.Logger?.Information("Browser fullscreen refused under the remote card (no takeover armed)");
                 _ = _browser.ExitFullscreenAsync();
                 _browser.ClearFullscreenRegistration();
                 return;
