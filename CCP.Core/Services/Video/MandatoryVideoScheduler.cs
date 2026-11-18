@@ -389,7 +389,7 @@ namespace ConditioningControlPanel.Services
         // Resolve again after pre-roll because the licence or cache can change in the meantime.
         internal Func<string, string?> CachedScrolllerPath { get; set; } = ScrolllerDiskCache.TryGetPath;
 
-        private string? PlaybackPath(string path) => !ScrolllerPolicy.IsScrolllerUrl(path) ? path
+        internal string? PlaybackPath(string path) => !ScrolllerPolicy.IsScrolllerUrl(path) ? path
             : ScrolllerPolicy.Enabled ? CachedScrolllerPath(path) : null;
 
         /// <summary>WPF TriggerVideo -> PlayVideo: pick a clip, stop the flash, and show it after the
