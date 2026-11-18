@@ -2109,8 +2109,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private void Menu_Dollhouse_Click(object? sender, RoutedEventArgs e)
         {
-            // WPF also spawned the loadout sidebar here (App.Chaos.ShowLoadoutSidebar).
-            // ponytail: needs ChaosService, wired when it moves to Core.
             EnterRunContext();
             ShowDollhouseView();
             ShowTab("loadout");

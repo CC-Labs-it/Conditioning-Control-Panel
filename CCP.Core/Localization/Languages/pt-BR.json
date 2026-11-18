@@ -1,4 +1,10 @@
 {
+  "chaos_sidebar_empty_toy": "bolso de brinquedo vazio",
+  "chaos_sidebar_empty_accessory": "bolso de acessório vazio",
+  "chaos_sidebar_empty_desc": "clique para comprar na casa de bonecas.",
+  "chaos_sidebar_left_behind": "deixado para trás: {0}",
+  "chaos_debug_add_sparks": "+500 faíscas",
+  "chaos_tape_snaps": "a fita para",
   "chaos_bonus_first_taste": "primeiro sabor",
   "chaos_bonus_first_snap": "primeiro estalo",
   "chaos_bonus_first_whisper": "primeiro sussurro",
@@ -141,6 +147,7 @@
   "chaos_event_sin_bonus": "pecado aceito (+{0:0.00}x)",
   "chaos_event_sin_shielded": "a vela removeu a desvantagem",
   "chaos_event_sin_resistance": "você disse sim (+1 resistência)",
+  "chaos_announce_depth": "PROFUNDIDADE {0}",
   "chaos_announce_resist": "+1 RESISTÊNCIA",
   "chaos_first_sin_demo": "o primeiro pecado está protegido desta vez",
   "chaos_duo_demo": "uma carta dourada. seus brinquedos aprenderam a trabalhar juntos.",

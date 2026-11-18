@@ -1,4 +1,10 @@
 {
+  "chaos_sidebar_empty_toy": "空のおもちゃポケット",
+  "chaos_sidebar_empty_accessory": "空のアクセサリーポケット",
+  "chaos_sidebar_empty_desc": "クリックしてドールハウスで買い物。",
+  "chaos_sidebar_left_behind": "置いてきた: {0}",
+  "chaos_debug_add_sparks": "+500 スパーク",
+  "chaos_tape_snaps": "テープが途切れる",
   "chaos_bonus_first_taste": "初めての味",
   "chaos_bonus_first_snap": "初めてのスナップ",
   "chaos_bonus_first_whisper": "初めてのささやき",
@@ -141,6 +147,7 @@
   "chaos_event_sin_bonus": "罪を受け入れた (+{0:0.00}x)",
   "chaos_event_sin_shielded": "ろうそくが代償を取り除いた",
   "chaos_event_sin_resistance": "イエスと言った (+1 抵抗)",
+  "chaos_announce_depth": "深度 {0}",
   "chaos_announce_resist": "耐性 +1",
   "chaos_first_sin_demo": "最初の罪は今回だけ守られる",
   "chaos_duo_demo": "金のカード。おもちゃたちが力を合わせることを覚えた。",
