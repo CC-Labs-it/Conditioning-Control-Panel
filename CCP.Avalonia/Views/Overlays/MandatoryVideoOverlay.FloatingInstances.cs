@@ -17,7 +17,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 
 /// <summary>WPF VideoService.FloatingInstances.cs:18-130: the run's clip (Show) is the first floating window; later triggers
 /// join windows with their own LibVLC player, frame and reveal, up to MandatoryVideoFloatingCount. A clip's end closes only
-/// its own window with its own credit; the last one ends the run. Every teardown (CloseAll: panic, Esc, stop) closes all.</summary>
+/// its own window with its own credit; the last one ends the run. Which window has the sound is
+/// <see cref="FloatingAudioFocus{T}"/>. Every teardown (CloseAll: panic, Esc, stop) closes all.</summary>
 internal sealed partial class MandatoryVideoOverlay
 {
     internal sealed class FloatingInstance(string clip)
@@ -38,6 +39,7 @@ internal sealed partial class MandatoryVideoOverlay
 
     /// <summary>Joined windows, oldest first; the run's own clip is older than all of them. UI thread only.</summary>
     private readonly List<FloatingInstance> _floaters = new();
+    private readonly FloatingAudioFocus<Window> _audioFocus = new();
 
     internal IReadOnlyList<FloatingInstance> Floaters => _floaters;
     private IEnumerable<Surface> AllSurfaces => _surfaces.Concat(_floaters.Select(f => f.Surface));
@@ -45,15 +47,20 @@ internal sealed partial class MandatoryVideoOverlay
     public int FloatingLimit => MandatoryVideoPresentation.ClampCount(CoreSettings.Current.MandatoryVideoFloatingCount);
     /// <summary>Floating windows on screen: the run's own (while it plays) and the joined ones.</summary>
     public int FloatingUp => (Floating ? _surfaces.Count : 0) + _floaters.Count;
+    /// <summary>WPF _floatRunOpen: the windows own the run; the last one to close ends it.</summary>
+    public bool FloatingRunOpen => Scheduler.IsPlaying && FloatingUp > 0;
 
-    /// <summary>WPF TryAddFloatingTestVideo (:872-904): a Test press while a floating video plays adds a
-    /// window, and at the limit the oldest makes room.</summary>
+    internal bool HasFloatingSound(Window w) => _audioFocus.HasSound(w);
+
+    /// <summary>WPF TryFloatingTrigger (:109-118) and TryAddFloatingTestVideo (:872-904): a trigger while a
+    /// floating video plays adds a window (or skips quietly at the limit); a Test press replaces the oldest.</summary>
     public bool TryFloatingTrigger(bool userInitiated)
     {
-        if (!userInitiated || (!Floating && _floaters.Count == 0)) return false;
+        if (!Floating && _floaters.Count == 0) return false;
         if (FloatingLimit < 2 && _floaters.Count == 0)
         {
-            // One window is all there may be: a Test press replaces it (WPF :896).
+            // One window is all there may be: a Test press replaces it (WPF :896), an automatic trigger waits.
+            if (!userInitiated) return false;
             Scheduler.ForceCleanup();
             return Scheduler.Trigger(userInitiated: true);
         }
@@ -82,6 +89,7 @@ internal sealed partial class MandatoryVideoOverlay
                     else CloseInstance(_floaters[0], "the oldest makes room", endRun: false);
                 }
             var ok = SpawnInstance(clip);
+            if (decision == MandatoryVideoPresentation.TriggerDecision.Open && SpawnTogetherExtras() > 0) ok = true;
             if (decision == MandatoryVideoPresentation.TriggerDecision.ReplaceOldest && FloatingUp == 0) Scheduler.End();
             return ok;
         }
@@ -90,6 +98,22 @@ internal sealed partial class MandatoryVideoOverlay
             Log.Debug("VideoService: floating add failed - {Error}", ex.Message);
             return false;
         }
+    }
+
+    /// <summary>WPF SpawnTogetherExtras (:255-269): "Pop up together" fills every free slot at once.</summary>
+    private int SpawnTogetherExtras()
+    {
+        if (!CoreSettings.Current.MandatoryVideoFloatingTogether) return 0;
+        var want = MandatoryVideoPresentation.WindowsToOpen(FloatingUp, FloatingLimit, together: true);
+        var opened = 0;
+        for (var i = 0; i < want && Scheduler.IsPlaying; i++)
+        {
+            var clip = PickFloatingClip();
+            if (clip == null || !SpawnInstance(clip)) break;
+            opened++;
+        }
+        if (opened > 0) Log.Information("VideoService: floating: {Opened} more opened together ({Up} up)", opened, FloatingUp);
+        return opened;
     }
 
     /// <summary>WPF PickFloatingClip (:414-430): not a clip already up while the pool allows.</summary>
@@ -124,6 +148,7 @@ internal sealed partial class MandatoryVideoOverlay
             if (_playbackFactory != null)
             {
                 f.Playback = _playbackFactory();
+                f.Playback.SetAudioOff(true);   // WPF FloatingInstances.cs:534-535: veiled, it takes no sound until the reveal
                 f.FrameSeen = true;
                 RevealInstance(f);
             }
@@ -133,6 +158,7 @@ internal sealed partial class MandatoryVideoOverlay
                 var s = CoreSettings.Current;
                 var player = f.Player = new MediaPlayer(vlc) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
                 f.Playback = new NativeMandatoryPlayback(player);
+                f.Playback.SetAudioOff(true);   // WPF :534-535 (WatchInstance re-applies once the track exists)
                 ApplyInstanceVolume(f);
                 f.Sink = new VlcFrameSink(player, () => f.Media, bmp => f.Surface.Video.Source = bmp, () =>
                 {
@@ -174,6 +200,8 @@ internal sealed partial class MandatoryVideoOverlay
     {
         if (f.Closed || f.Playback is not { } p) { f.Watch?.Stop(); return; }
         if (_gracePaused) return;   // SetFloatingPaused holds its clocks
+        // Veiled or not the holder: silent, also for an audio track LibVLC selects after the last focus pass.
+        p.SetAudioOff(!_audioFocus.HasSound(f.Window));
         if (!f.Revealed)
             switch (MandatoryVideoPresentation.DecideFirstFrame(f.SinceReady.Elapsed.TotalSeconds, f.FrameSeen, p.IsPlaying))
             {
@@ -197,11 +225,14 @@ internal sealed partial class MandatoryVideoOverlay
         if (f.Playback is { } p) f.PlayedMs = Math.Max(f.PlayedMs, p.Time - f.StartMs);
     }
 
-    /// <summary>WPF RevealInstance (:593-617): shown once it has a frame; controls after the fade.</summary>
+    /// <summary>WPF RevealInstance (:593-617): shown, it joins the sound rotation; controls after the fade.</summary>
     private void RevealInstance(FloatingInstance f)
     {
         if (f.Closed || f.Revealed) return;
         f.Revealed = true;
+        // WPF :613: focus first, so a window that does not take the sound is never heard when the reveal lifts its hold.
+        _audioFocus.Join(f.Window, CoreSettings.Current.MandatoryVideoFloatingKeepSound);
+        ApplyAudioFocus();
         f.Surface.Reveal?.Present();
         var w = f.Window;
         f.Fade = new VideoReveal(_videoFadeSeconds, tick => w.RequestAnimationFrame(_ => tick()),
@@ -233,6 +264,39 @@ internal sealed partial class MandatoryVideoOverlay
             : MandatoryVideoScheduler.EffectiveVolume(CoreSettings.Current.MasterVolume, CoreSettings.Current.VideoVolume);
     }
 
+    /// <summary>WPF OnFloatingTouched (:256-260): a pressed window takes the sound.</summary>
+    internal void TouchFloating(Window w)
+    {
+        if (_audioFocus.Touch(w)) ApplyAudioFocus();
+    }
+
+    /// <summary>WPF ApplyAudioFocus (:263-276): exactly one window unmuted and lit, the holder.</summary>
+    private void ApplyAudioFocus()
+    {
+        var primary = Floating && _surfaces.Count > 0 ? _surfaces[0].Window : null;
+        try { if (primary != null && _audioFocus.Items.Contains(primary)) _playback?.SetAudioOff(!_audioFocus.HasSound(primary)); }
+        catch (Exception ex) { Log.Debug("VideoService: floating audio switch failed - {Error}", ex.Message); }
+        foreach (var f in _floaters)
+        {
+            try { if (_audioFocus.Items.Contains(f.Window)) f.Playback?.SetAudioOff(!_audioFocus.HasSound(f.Window)); }
+            catch (Exception ex) { Log.Debug("VideoService: floating audio switch failed - {Error}", ex.Message); }
+        }
+        _refreshFloating?.Invoke();
+    }
+
+    /// <summary>WPF VideoService.cs:6444-6456: one Resume card per screen holding a floating window. A card is
+    /// hosted by a window on that screen; WPF's cards outlive the windows, so a closed host hands it on.</summary>
+    private void ShowGraceCards()
+    {
+        foreach (var screen in AllSurfaces.GroupBy(x => x.Screen?.Bounds).Where(g => g.All(x => x.GraceHost == null)))
+        {
+            var x = screen.First();
+            x.Layer.IsHitTestVisible = false;
+            x.Grace.IsVisible = true;
+            ShowGraceHost(x);
+        }
+    }
+
     /// <summary>WPF SetFloatingPaused (:366-376): the grace pause holds every joined window.</summary>
     private void SetFloatingPaused(bool paused)
     {
@@ -252,18 +316,19 @@ internal sealed partial class MandatoryVideoOverlay
 
     private void RetirePrimary(string reason, bool endRun = true)
     {
-        var held = _gracePaused;
-        var watched = ClosePrimary(retire: true);   // ends the grace pause with the first window's card
-        // WPF FloatingInstances.cs:417-430: a grace pause always ends in a resume; the joined windows play on.
-        if (held) { _graceConsumed = true; SetFloatingPaused(false); }   // one grace per run (WPF VideoService.cs:6328-6329)
+        // WPF FloatingInstances.cs:417-430: a grace pause always ends in a resume, and the resume closes every
+        // screen's card (WPF VideoService.cs:6325-6335); the joined windows play on, the grace spent.
+        ResumeFromGrace("the first window closed");
+        var watched = ClosePrimary(retire: true);
         if (watched >= 1) CoreProgression.TrackVideoWatched(watched);   // WPF CreditInstance (:779-797)
         Log.Information("VideoService: floating window closed ({Reason}), {Left} left", reason, FloatingUp);
+        ApplyAudioFocus();
         if (endRun && FloatingUp == 0 && Scheduler.IsPlaying) Scheduler.End();
     }
 
     /// <summary>WPF CloseInstance (:799-860): idempotent; credits its own clip, takes nothing with it, and
     /// only the last window to go ends the run.</summary>
-    private void CloseInstance(FloatingInstance f, string reason, bool watchedToEnd = false, bool endRun = true)
+    private void CloseInstance(FloatingInstance f, string reason, bool watchedToEnd = false, bool endRun = true, bool refocus = true)
     {
         if (f.Closed) return;
         f.Closed = true;
@@ -288,7 +353,9 @@ internal sealed partial class MandatoryVideoOverlay
         f.Media = null;
         if (f.Surface is { } x)
         {
+            _audioFocus.Remove(x.Window);
             CloseGraceHost(x);
+            if (_gracePaused && endRun) ShowGraceCards();   // its screen's Resume card moves to a window still up
             x.Video.Source = null;
             x.Reveal?.Cancel();
             x.Window.Close();
@@ -296,6 +363,7 @@ internal sealed partial class MandatoryVideoOverlay
         f.Sink?.Free();
         f.Sink = null;
         Log.Information("VideoService: floating window closed ({Reason}), {Left} left", reason, FloatingUp);
+        if (refocus) ApplyAudioFocus();
         if (endRun && FloatingUp == 0 && Scheduler.IsPlaying) Scheduler.End();
     }
 
@@ -304,7 +372,7 @@ internal sealed partial class MandatoryVideoOverlay
     {
         foreach (var f in _floaters.ToList())
         {
-            try { CloseInstance(f, reason, endRun: false); }
+            try { CloseInstance(f, reason, endRun: false, refocus: false); }
             catch (Exception ex) { Log.Debug("VideoService: floating close failed - {Error}", ex.Message); }
         }
     }
