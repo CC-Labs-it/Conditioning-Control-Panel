@@ -742,6 +742,7 @@ namespace ConditioningControlPanel.Services
             if (_queue.Count == 0)
             {
                 var enabled = _library();
+                // Keep the minimum filter until the Avalonia host can loop or fill short clips.
                 var kept = KeepByLength(enabled, CoreSettings.Current.VideoMinDurationSeconds,
                     CoreSettings.Current.VideoMaxDurationSeconds, DurationOf);
                 LastFunnelEnabled = enabled.Count;   // WPF _lastFunnelEnabled / _lastFunnelDuration (#1352)

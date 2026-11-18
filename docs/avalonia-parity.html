@@ -789,6 +789,7 @@ ported-by-merge (<code>Assets/web/dtrh</code>); lane game-dtrh-host ported two h
 
 <table>
 <tr><th>id</th><th>WPF reference</th><th>Avalonia counterpart</th><th>status</th><th>notes / evidence</th></tr>
+<tr><td>video-min-core</td><td>ConditioningControlPanel/Services/Video/VideoMinLoop.cs:1-65, VideoMinFill.cs:1-107, VideoService.cs:8578-8590</td><td>CCP.Core/Services/Video/VideoMinLoop.cs:1, VideoMinFill.cs:1, MandatoryVideoScheduler.cs:745</td><td>stub</td><td>Shared rules ported; Core retains the minimum filter for known short clips until Avalonia playback loop and fill hosts are implemented (MandatoryVideoScheduler.cs:745; WPF VideoService.cs:3261, 6760, 8578-8590). Unknown lengths remain eligible. Tests: VideoMinLoopTests, VideoMinFillTests, MandatoryVideoSchedulerTests.PickNext_filters_short_clips_until_loop_and_fill_playback_are_supported (fail-proven).</td></tr>
 <tr><td>blocked-migration-input</td><td>Tests (migration)</td><td>-</td><td>resolved</td><td>Resolved by 54cb8d601 (settings-migration-test): a local-only real WPF profile migration test now exists; the profile is never committed. Historical blocker: the goal needs a migration test from a REAL WPF-release settings file; the repo has only synthetic fixtures and the user's own profile must not be committed. Needs a scrubbed 6.11.x settings.json + provenance README from the user (oracle-updater-installer.md §4)</td></tr>
 </table>
 
