@@ -6163,6 +6163,8 @@
   "tooltip_super_pool_size": "Quanto cresce il vortice mentre il mouse resta fermo.",
   "super_pool_centred": "Resta al centro",
   "tooltip_super_pool_centred": "Il vortice resta al centro dello schermo alla massima grandezza e non segue più il mouse.",
+  "super_moving_pops": "Gli effetti in movimento scoppiano bolle e immagini flash",
+  "tooltip_super_moving_pops": "Attivo: la parola che rimbalza e il vortice scoppiano le bolle e rompono le immagini flash che toccano. Spento: spingono e attirano ancora, ma non scoppiano né rompono nulla.",
   "super_pool_drags": "Trascina",
   "tooltip_super_pool_drags": "Cosa attira e fa girare il vortice: la nebbia, le immagini, le bolle.",
   "super_pool_drags_fog": "Nebbia",

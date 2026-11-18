@@ -6405,6 +6405,8 @@
   "tooltip_super_pool_size": "鼠标静止时漩涡能长到多大。",
   "super_pool_centred": "保持居中",
   "tooltip_super_pool_centred": "漩涡以最大尺寸停在屏幕中央，不再跟随鼠标。",
+  "super_moving_pops": "移动效果会戳破泡泡和闪图",
+  "tooltip_super_moving_pops": "开启：弹跳文字和漩涡会戳破碰到的泡泡并打碎闪图。关闭：它们仍会推动和吸引，但不会戳破或打碎任何东西。",
   "super_pool_drags": "卷入",
   "tooltip_super_pool_drags": "漩涡会卷进来、绕着转的东西：雾、图片、泡泡。",
   "super_pool_drags_fog": "雾",

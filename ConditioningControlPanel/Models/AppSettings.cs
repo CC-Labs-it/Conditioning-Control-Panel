@@ -5653,6 +5653,15 @@ namespace ConditioningControlPanel.Models
             set { _whirlpoolSize = SuperCore.WhirlpoolOptions.ClampSize(value); OnPropertyChanged(); }
         }
 
+        // V2 (Scrawl word, Whirlpool): moving effects pop bubbles and break flash images. Off by
+        // default (owner, 2026-11-18): off, they still pull and push but never pop or break anything.
+        private bool _movingEffectsPop;
+        public bool MovingEffectsPop
+        {
+            get => _movingEffectsPop;
+            set { _movingEffectsPop = value; OnPropertyChanged(); }
+        }
+
         // Whirlpool: sits in the middle of the screen at full size instead of under the cursor.
         private bool _whirlpoolStayCentred;
         public bool WhirlpoolStayCentred

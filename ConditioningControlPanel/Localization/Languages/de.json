@@ -5893,6 +5893,8 @@
   "tooltip_super_pool_size": "Wie groß der Strudel wird, während die Maus ruht.",
   "super_pool_centred": "In der Mitte bleiben",
   "tooltip_super_pool_centred": "Der Strudel bleibt in voller Größe in der Bildschirmmitte und folgt der Maus nicht mehr.",
+  "super_moving_pops": "Bewegte Effekte lassen Blasen platzen und Flash-Bilder brechen",
+  "tooltip_super_moving_pops": "An: Das springende Wort und der Strudel lassen Blasen platzen und brechen Flash-Bilder, die sie berühren. Aus: Sie schieben und ziehen weiter, lassen aber nichts platzen.",
   "super_pool_drags": "Zieht hinein",
   "tooltip_super_pool_drags": "Was der Strudel hineinzieht und herumwirbelt: Nebel, Bilder, Blasen.",
   "super_pool_drags_fog": "Nebel",

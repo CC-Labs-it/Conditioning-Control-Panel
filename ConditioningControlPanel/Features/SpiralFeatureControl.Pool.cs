@@ -65,6 +65,7 @@ namespace ConditioningControlPanel.Features
                 SliderPoolSize.Value = s.WhirlpoolSize;
                 TxtPoolSize.Text = $"{s.WhirlpoolSize}%";
                 ChkPoolCentred.IsChecked = s.WhirlpoolStayCentred;
+                ChkPoolPops.IsChecked = s.MovingEffectsPop;
                 ChkPoolDragsFog.IsChecked = s.WhirlpoolDragsFog;
                 ChkPoolDragsPictures.IsChecked = s.WhirlpoolDragsPictures;
                 ChkPoolDragsBubbles.IsChecked = s.WhirlpoolDragsBubbles;
@@ -126,6 +127,16 @@ namespace ConditioningControlPanel.Features
             var s = App.Settings?.Current;
             if (s == null) return;
             s.WhirlpoolStayCentred = ChkPoolCentred.IsChecked ?? false;
+            App.Settings?.Save();
+        }
+
+        // SuperStageHost and the bouncing word hand it to the stage each frame. Same setting as the Scrawl box row.
+        private void ChkPoolPops_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_poolLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.MovingEffectsPop = ChkPoolPops.IsChecked ?? false;
             App.Settings?.Save();
         }
 
