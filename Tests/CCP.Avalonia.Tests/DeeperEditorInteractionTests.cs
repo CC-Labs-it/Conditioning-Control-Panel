@@ -40,6 +40,30 @@ public sealed class DeeperEditorInteractionTests
     });
 
     [Fact]
+    public Task HoverTimeFollowsPointerAndPanicClearsIt() => Run((w, model) =>
+    {
+        Set(w, "_totalSeconds", 30d);
+        var canvas = w.FindControl<Canvas>("TimelineCanvas")!;
+        var tip = w.FindControl<Border>("HoverTimeTip")!;
+        var label = w.FindControl<TextBlock>("TxtHoverTime")!;
+        void Move(double x) => canvas.RaiseEvent(new PointerEventArgs(InputElement.PointerMovedEvent, canvas,
+            new global::Avalonia.Input.Pointer(1, PointerType.Mouse, true), w, canvas.TranslatePoint(new Point(x, 1), w) ?? default,
+            0, PointerPointProperties.None, KeyModifiers.None));
+        Assert.True(canvas.Bounds.Width > 0);
+        Move(canvas.Bounds.Width / 2);
+        Assert.True(tip.IsVisible);
+        Assert.Equal("0:15.00", label.Text);
+        Move(canvas.Bounds.Width + 100);
+        Assert.Equal("0:30.00", label.Text);
+        canvas.RaiseEvent(new PointerEventArgs(InputElement.PointerExitedEvent, canvas,
+            new global::Avalonia.Input.Pointer(1, PointerType.Mouse, true), w, default, 0, PointerPointProperties.None, KeyModifiers.None));
+        Assert.False(tip.IsVisible);
+        Move(1);
+        ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.StopAll("test");
+        Assert.False(tip.IsVisible);
+    });
+
+    [Fact]
     public Task RuleDeleteAndEscapeUseThePrimarySelection() => Run((w, model) =>
     {
         var rule = new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 3 } };
