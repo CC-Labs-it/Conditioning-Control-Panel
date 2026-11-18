@@ -25,6 +25,24 @@ public class BubbleSkinsTests
     }
 
     [Fact]
+    public void A_worn_skin_draws_on_the_plain_bubble_never_over_the_lock()
+    {
+        Assert.Equal(Models.BuiltInMods.LockedId, BubbleSkinChoice.LockModId);
+        foreach (var id in BubbleSkinIds.All)
+        {
+            bool worn = BubbleSkinChoice.Resolve(id) != BubbleSkinIds.Soap;
+            // A skin takes the plain bubble; no skin (soap) keeps the lock bubble.
+            Assert.Equal(worn, BubbleSkinChoice.SkinTakesPlainBubble(id, carriesLock: true));
+            Assert.False(BubbleSkinChoice.SkinTakesPlainBubble(id, carriesLock: false));
+        }
+        Assert.False(BubbleSkinChoice.SkinTakesPlainBubble(null, carriesLock: true));
+        Assert.True(BubbleSkinChoice.CarriesLock(BubbleSkinChoice.LockModId, modSuppliesBubbleArt: true));
+        Assert.False(BubbleSkinChoice.CarriesLock(BubbleSkinChoice.LockModId, modSuppliesBubbleArt: false));   // no lock art on disk = the plain bubble
+        Assert.False(BubbleSkinChoice.CarriesLock("builtin-drone", modSuppliesBubbleArt: true));
+        Assert.False(BubbleSkinChoice.CarriesLock(null, modSuppliesBubbleArt: true));
+    }
+
+    [Fact]
     public void Interior_is_deterministic_capped_inside_the_glass_and_still_under_off()
     {
         var a = new SkinPrim[BubbleSkins.MaxInterior];

@@ -1303,10 +1303,12 @@ public partial class BubbleService : IDisposable
             spec = null;
         // Super Froth took the bubbles' star from Inner Bloom (owner, 2026-11-15): no bloom is
         // started here any more. The bloom code is parked in BubbleService.InnerBloom.cs.
+        var skin = BubbleCore.BubbleSkinChoice.Current();
+        var sprite = SpriteForNewBubble(skin);
         if (spec == null)
-            return new Bubble(screen, _bubbleImage, _random, OnPop, OnMiss, OnDestroy, isClickable,
+            return new Bubble(screen, sprite, _random, OnPop, OnMiss, OnDestroy, isClickable,
                               ambientMotion: AmbientBubbleMotion.RollForSpawn(_random),
-                              skin: BubbleCore.BubbleSkinChoice.Current());
+                              skin: skin);
         // Trigger bubbles ride the shared ambient host like plain bubbles (hook-based pops via the
         // UsesHost/HostHitClickable snapshots). forceWindowMode was a relic of the host being
         // chaos-run-only: the per-pop layered-window Show/Close it forced was the residual "small
@@ -1316,7 +1318,7 @@ public partial class BubbleService : IDisposable
         bool hostUp = _ambientHost && ChaosBubbleHostOverlay.IsReady
             && ChaosBubbleHostOverlay.CoversPoint(screen.Bounds.X + screen.Bounds.Width / 2.0,
                                                   screen.Bounds.Y + screen.Bounds.Height / 2.0);
-        return new Bubble(screen, _bubbleImage, _random, onPop: null, onMiss: OnMiss, onDestroy: OnDestroy,
+        return new Bubble(screen, sprite, _random, onPop: null, onMiss: OnMiss, onDestroy: OnDestroy,
                           isClickable: isClickable, spec: spec,
                           onBenignPop: b =>
                           {
@@ -1325,7 +1327,36 @@ public partial class BubbleService : IDisposable
                               OnFrothPopped(b);   // Super Froth: the parts it took in, then its ring
                           },
                           forceWindowMode: !hostUp, ambientTrigger: true,
-                          skin: BubbleCore.BubbleSkinChoice.Current());
+                          skin: skin);
+    }
+
+    private BitmapImage? _plainBubbleImage;
+
+    /// <summary>The picture a new ambient bubble draws on. Under the Locked mod the bubble art carries a
+    /// lock; a worn skin never draws over it, it takes the plain bubble instead
+    /// (<see cref="BubbleCore.BubbleSkinChoice.SkinTakesPlainBubble"/>). No skin worn = the mod's bubble.</summary>
+    private BitmapImage? SpriteForNewBubble(string skin)
+    {
+        try
+        {
+            var modId = App.Mods?.ActiveModId;
+            bool carriesLock = BubbleCore.BubbleSkinChoice.CarriesLock(modId,
+                modId == BubbleCore.BubbleSkinChoice.LockModId && ModResourceResolver.HasActiveModOverride("bubble.png"));
+            if (!BubbleCore.BubbleSkinChoice.SkinTakesPlainBubble(skin, carriesLock)) return _bubbleImage;
+            if (_plainBubbleImage == null)
+            {
+                var plain = new BitmapImage();
+                plain.BeginInit();
+                plain.UriSource = new Uri("pack://application:,,,/Resources/bubble.png", UriKind.Absolute);
+                plain.CacheOption = BitmapCacheOption.OnLoad;
+                plain.EndInit();
+                plain.Freeze();
+                _plainBubbleImage = plain;
+            }
+            return _plainBubbleImage;
+        }
+        catch (Exception ex) { Diag.Swallowed(ex, "plain bubble under a skin"); }
+        return _bubbleImage;
     }
 
     /// <summary>
