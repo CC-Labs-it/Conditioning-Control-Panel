@@ -28,6 +28,9 @@ public sealed class EmergencyExitBarkTests
     {
         await AvaloniaTestDispatcher.RunAsync(() => {
             var old = (BarkHead.Engine, CoreSettings.Current.AvatarEnabled);
+            var emi = ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskService.Instance;
+            var oldEngine = emi.LineEngine;
+            emi.LineEngine = ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.FromJson(System.IO.File.ReadAllText(System.IO.Path.Combine(AppContext.BaseDirectory, "Resources", "emi", "desk-lines.json")));
             var lines = new List<string>();
             using var ld = new LockdownService();
             try {
@@ -41,15 +44,19 @@ public sealed class EmergencyExitBarkTests
                 ld.Activate(TimeSpan.FromMinutes(30));
                 EmergencyExitWindow.Open(null, ld);
                 var window = Assert.IsType<EmergencyExitWindow>(EmergencyExitWindow.Current);
+                Assert.True(emi.LineEngine.HoldActive);
+                Assert.Null(emi.LineEngine.Draw("resized"));
                 var web = Assert.IsType<ConditioningControlPanel.Avalonia.Views.Controls.WebHost>(window.Content);
                 string? init = null;
                 web.ScriptInvoker = script => { init = script; return Task.FromResult<string?>(null); };
                 web.OnNavigationCompleted(web.Source!);
                 var line = Assert.Single(lines);
+                window.Close();
+                Assert.False(emi.LineEngine.HoldActive);
                 Assert.EndsWith(":1", line);
                 Assert.NotNull(init);
                 Assert.Contains("\"game\":\"" + line.Split(':')[0] + "\"", init);
-            } finally { EmergencyExitWindow.Current?.Close(); ld.Deactivate(); (BarkHead.Engine, CoreSettings.Current.AvatarEnabled) = old; }
+            } finally { EmergencyExitWindow.Current?.Close(); emi.LineEngine = oldEngine; ld.Deactivate(); (BarkHead.Engine, CoreSettings.Current.AvatarEnabled) = old; }
             return Task.CompletedTask;
         });
     }

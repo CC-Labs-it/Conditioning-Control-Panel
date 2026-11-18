@@ -68,6 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private readonly List<Surface> _surfaces = new();
         private readonly List<Window> _messages = new();
         private readonly List<Target> _targets = new();
+        private bool _attentionHoldArmed;
         private readonly List<(List<Target> Targets, AttentionToyButtonBinding Binding)> _toyBatches = new();
         private List<double> _spawnTimes = new();
         private MediaPlayer? _player;
@@ -1004,6 +1005,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 t.Move(dt);
             }
             ReleaseToyBatches();
+            if (_targets.Count == 0) ReleaseAttentionHold();
         }
 
         private void ReleaseToyBatches()
@@ -1035,6 +1037,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Scheduler.NoteHit();
                 foreach (var o in batch) { _targets.Remove(o); if (o != t) o.Remove(); }
                 t.FadeOut();
+                if (_targets.Count == 0) ReleaseAttentionHold();
                 ReleaseToyBatches();
                 Log.Information("ATTENTION: Hit {Hits}/{Spawned}", Scheduler.AttentionHits, Scheduler.AttentionSpawned);
             }
@@ -1046,10 +1049,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 batch.Add(t);
                 _targets.Add(t);
             }
+            if (batch.Count > 0)
+            {
+                _attentionHoldArmed = true;
+                Views.Windows.EmiDesk.EmiDeskService.Instance.Fire("attentionCheckShown");
+            }
             var binding = AttentionToyButtonBinding.Arm(CoreHaptics.Service,
                 () => batch.Any(t => _targets.Contains(t)),
                 () => Hit(batch.First(t => _targets.Contains(t))));
             if (binding != null) _toyBatches.Add((batch, binding));
+        }
+
+        private void ReleaseAttentionHold()
+        {
+            if (!_attentionHoldArmed) return;
+            _attentionHoldArmed = false;
+            Views.Windows.EmiDesk.EmiDeskService.Instance.LineEngine.ReleaseHold("attentionCheckShown");
         }
 
         internal static void PlayPop()
@@ -1332,6 +1347,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _graceTimer = _guard = null;
                 _spawnTimes.Clear();
                 _targets.Clear();
+                ReleaseAttentionHold();
                 ReleaseToyBatches();
                 // Stop joins the decoder thread, so after it no callback touches the frame buffer.
                 if (_playback != null)
