@@ -27,6 +27,8 @@ namespace ConditioningControlPanel.Services
         // half-written temp over settings.json (#761). Never taken while _timerLock is held,
         // and never held across the UI-thread serialize hop — both would deadlock the shutdown
         // path, where SaveImmediate runs ON the UI thread.
+        // Recovery must not remove a temp file another instance is publishing.
+        private static readonly object SettingsFilesLock = new();
         private readonly object _saveLock = new();
         private readonly object _timerLock = new();
         // Instances with an armed debounce. Product code only adds/removes; the test isolation hook
@@ -76,6 +78,7 @@ namespace ConditioningControlPanel.Services
 
         // Per-instance seam for deterministic lifecycle proofs; production keeps the 500ms default.
         internal int SaveDebounceDueTimeMilliseconds { get; set; } = 500;
+        internal Action? BeforeAtomicPublishForTests { get; set; }
 
         public AppSettings Current { get; private set; }
 
@@ -359,6 +362,7 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         private void RecoverAndCleanTempFiles()
         {
+            lock (SettingsFilesLock)
             try
             {
                 var dir = Path.GetDirectoryName(_settingsPath);
@@ -962,6 +966,7 @@ namespace ConditioningControlPanel.Services
                 Directory.CreateDirectory(Path.GetDirectoryName(_settingsPath)!);
 
                 lock (_saveLock)
+                lock (SettingsFilesLock)
                 {
                     // Sealed while this snapshot was being serialized: the reset owns the file now.
                     if (_sealed) return false;
@@ -993,6 +998,7 @@ namespace ConditioningControlPanel.Services
                             writer.Flush();
                             stream.Flush(true);
                         }
+                        BeforeAtomicPublishForTests?.Invoke();
                         PublishAtomicFile(tempPath);
                     }
                     catch
