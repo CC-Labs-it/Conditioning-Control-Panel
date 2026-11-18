@@ -46,19 +46,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private DateTime _openedUtc;
         /// <summary>The intake claim's slip delivery (tests await it).</summary>
         internal System.Threading.Tasks.Task SparklesPending { get; private set; } = System.Threading.Tasks.Task.CompletedTask;
-        internal WebHost Web { get; } = new();
+        internal WebHost Web { get; } = new() { HostedPageMotion = true };
         internal string SessionsFolder { get; init; } = SessionFileService.CustomSessionsFolder;
 
         /// <summary>The page this host loaded; messages from any other document are dropped.</summary>
         internal Uri? PageUrl { get; set; }
+
+        private WindowState? _pageWindowedState;
+
+        // WPF ChaosWebViewHost.cs:1661 routes page fullscreen through SetFullscreen: one window mode,
+        // so a page exit always leaves fullscreen, even one the host entered (then to a titled window).
+        private void SetPageFullscreen(bool on)
+        {
+            if (on == (WindowState == WindowState.FullScreen)) return;
+            var next = on ? WindowState.FullScreen : _pageWindowedState ?? WindowState.Normal;
+            _pageWindowedState = on ? WindowState : null;
+            WindowState = next;
+        }
 
         public IntakeHostWindow()
         {
             Title = "Graded Intake";   // WPF IntakeHostService.ProductName
             Width = 1280;
             Height = 800;
+            Web.EnvironmentRequested += Views.Games.GameWindow.ConfigureHostedPageMotion;
             Content = Web;
             Web.WindowsBrowserArguments = "--autoplay-policy=no-user-gesture-required";
+            Web.NativeFullscreenEntered += () => SetPageFullscreen(true);
+            Web.NativeFullscreenExited += () => SetPageFullscreen(false);
+            // The remembered mode belongs to a page-entered fullscreen only; any other exit drops it.
+            PropertyChanged += (_, e) => { if (e.Property == WindowStateProperty && WindowState != WindowState.FullScreen) _pageWindowedState = null; };
             Web.WebMessage += OnPageMessage;
             Web.BrowserProcessFailed += OnBrowserProcessFailed;
             // WPF DisposeAll: a closed window never leaves the mic open.
