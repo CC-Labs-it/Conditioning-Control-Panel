@@ -146,6 +146,7 @@
   "chaos_event_sin_bonus": "죄를 받아들임 (+{0:0.00}x)",
   "chaos_event_sin_shielded": "촛불이 불이익을 없앴다",
   "chaos_event_sin_resistance": "수락했다 (+1 저항)",
+  "chaos_announce_depth": "깊이 {0}",
   "chaos_announce_resist": "저항 +1",
   "chaos_first_sin_demo": "첫 번째 죄는 이번만 보호돼",
   "chaos_duo_demo": "금빛 카드야. 장난감들이 함께하는 법을 배웠어.",

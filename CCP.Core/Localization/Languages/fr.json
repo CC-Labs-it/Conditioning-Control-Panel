@@ -146,6 +146,7 @@
   "chaos_event_sin_bonus": "péché accepté (+{0:0.00}x)",
   "chaos_event_sin_shielded": "la bougie a retiré le revers",
   "chaos_event_sin_resistance": "vous avez dit oui (+1 résistance)",
+  "chaos_announce_depth": "PROFONDEUR {0}",
   "chaos_announce_resist": "+1 RÉSISTANCE",
   "chaos_first_sin_demo": "le premier péché est protégé cette fois",
   "chaos_duo_demo": "une carte dorée. tes jouets ont appris à travailler ensemble.",
