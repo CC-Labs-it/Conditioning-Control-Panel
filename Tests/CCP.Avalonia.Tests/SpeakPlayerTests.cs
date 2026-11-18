@@ -66,15 +66,22 @@ public class SpeakPlayerTests
             // The trunk player starts audio only after its waveform load (#4751), off the UI thread.
             for (int i = 0; i < 500 && !audio.Playing; i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
             Assert.True(audio.Playing);
+            // This test drives playback with Tick. Do not let the real 100 ms UI timer
+            // enter the replacement band at the old position while the queue is drained.
+            var uiTimer = (DispatcherTimer)typeof(EnhancementPlayerWindow).GetField("_uiTimer",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(player)!;
+            uiTimer.Stop();
             var enhancement = new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*", TimelineItems = {
                 new TimelineItem { Kind = TimelineItemKind.Effect, Start = 1, Duration = 3, EffectType = EffectTypes.Speak,
-                    EffectActivation = EffectActivation.Region, EffectSpeakTarget = "yes", EffectSpeakCueMode = SpeakCueMode.Intermittent } } };
+                    EffectActivation = EffectActivation.Region, EffectSpeakTarget = "yes", EffectSpeakCueMode = SpeakCueMode.Intermittent,
+                    EffectSpeakCueIntervalMs = 60_000 } } };
             player.LoadEnhancementFromMemory(enhancement, "test"); Tick(player); audio.PositionSeconds = 1.2; Tick(player);
             Dispatcher.UIThread.RunJobs();
             Assert.Single(cards); Assert.True(cards[0].IsVisible);
             SubliminalWhisperShow.DrawSpeak("queued feedback");
             player.LoadEnhancementFromMemory(enhancement, "replacement");
             Assert.False(cards[0].IsVisible);
+            await Task.Delay(250); // longer than the player timer, even on a slow runner
             Dispatcher.UIThread.RunJobs();
             Assert.Single(cards);
             audio.PositionSeconds = 0; Tick(player); audio.PositionSeconds = 1.2; Tick(player);

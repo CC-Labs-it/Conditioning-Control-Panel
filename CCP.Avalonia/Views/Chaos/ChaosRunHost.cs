@@ -224,6 +224,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _overlay.Show();
                 ChaosEffectBannerOverlay.EnsureCreated();   // WPF :410 birth the banner window NOW, not mid-chaos
                 Overlays.ChaosFieldFxOverlay.EnsureCreated();   // WPF ChaosModeService.cs:411
+                ChaosTunnelWindow.Open(preload: true);   // WPF ChaosModeService.cs:348
                 _overlay.ShowCountdown(BeginRun, shortFlash: isRestart);   // 1s flash on RunAgain
             }
             catch (Exception ex)
@@ -244,6 +245,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // With a panic already queued, start only after it has run: it usually ends the run, and
             // then nothing (boons, HUD, StartToys) ever starts. Background runs after the panic's Default.
             if (PanicWatchdog.PanicPending) { Dispatcher.UIThread.Post(BeginRun, DispatcherPriority.Background); return; }
+            ChaosTunnelWindow.Open();   // WPF ChaosModeService.cs:519-523
+            _state.PropertyChanged += OnTunnelStateChanged;
+            OnTunnelStateChanged(_state, new System.ComponentModel.PropertyChangedEventArgs(nameof(ChaosRunState.Combo)));
+            OnTunnelStateChanged(_state, new System.ComponentModel.PropertyChangedEventArgs(nameof(ChaosRunState.ActIndex)));
             _heavyUntilUtc = DateTime.MinValue;   // WPF ChaosModeService.cs:405
             HookRunVideo();   // WPF ChaosModeService.cs:504
             _runsAtStart = ChaosMeta.State.RunsCompleted; _draftsThisRun = 0;
@@ -551,8 +556,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         /// <summary>WPF CanChannelDefuse (:1927): the focus must cover the snap's cost (paid on completion).</summary>
-        private static bool CanChannelDefuse(AmbientBubble b) =>
-            _state != null && (_freezeRemainingSec > 0 || _state.Focus >= ChaosTuning.DEFUSE_COST);
+        private static bool CanChannelDefuse(AmbientBubble b)
+        {
+            if (b.Popping || b.Channeling || !b.IsLiveThreat) return false;
+            bool approved = _state != null && (_freezeRemainingSec > 0 || _state.Focus >= ChaosTuning.DEFUSE_COST);
+            if (approved) ChaosRunLessons.OnChannelStarted(BubbleOverlay.Field.Clock());
+            return approved;
+        }
 
         /// <summary>WPF OnDefused (:1984): the core snap (cost, counts, score, Drip Feed), the Snap
         /// Chain window, Playing with Fire's brink gold and the Pendulum's scoring window.</summary>
@@ -571,6 +581,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (_state.DefuseInvulnMs > 0) _invulnUntilUtc = BubbleOverlay.Field.Clock().AddMilliseconds(_state.DefuseInvulnMs);   // WPF :2000
             CountRegenPop();   // WPF ChaosModeService :2001
             FirstTime(ChaosFirstTimes.Snap);
+            if (b.DefusedViaChannel) ChaosRunLessons.OnChannelEnded(BubbleOverlay.Field.Clock());
             ChaosRunLessons.OnDefuseCompleted(fuseSecLeft, b.DefusedViaChannel);
             var (pts, lastBreath, slowburn) = ChaosFieldMath.ApplyDefuse(_state, spec, fuseSecLeft,
                 b.DefusedViaChannel, free: _freezeRemainingSec > 0, pendulum: PendulumMultiplier, ChaosFieldMath.ChanceFlip(_state, Rng));
@@ -604,7 +615,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (slowburn > 1) _state.PushEvent("🐌 slow burn! x3");
             _state.PushEvent($"✔ snapped {spec.Payload.DisplayName}");
             CheckComboMilestone();
-            // ponytail: slow_fuses/blindfold lessons and
+            // ponytail: blindfold lesson and
             // the brink narrative -> chaos-payout-fallin-d; the defuse barks -> chaos-payout-barks.
         }
 
@@ -614,6 +625,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             var spec = b.Spec;
             if (_state == null || spec == null || _manualPaused || _lessonCardPaused) return;
+            if (b.BrokenReason is "click" or "release" or "nofocus")
+                ChaosRunLessons.OnChannelEnded(BubbleOverlay.Field.Clock());
             switch (b.BrokenReason)
             {
                 case "nofocus":   // WPF OnPlayerPress :4502 + OnChannelBroken :1943
@@ -781,6 +794,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 "+" + ((long)pts).ToString("N0"), Color.FromRgb(0xFF, 0xE9, 0xA0));
         }
 
+        private static void OnTunnelStateChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            var state = _state;
+            var tunnel = ChaosTunnelWindow.Active;
+            if (state == null || tunnel == null) return;
+            if (e.PropertyName == nameof(ChaosRunState.Combo))
+                tunnel.Post(new { type = "streak", combo = state.Combo, mult = state.ComboMult });
+            else if (e.PropertyName == nameof(ChaosRunState.ActIndex))
+                tunnel.Post(new { type = "zone-hint", depth = state.ActIndex, intensity = Math.Min(1.0, (state.ActIndex - 1) / 5.0) });
+        }
+
         private static DateTime _heavyUntilUtc = DateTime.MinValue;
         private static DateTime _videoQuarantineUntilUtc = DateTime.MinValue;
         private static MandatoryVideoScheduler? _runVideo;
@@ -805,11 +829,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
         }
 
-        private static void OnVideoStartedDuringRun() => _videoGuard?.Started();
+        private static void OnVideoStartedDuringRun()
+        {
+            _videoGuard?.Started();
+            TunnelVideo(true);
+        }
+
+        internal static void TunnelVideo(bool on)
+        {
+            var tunnel = ChaosTunnelWindow.Active;
+            if (Dispatcher.UIThread.CheckAccess()) tunnel?.SetVideoPlaying(on);
+            else Dispatcher.UIThread.Post(() => { if (ChaosTunnelWindow.Active == tunnel) tunnel?.SetVideoPlaying(on); });
+        }
 
         internal static void OnVideoEndedDuringRun()
         {
             _videoGuard?.Ended();
+            TunnelVideo(false);
             var until = BubbleOverlay.Field.Clock().AddSeconds(3);
             if (until > _heavyUntilUtc) _heavyUntilUtc = until;
             if (until > _videoQuarantineUntilUtc) _videoQuarantineUntilUtc = until;
@@ -1301,6 +1337,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         public static void ForceShutdown()
         {
             CloseLoadoutSidebar();
+            ChaosTunnelWindow.CloseActive();
             ChaosUnlockCardOverlay.CloseActive();
             ChaosAnnouncerOverlay.CloseActive();   // WPF :3177; also clears a queue left by an idle caller
             ChaosCursorGlowOverlay.CloseActive();   // WPF ForceShutdown :3183
@@ -1572,7 +1609,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void RunAgain()
         {
             _overlay?.Close();   // OnOverlayClosed -> CleanupAfterRun
-            Dispatcher.UIThread.Post(() => StartRun(isRestart: true));
+            _active = true;   // pending restart; panic clears it before the posted callback
+            Dispatcher.UIThread.Post(() => { if (_active && _state == null) { _active = false; StartRun(isRestart: true); } });
         }
 
         private static void OnOverlayClosed()
@@ -1613,6 +1651,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _runTimer = null;
             _hud = null;
             _overlay = null;
+            if (_state != null) _state.PropertyChanged -= OnTunnelStateChanged;
+            ChaosTunnelWindow.EndActive();
             _state = null;
             UnhookRunVideo();   // WPF CleanupAfterRun :3318
             _heavyUntilUtc = DateTime.MinValue;
