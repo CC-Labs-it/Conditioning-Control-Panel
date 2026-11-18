@@ -1,6 +1,7 @@
 using System;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.GoonGame;
+using ConditioningControlPanel.Services.Transfer;
 using Newtonsoft.Json.Linq;
 
 namespace ConditioningControlPanel.Avalonia.Views.Games;
@@ -18,6 +19,7 @@ internal sealed partial class GameWindow
     private void StartGoonWatch()
     {
         _goonBeat = _goonPaintMove = _goonTick = GoonUtcNow();
+        GoonCacheBridge.Attach(PostGoonCache);
         _goonWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(GoonHostRules.WatchIntervalSeconds) };
         _goonWatch.Tick += (_, _) => CheckGoonWatch(GoonUtcNow());
         _goonWatch.Start();
@@ -28,6 +30,12 @@ internal sealed partial class GameWindow
         if (HandleGoonInbox(message)) { handled = true; return; }
         switch ((string?)message["type"])
         {
+            case "cache-req":
+            case "cache-put":
+            case "encode-done":
+                if (!_closing) GoonCacheBridge.OnMessage(message);
+                handled = true;
+                break;
             case "ready":
                 BootGoonInbox();
                 _goonBeat = _goonPaintMove = _goonTick = GoonUtcNow();
@@ -75,8 +83,16 @@ internal sealed partial class GameWindow
         if (next != null) _goonRetried = next._goonRetried = true;
     }
 
+    private void PostGoonCache(object frame) => Dispatcher.UIThread.Post(() =>
+    {
+        if (!_closing) Post(frame);
+    });
+
     private void StopGoonWatch()
     {
+        // WPF GoonHostService.cs:2113-2118: a closed match must not strand the queue.
+        try { GoonCacheBridge.Detach(); } catch (Exception ex) { Diag.Swallowed(ex); }
+        try { TransferCompressionService.Instance.ResumeAfterMatch(); } catch (Exception ex) { Diag.Swallowed(ex); }
         _goonWatch?.Stop();
         _goonWatch = null;
     }
