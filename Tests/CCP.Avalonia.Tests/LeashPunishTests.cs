@@ -53,24 +53,27 @@ public sealed class LeashPunishTests
     [Fact]
     public void RefusedClose_PlaysDenied() => Run((shell, launcher, svc, host, runner) =>
     {
-        var (play, art, muted, rules, volume) = (CoreAudio.PlayOneShotProvider, CoreModArt.AudioOverridePathProvider, CoreAudio.IsOutputSuppressedProvider, LeashSound.Rules, CoreSettings.Current.MasterVolume);
+        var (play, stoppable, art, muted, rules, volume) = (CoreAudio.PlayOneShotProvider, CoreAudio.PlayStoppableProvider, CoreModArt.AudioOverridePathProvider, CoreAudio.IsOutputSuppressedProvider, LeashSound.Rules, CoreSettings.Current.MasterVolume);
         var file = Path.GetTempFileName();
-        string? cue = null;
+        string? cue = null; var oneShots = 0;
         try
         {
             CoreSettings.Current.MasterVolume = 50;
-            CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => cue = tag;
+            // Restack r2-b016: one cue per refusal, the stoppable one, so close and panic can cut it.
+            CoreAudio.PlayOneShotProvider = (_, _, _, _, _) => oneShots++;
+            CoreAudio.PlayStoppableProvider = (_, _, tag, _, _) => { cue = tag; return () => { }; };
             CoreModArt.AudioOverridePathProvider = _ => file;
             CoreAudio.IsOutputSuppressedProvider = () => false;
             LeashSound.Rules = new LeashSfxRules();
             Assert.True(LeashPunishWindow.OpenUrl("https://example.com", "holder", true));
             LeashPunishWindow.Current!.Refuse();
             Assert.Equal("leash-denied", cue);
+            Assert.Equal(0, oneShots);
         }
         finally
         {
             LeashPunishWindow.CloseNow();
-            (CoreAudio.PlayOneShotProvider, CoreModArt.AudioOverridePathProvider, CoreAudio.IsOutputSuppressedProvider, LeashSound.Rules, CoreSettings.Current.MasterVolume) = (play, art, muted, rules, volume);
+            (CoreAudio.PlayOneShotProvider, CoreAudio.PlayStoppableProvider, CoreModArt.AudioOverridePathProvider, CoreAudio.IsOutputSuppressedProvider, LeashSound.Rules, CoreSettings.Current.MasterVolume) = (play, stoppable, art, muted, rules, volume);
             File.Delete(file);
         }
     });

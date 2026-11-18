@@ -5,7 +5,6 @@
 // injection); messages ride the engine's invokeCSharpAction string carrier (same 'leash-ended'/'leash-error'); a local
 // file plays from a page written under the user data; no HTTP status, so only no engine or a media error fail it.
 using System;
-using ConditioningControlPanel.Avalonia.Platform;
 using System.IO;
 using System.Net;
 using Avalonia;
@@ -280,7 +279,6 @@ internal sealed class LeashPunishWindow : Window
     /// <summary>A close on a punishment: the window shakes and the head says whose it is, for a few seconds.</summary>
     internal void Refuse()
     {
-        LeashSound.Denied(DateTime.UtcNow);
         _title.Text = Loc.GetF("leash_punish_no_close", _holder);
         (_title.Foreground, _hint.Foreground) = (F.Gold, F.Gold);
         _refuseTimer?.Stop();
