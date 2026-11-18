@@ -1,0 +1,6 @@
+a small round after your first night with 7.3.1.
+
+- bubble skins under Circe's Lock: a skin you wear shows on a plain bubble now, with no lock drawn over it. with no skin worn, the lock bubbles stay as they were.
+- the picture that washes over the screen when a glitch bubble pops is sized for each monitor, not stretched across all of them.
+- takeover web videos: two more cases where fullscreen was lost are fixed. one was a video that starts late, the other a video started while someone holds your remote.
+- the shop shows Emi as the example face inside profile frames.

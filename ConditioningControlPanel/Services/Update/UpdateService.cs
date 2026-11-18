@@ -20,15 +20,24 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.3.1";
+        public const string AppVersion = "7.3.2";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.3.1 - Back to the basics
+        public const string CurrentPatchNotes = @"v7.3.2 - Back to the basics
 
-NEW IN 7.3.1
+NEW IN 7.3.2
+
+a small round after your first night with 7.3.1.
+
+- bubble skins under Circe's Lock: a skin you wear shows on a plain bubble now, with no lock drawn over it. with no skin worn, the lock bubbles stay as they were.
+- the picture that washes over the screen when a glitch bubble pops is sized for each monitor, not stretched across all of them.
+- takeover web videos: two more cases where fullscreen was lost are fixed. one was a video that starts late, the other a video started while someone holds your remote.
+- the shop shows Emi as the example face inside profile frames.
+
+FROM 7.3.1
 
 7.3.0 gave the basics a V2. this one gives them a wardrobe, and fixes what you told us about the V2s.
 
@@ -122,7 +131,7 @@ FIXES
 - Deeper: fixed a crash while a library file was being read.
 - Piece by Piece: a press that does not move is a click, the lit square is the one a click plays, and an arrow no longer stays stuck after a lost right release.
 
-this is a pre-release. it carries everything in 7.3.0 and 7.2.4.";
+this is a pre-release. it carries everything in 7.3.1, 7.3.0 and 7.2.4.";
 
         private const string GitHubOwner = "CC-Labs-it";
         private const string GitHubRepo = "Conditioning-Control-Panel";
