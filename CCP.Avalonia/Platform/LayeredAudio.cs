@@ -179,7 +179,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 public GainWorker Gain = null!;
             }
 
-            private readonly LibVLC _vlc;
+            private readonly Func<LibVLC> _engine;   // per copy: a retired shared engine is not reused
             private readonly string _path;
             private readonly object _gate = new();
             private readonly List<Copy> _live = new();
@@ -204,9 +204,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
             /// <param name="initialVolume">Known before playback for layers; null leaves a drone muted
             /// until its first volume is supplied.</param>
             public VlcLayerPlayer(LibVLC vlc, string path, int? initialVolume = null, TimeProvider? time = null)
+                : this(() => vlc, path, initialVolume, time) { }
+
+            public VlcLayerPlayer(Func<LibVLC> engine, string path, int? initialVolume = null, TimeProvider? time = null)
             {
                 _time = time ?? TimeProvider.System;
-                _vlc = vlc;
+                _engine = engine;
                 _path = path;
                 _volume = new GainFence(initialVolume.GetValueOrDefault());
                 _volumeConfigured = initialVolume.HasValue;
@@ -220,7 +223,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 lock (_gate)
                 {
                     if (_disposed || _newest != after) return;
-                    var media = new Media(_vlc, _path, FromType.FromPath);
+                    Media media;
+                    // Retry acquisition even when no copy remains to signal an end.
+                    try { media = new Media(_engine(), _path, FromType.FromPath); }
+                    catch (Exception ex)
+                    {
+                        Log.Debug(ex, "LayeredAudio: next pass"); _timerFor = after;
+                        (_next ??= _time.CreateTimer(_ => { Copy? f; lock (_gate) f = _timerFor; StartCopy(f); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan)).Change(TimeSpan.FromSeconds(1), Timeout.InfiniteTimeSpan);
+                        return;
+                    }
                     media.AddOption(LibVlcAudio.NoVideo);
                     c = new Copy(new MediaPlayer(media), media);
                     // As in LibVlcAudio: volume set before Playing, or on libvlc's own thread, is lost.
@@ -282,7 +293,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     if (due > 0)
                     {
                         _timerFor = c;
-                        (_next ??= _time.CreateTimer(_ => { Copy? f; lock (_gate) f = _timerFor; if (f != null) StartCopy(f); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan))
+                        (_next ??= _time.CreateTimer(_ => { Copy? f; lock (_gate) f = _timerFor; StartCopy(f); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan))
                             .Change(TimeSpan.FromMilliseconds(due), Timeout.InfiniteTimeSpan);
                         return;
                     }

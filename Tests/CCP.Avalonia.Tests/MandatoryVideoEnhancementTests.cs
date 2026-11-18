@@ -60,6 +60,15 @@ public class MandatoryVideoEnhancementTests
         }
     });
 
+    private static void WaitForPlayback(MandatoryVideoOverlay overlay)
+    {
+        Assert.True(SpinWait.SpinUntil(() =>
+        {
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            return overlay.PlaybackActive;
+        }, TimeSpan.FromSeconds(3)), "Playback did not start");
+    }
+
     [Fact]
     public void SidecarBindsOnlyWhenEnabledAndStopsOnEveryCleanup() => WithClip((overlay, path, clock, recorder, _) =>
     {
@@ -73,6 +82,7 @@ public class MandatoryVideoEnhancementTests
         CoreSettings.Current.VideoEnhanceIfPossible = true;
         Assert.True(overlay.Scheduler.Trigger(strictOverride: false, path: path));
         clock.Fire(); // pre-roll completes and starts the fake decoder
+        WaitForPlayback(overlay);
         Assert.True(overlay.EnhancementRunning);
         overlay.ReportPlaybackTime(1500);
         Assert.Equal(1, recorder.Fired);
@@ -81,6 +91,7 @@ public class MandatoryVideoEnhancementTests
         Assert.Equal(1, recorder.Fired);
 
         overlay.Show(path, false);
+        WaitForPlayback(overlay);
         overlay.ReportPlaybackTime(1500);
         Assert.Equal(2, recorder.Fired);
         overlay.Scheduler.Stop(); // what CoreEngine.Stop (CoreEngine.cs:94) runs on Stop and panic
@@ -89,6 +100,7 @@ public class MandatoryVideoEnhancementTests
 
         EnhancementHostService.DispatcherFactory = null;
         overlay.Show(path, false);
+        WaitForPlayback(overlay);
         Assert.False(overlay.EnhancementRunning);
         overlay.ReportPlaybackTime(1500);
         Assert.Equal(2, recorder.Fired);
@@ -107,6 +119,7 @@ public class MandatoryVideoEnhancementTests
             start = wall.GetUtcNow();
             Assert.True(overlay.Scheduler.Trigger(strictOverride: false, path: path));
             clock.Fire();
+            WaitForPlayback(overlay);
             Assert.Equal(enhance, overlay.EnhancementRunning);
         }
         bool At(double seconds, long ms)
