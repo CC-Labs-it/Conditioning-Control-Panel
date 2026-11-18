@@ -289,6 +289,27 @@ public sealed class SessionRunnerTests : IDisposable
         Assert.InRange(LockCardScheduler.Instance.LastWindowMinutes ?? -1, 1.49, 1.5);
     }
 
+    [Fact]   // WPF SessionEngine.cs:246, :310, :512, :604, :667, :730: the lifecycle the companion barks hear
+    public void LifecycleEventsFollowWpfSessionEngine()
+    {
+        var session = OneMinute();
+        session.DurationMinutes = 2;
+        session.Phases.Add(new SessionPhase { StartMinute = 0, Name = "Intro" });
+        session.Phases.Add(new SessionPhase { StartMinute = 1, Name = "Deep" });
+        var seen = new System.Collections.Generic.List<string>();
+        _runner.Started += () => seen.Add("started");
+        _runner.PhaseChanged += i => seen.Add("phase" + i);
+        _runner.Progressed += () => seen.Add("progress");
+        _runner.Paused += n => seen.Add("paused" + n);
+        _runner.Resumed += gap => seen.Add(gap >= TimeSpan.Zero ? "resumed" : "negative");
+        _runner.Start(session);
+        _runner.Tick(TimeSpan.FromSeconds(30));
+        _runner.Pause();
+        _runner.Resume();
+        _runner.Tick(TimeSpan.FromSeconds(61));
+        Assert.Equal(new[] { "started", "phase0", "progress", "paused1", "resumed", "phase1", "progress" }, seen);
+    }
+
     [Fact]
     public void PauseAndResumeRepaintEvenWhileTheTimerIsHeld()
     {

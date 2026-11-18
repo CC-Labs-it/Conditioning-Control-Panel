@@ -757,7 +757,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// owner is only set when there is a real TopLevel, because the render harness hosts this
         /// view without a Window.
         /// </summary>
-        private void BtnMediaLog_Click(object? sender, RoutedEventArgs e)
+        private void BtnMediaLog_Click(object? sender, RoutedEventArgs e) => OpenMediaLog();
+
+        internal void OpenMediaLog()
         {
             try
             {

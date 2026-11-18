@@ -266,6 +266,94 @@ public sealed class CompanionBarkHeadTests
         finally { BarkHead.Stop(); }
     });
 
+    // WPF BarkService.cs:956-1003: the session runner's events raise the session barks, with the WPF context and
+    // live reads, and Stop detaches them.
+    [Theory]
+    [InlineData("Started", "SessionStarted", null, null)]
+    [InlineData("Stopped", "SessionStopped", null, null)]
+    [InlineData("Completed", "SessionCompleted", null, null)]
+    [InlineData("PhaseChanged", "SessionPhaseChanged", "phase_is_deepener", true)]
+    [InlineData("Progressed", "SessionProgress", "session_elapsed_sec_lt", 1)]
+    [InlineData("Paused", "SessionPaused", "pause_n_eq", 2)]
+    [InlineData("Resumed", "SessionResumed", "paused_sec_gte", 30)]
+    public void SessionEventsRaiseTheirBarksAndStopDetaches(string source, string trigger, string? key, object? value) => WithSeamsRestored(_ =>
+    {
+        BarkHead.Stop();
+        var old = (App.Sessions, CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider);
+        var phaseField = typeof(BarkHead).GetField("_phaseName", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var oldPhase = phaseField.GetValue(null);
+        var runner = App.Sessions = new ConditioningControlPanel.Services.SessionRunner(new ConditioningControlPanel.Services.SessionLogService());
+        typeof(ConditioningControlPanel.Services.SessionRunner).GetProperty("CurrentSession")!.SetValue(runner, new ConditioningControlPanel.Models.Session
+            { Phases = { new() { Name = "Intro" }, new() { Name = "Deepener" } } });
+        var rule = Rule(trigger, "reacted", key is null ? null : (key, value!));
+        rule.ClassRaw = "safety";
+        var e = Seeded(rule, out var spoken);
+        int count = 0;
+        e.BarkSpoken += (_, _) => count++;
+        var name = source == "Completed" ? "Stopped" : source;
+        var field = typeof(ConditioningControlPanel.Services.SessionRunner).GetField(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        object?[] args = source switch
+        {
+            "Stopped" or "Completed" => new object?[] { new ConditioningControlPanel.Models.Session(), source == "Completed" },
+            "PhaseChanged" => new object?[] { 1 },
+            "Paused" => new object?[] { 2 },
+            "Resumed" => new object?[] { System.TimeSpan.FromSeconds(45) },
+            _ => System.Array.Empty<object?>(),
+        };
+        try
+        {
+            BarkHead.WireSources(e);
+            ((System.Delegate?)field.GetValue(runner))?.DynamicInvoke(args);
+            Assert.Equal("reacted", spoken());
+            Assert.Equal(1, count);
+            BarkHead.Stop();
+            e.ReloadRules();
+            ((System.Delegate?)field.GetValue(runner))?.DynamicInvoke(args);
+            Assert.Equal(1, count);
+        }
+        finally
+        {
+            BarkHead.Stop();
+            phaseField.SetValue(null, oldPhase);
+            (App.Sessions, CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider) = old;
+        }
+    });
+
+    [Fact]   // WPF ResolveField :1428-1482 over BarkState.cs:26-28, :139-147: live reads, zeroed once the session is not running
+    public void SessionConditionsReadTheRunnerLive() => WithSeamsRestored(_ =>
+    {
+        BarkHead.Stop();
+        var old = (App.Sessions, CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider);
+        var phaseField = typeof(BarkHead).GetField("_phaseName", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var oldPhase = phaseField.GetValue(null);
+        var type = typeof(ConditioningControlPanel.Services.SessionRunner);
+        var runner = App.Sessions = new ConditioningControlPanel.Services.SessionRunner(new ConditioningControlPanel.Services.SessionLogService());
+        type.GetProperty("CurrentSession")!.SetValue(runner, new ConditioningControlPanel.Models.Session
+            { DurationMinutes = 20, Phases = { new() { Name = "Intro" }, new() { Name = "Deepener" } } });
+        var e = Seeded(Rule("Idle", "unused"), out var unused);
+        BarkRule Live(params (string, object)[] c) => new() { Conditions = c.ToDictionary(x => x.Item1, x => x.Item2) };
+        try
+        {
+            BarkHead.WireSources(e);
+            foreach (var (p, v) in new (string, object)[] { ("IsRunning", true), ("CurrentPhaseIndex", 1), ("PauseCount", 3) })
+                type.GetProperty(p)!.SetValue(runner, v);
+            ((System.Delegate?)type.GetField("PhaseChanged", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(runner))!.DynamicInvoke(1);
+            var running = Live(("phase_name", "Deepener"), ("phase_is_deepener", true), ("session_phase_index", 1),
+                ("pauses_this_session", 3), ("session_planned_min", 20), ("session_elapsed_sec_gte", 0));
+            Assert.True(e.ConditionsPass(running, new BarkContext("Idle")));
+            type.GetProperty("IsRunning")!.SetValue(runner, false);
+            Assert.False(e.ConditionsPass(running, new BarkContext("Idle")));
+            Assert.True(e.ConditionsPass(Live(("pauses_this_session", 0), ("session_phase_index", -1), ("phase_is_deepener", true)),
+                new BarkContext("Idle")));
+        }
+        finally
+        {
+            BarkHead.Stop();
+            phaseField.SetValue(null, oldPhase);
+            (App.Sessions, CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider) = old;
+        }
+    });
+
     [Theory]
     [InlineData("QuestsRefreshed", "QuestsRefreshed")]
     [InlineData("QuestCompleted", "QuestCompleted")]

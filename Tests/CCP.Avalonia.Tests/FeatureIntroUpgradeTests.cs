@@ -21,6 +21,60 @@ namespace CCP.Avalonia.Tests;
 public sealed class FeatureIntroUpgradeTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RunRestoresPatchNotesProvider(bool bodyThrows)
+    {
+        var original = CoreReleaseContent.PatchNotesProvider;
+        Func<string?> sentinel = () => "original notes";
+        CoreReleaseContent.PatchNotesProvider = sentinel;
+        try
+        {
+            async Task Exercise() => await Run("old-version", _ =>
+            {
+                CoreReleaseContent.PatchNotesProvider = () => "";
+                if (bodyThrows) throw new InvalidOperationException("test cleanup");
+                return Task.CompletedTask;
+            });
+            if (bodyThrows) await Assert.ThrowsAsync<InvalidOperationException>(Exercise);
+            else await Exercise();
+            Assert.Same(sentinel, CoreReleaseContent.PatchNotesProvider);
+        }
+        finally { CoreReleaseContent.PatchNotesProvider = original; }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task VersionBumpFiresBeforeStampEvenWithoutNotes(bool blankNotes) => Run("old-version", async shell =>
+    {
+        var calls = new List<(string moment, object? context, string seen)>();
+        shell.UpgradeFire = (moment, context) => calls.Add((moment, context, CoreSettings.Current.LastSeenVersion));
+        if (blankNotes) CoreReleaseContent.PatchNotesProvider = () => "";
+        var showing = shell.ShowWhatsNewIfNeeded();
+        var call = Assert.Single(calls);
+        Assert.Equal("afterUpdate", call.moment);
+        Assert.Equal(CoreReleaseContent.AppVersion, call.context!.GetType().GetProperty("target")!.GetValue(call.context));
+        Assert.Equal("old-version", call.seen);
+        await Step(); // the notes wait their priority 30 turn on the ladder
+        foreach (var dialog in shell.OwnedWindows.OfType<WhatsNewDialog>().ToArray()) dialog.Close();
+        await showing;
+        await shell.ShowWhatsNewIfNeeded();
+        Assert.Single(calls);
+    });
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(null)]
+    public Task FreshAndCurrentDoNotFireAfterUpdate(string? previous) => Run(previous, async shell =>
+    {
+        var calls = 0;
+        shell.UpgradeFire = (_, _) => calls++;
+        await shell.ShowWhatsNewIfNeeded();
+        Assert.Equal(0, calls);
+    });
+
+    [Theory]
     [InlineData("")]
     [InlineData(null)]
     public Task FreshAndCurrentVersionsStaySilent(string? previous) => Run(previous, async shell =>
@@ -445,6 +499,7 @@ public sealed class FeatureIntroUpgradeTests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
         LocalizationManager.Instance.SetLanguage("en");
+        var oldPatchNotesProvider = CoreReleaseContent.PatchNotesProvider;
         CoreReleaseContent.PatchNotesProvider = () => $"v{CoreReleaseContent.AppVersion} - Test notes";
         var old = CoreSettings.ServiceProvider;
         var service = new SettingsService();
@@ -460,6 +515,7 @@ public sealed class FeatureIntroUpgradeTests
         FeatureIntroPopup.ResetForTests();
         var shell = new MainShellWindow();
         if (detachStartup) shell.Opened -= shell.OnUpgradeShellOpened;
+        shell.UpgradeFire = (_, _) => { }; // never reach the shared EMI Desk; the afterUpdate tests set their own
         StartupLadder.ModalWindowReady = () => shell.IsVisible;
         // The initialized headless app forbids the lifetime setter; restore its backing field below.
         var lifetimeField = typeof(Application).GetField("_applicationLifetime", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
@@ -475,6 +531,7 @@ public sealed class FeatureIntroUpgradeTests
             MainShellWindow.IsStartupDialogShowing = false;
             service.SaveImmediate();
             CoreSettings.ServiceProvider = old;
+            CoreReleaseContent.PatchNotesProvider = oldPatchNotesProvider;
             LocalizationManager.Instance.SetLanguage(oldLanguage);
             StartupLadder.ResetForTests();
             FeatureIntroPopup.ResetForTests();
