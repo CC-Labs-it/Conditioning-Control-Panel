@@ -58,9 +58,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// </summary>
     public partial class LockCardWindow : Window
     {
-        // ponytail: needs ConditioningControlPanel/Services/LockCard/LockCardService.cs, which is
-        // pinned to the head by App.* and the WPF window itself. Placeholder card so the render
-        // (and any manual run) shows the real layout with real strings.
+        // Sample card for the headless render; live cards are scheduled by CoreLockCard.
         private const int SampleRepeats = 3;
 
         /// <summary>

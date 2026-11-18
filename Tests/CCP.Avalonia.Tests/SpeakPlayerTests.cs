@@ -47,9 +47,10 @@ public class SpeakPlayerTests
         System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(o, args);
     private static void Tick(EnhancementPlayerWindow p) => Call(p, "UiTimer_Tick", null, EventArgs.Empty);
     private static SpeakPromptRuntime Runtime(Func<string, RecognizeOptions, CancellationToken, Task<PhraseResult>> listen,
-        Action? stopListening = null, Action<string>? show = null, Action? hide = null, Action<string>? flash = null) =>
+        Action? stopListening = null, Action<string>? show = null, Action? hide = null, Action<string>? flash = null,
+        Func<TimeSpan, Action, Action>? startCueTimer = null) =>
         new(() => true, () => true, () => Task.FromResult(true), () => false, () => { }, () => { }, () => false,
-            listen, stopListening ?? (() => { }), show ?? (_ => { }), hide ?? (() => { }), flash);
+            listen, stopListening ?? (() => { }), show ?? (_ => { }), hide ?? (() => { }), flash, startCueTimer);
 
     [Fact]
     public Task ReplacementRetiresQueuedAndDisplayedSpeakCards() => AvaloniaTestDispatcher.RunAsync(async () =>
@@ -59,7 +60,10 @@ public class SpeakPlayerTests
         var player = new EnhancementPlayerWindow(null, null);
         var cards = new System.Collections.Generic.List<SubliminalOverlayWindow>();
         SubliminalWhisperShow.DrawNow = text => { SubliminalOverlay.CloseAll(); var card = new SubliminalOverlayWindow(text); cards.Add(card); SubliminalOverlay.Present(card); };
-        player.SpeakSessionFactory = Runtime(async (_, _, ct) => { await Task.Delay(Timeout.Infinite, ct); return PhraseResult.NotAvailable; }).CreateSession;
+        // Suppress repeated cues: a busy dispatcher can otherwise
+        // fire the real 250 ms timer before the first card-count assertion.
+        player.SpeakSessionFactory = Runtime(async (_, _, ct) => { await Task.Delay(Timeout.Infinite, ct); return PhraseResult.NotAvailable; },
+            startCueTimer: (_, _) => () => { }).CreateSession;
         try
         {
             player.Show(); player.OpenLocalMediaFile(media.Path);

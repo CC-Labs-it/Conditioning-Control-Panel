@@ -38,8 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para>Chaos runs share the field: ChaosRunHost spawns treat bubbles here (BeginChaos/
     /// SpawnChaos/EndChaos) and gets their pops; they draw tinted and pay no ambient XP.</para>
     ///
-    /// <para>ponytail: Bubbles v2 motions (Rain/Spiral In),
-    /// Brain Drain, Natasha's red bubble, the avatar egg
+    /// <para>ponytail: Natasha's red bubble, the avatar egg
     /// and the milestone popup remain unported. The lucky gold glow is wired (LuckyGlow).
     /// Gaze pops, pop sparkles, pop haptics, mod pop audio and achievement credit are wired.
     /// See the feat-bubble-pop ledger row for the current parity evidence.</para>
