@@ -245,7 +245,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (!recovery && CoreSettings.Current.IntakeFullscreen) intake.WindowState = WindowState.FullScreen;
             intake.Relaunch = () => OpenIntake(owner, duckMain, recovery: true);
             intake.Drafted += (session, path) => OnSessionDrafted(shell, session, path);
-            try { LoadAndShowIntake(intake); }
+            try
+            {
+                LoadAndShowIntake(intake);
+                if (owner != null) intake.AttachIntakeOwner(owner);
+            }
             catch { intake.Close(); emi.EndIntake(); throw; }
             return intake;
         }
