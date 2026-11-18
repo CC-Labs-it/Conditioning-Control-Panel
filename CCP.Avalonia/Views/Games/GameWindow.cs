@@ -317,7 +317,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (Spec.Id == PrizeCounterId) { HandleCounter(o); return; }   // the counter speaks only its own seam (CONTRACT.md)
             if (Spec.Id == PbpId && HandlePbp(o)) return;
             if (IsRace && HandleRace(o)) return;
-            if (IsDtrh && HandleDtrh(o)) return;
+            if (IsDtrh && (ObserveDtrhVoice(o) || HandleDtrh(o))) return;
             if (IsGlassroad && HandleGlassroad(o)) return;
             switch ((string?)o["type"])
             {
