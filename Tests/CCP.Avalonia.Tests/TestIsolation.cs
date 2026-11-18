@@ -176,6 +176,7 @@ internal sealed class ProcessStateSnapshot
     private readonly List<(MemberInfo Member, object? Value)> _statics = new();
     private readonly List<(AppSettings Settings, string Json)> _settings = new();
     private readonly Dictionary<string, byte[]> _files = new();
+    private Action? _restoreSuperTierEvents;
 
     private static readonly JsonSerializerSettings Json = new()
     {
@@ -187,6 +188,7 @@ internal sealed class ProcessStateSnapshot
     /// Reattach the intake pass to the original providers without reading the secret store.</summary>
     internal static Action CaptureAccountSeed()
     {
+        var restoreSuper = AccountSeed.CaptureSuperTierEvents();
         var p = ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon;
         var ss = ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar;
         var discord = ConditioningControlPanel.Avalonia.Platform.AccountSeed.Discord;
@@ -200,6 +202,7 @@ internal sealed class ProcessStateSnapshot
         var recovery = (ConditioningControlPanel.Services.AuthRecovery.Recovered, ConditioningControlPanel.Services.AuthRecovery.ProviderRevalidate);
         return () =>
         {
+            restoreSuper();
             // Seed detached the intake listener from the old pair. Put it back on that pair.
             ConditioningControlPanel.Avalonia.App.IntakePass.AttachEntitlementSources(
                 h => { if (p != null) p.TierChanged += h; if (ss != null) ss.TierChanged += h; },
@@ -223,6 +226,7 @@ internal sealed class ProcessStateSnapshot
     internal static ProcessStateSnapshot Take(bool repairLateWrites = true)
     {
         var s = new ProcessStateSnapshot();
+        s._restoreSuperTierEvents = AccountSeed.CaptureSuperTierEvents();
         foreach (var m in Members.Value) s._statics.Add((m, Get(m)));
         foreach (var settings in new[] { CoreSettings.Current, FallbackSettings() }.Distinct())
             s._settings.Add((settings, JsonConvert.SerializeObject(settings, Json)));
@@ -235,6 +239,7 @@ internal sealed class ProcessStateSnapshot
 
     internal void Restore()
     {
+        _restoreSuperTierEvents?.Invoke();
         foreach (var (m, value) in _statics)
         {
             var now = Get(m);
