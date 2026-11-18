@@ -28,7 +28,7 @@ namespace ConditioningControlPanel.Services
     ///
     /// Bubble count follows WPF SessionEngine too (schedule, pause, resume).
     ///
-    /// ponytail: not driven here - brain drain, phase events,
+    /// ponytail: not driven here - phase events,
     /// EMI Desk, friends and achievement tracking. No settings are written for them,
     /// so the snapshot restore writes their own values back; each arrives with its Core service.
     /// </summary>

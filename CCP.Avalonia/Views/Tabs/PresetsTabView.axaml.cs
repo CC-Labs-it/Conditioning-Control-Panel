@@ -33,7 +33,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// (WPF MainWindow.Presets.cs:515-636, applied at start :1586 and live during a run, #474), and
     /// so are the focal tab FX in PresetsTabView.Fx.cs (selected-card sheen, entrances, press scale;
     /// WPF MainWindow.TabFxPresetsQuestsAchievements.cs, OnPresetsTabVisibilityChanged / RefreshCardSheen).
-    /// ponytail: the Takeaway shelf needs JustDropOrdersService (row shell-takeaway).
     /// </summary>
     public partial class PresetsTabView : UserControl
     {
@@ -452,8 +451,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // ---- Takeaway empty state + Core-backed session rack --------------------
         //
-        // The Takeaway strip paints WPF's empty state until the order drawer moves. The preset rail and
-        // the session rack read Core (Preset, AppSettings.UserPresets, Session).
+        // The preset rail and session rack read Core; the shell wires the Takeaway shelf.
 
         private void SeedRailRackAndTakeaway()
         {
