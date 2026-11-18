@@ -43,6 +43,8 @@ public sealed class EmiDeskPresentationTests
             var ignored = typeof(EmiLineEngine).GetField("_ignoredAsksThisLaunch", Private)!;
             int before = (int)ignored.GetValue(engine)!;
             desk.ShowAsk(ask, engine);
+            // The ask opens on the WPF dot cadence (#5242): ".", "..", "..." then the question.
+            for (int i = 0; i < 3; i++) desk.AdvanceAskTimer();
             Assert.True(desk.AskLive);
             Assert.Equal("offer?", desk.BubbleText);
             desk.BeginPresentation(() => { });
