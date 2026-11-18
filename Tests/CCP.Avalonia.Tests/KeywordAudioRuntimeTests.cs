@@ -101,6 +101,81 @@ public sealed class KeywordAudioRuntimeTests
         }
     });
 
+    [Fact]
+    public void X11SourceDeliversKeywordsAndPanicDropsQueuedKeys() => Run((_, s, played) =>
+    {
+        var fired = 0;
+        Action<KeywordTrigger> handler = _ => fired++;
+        KeywordTriggerHead.Engine.TriggerFired += handler;
+        KeywordTriggerHead.KeyboardSupportedForTests = true;
+        KeywordTriggerHead.UseX11ForTests = true;
+        KeywordTriggerHead.ResolveX11ForTests = (_, code) => (ulong)code;
+        KeywordTriggerHead.X11ForegroundForTests = () => 0;
+        try
+        {
+            KeywordTriggerHead.Sync();
+            var source = Assert.IsType<Action<IntPtr, int>>(X11PanicKey.KeywordPress);
+            foreach (var c in "sit") source(IntPtr.Zero, c);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, fired);
+            // A queued press cannot outlive panic, even if the user immediately re-arms.
+            KeywordTriggerHead.Engine.Now = () => _singletonNow.AddSeconds(10);
+            foreach (var c in "sit") source(IntPtr.Zero, c);
+            Assert.Single(PanicSurfaces.All, x => x.Id == "keyword-triggers").Stop(null);
+            Assert.Null(X11PanicKey.KeywordPress);
+            Assert.False(KeywordTriggerHead.Engine.IsActive);
+            s.KeywordTriggersEnabled = true; KeywordTriggerHead.Sync();
+            foreach (var c in "sit") source(IntPtr.Zero, c); // callback captured by listener before stop
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, fired);
+        }
+        finally
+        {
+            KeywordTriggerHead.Stop();
+            KeywordTriggerHead.Engine.TriggerFired -= handler;
+            KeywordTriggerHead.KeyboardSupportedForTests = null;
+            KeywordTriggerHead.UseX11ForTests = false;
+            KeywordTriggerHead.ResolveX11ForTests = null;
+            KeywordTriggerHead.X11ForegroundForTests = null;
+        }
+    });
+
+    [Fact]
+    public void X11SourceHonoursMasterAccessAndOwnFocus() => Run((_, s, played) =>
+    {
+        KeywordTriggerHead.KeyboardSupportedForTests = true;
+        KeywordTriggerHead.UseX11ForTests = true;
+        KeywordTriggerHead.ResolveX11ForTests = (_, code) => (ulong)code;
+        KeywordTriggerHead.X11ForegroundForTests = () => (uint)Environment.ProcessId;
+        var fired = 0;
+        Action<KeywordTrigger> handler = _ => fired++;
+        KeywordTriggerHead.Engine.TriggerFired += handler;
+        try
+        {
+            s.KeywordTriggersEnabled = false;
+            KeywordTriggerHead.AttachKeyboard(); Assert.Null(X11PanicKey.KeywordPress);
+            s.KeywordTriggersEnabled = true;
+            CoreEntitlement.HasPremiumProvider = () => false;
+            KeywordTriggerHead.AttachKeyboard(); Assert.Null(X11PanicKey.KeywordPress);
+            CoreEntitlement.HasPremiumProvider = () => true;
+            s.KeywordTriggerIgnoreOwnFocus = true;
+            KeywordTriggerHead.Sync();
+            var source = Assert.IsType<Action<IntPtr, int>>(X11PanicKey.KeywordPress);
+            foreach (var c in "sit") source(IntPtr.Zero, c);
+            Dispatcher.UIThread.RunJobs(); Assert.Equal(0, fired);
+            KeywordTriggerHead.DetachKeyboard(); Assert.Null(X11PanicKey.KeywordPress);
+        }
+        finally
+        {
+            KeywordTriggerHead.Stop();
+            KeywordTriggerHead.Engine.TriggerFired -= handler;
+            KeywordTriggerHead.KeyboardSupportedForTests = null;
+            KeywordTriggerHead.UseX11ForTests = false;
+            KeywordTriggerHead.ResolveX11ForTests = null;
+            KeywordTriggerHead.X11ForegroundForTests = null;
+        }
+    });
+
     // restack b220 (#4299, Mich): the OCR consumer and scan lifecycle.
     [Fact] // WPF KeywordTriggerService.cs:193-200,712-739,842-862,913-943
     public void OcrRequiresConsecutivePositionsKeepsThemThroughALapseAndStopAndClearsOnScopeLoss() => Run((engine, s, played) =>
