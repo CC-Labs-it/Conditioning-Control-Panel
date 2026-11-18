@@ -31,7 +31,7 @@ namespace CCP.Avalonia.Tests;
 /// MainWindow/MainWindow.Possession.cs (host + walk), MainWindow.Lab.cs:871-986 (readout) and 1100
 /// (first-run rules), Services/Possession/PossessionWpfHead.cs, EmberAttribution.cs, PossessionEffectBase.cs.
 /// The director is built BEFORE the shell, as App does (its lockdown handlers run first).</summary>
-public sealed class PossessionShellTests
+public sealed partial class PossessionShellTests
 {
     private sealed record Rig(MainShellWindow Shell, LockdownService Lockdown, PossessionDirector Director, FakeFrames Frames)
     {
@@ -41,7 +41,7 @@ public sealed class PossessionShellTests
     private static void Run(Action<Rig> body, Action<AppSettings>? seed = null) =>
         RunAsync(rig => { body(rig); return Task.CompletedTask; }, seed).GetAwaiter().GetResult();
 
-    private static Task RunAsync(Func<Rig, Task> body, Action<AppSettings>? seed = null)
+    private static Task RunAsync(Func<Rig, Task> body, Action<AppSettings>? seed = null, IPossessionEffect[]? effects = null, PossessionDirectorHead? head = null)
     {
         return AvaloniaTestDispatcher.RunAsync(async () =>
         {
@@ -69,7 +69,7 @@ public sealed class PossessionShellTests
             var priorPost = CoreDispatch.PostProvider;
             CoreDispatch.PostProvider = a => Dispatcher.UIThread.Post(a);
             var ld = LockdownService.Current = new LockdownService();
-            var director = new PossessionDirector(ld, PossessionAvaloniaHead.CreateEffects(), PossessionAvaloniaHead.CreateDirectorHead());
+            var director = new PossessionDirector(ld, effects != null ? effects : PossessionAvaloniaHead.CreateEffects(), head ?? PossessionAvaloniaHead.CreateDirectorHead());
             var frames = new FakeFrames();
             var shell = new MainShellWindow { PossessionFramesOverride = frames, PossessionDirectorOverride = director };
             var rig = new Rig(shell, ld, director, frames);
