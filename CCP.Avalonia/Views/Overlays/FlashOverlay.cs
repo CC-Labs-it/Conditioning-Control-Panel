@@ -480,6 +480,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             w.ApplyCorners(CoreSettings.Current.FlashRoundedCorners, OwnsMotion, glow.HasGlow,
                 rect.Width / scaling, rect.Height / scaling);
             w.Show();
+            SubliminalOverlay.RestackStages(); // CompositorLayers: Flash (30) stays under a hosted subliminal card (40)
             w.Run(alpha, fade, lifetime);
             w.StartLuckyPulse();
             var motion = BuildMotion(rect, screen, CoreSettings.Current, Rng, w.InheritMotion);
