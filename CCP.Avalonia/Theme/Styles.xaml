@@ -548,7 +548,11 @@
     <Style Selector="^:pointerover /template/ Border#border">
       <Setter Property="Background" Value="{DynamicResource PinkButtonHoveredBrush}"/>
     </Style>
+    <Style Selector="^ /template/ Border#border">
+      <Setter Property="Transitions" Value="{StaticResource PressReleaseTransitions}"/>
+    </Style>
     <Style Selector="^:pressed /template/ Border#border">
+      <Setter Property="Transitions" Value="{StaticResource PressDownTransitions}"/>
       <Setter Property="Background" Value="{DynamicResource AccentPressedBrush}"/>
       <Setter Property="RenderTransform" Value="scale(0.97)"/>
     </Style>
