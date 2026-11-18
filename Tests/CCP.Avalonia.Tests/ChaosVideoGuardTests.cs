@@ -14,6 +14,7 @@ public class ChaosVideoGuardTests
 {
     private sealed class Host : IMandatoryVideoHost
     {
+        public int FloatingLimit => 1; public int FloatingUp => 0;
         public int Shows, Closes; public Action? Then; public bool BubbleCountActive { get; set; }
         public void Show(string path, bool strict) => Shows++;
         public double CloseAll() { Closes++; return 0; }

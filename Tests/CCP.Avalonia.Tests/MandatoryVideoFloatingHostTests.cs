@@ -490,6 +490,29 @@ public sealed class MandatoryVideoFloatingHostTests
         Assert.False(decoders[1].AudioOff, "then the newest takes the sound");
     });
 
+    // LibVLC volume is one process-wide session on Windows (WPF VideoService.FloatingInstances.cs:74-75): a joined
+    // window's own mute and its closing hold silence its audio track, never the shared volume the other window plays at.
+    [Fact]
+    public Task A_joined_windows_mute_and_close_silence_only_its_own_track() => Run((o, decoders) =>
+    {
+        o.Scheduler.Trigger();
+        o.Scheduler.Trigger();
+        Assert.Same(decoders[2], decoders.Single(d => d.AudioOff != true));   // the newest has the sound
+        var newest = o.Floaters[1];
+        newest.Surface.Buttons.Mute.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.True(newest.UserMuted);
+        Assert.True(decoders[2].AudioOff, "its own mute deselects its track");
+        newest.Surface.Buttons.Mute.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.False(decoders[2].AudioOff, "unmuted, the focus holder plays again");
+
+        var middle = o.Floaters[0].Window;   // the middle window takes the sound, then the newest closes
+        middle.MouseDown(new Point(5, 5), MouseButton.Left);
+        middle.MouseUp(new Point(5, 5), MouseButton.Left);
+        Assert.False(decoders[1].AudioOff);
+        newest.Surface.Buttons.Close.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.False(decoders[1].AudioOff, "a closing window's hold leaves the holder's sound alone");
+    });
+
     // WPF VideoService.cs:6444-6456: a Resume card on every screen holding a floating window, kept when its host closes.
     [Fact]
     public Task Grace_shows_a_card_per_screen_and_keeps_one_when_a_window_closes() => Run((o, _) =>
