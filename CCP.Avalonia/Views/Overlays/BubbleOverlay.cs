@@ -20,7 +20,6 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.UI;
-using ConditioningControlPanel.Services.Chaos;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
