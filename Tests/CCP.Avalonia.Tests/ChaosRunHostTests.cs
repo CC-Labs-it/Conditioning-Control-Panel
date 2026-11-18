@@ -71,6 +71,30 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    [Fact]
+    public async Task Heavy_effect_blocks_video_spawns()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            try
+            {
+                var cfg = Cfg();
+                cfg.EnabledVariants = new() { "video" };
+                ChaosRunHost.StartRun(cfg);
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                BubbleOverlay.Field.Bubbles.Clear();
+                ChaosRunHost.OnVideoEndedDuringRun();
+                ChaosRunHost.SpawnTick();
+                Assert.NotEmpty(BubbleOverlay.Field.Bubbles);
+                Assert.DoesNotContain(BubbleOverlay.Field.Bubbles, b => b.Spec?.VariantId == "video");
+            }
+            finally { ChaosRunHost.ForceShutdown(); }
+            return Task.CompletedTask;
+        });
+    }
+
     private static void Ticks(int n) { for (int i = 0; i < n; i++) ChaosRunHost.Tick(); }
 
     /// <summary>A fresh in-memory save (TestIsolation puts the files back afterwards).</summary>
