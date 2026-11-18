@@ -103,7 +103,7 @@ export function installLive(view, { t, base = './', motion = 'full', gentle = fa
   fm.speed = speed ? fm.speed / speed : 0;   // the clock already runs at the page's speed
   let portrait = null;
   try {
-    if (doc && doc.createElement) { portrait = doc.createElement('img'); portrait.onload = () => kick(); portrait.src = `${base}assets/preview/profile/profile.avatar.rain-portrait.png`; }
+    if (doc && doc.createElement) { portrait = doc.createElement('img'); portrait.onload = () => kick(); portrait.src = `${base}assets/preview/profile/profile.avatar.emi-pixel.png`; }
   } catch { portrait = null; }
   const framePainter = (e, fill) => (item, tt) => {
     const g = item.c, w = item.w, h = item.h, s = Math.min(w, h) * fill;
