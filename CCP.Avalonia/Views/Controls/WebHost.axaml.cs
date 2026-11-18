@@ -393,17 +393,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         }
 
         /// <summary>
-        /// True when some adapter is both installed and able to host a native control. Probed once
-        /// per process: <see cref="WebViewAdapterInfo.GetAdapterInfo"/> shells out to the platform
-        /// (dlopen of libwebkit2gtk, a WebView2 registry lookup) and the answer cannot change while
-        /// the app runs.
+        /// True when some adapter is both installed and able to host a native control. The adapter scan
+        /// and the audio-sink probe run once per process: <see cref="WebViewAdapterInfo.GetAdapterInfo"/>
+        /// shells out to the platform (dlopen of libwebkit2gtk, a WebView2 registry lookup) and that answer
+        /// cannot change while the app runs. Whether this is the desktop app is read on every call, so the
+        /// first caller's lifetime (a test that installs a desktop lifetime) does not latch it for the process.
         /// </summary>
         public static bool IsAvailable => UnavailableReason is null;
 
-        private static readonly Lazy<string?> _reason = new(ProbeUnavailableReason);
-
         /// <summary>Null when a web view can be hosted; otherwise the platform's own explanation.</summary>
-        public static string? UnavailableReason => _reason.Value;
+        public static string? UnavailableReason => ProbeUnavailableReason();
 
         private static readonly Lazy<(string Text, string? Command)?> _linuxHint = new(() =>
             ConditioningControlPanel.Services.LinuxDependencies.Check(
@@ -899,6 +898,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         private static string? ProbeUnavailableReason()
         {
+            // Only the real desktop app (StartWithClassicDesktopLifetime) hosts an engine. Tests (bare dispatcher or
+            // headless session) and --render-all/--smoke (SetupWithoutStarting) have no desktop lifetime, so they
+            // always draw the fallback, even on a box with WPE/WebKitGTK installed.
+            var headless = Application.Current?.ApplicationLifetime is not global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+            var linux = OperatingSystem.IsLinux();
+            var sink = headless || _audioSink.Value;
+            return DecideUnavailableReason(_adapters.Value, linux, headless, LinuxChoice, audioSink: sink);
+        }
+
+        // The desktop app's audio-sink answer (the headless branch of AudioSinkReady is always true), probed once.
+        private static readonly Lazy<bool> _audioSink = new(() => AudioSinkReady(OperatingSystem.IsLinux(), headless: false,
+            () => ConditioningControlPanel.Services.LinuxDependencies.GstPluginPresent("libgstautodetect.so"),
+            Environment.GetEnvironmentVariable("CCP_LINUX_WEBVIEW")));
+
+        private static readonly Lazy<IReadOnlyList<DetailedWebViewAdapterInfo>> _adapters = new(ScanAdapters);
+
+        private static IReadOnlyList<DetailedWebViewAdapterInfo> ScanAdapters()
+        {
             var adapters = new List<DetailedWebViewAdapterInfo>();
             foreach (WebViewAdapterType type in Enum.GetValues(typeof(WebViewAdapterType)))
             {
@@ -913,14 +930,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     // cannot even be asked about is, for our purposes, not there.
                 }
             }
-            // Only the real desktop app (StartWithClassicDesktopLifetime) hosts an engine. Tests (bare dispatcher or
-            // headless session) and --render-all/--smoke (SetupWithoutStarting) have no desktop lifetime, so they
-            // always draw the fallback, even on a box with WPE/WebKitGTK installed.
-            var headless = Application.Current?.ApplicationLifetime is not global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
-            var linux = OperatingSystem.IsLinux();
-            var sink = AudioSinkReady(linux, headless, () => ConditioningControlPanel.Services.LinuxDependencies.GstPluginPresent("libgstautodetect.so"),
-                Environment.GetEnvironmentVariable("CCP_LINUX_WEBVIEW"));
-            return DecideUnavailableReason(adapters, linux, headless, LinuxChoice, audioSink: sink);
+            return adapters;
         }
 
         /// <summary>The audioSink input of <see cref="DecideUnavailableReason"/>: probed only on the real Linux desktop app,

@@ -29,14 +29,17 @@ public sealed class CompanionBrainHostTests
         var entitlement = ConditioningControlPanel.CoreEntitlement.HasPremiumProvider;
         var recall = ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled;
         var dir = Directory.CreateTempSubdirectory("ccp-brain-recall-");
-        var engine = new AchievementEngine(new AchievementStore(Path.Combine(dir.FullName, "achievements.json")));
+        var entitlementChecks = 0;
+        var engine = new AchievementEngine(new AchievementStore(Path.Combine(dir.FullName, "achievements.json")),
+            () => { entitlementChecks++; return ConditioningControlPanel.CoreEntitlement.HasPremium; });
         try
         {
             property.SetValue(null, engine);
             AvApp.SeedCompanionRecall();
             AvApp.SeedCompanionRecall(); // repeated composition must not add listeners
-            var entitlementChecks = 0;
-            ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => { entitlementChecks++; return false; };
+            ConditioningControlPanel.CoreEntitlement.HasPremiumProvider = () => false;
+            // Other UI work can read the same global provider while the recall is dispatched.
+            Dispatcher.UIThread.Post(() => { _ = ConditioningControlPanel.CoreEntitlement.HasPremium; });
             ConditioningControlPanel.Services.Companion.Brain.CompanionBrain.MemoryRecalled!();
             Dispatcher.UIThread.RunJobs();
             Assert.False(engine.Progress.IsUnlocked("she_remembers"));

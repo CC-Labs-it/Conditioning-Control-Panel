@@ -557,9 +557,14 @@ public sealed class SessionRunnerTests : IDisposable
     public void Ledger_IsPersistedBeforeTheSessionOverrides()
     {
         var old = CoreSettings.ServiceProvider;
-        var svc = new SettingsService();
+        // A private settings file, not the sandbox's shared CorePaths.UserData/settings.json: another
+        // class's service (RecoveredProfileReconcileTests) could land a debounced save there between
+        // Start's immediate save and the read below, so the read saw that service's file instead.
+        var dir = Path.Combine(Path.GetTempPath(), "ccp-ledger-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var path = Path.Combine(dir, "settings.json");
+        var svc = new SettingsService(path);
         CoreSettings.ServiceProvider = () => svc;
-        var path = Path.Combine(CorePaths.UserData, "settings.json");
         try
         {
             svc.Current.FlashFrequency = 20;
@@ -577,7 +582,7 @@ public sealed class SessionRunnerTests : IDisposable
             svc.SaveImmediate();
             svc.SealForReset();
             CoreSettings.ServiceProvider = old;
-            foreach (var f in Directory.GetFiles(CorePaths.UserData, "settings*")) File.Delete(f);
+            Directory.Delete(dir, recursive: true);
         }
     }
 
