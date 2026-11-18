@@ -45,6 +45,32 @@ public class TestIsolationTests
         }
     });
 
+    /// <summary>A real-clock grace pause left its dedup stamp on the overlay singleton, and a later test's
+    /// stepped 2026-01-01 clock saw its first Esc as a duplicate press (MandatoryVideoOverlayTests).</summary>
+    [Fact]
+    public void RestorePutsTheVideoOverlaysGraceStampAndClockBack() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var o = ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance;
+        var stamp = typeof(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay)
+            .GetField("_lastGraceUtc", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var (oldStamp, oldTime) = ((System.DateTime)stamp.GetValue(o)!, o.Time);
+        try
+        {
+            var snapshot = ProcessStateSnapshot.Take();
+            stamp.SetValue(o, System.DateTime.UtcNow);   // what TryGracePause on the system clock leaves
+            o.Time = new FixedClock();
+            snapshot.Restore();
+            Assert.Equal(oldStamp, (System.DateTime)stamp.GetValue(o)!);
+            Assert.Same(oldTime, o.Time);
+        }
+        finally { stamp.SetValue(o, oldStamp); o.Time = oldTime; }
+    });
+
+    private sealed class FixedClock : System.TimeProvider
+    {
+        public override global::System.DateTimeOffset GetUtcNow() => new(2026, 1, 1, 0, 0, 0, global::System.TimeSpan.Zero);
+    }
+
     [Fact]
     public void HeadlessBootstrapIncludesShippedFontFallbacks() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
     {

@@ -174,7 +174,21 @@ internal static class OpenWindows
 internal sealed class ProcessStateSnapshot
 {
     private readonly List<(MemberInfo Member, object? Value)> _statics = new();
+    private readonly List<(MemberInfo Member, object? Value)> _overlay = new();
     private readonly List<(AppSettings Settings, string Json)> _settings = new();
+
+    // MandatoryVideoOverlay.Instance is a process-wide singleton, so its instance state is process
+    // state the static scan cannot see. The grace-pause dedup stamp outlives every clip: a test that
+    // grace-pauses on the real clock (VoiceRemainingCommandsTests, 2026-11) left a stamp that a later
+    // test's stepped clock (2026-01-01) read as a press "-10 months ago", inside the 200 ms dedup, so
+    // its first Esc was swallowed (MandatoryVideoOverlayTests, red only when the class order put it
+    // second). The grace clock seam rides along so a test that dies before its finally cannot leak it.
+    private const BindingFlags AnyInstance = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+    private static readonly MemberInfo[] OverlayMembers =
+    {
+        typeof(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay).GetField("_lastGraceUtc", AnyInstance)!,
+        typeof(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay).GetProperty("Time", AnyInstance)!,
+    };
     private readonly Dictionary<string, byte[]> _files = new();
 
     private static readonly JsonSerializerSettings Json = new()
@@ -224,6 +238,8 @@ internal sealed class ProcessStateSnapshot
     {
         var s = new ProcessStateSnapshot();
         foreach (var m in Members.Value) s._statics.Add((m, Get(m)));
+        var overlay = ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance;
+        foreach (var m in OverlayMembers) s._overlay.Add((m, Get(m, overlay)));
         foreach (var settings in new[] { CoreSettings.Current, FallbackSettings() }.Distinct())
             s._settings.Add((settings, JsonConvert.SerializeObject(settings, Json)));
         // Nested scopes capture the current test, not the previous test baseline.
@@ -239,6 +255,12 @@ internal sealed class ProcessStateSnapshot
         {
             var now = Get(m);
             if (!ReferenceEquals(now, value) && !Equals(now, value)) Set(m, value);
+        }
+        var overlay = ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance;
+        foreach (var (m, value) in _overlay)
+        {
+            var now = Get(m, overlay);
+            if (!ReferenceEquals(now, value) && !Equals(now, value)) Set(m, value, overlay);
         }
         foreach (var (settings, json) in _settings)
             if (JsonConvert.SerializeObject(settings, Json) != json) JsonConvert.PopulateObject(json, settings, Json);
@@ -280,10 +302,10 @@ internal sealed class ProcessStateSnapshot
         ((Lazy<AppSettings>)typeof(CoreSettings).GetField("Fallback", BindingFlags.Static | BindingFlags.NonPublic)!
             .GetValue(null)!).Value;
 
-    private static object? Get(MemberInfo m) => m is FieldInfo f ? f.GetValue(null) : ((PropertyInfo)m).GetValue(null);
-    private static void Set(MemberInfo m, object? v)
+    private static object? Get(MemberInfo m, object? target = null) => m is FieldInfo f ? f.GetValue(target) : ((PropertyInfo)m).GetValue(target);
+    private static void Set(MemberInfo m, object? v, object? target = null)
     {
-        if (m is FieldInfo f) f.SetValue(null, v); else ((PropertyInfo)m).SetValue(null, v);
+        if (m is FieldInfo f) f.SetValue(target, v); else ((PropertyInfo)m).SetValue(target, v);
     }
 
     private const BindingFlags AnyStatic = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;

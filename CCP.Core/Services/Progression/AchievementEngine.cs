@@ -17,11 +17,13 @@ namespace ConditioningControlPanel.Services;
 internal sealed class AchievementEngine
 {
     private readonly AchievementStore _store;
+    private readonly Func<bool> _canUnlockExclusive;
     private volatile bool _isDirty;
 
-    public AchievementEngine(AchievementStore store)
+    public AchievementEngine(AchievementStore store, Func<bool>? canUnlockExclusive = null)
     {
         _store = store;
+        _canUnlockExclusive = canUnlockExclusive ?? (() => CanUnlockExclusive);
         Progress = store.Load();
         ResetContinuousSpiral(); // WPF AchievementService.cs:85-86: a saved run never resumes.
     }
@@ -489,7 +491,7 @@ internal sealed class AchievementEngine
     public bool TryUnlockExclusive(string achievementId)
     {
         if (Progress.IsUnlocked(achievementId)) return false;
-        if (!CanUnlockExclusive)
+        if (!_canUnlockExclusive())
         {
             Log.Debug("Exclusive achievement {Id} withheld — user not entitled", achievementId);
             return false;
