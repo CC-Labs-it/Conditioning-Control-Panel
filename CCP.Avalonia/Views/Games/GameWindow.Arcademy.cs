@@ -39,6 +39,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case "pong":
                     _arcademyLastBeat = ArcademyUtcNow();
                     break;
+                case "assets-request":
+                    PostArcademyAssetsUnavailable(message);
+                    handled = true;
+                    break;
                 case "class-started":
                     _arcademyClassActive = true;
                     handled = true;

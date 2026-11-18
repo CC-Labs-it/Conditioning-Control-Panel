@@ -131,6 +131,10 @@ public sealed class SpiralGentleWindowFadeTests
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        // Close the preceding run and let its worker finish before changing settings. Otherwise
+        // awaiting that stale worker can return while it starts this test's own decode.
+        SpiralOverlay.CloseAll();
+        while (SpiralOverlay.Decoding is { } prior) await prior;
         var dir = Directory.CreateTempSubdirectory("spiral-gif-fade-");
         var path = Path.Combine(dir.FullName, "loop.gif");
         File.WriteAllBytes(path, Convert.FromBase64String(TinyGif));
