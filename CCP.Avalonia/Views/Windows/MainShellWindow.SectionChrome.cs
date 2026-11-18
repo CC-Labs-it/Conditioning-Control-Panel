@@ -101,10 +101,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>The head's half of Core <see cref="PanelDoorLink"/>: the Lockdown check and the
         /// fallback, which is exactly the title bar's "Back to CC Labs" button (BtnBackToLauncher:
-        /// same handler, same Lockdown refusal, a disabled button stays a no-op). The launcher's own
-        /// door API is wired into <see cref="PanelDoorLink.OpenLauncherDoor"/> by the merge, not here.</summary>
+        /// same handler, same Lockdown refusal, a disabled button stays a no-op). The door hook opens the
+        /// launcher on the named door (WPF MainWindow.xaml.cs:225-229); ShowDoor refuses under Lockdown too.</summary>
         private void WirePanelDoorLink()
         {
+            PanelDoorLink.OpenLauncherDoor = key =>
+            {
+                if (ConditioningControlPanel.Services.Launcher.LauncherDoorRules.TryParse(key, out var door))
+                    LauncherWindow.ShowDoor(Current ?? this, door);
+            };
             PanelDoorLink.IsLockedDown = () => LockdownActive;
             PanelDoorLink.Fallback = () => PressBackToCcLabs(Current ?? this);
         }

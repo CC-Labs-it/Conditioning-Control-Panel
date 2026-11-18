@@ -159,7 +159,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (e.Property == IsVisibleProperty) { if (IsVisible) FxOnShown(); else FxPark(); }
                 else if (e.Property == WindowStateProperty)
                 {
-                    if (FxLive) { EnsureFxClock(); QueuePanelComet(); } else FxPark();
+                    // WPF Choreo.cs:113 ChoreoUnpark: the door reels run again once restored.
+                    if (FxLive) { EnsureFxClock(); QueuePanelComet(); StartDoorReels(); } else FxPark();
                     // The DWM squares a maximised window's corners; the frame's clip follows.
                     WindowFrame.CornerRadius = new CornerRadius(WindowState == WindowState.Normal ? 8 : 0);
                 }

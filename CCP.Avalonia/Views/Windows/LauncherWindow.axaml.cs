@@ -947,7 +947,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal };
             if (icon != null) row.Children.Add(new TextBlock { Text = icon, FontSize = 10, Margin = new Thickness(0, 0, 5, 0), Foreground = ink });
-            row.Children.Add(new TextBlock { Text = Loc.Get(key), FontSize = 11, FontWeight = FontWeight.Bold, Foreground = ink });
+            row.Children.Add(new TextBlock { Text = Loc.Get(key), FontSize = 11, FontWeight = FontWeight.Bold, FontFamily = DoorFont, Foreground = ink });   // WPF Tiles.cs:322
             return new Border
             {
                 Background = background, CornerRadius = new CornerRadius(10), Padding = new Thickness(9, 3, 10, 3),

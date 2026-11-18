@@ -57,8 +57,12 @@ public partial class LauncherWindow
         StopWanderingSheen();
         _wanderTimer.Interval = TimeSpan.FromSeconds(_sheenRandom.Next(6, 11));
         if (!FxLive || !_fxActive || !AmbientFxCanvas.Env.AllowAmbientLoops) return;
+        // WPF Choreo.cs:469-474: the doors view wanders the doors (never the hovered one), a page its tiles.
         // WPF TileInView permits a quarter-card of slack, never a wholly clipped tile.
-        var cards = GamesGrid.Children.OfType<Border>().Where(tile =>
+        var pool = _door == null
+            ? _doorViews.Where(d => !ReferenceEquals(d, _doorHover)).Select(d => (Control)d.Button)
+            : GamesGrid.Children.OfType<Border>();
+        var cards = pool.Where(tile =>
         {
             if (!tile.IsEffectivelyVisible || tile.Bounds.Height <= 0) return false;
             var origin = tile.TranslatePoint(default, GamesColumn);
@@ -66,7 +70,7 @@ public partial class LauncherWindow
             return origin is { } p && p.Y >= -slack && p.Y + tile.Bounds.Height <= GamesColumn.Bounds.Height + slack;
         }).ToArray();
         if (cards.Length == 0) return;
-        WanderSheen = CardSheenAdorner.Attach(cards[_sheenRandom.Next(cards.Length)], TileRadius);
+        WanderSheen = CardSheenAdorner.Attach(cards[_sheenRandom.Next(cards.Length)], _door == null ? DoorRadius : TileRadius);
         if (WanderSheen != null) _wanderEnd.Start();
     }
 }
