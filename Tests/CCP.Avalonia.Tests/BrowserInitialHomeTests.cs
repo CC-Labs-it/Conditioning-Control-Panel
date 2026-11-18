@@ -63,6 +63,81 @@ public sealed class BrowserInitialHomeTests
         });
 
     [Fact]
+    public Task AppAutoplayCutIsDeferredWithoutPlaybackCap() => Run((shell, page, host, mod) =>
+        WithVideoSettings(() =>
+    {
+        var scripts = new System.Collections.Generic.List<string>();
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
+        host.NavigationInvoker = _ => true;
+        shell.BrowserAutoPlayDelay = () => Task.CompletedTask;
+        CoreSettings.Current.VideoMaxDurationSeconds = 30;
+        CoreSettings.Current.VideoCutRandomStart = true;
+        string Start(bool user)
+        {
+            Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:9/video", true, user));
+            host.OnNavigationCompleted(new Uri("http://127.0.0.1:9/video"));
+            var script = scripts.FindLast(x => x.Contains("const cutRequest ="))!;
+            if (user) Assert.Equal(WebHostTakeover.VideoAutoPlayScript, script);
+            else Assert.StartsWith(WebHost.CarrierShim, script);
+            return script.Split("const cutRequest = '")[1].Split("'")[0];
+        }
+        void Report(string token) => host.OnWebMessage("{\"type\":\"ccpCutMetadata\",\"request\":\"" + token + "\",\"dur\":120}");
+        int Seeks() => scripts.FindAll(x => x.Contains("if(window.__ccpCutRequest===")).Count;
+        var first = Start(false);
+        Report(first); Report(first);
+        Assert.Equal(0, Seeks());
+        var user = Start(true);
+        Report(user);
+        Assert.Equal(0, Seeks());
+        CoreSettings.Current.VideoCutRandomStart = false;
+        var disabled = Start(false);
+        Report(disabled);
+        Assert.Equal(0, Seeks());
+        CoreSettings.Current.VideoCutRandomStart = true;
+        var stale = Start(false);
+        Start(false);
+        Report(stale);
+        Assert.Equal(0, Seeks());
+        var panic = Start(false);
+        shell.PanicPauseBrowserMedia();
+        Report(panic);
+        Assert.Equal(0, Seeks());
+    }));
+
+    private static void WithVideoSettings(Action check)
+    {
+        var settings = CoreSettings.Current;
+        var oldLimit = settings.VideoMaxDurationSeconds;
+        var oldRandom = settings.VideoCutRandomStart;
+        try { check(); }
+        finally
+        {
+            settings.VideoMaxDurationSeconds = oldLimit;
+            settings.VideoCutRandomStart = oldRandom;
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task VideoCutSettingsAreRestoredEvenOnFailure(bool fail) => Run((shell, page, host, mod) =>
+    {
+        var settings = CoreSettings.Current;
+        var originalLimit = settings.VideoMaxDurationSeconds;
+        var originalRandom = settings.VideoCutRandomStart;
+        void Change()
+        {
+            settings.VideoMaxDurationSeconds = originalLimit == 30 ? 60 : 30;
+            settings.VideoCutRandomStart = !originalRandom;
+            if (fail) throw new InvalidOperationException("test cleanup");
+        }
+        if (fail) Assert.Throws<InvalidOperationException>(() => WithVideoSettings(Change));
+        else WithVideoSettings(Change);
+        Assert.Equal(originalLimit, settings.VideoMaxDurationSeconds);
+        Assert.Equal(originalRandom, settings.VideoCutRandomStart);
+    });
+
+    [Fact]
     public Task AdapterReadyBeforeFirstPageCompletesMakesNextLinkHalf() => Run((shell, page, host, mod) =>
     {
         double applied = 0;
