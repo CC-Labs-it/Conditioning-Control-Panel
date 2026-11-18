@@ -188,6 +188,8 @@ public sealed class EmiDeskSettingsSpeechTests
         bool sharedArmed = shared.HotkeyArmed;
         Assert.NotSame(shared, desk);
         var oldRegister = desk.RegisterChord;
+        var oldWindows = desk.IsWindows;
+        desk.IsWindows = () => false;
         Action? press = null;
         desk.RegisterChord = (_, _, callback) => { press = callback; return true; };
         desk.LineEngine = EmiLineEngine.FromJson("""{"version":1,"moments":{"firstContact":{"priority":3,"pools":["g"]}},"pools":{"g":[{"id":"g","t":"{via}","spice":0}]}}""");
@@ -204,7 +206,11 @@ public sealed class EmiDeskSettingsSpeechTests
             for (int i = 0; i < 3; i++) desk.Window!.AdvanceSpeech();
             Assert.Equal("hotkey", desk.Window!.BubbleText);
         }
-        finally { desk.RegisterChord = oldRegister; }
+        finally
+        {
+            desk.RegisterChord = oldRegister;
+            desk.IsWindows = oldWindows;
+        }
     }, isolated: true);
 
     [Fact]

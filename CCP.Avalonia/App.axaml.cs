@@ -1585,7 +1585,7 @@ namespace ConditioningControlPanel.Avalonia
                 shell.StartSchedulerClock();
                 shell.Opened += (_, _) => shell.StartQuickRecalHotkey();
                 // EMI Desk summon chord (WPF MainWindow.xaml.cs:246 arms it from the shell's Loaded).
-                Views.Windows.EmiDesk.EmiDeskService.Instance.ApplyHotkey();
+                shell.Opened += (_, _) => Views.Windows.EmiDesk.EmiDeskService.Instance.ApplyHotkey();
                 Views.Windows.EmiDesk.EmiDeskService.Instance.WireAppEvents(shell.Autonomy, Platform.PulseMicSource.Speech, dailyFree);
                 // Do-not-disturb reads the foreground app: user32 on Windows (as WPF DoNotDisturbGuard), X elsewhere.
                 ConditioningControlPanel.Services.UI.DndGuard.ForegroundProcess = Platform.Win32Windows.ForegroundSource;
