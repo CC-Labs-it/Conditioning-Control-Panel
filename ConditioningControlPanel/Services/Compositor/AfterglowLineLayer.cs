@@ -145,8 +145,8 @@ public sealed class AfterglowLineLayer : BaseLayer
     {
         var stage = SuperStageHost.Stage;
         float fromX = boundsPx.MidX, fromY = boundsPx.Top + boundsPx.Height * 0.46f;
-        // With the pool up on this monitor, words surface from its eye.
-        if (stage.PoolLive && stage.Pool.Size > 0.3 && boundsPx.Contains((int)stage.Pool.X, (int)stage.Pool.Y))
+        // With the pool up on this monitor, words surface from its eye (unless the pool's "Words" switch is off).
+        if (stage.PoolTakesWords && stage.Pool.Size > 0.3 && boundsPx.Contains((int)stage.Pool.X, (int)stage.Pool.Y))
         {
             fromX = (float)stage.Pool.X; fromY = (float)stage.Pool.Y;
         }

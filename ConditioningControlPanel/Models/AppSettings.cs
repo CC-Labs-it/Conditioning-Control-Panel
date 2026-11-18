@@ -5645,6 +5645,14 @@ namespace ConditioningControlPanel.Models
             set { _whirlpoolDragsBubbles = value; OnPropertyChanged(); }
         }
 
+        // Whirlpool: it catches the bouncing word and Afterglow's line rises from its eye. On as shipped.
+        private bool _whirlpoolDragsWords = true;
+        public bool WhirlpoolDragsWords
+        {
+            get => _whirlpoolDragsWords;
+            set { _whirlpoolDragsWords = value; OnPropertyChanged(); }
+        }
+
         // Whirlpool: its largest size, percent of the stock reach.
         private int _whirlpoolSize = SuperCore.WhirlpoolOptions.SizeDefault;
         public int WhirlpoolSize

@@ -69,6 +69,7 @@ namespace ConditioningControlPanel.Features
                 ChkPoolDragsFog.IsChecked = s.WhirlpoolDragsFog;
                 ChkPoolDragsPictures.IsChecked = s.WhirlpoolDragsPictures;
                 ChkPoolDragsBubbles.IsChecked = s.WhirlpoolDragsBubbles;
+                ChkPoolDragsWords.IsChecked = s.WhirlpoolDragsWords;
                 DimPoolEvery();
             }
             catch (Exception ex)
@@ -140,7 +141,7 @@ namespace ConditioningControlPanel.Features
             App.Settings?.Save();
         }
 
-        // SuperStageHost hands the stage the three switches each step.
+        // SuperStageHost hands the stage the four switches each step.
         private void ChkPoolDrags_Changed(object sender, RoutedEventArgs e)
         {
             if (_poolLoading) return;
@@ -149,6 +150,7 @@ namespace ConditioningControlPanel.Features
             s.WhirlpoolDragsFog = ChkPoolDragsFog.IsChecked ?? true;
             s.WhirlpoolDragsPictures = ChkPoolDragsPictures.IsChecked ?? true;
             s.WhirlpoolDragsBubbles = ChkPoolDragsBubbles.IsChecked ?? true;
+            s.WhirlpoolDragsWords = ChkPoolDragsWords.IsChecked ?? true;
             App.Settings?.Save();
         }
     }

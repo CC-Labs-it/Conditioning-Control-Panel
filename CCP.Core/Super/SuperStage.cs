@@ -59,6 +59,12 @@ public sealed class SuperStage
     public bool DragsFog { get; set; } = true;
     public bool DragsPictures { get; set; } = true;
     public bool DragsBubbles { get; set; } = true;
+    /// <summary>The pool catches the bouncing word, turns it and throws it (<see cref="TextFling"/>). Off = the
+    /// word bounces through the pool untouched (owner 2026-11-18: every interaction gets a switch).</summary>
+    public bool DragsWords { get; set; } = true;
+
+    /// <summary>True when the pool is live and the player lets it catch words.</summary>
+    public bool PoolTakesWords => PoolLive && DragsWords;
 
     /// <summary>What the pool does to a thing at a world point. Nothing while it is off. The kind is
     /// read from the mass (<see cref="WhirlpoolOptions.KindOf"/>) so a switched-off kind feels nothing.</summary>
