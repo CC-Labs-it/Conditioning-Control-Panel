@@ -129,6 +129,9 @@ internal static class DareLook
             ["check"] = G(P("M5 12.5 L9.5 17 L19 7.5")),
             ["cross"] = G(P("M6 6 L18 18 M18 6 L6 18")),
             ["arrow"] = G(P("M5 12 H18 M13 7 L18 12 L13 17")),
+            // The friend card's own marks: a fingertip with a tap ring, and three dots for "more".
+            ["poke"] = G(P("M10 21 V10.5 A1.5 1.5 0 0 1 13 10.5 V15 L17 15.8 A2 2 0 0 1 18.6 18 L18.2 21"), P("M7 8 A5 5 0 0 1 16 8")),
+            ["dots"] = G(C(6, 12, 1.4), C(12, 12, 1.4), C(18, 12, 1.4)),
         };
     }
 
@@ -772,31 +775,133 @@ internal static class DareLook
     }
 
     /// <summary>An amount or deadline choice: a small light card like the tiles (square corners and a
-    /// coloured base edge, never an oval: owner 2026-11-18), bold print, tabular figures.</summary>
-    public static Button Choice(string label, string? tip, Action onClick, string tag)
+    /// coloured base edge, never an oval: owner 2026-11-18), bold print, tabular figures.
+    /// <paramref name="compact"/> = the friend card's word stamps: 15 px print, the border in
+    /// <paramref name="edge"/>, no shadow, a real press onto the base edge, and <paramref name="on"/>
+    /// drawn pressed in with an ink outline (ON IS PRESSED IN). The default draws the Dares tray's chip.</summary>
+    public static Button Choice(string label, string? tip, Action onClick, string tag,
+        bool compact = false, Color? edge = null, bool on = false)
     {
-        var t = Words(label, 19, B(CardInk), weight: FontWeights.Bold);
+        var t = Words(label, compact ? 15 : 19, B(CardInk), weight: FontWeights.Bold);
         Typography.SetNumeralAlignment(t, FontNumeralAlignment.Tabular);
+        var rest = on ? WhiteBrush : TileBrush;
+        var move = new TranslateTransform(0, on ? 2.5 : 0);
         var face = new Border
         {
-            Background = TileBrush,
-            BorderBrush = TileEdgeBrush,
-            BorderThickness = new Thickness(1, 1, 1, 4),
-            CornerRadius = new CornerRadius(7),
-            Padding = new Thickness(14, 6, 14, 5),
-            Child = t,
+            Background = rest,
+            BorderBrush = on ? InkBrush : edge is { } e ? B(e) : TileEdgeBrush,
+            BorderThickness = on ? new Thickness(1.5, 1.5, 1.5, 1.5) : compact ? new Thickness(1.5, 1.5, 1.5, 4) : new Thickness(1, 1, 1, 4),
+            CornerRadius = new CornerRadius(compact ? 6 : 7),
+            Padding = compact ? new Thickness(9, 3, 9, 3) : new Thickness(14, 6, 14, 5),
+            Margin = on ? new Thickness(0, 0, 0, 2.5) : new Thickness(0),
+            // A compact word shrinks to fit a narrow cell (the watch switch) rather than trimming.
+            Child = compact ? new Viewbox { Child = t, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, HorizontalAlignment = HorizontalAlignment.Center } : t,
+            RenderTransform = move,
         };
         var g = new Grid();
-        g.Children.Add(ShadowUnder(TileBrush, new CornerRadius(7), new Thickness(8, 6, 8, 1), 7, 3, 0.4));
+        if (!compact) g.Children.Add(ShadowUnder(TileBrush, new CornerRadius(7), new Thickness(8, 6, 8, 1), 7, 3, 0.4));
         g.Children.Add(face);
         var b = Bare(g, label);
         b.Margin = new Thickness(0, 0, 8, 8);
         b.ToolTip = tip;
         b.Tag = tag;
-        b.MouseEnter += (_, _) => face.Background = WhiteBrush;
-        b.MouseLeave += (_, _) => face.Background = TileBrush;
+        b.MouseEnter += (_, _) => { if (b.IsEnabled) face.Background = WhiteBrush; };
+        b.MouseLeave += (_, _) => { face.Background = rest; if (compact && !on) PressTo(move, 0); };
+        if (compact && !on)
+        {
+            b.PreviewMouseLeftButtonDown += (_, _) => { if (b.IsEnabled) PressTo(move, 2.5); };
+            b.PreviewMouseLeftButtonUp += (_, _) => PressTo(move, 0);
+        }
         b.Click += (_, _) => onClick();
         return b;
+    }
+
+    // ---- the friend card (the drawer): the same family, no ovals (owner 2026-11-18) ---------
+
+    /// <summary>A rounded square in a hue with a white icon: the friend card's lead mark (a block,
+    /// never a disc there).</summary>
+    public static FrameworkElement Block(FrameworkElement icon, Color hue, double size = 26)
+    {
+        var g = new Grid { Width = size, Height = size, VerticalAlignment = VerticalAlignment.Center };
+        g.Children.Add(new Border { Background = B(hue), CornerRadius = new CornerRadius(5) });
+        icon.HorizontalAlignment = HorizontalAlignment.Center;
+        icon.VerticalAlignment = VerticalAlignment.Center;
+        g.Children.Add(icon);
+        return g;
+    }
+
+    /// <summary><see cref="Block(FrameworkElement, Color, double)"/> with one of this box's icons.</summary>
+    public static FrameworkElement Block(string icon, Color hue, double size = 26)
+        => Block(Icon(icon, size * 0.68, WhiteBrush, icon == "dots" ? WhiteBrush : null, 2), hue, size);
+
+    /// <summary>A block, then words in bold print that wrap: the friend card's tile content.</summary>
+    public static FrameworkElement Labelled(FrameworkElement block, string text, double size = 16)
+    {
+        var g = new Grid();
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        g.Children.Add(block);
+        var w = Words(text, size, CardInkBrush, wrap: true, weight: FontWeights.Bold);
+        w.Margin = new Thickness(8, 0, 0, 1);
+        Grid.SetColumn(w, 1);
+        g.Children.Add(w);
+        return g;
+    }
+
+    private const double Ledge = 4;
+
+    /// <summary>The friend card's pressable tile: a light face on a ledge of <paramref name="edge"/>
+    /// that the face goes down onto on press (IN) and comes back up from (OUT); <paramref name="on"/>
+    /// = pressed in, white, outlined in ink (ON IS PRESSED IN). Hover whitens the face; a disabled
+    /// tile fades (<see cref="Bare"/>). The content is the caller's.</summary>
+    public static Button PressTile(FrameworkElement content, Color edge, bool on, string tag, string name, Thickness? padding = null)
+    {
+        double rest = on ? Ledge - 1 : 0;
+        var move = new TranslateTransform(0, rest);
+        var restBrush = on ? WhiteBrush : TileBrush;
+        var face = new Border
+        {
+            Background = restBrush,
+            BorderBrush = on ? InkBrush : TileEdgeBrush,
+            BorderThickness = new Thickness(1.5),
+            CornerRadius = new CornerRadius(7),
+            Padding = padding ?? new Thickness(6, 5, 7, 5),
+            Margin = new Thickness(0, 0, 0, Ledge),
+            Child = content,
+            RenderTransform = move,
+        };
+        var g = new Grid();
+        g.Children.Add(new Border { Background = B(edge), CornerRadius = new CornerRadius(7), Margin = new Thickness(0, Ledge, 0, 0) });
+        g.Children.Add(face);
+        var b = Bare(g, name);
+        b.Tag = tag;
+        b.PreviewMouseLeftButtonDown += (_, _) => { if (b.IsEnabled) PressTo(move, Ledge - 1); };
+        b.PreviewMouseLeftButtonUp += (_, _) => PressTo(move, rest);
+        b.MouseEnter += (_, _) => { if (b.IsEnabled) face.Background = WhiteBrush; };
+        b.MouseLeave += (_, _) => { face.Background = restBrush; PressTo(move, rest); };
+        return b;
+    }
+
+    /// <summary>The friend card's tray under the tiles: a darker inset with a small spaced-capitals
+    /// label, so a picker reads as one labelled group.</summary>
+    public static Border Tray(string label, FrameworkElement body, string tag)
+    {
+        var sp = new StackPanel();
+        var head = Caps(label, 13, MutedBrush, FontWeights.Medium, 0.16);
+        head.HorizontalAlignment = HorizontalAlignment.Left;
+        head.Margin = new Thickness(0, 0, 0, 8);
+        sp.Children.Add(head);
+        sp.Children.Add(body);
+        return new Border
+        {
+            Background = Tint(Colors.Black, 0x30),
+            BorderBrush = Tint(Muted, 0x30),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10, 9, 10, 10),
+            Child = sp,
+            Tag = tag,
+        };
     }
 
     /// <summary>Swaps a chip's words (Copy -> Copied) without losing its look.</summary>

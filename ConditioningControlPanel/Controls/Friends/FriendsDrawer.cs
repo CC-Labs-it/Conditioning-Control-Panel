@@ -8,6 +8,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using ConditioningControlPanel.Controls.Dares;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
@@ -662,26 +663,67 @@ public sealed partial class FriendsDrawer : Border
         return t;
     }
 
-    /// <summary>The expanded card: the four actions in the owner's order, then whichever
-    /// picker is open.</summary>
+    /// <summary>The expanded card: the four actions in the owner's order as one family of pressable
+    /// tiles two by two (the Dares paint box, no ovals: owner 2026-11-18), the leash offer as a wide
+    /// tile with its (?) joined on, then whichever picker is open in a labelled tray.</summary>
     private FrameworkElement BuildCard(Friend f)
     {
         var card = new StackPanel { Margin = new Thickness(0, 8, 0, 2), Tag = "friends-card" };
         var grid = new UniformGrid { Columns = 2 };
         foreach (var act in FriendsDrawerRules.CardActions)
         {
-            if (act == "more") continue;
-            var b = ActionButton(act, f);
-            b.Margin = new Thickness(0, 0, grid.Children.Count % 2 == 0 ? 3 : 0, 6);
-            if (grid.Children.Count % 2 == 1) b.Margin = new Thickness(3, 0, 0, 6);
+            var b = act == "more" ? MoreTile(f) : ActionButton(act, f);
+            bool left = grid.Children.Count % 2 == 0;
+            b.Margin = new Thickness(left ? 0 : 3, 0, left ? 3 : 0, 6);
             grid.Children.Add(b);
         }
         card.Children.Add(grid);
         if (_leash.OfferChipFor(f) is { } leashChip) card.Children.Add(leashChip);
 
-        var more = FriendsLook.Pill(ButtonContent("", Loc.Get("friends_action_more"), center: true),
-            Brushes.Transparent, FriendsLook.MutedBrush, FriendsLook.Line2Brush, 10, new Thickness(10, 6, 10, 6));
-        more.Tag = "friends-action:more";
+        bool asking = false;
+        AddCardAsk(f, card, ref asking);
+        if (!asking && _picker != null)
+        {
+            var tray = DareLook.Tray(Loc.Get(ActionKey(_picker)), BuildPicker(f, _picker), "friends-tray:" + _picker);
+            tray.Margin = new Thickness(0, 2, 0, 0);
+            card.Children.Add(tray);
+        }
+        return card;
+    }
+
+    private static string ActionKey(string act) => act switch
+    {
+        "invite" => "friends_action_invite",
+        "poke" => "friends_action_poke",
+        "more" => "friends_action_more",
+        _ => "friends_action_watch",
+    };
+
+    /// <summary>Each action's block: its icon and its hue (the Dares kind colours).</summary>
+    private static (string Icon, Color Hue) ActionMark(string act) => act switch
+    {
+        "invite" => ("envelope", DareLook.ToneColor(DareTone.Minutes)),
+        "poke" => ("poke", DareLook.ToneColor(DareTone.Video)),
+        "watch" => ("video", DareLook.ToneColor(DareTone.Bubbles)),
+        _ => ("dots", DareLook.ToneColor(DareTone.CameraOff)),
+    };
+
+    private Button ActionButton(string act, Friend f)
+    {
+        var (icon, hue) = ActionMark(act);
+        var text = Loc.Get(ActionKey(act));
+        bool lit = _picker == act;
+        var b = DareLook.PressTile(DareLook.Labelled(DareLook.Block(icon, hue), text), hue, lit, "friends-action:" + act, text);
+        b.Click += (_, _) => { FriendsSfx.Click(); _picker = _picker == act ? null : act; Render(); };
+        return b;
+    }
+
+    /// <summary>"more": the fourth tile, quieter in hue, opening the same menu as a right-click.</summary>
+    private Button MoreTile(Friend f)
+    {
+        var (icon, hue) = ActionMark("more");
+        var text = Loc.Get(ActionKey("more"));
+        var more = DareLook.PressTile(DareLook.Labelled(DareLook.Block(icon, hue), text), hue, false, "friends-action:more", text);
         more.Click += (_, _) =>
         {
             FriendsSfx.Click();
@@ -690,57 +732,7 @@ public sealed partial class FriendsDrawer : Border
             menu.Placement = PlacementMode.Bottom;
             menu.IsOpen = true;
         };
-        card.Children.Add(more);
-
-        bool asking = false;
-        AddCardAsk(f, card, ref asking);
-        if (!asking && _picker != null)
-        {
-            var picker = BuildPicker(f, _picker);
-            picker.Margin = new Thickness(0, 8, 0, 0);
-            card.Children.Add(picker);
-        }
-        return card;
-    }
-
-    private Button ActionButton(string act, Friend f)
-    {
-        string glyph = act switch { "invite" => "", "poke" => "", _ => "" };
-        string key = act switch { "invite" => "friends_action_invite", "poke" => "friends_action_poke", _ => "friends_action_watch" };
-        bool lit = _picker == act;
-        var b = FriendsLook.Pill(ButtonContent(glyph, Loc.Get(key), center: false),
-            lit ? FriendsLook.ButtonHoverBrush : FriendsLook.ButtonBrush, FriendsLook.TextBrush,
-            lit ? FriendsLook.LilacBrush : FriendsLook.Line2Brush, 10, new Thickness(10, 8, 10, 8));
-        b.Tag = "friends-action:" + act;
-        b.Click += (_, _) => { FriendsSfx.Click(); _picker = _picker == act ? null : act; Render(); };
-        return b;
-    }
-
-    private static StackPanel ButtonContent(string glyph, string text, bool center)
-    {
-        var sp = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = center ? HorizontalAlignment.Center : HorizontalAlignment.Left,
-        };
-        sp.Children.Add(new TextBlock
-        {
-            Text = glyph,
-            FontFamily = new FontFamily("Segoe MDL2 Assets"),
-            FontSize = 14,
-            Foreground = FriendsLook.LilacBrush,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 8, 0),
-        });
-        sp.Children.Add(new TextBlock
-        {
-            Text = text,
-            FontFamily = FriendsLook.Display,
-            FontWeight = FontWeights.Medium,
-            FontSize = 13,
-            VerticalAlignment = VerticalAlignment.Center,
-        });
-        return sp;
+        return more;
     }
 
     private FrameworkElement BuildRequestRow(FriendRequest r, bool incoming)
