@@ -989,6 +989,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         public void PlayChain(EmiChain? chain, Action? done = null, string? bodyFrameOverride = null)
         {
             if (chain == null || (PresentationActive && !(PresentationArriving && chain.Id == "wake"))) return;
+            if (!AskLive) StopAskTimer();
             // ponytail: voice mood, prop teardown and pixel/art rendering still need their hosts.
             // #3329: the goodbye wink owns her until the dismissal lands, and any other chain during the
             // wake completes the summon first (WPF React.cs:132-138 order), so its done hook still runs once.
@@ -2838,6 +2839,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             try
             {
                 _closingForGood = true;
+                CancelAsk(visual: false);
                 StopGlassWatch();
                 _player.Dispose();
                 UnhookDeskItems();
