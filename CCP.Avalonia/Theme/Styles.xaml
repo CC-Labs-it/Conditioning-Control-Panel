@@ -425,6 +425,7 @@
 
   <!-- Controls.xaml:429 -->
   <ControlTheme x:Key="OutlineButton" TargetType="Button">
+    <Setter Property="FocusAdorner" Value="{x:Null}"/>
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="Foreground" Value="{DynamicResource PinkBrush}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
@@ -460,6 +461,7 @@
 
   <!-- Controls.xaml:342 -->
   <ControlTheme x:Key="PinkButton" TargetType="Button">
+    <Setter Property="FocusAdorner" Value="{x:Null}"/>
     <Setter Property="Background" Value="{DynamicResource PinkBrush}"/>
     <Setter Property="Foreground" Value="White"/>
     <Setter Property="FontWeight" Value="Bold"/>
