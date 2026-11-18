@@ -52,6 +52,7 @@ public partial class MainShellWindow
             if (_askService != null) { _askService.SnapshotChanged -= OnLeashAskSnapshot; _askService.EventArrived -= OnLeashEvent; }
             _askService = next;
             _seenLeashOffers.Clear();
+            _waitingLeashAsks.Clear();
             _heldLeashNotices.Clear();
             if (next != null)
             {
