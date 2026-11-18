@@ -27,7 +27,11 @@ namespace ConditioningControlPanel.Services
         // half-written temp over settings.json (#761). Never taken while _timerLock is held,
         // and never held across the UI-thread serialize hop — both would deadlock the shutdown
         // path, where SaveImmediate runs ON the UI thread.
-        private readonly object _saveLock = new();
+        // Recovery in a second service must not remove a temp file that a save is publishing.
+        // Services for the same path share this gate; unrelated profiles stay independent.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, object> SaveLocks =
+            new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        private readonly object _saveLock;
         private readonly object _timerLock = new();
         // Instances with an armed debounce. Product code only adds/removes; the test isolation hook
         // disarms them after each test so a dead test's private service cannot write settings.json
@@ -149,6 +153,7 @@ namespace ConditioningControlPanel.Services
         private SettingsService(string settingsPath, bool migrate)
         {
             _settingsPath = settingsPath;
+            _saveLock = SaveLocks.GetOrAdd(Path.GetFullPath(settingsPath), _ => new object());
             if (migrate) MigrateSettingsFromOldLocation();
 
             Current = Load();
@@ -194,11 +199,16 @@ namespace ConditioningControlPanel.Services
                 // per-write temp name now, so glob (the legacy fixed settings.json.tmp matches too)
                 // and only adopt a candidate that still parses — a truncated temp must never be
                 // promoted to settings.json.
-                RecoverAndCleanTempFiles();
-
-                if (File.Exists(_settingsPath))
+                string? json;
+                lock (_saveLock)
                 {
-                    var json = File.ReadAllText(_settingsPath);
+                    RecoverAndCleanTempFiles();
+                    // Windows readers can otherwise hold the destination across an atomic replace.
+                    json = File.Exists(_settingsPath) ? File.ReadAllText(_settingsPath) : null;
+                }
+
+                if (json != null)
+                {
 
                     // Use explicit settings to ensure lists are REPLACED, not merged with defaults.
                     // Error handler makes the load RESILIENT: a single unparseable member (e.g. an
