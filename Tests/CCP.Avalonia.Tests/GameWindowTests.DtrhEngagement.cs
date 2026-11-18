@@ -34,7 +34,7 @@ public sealed partial class GameWindowTests
         Assert.Equal(3, (int)Assert.Single(merged)["stats"]![0]!["grabs"]!);
         Assert.Empty(sent);
         w.Web.OnWebMessage("{\"type\":\"ready\"}");
-        Assert.Equal(new[] { "init", "manifest", "loom-list" }, sent.Take(3).Select(o => (string?)o["type"]));
+        Assert.Equal(new[] { "init", "meta", "manifest", "loom-list" }, sent.Take(4).Select(o => (string?)o["type"]));
         var favorites = sent.Where(o => (string?)o["type"] == "favorites").ToList();
         if (hasHistory)
             Assert.Equal(expected, Assert.Single(favorites)["names"]!.Values<string>());
@@ -55,7 +55,7 @@ public sealed partial class GameWindowTests
         w.HandleMessage("{\"type\":\"asset-stats\",\"stats\":[]}");
         w.HandleMessage("{\"type\":\"request-run\"}");
         Assert.True(w.DtrhReady);
-        Assert.Equal(new[] { "init", "manifest", "loom-list", "run-config" }, sent.Select(o => (string?)o["type"]));
+        Assert.Equal(new[] { "init", "meta", "manifest", "loom-list", "meta", "run-config" }, sent.Select(o => (string?)o["type"]));
         w.Close();
     });
 
@@ -97,8 +97,8 @@ public sealed partial class GameWindowTests
             w.Web.OnNavigationCompleted(w.PageUrl!);
             void Send(object frame) => w.Web.OnWebMessage(Newtonsoft.Json.JsonConvert.SerializeObject(frame));
             Send(new { type = "ready" });
-            Assert.Equal(new[] { "init", "manifest", "loom-list" }, sent.Select(o => (string?)o["type"]));
-            var entry = sent[2]["spirals"]!.Single(s => (string?)s["slug"] == slug);
+            Assert.Equal(new[] { "init", "meta", "manifest", "loom-list" }, sent.Select(o => (string?)o["type"]));
+            var entry = sent[3]["spirals"]!.Single(s => (string?)s["slug"] == slug);
             var path = DtrhLoomStore.GifPathFor(slug)!;
             Assert.Equal(3, (int)entry["params"]!["arms"]!);
             Assert.Equal(path, server.ResolveFile(new Uri((string)entry["url"]!).AbsolutePath));
@@ -157,7 +157,7 @@ public sealed partial class GameWindowTests
             };
             w.HandleMessage("{\"type\":\"ready\"}");
             Assert.True(w.DtrhReady);
-            Assert.Equal(failOnReady ? new[] { "init", "manifest", "favorites" } : new[] { "init", "manifest", "loom-list", "favorites" },
+            Assert.Equal(failOnReady ? new[] { "init", "meta", "manifest", "favorites" } : new[] { "init", "meta", "manifest", "loom-list", "favorites" },
                 sent.Select(o => (string?)o["type"]));
             failList = true;
             w.HandleMessage(Newtonsoft.Json.JsonConvert.SerializeObject(new { type = "loom-save", name = slug, gifBase64 = DtrhTinyGif }));

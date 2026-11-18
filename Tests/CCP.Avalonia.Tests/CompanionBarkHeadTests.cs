@@ -432,6 +432,14 @@ public sealed class CompanionBarkHeadTests
         Assert.Equal("first play", spoken());
     });
 
+    [Fact]
+    public void GiftGivenBarkReachesTheEngine() => WithSeamsRestored(_ =>
+    {
+        Seeded(Rule("ChaosGiftGiven", "gift"), out var spoken);
+        ConditioningControlPanel.Services.Chaos.ChaosLessons.GiftGivenBark!();
+        Assert.Equal("gift", spoken());
+    });
+
     private static BarkRule Rule(string trigger, string line, (string Key, object Value)? condition = null) => new()
     {
         Id = "t_" + trigger, Trigger = trigger, VariantPool = new() { new BarkVariant(line) },
@@ -462,6 +470,7 @@ public sealed class CompanionBarkHeadTests
             CoreSettingsHooks.SettingChangedSink, CoreBark.UiAction, CoreBark.TabNavigated, CoreBark.FeatureOpened, CoreBark.AvatarClicked);
         var chaos = (CoreBark.ChaosDraftAutopick, CoreBark.ChaosRankUp, CoreBark.ChaosResultsShown, CoreBark.AllLinesProvider);
         var firstTimeBark = ConditioningControlPanel.Services.Chaos.ChaosLessons.FirstTimeBark;
+        var giftGivenBark = ConditioningControlPanel.Services.Chaos.ChaosLessons.GiftGivenBark;
         var state = (s.AvatarEnabled, s.BarkChatSuppressionMs, new Dictionary<string, List<string>>(s.BarkVariantRotation));
         try
         {
@@ -474,6 +483,7 @@ public sealed class CompanionBarkHeadTests
                 CoreSettingsHooks.SettingChangedSink, CoreBark.UiAction, CoreBark.TabNavigated, CoreBark.FeatureOpened, CoreBark.AvatarClicked) = hooks;
             (CoreBark.ChaosDraftAutopick, CoreBark.ChaosRankUp, CoreBark.ChaosResultsShown, CoreBark.AllLinesProvider) = chaos;
             ConditioningControlPanel.Services.Chaos.ChaosLessons.FirstTimeBark = firstTimeBark;
+            ConditioningControlPanel.Services.Chaos.ChaosLessons.GiftGivenBark = giftGivenBark;
             (s.AvatarEnabled, s.BarkChatSuppressionMs) = (state.AvatarEnabled, state.BarkChatSuppressionMs);
             s.BarkVariantRotation.Clear();
             foreach (var kv in state.Item3) s.BarkVariantRotation[kv.Key] = kv.Value;

@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Windows.Threading;
+using System.Threading;
+using Serilog;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
@@ -28,7 +29,8 @@ internal sealed class DtrhMetaBridge
 {
     private readonly bool _testMode;
     private readonly ChaosMetaState? _testState;
-    private DispatcherTimer? _saveDebounce;
+    private Timer? _saveDebounce;
+    private int _saveGeneration;
     private readonly Action<object> _broadcast;   // posts a {type:'meta'} message to the page
 
     private static readonly JsonSerializerSettings SnapshotJson = new()
@@ -138,7 +140,7 @@ internal sealed class DtrhMetaBridge
                         S.GiftGiven = true;
                         S.Gold = 0;
                         S.PurchasedDials.Add(id);
-                        if (!_testMode) { try { App.Bark?.NotifyChaosGiftGiven(); } catch { } }
+                        if (!_testMode) { try { ChaosLessons.GiftGivenBark?.Invoke(); } catch { } }
                         applied = true;
                     }
                     break;
@@ -224,7 +226,7 @@ internal sealed class DtrhMetaBridge
                     foreach (var kv in cost) S.Materials[kv.Key] -= kv.Value;
                     S.DiscoveredRecipes.Add(id);
                     S.CraftedItems[id] = (S.CraftedItems.TryGetValue(id, out var owned) ? owned : 0) + 1;
-                    App.Logger?.Information("DtrhMetaBridge: crafted {Id} (x{Count})", id, S.CraftedItems[id]);
+                    Log.Information("DtrhMetaBridge: crafted {Id} (x{Count})", id, S.CraftedItems[id]);
                     applied = true;
                     break;
                 }
@@ -295,8 +297,8 @@ internal sealed class DtrhMetaBridge
                     S.FirstTimesAwarded ??= new HashSet<string>();
                     if (!S.FirstTimesAwarded.Add(id)) break;
                     S.Sparks += amount;
-                    if (!_testMode) { try { App.Bark?.NotifyChaosFirstTime(id); } catch { } }
-                    App.Logger?.Information("DtrhMetaBridge: first-time {Id} +{Amount} drops", id, amount);
+                    if (!_testMode) { try { ChaosLessons.FirstTimeBark?.Invoke(id); } catch { } }
+                    Log.Information("DtrhMetaBridge: first-time {Id} +{Amount} drops", id, amount);
                     applied = true;
                     break;
                 }
@@ -414,17 +416,17 @@ internal sealed class DtrhMetaBridge
                     break;
                 }
                 default:
-                    App.Logger?.Warning("DtrhMetaBridge: unknown op '{Op}' ignored", op);
+                    Log.Warning("DtrhMetaBridge: unknown op '{Op}' ignored", op);
                     break;
             }
         }
         catch (Exception ex)
         {
-            App.Logger?.Warning("DtrhMetaBridge: op '{Op}' failed: {E}", op, ex.Message);
+            Log.Warning("DtrhMetaBridge: op '{Op}' failed: {E}", op, ex.Message);
         }
 
         if (applied) { Bump(); DebounceSave(); }
-        else if (op != null) App.Logger?.Debug("DtrhMetaBridge: op '{Op}' rejected (shape/affordability)", op);
+        else if (op != null) Log.Debug("DtrhMetaBridge: op '{Op}' rejected (shape/affordability)", op);
         return applied;
     }
 
@@ -436,7 +438,8 @@ internal sealed class DtrhMetaBridge
     public void FlushSave()
     {
         if (_saveDebounce == null) return;
-        _saveDebounce.Stop();
+        _saveGeneration++;
+        _saveDebounce.Dispose();
         _saveDebounce = null;
         SaveNow();
     }
@@ -451,13 +454,12 @@ internal sealed class DtrhMetaBridge
 
     private void DebounceSave()
     {
-        if (_saveDebounce == null)
+        var generation = ++_saveGeneration;
+        _saveDebounce?.Dispose();
+        _saveDebounce = new Timer(_ => CoreDispatch.Post(() =>
         {
-            _saveDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
-            _saveDebounce.Tick += (_, _) => FlushSave();
-        }
-        _saveDebounce.Stop();
-        _saveDebounce.Start();
+            if (generation == _saveGeneration) FlushSave();
+        }), null, 500, Timeout.Infinite);
     }
 
     private void SaveNow()
@@ -466,7 +468,7 @@ internal sealed class DtrhMetaBridge
         {
             if (_testMode)
             {
-                var path = Path.Combine(App.UserDataPath, "chaos_meta.test.json");
+                var path = Path.Combine(CorePaths.UserData, "chaos_meta.test.json");
                 File.WriteAllText(path, JsonConvert.SerializeObject(_testState, Formatting.Indented));
             }
             else
@@ -474,7 +476,7 @@ internal sealed class DtrhMetaBridge
                 ChaosMeta.Save();
             }
         }
-        catch (Exception ex) { App.Logger?.Warning("DtrhMetaBridge.SaveNow: {E}", ex.Message); }
+        catch (Exception ex) { Log.Warning("DtrhMetaBridge.SaveNow: {E}", ex.Message); }
     }
 
     private int ComputeSparksOnly(in ChaosMeta.ChaosRunRewardInput run)

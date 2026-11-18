@@ -158,6 +158,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 catch (Exception ex) { Diag.Swallowed(ex); }
             }
             if (spec.Id == FypId) OpenFypVisit();
+            // WPF App.xaml.cs:2828 loads the active save before any DtRH door. Do not
+            // replace the state under a live classic hub or descent.
+            if (spec.Id == DtrhId && Chaos.ChaosHubWindow.Current == null && !Chaos.ChaosRunHost.IsActive)
+                ChaosMeta.Init();
             try
             {
                 var window = new GameWindow(spec);
