@@ -3,6 +3,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using Avalonia.Threading;
+using Avalonia.Controls;
+using Avalonia.LogicalTree;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
@@ -19,6 +22,55 @@ namespace CCP.Avalonia.Tests;
 /// the caged video window. The real Core LeashService on a no-network wire; the features behind the runner are faked.</summary>
 public sealed class LeashPunishTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LockedHint_ExplainsHowToCut(bool wayland) => Run((shell, launcher, svc, host, runner) =>
+    {
+        var (display, session, key) = (Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"), Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), CoreSettings.Current.PanicKey);
+        try
+        {
+            Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", wayland ? "wayland-test" : null);
+            Environment.SetEnvironmentVariable("XDG_SESSION_TYPE", wayland ? "wayland" : "x11");
+            CoreSettings.Current.PanicKey = "F10";
+            Assert.True(LeashPunishWindow.OpenUrl("https://example.com", "holder", true));
+            var hint = LeashPunishWindow.Current!.GetLogicalDescendants().OfType<TextBlock>().Single(t => (string?)t.Tag == "leash-punish-hint");
+            Assert.Equal(LeashHead.WaylandSession ? Loc.Get("leash_self_cut_wayland") : Loc.GetF("leash_punish_hold", LeashHoldToCut.KeyLabel("F10")), hint.Text);
+        }
+        finally
+        {
+            LeashPunishWindow.CloseNow();
+            Environment.SetEnvironmentVariable("WAYLAND_DISPLAY", display);
+            Environment.SetEnvironmentVariable("XDG_SESSION_TYPE", session);
+            CoreSettings.Current.PanicKey = key;
+        }
+    });
+
+    [Fact]
+    public void RefusedClose_PlaysDenied() => Run((shell, launcher, svc, host, runner) =>
+    {
+        var (play, art, muted, rules, volume) = (CoreAudio.PlayOneShotProvider, CoreModArt.AudioOverridePathProvider, CoreAudio.IsOutputSuppressedProvider, LeashSound.Rules, CoreSettings.Current.MasterVolume);
+        var file = Path.GetTempFileName();
+        string? cue = null;
+        try
+        {
+            CoreSettings.Current.MasterVolume = 50;
+            CoreAudio.PlayOneShotProvider = (_, _, tag, _, _) => cue = tag;
+            CoreModArt.AudioOverridePathProvider = _ => file;
+            CoreAudio.IsOutputSuppressedProvider = () => false;
+            LeashSound.Rules = new LeashSfxRules();
+            Assert.True(LeashPunishWindow.OpenUrl("https://example.com", "holder", true));
+            LeashPunishWindow.Current!.Refuse();
+            Assert.Equal("leash-denied", cue);
+        }
+        finally
+        {
+            LeashPunishWindow.CloseNow();
+            (CoreAudio.PlayOneShotProvider, CoreModArt.AudioOverridePathProvider, CoreAudio.IsOutputSuppressedProvider, LeashSound.Rules, CoreSettings.Current.MasterVolume) = (play, art, muted, rules, volume);
+            File.Delete(file);
+        }
+    });
+
     private sealed class FakeHost : ILeashTaskHost
     {
         public int Cards, Shows;

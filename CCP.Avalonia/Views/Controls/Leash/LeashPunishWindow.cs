@@ -4,7 +4,6 @@
 // Head differences (WebHost = NativeWebView): the cage runs after each load and each second (no document-created
 // injection); messages ride the engine's invokeCSharpAction string carrier (same 'leash-ended'/'leash-error'); a local
 // file plays from a page written under the user data; no HTTP status, so only no engine or a media error fail it.
-// ponytail: the refusal's LeashFx.Denied sound lands with the leash fx unit.
 using System;
 using System.IO;
 using System.Net;
@@ -16,6 +15,8 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Services.Leash;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using F = ConditioningControlPanel.Avalonia.Views.Controls.FriendsDrawer;
@@ -121,8 +122,9 @@ internal sealed class LeashPunishWindow : Window
         return b;
     }
     private string TitleText() => Loc.GetF(_locked ? "leash_punish_title" : "leash_task_title", _holder);
-    // WPF says "hold {key} 5 s to cut"; hold-to-cut is not on this head yet, so the hint names the Cut button.
-    private string HintText() => Loc.Get(_locked ? "leash_ask_p_cut" : "leash_task_close_hint");
+    private string HintText() => !_locked ? Loc.Get("leash_task_close_hint")
+        : LeashHead.WaylandSession ? Loc.Get("leash_self_cut_wayland")
+        : Loc.GetF("leash_punish_hold", LeashHoldToCut.KeyLabel(CoreSettings.Current.PanicKey));
     /// <summary>The head's Cut leash. The window goes first so nothing is left caged while the service works.</summary>
     internal void CutFromWindow()
     {
@@ -275,6 +277,7 @@ internal sealed class LeashPunishWindow : Window
     /// <summary>A close on a punishment: the window shakes and the head says whose it is, for a few seconds.</summary>
     internal void Refuse()
     {
+        LeashSound.Denied(DateTime.UtcNow);
         _title.Text = Loc.GetF("leash_punish_no_close", _holder);
         (_title.Foreground, _hint.Foreground) = (F.Gold, F.Gold);
         _refuseTimer?.Stop();
