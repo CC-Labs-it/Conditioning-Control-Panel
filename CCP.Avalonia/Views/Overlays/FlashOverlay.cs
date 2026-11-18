@@ -483,6 +483,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var entry = (w, rect);
             w.Closed += (_, _) => Active.RemoveAll(e => e.Window == w);
             Active.Add(entry);
+            EnsureDeckTick();
             w.ApplyCorners(CoreSettings.Current.FlashRoundedCorners, OwnsMotion, glow.HasGlow,
                 rect.Width / scaling, rect.Height / scaling);
             w.Show();
@@ -685,19 +686,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void Pop(FlashOverlayWindow w, bool fromGaze = false)
         {
             if (w.IsFadingOut || w.Exit != null || w.Shatter != null || w.DeckShatter != null || !Active.Any(e => e.Window == w)) return;
+            var rect = Active.First(e => e.Window == w).Rect;
             Active.RemoveAll(e => e.Window == w);
             _ = CoreHaptics.Service?.FlashClickVibeAsync();   // WPF FlashService.cs:2945
             var s = CoreSettings.Current;
             // WPF OnFlashClicked hydra (FlashService.cs:2956-2970): Corruption mode, up to two more.
             var n = FlashFxRules.HydraSpawnCount(s.CorruptionMode, s.HydraLimit, isRemix: w.IsRemix, fromGaze: fromGaze, w.HydraGeneration, Active.Count);
             if (n > 0) Multiply(w, n, ChildLifetime(w, s), w.HydraGeneration + 1);
+            Dismiss(w, rect, s);
+        }
+
+        /// <summary>WPF SafeCloseFlashWindow (FlashService.cs:5211-5254) for a flash already out of
+        /// <see cref="Active"/>: a card break, the Gentle fade, an owned shatter or the exit style.</summary>
+        private static void Dismiss(FlashOverlayWindow w, PixelRect rect, AppSettings s)
+        {
             // WPF FlashService.cs:5225-5240: the click that reached BreakAt breaks the card, ahead of Gentle and the exit picker.
             if (w.DeckBreak)
             {
                 w.DeckBreak = false;
-                if (!w.TryBeginDeckShatter(FlashOverlayWindow.DeckLevel, Rng)) { w.Close(); return; }
                 Exiting.Add(w);
                 w.Closed += (_, _) => Exiting.Remove(w);
+                double side = Math.Max(rect.Width, rect.Height), small = Math.Clamp(w.PoolScale, 0.35, 1);
+                Platform.Super.SuperStageHost.Stage.Blast(new ConditioningControlPanel.SuperCore.Blast(
+                    rect.X + rect.Width / 2.0, rect.Y + rect.Height / 2.0,
+                    side * ConditioningControlPanel.SuperCore.DeckOptions.ReachSides(s.DeckBreakReach) * small,
+                    side * 0.8 * small, ConditioningControlPanel.SuperCore.BlastKind.CardBreak));
+                if (!w.IsVisible) return; // a stage listener may have panicked synchronously
+                if (!w.TryBeginDeckShatter(FlashOverlayWindow.DeckLevel, Rng)) { w.Close(); return; }
                 return;
             }
             if (s.GentleVisuals)

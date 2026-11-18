@@ -1764,5 +1764,10 @@ const m=document.getElementById('ledger-meta');const s=document.querySelector('.
 <li>Restack b220 (#4299): the consumer (<code>KeywordAudioRuntime.CheckOcrWords</code>, one fire path with the keyboard) and the lifecycle (<code>ScreenOcrService</code>, <code>KeywordTriggerHead.SyncOcr</code> from the master and OCR switches and the interval slider) are in; #4267's parallel matcher was dropped for this one consumer.</li>
 <li>When an engine lands: <code>ScreenOcrService.Word</code> has no screen, so a regex match unions word rectangles across monitors; WPF <code>KeywordTriggerService.cs:1102</code> unions only words on the first word's screen. Add the screen to <code>Word</code> then. The panic fallback must also stop and restart the scanner (WPF PanicWatchdog; #4551).</li>
 </ul>
+<h2 id="2026-11-16-whirlpool-dormant-without-surface">2026-11-16: The Whirlpool stays dormant until a surface draws it (routine; supervisor)</h2>
+<ul>
+<li>Problem: lane s73-deck-b gave the shared stage a clock, so the pool grew under a resting pointer and pulled and ate pictures while nothing on this head drew the spiral.</li>
+<li>Choice: <code>SuperStageHost.PoolDrawn</code> (<code>CCP.Avalonia/Platform/Super/SuperStageHost.cs</code>) is false until a Whirlpool surface sets it and calls <code>Sync</code>; until then the clock never starts, the pool stays at size 0 and pictures feel nothing. WPF steps the stage from the drawing layer (<code>ConditioningControlPanel/Services/Compositor/WhirlpoolLayer.cs:70</code>) and only with the compositor up (<code>ConditioningControlPanel/Services/Super/SuperStageHost.cs:54</code>), so an undrawn pool never acts there either. The renderer is owned by the Super-on-Linux work on <code>sync/73-linux</code>; no second one is built here.</li>
+</ul>
 </body>
 </html>
