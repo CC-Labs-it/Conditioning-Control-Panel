@@ -20,15 +20,35 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.3.3";
+        public const string AppVersion = "7.3.4";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.3.3 - Back to the basics
+        public const string CurrentPatchNotes = @"v7.3.4 - Back to the basics
 
-NEW IN 7.3.3
+NEW IN 7.3.4
+
+DARES
+bet a friend on your own CCP use. right-click a friend and pick Dare, or type /bet make in our Discord.
+
+- the bet is one sentence you fill in one blank at a time: pictures seen, minutes, video time, a session by difficulty, bubbles popped, or a dare of your own. ""you can't do it"", or a duel where the bigger count wins.
+- stakes: Sparkles, a dare (you type its words in Discord with /bet write, the app shows it as a numbered sealed dare), lock minutes on your own Chaster tab, or a Lockdown. the Lockdown stake is for subscribers.
+- your own app counts what you do. a camera check is there if you both want it.
+- the loser gets one card: pay, renounce (no dares for 7 days, and your friend is told) or close CCP. nothing ever starts on its own. a debt left unpaid for 7 days counts as renounced.
+
+FROM YOUR 7.3.3 ROUND
+- a new switch, Moving effects pop bubbles and flash images, in the Scrawl and Whirlpool boxes. it is off: the bouncing word and the pool still push and pull things, they just stop popping and breaking them on their own. switch it on for the 7.3.3 behaviour.
+- Whirlpool with Stay centered pulls and swirls bubbles but never eats them. it was setting off Hydra cascades.
+- Whirlpool: Drags in has a Words switch. off, the pool leaves the bouncing word alone.
+- Steam: Reach scales the whole fog now, so 10% is a thin line at the edges. Strength under 10% really thins it.
+- the companion no longer slips a stray CALLBACK or a bare number into what it says.
+- the camera also stays off when you stop it from the title bar pill or Settings > Devices.
+- AI-started takeover videos on Hypnotube go fullscreen again.
+- chess: an Arrows on / off button top right of the board. off, a right drag turns the board instead of drawing.
+
+FROM 7.3.3
 
 a round for those who told us the panel slows the effects down, and for Scrawl with big text.
 
@@ -143,7 +163,7 @@ FIXES
 - Deeper: fixed a crash while a library file was being read.
 - Piece by Piece: a press that does not move is a click, the lit square is the one a click plays, and an arrow no longer stays stuck after a lost right release.
 
-this is a pre-release. it carries everything in 7.3.2, 7.3.1, 7.3.0 and 7.2.4.";
+this is a pre-release. it carries everything in 7.3.3, 7.3.2, 7.3.1, 7.3.0 and 7.2.4.";
 
         private const string GitHubOwner = "CC-Labs-it";
         private const string GitHubRepo = "Conditioning-Control-Panel";
