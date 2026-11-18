@@ -530,6 +530,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state.PushEvent($"🔮 prism! 10x · {spec.Payload.DisplayName} fires");
                 Pulse(Color.FromRgb(0xC8, 0xA8, 0xFF), 0.40);
                 CreditPop();   // WPF ChaosModeService.cs:1844
+                RollCamGirlTip();
                 CheckComboMilestone();
                 return;
             }
@@ -545,6 +546,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             CreditPop();   // WPF ChaosModeService.cs:1873
             Pulse(Color.FromRgb(255, 200, 235), 0.10);
             if (spec.PayMult > 1) _state.PushEvent("🪨 heavy drop! x3");
+            RollCamGirlTip();
             BodyBuzz(b);
             CheckComboMilestone();
         }
@@ -619,12 +621,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (ChaosGifCascadeOverlay.IsRaining) ChaosLessons.Tick("blindfold");
             ShowPopScore(pts);
             CreditPop();   // WPF ChaosModeService.cs:2025
+            RollCamGirlTip();
             if (_state.LastSecondGoldEnabled && fuseSecLeft <= 1.0)
             {
                 int gold = ChaosRunEngine.GoldScaled(_state, Rng.Next(5, 10));
-                BankGold(gold);
-                PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY + 30,
-                    $"+{gold} {ChaosGlyphs.Gold}", Color.FromRgb(0xFF, 0xD7, 0x00));
+                BankGold(gold, floatAtPop: true);
                 _state.PushEvent($"{ChaosGlyphs.Gold} playing with fire +{gold} gold");
                 Pulse(Color.FromRgb(255, 140, 60), 0.30);
             }
@@ -1408,13 +1409,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 : $"{ChaosGlyphs.Gold} loop done — she tips +{tip} gold");
         }
 
+        /// <summary>WPF RollCamGirlTip (:1756): chance per treat, prism or snap.</summary>
+        private static void RollCamGirlTip()
+        {
+            if (_state == null || _state.CamGirlTipChance <= 0 || Rng.NextDouble() >= _state.CamGirlTipChance) return;
+            int tip = ChaosRunEngine.GoldScaled(_state, Rng.Next(2, 5));
+            BankGold(tip, floatAtPop: true);
+            _state.PushEvent($"{ChaosGlyphs.Gold} {Loc.GetF("chaos_camgirl_tip", tip)}");
+        }
+
         /// <summary>WPF BankGold (:1709): persists at once; the very first gold gets its feed line.</summary>
-        private static void BankGold(int gold)
+        private static void BankGold(int gold, bool floatAtPop = false)
         {
             if (gold <= 0 || _state == null) return;
             bool first = !ChaosMeta.State.SeenGoldFirst;
             if (first) ChaosMeta.State.SeenGoldFirst = true;
             ChaosMeta.AddGold(gold);   // persists
+            if (floatAtPop)
+                PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY + 30,
+                    $"+{gold} {ChaosGlyphs.Gold}", Color.FromRgb(0xFF, 0xD7, 0x00));
             if (first)
             {
                 _state.PushEvent($"{ChaosGlyphs.Gold} gold. she takes it at her bench.");

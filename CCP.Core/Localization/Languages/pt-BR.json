@@ -8519,5 +8519,6 @@
   "possession_doki_ok": "ok",
   "remote_invalid_hypnotube_url": "URL de vídeo do HypnoTube inválida",
   "remote_browser_unavailable": "o navegador não conseguiu abrir",
-  "remote_browser_screen_busy": "{0} está na tela"
+  "remote_browser_screen_busy": "{0} está na tela",
+  "chaos_camgirl_tip": "gorjeta +{0} ouro"
 }

@@ -8519,5 +8519,6 @@
   "possession_doki_ok": "ok",
   "remote_invalid_hypnotube_url": "keine gültige HypnoTube-Video-URL",
   "remote_browser_unavailable": "der Browser konnte es nicht öffnen",
-  "remote_browser_screen_busy": "{0} ist auf dem Bildschirm"
+  "remote_browser_screen_busy": "{0} ist auf dem Bildschirm",
+  "chaos_camgirl_tip": "Trinkgeld +{0} Gold"
 }
