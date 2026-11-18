@@ -60,11 +60,11 @@ public static class BubbleSkinChoice
     public static bool CarriesLock(string? activeModId, bool modSuppliesBubbleArt)
         => modSuppliesBubbleArt && string.Equals(activeModId, LockModId, StringComparison.Ordinal);
 
-    /// <summary>Owner rule (2026-11-18): a lock bubble never wears a bought skin. It stays the normal
-    /// bubble with its lock inside, and soap also gives it the normal pop and sound. Every other bubble
-    /// keeps the worn skin.</summary>
-    public static string ForBubble(string? skin, bool carriesLock)
-        => carriesLock ? BubbleSkinIds.Soap : Resolve(skin);
+    /// <summary>Owner rule (2026-11-18): a bought skin never draws over the lock picture. With a skin
+    /// worn, a bubble that would carry the lock draws on the plain bubble instead, so the buyer sees
+    /// the skin. With no skin worn (soap) the lock bubble stays as it is.</summary>
+    public static bool SkinTakesPlainBubble(string? skin, bool carriesLock)
+        => carriesLock && Resolve(skin) != BubbleSkinIds.Soap;
 }
 
 /// <summary>Heart: <see cref="HeartBody"/> is the heart itself (R = its scale, Alpha = the beat 0..1);

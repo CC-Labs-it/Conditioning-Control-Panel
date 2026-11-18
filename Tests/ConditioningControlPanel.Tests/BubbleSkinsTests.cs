@@ -25,16 +25,17 @@ public class BubbleSkinsTests
     }
 
     [Fact]
-    public void A_lock_bubble_never_wears_a_skin_and_every_other_bubble_keeps_it()
+    public void A_worn_skin_draws_on_the_plain_bubble_never_over_the_lock()
     {
         Assert.Equal(Models.BuiltInMods.LockedId, BubbleSkinChoice.LockModId);
         foreach (var id in BubbleSkinIds.All)
         {
-            Assert.Equal(BubbleSkinIds.Soap, BubbleSkinChoice.ForBubble(id, carriesLock: true));
-            Assert.Equal(BubbleSkinChoice.Resolve(id), BubbleSkinChoice.ForBubble(id, carriesLock: false));
-            // Soap is what gives the lock bubble the normal pop: no skin clips of its own.
-            Assert.False(BubbleSkinSounds.HasOwnPop(BubbleSkinChoice.ForBubble(id, carriesLock: true)));
+            bool worn = BubbleSkinChoice.Resolve(id) != BubbleSkinIds.Soap;
+            // A skin takes the plain bubble; no skin (soap) keeps the lock bubble.
+            Assert.Equal(worn, BubbleSkinChoice.SkinTakesPlainBubble(id, carriesLock: true));
+            Assert.False(BubbleSkinChoice.SkinTakesPlainBubble(id, carriesLock: false));
         }
+        Assert.False(BubbleSkinChoice.SkinTakesPlainBubble(null, carriesLock: true));
         Assert.True(BubbleSkinChoice.CarriesLock(BubbleSkinChoice.LockModId, modSuppliesBubbleArt: true));
         Assert.False(BubbleSkinChoice.CarriesLock(BubbleSkinChoice.LockModId, modSuppliesBubbleArt: false));   // no lock art on disk = the plain bubble
         Assert.False(BubbleSkinChoice.CarriesLock("builtin-drone", modSuppliesBubbleArt: true));
