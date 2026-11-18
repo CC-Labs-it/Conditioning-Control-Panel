@@ -16,7 +16,7 @@ internal sealed partial class GameWindow
     {
         if (_roomMinimized == minimized) return;
         _roomMinimized = minimized;
-        if (minimized) _backRoomFx?.CancelAll();
+        if (minimized) { _backRoomFx?.CancelAll(); StopBreakoutHaptic(); }
         Post(new { type = "suspend", on = minimized, reason = "minimise" });
     }
     internal Func<BackRoomRainBridge> RainBridgeFactory = () => new BackRoomRainBridge();

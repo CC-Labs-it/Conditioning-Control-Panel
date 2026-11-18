@@ -29,6 +29,8 @@ public class ChaosBodyBuzzTests
         {
             ChaosFieldFxOverlay.SkipPlatformChecksForTests = true;
             zapField.SetValue(null, sentinel);
+            // A prior field may contain a popping bubble; the scenario must start with its own field.
+            AvaloniaTestDispatcher.Run(() => BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { Popping = true }));
             await ShockwaveSelectsRendererAndCancelsHops(false);
             Assert.True(ChaosFieldFxOverlay.SkipPlatformChecksForTests);
             Assert.Equal(sentinel, zapField.GetValue(null));
@@ -66,6 +68,8 @@ public class ChaosBodyBuzzTests
             field.SetValue(null, state);
             LocalizationManager.Instance.SetLanguage("de");
             ChaosRunHost.Rng = new Random(7);
+            BubbleOverlay.EndChaos();
+            BubbleOverlay.Stop(); // retire a prior ambient field and its spawn timer before arranging targets
             BubbleOverlay.BeginChaos(new Border(), _ => { });
             var source = new AmbientBubble { X = -10, Y = -10, Size = 20, Popping = true, Spec = new EffectBubbleSpec() };
             for (int i = 1; i <= 10; i++) BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = i * 30 - 10, Y = -10, Size = 20, Spec = new EffectBubbleSpec() });

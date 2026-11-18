@@ -58,13 +58,13 @@ namespace ConditioningControlPanel.Services.Haptics
         private static CancellationTokenSource? _playing;
 
         private static bool Ready
-            => App.Settings?.Current?.Haptics is { Enabled: true } && App.Haptics is { IsConnected: true };
+            => CoreSettings.Service?.Current?.Haptics is { Enabled: true } && CoreHaptics.Service is { IsConnected: true };
 
         /// <summary>The bridge's <c>Deps.Haptic</c>: one validated pulse, or a stop.</summary>
         public static void OnHaptic(BackRoomHaptic h)
         {
             if (h.IsStop) { Stop(); return; }
-            var haptics = App.Haptics;
+            var haptics = CoreHaptics.Service;
             if (haptics == null || !Ready) return;
 
             CancellationTokenSource cts;
@@ -75,7 +75,7 @@ namespace ConditioningControlPanel.Services.Haptics
                 cts = _playing = new CancellationTokenSource();
             }
             var ms = DurationFor(h.Ms, haptics.IsButtplugProvider);
-            App.Logger?.Debug("BackRoomHaptics: {Station}/{Tag} {Pct}% {Ms}ms", h.Station, h.Tag, (int)(h.Level * 100), ms);
+            Serilog.Log.Debug("BackRoomHaptics: {Station}/{Tag} {Pct}% {Ms}ms", h.Station, h.Tag, (int)(h.Level * 100), ms);
             _ = PlayAsync(haptics, h.Level, ms, cts);
         }
 

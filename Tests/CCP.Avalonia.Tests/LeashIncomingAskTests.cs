@@ -18,6 +18,7 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
+[Collection(RunsAloneCollection.Name)]
 public sealed class LeashIncomingAskTests
 {
     private const string First = "0123456789abcdef", Second = "fedcba9876543210";
