@@ -5893,6 +5893,8 @@
   "tooltip_super_pool_size": "Cuánto crece el remolino mientras el ratón descansa.",
   "super_pool_centred": "Quedarse en el centro",
   "tooltip_super_pool_centred": "El remolino se queda en el centro de la pantalla a tamaño completo y ya no sigue al ratón.",
+  "super_moving_pops": "Los efectos en movimiento revientan burbujas e imágenes flash",
+  "tooltip_super_moving_pops": "Activado: la palabra que rebota y el remolino revientan las burbujas y rompen las imágenes flash que tocan. Desactivado: siguen empujando y atrayendo, pero no revientan ni rompen nada.",
   "super_pool_drags": "Arrastra",
   "tooltip_super_pool_drags": "Lo que el remolino atrae y hace girar: la niebla, las imágenes, las burbujas.",
   "super_pool_drags_fog": "Niebla",

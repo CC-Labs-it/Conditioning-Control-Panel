@@ -5893,6 +5893,8 @@
   "tooltip_super_pool_size": "La taille que prend le tourbillon pendant que la souris reste immobile.",
   "super_pool_centred": "Rester au centre",
   "tooltip_super_pool_centred": "Le tourbillon reste au centre de l'écran à sa taille maximale et ne suit plus la souris.",
+  "super_moving_pops": "Les effets en mouvement éclatent les bulles et les images flash",
+  "tooltip_super_moving_pops": "Activé : le mot rebondissant et le tourbillon éclatent les bulles et brisent les images flash qu'ils touchent. Désactivé : ils poussent et attirent toujours, mais n'éclatent et ne brisent rien.",
   "super_pool_drags": "Attire",
   "tooltip_super_pool_drags": "Ce que le tourbillon attire et fait tourner : la brume, les images, les bulles.",
   "super_pool_drags_fog": "Brume",

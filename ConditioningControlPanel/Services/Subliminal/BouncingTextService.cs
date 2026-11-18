@@ -962,6 +962,8 @@ public class BouncingTextService : IDisposable
         }
         double left = l.PosX * d, top = l.PosY * d, w = l.TextWidth * d, h = l.TextHeight * d;
         // A caught word is small and in the eye: it pops and knocks nothing on the way round.
+        // The player's switch, read live (the stage steps only while fog or pool is on).
+        stage.MovingPops = App.Settings?.Current?.MovingEffectsPop == true;
         if (!held) stage.Sweep(left, top, left + w, top + h);
         if (stage.SteamOn)
             for (int i = -1; i <= 1; i++)
