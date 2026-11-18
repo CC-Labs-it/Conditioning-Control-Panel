@@ -43,7 +43,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// Gaze pops, pop sparkles, pop haptics, mod pop audio and achievement credit are wired.
     /// See the feat-bubble-pop ledger row for the current parity evidence.</para>
     /// </summary>
-    internal static class BubbleOverlay
+    internal static partial class BubbleOverlay
     {
         internal static readonly AmbientBubbleField Field = new()
         {
@@ -60,6 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static bool _pending;   // a frame is requested; the loop idles while the field is empty
         internal static Bitmap? Image;
         internal static Bitmap? TeaseImage;
+        internal static Bitmap? DarterImage, SweeperImage;
         internal static Bitmap? BrainDrainImage;   // WPF the bundled molten-spiral bubble (braindrain_melt.png)
         internal static readonly Dictionary<AmbientBubble, (List<Bitmap> Frames, double Delay, long Start, bool Animated)> TeaseFaces = new();
         private static int _teaseAnimated;
@@ -198,6 +199,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             LoadBubbleImage();
             TeaseImage = ChaosArt.Resolve("bubbles", "tease");
             BrainDrainImage = ChaosArt.Resolve("bubbles", Services.Chaos.BrainDrainBubble.VariantId);
+            DarterImage = ChaosArt.Resolve("bubbles", "darter");
+            SweeperImage = ChaosArt.Resolve("bubbles", "sweeper");
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
                 var sc = screens[i];
@@ -249,6 +252,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _chaosOpenedWindows = false;
             ChaosRipples.Clear();
             ChaosResidues.Clear();
+            ChaosTrails.Clear();
             _oneShotWindows = false;
             _running = false;
             _pending = false;
@@ -479,7 +483,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 foreach (var b in Field.Bubbles.ToArray())
                 {
                     if (b.Popping || b.AmbientTrigger || b.Spec is not { } spec || wave.Hit.Contains(b)) continue;
-                    if (spec.IsFreeze || spec.IsTease || spec.IsBrittle || spec.IsDarter) continue;
+                    if (spec.IsFreeze || spec.IsTease || spec.IsBrittle) continue;
                     var point = CenterPx(b);
                     double dx = point.X - wave.Center.X, dy = point.Y - wave.Center.Y;
                     if (dx * dx + dy * dy > reach * reach) continue;
@@ -488,7 +492,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     {
                         if (b.Snap()) Field.ChaosDefused?.Invoke(b);
                     }
-                    else PopChaos(b);
+                    else if (spec.IsDarter) { bool first = !b.Spanked; b.Spank(Field.Random, 1, dx, dy); if (first && b.Spanked) ChaosRunHost.PopText?.Invoke(b.CenterX, b.CenterY, ConditioningControlPanel.Localization.Loc.Get("chaos_label_flung"), Color.FromRgb(0x7A, 0xE0, 0xFF)); } else PopChaos(b);
                     // A pop callback may end the run and clear the field reentrantly.
                     if (i >= PlayerRipples.Count || !ReferenceEquals(PlayerRipples[i], wave)) return;
                 }
@@ -516,6 +520,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         internal static void Press(AmbientBubble b, double x, double y)
         {
+            if (b.Spec is { IsDarter: true } spec)
+            {
+                if (_chaosPopped == null || Field.HoldChaos || b.Popping) return;
+                if (spec.IsSweeper || ChaosRunHost.State?.SpankerActive == true)
+                {
+                    bool first = !b.Spanked;
+                    b.Spank(Field.Random, ChaosRunHost.State?.SpankGrowFactor ?? 1);
+                    if (first && b.Spanked)   // WPF BubbleService.cs:4748-4760: the first smack teaches and labels
+                    { Services.Chaos.ChaosLessons.Tick("rabbit_caller"); ChaosRunHost.PopText?.Invoke(b.CenterX, b.CenterY, ConditioningControlPanel.Localization.Loc.Get("chaos_label_spanked"), Color.FromRgb(0xFF, 0x4D, 0xC4)); }
+                }
+                else
+                {
+                    b.Popping = true;
+                    AnchorPop(b);
+                    if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.Burst(CenterPx(b), Color.FromUInt32(spec.Tint));
+                    ChaosRunHost.OnDarterCaught(b);
+                }
+                RequestFrame();
+                return;
+            }
             if (b.Spec?.IsTease == true)
             {
                 if (Field.HoldChaos || b.Popping) return;
@@ -611,6 +635,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.Bubbles.Clear();
             ChaosRipples.Clear();   // hand-ported from #4776: no ripple or hover outlives the field
             ChaosResidues.Clear();
+            ChaosTrails.Clear();
             _hoverScreen = -1;
             foreach (var w in Windows) w.Sync();
             RequestFrame();
@@ -626,6 +651,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.ClearFreezeVisuals();
             ChaosRipples.Clear();
             ChaosResidues.Clear();   // WPF EndChaosMode :2069
+            ChaosTrails.Clear();
             ChaosRunHost.ClearBodyBuzzHops();
             _hoverScreen = -1;
             _chaosPopped = null;
@@ -672,17 +698,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static bool EscortShielded(AmbientBubble b) => IsShielded(b);
 
-        private static void EStimClick(AmbientBubble source)
+        private static DateTime _lastFreeZap;
+        private static void EStimClick(AmbientBubble source, bool free = false, Point? origin = null)
         {
-            if (_estimCharges <= 0 || source.Spec is not { IsLive: false, IsDarter: false, IsFreeze: false }) return;
-            static double Dist2(AmbientBubble a, AmbientBubble b) =>
-                (a.CenterX - b.CenterX) * (a.CenterX - b.CenterX) + (a.CenterY - b.CenterY) * (a.CenterY - b.CenterY);
-            const double Reach2 = 600 * 600;
+            if (!free && (_estimCharges <= 0 || source.Spec is not { IsLive: false, IsDarter: false, IsFreeze: false })) return;
+            double Dist2(AmbientBubble a, AmbientBubble b)
+            {
+                var x = free ? origin ?? CenterPx(a) : new Point(a.CenterX, a.CenterY);
+                var y = free ? CenterPx(b) : new Point(b.CenterX, b.CenterY);
+                return (x.X - y.X) * (x.X - y.X) + (x.Y - y.Y) * (x.Y - y.Y);
+            }
+            double Reach2 = free ? 620 * 620 : 600 * 600;
             const int MaxChain = 40;
-            var pool = Field.Bubbles.Where(b => !ReferenceEquals(b, source) && !b.Popping && !b.AmbientTrigger &&
+            var pool = Field.Bubbles.Where(b => !ReferenceEquals(b, source) && !b.Popping && (free || !b.AmbientTrigger) &&
                 b.Spec is { IsDarter: false, IsFreeze: false, IsTease: false, IsBrittle: false } && !EscortShielded(b)).ToList();
             var hits = new List<(AmbientBubble From, AmbientBubble To, int DelayMs)>();
-            if (!_estimFork)
+            if (free || !_estimFork)
             {
                 foreach (var target in pool.Where(b => Dist2(source, b) <= Reach2).OrderBy(b => Dist2(source, b)).Take(3))
                     hits.Add((source, target, 70 * (hits.Count + 1)));
@@ -707,8 +738,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 }
             }
             if (hits.Count == 0) return;
-            _estimCharges--;
-            if (_estimCharges == 0) { _estimFork = false; ChaosEStimOverlay.Disarm(); }
+            if (!free && --_estimCharges == 0) { _estimFork = false; ChaosEStimOverlay.Disarm(); }
             foreach (var hit in hits)
             {
                 var to = hit.To;
@@ -717,21 +747,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     EStimHops.Remove(hop!);
                     // WPF BubbleService.cs:4661: a held (paused) field swallows the hop.
-                    if (Field.HoldChaos || _chaosPopped == null || !Field.Bubbles.Contains(to) || to.Popping || EscortShielded(to)) return;
-                    if (to.IsLiveThreat) { if (to.Snap()) Field.ChaosDefused?.Invoke(to); }
+                    if (Field.HoldChaos || _chaosPopped == null || !Field.Bubbles.Contains(to) || to.Popping || (!free && EscortShielded(to))) return;
+                    if (to.AmbientTrigger) Pop(to); else if (free) PopChaos(to);
+                    else if (to.IsLiveThreat) { if (to.Snap()) Field.ChaosDefused?.Invoke(to); }
                     else PopChaos(to);
                     RequestFrame();
                 }, TimeSpan.FromMilliseconds(hit.DelayMs));
                 EStimHops.Add(hop);
             }
-            var bolts = hits.Select(h => (CenterPx(h.From), CenterPx(h.To))).ToList();
+            var bolts = hits.Select(h => (free ? origin ?? CenterPx(h.From) : CenterPx(h.From), CenterPx(h.To))).ToList();
             // Gentle Visuals: the Skia bolt re-jitters every frame (flicker), the overlay path fades.
             if (ChaosSkiaFxOverlay.Enabled && ConditioningControlPanel.Services.Safety.GentleVisuals.AllowFlicker)
                 ChaosSkiaFxOverlay.Strike(bolts);
             else
                 ChaosEStimOverlay.Strike(bolts.Select(b => (new PixelPoint((int)b.Item1.X, (int)b.Item1.Y),
                     new PixelPoint((int)b.Item2.X, (int)b.Item2.Y))).ToList());
-            EStimArc?.Invoke(_estimCharges);
+            if (!free) EStimArc?.Invoke(_estimCharges);
+            else if ((DateTime.UtcNow - _lastFreeZap).TotalMilliseconds >= 140)
+            { _lastFreeZap = DateTime.UtcNow; PlayChaosCue("estim_zap", 0.45f); }
         }
 
         /// <summary>WPF SpawnChaosBubble (FloatUp, RainDown, Chaperone roaming). Without an overlay window (headless, or a
@@ -739,6 +772,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static AmbientBubble SpawnChaos(Services.Chaos.EffectBubbleSpec spec, Random? random = null,
             Services.Chaos.ChaosMotion motion = Services.Chaos.ChaosMotion.FloatUp, double hitboxScale = 1, bool liveMagnet = false)
         {
+            if (spec.IsDarter) motion = Services.Chaos.ChaosMotion.RoamBounce;
             AmbientBubble b;
             if (Targets.Count == 0)
                 b = AmbientBubble.SpawnChaos((random ?? Field.Random), 0, 0, 0, 1920, 1080, 1, spec, motion);
@@ -769,6 +803,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void PopChaos(AmbientBubble b)
         {
             if (b.Popping || b.Spec == null || Field.HoldChaos) return;   // held: the click is swallowed
+            if (b.Spec.IsDarter) { Press(b, b.CenterX, b.CenterY); return; }
             // WPF BubbleService.cs:4645-4669: instant pops preserve touch-only and escort immunity.
             if (b.Spec.IsTease || b.Spec.IsBrittle) return;
             if (IsShielded(b)) { BounceShield(b); return; }
@@ -914,8 +949,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         internal static void StepChaosField()
         {
+            SteerRabbits();
             Field.Step();
             if (Field.HoldChaos) return;
+            TickChaosTrails();
+            TickDarterSweeps();
             foreach (var b in Field.Bubbles)
             {
                 if (b.Spec is not { IsEscort: true } || b.Popping || b.OrbitFrames == 0 || b.OrbitFrames % 7 != 0 || b.OrbitTarget is not { Popping: false } live) continue;
@@ -1187,7 +1225,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     var b = bubbles[i];
                     if (b.Screen != _w.Index) continue;
                     var teaseImage = b.Spec?.IsTease == true ? BubbleOverlay.TeaseImage : null;
-                    var variantImage = teaseImage ?? (b.Spec?.VariantId == Services.Chaos.BrainDrainBubble.VariantId ? BubbleOverlay.BrainDrainImage : null);
+                    // WPF BubbleService.cs:3423-3434: sweepers fall back to the darter sprite.
+                    var variantImage = b.Spec is { IsDarter: true } rabbitSpec
+                        ? (rabbitSpec.IsSweeper ? BubbleOverlay.SweeperImage ?? BubbleOverlay.DarterImage : BubbleOverlay.DarterImage)
+                        : teaseImage ?? (b.Spec?.VariantId == Services.Chaos.BrainDrainBubble.VariantId ? BubbleOverlay.BrainDrainImage : null);
                     var img = variantImage ?? BubbleOverlay.Image;
                     double cx = (b.CenterX - ox) * k, cy = (b.CenterY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale;
                     var m = Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateRotation(b.Angle * Math.PI / 180)
@@ -1244,6 +1285,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                                 using (dc.PushOpacity(b.ShieldOpacity))
                                     dc.DrawEllipse(null, ShieldPen, new Point(cx, cy), size / 2 + 6 * k, size / 2 + 6 * k);
                             }
+                            if (b.Spec is { IsDarter: true } rabbit && !b.Popping && b.TelegraphFraction > 0)
+                            {
+                                double frac = b.TelegraphFraction, r = size / 2 * (1 + 0.30 * frac);
+                                using (dc.PushOpacity(0.85 * frac)) dc.DrawEllipse(null, FusePen(rabbit.Tint), new Point(cx, cy), r, r);
+                            }
                             if (b.FuseTotalMs > 0 && !b.Popping)   // WPF fuse ring: shrinks 1 -> 0.45; yellow, flash, red brink
                             {
                                 double rr = (size / 2 - 2) * (0.45 + 0.55 * b.FuseFraction);
@@ -1275,16 +1321,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     finally { glow?.Dispose(); }
                 }
             }
-            private static readonly Dictionary<double, DropShadowEffect> LuckyShadows = new();
+            private static readonly Dictionary<(uint, double, double), DropShadowEffect> LuckyShadows = new();
             /// <summary>WPF Bubble.SetLucky: #FFD700 at 0.8, no offset. The shadow is taken of what is drawn,
             /// so it fades with the bubble and its sparkles. Bounds cover the turned sprite and every live sparkle.</summary>
             private static DrawingContext.PushedState? LuckyGlow(DrawingContext dc, AmbientBubble b, double cx, double cy,
                 double size, double scale, double k, double ox, double oy)
             {
-                if (b.LuckyGlowBlur <= 0) return null;
-                var blur = b.LuckyGlowBlur * k;
-                if (!LuckyShadows.TryGetValue(blur, out var effect))
-                    LuckyShadows[blur] = effect = new DropShadowEffect { Color = Color.FromRgb(0xFF, 0xD7, 0x00), BlurRadius = blur, OffsetX = 0, OffsetY = 0, Opacity = 0.8 };
+                // WPF BubbleService.cs:3701, 4759: sweepers glow amber, spanked allies hot pink.
+                var (color, blur, opacity) = b.Spec?.IsSweeper == true ? (0xFFFF8A14u, 36 * k, 1.0) : b.Spanked ? (0xFFFF1493u, 34 * k, 1.0) :
+                    b.Spec is { IsDarter: true } darter ? (darter.Tint | 0xFF000000u, 26 * k, 0.9) : (0xFFFFD700u, b.LuckyGlowBlur * k, 0.8);
+                if (blur <= 0) return null;
+                if (!LuckyShadows.TryGetValue((color, blur, opacity), out var effect))
+                    LuckyShadows[(color, blur, opacity)] = effect = new DropShadowEffect { Color = Color.FromUInt32(color), BlurRadius = blur, OffsetX = 0, OffsetY = 0, Opacity = opacity };
                 var angle = b.Angle * Math.PI / 180;
                 var half = size * Math.Abs(scale) / 2 * (Math.Abs(Math.Cos(angle)) + Math.Abs(Math.Sin(angle))) + 2 * k;
                 double left = cx - half, top = cy - half, right = cx + half, bottom = cy + half;

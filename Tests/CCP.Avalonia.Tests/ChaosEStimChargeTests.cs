@@ -182,3 +182,46 @@ public sealed class ChaosEStimChargeTests
         finally { BubbleOverlay.EndChaos(); ChaosEStimOverlay.CloseActive(); ChaosEStimOverlay.CanShow = oldCanShow; }
     });
 }
+
+[Collection(RunsAloneCollection.Name)]
+public class ElectrifiedRabbitTests
+{
+    [Fact]
+    public Task Sweep_discharges_three_nearest_without_spending_charges() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var stateField = typeof(ChaosRunHost).GetField("_state", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var oldState = stateField.GetValue(null); var settings = ConditioningControlPanel.CoreSettings.Current;
+        var oldSettings = (settings.ChaosSkiaFxEnabled, settings.ChaosPinOnTop); var oldCanShow = ChaosEStimOverlay.CanShow; var oldSkip = ChaosEStimOverlay.SkipPlatformChecksForTests;
+        try {
+            settings.ChaosSkiaFxEnabled = false; settings.ChaosPinOnTop = false;
+            ChaosEStimOverlay.CanShow = () => true; ChaosEStimOverlay.SkipPlatformChecksForTests = true;
+            var state = new ChaosRunState(new ChaosRunConfig()); stateField.SetValue(null, state);
+            BubbleOverlay.BeginChaos(new Canvas(), _ => { }, _ => { });
+            AmbientBubble[] Fill()
+            {
+                var rabbit = BubbleOverlay.SpawnChaos(new EffectBubbleSpec { IsDarter = true, IsSweeper = true, SizePx = 20, LifetimeMs = 8000, DarterSpeed = 9 }, new Random(7));
+                rabbit.X = rabbit.Y = 0;
+                var bubbles = new[] { new AmbientBubble { X = 0, Size = 20, Spec = new EffectBubbleSpec() },
+                    new AmbientBubble { X = 100, Size = 20, Spec = new EffectBubbleSpec() },
+                    new AmbientBubble { X = 200, Size = 20, Spec = new EffectBubbleSpec { IsLive = true }, FuseTotalMs = 5000, FuseRemainingMs = 5000 },
+                    new AmbientBubble { X = 620, Size = 20, Spec = new EffectBubbleSpec() },
+                    new AmbientBubble { X = 620, Size = 20, Spec = new EffectBubbleSpec() }, new AmbientBubble { X = 621, Size = 20, Spec = new EffectBubbleSpec() } };
+                BubbleOverlay.Field.Bubbles.AddRange(new[] { bubbles[0], bubbles[3], bubbles[2], bubbles[1], bubbles[4], bubbles[5] }); return bubbles;
+            }
+            var off = Fill(); BubbleOverlay.TickDarterSweeps(); Assert.True(off[0].Popping); Assert.Null(ChaosEStimOverlay.Active);
+            BubbleOverlay.Field.Bubbles.Clear(); state.ElectrifiedRabbits = true;
+            var on = Fill(); BubbleOverlay.ArmEStim(2, true); BubbleOverlay.TickDarterSweeps();
+            Assert.Equal(2, BubbleOverlay.EStimCharges); Assert.NotNull(ChaosEStimOverlay.Active); Assert.Equal(3, ChaosEStimOverlay.Active!.BoltCount);
+            var bolt = ChaosEStimOverlay.Active!; var points = bolt.FirstBoltPoints; Assert.InRange((points[^1].X - points[0].X) * bolt.RenderScaling, 99, 101);
+            var escort = new AmbientBubble { X = 1000, Size = 20, Spec = new EffectBubbleSpec() }; on[1].Spec = new EffectBubbleSpec { IsLive = true, IsChaperoneLive = true }; on[1].Escort = escort; BubbleOverlay.Field.Bubbles.Add(escort);
+            await Task.Delay(350); Assert.True(on[0].Popping && on[2].Popping && !on[2].Deflating && on[3].Popping);
+            Assert.False(on[1].Popping || on[4].Popping || on[5].Popping); Assert.Equal(2, BubbleOverlay.EStimCharges);
+        }
+        finally
+        {
+            BubbleOverlay.EndChaos(); BubbleOverlay.Field.Bubbles.Clear(); ChaosEStimOverlay.CloseActive();
+            (settings.ChaosSkiaFxEnabled, settings.ChaosPinOnTop) = oldSettings;
+            ChaosEStimOverlay.CanShow = oldCanShow; ChaosEStimOverlay.SkipPlatformChecksForTests = oldSkip; stateField.SetValue(null, oldState);
+        }
+    });
+}

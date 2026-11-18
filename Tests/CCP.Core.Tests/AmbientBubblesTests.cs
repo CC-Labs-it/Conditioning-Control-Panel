@@ -2,6 +2,7 @@ using System;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Chaos;
 using Xunit;
 
 namespace CCP.Core.Tests;
@@ -72,6 +73,70 @@ public sealed class AmbientBubblesTests
         var spec = ConditioningControlPanel.Services.Chaos.ChaosBubbleVariants.BuildDarter(1);
         var b = AmbientBubble.SpawnChaos(new Random(7), 0, 100, 200, 1920, 1080, 2, spec);
         Assert.Equal(640, b.Y);
+    }
+
+    private static AmbientBubble Darter(EffectBubbleSpec spec) => AmbientBubble.SpawnChaos(new Random(7), 0, 0, 0, 1920, 1080, 1, spec, ChaosMotion.RoamBounce);
+
+    [Fact]
+    public void Darter_holds_then_moves_at_its_fixed_speed_and_expires()
+    {
+        var b = Darter(new EffectBubbleSpec { IsDarter = true, SizePx = 72, TelegraphMs = 64, LifetimeMs = 160, DarterSpeed = 9 });
+        double x = b.X, y = b.Y;
+        Assert.Equal(AmbientBubble.Result.Alive, b.Step()); Assert.Equal(AmbientBubble.Result.Alive, b.Step());
+        Assert.Equal(x, b.X); Assert.Equal(y, b.Y);
+        Assert.Equal(AmbientBubble.Result.Alive, b.Step());
+        Assert.Equal(9, Math.Sqrt(Math.Pow(b.X - x, 2) + Math.Pow(b.Y - y, 2)), 8);
+        Assert.Equal(AmbientBubble.Result.Alive, b.Step()); Assert.Equal(AmbientBubble.Result.Done, b.Step());
+    }
+
+    [Fact]
+    public void Darter_reflects_three_times_then_leaves_without_a_miss()
+    {
+        var b = Darter(new EffectBubbleSpec { IsDarter = true, SizePx = 72, LifetimeMs = 8000, DarterSpeed = 9 });
+        for (int i = 0; i < 3; i++)
+        {
+            b.X = 2000;
+            Assert.Equal(AmbientBubble.Result.Alive, b.Step());
+            Assert.Equal(1920 - 72, b.X);
+        }
+        b.X = 2200; Assert.Equal(AmbientBubble.Result.Done, b.Step());
+    }
+
+    [Fact]
+    public void Darter_telegraph_throbs_bounces_and_sweeper_smack_redirects_with_cooldown()
+    {
+        var spec = new EffectBubbleSpec { IsDarter = true, IsSweeper = true, SizePx = 72, TelegraphMs = 64, LifetimeMs = 8000, DarterSpeed = 9 };
+        AmbientBubble a = Darter(spec), b = Darter(spec), c = Darter(spec);
+        Assert.Equal(1, a.TelegraphFraction); Assert.True(a.Spanked);
+        a.Step(); Assert.Equal(.5, a.TelegraphFraction); Assert.NotEqual(1, a.DrawScale);
+        b.Step(); c.Step(); a.Step(); b.Step(); c.Step(); Assert.Equal(0, a.TelegraphFraction);
+        a.X = b.X = c.X = 2000; a.Step(); b.Step(); c.Step(); a.Step(); b.Step(); c.Step();
+        Assert.True(a.DrawScale > 1.1); // wall punch survives into the next frame
+        a.Spank(new Random(2), 3); c.Spank(new Random(2), 3);
+        Assert.Equal(1, a.SpankGrowth); // born spanked, no growth
+        a.Spank(new Random(3), 3); // guarded for 250 ms
+        a.X = b.X = c.X = 900; a.Y = b.Y = c.Y = 500;
+        a.Step(); b.Step(); c.Step();
+        Assert.True(Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y) > .01);
+        Assert.Equal(c.X, a.X, 8); Assert.Equal(c.Y, a.Y, 8);
+        var plain = Darter(new EffectBubbleSpec { IsDarter = true, SizePx = 72, LifetimeMs = 8000, DarterSpeed = 9 });
+        plain.Spank(new Random(2), 1.5); Assert.True(plain.Spanked); Assert.Equal(1.5, plain.SpankGrowth);
+        for (int i = 0; i < 8; i++) plain.Step();
+        plain.Spank(new Random(3), 3); Assert.Equal(1.5, plain.SpankGrowth);
+    }
+
+    [Fact]
+    public void Pull_turns_a_rabbit_at_most_0065_rad_and_a_caught_rabbit_bursts_slow_and_big()
+    {
+        var b = Darter(new EffectBubbleSpec { IsDarter = true, SizePx = 72, LifetimeMs = 8000, DarterSpeed = 9 });
+        b.Step(); double x = b.X, y = b.Y, heading = Math.Atan2(b.Y - y, b.X - x);
+        b.Step(); heading = Math.Atan2(b.Y - y, b.X - x); x = b.X; y = b.Y;
+        b.SteerToward(b.CenterX - 500 * Math.Cos(heading), b.CenterY - 500 * Math.Sin(heading), 1);
+        b.Step();
+        Assert.Equal(0.065, Math.Abs(Math.IEEERemainder(Math.Atan2(b.Y - y, b.X - x) - heading, 2 * Math.PI)), 6);
+        Assert.Equal(9, Math.Sqrt(Math.Pow(b.X - x, 2) + Math.Pow(b.Y - y, 2)), 6);
+        b.Popping = true; double scale = b.Scale; b.Step();
+        Assert.Equal(scale + 0.07, b.Scale, 6); Assert.Equal(0.97, b.Fade, 6);
     }
 
     [Theory]

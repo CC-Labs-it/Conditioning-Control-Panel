@@ -128,6 +128,78 @@ public sealed class LeashIncomingAskTests
             }
         });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ManualLookBeforeServiceRebindDoesNotReopenTheSameOffer(bool anotherWaiting) =>
+        LeashGateCardTests.Run(false, (shell, _, _) =>
+        {
+            var replacement = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            replacement.ApplyBlock(anotherWaiting ? Block((First, "juno"), (Second, "vex")) : Block((First, "juno")));
+            shell.Show();
+            LeashHead.Service = null;
+            shell.RebindLeashAsks(); // the shell has not yet bound the replacement
+            LeashHead.Service = replacement;
+            try
+            {
+                var offer = replacement.Snapshot.Offers.Single(o => o.From.Id == (anotherWaiting ? "vex" : "juno"));
+                var manual = Assert.IsType<LeashAskWindow>(LeashAskWindow.Open(offer, () => replacement, shell));
+                shell.RebindLeashAsks(); // the two-second timer catches up while Look is open
+                Assert.Same(manual, LeashAskWindow.Current);
+                manual.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+                Dispatcher.UIThread.RunJobs();
+                if (anotherWaiting)
+                {
+                    var next = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+                    Assert.Equal("leash-ask:juno", next.Card.Tag);
+                    next.Card.Dismiss();
+                    Dispatcher.UIThread.RunJobs();
+                }
+                Assert.Null(LeashAskWindow.Current);
+                Assert.Contains(replacement.Snapshot.Offers, o => o.Id == offer.Id); // Escape is not an answer
+                var reopened = Assert.IsType<LeashAskWindow>(LeashAskWindow.Open(offer, () => replacement, shell));
+                Assert.NotSame(manual, reopened); // Look can still open it deliberately
+                reopened.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current);
+            }
+            finally
+            {
+                LeashHead.Service = null;
+                shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent();
+                Dispatcher.UIThread.RunJobs();
+            }
+        });
+
+    [Fact]
+    public void ManualLookBeforeOfferSnapshotDoesNotReopenOnLaterPoll() =>
+        LeashGateCardTests.Run(false, (shell, _, _) =>
+        {
+            var replacement = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            LeashHead.Service = replacement;
+            shell.Show();
+            shell.RebindLeashAsks(); // bound, but the offer has not reached its snapshot yet
+            try
+            {
+                var offer = new LeashOffer(new LeashPerson("juno", "juno", null), At, At.AddDays(7)) { Id = First };
+                var manual = Assert.IsType<LeashAskWindow>(LeashAskWindow.Open(offer, () => replacement, shell));
+                replacement.ApplyBlock(Block((First, "juno")));
+                Assert.Same(manual, LeashAskWindow.Current);
+                manual.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current);
+                Assert.Single(replacement.Snapshot.Offers);
+            }
+            finally
+            {
+                LeashHead.Service = null;
+                shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent();
+                Dispatcher.UIThread.RunJobs();
+            }
+        });
+
     [Fact]
     public void LookConsumesItsQueuedOfferAndEscapeAdvancesToTheOtherOffer() =>
         LeashGateCardTests.Run(false, (shell, _, service) =>

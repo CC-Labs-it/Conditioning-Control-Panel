@@ -321,45 +321,48 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     && Rng.NextDouble() < ChaosTuning.CHAPERONE_SPAWN_CHANCE * (cfg.Difficulty == ChaosDifficulty.Easy ? 0.5 : 1.0))
                 {
                     SpawnChaperone(effIntensity);
-                    if (_spawnTimer != null)
-                        _spawnTimer.Interval = TimeSpan.FromMilliseconds(ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult, SpawnSlowFactor));
-                    return;
                 }
                 // WPF :1301 (after the Chaperone roll at :1264): a Tease replaces the ordinary slot, never the scripted first run.
-                if (TrySpawnTease(cfg, effIntensity))
+                else if (!TrySpawnTease(cfg, effIntensity))
                 {
-                    if (_spawnTimer != null) _spawnTimer.Interval = TimeSpan.FromMilliseconds(
-                        ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult, SpawnSlowFactor));
-                    return;
-                }
+                    EffectBubbleSpec spec;
+                    if (_state.HeavyDropEvery > 0 && ++_spawnSerial % _state.HeavyDropEvery == 0)
+                        spec = ChaosBubbleVariants.BuildHeavy(effIntensity, cfg.EffectIntensity, _state.BubbleScale);
+                    else
+                    {
+                        double sideDrift = _ordinarySpawns < ChaosTuning.SIDE_DRIFT_GRACE_SPAWNS ? 0 : ChaosTuning.SIDE_DRIFT_CHANCE;
+                        spec = ChaosBubbleVariants.Pick(effIntensity, _state.FuseTimeMult, cfg.MotionOverride,
+                            enabled.Count > 0 ? enabled : new[] { ChaosBubbleVariants.All[0].Id },
+                            cfg.EffectIntensity, _state.BubbleScale, sideDrift);
+                    }
+                    if (spec.IsFreeze && BubbleOverlay.Field.Bubbles.Count(b => b.Spec?.IsFreeze == true && !b.Popping) >= ChaosTuning.FREEZE_MAX_ON_SCREEN)
+                    {
+                        var noFreeze = enabled.Where(id => id != "bambifreeze").ToList();
+                        spec = ChaosBubbleVariants.Pick(effIntensity, _state.FuseTimeMult, cfg.MotionOverride,
+                            noFreeze.Count > 0 ? noFreeze : new[] { ChaosBubbleVariants.All[0].Id },
+                            cfg.EffectIntensity, _state.BubbleScale, 0);
+                    }
+                    _ordinarySpawns++;
+                    ChaosMeta.MarkDiscovered("bubble:" + spec.VariantId);
+                    // WPF ChaosModeService.cs:371, :378 samples the current boon/upgrade at spawn.
+                    BubbleOverlay.SpawnChaos(spec, hitboxScale: cfg.HitboxScale, liveMagnet: _state.MagnetEnabled);
 
-                EffectBubbleSpec spec;
-                if (_state.HeavyDropEvery > 0 && ++_spawnSerial % _state.HeavyDropEvery == 0)
-                    spec = ChaosBubbleVariants.BuildHeavy(effIntensity, cfg.EffectIntensity, _state.BubbleScale);
-                else
-                {
-                    double sideDrift = _ordinarySpawns < ChaosTuning.SIDE_DRIFT_GRACE_SPAWNS ? 0 : ChaosTuning.SIDE_DRIFT_CHANCE;
-                    spec = ChaosBubbleVariants.Pick(effIntensity, _state.FuseTimeMult, cfg.MotionOverride,
-                        enabled.Count > 0 ? enabled : new[] { ChaosBubbleVariants.All[0].Id },
-                        cfg.EffectIntensity, _state.BubbleScale, sideDrift);
+                    if (_state.PrismChance > 0 && Rng.NextDouble() < _state.PrismChance)
+                    {
+                        ChaosMeta.MarkDiscovered("bubble:prism");
+                        BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildPrism(effIntensity, cfg.EffectIntensity,
+                            treatOnly: _state.PrismTreatOnly), hitboxScale: cfg.HitboxScale, liveMagnet: _state.MagnetEnabled);
+                    }
                 }
-                if (spec.IsFreeze && BubbleOverlay.Field.Bubbles.Count(b => b.Spec?.IsFreeze == true && !b.Popping) >= ChaosTuning.FREEZE_MAX_ON_SCREEN)
+            }
+            // WPF ChaosModeService.cs:1203-1213: rabbits roll independently of the bubble cap.
+            if (cfg.DartersEnabled)
+            {
+                var rabbit = ChaosBubbleVariants.RollDarter(effIntensity, _state.RabbitRateMult);
+                if (rabbit != null)
                 {
-                    var noFreeze = enabled.Where(id => id != "bambifreeze").ToList();
-                    spec = ChaosBubbleVariants.Pick(effIntensity, _state.FuseTimeMult, cfg.MotionOverride,
-                        noFreeze.Count > 0 ? noFreeze : new[] { ChaosBubbleVariants.All[0].Id },
-                        cfg.EffectIntensity, _state.BubbleScale, 0);
-                }
-                _ordinarySpawns++;
-                ChaosMeta.MarkDiscovered("bubble:" + spec.VariantId);
-                // WPF ChaosModeService.cs:371, :378 samples the current boon/upgrade at spawn.
-                BubbleOverlay.SpawnChaos(spec, hitboxScale: cfg.HitboxScale, liveMagnet: _state.MagnetEnabled);
-
-                if (_state.PrismChance > 0 && Rng.NextDouble() < _state.PrismChance)
-                {
-                    ChaosMeta.MarkDiscovered("bubble:prism");
-                    BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildPrism(effIntensity, cfg.EffectIntensity,
-                        treatOnly: _state.PrismTreatOnly), hitboxScale: cfg.HitboxScale, liveMagnet: _state.MagnetEnabled);
+                    ChaosMeta.MarkDiscovered("bubble:darter");
+                    BubbleOverlay.SpawnChaos(rabbit);
                 }
             }
             if (_spawnTimer != null)
@@ -508,6 +511,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Pulse(Color.FromRgb(255, 200, 235), 0.10);
             if (spec.PayMult > 1) _state.PushEvent("🪨 heavy drop! x3");
             BodyBuzz(b);
+            // WPF ChaosModeService.cs:1880-1888: GG makes three sweepers at the treat.
+            if (_state.GgRabbitChance > 0 && Rng.NextDouble() < _state.GgRabbitChance)
+            {
+                var center = BubbleOverlay.CenterPx(b);
+                for (int i = 0; i < 3; i++)
+                    BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(_state.RunIntensity, false,
+                        center.X + Rng.Next(-40, 41), center.Y + Rng.Next(-40, 41), sweeper: true));
+                RippleCue("rabbit_spawn", 0.5f);
+                _state.PushEvent(Loc.Get("chaos_gg_rabbits"));
+            }
+            CheckComboMilestone();
+        }
+
+        // WPF ChaosModeService.cs:2351-2375: the rabbit is a pickup, not a treat payload.
+        internal static void OnDarterCaught(AmbientBubble b)
+        {
+            if (_state == null || _manualPaused || _lessonCardPaused || _draftPaused) return;
+            bool quick = b.QuickCatch, extended = _slowMoRemainingSec > 0;
+            _state.Score += (ChaosBubbleVariants.DARTER_BASE_POINTS + (quick ? ChaosBubbleVariants.DARTER_QUICK_BONUS : 0)) * _state.TotalMult;
+            _state.Focus += ChaosTuning.FOCUS_PER_RABBIT;
+            _state.Combo++; _state.Heat = Math.Min(1, _state.Heat + 0.05);
+            App.Achievements?.TrackBubblePopped();
+            ChaosLessons.Tick("rabbit_caller");
+            RippleCue("rabbit_catch", 0.6f);
+            Label(b, Loc.Get("chaos_rabbit_banner"), Color.FromUInt32(b.Spec!.Tint));
+            if (extended) { _slowMoRemainingSec += 0.8; _pendulumSlowActive = false; }
+            else ActivateSlowMo(6 + _state.SlowMoBonusSec, pendulum: false);
+            Pulse(Color.FromRgb(120, 200, 255), quick ? 0.32 : 0.24);
+            _state.PushEvent(Loc.Get(extended ? "chaos_rabbit_extend" : quick ? "chaos_rabbit_quick" : "chaos_rabbit_caught"));
             CheckComboMilestone();
         }
 
@@ -1453,7 +1485,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _slowMoRemainingSec = durationSec;
             _pendulumSlowActive = pendulum;
             BubbleOverlay.Field.ChaosTimeScale = SlowMoFactor;
-            ChaosEffectBannerOverlay.Show("slowmo", Loc.Get("chaos_pendulum_banner"), Color.FromRgb(0x7A, 0xE0, 0xFF),
+            ChaosEffectBannerOverlay.Show("slowmo", Loc.Get(pendulum ? "chaos_pendulum_banner" : "chaos_rabbit_banner"), Color.FromRgb(0x7A, 0xE0, 0xFF),
                 artKey: pendulum ? "pendulum" : "slowmo");
             EffectPayload.GlobalDurationMult = 1.0 / SlowMoFactor;
             if (!_slowMoCueOn) ChaosOverlayWindow.ChaosSfx.Play("time_slow_in", 0.5f);
