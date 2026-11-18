@@ -176,7 +176,7 @@ public partial class LauncherWindow
     {
         try
         {
-            if (!MotionFx.AllowAmbientLoops || _perfLow) { StopSpiralTurn(); return; }
+            if (!MotionFx.AmbientAllowedByLevel || _perfLow) { StopSpiralTurn(); return; }
             Spin(SpiralTurn, SpiralTurnSeconds, clockwise: true);
             Spin(SpiralSmallTurn, SpiralSmallTurnSeconds, clockwise: false);
         }
@@ -286,7 +286,7 @@ public partial class LauncherWindow
         {
             // Tiles rebuild on every show; entries whose art left the tree are dropped here.
             _kenBurns.RemoveAll(k => PresentationSource.FromVisual(k.Art) == null);
-            if (!MotionFx.AllowAmbientLoops || _perfLow || _backdropParked) { StopKenBurns(); return; }
+            if (!MotionFx.AmbientAllowedByLevel || _perfLow || _backdropParked) { StopKenBurns(); return; }
             foreach (var (art, scale, outward) in _kenBurns)
             {
                 if (art.IsMouseOver) continue;
@@ -304,7 +304,7 @@ public partial class LauncherWindow
     /// <summary>1.00 to 1.07 and back over 14 s each way; odd tiles start from the far end.</summary>
     private void ResumeKenBurns(ScaleTransform scale, bool outward)
     {
-        if (!MotionFx.AllowAmbientLoops || _perfLow) return;
+        if (!MotionFx.AmbientAllowedByLevel || _perfLow) return;
         double from = scale.ScaleX;
         double to = outward ? KenBurnsTo : 1.0;
         if (Math.Abs(from - to) < 0.002) to = outward ? 1.0 : KenBurnsTo;

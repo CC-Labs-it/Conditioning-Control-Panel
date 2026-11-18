@@ -373,7 +373,7 @@ public partial class LauncherWindow
                 _doorHover = view;
                 _trailTint = view.Hue;
                 BleedGlow(view.Hue);
-                if (!_perfLow && !_fxParked && MotionFx.AllowAmbientLoops)
+                if (!_perfLow && !_fxParked && MotionFx.AmbientAllowedByLevel)
                     _doorSheen = AttachSheen(view.Card, LauncherDoorCard.Radius);
             }
             else
@@ -437,7 +437,7 @@ public partial class LauncherWindow
             if (!ReferenceEquals(_doorCards[i], chosen)) _doorCards[i].FallAway(i > chosenAt);
         if (chosen != null)
         {
-            if (MotionFx.AllowAmbientLoops && !GentleVisuals.On) Shockwave(chosen.Card, chosen.Hue);
+            if (MotionFx.AmbientAllowedByLevel && !GentleVisuals.On) Shockwave(chosen.Card, chosen.Hue);
             BurstAt(chosen.Card, chosen.Hue, 140);
         }
         Later(LauncherDoorCard.OpenMs - 30, then);

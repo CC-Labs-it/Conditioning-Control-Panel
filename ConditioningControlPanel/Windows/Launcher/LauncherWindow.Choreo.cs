@@ -398,7 +398,7 @@ public partial class LauncherWindow
 
     private void ChoreoEngineState(bool running)
     {
-        bool live = running && !_fxParked && !_perfLow && MotionFx.AllowAmbientLoops;
+        bool live = running && !_fxParked && !_perfLow && MotionFx.AmbientAllowedByLevel;
         if (live == (_panelComet != null)) return;
         if (live)
         {
@@ -440,7 +440,7 @@ public partial class LauncherWindow
 
     private void StartWanderingSheen()
     {
-        if (_perfLow || _fxParked || !MotionFx.AllowAmbientLoops) return;
+        if (_perfLow || _fxParked || !MotionFx.AmbientAllowedByLevel) return;
         _wanderTimer ??= new DispatcherTimer(DispatcherPriority.Background);
         _wanderTimer.Tick -= OnWanderTick;
         _wanderTimer.Tick += OnWanderTick;
@@ -463,7 +463,7 @@ public partial class LauncherWindow
         try
         {
             if (_wanderTimer != null) _wanderTimer.Interval = NextWanderGap();
-            if (_fxParked || !MotionFx.AllowAmbientLoops) return;
+            if (_fxParked || !MotionFx.AmbientAllowedByLevel) return;
             DetachSheen(ref _wanderSheen);
             // The doors view has no tiles: the sheen wanders the two doors instead (never the
             // one under the cursor, which already had its own pass).
@@ -575,7 +575,7 @@ public partial class LauncherWindow
     {
         try
         {
-            bool on = LockdownVeil.IsVisible && !_fxParked && MotionFx.AllowAmbientLoops;
+            bool on = LockdownVeil.IsVisible && !_fxParked && MotionFx.AmbientAllowedByLevel;
             if (on)
             {
                 if (_veilEdge == null)

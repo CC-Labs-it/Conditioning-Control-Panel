@@ -780,13 +780,22 @@ namespace ConditioningControlPanel
         /// <summary>
         /// Whether a conditioning session is currently running. Set by MainWindow.
         /// </summary>
-        public static bool IsSessionRunning { get; set; }
+        public static bool IsSessionRunning
+        {
+            get => _isSessionRunning;
+            set { _isSessionRunning = value; Services.MotionFx.SetShowRunning(_isSessionRunning || _isEngineRunning); }
+        }
+        private static bool _isSessionRunning, _isEngineRunning;
 
         /// <summary>
         /// Whether the main engine is running (toggle-driven services should start/stop live).
         /// True for both plain engine runs and AI sessions. Set by MainWindow.StartEngine/StopEngine.
         /// </summary>
-        public static bool IsEngineRunning { get; set; }
+        public static bool IsEngineRunning
+        {
+            get => _isEngineRunning;
+            set { _isEngineRunning = value; Services.MotionFx.SetShowRunning(_isSessionRunning || _isEngineRunning); }
+        }
 
         /// <summary>
         /// Direct reference to the MainWindow instance. Use this instead of

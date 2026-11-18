@@ -326,7 +326,7 @@ internal sealed class LauncherDoorCard
     // ------------------------------------------------------------------ poses
 
     private static bool Animate => MotionFx.AllowTransitions;
-    private static bool Lively => MotionFx.AllowAmbientLoops;
+    private static bool Lively => MotionFx.AmbientAllowedByLevel;
 
     private static void To(DependencyObject target, DependencyProperty dp, double to, int ms,
                            IEasingFunction? ease = null, int delayMs = 0, bool fade = false)
