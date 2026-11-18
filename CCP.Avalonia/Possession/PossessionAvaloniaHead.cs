@@ -169,6 +169,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             list.Add(new StealCardEffect());
             list.Add(new ToastEffect());
             list.Add(new SwapEffect());
+            list.Add(new GhostCursorEffect());
             return list;
         }
 
