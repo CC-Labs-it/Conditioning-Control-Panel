@@ -10,6 +10,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Safety;
+using ConditioningControlPanel.Services.Super;
 using ConditioningControlPanel.Services.UI;               // MonitorTarget
 using Serilog;
 
@@ -96,6 +97,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
         }
 
+        internal static double SuperVeil { get; private set; } = 1;
+        internal static void StepSuperAside(bool replace, double dt)
+        {
+            bool held = VoiceOpacity.HasValue || HasTimedPayload || PulseHold || _pulseWeight.HasValue || App.Sessions?.PinkOpacity != null;
+            SuperVeil = SuperStepAside.Step(SuperVeil, SuperStepAside.Hides(replace, held), dt, SuperStepAside.FadeSecondsFor(UiMotionPreference.ResolveLevel(CoreSettings.Current.MotionLevel, UiMotionPreference.AnimationsEnabled, GentleVisuals.On)));
+            var (r, g, b) = EffectiveColor();
+            foreach (var w in Windows) w.SetTint(r, g, b, BaseOpacity());
+        }
+        private static double BaseOpacity()
+        {
+            double opacity = PaintedOpacity;
+            if (HasTimedPayload)
+                opacity = VoiceOpacity != null || (CoreSettings.Current.PinkFilterEnabled && ShouldShow()) ? Math.Max(opacity, PayloadHold.Opacity) : PayloadHold.Opacity;
+            return opacity * SuperStepAside.Ease(SuperVeil);
+        }
+
         internal static void SetPulse(double? weight)
         {
             // WPF OverlayService.cs:657-660 captures endpoints before the gentle timer starts.
@@ -106,7 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             _pulseWeight = weight;
             var (r, g, b) = EffectiveColor();
-            foreach (var w in Windows) w.SetTint(r, g, b, PaintedOpacity);
+            foreach (var w in Windows) w.SetTint(r, g, b, BaseOpacity());
         }
 
         /// <summary>Whether a tint can actually reach the screen: X11 with click-through, a
@@ -173,10 +190,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             var want = ResolveScreenIndices(s.PinkFilterTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
             var (r, g, b) = EffectiveColor();
-            var opacity = PaintedOpacity;   // a session ramps it without writing it (#471)
-            // WPF ResolveAdHocOverlayOpacity: an effect raises a live tint, never lowers it.
-            if (HasTimedPayload)
-                opacity = VoiceOpacity != null || (s.PinkFilterEnabled && ShouldShow()) ? Math.Max(opacity, PayloadHold.Opacity) : PayloadHold.Opacity;
+            var opacity = BaseOpacity();
 
             // Same monitors as last time: repaint the brushes and leave the windows alone. This is
             // the whole reason the slider does not tear down a full-screen window per tick.
@@ -245,13 +259,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// No tint on screen: nothing to sort, the next show applies the setting.</summary>
         internal static void SyncOrder()
         {
-            if (Windows.Count == 0) return;
+            if (Windows.Count == 0) { SuperStageOverlay.RaisePool(); return; }
             var raise = CoreSettings.Current.PinkFilterUnderEffects ? EffectWindows().ToArray() : Windows.ToArray<Window>();
             foreach (var w in raise)
             {
                 try { RaiseWindow(w); }
                 catch (Exception ex) { Log.Debug("Pink filter: re-sort raise failed: {E}", ex.Message); }
             }
+            SuperStageOverlay.RaisePool();
         }
 
         private static void HideAll()
