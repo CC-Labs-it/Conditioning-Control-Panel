@@ -118,6 +118,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BrowserWebHost.RouteBrowserPopups = true; // WPF BrowserService.cs:538-562
             _ = BrowserWebHost.SetMutedAsync(CoreSettings.Current.BrowserVideoMuted); // seed before adapter creation
             BrowserWebHost.BrowserProcessFailed += OnBrowserCrash;
+            BrowserWebHost.BrowserStartupFailed += OnBrowserStartupFailed;
             BrowserWebHost.NavigationCompleted += _ => ApplyBrowserMute();
             BrowserWebHost.NavigationBeginning += BeginRemixMediaWatch;
             BrowserWebHost.NavigationFinished += InstallRemixMediaWatch;
@@ -306,7 +307,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             bool prompt = _browserCrashed || popped || offline || BrowserPromptShown(BrowserWebHost.HasEngine, BrowserWebHost.Source != null);
             BrowserLoadingText.IsVisible = prompt;
             BrowserLoadingText.Bind(TextBlock.TextProperty, (Binding)new StrBareExtension(_browserCrashed
-                ? "label_browser_crashed_restart" : offline
+                ? (_browserStartupFailed ? "label_browser_start_failed_retry" : "label_browser_crashed_restart") : offline
                 ? "label_browser_disabled_in_offline_mode" : popped   // WPF MainWindow.Browser.cs:2737
                 ? "label_browser_popped_out_nclick_to_focus_window" : "label_click_to_load_browser").ProvideValue(null!));
             // A native web view draws over anything laid on it, so the prompt only shows with the host hidden.
