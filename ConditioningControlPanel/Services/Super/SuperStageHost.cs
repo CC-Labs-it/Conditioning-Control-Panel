@@ -149,9 +149,11 @@ public static class SuperStageHost
         Stage.DragsPictures = set?.WhirlpoolDragsPictures != false;
         Stage.DragsBubbles = set?.WhirlpoolDragsBubbles != false;
         Stage.Pool.ReachScale = WhirlpoolOptions.ReachScale(set?.WhirlpoolSize ?? WhirlpoolOptions.SizeDefault);
+        bool centred = set?.WhirlpoolStayCentred == true;
+        Stage.Pool.Eats = !centred;   // a parked pool pulls but never pops on its own
         if (Stage.PoolOn)
         {
-            var at = WhirlpoolOptions.Anchor(set?.WhirlpoolStayCentred == true, _lastX, _lastY, _speedPx, centreX, centreY);
+            var at = WhirlpoolOptions.Anchor(centred, _lastX, _lastY, _speedPx, centreX, centreY);
             Stage.Pool.Step(dt, at.X, at.Y, at.SpeedPx, dip, shortSide, gentle);
         }
 

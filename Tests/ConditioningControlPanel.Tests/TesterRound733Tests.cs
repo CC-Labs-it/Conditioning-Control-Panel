@@ -1,3 +1,6 @@
+using System;
+using System.IO;
+using System.Linq;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Super;
 using ConditioningControlPanel.SuperCore;
@@ -80,5 +83,79 @@ public class TesterRound733Tests
         Assert.True(band.Bottom <= 1440);
         // The baseline (11 percent from the bottom) is inside it.
         Assert.InRange(1440 - (int)(1440 * 0.11), band.Top, band.Bottom);
+    }
+
+    // ===================== 7.3.3 tier-2 round =====================
+
+    [Fact]
+    public void A_parked_pool_pulls_but_never_eats()
+    {
+        // BUG-H6LB5YCH6F: Stay centred parked a full pool mid-screen that popped every bubble in
+        // reach, and Hydra's children were born at the eye and eaten again.
+        var p = new Whirlpool();
+        for (double t = 0; t < 10; t += 1 / 30.0) p.Step(1 / 30.0, 960, 540, 0, 1, 1080);
+        Assert.True(p.Pull(p.X + 3, p.Y).Eaten);
+
+        p.Eats = false;
+        var atEye = p.Pull(p.X + 3, p.Y);
+        Assert.False(atEye.Eaten);
+        Assert.True(atEye.Inside);
+        Assert.False(p.Pull(p.X, p.Y).Eaten);
+        Assert.NotEqual(0, p.Pull(p.X + 200, p.Y).Ax);   // it still pulls
+    }
+
+    [Fact]
+    public void Stay_centred_switches_eating_off_in_the_host()
+    {
+        var src = File.ReadAllText(Path.Combine(AppDir(), "Services", "Super", "SuperStageHost.cs"));
+        Assert.Contains("Stage.Pool.Eats = !centred", src);
+    }
+
+    [Theory]
+    [InlineData("WebcamActivePill_Click")]       // the red title-bar pill (BUG-A5UTB2J3V4)
+    [InlineData("BtnWebcamDebugStart_Click")]    // Settings > Devices Stop tracking
+    [InlineData("ToggleWebcamTrackingAsync")]    // tracker button + shortcut
+    public void Every_stop_by_hand_holds_the_camera_off(string handler)
+    {
+        var src = File.ReadAllText(Path.Combine(AppDir(), "MainWindow", "MainWindow.LabTab.cs"))
+                + File.ReadAllText(Path.Combine(AppDir(), "MainWindow", "MainWindow.BlinkTrainer.cs"));
+        var decl = System.Text.RegularExpressions.Regex.Match(src, @"(void|Task) " + handler + @"\(");
+        Assert.True(decl.Success, handler + " not found");
+        int at = decl.Index;
+        int next = src.IndexOf("\n        internal ", at + 1, StringComparison.Ordinal);
+        int next2 = src.IndexOf("\n        private ", at + 1, StringComparison.Ordinal);
+        int end = new[] { next, next2, src.Length }.Where(i => i > at).Min();
+        Assert.Contains("HoldCameraOff(true)", src.Substring(at, end - at));
+    }
+
+    [Fact]
+    public void A_takeover_refused_for_want_of_a_gesture_is_retried_once()
+    {
+        // The line from BUG-HG326JRX2V, as the page posted it.
+        const string denied = "{\"type\":\"fsDenied\",\"reason\":\"TypeError\",\"connected\":true,\"visibility\":\"visible\",\"activation\":false}";
+        Assert.True(ConditioningControlPanel.Services.Browser.TakeoverFullscreenRetry.ShouldRetryWithGesture(denied, false));
+        Assert.False(ConditioningControlPanel.Services.Browser.TakeoverFullscreenRetry.ShouldRetryWithGesture(denied, true));
+        Assert.False(ConditioningControlPanel.Services.Browser.TakeoverFullscreenRetry.ShouldRetryWithGesture(
+            denied.Replace("\"activation\":false", "\"activation\":true"), false));
+        Assert.False(ConditioningControlPanel.Services.Browser.TakeoverFullscreenRetry.ShouldRetryWithGesture(
+            "{\"type\":\"fsDenied\",\"reason\":\"recheck TypeError\"}", false));
+    }
+
+    [Fact]
+    public void The_gesture_retry_runs_as_a_user_gesture()
+    {
+        var json = ConditioningControlPanel.Services.Browser.TakeoverFullscreenRetry.EvaluateParams("a('\"b\"')");
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        Assert.True(doc.RootElement.GetProperty("userGesture").GetBoolean());
+        Assert.Equal("a('\"b\"')", doc.RootElement.GetProperty("expression").GetString());
+    }
+
+    private static string AppDir()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Services")))
+            dir = dir.Parent;
+        Assert.NotNull(dir);
+        return Path.Combine(dir!.FullName, "ConditioningControlPanel");
     }
 }

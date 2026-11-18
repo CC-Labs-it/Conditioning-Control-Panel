@@ -44,6 +44,13 @@ public sealed class Whirlpool
     public double Eased => Ease(Size);
     /// <summary>The player's "Pool size" as a share of the stock reach (<see cref="WhirlpoolOptions.ReachScale"/>). 1 = as shipped.</summary>
     public double ReachScale { get; set; } = 1;
+    /// <summary>
+    /// False while "Stay centred" is on: the pool still pulls and swirls but never eats. Under the
+    /// cursor the player steers what it eats; a pool parked full size in the middle ate every bubble
+    /// in reach on its own, and with Hydra each eaten bubble's children were born at the eye and
+    /// eaten again (tier-2 report, 7.3.3: "something was still popping my bubbles").
+    /// </summary>
+    public bool Eats { get; set; } = true;
     /// <summary>Reach in pixels: nothing outside it feels the pool.</summary>
     public double Radius => (MinReach + (MaxReach - MinReach) * Eased) * ShortSide * ReachScale;
     /// <summary>
@@ -101,12 +108,12 @@ public sealed class Whirlpool
         if (!Live) return new PoolPull(0, 0, 1, false, false);
         double dx = X - x, dy = Y - y, d = Math.Sqrt(dx * dx + dy * dy), r = Radius;
         if (d >= r) return new PoolPull(0, 0, 1, false, false);
-        if (d < 1e-6) return new PoolPull(0, 0, 0.14, Size > 0.15, true);
+        if (d < 1e-6) return new PoolPull(0, 0, 0.14, Eats && Size > 0.15, true);
         double e = Eased, f = (1 - d / r) * (PullMin + (PullMax - PullMin) * e) * Dip / Math.Max(0.2, mass);
         double nx = dx / d, ny = dy / d;
         double ax = nx * f - ny * f * Swirl, ay = ny * f + nx * f * Swirl;
         double scale = Math.Clamp(d / (r * 0.5), 0.14, 1);
-        bool eaten = Size > 0.15 && d < EatRadius * Dip;
+        bool eaten = Eats && Size > 0.15 && d < EatRadius * Dip;
         return new PoolPull(ax, ay, scale, eaten, true);
     }
 }

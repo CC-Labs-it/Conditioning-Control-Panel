@@ -491,6 +491,9 @@ namespace ConditioningControlPanel
                 if (svc != null) await svc.StopAsync();
             }
             catch (Exception ex) { App.Logger?.Debug("WebcamActivePill_Click stop failed: {Error}", ex.Message); }
+            // A stop by hand like the tracker button: the next launch leaves the camera off
+            // (BUG-A5UTB2J3V4, 7.3.3: the title-bar pill never saved it).
+            HoldCameraOff(true);
         }
 
         internal async void BtnWebcamDebugStart_Click(object sender, RoutedEventArgs e)
@@ -507,6 +510,7 @@ namespace ConditioningControlPanel
                 AppSettingsTab.BtnWebcamDebugStart.Content = "Start tracking";
                 AppendWebcamDebugLog("Stop requested.");
                 await StopWebcamOffUiThreadAsync(svc);
+                HoldCameraOff(true);
                 RefreshBlinkTrainerTrackerButton();
                 return;
             }
@@ -535,6 +539,7 @@ namespace ConditioningControlPanel
             var started = await StartWebcamOffUiThreadAsync(svc);
             if (started)
             {
+                HoldCameraOff(false);
                 AppSettingsTab.BtnWebcamDebugStart.Content = "Stop tracking";
                 AppendWebcamDebugLog("Start() returned true — capture thread launching.");
             }

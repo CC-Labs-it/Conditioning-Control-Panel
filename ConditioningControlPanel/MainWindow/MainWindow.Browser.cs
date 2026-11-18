@@ -1173,12 +1173,18 @@ namespace ConditioningControlPanel
                     // The takeover script is asking for fullscreen now: its enter is app-started
                     // even when playback began long after the script went in (#1649).
                     var live = _browserFsGate.NoteTakeoverAsk(Environment.TickCount64);
+                    _takeoverFsGestureRetried = false;
                     App.Logger?.Information("Web takeover asks for fullscreen (armed = {Armed})", live);
                 }
                 else if (message.Contains("\"type\":\"fsDenied\""))
                 {
                     App.Logger?.Warning("Web takeover fullscreen refused by the page: {Detail}",
                         message.Length > 200 ? message[..200] : message);
+                    if (Services.Browser.TakeoverFullscreenRetry.ShouldRetryWithGesture(message, _takeoverFsGestureRetried))
+                    {
+                        _takeoverFsGestureRetried = true;
+                        RetryTakeoverFullscreenWithGesture();
+                    }
                 }
                 // The user left fullscreen but the page may still be playing. This ends the
                 // TAKEOVER only — conflating it with "media stopped" is what let a stray
@@ -2912,6 +2918,29 @@ namespace ConditioningControlPanel
                 };
                 timer.Start();
             }
+        }
+
+        private bool _takeoverFsGestureRetried;
+
+        /// <summary>
+        /// BUG-HG326JRX2V (7.3.2): a takeover the AI starts carries no user gesture, so a page like
+        /// Hypnotube refuses <c>requestFullscreen</c> ("TypeError", activation false). Ask once more
+        /// through the DevTools protocol with <c>userGesture</c>, which runs the same re-check script
+        /// as if the player had clicked. The re-check gives up on its own when the takeover was
+        /// stopped or the clip ended, and a second refusal is logged as "recheck" and never retried.
+        /// </summary>
+        private async void RetryTakeoverFullscreenWithGesture()
+        {
+            try
+            {
+                if (!_browserFsGate.TakeoverArmed(Environment.TickCount64)) return;
+                var core = _browser?.WebView?.CoreWebView2;
+                if (core == null) return;
+                App.Logger?.Information("Web takeover fullscreen: one retry as a user gesture");
+                await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",
+                    Services.Browser.TakeoverFullscreenRetry.EvaluateParams(TakeoverFullscreenReassertScript));
+            }
+            catch (Exception ex) { App.Logger?.Debug("Takeover fullscreen gesture retry failed: {Error}", ex.Message); }
         }
 
         private const string TakeoverFullscreenReassertScript = @"

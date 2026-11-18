@@ -66,7 +66,31 @@ namespace ConditioningControlPanel.Services.Awareness
         /// </summary>
         public bool CarriesLedgerHistory => Kind != TrendKind.GhostTown;
 
-        /// <summary>Compact form for the <c>[AWARE]</c> log line and the projection: "ReturnVisit(4)".</summary>
+        /// <summary>Compact form for the <c>[AWARE]</c> log line: "ReturnVisit(4)". The model reads <see cref="PromptLabel"/>.</summary>
         public string Label => string.Create(CultureInfo.InvariantCulture, $"{Kind}({Magnitude})");
+
+        /// <summary>
+        /// What the model reads in the projection's <c>trends</c> array: the same event with the
+        /// magnitude's UNIT spelled out. A bare "Backslide(135)" is 135 SECONDS away, and a small
+        /// model read it as "135 backslides today" (ccp-bugs #1666).
+        /// </summary>
+        public string PromptLabel
+        {
+            get
+            {
+                var n = Magnitude.ToString(CultureInfo.InvariantCulture);
+                return Kind switch
+                {
+                    TrendKind.ReturnVisit => $"ReturnVisit(visit {n} today)",
+                    TrendKind.LongHaul => $"LongHaul({n} minutes straight)",
+                    TrendKind.Streak => $"Streak({n} days running)",
+                    TrendKind.MediaLoop => $"MediaLoop({n} plays in a row)",
+                    TrendKind.Backslide => $"Backslide(reopened after {n} seconds away)",
+                    TrendKind.GhostTown => $"GhostTown({n} hours idle)",
+                    TrendKind.NightShift => $"NightShift({n} hours past bedtime)",
+                    _ => $"{Kind}({n})"
+                };
+            }
+        }
     }
 }
