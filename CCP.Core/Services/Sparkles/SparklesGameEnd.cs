@@ -14,6 +14,15 @@ namespace ConditioningControlPanel.Services.Sparkles.Claims;
 /// </summary>
 public static class SparklesGameEnd
 {
+    /// <summary>Arcademy class grade: S+ and S gold, A silver, B bronze, C and pass (zen) finished.</summary>
+    public static string ArcademyMedal(string? grade) => (grade ?? "").Trim().ToUpperInvariant() switch
+    {
+        "S+" or "S" => "gold",
+        "A" => "silver",
+        "B" => "bronze",
+        _ => "none",
+    };
+
     /// <summary>A score against the game's own ceiling for that run (the DtRH and Caucus XP caps):
     /// at the cap gold, 60% silver, 30% bronze.</summary>
     public static string RatioMedal(double score, double cap)
@@ -77,12 +86,13 @@ public sealed record SparklesPageClaim(string Game, string Mode, SparklesResult 
     JObject? Detail = null, JObject? Proof = null);
 
 /// <summary>
-/// WPF Services/Sparkles/SparklesPageResults.cs (B1 W3) for the pages this head hosts: chess and
-/// Breakout (no Goon host here yet). Each reader takes the page's frame as untrusted and answers the
+/// WPF Services/Sparkles/SparklesPageResults.cs (B1 W3) for chess, Goon and Breakout. Each reader takes the page's frame as untrusted and answers the
 /// claim, or null when nothing is claimed. The server checks every claim again.
 /// </summary>
 public static class SparklesPageResults
 {
+    private static readonly Regex GoonCode = new("^[A-Z0-9]{4,12}$", RegexOptions.CultureInvariant);
+    public const int GoonSuddenDeath = 1, GoonDraw = 3;
     private static readonly Regex MatchId = new("^[A-Za-z0-9_-]{1,64}$", RegexOptions.CultureInvariant);
     private const double MaxGameMs = 6 * 3600_000.0;
 
@@ -105,6 +115,29 @@ public static class SparklesPageResults
         var id = Str(o["matchId"]);
         if (id == null || !MatchId.IsMatch(id)) return null;
         return new("chess", "online", SparklesResult.ForDuel(outcome), length, detail, new JObject { ["matchId"] = id });
+    }
+
+    /// <summary>Goon <c>match-result { practice, code, result: { endReason, winnerIsHost, localIsHost,
+    /// survivedMs, disputed, countsForLedger } }</c>, sent once the result is final. Like the server,
+    /// only a match that ran its course claims: sudden death or a draw. Mercy (where Escape lands), a
+    /// leave and a pre-Live cancel claim nothing; a disputed practice claims nothing either.</summary>
+    public static SparklesPageClaim? Goon(JObject? o)
+    {
+        if (o?["result"] is not JObject r) return null;
+        if (r["countsForLedger"]?.Type == JTokenType.Boolean && !(bool)r["countsForLedger"]!) return null;
+        var end = Num(r["endReason"]);
+        string outcome;
+        if (end == GoonDraw) outcome = "draw";
+        else if (end == GoonSuddenDeath && Bool(r["winnerIsHost"]) is bool hostWon && Bool(r["localIsHost"]) is bool amHost)
+            outcome = hostWon == amHost ? "win" : "loss";
+        else return null;
+        var length = Ms(r["survivedMs"]);
+        if (Bool(o["practice"]) == true)
+            return Bool(r["disputed"]) == true ? null
+                : new("goon", "practice", SparklesResult.ForDuel(outcome), length);
+        var code = Str(o["code"]);
+        if (code == null || !GoonCode.IsMatch(code)) return null;
+        return new("goon", "online", SparklesResult.ForDuel(outcome), length, null, new JObject { ["goonMatchId"] = code });
     }
 
     /// <summary>Breakout <c>breakout-wall { walls, ballsLost, wallMs, skipped }</c>: one claim per cleared

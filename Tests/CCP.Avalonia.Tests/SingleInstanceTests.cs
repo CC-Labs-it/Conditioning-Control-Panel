@@ -254,6 +254,36 @@ namespace CCP.Avalonia.Tests
             Assert.Equal(payload, got);
         }
 
+        [Fact]
+        public void AcknowledgedSenderKeepsItsGateUntilThePipeCloses()
+        {
+            var pipe = "ccp_ack_" + Guid.NewGuid().ToString("N");
+            using var server = new System.IO.Pipes.NamedPipeServerStream(pipe, System.IO.Pipes.PipeDirection.InOut, 1,
+                System.IO.Pipes.PipeTransmissionMode.Byte, System.IO.Pipes.PipeOptions.Asynchronous | System.IO.Pipes.PipeOptions.CurrentUserOnly);
+            using var ackSent = new ManualResetEventSlim();
+            using var release = new ManualResetEventSlim();
+            var serverTask = Task.Run(() =>
+            {
+                server.WaitForConnection();
+                Assert.Equal(0, server.ReadByte());
+                server.WriteByte(1);
+                server.Flush();
+                ackSent.Set();
+                release.Wait(TimeSpan.FromSeconds(20));
+                server.Dispose();
+            });
+            var client = Task.Run(() => SingleInstance.RequestShow(pipe, null));
+            try
+            {
+                Assert.True(ackSent.Wait(TimeSpan.FromSeconds(20)));
+                Assert.False(client.Wait(TimeSpan.FromMilliseconds(250)));
+            }
+            finally { release.Set(); }
+            Assert.True(serverTask.Wait(TimeSpan.FromSeconds(20)));
+            Assert.True(client.Wait(TimeSpan.FromSeconds(20)));
+            Assert.True(client.Result);
+        }
+
         /// <summary>Launches racing each other (several files opened at once) each reach a primary that is busy
         /// showing: none is lost and none reads the busy primary as wedged and kills it, even when the queue
         /// as a whole takes longer than one ack timeout.</summary>

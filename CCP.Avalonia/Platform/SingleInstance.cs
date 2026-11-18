@@ -208,7 +208,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         /// <summary>true = acked, false = connected but no ack in time, null = nobody listening.</summary>
-        static bool? RequestShow(string pipe, string? payload)
+        internal static bool? RequestShow(string pipe, string? payload)
         {
             var bytes = Encoding.UTF8.GetBytes(payload ?? "");
             if (bytes.Length > 65536) bytes = Array.Empty<byte>();   // unreadable reads as a bare relaunch
@@ -241,7 +241,14 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 c.Flush();
                 using var cts = new CancellationTokenSource(ShowAckTimeoutMs);
                 var buf = new byte[1];
-                return c.ReadAsync(buf, cts.Token).AsTask().GetAwaiter().GetResult() == 1;
+                if (c.ReadAsync(buf, cts.Token).AsTask().GetAwaiter().GetResult() != 1) return false;
+                // Keep the sender gate until the listener has closed this pipe instance. Otherwise the
+                // next sender can connect to the already-acknowledged instance and lose its handoff.
+                // The acknowledgement is final even if an old listener does not close promptly.
+                try { c.ReadAsync(buf, cts.Token).AsTask().GetAwaiter().GetResult(); }
+                catch (OperationCanceledException) { }
+                catch (IOException) { }
+                return true;
             }
             catch (TimeoutException) { return null; }
             catch (OperationCanceledException) { return false; }
