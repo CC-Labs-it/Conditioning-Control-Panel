@@ -156,7 +156,7 @@ internal static class BarkHead
         if (s.SilentEgg || !s.Priority)
         {
             var voiced = !s.SilentEgg && s.AudioPath != null;
-            tube.Giggle(s.Text, unprompted: s.Unprompted, phraseAudioPath: voiced ? s.AudioPath : null, barkVoice: voiced);
+            tube.Giggle(s.Text, unprompted: s.Unprompted, phraseAudioPath: voiced ? s.AudioPath : null, barkVoice: voiced, mood: s.Mood);
             return;
         }
         tube.GigglePriority(s.Text, playSound: s.AudioPath == null, aiGenerated: false,
