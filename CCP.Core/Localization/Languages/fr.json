@@ -6373,6 +6373,8 @@
   "lockdown_audio_tics": "Tics sonores",
   "lockdown_audio_tics_tip": "Un petit tic de braise quand la pièce fait quelque chose de gros, et une brève chute quand cela empire. Désactive pour une hantise silencieuse.",
   "lockdown_poss_stay": "Reste",
+  "possession_swap_pair": "{0} et {1}",
+  "possession_swap_two_buttons": "deux boutons",
   "lockdown_poss_level_hers": "niveau a elle",
   "lockdown_poss_suffix_mine": " (a moi)",
   "lockdown_poss_suffix_hers": " (a elle)",

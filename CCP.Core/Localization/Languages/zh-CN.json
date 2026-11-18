@@ -6877,6 +6877,8 @@
   "lockdown_audio_tics": "声音抽动",
   "lockdown_audio_tics_tip": "房间做出大动作时的一声余烬轻响，情况变糟时的短暂下沉。想要安静的作祟就关掉它。",
   "lockdown_poss_stay": "留下",
+  "possession_swap_pair": "{0}和{1}",
+  "possession_swap_two_buttons": "两个按钮",
   "lockdown_poss_level_hers": "等级是她的",
   "lockdown_poss_suffix_mine": "（我的）",
   "lockdown_poss_suffix_hers": "（她的）",

@@ -6373,6 +6373,8 @@
   "lockdown_audio_tics": "Tics de sonido",
   "lockdown_audio_tics_tip": "Un pequeño tic de brasa cuando la sala hace algo grande, y una caída breve cuando empeora. Desactívalo para una posesión silenciosa.",
   "lockdown_poss_stay": "Quedate",
+  "possession_swap_pair": "{0} y {1}",
+  "possession_swap_two_buttons": "dos botones",
   "lockdown_poss_level_hers": "nivel suyo",
   "lockdown_poss_suffix_mine": " (mio)",
   "lockdown_poss_suffix_hers": " (suyo)",
