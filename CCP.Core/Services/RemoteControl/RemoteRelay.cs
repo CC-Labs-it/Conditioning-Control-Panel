@@ -551,7 +551,9 @@ namespace ConditioningControlPanel.Services
                 session_info = sessionStatus.Progress,
                 share_avatar = s.RemoteShareAvatar,
                 // Only advertise features this head actually implements.
-                caps = new[] { "haptic_pattern", "haptic_level" },
+                caps = CoreEngine.StartBrainDrain != null
+                    ? new[] { "haptic_pattern", "haptic_level", "signal", "brain_drain" }
+                    : new[] { "haptic_pattern", "haptic_level", "signal" },
             };
             try
             {

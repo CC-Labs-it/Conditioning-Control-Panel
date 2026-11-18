@@ -12,6 +12,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models.Deeper;
+using ConditioningControlPanel.Services.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
@@ -296,4 +297,42 @@ public sealed class DeeperPlayerAudioTests
         }
         finally { win.Close(); DeeperLocalAudio.Open = open; }
     });
+    [Fact]
+    public Task AudioEndPublishesTheLoadedPath() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("deeper-finished-").FullName;
+        var media = Path.Combine(dir, "audio.mp3");
+        var path = Path.Combine(dir, "audio.ccpenh.json");
+        File.WriteAllBytes(media, new byte[16]);
+        var enh = new Enhancement { MediaType = MediaTypes.Audio, MediaSource = media };
+        enh.Metadata.Name = "Audio";
+        File.WriteAllText(path, EnhancementSerializer.Save(enh));
+        var oldOpen = DeeperLocalAudio.Open;
+        var audio = new Audio();
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
+        var player = new EnhancementPlayerWindow(null, null) { LoadWaveformPeaks = NoPeaks };
+        string? finished = null;
+        void OnFinished(string? p) => finished = p;
+        EnhancementPlayerWindow.PlaybackFinished += OnFinished;
+        try
+        {
+            player.Show();
+            player.OpenLocalMediaFile(media);
+            Assert.Equal(path, player.LoadedFilePath);
+            Assert.True(audio.Playing);
+            audio.End();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(path, finished);
+        }
+        finally
+        {
+            EnhancementPlayerWindow.PlaybackFinished -= OnFinished;
+            player.Close();
+            DeeperLocalAudio.Open = oldOpen;
+            Directory.Delete(dir, true);
+        }
+        return Task.CompletedTask;
+    });
+
 }

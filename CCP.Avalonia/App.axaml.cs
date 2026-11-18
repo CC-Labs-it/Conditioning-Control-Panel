@@ -1955,6 +1955,7 @@ namespace ConditioningControlPanel.Avalonia
             catch (Exception ex) { Serilog.Log.Warning(ex, "Failed to stop spawned Ollama server"); }
             // WPF App.OnExit:6013/6173: zero the toys first (a Lovense level has no timeout), then dispose.
             try { CoreHaptics.Service?.Dispose(); } catch { }
+            try { Views.Overlays.KeywordHighlightOverlay.CloseAll(); } catch { }
             try { Views.Overlays.BlinkTrainerSession.Stop(); } catch { /* WPF Application.Exit += Stop */ }
             try { Views.Chaos.ChaosRunHost.ForceShutdown(); } catch { /* WPF App.OnExit:6241 Chaos.ForceShutdown */ }
             try { Views.Games.GameWindow.CloseCounterForExit(); } catch { /* WPF App.OnExit:6433 CloseFor(CloseAppExit) */ }
