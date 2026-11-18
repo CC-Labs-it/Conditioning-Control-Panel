@@ -161,11 +161,16 @@ internal static class OpenWindows
     internal static void CloseLeftovers()
     {
         var head = typeof(ConditioningControlPanel.Avalonia.App).Assembly;
-        foreach (var w in Open.Where(w => !_before.Contains(w)).ToArray())
+        // Close shells first so their static event subscriptions cannot reopen child windows during cleanup.
+        foreach (var w in Open.Where(w => !_before.Contains(w))
+                     .OrderByDescending(w => w is ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow).ToArray())
         {
             if (w.GetType().Assembly != head) { Open.Remove(w); continue; }   // the test's own; don't pin it
             // Logged so a product window leak stays visible even though the hook cleans it up.
             Serilog.Log.Warning("[TestIsolation] closing leftover {Window}", w.GetType().Name);
+            // A user close can be refused by Lockdown or hide a shell to the tray. Teardown must really
+            // close it so its timers and process-wide event handlers do not survive into the next test.
+            if (w is ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow shell) shell.MarkExitRequestedForTest();
             try { w.Close(); } catch (Exception) { /* a window that refuses to close must not fail the next test */ }
         }
     }
