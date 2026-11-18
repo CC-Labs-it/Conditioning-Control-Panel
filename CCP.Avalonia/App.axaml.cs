@@ -451,8 +451,13 @@ namespace ConditioningControlPanel.Avalonia
             var mods = Mods;
             mods.ModChanged += (_, _) =>
             {
-                if (Dispatcher.UIThread.CheckAccess()) Controls.AmbientFxCanvas.Env.ApplyPalette(mods);
-                else Dispatcher.UIThread.Post(() => Controls.AmbientFxCanvas.Env.ApplyPalette(mods));
+                void RefreshModAppearance()
+                {
+                    Controls.AmbientFxCanvas.Env.ApplyPalette(mods);
+                    LocalizationManager.Instance.NotifyVocabChanged();
+                }
+                if (Dispatcher.UIThread.CheckAccess()) RefreshModAppearance();
+                else Dispatcher.UIThread.Post(RefreshModAppearance);
             };
             CoreMods.Attach(Mods);
             Mods.Initialize(CoreSettings.Current.ActiveModId);
