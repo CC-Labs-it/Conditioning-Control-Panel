@@ -362,7 +362,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             // layered-window compositor bug and has no X11 twin.
             ScalingChanged += OnScalingSettled;
             Closed += OnClosedCleanup;
-            Opened += (_, _) => ApplyInputRegion();
+            Opened += (_, _) => { ApplyInputRegion(); StartTopmostWatch(OperatingSystem.IsWindows() && TryGetPlatformHandle()?.HandleDescriptor == "HWND" && TryGetPlatformHandle()?.Handle != IntPtr.Zero); };
             // WPF Bubble.cs:666/757 opens the bubble layer to clicks only while the ask chips show.
             _bubbleCanvas.PropertyChanged += (_, e) => { if (e.Property == IsHitTestVisibleProperty) ApplyInputRegion(); };
 
@@ -2790,8 +2790,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// and the dock chip cannot disagree with the screen.</summary>
         private void Dismiss() => EmiDeskService.Instance.Dismiss();
 
-        /// <summary>ponytail: needs App.EmiDesk.ResetOnboarding() - the QA gesture replay.</summary>
-        private void ResetOnboarding() { }
+        /// <summary>WPF EmiDeskWindow.xaml.cs:1606: the QA gesture replays onboarding through the service.</summary>
+        private void ResetOnboarding() => EmiDeskService.Instance.ResetOnboarding();
 
         /// <summary>WPF EmiDeskService.cs:661: widget moments feed the shared line engine.</summary>
         private void FireDeskEvent(string name) => EmiDeskService.Instance.Fire(name);

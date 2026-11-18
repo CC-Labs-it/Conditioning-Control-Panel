@@ -93,6 +93,29 @@ public sealed class DiscordActivityCallersTests : IDisposable
     }
 
     [Fact]
+    public void FloatingVideoEndRestoresRunningFlashPresence()
+    {
+        var clock = new FakeClock(); var host = new Host { Floating = true };
+        var video = new MandatoryVideoScheduler(host, clock, () => new[] { "/fake.mp4" });
+        CoreSettings.Current.FlashEnabled = true;
+        CoreSettings.Current.MandatoryVideosEnabled = true;
+        video.Start();
+        try
+        {
+            CoreFlash.Start();
+            Assert.True(CoreFlash.IsRunning);
+            Assert.True(video.Trigger());
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.True(CoreFlash.IsRunning);
+            Assert.Equal("Watching", _rpc.CurrentState);
+            video.End();
+            Assert.Equal("Conditioning", _rpc.CurrentState);
+            Assert.Equal("Flash training", _rpc.CurrentDetails);
+        }
+        finally { video.Stop(); CoreFlash.Stop(); }
+    }
+
+    [Fact]
     public void AttentionRetryKeepsWatchingLikeWpfCloseAll()
     {
         var clock = new FakeClock(); var host = new Host { HoldMessage = true };
@@ -117,6 +140,8 @@ public sealed class DiscordActivityCallersTests : IDisposable
         public int FloatingLimit => 1; public int FloatingUp => 0;
         internal int Shows;
         internal bool HoldMessage;
+        internal bool Floating;
+        public bool IsFloating(bool strict) => Floating;
         internal Action? Pending;
         public void Show(string path, bool strict) => Shows++;
         public double CloseAll() => 0;
