@@ -60,7 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             var make = AnnouncementClient;
             if (make == null) return;
-            var message = await make().GetMarqueeMessageAsync();
+            var message = await make().GetMarqueeMessageAsync(ConditioningControlPanel.Avalonia.BillboardServices.BoardService.Shared.OnMarquee);
             if (message == null || message == CoreSettings.Current.MarqueeMessage) return;
             Log.Information("Marquee message updated from server");
             CoreSettings.Current.MarqueeMessage = message;
