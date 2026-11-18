@@ -277,6 +277,8 @@
     <!-- Rounded display font (Fredoka, OFL) for the Chaos multiplier hero number. Embedded as a
          Resource so the pack:// font URI (/Fonts/#Fredoka) resolves in the single-file build. -->
     <Resource Include="Fonts\Fredoka.ttf" />
+    <!-- Dares slip fonts (OFL, licences beside them): Barlow Condensed prints the slip, Caveat writes the fills. -->
+    <Resource Include="Fonts\Dares\*.ttf" />
   </ItemGroup>
 
   <ItemGroup>
