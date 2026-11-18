@@ -12,6 +12,11 @@ using Avalonia.Interactivity;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Avalonia.Views.Tabs;
+using ConditioningControlPanel.Avalonia.Views.Windows;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Video;
 using Xunit;
@@ -91,6 +96,206 @@ public sealed class MandatoryVideoFloatingHostTests
         });
 
     private static List<Window> Up(MandatoryVideoOverlay o) => o.Windows.Where(w => w.IsVisible).ToList();
+
+    /// <summary>Timers wait for <see cref="FireLast"/>: the most recently armed one fires.</summary>
+    private sealed class Clock : TimeProvider
+    {
+        public readonly List<Timer> Armed = new();
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan due, TimeSpan period) => new Timer(this, () => callback(state));
+        public void FireLast() { var t = Armed[^1]; Armed.Remove(t); t.Fire(); }
+        public sealed class Timer(Clock clock, Action fire) : ITimer
+        {
+            public TimeSpan Due { get; private set; }
+            public void Fire() => fire();
+            public bool Change(TimeSpan due, TimeSpan period)
+            {
+                clock.Armed.Remove(this);
+                Due = due;
+                if (due != Timeout.InfiniteTimeSpan) clock.Armed.Add(this);
+                return true;
+            }
+            public void Dispose() => clock.Armed.Remove(this);
+            public ValueTask DisposeAsync() { Dispose(); return ValueTask.CompletedTask; }
+        }
+    }
+
+    /// <summary>WPF VideoService.cs:2940-2946 + VideoService.FloatingInstances.cs:117,250 (SchedulerMayTrigger):
+    /// a scheduler tick during an open floating run with room opens one more window through the real host.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Scheduler_ticks_join_the_open_run_until_the_limit_and_panic_closes_all(bool together) =>
+        AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureApp();
+            var s = CoreSettings.Current;
+            var saved = (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount, s.MandatoryVideoFloatingTogether,
+                s.AudioDuckingEnabled, s.GentleVisuals, s.StrictLockEnabled, s.AttentionChecksEnabled, s.VideoMaxDurationSeconds, s.FlashEnabled);
+            (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount, s.MandatoryVideoFloatingTogether,
+                s.AudioDuckingEnabled, s.GentleVisuals, s.StrictLockEnabled, s.AttentionChecksEnabled, s.VideoMaxDurationSeconds, s.FlashEnabled)
+                = (true, 20, true, 3, together, false, false, false, false, 0, false);
+            var post = CoreDispatch.PostProvider; var previousVideo = CoreEngine.Video;
+            var clock = new Clock(); var decoders = new List<Decoder>();
+            var o = new MandatoryVideoOverlay(() => { var d = new Decoder(); decoders.Add(d); return d; });
+            o.Scheduler = new MandatoryVideoScheduler(o, clock, () => new[] { "/v/a.mp4", "/v/b.mp4", "/v/c.mp4", "/v/d.mp4" });
+            try
+            {
+                CoreDispatch.PostProvider = a => a(); CoreEngine.Video = o.Scheduler;
+                o.Scheduler.DeferTrigger = ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.DeferVideo; o.Scheduler.Start();
+                clock.FireLast();   // the schedule fires: pre-roll
+                clock.FireLast();   // pre-roll ends: the run's first window
+                Assert.True(o.FloatingRunOpen);
+                if (together)
+                {
+                    Assert.Equal(3, Up(o).Count);
+                    o.Floaters[0].Surface.Buttons.Close.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));   // room again
+                    Assert.Equal(2, Up(o).Count);
+                    clock.FireLast();   // the next tick
+                    Assert.Equal(2, Up(o).Count);   // Pop up together: the run waits to end, no join
+                }
+                else
+                {
+                    Assert.Single(Up(o)); ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.BeginWebVideoTakeover();
+                    Assert.False(ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.WebVideoClaimed);
+                    ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.EndWebVideo();
+                    clock.FireLast();   // join tick
+                    Assert.Equal(2, Up(o).Count); clock.FireLast(); Assert.Equal(3, Up(o).Count);
+                    clock.FireLast();   // at the limit: skipped
+                    Assert.Equal(3, Up(o).Count); Assert.Equal(3, decoders.Count);
+                }
+                o.Scheduler.ForceCleanup();   // the engine stop a panic runs
+                Assert.Empty(Up(o)); Assert.Equal(0, o.FloatingUp); Assert.Empty(clock.Armed);
+            }
+            finally
+            {
+                o.Scheduler.Stop(); o.CloseAll();
+                ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.RetryPendingCard();
+                CoreEngine.Video = previousVideo;
+                CoreDispatch.PostProvider = post;
+                (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount, s.MandatoryVideoFloatingTogether,
+                    s.AudioDuckingEnabled, s.GentleVisuals, s.StrictLockEnabled, s.AttentionChecksEnabled, s.VideoMaxDurationSeconds, s.FlashEnabled) = saved;
+            }
+            return Task.CompletedTask;
+        });
+
+    [Fact]
+    public Task Browser_media_holds_a_real_floating_join_until_retry() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var s = CoreSettings.Current;
+        var saved = (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount,
+            s.MandatoryVideoFloatingTogether, s.AudioDuckingEnabled, s.GentleVisuals, s.StrictLockEnabled, s.FlashEnabled, s.ProtectBrowserVideoPlayback);
+        var busy = ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.InterruptingBrowserMedia;
+        var stamp = ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.RemixMediaTick;
+        var post = CoreDispatch.PostProvider;
+        var previousVideo = CoreEngine.Video;
+        var clock = new Clock();
+        var o = new MandatoryVideoOverlay(() => new Decoder());
+        o.Scheduler = new MandatoryVideoScheduler(o, clock, () => new[] { "/v/a.mp4", "/v/b.mp4" });
+        try
+        {
+            (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount,
+                s.MandatoryVideoFloatingTogether, s.AudioDuckingEnabled, s.GentleVisuals, s.StrictLockEnabled, s.FlashEnabled, s.ProtectBrowserVideoPlayback)
+                = (true, 20, true, 3, false, false, false, false, false, false);
+            CoreDispatch.PostProvider = a => a(); CoreEngine.Video = o.Scheduler;
+            o.Scheduler.DeferTrigger = ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.DeferVideo;
+            ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.RemixMediaTick = System.Diagnostics.Stopwatch.GetTimestamp();
+            ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.InterruptingBrowserMedia = false;
+            ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.BeginWebVideoTakeover();
+            o.Scheduler.Start(); clock.FireLast();
+            Assert.False(o.Scheduler.IsPlaying);
+            Assert.Equal(TimeSpan.FromSeconds(30), clock.Armed[^1].Due);
+            ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.EndWebVideo();
+            s.ProtectBrowserVideoPlayback = true;
+            clock.FireLast(); clock.FireLast();
+            Assert.Single(Up(o));
+            ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.InterruptingBrowserMedia = true;
+            clock.FireLast();
+            Assert.Single(Up(o));
+            Assert.Equal(TimeSpan.FromSeconds(30), clock.Armed[^1].Due);
+            ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.InterruptingBrowserMedia = false;
+            clock.FireLast();
+            Assert.Equal(2, Up(o).Count);
+        }
+        finally
+        {
+            o.Scheduler.Stop(); o.CloseAll();
+            ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.EndWebVideo();
+            ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow.RetryPendingCard();
+            CoreEngine.Video = previousVideo; CoreDispatch.PostProvider = post;
+            ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.InterruptingBrowserMedia = busy;
+            ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.RemixMediaTick = stamp;
+            (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount,
+                s.MandatoryVideoFloatingTogether, s.AudioDuckingEnabled, s.GentleVisuals, s.StrictLockEnabled, s.FlashEnabled, s.ProtectBrowserVideoPlayback) = saved;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Cross_origin_frame_reports_hold_and_release_a_scheduled_join(bool failedNavigation) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var s = CoreSettings.Current;
+        var saved = (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount,
+            s.MandatoryVideoFloatingTogether, s.AudioDuckingEnabled, s.GentleVisuals, s.StrictLockEnabled, s.FlashEnabled, s.ProtectBrowserVideoPlayback);
+        var busy = (SettingsTabView.RemixBrowserMediaBusy, SettingsTabView.InterruptingBrowserMedia, SettingsTabView.RemixMediaTick);
+        var post = CoreDispatch.PostProvider; var previousVideo = CoreEngine.Video;
+        var clock = new Clock(); var page = new SettingsTabView();
+        var web = page.FindControl<WebHost>("BrowserWebHost")!;
+        string? id = null;
+        web.AudioProbe = () => null; // WKWebView and other engines without an audio probe
+        web.ScriptInvoker = script =>
+        {
+            if (script.Contains("ccpRemixMedia")) id = Regex.Match(script, "const id = \"([^\"]+)\"").Groups[1].Value;
+            return Task.FromResult<string?>("true");
+        };
+        var browser = new Window { Content = page };
+        var o = new MandatoryVideoOverlay(() => new Decoder());
+        o.Scheduler = new MandatoryVideoScheduler(o, clock, () => new[] { "/v/a.mp4", "/v/b.mp4" });
+        try
+        {
+            (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount,
+                s.MandatoryVideoFloatingTogether, s.AudioDuckingEnabled, s.GentleVisuals, s.StrictLockEnabled, s.FlashEnabled, s.ProtectBrowserVideoPlayback)
+                = (true, 20, true, 3, false, false, false, false, false, true);
+            CoreDispatch.PostProvider = a => a(); CoreEngine.Video = o.Scheduler;
+            o.Scheduler.DeferTrigger = LockCardWindow.DeferVideo;
+            browser.Show();
+            web.OnNavigationCompleted(new Uri("https://example.com"), success: !failedNavigation);
+            if (!failedNavigation)
+            {
+                Assert.False(string.IsNullOrEmpty(id));
+                web.OnWebMessage(JsonSerializer.Serialize(new { type = "ccpRemixMedia", id, active = false, interrupting = false, unknown = true }));
+                void Frame(string name, bool active) => web.OnWebMessage(JsonSerializer.Serialize(new { type = "ccpRemixMedia", id, frame = name, active }));
+                Frame("first", false); // an idle unreadable iframe does not block
+                Assert.False(o.BrowserMediaBlocksScheduledVideo);
+                Frame("first", true); Frame("second", false);
+                Assert.True(o.BrowserMediaBlocksScheduledVideo); // idle second frame cannot clear the playing first
+                Frame("first", false);
+            }
+            Assert.False(o.BrowserMediaBlocksScheduledVideo); // also after a failed navigation
+            o.Scheduler.Start(); clock.FireLast(); clock.FireLast();
+            Assert.Single(Up(o));
+            if (!failedNavigation)
+            {
+                web.OnWebMessage(JsonSerializer.Serialize(new { type = "ccpRemixMedia", id, frame = "first", active = true }));
+                clock.FireLast(); Assert.Single(Up(o)); Assert.Equal(TimeSpan.FromSeconds(30), clock.Armed[^1].Due);
+                web.OnWebMessage(JsonSerializer.Serialize(new { type = "ccpRemixMedia", id, frame = "first", active = false }));
+            }
+            clock.FireLast(); Assert.Equal(2, Up(o).Count);
+        }
+        finally
+        {
+            o.Scheduler.Stop(); o.CloseAll(); browser.Close(); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            LockCardWindow.EndWebVideo(); LockCardWindow.RetryPendingCard();
+            (SettingsTabView.RemixBrowserMediaBusy, SettingsTabView.InterruptingBrowserMedia, SettingsTabView.RemixMediaTick) = busy;
+            CoreEngine.Video = previousVideo; CoreDispatch.PostProvider = post;
+            (s.MandatoryVideosEnabled, s.VideosPerHour, s.MandatoryVideoFloating, s.MandatoryVideoFloatingCount,
+                s.MandatoryVideoFloatingTogether, s.AudioDuckingEnabled, s.GentleVisuals, s.StrictLockEnabled, s.FlashEnabled, s.ProtectBrowserVideoPlayback) = saved;
+        }
+        return Task.CompletedTask;
+    });
 
     [Fact]
     public Task Test_presses_add_windows_up_to_the_limit_then_replace_the_oldest() => Run((o, decoders) =>
@@ -283,6 +488,29 @@ public sealed class MandatoryVideoFloatingHostTests
         o.Scheduler.Trigger();
         Assert.True(decoders[1].AudioCalls[0], "muted before the reveal's focus pass");
         Assert.False(decoders[1].AudioOff, "then the newest takes the sound");
+    });
+
+    // LibVLC volume is one process-wide session on Windows (WPF VideoService.FloatingInstances.cs:74-75): a joined
+    // window's own mute and its closing hold silence its audio track, never the shared volume the other window plays at.
+    [Fact]
+    public Task A_joined_windows_mute_and_close_silence_only_its_own_track() => Run((o, decoders) =>
+    {
+        o.Scheduler.Trigger();
+        o.Scheduler.Trigger();
+        Assert.Same(decoders[2], decoders.Single(d => d.AudioOff != true));   // the newest has the sound
+        var newest = o.Floaters[1];
+        newest.Surface.Buttons.Mute.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.True(newest.UserMuted);
+        Assert.True(decoders[2].AudioOff, "its own mute deselects its track");
+        newest.Surface.Buttons.Mute.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.False(decoders[2].AudioOff, "unmuted, the focus holder plays again");
+
+        var middle = o.Floaters[0].Window;   // the middle window takes the sound, then the newest closes
+        middle.MouseDown(new Point(5, 5), MouseButton.Left);
+        middle.MouseUp(new Point(5, 5), MouseButton.Left);
+        Assert.False(decoders[1].AudioOff);
+        newest.Surface.Buttons.Close.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.False(decoders[1].AudioOff, "a closing window's hold leaves the holder's sound alone");
     });
 
     // WPF VideoService.cs:6444-6456: a Resume card on every screen holding a floating window, kept when its host closes.

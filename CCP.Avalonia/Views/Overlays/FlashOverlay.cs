@@ -304,6 +304,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             // WPF FlashService.cs:1674: FlashDisplayed once per batch, right after its spawns are queued.
             if (flashes.Count > 0) Platform.BarkHead.Engine?.Raise("FlashDisplayed");
+            if (flashes.Count > 0)   // WPF RemoteControlService.Screen.cs:117-120: online when any picture came from Scrolller
+                ConditioningControlPanel.Services.Remote.RemoteScreenFeed.Flash(flashes.Any(f => ConditioningControlPanel.Services.Fyp.Online.ScrolllerCreditRules.IsScrolllerMedia(f.Path)));
             var refused = false;
             var notified = false; // WPF FlashService.cs:1674: one display event per burst.
             for (var i = 0; i < flashes.Count; i++)
