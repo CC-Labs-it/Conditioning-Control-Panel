@@ -333,10 +333,11 @@ public sealed partial class FriendsDrawer
             FontSize = 13.5,
             Tag = "friends-menu:" + f.Id,
         };
-        foreach (var item in FriendsDrawerRules.MenuItems(f.Squelched))
+        foreach (var item in FriendsDrawerRules.MenuItems(f.Squelched, DaresOpen()))
         {
             if (item == null) { menu.Items.Add(new Separator { Background = FriendsLook.LineBrush }); continue; }
             var mi = MenuItem(item);
+            if (item == "dare") DressDareItem(mi);
             if (item == "report")
             {
                 foreach (var reason in ReportReason.All)
@@ -362,7 +363,7 @@ public sealed partial class FriendsDrawer
         bool warn = id is "block" or "report";
         return new MenuItem
         {
-            Header = Loc.Get("friends_menu_" + id),
+            Header = Loc.Get(id == "dare" ? "dares_menu_dare" : "friends_menu_" + id),
             Foreground = warn ? FriendsLook.RedBrush : FriendsLook.TextBrush,
             Background = Brushes.Transparent,
             Tag = "friends-menu-item:" + id,
@@ -373,6 +374,7 @@ public sealed partial class FriendsDrawer
     /// (<see cref="AskFirst"/>); otherwise they run here. Internal for the suite.</summary>
     internal async Task RunMenuAsync(Friend f, string what)
     {
+        if (what == "dare") { OpenDareSlip(f); return; }
         if (_svc == null) return;
         if (what is "remove" or "block")
         {

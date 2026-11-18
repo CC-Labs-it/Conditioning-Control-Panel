@@ -394,6 +394,7 @@ public sealed partial class FriendsDrawer : Border
         // The page leaves the leash to Social > Leash; the popup keeps it pinned on top.
         if (!AsPage) _list.Children.Add(_leash);
         AddFeed();
+        AddDares(snap);
         var (online, offline) = FriendsDrawerRules.Split(snap);
         (online, offline) = FriendsDrawerRules.HostingFirst(online, offline, f => TableFor(f) != null);
         if (_openId != null && !ContainsFriend(snap, _openId)) { _openId = null; _picker = null; }
