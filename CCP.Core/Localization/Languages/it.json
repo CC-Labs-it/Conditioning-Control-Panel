@@ -9244,5 +9244,6 @@
   "possession_doki_ok": "ok",
   "remote_invalid_hypnotube_url": "URL video HypnoTube non valido",
   "remote_browser_unavailable": "il browser non è riuscito ad aprirlo",
-  "remote_browser_screen_busy": "{0} è sullo schermo"
+  "remote_browser_screen_busy": "{0} è sullo schermo",
+  "bubble_avatar_pop_fallback": "Ooh, lascia che questa la scoppi io per te~"
 }

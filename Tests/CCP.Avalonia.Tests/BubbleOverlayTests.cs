@@ -385,6 +385,51 @@ public sealed class BubbleOverlayTests
         });
     }
 
+    private sealed class EggHitRandom : Random
+    {
+        public override int Next(int maxValue) => 0;
+    }
+
+    [Theory]
+    [InlineData(1.0)]
+    [InlineData(1.5)]
+    public async Task Native_region_excludes_a_claimed_bubble_and_restores_it_on_release(double scale)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            var w = new BubbleOverlayWindow(0, new PixelRect(0, 0, 600, 300), scale);
+            var claimed = new AmbientBubble { Screen = 0, X = 40, Y = 40, Size = 80, Clickable = true,
+                AmbientTrigger = true, Spec = AmbientBubblePayloads.Build("flash") };
+            var other = new AmbientBubble { Screen = 0, X = 200, Y = 40, Size = 80, Clickable = true };
+            var x = (int)(80 * scale); var otherX = (int)(240 * scale); var y = (int)(80 * scale);
+            try
+            {
+                BubbleOverlay.Field.Bubbles.Clear();
+                BubbleOverlay.Field.Bubbles.Add(claimed);
+                BubbleOverlay.Field.Bubbles.Add(other);
+                w.Sync();
+                Assert.True(Win32Overlay.Hits(w.Rects, w.InputRectCount, x, y));
+                Assert.True(claimed.TryClaimForAvatar(new EggHitRandom(), DateTime.UtcNow.AddSeconds(5)));
+                w.Sync();
+                Assert.False(Win32Overlay.Hits(w.Rects, w.InputRectCount, x, y));
+                Assert.True(Win32Overlay.Hits(w.Rects, w.InputRectCount, otherX, y));
+                Assert.Null(BubbleOverlay.Field.HitTest(0, claimed.CenterX, claimed.CenterY));
+                BubbleOverlay.Field.Bubbles.Remove(other);
+                w.Sync();
+                Assert.Equal(0, w.InputRectCount);
+                claimed.ReleaseAvatarClaim();
+                w.Sync();
+                Assert.True(Win32Overlay.Hits(w.Rects, w.InputRectCount, x, y));
+                Assert.Same(claimed, BubbleOverlay.Field.HitTest(0, claimed.CenterX, claimed.CenterY));
+            }
+            finally { BubbleOverlay.Field.Bubbles.Clear(); w.Close(); }
+            return Task.CompletedTask;
+        });
+    }
+
     [Fact]
     public async Task Dense_field_keeps_input_for_bubbles_after_the_first_64()
     {

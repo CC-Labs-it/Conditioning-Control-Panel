@@ -21,6 +21,7 @@ namespace CCP.Avalonia.Tests;
 /// <summary>leash-gate-card (WPF LeashGateCard.cs, MainWindow.Leash.cs, LauncherHost.cs:360-366): a launcher
 /// tile under a pending punishment opens the panel with THE GATE on it; Panic and Cut leash always work;
 /// with nothing pending the tile opens its game. Driven from the launcher tile, on the real Core LeashService.</summary>
+[Collection(RunsAloneCollection.Name)]
 public sealed class LeashGateCardTests
 {
     private sealed class Targets : LeashCutSafety.ITargets

@@ -8506,5 +8506,6 @@
   "possession_doki_ok": "확인",
   "remote_invalid_hypnotube_url": "올바른 HypnoTube 동영상 URL이 아닙니다",
   "remote_browser_unavailable": "브라우저에서 열 수 없습니다",
-  "remote_browser_screen_busy": "{0}이(가) 화면에 표시되어 있습니다"
+  "remote_browser_screen_busy": "{0}이(가) 화면에 표시되어 있습니다",
+  "bubble_avatar_pop_fallback": "오, 이건 내가 터뜨려 줄게~"
 }
