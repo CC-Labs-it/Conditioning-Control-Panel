@@ -85,6 +85,22 @@ public sealed class LeashAskTests
         root.GetLogicalDescendants().OfType<T>().Single(c => c.Tag as string == tag);
 
     [Fact]
+    public void AskHelpOpensLeashedExplainer() => Run((shell, page, wire, seen) =>
+    {
+        LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+        var ask = LeashAskWindow.Current!;
+        LeashGateCardTests.Click(Tagged<Button>(ask.Card, "leash-help:ask"));
+        var explain = Assert.Single(ask.OwnedWindows.OfType<LeashExplainWindow>());
+        try
+        {
+            Assert.True(explain.IsVisible);
+            Tagged<StackPanel>(explain, "leash-explain-card:leashed");
+            Assert.False(ask.Card.PutItOnButton.IsEnabled);
+        }
+        finally { explain.Close(); }
+    });
+
+    [Fact]
     public void OfferRowLookOpensTheAskWhichWaitsForTheReadClockThenPutsItOn() =>
         Run((shell, page, wire, seen) =>
         {
@@ -192,6 +208,22 @@ public sealed class LeashAskTests
                 Assert.False(ask.ThudActive);
             }
             finally { (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals) = old; }
+        });
+
+    [Fact]
+    public void ManualLookBeforeServiceRebindDoesNotQueueTheSameOffer() =>
+        Run((shell, page, _, _) =>
+        {
+            var service = LeashHead.Service;
+            LeashHead.Service = null;
+            shell.RebindLeashAsks();
+            LeashHead.Service = service; // The shell has not yet performed its periodic rebind.
+            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            var ask = LeashAskWindow.Current!;
+            shell.RebindLeashAsks(); // The periodic rebind runs after the manual Look.
+            ask.Card.Dismiss();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
         });
 
     [Fact]
