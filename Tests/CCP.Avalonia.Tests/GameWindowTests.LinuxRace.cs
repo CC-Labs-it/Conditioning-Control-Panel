@@ -42,6 +42,45 @@ public sealed partial class GameWindowTests
         }
     });
     [Fact]
+    public void LinuxShell_HidesAndRestoresAnExistingSpeechBubble() => RunGlassroad((_, _, _) =>
+    {
+        if (!OperatingSystem.IsLinux()) return;
+        var oldLaunch = GameWindow.LaunchRaceShell;
+        var tube = new ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow(null);
+        using var process = LinuxRaceHostTests.StartCat();
+        LinuxRaceHost? host = null;
+        int changes = 0;
+        Action changed = () => changes++;
+        try
+        {
+            tube.Show();
+            tube.GigglePriority("A line.", playSound: false, aiGenerated: false);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(tube.ShouldShowBubble());
+            Assert.True(tube.BubbleWindow!.IsVisible);
+            GameActivity.GameActiveChanged += changed;
+            GameWindow.UseLinuxRaceCard = () => true;
+            GameWindow.LaunchRaceShell = (w, _) => host = new LinuxRaceHost(w, process);
+            var race = GameWindow.Launch(GameWindow.GlassroadId);
+            Assert.NotNull(race);
+            Assert.False(race!.IsVisible);
+            Assert.Equal(1, changes);
+            Assert.False(tube.ShouldShowBubble());
+            Assert.False(tube.BubbleWindow.IsVisible);
+            host!.Dispose();
+            Assert.Equal(2, changes);
+            Assert.True(tube.ShouldShowBubble());
+            Assert.True(tube.BubbleWindow.IsVisible);
+        }
+        finally
+        {
+            GameActivity.GameActiveChanged -= changed;
+            host?.Dispose();
+            tube.Close();
+            GameWindow.LaunchRaceShell = oldLaunch;
+        }
+    });
+    [Fact]
     public void LinuxShell_SessionRunsInTheUnshownWindow_RoomInitPipeAndExit() => RunShellRace((_, w, host, p, o) =>
     {
         Assert.False(w.IsVisible);
