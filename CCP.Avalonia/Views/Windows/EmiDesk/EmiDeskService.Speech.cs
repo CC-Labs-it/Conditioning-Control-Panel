@@ -103,6 +103,11 @@ internal sealed partial class EmiDeskService
         try { ArmVoiceHold("avatarSpeaking"); }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] avatar hold arm failed"); }
     }
+    internal void NoteAwarenessReaction()
+    {
+        try { ArmVoiceHold("awarenessReaction"); }
+        catch (Exception ex) { Log.Debug(ex, "[EmiDesk] awareness hold arm failed"); }
+    }
     private void ArmVoiceHold(string momentId)
     {
         if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => ArmVoiceHold(momentId)); return; }

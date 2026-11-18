@@ -4,6 +4,7 @@ using System.Reflection;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Bark;
+using ConditioningControlPanel.Services.EmiDesk;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
@@ -93,6 +94,8 @@ internal static class BarkHead
     /// <summary>Drops the engine and detaches sources (tests; the seams are the caller's to restore).</summary>
     internal static void Stop()
     {
+        EmiBarkBridge.DeskFire = null;
+        EmiBarkBridge.VideoTitleProbe = null;
         if (Engine != null) Engine.BarkSpoken -= OnBarkSpoken;
         foreach (var detach in _unsubscribe) detach();
         _unsubscribe.Clear();
@@ -104,6 +107,9 @@ internal static class BarkHead
     /// <summary>The mouth, live reads and Core seams; split from Start so a test can seed its own engine.</summary>
     internal static void Seed(BarkEngine e)
     {
+        EmiBarkBridge.DeskFire = () => Views.Windows.EmiDesk.EmiDeskService.Instance.Fire;
+        EmiBarkBridge.VideoTitleProbe = () => CoreEngine.Video?.LastVideoPath;
+        e.NoteAwarenessReaction = () => Views.Windows.EmiDesk.EmiDeskService.Instance.NoteAwarenessReaction();
         e.Speak = Speak;
         e.IsWhisperStarting = () => Views.Overlays.FlashOverlay.VoiceStarting;
         // WPF App.xaml.cs:3006: a held idle line is not recorded as spoken (#1468), same policy as the tube.

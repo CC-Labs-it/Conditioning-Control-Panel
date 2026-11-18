@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using ConditioningControlPanel.Services.Companion;
+using ConditioningControlPanel.Services.Awareness;
+using ConditioningControlPanel.Services.EmiDesk;
 using Serilog;
 
 namespace ConditioningControlPanel.Services.Bark
@@ -100,6 +102,9 @@ namespace ConditioningControlPanel.Services.Bark
 
         // Head seams; unseeded = WPF's answer for a missing service. No mouth = nothing said, nothing spent.
         public Action<BarkSpeech>? Speak;
+        public Action? NoteAwarenessReaction;
+        public IReactionArbiter? AwarenessArbiter;
+        private readonly System.Threading.AsyncLocal<bool> _inAwarenessBark = new();
         /// <summary>A flash voice is starting but has not reported its length yet (WPF holds the floor from Play).</summary>
         public Func<bool>? IsWhisperStarting;
         public Func<bool>? IsSpeaking;                 // App.AvatarWindow.IsSpeaking
@@ -171,10 +176,31 @@ namespace ConditioningControlPanel.Services.Bark
         /// <summary>WPF BarkService.NotifyExternalLineSpoken (:337): an EMI desk line counts against the global gap.</summary>
         public void NotifyExternalLineSpoken() { lock (_gate) _globalLastFireUtc = Now; }
 
-        /// <summary>WPF Raise (:1096): the first passing rule (priority order) wins; the gate decides under the
+        /// <summary>WPF RaiseAwarenessBark (:289): the arbiter already accounts for this delivery.</summary>
+        public bool RaiseAwarenessBark(ContextFrame frame)
+        {
+            if (frame == null) return false;
+            try { NoteAwarenessReaction?.Invoke(); } catch { }
+            bool previous = _inAwarenessBark.Value;
+            _inAwarenessBark.Value = true;
+            try
+            {
+                if (frame.Transition == TransitionKind.Milestone)
+                    return Raise("StillOnActivity", c => c.Set("activity", frame.ServiceName ?? "")
+                        .Set("still_minutes", Math.Floor(Math.Max(0, frame.DwellSeconds) / 60.0))
+                        .Set("app_cluster", frame.AppCluster ?? "").Set("app", frame.AppId ?? ""));
+                return Raise("ActivityChanged", c => c.Set("activity", frame.ServiceName ?? "")
+                    .Set("category", frame.Category.ToString()).Set("app_cluster", frame.AppCluster ?? "")
+                    .Set("app", frame.AppId ?? ""));
+            }
+            finally { _inAwarenessBark.Value = previous; }
+        }
+
+        /// <summary>WPF Raise (:1096): the first passing rule wins; the gate decides under the
         /// lock, the mouth speaks after it. True when it spoke.</summary>
         public bool Raise(string trigger, Action<BarkContext>? fill = null, bool guaranteed = false)
         {
+            EmiBarkBridge.Mirror(trigger, fill);
             try
             {
                 IReadOnlyList<BarkRule> rules;
@@ -417,6 +443,15 @@ namespace ConditioningControlPanel.Services.Bark
         private void CommitFire(BarkRule rule, int idx, List<BarkVariant> pool)
         {
             var now = Now;
+            if (!_inAwarenessBark.Value && !DryRun && rule.Class != BarkClass.Safety)
+            {
+                try
+                {
+                    if (WindowAwarenessService.V2OwnsReactionsProvider?.Invoke() == true)
+                        AwarenessArbiter?.RecordExternalLine(ReactionSource.Bark);
+                }
+                catch (Exception ex) { Log.Debug(ex, "BarkEngine: arbiter report failed"); }
+            }
             _lastFiredUtc[rule.Id] = now;
             _globalLastFireUtc = now;
             RememberSpoken(pool[idx].Audio);
