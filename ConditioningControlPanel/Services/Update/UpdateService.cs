@@ -20,15 +20,27 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.3.2";
+        public const string AppVersion = "7.3.3";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.3.2 - Back to the basics
+        public const string CurrentPatchNotes = @"v7.3.3 - Back to the basics
 
-NEW IN 7.3.2
+NEW IN 7.3.3
+
+a round for those who told us the panel slows the effects down, and for Scrawl with big text.
+
+- the panel goes still while the engine runs: its glows, sparkles and moving banners rest, so your effects get the frames. it wakes up when you stop. switch Auto performance off to keep it moving.
+- Motion (Full, Reduced, Off) is the first row of Settings > Performance now, and it reaches every animation in the panel the moment you change it.
+- Scrawl: with Corner flash off the gold CORNER word stays away, and big text no longer counts almost every bounce as a corner.
+- Scrawl: bigger text holds fewer stamps, fewer again with Second text on. a new Stamp size slider sets the stamps apart from the text.
+- Whirlpool: a new Stay centered switch. the pool sits in the middle of the screen at full size and stops following the mouse.
+- V2 subliminals use your Subliminal font, and ""Ignore CCP's own windows"" skips them.
+- the camera stays off after you stop it. it used to come back at every launch with Focus Gaze on.
+
+FROM 7.3.2
 
 a small round after your first night with 7.3.1.
 
@@ -131,7 +143,7 @@ FIXES
 - Deeper: fixed a crash while a library file was being read.
 - Piece by Piece: a press that does not move is a click, the lit square is the one a click plays, and an arrow no longer stays stuck after a lost right release.
 
-this is a pre-release. it carries everything in 7.3.1, 7.3.0 and 7.2.4.";
+this is a pre-release. it carries everything in 7.3.2, 7.3.1, 7.3.0 and 7.2.4.";
 
         private const string GitHubOwner = "CC-Labs-it";
         private const string GitHubRepo = "Conditioning-Control-Panel";
