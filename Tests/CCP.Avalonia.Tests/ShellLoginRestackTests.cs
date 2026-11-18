@@ -20,6 +20,23 @@ namespace CCP.Avalonia.Tests;
 public sealed partial class AccountSeedTests
 {
     [Fact]
+    public void AchievementRestoreQueueDoesNotCaptureLaterDispatches()
+    {
+        var previous = CoreDispatch.PostProvider;
+        var delivered = 0;
+        Action<Action> dispatcher = action => { delivered++; action(); };
+        try
+        {
+            CoreDispatch.PostProvider = dispatcher;
+            ProfileLoadAndSyncRestoreHistoricalAchievementsOnTheUiQueue();
+            CoreDispatch.Post(() => { });
+            Assert.Same(dispatcher, CoreDispatch.PostProvider);
+            Assert.Equal(1, delivered);
+        }
+        finally { CoreDispatch.PostProvider = previous; }
+    }
+
+    [Fact]
     public void ProfileLoadAndSyncRestoreHistoricalAchievementsOnTheUiQueue() => WithFreshInstall(async () =>
     {
         var (wire, sync, _) = SignIn("u1", L40Profile("u1", "from-get"));

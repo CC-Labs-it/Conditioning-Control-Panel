@@ -551,8 +551,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         /// <summary>WPF CanChannelDefuse (:1927): the focus must cover the snap's cost (paid on completion).</summary>
-        private static bool CanChannelDefuse(AmbientBubble b) =>
-            _state != null && (_freezeRemainingSec > 0 || _state.Focus >= ChaosTuning.DEFUSE_COST);
+        private static bool CanChannelDefuse(AmbientBubble b)
+        {
+            if (b.Popping || b.Channeling || !b.IsLiveThreat) return false;
+            bool approved = _state != null && (_freezeRemainingSec > 0 || _state.Focus >= ChaosTuning.DEFUSE_COST);
+            if (approved) ChaosRunLessons.OnChannelStarted(BubbleOverlay.Field.Clock());
+            return approved;
+        }
 
         /// <summary>WPF OnDefused (:1984): the core snap (cost, counts, score, Drip Feed), the Snap
         /// Chain window, Playing with Fire's brink gold and the Pendulum's scoring window.</summary>
@@ -571,6 +576,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (_state.DefuseInvulnMs > 0) _invulnUntilUtc = BubbleOverlay.Field.Clock().AddMilliseconds(_state.DefuseInvulnMs);   // WPF :2000
             CountRegenPop();   // WPF ChaosModeService :2001
             FirstTime(ChaosFirstTimes.Snap);
+            if (b.DefusedViaChannel) ChaosRunLessons.OnChannelEnded(BubbleOverlay.Field.Clock());
             ChaosRunLessons.OnDefuseCompleted(fuseSecLeft, b.DefusedViaChannel);
             var (pts, lastBreath, slowburn) = ChaosFieldMath.ApplyDefuse(_state, spec, fuseSecLeft,
                 b.DefusedViaChannel, free: _freezeRemainingSec > 0, pendulum: PendulumMultiplier, ChaosFieldMath.ChanceFlip(_state, Rng));
@@ -604,7 +610,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (slowburn > 1) _state.PushEvent("🐌 slow burn! x3");
             _state.PushEvent($"✔ snapped {spec.Payload.DisplayName}");
             CheckComboMilestone();
-            // ponytail: slow_fuses/blindfold lessons and
+            // ponytail: blindfold lesson and
             // the brink narrative -> chaos-payout-fallin-d; the defuse barks -> chaos-payout-barks.
         }
 
@@ -614,6 +620,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             var spec = b.Spec;
             if (_state == null || spec == null || _manualPaused || _lessonCardPaused) return;
+            if (b.BrokenReason is "click" or "release" or "nofocus")
+                ChaosRunLessons.OnChannelEnded(BubbleOverlay.Field.Clock());
             switch (b.BrokenReason)
             {
                 case "nofocus":   // WPF OnPlayerPress :4502 + OnChannelBroken :1943

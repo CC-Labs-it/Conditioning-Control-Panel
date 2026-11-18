@@ -101,6 +101,7 @@ public sealed partial class AccountSeedTests
     private async Task Fresh(Func<Task> body)
     {
         var oldSettings = CoreSettings.ServiceProvider;
+        var oldPost = CoreDispatch.PostProvider;
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         var s = CoreSettings.Current;
@@ -121,6 +122,7 @@ public sealed partial class AccountSeedTests
             (s.AuthToken, AccountSeed.NewV2, s.OfflineMode) = (oldToken, oldNew, oldOffline);
             CoreAccount.UnifiedUserId = null;
             CoreSettings.ServiceProvider = oldSettings;
+            CoreDispatch.PostProvider = oldPost;
         }
     }
 

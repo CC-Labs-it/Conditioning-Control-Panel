@@ -1551,6 +1551,33 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    [Fact]
+    public async Task Held_snap_banks_lifetime_channel_seconds()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            FreshMeta();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.State!.Focus = 100;
+                var now = DateTime.UnixEpoch;
+                BubbleOverlay.Field.Clock = () => now;
+                var b = BubbleOverlay.SpawnChaos(new EffectBubbleSpec
+                    { VariantId = "pink", IsLive = true, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() });
+                BubbleOverlay.Press(b, b.CenterX, b.CenterY);
+                now = now.AddMilliseconds(1100);
+                BubbleOverlay.Field.Step();
+                Assert.True(b.DefusedViaChannel);
+                Assert.Equal(1.1, ChaosMeta.State.TotalChannelSeconds, 6);
+            }
+            finally { ChaosRunHost.ForceShutdown(); BubbleOverlay.Field.Clock = () => DateTime.UtcNow; FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
     private sealed class ChaperoneMissDice : Random
     {
         private bool _rolled;
