@@ -2945,9 +2945,11 @@ namespace ConditioningControlPanel
             if (_browser?.WebView == null) return;
 
             // A late fullscreen event from the stopped page must not reopen a topmost host.
-            if (isFullscreen && Services.Browser.RemoteBrowserStopRule.HideBrowser(
-                RemoteControlOverlay.Visibility == Visibility.Visible, _remoteBrowserVideoActive))
+            if (isFullscreen && Services.Browser.RemoteBrowserStopRule.RefuseFullscreen(
+                RemoteControlOverlay.Visibility == Visibility.Visible, _remoteBrowserVideoActive,
+                _browserFsGate.TakeoverArmed(Environment.TickCount64)))
             {
+                App.Logger?.Information("Browser fullscreen refused under the remote card (no takeover armed)");
                 _ = _browser.ExitFullscreenAsync();
                 _browser.ClearFullscreenRegistration();
                 return;

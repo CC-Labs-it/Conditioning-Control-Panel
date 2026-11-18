@@ -98,6 +98,9 @@ internal sealed class BrowserFullscreenGate
         return true;
     }
 
+    /// <summary>True while an app-started takeover's enter is still expected.</summary>
+    internal bool TakeoverArmed(long nowMs) => nowMs <= _takeoverArmedUntil;
+
     /// <summary>A takeover asked to enter: hold page exits until the enter is applied.</summary>
     internal void NoteEnterWish(long nowMs)
     {
