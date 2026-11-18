@@ -175,6 +175,28 @@ public sealed class BarkEngineTests : IDisposable
     }
 
     [Fact]
+    public void WebcamFieldsResolveFromLiveState()
+    {
+        var rule = Rule("Camera", "seen");
+        rule.Conditions = new() { ["blink_count_gte"] = 2, ["face_lost_sec_gte"] = 3, ["webcam_running"] = true };
+        var e = Engine(rule);
+        var clock = new PopQuizSchedulerTests.FakeClock();
+        e.Clock = clock;
+        e.LiveField = field => field == "webcam_running";
+        e.RegisterBlink();
+        e.FaceLost();
+        clock.Advance(TimeSpan.FromSeconds(4));
+        Assert.False(e.Raise("Camera", guaranteed: true));
+        e.RegisterBlink();
+        e.LiveField = _ => false;
+        Assert.False(e.Raise("Camera", guaranteed: true));
+        e.LiveField = field => field == "webcam_running";
+        Assert.True(e.Raise("Camera", guaranteed: true));
+        e.FaceFound();
+        Assert.False(e.Raise("Camera", guaranteed: true));
+    }
+
+    [Fact]
     public void IdleRotatesAcrossRulesAndPersistsWithoutImmediateCycleRepeat()
     {
         var old = _s.BarkIdleRotation;
