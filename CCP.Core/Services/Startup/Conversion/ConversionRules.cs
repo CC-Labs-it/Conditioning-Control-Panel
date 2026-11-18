@@ -42,6 +42,7 @@ namespace ConditioningControlPanel.Services.Startup.Conversion
         public const string KeyLapseClosed = "lapse_closed";
         public const string KeyLapseReconnect = "lapse_reconnect";
         public const string KeyLapseGreeting = "lapse_greeting";
+        public const string KeyPassEnds = "pass_ends";
 
         /// <summary>How long after the close the closed row may still be posted (proposal 4d).</summary>
         public static readonly TimeSpan ClosedRowWindow = EntitlementTierRule.ClosedRowWindow;

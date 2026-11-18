@@ -105,6 +105,9 @@ internal static partial class PieceByPieceHostService
     }
 
     private static ChaosWebViewHost? _host;
+
+    /// <summary>This game's window, for the Prize Counter sheet its door opens over it (PrizeCounterHostService.Sheet.cs).</summary>
+    internal static ChaosWebViewHost? CounterHost => _host;
     private static DispatcherTimer? _bootWatch;
     private static DispatcherTimer? _heartbeatWatch;
     private static DateTime _lastHeartbeatUtc;

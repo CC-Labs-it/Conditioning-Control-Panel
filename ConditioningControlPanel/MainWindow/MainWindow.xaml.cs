@@ -88,7 +88,6 @@ namespace ConditioningControlPanel
         // to suppress. A flag that is only cleared by the handler is a trap once the handler
         // stops running - the next real click gets eaten instead.
         private Window? _browserPopoutWindow = null;
-        private bool _isDualMonitorPlaybackActive = false;
         private bool _isBrowserFullscreen = false;
         private bool _browserFullscreenWasPopout = false;
         private double _browserPreFullscreenZoom = 1.0;
@@ -221,6 +220,23 @@ namespace ConditioningControlPanel
         public MainWindow()
         {
             InitializeComponent();
+            // Declutter wave 2: a panel link to something that lives in the launcher now opens
+            // the launcher on that door (Games or Tools).
+            Services.UI.PanelDoorLink.OpenLauncherDoor = key =>
+            {
+                if (Services.Launcher.LauncherDoorRules.TryParse(key, out var door))
+                    Services.Launcher.LauncherHost.ShowDoor(door);
+            };
+            // The seam is Core's on the port: this head says when Lockdown runs (the door stays
+            // shut then, rule 6) and what the fallback is: the title-bar "Back to CC Labs" button,
+            // same handler, and a disabled button stays a no-op.
+            Services.UI.PanelDoorLink.IsLockedDown = () => App.Lockdown?.IsActive == true;
+            Services.UI.PanelDoorLink.Fallback = () =>
+            {
+                var button = App.MainWindowRef?.BtnBackToLauncher;
+                if (button == null || !button.IsEnabled) return;
+                button.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, button));
+            };
             Services.Diagnostics.FxBisect.Watch(this);
             // Nav rework: lane-owned pages register their ShowTab hosts (MainWindow.TabNavigation.cs).
             RegisterLaneNavTabs();
@@ -1625,6 +1641,12 @@ namespace ConditioningControlPanel
             if (TryRacePauseOnEscape()) return;
             Services.FirstShow.FirstShowService.Stop();
             CancelPendingAi();
+            // The Sparkles flight and its bells stop, the wallet snaps to its balance, nothing stays owed.
+            try { Services.Prizes.SparkleFlightDirector.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            // The weekly free Super try ends with a cut, before any hand-off below can return early.
+            try { Services.Super.SuperPreview.End(panic: true); } catch (Exception ex) { Diag.Swallowed(ex); }
+            // Super Lights Down: the dim goes on this frame in every mode (a floating dim never fades out after a panic).
+            try { Services.Super.LightsDownService.Panic(); } catch (Exception ex) { Diag.Swallowed(ex); }
 
             // EMI Desk (MOMENTS 4.B): FIRST LINE, before any of the ladder below. panicPressed is a
             // HOLD with a five-minute silence tail, and it has to be armed even if something further
@@ -2189,6 +2211,7 @@ namespace ConditioningControlPanel
                 App.Overlay?.Stop();
                 App.Overlay?.StopPinkFilter();
                 App.Overlay?.StopSpiral();
+                Services.Super.SuperStageHost.Stop();
             }
             catch (Exception ex)
             {

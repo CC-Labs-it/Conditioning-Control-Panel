@@ -87,10 +87,10 @@ public sealed class SkillPurchase
                         return settings.UnifiedId == id ? await RequestAsync(settings, skill, afterSync: true) : (false, Loc.Get("skill_err_login_required"));
                     return (false, result.Error ?? Loc.Get("dialog_purchase_failed"));
                 }
-                if (SparklePoints.AdoptAfterRefusal(settings.SkillPoints, result.SkillPoints, skill.Cost) is { } adopted) { settings.SkillPoints = adopted; Save(); }
+                if (SparklePoints.AdoptAfterRefusal(settings.SkillPoints, result.SkillPoints, skill.Cost) is { } adopted) { global::ConditioningControlPanel.Services.Prizes.SparklesLedger.Write(settings, adopted, global::ConditioningControlPanel.Services.Prizes.SparkleSource.SkillTree); Save(); }
                 return (false, result.Error ?? Loc.Get("dialog_purchase_failed"));
             }
-            if (result.SkillPoints.HasValue) settings.SkillPoints = result.SkillPoints.Value;
+            if (result.SkillPoints.HasValue) global::ConditioningControlPanel.Services.Prizes.SparklesLedger.Write(settings, result.SkillPoints.Value, global::ConditioningControlPanel.Services.Prizes.SparkleSource.SkillTree);
             if (result.UnlockedSkills != null) settings.UnlockedSkills = (settings.UnlockedSkills ?? new List<string>()).Union(result.UnlockedSkills).ToList();
             PointsSpent?.Invoke(skill.Cost);
             if (skill.Cost > 0 && string.IsNullOrEmpty(settings.SeasonStatsSeason)) settings.SeasonStatsSeason = EnhancementAnalytics.CurrentSeasonKey(settings, DateTime.UtcNow);

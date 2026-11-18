@@ -60,13 +60,43 @@ public sealed class SectionPaintShellTests
                 Assert.Equal(NavStripRules.TabTint(section, all.IndexOf("ramp"), all.Count), ramp.Tint);
                 Assert.NotEqual(studio.Tint, ramp.Tint);
 
-                // A rest pill: a raised plate (lit top) inside a bevelled 1.5 px rim, hue-lifted label.
-                var plate = Assert.IsType<LinearGradientBrush>(studio.Face.Background);
-                Assert.Equal(NavStripRules.WithAlpha(studio.Tint, NavStripRules.RestFillAlpha + NavStripRules.PlateLift), plate.GradientStops[0].Color);
-                var rim = Assert.IsType<LinearGradientBrush>(studio.Face.BorderBrush);
-                Assert.Equal(4, rim.GradientStops.Count);
+                // Declutter wave 1: a rest pill has no face (no plate, no rim; the 1.5 px border stays
+                // so nothing moves), only its hue-lifted label. The lit pill is the one filled object.
+                Assert.Same(Brushes.Transparent, studio.Face.Background);
+                Assert.Same(Brushes.Transparent, studio.Face.BorderBrush);
                 Assert.Equal(1.5, studio.Face.BorderThickness.Top);
                 Assert.Equal(NavStripRules.RestTextOn(hue, studio.Tint), Solid(studio.Label.Foreground));
+                // Under the pointer the face comes back: the hover plate (lit top) inside the bevelled rim.
+                strip.FxHoverForTests("studio", true);
+                var plate = Assert.IsType<LinearGradientBrush>(studio.Face.Background);
+                Assert.Equal(NavStripRules.WithAlpha(studio.Tint, NavStripRules.HoverFillAlpha + NavStripRules.PlateLift), plate.GradientStops[0].Color);
+                var rim = Assert.IsType<LinearGradientBrush>(studio.Face.BorderBrush);
+                Assert.Equal(4, rim.GradientStops.Count);
+                strip.FxHoverForTests("studio", false);
+                Assert.Same(Brushes.Transparent, studio.Face.Background);
+                Assert.Same(Brushes.Transparent, studio.Face.BorderBrush);
+
+                // The crumb: the section word is the room title, in the hue.
+                Assert.Equal(NavStripTable.CrumbTitleSize, strip.CrumbTitleSizeForTests);
+                Assert.Equal(NavStripTable.CrumbPageSize, strip.CrumbPageSizeForTests);
+
+                // The count badge seam: quiet with no provider, fed by it, and the pill keeps its height.
+                var badgesBefore = NavStripTable.BadgeProvider;
+                try
+                {
+                    Assert.Null(strip.PillBadge("studio"));
+                    double pillHeight = studio.Pill.Bounds.Height;
+                    NavStripTable.BadgeProvider = k => k == "studio" ? "  5 on " : null;
+                    NavStripTable.NotifyBadgesChanged();   // the mounted strip repaints itself
+                    w.UpdateLayout();
+                    Assert.Equal("5 on", strip.PillBadge("studio"));
+                    Assert.Null(strip.PillBadge("ramp"));
+                    Assert.Equal(pillHeight, studio.Pill.Bounds.Height);
+                    NavStripTable.BadgeProvider = _ => throw new System.InvalidOperationException("page gone");
+                    strip.RefreshBadges();
+                    Assert.Null(strip.PillBadge("studio"));
+                }
+                finally { NavStripTable.BadgeProvider = badgesBefore; strip.RefreshBadges(); w.UpdateLayout(); }
 
                 // The lit pill: the plate steps aside for the solid hue fill under it, a 2 px gloss
                 // ring whose extra half pixel comes out of the padding, ink chosen for contrast.
@@ -77,7 +107,7 @@ public sealed class SectionPaintShellTests
                 Assert.Equal(NavStripRules.ActiveTextOn(hue), Solid(presets.Label.Foreground));
                 Assert.True(strip.ActiveFill.IsVisible);
                 Assert.Equal(hue, Solid(strip.ActiveFill.Background));
-                // The pill sits in its "?" help host (d0ec7aa8d), so the row offset is the host's.
+                // The pill sits in its host (the confirm card's anchor), so the row offset is the host's.
                 Assert.Equal(((Control)presets.Pill.Parent!).Bounds.X, strip.ActiveFill.Margin.Left);
                 Assert.Equal(presets.Pill.Bounds.Width, strip.ActiveFill.Width);
                 Assert.Equal(0, strip.ActiveFill.BoxShadow.Count);   // Motion Off: no glow
@@ -86,7 +116,9 @@ public sealed class SectionPaintShellTests
                 ramp.Pill.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 w.UpdateLayout();
                 Assert.Equal(((Control)ramp.Pill.Parent!).Bounds.X, strip.ActiveFill.Margin.Left);
-                Assert.IsType<LinearGradientBrush>(presets.Face.Background);
+                // The pill that went dark has no face again.
+                Assert.Same(Brushes.Transparent, presets.Face.Background);
+                Assert.Same(Brushes.Transparent, presets.Face.BorderBrush);
 
                 // The HUD band (WPF MainWindow.xaml:805): header + XP rows on 20% black, rows 1-3.
                 var hud = w.Named<Border>("HudBand")!;
@@ -96,7 +128,7 @@ public sealed class SectionPaintShellTests
                 // The page wash and ink follow the section.
                 var wash = w.Named<Border>("SectionWashFill")!;
                 Assert.Equal(NavStripRules.WithAlpha(hue, 0x24 / 255.0), Solid(wash.Background));
-                w.ShowTab("play");
+                w.ShowTab("playeyes");
                 Dispatcher.UIThread.RunJobs();
                 var play = NavStripRules.Accent(NavSections.SectionForTab("play"));
                 Assert.NotEqual(hue, play);

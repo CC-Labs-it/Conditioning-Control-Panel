@@ -70,6 +70,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
         internal static void Stop() { VoiceOpacity = null; CloseAll(); }
 
+        /// <summary>Super Steam rides these windows (<see cref="SteamOverlay"/>): tell the shared
+        /// stage whenever they come, go or change. Never throws into a tint refresh.</summary>
+        private static void SyncSuper()
+        {
+            try { ConditioningControlPanel.Services.Super.SuperStageHost.Sync(); }
+            catch (Exception ex) { Log.Debug("Pink filter: Super sync failed: {E}", ex.Message); }
+        }
+
         private static bool _refused;
         internal static bool SkipPlatformChecksForTests;
         internal static IReadOnlyList<TintOverlayWindow> Shown => Windows;
@@ -157,7 +165,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static void Refresh(Visual host)
         {
             var s = CoreSettings.Current;
-            if (VoiceOpacity == null && !HasTimedPayload && (!s.PinkFilterEnabled || !ShouldShow())) { HideAll(); return; }
+            if (VoiceOpacity == null && !HasTimedPayload && (!s.PinkFilterEnabled || !ShouldShow())) { HideAll(); SyncSuper(); return; }
 
             var screens = ScreenList.Enumerate(host);
             var primary = -1;
@@ -175,6 +183,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (Windows.Count > 0 && want.SequenceEqual(_shownOn))
             {
                 foreach (var w in Windows) w.SetTint(r, g, b, opacity);
+                SyncSuper();
                 return;
             }
 
@@ -215,6 +224,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _shownOn = want;
             QuestMinutes.Follow(Windows.Count > 0);
             if (s.PinkFilterUnderEffects) SyncOrder();   // a fresh tint maps on top: put the effects back over it
+            SyncSuper();
             Log.Debug("Pink filter showing on {Count} screen(s) at {Opacity}%", Windows.Count, s.PinkFilterOpacity);
         }
 
@@ -286,6 +296,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Windows.Clear();
             _shownOn = Array.Empty<int>();
             QuestMinutes.Follow(false);
+            SyncSuper();
             if (_hookedOwner is not null) { _hookedOwner.Closed -= OnOwnerClosed; _hookedOwner = null; }
         }
 

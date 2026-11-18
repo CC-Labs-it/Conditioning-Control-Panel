@@ -36,7 +36,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Named<Tabs.AvailableSubjectsTabView>("AvailableSubjectsTab")?.Repaint();
             RefreshTierDependentViews();
             var haptics = StudioRack?.HapticsPanel;
-            var hapticsOpen = CoreEntitlement.HasPremium || CoreEntitlement.IsFreeToday("haptics");
+            var hapticsOpen = ConditioningControlPanel.Services.Haptics.HapticsAccess.IsOpen;
             if (haptics?.FindControl<Control>("HapticsContentGrid") is { } grid)
             {
                 grid.Opacity = hapticsOpen ? 1.0 : 0.3;
@@ -46,7 +46,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (haptics?.FindControl<Control>(box) is { } b) b.IsEnabled = hapticsOpen;
 
             RefreshPremiumGate(Named<Control>("BambiTakeoverTab"), "BambiTakeoverGate", "takeover");
-            RefreshPremiumGate(haptics, "HapticsGate", "haptics");
+            // Toys are free: the padlock veil is never drawn, whatever the tier.
+            if (haptics?.FindControl<Control>("HapticsGate") is { } hapticsGate) hapticsGate.IsVisible = !hapticsOpen;
             RefreshPremiumGate(Named<Control>("RemoteControlTab"), "RemoteControlGate", "remote");
             RefreshPremiumGate(Named<Control>("AwarenessTab"), "AwarenessGate", "awareness");
             RefreshLockdownGate();

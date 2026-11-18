@@ -117,6 +117,18 @@ namespace ConditioningControlPanel.Services.Video
         public static bool AttentionChecksApply(bool attentionSetting, bool floating) => attentionSetting && !floating;
 
         /// <summary>
+        /// The mini game as the options page shows it (owner, 2026-11-17): it does not work with
+        /// floating videos, so while "Floating" is the pick it reads as off and its row is greyed.
+        /// Gated at read time only: the saved setting is never written, so going back to full
+        /// screen brings the player's own choice back. A video that still takes the screen (strict,
+        /// Lockdown, a Chaos run) keeps its checks through <see cref="AttentionChecksApply"/>.
+        /// </summary>
+        public static bool MiniGameShownOn(bool attentionSetting, bool floatingSetting) => attentionSetting && !floatingSetting;
+
+        /// <summary>The mini game's row and options can be changed: not while "Floating" is the pick.</summary>
+        public static bool MiniGameEditable(bool floatingSetting) => !floatingSetting;
+
+        /// <summary>
         /// A floating window on a <paramref name="areaW"/> x <paramref name="areaH"/> work area, in
         /// that area's DIPs: 16:9, <paramref name="sizePercent"/> of the width (never larger than
         /// the area), at a random spot inside the flash images' edge padding and always wholly on

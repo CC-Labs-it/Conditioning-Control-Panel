@@ -535,7 +535,7 @@ public sealed class DeeperHubTests
             Assert.True(File.Exists(promoted));
             Assert.Contains(vm.FilteredEntries, r => DeeperTabViewModel.PathsEqual(r.Entry.FilePath, promoted));
 
-            shell.ShowTab("play");
+            shell.ShowTab("playeyes");
             Assert.False(view.IsVisible);
             player.OpenLocalMediaFile(hiddenMedia);
             Dispatcher.UIThread.RunJobs(); // a hidden tab still skips the reload

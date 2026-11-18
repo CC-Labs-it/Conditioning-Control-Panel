@@ -54,11 +54,15 @@ export function createWear({ bus = null, pieces = null, post = () => {}, onHost 
   }
 
   let last = null;
+  let lastBoard;
+  const boardId = () => mode === 'watch' ? normalLook(server?.w).board ?? null : mine().board ?? null;
   function apply() {
     const s = sides();
-    if (last && sameLook(last.w, s.w) && sameLook(last.b, s.b)) return;
+    const board = boardId();
+    if (last && sameLook(last.w, s.w) && sameLook(last.b, s.b) && board === lastBoard) return;
     last = s;
-    try { if (pieces && pieces.setLooks) pieces.setLooks(s); } catch { /* the board keeps its men */ }
+    lastBoard = board;
+    try { if (pieces && pieces.setLooks) pieces.setLooks(s, board); } catch { /* the board keeps its men */ }
   }
 
   function changed() {
@@ -70,10 +74,14 @@ export function createWear({ bus = null, pieces = null, post = () => {}, onHost 
   function choose(slot, id) {
     if (!SLOTS.includes(slot)) return false;
     if (id !== null && !(CATALOG[slot].includes(id) && ownedIds(grants || []).has(id))) return false;
-    if (picked[slot] === id) return true;
-    picked = { ...picked, [slot]: id };
+    if ((picked[slot] ?? null) === id) return true;
+    picked = normalLook({ ...picked, [slot]: id });
     writeSaved(storage, picked);
-    if (hosted) post({ type: 'pbp:look', look: normalLook(picked) });
+    if (hosted) {
+      const look = { ...picked };
+      if (['finish', 'board', 'companion'].includes(slot) && id === null) look[slot] = null;
+      post({ type: 'pbp:look', look });
+    }
     changed();
     return true;
   }
@@ -107,6 +115,7 @@ export function createWear({ bus = null, pieces = null, post = () => {}, onHost 
 
   return {
     mine,
+    boardId,
     picked: () => normalLook(picked),
     owned: () => ownedIds(grants || []),
     known: () => grants !== null,

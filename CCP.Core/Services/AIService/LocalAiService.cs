@@ -27,7 +27,6 @@ namespace ConditioningControlPanel.Services.AIService
     /// </summary>
     public class LocalAiService : IAiService
     {
-        private const string DefaultHost = "http://localhost:11434/";
         private const string DefaultModel = "qwen3.5:latest";
 
         private readonly BambiSprite _bambiSprite;
@@ -318,10 +317,23 @@ namespace ConditioningControlPanel.Services.AIService
             }
         }
 
+        // #5197: a host saved without http:// (or half typed) used to reach new Uri(host) as is and
+        // throw from the constructor, which kept the main window from opening. LocalAiHost adds the
+        // scheme and falls back to the default for anything still unusable; this never throws.
         private static string NormalizeHost(string host)
         {
-            return host.EndsWith("/", StringComparison.Ordinal) ? host : host + "/";
+            var normalized = LocalAiHost.Normalize(host, out var fellBack);
+            // Once per session: EnsureHost runs this on every request.
+            if (fellBack && !_warnedBadHost)
+            {
+                _warnedBadHost = true;
+                Log.Warning("LocalAiService: saved Ollama host is not a usable address, using {Default}",
+                    LocalAiHost.Default);
+            }
+            return normalized;
         }
+
+        private static bool _warnedBadHost;
 
         private static HttpClient BuildHttpClient(string host)
         {
@@ -336,7 +348,7 @@ namespace ConditioningControlPanel.Services.AIService
         private static string GetConfiguredHost()
         {
             var host = CoreSettings.Service?.Current?.CompanionPrompt?.AiOllamaHost;
-            return string.IsNullOrWhiteSpace(host) ? DefaultHost : host;
+            return string.IsNullOrWhiteSpace(host) ? LocalAiHost.Default : host;
         }
 
         private static string GetConfiguredModel()

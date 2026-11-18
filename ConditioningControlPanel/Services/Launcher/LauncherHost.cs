@@ -253,6 +253,15 @@ public static partial class LauncherHost
         catch (Exception ex) { Log.Debug(ex, "[Launcher] ShowTab {Tab} failed", tab); }
     }
 
+    /// <summary>The panel comes up (the launcher's exit beat first), then <paramref name="then"/> runs on it: the Prize
+    /// Counter's "See it on your profile" and the Studio look pages (PrizeCounterHostService.GoTo).</summary>
+    public static void OpenPanelThen(Action then)
+        => OpenPanel(null, () =>
+        {
+            try { then(); }
+            catch (Exception ex) { Log.Debug(ex, "[Launcher] panel follow-up failed"); }
+        });
+
     /// <summary>The launcher fades and hides, then the panel comes up and fades in.</summary>
     private static void OpenPanelNow(Action? then = null)
         => FadeThenHide(then == null ? ShowPanel : () => { ShowPanel(); then(); });
@@ -369,6 +378,7 @@ public static partial class LauncherHost
 
         _panelRequested = false;
         if (!LauncherCatalogue.TryLaunch(entry.Id)) return false;
+        NoteLaunched(entry);
 
         // A tile that lives in the panel opened it through OpenPanel during Launch. The panel
         // owns the hide (and the beat) and there is no window to wait on, so the poll stays off:
@@ -390,6 +400,56 @@ public static partial class LauncherHost
         else FadeThenHide(RaiseGame, StillWaiting);
         StartReturnPoll();
         return true;
+    }
+
+    /// <summary>A game that really started is what Continue offers next time. Tools are not kept.</summary>
+    private static void NoteLaunched(LauncherEntry entry)
+    {
+        try
+        {
+            if (!LauncherDoorRules.RemembersLaunch(entry.Door)) return;
+            var settings = App.Settings;
+            var current = settings?.Current;
+            if (current == null) return;
+            var id = LauncherDoorRules.ListedId(entry.Id);
+            if (string.Equals(current.LauncherLastPlayedId, id, StringComparison.OrdinalIgnoreCase)) return;
+            current.LauncherLastPlayedId = id;
+            settings!.Save();
+        }
+        catch (Exception ex) { Log.Debug(ex, "[Launcher] last-played note failed"); }
+    }
+
+    private static LauncherDoor? _pendingDoor;
+
+    /// <summary>Set by the launcher window while it exists: puts the right column on a door's page.</summary>
+    public static Action<LauncherDoor>? OpenDoorPage { get; set; }
+
+    /// <summary>The door a coming show should open on, read once by the window as it shows.</summary>
+    internal static LauncherDoor? TakePendingDoor()
+    {
+        var door = _pendingDoor;
+        _pendingDoor = null;
+        return door;
+    }
+
+    /// <summary>
+    /// The panel's way to a door: the launcher comes up (the panel tucks away exactly as its
+    /// "back to client" button does) already opened on <paramref name="door"/>'s page. False when
+    /// Lockdown refuses the trip; the panel then stays where it is.
+    /// </summary>
+    public static bool ShowDoor(LauncherDoor door)
+    {
+        if (IsShown)
+        {
+            Show();
+            try { OpenDoorPage?.Invoke(door); }
+            catch (Exception ex) { Log.Debug(ex, "[Launcher] opening door {Door} failed", door); }
+            return true;
+        }
+        _pendingDoor = door;
+        if (BackToLauncher()) return true;
+        _pendingDoor = null;
+        return false;
     }
 
     // The game came up while the launcher was still on screen; the hide that follows can pass

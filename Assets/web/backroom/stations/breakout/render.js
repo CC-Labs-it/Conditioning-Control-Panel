@@ -13,6 +13,7 @@ import { junctionProtected } from './junction-shield.js';
 import { shieldY as junctionShieldY } from './words/let-go.js';
 import {metalActive} from './grey-metal.js';
 import {createRewardPicker, rewardBounds} from './bubble-rewards.js';
+import { createSkinWear } from './bubble-wear.js';
 import { FINALE_PULSE_PERIOD } from './finale-chaos.js';
 import { drawMetronome } from './reform.js';
 import { createLevelIntro } from './level-intro.js';
@@ -76,7 +77,10 @@ function roundRect(g, x, y, w, h, r) {
 
 // Owner verified this path fixes a black Firefox playfield on the desktop GPU.
 export const prefersSoftwareCanvas = (agent = globalThis.navigator?.userAgent || '') => /Firefox\//i.test(agent);
-export function createRenderer(canvas, { reduced = false, media = null, rng = Math.random, software = prefersSoftwareCanvas(), brickHue = 270 } = {}) {
+export function createRenderer(canvas, { reduced = false, media = null, rng = Math.random, software = prefersSoftwareCanvas(), brickHue = 270, look = null } = {}) {
+  // The worn bubble skin (bubble-wear.js): look() -> { skin, calm, reduced }, read live; no look or soap = today's bubble.
+  const wear = createSkinWear();
+  const lookNow = () => { let l = null; try { l = look ? look() : null; } catch (e) { l = null; } return { skin: l && l.skin, calm: !!(l && l.calm), reduced: reduced || !!(l && l.reduced) }; };
   let g = canvas.getContext('2d', { willReadFrequently: software }), foreground = null;
   let cw = 0, ch = 0, scale = 1, ox = 0, oy = 0, off = null;
   let last = null, glitch = 0, wipe = 0, crackFlash = 0, spin = 0, aberr = 0, recoil = 0, lastNow = 0, lastCombo = 0, comboPop = 0;
@@ -160,8 +164,9 @@ export function createRenderer(canvas, { reduced = false, media = null, rng = Ma
       const other = d.tier === 2 && new Set(keys).size > 1 ? rewardPick(keys) : -1;
       const indices = other >= 0 ? [first, other] : [first];
       bubbleRewards.push({ ...d, indices, t: 0, life: d.tier === 3 ? 3.8 : 1.6 });
+      wear.pop(d, lookNow(), last ? last.colliders : []);
     } else if (name === 'relapse' || name === 'relapseStart') {
-      bubbleRewards.length = 0;
+      bubbleRewards.length = 0; wear.clear();
     }
     if (name === 'brick') {
       const rgb = toRgb(d.color) || ROWS[(d.row || 0) % ROWS.length];
@@ -820,6 +825,7 @@ export function createRenderer(canvas, { reduced = false, media = null, rng = Ma
     g.restore();
   }
   function drawColliders(s, mix) {
+    const lk = lookNow();
     for (const c of s.colliders) {
       const inflate = easeOutBack((typeof c.age === 'number' ? c.age : 1) / INFLATE_S);
       const idle = reduced ? null : bubbleIdle(c.age || 0, c.ph || 0), jel = !reduced && c.jelly > 0 ? jellyScale(c.jelly) : null;
@@ -851,7 +857,7 @@ export function createRenderer(canvas, { reduced = false, media = null, rng = Ma
         g.fillStyle = fade; g.fillRect(c.x - r, c.y - r, 2 * r, 2 * r);
       }
       g.restore();
-      drawBubble(c.x, c.y, r, a * .55);
+      if (!wear.draw(g, c, r, a, lk)) drawBubble(c.x, c.y, r, a * .55);
       for (let skin = 1; skin < remaining; skin++) {
         drawBubble(c.x, c.y, r * (1 - skin * .18), a * .25);
       }
@@ -1414,7 +1420,7 @@ export function createRenderer(canvas, { reduced = false, media = null, rng = Ma
     drawMetronome(g, s, reduced);
     spellFx.background(g, s);
     drawPendulums(s,mix); drawBricks(s, mix); drawPendulums(s,mix,true); if(s.iris) drawBricks(s, mix, true); mark("bricksMs");
-    if (!grey) { drawPops(s, mix); drawColliders(s, mix); }
+    if (!grey) { wear.tick(fxDt); drawPops(s, mix); drawColliders(s, mix); wear.frame(g, fxDt); } else wear.clear();
     if (grey) P.clear(); else ballSparkle(s);
     debris.draw(g, fxDt, mix, col, H);
     drawParticles(fxDt, mix);
@@ -1512,7 +1518,7 @@ export function createRenderer(canvas, { reduced = false, media = null, rng = Ma
   }
 
   const r = { resize, draw, onEvent, onGameEvent: onEvent, toField,
-    dispose() { portalFx.dispose(); smoke.clear(); endingCard.reset();letterFaces.clear();greyMetalFace=null; toughFaces.clear(); brickPictures.clear(); wordFaces.clear(); plainFaces.clear(); tierGlows.clear(); foreground?.remove(); foreground = null; spellFx.reset(); bubbleRewards.length = 0; P.clear(); shockwaves.length = drifters.length = 0; debris.clear(); stamps.clear(); wellFx.reset(); wellFx.dispose(); irisFx.dispose(); finaleFx.dispose(); finaleFreezeFrame=null; finaleOutroFrame=null; finaleOutroOwner=null; irisBuffer=null; off = null; },
+    dispose() { portalFx.dispose(); smoke.clear(); endingCard.reset();letterFaces.clear();greyMetalFace=null; toughFaces.clear(); brickPictures.clear(); wordFaces.clear(); plainFaces.clear(); tierGlows.clear(); foreground?.remove(); foreground = null; spellFx.reset(); bubbleRewards.length = 0; wear.dispose(); P.clear(); shockwaves.length = drifters.length = 0; debris.clear(); stamps.clear(); wellFx.reset(); wellFx.dispose(); irisFx.dispose(); finaleFx.dispose(); finaleFreezeFrame=null; finaleOutroFrame=null; finaleOutroOwner=null; irisBuffer=null; off = null; },
     particleCount: () => P.count() };
   return r;
 }

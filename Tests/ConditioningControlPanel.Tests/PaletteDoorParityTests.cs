@@ -174,7 +174,7 @@ public class PaletteDoorParityTests
         foreach (var query in new[] { "gaze", "gaze minigame" })
         {
             var ids = SettingsPaletteIndex.Search(query).Select(e => e.Id).ToList();
-            var play = ids.IndexOf("tab.play");
+            var play = ids.IndexOf("door.play");   // declutter wave 2: tab.play is the launcher Games door
             var haptics = ids.IndexOf("tab.haptics");
 
             Assert.True(play >= 0, $"\"{query}\" does not offer the Play wall at all");

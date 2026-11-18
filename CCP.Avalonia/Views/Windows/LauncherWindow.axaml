@@ -123,6 +123,24 @@
                 <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
             </Style>
         </ControlTheme>
+        <!-- A door card (LauncherWindow.Doors.cs): a Button so Enter, Space and UI Automation's Invoke
+             open it; the template draws nothing of its own, the card is its content. -->
+        <ControlTheme x:Key="LauncherDoorButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+            <Setter Property="VerticalAlignment" Value="Stretch"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <ControlTemplate TargetType="Button">
+                    <ContentPresenter x:Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
+                                      Background="Transparent"
+                                      HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
+                </ControlTemplate>
+            </Setter>
+        </ControlTheme>
     </Window.Resources>
 
     <Window.Styles>
@@ -377,11 +395,23 @@
             </Border>
 
             <!-- the games: two columns or three by the column's width (LauncherGridLayout) -->
+            <!-- Declutter 2026-11-15 (WPF feat/declutter-doors): the column opens on two door cards and no
+                 tiles; a door's page wears Back and the door's name over the old scroller and grid. -->
             <Grid x:Name="GamesColumn" Grid.Column="2" RowDefinitions="Auto,*">
-                <TextBlock Text="{loc:Str launcher_section_games}" Classes="eyebrow" Margin="9,0,0,4"/>
-                <ScrollViewer x:Name="GamesScroller" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="DoorPageHeader" Orientation="Horizontal" IsVisible="False" Margin="0,0,0,6">
+                    <Button x:Name="DoorBack" Theme="{StaticResource LauncherLink}" VerticalAlignment="Center"
+                            Margin="3,0,6,0" Click="DoorBack_Click">
+                        <TextBlock x:Name="DoorBackText" FontFamily="Fredoka, Segoe UI" FontSize="15"/>
+                    </Button>
+                    <TextBlock x:Name="GamesEyebrow" Text="{loc:Str launcher_section_games}" VerticalAlignment="Center"
+                               FontFamily="Fredoka, Segoe UI" FontSize="22" FontWeight="SemiBold" Margin="6,0,0,0"/>
+                </StackPanel>
+                <ScrollViewer x:Name="GamesScroller" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                              IsVisible="False">
                     <UniformGrid x:Name="GamesGrid" Columns="2" VerticalAlignment="Top"/>
                 </ScrollViewer>
+                <!-- GAMES over TOOLS, built in LauncherWindow.Doors.cs. -->
+                <UniformGrid x:Name="DoorsHost" Grid.Row="1" Columns="1" Rows="2"/>
             </Grid>
         </Grid>
 

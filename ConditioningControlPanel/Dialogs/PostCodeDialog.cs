@@ -29,9 +29,11 @@ public sealed class PostCodeDialog : Window
     private readonly Button _redeem = new();
     private readonly TextBlock _status = new();
     private bool _busy;
+    private readonly bool _passDoor;
 
-    private PostCodeDialog()
+    private PostCodeDialog(bool passDoor)
     {
+        _passDoor = passDoor;
         Title = "CC Labs";
         Width = 400;
         SizeToContent = SizeToContent.Height;
@@ -55,9 +57,11 @@ public sealed class PostCodeDialog : Window
         Loaded += (_, _) => _code.Focus();
     }
 
-    public static void Present(Window? owner)
+    /// <param name="passDoor">True from Settings > Account: the box is titled for any code. Either
+    /// way a pass code (CCP-PRIME-3M-...) typed here is redeemed as a pass.</param>
+    public static void Present(Window? owner, bool passDoor = false)
     {
-        var dialog = new PostCodeDialog();
+        var dialog = new PostCodeDialog(passDoor);
         try { if (owner is { IsVisible: true }) dialog.Owner = owner; }
         catch (InvalidOperationException) { } // swallow: owner closing; the box stands alone
         try { _open?.Close(); }
@@ -72,12 +76,12 @@ public sealed class PostCodeDialog : Window
         var stack = new StackPanel();
         stack.Children.Add(new TextBlock
         {
-            Text = Loc.Get("conv_postcode_dialog_title"), Foreground = Brushes.White, FontSize = 17,
+            Text = Loc.Get(_passDoor ? "pass_redeem_door" : "conv_postcode_dialog_title"), Foreground = Brushes.White, FontSize = 17,
             FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap,
         });
         stack.Children.Add(new TextBlock
         {
-            Text = Loc.Get("conv_postcode_hint"), Foreground = Text, FontSize = 13, TextWrapping = TextWrapping.Wrap,
+            Text = Loc.Get(_passDoor ? "pass_dialog_hint" : "conv_postcode_hint"), Foreground = Text, FontSize = 13, TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 6, 0, 0),
         });
 
@@ -130,11 +134,35 @@ public sealed class PostCodeDialog : Window
     private async void Redeem()
     {
         if (_busy) return;
-        if (PostCodeApi.NormalizeCode(_code.Text) == null) { Say(Loc.Get("conv_postcode_empty"), Warn); return; }
+        var passCode = CryptoPassApi.NormalizeCode(_code.Text);
+        if (passCode == null && PostCodeApi.NormalizeCode(_code.Text) == null) { Say(Loc.Get("conv_postcode_empty"), Warn); return; }
         _busy = true;
         _redeem.IsEnabled = false;
         try
         {
+            if (passCode != null)
+            {
+                var pass = await CryptoPassApi.RedeemAsync(passCode);
+                if (!IsLoaded) return;
+                if (pass.Ok && pass.UntilUtc is DateTime passUntil)
+                {
+                    // The tier is never taken from this reply: ask the server the usual way.
+                    Services.EntitlementTierSync.OnAppActivatedAfterCheckout();
+                    Say(Loc.GetF("pass_redeem_ok", Loc.Get(pass.Tier >= 2 ? "vaultgate_tier_lab_name" : "vaultgate_tier_vault_name"),
+                        passUntil.ToLocalTime().ToString("d MMM yyyy")), Good);
+                    _redeem.Visibility = Visibility.Collapsed;
+                    _code.IsEnabled = false;
+                    return;
+                }
+                Say(Loc.Get(pass.Reason switch
+                {
+                    "unknown_code" or "bad_code" => "pass_redeem_unknown",
+                    "already_redeemed" => "pass_redeem_used",
+                    "expired" => "conv_postcode_expired",
+                    _ => "conv_postcode_offline",
+                }), Warn);
+                return;
+            }
             var result = await PostCodeApi.RedeemAsync(_code.Text);
             if (!IsLoaded) return;
             if (result.Ok && result.Feature is string feature && result.UntilUtc is DateTime until)

@@ -39,6 +39,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     internal sealed class TintOverlayWindow : Window
     {
         private readonly SolidColorBrush _fill = new(Colors.Transparent);
+        private readonly Border _flat;
+        private SteamCanvas? _steam;
+        private PixelRect _px;
+        private double _scale = 1;
 
         public TintOverlayWindow()
         {
@@ -52,7 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Focusable = false;
             IsHitTestVisible = false;
             WindowStartupLocation = WindowStartupLocation.Manual;
-            Content = new Border { Background = _fill };
+            Content = _flat = new Border { Background = _fill };
 
             // The parameterless ctor is also what --render-all constructs, so it paints the tint
             // the user's settings actually describe rather than an invented one. At the default
@@ -77,6 +81,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Position = new PixelPoint(b.X, b.Y);
             Width = b.Width / scale;
             Height = b.Height / scale;
+            _px = b;
+            _scale = scale;
         }
+
+        /// <summary>Super Steam: swap the flat wash for the fog and back. The flat brush keeps
+        /// following <see cref="SetTint"/> underneath, so the wash is right the moment the fog leaves.</summary>
+        public void SetSteam(bool on)
+        {
+            if (on == (_steam != null)) return;
+            if (on) Content = _steam = new SteamCanvas(_px, _scale);
+            else { _steam = null; Content = _flat; }
+        }
+
+        /// <summary>The fog moved: draw it again.</summary>
+        public void InvalidateSteam() => _steam?.InvalidateVisual();
     }
 }

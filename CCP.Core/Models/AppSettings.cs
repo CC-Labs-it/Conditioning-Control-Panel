@@ -1571,6 +1571,27 @@ namespace ConditioningControlPanel.Models
             set { _videoMinDurationSeconds = Math.Max(0, value); OnPropertyChanged(); }
         }
 
+        // On: a clip shorter than the minimum is kept and replayed in place until the minimum has
+        // played, then ends once (Services/Video/VideoMinLoop). Off (default, and for every older
+        // settings file, which has no such key): the minimum only skips shorter clips, as before.
+        private bool _mandatoryVideoLoopShortClips = false;
+        public bool MandatoryVideoLoopShortClips
+        {
+            get => _mandatoryVideoLoopShortClips;
+            set { _mandatoryVideoLoopShortClips = value; OnPropertyChanged(); }
+        }
+
+        // On: a clip shorter than the minimum is kept and followed by other random clips from the
+        // pool until the minimum has played, then the run ends once (Services/Video/VideoMinFill).
+        // A pool of one, or LibVLC, loops the clip instead. Off (default, and for every older
+        // settings file): the loop option above, or the plain skip, decides as before.
+        private bool _mandatoryVideoFillShortWithOthers = false;
+        public bool MandatoryVideoFillShortWithOthers
+        {
+            get => _mandatoryVideoFillShortWithOthers;
+            set { _mandatoryVideoFillShortWithOthers = value; OnPropertyChanged(); }
+        }
+
         private int _videoMaxDurationSeconds = 0;
         public int VideoMaxDurationSeconds
         {
@@ -2808,6 +2829,90 @@ namespace ConditioningControlPanel.Models
             set { _mandatoryVideoReplayAfterFailedCheck = value; OnPropertyChanged(); }
         }
 
+        private Services.Super.CreepSpeed _superCreepSpeed = Services.Super.CreepSpeed.Normal;
+        /// <summary>Super Creep: how fast the pink fog climbs to its cap (Slow 15, Normal 10, Fast 5 minutes).</summary>
+        public Services.Super.CreepSpeed SuperCreepSpeed
+        {
+            get => _superCreepSpeed;
+            set { _superCreepSpeed = value; OnPropertyChanged(); }
+        }
+
+        private double _superCreepCap = 0.9;
+        /// <summary>Super Creep: the most the fog may cover, 0.2..0.9 (clamped where it is read).</summary>
+        public double SuperCreepCap
+        {
+            get => _superCreepCap;
+            set { _superCreepCap = value; OnPropertyChanged(); }
+        }
+
+        // ---- Lane B: Undertow, Lights Down and Deck options (owner, 2026-11-15). Clamps and
+        // defaults live in CCP.Core/Super (UndertowOptions, LightsDownOptions, DeckOptions);
+        // every default is the effect as it shipped before it had options.
+
+        private int _undertowLensSize = SuperCore.UndertowOptions.SizeDefault;
+        /// <summary>Undertow: the whole lens (widest, smallest, still) in percent of the stock lens.</summary>
+        public int UndertowLensSize
+        {
+            get => _undertowLensSize;
+            set { _undertowLensSize = SuperCore.UndertowOptions.ClampSize(value); OnPropertyChanged(); }
+        }
+
+        private int _undertowShrinkSpeed = SuperCore.UndertowOptions.ShrinkDefault;
+        /// <summary>Undertow: how fast the lens shrinks on its own, percent of stock (0 = holds open).</summary>
+        public int UndertowShrinkSpeed
+        {
+            get => _undertowShrinkSpeed;
+            set { _undertowShrinkSpeed = SuperCore.UndertowOptions.ClampShrink(value); OnPropertyChanged(); }
+        }
+
+        private int _undertowClickWiden = SuperCore.UndertowOptions.WidenDefault;
+        /// <summary>Undertow: how much a click widens the lens, percent of stock (0 = a click only ripples).</summary>
+        public int UndertowClickWiden
+        {
+            get => _undertowClickWiden;
+            set { _undertowClickWiden = SuperCore.UndertowOptions.ClampWiden(value); OnPropertyChanged(); }
+        }
+
+        private int _lightsDownDarkness = SuperCore.LightsDownOptions.DarknessDefault;
+        /// <summary>Lights Down: how dark the room gets, 0..100 (50 = stock).</summary>
+        public int LightsDownDarkness
+        {
+            get => _lightsDownDarkness;
+            set { _lightsDownDarkness = SuperCore.LightsDownOptions.ClampDarkness(value); OnPropertyChanged(); }
+        }
+
+        private int _lightsDownDimSpeed = SuperCore.LightsDownOptions.DimSpeedDefault;
+        /// <summary>Lights Down: how fast the room dims while the video is watched, percent of stock.</summary>
+        public int LightsDownDimSpeed
+        {
+            get => _lightsDownDimSpeed;
+            set { _lightsDownDimSpeed = SuperCore.LightsDownOptions.ClampDimSpeed(value); OnPropertyChanged(); }
+        }
+
+        private int _lightsDownReturnSpeed = SuperCore.LightsDownOptions.ReturnSpeedDefault;
+        /// <summary>Lights Down: how fast the lights come back when the eyes leave, percent of stock.</summary>
+        public int LightsDownReturnSpeed
+        {
+            get => _lightsDownReturnSpeed;
+            set { _lightsDownReturnSpeed = SuperCore.LightsDownOptions.ClampReturnSpeed(value); OnPropertyChanged(); }
+        }
+
+        private int _deckFlips = SuperCore.DeckOptions.FlipsDefault;
+        /// <summary>Deck: about how many flips a card takes before it breaks (each card rolls one either side).</summary>
+        public int DeckFlips
+        {
+            get => _deckFlips;
+            set { _deckFlips = SuperCore.DeckOptions.ClampFlips(value); OnPropertyChanged(); }
+        }
+
+        private int _deckBreakReach = SuperCore.DeckOptions.ReachDefault;
+        /// <summary>Deck: how far a break knocks the cards and bubbles around it, percent of stock.</summary>
+        public int DeckBreakReach
+        {
+            get => _deckBreakReach;
+            set { _deckBreakReach = SuperCore.DeckOptions.ClampReach(value); OnPropertyChanged(); }
+        }
+
         private bool _fillAllMonitorsWithVideo;
         /// <summary>
         /// On 3+ monitors, give every secondary screen its own video decoder. Each LibVLC
@@ -3128,6 +3233,13 @@ namespace ConditioningControlPanel.Models
             get => _launcherSoundEnabled;
             set { _launcherSoundEnabled = value; OnPropertyChanged(); }
         }
+
+        // The launcher's doors (Services/Launcher/LauncherDoorRules.cs). The last game started
+        // from the launcher feeds the Games door's Continue button; the seen list is the NEW
+        // cards the Games page has already shown, so the door's "N new" stamp can leave. Both
+        // describe this PC's launcher, nobody's progress.
+        public string LauncherLastPlayedId { get; set; } = "";
+        public List<string> LauncherSeenNewIds { get; set; } = new();
 
         private bool _panicKeyEnabled = true; // ESC to stop
         public bool PanicKeyEnabled
@@ -3559,6 +3671,16 @@ namespace ConditioningControlPanel.Models
             set { _serverPaidUntil = value; OnPropertyChanged(); }
         }
 
+        private DateTime? _passEndsUtc;
+        /// <summary>When the account's prepaid pass (a redeemed code) ends, from the server's
+        /// <c>crypto_pass.ends_at</c>. Feeds the "pass ends in N days" inbox row, never a gate.</summary>
+        [JsonProperty("pass_ends_utc")]
+        public DateTime? PassEndsUtc
+        {
+            get => _passEndsUtc;
+            set { _passEndsUtc = value; OnPropertyChanged(); }
+        }
+
         #endregion
 
         #region Scheduler
@@ -3927,6 +4049,14 @@ namespace ConditioningControlPanel.Models
         {
             get => _bubbleSharedHost;
             set { _bubbleSharedHost = value; OnPropertyChanged(); }
+        }
+        private bool _bubbleClassicPop;
+        /// <summary>Every bubble plays the original pop, whatever skin it wears (owner 2026-11-17: an opt-out
+        /// for people who do not like the skins' own pops). The lucky chime is untouched.</summary>
+        public bool BubbleClassicPop
+        {
+            get => _bubbleClassicPop;
+            set { _bubbleClassicPop = value; OnPropertyChanged(); }
         }
         private int _bubblesVolume = 50;
         public int BubblesVolume
@@ -5433,6 +5563,104 @@ namespace ConditioningControlPanel.Models
         {
             get => _pinkFilterUnderEffects;
             set { _pinkFilterUnderEffects = value; OnPropertyChanged(); }
+        }
+
+        // Steam (the pink filter's V2): words show in fog that was wiped and came back. Off = fog only.
+        private bool _steamWordsInFog = true;
+        public bool SteamWordsInFog
+        {
+            get => _steamWordsInFog;
+            set { _steamWordsInFog = value; OnPropertyChanged(); }
+        }
+
+        // Whirlpool (the spiral's V2): "" = always new Loom spirals, melting into each other;
+        // otherwise the slug of the saved Loom spiral it holds.
+        private string _whirlpoolSpiral = "";
+        public string WhirlpoolSpiral
+        {
+            get => _whirlpoolSpiral;
+            set { _whirlpoolSpiral = value ?? ""; OnPropertyChanged(); }
+        }
+
+        // Steam: how big the spot around the cursor that moves the fog is, in percent of the stock size.
+        public static int ClampSteamWipeSize(int v) => Math.Clamp(v, 40, 300);
+        private int _steamWipeSize = 100;
+        public int SteamWipeSize
+        {
+            get => _steamWipeSize;
+            set { _steamWipeSize = ClampSteamWipeSize(value); OnPropertyChanged(); }
+        }
+
+        // Steam's other gold-box options (owner, 2026-11-15). Its creep speed reuses SuperCreepSpeed.
+        // "Fog returns": how fast the fog closes over a wipe, percent of the stock speed.
+        private int _steamFogReturn = SuperCore.SteamOptions.ReturnDefault;
+        public int SteamFogReturn
+        {
+            get => _steamFogReturn;
+            set { _steamFogReturn = SuperCore.SteamOptions.ClampReturn(value); OnPropertyChanged(); }
+        }
+
+        // "Reach": how far in the fog may come, percent (100 = the whole screen, as shipped).
+        private int _steamReach = SuperCore.SteamOptions.ReachDefault;
+        public int SteamReach
+        {
+            get => _steamReach;
+            set { _steamReach = SuperCore.SteamOptions.ClampReach(value); OnPropertyChanged(); }
+        }
+
+        // Two-tone's second colour when the user picked their own (#RRGGBB); empty = the palette pick.
+        // This PC only: the account keeps a palette colour.
+        private string _fogSecondOwnColor = "";
+        public string FogSecondOwnColor
+        {
+            get => _fogSecondOwnColor;
+            set { _fogSecondOwnColor = SuperCore.FogLooks.TryHex(value) != null ? value.ToUpperInvariant() : ""; OnPropertyChanged(); }
+        }
+
+        // "Drift": how much the fog billows on its own, percent of the stock billow (0 = still).
+        private int _steamDrift = SuperCore.SteamOptions.DriftDefault;
+        public int SteamDrift
+        {
+            get => _steamDrift;
+            set { _steamDrift = SuperCore.SteamOptions.ClampDrift(value); OnPropertyChanged(); }
+        }
+
+        // Whirlpool (the spiral's V2): what the pool drags in. All on as shipped.
+        private bool _whirlpoolDragsFog = true;
+        public bool WhirlpoolDragsFog
+        {
+            get => _whirlpoolDragsFog;
+            set { _whirlpoolDragsFog = value; OnPropertyChanged(); }
+        }
+
+        private bool _whirlpoolDragsPictures = true;
+        public bool WhirlpoolDragsPictures
+        {
+            get => _whirlpoolDragsPictures;
+            set { _whirlpoolDragsPictures = value; OnPropertyChanged(); }
+        }
+
+        private bool _whirlpoolDragsBubbles = true;
+        public bool WhirlpoolDragsBubbles
+        {
+            get => _whirlpoolDragsBubbles;
+            set { _whirlpoolDragsBubbles = value; OnPropertyChanged(); }
+        }
+
+        // Whirlpool: its largest size, percent of the stock reach.
+        private int _whirlpoolSize = SuperCore.WhirlpoolOptions.SizeDefault;
+        public int WhirlpoolSize
+        {
+            get => _whirlpoolSize;
+            set { _whirlpoolSize = SuperCore.WhirlpoolOptions.ClampSize(value); OnPropertyChanged(); }
+        }
+
+        // Whirlpool: seconds a Loom spiral holds before it melts into a new one ("Always new" only).
+        private int _whirlpoolNewEvery = SuperCore.WhirlpoolOptions.HoldDefault;
+        public int WhirlpoolNewEvery
+        {
+            get => _whirlpoolNewEvery;
+            set { _whirlpoolNewEvery = SuperCore.WhirlpoolOptions.ClampHold(value); OnPropertyChanged(); }
         }
 
         #endregion
@@ -10331,6 +10559,223 @@ namespace ConditioningControlPanel.Models
         {
             get => _audioPlaylistEnhancements;
             set { _audioPlaylistEnhancements = value; OnPropertyChanged(); }
+        }
+
+        private Dictionary<string, int> _superModes = new();
+        /// <summary>
+        /// The player's pick per Super effect, keyed by <c>SuperEffect</c> name: 0 Classic, 1 Both, 2 Super only
+        /// (<c>SuperMode</c>). Absent = Both. Read only through <c>SuperAccess</c>, which also asks the tier gate.
+        /// </summary>
+        [JsonProperty(ObjectCreationHandling = ObjectCreationHandling.Replace)]
+        public Dictionary<string, int> SuperModes
+        {
+            get => _superModes;
+            set { _superModes = value ?? new(); OnPropertyChanged(); }
+        }
+
+        private List<string> _superEffectsOn = new();
+        /// <summary>
+        /// Super effects the player has switched on, as <c>SuperEffect</c> names. Read only through
+        /// <c>SuperAccess</c>, which also asks the tier gate; a name left here after a lapse is inert.
+        /// </summary>
+        [JsonProperty(ObjectCreationHandling = ObjectCreationHandling.Replace)]
+        public List<string> SuperEffectsOn
+        {
+            get => _superEffectsOn;
+            set { _superEffectsOn = value ?? new(); OnPropertyChanged(); }
+        }
+
+        // Super Afterglow's own option box (Services/Super/AfterglowOptions). Defaults are the effect as
+        // it shipped. Cosmetic: they travel with the cloud profile like every neighbour.
+        private int _afterglowFrequency = Services.Super.AfterglowOptions.FrequencyDefault;
+        /// <summary>Afterglow pops, 1 (rare) to 10 (often). Its own clock, not the main subliminal's. 5 = 1.5..4.5 s.</summary>
+        [JsonProperty]
+        public int AfterglowFrequency
+        {
+            get => _afterglowFrequency;
+            set { _afterglowFrequency = Services.Super.AfterglowOptions.ClampFrequency(value); OnPropertyChanged(); }
+        }
+
+        private int _afterglowCount = Services.Super.AfterglowOptions.CountDefault;
+        /// <summary>Words per Afterglow pop, 1 to 4 (a small burst).</summary>
+        [JsonProperty]
+        public int AfterglowCount
+        {
+            get => _afterglowCount;
+            set { _afterglowCount = Services.Super.AfterglowOptions.ClampCount(value); OnPropertyChanged(); }
+        }
+
+        private int _afterglowSize = Services.Super.AfterglowOptions.SizeDefault;
+        /// <summary>Afterglow word size, 1 (20 DIP) to 10 (90 DIP). 5 = 40 DIP.</summary>
+        [JsonProperty]
+        public int AfterglowSize
+        {
+            get => _afterglowSize;
+            set { _afterglowSize = Services.Super.AfterglowOptions.ClampSize(value); OnPropertyChanged(); }
+        }
+
+        private string _afterglowColorA = Services.Super.AfterglowOptions.ColorADefault;
+        /// <summary>First Afterglow glow colour, "#RRGGBB". A bad value falls back to pink.</summary>
+        [JsonProperty]
+        public string AfterglowColorA
+        {
+            get => _afterglowColorA;
+            set { _afterglowColorA = Services.Super.AfterglowOptions.Normalise(value, Services.Super.AfterglowOptions.ColorADefault); OnPropertyChanged(); }
+        }
+
+        private string _afterglowColorB = Services.Super.AfterglowOptions.ColorBDefault;
+        /// <summary>Second Afterglow glow colour, "#RRGGBB". A bad value falls back to mint.</summary>
+        [JsonProperty]
+        public string AfterglowColorB
+        {
+            get => _afterglowColorB;
+            set { _afterglowColorB = Services.Super.AfterglowOptions.Normalise(value, Services.Super.AfterglowOptions.ColorBDefault); OnPropertyChanged(); }
+        }
+
+        private int _afterglowDuration = Services.Super.AfterglowOptions.DurationDefault;
+        /// <summary>How long Afterglow words stay, 1-10 (5 = the shipped 0.42 s, 10 = about 1.7 s).</summary>
+        [JsonProperty]
+        public int AfterglowDuration
+        {
+            get => _afterglowDuration;
+            set { _afterglowDuration = Services.Super.AfterglowOptions.ClampDuration(value); OnPropertyChanged(); }
+        }
+
+        private int _afterglowOpacity = Services.Super.AfterglowOptions.OpacityDefault;
+        /// <summary>Afterglow words, echoes and sparks opacity in percent, 10-100.</summary>
+        [JsonProperty]
+        public int AfterglowOpacity
+        {
+            get => _afterglowOpacity;
+            set { _afterglowOpacity = Services.Super.AfterglowOptions.ClampOpacity(value); OnPropertyChanged(); }
+        }
+
+        private int _afterglowTilt = Services.Super.AfterglowOptions.TiltSliderDefault;
+        /// <summary>How much Afterglow words tilt, 0-10 (0 = straight, 5 = about 8 degrees, 10 = double).</summary>
+        [JsonProperty]
+        public int AfterglowTilt
+        {
+            get => _afterglowTilt;
+            set { _afterglowTilt = Services.Super.AfterglowOptions.ClampTilt(value); OnPropertyChanged(); }
+        }
+
+        private bool _afterglowOnly;
+        /// <summary>
+        /// "Use only Afterglow": while Afterglow runs, the normal subliminal cards are not shown, only
+        /// the near-cursor words. Off by default; ignored whenever Afterglow itself is not running.
+        /// </summary>
+        [JsonProperty]
+        public bool AfterglowOnly
+        {
+            get => _afterglowOnly;
+            set { _afterglowOnly = value; OnPropertyChanged(); }
+        }
+
+        // Super option boxes, lane C (owner 2026-11-15). Clamps and defaults: CCP.Core/Super/*Options.cs.
+
+        // Scrawl: how long a wall stamp stays, in seconds.
+        private int _scrawlStampSeconds = SuperCore.ScrawlOptions.StampSecondsDefault;
+        public int ScrawlStampSeconds
+        {
+            get => _scrawlStampSeconds;
+            set { _scrawlStampSeconds = SuperCore.ScrawlOptions.ClampStampSeconds(value); OnPropertyChanged(); }
+        }
+
+        // Scrawl: the most stamps the walls hold at once.
+        private int _scrawlStampCap = SuperCore.ScrawlOptions.StampCapDefault;
+        public int ScrawlStampCap
+        {
+            get => _scrawlStampCap;
+            set { _scrawlStampCap = SuperCore.ScrawlOptions.ClampStampCap(value); OnPropertyChanged(); }
+        }
+
+        // Scrawl: slam strength in percent; 0 = a click on a word is never taken.
+        private int _scrawlSlam = SuperCore.ScrawlOptions.SlamDefault;
+        public int ScrawlSlam
+        {
+            get => _scrawlSlam;
+            set { _scrawlSlam = SuperCore.ScrawlOptions.ClampSlam(value); OnPropertyChanged(); }
+        }
+
+        // Afterglow (take two): how many ghosts make a line.
+        private int _afterglowLineWords = SuperCore.AfterglowLineOptions.WordsDefault;
+        public int AfterglowLineWords
+        {
+            get => _afterglowLineWords;
+            set { _afterglowLineWords = SuperCore.AfterglowLineOptions.ClampWords(value); OnPropertyChanged(); }
+        }
+
+        // Afterglow (take two): how long the finished line stays lit, in seconds.
+        private double _afterglowLineHold = SuperCore.AfterglowLineOptions.HoldDefault;
+        public double AfterglowLineHold
+        {
+            get => _afterglowLineHold;
+            set { _afterglowLineHold = SuperCore.AfterglowLineOptions.ClampHold(value); OnPropertyChanged(); }
+        }
+
+        // Afterglow (take two): how bright a resting ghost is, in percent.
+        private int _afterglowGhostOpacity = SuperCore.AfterglowLineOptions.GhostDefault;
+        public int AfterglowGhostOpacity
+        {
+            get => _afterglowGhostOpacity;
+            set { _afterglowGhostOpacity = SuperCore.AfterglowLineOptions.ClampGhost(value); OnPropertyChanged(); }
+        }
+
+        // Afterglow (take two): while the V2 runs, the normal subliminal cards rest unless this is on (owner 2026-11-17).
+        private bool _afterglowAlsoBase = SuperCore.AfterglowBase.AlsoBaseDefault;
+        public bool AfterglowAlsoBase
+        {
+            get => _afterglowAlsoBase;
+            set { _afterglowAlsoBase = value; OnPropertyChanged(); }
+        }
+
+        // Froth: the biggest a merged bubble may grow, in sizes of a fresh one. Never changes pay.
+        private double _frothMaxSize = SuperCore.FrothOptions.MaxSizeDefault;
+        public double FrothMaxSize
+        {
+            get => _frothMaxSize;
+            set { _frothMaxSize = SuperCore.FrothOptions.ClampMaxSize(value); OnPropertyChanged(); }
+        }
+
+        // Froth: how far a big pop sets off its neighbours, in percent; 0 = no chains.
+        private int _frothPopReach = SuperCore.FrothOptions.ReachDefault;
+        public int FrothPopReach
+        {
+            get => _frothPopReach;
+            set { _frothPopReach = SuperCore.FrothOptions.ClampReach(value); OnPropertyChanged(); }
+        }
+
+        // Froth: how hard the cursor pushes bubbles, in percent; 0 = never.
+        private int _frothCursorPush = SuperCore.FrothOptions.PushDefault;
+        public int FrothCursorPush
+        {
+            get => _frothCursorPush;
+            set { _frothCursorPush = SuperCore.FrothOptions.ClampPush(value); OnPropertyChanged(); }
+        }
+
+        private int _superPreviewUsedWeek = -1;
+        /// <summary>
+        /// Week index (<c>SuperPreviewRule.WeekIndex</c>, Monday UTC weeks) of the last weekly free
+        /// Super try. -1 = never. One 10 second try per week.
+        /// </summary>
+        [JsonProperty]
+        public int SuperPreviewUsedWeek
+        {
+            get => _superPreviewUsedWeek;
+            set { _superPreviewUsedWeek = value; OnPropertyChanged(); }
+        }
+
+        private Dictionary<string, bool> _studioSectionsOpen = new();
+        /// <summary>
+        /// Which Studio option sections (Features/OptionSection) this PC left open or closed, by
+        /// section id. A view preference of this PC only: never in a preset, the session journal,
+        /// sync or a cloud backup (ProfileSyncService.ExcludedBackupProperties).
+        /// </summary>
+        [JsonProperty]
+        public Dictionary<string, bool> StudioSectionsOpen
+        {
+            get => _studioSectionsOpen;
+            set => _studioSectionsOpen = value ?? new Dictionary<string, bool>();
         }
 
         private bool _companionAsksEnabled = true;

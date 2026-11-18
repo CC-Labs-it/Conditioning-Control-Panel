@@ -8,8 +8,8 @@
 //
 // sync6-nav-polish-c: the leading glyph (a Fluent IconGlyph via IconMap.ForTab, wave 3), the
 // sunken tray / pill drop bands / pressed-in fill (wave 10, SectionTabStrip.Fx.cs) and the hover
-// lift / glyph wiggle / choose sparks / idle sheen (wave 7, same partial). The "?" help badges:
-// SectionTabStrip.Help.cs.
+// lift / glyph wiggle / choose sparks / idle sheen (wave 7, same partial). The strip's one "?" help
+// button (declutter wave 1; it replaced the per-pill badges): SectionTabStrip.Help.cs.
 // Choose rings reuse NavGlow; the press squish shares WPF MotionFx's Core values.
 // The "Moved" note (ShowMovedNote, WPF :503) landed in wire-ctrl-section-tab-strip-b.
 // Remaining section edge effects are tracked in the parity ledger.
@@ -56,11 +56,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             public ScaleTransform PressScale = new(), HoverScale = new();
             public bool Pressed, Hovered;
             public System.Threading.CancellationTokenSource? FaceRun;
+            // Declutter wave 1: the count badge slot (hidden while the provider says nothing).
+            public Border? CountPlate;
+            public TextBlock? Count;
         }
 
-        private readonly TextBlock _crumbSectionText = new() { FontSize = 14, FontWeight = FontWeight.ExtraBold };
-        private readonly TextBlock _crumbSep = new() { FontSize = 14, Margin = new Thickness(4, 0), VerticalAlignment = VerticalAlignment.Center, Opacity = 0.6 };
-        private readonly TextBlock _crumbPage = new() { FontSize = 14, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        // Declutter wave 1: the section word is the room title (larger, in the section hue).
+        private readonly TextBlock _crumbSectionText = new() { FontSize = NavStripRules.CrumbTitleSize, FontWeight = FontWeight.ExtraBold };
+        private readonly TextBlock _crumbSep = new() { FontSize = NavStripRules.CrumbPageSize, Margin = new Thickness(4, 0), VerticalAlignment = VerticalAlignment.Center, Opacity = 0.6 };
+        private readonly TextBlock _crumbPage = new() { FontSize = NavStripRules.CrumbPageSize, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
         private readonly Button _crumbSection;
         private readonly StackPanel _crumbPanel;
         private string? _crumbKey;
@@ -144,10 +148,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 VerticalAlignment = VerticalAlignment.Center, Template = PlainTemplate(),
             };
             _crumbSection.Click += (_, e) => { e.Handled = true; if (_section != null) SectionRequested?.Invoke(_section); };
+            // Right margin 5, not WPF's 9: Skia lays Companion's crumb + tray 2.5 px wider than WPF,
+            // and at the default 1469 px strip the tray then ran under the help button
+            // (NavRehomeShellTests.TheTrayEndsBeforeTheHelpButtonAt1469AndSettingsHidesIt).
             var crumb = _crumbPanel = new StackPanel
             {
                 Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(4, 0, 18, 0), Children = { _crumbSection, _crumbSep, _crumbPage },
+                Margin = new Thickness(4, 0, 5, 0), Children = { _crumbSection, _crumbSep, _crumbPage },
             };
             _track = new Border
             {
@@ -160,12 +167,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             var trayHost = BuildDepthTray(_track);
             _pillRow.LayoutUpdated += (_, _) => { if (IsVisible) PositionFill(animate: false, onlyIfMoved: true); };
             _pillRow.AddHandler(KeyDownEvent, PillRow_KeyDown, RoutingStrategies.Tunnel);
-            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(0, 0, 0, 6) };
+            // Declutter wave 1: ONE help button for the strip, in a last Auto column.
+            _helpButton = BuildHelpButton();
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), Margin = new Thickness(0, 0, 0, 6) };
             Grid.SetColumn(trayHost, 1);
             Grid.SetColumn(_movedNote, 2);
+            Grid.SetColumn(_helpButton, 3);
             row.Children.Add(crumb);
             row.Children.Add(trayHost);
             row.Children.Add(_movedNote);
+            row.Children.Add(_helpButton);
             Content = new StackPanel { Children = { row, _accentLine } };
         }
 
@@ -173,12 +184,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             base.OnAttachedToVisualTree(e);
             LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
+            NavStripTable.BadgesChanged -= OnBadgesChanged;
+            NavStripTable.BadgesChanged += OnBadgesChanged;
+            RefreshBadges();
             UpdateSheenClock();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
+            NavStripTable.BadgesChanged -= OnBadgesChanged;
             CloseConfirm();
             StopSheenClock();   // P65: a detached strip never ticks
             _crumbFadeRun?.Cancel();
@@ -358,7 +373,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _pillRow.Children.Clear();
             _pills.Clear();
             CloseConfirm();
-            _helpBadges.Clear();
             _activePill = null;
             _activeFill.Width = 0;
             _activeFill.IsVisible = false;
@@ -404,6 +418,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     content.Children.Add(parts.Glyph);
                 }
                 content.Children.Add(label);
+                // The count badge slot ("5 on"): a dark plate like the tier sign's, so it reads the
+                // same on the lit fill and on the tray. Fed by NavStripRules.BadgeText only.
+                parts.Count = new TextBlock
+                {
+                    FontSize = NavStripRules.CountBadgeFontSize, FontWeight = FontWeight.Bold,
+                    Foreground = parts.RestGlyph, VerticalAlignment = VerticalAlignment.Center,
+                };
+                parts.CountPlate = new Border
+                {
+                    Margin = new Thickness(NavStripRules.BadgeGap, 0, 0, 0), Padding = new Thickness(7, 1, 7, 2),
+                    CornerRadius = new CornerRadius(8), Background = BadgePlate,
+                    VerticalAlignment = VerticalAlignment.Center, IsVisible = false, Child = parts.Count,
+                };
+                content.Children.Add(parts.CountPlate);
+                PaintBadge(parts);
                 bool locked = PillLocked(tab.Tier);
                 // Locked stays visible: the tier sign sits in the pill, the click still navigates
                 // and the page's own gate explains the lock. Static on chrome.
@@ -421,7 +450,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                         },
                     });
-                // The face: a raised plate in the tab's tint inside a bevelled rim; the 1 px ring
+                // The face: a raised plate in the tab's tint inside a bevelled rim, drawn only when
+                // NavStripRules.ShowsFace says so (PaintFace): at rest a pill is icon + label on the
+                // tray. The border keeps its thickness while clear, so nothing moves. The 1 px ring
                 // around it is the focus ring, so border + ring never grow the pill (WPF :744).
                 double rightPad = NavStripRules.PillPadding + (locked ? NavStripRules.BadgePadExtra : 0);
                 var face = new Border
@@ -429,8 +460,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     CornerRadius = new CornerRadius(NavStripRules.PillHeight / 2 - 1),
                     Padding = new Thickness(NavStripRules.PillPadding, 0, rightPad, 0),
                     MinHeight = NavStripRules.PillHeight - 2,
-                    Background = parts.Plate, BorderThickness = new Thickness(NavStripRules.RestFaceThickness),
-                    BorderBrush = parts.Outline, Child = content,
+                    Background = Brushes.Transparent, BorderThickness = new Thickness(NavStripRules.RestFaceThickness),
+                    BorderBrush = Brushes.Transparent, Child = content,
                     RenderTransform = parts.FaceShift,   // wave 10: lit = sunk, pressed = down
                 };
                 var ring = new Border
@@ -459,16 +490,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 ToolTip.SetTip(pill, PillToolTip(section, tab, labelText, locked));
                 global::Avalonia.Automation.AutomationProperties.SetName(pill, labelText);
                 global::Avalonia.Automation.AutomationProperties.SetAutomationId(pill, "NavPill_" + tab.Key);
-                pill.PointerEntered += (_, _) => { if (!IsActive(tab.Key)) face.Background = parts.Hover; FxHover(parts, true, animate: true); };
-                pill.PointerExited += (_, _) => { if (!IsActive(tab.Key)) face.Background = parts.Plate; FxHover(parts, false, animate: true); };
+                pill.PointerEntered += (_, _) => FxHover(parts, true, animate: true);
+                pill.PointerExited += (_, _) => FxHover(parts, false, animate: true);
                 pill.AddHandler(PointerPressedEvent, (_, e) => { if (e.GetCurrentPoint(pill).Properties.IsLeftButtonPressed) DepthPress(parts, true); }, RoutingStrategies.Tunnel);
                 pill.AddHandler(PointerReleasedEvent, (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) DepthPress(parts, false); }, RoutingStrategies.Tunnel);
                 pill.PointerCaptureLost += (_, _) => DepthPress(parts, false);
                 pill.GotFocus += (_, _) => ring.BorderBrush = FocusRing;
                 pill.LostFocus += (_, _) => ring.BorderBrush = Brushes.Transparent;
                 pill.Click += (_, e) => { e.Handled = true; PressSquish(parts, false); parts.Pressed = false; Choose(tab, focus: false); };
-                // The pill rides in a host with its "?" badge (WPF d0ec7aa8d): hovering the badge never presses the pill.
-                _pillRow.Children.Add(HostWithHelp(section, tab, pill, labelText, tint));
+                // The pill rides in a host that anchors the "opens a window" card. Its help line
+                // lives on the strip's one help button (declutter wave 1).
+                _pillRow.Children.Add(new Grid { VerticalAlignment = VerticalAlignment.Center, Children = { pill } });
                 parts.Pill = pill;
                 parts.Ring = ring;
                 parts.Face = face;
@@ -511,24 +543,70 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             {
                 bool on = IsActive(p.Tab.Key);
                 // WPF SetActive :983: active = ink on the solid hue the fill slides under (the plate
-                // steps aside) and a near-white gloss ring in the tint; rest = the label on a raised
-                // plate inside the bevelled rim. The heavier lit rim takes its half pixel back from
-                // the padding, so nothing moves.
+                // steps aside) and a near-white gloss ring in the tint; rest = glyph + label on the
+                // tray, no face (PaintFace, from DepthSettle). The heavier lit rim takes its half
+                // pixel back from the padding, so nothing moves.
                 p.Label.Foreground = on ? _activeText : p.RestText;
                 if (p.Glyph != null) p.Glyph.Foreground = on ? p.ActiveGlyph : p.RestGlyph;
-                p.Face.BorderBrush = on ? p.ActiveRing : p.Outline;
                 double grow = on ? NavStripRules.ActiveFaceThickness - NavStripRules.RestFaceThickness : 0;
                 p.Face.BorderThickness = new Thickness(on ? NavStripRules.ActiveFaceThickness : NavStripRules.RestFaceThickness);
                 var pad = p.RestPadding;
                 p.Face.Padding = new Thickness(Math.Max(0, pad.Left - grow), pad.Top, Math.Max(0, pad.Right - grow), pad.Bottom);
-                p.Face.Background = on ? Brushes.Transparent : (p.Pill.IsPointerOver ? p.Hover : p.Plate);
                 // One Tab stop for the strip (ARIA tabs): the active pill, else the first. WPF :991.
                 p.Pill.IsTabStop = on || (key == null && p.Pill == _pills[0].Pill);
                 global::Avalonia.Automation.AutomationProperties.SetItemStatus(p.Pill, on ? "selected" : string.Empty);
                 DepthSettle(p, animate);
             }
+            RefreshHelp();
             PositionFill(animate);
         }
+
+        /// <summary>
+        /// A pill's face for its state (declutter wave 1): the lit pill wears its gloss ring over
+        /// the sliding fill; a resting pill has no plate and no outline; the pointer or a press
+        /// brings the plate and the bevelled outline. Called from DepthSettle, the one place every
+        /// state change already passes through.
+        /// </summary>
+        private void PaintFace(PillParts p)
+        {
+            bool on = IsActive(p.Tab.Key);
+            bool face = NavStripRules.ShowsFace(on, p.Hovered || p.Pill.IsPointerOver, p.Pressed);
+            p.Face.BorderBrush = on ? p.ActiveRing : face ? p.Outline : Brushes.Transparent;
+            p.Face.Background = on || !face ? Brushes.Transparent : p.Hover;
+        }
+
+        private static void PaintBadge(PillParts p)
+        {
+            if (p.CountPlate == null || p.Count == null) return;
+            var text = NavStripRules.BadgeText(p.Tab.Key);
+            p.Count.Text = text ?? string.Empty;
+            p.CountPlate.IsVisible = text != null;
+        }
+
+        /// <summary>NavStripTable.BadgesChanged fires on the caller's thread (a page's count can move
+        /// from a service or timer): hop to the UI thread before touching the pills.</summary>
+        internal void OnBadgesChanged()
+        {
+            if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) RefreshBadges();
+            else global::Avalonia.Threading.Dispatcher.UIThread.Post(RefreshBadges);
+        }
+
+        /// <summary>Ask the badge provider again for every pill (NavStripTable.NotifyBadgesChanged
+        /// lands here on a mounted strip, through <see cref="OnBadgesChanged"/>), then put the fill
+        /// back under its pill.</summary>
+        internal void RefreshBadges()
+        {
+            foreach (var p in _pills) PaintBadge(p);
+            // The row's LayoutUpdated re-places the fill once the new badge width lands.
+            if (_pills.Count > 0) PositionFill(animate: false);
+        }
+
+        /// <summary>Test seam: the count badge a pill shows now, or null.</summary>
+        internal string? PillBadge(string key) =>
+            Part(key) is { CountPlate.IsVisible: true, Count: { } c } ? c.Text : null;
+
+        internal double CrumbTitleSizeForTests => _crumbSectionText.FontSize;
+        internal double CrumbPageSizeForTests => _crumbPage.FontSize;
 
         /// <summary>WPF SlideMs (:123): 180 ms, halved at Reduced, 0 at Off.</summary>
         internal static int SlideMs(MotionLevel level) => level switch

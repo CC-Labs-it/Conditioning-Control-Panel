@@ -54,6 +54,8 @@ namespace ConditioningControlPanel.Services
         // the shared per-monitor Skia host - no per-screen window OR host canvas churn at all.
         // Focus-steal still falls back to the classic windows (the host is NOACTIVATE).
         private Compositor.SubliminalLayer? _layer;
+        // SUPER AFTERGLOW: words popping near the mouse while the ambient scheduler runs (switch off = idle).
+        private Super.AfterglowDriver? _afterglow;
         private static bool UseCompositor => App.CompositorEnabled;
         // One ref-counted hold on the shared host while any card could be up — NOT per show
         // (host churn is exactly what solid mode exists to remove). Released on Stop/Dispose,
@@ -145,6 +147,11 @@ namespace ConditioningControlPanel.Services
         private void TearDownSurfaces()
         {
             _visibleOneShotGen = null;
+
+            // Super Afterglow: panic and the emergency exit stop subliminals through here, and
+            // every ghost goes with the cards.
+            _afterglow?.Stop();
+            DispatcherHelper.RunOnUI(Compositor.AfterglowLineLayer.StopAll);
 
             // Blank + hide the keep-alive windows (don't close them — a Stop can land
             // mid-chaos-run, and closing layered windows then is the deadlock trigger).
@@ -247,13 +254,33 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
-        /// Display a subliminal flash
+        /// Owner 2026-11-17: while Afterglow (the Subliminals V2) runs, the ambient card rests and
+        /// the word comes up as its ghost only, unless "Also show the normal subliminals" is on.
+        /// The whisper, the haptic and the XP still follow the word. Rule: SuperCore.AfterglowBase.
         /// </summary>
-        public void FlashSubliminal()
+        private static bool AfterglowRestsCard()
+        {
+            try
+            {
+                bool runs = Super.SuperAccess.IsOn(Super.SuperEffect.Afterglow)
+                            && App.CompositorEnabled && App.Compositor != null;
+                return SuperCore.AfterglowBase.CardRests(runs,
+                    Super.SuperPreview.Trying == Super.SuperEffect.Afterglow,
+                    App.Settings?.Current?.AfterglowAlsoBase ?? SuperCore.AfterglowBase.AlsoBaseDefault);
+            }
+            catch { return false; }
+        }
+
+        /// <summary>
+        /// Display a subliminal flash. <paramref name="restCard"/> (the ambient tick only, while
+        /// Afterglow runs alone): the word still leaves its ghost and keeps its whisper, haptic and
+        /// XP, but no card is drawn.
+        /// </summary>
+        public void FlashSubliminal(bool restCard = false)
         {
             var text = CoreSubliminal.PickPhrase();
             if (text == null) return;
-            FlashPhrase(text);
+            FlashPhrase(text, restCard);
         }
 
         /// <summary>
@@ -261,9 +288,12 @@ namespace ConditioningControlPanel.Services
         /// through <see cref="CoreSubliminal.ShowProvider"/>; the phrase pick and the interval are
         /// its side of the split, everything below here is the head's.
         /// </summary>
-        internal void FlashPhrase(string text)
+        internal void FlashAmbient(string text) => FlashPhrase(text, AfterglowRestsCard());
+
+        internal void FlashPhrase(string text, bool restCard = false)
         {
             if (!_isRunning) _oneShotActive = true; // Allow display from remote control
+            Compositor.AfterglowLineLayer.WordShown(text);   // Super Afterglow: this word leaves a ghost
 
             // Check for linked audio
             string? audioPath = FindLinkedAudio(text);
@@ -281,7 +311,7 @@ namespace ConditioningControlPanel.Services
                     _ = App.Haptics?.TriggerSubliminalPatternAsync(text);
                     Task.Delay(SubliminalWhisper.VisualAfterHapticMs).ContinueWith(__ =>
                     {
-                        DispatcherHelper.RunOnUI(() => ShowSubliminalVisuals(text));
+                        DispatcherHelper.RunOnUI(() => ShowSubliminalVisuals(text, restCard: restCard));
                     });
                 });
 
@@ -294,7 +324,7 @@ namespace ConditioningControlPanel.Services
             }
             else
             {
-                TriggerSubliminalWithHapticPattern(text);
+                TriggerSubliminalWithHapticPattern(text, restCard: restCard);
                 App.Progression?.AddXP(10, XPSource.Subliminal);
             }
         }
@@ -574,7 +604,7 @@ namespace ConditioningControlPanel.Services
         /// Buttplug.io has ~1.3s latency so we trigger haptics earlier for that provider
         /// </summary>
         private async void TriggerSubliminalWithHapticPattern(string text, int? opacity = null, int? overrideDurationMs = null, bool suppressHaptic = false, int? oneShotGen = null,
-            int? fadeInMs = null, int? fadeOutMs = null)
+            int? fadeInMs = null, int? fadeOutMs = null, bool restCard = false)
         {
             try
             {
@@ -596,7 +626,7 @@ namespace ConditioningControlPanel.Services
                     await Task.Delay(anticipationMs);
 
                 // Now show on UI thread
-                DispatcherHelper.RunOnUI(() => ShowSubliminalVisuals(text, opacity, overrideDurationMs, oneShotGen, fadeInMs, fadeOutMs));
+                DispatcherHelper.RunOnUI(() => ShowSubliminalVisuals(text, opacity, overrideDurationMs, oneShotGen, fadeInMs, fadeOutMs, restCard));
             }
             catch (Exception ex)
             {
@@ -605,7 +635,7 @@ namespace ConditioningControlPanel.Services
         }
 
         private void ShowSubliminalVisuals(string text, int? opacity = null, int? overrideDurationMs = null, int? oneShotGen = null,
-            int? fadeInMs = null, int? fadeOutMs = null)
+            int? fadeInMs = null, int? fadeOutMs = null, bool restCard = false)
         {
             // #1045: this show belongs to a point-fired subliminal that has since been cancelled.
             // Checked FIRST because the pair below is inert while the ambient scheduler runs.
@@ -627,6 +657,9 @@ namespace ConditioningControlPanel.Services
             // Increment counter and fire event
             _subliminalCount++;
             SubliminalDisplayed?.Invoke(this, EventArgs.Empty);
+
+            // Afterglow runs alone: the word is on screen as its ghost, so the card rests.
+            if (restCard) return;
 
             // Hold, alpha and fades are Core's (SubliminalCard), shared with the Avalonia overlay.
             var durationMs = SubliminalCard.HoldMs(App.Settings.Current.SubliminalDuration, overrideDurationMs);
@@ -732,7 +765,8 @@ namespace ConditioningControlPanel.Services
                     new SkiaSharp.SKColor(textColor.R, textColor.G, textColor.B),
                     new SkiaSharp.SKColor(borderColor.R, borderColor.G, borderColor.B),
                     bgTransparent, targetOpacity, durationMs, fadeInMs, fadeOutMs,
-                    Compositor.SubliminalLayer.ResolveFace(App.Settings.Current.SubliminalFont));
+                    Compositor.SubliminalLayer.ResolveFace(App.Settings.Current.SubliminalFont),
+                    Looks.WornWordStyle.Current, Looks.WornWordStyle.Motion);
                 return true;
             }
             catch (Exception ex)
@@ -1170,6 +1204,9 @@ namespace ConditioningControlPanel.Services
                 // metrics it measured at Flash time.
                 if (_layer?.IsActive == true)
                     rects.AddRange(_layer.GetActiveTextRectsPx());
+                // Super Afterglow words are drawn text too.
+                if (_afterglow?.Layer is { IsActive: true } glow)
+                    rects.AddRange(glow.GetActiveTextRectsPx());
             }
             catch (Exception ex)
             {
@@ -1420,6 +1457,7 @@ namespace ConditioningControlPanel.Services
             _disposed = true;
 
             Stop();
+            _afterglow?.Dispose();
             try { _layer?.Clear(); } catch { }
             // App shutdown: the only place the keep-alive windows actually close.
             foreach (var win in _screenWindows.Values)

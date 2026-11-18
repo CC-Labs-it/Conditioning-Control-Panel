@@ -744,7 +744,7 @@ namespace ConditioningControlPanel.Services
                                   "Locked cards stay visible on purpose - the card tells you what it is before you " +
                                   "ever decide whether you want it.",
                     TargetElementName = "DoorPlay",
-                    RequiresTab = "play",
+                    RequiresTab = "playeyes",
                     TextPosition = TutorialStepPosition.Right
                 },
                 new TutorialStep
@@ -1086,7 +1086,7 @@ namespace ConditioningControlPanel.Services
                                   "Locked cards stay visible on purpose, so you can see what a thing is before " +
                                   "you decide whether you want it.",
                     TargetElementName = "DoorPlay",
-                    RequiresTab = "play",
+                    RequiresTab = "playeyes",
                     TextPosition = TutorialStepPosition.Right
                 },
                 new TutorialStep

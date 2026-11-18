@@ -581,6 +581,7 @@ async function start(init) {
     welcomeSeen: init.welcomeSeen === true,
     breakout: init.breakout,
     prizeCounter: init.prizeCounter === true,
+    bubbleSkin: typeof init.bubbleSkin === 'string' ? init.bubbleSkin : 'soap',   // optional, absent = soap (CONTRACT 2.2)
   });
   state.levels = readLevels(init.audio);
   state.media = readMedia(init.media);
@@ -596,6 +597,7 @@ async function start(init) {
     state.intensity = String(m.intensity || state.intensity);
     state.reduced = !!m.reduced;
     if (m.breakout) state.breakout = m.breakout;
+    if (typeof m.bubbleSkin === 'string') state.bubbleSkin = m.bubbleSkin;
     if (typeof m.invertLook === 'boolean') state.invertLook = m.invertLook;
     if (m.gates && typeof m.gates === 'object') state.gates = readGates(m.gates);
     state.intensityChoice = readChoice(m.intensityChoice, state.intensityChoice);

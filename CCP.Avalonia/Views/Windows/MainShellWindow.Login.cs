@@ -28,7 +28,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         ///
         /// </summary>
         /// <param name="accountChanged">A real sign-in/out: the lapse pass saves, as WPF's does.</param>
-        internal void UpdateQuickLoginUI(bool accountChanged = false)
+        /// <param name="keepAnnouncement">The language-change repaint: the banner slot is re-localised
+        /// (RelocaliseBannerSlot) instead of handed back to the welcome line, so a live announcement
+        /// survives. WPF has no language hook, so only that caller passes it.</param>
+        internal void UpdateQuickLoginUI(bool accountChanged = false, bool keepAnnouncement = false)
         {
             try
             {
@@ -51,7 +54,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 // Sign-in, startup restore and logout all land here; WPF repaints the header on
                 // each (Login.cs:198 UpdateLevelDisplay, OnProfileLoaded).
                 UpdateLevelDisplay();
-                UpdateBannerWelcomeMessage(); // WPF Login.cs:123/328: sign-in/out must replace the previous account's line.
+                if (keepAnnouncement) RelocaliseBannerSlot();
+                else UpdateBannerWelcomeMessage(); // WPF Login.cs:123/328: sign-in/out must replace the previous account's line.
                 Named<Tabs.DiscordTabView>("DiscordTab")?.RefreshPrivacyActions();
                 RefreshProfileBubble();   // WPF UpdateXPBarLoginState: the bubble paints the same identity
                 // WPF UpdatePatreonUI -> RefreshEntitlementVeils: an account change moves every veil.

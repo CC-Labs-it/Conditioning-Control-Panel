@@ -84,7 +84,7 @@ public class PrizeCounterRelayTests
         Assert.Equal(44, reply.Value<int>("week"));
         var seen = Assert.Single(h.Seen);
         Assert.Equal(HttpMethod.Get, seen.Method);
-        Assert.EndsWith("/v2/shop/state?unified_id=uid-1", seen.Url);
+        Assert.EndsWith("/v2/shop/state?unified_id=uid-1&caps=chess2", seen.Url);   // this app draws the 7.3.1 chess rows
         Assert.Equal("tok-1", seen.Token);
     }
 
@@ -103,7 +103,39 @@ public class PrizeCounterRelayTests
         Assert.Equal("c9", body.Value<string>("catalogVersion"));
         Assert.Equal(44, body.Value<int>("week"));
         Assert.Equal("uid-1", body.Value<string>("unified_id"));   // the page cannot name another account
-        Assert.Equal(5, body.Properties().Count());
+        Assert.Equal("chess2", body.Value<string>("caps"));
+        Assert.Equal(6, body.Properties().Count());
+    }
+
+    [Fact]
+    public async Task TheSheetsGiftStampGoalAndCoupon_ReachTheServer()
+    {
+        // Until 2026-11-17 only the DEBUG preview answered these: a real press was refused before it left the PC.
+        var (relay, h, _, _) = Make();
+        h.Answer = _ => Json(200, "{\"ok\":true,\"week\":44,\"tabs\":[]}");
+        Assert.True((await relay.RelayAsync("shop-gift", new JObject { ["unified_id"] = "someone-else", ["x"] = 1 }, null)).Value<bool>("ok"));
+        Assert.True((await relay.RelayAsync("shop-stamp", new JObject(), null)).Value<bool>("ok"));
+        Assert.True((await relay.RelayAsync("shop-goal", new JObject { ["itemId"] = "fx.bubble.heart" }, null)).Value<bool>("ok"));
+        Assert.True((await relay.RelayAsync("shop-goal", new JObject { ["itemId"] = null }, null)).Value<bool>("ok"));
+        var coupon = BuyBody(); coupon["coupon"] = true;
+        await relay.RelayAsync("shop-buy", coupon, "idem-c");
+        var notCoupon = BuyBody(); notCoupon["coupon"] = "yes";
+        await relay.RelayAsync("shop-buy", notCoupon, "idem-d");
+        Assert.Equal(new[] { "/v2/shop/gift", "/v2/shop/stamp", "/v2/shop/goal", "/v2/shop/goal", "/v2/shop/buy", "/v2/shop/buy" },
+            h.Seen.Select(x => new Uri(x.Url).AbsolutePath).ToArray());
+        Assert.All(h.Seen, x => { Assert.Equal(HttpMethod.Post, x.Method); Assert.Equal("tok-1", x.Token); });
+        var bodies = h.Seen.Select(x => JObject.Parse(x.Body!)).ToList();
+        Assert.All(bodies, b => { Assert.Equal("uid-1", b.Value<string>("unified_id")); Assert.Equal("chess2", b.Value<string>("caps")); });
+        Assert.Equal(2, bodies[0].Properties().Count());                      // a gift carries nothing of the page's
+        Assert.Equal(2, bodies[1].Properties().Count());
+        Assert.Equal("fx.bubble.heart", bodies[2].Value<string>("itemId"));
+        Assert.Equal(JTokenType.Null, bodies[3]["itemId"]!.Type);              // taking the goal off
+        Assert.True(bodies[4].Value<bool>("coupon"));
+        Assert.Null(bodies[5]["coupon"]);                                      // only the literal true rides
+        int n = h.Seen.Count;
+        Assert.Equal("bad_input", (await relay.RelayAsync("shop-goal", new JObject { ["itemId"] = 7 }, null)).Value<string>("reason"));
+        Assert.Equal("bad_input", (await relay.RelayAsync("shop-refund", new JObject(), null)).Value<string>("reason"));
+        Assert.Equal(n, h.Seen.Count);
     }
 
     [Fact]

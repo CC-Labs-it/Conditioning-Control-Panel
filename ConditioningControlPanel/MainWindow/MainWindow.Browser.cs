@@ -167,10 +167,9 @@ namespace ConditioningControlPanel
                     });
                 };
 
-                _browser.FullscreenChanged += (s, isFullscreen) =>
-                {
-                    Dispatcher.Invoke(() => HandleBrowserFullscreenChanged(isFullscreen));
-                };
+                // Never switch inside the WebView2 callback itself (#1565 #1596): record the wish
+                // and let the dispatcher apply it once the event has returned.
+                _browser.FullscreenChanged += (s, isFullscreen) => RequestBrowserFullscreen(isFullscreen);
 
                 // Chromium render/browser process crash. Tear down so the next
                 // BrowserSiteToggle click lazy-reinits instead of throwing
@@ -886,6 +885,9 @@ namespace ConditioningControlPanel
                                 fsNotified = true;
                                 window.chrome.webview.postMessage({ type: 'fsExit' });
                             };
+                            // The host's re-check (#1649) puts the page back into fullscreen after
+                            // a held exit; the next real exit must still be reported.
+                            window.__ccpTakeoverFsRearm = () => { fsNotified = false; };
 
                             // When the clip ends, drop out of fullscreen. Whether the SESSION ended
                             // is the reporter's call — sites auto-advance, and the user may keep
@@ -929,6 +931,9 @@ namespace ConditioningControlPanel
                             };
                             const goFullscreen = () => {
                                 if (window._ccpTakeoverStopped) return;
+                                // Tell the host this ask is the takeover's, however late it
+                                // comes (a player started by hand has no deadline).
+                                try { window.chrome.webview.postMessage(JSON.stringify({ type: 'fsAsk' })); } catch (_) {}
                                 if (video.requestFullscreen) {
                                     const req = video.requestFullscreen();
                                     if (req && req.catch) req.catch(reportFsDenied);
@@ -955,6 +960,9 @@ namespace ConditioningControlPanel
                     })();
                 ";
 
+                // The fullscreen this script asks for is app-started: its page exits are held
+                // while the host is built (#1649).
+                _browserFsGate.ArmTakeover(Environment.TickCount64);
                 await _browser.WebView.CoreWebView2.ExecuteScriptAsync(script);
                 App.Logger?.Debug("Auto-play and fullscreen script injected with exit handlers");
             }
@@ -1120,7 +1128,7 @@ namespace ConditioningControlPanel
                 if (message == "ccp_exit_fullscreen")
                 {
                     App.Logger?.Information("MainWindow: ccp_exit_fullscreen received (forced FS active = {Active})", _isBrowserFullscreen);
-                    if (_isBrowserFullscreen) ExitBrowserFullscreen();
+                    if (_isBrowserFullscreen) RequestBrowserFullscreen(false);
                     return;
                 }
 
@@ -1145,7 +1153,8 @@ namespace ConditioningControlPanel
                 {
                     App.Logger?.Information("Web video playback ended (takeover injection)");
                     App.BrowserMedia?.OnMediaStopped("takeover-injection");
-                    ExitBrowserFullscreen();
+                    _browserFsGate.Clear(); // a real end is never a reparent blip (#1649 hold)
+                    RequestBrowserFullscreen(false);
                 }
                 else if (message.Contains("\"type\":\"videoDuration\""))
                 {
@@ -1159,6 +1168,13 @@ namespace ConditioningControlPanel
                 }
                 // ccp-bugs #1492: the page refused the takeover's fullscreen request. The payload
                 // is page state only (error name, connected, visibility, activation).
+                else if (message.Contains("\"type\":\"fsAsk\""))
+                {
+                    // The takeover script is asking for fullscreen now: its enter is app-started
+                    // even when playback began long after the script went in (#1649).
+                    var live = _browserFsGate.NoteTakeoverAsk(Environment.TickCount64);
+                    App.Logger?.Information("Web takeover asks for fullscreen (armed = {Armed})", live);
+                }
                 else if (message.Contains("\"type\":\"fsDenied\""))
                 {
                     App.Logger?.Warning("Web takeover fullscreen refused by the page: {Detail}",
@@ -1169,8 +1185,11 @@ namespace ConditioningControlPanel
                 // fullscreenchange free the app to interrupt a video the user was still watching.
                 else if (message.Contains("\"type\":\"fsExit\""))
                 {
-                    App.BrowserMedia?.OnFullscreenExited();
-                    ExitBrowserFullscreen();
+                    // Held during a takeover's enter (#1649): the reparent knocked the page out,
+                    // the user did not leave, so the takeover is not released either.
+                    if (!_browserFsGate.HoldsExit(Environment.TickCount64))
+                        App.BrowserMedia?.OnFullscreenExited();
+                    RequestBrowserFullscreen(false);
                 }
                 // Audio sync messages
                 else if (message.Contains("\"type\":\"audioSyncVideoDetected\""))
@@ -1523,6 +1542,7 @@ namespace ConditioningControlPanel
 
             var isLoggedIn = App.Discord.IsAuthenticated;
             var s = App.Settings?.Current;
+            RefreshProfileLinkDiscord();
 
             // Update login status in Community Settings section
             if (DiscordTab.TxtDiscordTabStatus != null && DiscordTab.TxtDiscordTabInfo != null && DiscordTab.BtnDiscordTabLogin != null)
@@ -2813,14 +2833,97 @@ namespace ConditioningControlPanel
             }
         }
 
+        private readonly Services.Browser.BrowserFullscreenGate _browserFsGate = new();
+
+        /// <summary>
+        /// The ONLY way a WebView2 event asks for a fullscreen change (#1565 #1570 #1585 #1589 #1596).
+        /// It records the wish and posts one drain at Normal priority, so the reparent, the Show and
+        /// the resize renders run after the WebView2 callback has returned, never nested inside it.
+        /// </summary>
+        private void RequestBrowserFullscreen(bool isFullscreen)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() => RequestBrowserFullscreen(isFullscreen)));
+                return;
+            }
+            var now = Environment.TickCount64;
+            if (isFullscreen)
+            {
+                _browserFsGate.NoteEnterWish(now);
+            }
+            else if (_browserFsGate.HoldsExit(now))
+            {
+                // ccp-bugs #1649: the reparent into the host dropped the takeover page's fullscreen
+                // for a moment. Keep the host; the takeover re-check asks the page back in.
+                App.Logger?.Information("Web takeover fullscreen: page exit held during the enter");
+                return;
+            }
+            if (!_browserFsGate.Request(isFullscreen)) return;
+            Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(DrainBrowserFullscreenRequest));
+        }
+
+        /// <summary>
+        /// Asks a takeover page back into HTML5 fullscreen if the reparent knocked it out (#1649).
+        /// Runs a short while after the enter and again once the hold is over; it does nothing when
+        /// the page is already fullscreen, the takeover was stopped, the video ended, or a newer
+        /// enter or exit started. A refused request is logged like the takeover's own.
+        /// </summary>
+        private void ReassertTakeoverFullscreenLater(int transition)
+        {
+            foreach (var delayMs in new[] { 700L, Services.Browser.BrowserFullscreenGate.TakeoverHoldMs + 200 })
+            {
+                var timer = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher)
+                {
+                    Interval = TimeSpan.FromMilliseconds(delayMs),
+                };
+                timer.Tick += (_, _) =>
+                {
+                    timer.Stop();
+                    if (!_browserFsGate.IsCurrent(transition) || !_isBrowserFullscreen) return;
+                    try { _ = _browser?.WebView?.CoreWebView2?.ExecuteScriptAsync(TakeoverFullscreenReassertScript); }
+                    catch (Exception ex) { App.Logger?.Debug("Takeover fullscreen re-check failed: {Error}", ex.Message); }
+                };
+                timer.Start();
+            }
+        }
+
+        private const string TakeoverFullscreenReassertScript = @"
+            (function() {
+                if (window._ccpTakeoverStopped || document.fullscreenElement || document.webkitFullscreenElement) return;
+                var v = document.querySelector('video');
+                if (!v || v.ended || !v.requestFullscreen) return;
+                try { if (window.__ccpTakeoverFsRearm) window.__ccpTakeoverFsRearm(); } catch (_) {}
+                try {
+                    var p = v.requestFullscreen();
+                    if (p && p.catch) p.catch(function(err) {
+                        try {
+                            window.chrome.webview.postMessage(JSON.stringify({
+                                type: 'fsDenied',
+                                reason: 'recheck ' + String((err && (err.name || err.message)) || err).slice(0, 50) }));
+                        } catch (_) {}
+                    });
+                } catch (_) {}
+            })();";
+
+        private void DrainBrowserFullscreenRequest()
+        {
+            var wish = _browserFsGate.Take();
+            if (!Services.Browser.BrowserFullscreenGate.ShouldApply(wish, _isBrowserFullscreen)) return;
+            try { HandleBrowserFullscreenChanged(wish!.Value); }
+            catch (Exception ex) { App.Logger?.Error(ex, "Browser fullscreen change failed"); }
+        }
+
         private void HandleBrowserFullscreenChanged(bool isFullscreen)
         {
             if (_browser?.WebView == null) return;
 
             // A late fullscreen event from the stopped page must not reopen a topmost host.
-            if (isFullscreen && Services.Browser.RemoteBrowserStopRule.HideBrowser(
-                RemoteControlOverlay.Visibility == Visibility.Visible, _remoteBrowserVideoActive))
+            if (isFullscreen && Services.Browser.RemoteBrowserStopRule.RefuseFullscreen(
+                RemoteControlOverlay.Visibility == Visibility.Visible, _remoteBrowserVideoActive,
+                _browserFsGate.TakeoverArmed(Environment.TickCount64)))
             {
+                App.Logger?.Information("Browser fullscreen refused under the remote card (no takeover armed)");
                 _ = _browser.ExitFullscreenAsync();
                 _browser.ClearFullscreenRegistration();
                 return;
@@ -2828,38 +2931,42 @@ namespace ConditioningControlPanel
 
             if (isFullscreen)
             {
-                // Mirror only when the "Show content on" picker actually covers more than one
-                // screen - pinning content to a single monitor must not clone it onto the others.
-                var useDualMonitor = App.GetGlobalScreens().Length > 1;
-
-                if (useDualMonitor)
-                {
-                    _isDualMonitorPlaybackActive = App.ScreenMirror.EnableMirror();
-                    if (_isDualMonitorPlaybackActive)
-                    {
-                        App.Logger?.Information("Screen mirroring enabled for fullscreen video");
-                    }
-                }
-
-                // Always reparent — single-monitor users still need real
-                // full-monitor fullscreen, otherwise HT's HTML5 fullscreen
-                // just renders inside the dashboard cell. The dblclick exit
-                // works via the JS click-pair detector + ccp_exit_fullscreen
-                // WebMessage path (window._ccpForcedFs flag covers the case
-                // where the page lost HTML5 fullscreen during reparent).
+                // No display CLONE here any more (#1565 #1570 #1585). Flipping the Windows display
+                // topology (SetDisplayConfig) on every fullscreen reset every monitor and GPU device
+                // while this window was being shown and maximized; WPF's render thread died
+                // (UCEERR_RENDERTHREADFAILURE) or stopped answering, and a session that died in clone
+                // mode left the player's monitors cloned at the smallest resolution. The video now
+                // fills the monitor the app is on.
+                //
+                // Always reparent - single-monitor users still need real full-monitor fullscreen,
+                // otherwise HT's HTML5 fullscreen just renders inside the dashboard cell. The
+                // dblclick exit works via the JS click-pair detector + ccp_exit_fullscreen
+                // WebMessage path (window._ccpForcedFs flag covers the case where the page lost
+                // HTML5 fullscreen during reparent).
                 EnterBrowserFullscreen();
             }
             else
             {
-                if (_isDualMonitorPlaybackActive)
-                {
-                    App.ScreenMirror.DisableMirror();
-                    _isDualMonitorPlaybackActive = false;
-                    App.Logger?.Information("Screen mirroring disabled");
-                }
-
                 ExitBrowserFullscreen();
             }
+        }
+
+        /// <summary>
+        /// Maximizes the fullscreen host one dispatcher turn after it was shown or restyled, in place
+        /// of the old nested <c>Dispatcher.Invoke(() =&gt; { }, Render)</c> pump. That pump ran every
+        /// queued Normal job (a chat scroll calling UpdateLayout, a SizeToContent window resizing)
+        /// in the middle of the switch, which is where every hang report stops. A newer enter or
+        /// exit, or a closed window, makes the step stand down.
+        /// </summary>
+        private void MaximizeBrowserFullscreenHostLater(Window host, int transition)
+        {
+            Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
+            {
+                if (!_browserFsGate.IsCurrent(transition) || !_isBrowserFullscreen
+                    || !ReferenceEquals(host, _browserPopoutWindow) || new System.Windows.Interop.WindowInteropHelper(host).Handle == IntPtr.Zero) return;
+                try { host.WindowState = WindowState.Maximized; }
+                catch (Exception ex) { App.Logger?.Debug("Browser fullscreen maximize failed: {Error}", ex.Message); }
+            }));
         }
 
         // ---- rented Topmost + escape hatch for the fullscreen browser (#952) -------------------
@@ -2963,6 +3070,9 @@ namespace ConditioningControlPanel
                 _browserPreFullscreenZoom = _browser.ZoomFactor;
                 _browser.ZoomFactor = 1.0;
                 _isBrowserFullscreen = true;
+                var transition = _browserFsGate.BeginTransition();
+                // An app-started takeover holds the page's exits while the host is built (#1649).
+                var takeover = _browserFsGate.NoteEnterApplied(Environment.TickCount64);
 
                 if (_browserPopoutWindow != null)
                 {
@@ -2986,8 +3096,7 @@ namespace ConditioningControlPanel
                     _browserPopoutWindow.WindowStyle = WindowStyle.None;
                     _browserPopoutWindow.ResizeMode = ResizeMode.NoResize;
                     _browserPopoutWindow.Topmost = true;
-                    _browserPopoutWindow.Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
-                    _browserPopoutWindow.WindowState = WindowState.Maximized;
+                    MaximizeBrowserFullscreenHostLater(_browserPopoutWindow, transition);
                     ArmFullscreenEscapes(_browserPopoutWindow);
                 }
                 else
@@ -3005,8 +3114,16 @@ namespace ConditioningControlPanel
                     SettingsTab.BrowserLoadingText.Text = "\ud83c\udf10 Browser in fullscreen";
                     SettingsTab.BrowserLoadingText.Visibility = Visibility.Visible;
 
-                    var screen = System.Windows.Forms.Screen.FromHandle(
-                        new System.Windows.Interop.WindowInteropHelper(this).Handle);
+                    // A takeover goes where the app's content goes ("Show content on", the screen
+                    // the main video copy uses), not wherever the panel happens to sit (#1649).
+                    // One screen only: no display clone (#1565). A video the user maximized stays
+                    // on the panel's screen, where they are looking.
+                    var screen = (takeover ? App.GetPrimaryContentScreen() : null)
+                        ?? System.Windows.Forms.Screen.FromHandle(
+                            new System.Windows.Interop.WindowInteropHelper(this).Handle);
+                    // Screen bounds are pixels, Left/Top are DIPs (same as the video windows).
+                    var hostDpi = BubbleCountWindow.GetDpiForScreen(screen);
+                    if (!(hostDpi > 0)) hostDpi = 1.0;
 
                     // Create window with fullscreen properties from the start (like video windows)
                     _browserPopoutWindow = new Window
@@ -3017,8 +3134,8 @@ namespace ConditioningControlPanel
                         Topmost = true,
                         Background = System.Windows.Media.Brushes.Black,
                         WindowStartupLocation = WindowStartupLocation.Manual,
-                        Left = screen.Bounds.X + 100,
-                        Top = screen.Bounds.Y + 100,
+                        Left = (screen.Bounds.X + 100) / hostDpi,
+                        Top = (screen.Bounds.Y + 100) / hostDpi,
                         Width = 400,
                         Height = 300,
                         Content = _browser.WebView
@@ -3048,10 +3165,10 @@ namespace ConditioningControlPanel
                         _browserPopoutWindow = null;
                     };
 
-                    // Show small first, pump render queue, then maximize — exactly like video windows
+                    // Show small first, then maximize on the next dispatcher turn. No nested pump
+                    // in between (#1565 #1596): see MaximizeBrowserFullscreenHostLater.
                     _browserPopoutWindow.Show();
-                    _browserPopoutWindow.Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
-                    _browserPopoutWindow.WindowState = WindowState.Maximized;
+                    MaximizeBrowserFullscreenHostLater(_browserPopoutWindow, transition);
                     ArmFullscreenEscapes(_browserPopoutWindow);
                 }
 
@@ -3071,7 +3188,9 @@ namespace ConditioningControlPanel
                 try { _ = _browser.WebView.CoreWebView2.ExecuteScriptAsync("window._ccpForcedFs = true;"); }
                 catch { }
 
-                App.Logger?.Information("Browser entered fullscreen");
+                if (takeover) ReassertTakeoverFullscreenLater(transition);
+
+                App.Logger?.Information("Browser entered fullscreen (takeover = {Takeover})", takeover);
             }
             catch (Exception ex)
             {
@@ -3082,12 +3201,11 @@ namespace ConditioningControlPanel
 
         private void ExitBrowserFullscreen()
         {
-            if (_isDualMonitorPlaybackActive)
-            {
-                App.ScreenMirror.DisableMirror();
-                _isDualMonitorPlaybackActive = false;
-            }
+            // A queued enter from the page dies with any exit (panic, teardown, Esc), and a pending
+            // maximize of the host stands down.
+            _browserFsGate.Clear();
             if (!_isBrowserFullscreen) return;
+            _browserFsGate.BeginTransition();
 
             // Off FIRST, and off the same window they went on (#952). The popout branch below
             // hands a window the user owns back to them, and a surviving Activated handler would

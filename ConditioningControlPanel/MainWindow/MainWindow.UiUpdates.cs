@@ -69,13 +69,7 @@ namespace ConditioningControlPanel
             AnimateXpDisplay(xp, xpNeeded, level);
 
             // Update title based on level
-            var rankTitle = level switch
-            {
-                < 20 => "BASIC BIMBO",
-                < 50 => "DUMB AIRHEAD",
-                < 100 => "SYNTHETIC BLOWDOLL",
-                _ => "PERFECT FUCKPUPPET"
-            };
+            var rankTitle = Models.RankTitles.ForLevel(level);
             TxtPlayerTitle.Text = App.Mods?.MakeModAware(rankTitle) ?? rankTitle;
 
             // Update unlockables visibility based on level

@@ -405,10 +405,12 @@ namespace ConditioningControlPanel
 
             if (SetApplicationLanguage(code))
             {
-                // XAML bindings update live; code-behind strings need a restart
+                // XAML bindings update live; code-behind strings need a restart. The header
+                // banner is Home only, so the notice goes through the announcement path, which
+                // shows it on every page (Settings is where the language was changed).
                 if (TxtBannerSecondary != null)
                 {
-                    TxtBannerSecondary.Text = Loc.Get("msg_restart_to_apply");
+                    SetBannerAnnouncement(Loc.Get("msg_restart_to_apply"));
                     TxtBannerSecondary.Opacity = 1;
                     TxtBannerSecondary.IsHitTestVisible = true;
                 }
