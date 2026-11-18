@@ -276,12 +276,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
             RefreshSetupHint();
             PaintHeroClock();
-            var ends = LiveLockClock.EndsAt(snapshot, chaster!.BalanceSeconds, DateTime.UtcNow)?.ToLocalTime();
-            TxtHeroEnds.Text = ends is { } when ? Loc.GetF("chaster_hero_ends", when.ToString("ddd d MMM HH:mm")) : "";
-            TxtHeroEnds.IsVisible = ends != null;
+            PaintHeroEnds(snapshot, chaster!.BalanceSeconds);
             RefreshPills(chaster.LockLookup, snapshot, chaster.SafetyHoldRemaining);
             BuildCalendar(snapshot);
             RefreshTag(chaster.BalanceSeconds);
+        }
+
+        // WPF ChasterTabView.xaml.cs:307: distinguish Chaster's end from the pending add.
+        internal void PaintHeroEnds(LockSnapshot? snapshot, int balance)
+        {
+            var ends = LiveLockClock.EndsAt(snapshot, balance, DateTime.UtcNow)?.ToLocalTime();
+            TxtHeroEnds.Text = ends is { } when ? Loc.GetF("chaster_hero_ends", when.ToString("ddd d MMM HH:mm")) : "";
+            TxtHeroEnds.IsVisible = ends != null;
+            var pending = LiveLockClock.PendingAdd(balance);
+            ToolTip.SetTip(TxtHeroEnds, ends != null && pending > 0 && snapshot?.EndsAtUtc is { } own
+                ? Loc.GetF("chaster_hero_ends_tip", own.ToLocalTime().ToString("ddd d MMM HH:mm"), CircesTab.Format(pending))
+                : null);
         }
 
         private void RefreshSetupHint()
