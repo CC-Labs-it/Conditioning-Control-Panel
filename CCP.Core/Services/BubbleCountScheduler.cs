@@ -321,6 +321,7 @@ namespace ConditioningControlPanel.Services
         internal void OnComplete(bool success)
         {
             if (!IsBusy) return;   // panic got there first
+            Remote.RemoteScreenFeed.CountEnded(success);   // WPF GameCompleted/GameFailed -> the remote preview
             var generation = ++_generation; // retire the clip callback before showing a message
             if (success)
             {

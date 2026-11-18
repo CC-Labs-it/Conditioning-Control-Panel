@@ -137,6 +137,7 @@ public sealed class DiscordActivityCallersTests : IDisposable
 
     private sealed class Host : IMandatoryVideoHost
     {
+        public int FloatingLimit => 1; public int FloatingUp => 0;
         internal int Shows;
         internal bool HoldMessage;
         internal bool Floating;

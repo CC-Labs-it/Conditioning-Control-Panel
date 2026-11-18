@@ -10,6 +10,8 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Companion;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -23,6 +25,8 @@ public partial class ModCreatorWindow
     private StackPanel? _barkCardsPanel;
     private string? _barkAudioDir;
     private readonly Dictionary<StackPanel, string> _barkAttachments = new();
+    internal string BarkBaseManifestPath = ContentLocator.Resolve(Path.Combine(
+        CompanionContentResolver.CompanionAudioRelativeDir, CompanionContentResolver.BarkRulesFileName));
     private string _barkSkipStatus = "";
     private sealed class BarkCard
     {
@@ -34,6 +38,7 @@ public partial class ModCreatorWindow
         public CheckBox Override = new(), Repeatable = new();
         public TextBox Priority = new(), Cooldown = new(), Chance = new(), Mood = new(), Conditions = new();
         public ComboBox Scope = new(), Class = new();
+        public ComboBox? OverrideId;
         public readonly List<(TextBox Text, JToken Original, StackPanel Row)> Lines = new();
     }
 
@@ -55,14 +60,41 @@ public partial class ModCreatorWindow
         return button;
     }
 
+    // WPF ModCreatorWindow.Barks.cs:98-125: unreadable manifests leave free text fields.
+    internal static (string[] Triggers, string[] Ids) ReadBarkPickerItems(string path)
+    {
+        try
+        {
+            var rules = JArray.Parse(File.ReadAllText(path)).OfType<JObject>().ToArray();
+            string[] Values(string key) => rules.Select(r => r.Value<string>(key))
+                .Where(v => !string.IsNullOrWhiteSpace(v)).OfType<string>()
+                .Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(v => v, StringComparer.OrdinalIgnoreCase).ToArray();
+            return (Values("trigger"), Values("id"));
+        }
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is JsonException || ex is ArgumentException || ex is InvalidCastException || ex is FormatException)
+        { return (Array.Empty<string>(), Array.Empty<string>()); }
+    }
+
     private void AddBarkCard(JObject? loaded)
     {
         var card = new BarkCard { Json = loaded == null ? new JObject() : (JObject)loaded.DeepClone(), LoadedFromFile = loaded != null };
         card.Override.Content = Loc.Get("mod_barks_override");
         card.Override.IsChecked = loaded != null && loaded["trigger"] == null;
+        var (triggers, ids) = ReadBarkPickerItems(BarkBaseManifestPath);
+        var triggerPicker = new ComboBox { ItemsSource = triggers, Width = 240, HorizontalAlignment = HorizontalAlignment.Left, Tag = "bark_trigger_picker" };
+        var idPicker = new ComboBox { ItemsSource = ids, Width = 260, HorizontalAlignment = HorizontalAlignment.Left, Tag = "bark_id_picker" };
+        triggerPicker.SelectionChanged += (_, _) => { if (triggerPicker.SelectedItem is string value) card.Trigger.Text = value; };
+        card.OverrideId = ids.Length > 0 ? idPicker : null;
         var triggerLabel = CreateFieldLabel(Loc.Get("mod_barks_trigger"));
         var settings = new Border();
-        void ShowTrigger() => triggerLabel.IsVisible = card.Trigger.IsVisible = settings.IsVisible = card.Override.IsChecked != true;
+        void ShowTrigger()
+        {
+            var isNew = card.Override.IsChecked != true;
+            triggerLabel.IsVisible = card.Trigger.IsVisible = settings.IsVisible = isNew;
+            triggerPicker.IsVisible = isNew && triggers.Length > 0;
+            idPicker.IsVisible = !isNew && card.OverrideId != null;
+            card.Id.IsVisible = isNew || card.OverrideId == null;
+        }
         ShowTrigger();
         card.Override.IsCheckedChanged += (_, _) => ShowTrigger();
         card.Id.Width = 260; card.Id.HorizontalAlignment = HorizontalAlignment.Left;
@@ -94,8 +126,10 @@ public partial class ModCreatorWindow
         card.Panel.Children.Add(header);
         card.Panel.Children.Add(CreateFieldLabel(Loc.Get("mod_barks_id")));
         card.Panel.Children.Add(card.Id);
+        card.Panel.Children.Add(idPicker);
         card.Panel.Children.Add(triggerLabel);
         card.Panel.Children.Add(card.Trigger);
+        card.Panel.Children.Add(triggerPicker);
         // WPF ModCreatorWindow.Barks.cs:209-246, 316-326.
         var fields = new StackPanel();
         settings.Child = fields;
@@ -130,6 +164,14 @@ public partial class ModCreatorWindow
         _barkCards.Add(card);
         _barkCardsPanel?.Children.Add(card.Frame);
         card.Id.Text = loaded?.Value<string>("id") ?? "";
+        // WPF Barks.cs:296-309 keeps unknown loaded IDs available for overrides.
+        if (loaded != null && card.Override.IsChecked == true && card.OverrideId != null)
+        {
+            var loadedId = card.Id.Text ?? "";
+            var match = ids.FirstOrDefault(id => string.Equals(id, loadedId, StringComparison.OrdinalIgnoreCase));
+            if (match == null) { idPicker.ItemsSource = ids.Append(loadedId).ToArray(); match = loadedId; }
+            idPicker.SelectedItem = match;
+        }
         card.Trigger.Text = loaded?.Value<string>("trigger") ?? "";
         card.Priority.Text = loaded?.Value<int?>("priority")?.ToString(CultureInfo.InvariantCulture) ?? "";
         card.Cooldown.Text = loaded?.Value<int?>("cooldown_ms")?.ToString(CultureInfo.InvariantCulture) ?? "";
@@ -264,9 +306,10 @@ public partial class ModCreatorWindow
         foreach (var card in _barkCards)
         {
             var isOverride = card.Override.IsChecked == true;
-            var id = card.Id.Text?.Trim() ?? "";
+            var id = isOverride && card.OverrideId != null
+                ? card.OverrideId.SelectedItem as string ?? "" : card.Id.Text?.Trim() ?? "";
             if (!isOverride) id = Regex.Replace(id.ToLowerInvariant(), "[^a-z0-9]+", "_").Trim('_');
-            if (id.Length == 0) { skipped.Add(Loc.Get("mod_barks_no_id")); continue; }
+            if (string.IsNullOrWhiteSpace(id)) { skipped.Add(Loc.Get("mod_barks_no_id")); continue; }
             var pool = new JArray();
             foreach (var (box, original, _) in card.Lines)
             {

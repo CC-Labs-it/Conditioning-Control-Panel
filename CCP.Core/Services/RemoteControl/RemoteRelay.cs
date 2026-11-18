@@ -57,6 +57,7 @@ namespace ConditioningControlPanel.Services
         private string? _lastReason;
         private bool _pollBackedOff;
         private DateTime _lastControllerCommand = DateTime.MinValue;
+        private string? _lastPushedScreenKey;
         public const double HotPollSeconds = 1.0, HotWindowSeconds = 60.0, ConnectedHeartbeatSeconds = 5.0;   // WPF Screen.cs (d39969827)
 
         /// <summary>WPF PollBaseSeconds: 1 s while a connected controller sent a command in the last minute or
@@ -153,6 +154,7 @@ namespace ConditioningControlPanel.Services
                 (SessionCode, ConnectPin, Tier, IsActive) = (code, pin, tier, true);
                 // The wearer's own values, handed back at every end (owner 2026-10-22, RemoteWearer).
                 Remote.RemoteWearer.Take();
+                Remote.RemoteScreenFeed.Open();   // WPF AttachScreenFeeds
                 (_consecutiveFailures, PollInterval, _lastStatusPush, _statusBackoffUntil) = (0, PollIntervalSeconds, DateTime.MinValue, DateTime.MinValue);
                 if (AutoPoll) StartLoop();
                 Log.Information("[RemoteControl] Session started: {Code}, tier: {Tier}", code, tier);
@@ -211,7 +213,8 @@ namespace ConditioningControlPanel.Services
             (IsActive, SessionCode, ConnectPin, Tier, ControllerIdle, _idleSince, _autoDisconnected) = (false, null, null, null, false, null, false);
             LastEndedUtc = Now();
             (_pollBackedOff, _lastControllerCommand) = (false, DateTime.MinValue);
-            (_lastOptInTags, _lastOptInStatus) = (null, null);
+            (_lastOptInTags, _lastOptInStatus, _lastPushedScreenKey) = (null, null, null);
+            Remote.RemoteScreenFeed.Close();   // WPF DetachScreenFeeds
             Interlocked.Increment(ref _sessionGeneration);   // an opt-in still in flight must not list the next session
             // StopAsync and the poll loop land here off the UI thread, and the stops close windows: run
             // them on the UI like ControllerLeft, posted if a stalled UI cancels the Invoke.
@@ -273,8 +276,10 @@ namespace ConditioningControlPanel.Services
                 }
 
                 var heartbeat = ControllerConnected ? ConnectedHeartbeatSeconds : StatusPushIntervalSeconds;
-                if (lastId != null || changed || (Now() - _lastStatusPush).TotalSeconds >= heartbeat)
-                    await SendStatusAsync(lastId, lastAction).ConfigureAwait(false);
+                // WPF RemoteControlService.cs:671: also push when the live preview moved, at most once a second.
+                var screen = ControllerConnected ? Remote.RemoteScreenFeed.BuildSafe() : null;
+                if (lastId != null || changed || (Now() - _lastStatusPush).TotalSeconds >= heartbeat || ScreenWantsPush(screen))
+                    await SendStatusAsync(lastId, lastAction, screen).ConfigureAwait(false);
                 if (!_pollBackedOff) PollInterval = PollBase;
             }
             catch (Exception ex)
@@ -523,9 +528,14 @@ namespace ConditioningControlPanel.Services
             catch (Exception ex) { Log.Warning(ex, "[RemoteControl] Directory re-publish after disconnect failed"); }
         }
 
-        private async Task SendStatusAsync(string? lastId, string? lastAction)
+        /// <summary>WPF ScreenWantsPush: the preview moved since the last push and the 1 s gap has passed.</summary>
+        private bool ScreenWantsPush(JObject? screen) => screen != null
+            && Remote.RemoteScreenState.ChangeKey(screen) != _lastPushedScreenKey && (Now() - _lastStatusPush).TotalSeconds >= 1.0;
+
+        private async Task SendStatusAsync(string? lastId, string? lastAction, JObject? screen = null)
         {
             if (Now() < _statusBackoffUntil) return;
+            screen ??= Remote.RemoteScreenFeed.BuildSafe();
             var s = CoreSettings.Current;
             var (_, sessionStatus) = CoreDispatch.Invoke(() =>
             {
@@ -552,14 +562,19 @@ namespace ConditioningControlPanel.Services
                 share_avatar = s.RemoteShareAvatar,
                 // Only advertise features this head actually implements.
                 caps = CoreEngine.StartBrainDrain != null
-                    ? new[] { "haptic_pattern", "haptic_level", "signal", "brain_drain" }
-                    : new[] { "haptic_pattern", "haptic_level", "signal" },
+                    ? new[] { "haptic_pattern", "haptic_level", "signal", "screen", "brain_drain" }
+                    : new[] { "haptic_pattern", "haptic_level", "signal", "screen" },
+                screen,   // WPF v2 live preview (RemoteControlService.cs:728-742)
             };
             try
             {
                 using var resp = await PostAsync("/v2/remote/status", body).ConfigureAwait(false);
                 if ((int)resp.StatusCode == 429) _statusBackoffUntil = Now().AddSeconds(StatusBackoffSeconds);
-                else if (resp.IsSuccessStatusCode) _lastStatusPush = Now();
+                else if (resp.IsSuccessStatusCode)
+                {
+                    _lastStatusPush = Now();
+                    if (screen != null) _lastPushedScreenKey = Remote.RemoteScreenState.ChangeKey(screen);
+                }
             }
             catch (Exception ex) { Log.Warning(ex, "[RemoteControl] Status update error"); }
         }
@@ -576,9 +591,11 @@ namespace ConditioningControlPanel.Services
             if (RemoteCommands.AutonomyRunning?.Invoke() == true) list.Add("autonomy");
             if (CoreEngine.IsRunning) list.Add("session");
             if (CoreFlash.IsRunning) list.Add("flash_loop");
+            if (CoreEngine.Video?.IsRunning == true) list.Add("video_loop");
             if (CoreSubliminal.IsRunning) list.Add("subliminal_loop");
             if (LockCardScheduler.Instance.IsRunning) list.Add("lock_card");
             if (CoreMindWipe.IsRunning) list.Add("mind_wipe");
+            if (CoreBouncingText.IsRunning) list.Add("bounce_text");   // WPF RemoteControlService.cs:928-929
             return list;
         }
 

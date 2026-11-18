@@ -339,7 +339,9 @@ namespace ConditioningControlPanel.Avalonia
             // Real probes, not the fail-open default (which reads present + resolved). A throw
             // reaches the gate's CachedProbe and still fails open, as WPF's strict pair does; no pactl at all
             // fails open without spawning it (distro-check F6).
-            CoreQuests.CameraProbe = () => System.IO.Directory.EnumerateFiles("/dev", "video*").Any();
+            CoreQuests.CameraProbe = () => Platform.WindowsCameras.CameraPresent(OperatingSystem.IsWindows(),
+                Platform.WindowsCameras.EnumerateStrict, Platform.WindowsCameras.EnumerateMediaFoundationStrict,
+                () => System.IO.Directory.EnumerateFiles("/dev", "video*").Any());
             CoreQuests.MicrophoneProbe = () => Platform.PulseMicSource.MicrophonePresent(
                 Platform.LibVlcAudio.PactlInstalled, () => Platform.LibVlcAudio.Pactl("list short sources"));
 
@@ -1074,17 +1076,14 @@ namespace ConditioningControlPanel.Avalonia
                 SeedSubliminalFeatureUse();
                 CoreSubliminal.CustomShowProvider = text => Views.Overlays.SubliminalWhisperShow.Custom(text);
                 CoreSubliminal.BambiFreezeProvider = Views.Overlays.SubliminalWhisperShow.Freeze;
-                CoreSubliminal.RunStateChanged = running =>
-                {
-                    if (running) return;
-                    Views.Overlays.SubliminalWhisperShow.StopAll();
-                    global::Avalonia.Threading.Dispatcher.UIThread.Post(Views.Overlays.SubliminalOverlay.CloseAll);
-                };
+                CoreSubliminal.RunStateChanged = Views.Overlays.SubliminalWhisperShow.RunStateChanged;
                 CoreBouncingText.StartAction = () =>
                 {
                     if (desktop.MainWindow is { } host) Views.Overlays.BouncingTextOverlay.Start(host);
                 };
                 CoreBouncingText.StopAction = Views.Overlays.BouncingTextOverlay.Stop;
+                CoreBouncingText.IsRunningProvider = () => Views.Overlays.BouncingTextOverlay.IsRunning;
+                CoreBubbles.IsRunningProvider = () => Views.Overlays.BubbleOverlay.IsRunning;
                 Views.Overlays.CornerGifOverlay.Seed(() => desktop.MainWindow);   // the corner-GIF surface seam
                 CoreBouncingText.RefreshAction = Views.Overlays.BouncingTextOverlay.Refresh;
                 CoreBouncingText.RestartAction = Views.Overlays.BouncingTextOverlay.Restart;

@@ -119,6 +119,40 @@ public sealed class RemoteControlShellTests
         }
     });
 
+    // WPF RemoteControlService.Screen.cs:192,304: the preview carries real idle time on every desktop. Wayland's
+    // probe is async only, so the shell reads the last finished one and never blocks the poll on it.
+    [Fact]
+    public void PreviewIdleSecondsComeFromTheAsyncProbe() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var old = (global::ConditioningControlPanel.Avalonia.Platform.DesktopIdle.Reader, global::ConditioningControlPanel.Avalonia.Platform.DesktopIdle.Last);
+        MainShellWindow? shell = null;
+        int Poll(int want)
+        {
+            var until = DateTime.UtcNow.AddSeconds(5);
+            int got;
+            while ((got = global::ConditioningControlPanel.Services.Remote.RemoteScreenFeed.Read().IdleSeconds) != want && DateTime.UtcNow < until)
+                Thread.Sleep(10);
+            return got;
+        }
+        try
+        {
+            shell = new MainShellWindow();
+            global::ConditioningControlPanel.Avalonia.Platform.DesktopIdle.Reader = () => Task.FromResult<int?>(42);
+            Assert.Equal(42, Poll(42));
+            global::ConditioningControlPanel.Avalonia.Platform.DesktopIdle.Reader = () => Task.FromException<int?>(new InvalidOperationException());
+            Assert.Equal(0, Poll(0));   // an unavailable probe reads as active, as WPF's failed GetLastInputInfo
+        }
+        finally
+        {
+            shell?.Close();
+            (global::ConditioningControlPanel.Avalonia.Platform.DesktopIdle.Reader, global::ConditioningControlPanel.Avalonia.Platform.DesktopIdle.Last) = old;
+        }
+    });
+
     private sealed class FakeRelay : HttpMessageHandler
     {
         public readonly List<string> Paths = new();

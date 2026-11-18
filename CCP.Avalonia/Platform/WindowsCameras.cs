@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using System.Threading.Tasks;
 using System.Runtime.InteropServices.ComTypes;
 using Serilog;
 using ConditioningControlPanel.Localization;
@@ -54,7 +55,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         public static IReadOnlyList<WebcamDevice> Enumerate()
         {
             if (!OperatingSystem.IsWindows()) return Array.Empty<WebcamDevice>();
-            return EnumerateOrEmpty(EnumerateStrict);
+            return EnumerateWithFallback(EnumerateStrict, EnumerateMediaFoundationStrict);
         }
 
         internal static IReadOnlyList<WebcamDevice> EnumerateOrEmpty(Func<IReadOnlyList<WebcamDevice>> enumerate)
@@ -67,6 +68,87 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 Log.Warning(ex, "WindowsCameras: enumeration threw");
                 return new List<WebcamDevice>();
+            }
+        }
+
+        internal static IReadOnlyList<WebcamDevice> EnumerateWithFallback(
+            Func<IReadOnlyList<WebcamDevice>> directShow, Func<IReadOnlyList<WebcamDevice>> mediaFoundation)
+        {
+            var devices = EnumerateOrEmpty(directShow);
+            return devices.Count > 0 ? devices : EnumerateOrEmpty(mediaFoundation);
+        }
+
+        internal static bool CameraPresent(bool windows, Func<IReadOnlyList<WebcamDevice>> directShow,
+            Func<IReadOnlyList<WebcamDevice>> mediaFoundation, Func<bool> linuxProbe) =>
+            windows ? directShow().Count > 0 || mediaFoundation().Count > 0 : linuxProbe();
+
+        private static readonly Guid SourceType = new("c60ac5fe-252a-478f-a0ef-bc8fa5f7cad3");
+        private static readonly Guid VideoCapture = new("8ac3587a-4ae7-42d8-99e0-0a6013eef90f");
+        private static readonly Guid FriendlyName = new("60d0e559-52f8-4fa2-bbce-acdb34a8ec01");
+
+        [DllImport("mfplat.dll", ExactSpelling = true)]
+        private static extern int MFStartup(int version, int flags);
+        [DllImport("mfplat.dll", ExactSpelling = true)]
+        private static extern int MFShutdown();
+        [DllImport("mfplat.dll", ExactSpelling = true)]
+        private static extern int MFCreateAttributes(out IntPtr attributes, int initialSize);
+        [DllImport("mf.dll", ExactSpelling = true)]
+        private static extern int MFEnumDeviceSources(IntPtr attributes, out IntPtr devices, out int count);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int SetGuid(IntPtr self, ref Guid key, ref Guid value);
+        [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+        private delegate int GetAllocatedString(IntPtr self, ref Guid key, out IntPtr value, out int length);
+
+        private static T Method<T>(IntPtr instance, int slot) where T : Delegate =>
+            Marshal.GetDelegateForFunctionPointer<T>(Marshal.ReadIntPtr(Marshal.ReadIntPtr(instance), slot * IntPtr.Size));
+
+        internal static IReadOnlyList<WebcamDevice> EnumerateMediaFoundationStrict()
+        {
+            if (!OperatingSystem.IsWindows()) return Array.Empty<WebcamDevice>();
+            return Task.Run(EnumerateMediaFoundation).WaitAsync(TimeSpan.FromSeconds(5)).GetAwaiter().GetResult();
+        }
+
+        [SupportedOSPlatform("windows")]
+        private static IReadOnlyList<WebcamDevice> EnumerateMediaFoundation()
+        {
+            Marshal.ThrowExceptionForHR(MFStartup(0x20070, 0));
+            IntPtr attributes = IntPtr.Zero, sources = IntPtr.Zero;
+            int count = 0;
+            try
+            {
+                Marshal.ThrowExceptionForHR(MFCreateAttributes(out attributes, 1));
+                var key = SourceType;
+                var value = VideoCapture;
+                Marshal.ThrowExceptionForHR(Method<SetGuid>(attributes, 24)(attributes, ref key, ref value));
+                Marshal.ThrowExceptionForHR(MFEnumDeviceSources(attributes, out sources, out count));
+                var result = new List<WebcamDevice>(count);
+                for (int i = 0; i < count; i++)
+                {
+                    var source = Marshal.ReadIntPtr(sources, i * IntPtr.Size);
+                    var nameKey = FriendlyName;
+                    IntPtr name = IntPtr.Zero;
+                    try
+                    {
+                        int hr = Method<GetAllocatedString>(source, 13)(source, ref nameKey, out name, out _);
+                        result.Add(new WebcamDevice(i, DeviceName(hr >= 0 ? Marshal.PtrToStringUni(name) : null)));
+                    }
+                    finally { if (name != IntPtr.Zero) Marshal.FreeCoTaskMem(name); }
+                }
+                return result;
+            }
+            finally
+            {
+                if (sources != IntPtr.Zero)
+                {
+                    for (int i = 0; i < count; i++)
+                    {
+                        var source = Marshal.ReadIntPtr(sources, i * IntPtr.Size);
+                        if (source != IntPtr.Zero) Marshal.Release(source);
+                    }
+                    Marshal.FreeCoTaskMem(sources);
+                }
+                if (attributes != IntPtr.Zero) Marshal.Release(attributes);
+                MFShutdown();
             }
         }
 

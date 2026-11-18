@@ -6,7 +6,7 @@ using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
-// WebKitGTK and WPE document-start scripts, installed on the GLib thread.
+// Document-start scripts for WebKitGTK and WPE (installed on the GLib thread) and WKWebView.
 internal static class WebViewCarrier
 {
     private delegate int Idle(IntPtr data);
@@ -21,10 +21,14 @@ internal static class WebViewCarrier
     private sealed record Request(IntPtr View, string Script, GetManager Manager, NewScript New, AddScript Add,
         Unref ScriptUnref, Unref ViewUnref, TaskCompletionSource<bool> Done, bool AllFrames);
 
-    internal static Task<bool> InstallAsync(IPlatformHandle? handle, string script, bool allFrames = false) =>
-        OperatingSystem.IsLinux()
-            ? InstallLinuxAsync(handle, script, allFrames, InstallNativeAsync)
-            : Task.FromResult(false);
+    internal static Task<bool> InstallAsync(IPlatformHandle? handle, string script, bool allFrames = false)
+    {
+        if (OperatingSystem.IsMacOS() && allFrames && handle is IAppleWKWebViewPlatformHandle apple)
+            return Task.FromResult(InstallApple(apple, script));
+        // The top-frame bridge stays WebKitGTK only; WPE takes all-frame scripts.
+        if (!OperatingSystem.IsLinux() || (handle is ILinuxWpePlatformHandle && !allFrames)) return Task.FromResult(false);
+        return InstallLinuxAsync(handle, script, allFrames, InstallNativeAsync);
+    }
 
     // Select the library belonging to the actual view. Loading the other WebKit can mix libsoup versions.
     internal static Task<bool> InstallLinuxAsync(IPlatformHandle? handle, string script, bool allFrames,
@@ -68,6 +72,39 @@ internal static class WebViewCarrier
         return Task.FromResult(false);
     }
 
+    // WKUserScript is evaluated in each frame, including cross-origin frames. The retained
+    // handle belongs to us; the content controller retains the user script after adding it.
+    private static bool InstallApple(IAppleWKWebViewPlatformHandle handle, string source)
+    {
+        IntPtr view = IntPtr.Zero, script = IntPtr.Zero;
+        try
+        {
+            view = handle.GetWKWebViewRetained();
+            if (view == IntPtr.Zero) return false;
+            var text = SendString(objc_getClass("NSString"), sel_registerName("stringWithUTF8String:"), source);
+            var allocated = Send(objc_getClass("WKUserScript"), sel_registerName("alloc"));
+            script = SendScript(allocated, sel_registerName("initWithSource:injectionTime:forMainFrameOnly:"), text, 0, 0);
+            var config = Send(view, sel_registerName("configuration"));
+            var controller = Send(config, sel_registerName("userContentController"));
+            if (script == IntPtr.Zero || controller == IntPtr.Zero) return false;
+            SendOne(controller, sel_registerName("addUserScript:"), script);
+            return true;
+        }
+        catch (Exception ex) { Log.Debug("WebViewCarrier: WKUserScript install failed: {E}", ex.Message); return false; }
+        finally
+        {
+            if (script != IntPtr.Zero) Send(script, sel_registerName("release"));
+            if (view != IntPtr.Zero) Send(view, sel_registerName("release"));
+        }
+    }
+
+    [DllImport("/usr/lib/libobjc.A.dylib")] private static extern IntPtr objc_getClass(string name);
+    [DllImport("/usr/lib/libobjc.A.dylib")] private static extern IntPtr sel_registerName(string name);
+    [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")] private static extern IntPtr Send(IntPtr obj, IntPtr selector);
+    [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")] private static extern IntPtr SendString(IntPtr obj, IntPtr selector, [MarshalAs(UnmanagedType.LPUTF8Str)] string text);
+    [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")] private static extern IntPtr SendScript(IntPtr obj, IntPtr selector, IntPtr text, long time, byte mainOnly);
+    [DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")] private static extern void SendOne(IntPtr obj, IntPtr selector, IntPtr value);
+
     private static int OnIdle(IntPtr data)
     {
         var state = GCHandle.FromIntPtr(data);
@@ -76,7 +113,7 @@ internal static class WebViewCarrier
         try
         {
             var manager = request.Manager(request.View);
-            // ALL_FRAMES = 0, TOP_FRAME = 1; START = 0.
+            // ALL_FRAMES = 0, TOP_FRAME = 1; START = 0 (before the page scripts).
             var script = manager == IntPtr.Zero ? IntPtr.Zero : request.New(request.Script, request.AllFrames ? 0 : 1, 0, IntPtr.Zero, IntPtr.Zero);
             if (script != IntPtr.Zero)
             {

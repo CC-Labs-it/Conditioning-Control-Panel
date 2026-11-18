@@ -143,6 +143,48 @@ public sealed class SpiralFinishTests
             }
         });
 
+    [Fact]
+    public Task Loom_browser_failure_closes_and_allows_a_fresh_window()
+        => Run(() =>
+        {
+            var card = new SpiralFeatureControl();
+            var host = new Window { Content = card };
+            host.Show();
+            try
+            {
+                var button = card.FindControl<Button>("BtnOpenLoom")!;
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var loom = Assert.IsType<GameWindow>(GameWindow.OpenForTests("loom"));
+                var closed = false;
+                loom.Closed += (_, _) => closed = true;
+                loom.Web.OnBrowserProcessFailed();
+                Assert.True(closed);
+                Assert.Null(GameWindow.OpenForTests("loom"));
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var fresh = Assert.IsType<GameWindow>(GameWindow.OpenForTests("loom"));
+                Assert.NotSame(loom, fresh);
+                return Task.CompletedTask;
+            }
+            finally { GameWindow.CloseAllForPanic(); host.Close(); }
+        });
+
+    [Fact]
+    public Task Other_game_stays_open_after_browser_failure()
+        => Run(() =>
+        {
+            var game = GameWindow.Launch("breakoutdemo")!;
+            try
+            {
+                var closed = false;
+                game.Closed += (_, _) => closed = true;
+                game.Web.OnBrowserProcessFailed();
+                Assert.False(closed);
+                Assert.Same(game, GameWindow.OpenForTests("breakoutdemo"));
+                return Task.CompletedTask;
+            }
+            finally { GameWindow.CloseAllForPanic(); }
+        });
+
     [Theory]
     [InlineData("windows")]
     [InlineData("gtk")]
