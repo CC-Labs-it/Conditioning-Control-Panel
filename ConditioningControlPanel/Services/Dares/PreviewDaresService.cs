@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Services.Dares;
 /// 4 s, a friend's count that climbs, deadlines squeezed into minutes (3h = 3 min, today = 5, weekend =
 /// 8, week = 10) and <see cref="SettleNowAsync"/> to end a bet at once.
 ///
-/// <para>Walls: Sparkles move only inside the preview file (never SkillPoints); a lock debt books
+/// <para>Walls: Sparkles move only inside the preview file (never the real balance); a lock debt books
 /// nothing; a Lockdown debt runs the REAL Lockdown (<see cref="DareLockdownKeeper"/>), because that is
 /// what the owner must see. This player's own counts come from a real <see cref="DareMeter"/> fed by
 /// the same hooks as the live service. In a Release build <see cref="Enabled"/> is false whatever the
@@ -102,13 +102,15 @@ public sealed class PreviewDaresService : IDaresService, IDisposable
     private readonly DareLockdownKeeper _keeper;
     private readonly Func<bool> _mySub;
     private readonly Func<string, (string Name, int Tier)?> _friend;
+    private readonly double? _pace;
     private Data _data;
     private DispatcherTimer? _timer;
 
     public PreviewDaresService(string? path, DareMeter meter, DareLockdownKeeper keeper,
         Func<DateTimeOffset>? now = null, Random? rng = null, Func<bool>? mySub = null,
-        Func<string, (string Name, int Tier)?>? friend = null)
+        Func<string, (string Name, int Tier)?>? friend = null, double? pace = null)
     {
+        _pace = pace;
         _path = path;
         _meter = meter;
         _keeper = keeper;
@@ -190,7 +192,7 @@ public sealed class PreviewDaresService : IDaresService, IDisposable
         var bet = new DareBet(id, DareSide.From, new DareFriend(friendId, who.Name, null), s.Type, s.What, s.Deadline,
             now + Compressed(s.Deadline), s.Camera, s.FromStake, s.ToStake, DareSlipRules.Seals(s),
             writing ? DareState.Writing : DareState.Sent, null, 0, 0, null, null, null, now, null, null, null);
-        _data.Rows.Insert(0, new Row { Bet = bet, Pace = 0.6 + _rng.NextDouble() * 0.8, Due = now + (writing ? FriendActsAfter : AcceptAfter), FriendTier = who.Tier });
+        _data.Rows.Insert(0, new Row { Bet = bet, Pace = _pace ?? 0.6 + _rng.NextDouble() * 0.8, Due = now + (writing ? FriendActsAfter : AcceptAfter), FriendTier = who.Tier });
         Commit();
         return Done(new DareCreateOutcome(writing ? DareCreateStatus.Writing : DareCreateStatus.Sent, id, writing ? "PRV" + (_data.Seq % 1000).ToString("D3", System.Globalization.CultureInfo.InvariantCulture) : null));
     }
@@ -272,7 +274,7 @@ public sealed class PreviewDaresService : IDaresService, IDisposable
         switch (b.MyStake.Kind)
         {
             case DareStakeKind.Sp:
-                // Preview wallet only: the real SkillPoints never move.
+                // Preview wallet only: the real balance never moves.
                 _data.Sp -= b.MyStake.Amount;
                 row.Bet = b with { Debt = b.Debt! with { State = DareDebtState.Paid } };
                 return DareActResult.Done;
