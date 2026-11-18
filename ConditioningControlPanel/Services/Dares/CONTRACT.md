@@ -13,7 +13,8 @@ token, 429 `too_fast`, 503 no Redis.
 
 DARK until `DARES_ENABLED`: `off` (default) answers every op `{ ok:false, reason:"off" }`; `allow`
 opens it only to the unified ids in `DARES_ALLOW` (comma list; BOTH players of a bet must be on it,
-else `create` answers `refused`); `on` opens it to everyone. Free for every tier.
+else `create` answers `refused`); `on` opens it to everyone. Free for every tier, except that a `lockdown` stake is for subscribers
+(owner 2026-11-18, see Limits).
 
 ## Grammar (refuse anything else with `{ ok:false, reason:"bad_input" }`)
 
@@ -58,9 +59,9 @@ until `banned_until`), and the other side is told. Nothing else.
 
 | op | body | reply |
 |---|---|---|
-| `state` | `{ lockdown_ok? }` | `{ ok, me:{ banned_until, lockdown_ok, discord, sp_won_today }, bets:[B] }` |
-| `create` | `{ to, slip, tz_min }` | `{ ok, status, id?, write_code? }` status: `sent` `writing` `not_friends` `banned` `friend_banned` `limit` `discord_needed` `lockdown_not_ok` `refused` |
-| `accept` | `{ id }` | `{ ok, status }` status: `running` `gone` `banned` `limit` `lockdown_busy` |
+| `state` | `{}` | `{ ok, me:{ banned_until, discord, sp_won_today }, bets:[B] }` (`sp_won_today` is an info counter only; the client never depends on it) |
+| `create` | `{ to, slip, tz_min }` | `{ ok, status, id?, write_code? }` status: `sent` `writing` `not_friends` `banned` `friend_banned` `limit` `discord_needed` `lockdown_needs_sub` `refused` |
+| `accept` | `{ id }` | `{ ok, status }` status: `running` `gone` `banned` `limit` `lockdown_busy` `lockdown_needs_sub` |
 | `pass` | `{ id }` | `{ ok }` |
 | `cancel` | `{ id }` | `{ ok }` (sender, while `writing` or `sent`) |
 | `report` | `{ id, count, seen_s?, counted_s? }` | `{ ok, bet:B }` |
@@ -103,16 +104,16 @@ The server settles lazily on any `state` / `report` call by either side and on t
 ## Sparkles (owner call 2026-11-18: Sparkles move player to player HERE ONLY)
 
 An `sp` debt is paid by `pay`: the loser's netSp at `user.backroom.dares` goes down by the amount,
-the winner's goes up by the amount capped at 500 Sparkles won through dares per UTC day
-(`sp_won_today`); past the cap the loser pays only what the winner can still take. Like stakes, it
+the winner's goes up by the same amount, in full (owner 2026-11-18: no daily cap). Like stakes, it
 sits under `user.backroom` so `/v2/user/sync` reads it as spend and merge-accounts carries it.
 
 ## Limits
 
 5 open bets per account (writing + sent + running + owed), 10 creates a UTC day, 1 owed or serving
-`lockdown` debt at a time (`lockdown_busy`), offers lapse after 24 h. `lockdown` stakes need
-`lockdown_ok` on the side that would owe it (sticky true once the client reports the player finished
-a Lockdown of their own). A `dare` anywhere on a slip needs the sender's Discord linked
+`lockdown` debt at a time (`lockdown_busy`), offers lapse after 24 h. A `lockdown` stake needs the
+side that would owe it at effective tier >= 1 (Basic or Prime): `create` answers `lockdown_needs_sub`
+when either lockdown stake sits on a tier-0 side, and `accept` re-checks the receiver and answers the
+same (owner 2026-11-18; replaces the old `lockdown_ok` rule, which is gone). A `dare` anywhere on a slip needs the sender's Discord linked
 (`discord_needed`); its words are written with `/bet write code:<write_code>` (6 chars, 30 min).
 
 ## Discord
