@@ -403,7 +403,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private static readonly Lazy<string?> _reason = new(ProbeUnavailableReason);
 
         /// <summary>Null when a web view can be hosted; otherwise the platform's own explanation.</summary>
-        public static string? UnavailableReason => _reason.Value;
+        public static string? UnavailableReason => ReasonForLifetime(
+            Application.Current?.ApplicationLifetime is global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime,
+            () => _reason.Value);
+
+        // A headless host cannot embed a native view, even if an earlier desktop lifetime probed one.
+        internal static string? ReasonForLifetime(bool desktop, Func<string?> probe) => desktop ? probe() : NoEngineReason;
 
         private static readonly Lazy<(string Text, string? Command)?> _linuxHint = new(() =>
             ConditioningControlPanel.Services.LinuxDependencies.Check(

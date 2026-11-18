@@ -125,7 +125,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>The tint is on screen now.</summary>
         internal static bool IsShowing => Windows.Count > 0;
-        private static int[] _shownOn = Array.Empty<int>();
+        private static (int Index, PixelRect Bounds, double Scaling)[] _shownOn = Array.Empty<(int, PixelRect, double)>();
         private static Window? _hookedOwner;
 
         /// <summary>The colour the tint renders: the user's pick if set, else the active mod's
@@ -164,6 +164,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
 
             var want = ResolveScreenIndices(s.PinkFilterTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
+            var layout = want.Select(i => (i, screens[i].Bounds, screens[i].Scaling)).ToArray();
             var (r, g, b) = EffectiveColor();
             var opacity = PaintedOpacity;   // a session ramps it without writing it (#471)
             // WPF ResolveAdHocOverlayOpacity: an effect raises a live tint, never lowers it.
@@ -172,7 +173,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             // Same monitors as last time: repaint the brushes and leave the windows alone. This is
             // the whole reason the slider does not tear down a full-screen window per tick.
-            if (Windows.Count > 0 && want.SequenceEqual(_shownOn))
+            if (Windows.Count > 0 && layout.SequenceEqual(_shownOn))
             {
                 foreach (var w in Windows) w.SetTint(r, g, b, opacity);
                 return;
@@ -212,7 +213,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     Dispatcher.UIThread.Post(() => { if (Windows.Contains(w)) w.Opacity = 1; });
                 }
             }
-            _shownOn = want;
+            _shownOn = layout;
             QuestMinutes.Follow(Windows.Count > 0);
             if (s.PinkFilterUnderEffects) SyncOrder();   // a fresh tint maps on top: put the effects back over it
             Log.Debug("Pink filter showing on {Count} screen(s) at {Opacity}%", Windows.Count, s.PinkFilterOpacity);
@@ -251,7 +252,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _pulseWeight = null;
             var fading = Windows.ToArray();
             Windows.Clear();
-            _shownOn = Array.Empty<int>();
+            _shownOn = Array.Empty<(int, PixelRect, double)>();
             QuestMinutes.Follow(false);
             var duration = TimeSpan.FromSeconds(GentleVisuals.FadeSeconds);
             foreach (var w in fading)
@@ -284,9 +285,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 catch (Exception ex) { Log.Debug("Pink filter: failed to close a tint window: {E}", ex.Message); }
             }
             Windows.Clear();
-            _shownOn = Array.Empty<int>();
+            _shownOn = Array.Empty<(int, PixelRect, double)>();
             QuestMinutes.Follow(false);
-            if (_hookedOwner is not null) { _hookedOwner.Closed -= OnOwnerClosed; _hookedOwner = null; }
+            if (_hookedOwner is not null) { _hookedOwner.Closed -= OnOwnerClosed; _hookedOwner.Screens.Changed -= OnScreensChanged; _hookedOwner = null; }
         }
 
         /// <summary>
@@ -363,9 +364,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static void HookOwner(Window? owner)
         {
             if (owner is null || ReferenceEquals(owner, _hookedOwner)) return;
-            if (_hookedOwner is not null) _hookedOwner.Closed -= OnOwnerClosed;
+            if (_hookedOwner is not null) { _hookedOwner.Closed -= OnOwnerClosed; _hookedOwner.Screens.Changed -= OnScreensChanged; }
             _hookedOwner = owner;
             owner.Closed += OnOwnerClosed;
+            owner.Screens.Changed += OnScreensChanged;
+        }
+
+        private static void OnScreensChanged(object? sender, EventArgs e)
+        {
+            if (_hookedOwner is { } owner) Refresh(owner);
         }
 
         private static void OnOwnerClosed(object? sender, EventArgs e) => CloseAll();

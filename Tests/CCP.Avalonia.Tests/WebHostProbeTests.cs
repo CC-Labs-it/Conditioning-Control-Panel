@@ -37,6 +37,17 @@ public sealed class WebHostProbeTests
         });
 
     [Fact]
+    public void CachedDesktopAvailabilityDoesNotLeakIntoHeadlessLifetime()
+    {
+        var probes = 0;
+        string? Available() { probes++; return null; }
+        Assert.Null(WebHost.ReasonForLifetime(true, Available));
+        Assert.Equal(WebHost.NoEngineReason, WebHost.ReasonForLifetime(false, Available));
+        Assert.Equal(1, probes);
+        Assert.Null(WebHost.ReasonForLifetime(true, Available));
+    }
+
+    [Fact]
     public void LinuxWithBothEnginesAsReportedBy12_1IsAvailable() => Assert.Null(WebHost.DecideUnavailableReason(new[]
     {
         Info(WebViewAdapterType.WebKitGtk, true, WebViewEmbeddingScenario.NativeDialog),
