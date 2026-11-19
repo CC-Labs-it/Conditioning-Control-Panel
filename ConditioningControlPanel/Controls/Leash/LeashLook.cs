@@ -380,7 +380,7 @@ internal static class LeashLook
             Text = word,
             FontFamily = FriendsLook.Mono,
             FontWeight = FontWeights.Bold,
-            FontSize = word.Length > 1 ? size * 0.26 : size * 0.5,
+            FontSize = word.Length > 1 ? size * 0.3 : size * 0.5, // was 0.26 at 26-32 DIP: under 9 px, too small to read (ccp-bugs #1685)
             Foreground = InkBrush,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
