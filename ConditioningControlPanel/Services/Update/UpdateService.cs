@@ -20,15 +20,26 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.3.4";
+        public const string AppVersion = "7.3.5";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.3.4 - Back to the basics
+        public const string CurrentPatchNotes = @"v7.3.5 - Back to the basics
 
-NEW IN 7.3.4
+NEW IN 7.3.5
+
+DARES, ROUND TWO
+- you can only stake Sparkles you have. amounts you can't cover are greyed out, and a friend who can't cover their side is told when they accept.
+- the camera check passes at 60% of the time now, not 80%. a camera bet shows how much of the time the camera saw you, and says so when it can't see you.
+- friends: the card under a friend has a new look, and hovering a friend says what a right-click holds.
+- in our Discord, /sparkles shows your Sparkles and the stars EMI gave you.
+
+DECK
+- cards no longer stall side-on mid-flip: each card gets its next picture ready while it rests.
+
+FROM 7.3.4
 
 DARES
 bet a friend on your own CCP use. right-click a friend and pick Dare, or type /bet make in our Discord.
@@ -163,7 +174,7 @@ FIXES
 - Deeper: fixed a crash while a library file was being read.
 - Piece by Piece: a press that does not move is a click, the lit square is the one a click plays, and an arrow no longer stays stuck after a lost right release.
 
-this is a pre-release. it carries everything in 7.3.3, 7.3.2, 7.3.1, 7.3.0 and 7.2.4.";
+this is a pre-release. it carries everything in 7.3.4, 7.3.3, 7.3.2, 7.3.1, 7.3.0 and 7.2.4.";
 
         private const string GitHubOwner = "CC-Labs-it";
         private const string GitHubRepo = "Conditioning-Control-Panel";
