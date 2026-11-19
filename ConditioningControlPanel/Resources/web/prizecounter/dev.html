@@ -14,6 +14,11 @@
        ?signedout (the sign-in button; pressing it reloads signed in).
        The console has window.mock (the mock server: fail, setSp, setTier, setWeek, reprice). -->
   <main id="pc"></main>
+  <!-- The loading card (hud/loading.js): drawn here so it is up on the first paint, lifted away by main.js. -->
+  <div id="pc-loading" class="pc-loading" role="status" aria-busy="true">
+    <div class="pc-loading-tag"><span class="pc-loading-hole"></span><span class="pc-star pc-loading-star"></span>
+      <div class="pc-loading-dots"><i class="pc-loading-dot"></i><i class="pc-loading-dot"></i><i class="pc-loading-dot"></i></div></div>
+  </div>
   <script type="module">
     import { createMockServer } from './mock/server.js';
     import { createMockHost } from './mock/host.js';
