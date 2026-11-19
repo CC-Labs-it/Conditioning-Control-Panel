@@ -34,13 +34,24 @@ public static class V2WalletNet
     /// <param name="storedNet">The last net this PC stored for that account. Null = never.</param>
     /// <param name="serverSp">The reply's <c>skill_points</c>.</param>
     /// <param name="localSp">The balance the wallet holds now.</param>
-    public static Step Decide(bool sameAccount, int? replyNet, int? storedNet, int serverSp, int localSp)
+    /// <param name="sentSp">The balance this PC sent in the same sync request. Null = unknown, or a
+    /// reply that must not lower (a season reset reply).</param>
+    public static Step Decide(bool sameAccount, int? replyNet, int? storedNet, int serverSp, int localSp, int? sentSp = null)
     {
         // Neither the balance nor the net may land: the stored net stays, so a good reply still
         // sees the drop. A wrong-account reply must not write anything at all.
         if (!sameAccount || serverSp < 0) return new Step(localSp, storedNet, false);
         if (replyNet is { } net && storedNet is { } seen && net < seen)
             return new Step(SparklePoints.Clamp(serverSp), net, true);
+        // ccp-bugs #1680: the server never takes the client's skill_points; it books level-up and
+        // bubble Sparkles from the level and bubble count this same request carried, under its
+        // per-hour caps. So when the wallet has not moved since the request was built, every local
+        // credit's evidence reached the server and was answered: the reply IS the booked balance,
+        // down included. A credit the server clamped comes back on a later reply as its cap walks up.
+        // A credit that landed while the reply was in flight makes the wallet differ from sentSp,
+        // and that reply stays raise-only (the next sync settles it).
+        if (sentSp is { } sent && sent == localSp)
+            return new Step(SparklePoints.Clamp(serverSp), replyNet ?? storedNet, false);
         // Missing net, first sighting, or no drop: today's raise-only merge.
         return new Step(SparklePoints.MergeMax(serverSp, localSp), replyNet ?? storedNet, false);
     }
