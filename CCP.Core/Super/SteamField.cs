@@ -38,6 +38,14 @@ public sealed class SteamField
     public const double PuffSpeed = 15;
     /// <summary>How fast the texture's drag springs back (s).</summary>
     public const double ShiftTime = 1.3;
+    /// <summary>
+    /// A resting wipe (the cursor held still, the bouncing word) falls off as the cube of the way in, over a reach this much wider than asked
+    /// (tier-2 2026-11-18: "the mouse cursor bubble has a bit too hard of an edge"). The old straight
+    /// falloff cleared all but the last few percent of the radius, since a wipe outruns the heal about
+    /// 60 to 1; this keeps the half-fog line near the old rim and spreads the edge over a soft band. A moving stroke keeps the straight falloff: each cell sees it only briefly, so its edge is soft already.
+    /// </summary>
+    public const double SoftReach = 1.25;
+    internal static double Soft(double w) => w * w * w;
 
     public readonly int W, H;
     public readonly double WidthPx, HeightPx;
@@ -309,7 +317,7 @@ public sealed class SteamField
 
     public void Wipe(double xPx, double yPx, double radiusPx, double dt, bool mark)
     {
-        double cx = Cx(xPx), cy = Cy(yPx), r = Math.Max(1, Cells(radiusPx));
+        double cx = Cx(xPx), cy = Cy(yPx), r = Math.Max(1, Cells(radiusPx) * SoftReach);
         int x0 = Math.Max(0, (int)(cx - r)), x1 = Math.Min(W - 1, (int)(cx + r) + 1);
         int y0 = Math.Max(0, (int)(cy - r)), y1 = Math.Min(H - 1, (int)(cy + r) + 1);
         for (int gy = y0; gy <= y1; gy++)
@@ -319,7 +327,7 @@ public sealed class SteamField
                 double rr = r * Rag(gx - cx, gy - cy);
                 if (d >= rr) continue;
                 double w = 1 - d / rr; int i = gy * W + gx;
-                Fog[i] *= (float)(1 - Math.Clamp(dt * WipeRate * w, 0, 1));
+                Fog[i] *= (float)(1 - Math.Clamp(dt * WipeRate * Soft(w), 0, 1));
                 if (mark) Mem[i] = Math.Max(Mem[i], (float)Math.Min(1, w * 4));
             }
         Dirty = true;
