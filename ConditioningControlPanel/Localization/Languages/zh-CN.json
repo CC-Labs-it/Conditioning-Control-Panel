@@ -6349,6 +6349,8 @@
   "tooltip_super_lights_dim_speed": "暗影出现的速度。",
   "super_lights_return_speed": "灯光恢复速度",
   "tooltip_super_lights_return_speed": "移动鼠标或移开视线时，暗影退去的速度。",
+  "super_lights_follow": "跟随眼睛或鼠标",
+  "tooltip_super_lights_follow": "开启：只在你观看视频时变暗。摄像头开着时看眼睛，否则看鼠标是否在视频上。关闭：鼠标静止时屏幕边缘变暗。",
   "super_deck_flips": "碎裂前翻面次数",
   "tooltip_super_deck_flips": "卡片碎裂前大约能翻几次。",
   "super_deck_reach": "碎裂范围",

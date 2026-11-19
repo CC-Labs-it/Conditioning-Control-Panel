@@ -44,6 +44,7 @@ namespace ConditioningControlPanel.Features
                 TxtLightsDimSpeed.Text = $"{s.LightsDownDimSpeed}%";
                 SliderLightsReturnSpeed.Value = s.LightsDownReturnSpeed;
                 TxtLightsReturnSpeed.Text = $"{s.LightsDownReturnSpeed}%";
+                ChkLightsFollow.IsChecked = s.LightsDownFollow;
                 _lightsDownReady = true;
             }
             catch (Exception ex)
@@ -80,6 +81,15 @@ namespace ConditioningControlPanel.Features
             if (s == null) return;
             s.LightsDownReturnSpeed = LightsDownOptions.ClampReturnSpeed(LightsDownOptions.Snap(e.NewValue));
             TxtLightsReturnSpeed.Text = $"{s.LightsDownReturnSpeed}%";
+            App.Settings?.Save();
+        }
+
+        private void ChkLightsFollow_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_lightsDownLoading || !_lightsDownReady || ChkLightsFollow == null) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.LightsDownFollow = ChkLightsFollow.IsChecked == true;
             App.Settings?.Save();
         }
     }

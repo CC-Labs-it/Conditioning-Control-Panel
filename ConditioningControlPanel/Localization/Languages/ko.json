@@ -5837,6 +5837,8 @@
   "tooltip_super_lights_dim_speed": "어둠이 다가오는 속도입니다.",
   "super_lights_return_speed": "불빛 복귀 속도",
   "tooltip_super_lights_return_speed": "마우스를 움직이거나 시선을 돌렸을 때 어둠이 물러나는 속도입니다.",
+  "super_lights_follow": "눈이나 마우스 따라가기",
+  "tooltip_super_lights_follow": "켜기: 영상을 보는 동안에만 어두워집니다. 카메라가 켜져 있으면 눈으로, 아니면 영상 위의 마우스로 판단합니다. 끄기: 마우스가 멈춰 있는 동안 가장자리가 어두워집니다.",
   "super_deck_flips": "깨지기까지 뒤집기",
   "tooltip_super_deck_flips": "카드가 깨지기 전까지 뒤집히는 대략적인 횟수입니다.",
   "super_deck_reach": "깨짐 범위",

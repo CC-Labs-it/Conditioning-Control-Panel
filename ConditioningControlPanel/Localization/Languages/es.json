@@ -5837,6 +5837,8 @@
   "tooltip_super_lights_dim_speed": "Qué tan rápido llega la oscuridad.",
   "super_lights_return_speed": "Regreso de la luz",
   "tooltip_super_lights_return_speed": "Qué tan rápido se retira la oscuridad cuando mueves el ratón o apartas la vista.",
+  "super_lights_follow": "Seguir ojos o ratón",
+  "tooltip_super_lights_follow": "Activado: solo oscurece mientras miras un vídeo, según tus ojos si la cámara está encendida, si no según el ratón sobre el vídeo. Desactivado: los bordes se oscurecen mientras el ratón está quieto.",
   "super_deck_flips": "Giros hasta romper",
   "tooltip_super_deck_flips": "Más o menos cuántos giros aguanta una carta antes de romperse.",
   "super_deck_reach": "Alcance de la rotura",

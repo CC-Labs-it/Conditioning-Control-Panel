@@ -6103,6 +6103,8 @@
   "tooltip_super_lights_dim_speed": "Quanto in fretta arriva il buio.",
   "super_lights_return_speed": "Ritorno della luce",
   "tooltip_super_lights_return_speed": "Quanto in fretta il buio si ritira quando muovi il mouse o distogli lo sguardo.",
+  "super_lights_follow": "Segui occhi o mouse",
+  "tooltip_super_lights_follow": "Attivo: il buio arriva solo mentre guardi un video, seguendo gli occhi se la fotocamera è accesa, altrimenti il mouse sul video. Spento: i bordi si scuriscono mentre il mouse è fermo.",
   "super_deck_flips": "Giri prima di rompersi",
   "tooltip_super_deck_flips": "Più o meno quanti giri regge una carta prima di rompersi.",
   "super_deck_reach": "Portata della rottura",

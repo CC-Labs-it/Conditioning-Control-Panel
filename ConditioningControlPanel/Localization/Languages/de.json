@@ -5837,6 +5837,8 @@
   "tooltip_super_lights_dim_speed": "Wie schnell das Dunkel kommt.",
   "super_lights_return_speed": "Licht-zurück-Tempo",
   "tooltip_super_lights_return_speed": "Wie schnell das Dunkel zurückweicht, wenn sich die Maus bewegt oder du wegsiehst.",
+  "super_lights_follow": "Augen oder Maus folgen",
+  "tooltip_super_lights_follow": "An: es dunkelt nur, solange du ein Video ansiehst, nach deinen Augen bei laufender Kamera, sonst nach der Maus auf dem Video. Aus: die Ränder dunkeln, solange die Maus ruht.",
   "super_deck_flips": "Drehungen bis Bruch",
   "tooltip_super_deck_flips": "Ungefähr wie oft sich eine Karte dreht, bevor sie bricht.",
   "super_deck_reach": "Bruchweite",

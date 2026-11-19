@@ -6397,6 +6397,8 @@
   "tooltip_super_lights_dim_speed": "How fast the dim comes in.",
   "super_lights_return_speed": "Lights back speed",
   "tooltip_super_lights_return_speed": "How fast the dim pulls back when the mouse moves or you look away.",
+  "super_lights_follow": "Follow eyes or mouse",
+  "tooltip_super_lights_follow": "On: it dims only while you watch a video, by your eyes when the camera is on, else by the mouse on the video. Off: the edges dim while the mouse rests.",
   "super_deck_flips": "Flips to break",
   "tooltip_super_deck_flips": "About how many flips a card takes before it breaks.",
   "super_deck_reach": "Break reach",

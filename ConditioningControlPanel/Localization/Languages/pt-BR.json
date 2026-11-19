@@ -5837,6 +5837,8 @@
   "tooltip_super_lights_dim_speed": "A rapidez com que o escuro chega.",
   "super_lights_return_speed": "Volta da luz",
   "tooltip_super_lights_return_speed": "A rapidez com que o escuro recua quando o mouse se mexe ou você desvia o olhar.",
+  "super_lights_follow": "Seguir olhos ou mouse",
+  "tooltip_super_lights_follow": "Ligado: só escurece enquanto você assiste a um vídeo, pelos seus olhos se a câmera estiver ligada, senão pelo mouse sobre o vídeo. Desligado: as bordas escurecem enquanto o mouse está parado.",
   "super_deck_flips": "Viradas até quebrar",
   "tooltip_super_deck_flips": "Mais ou menos quantas viradas uma carta aguenta antes de quebrar.",
   "super_deck_reach": "Alcance da quebra",

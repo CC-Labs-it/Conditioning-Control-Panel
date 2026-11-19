@@ -5837,6 +5837,8 @@
   "tooltip_super_lights_dim_speed": "暗さが広がる速さ。",
   "super_lights_return_speed": "明かりが戻る速さ",
   "tooltip_super_lights_return_speed": "マウスを動かしたときや目をそらしたときに暗さが引く速さ。",
+  "super_lights_follow": "目かマウスに合わせる",
+  "tooltip_super_lights_follow": "オン: 動画を見ている間だけ暗くなります。カメラが動いていれば目で、そうでなければ動画上のマウスで判断します。オフ: マウスが止まっている間、画面の端が暗くなります。",
   "super_deck_flips": "割れるまでの回数",
   "tooltip_super_deck_flips": "カードが割れるまでにめくれるおおよその回数。",
   "super_deck_reach": "割れの届く範囲",

@@ -5837,6 +5837,8 @@
   "tooltip_super_lights_dim_speed": "La vitesse à laquelle l'ombre arrive.",
   "super_lights_return_speed": "Retour de la lumière",
   "tooltip_super_lights_return_speed": "La vitesse à laquelle l'ombre recule quand la souris bouge ou que vous détournez le regard.",
+  "super_lights_follow": "Suivre les yeux ou la souris",
+  "tooltip_super_lights_follow": "Activé : l'ombre ne vient que pendant que vous regardez une vidéo, selon vos yeux si la caméra tourne, sinon selon la souris sur la vidéo. Désactivé : les bords s'assombrissent tant que la souris ne bouge pas.",
   "super_deck_flips": "Retournements avant casse",
   "tooltip_super_deck_flips": "À peu près combien de retournements une carte supporte avant de se briser.",
   "super_deck_reach": "Portée de la casse",

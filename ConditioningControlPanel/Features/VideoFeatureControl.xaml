@@ -480,6 +480,18 @@
                                        VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                        FontSize="13" FontWeight="Bold"/>
                         </Grid>
+                        <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_super_lights_follow}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{loc:Str super_lights_follow}" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                            <CheckBox Grid.Column="1" x:Name="ChkLightsFollow" Style="{StaticResource ToggleStyle}"
+                                      feat:OptionSection.Setting="LightsDownFollow"
+                                      feat:SessionLock.Owned="True" VerticalAlignment="Center"
+                                      Checked="ChkLightsFollow_Changed" Unchecked="ChkLightsFollow_Changed"/>
+                        </Grid>
                     </StackPanel>
                 </ctl:SuperBox>
             </StackPanel>

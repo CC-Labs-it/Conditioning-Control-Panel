@@ -2885,6 +2885,16 @@ namespace ConditioningControlPanel.Models
             set { _lightsDownReturnSpeed = SuperCore.LightsDownOptions.ClampReturnSpeed(value); OnPropertyChanged(); }
         }
 
+        private bool _lightsDownFollow = false;
+        /// <summary>Lights Down "Follow eyes or mouse" (owner, 2026-11-19, ccp-bugs #1672): on, the dim comes
+        /// in only while a video is watched (calibrated gaze when the camera already runs, else the mouse on a
+        /// video) and pulls back when not. Off (default, every older settings file): the reworked 7.3.1 effect.</summary>
+        public bool LightsDownFollow
+        {
+            get => _lightsDownFollow;
+            set { _lightsDownFollow = value; OnPropertyChanged(); }
+        }
+
         private int _deckFlips = SuperCore.DeckOptions.FlipsDefault;
         /// <summary>Deck: about how many flips a card takes before it breaks (each card rolls one either side).</summary>
         public int DeckFlips
