@@ -8843,6 +8843,7 @@
   "dares_help_renounce": "Renunciar: sem desafios por 7 dias, e o outro lado fica sabendo. Mais nada.",
   "dares_help_numbers": "Cada desafio do bilhete ganha um número. As palavras são escritas no Discord, por número. O app só mostra o número.",
   "dares_help_video": "HypnoTube e vídeos obrigatórios contam. Vários ao mesmo tempo contam uma vez.",
+  "dares_help_when": "As apostas se resolvem sozinhas: antes, se a meta for atingida, senão no prazo. Espere uns dois minutos.",
   "dares_cam_look": "Procuramos você algumas vezes por segundo e somamos o tempo em que você está lá.",
   "dares_cam_pass": "visto 60% do tempo = passou",
   "dares_cam_local": "Roda no seu PC. Nenhuma imagem sai dele. Só os segundos são enviados.",

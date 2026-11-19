@@ -493,6 +493,8 @@ public static class DareSlipRules
     public static string? HelpFor(DareStep s, DareDraft d) => s switch
     {
         DareStep.Camera => "dares_help_camera",
+        // Testers asked how to settle (2026-11-18): bets settle themselves, lazily, up to 2 min after the deadline.
+        DareStep.When => "dares_help_when",
         DareStep.What when d.Pending is DareKind.Video || d.What?.Kind == DareKind.Video => "dares_help_video",
         DareStep.What when d.What?.Kind == DareKind.Dare => "dares_help_numbers",
         DareStep.Mine or DareStep.Theirs when d.Pending is DareStakeKind.Lockdown => "dares_help_lockdown",

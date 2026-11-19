@@ -220,6 +220,7 @@ public class DareSlipUiTests
     {
         var d = WithMoth();
         Assert.Equal("dares_help_camera", DareSlipRules.HelpFor(DareStep.Camera, d));
+        Assert.Equal("dares_help_when", DareSlipRules.HelpFor(DareStep.When, d));
         d.Pending = DareKind.Video;
         Assert.Equal("dares_help_video", DareSlipRules.HelpFor(DareStep.What, d));
         d.Pending = DareStakeKind.Lockdown;

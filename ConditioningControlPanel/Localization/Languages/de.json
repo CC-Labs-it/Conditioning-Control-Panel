@@ -8843,6 +8843,7 @@
   "dares_help_renounce": "Verzichten: 7 Tage keine Wetten, und die andere Seite erfährt es. Sonst nichts.",
   "dares_help_numbers": "Jede Mutprobe auf dem Schein bekommt eine Nummer. Ihr Text wird in Discord geschrieben, nach Nummer. Die App zeigt nur die Nummer.",
   "dares_help_video": "HypnoTube und Pflichtvideos zählen. Mehrere gleichzeitig zählen einmal.",
+  "dares_help_when": "Wetten werden von selbst abgerechnet: früher, sobald das Ziel erreicht ist, sonst zur Frist. Gib ihnen zwei Minuten.",
   "dares_cam_look": "Wir schauen ein paar Mal pro Sekunde nach dir und zählen die Zeit, in der du da bist.",
   "dares_cam_pass": "60 % der Zeit gesehen = bestanden",
   "dares_cam_local": "Läuft auf deinem PC. Kein Bild verlässt ihn. Nur die Sekunden werden gesendet.",

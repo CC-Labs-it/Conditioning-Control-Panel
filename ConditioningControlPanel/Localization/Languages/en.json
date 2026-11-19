@@ -9598,6 +9598,7 @@
   "dares_help_renounce": "Renounce: no dares for 7 days, and they are told. Nothing else.",
   "dares_help_numbers": "Every dare on a slip gets a number. Its words are written in Discord, by number. The app only shows the number.",
   "dares_help_video": "HypnoTube and mandatory videos count. Several playing at once count once.",
+  "dares_help_when": "Bets settle on their own: early once the target is met, otherwise at the deadline. Give it two minutes.",
   "dares_cam_look": "We look for you a few times a second and add up the time you are there.",
   "dares_cam_pass": "seen 60% of the time = pass",
   "dares_cam_local": "Runs on your PC. No picture leaves it. Only the seconds are sent.",

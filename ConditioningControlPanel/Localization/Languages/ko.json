@@ -8843,6 +8843,7 @@
   "dares_help_renounce": "포기: 7일간 내기 금지, 상대에게 알려져요. 그 외는 없어요.",
   "dares_help_numbers": "쪽지의 미션마다 번호가 붙어요. 내용은 Discord에 번호별로 써요. 앱은 번호만 보여 줘요.",
   "dares_help_video": "HypnoTube와 필수 영상을 셉니다. 여러 개가 동시에 돌아도 한 번으로 셉니다.",
+  "dares_help_when": "내기는 자동으로 정산됩니다. 목표를 채우면 일찍, 아니면 마감 때. 2분 정도 기다려 주세요.",
   "dares_cam_look": "1초에 몇 번 당신을 찾아 있었던 시간을 더해요.",
   "dares_cam_pass": "60% 보이면 통과",
   "dares_cam_local": "이 PC 안에서만 돌아가요. 이미지는 나가지 않아요. 초만 보내요.",

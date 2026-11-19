@@ -8843,6 +8843,7 @@
   "dares_help_renounce": "Renoncer : pas de défis pendant 7 jours, et l'autre côté est prévenu. Rien d'autre.",
   "dares_help_numbers": "Chaque défi du ticket a un numéro. Ses mots s'écrivent sur Discord, par numéro. L'app ne montre que le numéro.",
   "dares_help_video": "HypnoTube et les vidéos obligatoires comptent. Plusieurs à la fois comptent une fois.",
+  "dares_help_when": "Les paris se règlent tout seuls. Plus tôt dès que l'objectif est atteint, sinon à l'échéance. Compte deux minutes.",
   "dares_cam_look": "On vous cherche quelques fois par seconde et on additionne le temps de présence.",
   "dares_cam_pass": "vu 60 % du temps = réussi",
   "dares_cam_local": "Tourne sur votre PC. Aucune image ne sort. Seules les secondes sont envoyées.",

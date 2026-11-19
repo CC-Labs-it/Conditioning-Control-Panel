@@ -8843,6 +8843,7 @@
   "dares_help_renounce": "Renunciar: sin retos durante 7 días, y la otra parte se entera. Nada más.",
   "dares_help_numbers": "Cada reto del boleto tiene un número. Sus palabras se escriben en Discord, por número. La app solo muestra el número.",
   "dares_help_video": "Cuentan HypnoTube y los vídeos obligatorios. Varios a la vez cuentan una vez.",
+  "dares_help_when": "Las apuestas se cierran solas: antes si se cumple el objetivo, si no, al llegar el plazo. Dales dos minutos.",
   "dares_cam_look": "Te buscamos unas veces por segundo y sumamos el tiempo que estás.",
   "dares_cam_pass": "visto el 60 % del tiempo = superado",
   "dares_cam_local": "Funciona en tu PC. Ninguna imagen sale. Solo se envían los segundos.",

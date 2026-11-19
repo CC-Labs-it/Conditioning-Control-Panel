@@ -9597,6 +9597,7 @@
   "dares_help_renounce": "Rinunciare: niente sfide per 7 giorni, e l'altra parte lo sa. Nient'altro.",
   "dares_help_numbers": "Ogni sfida sul biglietto ha un numero. Le parole si scrivono su Discord, per numero. L'app mostra solo il numero.",
   "dares_help_video": "Contano HypnoTube e i video obbligatori. Più video insieme contano una volta.",
+  "dares_help_when": "Le scommesse si chiudono da sole: prima se l'obiettivo è raggiunto, altrimenti alla scadenza. Serve un paio di minuti.",
   "dares_cam_look": "Ti cerchiamo qualche volta al secondo e sommiamo il tempo in cui ci sei.",
   "dares_cam_pass": "visto il 60% del tempo = superato",
   "dares_cam_local": "Funziona sul tuo PC. Nessuna immagine esce. Si inviano solo i secondi.",
