@@ -82,7 +82,7 @@ public class AwarenessProjectionGoldenTests
             "\"time_of_day\":\"Afternoon\"," +
             "\"weekday\":\"Monday\"," +
             "\"tier\":\"Rare\"," +
-            "\"trends\":[\"ReturnVisit(4)\"]," +
+            "\"trends\":[\"ReturnVisit(visit 4 today)\"]," +
             "\"ccp\":{\"session\":true,\"level\":41,\"login_streak\":9,\"achievement\":\"she_remembers\"}," +
             "\"media\":{\"state\":\"playing\",\"repeats\":5}," +
             "\"habits\":[]," +

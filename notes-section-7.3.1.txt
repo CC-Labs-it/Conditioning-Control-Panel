@@ -1,0 +1,49 @@
+BACK TO THE BASICS: 7.3.1
+
+7.3.0 gave the basics a V2. this one gives them a wardrobe, and fixes what you told us about the V2s.
+
+THE SHOP
+the Prize Counter is rebuilt. it is a sheet that drops down from your wallet now, not a room you walk through. look for the gold SHOP tag on the launcher, the panel wallet, Studio and EMI's desk.
+
+- tabs with their own emblem: Featured, Karts, Chess, Bubbles and effects, Accessories, Prime only, Back Room, Owned.
+- every item has a picture, a short "what it does", and a try-on before you buy.
+- after you buy or wear something, the shop tells you where it shows and takes you there.
+- Sparkles are one gold star everywhere, and every credit flies to your wallet.
+- a weekly gift, a stamp card for your first two weeks, and a "saving for" bar you can pin to one item.
+
+LOOKS FOR YOUR EFFECTS
+- Bubbles: seven skins. Soap, Marble, Heart, Champagne, Spiral, Disco, Frost. each has its own movement inside, its own pop and its own sound. the old pop is still there as a switch.
+- Deck cards: backs in Ink, Check and Lace, and Whisper, which puts a spiral with words coming at you on the back of every flip.
+- Subliminals: word styles. Typed, Chalk, Drift, Echo, Marquee.
+- Pink Filter: Two-tone, a second colour blended into the first.
+- what you own is picked in the effect's own options, next to everything else.
+
+CHESS AND KARTS
+- Piece by Piece: five piece finishes (Candy lacquer, Mineral strata, Liquid ribbons, Oil slick, Gold faultlines), four boards (Midnight Observatory, Glasshouse, Velvet Theatre, After Hours Arcade), and Emi as a cheerleader at your table.
+- chess and kart items sit on their own shelves now, easy to tell apart.
+
+PROFILE
+- profile frames are redrawn and they move: Lace, Ink Stamp, Gilt, Polaroid.
+- your own picture wears the frame everywhere you see it.
+
+V2, AFTER YOUR FEEDBACK
+- every settings page has a plain V2 on/off switch, and presets remember which V2s are on.
+- the old Back Room "Flashes v2" and "Bubbles v2" are called Extra Flashes and Extra Bubbles now. the Super effects are the V2.
+- Deck: the card takes the shape of the picture, so tall pictures no longer sit in an empty frame. the flip is quicker and steadier.
+- Deck keeps its cards when you own Shatter.
+- Steam: a pause between fog phrases, and a Reach slider for how far in the fog comes, from the edges only to the centre.
+- Two-tone moved into Steam's gold box, with a colour of your own next to the palette.
+- the V2 subliminals and the words in the fog wear your word style.
+- Subliminals: with the V2 on, the normal cards rest. "Also show the normal subliminals" runs both.
+- Lights Down is reworked. fullscreen: a soft dim around the screen that pulls back when you move the mouse or look away. floating videos: the whole screen dims from the edges and the videos stay lit, with a glow in your mod's colour.
+- the attention target does not run with floating videos. the page says so now and switches it off.
+- fog and the Whirlpool are much lighter on the processor.
+- the V2 star and three other icons no longer show as empty boxes.
+
+STUDIO
+- option pages are split into named sections (Basics and so on) that fold, and each one says how many things you changed.
+
+FIXES
+- fixed a "Collection was modified" crash while popping bubbles with Froth on.
+- a Games pill on Play opens the launcher's Games page.
+- takeover web videos go fullscreen again.

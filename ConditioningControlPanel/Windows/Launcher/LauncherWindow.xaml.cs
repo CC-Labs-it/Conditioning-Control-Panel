@@ -26,7 +26,7 @@ namespace ConditioningControlPanel.Launcher;
 /// <para>The decoration (particles, comets, sheen, the mascot) lives in the Fx partial and is
 /// gated there. Everything in this file must read and work with all of it switched off.</para>
 /// </summary>
-public partial class LauncherWindow : Window
+public partial class LauncherWindow : Window, ConditioningControlPanel.Services.PrizeCounter.ICounterSheetDoor
 {
     private const double TileRadius = 16;
 
@@ -57,8 +57,17 @@ public partial class LauncherWindow : Window
         Closed += OnClosedCleanup;
         LauncherHost.FadeOut = FadeOutThen;
         LauncherHost.RequestSignIn = OpenSignIn;
+        LauncherHost.OpenDoorPage = OpenDoorPage;
+        // A page swap shows the scroller with no layout yet: fit once it has a height.
+        GamesScroller.SizeChanged += (_, _) => FitTiles();
 
         SetUpSoundButton();
+        InitializeSparkleFly();
+
+        // The Prize Counter sheet slides down under the title bar, inside this window; the veil and
+        // the window edge stay above its scrim.
+        _counterSheet = ConditioningControlPanel.Controls.CounterSheetView.Mount(this, RootGrid, TitleBar,
+            Services.PrizeCounter.CounterSheetRules.FromLauncher, insertAt: RootGrid.Children.IndexOf(LockdownVeil), walletChip: () => WalletChip);
 
         var mods = App.Mods;
         if (mods != null) mods.ModChanged += OnModChanged;
@@ -101,6 +110,9 @@ public partial class LauncherWindow : Window
         try
         {
             FadeIn();
+            // The panel asked for a door (LauncherHost.ShowDoor): open on its page, no swap.
+            if (LauncherHost.TakePendingDoor() is { } asked) _door = asked;
+            _doorsEnter = true;
             BuildTiles();
             RefreshAccount();
             RefreshMod();
@@ -174,6 +186,7 @@ public partial class LauncherWindow : Window
         _shortcutTextTimer.Stop();
         StopOpenTables();
         LauncherHost.RequestSignIn = null;
+        LauncherHost.OpenDoorPage = null;
         UnhookEngine();
         var mods = App.Mods;
         if (mods != null) mods.ModChanged -= OnModChanged;
@@ -245,8 +258,11 @@ public partial class LauncherWindow : Window
 
     private void AccountChip_Click(object sender, RoutedEventArgs e) => OpenPanelTab("appsettings");
 
-    /// <summary>The wallet chip opens the Prize Counter over the launcher: the same door as the
-    /// panel's SparkleWallet (owner, 2026-10-29). The counter is its own window; the launcher stays.</summary>
+    private readonly ConditioningControlPanel.Controls.CounterSheetView _counterSheet;
+    ConditioningControlPanel.Controls.CounterSheetView? Services.PrizeCounter.ICounterSheetDoor.CounterSheet => _counterSheet;
+
+    /// <summary>The wallet chip slides the Prize Counter sheet down under the title bar, inside this
+    /// window (owner, 2026-11-17; PrizeCounterHostService.Sheet.cs); a second press closes it.</summary>
     private void WalletChip_Click(object sender, RoutedEventArgs e)
     {
         LauncherSfx.Click();
@@ -300,7 +316,7 @@ public partial class LauncherWindow : Window
     {
         try
         {
-            var now = LauncherCatalogue.Games.Where(g => g.Available)
+            var now = LauncherCatalogue.All.Where(g => g.Available)
                 .Select(g => new KeyValuePair<string, bool>(g.Id, g.Revealed));
             if (!LauncherTileRefresh.ShouldRebuild(trigger, IsVisible, _revealedAtBuild, now)) return;
             Log.Information("[Launcher] {Trigger} redrawing tiles", trigger);
@@ -540,9 +556,13 @@ public partial class LauncherWindow : Window
         _tiles.Clear();
         _tileById.Clear();
         _revealedAtBuild.Clear();
-        foreach (var entry in LauncherCatalogue.Games.Where(g => g.Available))
-        {
+        // The reveal record covers every card, shown or not, so a grant flip behind a closed door
+        // still repaints the page when it next opens (and the doors' collage now).
+        foreach (var entry in LauncherCatalogue.All.Where(g => g.Available))
             _revealedAtBuild[entry.Id] = entry.Revealed;
+        // Only the open door's page is tiled; the doors themselves leave the grid empty.
+        foreach (var entry in PageEntries())
+        {
             try
             {
                 var tile = CreateTile(entry);
@@ -552,6 +572,7 @@ public partial class LauncherWindow : Window
             }
             catch (Exception ex) { Log.Warning(ex, "[Launcher] tile {Id} failed to build", entry.Id); }
         }
+        ApplyDoorView();
         FitTiles();
     }
 
@@ -653,7 +674,12 @@ public partial class LauncherWindow : Window
             double xp = Math.Max(0, s.PlayerXP);
             double need = 0;
             try { need = App.Progression?.GetXPForLevel(level) ?? 0; } catch { }
-            int sparkles = Math.Max(0, s.SkillPoints);
+            // The same rule as the chip and the panel wallet: the DEBUG shop preview shows its own wallet, marked.
+            var wallet = MainWindow.HeaderWalletValue(s.SkillPoints);
+            int sparkles = wallet.PreviewMark ? wallet.Value : Math.Max(0, s.SkillPoints);
+#if DEBUG
+            MarkPreview(StatSparkles.Parent as Panel, wallet.PreviewMark);
+#endif
             double minutes = Math.Max(0, s.TotalConditioningMinutes);
 
             MotionFx.Odometer(StatLevel, _shownLevel, level, "{0:0}", _shownLevel == 0 ? 0.9 : 0.5);

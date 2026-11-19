@@ -329,7 +329,7 @@ namespace ConditioningControlPanel.Controls
             if (_paused || _faults >= FaultLimit) return false;
             if (!IsLoaded || !IsVisible) return false;
             if (_targetFps <= 0) return false;
-            if (!MotionFx.AllowAmbientLoops) return false;
+            if (!MotionFx.AmbientAllowedByLevel) return false;
             var w = _window;
             if (w != null)
             {

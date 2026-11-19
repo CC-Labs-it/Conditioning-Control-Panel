@@ -35,7 +35,8 @@ namespace ConditioningControlPanel
         {
             try
             {
-                ApplyProfileCosmetics(CosmeticsCatalog.SanitizeOwn(App.Settings?.Current?.ProfileCosmetics));
+                // The own frame and picture come through the one seam: the DEBUG shop preview shows its own there.
+                ApplyProfileCosmetics(OwnProfileLook.Overlay(CosmeticsCatalog.SanitizeOwn(App.Settings?.Current?.ProfileCosmetics)));
             }
             catch (Exception ex) { App.Logger?.Debug("ApplyOwnProfileCosmetics: {E}", ex.Message); }
         }
@@ -354,7 +355,9 @@ namespace ConditioningControlPanel
         {
             try
             {
-                var current = CosmeticsCatalog.SanitizeOwn(App.Settings?.Current?.ProfileCosmetics);
+                var real = CosmeticsCatalog.SanitizeOwn(App.Settings?.Current?.ProfileCosmetics);
+                // The dialog shows the frame and picture the own surfaces wear (the preview's, in the DEBUG shop preview).
+                var current = OwnProfileLook.Overlay(real);
                 var unlocked = App.Achievements?.Progress?.UnlockedAchievements;
 
                 // The wardrobe editor's stage shows your avatar - but only when YOUR card is on
@@ -372,7 +375,15 @@ namespace ConditioningControlPanel
                 { Owner = this };
                 if (dialog.ShowDialog() != true) return;
 
-                PersistOwnCosmetics(CosmeticsCatalog.SanitizeOwn(dialog.Result));
+                var result = dialog.Result;
+                // Preview: frame and picture go to the preview file only; the account keeps its own two.
+                if (OwnProfileLook.SaveToPreview(result.FrameId, result.AvatarId))
+                {
+                    result = result.Clone();
+                    result.FrameId = real.FrameId;
+                    result.AvatarId = real.AvatarId;
+                }
+                PersistOwnCosmetics(CosmeticsCatalog.SanitizeOwn(result));
             }
             catch (Exception ex)
             {
@@ -422,6 +433,8 @@ namespace ConditioningControlPanel
 
             // Repaint immediately; the card on screen is the point.
             ApplyOwnProfileCosmetics();
+            // ...and every other own surface (account chip, friends chip and drawer).
+            OwnProfileLook.Raise();
 
             // An empty loadout normally rides as null ("no change") so a fresh machine cannot
             // wipe the account before it has read it — but an explicit save of an empty loadout
@@ -449,10 +462,12 @@ namespace ConditioningControlPanel
         private void InitializeProfileEquip()
         {
             ProfileEquipSync.Adopted += OnProfileEquipAdopted;
+            OwnProfileLook.Changed += OnOwnLookChanged;
             if (App.ProfileSync != null) App.ProfileSync.ProfileLoaded += OnProfileEquipProfileLoaded;
             Closed += (_, _) =>
             {
                 ProfileEquipSync.Adopted -= OnProfileEquipAdopted;
+                OwnProfileLook.Changed -= OnOwnLookChanged;
                 if (App.ProfileSync != null) App.ProfileSync.ProfileLoaded -= OnProfileEquipProfileLoaded;
             };
             // A launcher-first boot can load the profile before this window exists.
@@ -460,12 +475,41 @@ namespace ConditioningControlPanel
         }
 
         private void OnProfileEquipProfileLoaded(object? sender, EventArgs e)
-            => Dispatcher.BeginInvoke(new Action(() => _ = ProfileEquipSync.PullOnceAsync()));
+            => Dispatcher.BeginInvoke(new Action(() =>
+            {
+                _ = ProfileEquipSync.PullOnceAsync();
+                // The screen effect looks follow the account the same way (once per account per launch).
+                if (Services.Prizes.AccountLookStore.ForRelay() is { } looks) _ = looks.PullOnceAsync();
+            }));
 
-        private void OnProfileEquipAdopted()
+        private void OnProfileEquipAdopted() => OwnProfileLook.Raise();
+
+        /// <summary>The Prize Counter's "See it on your profile": once the page has settled, one highlight ring round
+        /// your avatar (OwnAvatarPulse: none with motion Off, softer with Gentle visuals).</summary>
+        internal void PulseOwnAvatarSoon()
         {
-            if (_profileViewingSelf) ApplyOwnProfileCosmetics();
-            RefreshProfileBubble();
+            var plan = OwnAvatarPulse.For(App.Settings?.Current?.MotionLevel ?? MotionLevel.Full, Services.Safety.GentleVisuals.On);
+            if (plan is not { } p) return;
+            var timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(OwnAvatarPulse.DelayMs) };
+            timer.Tick += (_, _) =>
+            {
+                timer.Stop();
+                try { if (_profileViewingSelf && DiscordTab?.IsVisible == true) DiscordTab.ProfileHeroAvatar?.Pulse(p); }
+                catch (Exception ex) { App.Logger?.Debug("PulseOwnAvatarSoon: {E}", ex.Message); }
+            };
+            timer.Start();
+        }
+
+        /// <summary>The own frame or picture changed (a counter Wear, the dialog, another device, the preview):
+        /// the card when it is yours, and the account chip.</summary>
+        private void OnOwnLookChanged()
+        {
+            try
+            {
+                if (_profileViewingSelf) ApplyOwnProfileCosmetics();
+                RefreshProfileBubble();
+            }
+            catch (Exception ex) { App.Logger?.Debug("OnOwnLookChanged: {E}", ex.Message); }
         }
 
         // ============================== click-to-pin ==============================

@@ -29,6 +29,8 @@ public sealed class PrizeCounterRelay
 {
     public const string OpState = "shop-state";
     public const string OpBuy = "shop-buy";
+    /// <summary>The sheet's Wear for a screen effect look (POST /v2/shop/equip { slot, itemId|null }); answers a state body.</summary>
+    public const string OpEquip = "shop-equip";
 
     /// <summary>Under the page's own 15 s wait (host.js), so the page always hears our answer.</summary>
     public static readonly TimeSpan Timeout = TimeSpan.FromSeconds(12);
@@ -59,6 +61,15 @@ public sealed class PrizeCounterRelay
 
     public static JObject Refusal(string reason) => new() { ["ok"] = false, ["reason"] = reason };
 
+    /// <summary>The sheet's own three (CCP-Server shop-routes.js "7.3 SHEET ADDITIONS"): the weekly gift, a stamp,
+    /// the row being saved for. Until 2026-11-17 only the DEBUG preview answered them, so the real server
+    /// never heard a press.</summary>
+    public const string OpGift = "shop-gift", OpStamp = "shop-stamp", OpGoal = "shop-goal";
+
+    /// <summary>What this app can draw that older ones cannot (server shop.js envForCaps): the 7.3.1 chess rows
+    /// (finishes, boards, seated Emi) are listed and sold only to a request that says so.</summary>
+    public const string Caps = "chess2";
+
     /// <summary>The whitelist. Exact, case-sensitive.</summary>
     public static bool TryRoute(string? op, out HttpMethod method, out string path)
     {
@@ -66,6 +77,10 @@ public sealed class PrizeCounterRelay
         {
             case OpState: method = HttpMethod.Get; path = "/v2/shop/state"; return true;
             case OpBuy: method = HttpMethod.Post; path = "/v2/shop/buy"; return true;
+            case OpEquip: method = HttpMethod.Post; path = "/v2/shop/equip"; return true;
+            case OpGift: method = HttpMethod.Post; path = "/v2/shop/gift"; return true;
+            case OpStamp: method = HttpMethod.Post; path = "/v2/shop/stamp"; return true;
+            case OpGoal: method = HttpMethod.Post; path = "/v2/shop/goal"; return true;
             default: method = HttpMethod.Get; path = string.Empty; return false;
         }
     }
@@ -78,7 +93,26 @@ public sealed class PrizeCounterRelay
         HttpRequestMessage req;
         if (method == HttpMethod.Get)
         {
-            req = new HttpRequestMessage(HttpMethod.Get, $"{BackRoomApi.BaseUrl}{path}?unified_id={Uri.EscapeDataString(id.UnifiedId)}");
+            req = new HttpRequestMessage(HttpMethod.Get, $"{BackRoomApi.BaseUrl}{path}?unified_id={Uri.EscapeDataString(id.UnifiedId)}&caps={Caps}");
+        }
+        else if (op == OpEquip)
+        {
+            var o = new JObject { ["slot"] = body?["slot"]?.DeepClone(), ["itemId"] = body?["itemId"]?.DeepClone() ?? JValue.CreateNull(), ["caps"] = Caps, ["unified_id"] = id.UnifiedId };
+            req = new HttpRequestMessage(HttpMethod.Post, BackRoomApi.BaseUrl + path)
+            {
+                Content = new StringContent(o.ToString(Formatting.None), Encoding.UTF8, "application/json"),
+            };
+        }
+        else if (op is OpGift or OpStamp or OpGoal)
+        {
+            // Nothing of the page's but the goal's row: the reply is a whole state, so it carries the caps too.
+            var o = new JObject { ["caps"] = Caps };
+            if (op == OpGoal) o["itemId"] = body?["itemId"]?.DeepClone() ?? JValue.CreateNull();
+            o["unified_id"] = id.UnifiedId;
+            req = new HttpRequestMessage(HttpMethod.Post, BackRoomApi.BaseUrl + path)
+            {
+                Content = new StringContent(o.ToString(Formatting.None), Encoding.UTF8, "application/json"),
+            };
         }
         else
         {
@@ -88,8 +122,11 @@ public sealed class PrizeCounterRelay
                 ["itemId"] = body?["itemId"]?.DeepClone(),
                 ["catalogVersion"] = body?["catalogVersion"]?.DeepClone(),
                 ["week"] = body?["week"]?.DeepClone(),
+                ["caps"] = Caps,
                 ["unified_id"] = id.UnifiedId,
             };
+            // The stamp card's coupon: only ever the literal true (the server refuses anything else).
+            if (body?["coupon"] is JValue { Type: JTokenType.Boolean } c && c.Value<bool>()) o["coupon"] = true;
             req = new HttpRequestMessage(HttpMethod.Post, BackRoomApi.BaseUrl + path)
             {
                 Content = new StringContent(o.ToString(Formatting.None), Encoding.UTF8, "application/json"),
@@ -102,8 +139,17 @@ public sealed class PrizeCounterRelay
     /// <summary>One page request to one body. Never throws.</summary>
     public async Task<JObject> RelayAsync(string? op, JObject? body, string? idem, CancellationToken ct = default)
     {
+#if DEBUG
+        // The DEBUG shop preview (CCP_SHOP_PREVIEW=1) answers locally: no server, no token, no real wallet.
+        if (ShopPreviewBackend.Enabled) return ShopPreviewBackend.Shared.Handle(op, body, idem);
+#endif
         if (!TryRoute(op, out _, out _)) return Refusal("bad_input");
         if (op == OpBuy && (string.IsNullOrWhiteSpace(idem) || body?["itemId"] is not JValue { Type: JTokenType.String }))
+            return Refusal("bad_input");
+        if (op == OpEquip && (body?["slot"] is not JValue { Type: JTokenType.String }
+            || body["itemId"] is { Type: not (JTokenType.String or JTokenType.Null) }))
+            return Refusal("bad_input");
+        if (op == OpGoal && body?["itemId"] is { Type: not (JTokenType.String or JTokenType.Null) })
             return Refusal("bad_input");
         bool offline;
         try { offline = _offline(); } catch { offline = false; }
@@ -123,7 +169,7 @@ public sealed class PrizeCounterRelay
                 // The account changed under the request: its answer belongs to nobody signed in now.
                 if (SafeIdentity()?.UnifiedId != id.Value.UnifiedId) return Refusal("signed_out");
                 MergedAccountRecovery.TryHandle((int)res.StatusCode, text);
-                return Read(op!, id.Value.UnifiedId, res.IsSuccessStatusCode, text);
+                return Read(op!, id.Value.UnifiedId, res.IsSuccessStatusCode, text, op == OpEquip ? (string?)body?["slot"] : null);
             }
             catch (OperationCanceledException) { return Refusal("offline"); }
             catch (HttpRequestException ex)
@@ -140,12 +186,15 @@ public sealed class PrizeCounterRelay
     /// the wallet to a number the server did not settle.</summary>
     public bool HandleWalletFrame(int sp)
     {
+#if DEBUG
+        if (ShopPreviewBackend.Enabled) return false;   // a preview receipt never moves the real wallet
+#endif
         if (_lastReceipt is not { } last || last.Sp != sp) return false;
         Adopt(last.Account, true, sp);
         return true;
     }
 
-    private JObject Read(string op, string sentFor, bool success, string text)
+    private JObject Read(string op, string sentFor, bool success, string text, string? wroteSlot = null)
     {
         JObject? o = null;
         try { o = JsonConvert.DeserializeObject(text) as JObject; } catch { }
@@ -161,7 +210,29 @@ public sealed class PrizeCounterRelay
         }
         if (ok || reason == "owned") ApplyPrizes(sentFor, o["prizes"]);
         if (op == OpBuy && ok) NoteBuyLanded();
+        NoteLooks(op, sentFor, ok, reason, o, wroteSlot);
         return o;
+    }
+
+    /// <summary>The account look store (<see cref="Prizes.AccountLookStore"/>): null = none (the DEBUG preview, tests).
+    /// Unset = the app's own store.</summary>
+    internal Prizes.AccountLookStore? Looks { get => _looksSet ? _looks : Prizes.AccountLookStore.ForRelay(); init { _looks = value; _looksSet = true; } }
+    private readonly Prizes.AccountLookStore? _looks;
+    private readonly bool _looksSet;
+
+    /// <summary>A state body with looks settles the store (and, with a pick owed here, shows the page that pick);
+    /// a refused equip tells the store whether the server sells looks at all.</summary>
+    private void NoteLooks(string op, string sentFor, bool ok, string? reason, JObject o, string? wroteSlot)
+    {
+        try
+        {
+            var looks = Looks;
+            if (looks == null) return;
+            if (!ok) { looks.CounterRefused(op, reason); return; }
+            if (op is OpState or OpEquip && o["equip"] is JObject)
+                looks.FromCounter(sentFor, o, wroteSlot);
+        }
+        catch (Exception ex) { App.Logger?.Debug("PrizeCounter looks note failed: {E}", ex.Message); }
     }
 
     /// <summary>A buy receipt, or a buy refused for want of Sparkles: the two replies whose balance

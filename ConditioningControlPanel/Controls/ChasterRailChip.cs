@@ -358,6 +358,8 @@ namespace ConditioningControlPanel.Controls
             catch (Exception ex) { App.Logger?.Debug("[Chaster] rail chip could not wire: {E}", ex.Message); }
             Apply();
             StartIdle();
+            MotionFx.AmbientChanged -= OnAmbientChanged;
+            MotionFx.AmbientChanged += OnAmbientChanged;
         }
 
         private void Unwire()
@@ -377,6 +379,7 @@ namespace ConditioningControlPanel.Controls
             catch { /* teardown races are not worth a log line */ }
             _tick?.Stop();
             _tick = null;
+            MotionFx.AmbientChanged -= OnAmbientChanged;
             StopIdle();
         }
 
@@ -662,6 +665,12 @@ namespace ConditioningControlPanel.Controls
                 _swing.BeginAnimation(RotateTransform.AngleProperty, swing);
             }
             catch (Exception ex) { App.Logger?.Debug("[Chaster] rail chip idle: {E}", ex.Message); }
+        }
+
+        /// <summary>The ambient gate moved (show start or stop, motion level): the idle loop re-reads it.</summary>
+        private void OnAmbientChanged()
+        {
+            if (MotionFx.AllowAmbientLoops) StartIdle(); else StopIdle();
         }
 
         private void StopIdle()

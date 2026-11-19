@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using ConditioningControlPanel.Controls.Dares;
 using ConditioningControlPanel.Controls.Friends;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Friends;
@@ -209,36 +210,43 @@ public sealed class LeashDrawerSection : StackPanel
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var content = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-        Brush accent = state switch
+        // A wide tile in the card's one family (the Dares paint box), its (?) joined on as a square
+        // segment of the same height: no ovals (owner 2026-11-18).
+        Color accent = state switch
         {
-            LeashUiRules.OfferChip.Sent => FriendsLook.MintBrush,
-            LeashUiRules.OfferChip.Greyed => FriendsLook.DimBrush,
-            _ => FriendsLook.GoldBrush,
+            LeashUiRules.OfferChip.Sent => DareLook.Tick,
+            LeashUiRules.OfferChip.Greyed => DareLook.ToneColor(DareTone.CameraOff),
+            _ => DareLook.Gold,
         };
-        var ic = LeashLook.Icon("link", accent, 14);
-        ic.Margin = new Thickness(0, 0, 7, 0);
-        content.Children.Add(ic);
-        var label = FriendsLook.Label(Loc.Get(state switch
+        var label = DareLook.Words(Loc.Get(state switch
         {
             LeashUiRules.OfferChip.Sent => "leash_offer_sent",
             LeashUiRules.OfferChip.Holding => "leash_offer_holding",
             _ => "leash_offer",
-        }), 13, accent, FriendsLook.Display, FontWeights.Medium);
+        }), 16, DareLook.CardInkBrush, weight: FontWeights.Bold);
         label.Tag = "leash-offer-label";
-        content.Children.Add(label);
+        var words = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
+        words.Children.Add(label);
         if (state == LeashUiRules.OfferChip.Sent && OfferStep(f.Id) is { } step)
         {
             // How far the offer got: arrived, seen (the answer ends it and the chip moves on).
-            var w = FriendsLook.Label("  ·  " + Loc.Get(LeashUiRules.StepKey(step)), 11, FriendsLook.LilacBrush, FriendsLook.Mono);
-            w.VerticalAlignment = VerticalAlignment.Center;
+            var w = DareLook.Words("  ·  " + Loc.Get(LeashUiRules.StepKey(step)), 14, DareLook.PrintBrush);
             w.Tag = "leash-offer-step:" + step.ToString().ToLowerInvariant();
-            content.Children.Add(w);
+            words.Children.Add(w);
         }
-        var chip = FriendsLook.Pill(content, FriendsLook.Frozen(Color.FromArgb(0x22, 0xFF, 0xCF, 0x6B)), accent,
-            state == LeashUiRules.OfferChip.Sent ? FriendsLook.Frozen(LeashLook.MintDeep) : LeashLook.GoldDeepBrush, 999, new Thickness(10, 6, 10, 6));
-        chip.Tag = "leash-offer";
+        var content = new Grid();
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        content.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        content.Children.Add(DareLook.Block(LeashLook.Icon("link", DareLook.WhiteBrush, 18), accent));
+        words.Margin = new Thickness(8, 0, 0, 1);
+        Grid.SetColumn(words, 1);
+        content.Children.Add(words);
+        // Offered or held is done, so it sits pressed in (ON IS PRESSED IN) at full strength; only a
+        // friend away too long fades.
+        bool done = state is LeashUiRules.OfferChip.Sent or LeashUiRules.OfferChip.Holding;
+        var chip = DareLook.PressTile(content, accent, done, "leash-offer", label.Text);
         chip.IsEnabled = state == LeashUiRules.OfferChip.Offer;
+        if (done) chip.Opacity = 1;
         if (state == LeashUiRules.OfferChip.Greyed) chip.ToolTip = Loc.Get("leash_offer_greyed");
         var result = FriendsLook.Label("", 11, FriendsLook.GoldBrush);
         chip.Click += async (_, _) =>
@@ -257,8 +265,11 @@ public sealed class LeashDrawerSection : StackPanel
             await System.Threading.Tasks.Task.CompletedTask;
         };
         row.Children.Add(chip);
-        var help = LeashLook.Help(LeashExplainRole.Offer);
-        help.Margin = new Thickness(6, 0, 0, 0);
+        var q = DareLook.Words("?", 18, DareLook.CardInkBrush, weight: FontWeights.Bold);
+        q.HorizontalAlignment = HorizontalAlignment.Center;
+        var help = LeashLook.WireHelp(DareLook.PressTile(q, accent, false, "", Loc.Get("leash_help"), new Thickness(11, 0, 11, 0)),
+            LeashExplainRole.Offer);
+        help.Margin = new Thickness(3, 0, 0, 0);
         Grid.SetColumn(help, 1);
         row.Children.Add(help);
         return row;

@@ -127,6 +127,9 @@ namespace ConditioningControlPanel.Services.Safety
             bool glassroadInFront = false, bool glassroadReady = false)
         {
             if (!claimed) return KeptEscapePage.None;
+            // The Prize Counter keeps Escape as its back (confirm card, preview, leave), never a close. It
+            // comes first: its sheet now opens INSIDE a game window, so that game reads as in front too.
+            if (counterInFront) return counterReady ? KeptEscapePage.Counter : KeptEscapePage.None;
             if (raceInFront) return raceReady ? KeptEscapePage.Race : KeptEscapePage.None;
             if (boardInFront) return boardReady ? KeptEscapePage.Board : KeptEscapePage.None;
             if (breakoutInFront) return breakoutReady ? KeptEscapePage.Breakout : KeptEscapePage.None;
@@ -135,8 +138,6 @@ namespace ConditioningControlPanel.Services.Safety
             if (goonInFront) return goonReady ? KeptEscapePage.Goon : KeptEscapePage.None;
             if (roomInFront) return roomReady ? KeptEscapePage.Room : KeptEscapePage.None;
             if (intakeInFront) return intakeReady ? KeptEscapePage.Intake : KeptEscapePage.None;
-            // The Prize Counter keeps Escape as its back (confirm card, preview, leave), never a close.
-            if (counterInFront) return counterReady ? KeptEscapePage.Counter : KeptEscapePage.None;
             if (glassroadInFront) return glassroadReady ? KeptEscapePage.Glassroad : KeptEscapePage.None;
             return KeptEscapePage.None;
         }

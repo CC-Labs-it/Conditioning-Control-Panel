@@ -902,5 +902,40 @@ namespace ConditioningControlPanel.Services
                 return false;
             }
         }
+
+        // ===================== Super Lights Down (floating) =====================
+
+        /// <summary>Lights Down: the video on screen floats (one LibVLC window or the browser instances).</summary>
+        internal bool FloatingVideoUp => FloatingOnScreen;
+
+        /// <summary>Lights Down: every screen a floating video may open on (the Video panel's monitor pick).</summary>
+        internal static Screen[] FloatingVideoScreens() => VideoScreens();
+
+        /// <summary>
+        /// Lights Down: the floating windows a player can see right now, by HWND, in physical pixels.
+        /// A window still veiled before its first frame is left out (a halo around nothing), and a
+        /// closing one is already gone from the list, so its hole eases shut where it was.
+        /// </summary>
+        internal void CopyFloatingVideoRects(List<(IntPtr Hwnd, System.Drawing.Rectangle Rect)> into)
+        {
+            into.Clear();
+            try
+            {
+                foreach (var c in _floaters)
+                {
+                    if (!c.Revealed || c.Closed) continue;
+                    var hwnd = new WindowInteropHelper(c.Window).Handle;
+                    if (hwnd == IntPtr.Zero) continue;
+                    into.Add((hwnd, InstanceRectNow(c)));
+                }
+                if (IsFloating && _primaryVideoWindow is { IsVisible: true } w)
+                {
+                    var hwnd = new WindowInteropHelper(w).Handle;
+                    if (hwnd != IntPtr.Zero && GetWindowRect(hwnd, out var r) && r.Right > r.Left && r.Bottom > r.Top)
+                        into.Add((hwnd, new System.Drawing.Rectangle(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top)));
+                }
+            }
+            catch (Exception ex) { Diag.Swallowed(ex); }
+        }
     }
 }

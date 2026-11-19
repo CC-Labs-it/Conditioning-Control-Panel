@@ -851,7 +851,7 @@ public class SkillTreeService : IDisposable
 
         var pointsAwarded = levelsGained * PointsPerLevel;
         var previousPoints = settings.SkillPoints;
-        settings.SkillPoints += pointsAwarded;
+        Services.Prizes.SparklesLedger.Write(settings, settings.SkillPoints + pointsAwarded, Services.Prizes.SparkleSource.LevelUp);
         var creditedBalance = settings.SkillPoints;
 
         // Track total skill points earned (for stats)

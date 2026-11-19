@@ -16,12 +16,13 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <!-- The page word has one fixed width per section (FixCrumbWidth) and the track keeps
                  its height when Settings hides it, so pills never move and every header row is
                  the same height. -->
-            <StackPanel x:Name="CrumbPanel" Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,18,0">
+            <StackPanel x:Name="CrumbPanel" Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,9,0">
                 <Button x:Name="CrumbSection" Cursor="Hand" Focusable="True" Padding="0"
                         Background="Transparent" BorderThickness="0" Click="CrumbSection_Click">
                     <Button.Template>
@@ -81,6 +82,34 @@
                 <TextBlock x:Name="MovedNoteText" FontSize="12.5" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextLightBrush}" />
             </Border>
+
+            <!-- Declutter wave 1 (2026-11-15): ONE help button for the strip, at its right end. It
+                 shows the help line of the pill that is lit (RefreshHelp); the per-pill "?" badges
+                 are gone. Neutral chrome: no hue, no border at rest. Hidden (not collapsed) when
+                 the page has no help line, so the row never shifts. -->
+            <Button x:Name="HelpButton" Grid.Column="3" Width="22" Height="22" Margin="2,0,0,0"
+                    VerticalAlignment="Center" Cursor="Help" Focusable="True" Padding="0"
+                    Background="Transparent" BorderThickness="0" Visibility="Hidden"
+                    AutomationProperties.AutomationId="NavStripHelp" Click="HelpButton_Click">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="11"
+                                BorderThickness="2" BorderBrush="Transparent">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#14FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="#CCFFFFFF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+                <TextBlock Text="?" FontSize="13" FontWeight="Bold" Margin="0,-1,0,0"
+                           Foreground="{DynamicResource TextLightBrush}" />
+            </Button>
         </Grid>
         <Border x:Name="AccentLine" Grid.Row="1" CornerRadius="1" Opacity="0.85" />
     </Grid>

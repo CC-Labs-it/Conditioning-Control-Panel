@@ -120,7 +120,11 @@ namespace ConditioningControlPanel.Controls.NavRail
             bool pressed = p.Pressed;
             bool hovered = p.Pill.IsMouseOver || p.Hovered;
             double y = DepthRules.TravelFor(true, pressed, active, hovered: false);
-            double drop = DepthRules.ShadowFor(true, pressed, active, hovered);
+            // Declutter wave 1: a resting pill has no face, so it casts no drop either; the
+            // pointer brings both back.
+            PaintFace(p);
+            double drop = NavStripRules.ShowsFace(active, hovered, pressed)
+                ? DepthRules.ShadowFor(true, pressed, active, hovered) : 0;
 
             if (p.Drop != null)
             {

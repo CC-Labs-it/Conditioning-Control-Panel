@@ -45,6 +45,9 @@ internal static partial class GlassroadHostService
     }
 
     private static ChaosWebViewHost? _host;
+
+    /// <summary>This game's window, for the Prize Counter sheet its door opens over it (PrizeCounterHostService.Sheet.cs).</summary>
+    internal static ChaosWebViewHost? CounterHost => _host;
     private static CoreWebView2? _core;
     private static DispatcherTimer? _watch;
     private static DateTime _lastHeartbeatUtc, _lastProgressUtc;
@@ -315,7 +318,7 @@ internal static partial class GlassroadHostService
     private static bool _counterOpen;
 
     /// <summary>The garage's Prize Counter row (7.2 contract 1, owner call: no per-game relay): pause the page and
-    /// open the counter WINDOW over it on the kart tab (the shared seam, <c>Launch(from, tab, onClosed)</c>). When
+    /// open the counter sheet inside this window on the kart tab (the shared seam, <c>Launch(from, tab, onClosed)</c>). When
     /// the counter closes the page gets the owned frame again, so a look bought there lights up even if no
     /// ownership event reached us.</summary>
     private static void OpenPrizeCounter()

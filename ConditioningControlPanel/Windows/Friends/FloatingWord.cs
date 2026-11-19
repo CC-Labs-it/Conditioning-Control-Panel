@@ -104,7 +104,7 @@ internal sealed class FloatingWord : Window
         op.Completed += (_, _) => SafeClose();
         text.BeginAnimation(OpacityProperty, op);
 
-        if (full && MotionFx.AllowParticles) Sparks(canvas, cx, cy, colour);
+        if (full && MotionFx.ParticlesAllowedByLevel) Sparks(canvas, cx, cy, colour);
     }
 
     /// <summary>A dozen short streaks thrown out of the word at the pop, gold and the word's colour.</summary>

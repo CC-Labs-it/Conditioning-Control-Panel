@@ -22,13 +22,15 @@ import { createDirector } from './board/director.js';
 import { createDriverSwitch, startOnlineMatch, startWatchMatch } from './net/online.js';
 import { setWatchPolicy, setLookSource } from './net/api.js';
 import { createAttachments } from './board/attachments.js';
+import { createBoardOrnaments } from './board/ornaments.js';
+import { setFinishTime } from './board/finishes.js';
 import { createWear } from './skins/wear.js';
 import { DEFAULT_MS } from './game/clock.js';
 import { postToHost, onHostMessage, onIdentity, signalReady, isHosted } from './bridge.js';
 import { showSlip } from './sparkles-slip.js';
 import { createPauseHush } from './ui/pause-hush.js';
 import { createHostEscape, HOST_ESCAPE } from './ui/host-escape.js';
-import { presentation } from './game/preferences.js';
+import { presentation, onPresentation, boardMotionScale } from './game/preferences.js';
 import { pictureChoice } from './ui/pictures.js';
 import { createIqLive } from './game/iq.js';
 import { readSolo, setSoloIq, patchSoloIq } from './game/save.js';
@@ -76,16 +78,44 @@ function main() {
   // spring out of it when pieces.js builds it.
   const jiggle = createJiggle();
   const anim = createAnim({ group: view.pieceGroup, jiggle });
-  const pieces = createPieces({ group: view.pieceGroup, hooks: anim.hooks, jiggle, attachments: createAttachments() });
+  const attachments = createAttachments();
+  const pieces = createPieces({ group: view.pieceGroup, hooks: anim.hooks, jiggle, attachments });
+  const ornaments = createBoardOrnaments({ scene: view.scene, attachments });
+  let boardTheme = null;
+  let themeEffects = null;
+  let themeLights = null;
+  let cheerleaders = null;
+  let selectedBoard = null;
   // The wardrobe (skins/wear.js): who wears what, and the player's own pick. The pick rides
   // every seat and join (contract 4); the server clamps it and hands both looks back.
-  const wear = createWear({ bus, pieces, post: postToHost, onHost: onHostMessage, hosted: isHosted,
+  const wear = createWear({ bus, pieces: { setLooks(looks, boardId) {
+    pieces.setLooks(looks);
+    ornaments.setLooks(looks);
+    selectedBoard = boardId;
+    boardTheme?.setTheme(boardId);
+    themeEffects?.setTheme(boardId);
+    themeLights?.setTheme(boardId);
+    cheerleaders?.setLooks(looks);
+  } }, post: postToHost, onHost: onHostMessage, hosted: isHosted,
     storage: (() => { try { return window.localStorage; } catch { return null; } })() });
+  let finishMotion = 1;
+  const stopFinishPreference = onPresentation(p => { finishMotion = p.reducedMotion ? 0 : boardMotionScale(p); });
+  { const dispose = view.dispose; view.dispose = () => {
+    stopFinishPreference();
+    themeLights?.dispose();
+    boardTheme?.dispose();
+    themeEffects?.dispose();
+    cheerleaders?.dispose();
+    ornaments.dispose();
+    wear.dispose();
+    dispose();
+  }; }
   setLookSource(() => wear.mine());
   // The board API the effects layer drives. Keep this surface stable.
   const board = {
     view,
     pieces,
+    ornaments,
     anim,
     jiggle: pieces.jiggle,
     buzzCheck(square) { anim.buzz(pieces.pieceAt(square)); },
@@ -116,7 +146,9 @@ function main() {
   board.drag = drag;
   // The player's own arrows and circles (right drag / right click, lichess style). Local only:
   // never on the bus, the wire or a replay. A new game, a new seat or a take-back wipes them.
-  board.annotate = createAnnotate({ view, isBusy: () => drag.isSuspended() || !!window.PBP?.door?.isUp?.() });
+  // The HUD's "Arrows" button off: the press is never ours, so the camera orbits with it.
+  board.annotate = createAnnotate({ view, isBusy: () => !presentation().arrows || drag.isSuspended() || !!window.PBP?.door?.isUp?.() });
+  onPresentation((p) => { if (!p.arrows && (board.annotate.size() || board.annotate.isDrawing())) board.annotate.clear(); });
   for (const name of ['newgame', 'local', 'takeback']) bus.on(name, () => board.annotate.clear());
   { const dispose = view.dispose; view.dispose = () => { board.annotate.dispose(); dispose(); }; }
 
@@ -206,6 +238,11 @@ function main() {
   const drawBoard = () => { if (board.intro) board.intro.render(renderBase); else renderBase(); };
   view.render = () => {
     for (const fn of feelLate) fn(feelDt);
+    const themeDt = pausedGame || document.hidden ? 0 : feelDt * finishMotion;
+    boardTheme?.update(themeDt);
+    themeEffects?.update(themeDt);
+    themeLights?.update(themeDt);
+    cheerleaders?.update(themeDt);
     if (board.juice) { board.juice.update(feelDt); board.juice.render(drawBoard); }
     else drawBoard();
   };
@@ -363,10 +400,29 @@ function main() {
   // --- T: the room (floor, dome, and the light that leans to the mover) ---
   // Loaded late and guarded like the rest: without it the board sits in the
   // flat navy it always did. The turn tell rides the bus on its own.
-  import('./board/room.js').then((m) => {
+  import('./board/room.js').then(async (m) => {
     board.room = m.createRoom({ view, bus, game, env: () => board.env });
     feelLate.push((dt) => board.room.update(dt));
+    const themes = await import('./board/themes.js');
+    boardTheme = themes.createBoardTheme({ view });
+    board.theme = boardTheme;
+    boardTheme.setTheme(selectedBoard);
+    const lighting = await import('./board/theme-lights.js');
+    themeLights = lighting.createThemeLights({ view, bus });
+    board.themeLights = themeLights;
+    themeLights.setTheme(selectedBoard);
   }).catch((e) => console.warn('[pbp] room missing', e));
+  import('./board/theme-effects.js').then(m => {
+    themeEffects = m.createThemeEffects({ view, bus, pieces });
+    board.themeEffects = themeEffects;
+    themeEffects.setTheme(selectedBoard);
+  }).catch(e => console.warn('[pbp] theme effects missing', e));
+  bus.on('theme-react', event => boardTheme?.react(event));
+  import('./board/cheerleader.js').then(m => {
+    cheerleaders = m.createCheerleaders({ view, bus, pieces, game });
+    board.cheerleaders = cheerleaders;
+    cheerleaders.setLooks(wear.sides());
+  }).catch(e => console.warn('[pbp] cheerleader missing', e));
   // The air in it: motes drifting round the board, scenery only.
   import('./board/motes.js').then((m) => {
     board.motes = m.createMotes({ scene: view.scene });
@@ -464,6 +520,7 @@ function main() {
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000);
     last = now;
+    setFinishTime(now / 1000, pausedGame || document.hidden ? 0 : finishMotion);
     view.update(dt);
     pieces.update(dt);
     anim.update(dt);

@@ -66,8 +66,10 @@ namespace ConditioningControlPanel.Services.UI
                 T("studio", "st4_nav_studio"),
                 T("presets", "tab_presets"),
                 Z("haptics", "tab_haptics", tier: 1),        // StudioTab.FocusRackEntry("haptics")
-                W("justdrop", "jd_door_title"),
                 Z("ramp", "nav_tab_ramp"),                   // StudioTab.FocusRackEntry("scheduler")
+                // Declutter wave 2 (2026-11-15): Just Drop left the strip for the launcher's Tools
+                // door. Still owned here and ShowTab("justdrop") still opens its window; no pill.
+                new NavTab("justdrop", "jd_door_title", NavTabKind.Window, Hidden: true),
             }),
             new NavSection(Companion, "nav_door_companion", "companion", new[]
             {
@@ -80,12 +82,17 @@ namespace ConditioningControlPanel.Services.UI
                 T("shelistening", "tab_shelistening", tier: 1),
                 T("awareness", "tab_awareness", tier: 1),
             }),
-            new NavSection(Play, "nav_door_play", "play", new[]
+            // Declutter wave 2 (2026-11-15): the games left the Play page for the launcher's Games
+            // door (LauncherDoors below). Play is Eyes, Sessions and Deeper and lands on Eyes.
+            // ccp-bugs #1633 (7.3.0 testers could not find the games): a Games pill is back, last,
+            // as a window pill. It asks first, then ShowTab("play") opens the launcher straight on
+            // its Games page (PanelDoorLink); it never lights and is never remembered.
+            new NavSection(Play, "nav_door_play", "playeyes", new[]
             {
-                T("play", "nav_tab_games"),
                 Z("playeyes", "nav_tab_eyes"),               // PlayTab scrolled to EYES (page order wins)
                 Z("playsessions", "nav_tab_sessions"),       // PlayTab scrolled to SESSIONS
                 T("deeper", "tab_deeper"),
+                W("play", "nav_tab_games"),                  // the launcher's Games door
                 // Pages of their own that live inside Play's zones: owned here, no pill.
                 T("gradedintake", "tab_gradedintake", hidden: true),
                 T("lockdown", "tab_lockdown_mode", tier: 1, hidden: true),
@@ -140,11 +147,45 @@ namespace ConditioningControlPanel.Services.UI
             new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase)
             {
                 ["exclusives"] = (Home, "premium"),
-                ["lab"] = (Play, "play"),
+                // "lab" was the old Lab page (gaze, blink, lockdown): it lands on Play > Eyes.
+                // "play" was the Games pill: the chrome files it under Play > Eyes (rail memory,
+                // search), but ShowTab asks LauncherDoors first and opens the launcher instead.
+                ["lab"] = (Play, "playeyes"),
+                ["play"] = (Play, "playeyes"),
                 ["progression"] = (Home, "settings"),
                 ["patreon"] = (Settings, "account"),
                 ["together"] = (Social, "availablesubjects"),
             };
+
+        /// <summary>ShowTab keys whose page left the panel for the launcher: key -> door
+        /// ("games" | "tools", see PanelDoorLink). ShowTab opens that door and leaves the tab on
+        /// screen alone. Never dead: with the launcher side unwired the door is the launcher itself.</summary>
+        public static readonly IReadOnlyDictionary<string, string> LauncherDoors =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["play"] = "games",
+            };
+
+        /// <summary>The launcher door a tab key opens ("games" | "tools"), or null for a panel key.</summary>
+        public static string? LauncherDoorFor(string? tabKey) =>
+            !string.IsNullOrEmpty(tabKey) && LauncherDoors.TryGetValue(tabKey!, out var door) ? door : null;
+
+        /// <summary>Scroll target when the Play page shows a zone key: "sessions" or "eyes" scroll
+        /// to that zone, "top" shows the page from its title, null leaves the scroll alone.
+        /// Eyes is the landing, so only a click on its pill scrolls there; a rail door or a
+        /// default landing on it shows the top (title, subtitle and the Together zone).</summary>
+        public static string? PlayLandingScroll(string? tab, bool fromPill) =>
+            (tab ?? "").ToLowerInvariant() switch
+            {
+                "playsessions" => "sessions",
+                "playeyes" => fromPill ? "eyes" : "top",
+                _ => null,
+            };
+
+        /// <summary>True when a remembered tab is a key whose page left for the launcher's Games
+        /// door (the old Games pill): that arrival came for the games and earns the "Moved" note.</summary>
+        public static bool CameForGames(string? rememberedTab) =>
+            LauncherDoorFor(rememberedTab) == PanelDoorLink.Games;
 
         /// <summary>Old and alternate names per destination, for search ("(was X)" hints).
         /// Keyed by tab key; the Settings account section is "account", the full vault "premium".</summary>

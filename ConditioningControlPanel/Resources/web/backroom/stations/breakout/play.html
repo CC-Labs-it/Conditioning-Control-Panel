@@ -60,6 +60,7 @@ function applyHost(m) {
   if (typeof m.reduced === 'boolean') ctx.reduced = m.reduced;
   if (m.motion) ctx.motion = m.motion;
   if (m.intensity) ctx.intensity = m.intensity;
+  if (typeof m.bubbleSkin === 'string') ctx.bubbleSkin = m.bubbleSkin;   // optional, absent = soap (CONTRACT 2.2)
   if (Number.isFinite(m.sp)) { sp = m.sp; for (const fn of spFns) fn(sp); }
   for (const fn of settingsFns) fn(m);
 }

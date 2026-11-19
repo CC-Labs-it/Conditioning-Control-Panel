@@ -255,7 +255,7 @@ public sealed class LeashSelfCard : Border
         int i = 0;
         foreach (var s in _me.Stickers.Reverse().Take(14))
         {
-            var d = LeashLook.StickerDisc(s.Id, 26, i++);
+            var d = LeashLook.StickerDisc(s.Id, 36, i++);
             d.Margin = new Thickness(0, 0, 5, 5);
             d.ToolTip = Loc.GetF("leash_sticker_from", s.From.Name);
             wrap.Children.Add(d);

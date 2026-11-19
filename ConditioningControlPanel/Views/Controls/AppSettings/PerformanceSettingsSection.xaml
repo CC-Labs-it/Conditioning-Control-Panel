@@ -75,6 +75,25 @@
                 <TextBlock Text="{loc:Str set2_section_performance_hint}" TextWrapping="Wrap"
                            Foreground="{DynamicResource TextMutedBrush}" FontSize="11" Margin="0,0,0,8"/>
 
+                <!-- Motion (accessibility). The three items ARE the enum ordinals — never reorder. -->
+                <Grid MinHeight="34" Margin="0,2,0,0" ToolTip="{loc:Str tooltip_motion_level}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}"
+                               Text="{loc:Str setting_motion_level}"
+                               Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                    <ComboBox Grid.Column="1" x:Name="CmbMotionLevel" x:FieldModifier="internal"
+                              Style="{StaticResource DarkComboBoxStyle}" FontSize="11"
+                              Width="110" MinHeight="28" VerticalAlignment="Center"
+                              SelectionChanged="CmbMotionLevel_SelectionChanged">
+                        <ComboBoxItem Content="{loc:Str label_motion_full}"/>
+                        <ComboBoxItem Content="{loc:Str label_motion_reduced}"/>
+                        <ComboBoxItem Content="{loc:Str label_motion_off}"/>
+                    </ComboBox>
+                </Grid>
+
                 <!-- Four related switches = one 2-column chip grid (contract). Every
                      description became its chip's ToolTip; not one loc key changed. -->
                 <Grid>
@@ -203,25 +222,6 @@
                                   SelectionChanged="CmbGentle_SelectionChanged"/>
                     </Grid>
                 </StackPanel>
-
-                <!-- Motion (accessibility). The three items ARE the enum ordinals — never reorder. -->
-                <Grid MinHeight="34" Margin="0,2,0,0" ToolTip="{loc:Str tooltip_motion_level}">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}"
-                               Text="{loc:Str setting_motion_level}"
-                               Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
-                    <ComboBox Grid.Column="1" x:Name="CmbMotionLevel" x:FieldModifier="internal"
-                              Style="{StaticResource DarkComboBoxStyle}" FontSize="11"
-                              Width="110" MinHeight="28" VerticalAlignment="Center"
-                              SelectionChanged="CmbMotionLevel_SelectionChanged">
-                        <ComboBoxItem Content="{loc:Str label_motion_full}"/>
-                        <ComboBoxItem Content="{loc:Str label_motion_reduced}"/>
-                        <ComboBoxItem Content="{loc:Str label_motion_off}"/>
-                    </ComboBox>
-                </Grid>
 
                 <!-- THE BACK ROOM effects intensity (CONTRACT section 4). Item order IS the
                      BackRoomFxIntensity ordinal (Calm=0, Normal=1, Full=2) - never reorder. It sits
