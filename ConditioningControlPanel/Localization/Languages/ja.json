@@ -2084,6 +2084,8 @@
   "btn_10_minutes": "10分",
   "btn_15_minutes": "15分",
   "btn_60_minutes": "60分",
+  "btn_40_minutes": "40分",
+  "btn_50_minutes": "50分",
   "btn_2_hours": "2時間",
   "btn_4_hours": "4時間",
   "btn_activate": "有効化",

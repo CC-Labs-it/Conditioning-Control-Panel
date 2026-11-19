@@ -190,6 +190,8 @@
                                                     <ComboBoxItem Content="{loc:Str btn_15_minutes}" Tag="15"/>
                                                     <ComboBoxItem Content="{loc:Str btn_20_minutes}" Tag="20"/>
                                                     <ComboBoxItem Content="{loc:Str label_30_minutes}" Tag="30"/>
+                                                    <ComboBoxItem Content="{loc:Str btn_40_minutes}" Tag="40"/>
+                                                    <ComboBoxItem Content="{loc:Str btn_50_minutes}" Tag="50"/>
                                                     <ComboBoxItem Content="{loc:Str btn_60_minutes}" Tag="60"/>
                                                     <ComboBoxItem Content="{loc:Str btn_2_hours}" Tag="120"/>
                                                     <ComboBoxItem Content="{loc:Str btn_4_hours}" Tag="240"/>
