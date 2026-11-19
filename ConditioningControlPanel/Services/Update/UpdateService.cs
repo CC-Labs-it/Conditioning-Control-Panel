@@ -20,15 +20,26 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.3.5";
+        public const string AppVersion = "7.3.6";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.3.5 - Back to the basics
+        public const string CurrentPatchNotes = @"v7.3.6 - Back to the basics
 
-NEW IN 7.3.5
+NEW IN 7.3.6
+
+FIX DAY
+- Sparkles: the top bar matches the shop now. after a big run it can dip for a moment, then climbs back as your Sparkles are booked.
+- Afterglow: the words on the line keep their distance as they glow and sink.
+- Lights Down: a new Follow eyes or mouse switch. on, it dims only while you watch the video, by your eyes when the camera is on, else by the mouse on it. off, it stays as it is.
+- Steam: the clear spot around a resting cursor fades into the fog instead of ending at a hard edge.
+- notifications that pile up while CCP starts come one after another, not all at once.
+- leash stickers are bigger, and you can read them.
+- Dares: the (?) on the deadline says how a bet settles. on its own, early once the target is met, otherwise at the deadline. give it two minutes.
+
+FROM 7.3.5
 
 DARES, ROUND TWO
 - you can only stake Sparkles you have. amounts you can't cover are greyed out, and a friend who can't cover their side is told when they accept.
@@ -174,7 +185,7 @@ FIXES
 - Deeper: fixed a crash while a library file was being read.
 - Piece by Piece: a press that does not move is a click, the lit square is the one a click plays, and an arrow no longer stays stuck after a lost right release.
 
-this is a pre-release. it carries everything in 7.3.4, 7.3.3, 7.3.2, 7.3.1, 7.3.0 and 7.2.4.";
+this is a pre-release. it carries everything in 7.3.5, 7.3.4, 7.3.3, 7.3.2, 7.3.1, 7.3.0 and 7.2.4.";
 
         private const string GitHubOwner = "CC-Labs-it";
         private const string GitHubRepo = "Conditioning-Control-Panel";
