@@ -471,7 +471,7 @@ namespace ConditioningControlPanel
             {
                 SetWindowPos(_hwnd, HWND_TOPMOST, 0, 0, 0, 0,
                     SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
-                SetForegroundWindow(_hwnd);
+                ForegroundGrab.Take(_hwnd);   // #1698
             }
             Activate();
             FocusInput();
@@ -629,13 +629,14 @@ namespace ConditioningControlPanel
             {
                 SetWindowPos(_hwnd, HWND_TOPMOST, 0, 0, 0, 0,
                     SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
-                SetForegroundWindow(_hwnd);
+                // #1698: a plain SetForegroundWindow fails silently while another app holds the keyboard.
+                ForegroundGrab.Take(_hwnd);
             }
             Activate();
             FocusInput();
 
-            App.Logger?.Information("Lock Card shown - PhraseChars: {Chars}, Repeats: {Repeats}, Strict: {Strict}, Voice: {Voice}, Monitors: {Count}",
-                (_phrase ?? "").Length, _requiredRepeats, _strictMode, _voiceMode, _allWindows.Count);
+            App.Logger?.Information("Lock Card shown - PhraseChars: {Chars}, Repeats: {Repeats}, Strict: {Strict}, Voice: {Voice}, Monitors: {Count}, Foreground: {Fg}",
+                (_phrase ?? "").Length, _requiredRepeats, _strictMode, _voiceMode, _allWindows.Count, ForegroundGrab.Owns(_hwnd));
 
             // Begin the spoken-solve listen loop on the primary monitor.
             if (_voiceMode) StartVoiceSolve();
@@ -1780,8 +1781,22 @@ namespace ConditioningControlPanel
             }
 
             // Focus primary window
-            primaryWindow?.Activate();
-            primaryWindow?.FocusInput();
+            primaryWindow?.TakeKeyboard();
+        }
+
+        /// <summary>
+        /// #1698: the mirrors shown after the primary can take activation inside our process, so the
+        /// primary takes the foreground back here, then checks again once the show has settled: a card
+        /// that only LOOKS focused while another app (Discord) keeps the keys is the reported bug.
+        /// </summary>
+        private void TakeKeyboard()
+        {
+            ForegroundGrab.Take(_hwnd);
+            Activate();
+            FocusInput();
+            ForegroundGrab.RecheckSoon(this, () => _hwnd,
+                () => _isPrimary && !_isCompleted && IsVisible,
+                FocusInput, "LockCardWindow");
         }
     }
 }
