@@ -246,13 +246,15 @@ test('the ending layer is in the page, above the end fade', () => {
   assert.ok(z(/#l-ending \{ z-index: (\d+)/) > z(/\.endfade \{[^}]*z-index: (\d+)/));
 });
 
-test('a link is cclabs.app, www, app, the one Discord invite, or nothing', () => {
+test('a link is cclabs.app, www, app, the one Discord invite, the two neal.fun credits, or nothing', () => {
   for (const good of ['https://cclabs.app', 'https://cclabs.app/', 'https://cclabs.app/ccp.html?x=1#y', 'HTTPS://CCLABS.APP/a',
-    'https://www.cclabs.app/', 'https://app.cclabs.app', 'https://app.cclabs.app/tc', 'https://discord.gg/YxVAMt4qaZ']) assert.ok(allowedLink(good), good);
+    'https://www.cclabs.app/', 'https://app.cclabs.app', 'https://app.cclabs.app/tc', 'https://discord.gg/YxVAMt4qaZ',
+    'https://neal.fun/', 'https://neal.fun', 'https://neal.fun/stimulation-clicker/']) assert.ok(allowedLink(good), good);
   for (const bad of ['http://cclabs.app', 'http://app.cclabs.app', 'https://tc.cclabs.app', 'https://evil.cclabs.app', 'https://cclabs.app.example.com', 'https://app.cclabs.app.example.com',
     'https://cclabs.app@example.com', 'https://x:y@cclabs.app', 'https://cclabs.app:8443', 'https://app.cclabs.app:444/', 'javascript:alert(1)', 'data:text/html,x', '//cclabs.app', '/a', '', null, undefined,
     'https://example.com/https://cclabs.app', 'https://discord.gg/other', 'https://discord.gg/YxVAMt4qaZ/x', 'https://discord.gg/YxVAMt4qaZ?x=1', 'http://discord.gg/YxVAMt4qaZ',
-    'https://discord.gg.example.com/YxVAMt4qaZ', 'https://discord.com/invite/YxVAMt4qaZ']) assert.equal(allowedLink(bad), null, String(bad));
+    'https://discord.gg.example.com/YxVAMt4qaZ', 'https://discord.com/invite/YxVAMt4qaZ',
+    'http://neal.fun/', 'https://neal.fun/password-game/', 'https://neal.fun/stimulation-clicker', 'https://neal.fun.example.com/', 'https://www.neal.fun/']) assert.equal(allowedLink(bad), null, String(bad));
 });
 
 test('ctx.openLink opens only inside a press; hosted goes down the wire, unhosted is a new tab', () => {
