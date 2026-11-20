@@ -461,7 +461,8 @@ namespace ConditioningControlPanel.Services.AIService
             ApplySamplerSettings(payload);
             if (options?.CompanionV2 == true)
             {
-                payload["max_tokens"] = Math.Clamp(options.MaxTokens, 1, AiCallOptions.PreviewTokenLimit(options.Purpose));
+                // The player's own endpoint, not the hosted proxy: its budget, not ours (#1702).
+                payload["max_tokens"] = AiCallOptions.OwnEndpointTokenLimit(options);
                 payload["temperature"] = options.Temperature;
             }
 

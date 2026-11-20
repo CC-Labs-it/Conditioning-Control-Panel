@@ -523,9 +523,13 @@ namespace ConditioningControlPanel.Services.AIService
                 // The caller's budget is honoured here, not silently dropped: a 60-token ambient quip
                 // that comes back as three paragraphs inflates every later window and costs seconds
                 // of local inference. LocalMaxTokensHardCap keeps a pathological request bounded.
+                // #1702: under Companion V2 the caller's number is the HOSTED cap (80 for a
+                // reaction); the player's own box gets the own-endpoint room instead.
                 var (status, body) = await SendChatAsync(model,
                     outgoing.Select(m => (m.Role, (string?)m.Content)), cancellationToken,
-                    maxTokens: Math.Clamp(options.MaxTokens, 1, LocalMaxTokensHardCap),
+                    maxTokens: options.CompanionV2
+                        ? Math.Min(AiCallOptions.OwnEndpointTokenLimit(options), LocalMaxTokensHardCap)
+                        : Math.Clamp(options.MaxTokens, 1, LocalMaxTokensHardCap),
                     temperature: options.Temperature).ConfigureAwait(false);
 
                 if (status != 200)

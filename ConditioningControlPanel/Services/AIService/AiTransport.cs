@@ -89,6 +89,26 @@ namespace ConditioningControlPanel.Services.AIService
             _ => 240
         };
 
+        /// <summary>
+        /// Ceiling for the player's OWN endpoint (Ollama, or any OpenAI-compatible server such as
+        /// KoboldCpp). Those replies run on the player's hardware or key, not our bill, so the
+        /// hosted caps above do not apply there.
+        /// </summary>
+        public const int OwnEndpointMaxTokens = 512;
+
+        /// <summary>
+        /// Reply budget sent to the player's own endpoint. ccp-bugs #1702: the hosted
+        /// <see cref="PreviewTokenLimit"/> (80 for a reaction) rode along to bring-your-own models,
+        /// and a local model that ran one word past it had the whole reply dropped as truncated.
+        /// The prompt still asks for a short line; this is only the room it may use. Never lower
+        /// than what the caller asked for, never above <see cref="OwnEndpointMaxTokens"/>.
+        /// </summary>
+        public static int OwnEndpointTokenLimit(AiCallOptions options)
+        {
+            var floor = options.Purpose == AiPurpose.Reaction ? 240 : OwnEndpointMaxTokens;
+            return Math.Clamp(Math.Max(options.MaxTokens, floor), 1, OwnEndpointMaxTokens);
+        }
+
         /// <summary>Chat-box defaults: tier A, interactive, 100 tokens out.</summary>
         public static AiCallOptions Chat { get; } =
             new() { Purpose = AiPurpose.Chat, MaxTokens = 100, Temperature = 0.7, Interactive = true };
