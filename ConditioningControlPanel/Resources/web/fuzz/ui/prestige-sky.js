@@ -250,9 +250,9 @@ export function openSky({ doc = document, win = window, life, P, audio = null, g
   let viewDepth = renewal ? renewal.depthBefore : p.depth;
   let hiddenLit = renewal?.newEnding || null;
   let pending = null;   // the star whose Stardust is still flying to it
-  const lvReal = (a) => P.level(p, LANES[a].id);
+  const lvReal = (a) => (P.takenLevel || P.level)(p, LANES[a].id);   // stars bought for the next run show as taken
   const lv = (a) => lvReal(a) - (pending && pending.kind === 'star' && pending.a === a ? 1 : 0);
-  const coreOwned = () => !!p.core && pending?.kind !== 'core';
+  const coreOwned = () => !!(P.coreTaken ? P.coreTaken(p) : p.core) && pending?.kind !== 'core';
   const owned = (n) => (n.kind === 'star' ? n.k < lv(n.a) : n.kind === 'end' ? !!p.lit?.[n.id] && hiddenLit !== n.id : coreOwned());
   const ringOpen = (n) => (n.kind === 'star' ? n.k < viewDepth : n.kind === 'core' ? viewDepth >= MAX_DEPTH : true);
   const isNext = (n) => (n.kind === 'star' ? n.k === lv(n.a) : n.kind === 'core' ? !coreOwned() && LANES.every((_, a) => lv(a) >= STEPS) : false);
@@ -749,7 +749,7 @@ export function openSky({ doc = document, win = window, life, P, audio = null, g
     const tag = lane ? `<span class="tag">${esc(lane.name)} ${n.k + 1}/${STEPS}</span><span class="tag kind" style="--kc:${KINDS[lane.kind] || KINDS.boost}">${esc(lane.tag)}</span>`
       : `<span class="tag">${n.kind === 'end' ? 'Ending' : 'The core'}</span>`;
     let foot;
-    if (own) foot = '<span class="lit">Lit</span>';
+    if (own) foot = n.kind === 'star' && P.isLater?.(p, n.id) || n.kind === 'core' && !p.core ? '<span class="lit">Lit from next run</span>' : '<span class="lit">Lit</span>';
     else if (n.kind === 'end') foot = `<p>Reach the ending <b>${esc(n.name)}</b> to light it.</p>`;
     else if (!ringOpen(n)) foot = `<p>Opens at Depth ${n.kind === 'core' ? MAX_DEPTH : n.k + 1}.</p>`;
     else if (!isNext(n)) foot = n.kind === 'core' ? '<p>Light the last star of every lane first.</p>' : '<p>Light the star before it first.</p>';
@@ -777,7 +777,7 @@ export function openSky({ doc = document, win = window, life, P, audio = null, g
   function buy(n) {
     if (busy || pending || !affordable(n)) return;
     try { if (n.kind === 'core') P.buyCore(p); else P.buyStar(p, n.id); } catch { /* refused */ }
-    const took = n.kind === 'core' ? !!p.core : P.has(p, n.id);
+    const took = n.kind === 'core' ? !!(P.coreTaken ? P.coreTaken(p) : p.core) : (P.taken || P.has)(p, n.id);
     if (!took) { thunk(); select(n); return; }
     pending = n;
     save(); setDust(p.dust);
@@ -857,7 +857,7 @@ export function openSky({ doc = document, win = window, life, P, audio = null, g
   function nextSheet() {
     if (busy || pending) return;
     select(null); hideNote();
-    const has = (id) => { try { return !!P.has(p, id); } catch { return false; } };
+    const has = (id) => { try { return !!(P.taken || P.has)(p, id); } catch { return false; } };
     const prev = p.next || { rules: [], words: [], keep: [] };
     const openRules = (() => { try { return (P.rulesOpen(p) || []).map((r) => (typeof r === 'string' ? r : r?.id)).filter((id) => FINE_RULES.some((x) => x.id === id)); } catch { return []; } })();
     const slots = (() => { try { const s = P.fineSlots(p); return Number.isFinite(s) ? s : openRules.length; } catch { return 0; } })();
