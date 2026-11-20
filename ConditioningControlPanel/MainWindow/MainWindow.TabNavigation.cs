@@ -132,6 +132,14 @@ namespace ConditioningControlPanel
             catch (Exception ex) { App.Logger?.Debug("Games moved note failed: {E}", ex.Message); }
         }
 
+        /// <summary>A launcher door refused by Lockdown: "Lockdown is on. The launcher waits."
+        /// Not budgeted, since it answers a click.</summary>
+        private void ShowDoorLockedNote()
+        {
+            try { SectionStrip?.ShowMovedNote(Loc.Get(Services.UI.PanelDoorLink.LockdownLineKey)); }
+            catch (Exception ex) { App.Logger?.Debug("Door locked note failed: {E}", ex.Message); }
+        }
+
         // ============================== lane tab registry ==============================
         // Nav rework 2026-10-06 (BRIEF contract 1). New section pages (Friends, Leash,
         // Personality, Permissions, Links, Folders...) are not XAML children of MainWindow:
@@ -259,9 +267,11 @@ namespace ConditioningControlPanel
             // the one seam and leaves the tab on screen alone, like the window keys below.
             if (Services.UI.NavSections.LauncherDoorFor(tab) is { } launcherDoor)
             {
-                // Refused during Lockdown: the panel stays, so the strip says where the games went.
-                if (!Services.UI.PanelDoorLink.Open(launcherDoor) && launcherDoor == Services.UI.PanelDoorLink.Games)
-                    Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(ShowGamesMovedNote));
+                // Refused during Lockdown: the panel stays, and the strip says why in the launcher
+                // veil's own words, every time (ccp-bugs #1701: the budgeted "Moved" note went
+                // quiet after three hits, so the click looked dead).
+                if (!Services.UI.PanelDoorLink.Open(launcherDoor))
+                    Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(ShowDoorLockedNote));
                 return;
             }
             // "lab" (bark rules, tutorial steps, third-party deep links) was the Lab page: gaze,
