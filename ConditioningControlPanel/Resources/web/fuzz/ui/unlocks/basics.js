@@ -10,7 +10,7 @@ import { btnCenter, fresh, rings } from './basics/fx.js';
 import { createTapPhrase } from './basics/tap-feel.js';
 
 import { bindBounce, FACE_CSS } from '../bouncing-art.js';
-import { squashScale } from './arcade/breakout-core/contact.js';
+import { createJelly, jellyShape, JELLY_PRESS, PRESS_KICK, WALL_KICK } from './basics/jelly.js';
 import { createOrbits, snapDiag } from './basics/pair-orbit.js';
 import { STRAY_WORDS, THEME_STRAY_WORDS } from '../../data/content/side.js';
 
@@ -90,34 +90,35 @@ function bouncer(ctx,index) {
   const inks = ['var(--accent)','var(--accent-2)','var(--ink)'];
   let ink = index % inks.length;
   el.style.transform = `translate(${x}px,${y}px)`;
-  /* Wall feel (owner 2026-11-08), spaced out by rows the copies already have: a plain bounce first, Wall Pop adds the
-   * Breakout brick squash along the hit axis (overshoot and settle), Corner Bonus adds a wobble. Little EMIs (and a copy
-   * of an EMI face) get both and flinch on each hit. Gentle and reduced motion: a plain bounce. */
+  /* Wall feel (owner 2026-11-08), spaced out by rows the copies already have; owner 2026-11-20 made every copy elastic.
+   * Each copy is a jelly on two damped springs (ui/unlocks/basics/jelly.js): every wall hit squashes it flat against the
+   * wall and it wobbles back in a few overshoots, a press squeezes it in and it boings out. Wall Pop makes the wall
+   * squash deeper, Corner Bonus adds a rotation wobble. Little EMIs (and a copy of an EMI face) get both and flinch on
+   * each hit. Gentle and reduced motion: a plain bounce, no squash. */
   let hitAt = -1, hitAxis = 'x', hitOrigin = '50% 50%', origin = '', flinch = 0;
-  const SQUASH_S = .32, WOBBLE_S = .6, PRESS_S = .14;
+  const WOBBLE_S = .6;
+  const wall = createJelly(), squeeze = createJelly(JELLY_PRESS);
   /* The squash pivots on the wall it hit, so the flattened side stays on the wall instead of lifting off it. */
   const pivot = (o) => { if (o !== origin) { origin = o; el.style.transformOrigin = o; } };
   const emiCopy = () => el.dataset.bounceArt === 'emi' || Boolean(el.querySelector('.xe-f'));
+  /** A wall or a copy hit: kick the wall spring, harder with Wall Pop or for an EMI copy. */
+  const thump = () => wall.kick(emiCopy() || ctx.has('wallpop') ? WALL_KICK.pop : WALL_KICK.plain);
   function feel(dt) {
-    if (ctx.gentle || ctx.reduced) { hitAt = pressAt = -1; return ''; }
-    const emi = emiCopy();
+    if (ctx.gentle || ctx.reduced) { hitAt = pressAt = -1; wall.reset(); squeeze.reset(); return ''; }
+    if (pressAt === 0) { squeeze.kick(PRESS_KICK); pressAt = -1; }
     let sx = 1, sy = 1, rot = 0;
+    const s = wall.step(dt), p = squeeze.step(dt);
     if (hitAt >= 0) {
       hitAt += dt;
-      if ((emi || ctx.has('wallpop')) && hitAt < SQUASH_S) {
-        const { along, across } = squashScale(1 - hitAt / SQUASH_S);
-        if (hitAxis === 'x') { sx = along; sy = across; } else if (hitAxis === 'y') { sx = across; sy = along; } else sx = sy = (along + across) / 2;
-      }
-      if ((emi || ctx.has('corner')) && hitAt < WOBBLE_S) rot = 7 * Math.exp(-hitAt * 7) * Math.sin(hitAt * 34) * (dx * dy < 0 ? -1 : 1);
-      if (hitAt >= Math.max(SQUASH_S, WOBBLE_S)) hitAt = -1;
+      if ((emiCopy() || ctx.has('corner')) && hitAt < WOBBLE_S) rot = 7 * Math.exp(-hitAt * 7) * Math.sin(hitAt * 34) * (dx * dy < 0 ? -1 : 1);
+      if (hitAt >= WOBBLE_S && !wall.moving()) hitAt = -1;
     }
-    pivot(hitAt >= 0 ? hitOrigin : '50% 50%');
-    if (pressAt >= 0) {
-      pressAt += dt;
-      const k = pressAt < PRESS_S ? Math.sin(pressAt / PRESS_S * Math.PI) * .12 : 0;
-      sx *= 1 - k; sy *= 1 - k;
-      if (pressAt >= PRESS_S) pressAt = -1;
+    if (s) {
+      const { along, across } = jellyShape(s);
+      if (hitAxis === 'x') { sx = along; sy = across; } else if (hitAxis === 'y') { sx = across; sy = along; } else sx = sy = (along + across) / 2;
     }
+    pivot(hitAt >= 0 || wall.moving() ? hitOrigin : '50% 50%');
+    if (p) { sx *= 1 - p; sy *= 1 - p; }
     return sx === 1 && sy === 1 && !rot ? '' : ` rotate(${rot.toFixed(2)}deg) scale(${sx.toFixed(3)},${sy.toFixed(3)})`;
   }
   /** An EMI copy flinches on a wall hit (shocked pose and face), then goes back. Never under Gentle or reduced motion. */
@@ -158,6 +159,7 @@ function bouncer(ctx,index) {
       if (ctx.gentle || ctx.reduced) return;
       hitAt = 0; hitAxis = axis;
       hitOrigin = axis === 'x' ? `${nx > 0 ? '100%' : '0%'} 50%` : `50% ${ny > 0 ? '100%' : '0%'}`;
+      thump();
       react();
     },
     step(dt) {
@@ -177,6 +179,7 @@ function bouncer(ctx,index) {
       if (hx || hy) {
         hitAt = 0; hitAxis = hx && hy ? 'xy' : hx ? 'x' : 'y';
         hitOrigin = `${!hx ? '50%' : x <= 0 ? '0%' : '100%'} ${!hy ? '50%' : y <= 0 ? '0%' : '100%'}`;
+        if (!ctx.gentle && !ctx.reduced) thump();
         react();
       }
       el.style.transform = `translate(${x}px,${y}px)` + feel(dt);
