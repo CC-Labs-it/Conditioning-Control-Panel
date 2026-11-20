@@ -109,6 +109,28 @@ public class PresetCarryTests
     }
 
     [Fact]
+    public void Loading_A_then_old_B_does_not_carry_As_steam_colour_fill_range_or_drift_speed()
+    {
+        // Preset A: white Steam, a low fog cap, slow floating-video drift (the tier-2 reports, 7.3.6).
+        var a = new AppSettings { PinkFilterColor = "#FFFFFF", SuperCreepCap = 0.5, MandatoryVideoFloatingSpeedPercent = 40, FlashDriftSpeed = new AppSettings().FlashDriftSpeed + 1 };
+        var presetA = Preset.FromSettings(a, "A");
+        // Preset B: saved before 7.3.7, so it never held these.
+        var presetB = JsonConvert.DeserializeObject<Preset>("{\"Name\":\"B\",\"FlashEnabled\":true}")!;
+        Assert.Null(presetB.Carried);
+
+        var live = new AppSettings();
+        presetA.ApplyTo(live);
+        Assert.Equal("#FFFFFF", live.PinkFilterColor);
+        presetB.ApplyTo(live);
+
+        var d = new AppSettings();
+        Assert.Equal(d.PinkFilterColor, live.PinkFilterColor);
+        Assert.Equal(d.SuperCreepCap, live.SuperCreepCap);
+        Assert.Equal(d.MandatoryVideoFloatingSpeedPercent, live.MandatoryVideoFloatingSpeedPercent);
+        Assert.Equal(d.FlashDriftSpeed, live.FlashDriftSpeed);
+    }
+
+    [Fact]
     public void Settings_json_round_trip_keeps_them()
     {
         var saved = Changed();
