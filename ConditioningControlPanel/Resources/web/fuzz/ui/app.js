@@ -36,6 +36,7 @@ import { runThemes, themed } from './theme-text.js';
 import { nextFrame, frameRect } from './perf.js';
 import { mountStickerBook } from './sticker-book.js';
 import { createStage } from './stage.js';
+import { isPhone, tickerMs } from './phone.js';
 
 export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   const $ = (id) => doc.getElementById(id);
@@ -56,7 +57,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   let gentleOn = !!extras.gentle, initGentle = !!init.gentle, initReduced = !!init.reduced;
   let engine = null, shop = null, purchaseFeel = null, stage = null;
   let particles = 0, dims = { w: win.innerWidth, h: win.innerHeight };
-  let lockUntil = 0, swapUntil = 0, toastEl = null, tickerBusy = 0;
+  let lockUntil = 0, swapUntil = 0, toastEl = null, tickerBusy = 0, tickerAnim = null, tickerHeld = false;
   let downTimer = 0;
   const skins = [];
   /* Double Wielding (ui/hands.js): one entry per mounted scope, each with its right-hand juice. Empty = left button only. */
@@ -155,11 +156,22 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     s.style.cssText = 'position:absolute;left:0;top:0;';
     setRich(s, tickerQ.shift());
     host.appendChild(s);
-    const w = host.clientWidth, tw = s.offsetWidth;
+    const w = host.clientWidth, tw = s.offsetWidth, phone = isPhone(win);
     const a = gentle()
-      ? s.animate([{ opacity: 0 }, { opacity: 1, offset: 0.1 }, { opacity: 1, offset: 0.9 }, { opacity: 0 }], { duration: 4000 })
-      : s.animate([{ transform: `translateX(${w}px)` }, { transform: `translateX(${-tw}px)` }], { duration: Math.max(4000, ((w + tw) / 70) * 1000) });
-    a.onfinish = a.oncancel = () => { s.remove(); tickerBusy = 0; pumpTicker(); };
+      ? s.animate([{ opacity: 0 }, { opacity: 1, offset: 0.1 }, { opacity: 1, offset: 0.9 }, { opacity: 0 }], { duration: phone ? 7000 : 4000 })
+      : s.animate([{ transform: `translateX(${w}px)` }, { transform: `translateX(${-tw}px)` }], { duration: tickerMs(w, tw, phone) });
+    tickerAnim = a;
+    a.onfinish = a.oncancel = () => { s.remove(); tickerBusy = 0; if (tickerAnim === a) tickerAnim = null; pumpTicker(); };
+    if (!host.dataset.hold) {   // phone: a resting finger holds the thought still (ui/phone.js, styles.css)
+      host.dataset.hold = '1';
+      host.addEventListener('pointerdown', () => { if (!isPhone(win)) return; tickerHeld = true; tickerAnim?.pause(); });
+      const release = () => {
+        if (!tickerHeld) return;
+        tickerHeld = false;
+        if (!engine?.paused && !engine?.suspended && tickerAnim?.playState === 'paused') tickerAnim.play();
+      };
+      for (const type of ['pointerup', 'pointercancel']) win.addEventListener(type, release, true);
+    }
   }
 
   /* ---- the main button ---- */
@@ -284,6 +296,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     } else {
       for (const a of frozen) { if (a.playState === 'paused') a.play(); }  // anything cancelled during the pause stays cancelled
       frozen = [];
+      if (tickerHeld || tickerAnim?.playState === 'paused') { tickerHeld = false; tickerAnim?.play(); }   // a finger held on the strip as the pause came
       el.world.inert = worldWasInert;
       el.cards.inert = false;
     }
@@ -378,6 +391,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   function drawPictureRow() {
     $('pics-now').textContent = pictureRow(engine.pictures);
     $('pics-change').hidden = !!wakeGate;
+    $('new-run').hidden = !!wakeGate;   // the intro: no run to start over yet
   }
   function resume() {
     if (engine.suspended) return;
@@ -409,6 +423,15 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       forget.dataset.sure = '1';
       forget.textContent = 'Sure. Forget it.';
       setTimeout(() => { forget.dataset.sure = ''; forget.textContent = 'Forget everything'; }, 4000);
+    });
+    /* New run (owner 2026-11-21): main.js newRun, the same two taps as Forget. Keeps the life save, skips the terms. */
+    const again = $('new-run');
+    again.addEventListener('click', () => {
+      if (engine.suspended || !hooks.newRun) return;   // the host's stop holds the page as it is
+      if (again.dataset.sure) { hooks.newRun(); return; }
+      again.dataset.sure = '1';
+      again.textContent = 'Sure. Start over.';
+      setTimeout(() => { again.dataset.sure = ''; again.textContent = 'New run'; }, 4000);
     });
     $('save-out').addEventListener('click', () => { el.saveBox.hidden = false; el.saveBox.readOnly = true; el.saveBox.value = hooks.exportSave(); el.saveBox.select?.(); });
     const inBtn = $('save-in');

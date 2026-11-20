@@ -27,6 +27,8 @@ import { loadPrestige, prestigeNow, openRenewal, openSky, SKY_CURRENCY } from '.
 import { applyLooks } from './sim/prestige-looks.js';
 import { canKeepPlaying as keepPlayingOk, keepPlaying as keepPlayingRun } from './sim/prestige-endings.js';   // Endless (onemore)
 import { sealedFor, showSeal } from './ui/seal.js';
+import { mountLlamaPen } from './ui/llama-pen.js';
+import { mountHomeTip } from './ui/phone.js';
 
 const qs = new URLSearchParams(location.search);
 /* Dev doors (jumps, granted items, cheat wallets, the age-gate skip they carry) open only on a local preview.
@@ -302,6 +304,8 @@ function start(init) {
     playing = true;
     syncMedia();
     engine.mountAll(!!saved?.run);
+    mountLlamaPen({ doc: document, life, extras, gentle: ui.gentle, save: persist });   // the herd, top left, from the first second
+    mountHomeTip({ doc: document, win: window, storage: fresh ? memoryStorage() : preferenceStorage });   // iPhone Safari, once
     engine.syncQuiet();
     ui.drawPhrase();
     if (run.mood && run.clock < 500) {

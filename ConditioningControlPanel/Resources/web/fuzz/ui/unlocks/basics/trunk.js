@@ -86,6 +86,7 @@ export default {
       next();
       ctx.every(9000, next);
       ctx.stage.register(ctx.layer('ticker'));   // the strip fades with the cast (ui/stage.js)
+      ctx.layer('ticker').classList.add('on');   // a phone gives the owned strip its own row under the controls (styles.css)
       return {};
     },
   },

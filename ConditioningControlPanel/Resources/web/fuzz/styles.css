@@ -628,3 +628,55 @@ html[data-bubble-type] :is(.row .cost,.row .tag,.mix-name,.mix-value,.scr-tag,.x
   .cursor-kit-footer {margin-top:5px;}
 }
 
+
+/* ---- the llama pen (ui/llama-pen.js): top left, above the dock windows' 48 px band, never under the top right controls ---- */
+#llama-pen { position: fixed; left: max(8px, env(safe-area-inset-left)); top: max(4px, env(safe-area-inset-top)); z-index: 15; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; margin: 0; padding: 0; border: 0; background: none; color: var(--ink); font: 11px/1.1 var(--font); cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+#llama-pen:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.lp-fence { position: relative; display: flex; align-items: flex-end; height: 28px; min-width: 70px; padding: 0 6px; border-bottom: 2px solid #6b4a2b; }
+.lp-fence::after { content: ''; position: absolute; inset: auto 0 0 0; height: 9px; pointer-events: none; opacity: .85;
+  background: linear-gradient(#8a5a33, #8a5a33) 0 2px / 100% 2px no-repeat, repeating-linear-gradient(90deg, #8a5a33 0 2px, transparent 2px 15px); }
+.lp-herd { display: flex; align-items: flex-end; }
+.lp-l { display: flex; justify-content: center; width: var(--lp-step, 18px); font-size: 20px; line-height: 24px; }
+.lp-l:last-child { margin-right: 6px; }
+.lp-gate { display: block; margin-left: 4px; transform: perspective(40px) rotateY(-38deg); transform-origin: left center; }
+.lp-n { padding-left: 2px; color: var(--ink-soft); white-space: nowrap; }
+.lp-chip { display: none; }
+.lp-walk { animation: lp-walk 1400ms ease-out backwards; }
+@keyframes lp-walk {
+  0% { transform: translate(44px, 0); opacity: 0; }
+  12% { transform: translate(37px, -4px); opacity: 1; }
+  26% { transform: translate(29px, 0); }
+  40% { transform: translate(21px, -4px); }
+  54% { transform: translate(13px, 0); }
+  68% { transform: translate(6px, -5px); }
+  84% { transform: scale(1.1, .9); }
+  100% { transform: none; }
+}
+body.gentle .lp-walk { animation: none; }
+@media (prefers-reduced-motion: reduce) { .lp-walk { animation: none; } }
+.lp-say { position: fixed; left: max(8px, env(safe-area-inset-left)); top: calc(max(4px, env(safe-area-inset-top)) + 44px); z-index: 64; width: max-content; max-width: min(280px, calc(100vw - 16px)); padding: 7px 10px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); box-shadow: 2px 3px 0 #0003; font: 13px/1.3 var(--font); }
+.lp-say[hidden] { display: none; }
+/* Under the rail width the corner is the ticker's: the pen folds to a chip with the number, the same bevel as Wake Up. */
+@media (max-width: 1099.98px) {
+  #llama-pen { top: max(8px, env(safe-area-inset-top)); }
+  #llama-pen .lp-fence, #llama-pen .lp-n { display: none; }
+  #llama-pen .lp-chip { display: flex; align-items: center; gap: 3px; min-height: 36px; padding: 2px 8px; background: #d4d0c8; color: #000; border: 2px outset #fff; font: 15px "Times New Roman", Times, serif; }
+  #llama-pen .lp-chip i { font-style: normal; font-size: 17px; }
+  #llama-pen:active .lp-chip { border-style: inset; }
+  .lp-say { top: calc(max(8px, env(safe-area-inset-top)) + 42px); }
+}
+@media (pointer: coarse) and (max-width: 1099.98px) {
+  #llama-pen .lp-chip { min-height: 44px; }
+  .lp-say { top: calc(max(8px, env(safe-area-inset-top)) + 50px); }
+}
+
+/* ---- phone ticker (ui/phone.js PHONE_QUERY): its own row under the controls, bigger, bolder, slower, held by a finger ---- */
+@media (pointer: coarse) and (max-width: 759px) {
+  #stage:has(> #l-ticker.on) { padding-top: calc(max(8px, env(safe-area-inset-top)) + 90px); }
+  #stage > #l-ticker.on { top: calc(max(8px, env(safe-area-inset-top)) + 50px); left: 0; right: 0; height: 34px; line-height: 34px; font-size: 19px; font-weight: 700; filter: saturate(1.35) brightness(1.08);
+    pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 5%, #000 95%, transparent 100%); mask-image: linear-gradient(to right, transparent 0, #000 5%, #000 95%, transparent 100%); }
+}
+/* The iPhone home screen tip (ui/phone.js): once, over the dock strip, gone on a tap. */
+#home-tip { position: fixed; left: 50%; bottom: calc(var(--dock-h) + env(safe-area-inset-bottom, 0px) + 12px); z-index: 90; transform: translateX(-50%); max-width: calc(100vw - 24px); min-height: 44px; padding: 6px 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); box-shadow: 2px 3px 0 #0003; font: 15px/1.3 var(--font); touch-action: manipulation; animation: home-tip-in .3s ease-out; }
+@keyframes home-tip-in { from { opacity: 0; } }
