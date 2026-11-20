@@ -168,6 +168,13 @@ namespace ConditioningControlPanel.Models
         public Dictionary<string, int>? SuperModes { get; set; }
 
         /// <summary>
+        /// The newer settings (Steam, floating videos, flash motion, V2 options, monitor targets) as
+        /// AppSettings name to value; see <see cref="PresetCarry"/>. Null on presets saved before 7.3.7
+        /// and on the built-ins: applying one puts the looks back to their defaults.
+        /// </summary>
+        public Dictionary<string, string>? Carried { get; set; }
+
+        /// <summary>
         /// Creates the 5 default presets
         /// </summary>
         public static List<Preset> GetDefaultPresets()
@@ -450,6 +457,9 @@ namespace ConditioningControlPanel.Models
             var superModes = MergeSuperModes(settings.SuperModes, SuperModes);
             if (superModes != null) settings.SuperModes = superModes;
 
+            // Steam, floating videos, flash motion, V2 options, monitors (ccp-bugs #1695 #1696).
+            PresetCarry.Apply(settings, Carried);
+
             // Update current preset name
             settings.CurrentPresetName = Name;
         }
@@ -569,7 +579,8 @@ namespace ConditioningControlPanel.Models
                 PanicKeyEnabled = settings.PanicKeyEnabled,
 
                 // V2 switches
-                SuperModes = SnapshotSuperModes(settings.SuperModes)
+                SuperModes = SnapshotSuperModes(settings.SuperModes),
+                Carried = PresetCarry.Snapshot(settings)
             };
         }
 
