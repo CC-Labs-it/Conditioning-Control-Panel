@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { herdOf, herdWords, newcomers, section12, penLine, penModel, penStep, PEN_MAX } from '../ui/llama-pen.js';
+import { herdOf, herdWords, newcomers, section12, penLine, penModel, penStep, namedCounts, PEN_MAX } from '../ui/llama-pen.js';
 import { tickerMs, iphoneSafari, standalone, homeTipDue, HOME_TIP, HOME_TIP_KEY, PHONE_QUERY } from '../ui/phone.js';
 import { UPDATE_LINES } from '../data/content/terms.js';
 
@@ -33,13 +33,28 @@ test('twelve llamas fit the corner above the dock band', () => {
 });
 
 test('the press line is the last update accepted, or Section 12 with the herd number before any update', () => {
-  assert.equal(penLine({ updates: 1 }), UPDATE_LINES[0]);
+  assert.equal(penLine({ updates: 1, llamas: 4 }), UPDATE_LINES[0]);
   assert.equal(penLine({ updates: 3 }), UPDATE_LINES[2]);
-  assert.equal(penLine({ updates: UPDATE_LINES.length + 1 }), UPDATE_LINES[0]);
+  assert.equal(penLine({ updates: UPDATE_LINES.length + 1, llamas: 4 }), UPDATE_LINES[0]);
   const first = penLine({ updates: 0, llamas: 6 });
   assert.equal(first, section12(6));
   assert.match(first, /^12\. Charitable Obligations\. .*six \(6\) llamas/);
   assert.doesNotMatch(first, /[<>]/);
+});
+
+test('the bubble never names a llama count the pen does not show', () => {
+  assert.deepEqual(namedCounts('Section 12 now covers five llamas. One of them has read your file.'), [5]);
+  assert.deepEqual(namedCounts('One llama has been promoted to supervisor.'), [1]);
+  assert.deepEqual(namedCounts('The llamas now have dental.'), []);
+  assert.deepEqual(namedCounts('Shelter 3 llamas.'), [3]);
+  assert.equal(penLine({ updates: 2, llamas: 12 }), section12(12), 'five llamas against a herd of twelve falls back');
+  assert.equal(penLine({ updates: 2, llamas: 5 }), UPDATE_LINES[1], 'five llamas with a herd of five stands');
+  for (let n = 3; n <= 12; n += 1) {
+    for (let u = 0; u <= UPDATE_LINES.length * 2; u += 1) {
+      const line = penLine({ updates: u, llamas: n });
+      assert.ok(namedCounts(line).every((c) => c === n), `herd ${n}, update ${u}: ${line}`);
+    }
+  }
 });
 
 test('phone ticker runs slower than the desktop one, desktop speed unchanged', () => {

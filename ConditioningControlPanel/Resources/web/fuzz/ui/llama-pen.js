@@ -35,10 +35,23 @@ export function section12(n) {
   return src.replace(/<[^>]+>/g, '').replace('three (3)', herdWords(n));
 }
 
-/** The pen's line: the update the player last accepted on a later visit, or Section 12 itself before any update. */
+/** The llama counts a line names ("five llamas", "One llama", "3 llamas"), as numbers. */
+export function namedCounts(line) {
+  const out = [];
+  for (const m of String(line).matchAll(/\b([a-z]+|\d+) llamas?\b/gi)) {
+    const w = m[1].toLowerCase();
+    const n = /^\d+$/.test(w) ? Number(w) : LLAMA_WORDS.indexOf(w);
+    if (n >= 0) out.push(n);
+  }
+  return out;
+}
+
+/** The pen's line: the update the player last accepted on a later visit, or Section 12 itself before any update. An
+ *  update that names a llama count other than the herd in the pen falls back to Section 12 with the real number. */
 export function penLine(life) {
-  const u = int(life?.updates, 0);
-  return u > 0 ? UPDATE_LINES[(u - 1) % UPDATE_LINES.length] : section12(herdOf(life));
+  const u = int(life?.updates, 0), n = herdOf(life);
+  const line = u > 0 ? UPDATE_LINES[(u - 1) % UPDATE_LINES.length] : '';
+  return line && namedCounts(line).every((c) => c === n) ? line : section12(n);
 }
 
 /** The whole picture of the pen for one run. */
