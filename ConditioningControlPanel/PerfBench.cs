@@ -41,7 +41,8 @@ internal static class PerfBench
             window.Show();
             var startupMs = await firstFrame;
             using var process = Process.GetCurrentProcess();
-            var sinceProcessMs = (DateTime.Now - process.StartTime).TotalMilliseconds;
+            // Process start to the same frame as startup_ms, not to whenever the await resumed (shared with CCP.Avalonia/PerfBench.cs).
+            var sinceProcessMs = startupMs + (DateTime.Now - process.StartTime).TotalMilliseconds - SinceMain.Elapsed.TotalMilliseconds;
             if (tabs.Length == 0) throw new InvalidOperationException("no benchmark tabs");
             var samples = tabs.Select(_ => new List<double>()).ToArray();
             var clock = new Stopwatch();
