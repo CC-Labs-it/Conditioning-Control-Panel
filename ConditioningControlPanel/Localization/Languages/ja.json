@@ -1,5 +1,7 @@
 {
   "Sparkles_Slip_Paid": "支払済",
+  "deeper_editor_tip_zoom_out": "縮小（Ctrlを押しながらスクロールでも可）",
+  "deeper_editor_tip_zoom_in": "拡大（Ctrlを押しながらスクロールでも可）",
   "Sparkles_Slip_Place": "{1}人中{0}位",
   "Sparkles_Slip_Gold": "金",
   "Sparkles_Slip_Silver": "銀",
