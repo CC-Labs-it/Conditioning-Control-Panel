@@ -1,0 +1,25 @@
+{
+  "before": [
+    0,
+    0,
+    13
+  ],
+  "after": [
+    0,
+    0,
+    10.074800000381474
+  ],
+  "buttonPresses": 1,
+  "pauseFrozen": true,
+  "panic": true,
+  "viewport": [
+    393,
+    852
+  ],
+  "timing": {
+    "renders": 105,
+    "actualMs": 3500.600000023842,
+    "frames": 210
+  },
+  "faults": []
+}

@@ -1,0 +1,24 @@
+{
+  "before": {
+    "file": "catwalk-refine-02",
+    "triangles": 24578,
+    "overlap": 144,
+    "minimum": -0.35951776524704826,
+    "closest": [
+      -25.533000946044922,
+      10.25,
+      -5
+    ]
+  },
+  "after": {
+    "file": "catwalk-refine-03",
+    "triangles": 24578,
+    "overlap": 0,
+    "minimum": 0.053155679066442474,
+    "closest": [
+      -20.525485068338153,
+      11.327202796936035,
+      -4.95186819548986
+    ]
+  }
+}

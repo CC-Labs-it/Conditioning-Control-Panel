@@ -1,0 +1,897 @@
+{
+  "expected": "hall",
+  "integrated": true,
+  "network": {
+    "megabitsPerSecond": 20,
+    "latencyMs": 35
+  },
+  "devices": [
+    {
+      "name": "desktop",
+      "size": {
+        "width": 1920,
+        "height": 1080
+      },
+      "entryMs": 3952,
+      "firstBytes": 6590013,
+      "firstFiles": [
+        {
+          "name": "zones.json",
+          "bytes": 3857,
+          "beforeArrival": true
+        },
+        {
+          "name": "hall-probe-px.webp",
+          "bytes": 6049,
+          "beforeArrival": true
+        },
+        {
+          "name": "hall-probe-nx.webp",
+          "bytes": 6259,
+          "beforeArrival": true
+        },
+        {
+          "name": "hall-probe-py.webp",
+          "bytes": 3591,
+          "beforeArrival": true
+        },
+        {
+          "name": "hall-collision.glb",
+          "bytes": 55365,
+          "beforeArrival": true
+        },
+        {
+          "name": "hall-probe-ny.webp",
+          "bytes": 1293,
+          "beforeArrival": true
+        },
+        {
+          "name": "hall-probe-pz.webp",
+          "bytes": 6497,
+          "beforeArrival": true
+        },
+        {
+          "name": "hall-probe-nz.webp",
+          "bytes": 7249,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/ce0ef0a96be49d9b2c22.webp",
+          "bytes": 8511,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/fee32c8ea4784c7ef87b.webp",
+          "bytes": 14334,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/bba53466b221a34f182a.webp",
+          "bytes": 91482,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/d48c3f5c164ba2a5f34b.webp",
+          "bytes": 52338,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/073a3617515fc267a7e3.webp",
+          "bytes": 76842,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/b413eba9386dd342092a.webp",
+          "bytes": 165691,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/149595e7fea552a22ffa.webp",
+          "bytes": 23032,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/8e56ec547f04c3be4c38.webp",
+          "bytes": 118909,
+          "beforeArrival": true
+        },
+        {
+          "name": "hall-light.webp",
+          "bytes": 525545,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/be11498637a21b08fee8.webp",
+          "bytes": 415237,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/b78c1102d3ee613c8812.webp",
+          "bytes": 103479,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/8b7230ac561409bcd8f9.webp",
+          "bytes": 205885,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/84bd2de20a6742112868.webp",
+          "bytes": 259839,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/396dcc2b143be18e6eb8.webp",
+          "bytes": 34294,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/d76408f6aec44119c508.webp",
+          "bytes": 18824,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/9883b9738af0989d2f5f.webp",
+          "bytes": 379051,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/9e86ed252af3b6e6da5d.webp",
+          "bytes": 113163,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/d58bd2d047236d03ee79.webp",
+          "bytes": 74076,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/58496ba85871bbc29b85.webp",
+          "bytes": 26930,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/114ec90b52e2b3b1fe56.webp",
+          "bytes": 24098,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/05220d30131f00f8db4c.webp",
+          "bytes": 54212,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/485a7f75470c0fce78b7.webp",
+          "bytes": 7521,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/17a07eb477f1b86b2b72.webp",
+          "bytes": 91700,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/9a1302507a5748cd30fc.webp",
+          "bytes": 2369,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/c01d8b9639e7ff99f2d0.webp",
+          "bytes": 10506,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/104c9019e81ea317a55c.webp",
+          "bytes": 9641,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/a9dc077c42a3ab074960.webp",
+          "bytes": 9663,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/0eba5c11798d89f9997b.webp",
+          "bytes": 14864,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/477a06cacc53114e4750.webp",
+          "bytes": 8987,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/31af03eca8bb5e7f16e0.webp",
+          "bytes": 133083,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/9f8e45bd8c2dada59ced.webp",
+          "bytes": 36296,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/84be768c7b2eeaa49fed.webp",
+          "bytes": 10037,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/e25eb22b586fc57f629f.webp",
+          "bytes": 10356,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/c95458f517fffd6fefe9.webp",
+          "bytes": 444183,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/325444ef0f1444ebe8cb.webp",
+          "bytes": 12096,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/51f1a23eec97ba211c21.webp",
+          "bytes": 14100,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/f277e9cd47a56d698455.webp",
+          "bytes": 12114,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/a7e16b7903b42626edf4.webp",
+          "bytes": 9807,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/458e6b8e9568e5609f4f.webp",
+          "bytes": 10416,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/8b06838fd3647c4d4e77.webp",
+          "bytes": 10254,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/5e87c7d25a291625a39d.webp",
+          "bytes": 12880,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/9b318339ebf2dd22cd9d.webp",
+          "bytes": 8885,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/c5ece72dc41d9e27e803.webp",
+          "bytes": 14426,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/173027dcc5b15ac912f3.webp",
+          "bytes": 2293,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/9470836720214c658911.webp",
+          "bytes": 3659,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/68794abe0c79e23134dc.webp",
+          "bytes": 9447,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/4dda23ee5daeccbfa91e.webp",
+          "bytes": 20098,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/ad1b4afb193886afc9a8.webp",
+          "bytes": 62062,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/81b01ebfd92f6d875d53.webp",
+          "bytes": 137603,
+          "beforeArrival": true
+        },
+        {
+          "name": "hall.glb",
+          "bytes": 2584735,
+          "beforeArrival": true
+        }
+      ],
+      "state": {
+        "zone": "hall",
+        "feet": [
+          0,
+          0,
+          13
+        ],
+        "surface": "stone",
+        "elapsed": 0.02009999997615796,
+        "ready": true,
+        "loaded": [
+          "hall"
+        ],
+        "textures": {
+          "residentSources": 48,
+          "sharedHits": 0,
+          "decodedBytes": 175990016
+        },
+        "calls": 41,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0
+      },
+      "initialTiming": {
+        "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "medianMs": 16.69999998807907,
+        "p95Ms": 17.099999994039536,
+        "frames": 240,
+        "pixelRatio": 1,
+        "textureMemory": {
+          "residentSources": 48,
+          "sharedHits": 0,
+          "decodedBytes": 175990016
+        }
+      },
+      "dreamTiming": {
+        "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "medianMs": 16.69999998807907,
+        "p95Ms": 17.200000017881393,
+        "frames": 240,
+        "pixelRatio": 1,
+        "textureMemory": {
+          "residentSources": 52,
+          "sharedHits": 40,
+          "decodedBytes": 187557120
+        }
+      },
+      "rooms": {
+        "hall": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 16.69999998807907,
+          "p95Ms": 17.099999994039536,
+          "frames": 240,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 52,
+            "sharedHits": 40,
+            "decodedBytes": 187557120
+          }
+        },
+        "habitat": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 16.69999998807907,
+          "p95Ms": 17.099999994039536,
+          "frames": 241,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 53,
+            "sharedHits": 63,
+            "decodedBytes": 188278016
+          }
+        },
+        "service": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 16.69999998807907,
+          "p95Ms": 17,
+          "frames": 239,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 49,
+            "sharedHits": 91,
+            "decodedBytes": 158064640
+          }
+        },
+        "secret": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 16.69999998807907,
+          "p95Ms": 16.900000005960464,
+          "frames": 240,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 33,
+            "sharedHits": 113,
+            "decodedBytes": 157089792
+          }
+        },
+        "catwalk": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 16.69999998807907,
+          "p95Ms": 17.099999994039536,
+          "frames": 229,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 26,
+            "sharedHits": 146,
+            "decodedBytes": 103841792
+          }
+        }
+      },
+      "walkedMeters": 3.659999999594673,
+      "shared": {
+        "residentSources": 52,
+        "sharedHits": 40,
+        "decodedBytes": 187557120
+      },
+      "returned": {
+        "zone": "hall",
+        "feet": [
+          0,
+          0,
+          13
+        ],
+        "surface": "stone",
+        "elapsed": 37.53849999539903,
+        "ready": true,
+        "loaded": [
+          "catwalk",
+          "dome",
+          "hall"
+        ],
+        "textures": {
+          "residentSources": 52,
+          "sharedHits": 168,
+          "decodedBytes": 187557120
+        },
+        "calls": 60,
+        "pixelRatio": 1,
+        "depth": 0.9731172916700279,
+        "phase": 4,
+        "seconds": 203.5481500008067
+      },
+      "usedSmallerTextures": false
+    },
+    {
+      "name": "phone",
+      "size": {
+        "width": 393,
+        "height": 852
+      },
+      "entryMs": 3309,
+      "firstBytes": 3357207,
+      "firstFiles": [
+        {
+          "name": "zones.json",
+          "bytes": 3857,
+          "beforeArrival": true
+        },
+        {
+          "name": "hall-probe-px.webp",
+          "bytes": 6049,
+          "beforeArrival": true
+        },
+        {
+          "name": "hall-probe-nx.webp",
+          "bytes": 6259,
+          "beforeArrival": true
+        },
+        {
+          "name": "hall-probe-py.webp",
+          "bytes": 3591,
+          "beforeArrival": true
+        },
+        {
+          "name": "hall-collision.glb",
+          "bytes": 55365,
+          "beforeArrival": true
+        },
+        {
+          "name": "hall-probe-nz.webp",
+          "bytes": 7249,
+          "beforeArrival": true
+        },
+        {
+          "name": "hall-probe-ny.webp",
+          "bytes": 1293,
+          "beforeArrival": true
+        },
+        {
+          "name": "hall-probe-pz.webp",
+          "bytes": 6497,
+          "beforeArrival": true
+        },
+        {
+          "name": "hall-light-mobile.webp",
+          "bytes": 148217,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/ce0ef0a96be49d9b2c22-mobile.webp",
+          "bytes": 744,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/bba53466b221a34f182a-mobile.webp",
+          "bytes": 3303,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/fee32c8ea4784c7ef87b-mobile.webp",
+          "bytes": 1351,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/b413eba9386dd342092a-mobile.webp",
+          "bytes": 1965,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/d48c3f5c164ba2a5f34b-mobile.webp",
+          "bytes": 8379,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/be11498637a21b08fee8-mobile.webp",
+          "bytes": 96570,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/073a3617515fc267a7e3-mobile.webp",
+          "bytes": 1170,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/8e56ec547f04c3be4c38-mobile.webp",
+          "bytes": 14732,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/149595e7fea552a22ffa-mobile.webp",
+          "bytes": 5689,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/9883b9738af0989d2f5f-mobile.webp",
+          "bytes": 20382,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/84bd2de20a6742112868-mobile.webp",
+          "bytes": 38032,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/8b7230ac561409bcd8f9-mobile.webp",
+          "bytes": 32274,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/b78c1102d3ee613c8812-mobile.webp",
+          "bytes": 2395,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/9e86ed252af3b6e6da5d-mobile.webp",
+          "bytes": 25834,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/c95458f517fffd6fefe9-mobile.webp",
+          "bytes": 55466,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/396dcc2b143be18e6eb8-mobile.webp",
+          "bytes": 3147,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/d58bd2d047236d03ee79-mobile.webp",
+          "bytes": 10368,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/d76408f6aec44119c508-mobile.webp",
+          "bytes": 5189,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/58496ba85871bbc29b85-mobile.webp",
+          "bytes": 2229,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/05220d30131f00f8db4c-mobile.webp",
+          "bytes": 7799,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/485a7f75470c0fce78b7-mobile.webp",
+          "bytes": 862,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/17a07eb477f1b86b2b72-mobile.webp",
+          "bytes": 17568,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/114ec90b52e2b3b1fe56-mobile.webp",
+          "bytes": 6027,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/31af03eca8bb5e7f16e0-mobile.webp",
+          "bytes": 1587,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/9a1302507a5748cd30fc-mobile.webp",
+          "bytes": 716,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/c01d8b9639e7ff99f2d0-mobile.webp",
+          "bytes": 6247,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/104c9019e81ea317a55c-mobile.webp",
+          "bytes": 6995,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/a9dc077c42a3ab074960-mobile.webp",
+          "bytes": 7071,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/0eba5c11798d89f9997b-mobile.webp",
+          "bytes": 10570,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/477a06cacc53114e4750-mobile.webp",
+          "bytes": 5745,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/84be768c7b2eeaa49fed-mobile.webp",
+          "bytes": 6045,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/9f8e45bd8c2dada59ced-mobile.webp",
+          "bytes": 11284,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/325444ef0f1444ebe8cb-mobile.webp",
+          "bytes": 7369,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/e25eb22b586fc57f629f-mobile.webp",
+          "bytes": 6657,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/51f1a23eec97ba211c21-mobile.webp",
+          "bytes": 6945,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/f277e9cd47a56d698455-mobile.webp",
+          "bytes": 6531,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/a7e16b7903b42626edf4-mobile.webp",
+          "bytes": 5495,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/9b318339ebf2dd22cd9d-mobile.webp",
+          "bytes": 16060,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/458e6b8e9568e5609f4f-mobile.webp",
+          "bytes": 19746,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/8b06838fd3647c4d4e77-mobile.webp",
+          "bytes": 4903,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/c5ece72dc41d9e27e803-mobile.webp",
+          "bytes": 2877,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/5e87c7d25a291625a39d-mobile.webp",
+          "bytes": 7339,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/173027dcc5b15ac912f3-mobile.webp",
+          "bytes": 3421,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/9470836720214c658911-mobile.webp",
+          "bytes": 5479,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/68794abe0c79e23134dc-mobile.webp",
+          "bytes": 6827,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/81b01ebfd92f6d875d53-mobile.webp",
+          "bytes": 2349,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/ad1b4afb193886afc9a8-mobile.webp",
+          "bytes": 8077,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/4dda23ee5daeccbfa91e-mobile.webp",
+          "bytes": 5949,
+          "beforeArrival": true
+        },
+        {
+          "name": "hall-mobile.glb",
+          "bytes": 2585071,
+          "beforeArrival": true
+        }
+      ],
+      "state": {
+        "zone": "hall",
+        "feet": [
+          0,
+          0,
+          13
+        ],
+        "surface": "stone",
+        "elapsed": 0.04170000000596065,
+        "ready": true,
+        "loaded": [
+          "hall"
+        ],
+        "textures": {
+          "residentSources": 48,
+          "sharedHits": 0,
+          "decodedBytes": 38465536
+        },
+        "calls": 31,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0
+      },
+      "initialTiming": {
+        "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "medianMs": 33.39999997615814,
+        "p95Ms": 33.60000002384186,
+        "frames": 119,
+        "pixelRatio": 1,
+        "textureMemory": {
+          "residentSources": 48,
+          "sharedHits": 0,
+          "decodedBytes": 38465536
+        }
+      },
+      "dreamTiming": {
+        "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "medianMs": 33.400000005960464,
+        "p95Ms": 33.80000001192093,
+        "frames": 118,
+        "pixelRatio": 1,
+        "textureMemory": {
+          "residentSources": 52,
+          "sharedHits": 40,
+          "decodedBytes": 41609216
+        }
+      },
+      "rooms": {
+        "hall": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 33.39999997615814,
+          "p95Ms": 33.599999994039536,
+          "frames": 119,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 48,
+            "sharedHits": 40,
+            "decodedBytes": 38465536
+          }
+        },
+        "habitat": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 33.39999997615814,
+          "p95Ms": 33.79999998211861,
+          "frames": 119,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 53,
+            "sharedHits": 63,
+            "decodedBytes": 41957376
+          }
+        },
+        "service": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 33.39999997615814,
+          "p95Ms": 33.599999994039536,
+          "frames": 119,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 43,
+            "sharedHits": 91,
+            "decodedBytes": 36616192
+          }
+        },
+        "secret": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 33.39999997615814,
+          "p95Ms": 33.60000002384186,
+          "frames": 119,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 33,
+            "sharedHits": 113,
+            "decodedBytes": 58902528
+          }
+        },
+        "catwalk": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 33.39999997615814,
+          "p95Ms": 33.79999998211861,
+          "frames": 120,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 26,
+            "sharedHits": 146,
+            "decodedBytes": 26212352
+          }
+        }
+      },
+      "walkedMeters": 3.134652631177415,
+      "shared": {
+        "residentSources": 52,
+        "sharedHits": 40,
+        "decodedBytes": 41609216
+      },
+      "returned": {
+        "zone": "hall",
+        "feet": [
+          0,
+          0,
+          13
+        ],
+        "surface": "stone",
+        "elapsed": 36.38909999503528,
+        "ready": true,
+        "loaded": [
+          "hall"
+        ],
+        "textures": {
+          "residentSources": 48,
+          "sharedHits": 168,
+          "decodedBytes": 38465536
+        },
+        "calls": 31,
+        "pixelRatio": 1,
+        "depth": 0.9740209375035606,
+        "phase": 4,
+        "seconds": 203.76502500085454
+      },
+      "usedSmallerTextures": true
+    }
+  ],
+  "errors": []
+}

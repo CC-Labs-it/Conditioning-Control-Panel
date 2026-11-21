@@ -162,7 +162,12 @@ export function createAdCard({ doc, box, model, label = ADCARD_COPY.cardLabel, r
   for (const [k, v] of Object.entries({ A: C.A, B: C.B, M: C.M, hot: C.hot, ink: C.ink, paper: C.paper, hlc: C.hlc })) card.style.setProperty('--' + k, v);
   card.innerHTML = cardHtml(model);
   box.replaceChildren(card);
-  livePortrait(doc, card.querySelector('.pic'), model.first);
+  const pic = card.querySelector('.pic');
+  if (model.groupPhoto) {
+    const image = doc.createElement('img');
+    image.className = 'base'; image.alt = 'Group photograph in the Hall of the Twelve';
+    image.src = model.groupPhoto; pic.style.aspectRatio = '8 / 5'; pic.append(image);
+  } else livePortrait(doc, pic, model.first);
   const canvas = card.querySelector('canvas.sp'), spec = { cols: C.spiral, base: C.paper };
   let tl = null, raf = 0, dead = false, lastSpiral = 0, phase = 0, heldAt = null;
   const heldAnimations = new Set();

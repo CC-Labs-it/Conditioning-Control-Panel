@@ -1,5 +1,5 @@
 // The Panel (owner 2026-11-21, handoff-1121/TC-LLAMA-ROUND-BRIEF.md change 2): an extra open fate card, only for a full
-// pen (life.llamas >= 12, the run's `herd`), and its three-scene ending. Players who never touch the llamas lose nothing.
+// pen (life.llamas >= 12, the run's `herd`), now opening the Expo walk. Players who never touch the llamas lose nothing.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as E from '../sim/economy.js';
@@ -15,13 +15,12 @@ import { createLife, recordEnding } from '../sim/save.js';
 import { cardModel } from '../ui/adcard/model.js';
 import { herdHtml } from '../ui/adcard/card.js';
 import { GROUPS } from '../ui/unlocks/index.js';
-import { panelLength, PANEL_PAPER } from '../ui/unlocks/fate/llama/ending.js';
+import { expoEnding, EXPO_PAPER } from '../ui/unlocks/fate/llama/ending.js';
 import { OWED } from '../ui/unlocks/fate/llama/art.js';
 import { fateShut } from '../ui/guide-world-model.js';
 import { createJourney, EXTRAS } from '../sim/journey.js';
 import { allRoutes } from '../sim/route.js';
 import { measureJourney } from '../dev/journey-timing.mjs';
-import { CONFIG } from '../data/config.js';
 
 const THEMES = Object.keys(FORKS.f5.opts);
 const rich = (s) => { s.fuzz = 1e12; s.total = 1e12; return s; };
@@ -130,18 +129,14 @@ test('Journey reference player on The Panel: seed right after Second Theme, abou
   assert.equal(rep.paid.at(-1).id, 'll_end');
 });
 
-test('the ending: three scenes, Section 50 to close, a sealed sticker, under the show cap', () => {
+test('the Expo keeps the ending identity and sticker, with no forced wall-clock exit', () => {
   const e = ENDINGS.ll_end;
-  assert.equal(e.scenes.length, 3);
-  assert.equal(e.closing, 'No one has reached the llama and returned unchanged.');
-  assert.ok(TERMS.some((t) => t.includes(e.closing)), 'the closing line is Section 50');
-  assert.equal(e.scenes[1].verdict, 'Verdict: mostly chewing.');
   assert.ok(!e.link, 'no link out: the llamas are not a product');
-  assert.ok(panelLength() < CONFIG.ENDING_SHOW_MAX_MS, `${panelLength()} ms`);
   const group = GROUPS['fate-llama'];
   assert.deepEqual(Object.keys(group).sort(), ['ft_panel', 'll_end']);
-  assert.equal(typeof group.ll_end.ending, 'function');
-  assert.equal(group.ll_end.fadeColour, PANEL_PAPER);
+  assert.equal(group.ll_end.ending, expoEnding);
+  assert.equal(group.ll_end.fadeColour, EXPO_PAPER);
+  assert.equal(group.ll_end.showMaxMs, null, 'the visitor decides when to leave');
   assert.ok(OWED.length >= 4 && OWED.every((o) => o.file && o.size && o.what && /^real/.test(o.now)), 'every owed picture is real now');
 
   const st = STICKER_BY_ID.e_ll_end;

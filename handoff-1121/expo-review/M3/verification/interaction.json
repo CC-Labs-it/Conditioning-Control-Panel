@@ -1,0 +1,181 @@
+{
+  "visits": [
+    {
+      "reduced": false,
+      "depthTimeRate": 1,
+      "doorways": [
+        {
+          "phase": 0,
+          "depth": 0.021000000000000005,
+          "bubbles": 0,
+          "frames": 0,
+          "exit": "hall",
+          "secondsAfter": 4.556299999947851,
+          "feet": [
+            -9.878999999999989,
+            0,
+            -5
+          ]
+        },
+        {
+          "phase": 1,
+          "depth": 0.1492,
+          "bubbles": 0,
+          "frames": 0,
+          "exit": "hall",
+          "secondsAfter": 28.582824999926977,
+          "feet": [
+            -9.878999999999989,
+            0,
+            -5
+          ]
+        },
+        {
+          "phase": 2,
+          "depth": 0.34555555555555556,
+          "bubbles": 16,
+          "frames": 0,
+          "exit": "hall",
+          "secondsAfter": 62.58162499998805,
+          "feet": [
+            -9.878999999999989,
+            0,
+            -5
+          ]
+        },
+        {
+          "phase": 3,
+          "depth": 0.5966666666666667,
+          "bubbles": 16,
+          "frames": 0,
+          "exit": "hall",
+          "secondsAfter": 113.61132499993894,
+          "feet": [
+            -9.878999999999989,
+            0,
+            -5
+          ]
+        },
+        {
+          "phase": 4,
+          "depth": 0.8508333333333333,
+          "bubbles": 16,
+          "frames": 6,
+          "exit": "hall",
+          "secondsAfter": 174.58054999996733,
+          "feet": [
+            -9.878999999999989,
+            0,
+            -5
+          ]
+        },
+        {
+          "phase": 5,
+          "depth": 1,
+          "bubbles": 16,
+          "frames": 6,
+          "exit": "hall",
+          "secondsAfter": 209.8670500000328,
+          "feet": [
+            -9.878999999999989,
+            0,
+            -5
+          ]
+        }
+      ],
+      "pauseFroze": true,
+      "poppedWithKey": true,
+      "oculusLinked": true,
+      "panic": true
+    },
+    {
+      "reduced": true,
+      "depthTimeRate": 0.6499999999999999,
+      "doorways": [
+        {
+          "phase": 0,
+          "depth": 0.02065,
+          "bubbles": 0,
+          "frames": 0,
+          "exit": "hall",
+          "secondsAfter": 4.389349999983611,
+          "feet": [
+            -9.878999999999989,
+            0,
+            -5
+          ]
+        },
+        {
+          "phase": 1,
+          "depth": 0.14878000000000002,
+          "bubbles": 0,
+          "frames": 0,
+          "exit": "hall",
+          "secondsAfter": 28.332054999951712,
+          "feet": [
+            -9.878999999999989,
+            0,
+            -5
+          ]
+        },
+        {
+          "phase": 2,
+          "depth": 0.34516666666666673,
+          "bubbles": 5,
+          "frames": 0,
+          "exit": "hall",
+          "secondsAfter": 62.33853499995559,
+          "feet": [
+            -9.878999999999989,
+            0,
+            -5
+          ]
+        },
+        {
+          "phase": 3,
+          "depth": 0.596375,
+          "bubbles": 5,
+          "frames": 0,
+          "exit": "hall",
+          "secondsAfter": 113.33180499997344,
+          "feet": [
+            -9.878999999999989,
+            0,
+            -5
+          ]
+        },
+        {
+          "phase": 4,
+          "depth": 0.8505416666666666,
+          "bubbles": 5,
+          "frames": 4,
+          "exit": "hall",
+          "secondsAfter": 174.3323799999922,
+          "feet": [
+            -9.878999999999989,
+            0,
+            -5
+          ]
+        },
+        {
+          "phase": 5,
+          "depth": 1,
+          "bubbles": 5,
+          "frames": 4,
+          "exit": "hall",
+          "secondsAfter": 209.86707500000153,
+          "feet": [
+            -9.878999999999989,
+            0,
+            -5
+          ]
+        }
+      ],
+      "pauseFroze": true,
+      "poppedWithKey": true,
+      "oculusLinked": true,
+      "panic": true
+    }
+  ],
+  "errors": []
+}

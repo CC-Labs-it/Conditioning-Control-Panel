@@ -108,6 +108,8 @@ export function cardModel({ run, life = {}, name = '', adNumber = null, serialLa
   const w = barWidths({ pics, total, golden });
   return {
     first, second,
+    groupPhoto: run?.ended?.id === 'll_end' && llamas === 12 && /^data:image\/webp;base64,[A-Za-z0-9+/=]{1,240000}$/.test(run.store?.ll_end?.groupPhoto)
+      ? run.store.ll_end.groupPhoto : null,
     labels: [ADCARD_COPY.themes[first], ...(second ? [ADCARD_COPY.themes[second]] : [])],
     colours: cardColours(first, second),
     serial: fill(button ? ADCARD_COPY.buttonSerial : serialLabel, { n: adText }),

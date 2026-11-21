@@ -1,0 +1,197 @@
+{
+  "start": {
+    "id": "hall",
+    "at": [
+      0,
+      0,
+      13
+    ],
+    "yaw": 0
+  },
+  "zones": [
+    {
+      "id": "hall",
+      "bounds": [
+        -12,
+        0,
+        -16,
+        12,
+        10.8,
+        16
+      ],
+      "file": "hall.glb",
+      "mobileFile": "hall-mobile.glb",
+      "lightIntensity": 32.06457570495658,
+      "reflectionIntensity": 0.33
+    },
+    {
+      "id": "dome",
+      "bounds": [
+        -31,
+        -0.1,
+        -13.8,
+        -12,
+        11.52,
+        3.8
+      ],
+      "file": "dome.glb",
+      "mobileFile": "dome-mobile.glb",
+      "lightIntensity": 9.179523794137484,
+      "reflectionIntensity": 0.33
+    },
+    {
+      "id": "habitat",
+      "bounds": [
+        12,
+        0,
+        2.1,
+        24,
+        4.6,
+        13.8
+      ],
+      "file": "habitat.glb",
+      "mobileFile": "habitat-mobile.glb",
+      "lightIntensity": 10.57822215720712,
+      "reflectionIntensity": 0.33
+    },
+    {
+      "id": "service",
+      "bounds": [
+        12,
+        -0.16,
+        18.3,
+        35.5,
+        10.0,
+        42.2
+      ],
+      "file": "service.glb",
+      "mobileFile": "service-mobile.glb",
+      "lightIntensity": 66.27363857503994,
+      "reflectionIntensity": 0.33,
+      "crossings": [
+        {
+          "axis": "z",
+          "direction": -1,
+          "at": 21.93,
+          "across": [
+            21.4,
+            23.44
+          ],
+          "height": [
+            1.37,
+            2.03
+          ],
+          "offset": [
+            0,
+            3.4,
+            0
+          ]
+        },
+        {
+          "axis": "z",
+          "direction": 1,
+          "at": 21.96,
+          "across": [
+            21.4,
+            23.44
+          ],
+          "height": [
+            4.77,
+            5.43
+          ],
+          "offset": [
+            0,
+            -3.4,
+            0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "secret",
+      "bounds": [
+        30.4,
+        -0.16,
+        37.55,
+        89.4,
+        3.75,
+        53.5
+      ],
+      "file": "secret.glb",
+      "mobileFile": "secret-mobile.glb",
+      "lightIntensity": 12.2361655204716,
+      "reflectionIntensity": 0.33,
+      "crossings": [
+        {
+          "axis": "x",
+          "direction": -1,
+          "at": 80.0,
+          "across": [
+            39.87,
+            42.13
+          ],
+          "height": [
+            -0.25,
+            1.0
+          ],
+          "offset": [
+            6,
+            0,
+            10
+          ]
+        },
+        {
+          "axis": "x",
+          "direction": 1,
+          "at": 86.2,
+          "across": [
+            49.87,
+            52.13
+          ],
+          "height": [
+            -0.25,
+            1.0
+          ],
+          "offset": [
+            -5.78,
+            0,
+            -10
+          ]
+        },
+        {
+          "axis": "x",
+          "direction": -1,
+          "at": 33.5,
+          "across": [
+            49.87,
+            52.13
+          ],
+          "height": [
+            -0.25,
+            1.0
+          ],
+          "offset": [
+            0.7,
+            0,
+            -10
+          ]
+        }
+      ]
+    },
+    {
+      "id": "catwalk",
+      "bounds": [
+        -31,
+        6.58,
+        -13.4,
+        -12,
+        16.1,
+        29.55
+      ],
+      "file": "catwalk.glb",
+      "mobileFile": "catwalk-mobile.glb",
+      "lightIntensity": 21.582901459643242,
+      "reflectionIntensity": 0.33
+    }
+  ]
+}

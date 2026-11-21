@@ -1,0 +1,50 @@
+{
+  "steps": {
+    "stone": [
+      "step-stone-1.ogg",
+      "step-stone-2.ogg"
+    ],
+    "wood": [
+      "step-wood-1.ogg",
+      "step-wood-2.ogg",
+      "step-wood-3.ogg"
+    ],
+    "metal": [
+      "step-metal-1.ogg",
+      "step-metal-2.ogg",
+      "step-metal-3.ogg"
+    ],
+    "carpet": [
+      "step-carpet-1.ogg",
+      "step-carpet-2.ogg",
+      "step-carpet-3.ogg"
+    ]
+  },
+  "tones": {
+    "hall": "hall.ogg",
+    "atrium": "atrium.ogg",
+    "hoof": "hoof.ogg",
+    "habitat": "habitat.ogg",
+    "twelve": "twelve.ogg",
+    "dome": "dome.ogg",
+    "secret": "secret.ogg",
+    "shop": "shop.ogg",
+    "service": "service.ogg",
+    "server": "server.ogg"
+  },
+  "effects": {
+    "door": "door.ogg",
+    "press": "press.ogg",
+    "turnstile": "turnstile.ogg",
+    "glass": "glass.ogg",
+    "feed": "feed.ogg",
+    "register": "register.ogg",
+    "chime": "chime.ogg",
+    "bubble": "bubble.ogg",
+    "spit": "spit.ogg",
+    "band": "band.ogg",
+    "note": "note.ogg",
+    "fog": "fog.ogg",
+    "dream": "dream.ogg"
+  }
+}

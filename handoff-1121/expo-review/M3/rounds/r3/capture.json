@@ -1,0 +1,508 @@
+{
+  "timeMode": "continuous real clock",
+  "gentle": false,
+  "wallSeconds": 225.302,
+  "rows": [
+    {
+      "name": "phase-0-room.png",
+      "at": [
+        -14.86,
+        0,
+        -5
+      ],
+      "targ": [
+        -22,
+        1.4,
+        -5
+      ],
+      "zone": "dome",
+      "feet": [
+        -14.86,
+        0,
+        -5
+      ],
+      "surface": "stone",
+      "elapsed": 13.50179999844428,
+      "ready": true,
+      "loaded": [
+        "hall",
+        "dome"
+      ],
+      "calls": 25,
+      "pixelRatio": 1,
+      "depth": 0.066968499992281,
+      "phase": 0,
+      "seconds": 13.3936999984562,
+      "eye": [
+        -14.86,
+        1.6,
+        -5
+      ],
+      "yaw": 1.5707963267948966,
+      "roll": 0,
+      "visibleSourcePanes": 0,
+      "visibleFrames": 0
+    },
+    {
+      "name": "phase-0-detail.png",
+      "at": [
+        -19.95,
+        0,
+        -5.15
+      ],
+      "targ": [
+        -22,
+        1.4,
+        -5
+      ],
+      "zone": "dome",
+      "feet": [
+        -19.95,
+        0,
+        -5.15
+      ],
+      "surface": "stone",
+      "elapsed": 13.749599998414478,
+      "ready": true,
+      "loaded": [
+        "hall",
+        "dome"
+      ],
+      "calls": 17,
+      "pixelRatio": 1,
+      "depth": 0.06820749999213198,
+      "phase": 0,
+      "seconds": 13.641499998426397,
+      "eye": [
+        -19.95,
+        1.6,
+        -5.15
+      ],
+      "yaw": 1.6438368920980162,
+      "roll": 0,
+      "visibleSourcePanes": 0,
+      "visibleFrames": 0
+    },
+    {
+      "name": "phase-1-room.png",
+      "at": [
+        -18.5,
+        0,
+        -5.7
+      ],
+      "targ": [
+        -23.5,
+        0.05,
+        -4.4
+      ],
+      "zone": "dome",
+      "feet": [
+        -18.5,
+        0,
+        -5.7
+      ],
+      "surface": "stone",
+      "elapsed": 32.35769999636409,
+      "ready": true,
+      "loaded": [
+        "hall",
+        "dome"
+      ],
+      "calls": 25,
+      "pixelRatio": 1,
+      "depth": 0.1734975999782561,
+      "phase": 1,
+      "seconds": 32.24959999637601,
+      "eye": [
+        -18.5,
+        1.6,
+        -5.7
+      ],
+      "yaw": 1.8251643853481625,
+      "roll": 0,
+      "visibleSourcePanes": 0,
+      "visibleFrames": 0
+    },
+    {
+      "name": "phase-1-detail.png",
+      "at": [
+        -20.15,
+        0,
+        -4.88
+      ],
+      "targ": [
+        -22,
+        1.43,
+        -5
+      ],
+      "zone": "dome",
+      "feet": [
+        -20.15,
+        0,
+        -4.88
+      ],
+      "surface": "stone",
+      "elapsed": 32.590699996346224,
+      "ready": true,
+      "loaded": [
+        "hall",
+        "dome"
+      ],
+      "calls": 18,
+      "pixelRatio": 1,
+      "depth": 0.17489559997814888,
+      "phase": 1,
+      "seconds": 32.48259999635815,
+      "eye": [
+        -20.15,
+        1.6,
+        -4.88
+      ],
+      "yaw": 1.5060222048689789,
+      "roll": 0,
+      "visibleSourcePanes": 0,
+      "visibleFrames": 0
+    },
+    {
+      "name": "phase-2-room.png",
+      "at": [
+        -18.7,
+        0,
+        -6.5
+      ],
+      "targ": [
+        -22,
+        5.8,
+        -5
+      ],
+      "zone": "dome",
+      "feet": [
+        -18.7,
+        0,
+        -6.5
+      ],
+      "surface": "stone",
+      "elapsed": 58.38919999315299,
+      "ready": true,
+      "loaded": [
+        "hall",
+        "dome"
+      ],
+      "calls": 24,
+      "pixelRatio": 1,
+      "depth": 0.3237838888509162,
+      "phase": 2,
+      "seconds": 58.281099993164915,
+      "eye": [
+        -18.7,
+        1.6,
+        -6.5
+      ],
+      "yaw": 1.9974238199217726,
+      "roll": 0,
+      "visibleSourcePanes": 0,
+      "visibleFrames": 0
+    },
+    {
+      "name": "phase-2-detail.png",
+      "at": [
+        -20,
+        0,
+        -8
+      ],
+      "targ": [
+        -22.2,
+        1.5,
+        -4.4
+      ],
+      "zone": "dome",
+      "feet": [
+        -20,
+        0,
+        -8
+      ],
+      "surface": "stone",
+      "elapsed": 58.63859999309337,
+      "ready": true,
+      "loaded": [
+        "hall",
+        "dome"
+      ],
+      "calls": 33,
+      "pixelRatio": 1,
+      "depth": 0.32516944440614054,
+      "phase": 2,
+      "seconds": 58.530499993105295,
+      "eye": [
+        -20,
+        1.6,
+        -8
+      ],
+      "yaw": 2.5930432511392656,
+      "roll": 0,
+      "visibleSourcePanes": 0,
+      "visibleFrames": 0
+    },
+    {
+      "name": "phase-3-room.png",
+      "at": [
+        -15.6,
+        0,
+        -6.2
+      ],
+      "targ": [
+        -22.5,
+        1.3,
+        -5.4
+      ],
+      "zone": "dome",
+      "feet": [
+        -15.6,
+        0,
+        -6.2
+      ],
+      "surface": "stone",
+      "elapsed": 110.35729998534309,
+      "ready": true,
+      "loaded": [
+        "hall",
+        "dome"
+      ],
+      "calls": 38,
+      "pixelRatio": 1,
+      "depth": 0.5843716666056459,
+      "phase": 3,
+      "seconds": 110.24919998535502,
+      "eye": [
+        -15.6,
+        1.6,
+        -6.2
+      ],
+      "yaw": 1.6862229871618217,
+      "roll": 0,
+      "visibleSourcePanes": 0,
+      "visibleFrames": 0
+    },
+    {
+      "name": "phase-3-detail.png",
+      "at": [
+        -21,
+        0,
+        -10.9
+      ],
+      "targ": [
+        -23.8,
+        2.65,
+        -4
+      ],
+      "zone": "dome",
+      "feet": [
+        -21,
+        0,
+        -10.9
+      ],
+      "surface": "stone",
+      "elapsed": 110.60669998534308,
+      "ready": true,
+      "loaded": [
+        "hall",
+        "dome"
+      ],
+      "calls": 39,
+      "pixelRatio": 1,
+      "depth": 0.5854108332723126,
+      "phase": 3,
+      "seconds": 110.49859998535501,
+      "eye": [
+        -21,
+        1.6,
+        -10.9
+      ],
+      "yaw": 2.756098786660464,
+      "roll": 0,
+      "visibleSourcePanes": 0,
+      "visibleFrames": 0
+    },
+    {
+      "name": "phase-4-room.png",
+      "at": [
+        -18.8,
+        0,
+        -6.6
+      ],
+      "targ": [
+        -23.4,
+        2.35,
+        -4.1
+      ],
+      "zone": "dome",
+      "feet": [
+        -18.8,
+        0,
+        -6.6
+      ],
+      "surface": "stone",
+      "elapsed": 175.3685999756029,
+      "ready": true,
+      "loaded": [
+        "hall",
+        "dome"
+      ],
+      "calls": 38,
+      "pixelRatio": 1,
+      "depth": 0.8552520832317285,
+      "phase": 4,
+      "seconds": 175.26049997561483,
+      "eye": [
+        -18.8,
+        1.6,
+        -6.6
+      ],
+      "yaw": 2.0686186594118987,
+      "roll": 0,
+      "visibleSourcePanes": 4,
+      "visibleFrames": 6
+    },
+    {
+      "name": "phase-4-detail.png",
+      "at": [
+        -22.2,
+        0,
+        -6.9
+      ],
+      "targ": [
+        -25.8,
+        2.5,
+        -1.7
+      ],
+      "zone": "dome",
+      "feet": [
+        -22.2,
+        0,
+        -6.9
+      ],
+      "surface": "stone",
+      "elapsed": 175.63399997559108,
+      "ready": true,
+      "loaded": [
+        "hall",
+        "dome"
+      ],
+      "calls": 31,
+      "pixelRatio": 1,
+      "depth": 0.8563579165650126,
+      "phase": 4,
+      "seconds": 175.525899975603,
+      "eye": [
+        -22.2,
+        1.6,
+        -6.9
+      ],
+      "yaw": 2.536047989984823,
+      "roll": 0,
+      "visibleSourcePanes": 3,
+      "visibleFrames": 6
+    },
+    {
+      "name": "phase-5-room.png",
+      "at": [
+        -19.4,
+        0,
+        -4.5
+      ],
+      "targ": [
+        -22,
+        1.42,
+        -5
+      ],
+      "zone": "dome",
+      "feet": [
+        -19.4,
+        0,
+        -4.5
+      ],
+      "surface": "stone",
+      "elapsed": 222.84049996842992,
+      "ready": true,
+      "loaded": [
+        "hall",
+        "dome"
+      ],
+      "calls": 33,
+      "pixelRatio": 1,
+      "depth": 1,
+      "phase": 5,
+      "seconds": 210,
+      "eye": [
+        -19.4,
+        1.6,
+        -4.5
+      ],
+      "yaw": 1.380808038876181,
+      "roll": 0,
+      "visibleSourcePanes": 2,
+      "visibleFrames": 6
+    },
+    {
+      "name": "phase-5-detail.png",
+      "at": [
+        -21.2,
+        0,
+        -7.25
+      ],
+      "targ": [
+        -16.3,
+        0.45,
+        -5
+      ],
+      "zone": "dome",
+      "feet": [
+        -21.2,
+        0,
+        -7.25
+      ],
+      "surface": "stone",
+      "elapsed": 223.0397999683942,
+      "ready": true,
+      "loaded": [
+        "hall",
+        "dome"
+      ],
+      "calls": 68,
+      "pixelRatio": 1,
+      "depth": 1,
+      "phase": 5,
+      "seconds": 210,
+      "eye": [
+        -21.2,
+        1.6,
+        -7.25
+      ],
+      "yaw": -2.0012610996292044,
+      "roll": 0,
+      "visibleSourcePanes": 0,
+      "visibleFrames": 6
+    }
+  ],
+  "escape": {
+    "zone": "hall",
+    "feet": [
+      -9.650000000000034,
+      0,
+      -5
+    ],
+    "surface": "stone",
+    "elapsed": 224.32079996823964,
+    "ready": true,
+    "loaded": [
+      "hall",
+      "dome"
+    ],
+    "calls": 43,
+    "pixelRatio": 1,
+    "depth": 0.9993757291667228,
+    "phase": 4,
+    "seconds": 209.85017500001348
+  },
+  "issues": []
+}

@@ -504,6 +504,11 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     if (endingBegun) return;
     endingBegun = true;
     stopped = true;
+    const interactiveVisit = registry[id]?.showMaxMs === null;
+    let visitAborted = interactiveVisit && suspendReason === 'panic';
+    const unwatch = interactiveVisit && subscribe('suspend', event => {
+      if (event?.on && event.reason === 'panic') visitAborted = true;
+    });
     /* take(ctx) -> Promise: an optional phase BEFORE the fade, while the page is still mounted (and frozen: `stopped`
      * stops every unlock's frames). Streams keep playing until it resolves. Capped on the game clock. */
     const take = !restored && registry[id]?.take;
@@ -516,15 +521,19 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
         total: Math.round(run.total), minutes: Math.round(run.clock / 60000), items: run.order.length,
         ending: id, route: E.routeOf(run), dayUtc: new Date().toISOString().slice(0, 10),
       });
-      if (take) {
+      if (take && !visitAborted) {
         const scope = newScope(BY_ID[id]);
         scopes.set(ENDING_SCOPE, scope);
         scope.ctx = makeContext(api, scope);
         try {
           // An ending that leaves the game world mid-take keeps its own camera and prepared media.
           const releaseWorld = () => { audio?.stopStreams?.(); unmountAll(ENDING_SCOPE); };
-          const limit = registry[id].takeMaxMs || CONFIG.ENDING_TAKE_MAX_MS;
-          await Promise.race([take(scope.ctx, releaseWorld), new Promise(r => scope.timers.add({ at: now + limit, fn: r }))]);
+          const visit = take(scope.ctx, releaseWorld);
+          if (registry[id].takeMaxMs === null) await visit;
+          else {
+            const limit = registry[id].takeMaxMs || CONFIG.ENDING_TAKE_MAX_MS;
+            await Promise.race([visit, new Promise(r => scope.timers.add({ at: now + limit, fn: r }))]);
+          }
         } catch (e) { console.error(e); }
         audio?.stopStreams?.();
       }
@@ -533,18 +542,23 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     }
     unmountAll();
     const show = !restored && registry[id]?.ending;
-    if (show) {
+    if (show && !visitAborted) {
       audio?.setQuiet(false);
       const scope = newScope(BY_ID[id]);
       scopes.set(ENDING_SCOPE, scope);
       scope.ctx = makeContext(api, scope);
+      let showTimer;
       try {
-        /* showMaxMs: an ending the player works in (the Living Ad card saves files) may hold the screen longer */
-        await Promise.race([registry[id].ending(scope.ctx), new Promise((r) => setTimeout(r, registry[id].showMaxMs || CONFIG.ENDING_SHOW_MAX_MS))]);
+        // null is an explicit player-ended visit. Other shows keep their existing safety cap.
+        const visit = registry[id].ending(scope.ctx);
+        if (registry[id].showMaxMs === null) await visit;
+        else await Promise.race([visit, new Promise(r => { showTimer = setTimeout(r, registry[id].showMaxMs || CONFIG.ENDING_SHOW_MAX_MS); })]);
       } catch (e) { console.error(e); }
+      finally { if (showTimer != null) clearTimeout(showTimer); }
       unmount(ENDING_SCOPE);
       audio?.setQuiet(true);
     }
+    if (unwatch) unwatch();
     ui.credits?.(id);
     creditsUp = true;
     for (const it of ITEMS) if (it.group === 'after') mount(it.id);

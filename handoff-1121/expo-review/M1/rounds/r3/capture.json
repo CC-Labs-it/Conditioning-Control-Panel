@@ -1,0 +1,354 @@
+{
+  "zone": "hall",
+  "entryMs": 3502,
+  "width": 1920,
+  "height": 1080,
+  "coarse": false,
+  "timing": {
+    "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5080 (0x00002C02) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "frames": 178,
+    "medianMs": 34.19999999999891,
+    "p95Ms": 50.19999999999891,
+    "firstViewBytes": 6587356
+  },
+  "shots": [
+    {
+      "name": "01-entrance",
+      "at": [
+        0,
+        0,
+        13.2
+      ],
+      "look": [
+        0,
+        2.35,
+        -6.3
+      ],
+      "zone": "hall",
+      "feet": [
+        0,
+        0,
+        13.2
+      ],
+      "surface": "stone",
+      "elapsed": 7.104400000017882,
+      "ready": true,
+      "loaded": [
+        "hall"
+      ],
+      "calls": 41,
+      "depth": 0,
+      "phase": 0
+    },
+    {
+      "name": "02-roof",
+      "at": [
+        -1.5,
+        0,
+        9
+      ],
+      "look": [
+        1.5,
+        8.4,
+        -3
+      ],
+      "zone": "hall",
+      "feet": [
+        -1.5,
+        0,
+        9
+      ],
+      "surface": "stone",
+      "elapsed": 7.9274000000596025,
+      "ready": true,
+      "loaded": [
+        "hall"
+      ],
+      "calls": 30,
+      "depth": 0,
+      "phase": 0
+    },
+    {
+      "name": "03-west-aisle",
+      "at": [
+        -7.7,
+        0,
+        10.8
+      ],
+      "look": [
+        -7.1,
+        2,
+        -6.5
+      ],
+      "zone": "hall",
+      "feet": [
+        -7.7,
+        0,
+        10.8
+      ],
+      "surface": "carpet",
+      "elapsed": 8.593000000095362,
+      "ready": true,
+      "loaded": [
+        "hall"
+      ],
+      "calls": 40,
+      "depth": 0,
+      "phase": 0
+    },
+    {
+      "name": "04-east-aisle",
+      "at": [
+        8.1,
+        0,
+        10.5
+      ],
+      "look": [
+        8.4,
+        2.25,
+        -6.2
+      ],
+      "zone": "hall",
+      "feet": [
+        8.1,
+        0,
+        10.5
+      ],
+      "surface": "carpet",
+      "elapsed": 9.406500000095361,
+      "ready": true,
+      "loaded": [
+        "hall"
+      ],
+      "calls": 38,
+      "depth": 0,
+      "phase": 0
+    },
+    {
+      "name": "05-mezzanine",
+      "at": [
+        -9.8,
+        3.4,
+        11
+      ],
+      "look": [
+        0.5,
+        2.9,
+        -6.5
+      ],
+      "zone": "hall",
+      "feet": [
+        -9.8,
+        3.3999998569488525,
+        11
+      ],
+      "surface": "wood",
+      "elapsed": 10.25030000010132,
+      "ready": true,
+      "loaded": [
+        "hall",
+        "habitat"
+      ],
+      "calls": 46,
+      "depth": 0,
+      "phase": 0
+    },
+    {
+      "name": "06-information",
+      "at": [
+        3.4,
+        0,
+        12.8
+      ],
+      "look": [
+        5.5,
+        0.88,
+        10
+      ],
+      "zone": "hall",
+      "feet": [
+        3.4,
+        0,
+        12.8
+      ],
+      "surface": "carpet",
+      "elapsed": 11.075000000101323,
+      "ready": true,
+      "loaded": [
+        "hall"
+      ],
+      "calls": 38,
+      "depth": 0,
+      "phase": 0
+    },
+    {
+      "name": "07-first-press-approach",
+      "at": [
+        -2.9,
+        0,
+        -4.25
+      ],
+      "look": [
+        0,
+        1.7,
+        -10
+      ],
+      "zone": "hall",
+      "feet": [
+        -2.9,
+        0,
+        -4.25
+      ],
+      "surface": "carpet",
+      "elapsed": 11.821000000125169,
+      "ready": true,
+      "loaded": [
+        "hall"
+      ],
+      "calls": 30,
+      "depth": 0,
+      "phase": 0
+    },
+    {
+      "name": "08-button",
+      "at": [
+        0.08,
+        0,
+        -7.73
+      ],
+      "look": [
+        0,
+        1.03,
+        -9
+      ],
+      "zone": "hall",
+      "feet": [
+        0.08,
+        0,
+        -7.73
+      ],
+      "surface": "stone",
+      "elapsed": 12.651500000137093,
+      "ready": true,
+      "loaded": [
+        "hall"
+      ],
+      "calls": 30,
+      "depth": 0,
+      "phase": 0
+    },
+    {
+      "name": "09-accession",
+      "at": [
+        1.46,
+        0,
+        -7.68
+      ],
+      "look": [
+        1.46,
+        0.92,
+        -8.874
+      ],
+      "zone": "hall",
+      "feet": [
+        1.46,
+        0,
+        -7.68
+      ],
+      "surface": "stone",
+      "elapsed": 13.605300000143052,
+      "ready": true,
+      "loaded": [
+        "hall"
+      ],
+      "calls": 28,
+      "depth": 0,
+      "phase": 0
+    },
+    {
+      "name": "10-west-reverse",
+      "at": [
+        -7.25,
+        0,
+        -10.8
+      ],
+      "look": [
+        1.1,
+        3,
+        12.4
+      ],
+      "zone": "hall",
+      "feet": [
+        -7.25,
+        0,
+        -10.8
+      ],
+      "surface": "carpet",
+      "elapsed": 14.44120000011325,
+      "ready": true,
+      "loaded": [
+        "hall"
+      ],
+      "calls": 34,
+      "depth": 0,
+      "phase": 0
+    },
+    {
+      "name": "11-east-gallery",
+      "at": [
+        9.8,
+        3.4,
+        -11.5
+      ],
+      "look": [
+        -3.3,
+        3.15,
+        9
+      ],
+      "zone": "hall",
+      "feet": [
+        9.8,
+        3.3999998569488525,
+        -11.5
+      ],
+      "surface": "wood",
+      "elapsed": 15.27930000009537,
+      "ready": true,
+      "loaded": [
+        "hall"
+      ],
+      "calls": 49,
+      "depth": 0,
+      "phase": 0
+    },
+    {
+      "name": "12-north-axis",
+      "at": [
+        0,
+        3.4,
+        -14
+      ],
+      "look": [
+        1,
+        2.4,
+        7.4
+      ],
+      "zone": "hall",
+      "feet": [
+        0,
+        3.3999998569488525,
+        -14
+      ],
+      "surface": "wood",
+      "elapsed": 15.900500000077486,
+      "ready": true,
+      "loaded": [
+        "hall"
+      ],
+      "calls": 41,
+      "depth": 0,
+      "phase": 0
+    }
+  ],
+  "issues": []
+}

@@ -1,0 +1,327 @@
+{
+  "samples": {
+    "start": {
+      "actual": 3,
+      "presses": 0,
+      "record": "Pressed 3 times by one human, 2026. Believed voluntary.",
+      "second": false,
+      "position": [
+        0.6899999976158142,
+        1.0084999799728394,
+        -9
+      ],
+      "caption": ""
+    },
+    "one": {
+      "actual": 3,
+      "presses": 1,
+      "record": "Pressed 3 times by one human, 2026. Believed voluntary.",
+      "second": false,
+      "position": [
+        0.6899999976158142,
+        1.0084999799728394,
+        -9
+      ],
+      "caption": "Thank you for pressing the exhibit."
+    },
+    "ten": {
+      "actual": 3,
+      "presses": 10,
+      "record": "Pressed 3 times by one human, 2026. Believed voluntary. and 10 times at the Expo. As predicted.",
+      "second": false,
+      "position": [
+        0.6899999976158142,
+        1.0084999799728394,
+        -9
+      ],
+      "caption": "The exhibit has been pressed ten times. This was expected. Please do not be embarrassed."
+    },
+    "stop": {
+      "actual": 3,
+      "presses": 51,
+      "record": "Pressed 3 times by one human, 2026. Believed voluntary. and 51 times at the Expo. As predicted.",
+      "second": true,
+      "position": [
+        0.6899999976158142,
+        1.0084999799728394,
+        -9
+      ],
+      "caption": "Your agreement to stop has been recorded. You may continue."
+    },
+    "walk": {
+      "gallery-1": [
+        {
+          "to": [
+            -8.35,
+            6.24
+          ],
+          "feet": [
+            -8.35,
+            0,
+            6.240000000000006
+          ],
+          "surface": "carpet"
+        },
+        {
+          "to": [
+            -8.35,
+            0.32
+          ],
+          "feet": [
+            -8.35,
+            3.3319999853769913,
+            0.32
+          ],
+          "surface": "stone"
+        },
+        {
+          "to": [
+            -8.35,
+            -0.65
+          ],
+          "feet": [
+            -8.35,
+            3.3999998569488525,
+            -0.6400000000000001
+          ],
+          "surface": "wood"
+        },
+        {
+          "to": [
+            -10.3,
+            -0.65
+          ],
+          "feet": [
+            -10.3,
+            3.3999998569488525,
+            -0.65
+          ],
+          "surface": "wood"
+        },
+        {
+          "to": [
+            -10.3,
+            -12.4
+          ],
+          "feet": [
+            -10.3,
+            3.3999998569488525,
+            -12.4
+          ],
+          "surface": "wood"
+        },
+        {
+          "to": [
+            -10.3,
+            -14.7
+          ],
+          "feet": [
+            -10.3,
+            3.3999998569488525,
+            -14.68000000000002
+          ],
+          "surface": "wood"
+        },
+        {
+          "to": [
+            0,
+            -14.7
+          ],
+          "feet": [
+            0,
+            3.3999998569488525,
+            -14.7
+          ],
+          "surface": "wood"
+        },
+        {
+          "to": [
+            10.3,
+            -14.7
+          ],
+          "feet": [
+            10.3,
+            3.3999998569488525,
+            -14.7
+          ],
+          "surface": "wood"
+        },
+        {
+          "to": [
+            10.3,
+            -0.65
+          ],
+          "feet": [
+            10.3,
+            3.3999998569488525,
+            -0.6599999999999673
+          ],
+          "surface": "wood"
+        },
+        {
+          "to": [
+            8.35,
+            -0.65
+          ],
+          "feet": [
+            8.35,
+            3.3999998569488525,
+            -0.65
+          ],
+          "surface": "wood"
+        },
+        {
+          "to": [
+            8.35,
+            6.8
+          ],
+          "feet": [
+            8.35,
+            0,
+            6.789999999999985
+          ],
+          "surface": "carpet"
+        }
+      ],
+      "gallery1": [
+        {
+          "to": [
+            8.35,
+            6.24
+          ],
+          "feet": [
+            8.35,
+            0,
+            6.240000000000006
+          ],
+          "surface": "carpet"
+        },
+        {
+          "to": [
+            8.35,
+            0.32
+          ],
+          "feet": [
+            8.35,
+            3.3319999853769913,
+            0.32
+          ],
+          "surface": "stone"
+        },
+        {
+          "to": [
+            8.35,
+            -0.65
+          ],
+          "feet": [
+            8.35,
+            3.3999998569488525,
+            -0.6400000000000001
+          ],
+          "surface": "wood"
+        },
+        {
+          "to": [
+            10.3,
+            -0.65
+          ],
+          "feet": [
+            10.3,
+            3.3999998569488525,
+            -0.65
+          ],
+          "surface": "wood"
+        },
+        {
+          "to": [
+            10.3,
+            -12.4
+          ],
+          "feet": [
+            10.3,
+            3.3999998569488525,
+            -12.4
+          ],
+          "surface": "wood"
+        },
+        {
+          "to": [
+            10.3,
+            -14.7
+          ],
+          "feet": [
+            10.3,
+            3.3999998569488525,
+            -14.68000000000002
+          ],
+          "surface": "wood"
+        },
+        {
+          "to": [
+            0,
+            -14.7
+          ],
+          "feet": [
+            0,
+            3.3999998569488525,
+            -14.7
+          ],
+          "surface": "wood"
+        },
+        {
+          "to": [
+            -10.3,
+            -14.7
+          ],
+          "feet": [
+            -10.3,
+            3.3999998569488525,
+            -14.7
+          ],
+          "surface": "wood"
+        },
+        {
+          "to": [
+            -10.3,
+            -0.65
+          ],
+          "feet": [
+            -10.3,
+            3.3999998569488525,
+            -0.6599999999999673
+          ],
+          "surface": "wood"
+        },
+        {
+          "to": [
+            -8.35,
+            -0.65
+          ],
+          "feet": [
+            -8.35,
+            3.3999998569488525,
+            -0.65
+          ],
+          "surface": "wood"
+        },
+        {
+          "to": [
+            -8.35,
+            6.8
+          ],
+          "feet": [
+            -8.35,
+            0,
+            6.789999999999985
+          ],
+          "surface": "carpet"
+        }
+      ]
+    },
+    "pause": {
+      "paused": true,
+      "expo": true
+    }
+  },
+  "fails": []
+}
