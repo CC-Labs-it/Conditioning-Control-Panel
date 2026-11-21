@@ -316,7 +316,9 @@ namespace ConditioningControlPanel.Services.JustDrop
                         if (_host != host) return;
                         var (images, videos) = t.IsFaulted ? (0, 0) : t.Result;
                         var s = App.Settings?.Current;
-                        PostNow(JustDropBridge.Caps(HapticsAccess.IsOpen, App.Haptics?.IsConnected == true,
+                        // Ready = access open AND the master haptics switch on AND a toy connected:
+                        // a page told "haptics" with the switch off would drop its badge and buzz nothing.
+                        PostNow(JustDropBridge.Caps(JustDropHapticDirector.Ready, App.Haptics?.IsConnected == true,
                             images, videos,
                             JustDropBridge.EffectiveMediaSource(s?.MediaSource, s?.HasRemoteMediaConsent ?? false)));
                     }, TaskScheduler.FromCurrentSynchronizationContext());
@@ -348,7 +350,7 @@ namespace ConditioningControlPanel.Services.JustDrop
                 var disp = Application.Current?.Dispatcher;
                 if (disp == null || disp.HasShutdownStarted) return;
                 disp.BeginInvoke(new Action(() => PostNow(JustDropBridge.Envelope("haptics-changed",
-                    new { haptics = HapticsAccess.IsOpen && connected }))));
+                    new { haptics = connected && JustDropHapticDirector.Ready }))));
             };
             haptics.ConnectionChanged += _toyWatch;
         }
