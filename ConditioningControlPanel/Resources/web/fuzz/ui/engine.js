@@ -538,10 +538,14 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
       const scope = newScope(BY_ID[id]);
       scopes.set(ENDING_SCOPE, scope);
       scope.ctx = makeContext(api, scope);
+      let showTimer;
       try {
-        /* showMaxMs: an ending the player works in (the Living Ad card saves files) may hold the screen longer */
-        await Promise.race([registry[id].ending(scope.ctx), new Promise((r) => setTimeout(r, registry[id].showMaxMs || CONFIG.ENDING_SHOW_MAX_MS))]);
+        // null is an explicit player-ended visit. Other shows keep their existing safety cap.
+        const visit = registry[id].ending(scope.ctx);
+        if (registry[id].showMaxMs === null) await visit;
+        else await Promise.race([visit, new Promise(r => { showTimer = setTimeout(r, registry[id].showMaxMs || CONFIG.ENDING_SHOW_MAX_MS); })]);
       } catch (e) { console.error(e); }
+      finally { if (showTimer != null) clearTimeout(showTimer); }
       unmount(ENDING_SCOPE);
       audio?.setQuiet(true);
     }

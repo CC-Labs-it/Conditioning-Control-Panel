@@ -8,7 +8,6 @@ import { dirname, join } from 'node:path';
 import { LLAMAS, LLAMA_BY_ID, PANEL_SEATS, herdRoster, llamaPortrait } from '../data/content/llamas.js';
 import { penModel, llamaSvg, PROPS, spitDelay, spitAllowed, SPIT_MIN_MS, SPIT_MAX_MS, PEN_MAX } from '../ui/llama-pen.js';
 import { ART, OWED } from '../ui/unlocks/fate/llama/art.js';
-import { SEAT_X } from '../ui/unlocks/fate/llama/ending.js';
 import { STICKER_BY_ID } from '../data/content/stickers.js';
 import { ENDINGS } from '../data/content/endings.js';
 
@@ -34,7 +33,6 @@ test('the herd order: the panel shelters first, then the rest as the herd grows 
   assert.equal(herdRoster(40).length, 12);
   assert.equal(herdRoster('x').length, 0);
   assert.deepEqual([...PANEL_SEATS].sort(), ['henry', 'margaret', 'reginald']);
-  for (const id of PANEL_SEATS) assert.ok(SEAT_X[id] > 0 && SEAT_X[id] < 100);
 });
 
 test('the pen shows the named herd in order, every prop drawn', () => {

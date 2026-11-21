@@ -42,6 +42,41 @@ function setup(registry, id = 'stray') {
   return { run, ui, engine };
 }
 
+test('an explicitly unbounded ending waits for the visitor and cleans its scope before recap', async t => {
+  const timers = [];
+  t.mock.method(globalThis, 'setTimeout', (fn, ms) => { timers.push({ fn, ms }); return timers.length; });
+  let finish, mounted, cleaned = false, recap = null;
+  const ready = new Promise(resolve => { mounted = resolve; });
+  const { engine, ui } = setup({ ll_end: {
+    showMaxMs: null,
+    ending(ctx) {
+      ctx.cleanup(() => { cleaned = true; });
+      mounted();
+      return new Promise(resolve => { finish = resolve; });
+    },
+  } }, 'll_end');
+  ui.credits = id => { assert.ok(cleaned); recap = id; };
+  const done = engine.end('ll_end');
+  await ready;
+  assert.deepEqual(timers, [], 'no wall timer is armed for an unlimited visit');
+  for (let n = 0; n < 100; n++) engine.step(1000);
+  assert.equal(recap, null, 'the old 90 second cap does not end the walk');
+  finish();
+  await done;
+  assert.equal(recap, 'll_end');
+  assert.ok(!engine.scopes.has('__ending'));
+});
+
+test('a finite ending releases its wall timer when it completes early', async t => {
+  let timer, released;
+  t.mock.method(globalThis, 'setTimeout', (fn, ms) => { timer = { fn, ms }; return timer; });
+  t.mock.method(globalThis, 'clearTimeout', value => { released = value; });
+  const { engine } = setup({ ll_end: { showMaxMs: 12345, ending: async () => {} } }, 'll_end');
+  await engine.end('ll_end');
+  assert.equal(timer.ms, 12345);
+  assert.equal(released, timer, 'the safety cap must not keep the process or scene alive');
+});
+
 test('a mount gets a ctx with every documented member', () => {
   let got = null;
   const { engine } = setup({ stray: { mount(ctx) { got = ctx; return {}; } } });
