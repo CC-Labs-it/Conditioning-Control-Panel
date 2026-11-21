@@ -24,7 +24,7 @@ ticker: {
 `mount` runs on buy and again on every reload, so read what you need from `ctx.store` and redraw. It returns
 `{ tick(dt, now)?, off()?, grow(count)? }`. `dt` is seconds, `now` is game-clock ms. A stacking row with `grow` stays
 mounted and hears the new count; any other re-buy remounts. Your code throwing 3 times switches the unlock off; the game
-carries on. An ending row may also export `ending(ctx) -> Promise`: its show between the fade and the credits, up to 90 s.
+carries on. An ending row may also export `ending(ctx) -> Promise`: its show between the fade and the credits, normally up to 90 s. `showMaxMs` overrides that cap; explicit `null` means the player ends the visit. Such a show must resolve on its exit and on panic, and clean up through `ctx.cleanup`. Dome time uses unscaled `ctx.activeMs`, not the speed-scaled frame delta.
 A row can export `take(ctx, releaseWorld) -> Promise` to use the frozen game page before the fade. Its streams play until the take
 ends or calls `releaseWorld()`. That call unmounts the game while keeping the take and its prepared media alive. Bimbodoll uses it
 between swallowing the page and entering the sky. A take has `ENDING_TAKE_MAX_MS` of game time by default, or the row's `takeMaxMs`.
