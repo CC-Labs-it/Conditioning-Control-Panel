@@ -68,6 +68,16 @@ OutputDir=.\installer-output
 OutputBaseFilename=ConditioningControlPanel-{#MyAppVersion}-Setup
 SetupIconFile=ConditioningControlPanel\Resources\app.ico
 
+; Code signing (ccp-bugs #1714). Signing Setup.exe after the compile left the temporary copy
+; Setup unpacks to %TEMP% and the uninstaller unsigned, and Smart App Control blocked the 7.3.7
+; update on that stage. A release cut passes /DSignRelease and defines the "ccpsign" Sign Tool
+; (/Sccpsign=... with $f); ISCC then signs Setup.exe, its temporary self-copies and unins000.exe.
+; Local test builds (build-installer.bat) pass neither and stay unsigned.
+#ifdef SignRelease
+SignTool=ccpsign
+SignedUninstaller=yes
+#endif
+
 ; Compression
 Compression=lzma2/ultra64
 SolidCompression=yes
