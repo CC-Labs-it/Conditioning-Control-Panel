@@ -1,5 +1,7 @@
 {
   "Sparkles_Slip_Paid": "지급됨",
+  "deeper_editor_tip_zoom_out": "축소 (또는 Ctrl을 누른 채 스크롤)",
+  "deeper_editor_tip_zoom_in": "확대 (또는 Ctrl을 누른 채 스크롤)",
   "Sparkles_Slip_Place": "{1}명 중 {0}위",
   "Sparkles_Slip_Gold": "금",
   "Sparkles_Slip_Silver": "은",
