@@ -51,6 +51,8 @@ try{
     report.errors.push(device+' expected ten native dated projector buttons in '+zone);
    if(zone==='twelve'&&caps.filter(c=>c.node.startsWith('expo_replay_log_')).length!==12)
     report.errors.push(device+' expected twelve native herd log buttons');
+   if(zone==='twelve'&&caps.filter(c=>c.node.startsWith('log_')).length!==12)
+    report.errors.push(device+' expected twelve independently sprung green log buttons');
    // Offer the till/contract before the locked Exit. The main hall switch precedes its rising partner.
    const last=new Set(['press_stop','expo_press_exit_sale']);
    caps.sort((a,b)=>Number(last.has(a.node))-Number(last.has(b.node)));
@@ -66,8 +68,14 @@ try{
       await f.waitForTimeout(940);
      }
      if(cap.node==='expo_press_exit_sale'){
-      row.locked=await f.evaluate(()=>{const m=__expo.scene.getObjectByName('expo_press_exit_sale');return !m.visible||!m.parent.visible;});
+      const locked=await f.evaluate(async()=>{
+       const e=__expo,T=await import('three');await e.go('shop',[22.77,0,-10.05]);
+       const m=e.scene.getObjectByName('expo_press_exit_sale'),c=new T.Box3().setFromObject(m,true).getCenter(new T.Vector3());
+       e.lookAt(...c.toArray());return {hidden:!m.visible||!m.parent.visible,focus:e.focusTarget()};
+      });
+      row.locked=locked.hidden;row.lockedFocus=locked.focus;
       assert(row.locked,'Exit sale cap was available before completing two shop loops');
+      assert(!locked.focus?.lineage.includes(cap.node)&&locked.focus?.owner!=='exit_sale','Locked sale cap accepted a hit');
       for(let i=0;i<2;i++){
        await f.evaluate(async()=>{const e=__expo;await e.go('shop',[15.03,0,-12.14]);e.lookAt(15.03,1.14,-13.93);});
        await use();await f.waitForTimeout(200);
@@ -100,9 +108,16 @@ try{
       return {centre:centre.toArray(),nearest};
      },{zone,name:cap.node});
      row.approach=target;if(!target?.focus)throw Error('No reachable direct cap ray');
+     if(cap.node.startsWith('log_'))assert.equal(target.focus.owner,'expo_replay_'+cap.node);
      const before=await f.evaluate(n=>__expo.buttons().find(c=>c.node===n).pressed,cap.node);
      await use();
      await f.waitForFunction(({name,before})=>__expo.buttons().some(c=>c.node===name&&c.pressed>before),{name:cap.node,before},{timeout:2000});
+     if(cap.node.startsWith('log_')){
+      row.log=await f.evaluate(id=>{
+       const n=__expo.narrationState();return {id,heard:n.heard.includes(id),playing:n.speech.playing,queued:n.speech.queue.includes(id)};
+      },cap.node);
+      assert(row.log.heard||row.log.queued||row.log.playing===cap.node,'The green cap did not enter its recruited recording');
+     }
      await f.waitForFunction(n=>__expo.buttons().some(c=>c.node===n&&c.amount===0),cap.node,{timeout:3000});
      row.passed=true;
     }catch(err){row.error=String(err.message).slice(0,400);console.error(device,zone,cap.node,row.error);}
@@ -110,6 +125,33 @@ try{
    await writeFile(join(out,'caps.json'),JSON.stringify(report,null,2));
   }
   await Promise.all(pending);await ctx.close();
+  if(!filter.size||filter.has('twelve')){
+   const visit=await browser.newContext({hasTouch:touch,isMobile:touch,
+    reducedMotion:touch?'reduce':'no-preference',viewport:touch?{width:393,height:852}:{width:1440,height:810}});
+   const view=await visit.newPage();await view.goto(base+'dev/play-ending.html?end=ll_end&pictures=none&herd=8');
+   await view.getByRole('button',{name:'Play Llama Expo 2037'}).click();
+   const folded=view.frames().find(fr=>fr.url().includes('/fuzz/index.html'));await folded.locator('.expo-worm #btn').click();
+   await folded.waitForFunction(()=>window.__expo?.state().ready,null,{timeout:120000});
+   await folded.evaluate(async p=>{await __expo.go('twelve',p);},points.twelve);
+   const recruited=await folded.evaluate(()=>__expo.exhibits.state.file.herd);
+   assert.equal(recruited.length,8);
+   const hidden=[];
+   for(const row of rows.filter(r=>r.zone==='twelve'&&/^(?:expo_replay_)?log_/.test(r.node)&&!recruited.includes(r.node.split('_').at(-1)))){
+    assert(row.approach?.feet,'Missing full-roster approach for '+row.node);
+    const check=await folded.evaluate(async({node,feet,centre})=>{
+     const e=__expo;await e.go('twelve',feet);e.lookAt(...centre);
+     const mesh=e.scene.getObjectByName(node);
+     let visible=true;for(let n=mesh;n;n=n.parent)visible&&=n.visible;
+     return {node,visible,focus:e.focusTarget(),rosterStations:e.narrationState().stations.map(s=>s.id)};
+    },{node:row.node,...row.approach});
+    if(touch)await folded.locator('.expo-interact').tap();else await view.keyboard.press('e');
+    check.strokes=await folded.evaluate(name=>__expo.buttons().find(c=>c.node===name).pressed,row.node);
+    const id='log_'+row.node.split('_').at(-1);
+    assert(!check.visible&&!check.strokes&&!check.rosterStations.includes(id)&&!check.focus?.lineage.includes(row.node),'Missing herd control was accessible: '+row.node);
+    hidden.push(check);
+   }
+   assert.equal(hidden.length,8);report.devices.at(-1).unrecruited={recruited,hidden};await visit.close();
+  }
  }
 }finally{await browser.close();await writeFile(join(out,'caps.json'),JSON.stringify(report,null,2));}
 const failed=report.devices.flatMap(d=>d.rows.filter(r=>!r.passed));console.log('Caps',report.devices.map(d=>d.rows.length),'failed',failed.length);

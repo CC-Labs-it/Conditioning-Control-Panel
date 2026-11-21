@@ -49,6 +49,24 @@ test('conditional sale hardware hides with its listing and Gentle uses two fixed
   for(let i=0;i<4;i++){buttons.tick(.04);assert.equal(buttons.debug()[1].amount,1);}
   buttons.tick(.04);assert.equal(buttons.debug()[1].amount,0);
 });
+test('both portrait stand caps use the existing replay with independent native travel',()=>{
+  const buttons=createButtonTravel({}),room=new Group();
+  const keys=['log_reginald','expo_replay_log_reginald'].map((name,index)=>{
+    const mesh=new Mesh(new BoxGeometry(.15,.15,.06),new MeshBasicMaterial());
+    mesh.name=name;mesh.position.x=index*.26;
+    mesh.userData={pressAxis:[0,0,1],travelMetres:index?.02352:.022};
+    room.add(mesh);return mesh;
+  });
+  buttons.mount('twelve',room);
+  let replays=0;const action=buttons.bind(keys[1],()=>++replays);
+  assert.deepEqual(new Set(action.roots),new Set(keys));
+  action.activate({object:keys[0]});buttons.tick(.09);
+  assert.deepEqual(buttons.debug().map(c=>[c.pressed,c.travel]),[[1,.022],[0,0]]);
+  action.activate({object:keys[1]});buttons.tick(.09);
+  assert.equal(buttons.debug()[1].travel,.02352);assert.equal(replays,2);
+  buttons.tick(.4);assert(buttons.debug().every(c=>c.travel===0));
+  buttons.unmount('twelve');assert.equal(buttons.resolve(keys[1]).length,0);
+});
 test('every Hoof attempt and glass tap reaches the exhibit during a single mechanical excursion',()=>{
   const {buttons,surface,caps}=desk(),visit=createVisit({state:{}});
   const hit={object:caps[0]},hoof=buttons.bind(surface,()=>visit.useHoof());

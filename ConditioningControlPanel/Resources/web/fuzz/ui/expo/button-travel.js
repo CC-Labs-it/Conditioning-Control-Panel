@@ -20,14 +20,15 @@ export function createButtonTravel(ctx){
   function mount(zone,group){
     group.updateMatrixWorld(true);
     const caps=[];group.traverse(node=>{
-      if(node.userData.pressTarget||node.name.startsWith('expo_press_')||node.name.startsWith('expo_replay_')||
+      if(node.userData.pressTarget||Array.isArray(node.userData.pressAxis)||node.name.startsWith('expo_press_')||node.name.startsWith('expo_replay_')||
         node.name.startsWith('expo_control_')||floorCaps.has(node.name)||node.name==='alpaca_button')caps.push(node);
     });
     const rows=[];
     for(const node of caps){
       // GLTFLoader names children of a multi-material assembly after their parent too.
       if(caps.includes(node.parent))continue;
-      const data=node.userData,target=data.pressTarget||node.name.replace(/^expo_press_/,'');
+      const data=node.userData;
+      const target=data.pressTarget||(/^log_[a-z]+$/.test(node.name)?'expo_replay_'+node.name:node.name.replace(/^expo_press_/,''));
       const native=Array.isArray(data.pressAxis)&&data.pressAxis.length===3;
       const parent=node.parent,defaultDepth=floorCaps.has(node.name) ? .029 : node.name.startsWith('expo_control_') ? .009 : .010;
       const centre=node.worldToLocal(new Box3().setFromObject(node,true).getCenter(new Vector3()));
@@ -52,6 +53,8 @@ export function createButtonTravel(ctx){
     return cap.parent.worldToLocal(world.clone().multiplyScalar(cap.depth)).sub(origin);
   }
   function resolve(mesh){
+    // Both caps on a recruited portrait stand use the same registered replay and keep separate springs.
+    if(mesh.name.startsWith('expo_replay_log_'))return shared.get(mesh.name)||[];
     if(all.has(mesh))return [all.get(mesh)];
     const alias=aliases[mesh.name]||mesh.name.replace(/^expo_display_/,'expo_control_');
     return shared.get(mesh.name)||shared.get(alias)||[];
