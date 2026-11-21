@@ -28,7 +28,17 @@ try {
   await frame.waitForFunction(()=>fuzz.engine.paused);
   const before=await frame.evaluate(()=>__expo.state().seconds);await page.waitForTimeout(620);
   checks.pauseFroze=await frame.evaluate(t=>__expo.state().seconds===t,before);check(checks.pauseFroze,'pause clock');
-  await frame.evaluate(()=>fuzz.engine.setPaused(false));
+  if(!reduced){
+    await frame.locator('#gentle').check();await frame.locator('#resume').click();
+    checks.playerGentle=await frame.evaluate(async()=>{
+      const x=__expo,initial=x.state();await new Promise(r=>setTimeout(r,1100));const final=x.state();
+      return {preference:document.body.classList.contains('gentle'),systemReduced:matchMedia('(prefers-reduced-motion: reduce)').matches,
+        rate:(final.seconds-initial.seconds)/(final.elapsed-initial.elapsed)};
+    });
+    check(checks.playerGentle.preference&&!checks.playerGentle.systemReduced&&Math.abs(checks.playerGentle.rate-.65)<.04,'in-game Gentle preference');
+    await frame.locator('.expo-root').focus();await page.keyboard.press('Escape');
+    await frame.locator('#gentle').uncheck();await frame.locator('#resume').click();
+  }else await frame.locator('#resume').click();
   for(const goal of [4,28,62,113,174,210]){
    const state=await frame.evaluate(async({goal,reduced})=>{
     const x=__expo;await x.go('dome',[-14.1,0,-5]);x.lookAt(-9,1.6,-5);

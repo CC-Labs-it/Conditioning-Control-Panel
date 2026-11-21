@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { roomRequest as request, clearEntrance } from './entrance.js';
+import { roomRequest as request, clearEntrance, firstSurfaceMap } from './entrance.js';
 
 export const assetURL = path => new URL('../../assets/expo/' + path, import.meta.url).href;
 const url = name => assetURL('zones/' + name);
@@ -41,7 +41,8 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
   const known = new Map(plan.zones.map(z => [z.id, z]));
   const resident = new Map(), pending = new Map(), retries = new Map();
   const photoSources = new Map();
-  let sharedHits=0;
+  const earlySources=new WeakMap();
+  let sharedHits=0,fullDetailMaps=0,firstRoom=true,promotionTimer=0;
   const anisotropy = Math.min(lite ? 4 : 8, renderer.capabilities.getMaxAnisotropy());
   let disposed = false, streamClock = 0;
   function syncDoors() {
@@ -64,6 +65,35 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
     }
     zone.sources.clear();
   }
+  async function pixels(name,signal){
+    const response=await request(name,signal);
+    return createImageBitmap(await response.blob(),{colorSpaceConversion:'none',premultiplyAlpha:'none'});
+  }
+  function useCurrentSource(texture){
+    const entry=earlySources.get(texture.source);
+    if(!entry)return;
+    if(texture.source!==entry.source){
+      // WebGL immutable storage keeps its initial dimensions until the old allocation is released.
+      texture.dispose();texture.source=entry.source;texture.needsUpdate=true;
+    }else if(entry.preview)entry.users.add(texture);
+  }
+  async function sharpenEntrance(entries){
+    const queue=entries.filter(entry=>entry.preview);
+    async function worker(){
+      while(queue.length&&!disposed){
+        const entry=queue.shift(),signal=entry.controller.signal;
+        if(signal.aborted)continue;
+        try{
+          const image=await pixels(entry.file,signal);
+          if(signal.aborted || disposed){image.close();continue;}
+          const old=entry.source;entry.source=new THREE.Source(image);entry.preview=false;
+          for(const texture of entry.users)useCurrentSource(texture);
+          entry.users.clear();old.data.close();fullDetailMaps++;
+        }catch(error){if(!signal.aborted&&!disposed)report(error);}
+      }
+    }
+    await Promise.all([worker(),worker()]);
+  }
   function zoneLoader(zone,signal) {
     const manager=new THREE.LoadingManager();
     // The exporter gives each shared PBR image its immutable content hash. Reuse its decoded pixels
@@ -73,26 +103,27 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
         if(signal.aborted){fail(new DOMException('Visit ended','AbortError'));return;}
         let entry=photoSources.get(uri);
         if (!entry) {
-          entry={references:0,source:null,controller:new AbortController()};
+          const relative=uri.slice(url('').length),file=zone.entrance?firstSurfaceMap(relative):relative;
+          entry={references:0,source:null,controller:new AbortController(),file:relative,preview:file!==relative};
           const item=entry;
-          const relative=uri.slice(url('').length);
-          item.promise=request(relative,item.controller.signal).then(response=>response.blob()).then(blob=>createImageBitmap(blob,{colorSpaceConversion:'none',premultiplyAlpha:'none'})).then(bitmap=>{
+          item.promise=pixels(file,item.controller.signal).then(bitmap=>{
             if(item.controller.signal.aborted){bitmap.close();throw new DOMException('Visit ended','AbortError');}
-            return item.source=new THREE.Source(bitmap);
+            item.source=new THREE.Source(bitmap);
+            if(item.preview){item.users=new Set();earlySources.set(item.source,item);}
           });
           photoSources.set(uri,item);
         } else sharedHits++;
         if(!zone.sources.has(uri)){entry.references++;zone.sources.set(uri,entry);}
-        entry.promise.then(source=>{
+        entry.promise.then(()=>{
           const texture=new THREE.Texture();
-          texture.source=source;texture.userData.expoSharedSource=true;texture.needsUpdate=true;done(texture);
+          texture.source=entry.source;texture.userData.expoSharedSource=true;texture.needsUpdate=true;done(texture);
         }).catch(error=>{zone.materialError ||= error;fail(error);});
       }
     });
     return new GLTFLoader(manager).setMeshoptDecoder(MeshoptDecoder);
   }
   async function load(def, controller) {
-    const { id } = def, zone = { id, doors: [], images: [], originalMaterials: new Set(),sources:new Map() };
+    const { id } = def, zone = { id, doors: [], images: [], originalMaterials: new Set(),sources:new Map(),entrance:firstRoom&&id===plan.start.id };
     const { signal } = controller;
     const loader=zoneLoader(zone,signal);
     signal.addEventListener('abort',()=>releaseSources(zone),{once:true});
@@ -136,7 +167,7 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
         if (!mesh.isMesh) return;
         const apply = m => {
           for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap']) {
-            if (m[key]) m[key].anisotropy = anisotropy;
+            if (m[key]) {useCurrentSource(m[key]);m[key].anisotropy=anisotropy;}
           }
           if (!m.isMeshStandardMaterial) return m;
           m.envMap = zone.environment.texture;
@@ -175,6 +206,10 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
       scene.add(zone.view); resident.set(id, zone);
       exhibits.mount?.(id, zone.view);
       syncDoors();
+      if(zone.entrance){
+        firstRoom=false;
+        promotionTimer=setTimeout(()=>{void sharpenEntrance([...zone.sources.values()]);},250);
+      }
       return zone;
     } catch (error) {
       if (resident.get(id) === zone) {
@@ -202,6 +237,14 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
     return Math.hypot(Math.max(bounds[0] - p.x, 0, p.x - bounds[3]),
       Math.max(bounds[1] - p.y, 0, p.y - bounds[4]), Math.max(bounds[2] - p.z, 0, p.z - bounds[5]));
   }
+  function looksIntoAtrium(zone,p){
+    if(zone==='service'&&p.x<=21.5){
+      const ground=p.y<1.5&&Math.abs(p.z-32)<=1.6;
+      const gallery=p.y>5.9&&p.y<7.7&&Math.abs(p.z-23)<=1.6;
+      return ground||gallery;
+    }
+    return zone==='catwalk'&&p.x>=-16&&p.y>5.9&&p.y<7.7&&Math.abs(p.z-28)<=2.1;
+  }
   function stream(dt) {
     streamClock += dt;
     if (streamClock < .18) return;
@@ -210,7 +253,8 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
     for (const def of known.values()) {
       if (def.id === walker.zone) continue;
       const visibleFromHere = (known.get(walker.zone)?.sightlines || sightlines[walker.zone] || []).includes(def.id);
-      const d = visibleFromHere ? 0 : distance(def.bounds, walker.feet);
+      const opening=def.id==='atrium'&&looksIntoAtrium(walker.zone,walker.feet);
+      const d = opening ? -1 : visibleFromHere ? 0 : distance(def.bounds, walker.feet);
       if (d > (lite ? 12 : 18)) unload(def.id);
       if (d < (lite ? 4 : 6) && !resident.has(def.id) && d < score && (retries.get(def.id) || 0) < performance.now()) {
         next = def; score = d;
@@ -223,9 +267,10 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
     });
   }
   return { ensure, stream, resident,
-    textureStats:()=>({residentSources:photoSources.size,sharedHits,decodedBytes:[...photoSources.values()].reduce((n,e)=>n+(e.source?e.source.data.width*e.source.data.height*4:0),0)}),
+    textureStats:()=>({residentSources:photoSources.size,sharedHits,fullDetailMaps,pendingDetailMaps:[...photoSources.values()].filter(e=>e.preview).length,
+      decodedBytes:[...photoSources.values()].reduce((n,e)=>n+(e.source?e.source.data.width*e.source.data.height*4:0),0)}),
     dispose() {
-    clearEntrance();
+    clearTimeout(promotionTimer);clearEntrance();
     disposed = true;
     for (const { controller } of pending.values()) controller.abort();
     for (const id of resident.keys()) unload(id);

@@ -1,6 +1,6 @@
 # The chamber
 
-One active clock moves from a white plaster chamber to a spiral well. The native room has a polished marble floor, a brass and enamel sign, six separate bevelled words, framed prints, an open oculus below the inspection deck and one working doorway. Two photographs per phase are in `shots/`. The one-minute film draws six ten-second excerpts from a single 225.239-second visit driven by the live game's clock.
+One active clock moves from a white plaster chamber to a spiral well. The native room has a polished marble floor, a brass and enamel sign, six separate bevelled words, framed prints, an open oculus below the inspection deck and one working doorway. Two photographs per phase are in `shots/`. The one-minute film draws six ten-second excerpts from a single 225.619-second visit driven by the live game's clock. The print fades into its raised letters at the first threshold. The floor, sky, floating objects and sound follow the same clock at full depth.
 
 ## Reproduce the visit
 
@@ -46,8 +46,12 @@ The final threshold holds while the player stays. On leaving, depth recedes at a
 
 ## Verification and limits
 
-`verification/interaction.json` records two real ending purchases, one in each motion mode. Each crossed the physical exit in every phase. An actual E key popped a sphere, Escape froze the clock, panic released the scene and the deck was resident overhead. Normal mode admitted 16 bubbles and six frames. Reduced mode admitted five and four, with a measured clock multiplier of 0.65. The level camera had zero roll in all twelve fixed photographs.
+`verification/interaction.json` records two real ending purchases, one in each motion mode. Each crossed the physical exit in every phase. An actual E key popped a sphere, Escape froze the clock, panic released the scene and the deck was resident overhead. Normal mode admitted 16 bubbles and six frames. Reduced mode admitted five and four, with a measured clock multiplier of 0.65. With the operating system set to normal motion, checking Gentle visuals in the real pause menu also measured 0.65. The level camera had zero roll in all twelve fixed photographs.
 
 The normal and Gentle pictures were inspected in desktop Chrome. A separate run used the physical Intel integrated GPU (0x7D67) at native 1920 by 1080. In the full-depth chamber it delivered 16.7 ms median and 17.2 ms p95. The same GPU in a 393 by 852 touch profile rendered the reduced full-depth chamber at 33.4 ms median and 33.8 ms p95. Both kept pixel ratio 1. The machine-readable results are in `verification/integrated.json`. Physical VR and mid-range phone hardware remain unmeasured.
 
-The regular inspection photographs load four local test pictures. Real online pictures remain subject to the user's museum consent, cache and availabil
+The regular inspection photographs load four local test pictures. Real online pictures remain subject to the user's museum consent, cache and availability. Occlusion of those DOM pictures is conservative and can temporarily hide a whole picture near an overlapping foreground object. The reflective floor uses an analytic underfloor volume and reflections of the stationary chamber stored in the baked room probe.
+
+A temporary native WPF review host ran the installed WebView2 157.0.4341.60. Its mapped resource host loaded the GLB, the baked lightmap and Three r169. The hosted game then received its ordinary protocol-1 init, completed a local ending purchase, registered a physical First Press, rendered the full-depth chamber and disposed it on panic. The native capture and receipts are in `verification/wpf/`.
+
+The standing sign, PA lines and visitor-time plaque use the bible's text. “Visitor Services” is the added civic department masthead. The full-depth phrase comes from the run's selected theme vocabulary.

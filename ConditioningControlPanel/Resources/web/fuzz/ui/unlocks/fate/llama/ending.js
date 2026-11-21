@@ -31,6 +31,8 @@ export function wormhole(ctx) {
   const oldNodes = [...button.childNodes], oldName = button.getAttribute('aria-label');
   root.append(button); button.replaceChildren(doc.createTextNode('YES')); button.setAttribute('aria-label', question.textContent + ' YES');
   button.focus({ preventScroll: true });
+  warmEntrance();
+  void import('../../../expo/scene.js').catch(()=>{});
   return new Promise(resolve => {
     let gone = false, crossed = -1, elapsed = 0, previous = ctx.activeMs, offFrame, offHold;
     const stop = () => {
@@ -44,7 +46,6 @@ export function wormhole(ctx) {
       if (gone || crossed >= 0 || ctx.paused || doc.hidden) return;
       crossed = elapsed;
       warmEntrance();
-      void import('../../../expo/scene.js').catch(()=>{});
       ctx.audio.play('assets/expo/audio/spit.ogg', { bus: 'sfx', gain: .55 });
     };
     const paint = () => {
@@ -66,7 +67,7 @@ export function wormhole(ctx) {
     };
     button.addEventListener('click', enter, true); offFrame = ctx.frame(paint);
     offHold = ctx.on('suspend', e => { if (e?.on && e.reason === 'panic') { clearEntrance();stop(); } });
-    ctx.cleanup(stop); paint();
+    ctx.cleanup(()=>{if(crossed<0)clearEntrance();stop();}); paint();
   });
 }
 

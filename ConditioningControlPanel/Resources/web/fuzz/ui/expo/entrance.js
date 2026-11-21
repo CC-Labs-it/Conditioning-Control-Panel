@@ -8,7 +8,7 @@ const get=(name,signal)=>fetch(new URL(name,root),{signal}).then(response=>{
 });
 const textureFile=/^textures\/[a-f0-9]+(?:-mobile)?\.webp$/;
 
-async function firstTextureNames(response){
+async function firstTextureNames(response,details){
   const reader=response.clone().body.getReader(),chunks=[];
   let bytes=0,end=20;
   try{
@@ -27,14 +27,30 @@ async function firstTextureNames(response){
     if(bytes<end)return [];
     const data=new Uint8Array(end);let offset=0;
     for(const chunk of chunks){const count=Math.min(end-offset,chunk.length);data.set(chunk.subarray(0,count),offset);offset+=count;}
-    return (JSON.parse(new TextDecoder().decode(data.subarray(20))).images||[]).map(image=>image.uri).filter(uri=>textureFile.test(uri));
+    const gltf=JSON.parse(new TextDecoder().decode(data.subarray(20)));
+    const imageFor=slot=>{
+      const texture=gltf.textures?.[slot?.index];
+      return gltf.images?.[texture?.extensions?.EXT_texture_webp?.source ?? texture?.source]?.uri;
+    };
+    if(details){
+      const colour=new Set();
+      for(const mat of gltf.materials||[]){
+        const pbr=mat.pbrMetallicRoughness||{};
+        colour.add(imageFor(pbr.baseColorTexture));colour.add(imageFor(mat.emissiveTexture));
+        for(const slot of [mat.normalTexture,pbr.metallicRoughnessTexture]){
+          const name=imageFor(slot);if(name&&textureFile.test(name))details.add(name);
+        }
+      }
+      for(const name of colour)details.delete(name);
+    }
+    return (gltf.images||[]).map(image=>image.uri).filter(uri=>textureFile.test(uri));
   }finally{void reader.cancel().catch(()=>{});}
 }
 
-/** Begin only the first room's transfer while the accepted wormhole is crossing the screen. */
+/** Buying the ending starts its first room's transfer while the visitor reads the wormhole prompt. */
 export function warmEntrance(){
-  clearEntrance();
-  const controller=new AbortController(), files=new Map(),current={controller,files,claimed:new Set(),timer:0};
+  if(batch)return;
+  const controller=new AbortController(), files=new Map(),current={controller,files,claimed:new Set(),details:new Set(),timer:0};
   batch=current;
   function prepare(name){
     const pending=get(name,controller.signal);
@@ -49,8 +65,10 @@ export function warmEntrance(){
     if(!def)return;
     const id=def.id;
     const view=(LITE&&def.mobileFile)||def.file||id+'.glb';
-    prepare(view).then(firstTextureNames).then(names=>{
-      if(batch===current&&!controller.signal.aborted)for(const name of new Set(names))if(!current.claimed.has(name))prepare(name);
+    prepare(view).then(file=>firstTextureNames(file,!LITE&&def.mobileFile?current.details:null)).then(names=>{
+      if(batch===current&&!controller.signal.aborted)for(const file of new Set(names)){
+        const name=firstSurfaceMap(file);if(!current.claimed.has(name))prepare(name);
+      }
     }).catch(()=>{});
     for(const file of [def.collision||id+'-collision.glb',
       id+(LITE?'-light-mobile.webp':'-light.webp'),...['px','nx','py','ny','pz','nz'].map(side=>id+'-probe-'+side+'.webp')]){
@@ -58,6 +76,11 @@ export function warmEntrance(){
     }
   }).catch(()=>{});
   current.timer=setTimeout(()=>{if(batch===current)clearEntrance();},45000);
+}
+
+// The first desktop view keeps the full colour, signs and light bake while fine surface detail streams in.
+export function firstSurfaceMap(name){
+  return batch?.details.has(name)?name.replace(/\.webp$/,'-mobile.webp'):name;
 }
 
 export function clearEntrance(){

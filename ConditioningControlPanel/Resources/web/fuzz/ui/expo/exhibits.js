@@ -10,7 +10,7 @@ const clamp = n => Math.min(1,Math.max(0,n));
 export function createExhibits(api) {
   const {THREE,ctx,camera,register,play,say,go,exit} = api;
   const state = createVisit(ctx), zones = new Map();
-  let here = '', hudClock = 0, pending = [], lastPress = -20, lastStop = -20, stopShown = -20;
+  let here = '', hudClock = 0, pending = [], lastPress = -20, lastStop = -20, stopShown = -20, returnAt = null;
   const cue = id => { if (id && LINES[id]) say(LINES[id],id); };
   function once(id) { if (!state.heard.has(id)) { state.heard.add(id); cue(id); } }
   function later(id, delay) { pending.push({id, at:hudClock+delay, zone:here}); }
@@ -58,18 +58,18 @@ export function createExhibits(api) {
       if(ui.secondary) ui.secondary.visible=state.presses>=50;
     }
     if (id==='hoof') {
-      const panel = surface('hoof_display');
-      ui.hands=obj('hoof_hands'); ui.human=obj('hoof_staff'); ui.photos=obj('hoof_mosaic');
-      if(ui.hands){
-        ui.worn=ui.hands.clone(true);
-        ui.worn.position.set(0,0,0);ui.worn.scale.setScalar(.48);
-        ui.worn.visible=false;
-        api.scene.add(ui.worn);
-        clean.push(()=>ui.worn.removeFromParent());
-      }
+      const panel = surface('hoof_display',{emission:.48});
+      ui.hands=['hoof_hand_left','hoof_hand_right'].map(obj).filter(Boolean);
+      ui.human=obj('hoof_staff'); ui.photos=obj('hoof_mosaic');
+      ui.grip=new THREE.Quaternion().setFromEuler(new THREE.Euler(2.46,Math.PI,0,'XYZ'));
+      ui.worn=ui.hands.map(hand=>{
+        const glove=hand.clone(true);
+        glove.position.set(0,0,0);glove.scale.setScalar(.74);glove.visible=false;
+        api.scene.add(glove);clean.push(()=>glove.removeFromParent());return glove;
+      });
       ui.refresh=()=>{
         const page=state.hoof;
-        if(ui.hands)ui.hands.visible=page==='idle'||page==='complete';
+        for(const hand of ui.hands)hand.visible=page==='idle'||page==='complete';
         if(ui.human)ui.human.visible=page==='assistant'||page==='complete';
         if(ui.photos)ui.photos.visible=page==='pictures'||page==='failed';
         const rows = {
@@ -81,9 +81,11 @@ export function createExhibits(api) {
           foot:page==='complete'?'This is why.':page==='idle'?'Applied Sciences  /  Hoof Simulator':'Human Interface Programme',good:page==='complete'});
       };
       if(ui.human)ui.human.userData.expoRest=ui.human.position.clone();
-      const use=()=>{const previous=state.hoof; const line=state.useHoof();play('press');cue(line);ui.refresh();
+      const use=()=>{const previous=state.hoof; const line=state.useHoof();
+        if(previous==='checkbox'||previous==='pictures')ui.lastAttempt=hudClock;
+        play('press');cue(line);ui.refresh();
         if(previous==='idle'||previous==='complete')later('hoof_2',3.2); };
-      bind('hoof_hands','Put on the hooves',use);
+      for(const name of ['hoof_hand_left','hoof_hand_right'])bind(name,'Put on the hooves',use);
       bind('hoof_console','Try the console',use); bind('hoof_display','Try the test',use);
       bind('hoof_mosaic','Submit picture test',use);
       ui.refresh();
@@ -117,14 +119,18 @@ export function createExhibits(api) {
       if(doctorFound)bind('alpaca_button','Is he an alpaca?',()=>{play('chime');void go('atrium',[0,0,36],0).then(()=>cue('pa_alpaca'));});
       const photo=obj('photo_release');
       ui.photo=photo;ui.aperture=0;
+      if(obj('photo_terrace'))obj('photo_terrace').visible=false;
       ui.hatches=[obj('photo_hatch_0'),obj('photo_hatch_1')];
       for(const hatch of ui.hatches)if(hatch)hatch.userData.expoRest=hatch.position.clone();
       if(photo)photo.visible=false;
-      if(state.file.herd.length===12)bind('photo_release','Take the group photograph',()=>{api.capturePhoto?.();state.photo=true;play('chime');say('Group photograph filed.');});
+      if(state.file.herd.length===12)bind('photo_release','Take the group photograph',()=>{
+        if(!api.capturePhoto?.())return;
+        state.photo=true;play('chime');say('Group photograph filed.');
+      });
       bind('chewed_file','Read your file',()=>say(state.file.name+' · '+state.file.taps.toLocaleString()+' presses. Verdict: mostly chewing.'));
     }
     if (id==='shop') {
-      const till=surface('till_display');
+      const till=surface('till_display',{emission:.36});
       ui.refresh=()=>{
         const available=state.contract && state.loops>=2;
         api.setColliderEnabled?.('shop_shelves_before',state.loops===0);
@@ -140,7 +146,7 @@ export function createExhibits(api) {
       for (const shelf of ui.shelves) if(shelf)shelf.userData.expoRest=shelf.position.clone();
       ui.exitSale=obj('exit_sale');ui.portal=obj('shop_wormhole');
       ui.doorGlass=createDoorGlass(THREE,ui.portal);clean.push(()=>ui.doorGlass.dispose());
-      ui.home=()=>{if(ui.departure!=null)return;ui.departure=0;play('spit');cue('pa_leave');};
+      ui.home=()=>{if(returnAt!=null)return;returnAt=hudClock+5.3;play('spit');cue('pa_leave');};
       function purchase(){
         if(!state.contract){state.contract=true;play('register');say('Your contract, framed.');}
         else if(state.loops>=2 && !state.boughtExit){state.boughtExit=true;play('door');cue('pa_shop_buy');}
@@ -181,7 +187,7 @@ export function createExhibits(api) {
   function enter(id) {
     if(id===here)return;
     const worn=zones.get('hoof')?.ui.worn;
-    if(worn)worn.visible=false;
+    if(worn)for(const glove of worn)glove.visible=false;
     here=id;
     if(hallCues[id])once(hallCues[id]);
     if(id==='habitat')later('keep_1',4);
@@ -191,6 +197,7 @@ export function createExhibits(api) {
   function tick(dt,id) {
     if(ctx.paused)return;
     hudClock+=dt;
+    if(returnAt!=null && hudClock>=returnAt){exit();return;}
     if(hudClock>=900)once('pa_closing');
     pending=pending.filter(event=>{
       if(event.zone!==here)return false;
@@ -214,12 +221,17 @@ export function createExhibits(api) {
       if(release || Math.floor(state.habitatTime)!==old)ui.refresh();
     }
     if(id==='hoof') {const line=state.tickHoof(dt); if(line){cue(line);ui.refresh();}
-      if(ui.worn){
-        ui.worn.visible=!['idle','complete'].includes(state.hoof);
-        ui.worn.position.set(0,-.29,-.57).applyQuaternion(camera.quaternion).add(camera.position);
-        ui.worn.quaternion.copy(camera.quaternion);
-      }
-      if(ui.human && state.hoof==='assistant')ui.human.position.x=ui.human.userData.expoRest.x+.94*(1-clamp(state.hoofTime/1.7));}
+      ui.worn.forEach((glove,i)=>{
+        glove.visible=!['idle','complete'].includes(state.hoof);
+        const spread=Math.min(.34,.24*camera.aspect);
+        const duration=(ctx.gentle||ctx.reduced) ? .72 : .46;
+        const t=clamp((hudClock-(ui.lastAttempt??-10))/duration);
+        const reach=i===1?Math.sin(Math.PI*t):0;
+        glove.position.set(i===0?-spread:spread*(1-.91*reach),-.245+.21*reach,-.57-.17*reach)
+          .applyQuaternion(camera.quaternion).add(camera.position);
+        glove.quaternion.copy(camera.quaternion).multiply(ui.grip);
+      });
+      if(ui.human && state.hoof==='assistant')ui.human.position.x=ui.human.userData.expoRest.x-.94*(1-clamp(state.hoofTime/1.7));}
     if(id==='twelve' && state.file.herd.length===12 && ui.photo){
       if(Math.hypot(camera.position.x,camera.position.z+25.15)<4||ui.aperture>0)
         ui.aperture=clamp(ui.aperture+dt/(ctx.gentle||ctx.reduced?2.8:1.5));
@@ -235,10 +247,6 @@ export function createExhibits(api) {
       if(state.boughtExit){
         ui.doorGlass.step(dt,ctx.gentle||ctx.reduced);
         if(Math.abs(camera.position.x-15.03)<.62 && camera.position.z < -13.29)ui.home();
-      }
-      if(ui.departure!=null){
-        ui.departure+=dt;
-        if(ui.departure>5.3)exit();
       }
     }
     if(id==='atrium' && ui.pivot){

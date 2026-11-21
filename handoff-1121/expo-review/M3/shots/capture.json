@@ -1,7 +1,7 @@
 {
   "timeMode": "continuous real clock",
   "gentle": false,
-  "wallSeconds": 225.239,
+  "wallSeconds": 225.619,
   "rows": [
     {
       "name": "phase-0-room.png",
@@ -22,7 +22,7 @@
         -5
       ],
       "surface": "stone",
-      "elapsed": 13.118099998432383,
+      "elapsed": 13.374399998629064,
       "ready": true,
       "loaded": [
         "hall",
@@ -36,9 +36,9 @@
       },
       "calls": 31,
       "pixelRatio": 1,
-      "depth": 0.06516099999210233,
+      "depth": 0.06644249999320492,
       "phase": 0,
-      "seconds": 13.032199998420463,
+      "seconds": 13.288499998640983,
       "eye": [
         -14.86,
         1.6,
@@ -68,7 +68,7 @@
         -5.15
       ],
       "surface": "stone",
-      "elapsed": 13.3341999984145,
+      "elapsed": 13.640099998664816,
       "ready": true,
       "loaded": [
         "hall",
@@ -82,9 +82,9 @@
       },
       "calls": 23,
       "pixelRatio": 1,
-      "depth": 0.0662414999920129,
+      "depth": 0.06777099999338368,
       "phase": 0,
-      "seconds": 13.24829999840258,
+      "seconds": 13.554199998676735,
       "eye": [
         -19.95,
         1.6,
@@ -114,7 +114,7 @@
         -5.7
       ],
       "surface": "stone",
-      "elapsed": 32.2965999959113,
+      "elapsed": 32.476599995941115,
       "ready": true,
       "loaded": [
         "hall",
@@ -128,9 +128,9 @@
       },
       "calls": 31,
       "pixelRatio": 1,
-      "depth": 0.17326419997539627,
+      "depth": 0.17434419997571812,
       "phase": 1,
-      "seconds": 32.210699995899375,
+      "seconds": 32.39069999595302,
       "eye": [
         -18.5,
         1.6,
@@ -160,7 +160,7 @@
         -4.88
       ],
       "surface": "stone",
-      "elapsed": 32.51279999584574,
+      "elapsed": 32.742399995941135,
       "ready": true,
       "loaded": [
         "hall",
@@ -174,9 +174,9 @@
       },
       "calls": 24,
       "pixelRatio": 1,
-      "depth": 0.1745613999750029,
+      "depth": 0.17593899997571827,
       "phase": 1,
-      "seconds": 32.426899995833814,
+      "seconds": 32.65649999595304,
       "eye": [
         -20.15,
         1.6,
@@ -206,7 +206,7 @@
         -6.5
       ],
       "surface": "stone",
-      "elapsed": 58.3419999919973,
+      "elapsed": 58.43899999269456,
       "ready": true,
       "loaded": [
         "hall",
@@ -220,9 +220,9 @@
       },
       "calls": 34,
       "pixelRatio": 1,
-      "depth": 0.3236449999554743,
+      "depth": 0.32418388884836924,
       "phase": 2,
-      "seconds": 58.25609999198537,
+      "seconds": 58.35309999270647,
       "eye": [
         -18.7,
         1.6,
@@ -252,7 +252,7 @@
         -8
       ],
       "surface": "stone",
-      "elapsed": 58.6079999919556,
+      "elapsed": 58.771599992646856,
       "ready": true,
       "loaded": [
         "hall",
@@ -266,9 +266,9 @@
       },
       "calls": 43,
       "pixelRatio": 1,
-      "depth": 0.32512277773302045,
+      "depth": 0.326031666625882,
       "phase": 2,
-      "seconds": 58.522099991943676,
+      "seconds": 58.68569999265876,
       "eye": [
         -20,
         1.6,
@@ -298,7 +298,7 @@
         -6.2
       ],
       "surface": "stone",
-      "elapsed": 110.34009998270784,
+      "elapsed": 110.39839998483583,
       "ready": true,
       "loaded": [
         "hall",
@@ -312,9 +312,9 @@
       },
       "calls": 44,
       "pixelRatio": 1,
-      "depth": 0.5843924999278997,
+      "depth": 0.5846354166035322,
       "phase": 3,
-      "seconds": 110.25419998269591,
+      "seconds": 110.31249998484773,
       "eye": [
         -15.6,
         1.6,
@@ -344,7 +344,7 @@
         -10.9
       ],
       "surface": "stone",
-      "elapsed": 110.58959998269594,
+      "elapsed": 110.71479998480007,
       "ready": true,
       "loaded": [
         "hall",
@@ -358,9 +358,9 @@
       },
       "calls": 49,
       "pixelRatio": 1,
-      "depth": 0.5854320832611833,
+      "depth": 0.5859537499367166,
       "phase": 3,
-      "seconds": 110.50369998268401,
+      "seconds": 110.62889998481197,
       "eye": [
         -21,
         1.6,
@@ -390,7 +390,7 @@
         -6.6
       ],
       "surface": "stone",
-      "elapsed": 175.3185999724853,
+      "elapsed": 175.3765999752668,
       "ready": true,
       "loaded": [
         "hall",
@@ -404,9 +404,9 @@
       },
       "calls": 45,
       "pixelRatio": 1,
-      "depth": 0.8551362498853057,
+      "depth": 0.8553779165636612,
       "phase": 4,
-      "seconds": 175.23269997247337,
+      "seconds": 175.2906999752787,
       "eye": [
         -18.8,
         1.6,
@@ -436,7 +436,7 @@
         -6.9
       ],
       "surface": "stone",
-      "elapsed": 175.5509999724793,
+      "elapsed": 175.67499997522512,
       "ready": true,
       "loaded": [
         "hall",
@@ -450,9 +450,9 @@
       },
       "calls": 39,
       "pixelRatio": 1,
-      "depth": 0.856104583218614,
+      "depth": 0.8566212498968209,
       "phase": 4,
-      "seconds": 175.46509997246739,
+      "seconds": 175.58909997523702,
       "eye": [
         -22.2,
         1.6,
@@ -482,7 +482,7 @@
         -4.5
       ],
       "surface": "stone",
-      "elapsed": 222.79149996473015,
+      "elapsed": 222.91149996905838,
       "ready": true,
       "loaded": [
         "hall",
@@ -494,7 +494,7 @@
         "sharedHits": 40,
         "decodedBytes": 187557120
       },
-      "calls": 39,
+      "calls": 40,
       "pixelRatio": 1,
       "depth": 1,
       "phase": 5,
@@ -528,7 +528,7 @@
         -7.25
       ],
       "surface": "stone",
-      "elapsed": 223.00559996473615,
+      "elapsed": 223.12549996900478,
       "ready": true,
       "loaded": [
         "hall",
@@ -552,7 +552,7 @@
       ],
       "yaw": -2.0012610996292044,
       "roll": 0,
-      "visibleSourcePanes": 0,
+      "visibleSourcePanes": 1,
       "visibleFrames": 6
     }
   ],
@@ -564,7 +564,7 @@
       -5
     ],
     "surface": "stone",
-    "elapsed": 224.28749996455736,
+    "elapsed": 224.42119996887396,
     "ready": true,
     "loaded": [
       "hall",
@@ -578,9 +578,9 @@
     },
     "calls": 48,
     "pixelRatio": 1,
-    "depth": 0.9993758333333956,
+    "depth": 0.999376666666729,
     "phase": 4,
-    "seconds": 209.85020000001495
+    "seconds": 209.85040000001496
   },
   "issues": []
 }

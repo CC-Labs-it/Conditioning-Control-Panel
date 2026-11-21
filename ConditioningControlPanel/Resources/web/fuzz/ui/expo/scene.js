@@ -8,7 +8,7 @@ import { createSound } from './audio.js';
 import { createExhibits } from './exhibits.js';
 import { createExpoMedia } from './media-panes.js';
 import { createDomeEffects } from './dome-effects.js';
-import { LLAMA_BY_ID } from '../../data/content/llamas.js';
+import { groupPhotograph } from './group-photo.js';
 
 const CSS = `
 .expo-root {position:absolute;inset:0;background:#222c25;overflow:hidden;touch-action:none;pointer-events:auto;outline:none;color:white;font:500 16px/1.35 system-ui}
@@ -100,33 +100,11 @@ export function createExpo(ctx, parent, { onExit } = {}) {
       media?.draw();
     }
     function capturePhoto() {
-      const gallery=zones?.resident.get('twelve')?.view, herd=exhibits.state?.file?.herd || [];
-      if(!gallery || herd.length!==12)return null;
-      const models=herd.map(id=>gallery.getObjectByName('statue_'+id));
-      if(models.some(model=>!model || !model.visible))return null;
-      const out=doc.createElement('canvas');out.width=840;out.height=554;
-      const g=out.getContext('2d');g.fillStyle='#eae6d6';g.fillRect(0,0,out.width,out.height);
-      g.fillStyle='#173e31';g.fillRect(0,0,out.width,43);
-      g.fillStyle='#f2eddb';g.font='22px Georgia';g.fillText('The Hall of the Twelve',18,29);
-      g.textAlign='right';g.font='12px system-ui';g.fillText('LLAMA EXPO 2037',822,27);g.textAlign='left';
-      const plate=new THREE.PerspectiveCamera(42,canvas.width/canvas.height,.035,80);
-      const centre=new THREE.Vector3(),size=new THREE.Vector3(),toward=new THREE.Vector3();
-      const width=196,height=138,ratio=width/height;
-      const sw=Math.min(canvas.width,canvas.height*ratio),sh=sw/ratio;
-      try {
-        models.forEach((model,i)=>{
-          const box=new THREE.Box3().setFromObject(model,true);box.getCenter(centre);box.getSize(size);
-          toward.set(-centre.x,0,-26.1-centre.z).normalize();
-          const distance=Math.max(size.y*1.27,Math.max(size.x,size.z)*1.22/ratio)/(2*Math.tan(Math.PI*plate.fov/360));
-          plate.position.copy(centre).addScaledVector(toward,distance);plate.position.y+=size.y*.11;
-          plate.lookAt(centre);plate.updateMatrixWorld();
-          post.draw(scene,plate,true);
-          const x=16+(i%4)*204,y=54+Math.floor(i/4)*164;
-          g.drawImage(canvas,(canvas.width-sw)/2,(canvas.height-sh)/2,sw,sh,x,y,width,height);
-          g.fillStyle='#284437';g.font='13px Georgia';g.fillText(LLAMA_BY_ID[herd[i]].name,x+2,y+154,width-4);
-        });
-      } finally { draw(); }
-      const photo=out.toDataURL('image/webp',.75);ctx.store.set('groupPhoto',photo);return photo;
+      const gallery=zones?.resident.get('twelve')?.view;
+      if(!gallery || exhibits.state?.file?.herd.length!==12)return null;
+      const photo=groupPhotograph({gallery,scene,renderer,doc,draw});
+      if(photo)ctx.store.set('groupPhoto',photo);
+      return photo;
     }
     async function go(id, at, yaw = 0) {
       if (dead || !zones) return false;
@@ -172,7 +150,8 @@ export function createExpo(ctx, parent, { onExit } = {}) {
     clean.push(ctx.frame(() => {
       const now = ctx.activeMs, dt = Math.max(0, Math.min(1, (now-previous)/1000)); previous = now;
       if (!ready || dead || ctx.paused || doc.hidden) return;
-      elapsed += dt; controls.step(dt); walker.step(dt); entered(); zones.stream(dt); exhibits.tick?.(dt, walker.zone); dome.step(dt,walker.zone);
+      elapsed += dt; controls.step(dt); walker.step(dt); entered(); sound.setListener(walker.feet);
+      zones.stream(dt); exhibits.tick?.(dt, walker.zone); dome.step(dt,walker.zone);
       if(dt<.12 && dt>0){budgetTime+=dt;budgetFrames++;}
       if(budgetTime>=1.75){
         const average=budgetTime/budgetFrames,goal=LITE?1/30:1/60;

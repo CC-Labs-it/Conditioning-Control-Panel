@@ -41,11 +41,18 @@ export function createSound(ctx) {
     room = id;
     layer('room', bank.tones?.[id], .46);
     layer('band', id === 'atrium' && bank.effects?.band, .22);
+    if (id !== 'service') layer('server', null, 0);
     if (id !== 'dome') setDepth(0);
+  }
+  function setListener(feet) {
+    if (room !== 'service') return;
+    const distance = Math.hypot(feet.x - 25, feet.z - 27.19, feet.y + 1.6 - 1.04);
+    const gain = Math.max(0, 1 - distance / 4.1);
+    layer('server', gain > 0 && bank.tones?.server, .47 * gain * gain);
   }
   function setDepth(n) {
     depth = Math.max(0, Math.min(1, n));
-    for (const [name, start] of [['note', .08], ['fog', .45], ['dream', .7]]) {
+    for (const [name, start] of [['note', .1], ['fog', .5], ['dream', .75]]) {
       const gain = Math.max(0, Math.min(1, (depth - start) / .2));
       layer(name, gain > 0 ? bank.effects?.[name] : null, gain * .28);
     }
@@ -62,7 +69,7 @@ export function createSound(ctx) {
     held = on;
     for (const s of streams) { if (on) s.pause(); else s.play(); }
   }
-  return { play, footstep, setRoom, setDepth, speak, pause, dispose() {
+  return { play, footstep, setRoom, setDepth, setListener, speak, pause, dispose() {
     dead = true; controller.abort(); for (const s of streams) s.stop(); streams.clear(); layers.clear();
   } };
 }

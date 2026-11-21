@@ -1,6 +1,6 @@
 // Paint variable exhibit records onto the authored placard UVs.
 const PAPER = '#efe9d5', INK = '#123e34', GOLD = '#a27b45';
-export function livePanel(THREE, mesh, {width = 1280,height = 600} = {}) {
+export function livePanel(THREE, mesh, {width = 1280,height = 600, emission = 0} = {}) {
   const canvas = document.createElement('canvas');
   canvas.width = width; canvas.height = height;
   const g = canvas.getContext('2d');
@@ -12,8 +12,9 @@ export function livePanel(THREE, mesh, {width = 1280,height = 600} = {}) {
   const original = mesh.material;
   surface.map = texture;
   surface.color?.set(0xffffff);
-  surface.emissiveMap = null;
-  surface.emissive?.set(0x000000);
+  surface.emissiveMap = emission > 0 ? texture : null;
+  surface.emissive?.set(emission > 0 ? 0xffffff : 0x000000);
+  surface.emissiveIntensity = emission;
   mesh.material = surface;
   function draw(fn) {
     g.save(); g.fillStyle = PAPER; g.fillRect(0,0,width,height);

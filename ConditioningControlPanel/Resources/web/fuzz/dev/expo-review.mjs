@@ -68,6 +68,7 @@ try {
   await frame.waitForFunction(()=>!!window.__expo, null, {timeout:120000});
   const entryMs = Date.now()-admitted;
   const firstViewBytes=zoneBytes;
+  const available=await frame.evaluate(async()=>((await(await fetch('assets/expo/zones/zones.json')).json()).zones.map(z=>z.id)));
   await frame.evaluate(()=>document.fonts.ready);
   const timing=await frame.evaluate(async()=>{
     const ex=window.__expo,dt=[];
@@ -91,7 +92,15 @@ try {
     if(!label.includes(expected))throw Error('Expected '+expected+' at action position, saw '+label);
     for(let i=0;i<repeats;i++)await page.keyboard.press('KeyE');
   }
+  let domeReviewTime=0;
   for (const [name, at, look] of shots) {
+    const number=Number(name.slice(0,2));
+    const needsAtrium=available.includes('atrium')&&((zone==='service'&&number===12)||(zone==='catwalk'&&(number===2||number===3)));
+    const cold=needsAtrium&&process.env.EXPO_COLD_NEIGHBORS==='1';
+    if(cold){
+      await frame.evaluate(()=>__expo.go('secret',[84.2,0,41]));
+      await frame.waitForFunction(()=>!__expo.state().loaded.includes('atrium'),null,{timeout:60000});
+    }
     if(process.env.EXPO_EXHIBIT_STATES==='1'){
       const n=Number(name.slice(0,2));
       if(zone==='hoof'){
@@ -112,15 +121,25 @@ try {
         if(n===8 || n===10){await useAt([15.03,0,-12.14],[15.03,1.14,-13.93],'exit door');await page.waitForTimeout(320);}
         if(n===11)await useAt([22.77,0,-10.05],[22.77,1.37,-11.43],'Buy Exit');
       }
+      if(zone==='dome'){
+        const target=[0,0,22,25,47,52,92,110,153,180,213,219][n-1];
+        await frame.evaluate(async({at,seconds})=>{const e=window.__expo;await e.go('dome',at);e.deepen(seconds);},
+          {at,seconds:Math.max(0,target-domeReviewTime)});
+        domeReviewTime=target;
+      }
     }
     await frame.evaluate(async ({zone,at,look})=>{
       const ex = window.__expo; await ex.go(zone,at); ex.lookAt(...look); ex.draw();
       await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
     },{zone,at,look});
+    if(needsAtrium){
+      await frame.waitForFunction(()=>__expo.state().loaded.includes('atrium'),null,{timeout:60000});
+      await frame.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+    }
     const state = await frame.evaluate(()=>window.__expo.state());
     const shot = await cdp.send('Page.captureScreenshot',{format:'png', fromSurface:true});
     await writeFile(path.join(target, name+'.png'),Buffer.from(shot.data,'base64'));
-    results.push({ name, at, look, ...state });
+    results.push({ name, at, look, ...state,requiredNeighbors:needsAtrium?['atrium']:[],coldNeighborCheck:cold });
   }
   if (film) {
     const nodes = custom?.walk || [[0,13],[0,-7.67],[0,-3],[3.1,0],[3.1,7.65],[8.35,7.65],[8.35,-.9],[10.3,-.9],[10.3,-14.55],[0,-14.55]];

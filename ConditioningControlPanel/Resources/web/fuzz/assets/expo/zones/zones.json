@@ -1,29 +1,14 @@
 {
   "start": {
-    "id": "hall",
+    "id": "atrium",
     "at": [
       0,
       0,
-      13
+      37.2
     ],
     "yaw": 0
   },
   "zones": [
-    {
-      "id": "hall",
-      "bounds": [
-        -12,
-        0,
-        -16,
-        12,
-        10.8,
-        16
-      ],
-      "file": "hall.glb",
-      "mobileFile": "hall-mobile.glb",
-      "lightIntensity": 32.06457570495658,
-      "reflectionIntensity": 0.33
-    },
     {
       "id": "dome",
       "bounds": [
@@ -191,6 +176,66 @@
       "file": "catwalk.glb",
       "mobileFile": "catwalk-mobile.glb",
       "lightIntensity": 21.582901459643242,
+      "reflectionIntensity": 0.33
+    },
+    {
+      "id": "shop",
+      "bounds": [
+        12,
+        0,
+        -14.1,
+        25,
+        4.7,
+        1.55
+      ],
+      "file": "shop.glb",
+      "mobileFile": "shop-mobile.glb",
+      "lightIntensity": 9.968282034592772,
+      "reflectionIntensity": 0.33
+    },
+    {
+      "id": "hoof",
+      "bounds": [
+        -25,
+        0,
+        2.2,
+        -12,
+        4.7,
+        13.7
+      ],
+      "file": "hoof.glb",
+      "mobileFile": "hoof-mobile.glb",
+      "lightIntensity": 9.570697134202945,
+      "reflectionIntensity": 0.33
+    },
+    {
+      "id": "hall",
+      "bounds": [
+        -12,
+        0,
+        -16,
+        12,
+        10.8,
+        16
+      ],
+      "file": "hall.glb",
+      "mobileFile": "hall-mobile.glb",
+      "lightIntensity": 31.139902871821533,
+      "reflectionIntensity": 0.33
+    },
+    {
+      "id": "atrium",
+      "bounds": [
+        -12,
+        -0.17,
+        16,
+        12,
+        12.56,
+        41
+      ],
+      "file": "atrium.glb",
+      "mobileFile": "atrium-mobile.glb",
+      "lightIntensity": 23.055842096001562,
       "reflectionIntensity": 0.33
     }
   ]

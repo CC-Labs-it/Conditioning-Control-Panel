@@ -14,3 +14,7 @@ All source sets are licensed under Creative Commons CC0 1.0. The tints, carpet m
 | brass | [Metal009](https://ambientcg.com/view?id=Metal009) | Lennart Demes | [CC0 1.0](https://docs.ambientcg.com/license/) |
 | steel | [Metal009](https://ambientcg.com/view?id=Metal009) | Lennart Demes | [CC0 1.0](https://docs.ambientcg.com/license/) |
 | glass | [SurfaceImperfections001](https://ambientcg.com/view?id=SurfaceImperfections001) | Lennart Demes | [CC0 1.0](https://docs.ambientcg.com/license/) |
+
+## Exhibition artwork
+
+The llama castings, monument, clothed attendant, hoof glove, plush and living-wall cassette were reconstructed with Tripo from project references and finished in Blender. The gallery portraits use the original approved game artwork. Monocles, chains, necklace beads, badges, headwear, clothing details, plinths and plaques were modeled or typeset for this exhibition.

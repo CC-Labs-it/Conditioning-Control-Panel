@@ -10,7 +10,7 @@
           "bubbles": 0,
           "frames": 0,
           "exit": "hall",
-          "secondsAfter": 4.556299999947851,
+          "secondsAfter": 4.5819499999359286,
           "feet": [
             -9.878999999999989,
             0,
@@ -23,7 +23,7 @@
           "bubbles": 0,
           "frames": 0,
           "exit": "hall",
-          "secondsAfter": 28.582824999926977,
+          "secondsAfter": 28.58262499996425,
           "feet": [
             -9.878999999999989,
             0,
@@ -36,7 +36,7 @@
           "bubbles": 16,
           "frames": 0,
           "exit": "hall",
-          "secondsAfter": 62.58162499998805,
+          "secondsAfter": 62.58244999989863,
           "feet": [
             -9.878999999999989,
             0,
@@ -49,7 +49,7 @@
           "bubbles": 16,
           "frames": 0,
           "exit": "hall",
-          "secondsAfter": 113.61132499993894,
+          "secondsAfter": 113.57439999998512,
           "feet": [
             -9.878999999999989,
             0,
@@ -62,7 +62,7 @@
           "bubbles": 16,
           "frames": 6,
           "exit": "hall",
-          "secondsAfter": 174.58054999996733,
+          "secondsAfter": 174.58274999997323,
           "feet": [
             -9.878999999999989,
             0,
@@ -75,7 +75,7 @@
           "bubbles": 16,
           "frames": 6,
           "exit": "hall",
-          "secondsAfter": 209.8670500000328,
+          "secondsAfter": 209.8670000000253,
           "feet": [
             -9.878999999999989,
             0,
@@ -84,13 +84,18 @@
         }
       ],
       "pauseFroze": true,
+      "playerGentle": {
+        "preference": true,
+        "systemReduced": false,
+        "rate": 0.6500000000000014
+      },
       "poppedWithKey": true,
       "oculusLinked": true,
       "panic": true
     },
     {
       "reduced": true,
-      "depthTimeRate": 0.6499999999999999,
+      "depthTimeRate": 0.6500000000000002,
       "doorways": [
         {
           "phase": 0,
@@ -98,7 +103,7 @@
           "bubbles": 0,
           "frames": 0,
           "exit": "hall",
-          "secondsAfter": 4.389349999983611,
+          "secondsAfter": 4.329494999974073,
           "feet": [
             -9.878999999999989,
             0,
@@ -111,7 +116,7 @@
           "bubbles": 0,
           "frames": 0,
           "exit": "hall",
-          "secondsAfter": 28.332054999951712,
+          "secondsAfter": 28.331989999958562,
           "feet": [
             -9.878999999999989,
             0,
@@ -120,11 +125,11 @@
         },
         {
           "phase": 2,
-          "depth": 0.34516666666666673,
+          "depth": 0.3451666666666666,
           "bubbles": 5,
           "frames": 0,
           "exit": "hall",
-          "secondsAfter": 62.33853499995559,
+          "secondsAfter": 62.331714999951146,
           "feet": [
             -9.878999999999989,
             0,
@@ -137,7 +142,7 @@
           "bubbles": 5,
           "frames": 0,
           "exit": "hall",
-          "secondsAfter": 113.33180499997344,
+          "secondsAfter": 113.33132999993943,
           "feet": [
             -9.878999999999989,
             0,
@@ -150,7 +155,7 @@
           "bubbles": 5,
           "frames": 4,
           "exit": "hall",
-          "secondsAfter": 174.3323799999922,
+          "secondsAfter": 174.33249500000542,
           "feet": [
             -9.878999999999989,
             0,
@@ -163,7 +168,7 @@
           "bubbles": 5,
           "frames": 4,
           "exit": "hall",
-          "secondsAfter": 209.86707500000153,
+          "secondsAfter": 209.86687500001935,
           "feet": [
             -9.878999999999989,
             0,

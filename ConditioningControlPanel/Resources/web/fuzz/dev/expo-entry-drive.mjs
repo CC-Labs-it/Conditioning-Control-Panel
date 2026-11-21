@@ -17,6 +17,7 @@ try{
   const name=phone?'phone':'desktop',size=phone?{width:393,height:852}:{width:1920,height:1080};
   const cx=await browser.newContext({viewport:size,deviceScaleFactor:1,hasTouch:phone,isMobile:phone,reducedMotion:phone?'reduce':'no-preference'});
   const page=await cx.newPage();page.on('pageerror',e=>report.errors.push(name+' '+e.message));
+  page.on('console',m=>{if(/(WebGL|GL_).*INVALID_(OPERATION|VALUE|ENUM)|THREE\.WebGLProgram: Shader Error/i.test(m.text()))report.errors.push(name+' '+m.text());});
   const cdp=await cx.newCDPSession(page);await cdp.send('Network.enable');
   const ids=new Set(),files=new Map(),before=new Set();let arrived=false;
   cdp.on('Network.responseReceived',e=>{
@@ -26,14 +27,16 @@ try{
   cdp.on('Network.loadingFinished',e=>{const f=files.get(e.requestId);if(f){f.bytes=e.encodedDataLength;if(!arrived)before.add(e.requestId);}});
   await page.goto(base+'dev/play-ending.html?end=ll_end&pictures=none');
   const button=page.getByRole('button',{name:'Play Llama Expo 2037'});await button.waitFor();
-  const frame=page.frames().find(f=>f.url().includes('/fuzz/index.html'));await button.click();await frame.locator('.expo-worm #btn').waitFor();
+  const frame=page.frames().find(f=>f.url().includes('/fuzz/index.html'));
   if(link>0)await cdp.send('Network.emulateNetworkConditions',{offline:false,latency:rtt,downloadThroughput:link*125000,uploadThroughput:link*125000,connectionType:phone?'cellular4g':'wifi'});
+  const purchase=Date.now();await button.click();await frame.locator('.expo-worm #btn').waitFor();
   const then=Date.now();
   if(phone)await frame.locator('.expo-worm #btn').tap();else await frame.locator('.expo-worm #btn').click();
   await frame.waitForFunction(()=>window.__expo?.state().ready,null,{timeout:120000});arrived=true;
-  const entryMs=Date.now()-then,firstFiles=[...before].map(id=>files.get(id));
+  const entryMs=Date.now()-then,purchaseToRoomMs=Date.now()-purchase,firstFiles=[...before].map(id=>files.get(id));
   const state=await frame.evaluate(()=>__expo.state());
   if(state.zone!==expected)throw Error('Expected '+expected+' entry but found '+state.zone);
+  console.log(name+' first room '+entryMs+' ms, '+(firstFiles.reduce((n,f)=>n+f.bytes,0)/1e6).toFixed(2)+' MB');
   await page.screenshot({path:path.join(dir,name+'-entry.jpg'),type:'jpeg',quality:92});
   async function frameTiming(){return frame.evaluate(async()=>{
     const e=__expo,intervals=[],d=e.renderer.getContext(),gpuTimes=[];
@@ -59,6 +62,15 @@ try{
       gpuDrawMs:gpuTimes.length?gpuTimes[Math.floor(gpuTimes.length/2)]:null,frames:intervals.length,pixelRatio:e.state().pixelRatio,textureMemory:e.state().textures};
   });}
   const initialTiming=await frameTiming();
+  if(state.textures.pendingDetailMaps>0){
+    await frame.waitForFunction(()=>__expo.state().textures.pendingDetailMaps===0,null,{timeout:60000});
+    await page.screenshot({path:path.join(dir,name+'-full-detail.jpg'),quality:92,type:'jpeg'});
+  }
+  const detailAfter=await frame.evaluate(()=>__expo.state().textures);
+  if(process.env.ENTRY_ONLY==='1'){
+    report.devices.push({name,size,entryMs,purchaseToRoomMs,firstBytes:firstFiles.reduce((sum,file)=>sum+file.bytes,0),firstFiles,state,initialTiming,detailAfter});
+    await frame.evaluate(()=>fuzz.engine.setSuspended(true,'panic'));await cx.close();continue;
+  }
   async function touch(kind,x,y){await cdp.send('Input.dispatchTouchEvent',{type:kind,touchPoints:kind==='touchEnd'?[]:[{x,y,radiusX:5,radiusY:5,id:1}]});}
   await frame.locator('.expo-root').focus();
   if(phone){
@@ -93,7 +105,7 @@ try{
   const returned=await frame.evaluate(()=>__expo.state());
   if(shared.sharedHits===0)report.errors.push(name+' shared textures were not reused');
   const list=[...files.values()],firstBytes=firstFiles.reduce((sum,file)=>sum+file.bytes,0);
-  report.devices.push({name,size,entryMs,firstBytes,firstFiles,state,initialTiming,dreamTiming,rooms,walkedMeters:distance,shared,returned,
+  report.devices.push({name,size,entryMs,purchaseToRoomMs,firstBytes,firstFiles,state,initialTiming,detailAfter,dreamTiming,rooms,walkedMeters:distance,shared,returned,
     usedSmallerTextures:list.some(f=>f.name.includes('-mobile.webp'))});
   await frame.evaluate(()=>fuzz.engine.setSuspended(true,'panic'));await frame.locator('.expo-root').waitFor({state:'detached'});await cx.close();
  }

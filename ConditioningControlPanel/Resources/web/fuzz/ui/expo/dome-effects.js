@@ -37,7 +37,7 @@ function weave(source, floor, uniforms, table, probe) {
       float position=(ang/6.2831853-rotation/6.2831853-${field.layer.turns}*radii.r)*${field.layer.arms}.;
       float coverage=band(position,${field.layer.duty});
       vec3 thread=mix(mint,pearl,mod(floor(position),2.));
-      float sky=smoothstep(.235,.33,depth), paper=smoothstep(.095,.19,depth);
+      float sky=smoothstep(.25,.33,depth), paper=smoothstep(.10,.19,depth);
       vec3 tile=outgoingLight;
       float relief=.5+.5*cos(6.2831853*(position-${field.layer.duty}*.48));
       vec3 skyColour=mix(vec3(.081,.12,.19)*(.75+.31*relief),thread*(.46+.31*relief+.09*pulse),coverage);
@@ -53,7 +53,7 @@ function weave(source, floor, uniforms, table, probe) {
       float spin=atan(dot(virtualDir,north),dot(virtualDir,east))/6.2831853;
       float rings=value*${tunnel.layer.arms}.*2.0 - tunnelRotation*${tunnel.layer.arms}./6.2831853
                 + ${loomHelix(tunnel.layer)}.*spin;
-      float dream=smoothstep(.73,.89,depth);
+      float dream=smoothstep(.75,.89,depth);
       vec3 ink=vec3(.018,.027,.077);
       vec3 lapis=mix(vec3(.077,.48,.44),vec3(.47,.22,.45),.5+.5*cos(value*9.+virtualDir.y*3.));
       float mid=.5+.5*cos(6.2831853*(rings-${tunnel.layer.duty}*.46));
@@ -166,12 +166,14 @@ export function createDomeEffects({ctx,camera,say,play,register,bindMedia,setSou
     for(let i=0;i<6;i++){
       const w=group.getObjectByName('dome_word_'+i);if(w){
         const size=new T.Box3().setFromObject(w,true).getSize(new T.Vector3());
-        words.push({node:w,rest:w.position.clone(),scale:w.scale.clone(),rotation:w.rotation.clone(),halfWidth:Math.max(size.x,size.z)*.5,
+        const inks=[];
+        words.push({node:w,inks,rest:w.position.clone(),scale:w.scale.clone(),rotation:w.rotation.clone(),halfWidth:Math.max(size.x,size.z)*.5,
           dir:new T.Vector3(Math.cos(i*2.4),.19+Math.sin(i+1)*.12,Math.sin(i*2.4)).normalize()});
         walkMeshes(w,mesh=>{
           occluders.push({mesh});
           const original=mesh.material,ink=own(original.clone());
           ink.color.set('#516745');ink.metalness=.43;ink.roughness=.39;mesh.material=ink;
+          inks.push(ink);
           clean.push(()=>{mesh.material=original;});
         });
       }
@@ -212,22 +214,25 @@ export function createDomeEffects({ctx,camera,say,play,register,bindMedia,setSou
   }
   function update(dt) {
     if(!art)return;
-    const d=state.depth,still=calm(), sky=smooth(.245,.3,d), dreams=smooth(.74,.82,d), loosen=smooth(.49,.59,d);
+    const d=state.depth,still=calm(), sky=smooth(.25,.3,d), dreams=smooth(.75,.82,d), loosen=smooth(.5,.59,d);
     const {sign,signMap,words,bubbles,frames}=art;
     uniforms.depth.value=d;uniforms.rotation.value=loomLayerRotationRad(field.layer,motion*.008);
     uniforms.tunnelRotation.value=loomLayerRotationRad(tunnel.layer,motion*.006);
     const breath=.5+.5*Math.sin(motion*.43),full=smooth(.92,1,d),pulse=full*(breath-.5);
     uniforms.pulse.value=breath;
-    weather.time=motion;weather.density=inside?smooth(.495,.81,d)*(1+pulse*.075):0;
+    weather.time=motion;weather.density=inside?smooth(.5,.81,d)*(1+pulse*.075):0;
+    const inkReveal=smooth(.1,.12,d);
     if(sign) {
-      const key=d>=.999?phrases[Math.floor(motion/8)%phrases.length]:d>=.095?'':null;
-      if(key!==art.phrase){
-        art.phrase=key;
+      const key=d>=1?phrases[Math.floor(motion/8)%phrases.length]:d>=.1?'':null;
+      const inkStep=Math.round(inkReveal*24);
+      if(key!==art.phrase || inkStep!==art.inkStep){
+        art.phrase=key;art.inkStep=inkStep;
         if(key!==null){
           const g=art.dynamic.getContext('2d');g.fillStyle='#eee8d5';g.fillRect(0,0,1152,768);
           g.strokeStyle='#b99c62';g.lineWidth=3;g.strokeRect(18,18,1116,732);
           g.fillStyle='#826839';g.textAlign='left';g.textBaseline='middle';g.font='600 29px system-ui';g.fillText('VISITOR SERVICES',76,75);
           g.fillRect(76,108,1000,3);g.fillStyle='#15372c';g.textAlign='center';g.font='100px Georgia';g.fillText(key,576,382,1000);
+          if(inkStep<24&&signMap?.image){g.globalAlpha=1-inkStep/24;g.drawImage(signMap.image,0,0,1152,768);g.globalAlpha=1;}
           art.dynamicTex.needsUpdate=true; sign.material.map=art.dynamicTex;
         } else sign.material.map=signMap;
         sign.material.needsUpdate=true;
@@ -235,10 +240,15 @@ export function createDomeEffects({ctx,camera,say,play,register,bindMedia,setSou
       sign.material.color.setScalar(1+pulse*.045);
     }
     for(let i=0;i<words.length;i++){
-      const {node,rest,scale,rotation,dir,halfWidth}=words[i];
-      node.visible=d>=.095;
+      const {node,inks,rest,scale,rotation,dir,halfWidth}=words[i];
+      node.visible=inkReveal>0;
+      for(const m of inks){
+        const fade=inkReveal>0&&inkReveal<1;
+        if(m.transparent!==fade){m.transparent=fade;m.needsUpdate=true;}
+        m.opacity=inkReveal;
+      }
       const t=motion*.33+i*.59, wave=1-Math.abs(((t%4)+4)%4-2);
-      node.position.copy(rest);node.position.y+=Math.sin(motion*.22+i)*.004*smooth(.095,.13,d);
+      node.position.copy(rest);node.position.y+=Math.sin(motion*.22+i)*.004*smooth(.10,.13,d);
       const lift=1.45+1.31*Math.sin(t*.67+i);
       const clearance=halfWidth*(still?3:4)+.05;
       const wall=Math.sqrt(8.65**2-Math.max(0,rest.y+lift-2.75)**2)-clearance;
