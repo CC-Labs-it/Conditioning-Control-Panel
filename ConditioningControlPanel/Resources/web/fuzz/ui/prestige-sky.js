@@ -139,23 +139,39 @@ export async function openRenewal(opts) {
   } });
 }
 
-/** The sky itself (also usable without a renewal, for a look between runs: renewal = null). */
-export function openSky({ doc = document, win = window, life, P, audio = null, gentle = () => false, frozen = () => false, save = () => {}, start = () => {}, renewal = null, visit = null }) {
+/** Dispatched on the document after every buy in the Sky and when it closes (the Depth badge listens; brief 1121). */
+export const PRESTIGE_EVENT = 'tc:prestige-changed';
+/** Browse mode (the Renewal menu, mid-run): every word it adds, in one place. */
+export const BROWSE_LABELS = Object.freeze({
+  back: 'Back to the run',
+  light: 'Light for next run',
+  keep: 'Keep for next run',
+  aria: 'Renewal Sky, browsing. Stars lit here count from the next run.',
+});
+
+/** The sky itself (also usable without a renewal, for a look between runs: renewal = null).
+ *  browse = true is the mid-run look from the Renewal menu (ui/renewal-menu.js): stars are bought with buyLater /
+ *  buyCoreLater and felt from the next run, the Next run sheet only keeps its picks, nothing renews, signs or reloads,
+ *  and "Back to the run" calls onBack(). */
+export function openSky({ doc = document, win = window, life, P, audio = null, gentle = () => false, frozen = () => false, save = () => {}, start = () => {}, renewal = null, visit = null, browse = false, onBack = () => {} }) {
+  if (browse) renewal = null;
   const p = life.prestige;
   const calm = () => !!gentle() || !!win.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const changed = () => { try { doc.dispatchEvent(new win.CustomEvent(PRESTIGE_EVENT)); } catch { /* an old engine: nobody listens */ } };
 
   /* ---------- DOM ---------- */
   const root = doc.createElement('div');
   root.id = 'ps-sky';
   root.setAttribute('role', 'dialog');
   root.setAttribute('aria-modal', 'true');
-  root.setAttribute('aria-label', 'Renewal Sky');
+  root.setAttribute('aria-label', browse ? BROWSE_LABELS.aria : 'Renewal Sky');
+  if (browse) root.classList.add('browse');
   root.innerHTML = `
     <canvas class="ps-cv" aria-label="The ${esc(CURRENCY)} sky. Drag to move, scroll or pinch to zoom, tap a star to see it."></canvas>
     <div class="ps-hud top"><div class="ps-cluster">
+      <div class="ps-stamp" data-k="stamp" role="img" aria-label="Depth"><small>Depth</small><b data-k="depth">0</b><i>of ${MAX_DEPTH}</i></div>
       <div class="ps-pill ps-wallet" title="${esc(CURRENCY)}">${DUST_SVG}<b data-k="dust">0</b></div>
       <div class="ps-pill mult" title="Pay multiplier next run"><img alt="" src="${CLIP('wallet')}"><b data-k="mult">x1.00</b></div>
-      <div class="ps-stamp" data-k="stamp" title="Depth"><small>Depth</small><b data-k="depth">0</b></div>
       <div class="ps-clock" title="Next run length"><svg viewBox="-22 -22 44 44" aria-hidden="true">
         <circle r="18" fill="#efe4d1" stroke="#2a2031" stroke-width="3"/><path data-k="wedge" fill="#ff6fb5"/><circle r="18" fill="none" stroke="#2a2031" stroke-width="3"/>
         <line data-k="hand" x1="0" y1="0" x2="0" y2="-13" stroke="#2a2031" stroke-width="3" stroke-linecap="round"/><circle r="3" fill="#2a2031"/></svg>
@@ -170,6 +186,7 @@ export function openSky({ doc = document, win = window, life, P, audio = null, g
       </div>
       <button class="ps-next ps-looks" data-act="looks" type="button"><img alt="" src="${CLIP('dress')}"><span>Looks</span></button>
       <button class="ps-next" data-act="next" type="button"><img alt="" src="${CLIP('scroll')}"><span>Next run</span></button>
+      ${browse ? `<button class="ps-next ps-back" data-act="leave" type="button"><span>${esc(BROWSE_LABELS.back)}</span></button>` : ''}
     </div>
     <div class="ps-card" hidden></div>
     <div class="ps-over" hidden></div>
@@ -258,8 +275,10 @@ export function openSky({ doc = document, win = window, life, P, audio = null, g
   const isNext = (n) => (n.kind === 'star' ? n.k === lv(n.a) : n.kind === 'core' ? !coreOwned() && LANES.every((_, a) => lv(a) >= STEPS) : false);
   const canBuy = (n) => (n.kind === 'star' || n.kind === 'core') && !owned(n) && isNext(n) && ringOpen(n);
   const affordable = (n) => canBuy(n) && p.dust >= n.cost;
-  const payMult = () => { try { return (P.mult ? P.mult(p) : P.runMods(p)?.payMult) || 1; } catch { return 1; } };
-  const nextMin = () => { try { return P.runMods(p)?.minutes || T_RUN[Math.min(viewDepth, MAX_DEPTH - 1)]; } catch { return T_RUN[Math.min(viewDepth, MAX_DEPTH - 1)]; } };
+  /* The HUD shows the next run: in browse mode that is the record with the next-run bag settled (a copy, never saved). */
+  const felt = () => { if (!browse || !P.settleLater) return p; try { const c = JSON.parse(JSON.stringify(p)); P.settleLater(c); return c; } catch { return p; } };
+  const payMult = () => { try { const f = felt(); return (P.mult ? P.mult(f) : P.runMods(f)?.payMult) || 1; } catch { return 1; } };
+  const nextMin = () => { try { return P.runMods(felt())?.minutes || T_RUN[Math.min(viewDepth, MAX_DEPTH - 1)]; } catch { return T_RUN[Math.min(viewDepth, MAX_DEPTH - 1)]; } };
 
   /* ---------- nodes ---------- */
   const NODES = [];
@@ -348,6 +367,7 @@ export function openSky({ doc = document, win = window, life, P, audio = null, g
   const FOGB = Array.from({ length: 170 }, (_, i) => { const r = rngOf(i * 11 + 3); return { u: Math.sqrt(r()), a: r() * 7, s: 0.5 + r() * 0.9, v: (0.03 + r() * 0.05) * (r() < 0.5 ? 1 : 0.7) }; });
   const shooters = [];
   let nextShooter = 3, catches = Math.min(MAX_SHOOTER_CATCHES, Math.max(0, Math.floor(+visit?.caught || 0)));   // visit: main.js keeps it across a reload
+  if (browse) catches = MAX_SHOOTER_CATCHES;   // a mid-run look can be opened again and again: no Stardust farm there
   let fogR = ringEdge(viewDepth), fogTarget = fogR;
 
   /* ---------- effects ---------- */
@@ -445,7 +465,7 @@ export function openSky({ doc = document, win = window, life, P, audio = null, g
     o.caught = true; catches += 1; if (visit) visit.caught = catches;
     const gain = Math.max(5, Math.round(P_RUN[Math.min(p.depth, MAX_DEPTH - 1)] * 0.03));
     const [wx, wy] = s2w(x, y); burst(wx, wy, '#f6c544', 20, 0.9); [0, 4, 7].forEach((st, i) => pluck(noteHz(st + 10), i * 0.06, 0.3, 0.8));
-    p.dust += gain; save(); setDust(p.dust); legend(); return true;
+    p.dust += gain; save(); setDust(p.dust); legend(); changed(); return true;
   }
 
   const LABELS = [];
@@ -722,7 +742,7 @@ export function openSky({ doc = document, win = window, life, P, audio = null, g
   function hud(anim = true) {
     setDust(p.dust, anim);
     const m = payMult(); K('mult').textContent = 'x' + (m < 100 ? m.toFixed(2) : Math.round(m));
-    K('depth').textContent = viewDepth; setClock(viewDepth === p.depth ? nextMin() : T_RUN[Math.min(viewDepth, MAX_DEPTH - 1)], anim); legend();
+    K('depth').textContent = viewDepth; K('stamp').setAttribute('aria-label', `Depth ${viewDepth} of ${MAX_DEPTH}`); setClock(viewDepth === p.depth ? nextMin() : T_RUN[Math.min(viewDepth, MAX_DEPTH - 1)], anim); legend();
   }
   LANES.forEach((lane, a) => {
     const b = doc.createElement('button'); b.type = 'button'; b.className = 'ps-arm'; b.style.setProperty('--c', lane.hue); b.title = lane.name;
@@ -754,7 +774,7 @@ export function openSky({ doc = document, win = window, life, P, audio = null, g
     else if (!ringOpen(n)) foot = `<p>Opens at Depth ${n.kind === 'core' ? MAX_DEPTH : n.k + 1}.</p>`;
     else if (!isNext(n)) foot = n.kind === 'core' ? '<p>Light the last star of every lane first.</p>' : '<p>Light the star before it first.</p>';
     else { const short = n.cost - p.dust; foot = `<span class="cost">${DUST_SVG}${fmt(n.cost)}</span>
-      <button class="ps-go" data-act="buy" type="button" ${short > 0 ? 'disabled' : ''}>${short > 0 ? 'Need ' + fmt(short) + ' more' : 'Light it'}</button>`; }
+      <button class="ps-go" data-act="buy" type="button" ${short > 0 ? 'disabled' : ''}>${short > 0 ? 'Need ' + fmt(short) + ' more' : browse ? esc(BROWSE_LABELS.light) : 'Light it'}</button>`; }
     const greyIcon = !own && !(canBuy(n) && p.dust >= n.cost);
     cardEl.style.setProperty('--c', hue);
     cardEl.innerHTML = `<button class="ps-x" type="button" aria-label="Close">&times;</button><div class="head"><span class="disc"><img src="${CLIP(icon)}" alt="" class="${greyIcon ? 'grey' : ''}"></span>
@@ -776,11 +796,14 @@ export function openSky({ doc = document, win = window, life, P, audio = null, g
   /* ---------- buying: the contract decides, the sky shows it ---------- */
   function buy(n) {
     if (busy || pending || !affordable(n)) return;
-    try { if (n.kind === 'core') P.buyCore(p); else P.buyStar(p, n.id); } catch { /* refused */ }
+    try {
+      if (browse) { if (n.kind === 'core') P.buyCoreLater(p); else P.buyLater(p, n.id); }   // mid-run: paid now, felt from the next run
+      else if (n.kind === 'core') P.buyCore(p); else P.buyStar(p, n.id);
+    } catch { /* refused */ }
     const took = n.kind === 'core' ? !!(P.coreTaken ? P.coreTaken(p) : p.core) : (P.taken || P.has)(p, n.id);
     if (!took) { thunk(); select(n); return; }
     pending = n;
-    save(); setDust(p.dust);
+    save(); setDust(p.dust); changed();
     const wr = q('.ps-wallet').getBoundingClientRect(), cnt = calm() ? 1 : Math.min(9, 3 + Math.round(Math.log2(Math.max(2, n.cost))));
     let arrived = 0;
     const ignite = () => {
@@ -886,7 +909,9 @@ export function openSky({ doc = document, win = window, life, P, audio = null, g
       <section><h4>Fine Print <small>${openRules.length ? (full ? 'any number' : `up to ${slots}`) : ''}</small></h4>${rulesHtml}</section>
       <section><h4>Trigger Words <small>${wordN ? `pick ${wordN}` : ''}</small></h4>${wordsHtml}</section>
       <section><h4>Keepsakes <small>${keepN ? `pack ${keepN}` : ''}</small></h4>${keepHtml}</section>
-      <div class="acts"><button class="ps-go plain" type="button" data-act="back">Back to the sky</button><button class="ps-go" type="button" data-act="sign">Sign and start</button></div></div>`;
+      <div class="acts"><button class="ps-go plain" type="button" data-act="back">Back to the sky</button>${browse
+        ? `<button class="ps-go" type="button" data-act="sign">${esc(BROWSE_LABELS.keep)}</button>`
+        : '<button class="ps-go" type="button" data-act="sign">Sign and start</button>'}</div></div>`;
     overEl.classList.add('dim'); overEl.hidden = false;
     const sheet = overEl.querySelector('.ps-sheet');
     const limit = { rules: full ? openRules.length : slots, words: wordN, keep: keepN };
@@ -908,6 +933,7 @@ export function openSky({ doc = document, win = window, life, P, audio = null, g
         p.next = { rules: [...pick.rules], words: [...pick.words], keep: [...pick.keep] };
         save();
         [0, 4, 7, 12].forEach((s, i) => pluck(noteHz(s + 5), i * 0.07, 0.3, 1));
+        if (browse) { changed(); closeSheet(); return; }   // mid-run: the picks wait for the next run, nothing starts
         finish();
         return;
       }
@@ -961,7 +987,7 @@ export function openSky({ doc = document, win = window, life, P, audio = null, g
       let res = null;
       try { res = LK.buyLook(p, id); } catch { res = null; }
       if (!res?.ok) { thunk(); return; }
-      save(); setDust(p.dust); legend();
+      save(); setDust(p.dust); legend(); changed();
       [0, 4, 7].forEach((st, i) => pluck(noteHz(st + 8), i * 0.06, 0.3, 0.8));
       const top = overEl.querySelector('.ps-sheet')?.scrollTop || 0;
       paintShelf();
@@ -1022,6 +1048,8 @@ export function openSky({ doc = document, win = window, life, P, audio = null, g
   q('[data-act="zfit"]').onclick = () => flyTo(0, 0, fitZ, 0.6);
   nextBtn.onclick = () => { if (!frozen()) nextSheet(); };
   q('[data-act="looks"]').onclick = () => { if (!frozen()) looksSheet(); };
+  const leaveBtn = q('[data-act="leave"]');
+  if (leaveBtn) leaveBtn.onclick = () => { if (frozen() || busy || pending) return; close(); onBack(); };
   // Enter lights the selected star. Escape is the game's (it opens the pause card above this sheet).
   const onKey = (e) => { if (e.key === 'Enter' && sel && !frozen() && affordable(sel) && (doc.activeElement === doc.body || doc.activeElement === cv)) { e.preventDefault(); buy(sel); } };
   doc.addEventListener('keydown', onKey);
@@ -1041,6 +1069,7 @@ export function openSky({ doc = document, win = window, life, P, audio = null, g
     doc.removeEventListener('keydown', onKey);
     input?.stop?.();
     root.remove();
+    changed();
   }
 
   fogR = fogTarget = ringEdge(viewDepth);
@@ -1051,5 +1080,5 @@ export function openSky({ doc = document, win = window, life, P, audio = null, g
   shownDust = renewal ? p.dust - renewal.gained : p.dust; K('dust').textContent = fmt(shownDust);
   if (renewal) showRenewal(renewal); else if (!tipped()) later(2.4, showNote);
   raf = win.requestAnimationFrame(loop);
-  return { close, get open() { return !closed; } };
+  return { close, browse, get open() { return !closed; } };
 }
