@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { LITE } from '../perf.js';
 import { createControls } from './controls.js';
+import { expoGuideText, expoInteractionText } from './controller-menu.js';
 import { createButtonTravel } from './button-travel.js';
 import { mountJumpButton } from './jump-button.js';
 import { createWalker } from './collision.js';
@@ -39,7 +40,7 @@ const CSS = `
 `;
 
 /** Construction is synchronous so panic can release the renderer while the first room is still downloading. */
-export function createExpo(ctx, parent, { onExit, arrival = false } = {}) {
+export function createExpo(ctx, parent, { onExit, arrival = false, initialInputMode, onInputMode } = {}) {
   const doc = parent.ownerDocument, win = doc.defaultView, clean = [];
   const root = doc.createElement('div');
   root.className = 'expo-root'; root.tabIndex = -1; root.setAttribute('aria-label', 'Llama Expo 2037'); parent.append(root);
@@ -59,7 +60,16 @@ export function createExpo(ctx, parent, { onExit, arrival = false } = {}) {
     const stepDown=element('button','expo-step-down');stepDown.type='button';stepDown.hidden=true;
     stepDown.textContent='Step down';
     caption.setAttribute('aria-live', 'polite'); aim.setAttribute('aria-hidden', 'true');
-    guide.textContent = win.matchMedia('(pointer:coarse)').matches ? 'Drag to look. Use the stick to walk. Tap Jump to hop.' : 'WASD or arrows to walk. Drag or click to look. Space to jump. E to interact. Esc to pause.';
+    let inputMode = initialInputMode || (win.matchMedia('(pointer:coarse)').matches ? 'touch' : 'keyboard');
+    let guideUntil = 7;
+    guide.textContent = expoGuideText(inputMode);
+    function inputChanged(next) {
+      inputMode = next;
+      onInputMode?.(next);
+      const text = expoGuideText(next);
+      if (guide.textContent !== text) { guide.textContent = text; guide.hidden = false; guideUntil = elapsed + 7; }
+      updatePrompt();
+    }
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
     clean.push(() => { renderer.dispose(); renderer.forceContextLoss(); });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -105,9 +115,10 @@ export function createExpo(ctx, parent, { onExit, arrival = false } = {}) {
     }
     function updatePrompt(){
       stepDown.hidden=!walker.planter.released;
-      if (!stepDown.hidden) { prompt.textContent='E to step down'; return; }
+      if (!stepDown.hidden) { prompt.textContent = inputMode === 'gamepad' ? expoInteractionText('Step down', inputMode) : 'E to step down'; return; }
       const action = targetAt()?.action;
-      prompt.textContent = action ? (typeof action.label === 'function' ? action.label() : action.label) : '';
+      const label = action ? (typeof action.label === 'function' ? action.label() : action.label) : '';
+      prompt.textContent = expoInteractionText(label, inputMode);
     }
     stepDown.addEventListener('click',()=>{if(interact())root.focus({preventScroll:true});});
     function say(text) {
@@ -169,7 +180,8 @@ export function createExpo(ctx, parent, { onExit, arrival = false } = {}) {
       unmount(id, group) { instruments.unmount(id);narration.unmount(id); dome.unmount(id); exhibits.unmount?.(id,group);buttons.unmount(id); }
     };
     clean.push(() => { instruments.dispose();narration.dispose(); dome.dispose(); media?.dispose(); exhibits.dispose?.(); targets.clear(); });
-    controls = createControls({ root, canvas, camera, move: walker.move, onInteract: interact, onJump: () => walker.jump?.(),
+    controls = createControls({ root, canvas, camera, initialInputMode:inputMode, onInputMode:inputChanged,
+      move: walker.move, onInteract: interact, onJump: () => walker.jump?.(),
       onPause: () => { if (!ctx.paused) doc.getElementById('wake')?.click(); },
       isPaused: () => !ready || dead || loading || !!returnButton || ctx.paused || doc.hidden });
     clean.push(() => controls.dispose());
@@ -206,7 +218,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false } = {}) {
         budgetTime=0;budgetFrames=0;
       }
       if (elapsed > captionUntil) caption.textContent = '';
-      if (elapsed > 7) guide.hidden = true;
+      if (elapsed > guideUntil) guide.hidden = true;
       targetTime -= dt;
       if (targetTime <= 0) {
         updatePrompt();

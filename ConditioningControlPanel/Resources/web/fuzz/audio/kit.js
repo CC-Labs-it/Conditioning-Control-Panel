@@ -189,8 +189,14 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
     });
   }
 
-  function arm() {
-    if (armed) { if (ctx.state === 'suspended' && !held) ctx.resume().catch(() => {}); return true; }
+  function arm({retryStreams = false} = {}) {
+    if (armed) {
+      if (ctx.state === 'suspended' && !held) ctx.resume().catch(() => {});
+      if (retryStreams && !held) {
+        for (const s of streams) if (s.wanted && s.el.paused && !s.el.ended) playStream(s);
+      }
+      return true;
+    }
     try {
       ctx = new (window.AudioContext || window.webkitAudioContext)();
       master = ctx.createGain();
@@ -305,6 +311,9 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
       else ctx.resume?.().catch(() => {});
     },
     get armed() { return armed; },
+    get needsGesture() {
+      return level() > 0 && (armed ? ctx.state === 'suspended' : !!(globalThis.AudioContext || globalThis.webkitAudioContext));
+    },
     get muted() { return muted; },
     /** A live input for synthesised sound (an ending's tone, a convolver tail): { ac, node, stop() }, routed like a
      *  play() on its bus and source, so mute, pause, panic and the sliders all reach it. Null before the first gesture. */

@@ -77,6 +77,27 @@ test('sources register before gesture and while globally muted, with voices as t
   assert.equal(f.sources.length, 0);
 });
 
+test('a trusted audio retry restarts blocked room media and respects the existing mixer and playback intent', () => {
+  const {kit} = fixture();
+  const room = kit.stream('room.ogg', {loop:true});
+  const stopped = kit.stream('off.ogg', {autoplay:false});
+  const finished = kit.stream('announcement.mp3');
+  const connection = kit.input();
+  connection.ac.state = 'suspended';
+  room.el.paused = true;
+  finished.el.paused = finished.el.ended = true;
+  assert.equal(kit.needsGesture, true);
+  kit.setMuted(true); assert.equal(kit.needsGesture, false);
+  kit.setMuted(false); kit.setVolume(0); assert.equal(kit.needsGesture, false);
+  kit.setVolume(.35); kit.arm({retryStreams:true});
+  assert.equal(kit.needsGesture, false);
+  assert.equal(room.el.paused, false);
+  assert.equal(stopped.el.paused, true);
+  assert.equal(finished.el.paused, true);
+  assert.equal(kit.volume, .35);
+  connection.stop(); kit.stopStreams();
+});
+
 test('live source changes never overwrite a shot envelope and sit before its pan and master', async () => {
   const f = fixture();
   await f.kit.play('voice.mp3', { bus: 'voice', gain: .4, source: 'whispers', pan: -.4, fadeInMs: 400, fadeOutMs: 200 });

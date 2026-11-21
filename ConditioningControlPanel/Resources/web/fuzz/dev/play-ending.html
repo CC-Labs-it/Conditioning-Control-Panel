@@ -186,11 +186,19 @@ frame.addEventListener('load', () => {
         return;
       }
       note.replaceChildren(play);
+      let expoMenu;
       play.addEventListener('click', () => {
+        const display = frame.contentDocument.documentElement;
+        if (expoMenu?.mode === 'gamepad') display.dataset.expoPadAdmission = '1';
         fuzz.engine.audio.arm();
         if (fuzz.buy(endId).ok) { note.remove(); frame.focus(); frame.contentWindow.focus(); }
+        else if (expoMenu) delete display.dataset.expoPadAdmission;
       });
       fuzz.engine.subscribe('ending', () => note.remove());
+      if (endId === 'll_end') {
+        const { bindExpoPreviewButton } = await import('../ui/expo/controller-menu.js');
+        if (play.isConnected) expoMenu = bindExpoPreviewButton(play);
+      }
       return;
     }
     const style = frame.contentDocument.createElement('style');

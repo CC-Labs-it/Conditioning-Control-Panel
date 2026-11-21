@@ -1,5 +1,9 @@
+import { createExpoGamepad } from './gamepad.js';
+
 const WALK_SPEED = 4;
 const LOOK_SPEED = 0.0025;
+const PAD_YAW_SPEED = 2.25;
+const PAD_PITCH_SPEED = 1.70;
 const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight']);
 const UI = 'button,a,input,textarea,select,[contenteditable=true],[role=button]';
 const EDITOR = 'input,textarea,select,[contenteditable=true],[role=slider],[role=menu],[role=listbox],[role=tablist]';
@@ -9,9 +13,17 @@ function codeFor(event){
   return event.code&&event.code!=='Unidentified'?event.code:keyCodes[event.key]||keyCodes[event.key?.toLowerCase()];
 }
 
-/** The same walk on mouse, keyboard and touch. The camera never bobs or rolls. */
-export function createControls({ root, canvas, camera, move, onInteract, onJump, onPause, isPaused = () => false }) {
+/** All input methods share the same camera and collision-aware walk. */
+export function createControls({ root, canvas, camera, move, onInteract, onJump, onPause, onInputMode, initialInputMode, isPaused = () => false }) {
   const doc = root.ownerDocument, win = doc.defaultView, keys = new Set(), off = [];
+  const pad = createExpoGamepad(() => win.navigator.getGamepads?.());
+  const primaryMode = () => win.matchMedia?.('(pointer:coarse)').matches ? 'touch' : 'keyboard';
+  let inputMode = initialInputMode ?? primaryMode();
+  function used(mode) {
+    if (inputMode === mode) return;
+    inputMode = mode;
+    onInputMode?.(mode);
+  }
   let disposed = false, drag = null, stickId = null, stickX = 0, stickY = 0, locked = false;
   let releasing = false;
   const oldTouchAction = canvas.style.touchAction;
@@ -52,18 +64,19 @@ export function createControls({ root, canvas, camera, move, onInteract, onJump,
     release(canvas, oldDrag?.id); release(stick, oldStick);
   }
   function reset() {
-    keys.clear(); clearPointers();
+    keys.clear(); clearPointers(); pad.reset();
     if (doc.pointerLockElement === canvas) {
       releasing = true;
       doc.exitPointerLock?.();
     }
   }
-  function look(dx, dy) {
+  function turn(yaw, pitch) {
     if (!active()) return;
-    camera.rotation.y -= dx * LOOK_SPEED;
-    camera.rotation.x = Math.max(-1.45, Math.min(1.45, camera.rotation.x - dy * LOOK_SPEED));
+    camera.rotation.y -= yaw;
+    camera.rotation.x = Math.max(-1.45, Math.min(1.45, camera.rotation.x - pitch));
     camera.rotation.z = 0;
   }
+  function look(dx,dy) { turn(dx*LOOK_SPEED,dy*LOOK_SPEED); }
   function point(event) {
     const r = canvas.getBoundingClientRect();
     return { x: (event.clientX - r.left) / r.width * 2 - 1, y: 1 - (event.clientY - r.top) / r.height * 2 };
@@ -82,16 +95,20 @@ export function createControls({ root, canvas, camera, move, onInteract, onJump,
     releasing = false;
   });
   listen(doc, 'mousemove', event => {
-    if (locked) look(event.movementX || 0, event.movementY || 0);
+    if (locked && (event.movementX || event.movementY)) {
+      used('mouse'); look(event.movementX || 0,event.movementY || 0);
+    }
   });
   function keyDown(event){
     if (!active() || event.ctrlKey || event.altKey || event.metaKey || event.target?.closest?.(EDITOR)) return;
     const code=codeFor(event);
     if (MOVE_KEYS.has(code)) {
+      used('keyboard');
       if(doc.activeElement!==root||!doc.hasFocus())focusGame();
       event.preventDefault();event.stopPropagation();keys.add(code);return;
     }
     if(event.target?.closest?.(UI)||!['KeyE','Enter','Space'].includes(code))return;
+    used('keyboard');
     event.preventDefault();event.stopPropagation();
     if(!event.repeat){if(code==='Space')onJump?.();else onInteract();}
   }
@@ -109,9 +126,11 @@ export function createControls({ root, canvas, camera, move, onInteract, onJump,
     }
   }catch{}
   listen(win, 'blur', reset);
+  listen(win, 'gamepaddisconnected', event => pad.disconnect(event.gamepad?.index));
   listen(doc, 'visibilitychange', () => { if (doc.hidden) reset(); });
   listen(canvas, 'pointerdown', event => {
     if (!active() || event.button !== 0 || drag) return;
+    used(event.pointerType === 'touch' ? 'touch' : 'mouse');
     focusGame();
     event.preventDefault();
     if (event.pointerType === 'touch') root.classList.add('expo-has-touch');
@@ -144,6 +163,7 @@ export function createControls({ root, canvas, camera, move, onInteract, onJump,
   }
   listen(stick, 'pointerdown', event => {
     if (!active() || stickId != null) return;
+    used('touch');
     event.preventDefault(); event.stopPropagation();
     stickId = event.pointerId; capture(stick, stickId); moveStick(event);
   });
@@ -158,6 +178,7 @@ export function createControls({ root, canvas, camera, move, onInteract, onJump,
   let tap = null, handledTouch = -Infinity;
   listen(interact, 'pointerdown', event => {
     if (event.pointerType !== 'touch' || !active()) return;
+    used('touch');
     tap = { id:event.pointerId,x:event.clientX,y:event.clientY };
     capture(interact,event.pointerId);
   });
@@ -177,15 +198,33 @@ export function createControls({ root, canvas, camera, move, onInteract, onJump,
     interact.blur();
   });
   return {
+    get inputMode() { return inputMode; },
     step(dt) {
       if (!active()) { reset(); return; }
+      if (!Number.isFinite(dt) || dt <= 0) return;
+      const seconds = Math.min(dt,.1);
+      const focus = doc.activeElement;
+      const padFocus = doc.hasFocus() && (focus === root || focus === doc.body || focus === doc.documentElement ||
+        (root.contains(focus) && !focus?.closest?.(UI+','+EDITOR)));
+      if (!padFocus) pad.reset();
+      const input = padFocus ? pad.poll() : null;
+      if (padFocus && !input && inputMode === 'gamepad') used(primaryMode());
+      if (input?.activity) used('gamepad');
+      if (input?.back || input?.start) { onPause?.(); return; }
+      if (input) {
+        const sensitivity = Math.hypot(input.lookX,input.lookY);
+        if (sensitivity) turn(input.lookX*sensitivity*PAD_YAW_SPEED*seconds,input.lookY*sensitivity*PAD_PITCH_SPEED*seconds);
+        if (input.jump) onJump?.();
+        if (input.interact) onInteract();
+        if (!active()) return;
+      }
       const pressed = (...codes) => codes.some(code => keys.has(code)) ? 1 : 0;
-      let x = stickX + pressed('KeyD', 'ArrowRight') - pressed('KeyA', 'ArrowLeft');
-      let z = stickY + pressed('KeyW', 'ArrowUp') - pressed('KeyS', 'ArrowDown');
+      let x = stickX + (input?.moveX || 0) + pressed('KeyD', 'ArrowRight') - pressed('KeyA', 'ArrowLeft');
+      let z = stickY - (input?.moveY || 0) + pressed('KeyW', 'ArrowUp') - pressed('KeyS', 'ArrowDown');
       const length = Math.hypot(x, z);
-      if (!length || !Number.isFinite(dt) || dt <= 0) return;
+      if (!length) return;
       if (length > 1) { x /= length; z /= length; }
-      const distance = Math.min(dt, 0.1) * WALK_SPEED, yaw = camera.rotation.y;
+      const distance = seconds * WALK_SPEED, yaw = camera.rotation.y;
       const dx = (x * Math.cos(yaw) - z * Math.sin(yaw)) * distance;
       const dz = (-z * Math.cos(yaw) - x * Math.sin(yaw)) * distance;
       move(dx, dz);

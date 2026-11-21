@@ -1,6 +1,8 @@
 import { herdRoster, llamaPortrait } from '../../../../data/content/llamas.js';
 import { warmEntrance,clearEntrance } from '../../../expo/entrance.js';
 import { createPortal } from '../../../expo/portal.js';
+import { bindExpoMenus } from '../../../expo/controller-menu.js';
+import { bindExpoSoundUnlock } from '../../../expo/sound-unlock.js';
 
 export const PORTAL_DARK = '#071819';
 const ENTRY_CSS = `
@@ -18,6 +20,7 @@ const ENTRY_CSS = `
 body:has(.expo-root,.expo-ticket) #dock-strip {visibility:hidden;pointer-events:none}
 .expo-ticket b {font-size:clamp(22px,5vmin,40px);letter-spacing:.07em}
 .expo-ticket button {font:inherit;min-height:44px;padding:.35em 1em;border:1px solid #496858;color:#174937;background:#faf9ee}
+.expo-sound-unlock {position:absolute;z-index:9;right:max(12px,env(safe-area-inset-right));top:max(57px,calc(env(safe-area-inset-top) + 48px));max-width:50%;min-height:40px;padding:.4em .75em;border:1px solid #aec6ad;border-radius:4px;background:#153a32f2;color:#fff;font:600 14px/1.3 system-ui;pointer-events:auto;cursor:pointer}
 `;
 
 /** The purchase hands its own button to the visitor before the page fades. */
@@ -86,9 +89,13 @@ function wormhole(ctx, portal) {
 export async function expoEnding(ctx, releaseWorld) {
   const parent = ctx.layer('ending'), doc = parent.ownerDocument, win = doc.defaultView;
   ctx.css(ENTRY_CSS);
+  const menus = bindExpoMenus(ctx, parent);
+  const unlockSound = bindExpoSoundUnlock(ctx, parent, menus);
+  const releaseMenus = () => { unlockSound(); menus.dispose(); };
+  ctx.cleanup(releaseMenus);
   let portal = createPortal(ctx,parent);
   ctx.cleanup(()=>portal.dispose());
-  if (!await wormhole(ctx,portal)) { portal.dispose(); return; }
+  if (!await wormhole(ctx,portal)) { releaseMenus(); portal.dispose(); return; }
   releaseWorld();
   const cover = doc.createElement('div'); cover.className = 'expo-ticket'; parent.append(cover);
   const name = doc.createElement('b'); name.textContent = 'LLAMA EXPO 2037';
@@ -98,7 +105,7 @@ export async function expoEnding(ctx, releaseWorld) {
   const done = new Promise(resolve => { finish = resolve; });
   function dispose() {
     if (dead) return;
-    dead = true; scene?.dispose(); portal.dispose(); clearEntrance();cover.remove(); ctx.emit('ending-media', false);
+    dead = true; releaseMenus(); scene?.dispose(); portal.dispose(); clearEntrance();cover.remove(); ctx.emit('ending-media', false);
     if (win.__expo === scene) delete win.__expo;
     retry?.(); finish();
   }
@@ -115,7 +122,7 @@ export async function expoEnding(ctx, releaseWorld) {
         });
         const module = await Promise.race([import('../../../expo/scene.js'), done]);
         if (!module || dead) break;
-        scene = module.createExpo(ctx, parent, { onExit: dispose, arrival: true });
+        scene = module.createExpo(ctx, parent, { onExit: dispose, arrival: true, initialInputMode: menus.mode, onInputMode: menus.setMode });
         await Promise.race([scene.ready, done]);
         if (dead) break;
         if (['localhost','127.0.0.1','[::1]'].includes(win.location.hostname)) win.__expo = scene;

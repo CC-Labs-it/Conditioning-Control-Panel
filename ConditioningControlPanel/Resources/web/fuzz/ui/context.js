@@ -221,6 +221,10 @@ export function makeContext(engine, scope) {
 
     audio: {
       mixer: audio?.mixer,
+      get needsGesture() { return !!audio?.needsGesture; },
+      armFromUserPress(event) {
+        if (event?.isTrusted && !scope.dead && !engine.paused && !engine.suspended) audio?.arm?.({retryStreams:true});
+      },
       preload: path => audio?.preload?.(path),
       play: (path, opts) => audio?.play(path, soundOptions(opts)),
       /* Underwater: everything the unlock `ownerId` plays goes through a lowpass and a small cut (on) or back (off). */
