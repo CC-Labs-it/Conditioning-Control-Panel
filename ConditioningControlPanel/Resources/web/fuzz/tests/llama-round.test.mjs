@@ -61,7 +61,7 @@ test('phone ticker runs slower than the desktop one, desktop speed unchanged', (
   assert.equal(tickerMs(700, 280, false), Math.max(4000, (980 / 70) * 1000));
   assert.ok(tickerMs(360, 300, true) > tickerMs(360, 300, false) * 1.5);
   assert.ok(tickerMs(10, 10, true) >= 7000);
-  const css = read('../styles.css');
+  const css = read('../styles.css').split('\r\n').join('\n');   // the stylesheet is CRLF on disk
   assert.ok(css.includes(`@media ${PHONE_QUERY} {\n  #stage:has(> #l-ticker.on)`), 'the phone rules use the same query as the script');
 });
 
