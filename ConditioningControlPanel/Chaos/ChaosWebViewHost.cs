@@ -61,6 +61,10 @@ internal sealed class ChaosWebViewHost : IDisposable
         /// <summary>Raised for every page message except the built-in "ready"/"log" handling.</summary>
         public Action<JObject>? OnMessage { get; init; }
 
+        /// <summary>Like <see cref="OnMessage"/>, plus the sending document's url (<c>e.Source</c>), for a
+        /// host that must judge the origin itself (Just Drop: the live site may post capability asks).</summary>
+        public Action<JObject, string>? OnMessageFrom { get; init; }
+
         /// <summary>Raised (on the UI thread) once the page posts "ready".</summary>
         public Action? OnReady { get; init; }
 
@@ -1740,6 +1744,7 @@ internal sealed class ChaosWebViewHost : IDisposable
                     break;
                 default:
                     _pageMessage?.Invoke(o);
+                    _opts.OnMessageFrom?.Invoke(o, e.Source ?? string.Empty);
                     break;
             }
         }
