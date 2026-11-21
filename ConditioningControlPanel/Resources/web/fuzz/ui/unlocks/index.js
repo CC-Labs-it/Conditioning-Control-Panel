@@ -14,8 +14,9 @@ import fateOutside from './fate/outside.js';
 import fateButton from './fate/button.js';
 import fateThemes from './fate/themes.js';
 import fateMuseum from './fate/museum.js';
+import fateLlama from './fate/llama.js';
 import { mergeGroups } from './merge.js';
 
 export const GROUPS = Object.freeze({ basics, routes, 'themes-a': themesA, 'themes-b': themesB, extras, spiral, edges, meta, arcade,
-  'fate-outside': fateOutside, 'fate-button': fateButton, 'fate-themes': fateThemes, 'fate-museum': fateMuseum });
-export const REGISTRY = Object.freeze(mergeGroups([basics, routes, themesA, themesB, extras, spiral, edges, meta, arcade, fateOutside, fateButton, fateThemes, fateMuseum]));
+  'fate-outside': fateOutside, 'fate-button': fateButton, 'fate-themes': fateThemes, 'fate-museum': fateMuseum, 'fate-llama': fateLlama });
+export const REGISTRY = Object.freeze(mergeGroups([basics, routes, themesA, themesB, extras, spiral, edges, meta, arcade, fateOutside, fateButton, fateThemes, fateMuseum, fateLlama]));

@@ -120,6 +120,9 @@ export function cardModel({ run, life = {}, name = '', adNumber = null, serialLa
       { label: ADCARD_COPY.stats.golden, n: golden, w: w.golden },
     ],
     llamas,
+    /* The Panel (data/fate.js HERD_SETS): once a player has stood before the panel, its chair sits in the herd on every
+     * card after, this run's included. */
+    chair: run?.ended?.id === 'll_end' || (Number(life?.endings?.ll_end) || 0) > 0,
   };
 }
 

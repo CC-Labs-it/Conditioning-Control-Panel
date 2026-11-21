@@ -128,14 +128,16 @@ function fixedRate(s) {
 /** The ending set a plan is built for: the given one when this run is offered it, else Go Outside (always offered). The
  *  rows before the seed do not depend on it, so a plan made before the pick stays right up to the seed. */
 export const PLAN_FATE = 'outside';
-export const planFate = (fate, picks = {}) => (FATE_BY_ID[fate] && offeredTo(fate, picks) ? fate : PLAN_FATE);
+/* A herd set (The Panel, data/fate.js HERD_SETS) is only ever named here once the run picked it, so it is planned as if its
+ * herd were there; it has one card, so its fate2..fate4 places become ordinary rows. */
+export const planFate = (fate, picks = {}) => (FATE_BY_ID[fate] && offeredTo(fate, picks, FATE_BY_ID[fate].herd) ? fate : PLAN_FATE);
 /* minutes: the run's planned length; priceMult: the run multiplier (prices scale with it, 1 = today); fate: the ending set
  * the plan places (fate1..fate4 anchors, then its ending last); picks.fate is read when no fate is given. */
 export function buildPlan(picks, minutes = T_RUN[0], priceMult = 1, fate = picks.fate) {
-  const cards = FATE_BY_ID[planFate(fate, picks)].cards;
+  const planned = FATE_BY_ID[planFate(fate, picks)], cards = planned.cards;
   const { targetSeconds } = timeline(minutes);
   const pm = c => priceMult === 1 ? c : Math.max(1, Math.round(c * priceMult));
-  const shadow = E.createRun(),
+  const shadow = E.createRun({ herd: planned.herd || 0 }),
     j = setupJourney(shadow),
     entries = [],
     kinds = [];  // kinds[i] = the kind of paid plan row i (1-based; forks are not rows)

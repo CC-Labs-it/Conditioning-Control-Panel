@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { BY_ID, FORKS, FORK_OF_LANE } from '../data/items.js';
 import * as E from '../sim/economy.js';
+import { HERD_SETS } from '../data/fate.js';
 import { islandState, layoutWorld, SHOP_GOODS, worldStates } from '../ui/guide-world-model.js';
 import { depthName, openWater, placeDecor } from '../ui/guide-sea.js';
 
@@ -67,8 +68,12 @@ test('a fresh run: start owned, the first row on offer and tagged next, every ro
   /* Only the endings retired from the shop read as shut on a fresh run (sim/economy.js OFF_SHELF; Drop is the road's end). */
   const retired = layoutWorld().nodes.filter((n) => n.id !== 'drop' && E.OFF_SHELF.has(n.id)).map((n) => n.id);
   assert.ok(retired.length >= 5, retired.join());
-  assert.deepEqual(Object.keys(v.states).filter((id) => v.states[id] === 'off').sort(), retired.sort());
+  /* ...and The Panel without a full pen (data/fate.js HERD_SETS: life.llamas, the run's herd). */
+  const herd = HERD_SETS.flatMap((set) => [...set.cards, set.end]);
+  assert.deepEqual(Object.keys(v.states).filter((id) => v.states[id] === 'off').sort(), [...retired, ...herd].sort());
   for (const i of layoutWorld().islands) assert.notEqual(islandState(s, i), 'shut', i.id);
+  const full = worldStates(E.createRun({ herd: 12 }));
+  assert.deepEqual(Object.keys(full.states).filter((id) => full.states[id] === 'off').sort(), retired.sort(), 'a full pen opens it');
 });
 
 test('fate cards: the first seed shuts every other set, and a theme set waits for its theme', () => {

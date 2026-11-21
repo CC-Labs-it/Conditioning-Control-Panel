@@ -94,6 +94,10 @@ function start(init) {
     && qs.get('pictures') !== 'scrolller' ? qs.get('pictures') || (toyPreview ? 'online' : 'none') : null;
   const mood = MOODS[moodArg] ? moodArg : rollMood(life.runs);
   const run = saved?.run || E.createRun({ pace: paceArg || 1, mood, seed: Math.floor(Math.random() * 2 ** 32), perk: life.perk });
+  /* The Panel (data/fate.js HERD_SETS): the sim reads the herd live from the life save, so an opt-out on this visit's
+     terms counts at once. A getter, so it is never saved with the run. ?herd=12 sets a fresh (unsaved) life's herd. */
+  if (fresh && Number(qs.get('herd')) > 0) life.llamas = Math.min(12, Math.floor(Number(qs.get('herd'))));
+  Object.defineProperty(run, 'herd', { get: () => Number(life.llamas) || 0, configurable: true, enumerable: false });
   /* A saved run's pace already carries its Renewal Sky pay (sim/save.js); a dev ?pace keeps it on a reload. */
   if (paceArg) run.pace = Math.min(CONFIG.MAX_PACE, paceArg) * (saved?.run && run.prestige?.pay > 0 ? run.prestige.pay : 1);
   /* PRESTIGE LOOKS HOOK (sim/prestige-looks.js): looks bought in the Sky after the core are owned from the first second of

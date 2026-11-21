@@ -113,13 +113,21 @@ function livePortrait(doc, pic, theme) {
 }
 
 /* ---------- DOM ---------- */
+/** The herd row: one llama per sheltered llama. After The Panel ending the first one is the chair, wearing the scales
+ *  (placeholder until the owed chair drawing, handoff-1121/TC-LLAMA-ROUND-BRIEF.md). */
+export function herdHtml(m) {
+  const one = '<span>\u{1F999}</span>';
+  if (!m.chair || m.llamas < 1) return one.repeat(m.llamas);
+  return `<span class="chair" title="${esc(ADCARD_COPY.chair)}">\u{1F999}<i aria-hidden="true">\u2696\uFE0F</i></span>` + one.repeat(m.llamas - 1);
+}
+
 function cardHtml(m) {
   const pair = m.labels.length > 1 ? `<span>${esc(m.labels[0])}</span><i></i><span>${esc(m.labels[1])}</span>` : `<span>${esc(m.labels[0])}</span>`;
   const stats = m.stats.map((s) => `<div class="stat"><div class="ac-row"><span class="lab">${esc(s.label)}</span><span class="num" data-n="${s.n}">${whole(s.n)}</span></div>`
     + `<div class="barwrap"><div class="ac-bar"><i style="--w:${s.w}%"><s class="shine"></s></i></div></div></div>`).join('');
   const L = llamaLayout(m.llamas);
   const llamas = `<div class="stat"><div class="ac-row"><span class="lab">${esc(ADCARD_COPY.stats.llamas)}</span><span class="num" data-n="${m.llamas}">${m.llamas}</span></div>`
-    + `<div class="llamas${L.herd ? ' herd' : ''}" style="--ls:${L.font.toFixed(2)}cqw;--lg:${L.gap.toFixed(2)}cqw">${'<span>\u{1F999}</span>'.repeat(m.llamas)}</div></div>`;
+    + `<div class="llamas${L.herd ? ' herd' : ''}" style="--ls:${L.font.toFixed(2)}cqw;--lg:${L.gap.toFixed(2)}cqw">${herdHtml(m)}</div></div>`;
   const qr = `<svg viewBox="-1 -1 ${QR_SIZE + 2} ${QR_SIZE + 2}" aria-hidden="true"><path d="${QR_PATH}" fill="${esc(m.colours.ink)}"/></svg>`;
   return `<canvas class="sp" aria-hidden="true"></canvas><div class="inner">`
     + `<div class="ac-top"><img class="logo" data-in="stamp" data-t="60" src="${ASSETS}logo.webp" alt="${esc(ADCARD_COPY.logoAlt)}"></div>`

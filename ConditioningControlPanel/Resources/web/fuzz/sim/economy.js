@@ -9,14 +9,14 @@ import { CONFIG } from '../data/config.js';
 import { moodOf } from './moods.js';
 import { accrueActivities, trunkBoost, RANK_BOUNCE, RANK_TAP, RANK_PASSIVE } from './journey-effects.js';
 import { ridersOf } from '../data/folds.js';
-import { FATE_BY_ID, SEEDS, setOf } from '../data/fate.js';
+import { FATE_BY_ID, SEEDS, setOf, herdOpens } from '../data/fate.js';
 import { EMI_LIFT } from './tap-rate.js';
 
 export const WALL_BASE = 1;
 
 /** prestige: a Renewal Sky run stamp (sim/prestige.js runStamp). Its pay multiplier rides on pace, which every income path
  *  already carries; its price scale and minutes are read by the Journey plan. null = a run that plays as Depth 0. */
-export function createRun({ pace = 1, mood = null, seed = 1, perk = null, prestige = null } = {}) {
+export function createRun({ pace = 1, mood = null, seed = 1, perk = null, prestige = null, herd = 0 } = {}) {
   const s = {
     pace: Math.max(1, Math.min(CONFIG.MAX_PACE, pace)) * (prestige?.pay > 0 ? prestige.pay : 1),
     seed,
@@ -42,6 +42,9 @@ export function createRun({ pace = 1, mood = null, seed = 1, perk = null, presti
     base: { fps: 0, click: 1, wall: WALL_BASE },
   };
   if (prestige) s.prestige = prestige;
+  /* The Panel (data/fate.js HERD_SETS): the llamas the contract shelters. main.js reads it live from the life save
+   * instead (a getter, never saved with the run); harnesses pass it here. */
+  if (herd > 0) s.herd = herd;
   if (perk && BY_ID[perk] && BY_ID[perk].lane === 'look') { s.owned[perk] = 1; s.order.push(perk); }
   recalc(s);
   return s;
@@ -172,8 +175,9 @@ function fateAllows(s, it) {
   const picked = fateOf(s);
   if (picked) return it.fate === picked;
   if (it.step !== 1) return false;
-  const theme = FATE_BY_ID[it.fate]?.theme;
-  return !theme || s.picks.f5 === theme;
+  const set = FATE_BY_ID[it.fate];
+  if (!herdOpens(set, s.herd)) return false;   // The Panel: only a full pen (life.llamas) sees its seed
+  return !set?.theme || s.picks.f5 === set.theme;
 }
 
 /* ONE ENDING A RUN (owner 2026-11-10: "only 1 ending should pop up and only at the end of the run"). The ending held for
