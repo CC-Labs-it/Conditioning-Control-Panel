@@ -21,6 +21,7 @@ import { openFork } from './fork.js';
 import { pictureRow } from './picture-card.js';
 import { openAllowedLink } from './links.js';
 import { mountUsageRing } from './usage-ring.js';
+import { mountDepthBadge } from './depth-badge.js';
 import { createDock } from './dock.js';
 import { bindDockVolume } from './dock-volume.js';
 import { createPurchaseFeel } from './purchase-feel.js';
@@ -457,6 +458,8 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     engine.subscribe('pictures', ringRefresh);
     engine.subscribe('picture-meter', ringRefresh);
     ringRefresh();
+    /* The Depth badge: the Renewal bonuses on hover (ui/depth-badge.js, reads sim/ascension.js). */
+    mountDepthBadge({ doc, win, life: () => engine.life });
   }
 
   /* Signed in on the site (app.cclabs.app/tc): the account sits beside the sound button and opens the dashboard.
