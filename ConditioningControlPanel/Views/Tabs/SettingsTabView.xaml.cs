@@ -530,6 +530,15 @@ namespace ConditioningControlPanel.Views.Tabs
             if (Window.GetWindow(this) is MainWindow mw)
                 mw.BtnReloadBrowser_Click(sender, e);
         }
+        // Toolbar + / - page zoom (ccp-bugs #1694); MainWindow.Browser.cs owns the browser.
+        private void BtnBrowserZoomIn_Click(object sender, RoutedEventArgs e)
+        {
+            if (Window.GetWindow(this) is MainWindow mw) mw.AdjustBrowserZoom(+1);
+        }
+        private void BtnBrowserZoomOut_Click(object sender, RoutedEventArgs e)
+        {
+            if (Window.GetWindow(this) is MainWindow mw) mw.AdjustBrowserZoom(-1);
+        }
         // The browser card's fold arrow. MainWindow.DashboardFold.cs owns the setting, the row
         // arithmetic and the height ease; this view only carries the button and paints it.
         private void BtnFoldBrowser_Click(object sender, RoutedEventArgs e)

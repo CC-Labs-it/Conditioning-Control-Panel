@@ -19,7 +19,7 @@ namespace ConditioningControlPanel.Tests;
 public class PresetCarryTests
 {
     private static PropertyInfo P(string name) => typeof(AppSettings).GetProperty(name)!;
-    private static IEnumerable<string> All => PresetCarry.Looks.Concat(PresetCarry.Screens);
+    private static IEnumerable<string> All => PresetCarry.Looks.Concat(PresetCarry.Screens).Concat(PresetCarry.Modes);
 
     /// <summary>A value of the property's type that differs from <paramref name="v"/>.</summary>
     private static object Other(Type t, object? v)
@@ -69,9 +69,38 @@ public class PresetCarryTests
     [Fact]
     public void The_reported_settings_are_carried()
     {
-        foreach (var name in new[] { "PinkFilterColor", "SuperCreepCap", "SteamDrift", "MandatoryVideoFloating", "MandatoryVideoFloatingSpeedPercent", "FlashDriftSpeed" })
+        foreach (var name in new[] { "PinkFilterColor", "SuperCreepCap", "SteamDrift", "MandatoryVideoFloatingSpeedPercent", "FlashDriftSpeed" })
             Assert.Contains(name, PresetCarry.Looks);
         Assert.Contains("VideoTargetMonitor", PresetCarry.Screens);
+        Assert.Contains("MandatoryVideoFloating", PresetCarry.Modes);
+        Assert.DoesNotContain("MandatoryVideoFloating", PresetCarry.Looks);
+    }
+
+    /// <summary>ccp-bugs #1711 (7.3.7): a preset saved before 7.3.7 (or a built-in, or the Remember
+    /// star) turned floating videos back to full screen. The switch now stays; its size still resets.</summary>
+    [Fact]
+    public void Old_preset_leaves_floating_videos_on()
+    {
+        var live = new AppSettings { MandatoryVideoFloating = true, MandatoryVideoFloatingSizePercent = 50 };
+        var old = Preset.FromSettings(live, "old");
+        old.Carried = null;
+
+        old.ApplyTo(live);
+
+        Assert.True(live.MandatoryVideoFloating);
+        Assert.Equal(new AppSettings().MandatoryVideoFloatingSizePercent, live.MandatoryVideoFloatingSizePercent);
+
+        Preset.GetDefaultPresets().First(x => x.Id == "default-deep").ApplyTo(live);
+        Assert.True(live.MandatoryVideoFloating);
+    }
+
+    [Fact]
+    public void A_preset_that_carries_floating_still_applies_it()
+    {
+        var p = Preset.FromSettings(new AppSettings { MandatoryVideoFloating = false }, "full screen");
+        var live = new AppSettings { MandatoryVideoFloating = true };
+        p.ApplyTo(live);
+        Assert.False(live.MandatoryVideoFloating);
     }
 
     [Fact]
@@ -97,6 +126,7 @@ public class PresetCarryTests
 
         AssertSame(new AppSettings(), live, PresetCarry.Looks);
         AssertSame(Changed(), live, PresetCarry.Screens);
+        AssertSame(Changed(), live, PresetCarry.Modes);
     }
 
     [Fact]
@@ -106,6 +136,28 @@ public class PresetCarryTests
         Preset.GetDefaultPresets().First(x => x.Id == "default-deep").ApplyTo(live);
         Assert.Equal(new AppSettings().PinkFilterColor, live.PinkFilterColor);
         Assert.Equal(new AppSettings().SuperCreepCap, live.SuperCreepCap);
+    }
+
+    [Fact]
+    public void Loading_A_then_old_B_does_not_carry_As_steam_colour_fill_range_or_drift_speed()
+    {
+        // Preset A: white Steam, a low fog cap, slow floating-video drift (the tier-2 reports, 7.3.6).
+        var a = new AppSettings { PinkFilterColor = "#FFFFFF", SuperCreepCap = 0.5, MandatoryVideoFloatingSpeedPercent = 40, FlashDriftSpeed = new AppSettings().FlashDriftSpeed + 1 };
+        var presetA = Preset.FromSettings(a, "A");
+        // Preset B: saved before 7.3.7, so it never held these.
+        var presetB = JsonConvert.DeserializeObject<Preset>("{\"Name\":\"B\",\"FlashEnabled\":true}")!;
+        Assert.Null(presetB.Carried);
+
+        var live = new AppSettings();
+        presetA.ApplyTo(live);
+        Assert.Equal("#FFFFFF", live.PinkFilterColor);
+        presetB.ApplyTo(live);
+
+        var d = new AppSettings();
+        Assert.Equal(d.PinkFilterColor, live.PinkFilterColor);
+        Assert.Equal(d.SuperCreepCap, live.SuperCreepCap);
+        Assert.Equal(d.MandatoryVideoFloatingSpeedPercent, live.MandatoryVideoFloatingSpeedPercent);
+        Assert.Equal(d.FlashDriftSpeed, live.FlashDriftSpeed);
     }
 
     [Fact]

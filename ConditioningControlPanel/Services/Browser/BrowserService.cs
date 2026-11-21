@@ -1459,6 +1459,14 @@ namespace ConditioningControlPanel.Services
             }
 
             var url = _webView?.CoreWebView2?.Source ?? "";
+
+            // ccp-bugs #1693: BambiCloud's menu spilled above the page in a short window.
+            if (e.IsSuccess && ConditioningControlPanel.Services.Browser.BambiCloudHeaderFit.AppliesTo(url))
+            {
+                try { await _webView!.CoreWebView2.ExecuteScriptAsync(ConditioningControlPanel.Services.Browser.BambiCloudHeaderFit.Script); }
+                catch (Exception ex) { App.Logger?.Debug("BambiCloud header fit not applied: {Error}", ex.Message); }
+            }
+
             NavigationCompleted?.Invoke(this, url);
         }
 

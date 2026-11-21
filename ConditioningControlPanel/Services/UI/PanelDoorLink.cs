@@ -37,10 +37,7 @@ namespace ConditioningControlPanel.Services.UI
         public static bool Open(string? door)
         {
             var key = Normalize(door);
-            bool locked;
-            try { locked = IsLockedDown(); }
-            catch (Exception ex) { App.Logger?.Warning(ex, "PanelDoorLink: Lockdown check failed"); locked = true; }
-            if (locked) return false;
+            if (Locked()) return false;
             var hook = OpenLauncherDoor;
             if (hook != null)
             {
@@ -50,6 +47,22 @@ namespace ConditioningControlPanel.Services.UI
             try { Fallback(); }
             catch (Exception ex) { App.Logger?.Warning(ex, "PanelDoorLink: fallback for {Door} failed", key); }
             return true;
+        }
+
+        /// <summary>The line shown when Lockdown refuses a door: the launcher veil's own words
+        /// ("Lockdown is on. The launcher waits."), so no new copy.</summary>
+        public const string LockdownLineKey = "launcher_lockdown_veil";
+
+        /// <summary>True when <paramref name="tabKey"/> opens a launcher door (the Games pill,
+        /// "play") and Lockdown refuses it right now. ccp-bugs #1701: the pill must not ask
+        /// "Open Games?" for a trip that cannot happen; it says why instead.</summary>
+        public static bool RefusedNow(string? tabKey) =>
+            NavSections.LauncherDoorFor(tabKey) != null && Locked();
+
+        private static bool Locked()
+        {
+            try { return IsLockedDown(); }
+            catch (Exception ex) { App.Logger?.Warning(ex, "PanelDoorLink: Lockdown check failed"); return true; }
         }
 
         /// <summary>Presses the panel's title-bar "Back to CC Labs" button (<c>BtnBackToLauncher</c>),

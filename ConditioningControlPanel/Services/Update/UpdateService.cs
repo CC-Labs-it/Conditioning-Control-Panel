@@ -20,15 +20,31 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.3.7";
+        public const string AppVersion = "7.3.8";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.3.7 - Back to the basics
+        public const string CurrentPatchNotes = @"v7.3.8 - Back to the basics
 
-NEW IN 7.3.7
+NEW IN 7.3.8
+
+FIXES
+- the update installs again on PCs with Smart App Control: every part of the installer and the uninstaller is signed now.
+- Mandatory videos: a preset made before 7.3.7, or a built-in one, no longer switches floating videos back to full screen.
+- presets made before 7.3.1, and the built-in ones, load with the V2 effects off, the way they were saved.
+- takeover and AI web videos go fullscreen on their own again when you are in another window.
+- lock cards you type into take the keyboard as they show, even while another app is in front. no click first.
+- your own AI (Ollama or another endpoint) gets longer replies, so they no longer get cut off.
+- during Lockdown the Games pill on Play says the launcher waits, instead of offering a pop out that opens nothing.
+- the BambiCloud menu keeps its top line in a smaller window.
+
+NEW
+- the dashboard browser has + and - zoom buttons. holding Ctrl and scrolling zooms too.
+- Just Drop in the app: Haptic Waves, Heartbeat and Breath Pacer move your toy, Flash Gallery flashes your own pictures, and with your media source on Local the feed plays your own videos.
+
+FROM 7.3.7
 
 HOTFIX
 - presets: a preset now keeps its Steam and filter colour, fog, floating video, flash motion and V2 effect options, so loading one no longer carries the last look over. presets saved before 7.3.7 put those back to their defaults: load yours, set them again, save.
@@ -193,7 +209,7 @@ FIXES
 - Deeper: fixed a crash while a library file was being read.
 - Piece by Piece: a press that does not move is a click, the lit square is the one a click plays, and an arrow no longer stays stuck after a lost right release.
 
-this is a pre-release. it carries everything in 7.3.6, 7.3.5, 7.3.4, 7.3.3, 7.3.2, 7.3.1, 7.3.0 and 7.2.4.";
+this is a pre-release. it carries everything in 7.3.7, 7.3.6, 7.3.5, 7.3.4, 7.3.3, 7.3.2, 7.3.1, 7.3.0 and 7.2.4.";
 
         private const string GitHubOwner = "CC-Labs-it";
         private const string GitHubRepo = "Conditioning-Control-Panel";
