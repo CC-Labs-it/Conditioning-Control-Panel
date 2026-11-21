@@ -15,7 +15,9 @@ namespace ConditioningControlPanel.Models
     /// <para><see cref="Looks"/>: a preset WITHOUT the name (saved before 7.3.7, or a built-in) puts the
     /// AppSettings default back, so an old preset no longer inherits what was last live (owner,
     /// 2026-11-20). <see cref="Screens"/>: monitor targets are this PC's hardware, so a preset without
-    /// them leaves them as they are.</para>
+    /// them leaves them as they are. <see cref="Modes"/>: the floating-video choice is the player's
+    /// own comfort pick, so a preset without it leaves it too (owner, 2026-11-21, ccp-bugs #1711:
+    /// old presets turned floating videos back to full screen).</para>
     ///
     /// <para>Scalars only (bool, int, double, string, enum); <c>PresetCarryTests</c> checks every name.
     /// A new player-tunable effect option belongs in <see cref="Looks"/>.</para>
@@ -36,8 +38,7 @@ namespace ConditioningControlPanel.Models
             nameof(AppSettings.SteamWipeSize),
             nameof(AppSettings.SteamWordsInFog),
 
-            // Mandatory videos
-            nameof(AppSettings.MandatoryVideoFloating),
+            // Mandatory videos (the floating switch itself is in Modes)
             nameof(AppSettings.MandatoryVideoFloatingSizePercent),
             nameof(AppSettings.MandatoryVideoFloatingSpeedPercent),
             nameof(AppSettings.MandatoryVideoFloatingCount),
@@ -106,6 +107,12 @@ namespace ConditioningControlPanel.Models
             nameof(AppSettings.VideoTargetMonitor),
         };
 
+        /// <summary>Carried and applied, but a preset without them leaves them as they are (#1711).</summary>
+        public static readonly string[] Modes =
+        {
+            nameof(AppSettings.MandatoryVideoFloating),
+        };
+
         private static readonly Lazy<AppSettings> Defaults = new(() => new AppSettings());
 
         private static PropertyInfo Prop(string name) =>
@@ -117,7 +124,7 @@ namespace ConditioningControlPanel.Models
         public static Dictionary<string, string> Snapshot(AppSettings settings)
         {
             var map = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var name in Looks.Concat(Screens))
+            foreach (var name in Looks.Concat(Screens).Concat(Modes))
             {
                 var text = Format(Prop(name).GetValue(settings));
                 if (text != null) map[name] = text;
@@ -127,12 +134,13 @@ namespace ConditioningControlPanel.Models
 
         /// <summary>
         /// Writes the preset's carried values. A missing look goes back to its default; a missing
-        /// screen stays; an unreadable value is skipped. Assigns only on a real change.
+        /// screen or mode stays; an unreadable value is skipped. Assigns only on a real change.
         /// </summary>
         public static void Apply(AppSettings settings, IReadOnlyDictionary<string, string>? carried)
         {
             foreach (var name in Looks) ApplyOne(settings, name, carried, resetWhenMissing: true);
             foreach (var name in Screens) ApplyOne(settings, name, carried, resetWhenMissing: false);
+            foreach (var name in Modes) ApplyOne(settings, name, carried, resetWhenMissing: false);
         }
 
         private static void ApplyOne(AppSettings settings, string name, IReadOnlyDictionary<string, string>? carried, bool resetWhenMissing)

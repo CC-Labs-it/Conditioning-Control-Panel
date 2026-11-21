@@ -19,7 +19,7 @@ namespace ConditioningControlPanel.Tests;
 public class PresetCarryTests
 {
     private static PropertyInfo P(string name) => typeof(AppSettings).GetProperty(name)!;
-    private static IEnumerable<string> All => PresetCarry.Looks.Concat(PresetCarry.Screens);
+    private static IEnumerable<string> All => PresetCarry.Looks.Concat(PresetCarry.Screens).Concat(PresetCarry.Modes);
 
     /// <summary>A value of the property's type that differs from <paramref name="v"/>.</summary>
     private static object Other(Type t, object? v)
@@ -69,9 +69,38 @@ public class PresetCarryTests
     [Fact]
     public void The_reported_settings_are_carried()
     {
-        foreach (var name in new[] { "PinkFilterColor", "SuperCreepCap", "SteamDrift", "MandatoryVideoFloating", "MandatoryVideoFloatingSpeedPercent", "FlashDriftSpeed" })
+        foreach (var name in new[] { "PinkFilterColor", "SuperCreepCap", "SteamDrift", "MandatoryVideoFloatingSpeedPercent", "FlashDriftSpeed" })
             Assert.Contains(name, PresetCarry.Looks);
         Assert.Contains("VideoTargetMonitor", PresetCarry.Screens);
+        Assert.Contains("MandatoryVideoFloating", PresetCarry.Modes);
+        Assert.DoesNotContain("MandatoryVideoFloating", PresetCarry.Looks);
+    }
+
+    /// <summary>ccp-bugs #1711 (7.3.7): a preset saved before 7.3.7 (or a built-in, or the Remember
+    /// star) turned floating videos back to full screen. The switch now stays; its size still resets.</summary>
+    [Fact]
+    public void Old_preset_leaves_floating_videos_on()
+    {
+        var live = new AppSettings { MandatoryVideoFloating = true, MandatoryVideoFloatingSizePercent = 50 };
+        var old = Preset.FromSettings(live, "old");
+        old.Carried = null;
+
+        old.ApplyTo(live);
+
+        Assert.True(live.MandatoryVideoFloating);
+        Assert.Equal(new AppSettings().MandatoryVideoFloatingSizePercent, live.MandatoryVideoFloatingSizePercent);
+
+        Preset.GetDefaultPresets().First(x => x.Id == "default-deep").ApplyTo(live);
+        Assert.True(live.MandatoryVideoFloating);
+    }
+
+    [Fact]
+    public void A_preset_that_carries_floating_still_applies_it()
+    {
+        var p = Preset.FromSettings(new AppSettings { MandatoryVideoFloating = false }, "full screen");
+        var live = new AppSettings { MandatoryVideoFloating = true };
+        p.ApplyTo(live);
+        Assert.False(live.MandatoryVideoFloating);
     }
 
     [Fact]
@@ -97,6 +126,7 @@ public class PresetCarryTests
 
         AssertSame(new AppSettings(), live, PresetCarry.Looks);
         AssertSame(Changed(), live, PresetCarry.Screens);
+        AssertSame(Changed(), live, PresetCarry.Modes);
     }
 
     [Fact]
