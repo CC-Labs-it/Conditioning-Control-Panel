@@ -160,10 +160,10 @@ frame.addEventListener('load', () => {
     const want = Math.round(E.price(run, endId) * 1.05);
     if (run.fuzz < want) fuzz.add(want - run.fuzz);
     fuzz.ui.draw(true);
-    if (['dr_end', 'outside', 'o_out'].includes(endId)) {
+    if (['dr_end', 'outside', 'o_out', 'll_end'].includes(endId)) {
       // A crowded ending preview can put a toy or a setup card over its shop tile.
       const play = document.createElement('button');
-      play.textContent = 'Play ' + end.name.replace(/^Ending:\s*/, '');
+      play.textContent = endId === 'll_end' ? 'Play Llama Expo 2037' : 'Play ' + end.name.replace(/^Ending:\s*/, '');
       // The fixture grants a theme and several toys together. Let their arrival finish so the opening freezes the board.
       if (endId === 'o_out') {
         // A real late board with its main machines open. These layout choices belong only to this in-memory fixture.
