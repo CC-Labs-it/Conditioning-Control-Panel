@@ -67,6 +67,9 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
   /* A brand new run (nothing played, nothing bought) takes the stamp; a saved run keeps the one it started with, and a run
    * from before prestige existed plays as Depth 0. */
   const freshRun = !run.prestige && !run.clock && run.buys === 0 && !run.ended;
+  /* Stars bought mid-run (the Renewal menu, sim/prestige.js buyLater) are felt from here: once, as the fresh run takes its
+   * stamp. A reload of a saved run keeps its stamp and never settles. */
+  if (freshRun && life?.prestige) P.settleLater(life.prestige);
   const stamp = freshRun ? stampRun(run, prestigeOf()) : run.prestige || null;
   const journey = env.journey ? createJourney(run) : null;
   if (freshRun && stamp) {

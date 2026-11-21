@@ -35,6 +35,7 @@ import { createAwayClock } from './away.js';
 import { runThemes, themed } from './theme-text.js';
 import { nextFrame, frameRect } from './perf.js';
 import { mountStickerBook } from './sticker-book.js';
+import { mountRenewalMenu } from './renewal-menu.js';
 import { createStage } from './stage.js';
 import { isPhone, tickerMs } from './phone.js';
 
@@ -611,6 +612,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       wirePresses();
       wirePause(hooks);
       mountStickerBook({ doc, engine, gentle });   // the Sticker Book: pause card door + the meter's 'sticker-book' event
+      mountRenewalMenu({ doc, engine, audio, gentle });   // the Renewal menu: pause card door, bonuses, the Sky mid-run (browse)
       applyGentle();
       motionQuery?.addEventListener?.('change', applyGentle);
       const onResize = () => { dims = { w: win.innerWidth, h: win.innerHeight }; shop.fit(); };
