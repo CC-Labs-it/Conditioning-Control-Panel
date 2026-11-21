@@ -25,7 +25,7 @@ namespace ConditioningControlPanel.Services.Haptics
         private static CancellationTokenSource? _playing;
 
         /// <summary>A toy can be driven right now (what <c>caps.haptics</c> reports, plus the master switch).</summary>
-        private static bool Ready
+        internal static bool Ready
             => HapticsAccess.IsOpen
             && App.Settings?.Current?.Haptics is { Enabled: true }
             && App.Haptics is { IsConnected: true };
