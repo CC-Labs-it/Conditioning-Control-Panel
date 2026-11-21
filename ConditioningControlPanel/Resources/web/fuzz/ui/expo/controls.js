@@ -1,0 +1,169 @@
+const WALK_SPEED = 4;
+const LOOK_SPEED = 0.0025;
+const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight']);
+const UI = 'button,a,input,textarea,select,[contenteditable=true],[role=button]';
+
+/** The same walk on mouse, keyboard and touch. The camera never bobs or rolls. */
+export function createControls({ root, canvas, camera, canMove, onInteract, onPause, isPaused = () => false }) {
+  const doc = root.ownerDocument, win = doc.defaultView, keys = new Set(), off = [];
+  let disposed = false, drag = null, stickId = null, stickX = 0, stickY = 0, locked = false;
+  let releasing = false;
+  const oldTouchAction = canvas.style.touchAction;
+  canvas.style.touchAction = 'none';
+  camera.rotation.order = 'YXZ';
+  camera.rotation.z = 0;
+  const style = doc.createElement('style');
+  style.textContent = `
+    .expo-touch { display:none; position:absolute; z-index:5; touch-action:none; user-select:none; -webkit-user-select:none; }
+    .expo-stick { left:max(18px,env(safe-area-inset-left)); bottom:max(24px,env(safe-area-inset-bottom)); width:112px; height:112px;
+      border:2px solid #fff9; border-radius:50%; background:#143d3470; box-shadow:0 2px 10px #0003; }
+    .expo-stick-knob { position:absolute; left:35px; top:35px; width:38px; height:38px; border:2px solid #fff;
+      border-radius:50%; background:#d7eadbd9; pointer-events:none; }
+    .expo-interact { right:max(18px,env(safe-area-inset-right)); bottom:max(38px,env(safe-area-inset-bottom)); min-width:92px;
+      min-height:60px; padding:12px; border:2px solid white; border-radius:30px; background:#174b3be6; color:white; font:700 16px system-ui; }
+    .expo-has-touch .expo-touch { display:block; }
+    @media(pointer:coarse) { .expo-touch { display:block; } }
+  `;
+  const stick = doc.createElement('div');
+  stick.className = 'expo-touch expo-stick';
+  stick.setAttribute('aria-label', 'Drag to walk');
+  const knob = doc.createElement('div'); knob.className = 'expo-stick-knob'; stick.append(knob);
+  const interact = doc.createElement('button');
+  interact.className = 'expo-touch expo-interact'; interact.type = 'button'; interact.textContent = 'Interact';
+  root.append(style, stick, interact);
+  function listen(target, event, fn, options) {
+    target.addEventListener(event, fn, options);
+    off.push(() => target.removeEventListener(event, fn, options));
+  }
+  const active = () => !disposed && !isPaused() && !doc.hidden;
+  const capture = (el, id) => { try { el.setPointerCapture(id); } catch {} };
+  const release = (el, id) => { try { if (id != null && el.hasPointerCapture(id)) el.releasePointerCapture(id); } catch {} };
+  function clearPointers() {
+    const oldDrag = drag, oldStick = stickId;
+    drag = null; stickId = null; stickX = stickY = 0;
+    knob.style.transform = '';
+    release(canvas, oldDrag?.id); release(stick, oldStick);
+  }
+  function reset() {
+    keys.clear(); clearPointers();
+    if (doc.pointerLockElement === canvas) {
+      releasing = true;
+      doc.exitPointerLock?.();
+    }
+  }
+  function look(dx, dy) {
+    if (!active()) return;
+    camera.rotation.y -= dx * LOOK_SPEED;
+    camera.rotation.x = Math.max(-1.45, Math.min(1.45, camera.rotation.x - dy * LOOK_SPEED));
+    camera.rotation.z = 0;
+  }
+  function point(event) {
+    const r = canvas.getBoundingClientRect();
+    return { x: (event.clientX - r.left) / r.width * 2 - 1, y: 1 - (event.clientY - r.top) / r.height * 2 };
+  }
+  function requestLock() {
+    if (!active() || !canvas.requestPointerLock) return;
+    try { canvas.requestPointerLock()?.catch?.(() => {}); } catch {}
+  }
+  listen(doc, 'pointerlockchange', () => {
+    const wasLocked = locked;
+    locked = doc.pointerLockElement === canvas;
+    if (!locked) {
+      keys.clear(); clearPointers();
+      if (wasLocked && !releasing && active()) onPause?.();
+    }
+    releasing = false;
+  });
+  listen(doc, 'mousemove', event => {
+    if (locked) look(event.movementX || 0, event.movementY || 0);
+  });
+  listen(doc, 'keydown', event => {
+    // Escape belongs to the game's existing pause handler.
+    if (!active() || event.ctrlKey || event.altKey || event.metaKey || event.target?.closest?.(UI)) return;
+    if (MOVE_KEYS.has(event.code)) {
+      event.preventDefault(); event.stopPropagation(); keys.add(event.code);
+    } else if (event.code === 'KeyE' || event.code === 'Enter') {
+      event.preventDefault(); event.stopPropagation();
+      if (!event.repeat) onInteract();
+    }
+  }, true);
+  listen(doc, 'keyup', event => { keys.delete(event.code); }, true);
+  listen(win, 'blur', reset);
+  listen(doc, 'visibilitychange', () => { if (doc.hidden) reset(); });
+  listen(canvas, 'pointerdown', event => {
+    if (!active() || event.button !== 0 || drag) return;
+    event.preventDefault();
+    if (event.pointerType === 'touch') root.classList.add('expo-has-touch');
+    if (locked) { onInteract(); return; }
+    drag = { id: event.pointerId, x: event.clientX, y: event.clientY, distance: 0, type: event.pointerType };
+    capture(canvas, event.pointerId);
+  });
+  listen(canvas, 'pointermove', event => {
+    if (locked || !drag || drag.id !== event.pointerId) return;
+    const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
+    drag.distance += Math.hypot(dx, dy); drag.x = event.clientX; drag.y = event.clientY;
+    look(dx, dy);
+  });
+  listen(canvas, 'pointerup', event => {
+    if (!drag || drag.id !== event.pointerId) return;
+    const ended = drag; drag = null; release(canvas, event.pointerId);
+    if (!active() || ended.distance >= 6) return;
+    onInteract(point(event));
+    if (ended.type === 'mouse') requestLock();
+  });
+  listen(canvas, 'pointercancel', clearPointers);
+  listen(canvas, 'lostpointercapture', event => { if (drag?.id === event.pointerId) drag = null; });
+  listen(canvas, 'contextmenu', event => event.preventDefault());
+  function moveStick(event) {
+    if (stickId !== event.pointerId || !active()) return;
+    const r = stick.getBoundingClientRect(), dx = event.clientX - r.left - r.width / 2, dy = event.clientY - r.top - r.height / 2;
+    const length = Math.hypot(dx, dy), scale = length > 38 ? 38 / length : 1;
+    stickX = dx * scale / 38; stickY = -dy * scale / 38;
+    knob.style.transform = `translate(${dx * scale}px,${dy * scale}px)`;
+  }
+  listen(stick, 'pointerdown', event => {
+    if (!active() || stickId != null) return;
+    event.preventDefault(); event.stopPropagation();
+    stickId = event.pointerId; capture(stick, stickId); moveStick(event);
+  });
+  listen(stick, 'pointermove', moveStick);
+  function endStick(event) {
+    if (event.pointerId !== stickId) return;
+    const id = stickId; stickId = null; stickX = stickY = 0; knob.style.transform = ''; release(stick, id);
+  }
+  listen(stick, 'pointerup', endStick);
+  listen(stick, 'pointercancel', clearPointers);
+  listen(stick, 'lostpointercapture', endStick);
+  listen(interact, 'click', event => {
+    event.preventDefault(); event.stopPropagation();
+    if (active()) onInteract();
+    interact.blur();
+  });
+  return {
+    step(dt) {
+      if (!active()) { reset(); return; }
+      const pressed = (...codes) => codes.some(code => keys.has(code)) ? 1 : 0;
+      let x = stickX + pressed('KeyD', 'ArrowRight') - pressed('KeyA', 'ArrowLeft');
+      let z = stickY + pressed('KeyW', 'ArrowUp') - pressed('KeyS', 'ArrowDown');
+      const length = Math.hypot(x, z);
+      if (!length || !Number.isFinite(dt) || dt <= 0) return;
+      if (length > 1) { x /= length; z /= length; }
+      const seconds = Math.min(dt, 0.1), steps = Math.max(1, Math.ceil(seconds * WALK_SPEED / 0.12));
+      const distance = seconds * WALK_SPEED / steps, yaw = camera.rotation.y;
+      const dx = (x * Math.cos(yaw) - z * Math.sin(yaw)) * distance;
+      const dz = (-z * Math.cos(yaw) - x * Math.sin(yaw)) * distance;
+      for (let i = 0; i < steps; i++) {
+        if (canMove(camera.position.x + dx, camera.position.z)) camera.position.x += dx;
+        if (canMove(camera.position.x, camera.position.z + dz)) camera.position.z += dz;
+      }
+    },
+    reset,
+    dispose() {
+      if (disposed) return;
+      disposed = true; reset();
+      for (const remove of off) remove();
+      style.remove(); stick.remove(); interact.remove(); root.classList.remove('expo-has-touch');
+      canvas.style.touchAction = oldTouchAction;
+    },
+  };
+}
