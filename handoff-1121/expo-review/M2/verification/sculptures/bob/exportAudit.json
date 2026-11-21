@@ -1,0 +1,45 @@
+{
+  "id": "bob",
+  "sourceSha256": "ccbaa19b922e727b61e890992485ba62941281dd0a456a63cd7294bc82bcc131",
+  "sourceTriangles": 276714,
+  "glbSha256": "8ee14cbf5eb8afe6f8cf787fa840cf782b96cd88b5fcb9c207c545c58ee2ac35",
+  "glbBytes": 5197368,
+  "triangles": 39162,
+  "boundsHeight": 1.000144,
+  "fourSolesAboveLowest": {
+    "left fore": 2.7e-05,
+    "right fore": 5.8e-05,
+    "left hind": 0.0,
+    "right hind": 3.7e-05
+  },
+  "sharedOcularRimVertices": {
+    "Bob, solid right eye": 158,
+    "Bob, solid left eye": 163
+  },
+  "components": {
+    "Bob, inset left pupil": 202,
+    "Bob, inset right pupil": 202,
+    "Bob, solid left eye": 3220,
+    "Bob, solid right eye": 3110,
+    "Continuous drawn brim with front rain gutter": 912,
+    "Forged longitudinal helmet ridge": 796,
+    "Forged longitudinal helmet ridge.001": 796,
+    "Forged longitudinal helmet ridge.002": 796,
+    "hero_bob_cast": 21480,
+    "Pressed safety-helmet shell": 5372,
+    "Recessed side vent flutes": 198,
+    "Recessed side vent flutes.001": 198,
+    "Rolled helmet base": 768,
+    "Rolled lips around individual ear ports": 1112
+  },
+  "materials": [
+    "fitting_aged_brass",
+    "fitting_dark_brass",
+    "fitting_polished_brass",
+    "fitting_satin_brass",
+    "hero_bob_cast",
+    "hero_herd_globe_eye",
+    "hero_herd_pupil"
+  ],
+  "forward": "+X"
+}

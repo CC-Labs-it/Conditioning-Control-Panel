@@ -2,6 +2,8 @@
 import {createRequire} from 'node:module';
 import {mkdir,readFile,writeFile,unlink} from 'node:fs/promises';
 import {execFile} from 'node:child_process';
+import {createHash} from 'node:crypto';
+import {gunzipSync} from 'node:zlib';
 import {promisify} from 'node:util';
 import path from 'node:path';
 import {tourShots} from './expo-tour-shots.mjs';
@@ -23,10 +25,19 @@ try{
   const context=await browser.newContext({viewport:{width:Number(process.env.W||1600),height:Number(process.env.H||900)}});
   await installGameAudio(context);
   const page=await context.newPage();page.on('pageerror',e=>audit.faults.push(e.message));
-  audit.mediaRequests=[];
+  audit.mediaRequests=[];audit.roomGeometry={};
+  const geometryReads=[];
   page.on('response',response=>{
     const name=response.url().split('/assets/expo/narration/')[1];
     if(name&&!audit.mediaRequests.includes(name))audit.mediaRequests.push(name);
+    const room=new URL(response.url()).pathname.split('/assets/expo/zones/')[1];
+    if(room&&/\.glb(?:\.gz)?$/.test(room)&&!room.includes('collision')&&!audit.roomGeometry[room]){
+      const row=audit.roomGeometry[room]={};
+      geometryReads.push(response.body().then(bytes=>{
+        const native=bytes[0]===0x1f&&bytes[1]===0x8b?gunzipSync(bytes):bytes;
+        row.bytes=native.byteLength;row.sha256=createHash('sha256').update(native).digest('hex');
+      }).catch(error=>audit.faults.push('Reading '+room+': '+error.message)));
+    }
     if(response.status()>=400&&response.url().includes('/assets/expo/'))audit.faults.push(response.status()+' '+new URL(response.url()).pathname);
   });
   page.on('console',m=>{if(/(WebGL|GL_).*INVALID_(OPERATION|VALUE|ENUM)|THREE\.WebGLProgram: Shader Error/i.test(m.text()))audit.faults.push(m.text());});
@@ -72,9 +83,27 @@ try{
       },{...shot});
       shot.aim=aim;
       if(shot.visibleRooms)await frame.waitForFunction(ids=>ids.every(id=>__expo.state().loaded.includes(id)),shot.visibleRooms,{timeout:45000});
-      if(shot.expectedStation)await frame.waitForFunction(id=>{
-        const s=__expo.narrationState();return s[id.startsWith('pa_')?'pa':'voice'].id===id;
-      },shot.expectedStation,{timeout:160000});
+      if(shot.waitForCue)await frame.waitForFunction(id=>{
+        const s=__expo.narrationState();return s.pa.id===id||s.voice.id===id;
+      },shot.waitForCue,{timeout:180000});
+      if(shot.expectedStation){
+        if(shot.aimObject)await frame.evaluate(async id=>{
+          const T=await import('three'),face=__expo.scene.getObjectByName('expo_screen_'+id);
+          __expo.lookAt(...new T.Box3().setFromObject(face,true).getCenter(new T.Vector3()).toArray());
+        },shot.expectedStation);
+        try{
+          await frame.waitForFunction(id=>{
+            const s=__expo.narrationState();return s[id.startsWith('pa_')?'pa':'voice'].id===id;
+          },shot.expectedStation,{timeout:160000});
+        }catch(error){
+          audit.waitingForStation=await frame.evaluate(id=>{
+            const e=__expo,n=e.narrationState();
+            return {id,feet:e.state().feet,speech:n.speech,station:n.stations.find(s=>s.id===id),heard:n.heard,ended:n.finished};
+          },shot.expectedStation);
+          throw error;
+        }
+        if(shot.aimObject)await frame.evaluate(at=>__expo.lookAt(...at),aim);
+      }
       if(shot.settleSeconds)await page.waitForTimeout(shot.settleSeconds*1000);
       if(shot.dwell){
         if(rehearse)await frame.evaluate(t=>__expo.deepen(Math.max(0,t-__expo.state().seconds)),shot.dwell);
@@ -102,6 +131,19 @@ try{
     const stop=rehearse?null:await beginTabVideo(page,raw);
     const audioAfterVideo=rehearse?null:((await beginGameAudio(frame))-stop.startedAt)/1000;
     if(!rehearse)item.audioAfterVideoSeconds=Number(audioAfterVideo.toFixed(3));
+    const trackAt=performance.now();
+    await frame.evaluate(()=>{
+      const readings=[],start=performance.now();
+      function sample(){
+        const subtitle=channel=>document.querySelector('.expo-narration [data-channel="'+channel+'"]')?.dataset.lineId||'';
+        const voice=subtitle('voice'),pa=subtitle('pa'),previous=readings.at(-1);
+        if(!previous||voice!==previous.voice||pa!==previous.pa)
+          readings.push({at:(performance.now()-start)/1000,voice,pa});
+      }
+      sample();
+      const timer=setInterval(sample,200);
+      window.__expoTourSpeech=()=>{clearInterval(timer);sample();return readings;};
+    });
     const start=performance.now(),sec=()=>((performance.now()-start)/1000);
     if(shot.admission)await openGate();
     const cueTimes=rehearse?(shot.action?[.06]:[]):shot.repeat|| (shot.action?[1.1]:[]);
@@ -161,13 +203,17 @@ try{
       if(!item.photoCharacters || item.photoCharacters>240023)throw Error('The group photograph did not fit its recap slot.');
       await writeFile(path.join(dir,'group-photo.webp'),Buffer.from(photo.slice(photo.indexOf(',')+1),'base64'));
     }
+    const speech=await frame.evaluate(()=>{const data=window.__expoTourSpeech();delete window.__expoTourSpeech;return data;});
+    const offset=rehearse?0:(trackAt-stop.startedAt)/1000;
+    item.speechChanges=speech.map(point=>({...point,at:Number((point.at+offset).toFixed(3))}));
     if(!rehearse){
-      await finishGameAudio(frame,audio);await stop();await muxWalk(raw,audio,part,shot.seconds,audioAfterVideo);
+      await finishGameAudio(frame,audio);await stop();item.cut=await muxWalk(raw,audio,part,shot.seconds,audioAfterVideo);
       await unlink(raw);await unlink(audio);parts.push(part);
     }
     if(shot.home)await page.screenshot({path:path.join(dir,'return-recap.jpg'),quality:91,type:'jpeg'});
     await writeFile(path.join(dir,'edit-log.json'),JSON.stringify(audit,null,2));console.log(name);
   }
+  await Promise.all(geometryReads);
   if(audit.faults.length)throw Error('The film has recorded game or resource errors.');
   if(!rehearse){
     const list=path.join(dir,'shots.txt');await writeFile(list,parts.map(p=>"file '"+path.basename(p)+"'").join('\n')+'\n');

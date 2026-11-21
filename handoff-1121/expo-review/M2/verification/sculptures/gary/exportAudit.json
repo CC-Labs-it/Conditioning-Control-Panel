@@ -1,0 +1,45 @@
+{
+  "id": "gary",
+  "sourceSha256": "f4218219b3501f94ccfe588c30bc8ea753da1db199900f32668ea9bb09bcdc51",
+  "sourceTriangles": 336996,
+  "glbSha256": "f36f3f019cbf68c3a8beaf46438655c955ef7902b769f19dec4068c4d06d6514",
+  "glbBytes": 5598864,
+  "triangles": 29405,
+  "boundsHeight": 1.000289,
+  "fourSolesAboveLowest": {
+    "left fore": 0.0,
+    "right fore": 0.0,
+    "left hind": 0.0,
+    "right hind": 0.0
+  },
+  "sharedOcularRimVertices": {
+    "Gary, solid right eye": 94,
+    "Gary, solid left eye": 79
+  },
+  "components": {
+    "Bound edge of adjustable band": 1008,
+    "Bound edge of adjustable band.001": 1008,
+    "Buckle": 64,
+    "Buckle tongue": 24,
+    "Gary, inset left pupil": 202,
+    "Gary, inset right pupil": 202,
+    "Gary, solid left eye": 1578,
+    "Gary, solid right eye": 1870,
+    "hero_gary_cast": 19659,
+    "Open-crown brow band": 768,
+    "Open-top accountant's visor": 1172,
+    "Open-top accountant's visor turned edge": 682,
+    "Polished bill reveal": 584,
+    "Pressed bill seam": 584
+  },
+  "materials": [
+    "fitting_aged_brass",
+    "fitting_dark_brass",
+    "fitting_polished_brass",
+    "fitting_satin_brass",
+    "hero_gary_cast",
+    "hero_herd_globe_eye",
+    "hero_herd_pupil"
+  ],
+  "forward": "+X"
+}

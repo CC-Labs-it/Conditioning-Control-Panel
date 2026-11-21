@@ -12,7 +12,7 @@ await mkdir(out,{recursive:true});
 const points={hall:[0,0,-7.5],atrium:[.22,0,36.21],hoof:[-18,0,8],habitat:[13,0,7],shop:[15,0,-5],twelve:[0,0,-25.15],
  catwalk:[-13.2,6.8,22],service:[13.6,0,32],secret:[83,0,41],dome:[-20,0,-5],
  chronology:[7.8,0,43],forum:[0,0,103],commons:[-66.2,0,95],aquarium:[-59,0,45.5]};
-const report={devices:[],errors:[]};
+const report={base,devices:[],errors:[]};
 const required={
  hall:['press_main','press_stop','expo_replay_ex_press','expo_control_grid'],atrium:['expo_control_greenhouse'],
  hoof:Array.from({length:4},(_,i)=>'expo_press_hoof_checkbox_'+i),
@@ -30,7 +30,7 @@ try{
   report.devices.push({device,rows,files});page.on('pageerror',err=>report.errors.push(err.message));
   page.on('response',r=>{
    const name=new URL(r.url()).pathname.split('/assets/expo/zones/')[1];
-   if(!name||name.includes('collision')||!name.match(/\.glb(?:\.gz)?$/))return;
+   if(!name||!name.match(/\.glb(?:\.gz)?$/))return;
    const entry={file:name};files.push(entry);pending.push(r.body().then(bytes=>{
     entry.bytes=bytes.length;entry.sha256=createHash('sha256').update(bytes).digest('hex');
    }).catch(error=>{entry.error=error.message;}));

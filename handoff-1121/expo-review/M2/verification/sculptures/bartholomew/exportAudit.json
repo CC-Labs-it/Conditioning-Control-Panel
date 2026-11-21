@@ -1,0 +1,62 @@
+{
+  "id": "bartholomew",
+  "sourceSha256": "ef8374597e8a7ee84ef2dc23b45c03a0e0da8926623fad641eea61bfe8357e6d",
+  "sourceTriangles": 349628,
+  "glbSha256": "a79ad9fb05225044b06b48012efddb02b6ec044e75b545f15c73a84e7a4ffc7a",
+  "glbBytes": 6580564,
+  "triangles": 49254,
+  "boundsHeight": 1.0001,
+  "fourSolesAboveLowest": {
+    "left fore": 0.0,
+    "right fore": 0.0,
+    "left hind": 0.0,
+    "right hind": 0.0
+  },
+  "sharedOcularRimVertices": {
+    "Bartholomew, solid right eye": 137,
+    "Bartholomew, solid left eye": 128
+  },
+  "components": {
+    "Bartholomew, inset left pupil": 204,
+    "Bartholomew, inset right pupil": 202,
+    "Bartholomew, solid left eye": 1408,
+    "Bartholomew, solid right eye": 1444,
+    "Cashmere sweater draped over the withers": 4336,
+    "Crossed sleeves at the throat": 612,
+    "hero_bartholomew_cast": 21506,
+    "Paired raised cable knitting": 2848,
+    "Raglan shoulder seam": 336,
+    "Raglan shoulder seam.001": 336,
+    "Raised cable along the sleeve": 620,
+    "Raised cable along the sleeve.001": 620,
+    "Raised cable along the sleeve.002": 620,
+    "Raised cable along the sleeve.003": 620,
+    "Raised cable along the sleeve.004": 620,
+    "Raised cable along the sleeve.005": 620,
+    "Raised seed stitches between the sweater cables": 1950,
+    "Ribbed open cuff": 288,
+    "Ribbed open cuff.001": 288,
+    "Ribbed open cuff.002": 288,
+    "Ribbed open cuff.003": 288,
+    "Ribbed open cuff.004": 288,
+    "Ribbed open cuff.005": 288,
+    "Ribbed open cuff.006": 288,
+    "Ribbed open cuff.007": 288,
+    "Ribbed open cuff.008": 288,
+    "Ribbed open cuff.009": 288,
+    "Rolled neck of the sweater": 262,
+    "Sweater hem and shoulder binding": 1402,
+    "Turned tubular raglan sleeve": 2688,
+    "Turned tubular raglan sleeve.001": 2688,
+    "Vertical ribbing at the back hem": 432
+  },
+  "materials": [
+    "fitting_aged_brass",
+    "fitting_polished_brass",
+    "fitting_satin_brass",
+    "hero_bartholomew_cast",
+    "hero_herd_globe_eye",
+    "hero_herd_pupil"
+  ],
+  "forward": "+X"
+}

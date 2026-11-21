@@ -1,0 +1,68 @@
+{
+  "input": "touch joystick",
+  "reached": {
+    "feet": [
+      8.700749205487092,
+      0,
+      46.72582467238249
+    ],
+    "zone": "chronology",
+    "loaded": [
+      "atrium",
+      "chronology"
+    ],
+    "elapsed": 4.58909999999404
+  },
+  "state": {
+    "zone": "chronology",
+    "feet": [
+      8.767443936676989,
+      0,
+      46.729573382178785
+    ],
+    "surface": "stone",
+    "elapsed": 4.617399999445689,
+    "ready": true,
+    "loaded": [
+      "atrium",
+      "chronology"
+    ],
+    "textures": {
+      "residentSources": 84,
+      "sharedHits": 36,
+      "fullDetailMaps": 0,
+      "pendingDetailMaps": 0,
+      "decodedBytes": 87842816
+    },
+    "calls": 28,
+    "pixelRatio": 1,
+    "depth": 0,
+    "phase": 0,
+    "seconds": 0,
+    "planter": {
+      "used": false,
+      "held": false,
+      "seconds": 0,
+      "cues": 0
+    }
+  },
+  "nativeScreen": true,
+  "station": {
+    "id": "ev_h0",
+    "zone": "chronology",
+    "pos": [
+      9.497044086456299,
+      0.9418399930000305,
+      48.18231964111328
+    ],
+    "project": {
+      "active": false,
+      "paused": false,
+      "slide": "slides/chew.webp",
+      "resting": "slides/chew.webp",
+      "full": false,
+      "lamp": 0,
+      "zoom": 0
+    }
+  }
+}

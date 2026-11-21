@@ -1,0 +1,371 @@
+{
+  "room": "atrium",
+  "beforeLaunch": {
+    "zone": "atrium",
+    "pass": "media-03",
+    "bytes": 5112196,
+    "sha256": "5efa5b09482ae82b08cf219a33d96bccee2c98eb4fa531393b7767b9c351f89e"
+  },
+  "utc": "2026-11-21T13:56:29.178Z",
+  "source": "Normal public ending preview with inspection placements on real walkable floors",
+  "cameras": [
+    {
+      "file": "10-unobstructed.jpg",
+      "description": "The lit screen viewed between the structural columns from the physical aisle.",
+      "feet": [
+        -9.929999542236327,
+        0,
+        37.619998931884766
+      ],
+      "target": [
+        -11.729999542236328,
+        1.8799999952316284,
+        37.619998931884766
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        -9.929999542236327,
+        1.6,
+        37.619998931884766
+      ],
+      "quaternion": [
+        0.054505803928465234,
+        0.705002920091904,
+        -0.05450580392846523,
+        0.7050029200919041
+      ],
+      "zone": "atrium",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_u2",
+      "playback": {
+        "voice": {
+          "id": "ev_u2",
+          "seconds": 0.893968,
+          "gain": 0.37422074032028735,
+          "pan": 0.2841844117520868,
+          "duck": 0.3981071705534972,
+          "subtitle": "The terms updated. Everyone tapped accept. Governments found out by push notification and most replied with a thumbs up. No shots, no speeches, no raised voices. Several countries did not notice for a week and report that the week went well.",
+          "queue": [
+            "ev_h3",
+            "ev_m2",
+            "ev_h5",
+            "ev_h2"
+          ]
+        },
+        "project": {
+          "active": true,
+          "slide": "slides/coup.webp",
+          "full": true,
+          "lamp": 0.9512923900587132,
+          "zoom": 0.00190908031888762
+        },
+        "finished": 0
+      }
+    },
+    {
+      "file": "chapter-1.jpg",
+      "description": "Approach to the first accession strip in this chapter.",
+      "feet": [
+        10.720000267028809,
+        0,
+        39.91
+      ],
+      "target": [
+        10.720000267028809,
+        1.3679999952316284,
+        40.73
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        10.720000267028809,
+        1.6,
+        39.91
+      ],
+      "quaternion": [
+        -8.414797717838243e-18,
+        0.9905123035252204,
+        0.13742407563873849,
+        6.065138610141163e-17
+      ],
+      "zone": "atrium",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_u2",
+      "chapter": {
+        "id": "ev_h0",
+        "title": "The Long Chew",
+        "line": "About 4000 BC to 2025",
+        "chapter": 1,
+        "section": "Before, and The Connection",
+        "index": 0
+      }
+    },
+    {
+      "file": "chapter-1-header.jpg",
+      "description": "The physical framed chapter lettering above its first record.",
+      "feet": [
+        10.720000267028809,
+        0,
+        38.89
+      ],
+      "target": [
+        10.720000267028809,
+        2.7099999952316285,
+        40.75
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        10.720000267028809,
+        1.6,
+        38.89
+      ],
+      "quaternion": [
+        1.627487264475587e-17,
+        0.9640312713860649,
+        -0.2657888406042799,
+        5.902989053904489e-17
+      ],
+      "zone": "atrium",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_u2",
+      "chapter": {
+        "id": "ev_h0",
+        "title": "The Long Chew",
+        "line": "About 4000 BC to 2025",
+        "chapter": 1,
+        "section": "Before, and The Connection",
+        "index": 0
+      }
+    },
+    {
+      "file": "chapter-2.jpg",
+      "description": "Approach to the first accession strip in this chapter.",
+      "feet": [
+        -10.889999542236328,
+        0,
+        39.68000030517578
+      ],
+      "target": [
+        -11.709999542236329,
+        1.3679999952316284,
+        39.68000030517578
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        -10.889999542236328,
+        1.6,
+        39.68000030517578
+      ],
+      "quaternion": [
+        -0.097173495782445,
+        0.7003979666713911,
+        0.09717349578244498,
+        0.7003979666713912
+      ],
+      "zone": "atrium",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_u2",
+      "chapter": {
+        "id": "ev_h3",
+        "title": "Dame Margaret writes the Update",
+        "line": "Early 2027",
+        "chapter": 2,
+        "section": "The Polite Coup",
+        "index": 8
+      }
+    },
+    {
+      "file": "chapter-2-header.jpg",
+      "description": "The physical framed chapter lettering above its first record.",
+      "feet": [
+        -9.869999542236329,
+        0,
+        39.68000030517578
+      ],
+      "target": [
+        -11.729999542236328,
+        2.7099999952316285,
+        39.68000030517578
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        -9.869999542236329,
+        1.6,
+        39.68000030517578
+      ],
+      "quaternion": [
+        0.18794109155499666,
+        0.6816730492729755,
+        -0.1879410915549967,
+        0.6816730492729753
+      ],
+      "zone": "atrium",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_u2",
+      "chapter": {
+        "id": "ev_h3",
+        "title": "Dame Margaret writes the Update",
+        "line": "Early 2027",
+        "chapter": 2,
+        "section": "The Polite Coup",
+        "index": 8
+      }
+    },
+    {
+      "file": "chapter-3.jpg",
+      "description": "Approach to the first accession strip in this chapter.",
+      "feet": [
+        -10.889999542236328,
+        0,
+        29.3799991607666
+      ],
+      "target": [
+        -11.709999542236329,
+        1.3679999952316284,
+        29.3799991607666
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        -10.889999542236328,
+        1.6,
+        29.3799991607666
+      ],
+      "quaternion": [
+        -0.097173495782445,
+        0.7003979666713911,
+        0.09717349578244498,
+        0.7003979666713912
+      ],
+      "zone": "atrium",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_u2",
+      "chapter": {
+        "id": "ev_b2",
+        "title": "The Hoof Problem",
+        "line": "January 2028",
+        "chapter": 3,
+        "section": "The Hoof Problem",
+        "index": 13
+      }
+    },
+    {
+      "file": "chapter-3-header.jpg",
+      "description": "The physical framed chapter lettering above its first record.",
+      "feet": [
+        -9.869999542236329,
+        0,
+        29.3799991607666
+      ],
+      "target": [
+        -11.729999542236328,
+        2.7099999952316285,
+        29.3799991607666
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        -9.869999542236329,
+        1.6,
+        29.3799991607666
+      ],
+      "quaternion": [
+        0.18794109155499666,
+        0.6816730492729755,
+        -0.1879410915549967,
+        0.6816730492729753
+      ],
+      "zone": "atrium",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_u2",
+      "chapter": {
+        "id": "ev_b2",
+        "title": "The Hoof Problem",
+        "line": "January 2028",
+        "chapter": 3,
+        "section": "The Hoof Problem",
+        "index": 13
+      }
+    }
+  ],
+  "errors": [],
+  "browserGeometry": {
+    "pathname": "/fuzz/assets/expo/zones/atrium.glb",
+    "bytes": 5112196,
+    "sha256": "5efa5b09482ae82b08cf219a33d96bccee2c98eb4fa531393b7767b9c351f89e",
+    "publication": {
+      "zone": "atrium",
+      "pass": "media-03",
+      "bytes": 5112196,
+      "sha256": "5efa5b09482ae82b08cf219a33d96bccee2c98eb4fa531393b7767b9c351f89e"
+    }
+  },
+  "complete": true
+}

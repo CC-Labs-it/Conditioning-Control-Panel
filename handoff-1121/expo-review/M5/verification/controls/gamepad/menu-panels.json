@@ -1,0 +1,17 @@
+{
+  "input": "Standard-mapped virtual pad in a separate Chrome session",
+  "checks": {
+    "nativeMixer": {
+      "before": 100,
+      "afterLeft": 95,
+      "restored": 100
+    },
+    "nativeMuteAndGentle": true,
+    "filePickerKeptNative": true,
+    "pictureBack": true,
+    "stickerBack": true,
+    "mobileStickerDetail": true,
+    "resumeToWormhole": true
+  },
+  "passed": true
+}

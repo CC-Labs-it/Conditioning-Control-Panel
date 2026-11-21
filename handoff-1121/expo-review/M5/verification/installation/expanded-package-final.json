@@ -1,0 +1,255 @@
+{
+  "start": {
+    "id": "atrium",
+    "at": [
+      0.22,
+      0,
+      36.21
+    ],
+    "yaw": 0
+  },
+  "zones": [
+    {
+      "id": "secret",
+      "desktop": {
+        "triangles": 65824,
+        "glbBytes": 2004632,
+        "coldBytes": 9289006,
+        "uniqueTextures": 43,
+        "sha256": "077822a3213c6c2ce0814a25743312cc624afd05ef5f15dcd580513e71c51bb9"
+      },
+      "phone": {
+        "triangles": 65824,
+        "glbBytes": 2004940,
+        "coldBytes": 4263352,
+        "uniqueTextures": 43,
+        "sha256": "93223841e954e3c3cc28502148ce9fecc0c41d955b626305288ecf18301a771c"
+      }
+    },
+    {
+      "id": "hoof",
+      "desktop": {
+        "triangles": 34172,
+        "glbBytes": 648244,
+        "coldBytes": 7906442,
+        "uniqueTextures": 62,
+        "sha256": "b7b2b876d4935991f75a26d04f5602a6b287555cab63a199b7bb8cd01ce2e2d1"
+      },
+      "phone": {
+        "triangles": 34172,
+        "glbBytes": 648680,
+        "coldBytes": 2763512,
+        "uniqueTextures": 62,
+        "sha256": "7f3a6d2378642c8a9fb3f0457fd9b60028cbe8ed8937d97b7144567a43d030c3"
+      }
+    },
+    {
+      "id": "habitat",
+      "desktop": {
+        "triangles": 26747,
+        "glbBytes": 631204,
+        "coldBytes": 5936486,
+        "uniqueTextures": 60,
+        "sha256": "44fa385387ade94cc0c9253beeadfde24e4922162dbb1eb482bc8abb7a70a0e4"
+      },
+      "phone": {
+        "triangles": 26747,
+        "glbBytes": 631632,
+        "coldBytes": 2071944,
+        "uniqueTextures": 60,
+        "sha256": "fe85dde3cae2215f22a5735a398072a6a9cd2c73eeab3cd380b66e00c1292b5d"
+      }
+    },
+    {
+      "id": "service",
+      "desktop": {
+        "triangles": 41600,
+        "glbBytes": 1198624,
+        "coldBytes": 7843266,
+        "uniqueTextures": 65,
+        "sha256": "b83ffbf3b78cdfc47f9fd1d54172bf54ebc14d1639b8fee5f8696e30f1c83815"
+      },
+      "phone": {
+        "triangles": 41600,
+        "glbBytes": 1199080,
+        "coldBytes": 2680074,
+        "uniqueTextures": 65,
+        "sha256": "60b8c08064c3f4c3abdabbfe5dbdf56fee34887c11b87d852928c6a203051760"
+      }
+    },
+    {
+      "id": "catwalk",
+      "desktop": {
+        "triangles": 27929,
+        "glbBytes": 803564,
+        "coldBytes": 5414778,
+        "uniqueTextures": 38,
+        "sha256": "4425583931f77cf77ecd14ec1d8e7a68fa2ea8ae9c1494ecfb38c15363167f7b"
+      },
+      "phone": {
+        "triangles": 27929,
+        "glbBytes": 803836,
+        "coldBytes": 1508962,
+        "uniqueTextures": 38,
+        "sha256": "a240ecb373afb19cfc647557b3e032a4c9887c0c991ac0aecfb33fcb33537705"
+      }
+    },
+    {
+      "id": "hall",
+      "desktop": {
+        "triangles": 193614,
+        "glbBytes": 4109332,
+        "coldBytes": 14095810,
+        "uniqueTextures": 100,
+        "sha256": "2fb2f447c7474ad1d2e89ddfde3a22cdf0af259ad00049e13a8e8eed07e6fc0e"
+      },
+      "phone": {
+        "triangles": 193614,
+        "glbBytes": 4110032,
+        "coldBytes": 7146206,
+        "uniqueTextures": 100,
+        "sha256": "2d2011f0d1e649a4d036c46855dd2a95731e86c1b7466e09fff39e4e0f4dce39"
+      }
+    },
+    {
+      "id": "dome",
+      "desktop": {
+        "triangles": 161471,
+        "glbBytes": 3559232,
+        "coldBytes": 8200388,
+        "uniqueTextures": 35,
+        "sha256": "57d7fdea4c632d272d45fc178cd5bf3e2013d74697697b393eeaacfc57426bae"
+      },
+      "phone": {
+        "triangles": 161471,
+        "glbBytes": 3559484,
+        "coldBytes": 4275338,
+        "uniqueTextures": 35,
+        "sha256": "e807f66580f451aefbdf95c4193decfbdc503610401aaabbb8fc24f9f73b8287"
+      }
+    },
+    {
+      "id": "chronology",
+      "desktop": {
+        "triangles": 63346,
+        "glbBytes": 1800392,
+        "coldBytes": 7990302,
+        "uniqueTextures": 40,
+        "sha256": "b26531fb332d9b90467cc5552cf1327f6b29bf1976eec23cc7a661148ece67cc"
+      },
+      "phone": {
+        "triangles": 63346,
+        "glbBytes": 1800680,
+        "coldBytes": 3073922,
+        "uniqueTextures": 40,
+        "sha256": "b6672cd290b9977e19115c4f43d98393e1bd83cd1b44cd7104fdcd84b3eec574"
+      }
+    },
+    {
+      "id": "shop",
+      "desktop": {
+        "triangles": 39289,
+        "glbBytes": 828444,
+        "coldBytes": 7417652,
+        "uniqueTextures": 68,
+        "sha256": "3bc47be339b4e49ccb0dcf518b893111b813dadc78b40ecfb60b891b685b4437"
+      },
+      "phone": {
+        "triangles": 39289,
+        "glbBytes": 828924,
+        "coldBytes": 3285206,
+        "uniqueTextures": 68,
+        "sha256": "c8ff27cbe65e28eb7e9dc73b5b648380d04f52bd51ac6bf72e49a7c7d1bc27af"
+      }
+    },
+    {
+      "id": "aquarium",
+      "desktop": {
+        "triangles": 110754,
+        "glbBytes": 2396044,
+        "coldBytes": 9247260,
+        "uniqueTextures": 62,
+        "sha256": "be9eae5838bc2993e8c74bcd6b3651e9b47f6cc7e9edd141ba0590a6de6387a9"
+      },
+      "phone": {
+        "triangles": 110754,
+        "glbBytes": 2396488,
+        "coldBytes": 3865996,
+        "uniqueTextures": 62,
+        "sha256": "a281dfd285c0b9fdf92f02a8c94e01f87ba97034a05367f8f7eba9733863a8c2"
+      }
+    },
+    {
+      "id": "forum",
+      "desktop": {
+        "triangles": 59718,
+        "glbBytes": 1698324,
+        "coldBytes": 7933542,
+        "uniqueTextures": 39,
+        "sha256": "839d736f05589ca0b1519d5b5e06ab9f2f8ff7b0dc9bdefebbffd62fcd2bb2b5"
+      },
+      "phone": {
+        "triangles": 59718,
+        "glbBytes": 1698604,
+        "coldBytes": 3005276,
+        "uniqueTextures": 39,
+        "sha256": "484f739d1d9e7bbb3f22b79948817724fc3296a2c2fab4077c8694d9448dcbed"
+      }
+    },
+    {
+      "id": "twelve",
+      "desktop": {
+        "triangles": 848087,
+        "glbBytes": 11766072,
+        "coldBytes": 38720674,
+        "uniqueTextures": 131,
+        "sha256": "16b4938fff3f903bb486d95fc37d0b72a57b856d83da41d124f30e16af88ed98"
+      },
+      "phone": {
+        "triangles": 848087,
+        "glbBytes": 11766996,
+        "coldBytes": 17367016,
+        "uniqueTextures": 131,
+        "sha256": "3b668c64d45d5c46d9e02c8a86d4ab0cd89d4436b3ce2e3fde3d511812f6ff75"
+      }
+    },
+    {
+      "id": "commons",
+      "desktop": {
+        "triangles": 88906,
+        "glbBytes": 1888784,
+        "coldBytes": 9060394,
+        "uniqueTextures": 51,
+        "sha256": "02ea881f38a060e81ca30b1dfb100b0627e1ebfb70b5e598d77514a9def3f698"
+      },
+      "phone": {
+        "triangles": 88906,
+        "glbBytes": 1889148,
+        "coldBytes": 3836112,
+        "uniqueTextures": 51,
+        "sha256": "ffa171d75bf4323c9c71f62ccccd64dbf88c66afca61540032f33244934d6623"
+      }
+    },
+    {
+      "id": "atrium",
+      "desktop": {
+        "triangles": 308723,
+        "glbBytes": 4110656,
+        "coldBytes": 14162442,
+        "uniqueTextures": 80,
+        "sha256": "4308d0fb1096f20257984e4b4453ab10f6f3ecdf38dc2dabb5f5e2bb69dca9dc"
+      },
+      "phone": {
+        "triangles": 308723,
+        "glbBytes": 4111216,
+        "coldBytes": 6723368,
+        "uniqueTextures": 80,
+        "sha256": "3c8681a24c36d9032b4b8af9342c831598aae74a0f36a5392692ee1732f21b45"
+      },
+      "arrivalCompressedBytes": 2043609
+    }
+  ],
+  "activeTextureBytes": 49639100,
+  "obsoleteCount": 275,
+  "obsoleteBytes": 20353718
+}

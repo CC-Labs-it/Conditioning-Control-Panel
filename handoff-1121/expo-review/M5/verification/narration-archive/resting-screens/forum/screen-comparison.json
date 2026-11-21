@@ -1,0 +1,167 @@
+{
+  "room": "forum",
+  "geometrySha256": "9c43963f096d36c88ac9db1376858a3fe8613832a08abe670042f92834110231",
+  "screens": [
+    {
+      "record": 11,
+      "id": "ev_h5",
+      "actualImage": "11-ev_h5.jpg",
+      "expectedWide": "slides/constitution.webp",
+      "nearestPrint": "slides/constitution.webp",
+      "rank": 1,
+      "correlation": 0.8956,
+      "secondBest": 0.2333,
+      "screenContrast": 17.84,
+      "atlasCell": [
+        5,
+        0
+      ],
+      "pass": true
+    },
+    {
+      "record": 12,
+      "id": "ev_h4",
+      "actualImage": "12-ev_h4.jpg",
+      "expectedWide": "slides/blink.webp",
+      "nearestPrint": "slides/blink.webp",
+      "rank": 1,
+      "correlation": 0.8849,
+      "secondBest": 0.2661,
+      "screenContrast": 17.21,
+      "atlasCell": [
+        0,
+        0
+      ],
+      "pass": true
+    },
+    {
+      "record": 13,
+      "id": "ev_u3",
+      "actualImage": "13-ev_u3.jpg",
+      "expectedWide": "slides/spit.webp",
+      "nearestPrint": "slides/spit.webp",
+      "rank": 1,
+      "correlation": 0.7694,
+      "secondBest": 0.2105,
+      "screenContrast": 15.76,
+      "atlasCell": [
+        3,
+        4
+      ],
+      "pass": true
+    },
+    {
+      "record": 14,
+      "id": "ev_b2",
+      "actualImage": "14-ev_b2.jpg",
+      "expectedWide": "slides/kiosk.webp",
+      "nearestPrint": "slides/kiosk.webp",
+      "rank": 1,
+      "correlation": 0.8822,
+      "secondBest": 0.2307,
+      "screenContrast": 26.71,
+      "atlasCell": [
+        6,
+        2
+      ],
+      "pass": true
+    },
+    {
+      "record": 15,
+      "id": "ev_w2",
+      "actualImage": "15-ev_w2.jpg",
+      "expectedWide": "slides/climate.webp",
+      "nearestPrint": "slides/climate.webp",
+      "rank": 1,
+      "correlation": 0.8972,
+      "secondBest": 0.3778,
+      "screenContrast": 20.3,
+      "atlasCell": [
+        4,
+        0
+      ],
+      "pass": true
+    },
+    {
+      "record": 16,
+      "id": "ev_m3",
+      "actualImage": "16-ev_m3.jpg",
+      "expectedWide": "slides/plate.webp",
+      "nearestPrint": "slides/plate.webp",
+      "rank": 1,
+      "correlation": 0.8724,
+      "secondBest": 0.3144,
+      "screenContrast": 21.7,
+      "atlasCell": [
+        5,
+        3
+      ],
+      "pass": true
+    },
+    {
+      "record": 17,
+      "id": "ev_b3",
+      "actualImage": "17-ev_b3.jpg",
+      "expectedWide": "slides/captcha.webp",
+      "nearestPrint": "slides/captcha.webp",
+      "rank": 1,
+      "correlation": 0.8994,
+      "secondBest": 0.2255,
+      "screenContrast": 21.64,
+      "atlasCell": [
+        2,
+        0
+      ],
+      "pass": true
+    },
+    {
+      "record": 18,
+      "id": "ev_h6",
+      "actualImage": "18-ev_h6.jpg",
+      "expectedWide": "slides/signs.webp",
+      "nearestPrint": "slides/signs.webp",
+      "rank": 1,
+      "correlation": 0.924,
+      "secondBest": 0.2287,
+      "screenContrast": 22.71,
+      "atlasCell": [
+        1,
+        4
+      ],
+      "pass": true
+    },
+    {
+      "record": 19,
+      "id": "ev_b4",
+      "actualImage": "19-ev_b4.jpg",
+      "expectedWide": "slides/training.webp",
+      "nearestPrint": "slides/training.webp",
+      "rank": 1,
+      "correlation": 0.9372,
+      "secondBest": 0.2176,
+      "screenContrast": 25.51,
+      "atlasCell": [
+        7,
+        4
+      ],
+      "pass": true
+    },
+    {
+      "record": 20,
+      "id": "ev_u4",
+      "actualImage": "20-ev_u4.jpg",
+      "expectedWide": "slides/finger.webp",
+      "nearestPrint": "slides/finger.webp",
+      "rank": 1,
+      "correlation": 0.9016,
+      "secondBest": 0.3343,
+      "screenContrast": 21.76,
+      "atlasCell": [
+        3,
+        1
+      ],
+      "pass": true
+    }
+  ],
+  "pass": true
+}

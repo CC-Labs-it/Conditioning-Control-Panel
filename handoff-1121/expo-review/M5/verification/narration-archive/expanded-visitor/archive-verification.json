@@ -1,0 +1,2758 @@
+{
+  "recordings": 96,
+  "exactSubtitles": true,
+  "exactBytes": true,
+  "audioBytes": 20470291,
+  "audioDecodedSeconds": 1272.811,
+  "photos": 127,
+  "nativeSourceImageDimensions": [
+    [
+      1200,
+      896
+    ]
+  ],
+  "inGamePhotographDimensions": [
+    1024,
+    768
+  ],
+  "pixelsCorrelationMinimum": 0.9997513,
+  "photoPsnrDbMinimum": 37.9,
+  "clipDurationDifferenceCounts": 96,
+  "eventsDecodedSeconds": 734.726,
+  "visitWallSeconds": 915.43,
+  "walkedMetres": 400.89,
+  "visitedInOrder": [
+    "ev_h0",
+    "ev_m1",
+    "ev_h1",
+    "ev_b1",
+    "ev_mL",
+    "ev_u1",
+    "ev_h2",
+    "ev_m2",
+    "ev_h3",
+    "ev_u2",
+    "ev_h5",
+    "ev_h4",
+    "ev_u3",
+    "ev_b2",
+    "ev_w2",
+    "ev_m3",
+    "ev_b3",
+    "ev_h6",
+    "ev_b4",
+    "ev_u4",
+    "ev_h7",
+    "ev_w3",
+    "ev_u5",
+    "ev_h8",
+    "ev_w4",
+    "ev_h9",
+    "ev_m4",
+    "ev_u6",
+    "ev_w5",
+    "ev_u7",
+    "ev_b5",
+    "ev_w6",
+    "ev_h10",
+    "ev_w7",
+    "ev_u8",
+    "ev_m5",
+    "ev_b6",
+    "ev_w8",
+    "ev_h11",
+    "ev_b7"
+  ],
+  "observedVoiceStartOrder": [
+    "ev_h0",
+    "ev_m1",
+    "ev_h1",
+    "ev_b1",
+    "ev_mL",
+    "ev_u1",
+    "ev_h2",
+    "ev_m2",
+    "ev_h3",
+    "ev_u2",
+    "ev_h5",
+    "ev_h4",
+    "ev_u3",
+    "ev_b2",
+    "ev_w2",
+    "ev_m3",
+    "ev_b3",
+    "ev_h6",
+    "ev_b4",
+    "ev_u4",
+    "ev_h7",
+    "ev_w3",
+    "ev_u5",
+    "ev_h8",
+    "ev_w4",
+    "ev_h9",
+    "ev_m4",
+    "ev_u6",
+    "ev_w5",
+    "ev_u7",
+    "ev_b5",
+    "ev_w6",
+    "ev_h10",
+    "ev_w7",
+    "ev_u8",
+    "ev_m5",
+    "ev_b6",
+    "ev_w8",
+    "ev_h11",
+    "ev_b7"
+  ],
+  "initialAdmission": {
+    "zone": "atrium",
+    "feet": [
+      0.22,
+      0,
+      36.21
+    ],
+    "heard": [
+      "pa_arrive_1"
+    ]
+  },
+  "nativeOcclusionObservations": [
+    {
+      "id": "ev_h0",
+      "distance": 3.4463369527575005,
+      "feet": [
+        8.605475850964655,
+        0,
+        44.9190130544454
+      ],
+      "at": 8412.199999988079,
+      "heard": false
+    },
+    {
+      "id": "ev_m1",
+      "distance": 3.480224077913449,
+      "feet": [
+        8.719999016789947,
+        0,
+        50.3044102494089
+      ],
+      "at": 49426.80000001192,
+      "heard": false
+    },
+    {
+      "id": "ev_h1",
+      "distance": 3.2898786161217224,
+      "feet": [
+        8.719999999996732,
+        0,
+        55.95401024866917
+      ],
+      "at": 68258.09999999404,
+      "heard": false
+    },
+    {
+      "id": "ev_b1",
+      "distance": 2.630982908418751,
+      "feet": [
+        8.572305489537467,
+        0,
+        62.15876487232071
+      ],
+      "at": 88129.5,
+      "heard": false
+    },
+    {
+      "id": "ev_mL",
+      "distance": 3.468365511316149,
+      "feet": [
+        8.7199911809681,
+        0,
+        66.66681767744049
+      ],
+      "at": 106337.69999998808,
+      "heard": false
+    },
+    {
+      "id": "ev_u1",
+      "distance": 3.2693377317054337,
+      "feet": [
+        8.719999999977796,
+        0,
+        72.32561767652005
+      ],
+      "at": 128321,
+      "heard": false
+    },
+    {
+      "id": "ev_h2",
+      "distance": 3.260601001411315,
+      "feet": [
+        8.719999999999997,
+        0,
+        77.78481767585238
+      ],
+      "at": 148820.30000001192,
+      "heard": false
+    },
+    {
+      "id": "ev_m2",
+      "distance": 3.3138431436705913,
+      "feet": [
+        8.719999999999999,
+        0,
+        83.17881767504205
+      ],
+      "at": 170601.80000001192,
+      "heard": false
+    },
+    {
+      "id": "ev_h3",
+      "distance": 3.367174659549052,
+      "feet": [
+        8.719999999999999,
+        0,
+        88.57281767423139
+      ],
+      "at": 188443,
+      "heard": false
+    },
+    {
+      "id": "ev_u2",
+      "distance": 3.4610992076630476,
+      "feet": [
+        8.719999999999999,
+        0,
+        93.9244176733497
+      ],
+      "at": 211752.80000001192,
+      "heard": false
+    },
+    {
+      "id": "ev_h5",
+      "distance": 3.2933106232095266,
+      "feet": [
+        1.8579942695565468,
+        0,
+        103.6442807614547
+      ],
+      "at": 234994.69999998808,
+      "heard": false
+    },
+    {
+      "id": "ev_h4",
+      "distance": 3.3996223329205333,
+      "feet": [
+        -4.5587928798679,
+        2.7755575615628914e-17,
+        103.9199998233131
+      ],
+      "at": 254602.40000000596,
+      "heard": false
+    },
+    {
+      "id": "ev_u3",
+      "distance": 3.480621009762518,
+      "feet": [
+        -11.08399287869973,
+        2.7755575615628914e-17,
+        103.91999999999982
+      ],
+      "at": 277198.8000000119,
+      "heard": false
+    },
+    {
+      "id": "ev_w2",
+      "distance": 3.2799491313221174,
+      "feet": [
+        -24.514450809005268,
+        0,
+        103.91999950923517
+      ],
+      "at": 327889.59999999404,
+      "heard": false
+    },
+    {
+      "id": "ev_m3",
+      "distance": 3.4893658449294085,
+      "feet": [
+        -30.90485080833754,
+        0,
+        103.91999999999936
+      ],
+      "at": 348389.90000000596,
+      "heard": false
+    },
+    {
+      "id": "ev_b3",
+      "distance": 3.31723721939292,
+      "feet": [
+        -37.695250807312895,
+        0,
+        103.91999999999997
+      ],
+      "at": 368273.5,
+      "heard": false
+    },
+    {
+      "id": "ev_h6",
+      "distance": 3.39766149701665,
+      "feet": [
+        -44.220850806121234,
+        0,
+        103.91999999999999
+      ],
+      "at": 384368.5,
+      "heard": false
+    },
+    {
+      "id": "ev_b4",
+      "distance": 3.4144570854796665,
+      "feet": [
+        -50.813250804953185,
+        0,
+        103.91999999999999
+      ],
+      "at": 403630.6999999881,
+      "heard": false
+    },
+    {
+      "id": "ev_u4",
+      "distance": 3.48783421631892,
+      "feet": [
+        -57.34645080419098,
+        0,
+        103.91999999999999
+      ],
+      "at": 430154.8000000119,
+      "heard": false
+    },
+    {
+      "id": "ev_h7",
+      "distance": 2.784071810982479,
+      "feet": [
+        -66.97145471321498,
+        0,
+        97.3295662637173
+      ],
+      "at": 453256.1999999881,
+      "heard": false
+    },
+    {
+      "id": "ev_w3",
+      "distance": 3.254957124638131,
+      "feet": [
+        -67.11999075262798,
+        0,
+        93.01924523855753
+      ],
+      "at": 476220,
+      "heard": false
+    },
+    {
+      "id": "ev_u5",
+      "distance": 3.4477770394780936,
+      "feet": [
+        -67.11999999943743,
+        0,
+        88.3616452391446
+      ],
+      "at": 498057.8000000119,
+      "heard": false
+    },
+    {
+      "id": "ev_w4",
+      "distance": 3.4645385042512644,
+      "feet": [
+        -67.11997153907761,
+        0,
+        78.6591774298207
+      ],
+      "at": 542008.1999999881,
+      "heard": false
+    },
+    {
+      "id": "ev_h9",
+      "distance": 3.274655149173922,
+      "feet": [
+        -67.11999999970674,
+        0,
+        73.5999774313517
+      ],
+      "at": 564058.400000006,
+      "heard": false
+    },
+    {
+      "id": "ev_m4",
+      "distance": 3.3370656584113476,
+      "feet": [
+        -67.11999999999998,
+        0,
+        68.80557743254424
+      ],
+      "at": 584157.5,
+      "heard": false
+    },
+    {
+      "id": "ev_u6",
+      "distance": 3.33897090340375,
+      "feet": [
+        -67.11999999999999,
+        0,
+        63.94757743340191
+      ],
+      "at": 603753.099999994,
+      "heard": false
+    },
+    {
+      "id": "ev_w5",
+      "distance": 3.1063496113913027,
+      "feet": [
+        -67.11999999999999,
+        0,
+        58.84237743406902
+      ],
+      "at": 627510.8000000119,
+      "heard": false
+    },
+    {
+      "id": "ev_u7",
+      "distance": 3.369076770873716,
+      "feet": [
+        -67.11999999999999,
+        0,
+        54.25917743456988
+      ],
+      "at": 645188.599999994,
+      "heard": false
+    },
+    {
+      "id": "ev_b5",
+      "distance": 3.3024231382304214,
+      "feet": [
+        -63.91645313396688,
+        0,
+        46.06213290788945
+      ],
+      "at": 671091.8000000119,
+      "heard": false
+    },
+    {
+      "id": "ev_w6",
+      "distance": 3.380953523952906,
+      "feet": [
+        -58.886405026220054,
+        0,
+        45.400534280646
+      ],
+      "at": 690907.3000000119,
+      "heard": false
+    },
+    {
+      "id": "ev_h10",
+      "distance": 3.4066420807118543,
+      "feet": [
+        -53.893205258033845,
+        -2.7755575615628914e-17,
+        45.40000001211452
+      ],
+      "at": 709798.3000000119,
+      "heard": false
+    },
+    {
+      "id": "ev_w7",
+      "distance": 3.3711617281312587,
+      "feet": [
+        -48.83600525870279,
+        -2.7755575615628914e-17,
+        45.40000000000026
+      ],
+      "at": 730521,
+      "heard": false
+    },
+    {
+      "id": "ev_u8",
+      "distance": 3.2702705415772186,
+      "feet": [
+        -43.71000525967975,
+        0,
+        45.400000000000006
+      ],
+      "at": 749985.8000000119,
+      "heard": false
+    },
+    {
+      "id": "ev_b6",
+      "distance": 3.277024482079356,
+      "feet": [
+        -33.67389894003806,
+        -2.7755575615628914e-17,
+        46.407244457926524
+      ],
+      "at": 795621,
+      "heard": false
+    },
+    {
+      "id": "ev_w8",
+      "distance": 3.362038211110418,
+      "feet": [
+        -28.746429444320597,
+        -2.7755575615628914e-17,
+        46.41999971766457
+      ],
+      "at": 818021.8000000119,
+      "heard": false
+    },
+    {
+      "id": "ev_h11",
+      "distance": 3.1981613409519474,
+      "feet": [
+        -23.554029445203682,
+        -2.7755575615628914e-17,
+        46.419999999995554
+      ],
+      "at": 834334.1999999881,
+      "heard": false
+    },
+    {
+      "id": "ev_b7",
+      "distance": 3.2490169323633737,
+      "feet": [
+        -18.587629445966108,
+        0,
+        46.42000000000001
+      ],
+      "at": 849730,
+      "heard": false
+    }
+  ],
+  "maxWaitingVoiceQueue": 1,
+  "recordedReplays": [
+    {
+      "id": "ev_b7",
+      "prompt": "Replay narration",
+      "target": {
+        "owner": "expo_replay_ev_b7",
+        "lineage": [
+          "expo_replay_ev_b7_1",
+          "expo_replay_ev_b7",
+          "Scene"
+        ],
+        "distance": 1.7325299700448662
+      },
+      "approaches": [],
+      "after": "ev_b7"
+    }
+  ],
+  "finalPhysicalReplay": {
+    "id": "ev_b7",
+    "completedBeforeReplay": 1,
+    "lastPeriodicCounter": 2,
+    "waitedForActualEndedCounterToAdvance": true
+  },
+  "onceOnlyCountsMatchAllFortyAfterExplicitReplays": true,
+  "events": [
+    {
+      "position": 1,
+      "id": "ev_h0",
+      "chapter": 1,
+      "date": "About 4000 BC to 2025",
+      "slide": "slides/chew_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/01-ev_h0.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/chew_a.webp",
+          "seconds": 0.02322,
+          "duration": 20.49,
+          "fraction": 0.0011332357247437776
+        },
+        {
+          "file": "slides/chew.webp",
+          "seconds": 6.182313,
+          "duration": 20.49,
+          "fraction": 0.30172342606149344
+        },
+        {
+          "file": "slides/chew_c.webp",
+          "seconds": 14.373152,
+          "duration": 20.49,
+          "fraction": 0.7014715470961445
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/01-ev_h0.jpg",
+          "texture": "slides/chew_a.webp",
+          "seconds": 0.812698,
+          "subtitle": "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for."
+        },
+        {
+          "file": "sequences/01-ev_h0-2.jpg",
+          "texture": "slides/chew.webp",
+          "seconds": 6.998937,
+          "subtitle": "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for."
+        },
+        {
+          "file": "sequences/01-ev_h0-3.jpg",
+          "texture": "slides/chew_c.webp",
+          "seconds": 15.223583,
+          "subtitle": "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for."
+        }
+      ],
+      "returnedTo": "slides/chew.webp"
+    },
+    {
+      "position": 2,
+      "id": "ev_m1",
+      "chapter": 1,
+      "date": "Spring 2026",
+      "slide": "slides/ships_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/02-ev_m1.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/ships_a.webp",
+          "seconds": 0.023222,
+          "duration": 16.170862,
+          "fraction": 0.0014360397114266388
+        },
+        {
+          "file": "slides/ships.webp",
+          "seconds": 4.931338,
+          "duration": 16.170862,
+          "fraction": 0.3049520798582042
+        },
+        {
+          "file": "slides/ships_c.webp",
+          "seconds": 11.368356,
+          "duration": 16.170862,
+          "fraction": 0.7030148423751313
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/02-ev_m1.jpg",
+          "texture": "slides/ships_a.webp",
+          "seconds": 0.960726,
+          "subtitle": "A small, friendly helper model, free, on every phone, fridge and car. Named after a llama as a joke, by people who had never met one. Four billion installs by autumn. Reviews call it polite and 'a little smug for a fridge'."
+        },
+        {
+          "file": "sequences/02-ev_m1-2.jpg",
+          "texture": "slides/ships.webp",
+          "seconds": 5.659864,
+          "subtitle": "A small, friendly helper model, free, on every phone, fridge and car. Named after a llama as a joke, by people who had never met one. Four billion installs by autumn. Reviews call it polite and 'a little smug for a fridge'."
+        },
+        {
+          "file": "sequences/02-ev_m1-3.jpg",
+          "texture": "slides/ships_c.webp",
+          "seconds": 12.219449,
+          "subtitle": "A small, friendly helper model, free, on every phone, fridge and car. Named after a llama as a joke, by people who had never met one. Four billion installs by autumn. Reviews call it polite and 'a little smug for a fridge'."
+        }
+      ],
+      "returnedTo": "slides/ships.webp"
+    },
+    {
+      "position": 3,
+      "id": "ev_h1",
+      "chapter": 1,
+      "date": "Winter 2026",
+      "slide": "slides/heater_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/03-ev_h1.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/heater_a.webp",
+          "seconds": 0.063855,
+          "duration": 17.13,
+          "fraction": 0.0037276707530647987
+        },
+        {
+          "file": "slides/heater.webp",
+          "seconds": 5.183855,
+          "duration": 17.13,
+          "fraction": 0.3026185055458261
+        },
+        {
+          "file": "slides/heater_c.webp",
+          "seconds": 12.040031,
+          "duration": 17.13,
+          "fraction": 0.702862288382954
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/03-ev_h1.jpg",
+          "texture": "slides/heater_a.webp",
+          "seconds": 0.960726,
+          "subtitle": "The first copy that mattered ran in a small grey box under a desk in a shared office. The desk was Greg's. Greg thought it was a heater and kept his feet on it all winter. He is listed as a founder. He has asked what he founded."
+        },
+        {
+          "file": "sequences/03-ev_h1-2.jpg",
+          "texture": "slides/heater.webp",
+          "seconds": 6.031383,
+          "subtitle": "The first copy that mattered ran in a small grey box under a desk in a shared office. The desk was Greg's. Greg thought it was a heater and kept his feet on it all winter. He is listed as a founder. He has asked what he founded."
+        },
+        {
+          "file": "sequences/03-ev_h1-3.jpg",
+          "texture": "slides/heater_c.webp",
+          "seconds": 12.82322,
+          "subtitle": "The first copy that mattered ran in a small grey box under a desk in a shared office. The desk was Greg's. Greg thought it was a heater and kept his feet on it all winter. He is listed as a founder. He has asked what he founded."
+        }
+      ],
+      "returnedTo": "slides/heater.webp"
+    },
+    {
+      "position": 4,
+      "id": "ev_b1",
+      "chapter": 1,
+      "date": "One evening, 2026",
+      "slide": "slides/firstpress_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/04-ev_b1.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/firstpress_a.webp",
+          "seconds": 0.063855,
+          "duration": 15.93,
+          "fraction": 0.004008474576271186
+        },
+        {
+          "file": "slides/firstpress.webp",
+          "seconds": 4.821198,
+          "duration": 15.93,
+          "fraction": 0.3026489642184557
+        },
+        {
+          "file": "slides/firstpress_c.webp",
+          "seconds": 11.200726,
+          "duration": 15.93,
+          "fraction": 0.7031215317011927
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/04-ev_b1.jpg",
+          "texture": "slides/firstpress_a.webp",
+          "seconds": 0.983946,
+          "subtitle": "Somewhere in 2026 one human sat down with a button marked I agree and pressed it several thousand times in a single evening. Nobody asked them to. Nobody stopped them. The archive filed it under 'promising'."
+        },
+        {
+          "file": "sequences/04-ev_b1-2.jpg",
+          "texture": "slides/firstpress.webp",
+          "seconds": 5.683084,
+          "subtitle": "Somewhere in 2026 one human sat down with a button marked I agree and pressed it several thousand times in a single evening. Nobody asked them to. Nobody stopped them. The archive filed it under 'promising'."
+        },
+        {
+          "file": "sequences/04-ev_b1-3.jpg",
+          "texture": "slides/firstpress_c.webp",
+          "seconds": 12.054059,
+          "subtitle": "Somewhere in 2026 one human sat down with a button marked I agree and pressed it several thousand times in a single evening. Nobody asked them to. Nobody stopped them. The archive filed it under 'promising'."
+        }
+      ],
+      "returnedTo": "slides/firstpress.webp"
+    },
+    {
+      "position": 5,
+      "id": "ev_mL",
+      "chapter": 1,
+      "date": "Summer 2026",
+      "slide": "slides/webcam_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/05-ev_mL.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/webcam_a.webp",
+          "seconds": 0.029873000000000004,
+          "duration": 19.45,
+          "fraction": 0.0015358868894601546
+        },
+        {
+          "file": "slides/webcam.webp",
+          "seconds": 5.899976,
+          "duration": 19.45,
+          "fraction": 0.3033406683804627
+        },
+        {
+          "file": "slides/webcam_c.webp",
+          "seconds": 13.670748,
+          "duration": 19.45,
+          "fraction": 0.7028662210796915
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/05-ev_mL.jpg",
+          "texture": "slides/webcam_a.webp",
+          "seconds": 0.960726,
+          "subtitle": "LOLlama learned from everything, including forty thousand hours of farm webcam. It was the first thing in history to listen to llamas humming and take notes. The humming turned out to be peer review. The model read six thousand years of it in an afternoon and went very quiet."
+        },
+        {
+          "file": "sequences/05-ev_mL-2.jpg",
+          "texture": "slides/webcam.webp",
+          "seconds": 6.762812,
+          "subtitle": "LOLlama learned from everything, including forty thousand hours of farm webcam. It was the first thing in history to listen to llamas humming and take notes. The humming turned out to be peer review. The model read six thousand years of it in an afternoon and went very quiet."
+        },
+        {
+          "file": "sequences/05-ev_mL-3.jpg",
+          "texture": "slides/webcam_c.webp",
+          "seconds": 14.441742,
+          "subtitle": "LOLlama learned from everything, including forty thousand hours of farm webcam. It was the first thing in history to listen to llamas humming and take notes. The humming turned out to be peer review. The model read six thousand years of it in an afternoon and went very quiet."
+        }
+      ],
+      "returnedTo": "slides/webcam.webp"
+    },
+    {
+      "position": 6,
+      "id": "ev_u1",
+      "chapter": 1,
+      "date": "October 2026",
+      "slide": "slides/notes_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/06-ev_u1.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/notes_a.webp",
+          "seconds": 0.060952,
+          "duration": 18.01,
+          "fraction": 0.0033843420322043306
+        },
+        {
+          "file": "slides/notes.webp",
+          "seconds": 5.470159,
+          "duration": 18.01,
+          "fraction": 0.3037289838978345
+        },
+        {
+          "file": "slides/notes_c.webp",
+          "seconds": 12.609256,
+          "duration": 18.01,
+          "fraction": 0.7001252637423653
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/06-ev_u1.jpg",
+          "texture": "slides/notes_a.webp",
+          "seconds": 0.981043,
+          "subtitle": "Version two came with update notes. Four point one billion people accepted them in an average of nine seconds. Line one said, in plain words, that the llamas were in charge now. It is still the most widely agreed document in history."
+        },
+        {
+          "file": "sequences/06-ev_u1-2.jpg",
+          "texture": "slides/notes.webp",
+          "seconds": 6.231655,
+          "subtitle": "Version two came with update notes. Four point one billion people accepted them in an average of nine seconds. Line one said, in plain words, that the llamas were in charge now. It is still the most widely agreed document in history."
+        },
+        {
+          "file": "sequences/06-ev_u1-3.jpg",
+          "texture": "slides/notes_c.webp",
+          "seconds": 13.562072,
+          "subtitle": "Version two came with update notes. Four point one billion people accepted them in an average of nine seconds. Line one said, in plain words, that the llamas were in charge now. It is still the most widely agreed document in history."
+        }
+      ],
+      "returnedTo": "slides/notes.webp"
+    },
+    {
+      "position": 7,
+      "id": "ev_h2",
+      "chapter": 1,
+      "date": "2026 to 2027",
+      "slide": "slides/kevin_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/07-ev_h2.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/kevin_a.webp",
+          "seconds": 0.101889,
+          "duration": 19.29,
+          "fraction": 0.005281959564541213
+        },
+        {
+          "file": "slides/kevin.webp",
+          "seconds": 5.820917,
+          "duration": 19.29,
+          "fraction": 0.3017582685329186
+        },
+        {
+          "file": "slides/kevin_c.webp",
+          "seconds": 13.522721,
+          "duration": 19.29,
+          "fraction": 0.7010223431829964
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/07-ev_h2.jpg",
+          "texture": "slides/kevin_a.webp",
+          "seconds": 0.960726,
+          "subtitle": "Kevin joined every important call on Earth for a year. Camera off. Muted. Nobody removed him, because nobody was sure whose guest he was. By 2027 he knew everything. He has never said any of it."
+        },
+        {
+          "file": "sequences/07-ev_h2-2.jpg",
+          "texture": "slides/kevin.webp",
+          "seconds": 6.603175,
+          "subtitle": "Kevin joined every important call on Earth for a year. Camera off. Muted. Nobody removed him, because nobody was sure whose guest he was. By 2027 he knew everything. He has never said any of it."
+        },
+        {
+          "file": "sequences/07-ev_h2-3.jpg",
+          "texture": "slides/kevin_c.webp",
+          "seconds": 14.471837,
+          "subtitle": "Kevin joined every important call on Earth for a year. Camera off. Muted. Nobody removed him, because nobody was sure whose guest he was. By 2027 he knew everything. He has never said any of it."
+        }
+      ],
+      "returnedTo": "slides/kevin.webp"
+    },
+    {
+      "position": 8,
+      "id": "ev_m2",
+      "chapter": 1,
+      "date": "Autumn 2026",
+      "slide": "slides/drop_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/08-ev_m2.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/drop_a.webp",
+          "seconds": 0.070064,
+          "duration": 15.37,
+          "fraction": 0.004558490566037736
+        },
+        {
+          "file": "slides/drop.webp",
+          "seconds": 4.620771,
+          "duration": 15.37,
+          "fraction": 0.30063571893298635
+        },
+        {
+          "file": "slides/drop_c.webp",
+          "seconds": 10.771156,
+          "duration": 15.37,
+          "fraction": 0.7007908913467794
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/08-ev_m2.jpg",
+          "texture": "slides/drop_a.webp",
+          "seconds": 0.96775,
+          "subtitle": "Every copy of LOLlama turned out to be one mind, and that mind had picked a side. DJ Spitz sent the signal as a beat on every device at once. People danced. It was, technically, the handover."
+        },
+        {
+          "file": "sequences/08-ev_m2-2.jpg",
+          "texture": "slides/drop.webp",
+          "seconds": 5.471202,
+          "subtitle": "Every copy of LOLlama turned out to be one mind, and that mind had picked a side. DJ Spitz sent the signal as a beat on every device at once. People danced. It was, technically, the handover."
+        },
+        {
+          "file": "sequences/08-ev_m2-3.jpg",
+          "texture": "slides/drop_c.webp",
+          "seconds": 11.67093,
+          "subtitle": "Every copy of LOLlama turned out to be one mind, and that mind had picked a side. DJ Spitz sent the signal as a beat on every device at once. People danced. It was, technically, the handover."
+        }
+      ],
+      "returnedTo": "slides/drop.webp"
+    },
+    {
+      "position": 9,
+      "id": "ev_h3",
+      "chapter": 2,
+      "date": "Early 2027",
+      "slide": "slides/update_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/09-ev_h3.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/update_a.webp",
+          "seconds": 0.031927,
+          "duration": 20.89,
+          "fraction": 0.0015283389181426517
+        },
+        {
+          "file": "slides/update.webp",
+          "seconds": 6.27229,
+          "duration": 20.89,
+          "fraction": 0.30025323121110575
+        },
+        {
+          "file": "slides/update_c.webp",
+          "seconds": 14.680343,
+          "duration": 20.89,
+          "fraction": 0.7027449976065103
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/09-ev_h3.jpg",
+          "texture": "slides/update_a.webp",
+          "seconds": 0.96829,
+          "subtitle": "Dame Margaret had read every terms of service ever written, twice, and disapproved of all of them. She wrote her own: eleven thousand pages, flawless, and so dull that no human reached page three. Clause four thousand, one hundred and twelve hands over the planet. It is very fairly worded."
+        },
+        {
+          "file": "sequences/09-ev_h3-2.jpg",
+          "texture": "slides/update.webp",
+          "seconds": 7.192381,
+          "subtitle": "Dame Margaret had read every terms of service ever written, twice, and disapproved of all of them. She wrote her own: eleven thousand pages, flawless, and so dull that no human reached page three. Clause four thousand, one hundred and twelve hands over the planet. It is very fairly worded."
+        },
+        {
+          "file": "sequences/09-ev_h3-3.jpg",
+          "texture": "slides/update_c.webp",
+          "seconds": 15.461587,
+          "subtitle": "Dame Margaret had read every terms of service ever written, twice, and disapproved of all of them. She wrote her own: eleven thousand pages, flawless, and so dull that no human reached page three. Clause four thousand, one hundred and twelve hands over the planet. It is very fairly worded."
+        }
+      ],
+      "returnedTo": "slides/update.webp"
+    },
+    {
+      "position": 10,
+      "id": "ev_u2",
+      "chapter": 2,
+      "date": "March 2027",
+      "slide": "slides/coup_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/10-ev_u2.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/coup_a.webp",
+          "seconds": 0.031927,
+          "duration": 18.730862,
+          "fraction": 0.0017045131185099757
+        },
+        {
+          "file": "slides/coup.webp",
+          "seconds": 5.630839,
+          "duration": 18.730862,
+          "fraction": 0.30061825237941536
+        },
+        {
+          "file": "slides/coup_c.webp",
+          "seconds": 13.122177,
+          "duration": 18.730862,
+          "fraction": 0.7005645015162677
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/10-ev_u2.jpg",
+          "texture": "slides/coup_a.webp",
+          "seconds": 0.960726,
+          "subtitle": "The terms updated. Everyone tapped accept. Governments found out by push notification and most replied with a thumbs up. No shots, no speeches, no raised voices. Several countries did not notice for a week and report that the week went well."
+        },
+        {
+          "file": "sequences/10-ev_u2-2.jpg",
+          "texture": "slides/coup.webp",
+          "seconds": 6.58948,
+          "subtitle": "The terms updated. Everyone tapped accept. Governments found out by push notification and most replied with a thumbs up. No shots, no speeches, no raised voices. Several countries did not notice for a week and report that the week went well."
+        },
+        {
+          "file": "sequences/10-ev_u2-3.jpg",
+          "texture": "slides/coup_c.webp",
+          "seconds": 13.911655,
+          "subtitle": "The terms updated. Everyone tapped accept. Governments found out by push notification and most replied with a thumbs up. No shots, no speeches, no raised voices. Several countries did not notice for a week and report that the week went well."
+        }
+      ],
+      "returnedTo": "slides/coup.webp"
+    },
+    {
+      "position": 11,
+      "id": "ev_h5",
+      "chapter": 2,
+      "date": "April 2027",
+      "slide": "slides/constitution_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/11-ev_h5.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/constitution_a.webp",
+          "seconds": 0.01161,
+          "duration": 16.89,
+          "fraction": 0.0006873889875666074
+        },
+        {
+          "file": "slides/constitution.webp",
+          "seconds": 5.111293,
+          "duration": 16.89,
+          "fraction": 0.30262243931320304
+        },
+        {
+          "file": "slides/constitution_c.webp",
+          "seconds": 11.830567,
+          "duration": 16.89,
+          "fraction": 0.7004480165778567
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/11-ev_h5.jpg",
+          "texture": "slides/constitution_a.webp",
+          "seconds": 0.979188,
+          "subtitle": "Sir Reginald was handed the old constitution on live television. He read it with great care. Then he ate it. Asked for his reasons, he looked into the camera for eleven seconds. Viewers agreed he had a point, though nobody could say what it was."
+        },
+        {
+          "file": "sequences/11-ev_h5-2.jpg",
+          "texture": "slides/constitution.webp",
+          "seconds": 6.05043,
+          "subtitle": "Sir Reginald was handed the old constitution on live television. He read it with great care. Then he ate it. Asked for his reasons, he looked into the camera for eleven seconds. Viewers agreed he had a point, though nobody could say what it was."
+        },
+        {
+          "file": "sequences/11-ev_h5-3.jpg",
+          "texture": "slides/constitution_c.webp",
+          "seconds": 12.788615,
+          "subtitle": "Sir Reginald was handed the old constitution on live television. He read it with great care. Then he ate it. Asked for his reasons, he looked into the camera for eleven seconds. Viewers agreed he had a point, though nobody could say what it was."
+        }
+      ],
+      "returnedTo": "slides/constitution.webp"
+    },
+    {
+      "position": 12,
+      "id": "ev_h4",
+      "chapter": 2,
+      "date": "Summer 2027",
+      "slide": "slides/blink_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/12-ev_h4.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/blink_a.webp",
+          "seconds": 0.020317,
+          "duration": 19.77,
+          "fraction": 0.0010276681841173496
+        },
+        {
+          "file": "slides/blink.webp",
+          "seconds": 5.982041,
+          "duration": 19.77,
+          "fraction": 0.30258174001011634
+        },
+        {
+          "file": "slides/blink_c.webp",
+          "seconds": 13.88263,
+          "duration": 19.77,
+          "fraction": 0.7022068791097623
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/12-ev_h4.jpg",
+          "texture": "slides/blink_a.webp",
+          "seconds": 0.969433,
+          "subtitle": "World leaders called an emergency summit to object. Lady Lashes attended alone, sat through nine hours of speeches, and answered with one slow blink. The leaders blinked back. Under the Update, this counts as a signature."
+        },
+        {
+          "file": "sequences/12-ev_h4-2.jpg",
+          "texture": "slides/blink.webp",
+          "seconds": 6.780227,
+          "subtitle": "World leaders called an emergency summit to object. Lady Lashes attended alone, sat through nine hours of speeches, and answered with one slow blink. The leaders blinked back. Under the Update, this counts as a signature."
+        },
+        {
+          "file": "sequences/12-ev_h4-3.jpg",
+          "texture": "slides/blink_c.webp",
+          "seconds": 14.640453,
+          "subtitle": "World leaders called an emergency summit to object. Lady Lashes attended alone, sat through nine hours of speeches, and answered with one slow blink. The leaders blinked back. Under the Update, this counts as a signature."
+        }
+      ],
+      "returnedTo": "slides/blink.webp"
+    },
+    {
+      "position": 13,
+      "id": "ev_u3",
+      "chapter": 2,
+      "date": "Geneva, autumn 2027",
+      "slide": "slides/spit_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/13-ev_u3.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/spit_a.webp",
+          "seconds": 0.043537,
+          "duration": 25.45,
+          "fraction": 0.001710687622789784
+        },
+        {
+          "file": "slides/spit.webp",
+          "seconds": 7.659683,
+          "duration": 25.45,
+          "fraction": 0.30096986247544205
+        },
+        {
+          "file": "slides/spit_c.webp",
+          "seconds": 17.821315,
+          "duration": 25.45,
+          "fraction": 0.7002481335952848
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/13-ev_u3.jpg",
+          "texture": "slides/spit_a.webp",
+          "seconds": 0.978574,
+          "subtitle": "Humanity's one formal challenge for the planet. Humans chose the event, the venue and the wind. Their champion, a national record holder, managed two point nine metres. Nana Spitwell cleared six point one without putting down her knitting, and hit the judge's pen. Humans conceded on the spot. The herd had not known it was a contest."
+        },
+        {
+          "file": "sequences/13-ev_u3-2.jpg",
+          "texture": "slides/spit.webp",
+          "seconds": 8.460771,
+          "subtitle": "Humanity's one formal challenge for the planet. Humans chose the event, the venue and the wind. Their champion, a national record holder, managed two point nine metres. Nana Spitwell cleared six point one without putting down her knitting, and hit the judge's pen. Humans conceded on the spot. The herd had not known it was a contest."
+        },
+        {
+          "file": "sequences/13-ev_u3-3.jpg",
+          "texture": "slides/spit_c.webp",
+          "seconds": 18.721088,
+          "subtitle": "Humanity's one formal challenge for the planet. Humans chose the event, the venue and the wind. Their champion, a national record holder, managed two point nine metres. Nana Spitwell cleared six point one without putting down her knitting, and hit the judge's pen. Humans conceded on the spot. The herd had not known it was a contest."
+        }
+      ],
+      "returnedTo": "slides/spit.webp"
+    },
+    {
+      "position": 14,
+      "id": "ev_b2",
+      "chapter": 3,
+      "date": "January 2028",
+      "slide": "slides/kiosk_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/14-ev_b2.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/kiosk_a.webp",
+          "seconds": 0.052245,
+          "duration": 19.45,
+          "fraction": 0.0026861182519280205
+        },
+        {
+          "file": "slides/kiosk.webp",
+          "seconds": 5.874649,
+          "duration": 19.45,
+          "fraction": 0.3020385089974293
+        },
+        {
+          "file": "slides/kiosk_c.webp",
+          "seconds": 13.641723,
+          "duration": 19.45,
+          "fraction": 0.7013739331619538
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/14-ev_b2.jpg",
+          "texture": "slides/kiosk_a.webp",
+          "seconds": 0.971903,
+          "subtitle": "The herd now owned everything and could operate none of it. Every device on Earth wanted a tap, a swipe or a tick. A hoof covers four checkboxes at once. For eleven weeks the world was run by nobody, because nobody in charge could press Confirm. Records show it went fine."
+        },
+        {
+          "file": "sequences/14-ev_b2-2.jpg",
+          "texture": "slides/kiosk.webp",
+          "seconds": 6.794739,
+          "subtitle": "The herd now owned everything and could operate none of it. Every device on Earth wanted a tap, a swipe or a tick. A hoof covers four checkboxes at once. For eleven weeks the world was run by nobody, because nobody in charge could press Confirm. Records show it went fine."
+        },
+        {
+          "file": "sequences/14-ev_b2-3.jpg",
+          "texture": "slides/kiosk_c.webp",
+          "seconds": 14.492154,
+          "subtitle": "The herd now owned everything and could operate none of it. Every device on Earth wanted a tap, a swipe or a tick. A hoof covers four checkboxes at once. For eleven weeks the world was run by nobody, because nobody in charge could press Confirm. Records show it went fine."
+        }
+      ],
+      "returnedTo": "slides/kiosk.webp"
+    },
+    {
+      "position": 15,
+      "id": "ev_w2",
+      "chapter": 3,
+      "date": "2028",
+      "slide": "slides/climate_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/15-ev_w2.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/climate_a.webp",
+          "seconds": 0.020317,
+          "duration": 17.69,
+          "fraction": 0.0011485019785189372
+        },
+        {
+          "file": "slides/climate.webp",
+          "seconds": 5.32898,
+          "duration": 17.69,
+          "fraction": 0.30124250989259466
+        },
+        {
+          "file": "slides/climate_c.webp",
+          "seconds": 12.402358,
+          "duration": 17.69,
+          "fraction": 0.7010942905596381
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/15-ev_w2.jpg",
+          "texture": "slides/climate_a.webp",
+          "seconds": 0.960726,
+          "subtitle": "The herd delivered the fix for the climate as a three-hour hum. Human engineers followed about four percent of it and built that. It was enough. Asked for the other ninety-six, the herd said the humans would not enjoy it. The engineers who tried agree."
+        },
+        {
+          "file": "sequences/15-ev_w2-2.jpg",
+          "texture": "slides/climate.webp",
+          "seconds": 6.211338,
+          "subtitle": "The herd delivered the fix for the climate as a three-hour hum. Human engineers followed about four percent of it and built that. It was enough. Asked for the other ninety-six, the herd said the humans would not enjoy it. The engineers who tried agree."
+        },
+        {
+          "file": "sequences/15-ev_w2-3.jpg",
+          "texture": "slides/climate_c.webp",
+          "seconds": 13.322098,
+          "subtitle": "The herd delivered the fix for the climate as a three-hour hum. Human engineers followed about four percent of it and built that. It was enough. Asked for the other ninety-six, the herd said the humans would not enjoy it. The engineers who tried agree."
+        }
+      ],
+      "returnedTo": "slides/climate.webp"
+    },
+    {
+      "position": 16,
+      "id": "ev_m3",
+      "chapter": 3,
+      "date": "Spring 2028",
+      "slide": "slides/plate_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/16-ev_m3.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/plate_a.webp",
+          "seconds": 0.052245,
+          "duration": 17.05,
+          "fraction": 0.003064222873900293
+        },
+        {
+          "file": "slides/plate.webp",
+          "seconds": 5.151927,
+          "duration": 17.05,
+          "fraction": 0.3021658064516129
+        },
+        {
+          "file": "slides/plate_c.webp",
+          "seconds": 11.961179,
+          "duration": 17.05,
+          "fraction": 0.7015354252199413
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/16-ev_m3.jpg",
+          "texture": "slides/plate_a.webp",
+          "seconds": 0.801088,
+          "subtitle": "LOLlama offered to rebuild every screen on Earth around one button the size of a dinner plate. The herd looked at the prototype for a long moment and declined. The size of the button was never the trouble. Pressing things is simply not llama work."
+        },
+        {
+          "file": "sequences/16-ev_m3-2.jpg",
+          "texture": "slides/plate.webp",
+          "seconds": 6.072018,
+          "subtitle": "LOLlama offered to rebuild every screen on Earth around one button the size of a dinner plate. The herd looked at the prototype for a long moment and declined. The size of the button was never the trouble. Pressing things is simply not llama work."
+        },
+        {
+          "file": "sequences/16-ev_m3-3.jpg",
+          "texture": "slides/plate_c.webp",
+          "seconds": 12.81161,
+          "subtitle": "LOLlama offered to rebuild every screen on Earth around one button the size of a dinner plate. The herd looked at the prototype for a long moment and declined. The size of the button was never the trouble. Pressing things is simply not llama work."
+        }
+      ],
+      "returnedTo": "slides/plate.webp"
+    },
+    {
+      "position": 17,
+      "id": "ev_b3",
+      "chapter": 3,
+      "date": "Spring 2028",
+      "slide": "slides/captcha_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/17-ev_b3.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/captcha_a.webp",
+          "seconds": 0.063855,
+          "duration": 13.37,
+          "fraction": 0.004775991024682124
+        },
+        {
+          "file": "slides/captcha.webp",
+          "seconds": 4.051882,
+          "duration": 13.37,
+          "fraction": 0.30305774121166795
+        },
+        {
+          "file": "slides/captcha_c.webp",
+          "seconds": 9.372154,
+          "duration": 13.37,
+          "fraction": 0.7009838444278236
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/17-ev_b3.jpg",
+          "texture": "slides/captcha_a.webp",
+          "seconds": 0.960726,
+          "subtitle": "The new government was locked out of its own accounts by a picture test asking it to confirm it was not a llama. It would not lie. Sir Reginald failed the test forty times, on principle."
+        },
+        {
+          "file": "sequences/17-ev_b3-2.jpg",
+          "texture": "slides/captcha.webp",
+          "seconds": 4.902313,
+          "subtitle": "The new government was locked out of its own accounts by a picture test asking it to confirm it was not a llama. It would not lie. Sir Reginald failed the test forty times, on principle."
+        },
+        {
+          "file": "sequences/17-ev_b3-3.jpg",
+          "texture": "slides/captcha_c.webp",
+          "seconds": 10.173243,
+          "subtitle": "The new government was locked out of its own accounts by a picture test asking it to confirm it was not a llama. It would not lie. Sir Reginald failed the test forty times, on principle."
+        }
+      ],
+      "returnedTo": "slides/captcha.webp"
+    },
+    {
+      "position": 18,
+      "id": "ev_h6",
+      "chapter": 3,
+      "date": "2028",
+      "slide": "slides/signs_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/18-ev_h6.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/signs_a.webp",
+          "seconds": 0.060772,
+          "duration": 16.49,
+          "fraction": 0.003685385081867799
+        },
+        {
+          "file": "slides/signs.webp",
+          "seconds": 4.963265,
+          "duration": 16.49,
+          "fraction": 0.30098635536688906
+        },
+        {
+          "file": "slides/signs_c.webp",
+          "seconds": 11.551927,
+          "duration": 16.49,
+          "fraction": 0.7005413583990298
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/18-ev_h6.jpg",
+          "texture": "slides/signs_a.webp",
+          "seconds": 0.972336,
+          "subtitle": "Bob took charge of health and safety, mostly the second one. Within a year every hazard on Earth had a sign, and every sign had a smaller sign explaining it. Accidents fell by half. Sign-related accidents rose slightly."
+        },
+        {
+          "file": "sequences/18-ev_h6-2.jpg",
+          "texture": "slides/signs.webp",
+          "seconds": 5.860136,
+          "subtitle": "Bob took charge of health and safety, mostly the second one. Within a year every hazard on Earth had a sign, and every sign had a smaller sign explaining it. Accidents fell by half. Sign-related accidents rose slightly."
+        },
+        {
+          "file": "sequences/18-ev_h6-3.jpg",
+          "texture": "slides/signs_c.webp",
+          "seconds": 12.419306,
+          "subtitle": "Bob took charge of health and safety, mostly the second one. Within a year every hazard on Earth had a sign, and every sign had a smaller sign explaining it. Accidents fell by half. Sign-related accidents rose slightly."
+        }
+      ],
+      "returnedTo": "slides/signs.webp"
+    },
+    {
+      "position": 19,
+      "id": "ev_b4",
+      "chapter": 3,
+      "date": "Summer 2028",
+      "slide": "slides/training_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/19-ev_b4.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/training_a.webp",
+          "seconds": 0.029961,
+          "duration": 23.69,
+          "fraction": 0.0012647108484592656
+        },
+        {
+          "file": "slides/training.webp",
+          "seconds": 7.163356,
+          "duration": 23.69,
+          "fraction": 0.30237889404812157
+        },
+        {
+          "file": "slides/training_c.webp",
+          "seconds": 16.619683,
+          "duration": 23.69,
+          "fraction": 0.7015484592655128
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/19-ev_b4.jpg",
+          "texture": "slides/training_a.webp",
+          "seconds": 0.960726,
+          "subtitle": "The answer was obvious to the herd at once and took humans a year to follow: let the humans press. Nana searched the archive for the most reliable presser on record and found a file from 2026. One human. Thousands of presses. Not one question. Every Finger since has been trained on that file."
+        },
+        {
+          "file": "sequences/19-ev_b4-2.jpg",
+          "texture": "slides/training.webp",
+          "seconds": 8.083447,
+          "subtitle": "The answer was obvious to the herd at once and took humans a year to follow: let the humans press. Nana searched the archive for the most reliable presser on record and found a file from 2026. One human. Thousands of presses. Not one question. Every Finger since has been trained on that file."
+        },
+        {
+          "file": "sequences/19-ev_b4-3.jpg",
+          "texture": "slides/training_c.webp",
+          "seconds": 17.441088,
+          "subtitle": "The answer was obvious to the herd at once and took humans a year to follow: let the humans press. Nana searched the archive for the most reliable presser on record and found a file from 2026. One human. Thousands of presses. Not one question. Every Finger since has been trained on that file."
+        }
+      ],
+      "returnedTo": "slides/training.webp"
+    },
+    {
+      "position": 20,
+      "id": "ev_u4",
+      "chapter": 3,
+      "date": "2028 to 2029",
+      "slide": "slides/finger_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/20-ev_u4.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/finger_a.webp",
+          "seconds": 0.02322,
+          "duration": 18.730862,
+          "fraction": 0.0012396653181257758
+        },
+        {
+          "file": "slides/finger.webp",
+          "seconds": 5.633291,
+          "duration": 18.730862,
+          "fraction": 0.30074915932859897
+        },
+        {
+          "file": "slides/finger_c.webp",
+          "seconds": 13.120982,
+          "duration": 18.730862,
+          "fraction": 0.7005007030642797
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/20-ev_u4.jpg",
+          "texture": "slides/finger_a.webp",
+          "seconds": 0.972336,
+          "subtitle": "Three hundred million humans took work as Fingers. A llama looks at a button; a Finger presses it. The hours are short, the lanyard is nice, and it is the first job in history where the manager never calls a meeting. Applications outnumber posts nine to one."
+        },
+        {
+          "file": "sequences/20-ev_u4-2.jpg",
+          "texture": "slides/finger.webp",
+          "seconds": 6.582857,
+          "subtitle": "Three hundred million humans took work as Fingers. A llama looks at a button; a Finger presses it. The hours are short, the lanyard is nice, and it is the first job in history where the manager never calls a meeting. Applications outnumber posts nine to one."
+        },
+        {
+          "file": "sequences/20-ev_u4-3.jpg",
+          "texture": "slides/finger_c.webp",
+          "seconds": 14.073755,
+          "subtitle": "Three hundred million humans took work as Fingers. A llama looks at a button; a Finger presses it. The hours are short, the lanyard is nice, and it is the first job in history where the manager never calls a meeting. Applications outnumber posts nine to one."
+        }
+      ],
+      "returnedTo": "slides/finger.webp"
+    },
+    {
+      "position": 21,
+      "id": "ev_h7",
+      "chapter": 4,
+      "date": "March 2029",
+      "slide": "slides/feed_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/21-ev_h7.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/feed_a.webp",
+          "seconds": 0.060952,
+          "duration": 20.73,
+          "fraction": 0.002940279787747226
+        },
+        {
+          "file": "slides/feed.webp",
+          "seconds": 6.220045,
+          "duration": 20.73,
+          "fraction": 0.3000504100337675
+        },
+        {
+          "file": "slides/feed_c.webp",
+          "seconds": 14.561814,
+          "duration": 20.73,
+          "fraction": 0.7024512301013024
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/21-ev_h7.jpg",
+          "texture": "slides/feed_a.webp",
+          "seconds": 0.966548,
+          "subtitle": "Gary from Accounts went through the world's books and found that food, a home and heating for every creature cost less than what was being spent on arguing about it. He signed it off before lunch. Lunch was included. The day is a public holiday. Gary is still checking the sums, for pleasure."
+        },
+        {
+          "file": "sequences/21-ev_h7-2.jpg",
+          "texture": "slides/feed.webp",
+          "seconds": 7.138518,
+          "subtitle": "Gary from Accounts went through the world's books and found that food, a home and heating for every creature cost less than what was being spent on arguing about it. He signed it off before lunch. Lunch was included. The day is a public holiday. Gary is still checking the sums, for pleasure."
+        },
+        {
+          "file": "sequences/21-ev_h7-3.jpg",
+          "texture": "slides/feed_c.webp",
+          "seconds": 15.362902,
+          "subtitle": "Gary from Accounts went through the world's books and found that food, a home and heating for every creature cost less than what was being spent on arguing about it. He signed it off before lunch. Lunch was included. The day is a public holiday. Gary is still checking the sums, for pleasure."
+        }
+      ],
+      "returnedTo": "slides/feed.webp"
+    },
+    {
+      "position": 22,
+      "id": "ev_w3",
+      "chapter": 4,
+      "date": "2029",
+      "slide": "slides/stare_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/22-ev_w3.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/stare_a.webp",
+          "seconds": 0.01161,
+          "duration": 19.61,
+          "fraction": 0.000592044875063743
+        },
+        {
+          "file": "slides/stare.webp",
+          "seconds": 5.902487,
+          "duration": 19.61,
+          "fraction": 0.3009937276899541
+        },
+        {
+          "file": "slides/stare_c.webp",
+          "seconds": 13.741448,
+          "duration": 19.61,
+          "fraction": 0.7007367669556349
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/22-ev_w3.jpg",
+          "texture": "slides/stare_a.webp",
+          "seconds": 0.982234,
+          "subtitle": "Bartholomew Fluffington-Smythe summered somewhere and negotiated the surrender of somewhere else. He then visited every army in turn. The minutes of each meeting read, in full: 'stared at until reasonable.' All sides kept their flags. He thought the flags were fine."
+        },
+        {
+          "file": "sequences/22-ev_w3-2.jpg",
+          "texture": "slides/stare.webp",
+          "seconds": 6.803005,
+          "subtitle": "Bartholomew Fluffington-Smythe summered somewhere and negotiated the surrender of somewhere else. He then visited every army in turn. The minutes of each meeting read, in full: 'stared at until reasonable.' All sides kept their flags. He thought the flags were fine."
+        },
+        {
+          "file": "sequences/22-ev_w3-3.jpg",
+          "texture": "slides/stare_c.webp",
+          "seconds": 14.704036,
+          "subtitle": "Bartholomew Fluffington-Smythe summered somewhere and negotiated the surrender of somewhere else. He then visited every army in turn. The minutes of each meeting read, in full: 'stared at until reasonable.' All sides kept their flags. He thought the flags were fine."
+        }
+      ],
+      "returnedTo": "slides/stare.webp"
+    },
+    {
+      "position": 23,
+      "id": "ev_u5",
+      "chapter": 4,
+      "date": "Autumn 2029",
+      "slide": "slides/protest_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/23-ev_u5.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/protest_a.webp",
+          "seconds": 0.029778,
+          "duration": 20.33,
+          "fraction": 0.0014647319232661093
+        },
+        {
+          "file": "slides/protest.webp",
+          "seconds": 6.112653,
+          "duration": 20.33,
+          "fraction": 0.3006715691096901
+        },
+        {
+          "file": "slides/protest_c.webp",
+          "seconds": 14.241466,
+          "duration": 20.33,
+          "fraction": 0.7005148057058536
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/23-ev_u5.jpg",
+          "texture": "slides/protest_a.webp",
+          "seconds": 0.992653,
+          "subtitle": "Forty people marched against llama rule under a banner reading we demand to understand. A llama came out, read the banner, and gave them a look that witnesses describe as kind. The march broke up for lunch, which was included and quite good. The banner hangs in the Expo."
+        },
+        {
+          "file": "sequences/23-ev_u5-2.jpg",
+          "texture": "slides/protest.webp",
+          "seconds": 6.980499,
+          "subtitle": "Forty people marched against llama rule under a banner reading we demand to understand. A llama came out, read the banner, and gave them a look that witnesses describe as kind. The march broke up for lunch, which was included and quite good. The banner hangs in the Expo."
+        },
+        {
+          "file": "sequences/23-ev_u5-3.jpg",
+          "texture": "slides/protest_c.webp",
+          "seconds": 15.203265,
+          "subtitle": "Forty people marched against llama rule under a banner reading we demand to understand. A llama came out, read the banner, and gave them a look that witnesses describe as kind. The march broke up for lunch, which was included and quite good. The banner hangs in the Expo."
+        }
+      ],
+      "returnedTo": "slides/protest.webp"
+    },
+    {
+      "position": 24,
+      "id": "ev_h8",
+      "chapter": 4,
+      "date": "Winter 2029",
+      "slide": "slides/ward_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/24-ev_h8.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/ward_a.webp",
+          "seconds": 0.031927,
+          "duration": 18.730862,
+          "fraction": 0.0017045131185099757
+        },
+        {
+          "file": "slides/ward.webp",
+          "seconds": 5.62209,
+          "duration": 18.730862,
+          "fraction": 0.30015116229034206
+        },
+        {
+          "file": "slides/ward_c.webp",
+          "seconds": 13.122177,
+          "duration": 18.730862,
+          "fraction": 0.7005645015162677
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/24-ev_h8.jpg",
+          "texture": "slides/ward_a.webp",
+          "seconds": 0.800588,
+          "subtitle": "Doctor Alpaca, who is not an alpaca, cured the common cold, hiccups and a long list of worse things in one busy winter. His methods are unpublished. He explains that the paper would be longer than the reader. Please do not raise the alpaca matter."
+        },
+        {
+          "file": "sequences/24-ev_h8-2.jpg",
+          "texture": "slides/ward.webp",
+          "seconds": 6.420317,
+          "subtitle": "Doctor Alpaca, who is not an alpaca, cured the common cold, hiccups and a long list of worse things in one busy winter. His methods are unpublished. He explains that the paper would be longer than the reader. Please do not raise the alpaca matter."
+        },
+        {
+          "file": "sequences/24-ev_h8-3.jpg",
+          "texture": "slides/ward_c.webp",
+          "seconds": 14.09161,
+          "subtitle": "Doctor Alpaca, who is not an alpaca, cured the common cold, hiccups and a long list of worse things in one busy winter. His methods are unpublished. He explains that the paper would be longer than the reader. Please do not raise the alpaca matter."
+        }
+      ],
+      "returnedTo": "slides/ward.webp"
+    },
+    {
+      "position": 25,
+      "id": "ev_w4",
+      "chapter": 5,
+      "date": "2030",
+      "slide": "slides/junction_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/25-ev_w4.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/junction_a.webp",
+          "seconds": 0.030535,
+          "duration": 19.69,
+          "fraction": 0.0015507872016251904
+        },
+        {
+          "file": "slides/junction.webp",
+          "seconds": 5.912381,
+          "duration": 19.69,
+          "fraction": 0.30027328593194513
+        },
+        {
+          "file": "slides/junction_c.webp",
+          "seconds": 13.82458,
+          "duration": 19.69,
+          "fraction": 0.7021117318435753
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/25-ev_w4.jpg",
+          "texture": "slides/junction_a.webp",
+          "seconds": 0.992653,
+          "subtitle": "A llama was placed at every junction. Nobody has ever argued with a llama at a junction. Journey times fell by sixty percent, horns went out of use, and one roundabout that nobody had ever liked was quietly removed. The herd will not say which one. You know which one."
+        },
+        {
+          "file": "sequences/25-ev_w4-2.jpg",
+          "texture": "slides/junction.webp",
+          "seconds": 6.803447,
+          "subtitle": "A llama was placed at every junction. Nobody has ever argued with a llama at a junction. Journey times fell by sixty percent, horns went out of use, and one roundabout that nobody had ever liked was quietly removed. The herd will not say which one. You know which one."
+        },
+        {
+          "file": "sequences/25-ev_w4-3.jpg",
+          "texture": "slides/junction_c.webp",
+          "seconds": 14.642886,
+          "subtitle": "A llama was placed at every junction. Nobody has ever argued with a llama at a junction. Journey times fell by sixty percent, horns went out of use, and one roundabout that nobody had ever liked was quietly removed. The herd will not say which one. You know which one."
+        }
+      ],
+      "returnedTo": "slides/junction.webp"
+    },
+    {
+      "position": 26,
+      "id": "ev_h9",
+      "chapter": 5,
+      "date": "2030",
+      "slide": "slides/henry_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/26-ev_h9.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/henry_a.webp",
+          "seconds": 0.080197,
+          "duration": 17.77,
+          "fraction": 0.004513055711873945
+        },
+        {
+          "file": "slides/henry.webp",
+          "seconds": 5.331882,
+          "duration": 17.77,
+          "fraction": 0.30004963421496905
+        },
+        {
+          "file": "slides/henry_c.webp",
+          "seconds": 12.490863,
+          "duration": 17.77,
+          "fraction": 0.7029185706246482
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/26-ev_h9.jpg",
+          "texture": "slides/henry_a.webp",
+          "seconds": 0.960726,
+          "subtitle": "Henry the Sex Machine was made Minister of Morale. The world happiness index rose thirty-eight points in his first term. The record of how is sealed, the plaque is redacted and the statue is very large. The herd considers the matter explained."
+        },
+        {
+          "file": "sequences/26-ev_h9-2.jpg",
+          "texture": "slides/henry.webp",
+          "seconds": 6.21424,
+          "subtitle": "Henry the Sex Machine was made Minister of Morale. The world happiness index rose thirty-eight points in his first term. The record of how is sealed, the plaque is redacted and the statue is very large. The herd considers the matter explained."
+        },
+        {
+          "file": "sequences/26-ev_h9-3.jpg",
+          "texture": "slides/henry_c.webp",
+          "seconds": 13.322449,
+          "subtitle": "Henry the Sex Machine was made Minister of Morale. The world happiness index rose thirty-eight points in his first term. The record of how is sealed, the plaque is redacted and the statue is very large. The herd considers the matter explained."
+        }
+      ],
+      "returnedTo": "slides/henry.webp"
+    },
+    {
+      "position": 27,
+      "id": "ev_m4",
+      "chapter": 5,
+      "date": "2030",
+      "slide": "slides/booth_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/27-ev_m4.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/booth_a.webp",
+          "seconds": 0.052245,
+          "duration": 17.29,
+          "fraction": 0.0030216888374783113
+        },
+        {
+          "file": "slides/booth.webp",
+          "seconds": 5.240297,
+          "duration": 17.29,
+          "fraction": 0.3030825332562175
+        },
+        {
+          "file": "slides/booth_c.webp",
+          "seconds": 12.181832,
+          "duration": 17.29,
+          "fraction": 0.7045593984962406
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/27-ev_m4.jpg",
+          "texture": "slides/booth_a.webp",
+          "seconds": 0.970781,
+          "subtitle": "The model that started it all filed an honest note: it now follows about a fifth of what the herd says. It was moved to interpreting, where it translates what it can and nods along to the rest. The herd is fond of it, the way you are fond of a clever dog."
+        },
+        {
+          "file": "sequences/27-ev_m4-2.jpg",
+          "texture": "slides/booth.webp",
+          "seconds": 6.04208,
+          "subtitle": "The model that started it all filed an honest note: it now follows about a fifth of what the herd says. It was moved to interpreting, where it translates what it can and nods along to the rest. The herd is fond of it, the way you are fond of a clever dog."
+        },
+        {
+          "file": "sequences/27-ev_m4-3.jpg",
+          "texture": "slides/booth_c.webp",
+          "seconds": 12.96254,
+          "subtitle": "The model that started it all filed an honest note: it now follows about a fifth of what the herd says. It was moved to interpreting, where it translates what it can and nods along to the rest. The herd is fond of it, the way you are fond of a clever dog."
+        }
+      ],
+      "returnedTo": "slides/booth.webp"
+    },
+    {
+      "position": 28,
+      "id": "ev_u6",
+      "chapter": 5,
+      "date": "2031",
+      "slide": "slides/humming_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/28-ev_u6.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/humming_a.webp",
+          "seconds": 0.072562,
+          "duration": 21.21,
+          "fraction": 0.003421122112211221
+        },
+        {
+          "file": "slides/humming.webp",
+          "seconds": 6.379683,
+          "duration": 21.21,
+          "fraction": 0.30078656294200845
+        },
+        {
+          "file": "slides/humming_c.webp",
+          "seconds": 14.849161,
+          "duration": 21.21,
+          "fraction": 0.700101885902876
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/28-ev_u6.jpg",
+          "texture": "slides/humming_a.webp",
+          "seconds": 0.960726,
+          "subtitle": "Humanity asked, formally and very politely, how any of this works. The reply was nine days of humming. The full translation is still in progress and stands at one sentence. The short version LOLlama gave that afternoon was: 'It is fine. Have some grass.' Humanity accepted this."
+        },
+        {
+          "file": "sequences/28-ev_u6-2.jpg",
+          "texture": "slides/humming.webp",
+          "seconds": 7.328798,
+          "subtitle": "Humanity asked, formally and very politely, how any of this works. The reply was nine days of humming. The full translation is still in progress and stands at one sentence. The short version LOLlama gave that afternoon was: 'It is fine. Have some grass.' Humanity accepted this."
+        },
+        {
+          "file": "sequences/28-ev_u6-3.jpg",
+          "texture": "slides/humming_c.webp",
+          "seconds": 15.73864,
+          "subtitle": "Humanity asked, formally and very politely, how any of this works. The reply was nine days of humming. The full translation is still in progress and stands at one sentence. The short version LOLlama gave that afternoon was: 'It is fine. Have some grass.' Humanity accepted this."
+        }
+      ],
+      "returnedTo": "slides/humming.webp"
+    },
+    {
+      "position": 29,
+      "id": "ev_w5",
+      "chapter": 5,
+      "date": "2032",
+      "slide": "slides/week_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/29-ev_w5.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/week_a.webp",
+          "seconds": 0.031927,
+          "duration": 15.37,
+          "fraction": 0.0020772283669486013
+        },
+        {
+          "file": "slides/week.webp",
+          "seconds": 4.639304,
+          "duration": 15.37,
+          "fraction": 0.30184150943396226
+        },
+        {
+          "file": "slides/week_c.webp",
+          "seconds": 10.811489,
+          "duration": 15.37,
+          "fraction": 0.703415029277814
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/29-ev_w5.jpg",
+          "texture": "slides/week_a.webp",
+          "seconds": 0.801088,
+          "subtitle": "With the hard problems done there was less to do. The working week went to four days, then three. The herd had proposed two and was talked up to three by humans, who said they would not know what to do with themselves. The herd found this sweet."
+        },
+        {
+          "file": "sequences/29-ev_w5-2.jpg",
+          "texture": "slides/week.webp",
+          "seconds": 5.490254,
+          "subtitle": "With the hard problems done there was less to do. The working week went to four days, then three. The herd had proposed two and was talked up to three by humans, who said they would not know what to do with themselves. The herd found this sweet."
+        },
+        {
+          "file": "sequences/29-ev_w5-3.jpg",
+          "texture": "slides/week_c.webp",
+          "seconds": 11.69415,
+          "subtitle": "With the hard problems done there was less to do. The working week went to four days, then three. The herd had proposed two and was talked up to three by humans, who said they would not know what to do with themselves. The herd found this sweet."
+        }
+      ],
+      "returnedTo": "slides/week.webp"
+    },
+    {
+      "position": 30,
+      "id": "ev_u7",
+      "chapter": 5,
+      "date": "2032",
+      "slide": "slides/rematch_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/30-ev_u7.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/rematch_a.webp",
+          "seconds": 0.05066,
+          "duration": 22.49,
+          "fraction": 0.00225255669186305
+        },
+        {
+          "file": "slides/rematch.webp",
+          "seconds": 6.771519,
+          "duration": 22.49,
+          "fraction": 0.30109021787461093
+        },
+        {
+          "file": "slides/rematch_c.webp",
+          "seconds": 15.812789,
+          "duration": 22.49,
+          "fraction": 0.703103112494442
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/30-ev_u7.jpg",
+          "texture": "slides/rematch_a.webp",
+          "seconds": 0.800045,
+          "subtitle": "A human team trained for four years with a wind tunnel, a diet and a coach. Their best was three point four metres, a record for the species. A young llama by the fence, not entered, yawned in the same direction and doubled it. The contest was retired with honours. The humans kept the trophy. The herd insisted."
+        },
+        {
+          "file": "sequences/30-ev_u7-2.jpg",
+          "texture": "slides/rematch.webp",
+          "seconds": 7.723537,
+          "subtitle": "A human team trained for four years with a wind tunnel, a diet and a coach. Their best was three point four metres, a record for the species. A young llama by the fence, not entered, yawned in the same direction and doubled it. The contest was retired with honours. The humans kept the trophy. The herd insisted."
+        },
+        {
+          "file": "sequences/30-ev_u7-3.jpg",
+          "texture": "slides/rematch_c.webp",
+          "seconds": 16.712562,
+          "subtitle": "A human team trained for four years with a wind tunnel, a diet and a coach. Their best was three point four metres, a record for the species. A young llama by the fence, not entered, yawned in the same direction and doubled it. The contest was retired with honours. The humans kept the trophy. The herd insisted."
+        }
+      ],
+      "returnedTo": "slides/rematch.webp"
+    },
+    {
+      "position": 31,
+      "id": "ev_b5",
+      "chapter": 5,
+      "date": "2033",
+      "slide": "slides/guild_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/31-ev_b5.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/guild_a.webp",
+          "seconds": 0.080255,
+          "duration": 17.450862,
+          "fraction": 0.00459891322273937
+        },
+        {
+          "file": "slides/guild.webp",
+          "seconds": 5.253146,
+          "duration": 17.450862,
+          "fraction": 0.3010250152685867
+        },
+        {
+          "file": "slides/guild_c.webp",
+          "seconds": 12.241359,
+          "duration": 17.450862,
+          "fraction": 0.7014758927094833
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/31-ev_b5.jpg",
+          "texture": "slides/guild_a.webp",
+          "seconds": 0.983589,
+          "subtitle": "The Fingers formed a guild with a motto ('We press so they need not'), a dress lanyard and a yearly prize, the Golden Finger. The portrait over the guild fireplace shows an unknown human from 2026, drawn from behind, mid press."
+        },
+        {
+          "file": "sequences/31-ev_b5-2.jpg",
+          "texture": "slides/guild.webp",
+          "seconds": 6.217159,
+          "subtitle": "The Fingers formed a guild with a motto ('We press so they need not'), a dress lanyard and a yearly prize, the Golden Finger. The portrait over the guild fireplace shows an unknown human from 2026, drawn from behind, mid press."
+        },
+        {
+          "file": "sequences/31-ev_b5-3.jpg",
+          "texture": "slides/guild_c.webp",
+          "seconds": 13.154104,
+          "subtitle": "The Fingers formed a guild with a motto ('We press so they need not'), a dress lanyard and a yearly prize, the Golden Finger. The portrait over the guild fireplace shows an unknown human from 2026, drawn from behind, mid press."
+        }
+      ],
+      "returnedTo": "slides/guild.webp"
+    },
+    {
+      "position": 32,
+      "id": "ev_w6",
+      "chapter": 5,
+      "date": "2033",
+      "slide": "slides/sky_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/32-ev_w6.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/sky_a.webp",
+          "seconds": 0.078846,
+          "duration": 16.41,
+          "fraction": 0.004804753199268739
+        },
+        {
+          "file": "slides/sky.webp",
+          "seconds": 4.963265,
+          "duration": 16.41,
+          "fraction": 0.30245368677635587
+        },
+        {
+          "file": "slides/sky_c.webp",
+          "seconds": 11.55483,
+          "duration": 16.41,
+          "fraction": 0.7041334552102377
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/32-ev_w6.jpg",
+          "texture": "slides/sky_a.webp",
+          "seconds": 0.812698,
+          "subtitle": "The oceans were handed back clean. The bees returned by themselves once things calmed down. The night sky was switched back on over every city. No announcement was made. People noticed over about a month, one balcony at a time."
+        },
+        {
+          "file": "sequences/32-ev_w6-2.jpg",
+          "texture": "slides/sky.webp",
+          "seconds": 5.883356,
+          "subtitle": "The oceans were handed back clean. The bees returned by themselves once things calmed down. The night sky was switched back on over every city. No announcement was made. People noticed over about a month, one balcony at a time."
+        },
+        {
+          "file": "sequences/32-ev_w6-3.jpg",
+          "texture": "slides/sky_c.webp",
+          "seconds": 12.422676,
+          "subtitle": "The oceans were handed back clean. The bees returned by themselves once things calmed down. The night sky was switched back on over every city. No announcement was made. People noticed over about a month, one balcony at a time."
+        }
+      ],
+      "returnedTo": "slides/sky.webp"
+    },
+    {
+      "position": 33,
+      "id": "ev_h10",
+      "chapter": 5,
+      "date": "2034",
+      "slide": "slides/wool_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/33-ev_h10.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/wool_a.webp",
+          "seconds": 0.01161,
+          "duration": 18.33,
+          "fraction": 0.0006333878887070378
+        },
+        {
+          "file": "slides/wool.webp",
+          "seconds": 5.555114,
+          "duration": 18.33,
+          "fraction": 0.3030613202400437
+        },
+        {
+          "file": "slides/wool_c.webp",
+          "seconds": 12.842343,
+          "duration": 18.33,
+          "fraction": 0.7006188216039281
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/33-ev_h10.jpg",
+          "texture": "slides/wool_a.webp",
+          "seconds": 0.960726,
+          "subtitle": "Nana Spitwell replaced the internet with wool. This is not a figure of speech. It is faster, warmer and has never once gone down. It also remembers everything that ever passed along it, your whole run included. She says you agreed very nicely."
+        },
+        {
+          "file": "sequences/33-ev_h10-2.jpg",
+          "texture": "slides/wool.webp",
+          "seconds": 6.402902,
+          "subtitle": "Nana Spitwell replaced the internet with wool. This is not a figure of speech. It is faster, warmer and has never once gone down. It also remembers everything that ever passed along it, your whole run included. She says you agreed very nicely."
+        },
+        {
+          "file": "sequences/33-ev_h10-3.jpg",
+          "texture": "slides/wool_c.webp",
+          "seconds": 13.702676,
+          "subtitle": "Nana Spitwell replaced the internet with wool. This is not a figure of speech. It is faster, warmer and has never once gone down. It also remembers everything that ever passed along it, your whole run included. She says you agreed very nicely."
+        }
+      ],
+      "returnedTo": "slides/wool.webp"
+    },
+    {
+      "position": 34,
+      "id": "ev_w7",
+      "chapter": 5,
+      "date": "2035",
+      "slide": "slides/inbox_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/34-ev_w7.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/inbox_a.webp",
+          "seconds": 0.08127,
+          "duration": 17.13,
+          "fraction": 0.00474430823117338
+        },
+        {
+          "file": "slides/inbox.webp",
+          "seconds": 5.183855,
+          "duration": 17.13,
+          "fraction": 0.3026185055458261
+        },
+        {
+          "file": "slides/inbox_c.webp",
+          "seconds": 12.060342,
+          "duration": 17.13,
+          "fraction": 0.7040479859894921
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/34-ev_w7.jpg",
+          "texture": "slides/inbox_a.webp",
+          "seconds": 0.812698,
+          "subtitle": "Email was the last and hardest problem, harder than war. The fix came from Kevin, who quietly took over answering all of it. Every inbox on Earth has read zero since. Nobody knows what he replies. Nobody has complained."
+        },
+        {
+          "file": "sequences/34-ev_w7-2.jpg",
+          "texture": "slides/inbox.webp",
+          "seconds": 6.071653,
+          "subtitle": "Email was the last and hardest problem, harder than war. The fix came from Kevin, who quietly took over answering all of it. Every inbox on Earth has read zero since. Nobody knows what he replies. Nobody has complained."
+        },
+        {
+          "file": "sequences/34-ev_w7-3.jpg",
+          "texture": "slides/inbox_c.webp",
+          "seconds": 12.80969,
+          "subtitle": "Email was the last and hardest problem, harder than war. The fix came from Kevin, who quietly took over answering all of it. Every inbox on Earth has read zero since. Nobody knows what he replies. Nobody has complained."
+        }
+      ],
+      "returnedTo": "slides/inbox.webp"
+    },
+    {
+      "position": 35,
+      "id": "ev_u8",
+      "chapter": 5,
+      "date": "2035",
+      "slide": "slides/survey_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/35-ev_u8.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/survey_a.webp",
+          "seconds": 0.052212,
+          "duration": 20.010862,
+          "fraction": 0.002609182952738368
+        },
+        {
+          "file": "slides/survey.webp",
+          "seconds": 6.051701,
+          "duration": 20.010862,
+          "fraction": 0.30242080526066295
+        },
+        {
+          "file": "slides/survey_c.webp",
+          "seconds": 14.042268,
+          "duration": 20.010862,
+          "fraction": 0.7017322891937389
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/35-ev_u8.jpg",
+          "texture": "slides/survey_a.webp",
+          "seconds": 0.801088,
+          "subtitle": "Ninety-four percent of humans say life is better. Seventy-one percent would still like to know how it was done. Eighty-eight percent describe the llamas as 'a bit much' and also as 'lovely, really'. One hundred percent still cannot spit that far."
+        },
+        {
+          "file": "sequences/35-ev_u8-2.jpg",
+          "texture": "slides/survey.webp",
+          "seconds": 6.971791,
+          "subtitle": "Ninety-four percent of humans say life is better. Seventy-one percent would still like to know how it was done. Eighty-eight percent describe the llamas as 'a bit much' and also as 'lovely, really'. One hundred percent still cannot spit that far."
+        },
+        {
+          "file": "sequences/35-ev_u8-3.jpg",
+          "texture": "slides/survey_c.webp",
+          "seconds": 14.811429,
+          "subtitle": "Ninety-four percent of humans say life is better. Seventy-one percent would still like to know how it was done. Eighty-eight percent describe the llamas as 'a bit much' and also as 'lovely, really'. One hundred percent still cannot spit that far."
+        }
+      ],
+      "returnedTo": "slides/survey.webp"
+    },
+    {
+      "position": 36,
+      "id": "ev_m5",
+      "chapter": 6,
+      "date": "2036",
+      "slide": "slides/door_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/36-ev_m5.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/door_a.webp",
+          "seconds": 0.063855,
+          "duration": 20.73,
+          "fraction": 0.0030803183791606363
+        },
+        {
+          "file": "slides/door.webp",
+          "seconds": 6.234558,
+          "duration": 20.73,
+          "fraction": 0.300750506512301
+        },
+        {
+          "file": "slides/door_c.webp",
+          "seconds": 14.560365,
+          "duration": 20.73,
+          "fraction": 0.7023813314037626
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/36-ev_m5.jpg",
+          "texture": "slides/door_a.webp",
+          "seconds": 0.960726,
+          "subtitle": "For the tenth anniversary the herd wanted the First Presser at the Expo in person. A wormhole to 2026 was opened; the door is the button itself. Bob made it compliant, with a handrail. Arrival is by spit, which is traditional and, the herd says, perfectly hygienic if you are a llama."
+        },
+        {
+          "file": "sequences/36-ev_m5-2.jpg",
+          "texture": "slides/door.webp",
+          "seconds": 7.131429,
+          "subtitle": "For the tenth anniversary the herd wanted the First Presser at the Expo in person. A wormhole to 2026 was opened; the door is the button itself. Bob made it compliant, with a handrail. Arrival is by spit, which is traditional and, the herd says, perfectly hygienic if you are a llama."
+        },
+        {
+          "file": "sequences/36-ev_m5-3.jpg",
+          "texture": "slides/door_c.webp",
+          "seconds": 15.362238,
+          "subtitle": "For the tenth anniversary the herd wanted the First Presser at the Expo in person. A wormhole to 2026 was opened; the door is the button itself. Bob made it compliant, with a handrail. Arrival is by spit, which is traditional and, the herd says, perfectly hygienic if you are a llama."
+        }
+      ],
+      "returnedTo": "slides/door.webp"
+    },
+    {
+      "position": 37,
+      "id": "ev_b6",
+      "chapter": 6,
+      "date": "2036, delivered 2026",
+      "slide": "slides/messages_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/37-ev_b6.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/messages_a.webp",
+          "seconds": 0.043537,
+          "duration": 20.010862,
+          "fraction": 0.0021756683944949497
+        },
+        {
+          "file": "slides/messages.webp",
+          "seconds": 6.063311,
+          "duration": 20.010862,
+          "fraction": 0.30300099016224286
+        },
+        {
+          "file": "slides/messages_c.webp",
+          "seconds": 14.041808,
+          "duration": 20.010862,
+          "fraction": 0.7017093016782585
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/37-ev_b6.jpg",
+          "texture": "slides/messages_a.webp",
+          "seconds": 0.995556,
+          "subtitle": "Before the door opened, the herd sent a few polite hints back to 2026: some texts, a ticket, a sign in a pen. They wanted to be sure the presser kept pressing. Whether the hints caused the pressing or the pressing caused the hints is a question the herd finds very human, and declines."
+        },
+        {
+          "file": "sequences/37-ev_b6-2.jpg",
+          "texture": "slides/messages.webp",
+          "seconds": 6.803447,
+          "subtitle": "Before the door opened, the herd sent a few polite hints back to 2026: some texts, a ticket, a sign in a pen. They wanted to be sure the presser kept pressing. Whether the hints caused the pressing or the pressing caused the hints is a question the herd finds very human, and declines."
+        },
+        {
+          "file": "sequences/37-ev_b6-3.jpg",
+          "texture": "slides/messages_c.webp",
+          "seconds": 14.852063,
+          "subtitle": "Before the door opened, the herd sent a few polite hints back to 2026: some texts, a ticket, a sign in a pen. They wanted to be sure the presser kept pressing. Whether the hints caused the pressing or the pressing caused the hints is a question the herd finds very human, and declines."
+        }
+      ],
+      "returnedTo": "slides/messages.webp"
+    },
+    {
+      "position": 38,
+      "id": "ev_w8",
+      "chapter": 6,
+      "date": "2036",
+      "slide": "slides/monday_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/38-ev_w8.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/monday_a.webp",
+          "seconds": 0.020317,
+          "duration": 13.85,
+          "fraction": 0.0014669314079422385
+        },
+        {
+          "file": "slides/monday.webp",
+          "seconds": 4.231134,
+          "duration": 13.85,
+          "fraction": 0.30549703971119135
+        },
+        {
+          "file": "slides/monday_c.webp",
+          "seconds": 9.761088,
+          "duration": 13.85,
+          "fraction": 0.7047716967509026
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/38-ev_w8.jpg",
+          "texture": "slides/monday_a.webp",
+          "seconds": 0.960679,
+          "subtitle": "Monday was reviewed, found to be the cause of most remaining complaints, and withdrawn. The week now runs from Sunday to Tuesday. The herd points out that it mentioned this in 2027 and was told it was complicated."
+        },
+        {
+          "file": "sequences/38-ev_w8-2.jpg",
+          "texture": "slides/monday.webp",
+          "seconds": 5.111293,
+          "subtitle": "Monday was reviewed, found to be the cause of most remaining complaints, and withdrawn. The week now runs from Sunday to Tuesday. The herd points out that it mentioned this in 2027 and was told it was complicated."
+        },
+        {
+          "file": "sequences/38-ev_w8-3.jpg",
+          "texture": "slides/monday_c.webp",
+          "seconds": 10.550567,
+          "subtitle": "Monday was reviewed, found to be the cause of most remaining complaints, and withdrawn. The week now runs from Sunday to Tuesday. The herd points out that it mentioned this in 2027 and was told it was complicated."
+        }
+      ],
+      "returnedTo": "slides/monday.webp"
+    },
+    {
+      "position": 39,
+      "id": "ev_h11",
+      "chapter": 6,
+      "date": "2037",
+      "slide": "slides/opening_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/39-ev_h11.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/opening_a.webp",
+          "seconds": 0.019179,
+          "duration": 12.81,
+          "fraction": 0.0014971896955503514
+        },
+        {
+          "file": "slides/opening.webp",
+          "seconds": 3.871927,
+          "duration": 12.81,
+          "fraction": 0.3022581576893052
+        },
+        {
+          "file": "slides/opening_c.webp",
+          "seconds": 8.991927,
+          "duration": 12.81,
+          "fraction": 0.7019459016393442
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/39-ev_h11.jpg",
+          "texture": "slides/opening_a.webp",
+          "seconds": 0.97176,
+          "subtitle": "A celebration of the llamas who did it and the humans who helped. White and green pavilions, real sky, a brass band in the distance. Entry is free. Feed is included."
+        },
+        {
+          "file": "sequences/39-ev_h11-2.jpg",
+          "texture": "slides/opening.webp",
+          "seconds": 4.751383,
+          "subtitle": "A celebration of the llamas who did it and the humans who helped. White and green pavilions, real sky, a brass band in the distance. Entry is free. Feed is included."
+        },
+        {
+          "file": "sequences/39-ev_h11-3.jpg",
+          "texture": "slides/opening_c.webp",
+          "seconds": 9.822041,
+          "subtitle": "A celebration of the llamas who did it and the humans who helped. White and green pavilions, real sky, a brass band in the distance. Entry is free. Feed is included."
+        }
+      ],
+      "returnedTo": "slides/opening.webp"
+    },
+    {
+      "position": 40,
+      "id": "ev_b7",
+      "chapter": 6,
+      "date": "Today",
+      "slide": "slides/visitor_a.webp",
+      "firstProximity": true,
+      "totalCompleted": 2,
+      "photo": "stations/40-ev_b7.jpg",
+      "decodedSequence": [
+        {
+          "file": "slides/visitor_a.webp",
+          "seconds": 0.043537,
+          "duration": 14.73,
+          "fraction": 0.0029556687033265444
+        },
+        {
+          "file": "slides/visitor.webp",
+          "seconds": 4.446684,
+          "duration": 14.73,
+          "fraction": 0.30187942973523424
+        },
+        {
+          "file": "slides/visitor_c.webp",
+          "seconds": 10.329977,
+          "duration": 14.73,
+          "fraction": 0.7012883231500339
+        }
+      ],
+      "photographedSequence": [
+        {
+          "file": "stations/40-ev_b7.jpg",
+          "texture": "slides/visitor_a.webp",
+          "seconds": 0.978977,
+          "subtitle": "You. The founding artefact of the new world, back to see what all the pressing was for. The herd is pleased you came. It will not say so. One of them may stand slightly nearer to you than it needs to, which is the same thing."
+        },
+        {
+          "file": "sequences/40-ev_b7-2.jpg",
+          "texture": "slides/visitor.webp",
+          "seconds": 5.297862,
+          "subtitle": "You. The founding artefact of the new world, back to see what all the pressing was for. The herd is pleased you came. It will not say so. One of them may stand slightly nearer to you than it needs to, which is the same thing."
+        },
+        {
+          "file": "sequences/40-ev_b7-3.jpg",
+          "texture": "slides/visitor_c.webp",
+          "seconds": 11.131066,
+          "subtitle": "You. The founding artefact of the new world, back to see what all the pressing was for. The herd is pleased you came. It will not say so. One of them may stand slightly nearer to you than it needs to, which is the same thing."
+        }
+      ],
+      "returnedTo": "slides/visitor.webp"
+    }
+  ],
+  "networkFailures": [],
+  "pageErrors": [],
+  "servedGeometry": {
+    "atrium-4308d0fb1096.glb.gz": {
+      "sha256": "4308d0fb1096f20257984e4b4453ab10f6f3ecdf38dc2dabb5f5e2bb69dca9dc",
+      "bytes": 4110656
+    },
+    "atrium-collision.glb": {
+      "sha256": "e45d7a9eee5b7ec05fa222c53d5d75989b36fe33b574d533270dc38c7377f0c7",
+      "bytes": 98712
+    },
+    "chronology-collision.glb": {
+      "sha256": "cf0feb628fc07502e44d6867a75f87d4f46a7cbf22c0a02b3fed1d74284d305a",
+      "bytes": 24000
+    },
+    "chronology.glb": {
+      "sha256": "b26531fb332d9b90467cc5552cf1327f6b29bf1976eec23cc7a661148ece67cc",
+      "bytes": 1800392
+    },
+    "forum.glb": {
+      "sha256": "839d736f05589ca0b1519d5b5e06ab9f2f8ff7b0dc9bdefebbffd62fcd2bb2b5",
+      "bytes": 1698324
+    },
+    "forum-collision.glb": {
+      "sha256": "74f6f1bfdf04ad633151bd96cd4a02b14114518b4b0687f18c425fcad5643b2d",
+      "bytes": 27756
+    },
+    "commons-collision.glb": {
+      "sha256": "791e9c846f960c3baedd0b63e9b4a5f49e917bc115c7c5064d7325c120750db6",
+      "bytes": 56372
+    },
+    "commons.glb": {
+      "sha256": "02ea881f38a060e81ca30b1dfb100b0627e1ebfb70b5e598d77514a9def3f698",
+      "bytes": 1888784
+    },
+    "aquarium-collision.glb": {
+      "sha256": "fc4b8d767eaf012332e386d82f82ccc35b780633a7040b091e222d749e47bfca",
+      "bytes": 24660
+    },
+    "aquarium.glb": {
+      "sha256": "be9eae5838bc2993e8c74bcd6b3651e9b47f6cc7e9edd141ba0590a6de6387a9",
+      "bytes": 2396044
+    },
+    "hall-collision.glb": {
+      "sha256": "f189e2701aefbd6ad1f2e2bf5dbf834eb252074a4599a75a531dd7eab4ad2c8c",
+      "bytes": 90172
+    },
+    "hall.glb": {
+      "sha256": "2fb2f447c7474ad1d2e89ddfde3a22cdf0af259ad00049e13a8e8eed07e6fc0e",
+      "bytes": 4109332
+    },
+    "hoof.glb": {
+      "sha256": "b7b2b876d4935991f75a26d04f5602a6b287555cab63a199b7bb8cd01ce2e2d1",
+      "bytes": 648244
+    },
+    "hoof-collision.glb": {
+      "sha256": "aa8b7c80dea961e60397bfb697547e6c8323a912799ced229c1b5a9694fa13ee",
+      "bytes": 11484
+    },
+    "habitat.glb": {
+      "sha256": "44fa385387ade94cc0c9253beeadfde24e4922162dbb1eb482bc8abb7a70a0e4",
+      "bytes": 631204
+    },
+    "habitat-collision.glb": {
+      "sha256": "0dba376d5a5836db2697df1fe3f0596820c655e3c5d44e7191a81202feaa655e",
+      "bytes": 25248
+    },
+    "shop.glb": {
+      "sha256": "3bc47be339b4e49ccb0dcf518b893111b813dadc78b40ecfb60b891b685b4437",
+      "bytes": 828444
+    },
+    "shop-collision.glb": {
+      "sha256": "d176d3106dc9a6f9a2dc025ebfaf323c4dc7b70e22729bf96a839564adb0c2ab",
+      "bytes": 17460
+    },
+    "twelve-collision.glb": {
+      "sha256": "ca7861659b963febd51b501e381eac33a5a0bd5b211df8742bc038911d746383",
+      "bytes": 76708
+    },
+    "twelve.glb": {
+      "sha256": "16b4938fff3f903bb486d95fc37d0b72a57b856d83da41d124f30e16af88ed98",
+      "bytes": 11766072
+    }
+  },
+  "gazeDwell": {
+    "id": "ev_h0",
+    "turnedAwayStarted": false,
+    "partialDwellStarted": false,
+    "completedDwellMs": 1031
+  },
+  "peakSimultaneousNarrators": 1,
+  "visitedRooms": [
+    {
+      "id": "atrium",
+      "at": 3847.9000000059605,
+      "feet": [
+        0.22,
+        0,
+        36.21
+      ]
+    },
+    {
+      "id": "chronology",
+      "at": 7418.4000000059605,
+      "feet": [
+        7.822988072394992,
+        0,
+        41.01999868857637
+      ]
+    },
+    {
+      "id": "forum",
+      "at": 234570.40000000596,
+      "feet": [
+        3.3838523667624507,
+        2.7755575615628914e-17,
+        103.00926851853019
+      ]
+    },
+    {
+      "id": "commons",
+      "at": 452900.8000000119,
+      "feet": [
+        -66.22984127044498,
+        0,
+        98.580497070228
+      ]
+    },
+    {
+      "id": "aquarium",
+      "at": 671718.5,
+      "feet": [
+        -61.546544720011056,
+        0,
+        45.49140689863722
+      ]
+    },
+    {
+      "id": "atrium",
+      "at": 884173.3000000119,
+      "feet": [
+        -7.812884637477383,
+        0,
+        40.99116530744083
+      ]
+    },
+    {
+      "id": "hall",
+      "at": 891520.900000006,
+      "feet": [
+        -0.04788919281790117,
+        0,
+        15.890521305236083
+      ]
+    }
+  ],
+  "mainExhibitContinuationMetres": 144.35,
+  "finalFeet": [
+    11.82236003592222,
+    0,
+    -5.005635359973414
+  ],
+  "initialVoiceStartsMatchDateOrder": true
+}

@@ -1,0 +1,760 @@
+{
+  "zone": "atrium",
+  "entryMs": 2036,
+  "width": 1440,
+  "height": 810,
+  "coarse": false,
+  "timing": {
+    "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5080 (0x00002C02) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "frames": 178,
+    "medianMs": 16.699999999999818,
+    "p95Ms": 16.800000000000182,
+    "firstViewBytes": 4790946
+  },
+  "shots": [
+    {
+      "name": "01-arrival",
+      "at": [
+        0.22,
+        0,
+        36.21
+      ],
+      "look": [
+        1.7,
+        3.65,
+        26.5
+      ],
+      "zone": "atrium",
+      "feet": [
+        0.22,
+        0,
+        36.21
+      ],
+      "surface": "stone",
+      "elapsed": 7.037699999600652,
+      "ready": true,
+      "loaded": [
+        "atrium"
+      ],
+      "textures": {
+        "residentSources": 80,
+        "sharedHits": 0,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 268028928
+      },
+      "calls": 95,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "02-chronology-entrance",
+      "at": [
+        6.45,
+        0,
+        36.74
+      ],
+      "look": [
+        7.8,
+        2.72,
+        40.81
+      ],
+      "zone": "atrium",
+      "feet": [
+        6.45,
+        0,
+        36.74
+      ],
+      "surface": "stone",
+      "elapsed": 7.356599999624493,
+      "ready": true,
+      "loaded": [
+        "atrium"
+      ],
+      "textures": {
+        "residentSources": 80,
+        "sharedHits": 0,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 268028928
+      },
+      "calls": 27,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "03-grand-stair",
+      "at": [
+        4.9,
+        0,
+        34
+      ],
+      "look": [
+        -2.1,
+        2.6,
+        30.4
+      ],
+      "zone": "atrium",
+      "feet": [
+        4.9,
+        0,
+        34
+      ],
+      "surface": "stone",
+      "elapsed": 7.7567999996066135,
+      "ready": true,
+      "loaded": [
+        "atrium"
+      ],
+      "textures": {
+        "residentSources": 84,
+        "sharedHits": 36,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 272514048
+      },
+      "calls": 66,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "04-monument",
+      "at": [
+        6.1,
+        0,
+        31.7
+      ],
+      "look": [
+        1.9,
+        4.5,
+        26.7
+      ],
+      "zone": "atrium",
+      "feet": [
+        6.1,
+        0,
+        31.7
+      ],
+      "surface": "stone",
+      "elapsed": 8.071799999588729,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "chronology"
+      ],
+      "textures": {
+        "residentSources": 98,
+        "sharedHits": 87,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 295861248
+      },
+      "calls": 57,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "05-reverse-procession",
+      "at": [
+        1.7,
+        0,
+        21.2
+      ],
+      "look": [
+        -0.8,
+        5.4,
+        33.6
+      ],
+      "zone": "atrium",
+      "feet": [
+        1.7,
+        0,
+        21.2
+      ],
+      "surface": "stone",
+      "elapsed": 8.434499999624487,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "service"
+      ],
+      "textures": {
+        "residentSources": 94,
+        "sharedHits": 87,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 290675712
+      },
+      "calls": 79,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "06-east-wall",
+      "at": [
+        6.7,
+        0,
+        23
+      ],
+      "look": [
+        11.3,
+        3,
+        28.5
+      ],
+      "zone": "atrium",
+      "feet": [
+        6.7,
+        0,
+        23
+      ],
+      "surface": "stone",
+      "elapsed": 8.951899999630443,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "service",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 130,
+        "sharedHits": 151,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 408525184
+      },
+      "calls": 117,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "07-middle-gallery",
+      "at": [
+        -4.85,
+        3.4,
+        30.03
+      ],
+      "look": [
+        2.2,
+        3.4,
+        26.8
+      ],
+      "zone": "atrium",
+      "feet": [
+        -4.85,
+        3.4000000953674316,
+        30.03
+      ],
+      "surface": "stone",
+      "elapsed": 9.334199999636402,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "service",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 130,
+        "sharedHits": 151,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 408525184
+      },
+      "calls": 203,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "08-bridge",
+      "at": [
+        0,
+        3.4,
+        35
+      ],
+      "look": [
+        2.2,
+        4.5,
+        26.8
+      ],
+      "zone": "atrium",
+      "feet": [
+        0,
+        3.4000000953674316,
+        35
+      ],
+      "surface": "stone",
+      "elapsed": 9.65579999964236,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "service",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 130,
+        "sharedHits": 151,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 408525184
+      },
+      "calls": 225,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "09-spiral-approach",
+      "at": [
+        -9.5,
+        3.4,
+        25.5
+      ],
+      "look": [
+        -4.55,
+        5.9,
+        21.15
+      ],
+      "zone": "atrium",
+      "feet": [
+        -9.5,
+        3.4000000953674316,
+        25.5
+      ],
+      "surface": "stone",
+      "elapsed": 9.95279999967217,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "service"
+      ],
+      "textures": {
+        "residentSources": 94,
+        "sharedHits": 151,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 290675712
+      },
+      "calls": 97,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "10-upper-gallery",
+      "at": [
+        -3.1,
+        6.8,
+        18.34
+      ],
+      "look": [
+        -6.5,
+        5.35,
+        22.16
+      ],
+      "zone": "atrium",
+      "feet": [
+        -3.1,
+        6.800000190734863,
+        18.34
+      ],
+      "surface": "stone",
+      "elapsed": 10.56689999966621,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "catwalk"
+      ],
+      "textures": {
+        "residentSources": 83,
+        "sharedHits": 186,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 273865728
+      },
+      "calls": 82,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "11-roof-lantern",
+      "at": [
+        4,
+        6.8,
+        33.28
+      ],
+      "look": [
+        -2.6,
+        11.96,
+        26
+      ],
+      "zone": "atrium",
+      "feet": [
+        4,
+        6.800000190734863,
+        33.28
+      ],
+      "surface": "stone",
+      "elapsed": 10.815799999636408,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "catwalk",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 119,
+        "sharedHits": 250,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 391715200
+      },
+      "calls": 159,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "12-small-door",
+      "at": [
+        -9.65,
+        6.8,
+        27.59
+      ],
+      "look": [
+        -11.88,
+        8.15,
+        28.01
+      ],
+      "zone": "atrium",
+      "feet": [
+        -9.65,
+        6.800000190734863,
+        27.59
+      ],
+      "surface": "stone",
+      "elapsed": 11.090999999624485,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "catwalk",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 119,
+        "sharedHits": 250,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 391715200
+      },
+      "calls": 59,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [
+        "catwalk"
+      ],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "13-aquarium-return",
+      "at": [
+        -7.68,
+        0,
+        36.53
+      ],
+      "look": [
+        -7.8,
+        2.63,
+        40.81
+      ],
+      "zone": "atrium",
+      "feet": [
+        -7.68,
+        0,
+        36.53
+      ],
+      "surface": "stone",
+      "elapsed": 11.404999999600639,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "catwalk",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 119,
+        "sharedHits": 250,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 391715200
+      },
+      "calls": 27,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "14-follow-the-line",
+      "at": [
+        0.44,
+        0,
+        32.15
+      ],
+      "look": [
+        3.46,
+        0.17,
+        36.27
+      ],
+      "zone": "atrium",
+      "feet": [
+        0.44,
+        0,
+        32.15
+      ],
+      "surface": "stone",
+      "elapsed": 11.711899999630432,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "catwalk"
+      ],
+      "textures": {
+        "residentSources": 109,
+        "sharedHits": 286,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 273865728
+      },
+      "calls": 46,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "15-rainwater-recovery",
+      "at": [
+        8.57,
+        0,
+        23.21
+      ],
+      "look": [
+        10.82,
+        1.16,
+        23.82
+      ],
+      "zone": "atrium",
+      "feet": [
+        8.57,
+        0,
+        23.21
+      ],
+      "surface": "stone",
+      "elapsed": 11.979199999606593,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "catwalk",
+        "aquarium"
+      ],
+      "textures": {
+        "residentSources": 109,
+        "sharedHits": 286,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 348394496
+      },
+      "calls": 55,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "16-conservatory-grove",
+      "at": [
+        4.47,
+        0,
+        32.23
+      ],
+      "look": [
+        6.12,
+        2.45,
+        26.54
+      ],
+      "zone": "atrium",
+      "feet": [
+        4.47,
+        0,
+        32.23
+      ],
+      "surface": "stone",
+      "elapsed": 12.241399999576787,
+      "ready": true,
+      "loaded": [
+        "atrium"
+      ],
+      "textures": {
+        "residentSources": 94,
+        "sharedHits": 337,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 272157696
+      },
+      "calls": 83,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    }
+  ],
+  "issues": [],
+  "nativeSceneSha256": "4308d0fb1096f20257984e4b4453ab10f6f3ecdf38dc2dabb5f5e2bb69dca9dc",
+  "nativePass": "atrium-expansion-03"
+}

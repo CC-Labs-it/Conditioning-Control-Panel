@@ -1,0 +1,980 @@
+{
+  "room": "hall",
+  "beforeLaunch": {
+    "zone": "hall",
+    "pass": "media-02",
+    "bytes": 4347020,
+    "sha256": "2b6aa87e8bae998bc67c4e768b0c7a615e6a4a5ce092c07503dca77b8f612728"
+  },
+  "utc": "2026-11-21T13:56:42.912Z",
+  "source": "Normal public ending preview with inspection placements on real walkable floors",
+  "cameras": [
+    {
+      "file": "21-same-angle.jpg",
+      "description": "Cell 21 at the R1 visitor position and target. Identical 1040 by 640 preview.",
+      "feet": [
+        -2.431323492944709,
+        0,
+        13.97979831128335
+      ],
+      "target": [
+        -3.3499999046325684,
+        1.8600001335144043,
+        15.739999771118164
+      ],
+      "eye": [
+        -2.431323492944709,
+        1.6,
+        13.97979831128335
+      ],
+      "quaternion": [
+        0.015496814897556598,
+        0.9691583964575656,
+        -0.06318513917907208,
+        0.23769621261339494
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h7",
+      "playback": {
+        "voice": {
+          "id": "ev_h7",
+          "seconds": 0.893968,
+          "gain": 0.37422074032028735,
+          "pan": 0.2957861390995371,
+          "duck": 0.3981071705534972,
+          "subtitle": "Gary from Accounts went through the world's books and found that food, a home and heating for every creature cost less than what was being spent on arguing about it. He signed it off before lunch. Lunch was included. The day is a public holiday. Gary is still checking the sums, for pleasure.",
+          "queue": [
+            "ev_w3"
+          ]
+        },
+        "project": {
+          "active": true,
+          "slide": "slides/feed.webp",
+          "full": true,
+          "lamp": 0.9500513598984718,
+          "zoom": 0.0017249744331886156
+        },
+        "finished": 0
+      }
+    },
+    {
+      "file": "26-unobstructed.jpg",
+      "description": "The lit screen viewed between the structural columns from the physical aisle.",
+      "feet": [
+        -9.929999542236327,
+        0,
+        10.949999809265137
+      ],
+      "target": [
+        -11.729999542236328,
+        1.8600000739097595,
+        10.949999809265137
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        -9.929999542236327,
+        1.6,
+        10.949999809265137
+      ],
+      "quaternion": [
+        0.05067457179440102,
+        0.7052886556392737,
+        -0.05067457179440101,
+        0.7052886556392738
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "playback": {
+        "voice": {
+          "id": "ev_h9",
+          "seconds": 0.792381,
+          "gain": 0.94,
+          "pan": 0.2957859480332998,
+          "duck": 1,
+          "subtitle": "Henry the Sex Machine was made Minister of Morale. The world happiness index rose thirty-eight points in his first term. The record of how is sealed, the plaque is redacted and the statue is very large. The herd considers the matter explained.",
+          "queue": [
+            "ev_w4",
+            "ev_m4"
+          ]
+        },
+        "project": {
+          "active": true,
+          "slide": "slides/henry.webp",
+          "full": true,
+          "lamp": 0.9335629236610606,
+          "zoom": 0.0017836375914462577
+        },
+        "finished": 0
+      }
+    },
+    {
+      "file": "chapter-4-21-plate-detail.jpg",
+      "description": "Approach to the first accession strip in this chapter.",
+      "feet": [
+        -3.3499999046325684,
+        0,
+        14.899999771118164
+      ],
+      "target": [
+        -3.3499999046325684,
+        1.3330000739097594,
+        15.719999771118164
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        -3.3499999046325684,
+        1.6,
+        14.899999771118164
+      ],
+      "quaternion": [
+        -9.5977158560812e-18,
+        0.9876394883495031,
+        0.15674259488962047,
+        6.047547690593744e-17
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "chapter": {
+        "id": "ev_h7",
+        "title": "Feed Is Included",
+        "line": "March 2029",
+        "chapter": 4,
+        "section": "Feed Is Included",
+        "index": 20
+      }
+    },
+    {
+      "file": "chapter-4-header.jpg",
+      "description": "The physical framed chapter lettering above its first record.",
+      "feet": [
+        -3.3499999046325684,
+        0,
+        13.879999771118165
+      ],
+      "target": [
+        -3.3499999046325684,
+        2.6900000739097596,
+        15.739999771118164
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        -3.3499999046325684,
+        1.6,
+        13.879999771118165
+      ],
+      "quaternion": [
+        1.603961654395671e-17,
+        0.9650823100177708,
+        -0.26194681691282934,
+        5.909424809384983e-17
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "chapter": {
+        "id": "ev_h7",
+        "title": "Feed Is Included",
+        "line": "March 2029",
+        "chapter": 4,
+        "section": "Feed Is Included",
+        "index": 20
+      }
+    },
+    {
+      "file": "chapter-5.jpg",
+      "description": "Approach to the first accession strip in this chapter.",
+      "feet": [
+        -10.889999542236328,
+        0,
+        13.4399995803833
+      ],
+      "target": [
+        -11.709999542236329,
+        1.3330000739097594,
+        13.4399995803833
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        -10.889999542236328,
+        1.6,
+        13.4399995803833
+      ],
+      "quaternion": [
+        -0.11083375174722654,
+        0.6983665795795457,
+        0.11083375174722651,
+        0.6983665795795458
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "chapter": {
+        "id": "ev_w4",
+        "title": "Traffic, solved",
+        "line": "2030",
+        "chapter": 5,
+        "section": "The Chewing Years",
+        "index": 24
+      }
+    },
+    {
+      "file": "chapter-5-header.jpg",
+      "description": "The physical framed chapter lettering above its first record.",
+      "feet": [
+        -9.869999542236329,
+        0,
+        13.4399995803833
+      ],
+      "target": [
+        -11.729999542236328,
+        2.6900000739097596,
+        13.4399995803833
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        -9.869999542236329,
+        1.6,
+        13.4399995803833
+      ],
+      "quaternion": [
+        0.18522437054929267,
+        0.6824162458167436,
+        -0.18522437054929264,
+        0.6824162458167438
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "chapter": {
+        "id": "ev_w4",
+        "title": "Traffic, solved",
+        "line": "2030",
+        "chapter": 5,
+        "section": "The Chewing Years",
+        "index": 24
+      }
+    },
+    {
+      "file": "chapter-6.jpg",
+      "description": "Approach to the first accession strip in this chapter.",
+      "feet": [
+        -10.539999961853027,
+        0,
+        -14.91
+      ],
+      "target": [
+        -10.539999961853027,
+        1.3330000739097594,
+        -15.73
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        -10.539999961853027,
+        1.6,
+        -14.91
+      ],
+      "quaternion": [
+        -0.15674259488962047,
+        0,
+        0,
+        0.9876394883495031
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "chapter": {
+        "id": "ev_m5",
+        "title": "The door to 2026",
+        "line": "2036",
+        "chapter": 6,
+        "section": "The Expo",
+        "index": 35
+      }
+    },
+    {
+      "file": "chapter-6-header.jpg",
+      "description": "The physical framed chapter lettering above its first record.",
+      "feet": [
+        -10.539999961853027,
+        0,
+        -13.89
+      ],
+      "target": [
+        -10.539999961853027,
+        2.6900000739097596,
+        -15.75
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        -10.539999961853027,
+        1.6,
+        -13.89
+      ],
+      "quaternion": [
+        0.26194681691282934,
+        0,
+        0,
+        0.9650823100177708
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "chapter": {
+        "id": "ev_m5",
+        "title": "The door to 2026",
+        "line": "2036",
+        "chapter": 6,
+        "section": "The Expo",
+        "index": 35
+      }
+    },
+    {
+      "file": "gallery-title.jpg",
+      "description": "West mezzanine photographic collection.",
+      "feet": [
+        -9.71,
+        3.3999998569488525,
+        14
+      ],
+      "target": [
+        -11.7,
+        4.94,
+        14
+      ],
+      "eye": [
+        -9.71,
+        4.999999856948852,
+        14
+      ],
+      "quaternion": [
+        -0.010656244001293653,
+        0.7070264807373093,
+        0.010656244001293655,
+        0.7070264807373093
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9"
+    },
+    {
+      "file": "gallery-overview.jpg",
+      "description": "West mezzanine photographic collection.",
+      "feet": [
+        -9.75,
+        3.3999998569488525,
+        14.9
+      ],
+      "target": [
+        -11.49,
+        4.97,
+        5.4
+      ],
+      "eye": [
+        -9.75,
+        4.999999856948852,
+        14.9
+      ],
+      "quaternion": [
+        -0.0015467319412951104,
+        0.0904511156986058,
+        0.00014047964048536743,
+        0.9958996854877754
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9"
+    },
+    {
+      "file": "gallery-projector.jpg",
+      "description": "West mezzanine photographic collection.",
+      "feet": [
+        -9.64,
+        3.3999998569488525,
+        0.42
+      ],
+      "target": [
+        -11.59,
+        4.98,
+        0.42
+      ],
+      "eye": [
+        -9.64,
+        4.999999856948852,
+        0.42
+      ],
+      "quaternion": [
+        -0.003626019652817561,
+        0.7070974840723713,
+        0.003626019652817562,
+        0.7070974840723712
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9"
+    },
+    {
+      "file": "print-flight.jpg",
+      "description": "Whole framed print with lamp, mat and physical caption.",
+      "feet": [
+        -9.93,
+        3.3999998569488525,
+        10.02
+      ],
+      "target": [
+        -11.7,
+        4.8,
+        10
+      ],
+      "eye": [
+        -9.93,
+        4.999999856948852,
+        10.02
+      ],
+      "quaternion": [
+        -0.03998125369735459,
+        0.701988504823594,
+        0.039532040385290575,
+        0.7099653908686666
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "key": "flight"
+    },
+    {
+      "file": "caption-flight.jpg",
+      "description": "Physical brass caption read from the walkable upper gallery.",
+      "feet": [
+        -10.88,
+        3.3999998569488525,
+        10.02
+      ],
+      "target": [
+        -11.68,
+        4.137,
+        10
+      ],
+      "eye": [
+        -10.88,
+        4.999999856948852,
+        10.02
+      ],
+      "quaternion": [
+        -0.2863795640028743,
+        0.639914117021915,
+        0.27930955453754436,
+        0.6561119118729861
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "key": "flight"
+    },
+    {
+      "file": "print-loch.jpg",
+      "description": "Whole framed print with lamp, mat and physical caption.",
+      "feet": [
+        -9.93,
+        3.3999998569488525,
+        6.02
+      ],
+      "target": [
+        -11.7,
+        4.8,
+        6
+      ],
+      "eye": [
+        -9.93,
+        4.999999856948852,
+        6.02
+      ],
+      "quaternion": [
+        -0.03998125369735459,
+        0.701988504823594,
+        0.039532040385290575,
+        0.7099653908686666
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "key": "loch"
+    },
+    {
+      "file": "caption-loch.jpg",
+      "description": "Physical brass caption read from the walkable upper gallery.",
+      "feet": [
+        -10.88,
+        3.3999998569488525,
+        6.02
+      ],
+      "target": [
+        -11.68,
+        4.137,
+        6
+      ],
+      "eye": [
+        -10.88,
+        4.999999856948852,
+        6.02
+      ],
+      "quaternion": [
+        -0.2863795640028743,
+        0.639914117021915,
+        0.27930955453754436,
+        0.6561119118729861
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "key": "loch"
+    },
+    {
+      "file": "print-summit.jpg",
+      "description": "Whole framed print with lamp, mat and physical caption.",
+      "feet": [
+        -9.93,
+        3.3999998569488525,
+        2.6
+      ],
+      "target": [
+        -11.7,
+        4.8,
+        2.58
+      ],
+      "eye": [
+        -9.93,
+        4.999999856948852,
+        2.6
+      ],
+      "quaternion": [
+        -0.0399812536973546,
+        0.7019885048235939,
+        0.03953204038529057,
+        0.7099653908686667
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "key": "summit"
+    },
+    {
+      "file": "caption-summit.jpg",
+      "description": "Physical brass caption read from the walkable upper gallery.",
+      "feet": [
+        -10.88,
+        3.3999998569488525,
+        2.6
+      ],
+      "target": [
+        -11.68,
+        4.137,
+        2.58
+      ],
+      "eye": [
+        -10.88,
+        4.999999856948852,
+        2.6
+      ],
+      "quaternion": [
+        -0.28637956400287434,
+        0.6399141170219149,
+        0.27930955453754447,
+        0.6561119118729859
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "key": "summit"
+    },
+    {
+      "file": "print-woods.jpg",
+      "description": "Whole framed print with lamp, mat and physical caption.",
+      "feet": [
+        -9.93,
+        3.3999998569488525,
+        -1.98
+      ],
+      "target": [
+        -11.7,
+        4.8,
+        -2
+      ],
+      "eye": [
+        -9.93,
+        4.999999856948852,
+        -1.98
+      ],
+      "quaternion": [
+        -0.0399812536973546,
+        0.7019885048235939,
+        0.03953204038529057,
+        0.7099653908686667
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "key": "woods"
+    },
+    {
+      "file": "caption-woods.jpg",
+      "description": "Physical brass caption read from the walkable upper gallery.",
+      "feet": [
+        -10.88,
+        3.3999998569488525,
+        -1.98
+      ],
+      "target": [
+        -11.68,
+        4.137,
+        -2
+      ],
+      "eye": [
+        -10.88,
+        4.999999856948852,
+        -1.98
+      ],
+      "quaternion": [
+        -0.28637956400287434,
+        0.6399141170219149,
+        0.27930955453754447,
+        0.6561119118729859
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "key": "woods"
+    },
+    {
+      "file": "print-moon.jpg",
+      "description": "Whole framed print with lamp, mat and physical caption.",
+      "feet": [
+        -9.93,
+        3.3999998569488525,
+        -5.98
+      ],
+      "target": [
+        -11.7,
+        4.8,
+        -6
+      ],
+      "eye": [
+        -9.93,
+        4.999999856948852,
+        -5.98
+      ],
+      "quaternion": [
+        -0.03998125369735459,
+        0.701988504823594,
+        0.039532040385290575,
+        0.7099653908686666
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "key": "moon"
+    },
+    {
+      "file": "caption-moon.jpg",
+      "description": "Physical brass caption read from the walkable upper gallery.",
+      "feet": [
+        -10.88,
+        3.3999998569488525,
+        -5.98
+      ],
+      "target": [
+        -11.68,
+        4.137,
+        -6
+      ],
+      "eye": [
+        -10.88,
+        4.999999856948852,
+        -5.98
+      ],
+      "quaternion": [
+        -0.2863795640028743,
+        0.639914117021915,
+        0.27930955453754436,
+        0.6561119118729861
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "key": "moon"
+    },
+    {
+      "file": "print-crossing.jpg",
+      "description": "Whole framed print with lamp, mat and physical caption.",
+      "feet": [
+        -9.93,
+        3.3999998569488525,
+        -9.98
+      ],
+      "target": [
+        -11.7,
+        4.8,
+        -10
+      ],
+      "eye": [
+        -9.93,
+        4.999999856948852,
+        -9.98
+      ],
+      "quaternion": [
+        -0.03998125369735459,
+        0.701988504823594,
+        0.039532040385290575,
+        0.7099653908686666
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "key": "crossing"
+    },
+    {
+      "file": "caption-crossing.jpg",
+      "description": "Physical brass caption read from the walkable upper gallery.",
+      "feet": [
+        -10.88,
+        3.3999998569488525,
+        -9.98
+      ],
+      "target": [
+        -11.68,
+        4.137,
+        -10
+      ],
+      "eye": [
+        -10.88,
+        4.999999856948852,
+        -9.98
+      ],
+      "quaternion": [
+        -0.2863795640028743,
+        0.639914117021915,
+        0.27930955453754436,
+        0.6561119118729861
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "key": "crossing"
+    },
+    {
+      "file": "print-girder.jpg",
+      "description": "Whole framed print with lamp, mat and physical caption.",
+      "feet": [
+        -9.93,
+        3.3999998569488525,
+        -13.98
+      ],
+      "target": [
+        -11.7,
+        4.8,
+        -14
+      ],
+      "eye": [
+        -9.93,
+        4.999999856948852,
+        -13.98
+      ],
+      "quaternion": [
+        -0.03998125369735459,
+        0.701988504823594,
+        0.039532040385290575,
+        0.7099653908686666
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "key": "girder"
+    },
+    {
+      "file": "caption-girder.jpg",
+      "description": "Physical brass caption read from the walkable upper gallery.",
+      "feet": [
+        -10.88,
+        3.3999998569488525,
+        -13.98
+      ],
+      "target": [
+        -11.68,
+        4.137,
+        -14
+      ],
+      "eye": [
+        -10.88,
+        4.999999856948852,
+        -13.98
+      ],
+      "quaternion": [
+        -0.2863795640028743,
+        0.639914117021915,
+        0.27930955453754436,
+        0.6561119118729861
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "key": "girder"
+    }
+  ],
+  "errors": [],
+  "browserGeometry": {
+    "pathname": "/fuzz/assets/expo/zones/hall.glb",
+    "bytes": 4347020,
+    "sha256": "2b6aa87e8bae998bc67c4e768b0c7a615e6a4a5ce092c07503dca77b8f612728",
+    "publication": {
+      "zone": "hall",
+      "pass": "media-02",
+      "bytes": 4347020,
+      "sha256": "2b6aa87e8bae998bc67c4e768b0c7a615e6a4a5ce092c07503dca77b8f612728"
+    }
+  },
+  "complete": true
+}

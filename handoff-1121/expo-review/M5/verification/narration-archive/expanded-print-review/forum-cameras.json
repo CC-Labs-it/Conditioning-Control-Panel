@@ -1,0 +1,128 @@
+{
+  "room": "forum",
+  "beforeLaunch": {
+    "zone": "forum",
+    "pass": "expansion-02",
+    "bytes": 1698324,
+    "sha256": "839d736f05589ca0b1519d5b5e06ab9f2f8ff7b0dc9bdefebbffd62fcd2bb2b5",
+    "collisionSha256": "74f6f1bfdf04ad633151bd96cd4a02b14114518b4b0687f18c425fcad5643b2d",
+    "furnitureColliders": [
+      "Forum desk top",
+      "Forum desk pedestals"
+    ]
+  },
+  "utc": "2026-11-21T15:36:28.386Z",
+  "source": "Normal public ending preview with inspection placements on real walkable floors",
+  "cameras": [
+    {
+      "file": "chapter-3.jpg",
+      "description": "Approach to the first accession strip in this chapter.",
+      "feet": [
+        -19.690000534057617,
+        0,
+        104.39999847412109
+      ],
+      "target": [
+        -19.690000534057617,
+        0.8984999475479125,
+        106.07599847412109
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        -19.690000534057617,
+        1.6,
+        104.39999847412109
+      ],
+      "quaternion": [
+        -1.205694672024267e-17,
+        0.9804225962035195,
+        0.19690488275700693,
+        6.00335697126189e-17
+      ],
+      "zone": "forum",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "chapter": {
+        "id": "ev_b2",
+        "title": "The Hoof Problem",
+        "line": "January 2028",
+        "chapter": 3,
+        "section": "The Hoof Problem",
+        "index": 13
+      }
+    },
+    {
+      "file": "chapter-3-header.jpg",
+      "description": "The physical framed chapter lettering above its first record.",
+      "feet": [
+        -19.690000534057617,
+        0,
+        103.44999847412109
+      ],
+      "target": [
+        -19.690000534057617,
+        3.1049999475479124,
+        106.2159984741211
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        -19.690000534057617,
+        1.6,
+        103.44999847412109
+      ],
+      "quaternion": [
+        1.509891317773315e-17,
+        0.969121431073567,
+        -0.24658396507867578,
+        5.93415729274673e-17
+      ],
+      "zone": "forum",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "chapter": {
+        "id": "ev_b2",
+        "title": "The Hoof Problem",
+        "line": "January 2028",
+        "chapter": 3,
+        "section": "The Hoof Problem",
+        "index": 13
+      }
+    }
+  ],
+  "errors": [],
+  "browserGeometry": {
+    "pathname": "/fuzz/assets/expo/zones/forum.glb",
+    "bytes": 1698324,
+    "sha256": "839d736f05589ca0b1519d5b5e06ab9f2f8ff7b0dc9bdefebbffd62fcd2bb2b5",
+    "publication": {
+      "zone": "forum",
+      "pass": "expansion-02",
+      "bytes": 1698324,
+      "sha256": "839d736f05589ca0b1519d5b5e06ab9f2f8ff7b0dc9bdefebbffd62fcd2bb2b5",
+      "collisionSha256": "74f6f1bfdf04ad633151bd96cd4a02b14114518b4b0687f18c425fcad5643b2d",
+      "furnitureColliders": [
+        "Forum desk top",
+        "Forum desk pedestals"
+      ]
+    }
+  },
+  "complete": true
+}

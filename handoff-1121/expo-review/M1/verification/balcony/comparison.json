@@ -1,0 +1,165 @@
+{
+  "views": {
+    "desktop": {
+      "timing": {
+        "prior": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "frames": 239,
+          "medianMs": 16.69999999999891,
+          "p95Ms": 16.80000000000109,
+          "gpuMs": 4.71401,
+          "end": [
+            10.04,
+            3.3999998569488525,
+            -7.003999999999993
+          ]
+        },
+        "revised": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "frames": 240,
+          "medianMs": 16.699999999999818,
+          "p95Ms": 16.800000000000182,
+          "gpuMs": 4.845312,
+          "end": [
+            10.04,
+            3.3999998569488525,
+            -7.004000000000003
+          ]
+        }
+      },
+      "areas": {
+        "all": {
+          "n": 93,
+          "frameDelta": {
+            "prior": 0.955,
+            "revised": 0.79
+          },
+          "peakToPeak": {
+            "prior": 7.94,
+            "revised": 6.95
+          }
+        },
+        "garden_fern": {
+          "n": 53,
+          "frameDelta": {
+            "prior": 1.18,
+            "revised": 0.645
+          },
+          "peakToPeak": {
+            "prior": 7.24,
+            "revised": 5.51
+          }
+        },
+        "garden_calathea": {
+          "n": 40,
+          "frameDelta": {
+            "prior": 0.922,
+            "revised": 0.922
+          },
+          "peakToPeak": {
+            "prior": 10.08,
+            "revised": 10.08
+          }
+        },
+        "garden_fern in direct view": {
+          "n": 34,
+          "frameDelta": {
+            "prior": 1.78,
+            "revised": 0.543
+          },
+          "peakToPeak": {
+            "prior": 11.7,
+            "revised": 4.745
+          }
+        },
+        "garden_calathea in direct view": {
+          "n": 32,
+          "frameDelta": {
+            "prior": 0.84,
+            "revised": 0.84
+          },
+          "peakToPeak": {
+            "prior": 7.965,
+            "revised": 7.965
+          }
+        }
+      }
+    },
+    "touch": {
+      "timing": {
+        "prior": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "frames": 119,
+          "medianMs": 33.399999999999636,
+          "p95Ms": 33.5,
+          "gpuMs": 2.04401,
+          "end": [
+            10.04,
+            3.3999998569488525,
+            -7.004000000000009
+          ]
+        },
+        "revised": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "frames": 119,
+          "medianMs": 33.399999999999636,
+          "p95Ms": 33.5,
+          "gpuMs": 1.659791,
+          "end": [
+            10.04,
+            3.3999998569488525,
+            -7.00400000000001
+          ]
+        }
+      },
+      "areas": {
+        "all": {
+          "n": 50,
+          "frameDelta": {
+            "prior": 1.345,
+            "revised": 1.035
+          },
+          "peakToPeak": {
+            "prior": 13.715,
+            "revised": 11.33
+          }
+        },
+        "garden_fern": {
+          "n": 29,
+          "frameDelta": {
+            "prior": 1.82,
+            "revised": 1.135
+          },
+          "peakToPeak": {
+            "prior": 11.4,
+            "revised": 8.91
+          }
+        },
+        "garden_calathea": {
+          "n": 21,
+          "frameDelta": {
+            "prior": 0.89,
+            "revised": 0.89
+          },
+          "peakToPeak": {
+            "prior": 15.66,
+            "revised": 15.66
+          }
+        },
+        "garden_fern in direct view": {
+          "n": 9,
+          "frameDelta": {
+            "prior": 2.605,
+            "revised": 1.6
+          },
+          "peakToPeak": {
+            "prior": 40.2,
+            "revised": 8.91
+          }
+        }
+      }
+    }
+  },
+  "errors": [],
+  "definition": "Rendered luminance in byte units. Each matched world point needed 24/29 common visible samples and geometric depth within 18 mm of the same opaque mesh instance. Masked leaf hits respect the original alpha map. The temporal statistic is the median absolute change between consecutive projected samples for each point, then the median over matched points. Glass can affect underlying colours."
+}

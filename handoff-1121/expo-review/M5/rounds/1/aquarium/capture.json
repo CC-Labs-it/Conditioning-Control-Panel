@@ -1,0 +1,560 @@
+{
+  "zone": "aquarium",
+  "entryMs": 1845,
+  "width": 1440,
+  "height": 810,
+  "coarse": false,
+  "timing": {
+    "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5080 (0x00002C02) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "frames": 178,
+    "medianMs": 16.699999999999818,
+    "p95Ms": 16.800000000000182,
+    "firstViewBytes": 5466628
+  },
+  "shots": [
+    {
+      "name": "01-ev_b5",
+      "at": [
+        -59.69,
+        0,
+        44.96
+      ],
+      "look": [
+        -59.35,
+        1.78,
+        48.61
+      ],
+      "zone": "aquarium",
+      "feet": [
+        -59.69,
+        0,
+        44.96
+      ],
+      "surface": "stone",
+      "elapsed": 7.121699999052269,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "aquarium"
+      ],
+      "textures": {
+        "residentSources": 104,
+        "sharedHits": 36,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 355116032
+      },
+      "calls": 52,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "02-ev_w6",
+      "at": [
+        -53.85,
+        0,
+        45.82
+      ],
+      "look": [
+        -54.33,
+        1.78,
+        48.61
+      ],
+      "zone": "aquarium",
+      "feet": [
+        -53.85,
+        0,
+        45.82
+      ],
+      "surface": "stone",
+      "elapsed": 7.316599999046305,
+      "ready": true,
+      "loaded": [
+        "aquarium"
+      ],
+      "textures": {
+        "residentSources": 58,
+        "sharedHits": 36,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 216086528
+      },
+      "calls": 56,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "03-ev_h10",
+      "at": [
+        -49.43,
+        0,
+        45.82
+      ],
+      "look": [
+        -49.31,
+        1.78,
+        48.61
+      ],
+      "zone": "aquarium",
+      "feet": [
+        -49.43,
+        0,
+        45.82
+      ],
+      "surface": "stone",
+      "elapsed": 7.532999998980738,
+      "ready": true,
+      "loaded": [
+        "aquarium"
+      ],
+      "textures": {
+        "residentSources": 58,
+        "sharedHits": 36,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 216086528
+      },
+      "calls": 51,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "04-ev_w7",
+      "at": [
+        -44.63,
+        0,
+        44.96
+      ],
+      "look": [
+        -44.29,
+        1.78,
+        48.61
+      ],
+      "zone": "aquarium",
+      "feet": [
+        -44.63,
+        0,
+        44.96
+      ],
+      "surface": "stone",
+      "elapsed": 7.732699998962857,
+      "ready": true,
+      "loaded": [
+        "aquarium"
+      ],
+      "textures": {
+        "residentSources": 58,
+        "sharedHits": 36,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 216086528
+      },
+      "calls": 55,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "05-ev_u8",
+      "at": [
+        -38.79,
+        0,
+        45.82
+      ],
+      "look": [
+        -39.27,
+        1.78,
+        48.61
+      ],
+      "zone": "aquarium",
+      "feet": [
+        -38.79,
+        0,
+        45.82
+      ],
+      "surface": "stone",
+      "elapsed": 7.948499998927098,
+      "ready": true,
+      "loaded": [
+        "aquarium"
+      ],
+      "textures": {
+        "residentSources": 58,
+        "sharedHits": 36,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 216086528
+      },
+      "calls": 54,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "06-ev_m5",
+      "at": [
+        -34.37,
+        0,
+        45.82
+      ],
+      "look": [
+        -34.25,
+        1.78,
+        48.61
+      ],
+      "zone": "aquarium",
+      "feet": [
+        -34.37,
+        0,
+        45.82
+      ],
+      "surface": "stone",
+      "elapsed": 8.148299998927097,
+      "ready": true,
+      "loaded": [
+        "aquarium"
+      ],
+      "textures": {
+        "residentSources": 58,
+        "sharedHits": 36,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 216086528
+      },
+      "calls": 50,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "07-ev_b6",
+      "at": [
+        -29.57,
+        0,
+        44.96
+      ],
+      "look": [
+        -29.23,
+        1.78,
+        48.61
+      ],
+      "zone": "aquarium",
+      "feet": [
+        -29.57,
+        0,
+        44.96
+      ],
+      "surface": "stone",
+      "elapsed": 8.362899998891335,
+      "ready": true,
+      "loaded": [
+        "aquarium"
+      ],
+      "textures": {
+        "residentSources": 58,
+        "sharedHits": 36,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 216086528
+      },
+      "calls": 45,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "08-ev_w8",
+      "at": [
+        -23.73,
+        0,
+        45.82
+      ],
+      "look": [
+        -24.21,
+        1.78,
+        48.61
+      ],
+      "zone": "aquarium",
+      "feet": [
+        -23.73,
+        0,
+        45.82
+      ],
+      "surface": "stone",
+      "elapsed": 8.612499998843644,
+      "ready": true,
+      "loaded": [
+        "aquarium"
+      ],
+      "textures": {
+        "residentSources": 58,
+        "sharedHits": 36,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 216086528
+      },
+      "calls": 40,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "09-ev_h11",
+      "at": [
+        -19.31,
+        0,
+        45.82
+      ],
+      "look": [
+        -19.19,
+        1.78,
+        48.61
+      ],
+      "zone": "aquarium",
+      "feet": [
+        -19.31,
+        0,
+        45.82
+      ],
+      "surface": "stone",
+      "elapsed": 8.845399998825759,
+      "ready": true,
+      "loaded": [
+        "aquarium"
+      ],
+      "textures": {
+        "residentSources": 58,
+        "sharedHits": 36,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 216086528
+      },
+      "calls": 32,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "10-ev_b7",
+      "at": [
+        -14.51,
+        0,
+        44.96
+      ],
+      "look": [
+        -14.17,
+        1.78,
+        48.61
+      ],
+      "zone": "aquarium",
+      "feet": [
+        -14.51,
+        0,
+        44.96
+      ],
+      "surface": "stone",
+      "elapsed": 9.078299998795952,
+      "ready": true,
+      "loaded": [
+        "aquarium"
+      ],
+      "textures": {
+        "residentSources": 58,
+        "sharedHits": 36,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 216086528
+      },
+      "calls": 36,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "11-gallery-approach",
+      "at": [
+        -61.1,
+        0,
+        45.5
+      ],
+      "look": [
+        -44.8,
+        2.2,
+        45.5
+      ],
+      "zone": "aquarium",
+      "feet": [
+        -61.1,
+        0,
+        45.5
+      ],
+      "surface": "stone",
+      "elapsed": 9.349699998736343,
+      "ready": true,
+      "loaded": [
+        "aquarium"
+      ],
+      "textures": {
+        "residentSources": 104,
+        "sharedHits": 72,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 220280832
+      },
+      "calls": 158,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "12-aquarium-canopy",
+      "at": [
+        -51.7,
+        0,
+        45.1
+      ],
+      "look": [
+        -55.5,
+        4.96,
+        45.8
+      ],
+      "zone": "aquarium",
+      "feet": [
+        -51.7,
+        0,
+        45.1
+      ],
+      "surface": "stone",
+      "elapsed": 9.768299998748263,
+      "ready": true,
+      "loaded": [
+        "aquarium"
+      ],
+      "textures": {
+        "residentSources": 58,
+        "sharedHits": 72,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 216086528
+      },
+      "calls": 44,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    }
+  ],
+  "issues": [],
+  "nativeSceneSha256": "6ea0783adaf30de1392bd28481d1d0f815f60231f007045908b6176ec0e22000",
+  "nativePass": "aquarium-expansion-01"
+}

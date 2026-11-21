@@ -1,0 +1,1846 @@
+{
+  "expected": "atrium",
+  "integrated": true,
+  "network": {
+    "megabitsPerSecond": 20,
+    "latencyMs": 35
+  },
+  "measurement": "First room bytes count completed zone geometry, collision, surface maps, lightmaps and reflection probes. Wall-clock timing also includes other game loading. Phone uses touch input on the same physical GPU.",
+  "devices": [
+    {
+      "name": "desktop",
+      "size": {
+        "width": 1920,
+        "height": 1080
+      },
+      "entryMs": 3772,
+      "purchaseToRoomMs": 4026,
+      "commandTiming": {
+        "yesToRoomMs": 3869,
+        "purchaseToRoomMs": 5058
+      },
+      "firstBytes": 4796185,
+      "allExpoFirstBytes": 5062586,
+      "mediaBeforePaint": [
+        {
+          "name": "audio/sounds.json",
+          "bytes": 1714,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/portal-rise.ogg",
+          "bytes": 32780,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/portal-arrival.ogg",
+          "bytes": 33586,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/spit.ogg",
+          "bytes": 18674,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/sounds.json",
+          "bytes": 1714,
+          "beforeArrival": true
+        },
+        {
+          "name": "narration/manifest.json",
+          "bytes": 32385,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/press.ogg",
+          "bytes": 5902,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/step-stone-2.ogg",
+          "bytes": 5781,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/step-stone-1.ogg",
+          "bytes": 5424,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/step-wood-1.ogg",
+          "bytes": 6036,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/step-wood-2.ogg",
+          "bytes": 6239,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/step-wood-3.ogg",
+          "bytes": 5121,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/step-metal-1.ogg",
+          "bytes": 8887,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/step-metal-2.ogg",
+          "bytes": 8666,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/step-metal-3.ogg",
+          "bytes": 8696,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/step-carpet-1.ogg",
+          "bytes": 7709,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/step-carpet-2.ogg",
+          "bytes": 7532,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/step-carpet-3.ogg",
+          "bytes": 7403,
+          "beforeArrival": true
+        },
+        {
+          "name": "narration/resting-index.json",
+          "bytes": 1159,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/atrium.ogg",
+          "bytes": 60993,
+          "beforeArrival": true
+        }
+      ],
+      "firstFiles": [
+        {
+          "name": "zones.json",
+          "bytes": 8383,
+          "beforeArrival": true
+        },
+        {
+          "name": "atrium-2e8788419b327c54-probe-px.webp",
+          "bytes": 7919,
+          "beforeArrival": true
+        },
+        {
+          "name": "atrium-2e8788419b327c54-probe-nx.webp",
+          "bytes": 7223,
+          "beforeArrival": true
+        },
+        {
+          "name": "atrium-2e8788419b327c54-probe-py.webp",
+          "bytes": 5787,
+          "beforeArrival": true
+        },
+        {
+          "name": "atrium-2e8788419b327c54-collision.glb",
+          "bytes": 98897,
+          "beforeArrival": true
+        },
+        {
+          "name": "atrium-2e8788419b327c54-probe-ny.webp",
+          "bytes": 4299,
+          "beforeArrival": true
+        },
+        {
+          "name": "atrium-2e8788419b327c54-probe-pz.webp",
+          "bytes": 4571,
+          "beforeArrival": true
+        },
+        {
+          "name": "atrium-2e8788419b327c54-probe-nz.webp",
+          "bytes": 8531,
+          "beforeArrival": true
+        },
+        {
+          "name": "atrium-2e8788419b327c54-light-mobile.webp",
+          "bytes": 218497,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/ce0ef0a96be49d9b2c22-mobile.webp",
+          "bytes": 744,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/26bed58d67da27423dbf-mobile.webp",
+          "bytes": 64044,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/9f391feb3fa7e02ff4c0-mobile.webp",
+          "bytes": 105355,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/fee32c8ea4784c7ef87b-mobile.webp",
+          "bytes": 1351,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/edee126e572a521cce18-mobile.webp",
+          "bytes": 7971,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/350a6c66342e682c3176-mobile.webp",
+          "bytes": 1717,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/073a3617515fc267a7e3-mobile.webp",
+          "bytes": 1170,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/8e56ec547f04c3be4c38-mobile.webp",
+          "bytes": 14732,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/149595e7fea552a22ffa-mobile.webp",
+          "bytes": 5689,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/9883b9738af0989d2f5f-mobile.webp",
+          "bytes": 20382,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/2899fa4ea03b7314746e-mobile.webp",
+          "bytes": 35066,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/b78c1102d3ee613c8812-mobile.webp",
+          "bytes": 2395,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/2123ede474d3fc5b9539-mobile.webp",
+          "bytes": 34098,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/49dd249ba455ed463cb4-mobile.webp",
+          "bytes": 75704,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/653caac4ca148c054c62-mobile.webp",
+          "bytes": 22676,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/bc4d9d6594d95199a487-mobile.webp",
+          "bytes": 27946,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/6ca0e73d99c015b1f40f-mobile.webp",
+          "bytes": 4497,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/c0986c0a19ad2a46870a-mobile.webp",
+          "bytes": 9675,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/396dcc2b143be18e6eb8-mobile.webp",
+          "bytes": 3147,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/f4b7e77706f5f3bfead6-mobile.webp",
+          "bytes": 6643,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/485a7f75470c0fce78b7-mobile.webp",
+          "bytes": 862,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/31af03eca8bb5e7f16e0-mobile.webp",
+          "bytes": 1587,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/9a1302507a5748cd30fc-mobile.webp",
+          "bytes": 716,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/58496ba85871bbc29b85-mobile.webp",
+          "bytes": 2229,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/05220d30131f00f8db4c-mobile.webp",
+          "bytes": 7799,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/17a07eb477f1b86b2b72-mobile.webp",
+          "bytes": 17568,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/8852cd0a9ff976f8839e-mobile.webp",
+          "bytes": 13902,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/79ae79dd621efdca4b06-mobile.webp",
+          "bytes": 6135,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/392ff68dac82451aed69-mobile.webp",
+          "bytes": 57732,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/8feff694b462f248b28f-mobile.webp",
+          "bytes": 92134,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/01ad159391301ab6ba0f-mobile.webp",
+          "bytes": 80834,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/d402229203b34ab5d395-mobile.webp",
+          "bytes": 70864,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/5d41fe63458e49f55ca5-mobile.webp",
+          "bytes": 73032,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/e1df4b45aaa7fe71fdff-mobile.webp",
+          "bytes": 146495,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/93e046de571ad530e0d0-mobile.webp",
+          "bytes": 123951,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/380f5b39a3c241096689-mobile.webp",
+          "bytes": 122765,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/7cef25955fd332f6635d.webp",
+          "bytes": 31096,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/557b9ff5e1962c3dfb49-mobile.webp",
+          "bytes": 107453,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/93daebfa41521f60eb9b.webp",
+          "bytes": 20630,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/c2436c252f8cf2fa2515.webp",
+          "bytes": 24862,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/0c815a061d810fc9d4e3.webp",
+          "bytes": 20884,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/16b97c92a1be2a445caf.webp",
+          "bytes": 12154,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/81dd856b3b186a9ab221.webp",
+          "bytes": 16648,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/13e48c49ba34fbfcd21d.webp",
+          "bytes": 22104,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/f349ed82cca065407b9d.webp",
+          "bytes": 20596,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/e25b1815cf5566677c92-mobile.webp",
+          "bytes": 26880,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/6c25d9ab0114a56b0db7-mobile.webp",
+          "bytes": 26796,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/e5b0799b4aa820658591-mobile.webp",
+          "bytes": 24894,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/46f2034def1888fca010-mobile.webp",
+          "bytes": 39838,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/7f75bb70486d480f390d-mobile.webp",
+          "bytes": 74748,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/d58bd2d047236d03ee79-mobile.webp",
+          "bytes": 10368,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/e101d60351fe5ec80826-mobile.webp",
+          "bytes": 52516,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/a82c46c0ec1473a21a94-mobile.webp",
+          "bytes": 5107,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/c511c932a1c11a04a93a-mobile.webp",
+          "bytes": 20952,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/4ad0dc677fddd5db8764-mobile.webp",
+          "bytes": 37056,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/5d1262b0349686c7ff49-mobile.webp",
+          "bytes": 15356,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/8074103e1453ad7d7e30.webp",
+          "bytes": 11124,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/114ec90b52e2b3b1fe56-mobile.webp",
+          "bytes": 6027,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/d76408f6aec44119c508-mobile.webp",
+          "bytes": 5189,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/81b01ebfd92f6d875d53-mobile.webp",
+          "bytes": 2349,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/ad1b4afb193886afc9a8-mobile.webp",
+          "bytes": 8077,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/fadfcd277c7447e9d68a-mobile.webp",
+          "bytes": 8763,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/4dda23ee5daeccbfa91e-mobile.webp",
+          "bytes": 5949,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/a6267b30cd282e019c4d-mobile.webp",
+          "bytes": 10782,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/9e86ed252af3b6e6da5d-mobile.webp",
+          "bytes": 25834,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/7752cb99a3336f179171-mobile.webp",
+          "bytes": 8959,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/ebd7930a87bec8ab3be1-mobile.webp",
+          "bytes": 9911,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/c95458f517fffd6fefe9-mobile.webp",
+          "bytes": 55466,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/55e46b535a2e3304f556-mobile.webp",
+          "bytes": 716,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/c9f4323a9dc36b371fa6.webp",
+          "bytes": 3785,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/5aef837ce164143c8b3c-mobile.webp",
+          "bytes": 21010,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/c132c408624961340d1d-mobile.webp",
+          "bytes": 61668,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/de749ed4e38e388d4878-mobile.webp",
+          "bytes": 46606,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/1cee7f0d513bb55915db-mobile.webp",
+          "bytes": 94396,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/06efe2ff7571879ad0c4-mobile.webp",
+          "bytes": 60466,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/b31f3e32333e4f8f5636-mobile.webp",
+          "bytes": 38934,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/c1cb5f6e6352db3c0b74-mobile.webp",
+          "bytes": 12238,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/092bacfaafcff2351496-mobile.webp",
+          "bytes": 4619,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/b025bdcd3a7cf3985f78-mobile.webp",
+          "bytes": 1415,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/68794abe0c79e23134dc.webp",
+          "bytes": 9447,
+          "beforeArrival": true
+        },
+        {
+          "name": "atrium-2e8788419b327c54.glb.gz",
+          "bytes": 2043803,
+          "beforeArrival": true
+        }
+      ],
+      "state": {
+        "zone": "atrium",
+        "feet": [
+          0.22,
+          0,
+          36.21
+        ],
+        "surface": "stone",
+        "elapsed": 0.6861999999642375,
+        "ready": true,
+        "loaded": [
+          "atrium"
+        ],
+        "textures": {
+          "residentSources": 80,
+          "sharedHits": 0,
+          "fullDetailMaps": 0,
+          "pendingDetailMaps": 70,
+          "decodedBytes": 92130304
+        },
+        "calls": 94,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        }
+      },
+      "initialTiming": {
+        "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "medianMs": 16.69999998807907,
+        "p95Ms": 18.600000023841858,
+        "gpuDrawMs": 8.399375,
+        "frames": 240,
+        "pixelRatio": 1,
+        "textureMemory": {
+          "residentSources": 80,
+          "sharedHits": 0,
+          "fullDetailMaps": 63,
+          "pendingDetailMaps": 7,
+          "decodedBytes": 255970304
+        }
+      },
+      "detailAfter": {
+        "residentSources": 80,
+        "sharedHits": 0,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 268028928
+      },
+      "dreamTiming": {
+        "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "medianMs": 16.69999998807907,
+        "p95Ms": 17.099999994039536,
+        "gpuDrawMs": 8.657916,
+        "frames": 234,
+        "pixelRatio": 1,
+        "textureMemory": {
+          "residentSources": 108,
+          "sharedHits": 96,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 353873280
+        }
+      },
+      "dreamMedia": {
+        "source": "own",
+        "pictures": 5,
+        "visible": 1
+      },
+      "rooms": {
+        "dome": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 16.69999998807907,
+          "p95Ms": 17.099999994039536,
+          "gpuDrawMs": 8.657916,
+          "frames": 234,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 108,
+            "sharedHits": 96,
+            "fullDetailMaps": 70,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 353873280
+          }
+        },
+        "secret": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 16.69999998807907,
+          "p95Ms": 16.900000005960464,
+          "gpuDrawMs": 4.412708,
+          "frames": 239,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 43,
+            "sharedHits": 127,
+            "fullDetailMaps": 70,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 199032832
+          }
+        },
+        "hoof": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 16.69999998807907,
+          "p95Ms": 16.900000005960464,
+          "gpuDrawMs": 6.061979,
+          "frames": 239,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 66,
+            "sharedHits": 189,
+            "fullDetailMaps": 70,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 230924288
+          }
+        },
+        "habitat": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 16.69999998807907,
+          "p95Ms": 17,
+          "gpuDrawMs": 7.672812,
+          "frames": 240,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 60,
+            "sharedHits": 235,
+            "fullDetailMaps": 70,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 199909376
+          }
+        },
+        "service": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 16.69999998807907,
+          "p95Ms": 16.900000005960464,
+          "gpuDrawMs": 5.094166,
+          "frames": 239,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 82,
+            "sharedHits": 278,
+            "fullDetailMaps": 70,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 251260928
+          }
+        },
+        "catwalk": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 16.69999998807907,
+          "p95Ms": 16.900000005960464,
+          "gpuDrawMs": 6.155677,
+          "frames": 226,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 44,
+            "sharedHits": 341,
+            "fullDetailMaps": 70,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 172134400
+          }
+        },
+        "hall": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 16.69999998807907,
+          "p95Ms": 17,
+          "gpuDrawMs": 9.131249,
+          "frames": 237,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 123,
+            "sharedHits": 442,
+            "fullDetailMaps": 70,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 406755712
+          }
+        },
+        "chronology": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 16.69999998807907,
+          "p95Ms": 16.900000005960464,
+          "gpuDrawMs": 5.730156,
+          "frames": 239,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 84,
+            "sharedHits": 479,
+            "fullDetailMaps": 70,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 295861248
+          }
+        },
+        "shop": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 16.69999998807907,
+          "p95Ms": 16.900000005960464,
+          "gpuDrawMs": 5.664895,
+          "frames": 238,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 68,
+            "sharedHits": 530,
+            "fullDetailMaps": 70,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 208385536
+          }
+        },
+        "aquarium": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 16.69999998807907,
+          "p95Ms": 16.900000005960464,
+          "gpuDrawMs": 6.896822,
+          "frames": 240,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 62,
+            "sharedHits": 561,
+            "fullDetailMaps": 70,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 225523712
+          }
+        },
+        "forum": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 16.69999998807907,
+          "p95Ms": 16.899999976158142,
+          "gpuDrawMs": 5.076822,
+          "frames": 239,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 39,
+            "sharedHits": 597,
+            "fullDetailMaps": 70,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 177895424
+          }
+        },
+        "twelve": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 16.69999998807907,
+          "p95Ms": 16.900000005960464,
+          "gpuDrawMs": 7.59125,
+          "frames": 239,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 193,
+            "sharedHits": 670,
+            "fullDetailMaps": 70,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 796808064
+          }
+        },
+        "commons": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 16.69999998807907,
+          "p95Ms": 16.900000005960464,
+          "gpuDrawMs": 9.451979,
+          "frames": 240,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 51,
+            "sharedHits": 716,
+            "fullDetailMaps": 70,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 195604480
+          }
+        },
+        "atrium": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 16.69999998807907,
+          "p95Ms": 16.900000005960464,
+          "gpuDrawMs": 9.302656,
+          "frames": 239,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 80,
+            "sharedHits": 761,
+            "fullDetailMaps": 70,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 268028928
+          }
+        }
+      },
+      "walkedMeters": 3.594799999332423,
+      "shared": {
+        "residentSources": 108,
+        "sharedHits": 96,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
+      },
+      "returned": {
+        "zone": "atrium",
+        "feet": [
+          0.22,
+          0,
+          36.21
+        ],
+        "surface": "stone",
+        "elapsed": 100.58219998613367,
+        "ready": true,
+        "loaded": [
+          "atrium"
+        ],
+        "textures": {
+          "residentSources": 80,
+          "sharedHits": 761,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 268028928
+        },
+        "calls": 94,
+        "pixelRatio": 1,
+        "depth": 0.9118429166789919,
+        "phase": 4,
+        "seconds": 188.84230000295804,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        }
+      },
+      "usedSmallerTextures": true
+    },
+    {
+      "name": "phone",
+      "size": {
+        "width": 393,
+        "height": 852
+      },
+      "entryMs": 3230,
+      "purchaseToRoomMs": 3343,
+      "commandTiming": {
+        "yesToRoomMs": 3298,
+        "purchaseToRoomMs": 3384
+      },
+      "firstBytes": 4679965,
+      "allExpoFirstBytes": 4933175,
+      "mediaBeforePaint": [
+        {
+          "name": "audio/sounds.json",
+          "bytes": 1714,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/portal-rise-gentle.ogg",
+          "bytes": 24011,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/portal-arrival-gentle.ogg",
+          "bytes": 29164,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/spit.ogg",
+          "bytes": 18674,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/sounds.json",
+          "bytes": 1714,
+          "beforeArrival": true
+        },
+        {
+          "name": "narration/manifest.json",
+          "bytes": 32385,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/press.ogg",
+          "bytes": 5902,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/step-stone-1.ogg",
+          "bytes": 5424,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/step-stone-2.ogg",
+          "bytes": 5781,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/step-wood-1.ogg",
+          "bytes": 6036,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/step-wood-2.ogg",
+          "bytes": 6239,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/step-wood-3.ogg",
+          "bytes": 5121,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/step-metal-1.ogg",
+          "bytes": 8887,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/step-carpet-1.ogg",
+          "bytes": 7709,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/step-metal-3.ogg",
+          "bytes": 8696,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/step-metal-2.ogg",
+          "bytes": 8666,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/step-carpet-2.ogg",
+          "bytes": 7532,
+          "beforeArrival": true
+        },
+        {
+          "name": "narration/resting-index.json",
+          "bytes": 1159,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/step-carpet-3.ogg",
+          "bytes": 7403,
+          "beforeArrival": true
+        },
+        {
+          "name": "audio/atrium.ogg",
+          "bytes": 60993,
+          "beforeArrival": true
+        }
+      ],
+      "firstFiles": [
+        {
+          "name": "zones.json",
+          "bytes": 8383,
+          "beforeArrival": true
+        },
+        {
+          "name": "atrium-2e8788419b327c54-probe-px.webp",
+          "bytes": 7919,
+          "beforeArrival": true
+        },
+        {
+          "name": "atrium-2e8788419b327c54-probe-nx.webp",
+          "bytes": 7223,
+          "beforeArrival": true
+        },
+        {
+          "name": "atrium-2e8788419b327c54-probe-py.webp",
+          "bytes": 5787,
+          "beforeArrival": true
+        },
+        {
+          "name": "atrium-2e8788419b327c54-collision.glb",
+          "bytes": 98897,
+          "beforeArrival": true
+        },
+        {
+          "name": "atrium-2e8788419b327c54-probe-ny.webp",
+          "bytes": 4299,
+          "beforeArrival": true
+        },
+        {
+          "name": "atrium-2e8788419b327c54-probe-pz.webp",
+          "bytes": 4571,
+          "beforeArrival": true
+        },
+        {
+          "name": "atrium-2e8788419b327c54-probe-nz.webp",
+          "bytes": 8531,
+          "beforeArrival": true
+        },
+        {
+          "name": "atrium-2e8788419b327c54-light-mobile.webp",
+          "bytes": 218497,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/ce0ef0a96be49d9b2c22-mobile.webp",
+          "bytes": 744,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/26bed58d67da27423dbf-mobile.webp",
+          "bytes": 64044,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/fee32c8ea4784c7ef87b-mobile.webp",
+          "bytes": 1351,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/edee126e572a521cce18-mobile.webp",
+          "bytes": 7971,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/350a6c66342e682c3176-mobile.webp",
+          "bytes": 1717,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/073a3617515fc267a7e3-mobile.webp",
+          "bytes": 1170,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/9f391feb3fa7e02ff4c0-mobile.webp",
+          "bytes": 105355,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/9883b9738af0989d2f5f-mobile.webp",
+          "bytes": 20382,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/8e56ec547f04c3be4c38-mobile.webp",
+          "bytes": 14732,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/149595e7fea552a22ffa-mobile.webp",
+          "bytes": 5689,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/2899fa4ea03b7314746e-mobile.webp",
+          "bytes": 35066,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/2123ede474d3fc5b9539-mobile.webp",
+          "bytes": 34098,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/b78c1102d3ee613c8812-mobile.webp",
+          "bytes": 2395,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/49dd249ba455ed463cb4-mobile.webp",
+          "bytes": 75704,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/bc4d9d6594d95199a487-mobile.webp",
+          "bytes": 27946,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/653caac4ca148c054c62-mobile.webp",
+          "bytes": 22676,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/6ca0e73d99c015b1f40f-mobile.webp",
+          "bytes": 4497,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/396dcc2b143be18e6eb8-mobile.webp",
+          "bytes": 3147,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/c0986c0a19ad2a46870a-mobile.webp",
+          "bytes": 9675,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/485a7f75470c0fce78b7-mobile.webp",
+          "bytes": 862,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/f4b7e77706f5f3bfead6-mobile.webp",
+          "bytes": 6643,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/31af03eca8bb5e7f16e0-mobile.webp",
+          "bytes": 1587,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/9a1302507a5748cd30fc-mobile.webp",
+          "bytes": 716,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/05220d30131f00f8db4c-mobile.webp",
+          "bytes": 7799,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/58496ba85871bbc29b85-mobile.webp",
+          "bytes": 2229,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/17a07eb477f1b86b2b72-mobile.webp",
+          "bytes": 17568,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/392ff68dac82451aed69-mobile.webp",
+          "bytes": 57732,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/8852cd0a9ff976f8839e-mobile.webp",
+          "bytes": 13902,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/79ae79dd621efdca4b06-mobile.webp",
+          "bytes": 6135,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/8feff694b462f248b28f-mobile.webp",
+          "bytes": 92134,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/01ad159391301ab6ba0f-mobile.webp",
+          "bytes": 80834,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/d402229203b34ab5d395-mobile.webp",
+          "bytes": 70864,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/5d41fe63458e49f55ca5-mobile.webp",
+          "bytes": 73032,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/e1df4b45aaa7fe71fdff-mobile.webp",
+          "bytes": 146495,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/93e046de571ad530e0d0-mobile.webp",
+          "bytes": 123951,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/380f5b39a3c241096689-mobile.webp",
+          "bytes": 122765,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/7cef25955fd332f6635d-mobile.webp",
+          "bytes": 10722,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/557b9ff5e1962c3dfb49-mobile.webp",
+          "bytes": 107453,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/c2436c252f8cf2fa2515-mobile.webp",
+          "bytes": 8603,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/93daebfa41521f60eb9b-mobile.webp",
+          "bytes": 5795,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/0c815a061d810fc9d4e3-mobile.webp",
+          "bytes": 6021,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/16b97c92a1be2a445caf-mobile.webp",
+          "bytes": 6959,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/81dd856b3b186a9ab221-mobile.webp",
+          "bytes": 8227,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/f349ed82cca065407b9d-mobile.webp",
+          "bytes": 6865,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/e25b1815cf5566677c92-mobile.webp",
+          "bytes": 26880,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/13e48c49ba34fbfcd21d-mobile.webp",
+          "bytes": 7323,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/6c25d9ab0114a56b0db7-mobile.webp",
+          "bytes": 26796,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/46f2034def1888fca010-mobile.webp",
+          "bytes": 39838,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/e5b0799b4aa820658591-mobile.webp",
+          "bytes": 24894,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/7f75bb70486d480f390d-mobile.webp",
+          "bytes": 74748,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/d58bd2d047236d03ee79-mobile.webp",
+          "bytes": 10368,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/e101d60351fe5ec80826-mobile.webp",
+          "bytes": 52516,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/a82c46c0ec1473a21a94-mobile.webp",
+          "bytes": 5107,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/4ad0dc677fddd5db8764-mobile.webp",
+          "bytes": 37056,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/c511c932a1c11a04a93a-mobile.webp",
+          "bytes": 20952,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/5d1262b0349686c7ff49-mobile.webp",
+          "bytes": 15356,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/8074103e1453ad7d7e30-mobile.webp",
+          "bytes": 5983,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/114ec90b52e2b3b1fe56-mobile.webp",
+          "bytes": 6027,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/d76408f6aec44119c508-mobile.webp",
+          "bytes": 5189,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/81b01ebfd92f6d875d53-mobile.webp",
+          "bytes": 2349,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/ad1b4afb193886afc9a8-mobile.webp",
+          "bytes": 8077,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/4dda23ee5daeccbfa91e-mobile.webp",
+          "bytes": 5949,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/fadfcd277c7447e9d68a-mobile.webp",
+          "bytes": 8763,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/a6267b30cd282e019c4d-mobile.webp",
+          "bytes": 10782,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/9e86ed252af3b6e6da5d-mobile.webp",
+          "bytes": 25834,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/c95458f517fffd6fefe9-mobile.webp",
+          "bytes": 55466,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/7752cb99a3336f179171-mobile.webp",
+          "bytes": 8959,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/ebd7930a87bec8ab3be1-mobile.webp",
+          "bytes": 9911,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/55e46b535a2e3304f556-mobile.webp",
+          "bytes": 716,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/c9f4323a9dc36b371fa6-mobile.webp",
+          "bytes": 3785,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/5aef837ce164143c8b3c-mobile.webp",
+          "bytes": 21010,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/c132c408624961340d1d-mobile.webp",
+          "bytes": 61668,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/06efe2ff7571879ad0c4-mobile.webp",
+          "bytes": 60466,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/de749ed4e38e388d4878-mobile.webp",
+          "bytes": 46606,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/b31f3e32333e4f8f5636-mobile.webp",
+          "bytes": 38934,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/1cee7f0d513bb55915db-mobile.webp",
+          "bytes": 94396,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/c1cb5f6e6352db3c0b74-mobile.webp",
+          "bytes": 12238,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/092bacfaafcff2351496-mobile.webp",
+          "bytes": 4619,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/b025bdcd3a7cf3985f78-mobile.webp",
+          "bytes": 1415,
+          "beforeArrival": true
+        },
+        {
+          "name": "textures/68794abe0c79e23134dc-mobile.webp",
+          "bytes": 6827,
+          "beforeArrival": true
+        },
+        {
+          "name": "atrium-2e8788419b327c54.glb.gz",
+          "bytes": 2043803,
+          "beforeArrival": true
+        }
+      ],
+      "state": {
+        "zone": "atrium",
+        "feet": [
+          0.22,
+          0,
+          36.21
+        ],
+        "surface": "stone",
+        "elapsed": 0.46789999989867254,
+        "ready": true,
+        "loaded": [
+          "atrium"
+        ],
+        "textures": {
+          "residentSources": 80,
+          "sharedHits": 0,
+          "fullDetailMaps": 0,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 76441600
+        },
+        "calls": 54,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        }
+      },
+      "initialTiming": {
+        "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "medianMs": 33.39999997615814,
+        "p95Ms": 33.599999994039536,
+        "gpuDrawMs": 2.14927,
+        "frames": 119,
+        "pixelRatio": 1,
+        "textureMemory": {
+          "residentSources": 80,
+          "sharedHits": 0,
+          "fullDetailMaps": 0,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 76441600
+        }
+      },
+      "detailAfter": {
+        "residentSources": 80,
+        "sharedHits": 0,
+        "fullDetailMaps": 0,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 76441600
+      },
+      "dreamTiming": {
+        "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        "medianMs": 33.39999997615814,
+        "p95Ms": 34.20000001788139,
+        "gpuDrawMs": 1.64151,
+        "frames": 118,
+        "pixelRatio": 1,
+        "textureMemory": {
+          "residentSources": 108,
+          "sharedHits": 96,
+          "fullDetailMaps": 0,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 100198400
+        }
+      },
+      "dreamMedia": {
+        "source": "own",
+        "pictures": 2,
+        "visible": 2
+      },
+      "rooms": {
+        "dome": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 33.39999997615814,
+          "p95Ms": 34.20000001788139,
+          "gpuDrawMs": 1.64151,
+          "frames": 118,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 108,
+            "sharedHits": 96,
+            "fullDetailMaps": 0,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 100198400
+          }
+        },
+        "secret": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 33.39999997615814,
+          "p95Ms": 33.5,
+          "gpuDrawMs": 0.938333,
+          "frames": 119,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 43,
+            "sharedHits": 127,
+            "fullDetailMaps": 0,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 69388288
+          }
+        },
+        "hoof": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 33.39999997615814,
+          "p95Ms": 33.79999998211861,
+          "gpuDrawMs": 1.275104,
+          "frames": 119,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 62,
+            "sharedHits": 158,
+            "fullDetailMaps": 0,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 62967808
+          }
+        },
+        "habitat": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 33.39999997615814,
+          "p95Ms": 33.70000001788139,
+          "gpuDrawMs": 1.534583,
+          "frames": 118,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 60,
+            "sharedHits": 204,
+            "fullDetailMaps": 0,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 60606464
+          }
+        },
+        "service": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 33.400000005960464,
+          "p95Ms": 33.69999998807907,
+          "gpuDrawMs": 1.358385,
+          "frames": 118,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 65,
+            "sharedHits": 247,
+            "fullDetailMaps": 0,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 59226112
+          }
+        },
+        "catwalk": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 33.30000001192093,
+          "p95Ms": 37.70000001788139,
+          "gpuDrawMs": 1.063802,
+          "frames": 118,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 44,
+            "sharedHits": 310,
+            "fullDetailMaps": 0,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 43841536
+          }
+        },
+        "hall": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 33.39999997615814,
+          "p95Ms": 38.900000005960464,
+          "gpuDrawMs": 1.809947,
+          "frames": 117,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 116,
+            "sharedHits": 410,
+            "fullDetailMaps": 0,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 104693760
+          }
+        },
+        "chronology": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 33.39999997615814,
+          "p95Ms": 41.900000005960464,
+          "gpuDrawMs": 1.284583,
+          "frames": 117,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 84,
+            "sharedHits": 447,
+            "fullDetailMaps": 0,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 87842816
+          }
+        },
+        "shop": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 33.400000005960464,
+          "p95Ms": 33.79999998211861,
+          "gpuDrawMs": 1.111927,
+          "frames": 118,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 68,
+            "sharedHits": 498,
+            "fullDetailMaps": 0,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 64225280
+          }
+        },
+        "aquarium": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 33.400000005960464,
+          "p95Ms": 33.599999994039536,
+          "gpuDrawMs": 1.292239,
+          "frames": 118,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 62,
+            "sharedHits": 529,
+            "fullDetailMaps": 0,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 70369280
+          }
+        },
+        "forum": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 33.39999997615814,
+          "p95Ms": 35.19999998807907,
+          "gpuDrawMs": 1.326041,
+          "frames": 117,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 39,
+            "sharedHits": 565,
+            "fullDetailMaps": 0,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 48955392
+          }
+        },
+        "twelve": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 33.39999997615814,
+          "p95Ms": 33.79999998211861,
+          "gpuDrawMs": 1.946145,
+          "frames": 118,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 193,
+            "sharedHits": 638,
+            "fullDetailMaps": 0,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 174624768
+          }
+        },
+        "commons": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 33.39999997615814,
+          "p95Ms": 33.69999998807907,
+          "gpuDrawMs": 1.347187,
+          "frames": 118,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 51,
+            "sharedHits": 684,
+            "fullDetailMaps": 0,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 60684288
+          }
+        },
+        "atrium": {
+          "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "medianMs": 33.30000001192093,
+          "p95Ms": 38.20000001788139,
+          "gpuDrawMs": 2.289479,
+          "frames": 118,
+          "pixelRatio": 1,
+          "textureMemory": {
+            "residentSources": 80,
+            "sharedHits": 729,
+            "fullDetailMaps": 0,
+            "pendingDetailMaps": 0,
+            "decodedBytes": 76441600
+          }
+        }
+      },
+      "walkedMeters": 3.1336421050021883,
+      "shared": {
+        "residentSources": 108,
+        "sharedHits": 96,
+        "fullDetailMaps": 0,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 100198400
+      },
+      "returned": {
+        "zone": "atrium",
+        "feet": [
+          0.22,
+          0,
+          36.21
+        ],
+        "surface": "stone",
+        "elapsed": 86.49239998706318,
+        "ready": true,
+        "loaded": [
+          "atrium"
+        ],
+        "textures": {
+          "residentSources": 80,
+          "sharedHits": 729,
+          "fullDetailMaps": 0,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 76441600
+        },
+        "calls": 54,
+        "pixelRatio": 1,
+        "depth": 0.9243630208448952,
+        "phase": 4,
+        "seconds": 191.84712500277485,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        }
+      },
+      "usedSmallerTextures": true
+    }
+  ],
+  "errors": [],
+  "roomVersions": [
+    {
+      "atrium-2e8788419b327c54.glb": {
+        "bytes": 4110656,
+        "sha256": "4308d0fb1096f20257984e4b4453ab10f6f3ecdf38dc2dabb5f5e2bb69dca9dc"
+      },
+      "atrium-2e8788419b327c54-mobile.glb": {
+        "bytes": 4111216,
+        "sha256": "3c8681a24c36d9032b4b8af9342c831598aae74a0f36a5392692ee1732f21b45"
+      }
+    },
+    {
+      "atrium-2e8788419b327c54.glb": {
+        "bytes": 4110656,
+        "sha256": "4308d0fb1096f20257984e4b4453ab10f6f3ecdf38dc2dabb5f5e2bb69dca9dc"
+      },
+      "atrium-2e8788419b327c54-mobile.glb": {
+        "bytes": 4111216,
+        "sha256": "3c8681a24c36d9032b4b8af9342c831598aae74a0f36a5392692ee1732f21b45"
+      }
+    }
+  ],
+  "reveals": [
+    {
+      "name": "desktop",
+      "readyFromYesMs": 3515,
+      "visibleFromYesMs": 3772,
+      "visibleFromPurchaseMs": 4026,
+      "firstCover": 0.643,
+      "fullyRevealedFromYesMs": 4189,
+      "fullyRevealedFromPurchaseMs": 4444
+    },
+    {
+      "name": "phone",
+      "readyFromYesMs": 3062,
+      "visibleFromYesMs": 3230,
+      "visibleFromPurchaseMs": 3343,
+      "firstCover": 0.645,
+      "fullyRevealedFromYesMs": 3514,
+      "fullyRevealedFromPurchaseMs": 3627
+    }
+  ]
+}

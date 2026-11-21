@@ -1,0 +1,120 @@
+{
+  "sourceGlbSha256": "2fb88b4edf90e8d5537faf69996b54303d31af0128bf271211f65ff17a7e40bd",
+  "beforeCollisionSha256": "31218e6a803b83cb574ca20c66567aa5a41e33d66231a6b5d67115e7667e438b",
+  "collisionSha256": "d8810f80c5707f5895350bc8d1514d723c4c6eef0767d2385e20b0cf113c921b",
+  "unchangedCollisionNodes": [
+    "Chamber wall",
+    "Vestibule floor",
+    "Walkable disc",
+    "Walls"
+  ],
+  "standDimensionsXYZ": {
+    "Enamel sign plate": [
+      0.055,
+      0.82,
+      1.21
+    ],
+    "Sign foot": [
+      0.61,
+      0.071,
+      0.61
+    ],
+    "Museum sign stem": [
+      0.048,
+      0.923,
+      0.048
+    ]
+  },
+  "controls": {
+    "expo_replay_dome_0": {
+      "target": [
+        -22.073502,
+        1.14,
+        -4.94625
+      ],
+      "westApproaches": [
+        {
+          "eye": [
+            -23.62,
+            1.6,
+            -5.45
+          ],
+          "before": [
+            "Sign base"
+          ],
+          "after": []
+        },
+        {
+          "eye": [
+            -23.62,
+            1.6,
+            -4.95
+          ],
+          "before": [
+            "Sign base"
+          ],
+          "after": []
+        },
+        {
+          "eye": [
+            -23.62,
+            1.6,
+            -4.45
+          ],
+          "before": [
+            "Sign base"
+          ],
+          "after": []
+        }
+      ],
+      "eastApproachBlockedBy": [
+        "Enamel sign plate"
+      ]
+    },
+    "expo_station_dome_0": {
+      "target": [
+        -22.081301,
+        1.14,
+        -5.12
+      ],
+      "westApproaches": [
+        {
+          "eye": [
+            -23.62,
+            1.6,
+            -5.45
+          ],
+          "before": [
+            "Sign base"
+          ],
+          "after": []
+        },
+        {
+          "eye": [
+            -23.62,
+            1.6,
+            -4.95
+          ],
+          "before": [
+            "Sign base"
+          ],
+          "after": []
+        },
+        {
+          "eye": [
+            -23.62,
+            1.6,
+            -4.45
+          ],
+          "before": [
+            "Sign base"
+          ],
+          "after": []
+        }
+      ],
+      "eastApproachBlockedBy": [
+        "Enamel sign plate"
+      ]
+    }
+  }
+}

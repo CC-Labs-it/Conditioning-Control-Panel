@@ -1,0 +1,130 @@
+{
+  "errors": [],
+  "checks": {
+    "lineOfSight": {
+      "blocked": true,
+      "offAxisStarted": true,
+      "hiddenUnowned": true
+    },
+    "mix": {
+      "measuredGainDb": -7.999999999999998,
+      "farGain": 0.045104112034699995,
+      "nearGain": 0.2793802670259618,
+      "queued": [
+        "ev_h0"
+      ],
+      "active": "log_kevin",
+      "pa": "pa_turnstile"
+    },
+    "pause": {
+      "from": 6.867999999999988,
+      "to": 6.867999999999988
+    },
+    "kevinRoomToneSeconds": 15,
+    "projectors": {
+      "gentleZoom": 0,
+      "rest": {
+        "active": false,
+        "slide": "slides/chew.webp",
+        "full": true,
+        "lamp": 0.031445480828751975,
+        "zoom": 0.039986143484626646
+      },
+      "clicks": [
+        {
+          "at": 1760.199999988079,
+          "args": [
+            "press",
+            0.34049470043789093,
+            0
+          ]
+        },
+        {
+          "at": 11133.899999976158,
+          "args": [
+            "press",
+            0.34049470043789093,
+            0
+          ]
+        },
+        {
+          "at": 19739.09999999404,
+          "args": [
+            "press",
+            0.061076797097985164,
+            -0.94
+          ]
+        },
+        {
+          "at": 41575,
+          "args": [
+            "press",
+            0.33355039560502864,
+            0.23891545742537532
+          ]
+        }
+      ]
+    },
+    "revisit": {
+      "finished": {
+        "pa_timeline": 1,
+        "pa_turnstile": 1,
+        "log_kevin": 1,
+        "ev_h0": 1
+      },
+      "replay": "log_kevin"
+    }
+  },
+  "sources": [
+    [
+      200,
+      "manifest.json"
+    ],
+    [
+      200,
+      "resting-atlas.webp"
+    ],
+    [
+      200,
+      "slides/kevin.webp"
+    ],
+    [
+      200,
+      "hall/log_kevin.mp3"
+    ],
+    [
+      200,
+      "hall/pa_timeline.mp3"
+    ],
+    [
+      200,
+      "hall/pa_turnstile.mp3"
+    ],
+    [
+      200,
+      "manifest.json"
+    ],
+    [
+      200,
+      "slides/inbox.webp"
+    ],
+    [
+      200,
+      "hall/ev_h0.mp3"
+    ],
+    [
+      200,
+      "slides/chew.webp"
+    ],
+    [
+      200,
+      "hall/log_kevin.mp3"
+    ],
+    [
+      200,
+      "slides/kevin.webp"
+    ]
+  ],
+  "started": "2026-11-21T13:31:51.834Z",
+  "ended": "2026-11-21T13:32:33.671Z"
+}

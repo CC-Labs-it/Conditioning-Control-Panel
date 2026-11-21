@@ -1,0 +1,70 @@
+{
+  "start": 1795278925.6341581,
+  "end": 1795279133.774005,
+  "configuration": {
+    "GPU": "integrated",
+    "EXPECT_GPU": "Intel",
+    "ALL_ROOMS": "1",
+    "EXPO_REQUIRED_ROOMS": "14",
+    "FUZZ_BASE": "http://127.0.0.1:8937/fuzz/",
+    "EXPO_REVIEW_EDITION": "expansion",
+    "MBPS": "20",
+    "RTT": "35"
+  },
+  "before": {
+    "base": "http://127.0.0.1:8937/fuzz/",
+    "zonesSha256": "78d422d894ff18f403d7c87ec222e3b83cec61137e3bf24b518131fdd233cd6b",
+    "stems": {
+      "secret": "secret-48b34ee5bcd1b749",
+      "hoof": "hoof-a9d81076bc008833",
+      "habitat": "habitat-daf49481ca2b66d0",
+      "service": "service-a01201da45e10b4a",
+      "catwalk": "catwalk-3cdf86715bf917bd",
+      "hall": "hall-2bc40eedb7ec4e81",
+      "dome": "dome-806631c2f039058c",
+      "chronology": "chronology-7cef6ed6b8cededf",
+      "shop": "shop-77f71f9181f8dd59",
+      "aquarium": "aquarium-bbe25ba3842672c6",
+      "forum": "forum-c7d30a800df69799",
+      "twelve": "twelve-7655aa9fd0f8ed2d",
+      "commons": "commons-b538a4067b66d3fa",
+      "atrium": "atrium-2e8788419b327c54"
+    },
+    "controllerSourceSha256": {
+      "gamepad.js": "a06cb9284e99092d2b00241b1caec222d07c59821e30ace1f91d87bcbb0dae51",
+      "controls.js": "9167fb5c52956786805812d1706e655d1c80824d4a67e6a1b4ec5e9f63832209",
+      "controller-menu.js": "439520ce900af197615208ea21d2e0279348c72f48bbaf762ba842af8e9b9f66",
+      "scene.js": "d2a7fce0b5cd5878b2e76af58b7aa5855fa1ab529d2ccd27e52e8c462d1906c7"
+    },
+    "domeCollisionSha256": "d8810f80c5707f5895350bc8d1514d723c4c6eef0767d2385e20b0cf113c921b"
+  },
+  "after": {
+    "base": "http://127.0.0.1:8937/fuzz/",
+    "zonesSha256": "78d422d894ff18f403d7c87ec222e3b83cec61137e3bf24b518131fdd233cd6b",
+    "stems": {
+      "secret": "secret-48b34ee5bcd1b749",
+      "hoof": "hoof-a9d81076bc008833",
+      "habitat": "habitat-daf49481ca2b66d0",
+      "service": "service-a01201da45e10b4a",
+      "catwalk": "catwalk-3cdf86715bf917bd",
+      "hall": "hall-2bc40eedb7ec4e81",
+      "dome": "dome-806631c2f039058c",
+      "chronology": "chronology-7cef6ed6b8cededf",
+      "shop": "shop-77f71f9181f8dd59",
+      "aquarium": "aquarium-bbe25ba3842672c6",
+      "forum": "forum-c7d30a800df69799",
+      "twelve": "twelve-7655aa9fd0f8ed2d",
+      "commons": "commons-b538a4067b66d3fa",
+      "atrium": "atrium-2e8788419b327c54"
+    },
+    "controllerSourceSha256": {
+      "gamepad.js": "a06cb9284e99092d2b00241b1caec222d07c59821e30ace1f91d87bcbb0dae51",
+      "controls.js": "9167fb5c52956786805812d1706e655d1c80824d4a67e6a1b4ec5e9f63832209",
+      "controller-menu.js": "439520ce900af197615208ea21d2e0279348c72f48bbaf762ba842af8e9b9f66",
+      "scene.js": "d2a7fce0b5cd5878b2e76af58b7aa5855fa1ab529d2ccd27e52e8c462d1906c7"
+    },
+    "domeCollisionSha256": "d8810f80c5707f5895350bc8d1514d723c4c6eef0767d2385e20b0cf113c921b"
+  },
+  "overlappingReviewProcesses": [],
+  "exitCode": 0
+}

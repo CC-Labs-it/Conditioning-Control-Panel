@@ -1,0 +1,68 @@
+{
+  "input": "W",
+  "reached": {
+    "feet": [
+      8.706742860058963,
+      0,
+      46.764177275259826
+    ],
+    "zone": "chronology",
+    "loaded": [
+      "atrium",
+      "chronology"
+    ],
+    "elapsed": 4.942800000011921
+  },
+  "state": {
+    "zone": "chronology",
+    "feet": [
+      8.706742860058963,
+      0,
+      46.764177275259826
+    ],
+    "surface": "stone",
+    "elapsed": 4.944999999415873,
+    "ready": true,
+    "loaded": [
+      "atrium",
+      "chronology"
+    ],
+    "textures": {
+      "residentSources": 84,
+      "sharedHits": 36,
+      "fullDetailMaps": 39,
+      "pendingDetailMaps": 31,
+      "decodedBytes": 234519552
+    },
+    "calls": 32,
+    "pixelRatio": 1,
+    "depth": 0,
+    "phase": 0,
+    "seconds": 0,
+    "planter": {
+      "used": false,
+      "held": false,
+      "seconds": 0,
+      "cues": 0
+    }
+  },
+  "nativeScreen": true,
+  "station": {
+    "id": "ev_h0",
+    "zone": "chronology",
+    "pos": [
+      9.497044086456299,
+      0.9418399930000305,
+      48.18231964111328
+    ],
+    "project": {
+      "active": false,
+      "paused": false,
+      "slide": "slides/chew.webp",
+      "resting": "slides/chew.webp",
+      "full": false,
+      "lamp": 0,
+      "zoom": 0
+    }
+  }
+}

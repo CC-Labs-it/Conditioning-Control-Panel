@@ -1,0 +1,101 @@
+{
+  "zone": "catwalk",
+  "entryMs": 3301,
+  "width": 1440,
+  "height": 810,
+  "coarse": false,
+  "timing": {
+    "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5080 (0x00002C02) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "frames": 178,
+    "medianMs": 16.699999999999818,
+    "p95Ms": 16.800000000000182,
+    "firstViewBytes": 7692035
+  },
+  "shots": [
+    {
+      "name": "02-small-door-near",
+      "at": [
+        -13.39,
+        6.8,
+        27.5
+      ],
+      "look": [
+        -11.95,
+        8.2,
+        28
+      ],
+      "zone": "catwalk",
+      "feet": [
+        -13.39,
+        6.800000190734863,
+        27.5
+      ],
+      "surface": "metal",
+      "elapsed": 7.633999999463611,
+      "ready": true,
+      "loaded": [
+        "catwalk",
+        "atrium"
+      ],
+      "textures": {
+        "residentSources": 50,
+        "sharedHits": 76,
+        "fullDetailMaps": 22,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 189915136
+      },
+      "calls": 35,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "requiredNeighbors": [
+        "atrium"
+      ],
+      "coldNeighborCheck": true
+    },
+    {
+      "name": "03-small-door-oblique",
+      "at": [
+        -14.43,
+        6.8,
+        28.78
+      ],
+      "look": [
+        -12.05,
+        8.18,
+        27.92
+      ],
+      "zone": "catwalk",
+      "feet": [
+        -14.43,
+        6.800000190734863,
+        28.78
+      ],
+      "surface": "metal",
+      "elapsed": 8.427099999421886,
+      "ready": true,
+      "loaded": [
+        "catwalk",
+        "atrium"
+      ],
+      "textures": {
+        "residentSources": 48,
+        "sharedHits": 134,
+        "fullDetailMaps": 22,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 189915136
+      },
+      "calls": 39,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "requiredNeighbors": [
+        "atrium"
+      ],
+      "coldNeighborCheck": true
+    }
+  ],
+  "issues": []
+}

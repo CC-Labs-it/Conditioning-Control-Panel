@@ -1,0 +1,638 @@
+{
+  "zone": "habitat",
+  "entryMs": 1740,
+  "width": 1440,
+  "height": 810,
+  "coarse": false,
+  "timing": {
+    "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5080 (0x00002C02) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "frames": 178,
+    "medianMs": 16.699999999999818,
+    "p95Ms": 16.800000000000182,
+    "firstViewBytes": 4718575
+  },
+  "shots": [
+    {
+      "name": "01-gallery-door",
+      "at": [
+        12.62,
+        0,
+        7
+      ],
+      "look": [
+        18.5,
+        1.65,
+        10
+      ],
+      "zone": "habitat",
+      "feet": [
+        12.62,
+        0,
+        7
+      ],
+      "surface": "wood",
+      "elapsed": 7.038499999260908,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "habitat"
+      ],
+      "textures": {
+        "residentSources": 85,
+        "sharedHits": 55,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 280316928
+      },
+      "calls": 54,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "02-enclosure",
+      "at": [
+        17.5,
+        0,
+        3.25
+      ],
+      "look": [
+        19.1,
+        1.6,
+        11.7
+      ],
+      "zone": "habitat",
+      "feet": [
+        17.5,
+        0,
+        3.25
+      ],
+      "surface": "wood",
+      "elapsed": 7.337799999219184,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "habitat"
+      ],
+      "textures": {
+        "residentSources": 121,
+        "sharedHits": 119,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 280316928
+      },
+      "calls": 154,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "03-desk",
+      "at": [
+        17.8,
+        0,
+        8.47
+      ],
+      "look": [
+        18.36,
+        1.24,
+        11.25
+      ],
+      "zone": "habitat",
+      "feet": [
+        17.8,
+        0,
+        8.47
+      ],
+      "surface": "wood",
+      "elapsed": 7.592299999231106,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "habitat",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 137,
+        "sharedHits": 169,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 398166400
+      },
+      "calls": 131,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "04-observation",
+      "at": [
+        22.8,
+        0,
+        4.4
+      ],
+      "look": [
+        16.5,
+        1.45,
+        11.2
+      ],
+      "zone": "habitat",
+      "feet": [
+        22.8,
+        0.36000001430511475,
+        4.4
+      ],
+      "surface": "wood",
+      "elapsed": 7.807199999254949,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "habitat",
+        "hall",
+        "shop"
+      ],
+      "textures": {
+        "residentSources": 137,
+        "sharedHits": 169,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 432562048
+      },
+      "calls": 218,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "05-keeper-office",
+      "at": [
+        14.81,
+        0,
+        8.69
+      ],
+      "look": [
+        19.3,
+        1.28,
+        11.43
+      ],
+      "zone": "habitat",
+      "feet": [
+        14.81,
+        0,
+        8.69
+      ],
+      "surface": "wood",
+      "elapsed": 8.078699999266865,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "habitat",
+        "hall",
+        "shop"
+      ],
+      "textures": {
+        "residentSources": 137,
+        "sharedHits": 169,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 432562048
+      },
+      "calls": 70,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "06-glass-notice",
+      "at": [
+        15.98,
+        0,
+        8.04
+      ],
+      "look": [
+        16,
+        1,
+        9.395
+      ],
+      "zone": "habitat",
+      "feet": [
+        15.98,
+        0,
+        8.04
+      ],
+      "surface": "wood",
+      "elapsed": 8.323699999266863,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "habitat",
+        "hall",
+        "shop"
+      ],
+      "textures": {
+        "residentSources": 137,
+        "sharedHits": 169,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 432562048
+      },
+      "calls": 144,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "07-floor-and-sill",
+      "at": [
+        20.2,
+        0,
+        4.85
+      ],
+      "look": [
+        17.65,
+        0.8,
+        9.7
+      ],
+      "zone": "habitat",
+      "feet": [
+        20.2,
+        0,
+        4.85
+      ],
+      "surface": "wood",
+      "elapsed": 8.539599999195335,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "habitat",
+        "hall",
+        "shop"
+      ],
+      "textures": {
+        "residentSources": 137,
+        "sharedHits": 169,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 432562048
+      },
+      "calls": 201,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "08-glass",
+      "at": [
+        19.4,
+        0,
+        8.18
+      ],
+      "look": [
+        19.4,
+        1.65,
+        9.55
+      ],
+      "zone": "habitat",
+      "feet": [
+        19.4,
+        0,
+        8.18
+      ],
+      "surface": "wood",
+      "elapsed": 8.80529999920129,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "habitat",
+        "hall",
+        "shop"
+      ],
+      "textures": {
+        "residentSources": 137,
+        "sharedHits": 169,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 432562048
+      },
+      "calls": 152,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "09-accepted-clauses",
+      "at": [
+        18.21,
+        0,
+        8.29
+      ],
+      "look": [
+        18.2,
+        0.94,
+        9.39
+      ],
+      "zone": "habitat",
+      "feet": [
+        18.21,
+        0,
+        8.29
+      ],
+      "surface": "wood",
+      "elapsed": 9.054199999183405,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "habitat",
+        "hall",
+        "shop"
+      ],
+      "textures": {
+        "residentSources": 137,
+        "sharedHits": 169,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 432562048
+      },
+      "calls": 130,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "10-feeding-slot",
+      "at": [
+        21.24,
+        0,
+        7.44
+      ],
+      "look": [
+        21.25,
+        0.73,
+        8.69
+      ],
+      "zone": "habitat",
+      "feet": [
+        21.24,
+        0,
+        7.44
+      ],
+      "surface": "wood",
+      "elapsed": 9.25389999913572,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "habitat",
+        "hall",
+        "shop"
+      ],
+      "textures": {
+        "residentSources": 137,
+        "sharedHits": 169,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 432562048
+      },
+      "calls": 88,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "11-terminal",
+      "at": [
+        18.32,
+        0,
+        8.9
+      ],
+      "look": [
+        18.3,
+        1.28,
+        11.047
+      ],
+      "zone": "habitat",
+      "feet": [
+        18.32,
+        0,
+        8.9
+      ],
+      "surface": "wood",
+      "elapsed": 9.48669999910592,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "habitat",
+        "hall",
+        "shop"
+      ],
+      "textures": {
+        "residentSources": 137,
+        "sharedHits": 169,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 432562048
+      },
+      "calls": 148,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "12-room-return",
+      "at": [
+        22.2,
+        0,
+        7.3
+      ],
+      "look": [
+        12.05,
+        1.47,
+        7
+      ],
+      "zone": "habitat",
+      "feet": [
+        22.2,
+        0,
+        7.3
+      ],
+      "surface": "wood",
+      "elapsed": 9.670899999093995,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "habitat",
+        "hall",
+        "shop"
+      ],
+      "textures": {
+        "residentSources": 137,
+        "sharedHits": 169,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 432562048
+      },
+      "calls": 204,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "13-water-sampling",
+      "at": [
+        16.12,
+        0,
+        9.17
+      ],
+      "look": [
+        17.15,
+        1.38,
+        12.83
+      ],
+      "zone": "habitat",
+      "feet": [
+        16.12,
+        0,
+        9.17
+      ],
+      "surface": "wood",
+      "elapsed": 9.957299999004581,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "habitat",
+        "hall",
+        "shop"
+      ],
+      "textures": {
+        "residentSources": 137,
+        "sharedHits": 169,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 432562048
+      },
+      "calls": 126,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    }
+  ],
+  "issues": [],
+  "nativeSceneSha256": "44fa385387ade94cc0c9253beeadfde24e4922162dbb1eb482bc8abb7a70a0e4",
+  "nativePass": "habitat-expansion-01"
+}

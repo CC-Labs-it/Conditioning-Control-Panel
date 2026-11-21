@@ -1,0 +1,89 @@
+{
+  "zone": "habitat",
+  "label": "13-water-sampling",
+  "requestedFeet": [
+    16.12,
+    0,
+    9.17
+  ],
+  "lookAt": [
+    17.15,
+    1,
+    12.83
+  ],
+  "errors": [],
+  "screens": [
+    {
+      "name": "13-water-sampling",
+      "look": [
+        17.15,
+        1,
+        12.83
+      ],
+      "feet": [
+        16.12,
+        0,
+        9.17
+      ],
+      "visitorPrompt": "Tap the glass",
+      "room": "habitat",
+      "loaded": [
+        "atrium",
+        "habitat",
+        "hall",
+        "shop"
+      ]
+    }
+  ],
+  "source": "private workshop package in the ordinary game page",
+  "sourceSha256": "44fa385387ade94cc0c9253beeadfde24e4922162dbb1eb482bc8abb7a70a0e4",
+  "servedSha256": "44fa385387ade94cc0c9253beeadfde24e4922162dbb1eb482bc8abb7a70a0e4",
+  "walk": {
+    "entry": [
+      12.78,
+      0,
+      7.01
+    ],
+    "points": [
+      {
+        "complete": true,
+        "feet": [
+          14.824122807694389,
+          0,
+          8.123231200434503
+        ],
+        "distance": 2.3275999996900762,
+        "target": [
+          14.91,
+          8.17
+        ]
+      },
+      {
+        "complete": true,
+        "feet": [
+          15.298316891286426,
+          0,
+          7.882059122789568
+        ],
+        "distance": 0.5319999999523183,
+        "target": [
+          15.44,
+          7.81
+        ]
+      },
+      {
+        "complete": true,
+        "feet": [
+          16.048504824379414,
+          0,
+          9.057935436144895
+        ],
+        "distance": 1.394799999737756,
+        "target": [
+          16.12,
+          9.17
+        ]
+      }
+    ]
+  }
+}

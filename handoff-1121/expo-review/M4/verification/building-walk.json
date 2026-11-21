@@ -1,0 +1,544 @@
+{
+  "source": "staged game",
+  "partial": false,
+  "segments": [
+    {
+      "label": "Arrival and grand curved stair",
+      "start": [
+        0,
+        0,
+        37.2
+      ],
+      "metres": 10.666,
+      "minY": 0,
+      "maxY": 3.4000000953674316,
+      "points": 44,
+      "frames": 169,
+      "transitions": [
+        "atrium"
+      ],
+      "jumps": [],
+      "failed": null,
+      "end": [
+        -3.0999999999999996,
+        3.4000000953674316,
+        30.02
+      ],
+      "surface": "stone"
+    },
+    {
+      "label": "West mezzanine and spiral stair",
+      "start": [
+        -3.0999999999999996,
+        3.4000000953674316,
+        30.02
+      ],
+      "metres": 43.818,
+      "minY": 3.4000000953674316,
+      "maxY": 6.800000190734863,
+      "points": 47,
+      "frames": 684,
+      "transitions": [
+        "atrium",
+        "catwalk"
+      ],
+      "jumps": [],
+      "failed": null,
+      "end": [
+        -12.2,
+        6.800000190734863,
+        21
+      ],
+      "surface": "metal"
+    },
+    {
+      "label": "Catwalk and dome oculus",
+      "start": [
+        -12.2,
+        6.800000190734863,
+        21
+      ],
+      "metres": 38.172,
+      "minY": 6.800000190734863,
+      "maxY": 11.950000762939453,
+      "points": 7,
+      "frames": 579,
+      "transitions": [
+        "catwalk"
+      ],
+      "jumps": [],
+      "failed": null,
+      "end": [
+        -22,
+        11.950000762939453,
+        -5.793680000090603
+      ],
+      "surface": "metal"
+    },
+    {
+      "label": "Return from oculus and view through small door",
+      "start": [
+        -22,
+        11.950000762939453,
+        -5.793680000090603
+      ],
+      "metres": 44.783,
+      "minY": 6.800000190734863,
+      "maxY": 11.950000762939453,
+      "points": 9,
+      "frames": 683,
+      "transitions": [
+        "catwalk"
+      ],
+      "jumps": [],
+      "failed": null,
+      "end": [
+        -12.566539999932049,
+        6.800000190734863,
+        28
+      ],
+      "surface": "metal"
+    },
+    {
+      "label": "Across the upper atrium into staff access",
+      "start": [
+        -12.566539999932049,
+        6.800000190734863,
+        28
+      ],
+      "metres": 40.273,
+      "minY": 6.800000190734863,
+      "maxY": 6.800000190734863,
+      "points": 7,
+      "frames": 635,
+      "transitions": [
+        "catwalk",
+        "atrium",
+        "service"
+      ],
+      "jumps": [],
+      "failed": null,
+      "end": [
+        12.5,
+        6.800000190734863,
+        23
+      ],
+      "surface": "carpet"
+    },
+    {
+      "label": "Descend service flight and hidden extra storey",
+      "start": [
+        12.5,
+        6.800000190734863,
+        23
+      ],
+      "metres": 47.793,
+      "minY": 0,
+      "maxY": 6.800000190734863,
+      "points": 12,
+      "frames": 741,
+      "transitions": [
+        "service"
+      ],
+      "jumps": [
+        {
+          "from": [
+            22.42,
+            5.099999904632568,
+            21.914600000000004
+          ],
+          "to": [
+            22.42,
+            1.7000000476837158,
+            21.977300000000003
+          ]
+        }
+      ],
+      "failed": null,
+      "end": [
+        30.3,
+        0,
+        32
+      ],
+      "surface": "carpet"
+    },
+    {
+      "label": "Break room, store room and server cupboard",
+      "start": [
+        30.3,
+        0,
+        32
+      ],
+      "metres": 40.613,
+      "minY": 0,
+      "maxY": 0,
+      "points": 9,
+      "frames": 642,
+      "transitions": [
+        "service"
+      ],
+      "jumps": [],
+      "failed": null,
+      "end": [
+        18,
+        0,
+        32
+      ],
+      "surface": "carpet"
+    },
+    {
+      "label": "Contract gallery and chair",
+      "start": [
+        18,
+        0,
+        32
+      ],
+      "metres": 75.678,
+      "minY": 0,
+      "maxY": 0,
+      "points": 4,
+      "frames": 1195,
+      "transitions": [
+        "service",
+        "secret"
+      ],
+      "jumps": [],
+      "failed": null,
+      "end": [
+        84.67833999993192,
+        0,
+        41
+      ],
+      "surface": "wood"
+    },
+    {
+      "label": "Longer return, then walk back in through original doorway",
+      "start": [
+        84.67833999993192,
+        0,
+        41
+      ],
+      "metres": 73.036,
+      "minY": -5.551115123125783e-17,
+      "maxY": 0,
+      "points": 7,
+      "frames": 1156,
+      "transitions": [
+        "secret",
+        "service"
+      ],
+      "jumps": [
+        {
+          "from": [
+            80.05791999990925,
+            0,
+            41
+          ],
+          "to": [
+            85.9948399999319,
+            0,
+            51
+          ]
+        },
+        {
+          "from": [
+            86.18445999995456,
+            0,
+            51
+          ],
+          "to": [
+            80.4675399999319,
+            -5.551115123125783e-17,
+            41
+          ]
+        },
+        {
+          "from": [
+            80.00999999999999,
+            0,
+            41
+          ],
+          "to": [
+            85.94615999995469,
+            0,
+            51
+          ]
+        },
+        {
+          "from": [
+            33.528200000000105,
+            0,
+            51
+          ],
+          "to": [
+            34.16512000002276,
+            0,
+            41
+          ]
+        }
+      ],
+      "failed": null,
+      "end": [
+        29.18,
+        0,
+        32
+      ],
+      "surface": "carpet"
+    },
+    {
+      "label": "Return to atrium and approach service doorway again",
+      "start": [
+        29.18,
+        0,
+        32
+      ],
+      "metres": 38.136,
+      "minY": 0,
+      "maxY": 0,
+      "points": 4,
+      "frames": 601,
+      "transitions": [
+        "service",
+        "atrium",
+        "service"
+      ],
+      "jumps": [],
+      "failed": null,
+      "end": [
+        30.288779999977454,
+        0,
+        32
+      ],
+      "surface": "carpet"
+    },
+    {
+      "label": "Climb service stair in reverse through the extra storey",
+      "start": [
+        30.288779999977454,
+        0,
+        32
+      ],
+      "metres": 77.591,
+      "minY": 0,
+      "maxY": 6.800000190734863,
+      "points": 16,
+      "frames": 1209,
+      "transitions": [
+        "service",
+        "atrium"
+      ],
+      "jumps": [
+        {
+          "from": [
+            22.42,
+            1.7000000476837158,
+            21.986160000067947
+          ],
+          "to": [
+            22.42,
+            5.099999904632568,
+            21.9227
+          ]
+        }
+      ],
+      "failed": null,
+      "end": [
+        -10.3,
+        6.800000190734863,
+        21
+      ],
+      "surface": "stone"
+    },
+    {
+      "label": "Descend spiral and grand stairs to the turnstile",
+      "start": [
+        -10.3,
+        6.800000190734863,
+        21
+      ],
+      "metres": 52.611,
+      "minY": 0,
+      "maxY": 6.800000190734863,
+      "points": 90,
+      "frames": 829,
+      "transitions": [
+        "atrium"
+      ],
+      "jumps": [],
+      "failed": null,
+      "end": [
+        -1.3552527156068805e-20,
+        0,
+        37.2
+      ],
+      "surface": "stone"
+    },
+    {
+      "label": "Atrium to Expo hall and back",
+      "start": [
+        -1.3552527156068805e-20,
+        0,
+        37.2
+      ],
+      "metres": 26.173,
+      "minY": 0,
+      "maxY": 0,
+      "points": 6,
+      "frames": 413,
+      "transitions": [
+        "atrium",
+        "hall",
+        "atrium"
+      ],
+      "jumps": [],
+      "failed": null,
+      "end": [
+        0,
+        0,
+        16.593839999932058
+      ],
+      "surface": "stone"
+    }
+  ],
+  "transitions": [
+    "atrium",
+    "catwalk",
+    "atrium",
+    "service",
+    "secret",
+    "service",
+    "atrium",
+    "service",
+    "atrium",
+    "hall",
+    "atrium"
+  ],
+  "jumps": [
+    {
+      "from": [
+        22.42,
+        5.099999904632568,
+        21.914600000000004
+      ],
+      "to": [
+        22.42,
+        1.7000000476837158,
+        21.977300000000003
+      ]
+    },
+    {
+      "from": [
+        80.05791999990925,
+        0,
+        41
+      ],
+      "to": [
+        85.9948399999319,
+        0,
+        51
+      ]
+    },
+    {
+      "from": [
+        86.18445999995456,
+        0,
+        51
+      ],
+      "to": [
+        80.4675399999319,
+        -5.551115123125783e-17,
+        41
+      ]
+    },
+    {
+      "from": [
+        80.00999999999999,
+        0,
+        41
+      ],
+      "to": [
+        85.94615999995469,
+        0,
+        51
+      ]
+    },
+    {
+      "from": [
+        33.528200000000105,
+        0,
+        51
+      ],
+      "to": [
+        34.16512000002276,
+        0,
+        41
+      ]
+    },
+    {
+      "from": [
+        22.42,
+        1.7000000476837158,
+        21.986160000067947
+      ],
+      "to": [
+        22.42,
+        5.099999904632568,
+        21.9227
+      ]
+    }
+  ],
+  "faults": [],
+  "admission": {
+    "zone": "atrium",
+    "feet": [
+      0,
+      0,
+      37.2
+    ],
+    "surface": "stone",
+    "elapsed": 0.021799999994039355,
+    "ready": true,
+    "loaded": [
+      "atrium"
+    ],
+    "textures": {
+      "residentSources": 45,
+      "sharedHits": 0,
+      "decodedBytes": 183230464
+    },
+    "calls": 21,
+    "pixelRatio": 1,
+    "depth": 0,
+    "phase": 0,
+    "seconds": 0
+  },
+  "metres": 609.34,
+  "wallSeconds": 166.215,
+  "end": {
+    "zone": "atrium",
+    "feet": [
+      0,
+      0,
+      16.593839999932058
+    ],
+    "surface": "stone",
+    "elapsed": 165.50679997856832,
+    "ready": true,
+    "loaded": [
+      "atrium",
+      "catwalk",
+      "hall"
+    ],
+    "textures": {
+      "residentSources": 65,
+      "sharedHits": 439,
+      "decodedBytes": 240477440
+    },
+    "calls": 45,
+    "pixelRatio": 1,
+    "depth": 0,
+    "phase": 0,
+    "seconds": 0
+  },
+  "complete": true
+}

@@ -1,0 +1,63 @@
+{
+  "standard": {
+    "frames": 85,
+    "fullCover": 33,
+    "intermediateBefore": 31,
+    "intermediateAfter": 31,
+    "warpSamples": 78,
+    "warpFirst": 0,
+    "warpLast": 1.2337999999940399,
+    "rise": [
+      {
+        "duration": 2.4,
+        "loop": true,
+        "from": 1.2,
+        "to": 2.2,
+        "at": 4007.9000000059605,
+        "ended": 5612.300000011921
+      }
+    ],
+    "tail": [
+      {
+        "duration": 3.2,
+        "loop": false,
+        "from": 0,
+        "to": 0,
+        "at": 5468.0999999940395,
+        "ended": 8665.59999999404
+      }
+    ],
+    "issues": [],
+    "lidMaximum": 1
+  },
+  "gentle": {
+    "frames": 65,
+    "fullCover": 23,
+    "intermediateBefore": 20,
+    "intermediateAfter": 21,
+    "warpSamples": 0,
+    "rise": [
+      {
+        "duration": 2.4,
+        "loop": true,
+        "from": 1.2,
+        "to": 2.2,
+        "at": 2234.5,
+        "ended": 3327.0999999940395
+      }
+    ],
+    "tail": [
+      {
+        "duration": 3.2,
+        "loop": false,
+        "from": 0,
+        "to": 0,
+        "at": 3182.4000000059605,
+        "ended": 6377.199999988079
+      }
+    ],
+    "issues": [],
+    "lidMaximum": 0
+  },
+  "passed": true
+}

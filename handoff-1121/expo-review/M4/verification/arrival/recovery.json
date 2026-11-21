@@ -1,0 +1,15 @@
+{
+  "hold": {
+    "pausedAt": "0.181",
+    "opened": true
+  },
+  "retry": {
+    "zone": "atrium",
+    "remainingCovers": 0
+  },
+  "panic": {
+    "alive": false,
+    "roots": 0
+  },
+  "passed": true
+}

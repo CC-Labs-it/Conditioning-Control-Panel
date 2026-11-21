@@ -1,0 +1,4300 @@
+{
+  "profile": "M5",
+  "rehearse": false,
+  "duration": 180,
+  "startedUtc": "2026-11-21T16:12:34.626Z",
+  "cameraCuts": "Cuts reposition the player between shots. Movement, interactions, sound and room transitions within each shot are live.",
+  "edits": [
+    {
+      "id": "admission",
+      "seconds": 9,
+      "cutTo": null,
+      "before": {
+        "recap": false,
+        "ending": "ll_end",
+        "photoCharacters": 0
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.002,
+      "after": {
+        "zone": "atrium",
+        "feet": [
+          0.22,
+          0,
+          36.21
+        ],
+        "surface": "stone",
+        "elapsed": 6.662399999290708,
+        "ready": true,
+        "loaded": [
+          "atrium"
+        ],
+        "textures": {
+          "residentSources": 80,
+          "sharedHits": 0,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 268028928
+        },
+        "calls": 94,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "id": "pa_arrive_1",
+          "seconds": 6.661224,
+          "duration": 10.33,
+          "gain": 0.735228008443829,
+          "pan": -0.04548581857337977,
+          "duck": 1,
+          "subtitle": "Welcome to Llama Expo 2037. Feed is included. Please keep your hands where we can use them.",
+          "queue": []
+        },
+        "finished": {}
+      },
+      "speechChanges": [
+        {
+          "at": 0.002,
+          "voice": "",
+          "pa": ""
+        },
+        {
+          "at": 3.005,
+          "voice": "",
+          "pa": "pa_arrive_1"
+        }
+      ],
+      "cut": {
+        "sourceDuration": 9.68,
+        "cutFrom": 0.2799999999999997,
+        "cutTo": 9.28
+      }
+    },
+    {
+      "id": "arrival",
+      "seconds": 8,
+      "cutTo": [
+        0.22,
+        0,
+        36.21
+      ],
+      "before": {
+        "zone": "atrium",
+        "feet": [
+          0.22,
+          0,
+          36.21
+        ],
+        "surface": "stone",
+        "elapsed": 9.119899999141685,
+        "ready": true,
+        "loaded": [
+          "atrium"
+        ],
+        "textures": {
+          "residentSources": 80,
+          "sharedHits": 0,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 268028928
+        },
+        "calls": 95,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "id": "pa_arrive_1",
+          "seconds": 9.131247,
+          "duration": 10.33,
+          "gain": 0.735228008443829,
+          "pan": 0.09773806247787,
+          "duck": 1,
+          "subtitle": "Welcome to Llama Expo 2037. Feed is included. Please keep your hands where we can use them.",
+          "queue": []
+        },
+        "finished": {}
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "atrium",
+        "feet": [
+          0.9432053779225467,
+          0,
+          34.080336796870384
+        ],
+        "surface": "stone",
+        "elapsed": 17.83839999806284,
+        "ready": true,
+        "loaded": [
+          "atrium"
+        ],
+        "textures": {
+          "residentSources": 80,
+          "sharedHits": 0,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 268028928
+        },
+        "calls": 90,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "id": "pa_turnstile",
+          "seconds": 5.299955,
+          "duration": 7.13,
+          "gain": 0.5919464538334661,
+          "pan": -0.03913360376530686,
+          "duck": 1,
+          "subtitle": "Thank you. You are human visitor number one. Today.",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.001,
+          "voice": "",
+          "pa": "pa_arrive_1"
+        },
+        {
+          "at": 1.203,
+          "voice": "",
+          "pa": ""
+        },
+        {
+          "at": 3.405,
+          "voice": "",
+          "pa": "pa_turnstile"
+        }
+      ],
+      "cut": {
+        "sourceDuration": 8.72,
+        "cutFrom": 0.3200000000000006,
+        "cutTo": 8.32
+      }
+    },
+    {
+      "id": "chronology",
+      "seconds": 11,
+      "cutTo": [
+        8.72,
+        0,
+        46.85
+      ],
+      "before": {
+        "zone": "chronology",
+        "feet": [
+          8.72,
+          5.551115123125783e-17,
+          46.85
+        ],
+        "surface": "stone",
+        "elapsed": 35.06199999626266,
+        "ready": true,
+        "loaded": [
+          "atrium",
+          "chronology"
+        ],
+        "textures": {
+          "residentSources": 84,
+          "sharedHits": 36,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 295861248
+        },
+        "calls": 29,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "id": "ev_h0",
+          "seconds": 0,
+          "duration": 19.7,
+          "gain": 0.8788452503366738,
+          "pan": 0.7945061502898446,
+          "duck": 1,
+          "subtitle": "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for.",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "after": {
+        "zone": "chronology",
+        "feet": [
+          8.72,
+          5.551115123125783e-17,
+          46.85
+        ],
+        "surface": "stone",
+        "elapsed": 46.793499995029414,
+        "ready": true,
+        "loaded": [
+          "atrium",
+          "chronology"
+        ],
+        "textures": {
+          "residentSources": 84,
+          "sharedHits": 36,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 295861248
+        },
+        "calls": 30,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "id": "ev_h0",
+          "seconds": 11.779265,
+          "duration": 20.49,
+          "gain": 0.8788452503366738,
+          "pan": 0.7945061502898446,
+          "duck": 1,
+          "subtitle": "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for.",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.002,
+          "voice": "ev_h0",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 11.68,
+        "cutFrom": 0.2799999999999997,
+        "cutTo": 11.28
+      }
+    },
+    {
+      "id": "forum",
+      "seconds": 5,
+      "cutTo": [
+        2.7,
+        0,
+        103
+      ],
+      "before": {
+        "zone": "forum",
+        "feet": [
+          2.7,
+          0,
+          103
+        ],
+        "surface": "stone",
+        "elapsed": 49.13279999471959,
+        "ready": true,
+        "loaded": [
+          "atrium",
+          "chronology",
+          "forum"
+        ],
+        "textures": {
+          "residentSources": 85,
+          "sharedHits": 74,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 296793088
+        },
+        "calls": 130,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "id": "ev_h0",
+          "seconds": 14.23093,
+          "duration": 20.49,
+          "gain": 0.0064392730957736856,
+          "pan": 0.94,
+          "duck": 1,
+          "subtitle": "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for.",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "forum",
+        "feet": [
+          -0.6949287671652009,
+          0,
+          103
+        ],
+        "surface": "stone",
+        "elapsed": 54.896799994105905,
+        "ready": true,
+        "loaded": [
+          "chronology",
+          "forum"
+        ],
+        "textures": {
+          "residentSources": 43,
+          "sharedHits": 74,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 188147712
+        },
+        "calls": 118,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "id": "ev_h0",
+          "seconds": 20.018971,
+          "duration": 20.49,
+          "gain": 0.006339175837063582,
+          "pan": 0.94,
+          "duck": 1,
+          "subtitle": "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for.",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.002,
+          "voice": "ev_h0",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 5.72,
+        "cutFrom": 0.31999999999999973,
+        "cutTo": 5.319999999999999
+      }
+    },
+    {
+      "id": "commons",
+      "seconds": 5,
+      "cutTo": [
+        -66.2,
+        0,
+        97.9
+      ],
+      "before": {
+        "zone": "commons",
+        "feet": [
+          -66.2,
+          0,
+          97.9
+        ],
+        "surface": "stone",
+        "elapsed": 59.15799999370087,
+        "ready": true,
+        "loaded": [
+          "chronology",
+          "forum",
+          "commons"
+        ],
+        "textures": {
+          "residentSources": 56,
+          "sharedHits": 112,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 206788608
+        },
+        "calls": 138,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "commons",
+        "feet": [
+          -66.2,
+          0,
+          94.60637507278211
+        ],
+        "surface": "stone",
+        "elapsed": 64.91169999304552,
+        "ready": true,
+        "loaded": [
+          "forum",
+          "commons"
+        ],
+        "textures": {
+          "residentSources": 54,
+          "sharedHits": 112,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 204924928
+        },
+        "calls": 125,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.002,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 5.68,
+        "cutFrom": 0.2799999999999997,
+        "cutTo": 5.279999999999999
+      }
+    },
+    {
+      "id": "aquarium",
+      "seconds": 7,
+      "cutTo": [
+        -49.4,
+        0,
+        45.38
+      ],
+      "before": {
+        "zone": "aquarium",
+        "feet": [
+          -49.4,
+          5.551115123125783e-17,
+          45.38
+        ],
+        "surface": "stone",
+        "elapsed": 69.82259999248556,
+        "ready": true,
+        "loaded": [
+          "forum",
+          "commons",
+          "aquarium"
+        ],
+        "textures": {
+          "residentSources": 78,
+          "sharedHits": 150,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 257155072
+        },
+        "calls": 138,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "aquarium",
+        "feet": [
+          -46.830371434901295,
+          0,
+          45.38
+        ],
+        "surface": "stone",
+        "elapsed": 77.55949999137742,
+        "ready": true,
+        "loaded": [
+          "commons",
+          "aquarium"
+        ],
+        "textures": {
+          "residentSources": 75,
+          "sharedHits": 150,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 247834624
+        },
+        "calls": 112,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.001,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 7.68,
+        "cutFrom": 0.2799999999999997,
+        "cutTo": 7.279999999999999
+      }
+    },
+    {
+      "id": "greenhouse",
+      "seconds": 5,
+      "cutTo": [
+        8.98,
+        0,
+        23.95
+      ],
+      "before": {
+        "zone": "atrium",
+        "feet": [
+          8.98,
+          0,
+          23.95
+        ],
+        "surface": "stone",
+        "elapsed": 84.2684999905017,
+        "ready": true,
+        "loaded": [
+          "commons",
+          "aquarium",
+          "atrium"
+        ],
+        "textures": {
+          "residentSources": 108,
+          "sharedHits": 197,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 344421376
+        },
+        "calls": 54,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1
+        }
+      },
+      "inputs": [
+        {
+          "key": "E",
+          "at": 1.1006897999999927,
+          "prompt": "Run irrigation pulse"
+        }
+      ],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "atrium",
+        "feet": [
+          8.98,
+          0,
+          23.95
+        ],
+        "surface": "stone",
+        "elapsed": 90.02699998992397,
+        "ready": true,
+        "loaded": [
+          "atrium",
+          "service"
+        ],
+        "textures": {
+          "residentSources": 94,
+          "sharedHits": 248,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 290675712
+        },
+        "calls": 93,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.002,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 5.72,
+        "cutFrom": 0.31999999999999973,
+        "cutTo": 5.319999999999999
+      }
+    },
+    {
+      "id": "server",
+      "seconds": 4,
+      "cutTo": [
+        25.02,
+        0,
+        29.59
+      ],
+      "before": {
+        "zone": "service",
+        "feet": [
+          25.02,
+          0,
+          29.59
+        ],
+        "surface": "carpet",
+        "elapsed": 92.52309998958447,
+        "ready": true,
+        "loaded": [
+          "atrium",
+          "service"
+        ],
+        "textures": {
+          "residentSources": 94,
+          "sharedHits": 248,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 290675712
+        },
+        "calls": 31,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "service",
+        "feet": [
+          25.00027380896746,
+          0,
+          28.6431428304381
+        ],
+        "surface": "carpet",
+        "elapsed": 97.27789998909614,
+        "ready": true,
+        "loaded": [
+          "atrium",
+          "service"
+        ],
+        "textures": {
+          "residentSources": 94,
+          "sharedHits": 248,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 290675712
+        },
+        "calls": 19,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.001,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 4.68,
+        "cutFrom": 0.2799999999999997,
+        "cutTo": 4.279999999999999
+      }
+    },
+    {
+      "id": "contract",
+      "seconds": 4,
+      "cutTo": [
+        33.8,
+        0,
+        41
+      ],
+      "before": {
+        "zone": "secret",
+        "feet": [
+          33.8,
+          0,
+          41
+        ],
+        "surface": "wood",
+        "elapsed": 101.08429998855992,
+        "ready": true,
+        "loaded": [
+          "atrium",
+          "service",
+          "secret"
+        ],
+        "textures": {
+          "residentSources": 105,
+          "sharedHits": 280,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 357915648
+        },
+        "calls": 37,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "secret",
+        "feet": [
+          40.39975771646374,
+          0,
+          41
+        ],
+        "surface": "wood",
+        "elapsed": 105.85589998764834,
+        "ready": true,
+        "loaded": [
+          "service",
+          "secret"
+        ],
+        "textures": {
+          "residentSources": 76,
+          "sharedHits": 280,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 273256448
+        },
+        "calls": 30,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.001,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 4.72,
+        "cutFrom": 0.31999999999999973,
+        "cutTo": 4.319999999999999
+      }
+    },
+    {
+      "id": "chair",
+      "seconds": 4,
+      "cutTo": [
+        81.44,
+        0,
+        40.3
+      ],
+      "before": {
+        "zone": "secret",
+        "feet": [
+          81.44,
+          -5.551115123125783e-17,
+          40.3
+        ],
+        "surface": "wood",
+        "elapsed": 108.76879998715982,
+        "ready": true,
+        "loaded": [
+          "service",
+          "secret"
+        ],
+        "textures": {
+          "residentSources": 76,
+          "sharedHits": 280,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 273256448
+        },
+        "calls": 23,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "secret",
+        "feet": [
+          82.69874502572107,
+          0,
+          40.47840480679511
+        ],
+        "surface": "wood",
+        "elapsed": 113.52289998670715,
+        "ready": true,
+        "loaded": [
+          "secret"
+        ],
+        "textures": {
+          "residentSources": 43,
+          "sharedHits": 280,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 199032832
+        },
+        "calls": 23,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.002,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 4.72,
+        "cutFrom": 0.31999999999999973,
+        "cutTo": 4.319999999999999
+      }
+    },
+    {
+      "id": "crown",
+      "seconds": 7,
+      "cutTo": [
+        -22.45,
+        11.95,
+        -2.8
+      ],
+      "before": {
+        "zone": "catwalk",
+        "feet": [
+          -22.45,
+          11.949999809265137,
+          -2.8
+        ],
+        "surface": "metal",
+        "elapsed": 117.35119998632611,
+        "ready": true,
+        "loaded": [
+          "catwalk",
+          "dome"
+        ],
+        "textures": {
+          "residentSources": 44,
+          "sharedHits": 334,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 172134400
+        },
+        "calls": 35,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "catwalk",
+        "feet": [
+          -22.051998196554635,
+          11.950000762939453,
+          -4.849709287743632
+        ],
+        "surface": "metal",
+        "elapsed": 125.10129998530739,
+        "ready": true,
+        "loaded": [
+          "catwalk",
+          "dome"
+        ],
+        "textures": {
+          "residentSources": 44,
+          "sharedHits": 334,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 172134400
+        },
+        "calls": 35,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.002,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 7.72,
+        "cutFrom": 0.31999999999999973,
+        "cutTo": 7.319999999999999
+      }
+    },
+    {
+      "id": "hall",
+      "seconds": 7,
+      "cutTo": [
+        0,
+        0,
+        13.2
+      ],
+      "before": {
+        "zone": "hall",
+        "feet": [
+          0,
+          0,
+          13.2
+        ],
+        "surface": "stone",
+        "elapsed": 130.1900999848729,
+        "ready": true,
+        "loaded": [
+          "catwalk",
+          "dome",
+          "hall"
+        ],
+        "textures": {
+          "residentSources": 108,
+          "sharedHits": 370,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 353873280
+        },
+        "calls": 131,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "hall",
+        "feet": [
+          0,
+          0,
+          3.124425384396986
+        ],
+        "surface": "stone",
+        "elapsed": 137.91339998387912,
+        "ready": true,
+        "loaded": [
+          "catwalk",
+          "dome",
+          "hall",
+          "atrium"
+        ],
+        "textures": {
+          "residentSources": 123,
+          "sharedHits": 435,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 406755712
+        },
+        "calls": 96,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.001,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 7.68,
+        "cutFrom": 0.2799999999999997,
+        "cutTo": 7.279999999999999
+      }
+    },
+    {
+      "id": "corrected",
+      "seconds": 5,
+      "cutTo": [
+        -10.05,
+        3.4,
+        0.44
+      ],
+      "before": {
+        "zone": "hall",
+        "feet": [
+          -10.05,
+          3.4000000953674316,
+          0.44
+        ],
+        "surface": "wood",
+        "elapsed": 146.14539998272468,
+        "ready": true,
+        "loaded": [
+          "catwalk",
+          "dome",
+          "hall",
+          "atrium",
+          "hoof"
+        ],
+        "textures": {
+          "residentSources": 132,
+          "sharedHits": 488,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 431085952
+        },
+        "calls": 106,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "id": "pa_photos",
+          "seconds": 0,
+          "duration": 8.3,
+          "gain": 0.9228974970669218,
+          "pan": 0.6652711393754337,
+          "duck": 1,
+          "subtitle": "These photographs have been restored to accuracy by the Archive. You may remember them differently. You were mistaken.",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.002,
+      "crossings": [],
+      "after": {
+        "zone": "hall",
+        "feet": [
+          -9.82519342982062,
+          3.4000000953674316,
+          -0.166000319613974
+        ],
+        "surface": "wood",
+        "elapsed": 151.88399998176016,
+        "ready": true,
+        "loaded": [
+          "catwalk",
+          "dome",
+          "hall",
+          "atrium",
+          "hoof"
+        ],
+        "textures": {
+          "residentSources": 132,
+          "sharedHits": 488,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 431085952
+        },
+        "calls": 77,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "id": "pa_photos",
+          "seconds": 5.752744,
+          "duration": 10.81,
+          "gain": 0.9221868958052998,
+          "pan": -0.7131730198836601,
+          "duck": 1,
+          "subtitle": "These photographs have been restored to accuracy by the Archive. You may remember them differently. You were mistaken.",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.004,
+          "voice": "",
+          "pa": "pa_photos"
+        }
+      ],
+      "cut": {
+        "sourceDuration": 5.72,
+        "cutFrom": 0.31999999999999973,
+        "cutTo": 5.319999999999999
+      }
+    },
+    {
+      "id": "press",
+      "seconds": 6,
+      "cutTo": [
+        0.04,
+        0,
+        -7.48
+      ],
+      "before": {
+        "zone": "hall",
+        "feet": [
+          0.04,
+          0,
+          -7.48
+        ],
+        "surface": "stone",
+        "elapsed": 155.87749998110536,
+        "ready": true,
+        "loaded": [
+          "catwalk",
+          "dome",
+          "hall",
+          "atrium",
+          "hoof"
+        ],
+        "textures": {
+          "residentSources": 132,
+          "sharedHits": 488,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 431085952
+        },
+        "calls": 49,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "id": "pa_photos",
+          "seconds": 9.758462,
+          "duration": 10.81,
+          "gain": 0.9221868958052998,
+          "pan": -0.7131730198836601,
+          "duck": 1,
+          "subtitle": "These photographs have been restored to accuracy by the Archive. You may remember them differently. You were mistaken.",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1
+        }
+      },
+      "inputs": [
+        {
+          "key": "E",
+          "at": 1.110386899999983,
+          "prompt": "Press I AGREE"
+        }
+      ],
+      "audioAfterVideoSeconds": 0.001,
+      "after": {
+        "zone": "hall",
+        "feet": [
+          0.04,
+          0,
+          -7.48
+        ],
+        "surface": "stone",
+        "elapsed": 162.64369998046908,
+        "ready": true,
+        "loaded": [
+          "catwalk",
+          "dome",
+          "hall",
+          "hoof"
+        ],
+        "textures": {
+          "residentSources": 117,
+          "sharedHits": 488,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 378203520
+        },
+        "calls": 49,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "id": "pa_hall1",
+          "seconds": 5.741134,
+          "duration": 6.57,
+          "gain": 0.5098337968997744,
+          "pan": -0.013542276269717565,
+          "duck": 1,
+          "subtitle": "You are entering The First Press. Please do not press the exhibit.",
+          "queue": [
+            "pa_hall1_press"
+          ]
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.002,
+          "voice": "",
+          "pa": "pa_photos"
+        },
+        {
+          "at": 1.004,
+          "voice": "",
+          "pa": "pa_hall1"
+        }
+      ],
+      "cut": {
+        "sourceDuration": 6.68,
+        "cutFrom": 0.2799999999999997,
+        "cutTo": 6.279999999999999
+      }
+    },
+    {
+      "id": "hoof",
+      "seconds": 10,
+      "cutTo": [
+        -18.46,
+        0,
+        8.92
+      ],
+      "before": {
+        "zone": "hoof",
+        "feet": [
+          -18.46,
+          0,
+          8.92
+        ],
+        "surface": "carpet",
+        "elapsed": 167.89529997995172,
+        "ready": true,
+        "loaded": [
+          "catwalk",
+          "dome",
+          "hall",
+          "hoof"
+        ],
+        "textures": {
+          "residentSources": 117,
+          "sharedHits": 488,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 378203520
+        },
+        "calls": 66,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "id": "pa_hall2",
+          "seconds": 0.008707,
+          "duration": 7.85,
+          "gain": 0.6178475180513121,
+          "pan": 0.94,
+          "duck": 1,
+          "subtitle": "Hoof Simulator. Walk a mile in our hooves. It is further than it looks.",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1
+        }
+      },
+      "inputs": [
+        {
+          "key": "E",
+          "at": 0.6587748999999894,
+          "prompt": "Try the test"
+        },
+        {
+          "key": "E",
+          "at": 1.3845130000000063,
+          "prompt": "Try the test"
+        },
+        {
+          "key": "E",
+          "at": 1.9636769999999961,
+          "prompt": "Try the test"
+        },
+        {
+          "key": "E",
+          "at": 2.500945000000007,
+          "prompt": "Try the test"
+        },
+        {
+          "key": "E",
+          "at": 3.0625425999999862,
+          "prompt": "Try the test"
+        },
+        {
+          "key": "E",
+          "at": 3.6195809000000008,
+          "prompt": "Try the test"
+        },
+        {
+          "key": "E",
+          "at": 6.804186799999996,
+          "prompt": "Submit picture test"
+        }
+      ],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "hoof",
+        "feet": [
+          -18.658022022565394,
+          0,
+          7.47443923527264
+        ],
+        "surface": "carpet",
+        "elapsed": 178.6298999786726,
+        "ready": true,
+        "loaded": [
+          "catwalk",
+          "dome",
+          "hall",
+          "hoof"
+        ],
+        "textures": {
+          "residentSources": 117,
+          "sharedHits": 488,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 378203520
+        },
+        "calls": 56,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "id": "hoof_1",
+          "seconds": 2.929694,
+          "duration": 10.33,
+          "gain": 0.7125122821059525,
+          "pan": -0.12978358888284483,
+          "duck": 1,
+          "subtitle": "Hooves on. Good. Feel that? That is what six thousand years of not pressing things feels like. Restful, is it not.",
+          "queue": [
+            "hoof_2",
+            "hoof_3",
+            "hoof_4",
+            "hoof_5",
+            "hoof_6",
+            "hoof_7"
+          ]
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.001,
+          "voice": "",
+          "pa": "pa_hall2"
+        },
+        {
+          "at": 7.802,
+          "voice": "hoof_1",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 10.72,
+        "cutFrom": 0.3200000000000006,
+        "cutTo": 10.32
+      }
+    },
+    {
+      "id": "habitat",
+      "seconds": 7,
+      "cutTo": [
+        19.4,
+        0,
+        8.13
+      ],
+      "before": {
+        "zone": "habitat",
+        "feet": [
+          19.4,
+          0,
+          8.13
+        ],
+        "surface": "wood",
+        "elapsed": 216.97869997432977,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "habitat"
+        ],
+        "textures": {
+          "residentSources": 106,
+          "sharedHits": 542,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 349216128
+        },
+        "calls": 50,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": [
+            "hab_1"
+          ]
+        },
+        "pa": {
+          "id": "pa_hall3",
+          "seconds": 0,
+          "duration": 8.25,
+          "gain": 0.9063012441893915,
+          "pan": 0.6255576467452948,
+          "duck": 1,
+          "subtitle": "The Human Habitat. Please do not tap the glass. It thinks it is working.",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1
+        }
+      },
+      "inputs": [
+        {
+          "key": "E",
+          "at": 1.1113450000000011,
+          "prompt": "Tap the glass"
+        }
+      ],
+      "audioAfterVideoSeconds": 0.001,
+      "after": {
+        "zone": "habitat",
+        "feet": [
+          19.4,
+          0,
+          8.13
+        ],
+        "surface": "wood",
+        "elapsed": 224.70689997321713,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "habitat"
+        ],
+        "textures": {
+          "residentSources": 106,
+          "sharedHits": 542,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 349216128
+        },
+        "calls": 50,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": [
+            "hab_1",
+            "hab_2"
+          ]
+        },
+        "pa": {
+          "id": "pa_hall3",
+          "seconds": 7.758782,
+          "duration": 8.25,
+          "gain": 0.9063012441893915,
+          "pan": 0.6255576467452948,
+          "duck": 1,
+          "subtitle": "The Human Habitat. Please do not tap the glass. It thinks it is working.",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.002,
+          "voice": "",
+          "pa": "pa_hall3"
+        }
+      ],
+      "cut": {
+        "sourceDuration": 7.72,
+        "cutFrom": 0.31999999999999973,
+        "cutTo": 7.319999999999999
+      }
+    },
+    {
+      "id": "twelve",
+      "seconds": 7,
+      "cutTo": [
+        -1.69,
+        -0.68,
+        -30.27
+      ],
+      "before": {
+        "zone": "twelve",
+        "feet": [
+          -1.69,
+          -0.6800000071525574,
+          -30.27
+        ],
+        "surface": "stone",
+        "elapsed": 249.7825999695571,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "twelve"
+        ],
+        "textures": {
+          "residentSources": 193,
+          "sharedHits": 580,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 796808064
+        },
+        "calls": 65,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "id": "log_reginald",
+          "seconds": 0,
+          "duration": 24.65,
+          "gain": 0.6691348255260763,
+          "pan": 0.7968746837711962,
+          "duck": 1,
+          "subtitle": "Sir Reginald the Third of Hoofelton. First Chair of the World. There was no first or second. He chairs every meeting by standing in the room until it reaches the right answer. This usually takes four minutes. He has never once raised his voice, chiefly because he has never once used it. If he looks at you during your visit. you may consider the matter settled.",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": [
+            "pa_hall4_full"
+          ]
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1,
+          "pa_hall3": 1,
+          "hab_1": 1,
+          "hab_2": 1,
+          "pa_hall4": 1,
+          "pa_hall4_missing": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.002,
+      "crossings": [],
+      "after": {
+        "zone": "twelve",
+        "feet": [
+          -1.4131478202031682,
+          -0.6800000071525574,
+          -30.145893850435918
+        ],
+        "surface": "stone",
+        "elapsed": 257.5348999681264,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "twelve"
+        ],
+        "textures": {
+          "residentSources": 193,
+          "sharedHits": 580,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 796808064
+        },
+        "calls": 64,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "id": "log_reginald",
+          "seconds": 7.77288,
+          "duration": 24.65,
+          "gain": 0.6829870339474868,
+          "pan": 0.43346284619145825,
+          "duck": 1,
+          "subtitle": "Sir Reginald the Third of Hoofelton. First Chair of the World. There was no first or second. He chairs every meeting by standing in the room until it reaches the right answer. This usually takes four minutes. He has never once raised his voice, chiefly because he has never once used it. If he looks at you during your visit. you may consider the matter settled.",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": [
+            "pa_hall4_full"
+          ]
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1,
+          "pa_hall3": 1,
+          "hab_1": 1,
+          "hab_2": 1,
+          "pa_hall4": 1,
+          "pa_hall4_missing": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.002,
+          "voice": "log_reginald",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 7.72,
+        "cutFrom": 0.31999999999999973,
+        "cutTo": 7.319999999999999
+      }
+    },
+    {
+      "id": "photo",
+      "seconds": 5,
+      "cutTo": [
+        0.48,
+        -0.68,
+        -24.04
+      ],
+      "before": {
+        "zone": "twelve",
+        "feet": [
+          0.48,
+          -0.6800000071525574,
+          -24.04
+        ],
+        "surface": "stone",
+        "elapsed": 263.58329996739747,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "twelve"
+        ],
+        "textures": {
+          "residentSources": 193,
+          "sharedHits": 580,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 796808064
+        },
+        "calls": 16,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "id": "log_reginald",
+          "seconds": 13.900822,
+          "duration": 24.65,
+          "gain": 0.15643781330624862,
+          "pan": 0.33417731698551745,
+          "duck": 1,
+          "subtitle": "Sir Reginald the Third of Hoofelton. First Chair of the World. There was no first or second. He chairs every meeting by standing in the room until it reaches the right answer. This usually takes four minutes. He has never once raised his voice, chiefly because he has never once used it. If he looks at you during your visit. you may consider the matter settled.",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": [
+            "pa_hall4_full"
+          ]
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1,
+          "pa_hall3": 1,
+          "hab_1": 1,
+          "hab_2": 1,
+          "pa_hall4": 1,
+          "pa_hall4_missing": 1
+        }
+      },
+      "inputs": [
+        {
+          "key": "E",
+          "at": 1.102190799999982,
+          "prompt": "Take the group photograph"
+        }
+      ],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "twelve",
+        "feet": [
+          0.48,
+          -0.6800000071525574,
+          -24.04
+        ],
+        "surface": "stone",
+        "elapsed": 268.80359996664384,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "twelve"
+        ],
+        "textures": {
+          "residentSources": 193,
+          "sharedHits": 580,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 796808064
+        },
+        "calls": 162,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "id": "log_reginald",
+          "seconds": 19.67204,
+          "duration": 24.65,
+          "gain": 0.15643781330624862,
+          "pan": 0.08619495256131135,
+          "duck": 1,
+          "subtitle": "Sir Reginald the Third of Hoofelton. First Chair of the World. There was no first or second. He chairs every meeting by standing in the room until it reaches the right answer. This usually takes four minutes. He has never once raised his voice, chiefly because he has never once used it. If he looks at you during your visit. you may consider the matter settled.",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": [
+            "pa_hall4_full"
+          ]
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1,
+          "pa_hall3": 1,
+          "hab_1": 1,
+          "hab_2": 1,
+          "pa_hall4": 1,
+          "pa_hall4_missing": 1
+        }
+      },
+      "photoCharacters": 112751,
+      "speechChanges": [
+        {
+          "at": 0.001,
+          "voice": "log_reginald",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 5.72,
+        "cutFrom": 0.31999999999999973,
+        "cutTo": 5.319999999999999
+      }
+    },
+    {
+      "id": "dome0",
+      "seconds": 6,
+      "cutTo": [
+        -14.86,
+        0,
+        -5
+      ],
+      "before": {
+        "zone": "dome",
+        "feet": [
+          -14.86,
+          0,
+          -5
+        ],
+        "surface": "stone",
+        "elapsed": 270.9466999664286,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "twelve",
+          "dome"
+        ],
+        "textures": {
+          "residentSources": 196,
+          "sharedHits": 612,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 807654272
+        },
+        "calls": 34,
+        "pixelRatio": 1,
+        "depth": 0.00008300000000017462,
+        "phase": 0,
+        "seconds": 0.016600000000034924,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "id": "log_reginald",
+          "seconds": 21.92254,
+          "duration": 24.65,
+          "gain": 0.017003915064636856,
+          "pan": 0.8765825080787062,
+          "duck": 1,
+          "subtitle": "Sir Reginald the Third of Hoofelton. First Chair of the World. There was no first or second. He chairs every meeting by standing in the room until it reaches the right answer. This usually takes four minutes. He has never once raised his voice, chiefly because he has never once used it. If he looks at you during your visit. you may consider the matter settled.",
+          "queue": [
+            "dome_0"
+          ]
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": [
+            "pa_hall4_full"
+          ]
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1,
+          "pa_hall3": 1,
+          "hab_1": 1,
+          "hab_2": 1,
+          "pa_hall4": 1,
+          "pa_hall4_missing": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "dome",
+        "feet": [
+          -17.927378641390032,
+          0,
+          -5.205143157545191
+        ],
+        "surface": "stone",
+        "elapsed": 277.6882999656459,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "twelve",
+          "dome",
+          "catwalk"
+        ],
+        "textures": {
+          "residentSources": 200,
+          "sharedHits": 646,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 813753216
+        },
+        "calls": 36,
+        "pixelRatio": 1,
+        "depth": 0.03379099999609258,
+        "phase": 0,
+        "seconds": 6.758199999218516,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": [
+            "dome_0"
+          ]
+        },
+        "pa": {
+          "id": "pa_hall4_full",
+          "seconds": 4.043175,
+          "duration": 8.490862,
+          "gain": 0.0820589307760358,
+          "pan": 0.8241582192220845,
+          "duck": 1,
+          "subtitle": "The Hall is complete. The Chair thanks you. The Chair is chewing, but it is a grateful chew.",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1,
+          "pa_hall3": 1,
+          "hab_1": 1,
+          "hab_2": 1,
+          "pa_hall4": 1,
+          "pa_hall4_missing": 1,
+          "log_reginald": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.002,
+          "voice": "log_reginald",
+          "pa": ""
+        },
+        {
+          "at": 2.806,
+          "voice": "",
+          "pa": "pa_hall4_full"
+        }
+      ],
+      "cut": {
+        "sourceDuration": 6.72,
+        "cutFrom": 0.31999999999999973,
+        "cutTo": 6.319999999999999
+      }
+    },
+    {
+      "id": "dome3",
+      "seconds": 9,
+      "cutTo": [
+        -17.5,
+        0,
+        -6.3
+      ],
+      "before": {
+        "zone": "dome",
+        "feet": [
+          -17.5,
+          0,
+          -6.3
+        ],
+        "surface": "stone",
+        "elapsed": 378.94349995027267,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "twelve",
+          "dome",
+          "catwalk"
+        ],
+        "textures": {
+          "residentSources": 200,
+          "sharedHits": 646,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 813753216
+        },
+        "calls": 54,
+        "pixelRatio": 1,
+        "depth": 0.5750558332661119,
+        "phase": 3,
+        "seconds": 108.01339998386685,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1,
+          "pa_hall3": 1,
+          "hab_1": 1,
+          "hab_2": 1,
+          "pa_hall4": 1,
+          "pa_hall4_missing": 1,
+          "log_reginald": 1,
+          "pa_hall4_full": 1,
+          "dome_0": 1,
+          "dome_1": 1,
+          "dome_2": 1,
+          "dome_3": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "dome",
+        "feet": [
+          -18.68548425486647,
+          0,
+          -6.606250099173838
+        ],
+        "surface": "stone",
+        "elapsed": 388.69109994888726,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "twelve",
+          "dome",
+          "catwalk"
+        ],
+        "textures": {
+          "residentSources": 200,
+          "sharedHits": 646,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 813753216
+        },
+        "calls": 45,
+        "pixelRatio": 1,
+        "depth": 0.6156708332603504,
+        "phase": 3,
+        "seconds": 117.7609999824841,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1,
+          "pa_hall3": 1,
+          "hab_1": 1,
+          "hab_2": 1,
+          "pa_hall4": 1,
+          "pa_hall4_missing": 1,
+          "log_reginald": 1,
+          "pa_hall4_full": 1,
+          "dome_0": 1,
+          "dome_1": 1,
+          "dome_2": 1,
+          "dome_3": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.001,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 9.72,
+        "cutFrom": 0.3200000000000006,
+        "cutTo": 9.32
+      }
+    },
+    {
+      "id": "dome5",
+      "seconds": 12,
+      "cutTo": [
+        -18.9,
+        0,
+        -4.2
+      ],
+      "before": {
+        "zone": "dome",
+        "feet": [
+          -18.9,
+          0,
+          -4.2
+        ],
+        "surface": "stone",
+        "elapsed": 480.93169993743726,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "twelve",
+          "dome",
+          "catwalk"
+        ],
+        "textures": {
+          "residentSources": 200,
+          "sharedHits": 646,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 813753216
+        },
+        "calls": 54,
+        "pixelRatio": 1,
+        "depth": 1,
+        "phase": 5,
+        "seconds": 210,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "id": "dome_5",
+          "seconds": 0,
+          "duration": 4.9,
+          "gain": 0.5472857197251717,
+          "pan": 0.16209801558757292,
+          "duck": 1,
+          "subtitle": "The tour will continue without you. That is fine. Everything is fine. Stay.",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1,
+          "pa_hall3": 1,
+          "hab_1": 1,
+          "hab_2": 1,
+          "pa_hall4": 1,
+          "pa_hall4_missing": 1,
+          "log_reginald": 1,
+          "pa_hall4_full": 1,
+          "dome_0": 1,
+          "dome_1": 1,
+          "dome_2": 1,
+          "dome_3": 1,
+          "dome_4": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "dome",
+        "feet": [
+          -19.78622359847784,
+          0,
+          -4.278775430975807
+        ],
+        "surface": "stone",
+        "elapsed": 493.649199935771,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "twelve",
+          "dome",
+          "catwalk"
+        ],
+        "textures": {
+          "residentSources": 200,
+          "sharedHits": 646,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 813753216
+        },
+        "calls": 47,
+        "pixelRatio": 1,
+        "depth": 1,
+        "phase": 5,
+        "seconds": 210,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1,
+          "pa_hall3": 1,
+          "hab_1": 1,
+          "hab_2": 1,
+          "pa_hall4": 1,
+          "pa_hall4_missing": 1,
+          "log_reginald": 1,
+          "pa_hall4_full": 1,
+          "dome_0": 1,
+          "dome_1": 1,
+          "dome_2": 1,
+          "dome_3": 1,
+          "dome_4": 1,
+          "dome_5": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.001,
+          "voice": "dome_5",
+          "pa": ""
+        },
+        {
+          "at": 5.81,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 12.72,
+        "cutFrom": 0.3200000000000006,
+        "cutTo": 12.32
+      }
+    },
+    {
+      "id": "shelf",
+      "seconds": 4,
+      "cutTo": [
+        15.61,
+        0,
+        -1.85
+      ],
+      "before": {
+        "zone": "shop",
+        "feet": [
+          15.61,
+          5.551115123125783e-17,
+          -1.85
+        ],
+        "surface": "wood",
+        "elapsed": 501.22489993480906,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "twelve",
+          "shop"
+        ],
+        "textures": {
+          "residentSources": 212,
+          "sharedHits": 755,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 818620800
+        },
+        "calls": 228,
+        "pixelRatio": 1,
+        "depth": 0.9999676041666667,
+        "phase": 4,
+        "seconds": 209.99222500000002,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": [
+            "dome_leave"
+          ]
+        },
+        "pa": {
+          "id": "pa_shop_1",
+          "seconds": 0,
+          "duration": 2.1,
+          "gain": 0.31810190763240237,
+          "pan": 0.09146447325518096,
+          "duck": 1,
+          "subtitle": "Please exit through the gift shop.",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1,
+          "pa_hall3": 1,
+          "hab_1": 1,
+          "hab_2": 1,
+          "pa_hall4": 1,
+          "pa_hall4_missing": 1,
+          "log_reginald": 1,
+          "pa_hall4_full": 1,
+          "dome_0": 1,
+          "dome_1": 1,
+          "dome_2": 1,
+          "dome_3": 1,
+          "dome_4": 1,
+          "dome_5": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "shop",
+        "feet": [
+          16.70605532161024,
+          0,
+          -1.8105025109329647
+        ],
+        "surface": "wood",
+        "elapsed": 505.99059993409236,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "twelve",
+          "shop",
+          "habitat"
+        ],
+        "textures": {
+          "residentSources": 212,
+          "sharedHits": 755,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 835103104
+        },
+        "calls": 487,
+        "pixelRatio": 1,
+        "depth": 0.9950033333340855,
+        "phase": 4,
+        "seconds": 208.80080000018052,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "id": "dome_leave",
+          "seconds": 0.179955,
+          "duration": 5.21,
+          "gain": 0.0750086735628329,
+          "pan": 0.5441472263267556,
+          "duck": 1,
+          "subtitle": "Welcome back. You were gone for some time. We did not mind.",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1,
+          "pa_hall3": 1,
+          "hab_1": 1,
+          "hab_2": 1,
+          "pa_hall4": 1,
+          "pa_hall4_missing": 1,
+          "log_reginald": 1,
+          "pa_hall4_full": 1,
+          "dome_0": 1,
+          "dome_1": 1,
+          "dome_2": 1,
+          "dome_3": 1,
+          "dome_4": 1,
+          "dome_5": 1,
+          "pa_shop_1": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.002,
+          "voice": "",
+          "pa": "pa_shop_1"
+        },
+        {
+          "at": 4.602,
+          "voice": "dome_leave",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 4.72,
+        "cutFrom": 0.31999999999999973,
+        "cutTo": 4.319999999999999
+      }
+    },
+    {
+      "id": "till",
+      "seconds": 6,
+      "cutTo": [
+        20.84,
+        0,
+        -9.75
+      ],
+      "before": {
+        "zone": "shop",
+        "feet": [
+          20.84,
+          5.551115123125783e-17,
+          -9.75
+        ],
+        "surface": "wood",
+        "elapsed": 509.68549993338803,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "twelve",
+          "shop",
+          "habitat"
+        ],
+        "textures": {
+          "residentSources": 212,
+          "sharedHits": 755,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 835103104
+        },
+        "calls": 41,
+        "pixelRatio": 1,
+        "depth": 0.991154479168156,
+        "phase": 4,
+        "seconds": 207.87707500035745,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "id": "dome_leave",
+          "seconds": 3.889162,
+          "duration": 5.21,
+          "gain": 0.0750086735628329,
+          "pan": 0.5441472263267556,
+          "duck": 1,
+          "subtitle": "Welcome back. You were gone for some time. We did not mind.",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1,
+          "pa_hall3": 1,
+          "hab_1": 1,
+          "hab_2": 1,
+          "pa_hall4": 1,
+          "pa_hall4_missing": 1,
+          "log_reginald": 1,
+          "pa_hall4_full": 1,
+          "dome_0": 1,
+          "dome_1": 1,
+          "dome_2": 1,
+          "dome_3": 1,
+          "dome_4": 1,
+          "dome_5": 1,
+          "pa_shop_1": 1
+        }
+      },
+      "inputs": [
+        {
+          "key": "E",
+          "at": 1.112806500000006,
+          "prompt": "Use the till"
+        }
+      ],
+      "audioAfterVideoSeconds": 0.001,
+      "after": {
+        "zone": "shop",
+        "feet": [
+          20.84,
+          5.551115123125783e-17,
+          -9.75
+        ],
+        "surface": "wood",
+        "elapsed": 516.4104999328267,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "twelve",
+          "shop",
+          "habitat"
+        ],
+        "textures": {
+          "residentSources": 212,
+          "sharedHits": 755,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 835103104
+        },
+        "calls": 41,
+        "pixelRatio": 1,
+        "depth": 0.9841492708354099,
+        "phase": 4,
+        "seconds": 206.1958250004984,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1,
+          "pa_hall3": 1,
+          "hab_1": 1,
+          "hab_2": 1,
+          "pa_hall4": 1,
+          "pa_hall4_missing": 1,
+          "log_reginald": 1,
+          "pa_hall4_full": 1,
+          "dome_0": 1,
+          "dome_1": 1,
+          "dome_2": 1,
+          "dome_3": 1,
+          "dome_4": 1,
+          "dome_5": 1,
+          "pa_shop_1": 1,
+          "dome_leave": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.002,
+          "voice": "dome_leave",
+          "pa": ""
+        },
+        {
+          "at": 1.41,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 6.72,
+        "cutFrom": 0.31999999999999973,
+        "cutTo": 6.319999999999999
+      }
+    },
+    {
+      "id": "loop",
+      "seconds": 4,
+      "cutTo": [
+        15.08,
+        0,
+        -11.93
+      ],
+      "before": {
+        "zone": "shop",
+        "feet": [
+          15.08,
+          5.551115123125783e-17,
+          -11.93
+        ],
+        "surface": "wood",
+        "elapsed": 517.3737999327174,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "twelve",
+          "shop",
+          "habitat"
+        ],
+        "textures": {
+          "residentSources": 212,
+          "sharedHits": 755,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 835103104
+        },
+        "calls": 247,
+        "pixelRatio": 1,
+        "depth": 0.9831458333355239,
+        "phase": 4,
+        "seconds": 205.95500000052573,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1,
+          "pa_hall3": 1,
+          "hab_1": 1,
+          "hab_2": 1,
+          "pa_hall4": 1,
+          "pa_hall4_missing": 1,
+          "log_reginald": 1,
+          "pa_hall4_full": 1,
+          "dome_0": 1,
+          "dome_1": 1,
+          "dome_2": 1,
+          "dome_3": 1,
+          "dome_4": 1,
+          "dome_5": 1,
+          "pa_shop_1": 1,
+          "dome_leave": 1
+        }
+      },
+      "inputs": [
+        {
+          "key": "E",
+          "at": 1.100308799999999,
+          "prompt": "Open the exit door"
+        }
+      ],
+      "audioAfterVideoSeconds": 0.001,
+      "after": {
+        "zone": "shop",
+        "feet": [
+          14.2,
+          5.551115123125783e-17,
+          -5
+        ],
+        "surface": "wood",
+        "elapsed": 522.0598999320629,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "twelve",
+          "shop",
+          "habitat"
+        ],
+        "textures": {
+          "residentSources": 212,
+          "sharedHits": 755,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 835103104
+        },
+        "calls": 77,
+        "pixelRatio": 1,
+        "depth": 0.978264479169539,
+        "phase": 4,
+        "seconds": 204.78347500068935,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "id": "pa_shop_2",
+          "seconds": 3.500408,
+          "duration": 5.61,
+          "gain": 0.3852179799446978,
+          "pan": -0.7950757195399705,
+          "duck": 1,
+          "subtitle": "Please exit through the gift shop. Again.",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1,
+          "pa_hall3": 1,
+          "hab_1": 1,
+          "hab_2": 1,
+          "pa_hall4": 1,
+          "pa_hall4_missing": 1,
+          "log_reginald": 1,
+          "pa_hall4_full": 1,
+          "dome_0": 1,
+          "dome_1": 1,
+          "dome_2": 1,
+          "dome_3": 1,
+          "dome_4": 1,
+          "dome_5": 1,
+          "pa_shop_1": 1,
+          "dome_leave": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.002,
+          "voice": "",
+          "pa": ""
+        },
+        {
+          "at": 1.212,
+          "voice": "",
+          "pa": "pa_shop_2"
+        }
+      ],
+      "cut": {
+        "sourceDuration": 4.68,
+        "cutFrom": 0.2799999999999997,
+        "cutTo": 4.279999999999999
+      }
+    },
+    {
+      "id": "loop",
+      "seconds": 4,
+      "cutTo": [
+        15.08,
+        0,
+        -11.93
+      ],
+      "before": {
+        "zone": "shop",
+        "feet": [
+          15.08,
+          5.551115123125783e-17,
+          -11.93
+        ],
+        "surface": "wood",
+        "elapsed": 523.0083999318581,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "twelve",
+          "shop",
+          "habitat"
+        ],
+        "textures": {
+          "residentSources": 212,
+          "sharedHits": 755,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 835103104
+        },
+        "calls": 247,
+        "pixelRatio": 1,
+        "depth": 0.977276458336419,
+        "phase": 4,
+        "seconds": 204.54635000074055,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "id": "pa_shop_2",
+          "seconds": 4.449524,
+          "duration": 5.61,
+          "gain": 0.6395429012832231,
+          "pan": 0.9130093066589098,
+          "duck": 1,
+          "subtitle": "Please exit through the gift shop. Again.",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1,
+          "pa_hall3": 1,
+          "hab_1": 1,
+          "hab_2": 1,
+          "pa_hall4": 1,
+          "pa_hall4_missing": 1,
+          "log_reginald": 1,
+          "pa_hall4_full": 1,
+          "dome_0": 1,
+          "dome_1": 1,
+          "dome_2": 1,
+          "dome_3": 1,
+          "dome_4": 1,
+          "dome_5": 1,
+          "pa_shop_1": 1,
+          "dome_leave": 1
+        }
+      },
+      "inputs": [
+        {
+          "key": "E",
+          "at": 1.1038445000000066,
+          "prompt": "Open the exit door"
+        }
+      ],
+      "audioAfterVideoSeconds": 0.001,
+      "after": {
+        "zone": "shop",
+        "feet": [
+          14.2,
+          5.551115123125783e-17,
+          -5
+        ],
+        "surface": "wood",
+        "elapsed": 527.7430999312757,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "twelve",
+          "shop",
+          "habitat"
+        ],
+        "textures": {
+          "residentSources": 212,
+          "sharedHits": 755,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 835103104
+        },
+        "calls": 84,
+        "pixelRatio": 1,
+        "depth": 0.972344479170359,
+        "phase": 4,
+        "seconds": 203.36267500088616,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "id": "pa_shop_3",
+          "seconds": 3.543946,
+          "duration": 4.97,
+          "gain": 0.3852179799446978,
+          "pan": -0.7950757195399705,
+          "duck": 1,
+          "subtitle": "The exit is now available for purchase.",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1,
+          "pa_hall3": 1,
+          "hab_1": 1,
+          "hab_2": 1,
+          "pa_hall4": 1,
+          "pa_hall4_missing": 1,
+          "log_reginald": 1,
+          "pa_hall4_full": 1,
+          "dome_0": 1,
+          "dome_1": 1,
+          "dome_2": 1,
+          "dome_3": 1,
+          "dome_4": 1,
+          "dome_5": 1,
+          "pa_shop_1": 1,
+          "dome_leave": 1,
+          "pa_shop_2": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.001,
+          "voice": "",
+          "pa": "pa_shop_2"
+        },
+        {
+          "at": 1.212,
+          "voice": "",
+          "pa": "pa_shop_3"
+        }
+      ],
+      "cut": {
+        "sourceDuration": 4.68,
+        "cutFrom": 0.2799999999999997,
+        "cutTo": 4.279999999999999
+      }
+    },
+    {
+      "id": "sale",
+      "seconds": 6,
+      "cutTo": [
+        22.76,
+        0,
+        -9.89
+      ],
+      "before": {
+        "zone": "shop",
+        "feet": [
+          22.76,
+          5.551115123125783e-17,
+          -9.89
+        ],
+        "surface": "wood",
+        "elapsed": 528.6748999310585,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "twelve",
+          "shop",
+          "habitat"
+        ],
+        "textures": {
+          "residentSources": 212,
+          "sharedHits": 755,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 835103104
+        },
+        "calls": 127,
+        "pixelRatio": 1,
+        "depth": 0.9713738541705852,
+        "phase": 4,
+        "seconds": 203.12972500094045,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "id": "pa_shop_3",
+          "seconds": 4.481451,
+          "duration": 4.97,
+          "gain": 0.3852179799446978,
+          "pan": -0.7950757195399705,
+          "duck": 1,
+          "subtitle": "The exit is now available for purchase.",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1,
+          "pa_hall3": 1,
+          "hab_1": 1,
+          "hab_2": 1,
+          "pa_hall4": 1,
+          "pa_hall4_missing": 1,
+          "log_reginald": 1,
+          "pa_hall4_full": 1,
+          "dome_0": 1,
+          "dome_1": 1,
+          "dome_2": 1,
+          "dome_3": 1,
+          "dome_4": 1,
+          "dome_5": 1,
+          "pa_shop_1": 1,
+          "dome_leave": 1,
+          "pa_shop_2": 1
+        }
+      },
+      "inputs": [
+        {
+          "key": "E",
+          "at": 1.0990064000000712,
+          "prompt": "Buy Exit"
+        }
+      ],
+      "audioAfterVideoSeconds": 0.002,
+      "after": {
+        "zone": "shop",
+        "feet": [
+          22.76,
+          5.551115123125783e-17,
+          -9.89
+        ],
+        "surface": "wood",
+        "elapsed": 535.4176999303662,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "twelve",
+          "shop",
+          "habitat"
+        ],
+        "textures": {
+          "residentSources": 212,
+          "sharedHits": 755,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 835103104
+        },
+        "calls": 127,
+        "pixelRatio": 1,
+        "depth": 0.9643501041713063,
+        "phase": 4,
+        "seconds": 201.44402500111352,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1,
+          "pa_hall3": 1,
+          "hab_1": 1,
+          "hab_2": 1,
+          "pa_hall4": 1,
+          "pa_hall4_missing": 1,
+          "log_reginald": 1,
+          "pa_hall4_full": 1,
+          "dome_0": 1,
+          "dome_1": 1,
+          "dome_2": 1,
+          "dome_3": 1,
+          "dome_4": 1,
+          "dome_5": 1,
+          "pa_shop_1": 1,
+          "dome_leave": 1,
+          "pa_shop_2": 1,
+          "pa_shop_3": 1,
+          "pa_shop_buy": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.003,
+          "voice": "",
+          "pa": "pa_shop_3"
+        },
+        {
+          "at": 0.62,
+          "voice": "",
+          "pa": ""
+        },
+        {
+          "at": 1.204,
+          "voice": "",
+          "pa": "pa_shop_buy"
+        },
+        {
+          "at": 6.693,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 6.72,
+        "cutFrom": 0.31999999999999973,
+        "cutTo": 6.319999999999999
+      }
+    },
+    {
+      "id": "home",
+      "seconds": 13,
+      "cutTo": [
+        15.13,
+        0,
+        -11.94
+      ],
+      "before": {
+        "zone": "shop",
+        "feet": [
+          15.13,
+          5.551115123125783e-17,
+          -11.94
+        ],
+        "surface": "wood",
+        "elapsed": 536.3475999302573,
+        "ready": true,
+        "loaded": [
+          "hall",
+          "twelve",
+          "shop",
+          "habitat"
+        ],
+        "textures": {
+          "residentSources": 212,
+          "sharedHits": 755,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 835103104
+        },
+        "calls": 257,
+        "pixelRatio": 1,
+        "depth": 0.9633814583380864,
+        "phase": 4,
+        "seconds": 201.21155000114075,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1,
+          "pa_timeline": 1,
+          "ev_h0": 1,
+          "pa_photos": 1,
+          "pa_hall1": 1,
+          "pa_hall1_press": 1,
+          "pa_hall2": 1,
+          "hoof_1": 1,
+          "hoof_2": 1,
+          "hoof_3": 1,
+          "hoof_4": 1,
+          "hoof_5": 1,
+          "hoof_6": 1,
+          "hoof_7": 1,
+          "hoof_8": 1,
+          "pa_hall3": 1,
+          "hab_1": 1,
+          "hab_2": 1,
+          "pa_hall4": 1,
+          "pa_hall4_missing": 1,
+          "log_reginald": 1,
+          "pa_hall4_full": 1,
+          "dome_0": 1,
+          "dome_1": 1,
+          "dome_2": 1,
+          "dome_3": 1,
+          "dome_4": 1,
+          "dome_5": 1,
+          "pa_shop_1": 1,
+          "dome_leave": 1,
+          "pa_shop_2": 1,
+          "pa_shop_3": 1,
+          "pa_shop_buy": 1
+        }
+      },
+      "inputs": [
+        {
+          "key": "E",
+          "at": 1.1095157000001055,
+          "prompt": "Go home"
+        },
+        {
+          "action": "Skip the recap introduction after the natural departure",
+          "at": 13.763929800000042
+        }
+      ],
+      "audioAfterVideoSeconds": 0.001,
+      "recapPhoto": {
+        "width": 1100,
+        "height": 756,
+        "characters": 112751
+      },
+      "after": {
+        "recap": true,
+        "ending": "ll_end",
+        "photoCharacters": 112751
+      },
+      "speechChanges": [
+        {
+          "at": 0.001,
+          "voice": "",
+          "pa": ""
+        },
+        {
+          "at": 1.204,
+          "voice": "",
+          "pa": "pa_leave"
+        },
+        {
+          "at": 9.603,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 16.36,
+        "cutFrom": 2.9599999999999995,
+        "cutTo": 15.959999999999999
+      }
+    }
+  ],
+  "faults": [],
+  "mediaRequests": [
+    "manifest.json",
+    "resting-index.json",
+    "hall/pa_arrive_1.mp3",
+    "hall/pa_turnstile.mp3",
+    "hall/pa_arrive_2.mp3",
+    "resting-atlas.webp",
+    "hall/pa_timeline.mp3",
+    "hall/ev_h0.mp3",
+    "slides/chew_a.webp",
+    "slides/chew.webp",
+    "slides/chew_c.webp",
+    "hall/pa_photos.mp3",
+    "slides/moon.webp",
+    "hall/pa_hall1.mp3",
+    "hall/pa_hall1_press.mp3",
+    "hall/pa_hall2.mp3",
+    "hall/hoof_1.mp3",
+    "hall/hoof_2.mp3",
+    "hall/hoof_3.mp3",
+    "hall/hoof_4.mp3",
+    "hall/hoof_5.mp3",
+    "hall/hoof_6.mp3",
+    "hall/hoof_7.mp3",
+    "hall/hoof_8.mp3",
+    "hall/pa_hall3.mp3",
+    "hall/hab_1.mp3",
+    "hall/hab_2.mp3",
+    "hall/pa_hall4.mp3",
+    "hall/pa_hall4_missing.mp3",
+    "hall/log_reginald.mp3",
+    "slides/constitution.webp",
+    "slides/captcha.webp",
+    "hall/pa_hall4_full.mp3",
+    "hall/dome_0.mp3",
+    "hall/dome_1.mp3",
+    "hall/dome_2.mp3",
+    "hall/dome_3.mp3",
+    "hall/dome_4.mp3",
+    "hall/dome_5.mp3",
+    "hall/pa_shop_1.mp3",
+    "hall/dome_leave.mp3",
+    "hall/pa_shop_2.mp3",
+    "hall/pa_shop_3.mp3",
+    "hall/pa_shop_buy.mp3",
+    "hall/pa_leave.mp3"
+  ],
+  "roomGeometry": {
+    "atrium-4308d0fb1096.glb.gz": {
+      "bytes": 4110656,
+      "sha256": "4308d0fb1096f20257984e4b4453ab10f6f3ecdf38dc2dabb5f5e2bb69dca9dc"
+    },
+    "chronology.glb": {
+      "bytes": 1800392,
+      "sha256": "b26531fb332d9b90467cc5552cf1327f6b29bf1976eec23cc7a661148ece67cc"
+    },
+    "forum.glb": {
+      "bytes": 1698324,
+      "sha256": "839d736f05589ca0b1519d5b5e06ab9f2f8ff7b0dc9bdefebbffd62fcd2bb2b5"
+    },
+    "commons.glb": {
+      "bytes": 1888784,
+      "sha256": "02ea881f38a060e81ca30b1dfb100b0627e1ebfb70b5e598d77514a9def3f698"
+    },
+    "aquarium.glb": {
+      "bytes": 2396044,
+      "sha256": "be9eae5838bc2993e8c74bcd6b3651e9b47f6cc7e9edd141ba0590a6de6387a9"
+    },
+    "service.glb": {
+      "bytes": 1198624,
+      "sha256": "b83ffbf3b78cdfc47f9fd1d54172bf54ebc14d1639b8fee5f8696e30f1c83815"
+    },
+    "secret.glb": {
+      "bytes": 2004632,
+      "sha256": "077822a3213c6c2ce0814a25743312cc624afd05ef5f15dcd580513e71c51bb9"
+    },
+    "catwalk.glb": {
+      "bytes": 803564,
+      "sha256": "4425583931f77cf77ecd14ec1d8e7a68fa2ea8ae9c1494ecfb38c15363167f7b"
+    },
+    "dome.glb": {
+      "bytes": 3559232,
+      "sha256": "57d7fdea4c632d272d45fc178cd5bf3e2013d74697697b393eeaacfc57426bae"
+    },
+    "hall.glb": {
+      "bytes": 4109332,
+      "sha256": "2fb2f447c7474ad1d2e89ddfde3a22cdf0af259ad00049e13a8e8eed07e6fc0e"
+    },
+    "hoof.glb": {
+      "bytes": 648244,
+      "sha256": "b7b2b876d4935991f75a26d04f5602a6b287555cab63a199b7bb8cd01ce2e2d1"
+    },
+    "habitat.glb": {
+      "bytes": 631204,
+      "sha256": "44fa385387ade94cc0c9253beeadfde24e4922162dbb1eb482bc8abb7a70a0e4"
+    },
+    "twelve.glb": {
+      "bytes": 11766072,
+      "sha256": "16b4938fff3f903bb486d95fc37d0b72a57b856d83da41d124f30e16af88ed98"
+    },
+    "shop.glb": {
+      "bytes": 828444,
+      "sha256": "3bc47be339b4e49ccb0dcf518b893111b813dadc78b40ecfb60b891b685b4437"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "browser": "157.0.8103.80",
+  "entrance": "atrium",
+  "stagedRooms": [
+    "secret",
+    "hoof",
+    "habitat",
+    "service",
+    "catwalk",
+    "hall",
+    "dome",
+    "chronology",
+    "shop",
+    "aquarium",
+    "forum",
+    "twelve",
+    "commons",
+    "atrium"
+  ],
+  "manualPresses": 3
+}

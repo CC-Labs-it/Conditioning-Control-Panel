@@ -1,0 +1,588 @@
+{
+  "room": "hall",
+  "beforeLaunch": {
+    "zone": "hall",
+    "pass": "expansion-01",
+    "bytes": 4109332,
+    "sha256": "2fb2f447c7474ad1d2e89ddfde3a22cdf0af259ad00049e13a8e8eed07e6fc0e",
+    "collisionSha256": "f189e2701aefbd6ad1f2e2bf5dbf834eb252074a4599a75a531dd7eab4ad2c8c",
+    "sharedSlabEndpoints": true
+  },
+  "utc": "2026-11-21T15:37:29.995Z",
+  "source": "Normal public ending preview with inspection placements on real walkable floors",
+  "cameras": [
+    {
+      "file": "gallery-title.jpg",
+      "opticalFile": "gallery-title.optical.jpg",
+      "description": "West mezzanine photographic collection.",
+      "feet": [
+        -9.71,
+        3.4000000953674316,
+        14
+      ],
+      "target": [
+        -11.7,
+        4.94,
+        14
+      ],
+      "eye": [
+        -9.71,
+        5.000000095367431,
+        14
+      ],
+      "quaternion": [
+        -0.010656286316657512,
+        0.7070264800995344,
+        0.010656286316657512,
+        0.7070264800995345
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58
+    },
+    {
+      "file": "gallery-overview.jpg",
+      "opticalFile": "gallery-overview.optical.jpg",
+      "description": "West mezzanine photographic collection.",
+      "feet": [
+        -9.75,
+        3.4000000953674316,
+        14.9
+      ],
+      "target": [
+        -11.49,
+        4.97,
+        5.4
+      ],
+      "eye": [
+        -9.75,
+        5.000000095367431,
+        14.9
+      ],
+      "quaternion": [
+        -0.0015467442335858285,
+        0.09045111569687184,
+        0.00014048075691448786,
+        0.9958996854686841
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58
+    },
+    {
+      "file": "gallery-projector.jpg",
+      "opticalFile": "gallery-projector.optical.jpg",
+      "description": "West mezzanine photographic collection.",
+      "feet": [
+        -9.64,
+        3.4000000953674316,
+        0.42
+      ],
+      "target": [
+        -11.59,
+        4.98,
+        0.42
+      ],
+      "eye": [
+        -9.64,
+        5.000000095367431,
+        0.42
+      ],
+      "quaternion": [
+        -0.0036260628752394016,
+        0.707097483850724,
+        0.0036260628752394024,
+        0.7070974838507239
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58
+    },
+    {
+      "file": "print-flight.jpg",
+      "opticalFile": "print-flight.optical.jpg",
+      "description": "Whole framed print with lamp, mat and physical caption.",
+      "feet": [
+        -9.93,
+        3.4000000953674316,
+        10.02
+      ],
+      "target": [
+        -11.7,
+        4.8,
+        10
+      ],
+      "eye": [
+        -9.93,
+        5.000000095367431,
+        10.02
+      ],
+      "quaternion": [
+        -0.03998130090769548,
+        0.7019885021948432,
+        0.039532087065195044,
+        0.7099653882100443
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "key": "flight"
+    },
+    {
+      "file": "caption-flight.jpg",
+      "opticalFile": "caption-flight.optical.jpg",
+      "description": "Physical brass caption read from the walkable upper gallery.",
+      "feet": [
+        -10.88,
+        3.4000000953674316,
+        10.02
+      ],
+      "target": [
+        -11.68,
+        4.137,
+        10
+      ],
+      "eye": [
+        -10.88,
+        5.000000095367431,
+        10.02
+      ],
+      "quaternion": [
+        -0.2863796091896057,
+        0.6399140977857349,
+        0.2793095986087263,
+        0.6561118921498907
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "key": "flight"
+    },
+    {
+      "file": "print-loch.jpg",
+      "opticalFile": "print-loch.optical.jpg",
+      "description": "Whole framed print with lamp, mat and physical caption.",
+      "feet": [
+        -9.93,
+        3.4000000953674316,
+        6.02
+      ],
+      "target": [
+        -11.7,
+        4.8,
+        6
+      ],
+      "eye": [
+        -9.93,
+        5.000000095367431,
+        6.02
+      ],
+      "quaternion": [
+        -0.03998130090769548,
+        0.7019885021948432,
+        0.039532087065195044,
+        0.7099653882100443
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "key": "loch"
+    },
+    {
+      "file": "caption-loch.jpg",
+      "opticalFile": "caption-loch.optical.jpg",
+      "description": "Physical brass caption read from the walkable upper gallery.",
+      "feet": [
+        -10.88,
+        3.4000000953674316,
+        6.02
+      ],
+      "target": [
+        -11.68,
+        4.137,
+        6
+      ],
+      "eye": [
+        -10.88,
+        5.000000095367431,
+        6.02
+      ],
+      "quaternion": [
+        -0.2863796091896057,
+        0.6399140977857349,
+        0.2793095986087263,
+        0.6561118921498907
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "key": "loch"
+    },
+    {
+      "file": "print-summit.jpg",
+      "opticalFile": "print-summit.optical.jpg",
+      "description": "Whole framed print with lamp, mat and physical caption.",
+      "feet": [
+        -9.93,
+        3.4000000953674316,
+        2.6
+      ],
+      "target": [
+        -11.7,
+        4.8,
+        2.58
+      ],
+      "eye": [
+        -9.93,
+        5.000000095367431,
+        2.6
+      ],
+      "quaternion": [
+        -0.03998130090769548,
+        0.7019885021948431,
+        0.03953208706519504,
+        0.7099653882100444
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "key": "summit"
+    },
+    {
+      "file": "caption-summit.jpg",
+      "opticalFile": "caption-summit.optical.jpg",
+      "description": "Physical brass caption read from the walkable upper gallery.",
+      "feet": [
+        -10.88,
+        3.4000000953674316,
+        2.6
+      ],
+      "target": [
+        -11.68,
+        4.137,
+        2.58
+      ],
+      "eye": [
+        -10.88,
+        5.000000095367431,
+        2.6
+      ],
+      "quaternion": [
+        -0.2863796091896057,
+        0.6399140977857346,
+        0.279309598608726,
+        0.6561118921498911
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "key": "summit"
+    },
+    {
+      "file": "print-woods.jpg",
+      "opticalFile": "print-woods.optical.jpg",
+      "description": "Whole framed print with lamp, mat and physical caption.",
+      "feet": [
+        -9.93,
+        3.4000000953674316,
+        -1.98
+      ],
+      "target": [
+        -11.7,
+        4.8,
+        -2
+      ],
+      "eye": [
+        -9.93,
+        5.000000095367431,
+        -1.98
+      ],
+      "quaternion": [
+        -0.03998130090769548,
+        0.7019885021948431,
+        0.03953208706519504,
+        0.7099653882100444
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "key": "woods"
+    },
+    {
+      "file": "caption-woods.jpg",
+      "opticalFile": "caption-woods.optical.jpg",
+      "description": "Physical brass caption read from the walkable upper gallery.",
+      "feet": [
+        -10.88,
+        3.4000000953674316,
+        -1.98
+      ],
+      "target": [
+        -11.68,
+        4.137,
+        -2
+      ],
+      "eye": [
+        -10.88,
+        5.000000095367431,
+        -1.98
+      ],
+      "quaternion": [
+        -0.2863796091896057,
+        0.6399140977857346,
+        0.279309598608726,
+        0.6561118921498911
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "key": "woods"
+    },
+    {
+      "file": "print-moon.jpg",
+      "opticalFile": "print-moon.optical.jpg",
+      "description": "Whole framed print with lamp, mat and physical caption.",
+      "feet": [
+        -9.93,
+        3.4000000953674316,
+        -5.98
+      ],
+      "target": [
+        -11.7,
+        4.8,
+        -6
+      ],
+      "eye": [
+        -9.93,
+        5.000000095367431,
+        -5.98
+      ],
+      "quaternion": [
+        -0.03998130090769548,
+        0.7019885021948432,
+        0.039532087065195044,
+        0.7099653882100443
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "key": "moon"
+    },
+    {
+      "file": "caption-moon.jpg",
+      "opticalFile": "caption-moon.optical.jpg",
+      "description": "Physical brass caption read from the walkable upper gallery.",
+      "feet": [
+        -10.88,
+        3.4000000953674316,
+        -5.98
+      ],
+      "target": [
+        -11.68,
+        4.137,
+        -6
+      ],
+      "eye": [
+        -10.88,
+        5.000000095367431,
+        -5.98
+      ],
+      "quaternion": [
+        -0.2863796091896057,
+        0.6399140977857349,
+        0.2793095986087263,
+        0.6561118921498907
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "key": "moon"
+    },
+    {
+      "file": "print-crossing.jpg",
+      "opticalFile": "print-crossing.optical.jpg",
+      "description": "Whole framed print with lamp, mat and physical caption.",
+      "feet": [
+        -9.93,
+        3.4000000953674316,
+        -9.98
+      ],
+      "target": [
+        -11.7,
+        4.8,
+        -10
+      ],
+      "eye": [
+        -9.93,
+        5.000000095367431,
+        -9.98
+      ],
+      "quaternion": [
+        -0.03998130090769548,
+        0.7019885021948432,
+        0.039532087065195044,
+        0.7099653882100443
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "key": "crossing"
+    },
+    {
+      "file": "caption-crossing.jpg",
+      "opticalFile": "caption-crossing.optical.jpg",
+      "description": "Physical brass caption read from the walkable upper gallery.",
+      "feet": [
+        -10.88,
+        3.4000000953674316,
+        -9.98
+      ],
+      "target": [
+        -11.68,
+        4.137,
+        -10
+      ],
+      "eye": [
+        -10.88,
+        5.000000095367431,
+        -9.98
+      ],
+      "quaternion": [
+        -0.2863796091896057,
+        0.6399140977857349,
+        0.2793095986087263,
+        0.6561118921498907
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "key": "crossing"
+    },
+    {
+      "file": "print-girder.jpg",
+      "opticalFile": "print-girder.optical.jpg",
+      "description": "Whole framed print with lamp, mat and physical caption.",
+      "feet": [
+        -9.93,
+        3.4000000953674316,
+        -13.98
+      ],
+      "target": [
+        -11.7,
+        4.8,
+        -14
+      ],
+      "eye": [
+        -9.93,
+        5.000000095367431,
+        -13.98
+      ],
+      "quaternion": [
+        -0.03998130090769548,
+        0.7019885021948432,
+        0.039532087065195044,
+        0.7099653882100443
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "key": "girder"
+    },
+    {
+      "file": "caption-girder.jpg",
+      "opticalFile": "caption-girder.optical.jpg",
+      "description": "Physical brass caption read from the walkable upper gallery.",
+      "feet": [
+        -10.88,
+        3.4000000953674316,
+        -13.98
+      ],
+      "target": [
+        -11.68,
+        4.137,
+        -14
+      ],
+      "eye": [
+        -10.88,
+        5.000000095367431,
+        -13.98
+      ],
+      "quaternion": [
+        -0.2863796091896057,
+        0.6399140977857349,
+        0.2793095986087263,
+        0.6561118921498907
+      ],
+      "zone": "hall",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "key": "girder"
+    }
+  ],
+  "errors": [],
+  "browserGeometry": {
+    "pathname": "/fuzz/assets/expo/zones/hall.glb",
+    "bytes": 4109332,
+    "sha256": "2fb2f447c7474ad1d2e89ddfde3a22cdf0af259ad00049e13a8e8eed07e6fc0e",
+    "publication": {
+      "zone": "hall",
+      "pass": "expansion-01",
+      "bytes": 4109332,
+      "sha256": "2fb2f447c7474ad1d2e89ddfde3a22cdf0af259ad00049e13a8e8eed07e6fc0e",
+      "collisionSha256": "f189e2701aefbd6ad1f2e2bf5dbf834eb252074a4599a75a531dd7eab4ad2c8c",
+      "sharedSlabEndpoints": true
+    }
+  },
+  "complete": true
+}

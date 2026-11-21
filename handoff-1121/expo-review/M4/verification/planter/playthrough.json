@@ -1,0 +1,172 @@
+{
+  "cues": [
+    {
+      "egg": {
+        "used": true,
+        "held": true,
+        "seconds": 10.020299998694666,
+        "cues": 1
+      },
+      "feet": [
+        9.630796992444228,
+        3.7200000286102295,
+        -6.832828636328411
+      ],
+      "voice": {
+        "id": "planter_10",
+        "seconds": 0.016700000000000728,
+        "gain": 0.06870072847330716,
+        "pan": 0.94,
+        "duck": 1,
+        "subtitle": "Oh, you thought, “I am so clever. I am going to break the game and jump down.”",
+        "queue": []
+      },
+      "pa": {
+        "seconds": 0,
+        "subtitle": "",
+        "queue": []
+      }
+    },
+    {
+      "egg": {
+        "used": true,
+        "held": true,
+        "seconds": 60.01119999122149,
+        "cues": 2
+      },
+      "feet": [
+        9.630796992444228,
+        3.7200000286102295,
+        -6.832828636328411
+      ],
+      "voice": {
+        "id": "planter_60",
+        "seconds": 0,
+        "duck": 1,
+        "subtitle": "You have been in the planter for one minute. The fern would like its place back.",
+        "queue": []
+      },
+      "pa": {
+        "seconds": 0,
+        "subtitle": "",
+        "queue": []
+      }
+    },
+    {
+      "egg": {
+        "used": true,
+        "held": false,
+        "seconds": 120,
+        "cues": 3
+      },
+      "feet": [
+        9.630796992444228,
+        3.7200000286102295,
+        -6.832828636328411
+      ],
+      "voice": {
+        "id": "planter_120",
+        "seconds": 0,
+        "duck": 1,
+        "subtitle": "You may climb down and continue. We might not be so indulgent next time.",
+        "queue": []
+      },
+      "pa": {
+        "seconds": 0,
+        "subtitle": "",
+        "queue": []
+      }
+    }
+  ],
+  "landing": [
+    9.4276,
+    3.7200000286102295,
+    -6.586140285788507
+  ],
+  "attempt": {
+    "egg": {
+      "used": true,
+      "held": true,
+      "seconds": 0.5251000000119208,
+      "cues": 0
+    },
+    "feet": [
+      9.630796992444228,
+      3.7200000286102295,
+      -6.832828636328411
+    ],
+    "voice": {
+      "seconds": 0,
+      "subtitle": "",
+      "queue": []
+    },
+    "pa": {
+      "id": "pa_arrive_1",
+      "seconds": 1.773424,
+      "gain": 0.04725876365092957,
+      "pan": -0.469700913486356,
+      "duck": 1,
+      "subtitle": "Welcome to Llama Expo 2037. Feed is included. Please keep your hands where we can use them.",
+      "queue": []
+    }
+  },
+  "pause": {
+    "before": 0.6238000000059607,
+    "after": 0.6238000000059607
+  },
+  "after": {
+    "egg": {
+      "used": true,
+      "held": false,
+      "seconds": 120,
+      "cues": 3
+    },
+    "feet": [
+      9.875100228881836,
+      3.3999998569488525,
+      -6.6
+    ],
+    "voice": {
+      "id": "planter_120",
+      "seconds": 0.08119999998807907,
+      "gain": 0.06870072847330716,
+      "pan": 0.94,
+      "duck": 1,
+      "subtitle": "You may climb down and continue. We might not be so indulgent next time.",
+      "queue": []
+    },
+    "pa": {
+      "seconds": 0,
+      "subtitle": "",
+      "queue": []
+    }
+  },
+  "walked": {
+    "egg": {
+      "used": true,
+      "held": false,
+      "seconds": 120,
+      "cues": 3
+    },
+    "feet": [
+      10.806398584419243,
+      3.3999998569488525,
+      -7.730629210720736
+    ],
+    "voice": {
+      "id": "planter_120",
+      "seconds": 0.4473999999165391,
+      "gain": 0.06621342438612617,
+      "pan": 0.94,
+      "duck": 1,
+      "subtitle": "You may climb down and continue. We might not be so indulgent next time.",
+      "queue": []
+    },
+    "pa": {
+      "seconds": 0,
+      "subtitle": "",
+      "queue": []
+    }
+  },
+  "passed": true
+}

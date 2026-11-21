@@ -1,0 +1,110 @@
+{
+  "scope": "Final three-slide chronology at accessible standing positions, six mounted chapter headers, and seven archive prints with enlarged brass captions.",
+  "browserGeometry": [
+    {
+      "pathname": "/fuzz/assets/expo/zones/chronology.glb",
+      "bytes": 1800392,
+      "sha256": "b26531fb332d9b90467cc5552cf1327f6b29bf1976eec23cc7a661148ece67cc",
+      "publication": {
+        "zone": "chronology",
+        "pass": "expansion-02",
+        "bytes": 1800392,
+        "sha256": "b26531fb332d9b90467cc5552cf1327f6b29bf1976eec23cc7a661148ece67cc",
+        "collisionSha256": "cf0feb628fc07502e44d6867a75f87d4f46a7cbf22c0a02b3fed1d74284d305a",
+        "furnitureColliders": [
+          "Archive cabinet case"
+        ]
+      }
+    },
+    {
+      "pathname": "/fuzz/assets/expo/zones/forum.glb",
+      "bytes": 1698324,
+      "sha256": "839d736f05589ca0b1519d5b5e06ab9f2f8ff7b0dc9bdefebbffd62fcd2bb2b5",
+      "publication": {
+        "zone": "forum",
+        "pass": "expansion-02",
+        "bytes": 1698324,
+        "sha256": "839d736f05589ca0b1519d5b5e06ab9f2f8ff7b0dc9bdefebbffd62fcd2bb2b5",
+        "collisionSha256": "74f6f1bfdf04ad633151bd96cd4a02b14114518b4b0687f18c425fcad5643b2d",
+        "furnitureColliders": [
+          "Forum desk top",
+          "Forum desk pedestals"
+        ]
+      }
+    },
+    {
+      "pathname": "/fuzz/assets/expo/zones/commons.glb",
+      "bytes": 1888784,
+      "sha256": "02ea881f38a060e81ca30b1dfb100b0627e1ebfb70b5e598d77514a9def3f698",
+      "publication": {
+        "zone": "commons",
+        "pass": "expansion-03",
+        "bytes": 1888784,
+        "sha256": "02ea881f38a060e81ca30b1dfb100b0627e1ebfb70b5e598d77514a9def3f698",
+        "collisionSha256": "791e9c846f960c3baedd0b63e9b4a5f49e917bc115c7c5064d7325c120750db6",
+        "furnitureColliders": [
+          "Commons hydroponic beds",
+          "Commons growing-bed feet",
+          "Commons propagation lamps",
+          "Commons espalier planters",
+          "Commons garden service tread"
+        ]
+      }
+    },
+    {
+      "pathname": "/fuzz/assets/expo/zones/aquarium.glb",
+      "bytes": 2396044,
+      "sha256": "be9eae5838bc2993e8c74bcd6b3651e9b47f6cc7e9edd141ba0590a6de6387a9",
+      "publication": {
+        "zone": "aquarium",
+        "pass": "expansion-04",
+        "bytes": 2396044,
+        "sha256": "be9eae5838bc2993e8c74bcd6b3651e9b47f6cc7e9edd141ba0590a6de6387a9"
+      }
+    },
+    {
+      "pathname": "/fuzz/assets/expo/zones/hall.glb",
+      "bytes": 4109332,
+      "sha256": "2fb2f447c7474ad1d2e89ddfde3a22cdf0af259ad00049e13a8e8eed07e6fc0e",
+      "publication": {
+        "zone": "hall",
+        "pass": "expansion-01",
+        "bytes": 4109332,
+        "sha256": "2fb2f447c7474ad1d2e89ddfde3a22cdf0af259ad00049e13a8e8eed07e6fc0e",
+        "collisionSha256": "f189e2701aefbd6ad1f2e2bf5dbf834eb252074a4599a75a531dd7eab4ad2c8c",
+        "sharedSlabEndpoints": true
+      }
+    }
+  ],
+  "inspectionPositions": "32 visitor-height inspections at the published annex records and hall photographic collection. The relocated record 21 is shown at its new Commons position.",
+  "visualReadback": {
+    "record10": "The complete projection and its physical accession are visible at the final Chronology station.",
+    "record26": "The complete projection and accession are visible on approach to Henry.",
+    "record21": "The new Commons presentation includes a complete projection and an independent accession plate close-up.",
+    "chapters": [
+      "Before, and The Connection",
+      "The Polite Coup",
+      "The Hoof Problem",
+      "Feed Is Included",
+      "The Chewing Years",
+      "The Expo"
+    ],
+    "printedCollection": [
+      "flight",
+      "loch",
+      "summit",
+      "woods",
+      "moon",
+      "crossing",
+      "girder"
+    ],
+    "printReview": "The published original pictures occupy seven separate physical frames, with visible mats, brass caption plates and individual dates. The crossing and girder are the last two."
+  },
+  "cameraCount": 32,
+  "sheets": [
+    "record-comparisons.jpg",
+    "chapter-headers.jpg",
+    "printed-collection.jpg",
+    "printed-captions.jpg"
+  ]
+}

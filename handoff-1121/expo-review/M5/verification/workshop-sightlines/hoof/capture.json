@@ -1,0 +1,89 @@
+{
+  "zone": "hoof",
+  "label": "13-calibration-worktop",
+  "requestedFeet": [
+    -16.93,
+    0,
+    5.97
+  ],
+  "lookAt": [
+    -17.75,
+    1.62,
+    4.4
+  ],
+  "errors": [],
+  "screens": [
+    {
+      "name": "13-calibration-worktop",
+      "look": [
+        -17.75,
+        1.62,
+        4.4
+      ],
+      "feet": [
+        -16.93,
+        0,
+        5.97
+      ],
+      "visitorPrompt": "",
+      "room": "hoof",
+      "loaded": [
+        "atrium",
+        "hoof",
+        "hall",
+        "dome"
+      ]
+    }
+  ],
+  "source": "private workshop package in the ordinary game page",
+  "sourceSha256": "b7b2b876d4935991f75a26d04f5602a6b287555cab63a199b7bb8cd01ce2e2d1",
+  "servedSha256": "b7b2b876d4935991f75a26d04f5602a6b287555cab63a199b7bb8cd01ce2e2d1",
+  "walk": {
+    "entry": [
+      -12.78,
+      0,
+      7.02
+    ],
+    "points": [
+      {
+        "complete": true,
+        "feet": [
+          -13.123375036934299,
+          0,
+          5.256722783310366
+        ],
+        "distance": 1.7963999996900395,
+        "target": [
+          -13.15,
+          5.12
+        ]
+      },
+      {
+        "complete": true,
+        "feet": [
+          -15.715377153019956,
+          0,
+          5.136256739411384
+        ],
+        "distance": 2.5947999995231235,
+        "target": [
+          -15.85,
+          5.13
+        ]
+      },
+      {
+        "complete": true,
+        "feet": [
+          -16.808277089221246,
+          0,
+          5.886446774590692
+        ],
+        "distance": 1.3255999997854238,
+        "target": [
+          -16.93,
+          5.97
+        ]
+      }
+    ]
+  }
+}

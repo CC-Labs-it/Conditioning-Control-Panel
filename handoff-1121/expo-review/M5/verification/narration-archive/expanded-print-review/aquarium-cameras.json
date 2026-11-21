@@ -1,0 +1,120 @@
+{
+  "room": "aquarium",
+  "beforeLaunch": {
+    "zone": "aquarium",
+    "pass": "expansion-04",
+    "bytes": 2396044,
+    "sha256": "be9eae5838bc2993e8c74bcd6b3651e9b47f6cc7e9edd141ba0590a6de6387a9"
+  },
+  "utc": "2026-11-21T15:37:20.604Z",
+  "source": "Normal public ending preview with inspection placements on real walkable floors",
+  "cameras": [
+    {
+      "file": "chapter-6.jpg",
+      "opticalFile": "chapter-6.optical.jpg",
+      "description": "Approach to the first accession strip in this chapter.",
+      "feet": [
+        -34.25,
+        5.551115123125783e-17,
+        46.90000228881836
+      ],
+      "target": [
+        -34.25,
+        0.8984999475479125,
+        48.57600228881836
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        -34.25,
+        1.6,
+        46.90000228881836
+      ],
+      "quaternion": [
+        -1.205694672024267e-17,
+        0.9804225962035195,
+        0.19690488275700693,
+        6.00335697126189e-17
+      ],
+      "zone": "aquarium",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "chapter": {
+        "id": "ev_m5",
+        "title": "The door to 2026",
+        "line": "2036",
+        "chapter": 6,
+        "section": "The Expo",
+        "index": 35
+      }
+    },
+    {
+      "file": "chapter-6-header.jpg",
+      "opticalFile": "chapter-6-header.optical.jpg",
+      "description": "The physical framed chapter lettering above its first record.",
+      "feet": [
+        -34.25,
+        5.551115123125783e-17,
+        45.95000228881836
+      ],
+      "target": [
+        -34.25,
+        3.1049999475479124,
+        48.71600228881836
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        -34.25,
+        1.6,
+        45.95000228881836
+      ],
+      "quaternion": [
+        1.5098913177733182e-17,
+        0.9691214310735669,
+        -0.24658396507867628,
+        5.93415729274673e-17
+      ],
+      "zone": "aquarium",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "chapter": {
+        "id": "ev_m5",
+        "title": "The door to 2026",
+        "line": "2036",
+        "chapter": 6,
+        "section": "The Expo",
+        "index": 35
+      }
+    }
+  ],
+  "errors": [],
+  "browserGeometry": {
+    "pathname": "/fuzz/assets/expo/zones/aquarium.glb",
+    "bytes": 2396044,
+    "sha256": "be9eae5838bc2993e8c74bcd6b3651e9b47f6cc7e9edd141ba0590a6de6387a9",
+    "publication": {
+      "zone": "aquarium",
+      "pass": "expansion-04",
+      "bytes": 2396044,
+      "sha256": "be9eae5838bc2993e8c74bcd6b3651e9b47f6cc7e9edd141ba0590a6de6387a9"
+    }
+  },
+  "complete": true
+}

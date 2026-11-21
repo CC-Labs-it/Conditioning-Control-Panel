@@ -1,0 +1,583 @@
+{
+  "zone": "dome",
+  "entryMs": 1842,
+  "width": 1440,
+  "height": 810,
+  "coarse": false,
+  "timing": {
+    "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5080 (0x00002C02) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "frames": 178,
+    "medianMs": 16.699999999999818,
+    "p95Ms": 16.800000000000182,
+    "firstViewBytes": 4718576
+  },
+  "shots": [
+    {
+      "name": "01-doorward",
+      "at": [
+        -15.28,
+        0,
+        -5
+      ],
+      "look": [
+        -22,
+        1.32,
+        -5
+      ],
+      "zone": "dome",
+      "feet": [
+        -15.28,
+        0,
+        -5
+      ],
+      "surface": "stone",
+      "elapsed": 7.164399999207271,
+      "ready": true,
+      "loaded": [
+        "dome"
+      ],
+      "textures": {
+        "residentSources": 35,
+        "sharedHits": 31,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 145063936
+      },
+      "calls": 15,
+      "pixelRatio": 1,
+      "depth": 0.0004724999998807925,
+      "phase": 0,
+      "seconds": 0.0944999999761585,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "02-first-vista",
+      "at": [
+        -16.18031,
+        0,
+        -8.36
+      ],
+      "look": [
+        -22,
+        1.32,
+        -5
+      ],
+      "zone": "dome",
+      "feet": [
+        -16.18031,
+        0,
+        -8.36
+      ],
+      "surface": "stone",
+      "elapsed": 7.531799999189391,
+      "ready": true,
+      "loaded": [
+        "dome",
+        "catwalk"
+      ],
+      "textures": {
+        "residentSources": 108,
+        "sharedHits": 96,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 176328704
+      },
+      "calls": 24,
+      "pixelRatio": 1,
+      "depth": 0.0023094999997913877,
+      "phase": 0,
+      "seconds": 0.4618999999582775,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "03-lettering",
+      "at": [
+        -18.64,
+        0,
+        -10.81969
+      ],
+      "look": [
+        -22,
+        1.32,
+        -5
+      ],
+      "zone": "dome",
+      "feet": [
+        -18.64,
+        0,
+        -10.81969
+      ],
+      "surface": "stone",
+      "elapsed": 7.76969999914767,
+      "ready": true,
+      "loaded": [
+        "dome",
+        "catwalk",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 108,
+        "sharedHits": 96,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
+      },
+      "calls": 78,
+      "pixelRatio": 1,
+      "depth": 0.11619879999949932,
+      "phase": 1,
+      "seconds": 22.699799999916554,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "04-crown-east",
+      "at": [
+        -22,
+        0,
+        -11.72
+      ],
+      "look": [
+        -20.9,
+        6.7,
+        -5
+      ],
+      "zone": "dome",
+      "feet": [
+        -22,
+        0,
+        -11.72
+      ],
+      "surface": "stone",
+      "elapsed": 7.993399999147668,
+      "ready": true,
+      "loaded": [
+        "dome",
+        "catwalk",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 108,
+        "sharedHits": 96,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
+      },
+      "calls": 104,
+      "pixelRatio": 1,
+      "depth": 0.13554099999949937,
+      "phase": 1,
+      "seconds": 25.92349999991656,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "05-watermark",
+      "at": [
+        -25.36,
+        0,
+        -10.81969
+      ],
+      "look": [
+        -22,
+        1.32,
+        -5
+      ],
+      "zone": "dome",
+      "feet": [
+        -25.36,
+        0,
+        -10.81969
+      ],
+      "surface": "stone",
+      "elapsed": 8.243299999135747,
+      "ready": true,
+      "loaded": [
+        "dome",
+        "catwalk",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 108,
+        "sharedHits": 96,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
+      },
+      "calls": 157,
+      "pixelRatio": 1,
+      "depth": 0.26762999999947024,
+      "phase": 2,
+      "seconds": 48.17339999990464,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "06-first-orbits",
+      "at": [
+        -27.81969,
+        0,
+        -8.36
+      ],
+      "look": [
+        -22,
+        1.32,
+        -5
+      ],
+      "zone": "dome",
+      "feet": [
+        -27.81969,
+        0,
+        -8.36
+      ],
+      "surface": "stone",
+      "elapsed": 8.472599999070173,
+      "ready": true,
+      "loaded": [
+        "dome",
+        "catwalk",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 108,
+        "sharedHits": 96,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
+      },
+      "calls": 208,
+      "pixelRatio": 1,
+      "depth": 0.2966816666657727,
+      "phase": 2,
+      "seconds": 53.402699999839086,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "07-chamber",
+      "at": [
+        -28.72,
+        0,
+        -5
+      ],
+      "look": [
+        -22,
+        1.32,
+        -5
+      ],
+      "zone": "dome",
+      "feet": [
+        -28.72,
+        0,
+        -5
+      ],
+      "surface": "stone",
+      "elapsed": 8.721499999022484,
+      "ready": true,
+      "loaded": [
+        "dome",
+        "catwalk",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 108,
+        "sharedHits": 96,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
+      },
+      "calls": 185,
+      "pixelRatio": 1,
+      "depth": 0.5152149999991308,
+      "phase": 3,
+      "seconds": 93.6515999997914,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "08-crown-west",
+      "at": [
+        -27.81969,
+        0,
+        -1.64
+      ],
+      "look": [
+        -20.9,
+        6.7,
+        -5
+      ],
+      "zone": "dome",
+      "feet": [
+        -27.81969,
+        0,
+        -1.64
+      ],
+      "surface": "stone",
+      "elapsed": 8.97089999901652,
+      "ready": true,
+      "loaded": [
+        "dome",
+        "catwalk",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 108,
+        "sharedHits": 96,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
+      },
+      "calls": 99,
+      "pixelRatio": 1,
+      "depth": 0.5912541666657727,
+      "phase": 3,
+      "seconds": 111.90099999978544,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "09-volume",
+      "at": [
+        -25.36,
+        0,
+        0.81969
+      ],
+      "look": [
+        -22,
+        1.32,
+        -5
+      ],
+      "zone": "dome",
+      "feet": [
+        -25.36,
+        0,
+        0.81969
+      ],
+      "surface": "stone",
+      "elapsed": 9.25349999896287,
+      "ready": true,
+      "loaded": [
+        "dome",
+        "catwalk",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 117,
+        "sharedHits": 149,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 356330880
+      },
+      "calls": 149,
+      "pixelRatio": 1,
+      "depth": 0.771598333332216,
+      "phase": 4,
+      "seconds": 155.18359999973183,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "10-picture-orbit",
+      "at": [
+        -22,
+        0,
+        1.72
+      ],
+      "look": [
+        -22,
+        1.32,
+        -5
+      ],
+      "zone": "dome",
+      "feet": [
+        -22,
+        5.551115123125783e-17,
+        1.72
+      ],
+      "surface": "stone",
+      "elapsed": 9.514299998933069,
+      "ready": true,
+      "loaded": [
+        "dome",
+        "catwalk",
+        "hall",
+        "hoof"
+      ],
+      "textures": {
+        "residentSources": 117,
+        "sharedHits": 149,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 378203520
+      },
+      "calls": 88,
+      "pixelRatio": 1,
+      "depth": 0.8851849999987587,
+      "phase": 4,
+      "seconds": 182.44439999970209,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "11-full-depth",
+      "at": [
+        -18.64,
+        0,
+        0.81969
+      ],
+      "look": [
+        -22,
+        1.32,
+        -5
+      ],
+      "zone": "dome",
+      "feet": [
+        -18.64,
+        0,
+        0.81969
+      ],
+      "surface": "stone",
+      "elapsed": 9.72969999890326,
+      "ready": true,
+      "loaded": [
+        "dome",
+        "catwalk",
+        "hall",
+        "hoof"
+      ],
+      "textures": {
+        "residentSources": 117,
+        "sharedHits": 149,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 378203520
+      },
+      "calls": 73,
+      "pixelRatio": 1,
+      "depth": 1,
+      "phase": 5,
+      "seconds": 210,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "12-crown-at-depth",
+      "at": [
+        -16.18031,
+        0,
+        -1.64
+      ],
+      "look": [
+        -20.9,
+        6.7,
+        -5
+      ],
+      "zone": "dome",
+      "feet": [
+        -16.18031,
+        0,
+        -1.64
+      ],
+      "surface": "stone",
+      "elapsed": 9.912799998891341,
+      "ready": true,
+      "loaded": [
+        "dome",
+        "catwalk",
+        "hall",
+        "hoof"
+      ],
+      "textures": {
+        "residentSources": 117,
+        "sharedHits": 149,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 378203520
+      },
+      "calls": 58,
+      "pixelRatio": 1,
+      "depth": 1,
+      "phase": 5,
+      "seconds": 210,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    }
+  ],
+  "issues": [],
+  "nativeSceneSha256": "57d7fdea4c632d272d45fc178cd5bf3e2013d74697697b393eeaacfc57426bae",
+  "nativePass": "dome-expansion-01"
+}

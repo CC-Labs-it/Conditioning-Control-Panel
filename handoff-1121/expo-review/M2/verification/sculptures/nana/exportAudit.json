@@ -1,0 +1,56 @@
+{
+  "id": "nana",
+  "sourceSha256": "e5213e6cd4a2c3d2e28f2f0fa9c489afe05ba404557ba99bbd038d344410deb3",
+  "sourceTriangles": 325614,
+  "glbSha256": "1eafccd020949949691f69a3a3f5f1231f576a807cdc24e2567c80fcc9da6747",
+  "glbBytes": 5456212,
+  "triangles": 47548,
+  "boundsHeight": 1.000139,
+  "fourSolesAboveLowest": {
+    "left fore": 0.0,
+    "right fore": 0.0,
+    "left hind": 0.0,
+    "right hind": 0.0
+  },
+  "sharedOcularRimVertices": {
+    "Nana, solid right eye": 162,
+    "Nana, solid left eye": 141
+  },
+  "components": {
+    "Crossed folds of scarf knot": 1076,
+    "hero_nana_cast": 21236,
+    "Knitted stitch rows on the scarf wrap": 4160,
+    "Layered scarf wrap": 2896,
+    "Long scarf end": 1184,
+    "Long scarf end knitted stitches": 832,
+    "Long scarf end selvedges": 640,
+    "Long scarf end twisted tassels": 1144,
+    "Nana, inset left pupil": 202,
+    "Nana, inset right pupil": 202,
+    "Nana, solid left eye": 2776,
+    "Nana, solid right eye": 3192,
+    "Raised rows in scarf weave": 3360,
+    "Raised woven cross stripe": 84,
+    "Raised woven cross stripe.001": 84,
+    "Raised woven cross stripe.002": 84,
+    "Raised woven cross stripe.003": 84,
+    "Raised woven cross stripe.004": 84,
+    "Raised woven cross stripe.005": 84,
+    "Raised woven cross stripe.006": 84,
+    "Raised woven cross stripe.007": 84,
+    "Scarf knot edge": 176,
+    "Short scarf end": 1184,
+    "Short scarf end knitted stitches": 832,
+    "Short scarf end selvedges": 640,
+    "Short scarf end twisted tassels": 1144
+  },
+  "materials": [
+    "fitting_aged_brass",
+    "fitting_dark_brass",
+    "fitting_satin_brass",
+    "hero_herd_globe_eye",
+    "hero_herd_pupil",
+    "hero_nana_cast"
+  ],
+  "forward": "+X"
+}

@@ -1,0 +1,216 @@
+{
+  "zones": {
+    "atrium": "e45d7a9eee5b7ec05fa222c53d5d75989b36fe33b574d533270dc38c7377f0c7",
+    "chronology": "cf0feb628fc07502e44d6867a75f87d4f46a7cbf22c0a02b3fed1d74284d305a",
+    "forum": "74f6f1bfdf04ad633151bd96cd4a02b14114518b4b0687f18c425fcad5643b2d",
+    "commons": "791e9c846f960c3baedd0b63e9b4a5f49e917bc115c7c5064d7325c120750db6",
+    "aquarium": "fc4b8d767eaf012332e386d82f82ccc35b780633a7040b091e222d749e47bfca"
+  },
+  "visuals": {
+    "atrium": "4308d0fb1096f20257984e4b4453ab10f6f3ecdf38dc2dabb5f5e2bb69dca9dc",
+    "chronology": "b26531fb332d9b90467cc5552cf1327f6b29bf1976eec23cc7a661148ece67cc",
+    "forum": "839d736f05589ca0b1519d5b5e06ab9f2f8ff7b0dc9bdefebbffd62fcd2bb2b5",
+    "commons": "02ea881f38a060e81ca30b1dfb100b0627e1ebfb70b5e598d77514a9def3f698",
+    "aquarium": "be9eae5838bc2993e8c74bcd6b3651e9b47f6cc7e9edd141ba0590a6de6387a9"
+  },
+  "seams": [
+    {
+      "from": "atrium",
+      "to": "chronology",
+      "seamCentreXZ": [
+        7.8,
+        41.0
+      ],
+      "checkedWidthMetres": 2.2,
+      "upwardContacts": 78,
+      "closedDoorCoverage": {
+        "atrium": {
+          "collider": {
+            "coverageSamples": 77,
+            "widthMetres": 3.12,
+            "heightMetres": 3.0
+          },
+          "opaqueLeaf": {
+            "coverageSamples": 77,
+            "widthMetres": 3.145,
+            "heightMetres": 3.04
+          }
+        },
+        "chronology": {
+          "collider": {
+            "coverageSamples": 77,
+            "widthMetres": 3.12,
+            "heightMetres": 3.02
+          },
+          "opaqueLeaf": {
+            "coverageSamples": 77,
+            "widthMetres": 3.12,
+            "heightMetres": 3.02
+          }
+        }
+      }
+    },
+    {
+      "from": "chronology",
+      "to": "forum",
+      "seamCentreXZ": [
+        3.4,
+        103.0
+      ],
+      "checkedWidthMetres": 5.72,
+      "upwardContacts": 78,
+      "closedDoorCoverage": {
+        "chronology": {
+          "collider": {
+            "coverageSamples": 77,
+            "widthMetres": 6.6,
+            "heightMetres": 4.62
+          },
+          "opaqueLeaf": {
+            "coverageSamples": 77,
+            "widthMetres": 6.6,
+            "heightMetres": 4.62
+          }
+        },
+        "forum": {
+          "collider": {
+            "coverageSamples": 77,
+            "widthMetres": 6.6,
+            "heightMetres": 4.62
+          },
+          "opaqueLeaf": {
+            "coverageSamples": 77,
+            "widthMetres": 6.61,
+            "heightMetres": 4.63
+          }
+        }
+      }
+    },
+    {
+      "from": "forum",
+      "to": "commons",
+      "seamCentreXZ": [
+        -66.2,
+        98.6
+      ],
+      "checkedWidthMetres": 5.72,
+      "upwardContacts": 78,
+      "closedDoorCoverage": {
+        "forum": {
+          "collider": {
+            "coverageSamples": 77,
+            "widthMetres": 6.6,
+            "heightMetres": 4.62
+          },
+          "opaqueLeaf": {
+            "coverageSamples": 77,
+            "widthMetres": 6.61,
+            "heightMetres": 4.63
+          }
+        },
+        "commons": {
+          "collider": {
+            "coverageSamples": 77,
+            "widthMetres": 6.6,
+            "heightMetres": 4.62
+          },
+          "opaqueLeaf": {
+            "coverageSamples": 77,
+            "widthMetres": 6.61,
+            "heightMetres": 4.63
+          }
+        }
+      }
+    },
+    {
+      "from": "commons",
+      "to": "aquarium",
+      "seamCentreXZ": [
+        -61.8,
+        45.5
+      ],
+      "checkedWidthMetres": 5.72,
+      "upwardContacts": 78,
+      "closedDoorCoverage": {
+        "commons": {
+          "collider": {
+            "coverageSamples": 77,
+            "widthMetres": 6.6,
+            "heightMetres": 4.62
+          },
+          "opaqueLeaf": {
+            "coverageSamples": 77,
+            "widthMetres": 6.61,
+            "heightMetres": 4.63
+          }
+        },
+        "aquarium": {
+          "collider": {
+            "coverageSamples": 77,
+            "widthMetres": 6.6,
+            "heightMetres": 4.62
+          },
+          "opaqueLeaf": {
+            "coverageSamples": 77,
+            "widthMetres": 6.61,
+            "heightMetres": 4.63
+          }
+        }
+      }
+    },
+    {
+      "from": "aquarium",
+      "to": "atrium",
+      "seamCentreXZ": [
+        -7.8,
+        41.0
+      ],
+      "checkedWidthMetres": 2.2,
+      "upwardContacts": 78,
+      "closedDoorCoverage": {
+        "aquarium": {
+          "collider": {
+            "coverageSamples": 77,
+            "widthMetres": 3.12,
+            "heightMetres": 3.02
+          },
+          "opaqueLeaf": {
+            "coverageSamples": 77,
+            "widthMetres": 3.13,
+            "heightMetres": 3.03
+          }
+        },
+        "atrium": {
+          "collider": {
+            "coverageSamples": 77,
+            "widthMetres": 3.12,
+            "heightMetres": 3.0
+          },
+          "opaqueLeaf": {
+            "coverageSamples": 77,
+            "widthMetres": 3.145,
+            "heightMetres": 3.04
+          }
+        }
+      }
+    }
+  ],
+  "stationFeet": [
+    {
+      "zone": "chronology",
+      "groundedStationContacts": 50
+    },
+    {
+      "zone": "forum",
+      "groundedStationContacts": 50
+    },
+    {
+      "zone": "commons",
+      "groundedStationContacts": 50
+    },
+    {
+      "zone": "aquarium",
+      "groundedStationContacts": 50
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "sizes": {
+    "pixels": [
+      1100,
+      756
+    ],
+    "display": [
+      495,
+      340.1875
+    ],
+    "otherElements": 0
+  },
+  "formats": {
+    "png": {
+      "size": 948388,
+      "status": "saved",
+      "type": "image/png"
+    },
+    "gif": {
+      "size": 49305,
+      "status": "saved",
+      "type": "image/gif"
+    },
+    "video": {
+      "size": 37077,
+      "status": "saved",
+      "type": "video/mp4"
+    }
+  }
+}

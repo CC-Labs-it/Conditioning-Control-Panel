@@ -1,0 +1,1424 @@
+{
+  "profile": "M4",
+  "rehearse": false,
+  "duration": 60,
+  "startedUtc": "2026-11-21T16:00:40.820Z",
+  "cameraCuts": "Cuts reposition the player between shots. Movement, interactions, sound and room transitions within each shot are live.",
+  "edits": [
+    {
+      "id": "arrival",
+      "seconds": 8,
+      "cutTo": [
+        0.22,
+        0,
+        36.21
+      ],
+      "before": {
+        "zone": "atrium",
+        "feet": [
+          0.22,
+          0,
+          36.21
+        ],
+        "surface": "stone",
+        "elapsed": 0.5085999999642373,
+        "ready": true,
+        "loaded": [
+          "atrium"
+        ],
+        "textures": {
+          "residentSources": 80,
+          "sharedHits": 0,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 268028928
+        },
+        "calls": 95,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "id": "pa_arrive_1",
+          "seconds": 0.490477,
+          "duration": 10.33,
+          "gain": 0.735228008443829,
+          "pan": -0.04548581857337977,
+          "duck": 1,
+          "subtitle": "Welcome to Llama Expo 2037. Feed is included. Please keep your hands where we can use them.",
+          "queue": []
+        },
+        "finished": {}
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "atrium",
+        "feet": [
+          0.9423262722215511,
+          0,
+          34.081703287419785
+        ],
+        "surface": "stone",
+        "elapsed": 9.250499998885388,
+        "ready": true,
+        "loaded": [
+          "atrium"
+        ],
+        "textures": {
+          "residentSources": 80,
+          "sharedHits": 0,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 268028928
+        },
+        "calls": 90,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "id": "pa_arrive_1",
+          "seconds": 9.261859,
+          "duration": 10.33,
+          "gain": 0.5920362077098053,
+          "pan": -0.03894082188328485,
+          "duck": 1,
+          "subtitle": "Welcome to Llama Expo 2037. Feed is included. Please keep your hands where we can use them.",
+          "queue": [
+            "pa_turnstile"
+          ]
+        },
+        "finished": {}
+      },
+      "speechChanges": [
+        {
+          "at": 0.002,
+          "voice": "",
+          "pa": "pa_arrive_1"
+        }
+      ],
+      "cut": {
+        "sourceDuration": 8.72,
+        "cutFrom": 0.3200000000000006,
+        "cutTo": 8.32
+      }
+    },
+    {
+      "id": "grand",
+      "seconds": 7,
+      "cutTo": [
+        0.95,
+        0,
+        34.07
+      ],
+      "before": {
+        "zone": "atrium",
+        "feet": [
+          0.95,
+          0,
+          34.07
+        ],
+        "surface": "stone",
+        "elapsed": 16.46399999788402,
+        "ready": true,
+        "loaded": [
+          "atrium"
+        ],
+        "textures": {
+          "residentSources": 80,
+          "sharedHits": 0,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 268028928
+        },
+        "calls": 90,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "id": "pa_turnstile",
+          "seconds": 6.161995,
+          "duration": 7.13,
+          "gain": 0.5920362077098053,
+          "pan": -0.03894082188328485,
+          "duck": 1,
+          "subtitle": "Thank you. You are human visitor number one. Today.",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "atrium",
+        "feet": [
+          -2.9616989698538596,
+          3.3059621918126694,
+          30.029386382058664
+        ],
+        "surface": "stone",
+        "elapsed": 24.183899997007845,
+        "ready": true,
+        "loaded": [
+          "atrium"
+        ],
+        "textures": {
+          "residentSources": 80,
+          "sharedHits": 0,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 268028928
+        },
+        "calls": 84,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "id": "pa_arrive_2",
+          "seconds": 4.201094,
+          "duration": 8.73,
+          "gain": 0.37914006010099316,
+          "pan": 0.9167307054173085,
+          "duck": 1,
+          "subtitle": "Human visitors are reminded that they are welcome. The herd has thought about this more than you have.",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.001,
+          "voice": "",
+          "pa": "pa_turnstile"
+        },
+        {
+          "at": 1.005,
+          "voice": "",
+          "pa": ""
+        },
+        {
+          "at": 3.61,
+          "voice": "",
+          "pa": "pa_arrive_2"
+        }
+      ],
+      "cut": {
+        "sourceDuration": 7.72,
+        "cutFrom": 0.31999999999999973,
+        "cutTo": 7.319999999999999
+      }
+    },
+    {
+      "id": "upper",
+      "seconds": 5,
+      "cutTo": [
+        -3.1,
+        6.8,
+        18.34
+      ],
+      "before": {
+        "zone": "atrium",
+        "feet": [
+          -3.1,
+          6.800000190734863,
+          18.34
+        ],
+        "surface": "stone",
+        "elapsed": 30.691099996000556,
+        "ready": true,
+        "loaded": [
+          "atrium"
+        ],
+        "textures": {
+          "residentSources": 80,
+          "sharedHits": 0,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 268028928
+        },
+        "calls": 109,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.021,
+      "crossings": [],
+      "after": {
+        "zone": "atrium",
+        "feet": [
+          0.9613557638982927,
+          6.800000190734863,
+          18.34
+        ],
+        "surface": "stone",
+        "elapsed": 36.430799995279585,
+        "ready": true,
+        "loaded": [
+          "atrium",
+          "hall"
+        ],
+        "textures": {
+          "residentSources": 116,
+          "sharedHits": 64,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 385878400
+        },
+        "calls": 112,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.042,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 5.76,
+        "cutFrom": 0.35999999999999976,
+        "cutTo": 5.359999999999999
+      }
+    },
+    {
+      "id": "service",
+      "seconds": 4,
+      "cutTo": [
+        30.2,
+        0,
+        24.1
+      ],
+      "before": {
+        "zone": "service",
+        "feet": [
+          30.2,
+          0,
+          24.1
+        ],
+        "surface": "carpet",
+        "elapsed": 40.72329999466586,
+        "ready": true,
+        "loaded": [
+          "atrium",
+          "hall",
+          "service"
+        ],
+        "textures": {
+          "residentSources": 130,
+          "sharedHits": 115,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 408525184
+        },
+        "calls": 245,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "service",
+        "feet": [
+          28.014232707617058,
+          0,
+          24.1
+        ],
+        "surface": "carpet",
+        "elapsed": 45.46029999405223,
+        "ready": true,
+        "loaded": [
+          "service"
+        ],
+        "textures": {
+          "residentSources": 65,
+          "sharedHits": 115,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 206016512
+        },
+        "calls": 20,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.001,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 4.68,
+        "cutFrom": 0.2799999999999997,
+        "cutTo": 4.279999999999999
+      }
+    },
+    {
+      "id": "server",
+      "seconds": 5,
+      "cutTo": [
+        25.02,
+        0,
+        29.59
+      ],
+      "before": {
+        "zone": "service",
+        "feet": [
+          25.02,
+          0,
+          29.59
+        ],
+        "surface": "carpet",
+        "elapsed": 48.971199993480276,
+        "ready": true,
+        "loaded": [
+          "service"
+        ],
+        "textures": {
+          "residentSources": 65,
+          "sharedHits": 115,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 206016512
+        },
+        "calls": 18,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "service",
+        "feet": [
+          25.000308730014734,
+          0,
+          28.64481904070718
+        ],
+        "surface": "carpet",
+        "elapsed": 54.724399992604475,
+        "ready": true,
+        "loaded": [
+          "service"
+        ],
+        "textures": {
+          "residentSources": 65,
+          "sharedHits": 115,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 206016512
+        },
+        "calls": 15,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.001,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 5.72,
+        "cutFrom": 0.31999999999999973,
+        "cutTo": 5.319999999999999
+      }
+    },
+    {
+      "id": "impossible",
+      "seconds": 4,
+      "cutTo": [
+        24.32,
+        1.14,
+        23
+      ],
+      "before": {
+        "zone": "service",
+        "feet": [
+          24.32,
+          1.1414293776728561,
+          23
+        ],
+        "surface": "stone",
+        "elapsed": 59.19859999211005,
+        "ready": true,
+        "loaded": [
+          "service"
+        ],
+        "textures": {
+          "residentSources": 65,
+          "sharedHits": 115,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 206016512
+        },
+        "calls": 21,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [
+        {
+          "from": [
+            22.42,
+            1.7000000476837158,
+            21.93155987260254
+          ],
+          "to": [
+            22.42,
+            5.099999904632568,
+            21.906688183008658
+          ]
+        }
+      ],
+      "after": {
+        "zone": "service",
+        "feet": [
+          25.10315316066805,
+          6.134057868144702,
+          20.71000155425708
+        ],
+        "surface": "stone",
+        "elapsed": 63.95709999112659,
+        "ready": true,
+        "loaded": [
+          "service"
+        ],
+        "textures": {
+          "residentSources": 65,
+          "sharedHits": 115,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 206016512
+        },
+        "calls": 14,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.001,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 4.68,
+        "cutFrom": 0.2799999999999997,
+        "cutTo": 4.279999999999999
+      }
+    },
+    {
+      "id": "contract",
+      "seconds": 5,
+      "cutTo": [
+        33.8,
+        0,
+        41
+      ],
+      "before": {
+        "zone": "secret",
+        "feet": [
+          33.8,
+          0,
+          41
+        ],
+        "surface": "wood",
+        "elapsed": 66.82249999062002,
+        "ready": true,
+        "loaded": [
+          "service",
+          "secret"
+        ],
+        "textures": {
+          "residentSources": 76,
+          "sharedHits": 147,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 273256448
+        },
+        "calls": 37,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "secret",
+        "feet": [
+          40.394796205562976,
+          0,
+          41
+        ],
+        "surface": "wood",
+        "elapsed": 72.56759998982155,
+        "ready": true,
+        "loaded": [
+          "service",
+          "secret"
+        ],
+        "textures": {
+          "residentSources": 76,
+          "sharedHits": 147,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 273256448
+        },
+        "calls": 30,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.001,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 5.72,
+        "cutFrom": 0.31999999999999973,
+        "cutTo": 5.319999999999999
+      }
+    },
+    {
+      "id": "chair",
+      "seconds": 6,
+      "cutTo": [
+        81.44,
+        0,
+        40.3
+      ],
+      "before": {
+        "zone": "secret",
+        "feet": [
+          81.44,
+          -5.551115123125783e-17,
+          40.3
+        ],
+        "surface": "wood",
+        "elapsed": 76.16079998951179,
+        "ready": true,
+        "loaded": [
+          "service",
+          "secret"
+        ],
+        "textures": {
+          "residentSources": 76,
+          "sharedHits": 147,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 273256448
+        },
+        "calls": 23,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "secret",
+        "feet": [
+          82.6982925973025,
+          0,
+          40.478340683082244
+        ],
+        "surface": "wood",
+        "elapsed": 82.8931999885701,
+        "ready": true,
+        "loaded": [
+          "secret"
+        ],
+        "textures": {
+          "residentSources": 43,
+          "sharedHits": 147,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 199032832
+        },
+        "calls": 23,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.001,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 6.68,
+        "cutFrom": 0.2799999999999997,
+        "cutTo": 6.279999999999999
+      }
+    },
+    {
+      "id": "longer",
+      "seconds": 5,
+      "cutTo": [
+        81.36,
+        0,
+        41
+      ],
+      "before": {
+        "zone": "secret",
+        "feet": [
+          81.36,
+          -5.551115123125783e-17,
+          41
+        ],
+        "surface": "wood",
+        "elapsed": 87.45379998804557,
+        "ready": true,
+        "loaded": [
+          "secret"
+        ],
+        "textures": {
+          "residentSources": 43,
+          "sharedHits": 147,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 199032832
+        },
+        "calls": 32,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [
+        {
+          "from": [
+            80.00702428529657,
+            0,
+            41
+          ],
+          "to": [
+            85.99518797601803,
+            0,
+            51
+          ]
+        }
+      ],
+      "after": {
+        "zone": "secret",
+        "feet": [
+          83.30727622279437,
+          0,
+          51
+        ],
+        "surface": "wood",
+        "elapsed": 93.20669998731859,
+        "ready": true,
+        "loaded": [
+          "secret"
+        ],
+        "textures": {
+          "residentSources": 43,
+          "sharedHits": 147,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 199032832
+        },
+        "calls": 32,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.001,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 5.68,
+        "cutFrom": 0.2799999999999997,
+        "cutTo": 5.279999999999999
+      }
+    },
+    {
+      "id": "tiny",
+      "seconds": 4,
+      "cutTo": [
+        -14.12,
+        6.8,
+        28
+      ],
+      "before": {
+        "zone": "catwalk",
+        "feet": [
+          -14.12,
+          6.800000190734863,
+          28
+        ],
+        "surface": "metal",
+        "elapsed": 97.30419998669268,
+        "ready": true,
+        "loaded": [
+          "catwalk",
+          "atrium"
+        ],
+        "textures": {
+          "residentSources": 83,
+          "sharedHits": 207,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 273865728
+        },
+        "calls": 117,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "catwalk",
+        "feet": [
+          -12.542598386553125,
+          6.800000190734863,
+          28
+        ],
+        "surface": "metal",
+        "elapsed": 102.08599998614449,
+        "ready": true,
+        "loaded": [
+          "catwalk",
+          "atrium",
+          "dome"
+        ],
+        "textures": {
+          "residentSources": 87,
+          "sharedHits": 238,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 288906240
+        },
+        "calls": 116,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.001,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 4.72,
+        "cutFrom": 0.31999999999999973,
+        "cutTo": 4.319999999999999
+      }
+    },
+    {
+      "id": "crown",
+      "seconds": 7,
+      "cutTo": [
+        -22.45,
+        11.95,
+        -2.8
+      ],
+      "before": {
+        "zone": "catwalk",
+        "feet": [
+          -22.45,
+          11.949999809265137,
+          -2.8
+        ],
+        "surface": "metal",
+        "elapsed": 105.11589998564389,
+        "ready": true,
+        "loaded": [
+          "catwalk",
+          "atrium",
+          "dome"
+        ],
+        "textures": {
+          "residentSources": 87,
+          "sharedHits": 238,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 288906240
+        },
+        "calls": 35,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "catwalk",
+        "feet": [
+          -22.05284800682273,
+          11.950000762939453,
+          -4.8453327648629285
+        ],
+        "surface": "metal",
+        "elapsed": 112.8465999846308,
+        "ready": true,
+        "loaded": [
+          "catwalk",
+          "dome"
+        ],
+        "textures": {
+          "residentSources": 44,
+          "sharedHits": 238,
+          "fullDetailMaps": 70,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 172134400
+        },
+        "calls": 35,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1,
+          "pa_turnstile": 1,
+          "pa_arrive_2": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.001,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 7.72,
+        "cutFrom": 0.31999999999999973,
+        "cutTo": 7.319999999999999
+      }
+    }
+  ],
+  "faults": [],
+  "mediaRequests": [
+    "manifest.json",
+    "resting-index.json",
+    "hall/pa_arrive_1.mp3",
+    "hall/pa_turnstile.mp3",
+    "hall/pa_arrive_2.mp3",
+    "resting-atlas.webp"
+  ],
+  "roomGeometry": {
+    "atrium-4308d0fb1096.glb.gz": {
+      "bytes": 4110656,
+      "sha256": "4308d0fb1096f20257984e4b4453ab10f6f3ecdf38dc2dabb5f5e2bb69dca9dc"
+    },
+    "hall.glb": {
+      "bytes": 4109332,
+      "sha256": "2fb2f447c7474ad1d2e89ddfde3a22cdf0af259ad00049e13a8e8eed07e6fc0e"
+    },
+    "service.glb": {
+      "bytes": 1198624,
+      "sha256": "b83ffbf3b78cdfc47f9fd1d54172bf54ebc14d1639b8fee5f8696e30f1c83815"
+    },
+    "secret.glb": {
+      "bytes": 2004632,
+      "sha256": "077822a3213c6c2ce0814a25743312cc624afd05ef5f15dcd580513e71c51bb9"
+    },
+    "catwalk.glb": {
+      "bytes": 803564,
+      "sha256": "4425583931f77cf77ecd14ec1d8e7a68fa2ea8ae9c1494ecfb38c15363167f7b"
+    },
+    "dome.glb": {
+      "bytes": 3559232,
+      "sha256": "57d7fdea4c632d272d45fc178cd5bf3e2013d74697697b393eeaacfc57426bae"
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "browser": "157.0.8103.80",
+  "entrance": "atrium",
+  "stagedRooms": [
+    "secret",
+    "hoof",
+    "habitat",
+    "service",
+    "catwalk",
+    "hall",
+    "dome",
+    "chronology",
+    "shop",
+    "aquarium",
+    "forum",
+    "twelve",
+    "commons",
+    "atrium"
+  ],
+  "manualPresses": 3
+}

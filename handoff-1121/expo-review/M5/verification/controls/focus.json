@@ -1,0 +1,244 @@
+{
+  "runs": [
+    {
+      "historical": true,
+      "trials": [
+        {
+          "label": "admission, untouched focus",
+          "key": "w",
+          "origin": {
+            "feet": [
+              0.22,
+              0,
+              36.21
+            ],
+            "active": "expo-root",
+            "frameFocus": true
+          },
+          "destination": [
+            0.22,
+            0,
+            34.71280000011922
+          ],
+          "distance": 1.4971999998807775
+        },
+        {
+          "label": "return by arrow",
+          "key": "ArrowDown",
+          "origin": {
+            "feet": [
+              0.22,
+              0,
+              34.71280000011922
+            ],
+            "active": "expo-root",
+            "frameFocus": true
+          },
+          "destination": [
+            0.22,
+            0,
+            36.23079999995233
+          ],
+          "distance": 1.5179999998331084
+        },
+        {
+          "label": "click to return from toolbar, mouse lock denied",
+          "key": "w",
+          "origin": {
+            "feet": [
+              0.22,
+              0,
+              36.23079999995233
+            ],
+            "active": "wake",
+            "frameFocus": true
+          },
+          "destination": [
+            0.22,
+            0,
+            36.23079999995233
+          ],
+          "distance": 0
+        },
+        {
+          "label": "arrow while a normal host button retains focus",
+          "key": "ArrowDown",
+          "origin": {
+            "feet": [
+              0.22,
+              0,
+              36.23079999995233
+            ],
+            "active": "wake",
+            "frameFocus": true
+          },
+          "destination": [
+            0.22,
+            0,
+            36.23079999995233
+          ],
+          "distance": 0
+        },
+        {
+          "label": "W while the launcher retains focus",
+          "key": "w",
+          "origin": {
+            "feet": [
+              0.22,
+              0,
+              36.23079999995233
+            ],
+            "active": "niched",
+            "frameFocus": false
+          },
+          "destination": [
+            0.22,
+            0,
+            36.23079999995233
+          ],
+          "distance": 0
+        },
+        {
+          "label": "arrow while the launcher retains focus",
+          "key": "ArrowDown",
+          "origin": {
+            "feet": [
+              0.22,
+              0,
+              36.23079999995233
+            ],
+            "active": "niched",
+            "frameFocus": false
+          },
+          "destination": [
+            0.22,
+            0,
+            36.23079999995233
+          ],
+          "distance": 0
+        }
+      ],
+      "dragDegrees": 12.318592595312698
+    },
+    {
+      "historical": false,
+      "trials": [
+        {
+          "label": "admission, untouched focus",
+          "key": "w",
+          "origin": {
+            "feet": [
+              0.22,
+              0,
+              36.21
+            ],
+            "active": "expo-root",
+            "frameFocus": true
+          },
+          "destination": [
+            0.22,
+            0,
+            34.77960000023842
+          ],
+          "distance": 1.4303999997615833
+        },
+        {
+          "label": "return by arrow",
+          "key": "ArrowDown",
+          "origin": {
+            "feet": [
+              0.22,
+              0,
+              34.77960000023842
+            ],
+            "active": "expo-root",
+            "frameFocus": true
+          },
+          "destination": [
+            0.22,
+            0,
+            36.293999999976165
+          ],
+          "distance": 1.5143999997377477
+        },
+        {
+          "label": "click to return from toolbar, mouse lock denied",
+          "key": "w",
+          "origin": {
+            "feet": [
+              0.22,
+              0,
+              36.293999999976165
+            ],
+            "active": "expo-root",
+            "frameFocus": true
+          },
+          "destination": [
+            0.22,
+            0,
+            34.69760000033379
+          ],
+          "distance": 1.5963999996423723
+        },
+        {
+          "label": "arrow while a normal host button retains focus",
+          "key": "ArrowDown",
+          "origin": {
+            "feet": [
+              0.22,
+              0,
+              34.69760000033379
+            ],
+            "active": "wake",
+            "frameFocus": true
+          },
+          "destination": [
+            0.22,
+            0,
+            36.2276000003338
+          ],
+          "distance": 1.5300000000000082
+        },
+        {
+          "label": "W while the launcher retains focus",
+          "key": "w",
+          "origin": {
+            "feet": [
+              0.22,
+              0,
+              36.2276000003338
+            ],
+            "active": "niched",
+            "frameFocus": false
+          },
+          "destination": [
+            0.22,
+            0,
+            34.69760000023842
+          ],
+          "distance": 1.5300000000953844
+        },
+        {
+          "label": "arrow while the launcher retains focus",
+          "key": "ArrowDown",
+          "origin": {
+            "feet": [
+              0.22,
+              0,
+              34.69760000023842
+            ],
+            "active": "niched",
+            "frameFocus": false
+          },
+          "destination": [
+            0.22,
+            0,
+            36.28760000023842
+          ],
+          "distance": 1.5900000000000034
+        }
+      ],
+      "dragDegrees": 12.318592595312698
+    }
+  ]
+}

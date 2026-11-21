@@ -1,0 +1,8 @@
+{
+  "status": "Partial fixed-layout historical baseline before the expanded chronological circuit and gaze rule",
+  "screenPhotographs": 8,
+  "stop": "The ninth recording had already been heard from the adjacent trigger area. The physical replay button did not expose a prompt at its original standing point.",
+  "actualError": [
+    "Error: Missing completed or photographed station ev_h3 {\"id\":\"ev_h3\",\"position\":9,\"zone\":\"atrium\",\"walk\":{\"complete\":true,\"first\":[-9.479147757657811,0,38.25728120761069],\"feet\":[-8.218801924702184,0,39.6028324426316],\"metres\":1.8628000000477831},\"firstProximity\":true,\"initialQueue\":[],\"playingOnArrival\":\"ev_h5\",\"replayedForPhotograph\":{\"id\":\"ev_h3\",\"prompt\":\"\",\"after\":\"ev_h5\"},\"finished\":1,\"secondsSinceAdmission\":426.06}"
+  ]
+}

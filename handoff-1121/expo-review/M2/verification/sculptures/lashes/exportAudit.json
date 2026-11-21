@@ -1,0 +1,51 @@
+{
+  "id": "lashes",
+  "sourceSha256": "d1084e2523b4ae093546df44579c5b1baf13d9a734f8798fb598fe8774c8aa14",
+  "sourceTriangles": 294014,
+  "glbSha256": "e17cba79798c2c3ff7536059887bf335bfb6d7548c5915c715a29a249ae4dba5",
+  "glbBytes": 5648224,
+  "triangles": 40267,
+  "boundsHeight": 1.000277,
+  "fourSolesAboveLowest": {
+    "left fore": 0.0,
+    "right fore": 2e-06,
+    "left hind": 9.8e-05,
+    "right hind": 0.0
+  },
+  "sharedOcularRimVertices": {
+    "Lashes, solid right eye": 126,
+    "Lashes, solid left eye": 135
+  },
+  "components": {
+    "Centerstone bezel": 392,
+    "Crescent coronet rail": 1340,
+    "Crescent coronet rail.001": 1340,
+    "Crescent coronet rail.002": 1340,
+    "Diamond-cut brass cabochon": 76,
+    "Fire-gilt finial": 164,
+    "Fire-gilt finial.001": 164,
+    "Fire-gilt finial.002": 164,
+    "Fire-gilt finial.003": 164,
+    "Fire-gilt finial.004": 164,
+    "Fire-gilt finial.005": 188,
+    "Fire-gilt finial.006": 164,
+    "Fire-gilt finial.007": 164,
+    "Fire-gilt finial.008": 164,
+    "Fire-gilt finial.009": 164,
+    "Fire-gilt finial.010": 164,
+    "hero_lashes_cast": 21331,
+    "Lashes, inset left pupil": 202,
+    "Lashes, inset right pupil": 202,
+    "Lashes, solid left eye": 984,
+    "Lashes, solid right eye": 940,
+    "Pierced teardrop galleries and connecting arches": 10292
+  },
+  "materials": [
+    "fitting_polished_brass",
+    "fitting_satin_brass",
+    "hero_herd_eye",
+    "hero_herd_pupil",
+    "hero_lashes_cast"
+  ],
+  "forward": "+X"
+}

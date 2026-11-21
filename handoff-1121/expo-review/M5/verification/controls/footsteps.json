@@ -1,0 +1,290 @@
+{
+  "source": "Ordinary game master during real keyboard walks. Each camera cut moves to the next surface.",
+  "shots": [
+    {
+      "surface": "stone",
+      "room": "hall",
+      "start": [
+        0,
+        0,
+        13.1
+      ],
+      "end": [
+        0,
+        0,
+        4.254000001168279
+      ],
+      "trace": [
+        {
+          "ms": 428.30000001192093,
+          "feet": [
+            0,
+            0,
+            11.372000000214584
+          ],
+          "surface": "stone",
+          "body": "assets/audio/sfx/thud.mp3",
+          "sole": "step-stone-1.ogg"
+        },
+        {
+          "ms": 844.8000000119209,
+          "feet": [
+            0,
+            0,
+            9.708400000500685
+          ],
+          "surface": "stone",
+          "body": "assets/audio/sfx/thud.mp3",
+          "sole": "step-stone-2.ogg"
+        },
+        {
+          "ms": 1262.4000000059605,
+          "feet": [
+            0,
+            0,
+            8.042400000977535
+          ],
+          "surface": "stone",
+          "body": "assets/audio/sfx/thud.mp3",
+          "sole": "step-stone-1.ogg"
+        },
+        {
+          "ms": 1679.199999988079,
+          "feet": [
+            0,
+            0,
+            6.3820000009775395
+          ],
+          "surface": "stone",
+          "body": "assets/audio/sfx/thud.mp3",
+          "sole": "step-stone-2.ogg"
+        },
+        {
+          "ms": 2095.800000011921,
+          "feet": [
+            0,
+            0,
+            4.719600001168278
+          ],
+          "surface": "stone",
+          "body": "assets/audio/sfx/thud.mp3",
+          "sole": "step-stone-1.ogg"
+        }
+      ]
+    },
+    {
+      "surface": "carpet",
+      "room": "hall",
+      "start": [
+        3.4,
+        0,
+        11.7
+      ],
+      "end": [
+        3.4,
+        0,
+        2.926400001025261
+      ],
+      "trace": [
+        {
+          "ms": 433,
+          "feet": [
+            3.4,
+            0,
+            9.974400000214585
+          ],
+          "surface": "carpet",
+          "body": "assets/audio/sfx/thud.mp3",
+          "sole": "step-carpet-1.ogg"
+        },
+        {
+          "ms": 849.5999999940395,
+          "feet": [
+            3.4,
+            0,
+            8.312400000643748
+          ],
+          "surface": "carpet",
+          "body": "assets/audio/sfx/thud.mp3",
+          "sole": "step-carpet-2.ogg"
+        },
+        {
+          "ms": 1266.699999988079,
+          "feet": [
+            3.4,
+            0,
+            6.650400000643745
+          ],
+          "surface": "carpet",
+          "body": "assets/audio/sfx/thud.mp3",
+          "sole": "step-carpet-3.ogg"
+        },
+        {
+          "ms": 1684.199999988079,
+          "feet": [
+            3.4,
+            0,
+            4.989200000524553
+          ],
+          "surface": "carpet",
+          "body": "assets/audio/sfx/thud.mp3",
+          "sole": "step-carpet-1.ogg"
+        },
+        {
+          "ms": 2100.699999988079,
+          "feet": [
+            3.4,
+            0,
+            3.3252000009775693
+          ],
+          "surface": "carpet",
+          "body": "assets/audio/sfx/thud.mp3",
+          "sole": "step-carpet-2.ogg"
+        }
+      ]
+    },
+    {
+      "surface": "wood",
+      "room": "hall",
+      "start": [
+        10.7,
+        3.3999998569488525,
+        5.15
+      ],
+      "end": [
+        10.7,
+        3.3999998569488525,
+        -3.6899999990701735
+      ],
+      "trace": [
+        {
+          "ms": 429.09999999403954,
+          "feet": [
+            10.7,
+            3.3999998569488525,
+            3.4252000002622744
+          ],
+          "surface": "wood",
+          "body": "assets/audio/sfx/thud.mp3",
+          "sole": "step-wood-1.ogg"
+        },
+        {
+          "ms": 846.1999999880791,
+          "feet": [
+            10.7,
+            3.3999998569488525,
+            1.7628000004291617
+          ],
+          "surface": "wood",
+          "body": "assets/audio/sfx/thud.mp3",
+          "sole": "step-wood-2.ogg"
+        },
+        {
+          "ms": 1263.0999999940395,
+          "feet": [
+            10.7,
+            3.3999998569488525,
+            0.09840000050068237
+          ],
+          "surface": "wood",
+          "body": "assets/audio/sfx/thud.mp3",
+          "sole": "step-wood-3.ogg"
+        },
+        {
+          "ms": 1680,
+          "feet": [
+            10.7,
+            3.3999998569488525,
+            -1.5607999995470019
+          ],
+          "surface": "wood",
+          "body": "assets/audio/sfx/thud.mp3",
+          "sole": "step-wood-1.ogg"
+        },
+        {
+          "ms": 2096.699999988079,
+          "feet": [
+            10.7,
+            3.3999998569488525,
+            -3.2243999992370647
+          ],
+          "surface": "wood",
+          "body": "assets/audio/sfx/thud.mp3",
+          "sole": "step-wood-2.ogg"
+        }
+      ]
+    },
+    {
+      "surface": "metal",
+      "room": "catwalk",
+      "start": [
+        -22,
+        11.949999809265137,
+        7.4
+      ],
+      "end": [
+        -22,
+        11.949999809265137,
+        -1.4483999982357512
+      ],
+      "trace": [
+        {
+          "ms": 431.69999998807907,
+          "feet": [
+            -22,
+            11.949999809265137,
+            5.670400000238384
+          ],
+          "surface": "metal",
+          "body": "assets/audio/sfx/thud.mp3",
+          "sole": "step-metal-1.ogg"
+        },
+        {
+          "ms": 848.5,
+          "feet": [
+            -22,
+            11.949999809265137,
+            4.006800000596016
+          ],
+          "surface": "metal",
+          "body": "assets/audio/sfx/thud.mp3",
+          "sole": "step-metal-2.ogg"
+        },
+        {
+          "ms": 1265.699999988079,
+          "feet": [
+            -22,
+            11.949999809265137,
+            2.3440000007628825
+          ],
+          "surface": "metal",
+          "body": "assets/audio/sfx/thud.mp3",
+          "sole": "step-metal-3.ogg"
+        },
+        {
+          "ms": 1682.5999999940395,
+          "feet": [
+            -22,
+            11.949999809265137,
+            0.6804000011443554
+          ],
+          "surface": "metal",
+          "body": "assets/audio/sfx/thud.mp3",
+          "sole": "step-metal-1.ogg"
+        },
+        {
+          "ms": 2099.699999988079,
+          "feet": [
+            -22,
+            11.949999809265137,
+            -0.9831999984026496
+          ],
+          "surface": "metal",
+          "body": "assets/audio/sfx/thud.mp3",
+          "sole": "step-metal-2.ogg"
+        }
+      ]
+    }
+  ],
+  "errors": []
+}

@@ -1,0 +1,570 @@
+{
+  "zone": "forum",
+  "entryMs": 1742,
+  "width": 1440,
+  "height": 810,
+  "coarse": false,
+  "timing": {
+    "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5080 (0x00002C02) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "frames": 178,
+    "medianMs": 16.699999999999818,
+    "p95Ms": 16.800000000000182,
+    "firstViewBytes": 4718575
+  },
+  "shots": [
+    {
+      "name": "01-ev_h5",
+      "at": [
+        -0.2,
+        0,
+        102.46
+      ],
+      "look": [
+        0.14,
+        1.78,
+        106.11
+      ],
+      "zone": "forum",
+      "feet": [
+        -0.2,
+        0,
+        102.46
+      ],
+      "surface": "stone",
+      "elapsed": 33.31309999684101,
+      "ready": true,
+      "loaded": [
+        "forum",
+        "chronology"
+      ],
+      "textures": {
+        "residentSources": 43,
+        "sharedHits": 72,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 188147712
+      },
+      "calls": 46,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "02-ev_h4",
+      "at": [
+        -5.99,
+        0,
+        103.32
+      ],
+      "look": [
+        -6.47,
+        1.78,
+        106.11
+      ],
+      "zone": "forum",
+      "feet": [
+        -5.99,
+        0,
+        103.32
+      ],
+      "surface": "stone",
+      "elapsed": 33.58799999681123,
+      "ready": true,
+      "loaded": [
+        "forum",
+        "chronology"
+      ],
+      "textures": {
+        "residentSources": 43,
+        "sharedHits": 72,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 188147712
+      },
+      "calls": 38,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "03-ev_u3",
+      "at": [
+        -13.2,
+        0,
+        103.32
+      ],
+      "look": [
+        -13.08,
+        1.78,
+        106.11
+      ],
+      "zone": "forum",
+      "feet": [
+        -13.2,
+        0,
+        103.32
+      ],
+      "surface": "stone",
+      "elapsed": 33.85289999672778,
+      "ready": true,
+      "loaded": [
+        "forum",
+        "chronology"
+      ],
+      "textures": {
+        "residentSources": 43,
+        "sharedHits": 72,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 188147712
+      },
+      "calls": 34,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "04-ev_b2",
+      "at": [
+        -20.03,
+        0,
+        102.46
+      ],
+      "look": [
+        -19.69,
+        1.78,
+        106.11
+      ],
+      "zone": "forum",
+      "feet": [
+        -20.03,
+        0,
+        102.46
+      ],
+      "surface": "stone",
+      "elapsed": 34.11929999669798,
+      "ready": true,
+      "loaded": [
+        "forum",
+        "chronology"
+      ],
+      "textures": {
+        "residentSources": 43,
+        "sharedHits": 72,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 188147712
+      },
+      "calls": 39,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "05-ev_w2",
+      "at": [
+        -25.82,
+        0,
+        103.32
+      ],
+      "look": [
+        -26.3,
+        1.78,
+        106.11
+      ],
+      "zone": "forum",
+      "feet": [
+        -25.82,
+        0,
+        103.32
+      ],
+      "surface": "stone",
+      "elapsed": 34.385499996674156,
+      "ready": true,
+      "loaded": [
+        "forum",
+        "chronology"
+      ],
+      "textures": {
+        "residentSources": 43,
+        "sharedHits": 72,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 188147712
+      },
+      "calls": 34,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "06-ev_m3",
+      "at": [
+        -33.03,
+        0,
+        103.32
+      ],
+      "look": [
+        -32.91,
+        1.78,
+        106.11
+      ],
+      "zone": "forum",
+      "feet": [
+        -33.03,
+        0,
+        103.32
+      ],
+      "surface": "stone",
+      "elapsed": 34.65139999665031,
+      "ready": true,
+      "loaded": [
+        "forum"
+      ],
+      "textures": {
+        "residentSources": 39,
+        "sharedHits": 72,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 177895424
+      },
+      "calls": 34,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "07-ev_b3",
+      "at": [
+        -39.86,
+        0,
+        102.46
+      ],
+      "look": [
+        -39.52,
+        1.78,
+        106.11
+      ],
+      "zone": "forum",
+      "feet": [
+        -39.86,
+        0,
+        102.46
+      ],
+      "surface": "stone",
+      "elapsed": 34.93429999662648,
+      "ready": true,
+      "loaded": [
+        "forum"
+      ],
+      "textures": {
+        "residentSources": 39,
+        "sharedHits": 72,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 177895424
+      },
+      "calls": 40,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "08-ev_h6",
+      "at": [
+        -45.65,
+        0,
+        103.32
+      ],
+      "look": [
+        -46.13,
+        1.78,
+        106.11
+      ],
+      "zone": "forum",
+      "feet": [
+        -45.65,
+        0,
+        103.32
+      ],
+      "surface": "stone",
+      "elapsed": 35.21749999657284,
+      "ready": true,
+      "loaded": [
+        "forum"
+      ],
+      "textures": {
+        "residentSources": 39,
+        "sharedHits": 72,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 177895424
+      },
+      "calls": 36,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "09-ev_b4",
+      "at": [
+        -52.86,
+        0,
+        103.32
+      ],
+      "look": [
+        -52.74,
+        1.78,
+        106.11
+      ],
+      "zone": "forum",
+      "feet": [
+        -52.86,
+        0,
+        103.32
+      ],
+      "surface": "stone",
+      "elapsed": 35.50049999651921,
+      "ready": true,
+      "loaded": [
+        "forum"
+      ],
+      "textures": {
+        "residentSources": 39,
+        "sharedHits": 72,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 177895424
+      },
+      "calls": 36,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "10-ev_u4",
+      "at": [
+        -59.69,
+        0,
+        102.46
+      ],
+      "look": [
+        -59.35,
+        1.78,
+        106.11
+      ],
+      "zone": "forum",
+      "feet": [
+        -59.69,
+        0,
+        102.46
+      ],
+      "surface": "stone",
+      "elapsed": 35.76099999647153,
+      "ready": true,
+      "loaded": [
+        "forum"
+      ],
+      "textures": {
+        "residentSources": 54,
+        "sharedHits": 108,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 202565632
+      },
+      "calls": 43,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "11-gallery-approach",
+      "at": [
+        2.7,
+        0,
+        103
+      ],
+      "look": [
+        -13.6,
+        2.2,
+        103
+      ],
+      "zone": "forum",
+      "feet": [
+        2.7,
+        0,
+        103
+      ],
+      "surface": "stone",
+      "elapsed": 36.37389999635831,
+      "ready": true,
+      "loaded": [
+        "forum",
+        "chronology"
+      ],
+      "textures": {
+        "residentSources": 43,
+        "sharedHits": 144,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 188147712
+      },
+      "calls": 130,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [
+        "chronology"
+      ],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "12-turning-gallery",
+      "at": [
+        -63.87415,
+        0,
+        102.48045
+      ],
+      "look": [
+        -66.17881,
+        1.8,
+        99.03127
+      ],
+      "zone": "forum",
+      "feet": [
+        -63.87415,
+        0,
+        102.48045
+      ],
+      "surface": "stone",
+      "elapsed": 36.97039999625101,
+      "ready": true,
+      "loaded": [
+        "forum",
+        "commons"
+      ],
+      "textures": {
+        "residentSources": 54,
+        "sharedHits": 180,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 204924928
+      },
+      "calls": 130,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [
+        "commons"
+      ],
+      "coldNeighborCheck": false
+    }
+  ],
+  "issues": [],
+  "nativeSceneSha256": "839d736f05589ca0b1519d5b5e06ab9f2f8ff7b0dc9bdefebbffd62fcd2bb2b5",
+  "nativePass": "forum-expansion-02"
+}

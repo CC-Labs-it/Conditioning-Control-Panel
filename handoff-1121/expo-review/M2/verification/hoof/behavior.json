@@ -1,0 +1,146 @@
+{
+  "zone": "hoof",
+  "records": [
+    {
+      "zone": "hoof",
+      "hoof": "checkbox",
+      "misses": 0,
+      "taps": 0,
+      "feeds": 0,
+      "clauses": [],
+      "realTaps": 7,
+      "name": "fitted",
+      "herd": [
+        "reginald",
+        "margaret",
+        "henry",
+        "greg",
+        "bob",
+        "lashes",
+        "kevin",
+        "spitz",
+        "gary",
+        "doctor",
+        "bartholomew",
+        "nana"
+      ],
+      "loops": 0,
+      "contract": false,
+      "exit": false,
+      "photo": false,
+      "turnstile": false,
+      "line": "",
+      "heard": [
+        "pa_arrive_1",
+        "pa_hall2"
+      ],
+      "visitor": "Signee #4071"
+    },
+    {
+      "zone": "hoof",
+      "hoof": "change",
+      "misses": 5,
+      "taps": 0,
+      "feeds": 0,
+      "clauses": [],
+      "realTaps": 7,
+      "name": "five-misses",
+      "herd": [
+        "reginald",
+        "margaret",
+        "henry",
+        "greg",
+        "bob",
+        "lashes",
+        "kevin",
+        "spitz",
+        "gary",
+        "doctor",
+        "bartholomew",
+        "nana"
+      ],
+      "loops": 0,
+      "contract": false,
+      "exit": false,
+      "photo": false,
+      "turnstile": false,
+      "line": "",
+      "heard": [
+        "pa_arrive_1",
+        "pa_hall2"
+      ],
+      "visitor": "Signee #4071"
+    },
+    {
+      "zone": "hoof",
+      "hoof": "failed",
+      "misses": 5,
+      "taps": 0,
+      "feeds": 0,
+      "clauses": [],
+      "realTaps": 7,
+      "name": "no-eligible-squares",
+      "herd": [
+        "reginald",
+        "margaret",
+        "henry",
+        "greg",
+        "bob",
+        "lashes",
+        "kevin",
+        "spitz",
+        "gary",
+        "doctor",
+        "bartholomew",
+        "nana"
+      ],
+      "loops": 0,
+      "contract": false,
+      "exit": false,
+      "photo": false,
+      "turnstile": false,
+      "line": "",
+      "heard": [
+        "pa_arrive_1",
+        "pa_hall2"
+      ],
+      "visitor": "Signee #4071"
+    },
+    {
+      "zone": "hoof",
+      "hoof": "complete",
+      "misses": 5,
+      "taps": 0,
+      "feeds": 0,
+      "clauses": [],
+      "realTaps": 7,
+      "name": "single-correct-box",
+      "herd": [
+        "reginald",
+        "margaret",
+        "henry",
+        "greg",
+        "bob",
+        "lashes",
+        "kevin",
+        "spitz",
+        "gary",
+        "doctor",
+        "bartholomew",
+        "nana"
+      ],
+      "loops": 0,
+      "contract": false,
+      "exit": false,
+      "photo": false,
+      "turnstile": false,
+      "line": "",
+      "heard": [
+        "pa_arrive_1",
+        "pa_hall2"
+      ],
+      "visitor": "Signee #4071"
+    }
+  ],
+  "issues": []
+}

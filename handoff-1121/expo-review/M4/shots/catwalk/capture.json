@@ -1,0 +1,642 @@
+{
+  "zone": "catwalk",
+  "entryMs": 1770,
+  "width": 1440,
+  "height": 810,
+  "coarse": false,
+  "timing": {
+    "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5080 (0x00002C02) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "frames": 178,
+    "medianMs": 16.699999999999818,
+    "p95Ms": 16.800000000000182,
+    "firstViewBytes": 4718576
+  },
+  "shots": [
+    {
+      "name": "01-upper-door",
+      "at": [
+        -13,
+        6.8,
+        21.04
+      ],
+      "look": [
+        -20,
+        7.81,
+        21.02
+      ],
+      "zone": "catwalk",
+      "feet": [
+        -13,
+        6.800000190734863,
+        21.04
+      ],
+      "surface": "metal",
+      "elapsed": 9.979299998658925,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "catwalk",
+        "dome",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 123,
+        "sharedHits": 130,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 406755712
+      },
+      "calls": 35,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "02-small-door-near",
+      "at": [
+        -13.39,
+        6.8,
+        27.5
+      ],
+      "look": [
+        -11.95,
+        8.2,
+        28
+      ],
+      "zone": "catwalk",
+      "feet": [
+        -13.39,
+        6.800000190734863,
+        27.5
+      ],
+      "surface": "metal",
+      "elapsed": 10.300599998635088,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "catwalk",
+        "dome",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 123,
+        "sharedHits": 130,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 406755712
+      },
+      "calls": 126,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [
+        "atrium"
+      ],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "03-small-door-oblique",
+      "at": [
+        -14.43,
+        6.8,
+        28.78
+      ],
+      "look": [
+        -12.05,
+        8.18,
+        27.92
+      ],
+      "zone": "catwalk",
+      "feet": [
+        -14.43,
+        6.800000190734863,
+        28.78
+      ],
+      "surface": "metal",
+      "elapsed": 10.615799998605278,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "catwalk",
+        "dome",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 123,
+        "sharedHits": 130,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 406755712
+      },
+      "calls": 177,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [
+        "atrium"
+      ],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "04-maintenance-flight",
+      "at": [
+        -19.23,
+        6.8,
+        21.02
+      ],
+      "look": [
+        -22.03,
+        8.69,
+        18.62
+      ],
+      "zone": "catwalk",
+      "feet": [
+        -19.23,
+        6.800000190734863,
+        21.02
+      ],
+      "surface": "metal",
+      "elapsed": 10.915099998533753,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "catwalk",
+        "dome",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 123,
+        "sharedHits": 130,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 406755712
+      },
+      "calls": 32,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "05-stair-ascent",
+      "at": [
+        -22,
+        7.55,
+        19.67
+      ],
+      "look": [
+        -22,
+        12.5,
+        12.7
+      ],
+      "zone": "catwalk",
+      "feet": [
+        -22,
+        7.546785623540695,
+        19.67
+      ],
+      "surface": "stone",
+      "elapsed": 11.197799998486065,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "catwalk",
+        "dome",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 123,
+        "sharedHits": 130,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 406755712
+      },
+      "calls": 58,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "06-return-flight",
+      "at": [
+        -22.29,
+        11.92,
+        12
+      ],
+      "look": [
+        -22.02,
+        8,
+        20.3
+      ],
+      "zone": "catwalk",
+      "feet": [
+        -22.29,
+        11.931249730288956,
+        12
+      ],
+      "surface": "metal",
+      "elapsed": 11.480699998480096,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "catwalk",
+        "dome",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 123,
+        "sharedHits": 130,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 406755712
+      },
+      "calls": 108,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "07-roof-space",
+      "at": [
+        -21.68,
+        11.95,
+        8.13
+      ],
+      "look": [
+        -22,
+        12.55,
+        -5.3
+      ],
+      "zone": "catwalk",
+      "feet": [
+        -21.68,
+        11.949999809265137,
+        8.13
+      ],
+      "surface": "metal",
+      "elapsed": 11.780199998444335,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "catwalk",
+        "dome",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 123,
+        "sharedHits": 130,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 406755712
+      },
+      "calls": 70,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "08-oculus-approach",
+      "at": [
+        -22.45,
+        11.95,
+        1.31
+      ],
+      "look": [
+        -21.1,
+        12.25,
+        -5.4
+      ],
+      "zone": "catwalk",
+      "feet": [
+        -22.45,
+        11.949999809265137,
+        1.31
+      ],
+      "surface": "metal",
+      "elapsed": 12.079899998372795,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "catwalk",
+        "dome",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 123,
+        "sharedHits": 130,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 406755712
+      },
+      "calls": 68,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "09-oculus-edge",
+      "at": [
+        -22.68,
+        11.95,
+        -3.8
+      ],
+      "look": [
+        -22.05,
+        6.4,
+        -5
+      ],
+      "zone": "catwalk",
+      "feet": [
+        -22.68,
+        11.950000762939453,
+        -3.8
+      ],
+      "surface": "metal",
+      "elapsed": 12.361899998331063,
+      "ready": true,
+      "loaded": [
+        "catwalk",
+        "dome",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 108,
+        "sharedHits": 130,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
+      },
+      "calls": 76,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "10-through-the-oculus",
+      "at": [
+        -22.02,
+        11.95,
+        -5.3
+      ],
+      "look": [
+        -21.96,
+        1.5,
+        -5.04
+      ],
+      "zone": "catwalk",
+      "feet": [
+        -22.02,
+        11.950000762939453,
+        -5.3
+      ],
+      "surface": "metal",
+      "elapsed": 12.643399998271455,
+      "ready": true,
+      "loaded": [
+        "catwalk",
+        "dome",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 108,
+        "sharedHits": 130,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
+      },
+      "calls": 76,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "11-crown-access",
+      "at": [
+        -20.98,
+        11.95,
+        -5.72
+      ],
+      "look": [
+        -25.47,
+        14.05,
+        -5.18
+      ],
+      "zone": "catwalk",
+      "feet": [
+        -20.98,
+        11.950000762939453,
+        -5.72
+      ],
+      "surface": "metal",
+      "elapsed": 12.90959999825953,
+      "ready": true,
+      "loaded": [
+        "catwalk",
+        "dome",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 108,
+        "sharedHits": 130,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
+      },
+      "calls": 18,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "12-return-walk",
+      "at": [
+        -22.08,
+        11.95,
+        -6.35
+      ],
+      "look": [
+        -21.99,
+        14.43,
+        6.75
+      ],
+      "zone": "catwalk",
+      "feet": [
+        -22.08,
+        11.950000762939453,
+        -6.35
+      ],
+      "surface": "metal",
+      "elapsed": 13.20889999820588,
+      "ready": true,
+      "loaded": [
+        "catwalk",
+        "dome",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 108,
+        "sharedHits": 130,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
+      },
+      "calls": 72,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "13-roof-intake",
+      "at": [
+        -12.99,
+        6.8,
+        24.42
+      ],
+      "look": [
+        -14.86,
+        8.29,
+        24.87
+      ],
+      "zone": "catwalk",
+      "feet": [
+        -12.99,
+        6.800000190734863,
+        24.42
+      ],
+      "surface": "metal",
+      "elapsed": 13.552399998140308,
+      "ready": true,
+      "loaded": [
+        "catwalk",
+        "dome",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 123,
+        "sharedHits": 195,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 383162752
+      },
+      "calls": 36,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    }
+  ],
+  "issues": [],
+  "nativeSceneSha256": "4425583931f77cf77ecd14ec1d8e7a68fa2ea8ae9c1494ecfb38c15363167f7b",
+  "nativePass": "catwalk-expansion-01"
+}

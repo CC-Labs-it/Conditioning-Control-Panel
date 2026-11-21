@@ -1,0 +1,638 @@
+{
+  "zone": "hoof",
+  "entryMs": 1840,
+  "width": 1440,
+  "height": 810,
+  "coarse": false,
+  "timing": {
+    "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5080 (0x00002C02) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "frames": 178,
+    "medianMs": 16.699999999999818,
+    "p95Ms": 16.800000000000182,
+    "firstViewBytes": 4718575
+  },
+  "shots": [
+    {
+      "name": "01-entrance",
+      "at": [
+        -13,
+        0,
+        7
+      ],
+      "look": [
+        -18.72,
+        1.45,
+        10.1
+      ],
+      "zone": "hoof",
+      "feet": [
+        -13,
+        0,
+        7
+      ],
+      "surface": "carpet",
+      "elapsed": 7.063099999171485,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "hoof"
+      ],
+      "textures": {
+        "residentSources": 89,
+        "sharedHits": 53,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 292359168
+      },
+      "calls": 32,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "02-workstation",
+      "at": [
+        -18.4,
+        0,
+        6
+      ],
+      "look": [
+        -18.4,
+        1.45,
+        10.4
+      ],
+      "zone": "hoof",
+      "feet": [
+        -18.4,
+        0,
+        6
+      ],
+      "surface": "carpet",
+      "elapsed": 7.326899999099959,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "hoof"
+      ],
+      "textures": {
+        "residentSources": 125,
+        "sharedHits": 117,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 292359168
+      },
+      "calls": 100,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "03-training-board",
+      "at": [
+        -22.6,
+        0,
+        7.2
+      ],
+      "look": [
+        -24.84,
+        1.83,
+        7.66
+      ],
+      "zone": "hoof",
+      "feet": [
+        -22.6,
+        0,
+        7.2
+      ],
+      "surface": "carpet",
+      "elapsed": 7.568099999129763,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "hoof",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 129,
+        "sharedHits": 147,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 410208640
+      },
+      "calls": 15,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "04-overhead-ribs",
+      "at": [
+        -22,
+        0,
+        4.6
+      ],
+      "look": [
+        -16,
+        3.3,
+        10.8
+      ],
+      "zone": "hoof",
+      "feet": [
+        -22,
+        0,
+        4.6
+      ],
+      "surface": "carpet",
+      "elapsed": 7.804199999147645,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "hoof",
+        "hall",
+        "dome"
+      ],
+      "textures": {
+        "residentSources": 129,
+        "sharedHits": 147,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 425249152
+      },
+      "calls": 202,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "05-visitor-bench",
+      "at": [
+        -15.9,
+        0,
+        5.02
+      ],
+      "look": [
+        -14.35,
+        0.7,
+        6.7
+      ],
+      "zone": "hoof",
+      "feet": [
+        -15.9,
+        0,
+        5.02
+      ],
+      "surface": "carpet",
+      "elapsed": 8.051199999135722,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "hoof",
+        "hall",
+        "dome"
+      ],
+      "textures": {
+        "residentSources": 129,
+        "sharedHits": 147,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 425249152
+      },
+      "calls": 169,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "06-pair-of-hooves",
+      "at": [
+        -18.47,
+        0,
+        8.33
+      ],
+      "look": [
+        -18.4,
+        1.25,
+        9.97
+      ],
+      "zone": "hoof",
+      "feet": [
+        -18.47,
+        0,
+        8.33
+      ],
+      "surface": "carpet",
+      "elapsed": 8.318299999123797,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "hoof",
+        "hall",
+        "dome"
+      ],
+      "textures": {
+        "residentSources": 129,
+        "sharedHits": 147,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 425249152
+      },
+      "calls": 106,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "07-checkbox",
+      "at": [
+        -18.46,
+        0,
+        8.92
+      ],
+      "look": [
+        -18.4,
+        1.75,
+        10.45
+      ],
+      "zone": "hoof",
+      "feet": [
+        -18.46,
+        0,
+        8.92
+      ],
+      "surface": "carpet",
+      "elapsed": 8.482499999105917,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "hoof",
+        "hall",
+        "dome"
+      ],
+      "textures": {
+        "residentSources": 129,
+        "sharedHits": 147,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 425249152
+      },
+      "calls": 103,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "08-console-details",
+      "at": [
+        -19.72,
+        0,
+        8.83
+      ],
+      "look": [
+        -18.7,
+        1.29,
+        10.1
+      ],
+      "zone": "hoof",
+      "feet": [
+        -19.72,
+        0,
+        8.83
+      ],
+      "surface": "carpet",
+      "elapsed": 8.63149999911188,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "hoof",
+        "hall",
+        "dome"
+      ],
+      "textures": {
+        "residentSources": 129,
+        "sharedHits": 147,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 425249152
+      },
+      "calls": 172,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "09-picture-test",
+      "at": [
+        -18.4,
+        0,
+        8.92
+      ],
+      "look": [
+        -18.4,
+        1.67,
+        10.45
+      ],
+      "zone": "hoof",
+      "feet": [
+        -18.4,
+        0,
+        8.92
+      ],
+      "surface": "carpet",
+      "elapsed": 12.682899998575387,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "hoof",
+        "hall",
+        "dome"
+      ],
+      "textures": {
+        "residentSources": 129,
+        "sharedHits": 147,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 425249152
+      },
+      "calls": 101,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "10-attendant",
+      "at": [
+        -20.1,
+        0,
+        8.21
+      ],
+      "look": [
+        -20.2,
+        1.28,
+        10.15
+      ],
+      "zone": "hoof",
+      "feet": [
+        -20.1,
+        0,
+        8.21
+      ],
+      "surface": "carpet",
+      "elapsed": 15.567899998360806,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "hoof",
+        "hall",
+        "dome"
+      ],
+      "textures": {
+        "residentSources": 129,
+        "sharedHits": 147,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 425249152
+      },
+      "calls": 86,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "11-human-assistance",
+      "at": [
+        -18.75,
+        0,
+        8.45
+      ],
+      "look": [
+        -19.69,
+        1.37,
+        10.3
+      ],
+      "zone": "hoof",
+      "feet": [
+        -18.75,
+        0,
+        8.45
+      ],
+      "surface": "carpet",
+      "elapsed": 18.876499997973365,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "hoof",
+        "hall",
+        "dome"
+      ],
+      "textures": {
+        "residentSources": 129,
+        "sharedHits": 147,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 425249152
+      },
+      "calls": 55,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "12-booth-return",
+      "at": [
+        -21.2,
+        0,
+        10.7
+      ],
+      "look": [
+        -12.3,
+        1.45,
+        7.02
+      ],
+      "zone": "hoof",
+      "feet": [
+        -21.2,
+        0,
+        10.7
+      ],
+      "surface": "carpet",
+      "elapsed": 19.07239999797933,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "hoof",
+        "hall",
+        "dome"
+      ],
+      "textures": {
+        "residentSources": 129,
+        "sharedHits": 147,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 425249152
+      },
+      "calls": 233,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "13-calibration-worktop",
+      "at": [
+        -16.93,
+        0,
+        5.97
+      ],
+      "look": [
+        -17.75,
+        1.62,
+        4.4
+      ],
+      "zone": "hoof",
+      "feet": [
+        -16.93,
+        0,
+        5.97
+      ],
+      "surface": "carpet",
+      "elapsed": 19.33859999797337,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "hoof",
+        "hall",
+        "dome"
+      ],
+      "textures": {
+        "residentSources": 129,
+        "sharedHits": 147,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 425249152
+      },
+      "calls": 67,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    }
+  ],
+  "issues": [],
+  "nativeSceneSha256": "b7b2b876d4935991f75a26d04f5602a6b287555cab63a199b7bb8cd01ce2e2d1",
+  "nativePass": "hoof-expansion-01"
+}

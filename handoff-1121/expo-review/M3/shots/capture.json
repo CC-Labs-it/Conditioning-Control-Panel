@@ -1,7 +1,7 @@
 {
   "timeMode": "continuous real clock",
   "gentle": false,
-  "wallSeconds": 225.619,
+  "wallSeconds": 229.136,
   "rows": [
     {
       "name": "phase-0-room.png",
@@ -22,23 +22,31 @@
         -5
       ],
       "surface": "stone",
-      "elapsed": 13.374399998629064,
+      "elapsed": 26.3149999967098,
       "ready": true,
       "loaded": [
-        "hall",
         "dome",
-        "catwalk"
+        "catwalk",
+        "hall"
       ],
       "textures": {
-        "residentSources": 52,
-        "sharedHits": 40,
-        "decodedBytes": 187557120
+        "residentSources": 108,
+        "sharedHits": 96,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
       },
-      "calls": 31,
+      "calls": 42,
       "pixelRatio": 1,
-      "depth": 0.06644249999320492,
+      "depth": 0.07958899999058246,
       "phase": 0,
-      "seconds": 13.288499998640983,
+      "seconds": 15.917799998116491,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
       "eye": [
         -14.86,
         1.6,
@@ -68,23 +76,31 @@
         -5.15
       ],
       "surface": "stone",
-      "elapsed": 13.640099998664816,
+      "elapsed": 26.664499996650196,
       "ready": true,
       "loaded": [
-        "hall",
         "dome",
-        "catwalk"
+        "catwalk",
+        "hall"
       ],
       "textures": {
-        "residentSources": 52,
-        "sharedHits": 40,
-        "decodedBytes": 187557120
+        "residentSources": 108,
+        "sharedHits": 96,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
       },
-      "calls": 23,
+      "calls": 34,
       "pixelRatio": 1,
-      "depth": 0.06777099999338368,
+      "depth": 0.08133649999028444,
       "phase": 0,
-      "seconds": 13.554199998676735,
+      "seconds": 16.267299998056888,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
       "eye": [
         -19.95,
         1.6,
@@ -114,23 +130,31 @@
         -5.7
       ],
       "surface": "stone",
-      "elapsed": 32.476599995941115,
+      "elapsed": 44.92609999469584,
       "ready": true,
       "loaded": [
-        "hall",
         "dome",
-        "catwalk"
+        "catwalk",
+        "hall"
       ],
       "textures": {
-        "residentSources": 52,
-        "sharedHits": 40,
-        "decodedBytes": 187557120
+        "residentSources": 108,
+        "sharedHits": 96,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
       },
-      "calls": 31,
+      "calls": 41,
       "pixelRatio": 1,
-      "depth": 0.17434419997571812,
+      "depth": 0.1871733999766117,
       "phase": 1,
-      "seconds": 32.39069999595302,
+      "seconds": 34.52889999610195,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
       "eye": [
         -18.5,
         1.6,
@@ -160,23 +184,31 @@
         -4.88
       ],
       "surface": "stone",
-      "elapsed": 32.742399995941135,
+      "elapsed": 45.275799994582606,
       "ready": true,
       "loaded": [
-        "hall",
         "dome",
-        "catwalk"
+        "catwalk",
+        "hall"
       ],
       "textures": {
-        "residentSources": 52,
-        "sharedHits": 40,
-        "decodedBytes": 187557120
+        "residentSources": 108,
+        "sharedHits": 96,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
       },
-      "calls": 24,
+      "calls": 33,
       "pixelRatio": 1,
-      "depth": 0.17593899997571827,
+      "depth": 0.1892715999759323,
       "phase": 1,
-      "seconds": 32.65649999595304,
+      "seconds": 34.878599995988715,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
       "eye": [
         -20.15,
         1.6,
@@ -206,23 +238,31 @@
         -6.5
       ],
       "surface": "stone",
-      "elapsed": 58.43899999269456,
+      "elapsed": 70.7550999908585,
       "ready": true,
       "loaded": [
-        "hall",
         "dome",
-        "catwalk"
+        "catwalk",
+        "hall"
       ],
       "textures": {
-        "residentSources": 52,
-        "sharedHits": 40,
-        "decodedBytes": 187557120
+        "residentSources": 108,
+        "sharedHits": 96,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
       },
-      "calls": 34,
+      "calls": 44,
       "pixelRatio": 1,
-      "depth": 0.32418388884836924,
+      "depth": 0.3353216666236932,
       "phase": 2,
-      "seconds": 58.35309999270647,
+      "seconds": 60.35789999226478,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
       "eye": [
         -18.7,
         1.6,
@@ -252,23 +292,31 @@
         -8
       ],
       "surface": "stone",
-      "elapsed": 58.771599992646856,
+      "elapsed": 71.16849999085855,
       "ready": true,
       "loaded": [
-        "hall",
         "dome",
-        "catwalk"
+        "catwalk",
+        "hall"
       ],
       "textures": {
-        "residentSources": 52,
-        "sharedHits": 40,
-        "decodedBytes": 187557120
+        "residentSources": 108,
+        "sharedHits": 96,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
       },
-      "calls": 43,
+      "calls": 76,
       "pixelRatio": 1,
-      "depth": 0.326031666625882,
+      "depth": 0.33761833329035995,
       "phase": 2,
-      "seconds": 58.68569999265876,
+      "seconds": 60.77129999226479,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
       "eye": [
         -20,
         1.6,
@@ -298,23 +346,31 @@
         -6.2
       ],
       "surface": "stone",
-      "elapsed": 110.39839998483583,
+      "elapsed": 120.79949998251652,
       "ready": true,
       "loaded": [
-        "hall",
         "dome",
-        "catwalk"
+        "catwalk",
+        "hall"
       ],
       "textures": {
-        "residentSources": 52,
-        "sharedHits": 40,
-        "decodedBytes": 187557120
+        "residentSources": 108,
+        "sharedHits": 96,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
       },
-      "calls": 44,
+      "calls": 55,
       "pixelRatio": 1,
-      "depth": 0.5846354166035322,
+      "depth": 0.5850095832663442,
       "phase": 3,
-      "seconds": 110.31249998484773,
+      "seconds": 110.40229998392262,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
       "eye": [
         -15.6,
         1.6,
@@ -344,23 +400,31 @@
         -10.9
       ],
       "surface": "stone",
-      "elapsed": 110.71479998480007,
+      "elapsed": 121.19879998248076,
       "ready": true,
       "loaded": [
-        "hall",
         "dome",
-        "catwalk"
+        "catwalk",
+        "hall"
       ],
       "textures": {
-        "residentSources": 52,
-        "sharedHits": 40,
-        "decodedBytes": 187557120
+        "residentSources": 108,
+        "sharedHits": 96,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
       },
-      "calls": 49,
+      "calls": 85,
       "pixelRatio": 1,
-      "depth": 0.5859537499367166,
+      "depth": 0.5866733332661953,
       "phase": 3,
-      "seconds": 110.62889998481197,
+      "seconds": 110.80159998388686,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
       "eye": [
         -21,
         1.6,
@@ -390,23 +454,31 @@
         -6.6
       ],
       "surface": "stone",
-      "elapsed": 175.3765999752668,
+      "elapsed": 185.78629997189955,
       "ready": true,
       "loaded": [
-        "hall",
         "dome",
-        "catwalk"
+        "catwalk",
+        "hall"
       ],
       "textures": {
-        "residentSources": 52,
-        "sharedHits": 40,
-        "decodedBytes": 187557120
+        "residentSources": 108,
+        "sharedHits": 96,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
       },
-      "calls": 45,
+      "calls": 57,
       "pixelRatio": 1,
-      "depth": 0.8553779165636612,
+      "depth": 0.8557879165554394,
       "phase": 4,
-      "seconds": 175.2906999752787,
+      "seconds": 175.38909997330546,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
       "eye": [
         -18.8,
         1.6,
@@ -436,23 +508,31 @@
         -6.9
       ],
       "surface": "stone",
-      "elapsed": 175.67499997522512,
+      "elapsed": 186.16899997187576,
       "ready": true,
       "loaded": [
-        "hall",
         "dome",
-        "catwalk"
+        "catwalk",
+        "hall"
       ],
       "textures": {
-        "residentSources": 52,
-        "sharedHits": 40,
-        "decodedBytes": 187557120
+        "residentSources": 108,
+        "sharedHits": 96,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
       },
-      "calls": 39,
+      "calls": 48,
       "pixelRatio": 1,
-      "depth": 0.8566212498968209,
+      "depth": 0.8573824998886737,
       "phase": 4,
-      "seconds": 175.58909997523702,
+      "seconds": 175.77179997328167,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
       "eye": [
         -22.2,
         1.6,
@@ -482,23 +562,31 @@
         -4.5
       ],
       "surface": "stone",
-      "elapsed": 222.91149996905838,
+      "elapsed": 235.63109996495396,
       "ready": true,
       "loaded": [
-        "hall",
         "dome",
-        "catwalk"
+        "catwalk",
+        "hall"
       ],
       "textures": {
-        "residentSources": 52,
-        "sharedHits": 40,
-        "decodedBytes": 187557120
+        "residentSources": 108,
+        "sharedHits": 96,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
       },
-      "calls": 40,
+      "calls": 53,
       "pixelRatio": 1,
       "depth": 1,
       "phase": 5,
       "seconds": 210,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
       "eye": [
         -19.4,
         1.6,
@@ -506,7 +594,7 @@
       ],
       "yaw": 1.380808038876181,
       "roll": 0,
-      "visibleSourcePanes": 2,
+      "visibleSourcePanes": 1,
       "visibleFrames": 6
     },
     {
@@ -528,23 +616,31 @@
         -7.25
       ],
       "surface": "stone",
-      "elapsed": 223.12549996900478,
+      "elapsed": 235.877099964942,
       "ready": true,
       "loaded": [
-        "hall",
         "dome",
-        "catwalk"
+        "catwalk",
+        "hall"
       ],
       "textures": {
-        "residentSources": 52,
-        "sharedHits": 40,
-        "decodedBytes": 187557120
+        "residentSources": 108,
+        "sharedHits": 96,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 353873280
       },
-      "calls": 74,
+      "calls": 160,
       "pixelRatio": 1,
       "depth": 1,
       "phase": 5,
       "seconds": 210,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
       "eye": [
         -21.2,
         1.6,
@@ -564,23 +660,31 @@
       -5
     ],
     "surface": "stone",
-    "elapsed": 224.42119996887396,
+    "elapsed": 238.25559996475155,
     "ready": true,
     "loaded": [
-      "hall",
       "dome",
-      "catwalk"
+      "catwalk",
+      "hall"
     ],
     "textures": {
-      "residentSources": 52,
-      "sharedHits": 40,
-      "decodedBytes": 187557120
+      "residentSources": 108,
+      "sharedHits": 96,
+      "fullDetailMaps": 70,
+      "pendingDetailMaps": 0,
+      "decodedBytes": 353873280
     },
-    "calls": 48,
+    "calls": 102,
     "pixelRatio": 1,
-    "depth": 0.999376666666729,
+    "depth": 0.9993765625000125,
     "phase": 4,
-    "seconds": 209.85040000001496
+    "seconds": 209.850375000003,
+    "planter": {
+      "used": false,
+      "held": false,
+      "seconds": 0,
+      "cues": 0
+    }
   },
   "issues": []
 }

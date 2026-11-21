@@ -1,0 +1,420 @@
+{
+  "programs": [],
+  "stream_groups": [],
+  "streams": [
+    {
+      "codec_name": "h264",
+      "codec_type": "video",
+      "width": 1920,
+      "height": 1080,
+      "side_data_list": [
+        {}
+      ]
+    },
+    {
+      "codec_name": "aac",
+      "codec_type": "audio",
+      "sample_rate": "48000"
+    }
+  ],
+  "format": {
+    "duration": "180.000000",
+    "size": "92322366"
+  },
+  "acceptedRoomGeometry": {
+    "atrium": "4308d0fb1096f20257984e4b4453ab10f6f3ecdf38dc2dabb5f5e2bb69dca9dc",
+    "chronology": "b26531fb332d9b90467cc5552cf1327f6b29bf1976eec23cc7a661148ece67cc",
+    "forum": "839d736f05589ca0b1519d5b5e06ab9f2f8ff7b0dc9bdefebbffd62fcd2bb2b5",
+    "commons": "02ea881f38a060e81ca30b1dfb100b0627e1ebfb70b5e598d77514a9def3f698",
+    "aquarium": "be9eae5838bc2993e8c74bcd6b3651e9b47f6cc7e9edd141ba0590a6de6387a9",
+    "service": "b83ffbf3b78cdfc47f9fd1d54172bf54ebc14d1639b8fee5f8696e30f1c83815",
+    "secret": "077822a3213c6c2ce0814a25743312cc624afd05ef5f15dcd580513e71c51bb9",
+    "catwalk": "4425583931f77cf77ecd14ec1d8e7a68fa2ea8ae9c1494ecfb38c15363167f7b",
+    "dome": "57d7fdea4c632d272d45fc178cd5bf3e2013d74697697b393eeaacfc57426bae",
+    "hall": "2fb2f447c7474ad1d2e89ddfde3a22cdf0af259ad00049e13a8e8eed07e6fc0e",
+    "hoof": "b7b2b876d4935991f75a26d04f5602a6b287555cab63a199b7bb8cd01ce2e2d1",
+    "habitat": "44fa385387ade94cc0c9253beeadfde24e4922162dbb1eb482bc8abb7a70a0e4",
+    "twelve": "16b4938fff3f903bb486d95fc37d0b72a57b856d83da41d124f30e16af88ed98",
+    "shop": "3bc47be339b4e49ccb0dcf518b893111b813dadc78b40ecfb60b891b685b4437"
+  },
+  "shotAudio": [
+    {
+      "shot": "admission",
+      "fromSeconds": 0,
+      "toSeconds": 9,
+      "rmsDbFS": -36.75,
+      "peakDbFS": -19.31,
+      "spoken": [
+        {
+          "recording": "pa_arrive_1",
+          "channel": "pa",
+          "fromSeconds": 2.725,
+          "toSeconds": 9.0
+        }
+      ]
+    },
+    {
+      "shot": "arrival",
+      "fromSeconds": 9,
+      "toSeconds": 17,
+      "rmsDbFS": -39.55,
+      "peakDbFS": -16.42,
+      "spoken": [
+        {
+          "recording": "pa_arrive_1",
+          "channel": "pa",
+          "fromSeconds": 9.0,
+          "toSeconds": 9.883
+        },
+        {
+          "recording": "pa_turnstile",
+          "channel": "pa",
+          "fromSeconds": 12.085,
+          "toSeconds": 17.0
+        }
+      ]
+    },
+    {
+      "shot": "chronology",
+      "fromSeconds": 17,
+      "toSeconds": 28,
+      "rmsDbFS": -35.91,
+      "peakDbFS": -16.66,
+      "spoken": [
+        {
+          "recording": "ev_h0",
+          "channel": "voice",
+          "fromSeconds": 17.0,
+          "toSeconds": 28.0
+        }
+      ]
+    },
+    {
+      "shot": "forum",
+      "fromSeconds": 28,
+      "toSeconds": 33,
+      "rmsDbFS": -46.67,
+      "peakDbFS": -27.69,
+      "spoken": [
+        {
+          "recording": "ev_h0",
+          "channel": "voice",
+          "fromSeconds": 28.0,
+          "toSeconds": 33.0
+        }
+      ]
+    },
+    {
+      "shot": "commons",
+      "fromSeconds": 33,
+      "toSeconds": 38,
+      "rmsDbFS": -47.29,
+      "peakDbFS": -26.01,
+      "spoken": []
+    },
+    {
+      "shot": "aquarium",
+      "fromSeconds": 38,
+      "toSeconds": 45,
+      "rmsDbFS": -45.29,
+      "peakDbFS": -24.84,
+      "spoken": []
+    },
+    {
+      "shot": "greenhouse",
+      "fromSeconds": 45,
+      "toSeconds": 50,
+      "rmsDbFS": -44.39,
+      "peakDbFS": -26.72,
+      "spoken": []
+    },
+    {
+      "shot": "server",
+      "fromSeconds": 50,
+      "toSeconds": 54,
+      "rmsDbFS": -43.52,
+      "peakDbFS": -32.82,
+      "spoken": []
+    },
+    {
+      "shot": "contract",
+      "fromSeconds": 54,
+      "toSeconds": 58,
+      "rmsDbFS": -42.83,
+      "peakDbFS": -23.54,
+      "spoken": []
+    },
+    {
+      "shot": "chair",
+      "fromSeconds": 58,
+      "toSeconds": 62,
+      "rmsDbFS": -44.83,
+      "peakDbFS": -30.75,
+      "spoken": []
+    },
+    {
+      "shot": "crown",
+      "fromSeconds": 62,
+      "toSeconds": 69,
+      "rmsDbFS": -45.23,
+      "peakDbFS": -25.36,
+      "spoken": []
+    },
+    {
+      "shot": "hall",
+      "fromSeconds": 69,
+      "toSeconds": 76,
+      "rmsDbFS": -44.84,
+      "peakDbFS": -24.58,
+      "spoken": []
+    },
+    {
+      "shot": "corrected",
+      "fromSeconds": 76,
+      "toSeconds": 81,
+      "rmsDbFS": -35.01,
+      "peakDbFS": -15.6,
+      "spoken": [
+        {
+          "recording": "pa_photos",
+          "channel": "pa",
+          "fromSeconds": 76.0,
+          "toSeconds": 81.0
+        }
+      ]
+    },
+    {
+      "shot": "press",
+      "fromSeconds": 81,
+      "toSeconds": 87,
+      "rmsDbFS": -38.07,
+      "peakDbFS": -19.47,
+      "spoken": [
+        {
+          "recording": "pa_photos",
+          "channel": "pa",
+          "fromSeconds": 81.0,
+          "toSeconds": 81.724
+        },
+        {
+          "recording": "pa_hall1",
+          "channel": "pa",
+          "fromSeconds": 81.724,
+          "toSeconds": 87.0
+        }
+      ]
+    },
+    {
+      "shot": "hoof",
+      "fromSeconds": 87,
+      "toSeconds": 97,
+      "rmsDbFS": -38.04,
+      "peakDbFS": -19.55,
+      "spoken": [
+        {
+          "recording": "pa_hall2",
+          "channel": "pa",
+          "fromSeconds": 87.0,
+          "toSeconds": 94.482
+        },
+        {
+          "recording": "hoof_1",
+          "channel": "voice",
+          "fromSeconds": 94.482,
+          "toSeconds": 97.0
+        }
+      ]
+    },
+    {
+      "shot": "habitat",
+      "fromSeconds": 97,
+      "toSeconds": 104,
+      "rmsDbFS": -35.61,
+      "peakDbFS": -16.97,
+      "spoken": [
+        {
+          "recording": "pa_hall3",
+          "channel": "pa",
+          "fromSeconds": 97.0,
+          "toSeconds": 104.0
+        }
+      ]
+    },
+    {
+      "shot": "twelve",
+      "fromSeconds": 104,
+      "toSeconds": 111,
+      "rmsDbFS": -35.67,
+      "peakDbFS": -20.26,
+      "spoken": [
+        {
+          "recording": "log_reginald",
+          "channel": "voice",
+          "fromSeconds": 104.0,
+          "toSeconds": 111.0
+        }
+      ]
+    },
+    {
+      "shot": "photo",
+      "fromSeconds": 111,
+      "toSeconds": 116,
+      "rmsDbFS": -42.78,
+      "peakDbFS": -28.76,
+      "spoken": [
+        {
+          "recording": "log_reginald",
+          "channel": "voice",
+          "fromSeconds": 111.0,
+          "toSeconds": 116.0
+        }
+      ]
+    },
+    {
+      "shot": "dome0",
+      "fromSeconds": 116,
+      "toSeconds": 122,
+      "rmsDbFS": -43.52,
+      "peakDbFS": -27.26,
+      "spoken": [
+        {
+          "recording": "log_reginald",
+          "channel": "voice",
+          "fromSeconds": 116.0,
+          "toSeconds": 118.486
+        },
+        {
+          "recording": "pa_hall4_full",
+          "channel": "pa",
+          "fromSeconds": 118.486,
+          "toSeconds": 122.0
+        }
+      ]
+    },
+    {
+      "shot": "dome3",
+      "fromSeconds": 122,
+      "toSeconds": 131,
+      "rmsDbFS": -41.38,
+      "peakDbFS": -24.38,
+      "spoken": []
+    },
+    {
+      "shot": "dome5",
+      "fromSeconds": 131,
+      "toSeconds": 143,
+      "rmsDbFS": -38.49,
+      "peakDbFS": -20.21,
+      "spoken": [
+        {
+          "recording": "dome_5",
+          "channel": "voice",
+          "fromSeconds": 131.0,
+          "toSeconds": 136.49
+        }
+      ]
+    },
+    {
+      "shot": "shelf",
+      "fromSeconds": 143,
+      "toSeconds": 147,
+      "rmsDbFS": -42.25,
+      "peakDbFS": -26.08,
+      "spoken": [
+        {
+          "recording": "pa_shop_1",
+          "channel": "pa",
+          "fromSeconds": 143.0,
+          "toSeconds": 147.0
+        }
+      ]
+    },
+    {
+      "shot": "till",
+      "fromSeconds": 147,
+      "toSeconds": 153,
+      "rmsDbFS": -45.14,
+      "peakDbFS": -27.89,
+      "spoken": [
+        {
+          "recording": "dome_leave",
+          "channel": "voice",
+          "fromSeconds": 147.0,
+          "toSeconds": 148.09
+        }
+      ]
+    },
+    {
+      "shot": "loop",
+      "fromSeconds": 153,
+      "toSeconds": 157,
+      "rmsDbFS": -41.55,
+      "peakDbFS": -21.56,
+      "spoken": [
+        {
+          "recording": "pa_shop_2",
+          "channel": "pa",
+          "fromSeconds": 153.932,
+          "toSeconds": 157.0
+        }
+      ]
+    },
+    {
+      "shot": "loop",
+      "fromSeconds": 157,
+      "toSeconds": 161,
+      "rmsDbFS": -41.24,
+      "peakDbFS": -22.13,
+      "spoken": [
+        {
+          "recording": "pa_shop_2",
+          "channel": "pa",
+          "fromSeconds": 157.0,
+          "toSeconds": 157.932
+        },
+        {
+          "recording": "pa_shop_3",
+          "channel": "pa",
+          "fromSeconds": 157.932,
+          "toSeconds": 161.0
+        }
+      ]
+    },
+    {
+      "shot": "sale",
+      "fromSeconds": 161,
+      "toSeconds": 167,
+      "rmsDbFS": -37.37,
+      "peakDbFS": -17.73,
+      "spoken": [
+        {
+          "recording": "pa_shop_3",
+          "channel": "pa",
+          "fromSeconds": 161.0,
+          "toSeconds": 161.3
+        },
+        {
+          "recording": "pa_shop_buy",
+          "channel": "pa",
+          "fromSeconds": 161.884,
+          "toSeconds": 167.0
+        }
+      ]
+    },
+    {
+      "shot": "home",
+      "fromSeconds": 167,
+      "toSeconds": 180,
+      "rmsDbFS": -41.52,
+      "peakDbFS": -20.84,
+      "spoken": [
+        {
+          "recording": "pa_leave",
+          "channel": "pa",
+          "fromSeconds": 167.0,
+          "toSeconds": 173.643
+        }
+      ]
+    }
+  ]
+}

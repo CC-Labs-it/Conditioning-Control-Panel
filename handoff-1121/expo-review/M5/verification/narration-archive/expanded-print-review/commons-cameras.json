@@ -1,0 +1,360 @@
+{
+  "room": "commons",
+  "beforeLaunch": {
+    "zone": "commons",
+    "pass": "expansion-03",
+    "bytes": 1888784,
+    "sha256": "02ea881f38a060e81ca30b1dfb100b0627e1ebfb70b5e598d77514a9def3f698",
+    "collisionSha256": "791e9c846f960c3baedd0b63e9b4a5f49e917bc115c7c5064d7325c120750db6",
+    "furnitureColliders": [
+      "Commons hydroponic beds",
+      "Commons growing-bed feet",
+      "Commons propagation lamps",
+      "Commons espalier planters",
+      "Commons garden service tread"
+    ]
+  },
+  "utc": "2026-11-21T15:38:48.172Z",
+  "source": "Normal public ending preview with inspection placements on real walkable floors",
+  "cameras": [
+    {
+      "file": "21-gallery-approach.jpg",
+      "opticalFile": "21-gallery-approach.optical.jpg",
+      "description": "Record 21 at the new Commons viewing position.",
+      "feet": [
+        -66.37999542236328,
+        0,
+        96.12000274658203
+      ],
+      "target": [
+        -69.29999542236328,
+        1.6799999475479126,
+        96.12000274658203
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        -66.37999542236328,
+        1.6,
+        96.12000274658203
+      ],
+      "quaternion": [
+        0.009683662724595575,
+        0.707040470324179,
+        -0.009683662724595575,
+        0.7070404703241792
+      ],
+      "zone": "commons",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h7",
+      "playback": {
+        "voice": {
+          "id": "ev_h7",
+          "seconds": 0.954012,
+          "duration": 20.73,
+          "gain": 0.7888332106202262,
+          "pan": 0.627388421418956,
+          "duck": 1,
+          "subtitle": "Gary from Accounts went through the world's books and found that food, a home and heating for every creature cost less than what was being spent on arguing about it. He signed it off before lunch. Lunch was included. The day is a public holiday. Gary is still checking the sums, for pleasure.",
+          "queue": []
+        },
+        "project": {
+          "active": true,
+          "paused": false,
+          "slide": "slides/feed_a.webp",
+          "texture": "slides/feed_a.webp",
+          "resting": "slides/feed.webp",
+          "full": true,
+          "lamp": 0.9599281024482299,
+          "zoom": 0.001840833574529667
+        },
+        "finished": 0
+      }
+    },
+    {
+      "file": "26-unobstructed.jpg",
+      "opticalFile": "26-unobstructed.optical.jpg",
+      "description": "The lit screen viewed between the structural columns from the physical aisle.",
+      "feet": [
+        -66.37999542236328,
+        0,
+        71.81999969482422
+      ],
+      "target": [
+        -69.29999542236328,
+        1.6799999475479126,
+        71.81999969482422
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        -66.37999542236328,
+        1.6,
+        71.81999969482422
+      ],
+      "quaternion": [
+        0.009683662724595575,
+        0.707040470324179,
+        -0.009683662724595575,
+        0.7070404703241792
+      ],
+      "zone": "commons",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "playback": {
+        "voice": {
+          "id": "ev_h9",
+          "seconds": 0.860309,
+          "duration": 17.77,
+          "gain": 0.7888332106202262,
+          "pan": 0.627388421418956,
+          "duck": 1,
+          "subtitle": "Henry the Sex Machine was made Minister of Morale. The world happiness index rose thirty-eight points in his first term. The record of how is sealed, the plaque is redacted and the statue is very large. The herd considers the matter explained.",
+          "queue": []
+        },
+        "project": {
+          "active": true,
+          "paused": false,
+          "slide": "slides/henry_a.webp",
+          "texture": "slides/henry_a.webp",
+          "resting": "slides/henry.webp",
+          "full": true,
+          "lamp": 0.9473126557520125,
+          "zoom": 0.0019365424873382107
+        },
+        "finished": 0
+      }
+    },
+    {
+      "file": "chapter-4-21-plate-detail.jpg",
+      "opticalFile": "chapter-4-21-plate-detail.optical.jpg",
+      "description": "Approach to the first accession strip in this chapter.",
+      "feet": [
+        -67.59999542236328,
+        0,
+        96.12000274658203
+      ],
+      "target": [
+        -69.27599542236328,
+        0.8984999475479125,
+        96.12000274658203
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        -67.59999542236328,
+        1.6,
+        96.12000274658203
+      ],
+      "quaternion": [
+        -0.1392327778462217,
+        0.6932634662040289,
+        0.13923277784622173,
+        0.6932634662040288
+      ],
+      "zone": "commons",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "chapter": {
+        "id": "ev_h7",
+        "title": "Feed Is Included",
+        "line": "March 2029",
+        "chapter": 4,
+        "section": "Feed Is Included",
+        "index": 20
+      }
+    },
+    {
+      "file": "chapter-4-header.jpg",
+      "opticalFile": "chapter-4-header.optical.jpg",
+      "description": "The physical framed chapter lettering above its first record.",
+      "feet": [
+        -66.64999542236328,
+        0,
+        96.12000274658203
+      ],
+      "target": [
+        -69.41599542236328,
+        3.1049999475479124,
+        96.12000274658203
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        -66.64999542236328,
+        1.6,
+        96.12000274658203
+      ],
+      "quaternion": [
+        0.17436119383899845,
+        0.6852723357053304,
+        -0.17436119383899842,
+        0.6852723357053305
+      ],
+      "zone": "commons",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "chapter": {
+        "id": "ev_h7",
+        "title": "Feed Is Included",
+        "line": "March 2029",
+        "chapter": 4,
+        "section": "Feed Is Included",
+        "index": 20
+      }
+    },
+    {
+      "file": "chapter-5.jpg",
+      "opticalFile": "chapter-5.optical.jpg",
+      "description": "Approach to the first accession strip in this chapter.",
+      "feet": [
+        -67.59999542236328,
+        0,
+        76.68000030517578
+      ],
+      "target": [
+        -69.27599542236328,
+        0.8984999475479125,
+        76.68000030517578
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        -67.59999542236328,
+        1.6,
+        76.68000030517578
+      ],
+      "quaternion": [
+        -0.1392327778462217,
+        0.6932634662040289,
+        0.13923277784622173,
+        0.6932634662040288
+      ],
+      "zone": "commons",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "chapter": {
+        "id": "ev_w4",
+        "title": "Traffic, solved",
+        "line": "2030",
+        "chapter": 5,
+        "section": "The Chewing Years",
+        "index": 24
+      }
+    },
+    {
+      "file": "chapter-5-header.jpg",
+      "opticalFile": "chapter-5-header.optical.jpg",
+      "description": "The physical framed chapter lettering above its first record.",
+      "feet": [
+        -66.64999542236328,
+        0,
+        76.68000030517578
+      ],
+      "target": [
+        -69.41599542236328,
+        3.1049999475479124,
+        76.68000030517578
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        -66.64999542236328,
+        1.6,
+        76.68000030517578
+      ],
+      "quaternion": [
+        0.17436119383899845,
+        0.6852723357053304,
+        -0.17436119383899842,
+        0.6852723357053305
+      ],
+      "zone": "commons",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_h9",
+      "chapter": {
+        "id": "ev_w4",
+        "title": "Traffic, solved",
+        "line": "2030",
+        "chapter": 5,
+        "section": "The Chewing Years",
+        "index": 24
+      }
+    }
+  ],
+  "errors": [],
+  "browserGeometry": {
+    "pathname": "/fuzz/assets/expo/zones/commons.glb",
+    "bytes": 1888784,
+    "sha256": "02ea881f38a060e81ca30b1dfb100b0627e1ebfb70b5e598d77514a9def3f698",
+    "publication": {
+      "zone": "commons",
+      "pass": "expansion-03",
+      "bytes": 1888784,
+      "sha256": "02ea881f38a060e81ca30b1dfb100b0627e1ebfb70b5e598d77514a9def3f698",
+      "collisionSha256": "791e9c846f960c3baedd0b63e9b4a5f49e917bc115c7c5064d7325c120750db6",
+      "furnitureColliders": [
+        "Commons hydroponic beds",
+        "Commons growing-bed feet",
+        "Commons propagation lamps",
+        "Commons espalier planters",
+        "Commons garden service tread"
+      ]
+    }
+  },
+  "complete": true
+}

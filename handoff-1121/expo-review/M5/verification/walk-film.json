@@ -1,0 +1,124 @@
+{
+  "programs": [],
+  "stream_groups": [],
+  "streams": [
+    {
+      "codec_name": "h264",
+      "codec_type": "video",
+      "width": 1920,
+      "height": 1080
+    },
+    {
+      "codec_name": "aac",
+      "codec_type": "audio",
+      "sample_rate": "48000"
+    }
+  ],
+  "format": {
+    "duration": "60.000000",
+    "size": "30397064"
+  },
+  "source": "tour.mp4",
+  "cuts": [
+    {
+      "shot": "admission",
+      "startInTour": 0,
+      "endInTour": 4
+    },
+    {
+      "shot": "arrival",
+      "startInTour": 11,
+      "endInTour": 15
+    },
+    {
+      "shot": "chronology",
+      "startInTour": 19,
+      "endInTour": 22
+    },
+    {
+      "shot": "aquarium",
+      "startInTour": 39,
+      "endInTour": 42
+    },
+    {
+      "shot": "crown",
+      "startInTour": 65,
+      "endInTour": 67
+    },
+    {
+      "shot": "hall",
+      "startInTour": 73,
+      "endInTour": 75
+    },
+    {
+      "shot": "corrected",
+      "startInTour": 76.4,
+      "endInTour": 78.4
+    },
+    {
+      "shot": "press",
+      "startInTour": 81.4,
+      "endInTour": 84.4
+    },
+    {
+      "shot": "hoof",
+      "startInTour": 92,
+      "endInTour": 96
+    },
+    {
+      "shot": "habitat",
+      "startInTour": 97.7,
+      "endInTour": 100.7
+    },
+    {
+      "shot": "twelve",
+      "startInTour": 106,
+      "endInTour": 109
+    },
+    {
+      "shot": "photo",
+      "startInTour": 111.55,
+      "endInTour": 114.55
+    },
+    {
+      "shot": "dome0",
+      "startInTour": 118,
+      "endInTour": 120
+    },
+    {
+      "shot": "dome3",
+      "startInTour": 126,
+      "endInTour": 129
+    },
+    {
+      "shot": "dome5",
+      "startInTour": 136,
+      "endInTour": 141
+    },
+    {
+      "shot": "shelf",
+      "startInTour": 144,
+      "endInTour": 146
+    },
+    {
+      "shot": "till",
+      "startInTour": 147.5,
+      "endInTour": 149.5
+    },
+    {
+      "shot": "loop",
+      "startInTour": 153.4,
+      "endInTour": 155.4
+    },
+    {
+      "shot": "sale",
+      "startInTour": 161.6,
+      "endInTour": 163.6
+    },
+    {
+      "shot": "home",
+      "startInTour": 174,
+      "endInTour": 180
+    }
+  ]
+}

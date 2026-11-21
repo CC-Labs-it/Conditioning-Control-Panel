@@ -1,0 +1,125 @@
+{
+  "approvedRecordings": 96,
+  "approvedPictures": 127,
+  "restingImagesComparedWithActualFramebuffers": 40,
+  "rooms": {
+    "chronology": {
+      "pass": "expansion-02",
+      "geometrySha256": "b26531fb332d9b90467cc5552cf1327f6b29bf1976eec23cc7a661148ece67cc",
+      "matched": 10,
+      "minimumCorrelation": 0.8238,
+      "comparison": "resting-screens/chronology-final/screen-comparison.json",
+      "previousVerifiedRevision": {
+        "pass": "expansion-01",
+        "geometrySha256": "d01f0e36bd75c48c11f8a165ec27ee735302d5c12450290cc51a31ee7e64d2b6",
+        "matched": 10,
+        "minimumCorrelation": 0.8239,
+        "comparison": "resting-screens/chronology/screen-comparison.json"
+      }
+    },
+    "forum": {
+      "pass": "expansion-02",
+      "geometrySha256": "839d736f05589ca0b1519d5b5e06ab9f2f8ff7b0dc9bdefebbffd62fcd2bb2b5",
+      "matched": 10,
+      "minimumCorrelation": 0.7622,
+      "comparison": "resting-screens/forum-final/screen-comparison.json",
+      "previousVerifiedRevision": {
+        "pass": "expansion-01",
+        "geometrySha256": "9c43963f096d36c88ac9db1376858a3fe8613832a08abe670042f92834110231",
+        "matched": 10,
+        "minimumCorrelation": 0.7694,
+        "comparison": "resting-screens/forum/screen-comparison.json"
+      }
+    },
+    "commons": {
+      "pass": "expansion-03",
+      "geometrySha256": "02ea881f38a060e81ca30b1dfb100b0627e1ebfb70b5e598d77514a9def3f698",
+      "matched": 10,
+      "minimumCorrelation": 0.8368,
+      "comparison": "resting-screens/commons-final/screen-comparison.json",
+      "previousVerifiedRevision": {
+        "pass": "expansion-01",
+        "geometrySha256": "fc345df036c832f0a417c332041365cbae8bd732ab3c90b3e9a80878c9c76393",
+        "matched": 10,
+        "minimumCorrelation": 0.8401,
+        "comparison": "resting-screens/commons/screen-comparison.json"
+      }
+    },
+    "aquarium": {
+      "pass": "expansion-04",
+      "geometrySha256": "be9eae5838bc2993e8c74bcd6b3651e9b47f6cc7e9edd141ba0590a6de6387a9",
+      "matched": 10,
+      "minimumCorrelation": 0.8139,
+      "comparison": "resting-screens/aquarium-final/screen-comparison.json",
+      "previousVerifiedRevision": {
+        "pass": "expansion-02",
+        "geometrySha256": "69a43f5cf8ce7ba3c7e737ad20927e6ed368c491282c28fe17c600b32ae9fea8",
+        "matched": 10,
+        "minimumCorrelation": 0.8055,
+        "comparison": "resting-screens/aquarium/screen-comparison.json"
+      }
+    }
+  },
+  "slidePlayback": {
+    "displayed": [
+      {
+        "file": "slides/chew_a.webp",
+        "seconds": 0.02322,
+        "duration": 20.49
+      },
+      {
+        "file": "slides/chew.webp",
+        "seconds": 6.179681,
+        "duration": 20.49
+      },
+      {
+        "file": "slides/chew_c.webp",
+        "seconds": 14.361542,
+        "duration": 20.49
+      }
+    ],
+    "clicks": [
+      {
+        "at": 35257.29999998212,
+        "args": [
+          "press",
+          0.061076797097985164,
+          0.94
+        ],
+        "source": "ev_h0.mp3",
+        "seconds": 0,
+        "duration": 20.49
+      },
+      {
+        "at": 41416.59999999404,
+        "args": [
+          "press",
+          0.3271880172884673,
+          -0.05376875194014948
+        ],
+        "source": "ev_h0.mp3",
+        "seconds": 6.161995,
+        "duration": 20.49
+      },
+      {
+        "at": 49606.19999998808,
+        "args": [
+          "press",
+          0.3271880172884673,
+          -0.05376875194014948
+        ],
+        "source": "ev_h0.mp3",
+        "seconds": 14.352834,
+        "duration": 20.49
+      }
+    ],
+    "middleAtRest": "slides/chew.webp"
+  },
+  "singleVoice": {
+    "peak": 1,
+    "decodedVoiceElements": 1,
+    "dualCaptions": 0
+  },
+  "sourceCatalogue": "three-slide-audit/media-audit.json",
+  "realAudioCheck": "speech-three-slides/component-checks.json"
+}

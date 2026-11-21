@@ -1,0 +1,58 @@
+{
+  "scope": "Pre-refit functional and legibility archive, atrium MEDIA 03 and hall MEDIA 02.",
+  "browserGeometry": [
+    {
+      "pathname": "/fuzz/assets/expo/zones/atrium.glb",
+      "bytes": 5112196,
+      "sha256": "5efa5b09482ae82b08cf219a33d96bccee2c98eb4fa531393b7767b9c351f89e",
+      "publication": {
+        "zone": "atrium",
+        "pass": "media-03",
+        "bytes": 5112196,
+        "sha256": "5efa5b09482ae82b08cf219a33d96bccee2c98eb4fa531393b7767b9c351f89e"
+      }
+    },
+    {
+      "pathname": "/fuzz/assets/expo/zones/hall.glb",
+      "bytes": 4347020,
+      "sha256": "2b6aa87e8bae998bc67c4e768b0c7a615e6a4a5ce092c07503dca77b8f612728",
+      "publication": {
+        "zone": "hall",
+        "pass": "media-02",
+        "bytes": 4347020,
+        "sha256": "2b6aa87e8bae998bc67c4e768b0c7a615e6a4a5ce092c07503dca77b8f612728"
+      }
+    }
+  ],
+  "inspectionPositions": "All 32 positions are on real floors through the ordinary public ending. Inspection placement was used for these close-ups. visitor-route.json records the original untampered physical walk.",
+  "visualReadback": {
+    "record10": "The lit original slide is completely visible from inside the pier.",
+    "record26": "The pier is clear of the lit original slide and lower accession label.",
+    "record21": "The original visitor position and target were repeated. The close-up resolves the cream plate, dark ink and March 2029 date.",
+    "chapters": [
+      "Before, and The Connection",
+      "The Polite Coup",
+      "The Hoof Problem",
+      "Feed Is Included",
+      "The Chewing Years",
+      "The Expo"
+    ],
+    "printedCollection": [
+      "flight",
+      "loch",
+      "summit",
+      "woods",
+      "moon",
+      "crossing",
+      "girder"
+    ],
+    "printReview": "The published original pictures occupy seven separate physical frames, with visible mats, brass caption plates and individual dates. The crossing and girder are the last two."
+  },
+  "cameraCount": 32,
+  "sheets": [
+    "record-comparisons.jpg",
+    "chapter-headers.jpg",
+    "printed-collection.jpg",
+    "printed-captions.jpg"
+  ]
+}

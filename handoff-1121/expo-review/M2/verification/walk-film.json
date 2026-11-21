@@ -1,0 +1,202 @@
+{
+  "programs": [],
+  "stream_groups": [],
+  "streams": [
+    {
+      "codec_name": "h264",
+      "codec_type": "video",
+      "width": 1920,
+      "height": 1080,
+      "side_data_list": [
+        {}
+      ]
+    },
+    {
+      "codec_name": "aac",
+      "codec_type": "audio",
+      "sample_rate": "48000"
+    }
+  ],
+  "format": {
+    "duration": "60.000000",
+    "size": "18083560"
+  },
+  "acceptedRoomGeometry": {
+    "atrium": "4308d0fb1096f20257984e4b4453ab10f6f3ecdf38dc2dabb5f5e2bb69dca9dc",
+    "hoof": "b7b2b876d4935991f75a26d04f5602a6b287555cab63a199b7bb8cd01ce2e2d1",
+    "dome": "57d7fdea4c632d272d45fc178cd5bf3e2013d74697697b393eeaacfc57426bae",
+    "habitat": "44fa385387ade94cc0c9253beeadfde24e4922162dbb1eb482bc8abb7a70a0e4",
+    "twelve": "16b4938fff3f903bb486d95fc37d0b72a57b856d83da41d124f30e16af88ed98",
+    "hall": "2fb2f447c7474ad1d2e89ddfde3a22cdf0af259ad00049e13a8e8eed07e6fc0e",
+    "shop": "3bc47be339b4e49ccb0dcf518b893111b813dadc78b40ecfb60b891b685b4437"
+  },
+  "shotAudio": [
+    {
+      "shot": "hoof",
+      "fromSeconds": 0,
+      "toSeconds": 13,
+      "rmsDbFS": -36.59,
+      "peakDbFS": -16.22,
+      "spoken": [
+        {
+          "recording": "pa_hall2",
+          "channel": "pa",
+          "fromSeconds": 0.0,
+          "toSeconds": 7.486
+        },
+        {
+          "recording": "hoof_1",
+          "channel": "voice",
+          "fromSeconds": 7.486,
+          "toSeconds": 13.0
+        }
+      ]
+    },
+    {
+      "shot": "habitat",
+      "fromSeconds": 13,
+      "toSeconds": 21,
+      "rmsDbFS": -36.12,
+      "peakDbFS": -16.6,
+      "spoken": [
+        {
+          "recording": "pa_hall3",
+          "channel": "pa",
+          "fromSeconds": 13.0,
+          "toSeconds": 20.924
+        },
+        {
+          "recording": "hab_1",
+          "channel": "voice",
+          "fromSeconds": 20.924,
+          "toSeconds": 21.0
+        }
+      ]
+    },
+    {
+      "shot": "twelve",
+      "fromSeconds": 21,
+      "toSeconds": 28,
+      "rmsDbFS": -35.68,
+      "peakDbFS": -19.24,
+      "spoken": [
+        {
+          "recording": "log_reginald",
+          "channel": "voice",
+          "fromSeconds": 21.0,
+          "toSeconds": 28.0
+        }
+      ]
+    },
+    {
+      "shot": "photo",
+      "fromSeconds": 28,
+      "toSeconds": 33,
+      "rmsDbFS": -42.62,
+      "peakDbFS": -28.18,
+      "spoken": [
+        {
+          "recording": "log_reginald",
+          "channel": "voice",
+          "fromSeconds": 28.0,
+          "toSeconds": 33.0
+        }
+      ]
+    },
+    {
+      "shot": "shelf",
+      "fromSeconds": 33,
+      "toSeconds": 38,
+      "rmsDbFS": -42.82,
+      "peakDbFS": -26.51,
+      "spoken": [
+        {
+          "recording": "pa_shop_1",
+          "channel": "pa",
+          "fromSeconds": 33.0,
+          "toSeconds": 37.324
+        }
+      ]
+    },
+    {
+      "shot": "till",
+      "fromSeconds": 38,
+      "toSeconds": 42,
+      "rmsDbFS": -45.4,
+      "peakDbFS": -29.11,
+      "spoken": []
+    },
+    {
+      "shot": "loop",
+      "fromSeconds": 42,
+      "toSeconds": 46,
+      "rmsDbFS": -41.42,
+      "peakDbFS": -21.35,
+      "spoken": [
+        {
+          "recording": "pa_shop_2",
+          "channel": "pa",
+          "fromSeconds": 42.884,
+          "toSeconds": 46.0
+        }
+      ]
+    },
+    {
+      "shot": "loop",
+      "fromSeconds": 46,
+      "toSeconds": 49,
+      "rmsDbFS": -41.95,
+      "peakDbFS": -21.57,
+      "spoken": [
+        {
+          "recording": "pa_shop_2",
+          "channel": "pa",
+          "fromSeconds": 46.0,
+          "toSeconds": 46.886
+        },
+        {
+          "recording": "pa_shop_3",
+          "channel": "pa",
+          "fromSeconds": 46.886,
+          "toSeconds": 49.0
+        }
+      ]
+    },
+    {
+      "shot": "sale",
+      "fromSeconds": 49,
+      "toSeconds": 53,
+      "rmsDbFS": -38.58,
+      "peakDbFS": -17.93,
+      "spoken": [
+        {
+          "recording": "pa_shop_3",
+          "channel": "pa",
+          "fromSeconds": 49.0,
+          "toSeconds": 50.331
+        },
+        {
+          "recording": "pa_shop_buy",
+          "channel": "pa",
+          "fromSeconds": 50.331,
+          "toSeconds": 53.0
+        }
+      ]
+    },
+    {
+      "shot": "home",
+      "fromSeconds": 53,
+      "toSeconds": 60,
+      "rmsDbFS": -42.43,
+      "peakDbFS": -22.03,
+      "spoken": [
+        {
+          "recording": "pa_leave",
+          "channel": "pa",
+          "fromSeconds": 53.0,
+          "toSeconds": 57.453
+        }
+      ]
+    }
+  ]
+}

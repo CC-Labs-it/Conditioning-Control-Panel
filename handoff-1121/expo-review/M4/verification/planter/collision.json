@@ -1,0 +1,244 @@
+[
+  {
+    "x": 9.42,
+    "z": -6.6,
+    "start": [
+      10.27,
+      3.3999998569488525,
+      -6.6
+    ],
+    "takeoff": [
+      9.875100228881836,
+      3.3999998569488525,
+      -6.6
+    ],
+    "landing": [
+      9.449496736231461,
+      3.7200000286102295,
+      -6.6
+    ],
+    "perched": {
+      "used": true,
+      "held": true,
+      "seconds": 0.6666666666666663,
+      "cues": 0
+    },
+    "triedWalkingOff": [
+      9.629496736231458,
+      3.7200000286102295,
+      -6.6
+    ],
+    "secondJump": false,
+    "earlyExit": false,
+    "at9": [],
+    "at10": [
+      "planter_10"
+    ],
+    "at59": [
+      "planter_10"
+    ],
+    "at60": [
+      "planter_10",
+      "planter_60"
+    ],
+    "heldBefore120": true,
+    "at120": [
+      "planter_10",
+      "planter_60",
+      "planter_120"
+    ],
+    "final": [
+      11.594373182496387,
+      3.3999998569488525,
+      -6.6
+    ],
+    "state": {
+      "used": true,
+      "held": false,
+      "seconds": 120,
+      "cues": 3
+    }
+  },
+  {
+    "x": 9.42,
+    "z": 10.4,
+    "start": [
+      10.27,
+      3.3999998569488525,
+      10.4
+    ],
+    "takeoff": [
+      9.875100228881836,
+      3.3999998569488525,
+      10.4
+    ],
+    "landing": [
+      9.449496736231461,
+      3.7200000286102295,
+      10.4
+    ],
+    "perched": {
+      "used": true,
+      "held": true,
+      "seconds": 0.6666666666666663,
+      "cues": 0
+    },
+    "triedWalkingOff": [
+      9.629496736231458,
+      3.7200000286102295,
+      10.4
+    ],
+    "secondJump": false,
+    "earlyExit": false,
+    "at9": [],
+    "at10": [
+      "planter_10"
+    ],
+    "at59": [
+      "planter_10"
+    ],
+    "at60": [
+      "planter_10",
+      "planter_60"
+    ],
+    "heldBefore120": true,
+    "at120": [
+      "planter_10",
+      "planter_60",
+      "planter_120"
+    ],
+    "final": [
+      11.594373182496387,
+      3.3999998569488525,
+      10.4
+    ],
+    "state": {
+      "used": true,
+      "held": false,
+      "seconds": 120,
+      "cues": 3
+    }
+  },
+  {
+    "x": -9.41,
+    "z": -4.77,
+    "start": [
+      -10.26,
+      3.3999998569488525,
+      -4.77
+    ],
+    "takeoff": [
+      -9.8651,
+      3.3999998569488525,
+      -4.775225487915564
+    ],
+    "landing": [
+      -9.439496507349626,
+      3.7200000286102295,
+      -4.77606696300443
+    ],
+    "perched": {
+      "used": true,
+      "held": true,
+      "seconds": 0.6666666666666663,
+      "cues": 0
+    },
+    "triedWalkingOff": [
+      -9.619496507349622,
+      3.7200000286102295,
+      -4.77606696300443
+    ],
+    "secondJump": false,
+    "earlyExit": false,
+    "at9": [],
+    "at10": [
+      "planter_10"
+    ],
+    "at59": [
+      "planter_10"
+    ],
+    "at60": [
+      "planter_10",
+      "planter_60"
+    ],
+    "heldBefore120": true,
+    "at120": [
+      "planter_10",
+      "planter_60",
+      "planter_120"
+    ],
+    "promptExit": true,
+    "final": [
+      -9.8651,
+      3.3999998569488525,
+      -4.775225487915564
+    ],
+    "state": {
+      "used": true,
+      "held": false,
+      "seconds": 120,
+      "cues": 3
+    }
+  },
+  {
+    "x": -9.41,
+    "z": 9.95,
+    "start": [
+      -10.26,
+      3.3999998569488525,
+      9.95
+    ],
+    "takeoff": [
+      -9.8651,
+      3.3999998569488525,
+      9.943905842157768
+    ],
+    "landing": [
+      -9.439496507349626,
+      3.7200000286102295,
+      9.942924210130988
+    ],
+    "perched": {
+      "used": true,
+      "held": true,
+      "seconds": 0.6666666666666663,
+      "cues": 0
+    },
+    "triedWalkingOff": [
+      -9.619496507349622,
+      3.7200000286102295,
+      9.942924210130988
+    ],
+    "secondJump": false,
+    "earlyExit": false,
+    "at9": [],
+    "at10": [
+      "planter_10"
+    ],
+    "at59": [
+      "planter_10"
+    ],
+    "at60": [
+      "planter_10",
+      "planter_60"
+    ],
+    "heldBefore120": true,
+    "at120": [
+      "planter_10",
+      "planter_60",
+      "planter_120"
+    ],
+    "promptExit": true,
+    "final": [
+      -9.8651,
+      3.3999998569488525,
+      9.943905842157768
+    ],
+    "state": {
+      "used": true,
+      "held": false,
+      "seconds": 120,
+      "cues": 3
+    }
+  }
+]

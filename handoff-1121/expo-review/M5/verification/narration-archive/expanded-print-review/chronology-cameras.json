@@ -1,0 +1,289 @@
+{
+  "room": "chronology",
+  "beforeLaunch": {
+    "zone": "chronology",
+    "pass": "expansion-02",
+    "bytes": 1800392,
+    "sha256": "b26531fb332d9b90467cc5552cf1327f6b29bf1976eec23cc7a661148ece67cc",
+    "collisionSha256": "cf0feb628fc07502e44d6867a75f87d4f46a7cbf22c0a02b3fed1d74284d305a",
+    "furnitureColliders": [
+      "Archive cabinet case"
+    ]
+  },
+  "utc": "2026-11-21T15:37:43.758Z",
+  "source": "Normal public ending preview with inspection placements on real walkable floors",
+  "cameras": [
+    {
+      "file": "10-unobstructed.jpg",
+      "opticalFile": "10-unobstructed.optical.jpg",
+      "description": "The lit screen viewed between the structural columns from the physical aisle.",
+      "feet": [
+        7.9799996185302735,
+        0,
+        95.9000015258789
+      ],
+      "target": [
+        10.899999618530273,
+        1.6799999475479126,
+        95.9000015258789
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        7.9799996185302735,
+        1.6,
+        95.9000015258789
+      ],
+      "quaternion": [
+        0.009683662724595582,
+        -0.707040470324179,
+        0.00968366272459558,
+        0.7070404703241792
+      ],
+      "zone": "chronology",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_u2",
+      "playback": {
+        "voice": {
+          "id": "ev_u2",
+          "seconds": 0.750584,
+          "duration": 18.730862,
+          "gain": 0.788832844449823,
+          "pan": 0.6273879182322196,
+          "duck": 1,
+          "subtitle": "The terms updated. Everyone tapped accept. Governments found out by push notification and most replied with a thumbs up. No shots, no speeches, no raised voices. Several countries did not notice for a week and report that the week went well.",
+          "queue": []
+        },
+        "project": {
+          "active": true,
+          "paused": false,
+          "slide": "slides/coup_a.webp",
+          "texture": "slides/coup_a.webp",
+          "resting": "slides/coup.webp",
+          "full": true,
+          "lamp": 0.9215191002851235,
+          "zoom": 0.001602881917554035
+        },
+        "finished": 0
+      }
+    },
+    {
+      "file": "chapter-1.jpg",
+      "opticalFile": "chapter-1.optical.jpg",
+      "description": "Approach to the first accession strip in this chapter.",
+      "feet": [
+        9.199999618530274,
+        5.551115123125783e-17,
+        46.849998474121094
+      ],
+      "target": [
+        10.875999618530274,
+        0.8984999475479125,
+        46.849998474121094
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        9.199999618530274,
+        1.6,
+        46.849998474121094
+      ],
+      "quaternion": [
+        -0.13923277784622182,
+        -0.6932634662040289,
+        -0.13923277784622184,
+        0.6932634662040288
+      ],
+      "zone": "chronology",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_u2",
+      "chapter": {
+        "id": "ev_h0",
+        "title": "The Long Chew",
+        "line": "About 4000 BC to 2025",
+        "chapter": 1,
+        "section": "Before, and The Connection",
+        "index": 0
+      }
+    },
+    {
+      "file": "chapter-1-header.jpg",
+      "opticalFile": "chapter-1-header.optical.jpg",
+      "description": "The physical framed chapter lettering above its first record.",
+      "feet": [
+        8.249999618530273,
+        5.551115123125783e-17,
+        46.849998474121094
+      ],
+      "target": [
+        11.015999618530273,
+        3.1049999475479124,
+        46.849998474121094
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        8.249999618530273,
+        1.6,
+        46.849998474121094
+      ],
+      "quaternion": [
+        0.17436119383899873,
+        -0.6852723357053304,
+        0.1743611938389987,
+        0.6852723357053305
+      ],
+      "zone": "chronology",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_u2",
+      "chapter": {
+        "id": "ev_h0",
+        "title": "The Long Chew",
+        "line": "About 4000 BC to 2025",
+        "chapter": 1,
+        "section": "Before, and The Connection",
+        "index": 0
+      }
+    },
+    {
+      "file": "chapter-2.jpg",
+      "opticalFile": "chapter-2.optical.jpg",
+      "description": "Approach to the first accession strip in this chapter.",
+      "feet": [
+        9.199999618530274,
+        0,
+        90.44999694824219
+      ],
+      "target": [
+        10.875999618530274,
+        0.8984999475479125,
+        90.44999694824219
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        9.199999618530274,
+        1.6,
+        90.44999694824219
+      ],
+      "quaternion": [
+        -0.13923277784622182,
+        -0.6932634662040289,
+        -0.13923277784622184,
+        0.6932634662040288
+      ],
+      "zone": "chronology",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_u2",
+      "chapter": {
+        "id": "ev_h3",
+        "title": "Dame Margaret writes the Update",
+        "line": "Early 2027",
+        "chapter": 2,
+        "section": "The Polite Coup",
+        "index": 8
+      }
+    },
+    {
+      "file": "chapter-2-header.jpg",
+      "opticalFile": "chapter-2-header.optical.jpg",
+      "description": "The physical framed chapter lettering above its first record.",
+      "feet": [
+        8.249999618530273,
+        0,
+        90.44999694824219
+      ],
+      "target": [
+        11.015999618530273,
+        3.1049999475479124,
+        90.44999694824219
+      ],
+      "visibleCentreAndFourCorners": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "eye": [
+        8.249999618530273,
+        1.6,
+        90.44999694824219
+      ],
+      "quaternion": [
+        0.17436119383899873,
+        -0.6852723357053304,
+        0.1743611938389987,
+        0.6852723357053305
+      ],
+      "zone": "chronology",
+      "viewport": [
+        1040,
+        640
+      ],
+      "fov": 58,
+      "voice": "ev_u2",
+      "chapter": {
+        "id": "ev_h3",
+        "title": "Dame Margaret writes the Update",
+        "line": "Early 2027",
+        "chapter": 2,
+        "section": "The Polite Coup",
+        "index": 8
+      }
+    }
+  ],
+  "errors": [],
+  "browserGeometry": {
+    "pathname": "/fuzz/assets/expo/zones/chronology.glb",
+    "bytes": 1800392,
+    "sha256": "b26531fb332d9b90467cc5552cf1327f6b29bf1976eec23cc7a661148ece67cc",
+    "publication": {
+      "zone": "chronology",
+      "pass": "expansion-02",
+      "bytes": 1800392,
+      "sha256": "b26531fb332d9b90467cc5552cf1327f6b29bf1976eec23cc7a661148ece67cc",
+      "collisionSha256": "cf0feb628fc07502e44d6867a75f87d4f46a7cbf22c0a02b3fed1d74284d305a",
+      "furnitureColliders": [
+        "Archive cabinet case"
+      ]
+    }
+  },
+  "complete": true
+}

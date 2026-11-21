@@ -1,0 +1,37 @@
+{
+  "sha256": "44cf6c27431a60fe86e158adcbeab02da63792bcd998f06ca0200f5836c70aa9",
+  "glbBytes": 6332096,
+  "triangles": 39553,
+  "bodyTriangles": 18000,
+  "objects": 9,
+  "nativeForward": "+X",
+  "height": 0.9999999,
+  "soleDistancesAboveMount": {
+    "right fore": 3.77e-05,
+    "left fore": 1.1e-05,
+    "right hind": 3.61e-05,
+    "left hind": 0.0
+  },
+  "medianExportedRoughness": {
+    "hero_reginald_cast": 0.498,
+    "hero_reginald_pupil": 0.188,
+    "hero_reginald_gold": 0.231,
+    "display_glass": 0.082,
+    "hero_reginald_eye": 0.196
+  },
+  "oneRightMonocle": true,
+  "oneRightChain": true,
+  "twoSolidEyes": true,
+  "independentBodyAndOptics": true,
+  "sections": {
+    "01 | Reginald, cast bronze": 18000,
+    "Dark polished horizontal pupil, left, bare": 285,
+    "Dark polished horizontal pupil, right, mounted": 284,
+    "Hand-linked single drape, 67 open ovals": 11256,
+    "Mane anchor and swivel pin": 116,
+    "One fitted convex optical lens": 1076,
+    "Single turned brass monocle frame": 3936,
+    "Solid vitreous bronze eye, left, bare": 2300,
+    "Solid vitreous bronze eye, right, mounted": 2300
+  }
+}

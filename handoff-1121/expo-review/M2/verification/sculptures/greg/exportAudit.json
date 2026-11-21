@@ -1,0 +1,44 @@
+{
+  "id": "greg",
+  "sourceSha256": "02a5ee32d52a339730eed2337292a1ab1e5c510f682f6147fe333244ae54d99e",
+  "sourceTriangles": 308540,
+  "glbSha256": "40da7b0673719424043f384f77ac6a6035fcc4c3819f32cdd790ea68d971fb9e",
+  "glbBytes": 5901880,
+  "triangles": 37186,
+  "boundsHeight": 1.000617,
+  "fourSolesAboveLowest": {
+    "left fore": 0.0,
+    "right fore": 0.0,
+    "left hind": 0.0,
+    "right hind": 0.0
+  },
+  "sharedOcularRimVertices": {
+    "Greg, solid right eye": 163,
+    "Greg, solid left eye": 170
+  },
+  "components": {
+    "Greg, inset left pupil": 204,
+    "Greg, inset right pupil": 204,
+    "Greg, solid left eye": 3348,
+    "Greg, solid right eye": 3216,
+    "hero_greg_cast": 22038,
+    "Radiused staff ID case": 276,
+    "Raised staff name": 4768,
+    "Recessed ID face": 276,
+    "Rolled borders of staff ribbon": 1532,
+    "Ruled badge lower edge": 20,
+    "Swivel crossbar": 20,
+    "Swivel hook": 364,
+    "Woven staff lanyard casting": 920
+  },
+  "materials": [
+    "fitting_aged_brass",
+    "fitting_dark_brass",
+    "fitting_polished_brass",
+    "fitting_satin_brass",
+    "hero_greg_cast",
+    "hero_herd_globe_eye",
+    "hero_herd_pupil"
+  ],
+  "forward": "+X"
+}

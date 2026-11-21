@@ -1,0 +1,217 @@
+{
+  "zone": "habitat",
+  "records": [
+    {
+      "zone": "habitat",
+      "hoof": "idle",
+      "misses": 0,
+      "taps": 1,
+      "feeds": 0,
+      "clauses": [
+        "I accept one (1) grey button, and I accept that my hand is already on it.",
+        "I will not form an attachment to the button. I have already formed an attachment to the button.",
+        "I accept that the button goes where it wants now, and my eyes go with it.",
+        "I will not chase it with the cursor. I understand that I will chase it with the cursor.",
+        "I accept a number under the counter showing how much {cur} I say per second.",
+        "The number is small. I will watch it anyway. Watching a number is easier than having a thought."
+      ],
+      "realTaps": 7,
+      "name": "glass-1",
+      "herd": [
+        "reginald",
+        "margaret",
+        "henry",
+        "greg",
+        "bob",
+        "lashes",
+        "kevin",
+        "spitz",
+        "gary",
+        "doctor",
+        "bartholomew",
+        "nana"
+      ],
+      "loops": 0,
+      "contract": false,
+      "exit": false,
+      "photo": false,
+      "turnstile": false,
+      "line": "",
+      "heard": [
+        "pa_arrive_1",
+        "pa_hall3"
+      ],
+      "visitor": "Signee #1471"
+    },
+    {
+      "zone": "habitat",
+      "hoof": "idle",
+      "misses": 0,
+      "taps": 3,
+      "feeds": 0,
+      "clauses": [
+        "I accept one (1) grey button, and I accept that my hand is already on it.",
+        "I will not form an attachment to the button. I have already formed an attachment to the button.",
+        "I accept that the button goes where it wants now, and my eyes go with it.",
+        "I will not chase it with the cursor. I understand that I will chase it with the cursor.",
+        "I accept a number under the counter showing how much {cur} I say per second.",
+        "The number is small. I will watch it anyway. Watching a number is easier than having a thought."
+      ],
+      "realTaps": 7,
+      "name": "glass-3",
+      "herd": [
+        "reginald",
+        "margaret",
+        "henry",
+        "greg",
+        "bob",
+        "lashes",
+        "kevin",
+        "spitz",
+        "gary",
+        "doctor",
+        "bartholomew",
+        "nana"
+      ],
+      "loops": 0,
+      "contract": false,
+      "exit": false,
+      "photo": false,
+      "turnstile": false,
+      "line": "",
+      "heard": [
+        "pa_arrive_1",
+        "pa_hall3"
+      ],
+      "visitor": "Signee #1471"
+    },
+    {
+      "zone": "habitat",
+      "hoof": "idle",
+      "misses": 0,
+      "taps": 10,
+      "feeds": 0,
+      "clauses": [
+        "I accept one (1) grey button, and I accept that my hand is already on it.",
+        "I will not form an attachment to the button. I have already formed an attachment to the button.",
+        "I accept that the button goes where it wants now, and my eyes go with it.",
+        "I will not chase it with the cursor. I understand that I will chase it with the cursor.",
+        "I accept a number under the counter showing how much {cur} I say per second.",
+        "The number is small. I will watch it anyway. Watching a number is easier than having a thought."
+      ],
+      "realTaps": 7,
+      "name": "glass-10",
+      "herd": [
+        "reginald",
+        "margaret",
+        "henry",
+        "greg",
+        "bob",
+        "lashes",
+        "kevin",
+        "spitz",
+        "gary",
+        "doctor",
+        "bartholomew",
+        "nana"
+      ],
+      "loops": 0,
+      "contract": false,
+      "exit": false,
+      "photo": false,
+      "turnstile": false,
+      "line": "",
+      "heard": [
+        "pa_arrive_1",
+        "pa_hall3"
+      ],
+      "visitor": "Signee #1471"
+    },
+    {
+      "zone": "habitat",
+      "hoof": "idle",
+      "misses": 0,
+      "taps": 10,
+      "feeds": 1,
+      "clauses": [
+        "I accept one (1) grey button, and I accept that my hand is already on it.",
+        "I will not form an attachment to the button. I have already formed an attachment to the button.",
+        "I accept that the button goes where it wants now, and my eyes go with it.",
+        "I will not chase it with the cursor. I understand that I will chase it with the cursor.",
+        "I accept a number under the counter showing how much {cur} I say per second.",
+        "The number is small. I will watch it anyway. Watching a number is easier than having a thought."
+      ],
+      "realTaps": 7,
+      "name": "feeding",
+      "herd": [
+        "reginald",
+        "margaret",
+        "henry",
+        "greg",
+        "bob",
+        "lashes",
+        "kevin",
+        "spitz",
+        "gary",
+        "doctor",
+        "bartholomew",
+        "nana"
+      ],
+      "loops": 0,
+      "contract": false,
+      "exit": false,
+      "photo": false,
+      "turnstile": false,
+      "line": "",
+      "heard": [
+        "pa_arrive_1",
+        "pa_hall3"
+      ],
+      "visitor": "Signee #1471"
+    },
+    {
+      "zone": "habitat",
+      "hoof": "idle",
+      "misses": 0,
+      "taps": 10,
+      "feeds": 1,
+      "clauses": [
+        "I accept one (1) grey button, and I accept that my hand is already on it.",
+        "I will not form an attachment to the button. I have already formed an attachment to the button.",
+        "I accept that the button goes where it wants now, and my eyes go with it.",
+        "I will not chase it with the cursor. I understand that I will chase it with the cursor.",
+        "I accept a number under the counter showing how much {cur} I say per second.",
+        "The number is small. I will watch it anyway. Watching a number is easier than having a thought."
+      ],
+      "realTaps": 7,
+      "name": "second-clause",
+      "herd": [
+        "reginald",
+        "margaret",
+        "henry",
+        "greg",
+        "bob",
+        "lashes",
+        "kevin",
+        "spitz",
+        "gary",
+        "doctor",
+        "bartholomew",
+        "nana"
+      ],
+      "loops": 0,
+      "contract": false,
+      "exit": false,
+      "photo": false,
+      "turnstile": false,
+      "line": "I will not form an attachment to the button. I have already formed an attachment to the button.",
+      "heard": [
+        "pa_arrive_1",
+        "pa_hall3",
+        "keep_6"
+      ],
+      "visitor": "Signee #1471"
+    }
+  ],
+  "issues": []
+}

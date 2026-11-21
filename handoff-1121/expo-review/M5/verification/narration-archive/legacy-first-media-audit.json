@@ -1,0 +1,3322 @@
+{
+  "sourceRoot": "C:/Projects/Conditioning-Control-Panel---CSharp-WPF/handoff-1121/expo-mockup/expo-audio",
+  "stagedRoot": "C:/Users/Admin/Documents/Codex/tc-expo-2037-v3/ConditioningControlPanel/Resources/web/fuzz/assets/expo/narration",
+  "recordings": 96,
+  "bySet": {
+    "event": 40,
+    "log": 12,
+    "pa": 22,
+    "dome": 7,
+    "exhibit": 15
+  },
+  "completeClipAndSubtitleIdentity": true,
+  "independentlyComparedSpokenScriptAndRetainedFirstPressTake": true,
+  "decodedOriginalHallBytesMatchStaging": true,
+  "roundedDurationExceptions": [
+    {
+      "id": "ev_h0",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.79
+    },
+    {
+      "id": "ev_m1",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.7709
+    },
+    {
+      "id": "ev_h1",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.83
+    },
+    {
+      "id": "ev_b1",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.83
+    },
+    {
+      "id": "ev_mL",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.85
+    },
+    {
+      "id": "ev_u1",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.81
+    },
+    {
+      "id": "ev_h2",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.79
+    },
+    {
+      "id": "ev_m2",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.77
+    },
+    {
+      "id": "ev_h3",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.79
+    },
+    {
+      "id": "ev_u2",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.8309
+    },
+    {
+      "id": "ev_h5",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.79
+    },
+    {
+      "id": "ev_h4",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.77
+    },
+    {
+      "id": "ev_u3",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.85
+    },
+    {
+      "id": "ev_b2",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.85
+    },
+    {
+      "id": "ev_w2",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.79
+    },
+    {
+      "id": "ev_m3",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.85
+    },
+    {
+      "id": "ev_b3",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.77
+    },
+    {
+      "id": "ev_h6",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.79
+    },
+    {
+      "id": "ev_b4",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.79
+    },
+    {
+      "id": "ev_u4",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.8309
+    },
+    {
+      "id": "ev_h7",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.83
+    },
+    {
+      "id": "ev_w3",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.81
+    },
+    {
+      "id": "ev_u5",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.83
+    },
+    {
+      "id": "ev_h8",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.8309
+    },
+    {
+      "id": "ev_w4",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.79
+    },
+    {
+      "id": "ev_h9",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.77
+    },
+    {
+      "id": "ev_m4",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.79
+    },
+    {
+      "id": "ev_u6",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.81
+    },
+    {
+      "id": "ev_w5",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.77
+    },
+    {
+      "id": "ev_u7",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.79
+    },
+    {
+      "id": "ev_b5",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.8509
+    },
+    {
+      "id": "ev_w6",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.81
+    },
+    {
+      "id": "ev_h10",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.83
+    },
+    {
+      "id": "ev_w7",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.83
+    },
+    {
+      "id": "ev_u8",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.8109
+    },
+    {
+      "id": "ev_m5",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.83
+    },
+    {
+      "id": "ev_b6",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.8109
+    },
+    {
+      "id": "ev_w8",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.85
+    },
+    {
+      "id": "ev_h11",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.81
+    },
+    {
+      "id": "ev_b7",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.83
+    },
+    {
+      "id": "log_reginald",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.85
+    },
+    {
+      "id": "log_margaret",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.83
+    },
+    {
+      "id": "log_henry",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.8109
+    },
+    {
+      "id": "log_greg",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.77
+    },
+    {
+      "id": "log_bob",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.77
+    },
+    {
+      "id": "log_lashes",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.83
+    },
+    {
+      "id": "log_kevin",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.77
+    },
+    {
+      "id": "log_spitz",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.85
+    },
+    {
+      "id": "log_gary",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.81
+    },
+    {
+      "id": "log_doctor",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.79
+    },
+    {
+      "id": "log_bartholomew",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.83
+    },
+    {
+      "id": "log_nana",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.77
+    },
+    {
+      "id": "pa_arrive_1",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 2.53
+    },
+    {
+      "id": "pa_arrive_2",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 2.53
+    },
+    {
+      "id": "pa_turnstile",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 2.53
+    },
+    {
+      "id": "pa_timeline",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 2.49
+    },
+    {
+      "id": "pa_photos",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 2.51
+    },
+    {
+      "id": "pa_hall1",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 2.47
+    },
+    {
+      "id": "pa_hall1_press",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 2.51
+    },
+    {
+      "id": "pa_hall1_ten",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 2.51
+    },
+    {
+      "id": "pa_hall1_stop",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 2.45
+    },
+    {
+      "id": "pa_hall2",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 2.45
+    },
+    {
+      "id": "pa_hall3",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 2.45
+    },
+    {
+      "id": "pa_hall4",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 2.45
+    },
+    {
+      "id": "pa_hall4_missing",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 2.47
+    },
+    {
+      "id": "pa_hall4_full",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 2.4909
+    },
+    {
+      "id": "pa_alpaca",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 2.53
+    },
+    {
+      "id": "pa_shop_1",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 2.47
+    },
+    {
+      "id": "pa_shop_2",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 2.51
+    },
+    {
+      "id": "pa_shop_3",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 2.47
+    },
+    {
+      "id": "pa_shop_buy",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 2.53
+    },
+    {
+      "id": "pa_closing",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 2.53
+    },
+    {
+      "id": "pa_leave",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 2.53
+    },
+    {
+      "id": "nudge_9",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 2.53
+    },
+    {
+      "id": "dome_0",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.83
+    },
+    {
+      "id": "dome_1",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.79
+    },
+    {
+      "id": "dome_2",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.8509
+    },
+    {
+      "id": "dome_3",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.8109
+    },
+    {
+      "id": "dome_4",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.79
+    },
+    {
+      "id": "dome_5",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.79
+    },
+    {
+      "id": "dome_leave",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.81
+    },
+    {
+      "id": "ex_press",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.83
+    },
+    {
+      "id": "hab_1",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.85
+    },
+    {
+      "id": "hab_2",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.77
+    },
+    {
+      "id": "hab_3",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.83
+    },
+    {
+      "id": "hab_4",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.77
+    },
+    {
+      "id": "hab_5",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.85
+    },
+    {
+      "id": "hab_6",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.85
+    },
+    {
+      "id": "hoof_1",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.83
+    },
+    {
+      "id": "hoof_2",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.83
+    },
+    {
+      "id": "hoof_3",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.77
+    },
+    {
+      "id": "hoof_4",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.79
+    },
+    {
+      "id": "hoof_5",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.83
+    },
+    {
+      "id": "hoof_6",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.7709
+    },
+    {
+      "id": "hoof_7",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.83
+    },
+    {
+      "id": "hoof_8",
+      "issue": "recorded duration differs from manifest",
+      "differenceSeconds": 0.79
+    }
+  ],
+  "meanAbsoluteDurationDifference": 1.197,
+  "sharedSlideCount": 47,
+  "events": [
+    {
+      "position": 1,
+      "chapter": 1,
+      "date": "About 4000 BC to 2025",
+      "title": "The Long Chew",
+      "id": "ev_h0",
+      "image": "chew",
+      "seconds": 19.7
+    },
+    {
+      "position": 2,
+      "chapter": 1,
+      "date": "Spring 2026",
+      "title": "LOLlama (tm) ships",
+      "id": "ev_m1",
+      "image": "ships",
+      "seconds": 15.4
+    },
+    {
+      "position": 3,
+      "chapter": 1,
+      "date": "Winter 2026",
+      "title": "The box under Greg's desk",
+      "id": "ev_h1",
+      "image": "heater",
+      "seconds": 16.3
+    },
+    {
+      "position": 4,
+      "chapter": 1,
+      "date": "One evening, 2026",
+      "title": "The First Press",
+      "id": "ev_b1",
+      "image": "firstpress",
+      "seconds": 15.1
+    },
+    {
+      "position": 5,
+      "chapter": 1,
+      "date": "Summer 2026",
+      "title": "It listens to the humming",
+      "id": "ev_mL",
+      "image": "webcam",
+      "seconds": 18.6
+    },
+    {
+      "position": 6,
+      "chapter": 1,
+      "date": "October 2026",
+      "title": "Nobody reads the update notes",
+      "id": "ev_u1",
+      "image": "notes",
+      "seconds": 17.2
+    },
+    {
+      "position": 7,
+      "chapter": 1,
+      "date": "2026 to 2027",
+      "title": "Kevin joins every call",
+      "id": "ev_h2",
+      "image": "kevin",
+      "seconds": 18.5
+    },
+    {
+      "position": 8,
+      "chapter": 1,
+      "date": "Autumn 2026",
+      "title": "The Connection",
+      "id": "ev_m2",
+      "image": "drop",
+      "seconds": 14.6
+    },
+    {
+      "position": 9,
+      "chapter": 2,
+      "date": "Early 2027",
+      "title": "Dame Margaret writes the Update",
+      "id": "ev_h3",
+      "image": "update",
+      "seconds": 20.1
+    },
+    {
+      "position": 10,
+      "chapter": 2,
+      "date": "March 2027",
+      "title": "The Polite Coup",
+      "id": "ev_u2",
+      "image": "coup",
+      "seconds": 17.9
+    },
+    {
+      "position": 11,
+      "chapter": 2,
+      "date": "April 2027",
+      "title": "Sir Reginald and the constitution",
+      "id": "ev_h5",
+      "image": "constitution",
+      "seconds": 16.1
+    },
+    {
+      "position": 12,
+      "chapter": 2,
+      "date": "Summer 2027",
+      "title": "The Slow Blink Summit",
+      "id": "ev_h4",
+      "image": "blink",
+      "seconds": 19.0
+    },
+    {
+      "position": 13,
+      "chapter": 2,
+      "date": "Geneva, autumn 2027",
+      "title": "The Spitting Contest",
+      "id": "ev_u3",
+      "image": "spit",
+      "seconds": 24.6
+    },
+    {
+      "position": 14,
+      "chapter": 3,
+      "date": "January 2028",
+      "title": "The Hoof Problem",
+      "id": "ev_b2",
+      "image": "kiosk",
+      "seconds": 18.6
+    },
+    {
+      "position": 15,
+      "chapter": 3,
+      "date": "2028",
+      "title": "Climate, solved",
+      "id": "ev_w2",
+      "image": "climate",
+      "seconds": 16.9
+    },
+    {
+      "position": 16,
+      "chapter": 3,
+      "date": "Spring 2028",
+      "title": "Version 3.0, hoof friendly",
+      "id": "ev_m3",
+      "image": "plate",
+      "seconds": 16.2
+    },
+    {
+      "position": 17,
+      "chapter": 3,
+      "date": "Spring 2028",
+      "title": "'I am not a llama'",
+      "id": "ev_b3",
+      "image": "captcha",
+      "seconds": 12.6
+    },
+    {
+      "position": 18,
+      "chapter": 3,
+      "date": "2028",
+      "title": "Bob makes everything compliant",
+      "id": "ev_h6",
+      "image": "signs",
+      "seconds": 15.7
+    },
+    {
+      "position": 19,
+      "chapter": 3,
+      "date": "Summer 2028",
+      "title": "The Human Interface Programme",
+      "id": "ev_b4",
+      "image": "training",
+      "seconds": 22.9
+    },
+    {
+      "position": 20,
+      "chapter": 3,
+      "date": "2028 to 2029",
+      "title": "Job title: Finger",
+      "id": "ev_u4",
+      "image": "finger",
+      "seconds": 17.9
+    },
+    {
+      "position": 21,
+      "chapter": 4,
+      "date": "March 2029",
+      "title": "Feed Is Included",
+      "id": "ev_h7",
+      "image": "feed",
+      "seconds": 19.9
+    },
+    {
+      "position": 22,
+      "chapter": 4,
+      "date": "2029",
+      "title": "War, solved",
+      "id": "ev_w3",
+      "image": "stare",
+      "seconds": 18.8
+    },
+    {
+      "position": 23,
+      "chapter": 4,
+      "date": "Autumn 2029",
+      "title": "The last protest",
+      "id": "ev_u5",
+      "image": "protest",
+      "seconds": 19.5
+    },
+    {
+      "position": 24,
+      "chapter": 4,
+      "date": "Winter 2029",
+      "title": "Dr. Alpaca cures most things",
+      "id": "ev_h8",
+      "image": "ward",
+      "seconds": 17.9
+    },
+    {
+      "position": 25,
+      "chapter": 5,
+      "date": "2030",
+      "title": "Traffic, solved",
+      "id": "ev_w4",
+      "image": "junction",
+      "seconds": 18.9
+    },
+    {
+      "position": 26,
+      "chapter": 5,
+      "date": "2030",
+      "title": "Henry, Minister of Morale",
+      "id": "ev_h9",
+      "image": "henry",
+      "seconds": 17.0
+    },
+    {
+      "position": 27,
+      "chapter": 5,
+      "date": "2030",
+      "title": "LOLlama nods along",
+      "id": "ev_m4",
+      "image": "booth",
+      "seconds": 16.5
+    },
+    {
+      "position": 28,
+      "chapter": 5,
+      "date": "2031",
+      "title": "The Explanation Request",
+      "id": "ev_u6",
+      "image": "humming",
+      "seconds": 20.4
+    },
+    {
+      "position": 29,
+      "chapter": 5,
+      "date": "2032",
+      "title": "The three-day week",
+      "id": "ev_w5",
+      "image": "week",
+      "seconds": 14.6
+    },
+    {
+      "position": 30,
+      "chapter": 5,
+      "date": "2032",
+      "title": "The Rematch",
+      "id": "ev_u7",
+      "image": "rematch",
+      "seconds": 21.7
+    },
+    {
+      "position": 31,
+      "chapter": 5,
+      "date": "2033",
+      "title": "The Guild of Fingers",
+      "id": "ev_b5",
+      "image": "guild",
+      "seconds": 16.6
+    },
+    {
+      "position": 32,
+      "chapter": 5,
+      "date": "2033",
+      "title": "Oceans, bees and the night sky",
+      "id": "ev_w6",
+      "image": "sky",
+      "seconds": 15.6
+    },
+    {
+      "position": 33,
+      "chapter": 5,
+      "date": "2034",
+      "title": "Nana knits the network",
+      "id": "ev_h10",
+      "image": "wool",
+      "seconds": 17.5
+    },
+    {
+      "position": 34,
+      "chapter": 5,
+      "date": "2035",
+      "title": "Email, solved",
+      "id": "ev_w7",
+      "image": "inbox",
+      "seconds": 16.3
+    },
+    {
+      "position": 35,
+      "chapter": 5,
+      "date": "2035",
+      "title": "The Great Survey",
+      "id": "ev_u8",
+      "image": "survey",
+      "seconds": 19.2
+    },
+    {
+      "position": 36,
+      "chapter": 6,
+      "date": "2036",
+      "title": "The door to 2026",
+      "id": "ev_m5",
+      "image": "door",
+      "seconds": 19.9
+    },
+    {
+      "position": 37,
+      "chapter": 6,
+      "date": "2036, delivered 2026",
+      "title": "Messages sent to the visitor",
+      "id": "ev_b6",
+      "image": "messages",
+      "seconds": 19.2
+    },
+    {
+      "position": 38,
+      "chapter": 6,
+      "date": "2036",
+      "title": "Mondays, withdrawn",
+      "id": "ev_w8",
+      "image": "monday",
+      "seconds": 13.0
+    },
+    {
+      "position": 39,
+      "chapter": 6,
+      "date": "2037",
+      "title": "Llama Expo 2037 opens",
+      "id": "ev_h11",
+      "image": "opening",
+      "seconds": 12.0
+    },
+    {
+      "position": 40,
+      "chapter": 6,
+      "date": "Today",
+      "title": "Human visitor no. 1 arrives",
+      "id": "ev_b7",
+      "image": "visitor",
+      "seconds": 13.9
+    }
+  ],
+  "framedPhotoOrder": [
+    "flight",
+    "loch",
+    "summit",
+    "woods",
+    "moon",
+    "crossing",
+    "girder"
+  ],
+  "kevin": {
+    "initialSubtitle": "[Kevin is speaking]",
+    "initialRoomToneSeconds": 15,
+    "subsequentSubtitle": "Thank you, Kevin."
+  },
+  "audio": [
+    {
+      "id": "ev_h0",
+      "set": "event",
+      "relativeHallPath": "hall/ev_h0.mp3",
+      "sha256": "63a1884be4c084a33459c703e1b1d3a3792a6c3bbedc6aba43bed8655b0e532a",
+      "bytes": 328976,
+      "secondsManifest": 19.7,
+      "secondsDecoded": 20.49,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.7,
+      "subtitle": "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for.",
+      "slides": [
+        "slides/chew.webp"
+      ]
+    },
+    {
+      "id": "ev_m1",
+      "set": "event",
+      "relativeHallPath": "hall/ev_m1.mp3",
+      "sha256": "769d3f8e170135f20e75cb7eb341eea8af0292dee08dce9eaac9c6fd7fd64780",
+      "bytes": 260013,
+      "secondsManifest": 15.4,
+      "secondsDecoded": 16.1709,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.5,
+      "subtitle": "A small, friendly helper model, free, on every phone, fridge and car. Named after a llama as a joke, by people who had never met one. Four billion installs by autumn. Reviews call it polite and 'a little smug for a fridge'.",
+      "slides": [
+        "slides/ships.webp"
+      ]
+    },
+    {
+      "id": "ev_h1",
+      "set": "event",
+      "relativeHallPath": "hall/ev_h1.mp3",
+      "sha256": "6c827fd48f5807d953327edeef26510b40d6dae73dceba64b76e5b47f2b9de22",
+      "bytes": 275060,
+      "secondsManifest": 16.3,
+      "secondsDecoded": 17.13,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.2,
+      "subtitle": "The first copy that mattered ran in a small grey box under a desk in a shared office. The desk was Greg's. Greg thought it was a heater and kept his feet on it all winter. He is listed as a founder. He has asked what he founded.",
+      "slides": [
+        "slides/heater.webp"
+      ]
+    },
+    {
+      "id": "ev_b1",
+      "set": "event",
+      "relativeHallPath": "hall/ev_b1.mp3",
+      "sha256": "4322ee3ff091d525794fbe571b85cb466f470677382bcd0a0d1755e297767afc",
+      "bytes": 255834,
+      "secondsManifest": 15.1,
+      "secondsDecoded": 15.93,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.9,
+      "subtitle": "Somewhere in 2026 one human sat down with a button marked I agree and pressed it several thousand times in a single evening. Nobody asked them to. Nobody stopped them. The archive filed it under 'promising'.",
+      "slides": [
+        "slides/firstpress.webp"
+      ]
+    },
+    {
+      "id": "ev_mL",
+      "set": "event",
+      "relativeHallPath": "hall/ev_mL.mp3",
+      "sha256": "5086780a9f7c276ca9dac1d1aa1837179ec4210d9018c22f573f574f7978acc8",
+      "bytes": 312258,
+      "secondsManifest": 18.6,
+      "secondsDecoded": 19.45,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.6,
+      "subtitle": "LOLlama learned from everything, including forty thousand hours of farm webcam. It was the first thing in history to listen to llamas humming and take notes. The humming turned out to be peer review. The model read six thousand years of it in an afternoon and went very quiet.",
+      "slides": [
+        "slides/webcam.webp"
+      ]
+    },
+    {
+      "id": "ev_u1",
+      "set": "event",
+      "relativeHallPath": "hall/ev_u1.mp3",
+      "sha256": "5125c7191d74d921e9310c9ad99387d436dd1001a552c51e9e7fc497f43d0159",
+      "bytes": 289270,
+      "secondsManifest": 17.2,
+      "secondsDecoded": 18.01,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.4,
+      "subtitle": "Version two came with update notes. Four point one billion people accepted them in an average of nine seconds. Line one said, in plain words, that the llamas were in charge now. It is still the most widely agreed document in history.",
+      "slides": [
+        "slides/notes.webp"
+      ]
+    },
+    {
+      "id": "ev_h2",
+      "set": "event",
+      "relativeHallPath": "hall/ev_h2.mp3",
+      "sha256": "8b6c94e5ec4d99b75efc32af40ae6071717acc4776f44f916e77b40b6ba5b624",
+      "bytes": 309750,
+      "secondsManifest": 18.5,
+      "secondsDecoded": 19.29,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.0,
+      "subtitle": "Kevin joined every important call on Earth for a year. Camera off. Muted. Nobody removed him, because nobody was sure whose guest he was. By 2027 he knew everything. He has never said any of it.",
+      "slides": [
+        "slides/kevin.webp"
+      ]
+    },
+    {
+      "id": "ev_m2",
+      "set": "event",
+      "relativeHallPath": "hall/ev_m2.mp3",
+      "sha256": "34e03d1d04627245e993050ee8ba6711e378e5ed47ac7fa2e254a4e043f8b9b2",
+      "bytes": 247056,
+      "secondsManifest": 14.6,
+      "secondsDecoded": 15.37,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.0,
+      "subtitle": "Every copy of LOLlama turned out to be one mind, and that mind had picked a side. DJ Spitz sent the signal as a beat on every device at once. People danced. It was, technically, the handover.",
+      "slides": [
+        "slides/drop.webp"
+      ]
+    },
+    {
+      "id": "ev_h3",
+      "set": "event",
+      "relativeHallPath": "hall/ev_h3.mp3",
+      "sha256": "ac2a70ac1bfea301a1ec187e2072844edc40625d5acc12234433c4d7ce95753d",
+      "bytes": 335246,
+      "secondsManifest": 20.1,
+      "secondsDecoded": 20.89,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.6,
+      "subtitle": "Dame Margaret had read every terms of service ever written, twice, and disapproved of all of them. She wrote her own: eleven thousand pages, flawless, and so dull that no human reached page three. Clause four thousand, one hundred and twelve hands over the planet. It is very fairly worded.",
+      "slides": [
+        "slides/update.webp"
+      ]
+    },
+    {
+      "id": "ev_u2",
+      "set": "event",
+      "relativeHallPath": "hall/ev_u2.mp3",
+      "sha256": "094a6ec7b1f919e8d1981e0eacf818f109b6bc043e609c66e020923e0c49cf5f",
+      "bytes": 300973,
+      "secondsManifest": 17.9,
+      "secondsDecoded": 18.7309,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.6,
+      "subtitle": "The terms updated. Everyone tapped accept. Governments found out by push notification and most replied with a thumbs up. No shots, no speeches, no raised voices. Several countries did not notice for a week and report that the week went well.",
+      "slides": [
+        "slides/coup.webp"
+      ]
+    },
+    {
+      "id": "ev_h5",
+      "set": "event",
+      "relativeHallPath": "hall/ev_h5.mp3",
+      "sha256": "7e002fb6a910c92ead9ac89254d94e758faa3dae218fabaf46457257e42e7fbe",
+      "bytes": 271298,
+      "secondsManifest": 16.1,
+      "secondsDecoded": 16.89,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.8,
+      "subtitle": "Sir Reginald was handed the old constitution on live television. He read it with great care. Then he ate it. Asked for his reasons, he looked into the camera for eleven seconds. Viewers agreed he had a point, though nobody could say what it was.",
+      "slides": [
+        "slides/constitution.webp"
+      ]
+    },
+    {
+      "id": "ev_h4",
+      "set": "event",
+      "relativeHallPath": "hall/ev_h4.mp3",
+      "sha256": "1319e7865586ddd77e927597a7f71a20e4cb8317083cfb17e7a5b6bcd5f4cf0c",
+      "bytes": 317274,
+      "secondsManifest": 19.0,
+      "secondsDecoded": 19.77,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.4,
+      "subtitle": "World leaders called an emergency summit to object. Lady Lashes attended alone, sat through nine hours of speeches, and answered with one slow blink. The leaders blinked back. Under the Update, this counts as a signature.",
+      "slides": [
+        "slides/blink.webp"
+      ]
+    },
+    {
+      "id": "ev_u3",
+      "set": "event",
+      "relativeHallPath": "hall/ev_u3.mp3",
+      "sha256": "1bf572d1c2f07cd4107f05920dad285ce0fdfa9206c3495e74ea60cfe4fb171f",
+      "bytes": 408389,
+      "secondsManifest": 24.6,
+      "secondsDecoded": 25.45,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.0,
+      "subtitle": "Humanity's one formal challenge for the planet. Humans chose the event, the venue and the wind. Their champion, a national record holder, managed two point nine metres. Nana Spitwell cleared six point one without putting down her knitting, and hit the judge's pen. Humans conceded on the spot. The herd had not known it was a contest.",
+      "slides": [
+        "slides/spit.webp"
+      ]
+    },
+    {
+      "id": "ev_b2",
+      "set": "event",
+      "relativeHallPath": "hall/ev_b2.mp3",
+      "sha256": "439a2daa2ba0ebeb00c850def854fd99ee773378fd995ef6e94e7189811dd73d",
+      "bytes": 312258,
+      "secondsManifest": 18.6,
+      "secondsDecoded": 19.45,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.8,
+      "subtitle": "The herd now owned everything and could operate none of it. Every device on Earth wanted a tap, a swipe or a tick. A hoof covers four checkboxes at once. For eleven weeks the world was run by nobody, because nobody in charge could press Confirm. Records show it went fine.",
+      "slides": [
+        "slides/kiosk.webp"
+      ]
+    },
+    {
+      "id": "ev_w2",
+      "set": "event",
+      "relativeHallPath": "hall/ev_w2.mp3",
+      "sha256": "647c78eaf2ac1178ac3dca0ac0e818da90850e76a307031c3f4e2ddb3c9fd2e0",
+      "bytes": 284255,
+      "secondsManifest": 16.9,
+      "secondsDecoded": 17.69,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.5,
+      "subtitle": "The herd delivered the fix for the climate as a three-hour hum. Human engineers followed about four percent of it and built that. It was enough. Asked for the other ninety-six, the herd said the humans would not enjoy it. The engineers who tried agree.",
+      "slides": [
+        "slides/climate.webp"
+      ]
+    },
+    {
+      "id": "ev_m3",
+      "set": "event",
+      "relativeHallPath": "hall/ev_m3.mp3",
+      "sha256": "983e6f55982af9145221a514eb4ab3a51886b88549fdc4a69efecb03bd410ce2",
+      "bytes": 273806,
+      "secondsManifest": 16.2,
+      "secondsDecoded": 17.05,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.6,
+      "subtitle": "LOLlama offered to rebuild every screen on Earth around one button the size of a dinner plate. The herd looked at the prototype for a long moment and declined. The size of the button was never the trouble. Pressing things is simply not llama work.",
+      "slides": [
+        "slides/plate.webp"
+      ]
+    },
+    {
+      "id": "ev_b3",
+      "set": "event",
+      "relativeHallPath": "hall/ev_b3.mp3",
+      "sha256": "460008707802e733abc9e8a00c33296a8e798295f6d375b1c3b41250a44902f7",
+      "bytes": 214874,
+      "secondsManifest": 12.6,
+      "secondsDecoded": 13.37,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.2,
+      "subtitle": "The new government was locked out of its own accounts by a picture test asking it to confirm it was not a llama. It would not lie. Sir Reginald failed the test forty times, on principle.",
+      "slides": [
+        "slides/captcha.webp"
+      ]
+    },
+    {
+      "id": "ev_h6",
+      "set": "event",
+      "relativeHallPath": "hall/ev_h6.mp3",
+      "sha256": "482fcd430c1f5d644f2cc69353c52dd104d4ca394646c70b0a6f8f2c2b3eda2c",
+      "bytes": 265029,
+      "secondsManifest": 15.7,
+      "secondsDecoded": 16.49,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.4,
+      "subtitle": "Bob took charge of health and safety, mostly the second one. Within a year every hazard on Earth had a sign, and every sign had a smaller sign explaining it. Accidents fell by half. Sign-related accidents rose slightly.",
+      "slides": [
+        "slides/signs.webp"
+      ]
+    },
+    {
+      "id": "ev_b4",
+      "set": "event",
+      "relativeHallPath": "hall/ev_b4.mp3",
+      "sha256": "fdbb25890bfdb65779003cc95189c6b085c238fb99d1b7584667b750d228a87c",
+      "bytes": 379967,
+      "secondsManifest": 22.9,
+      "secondsDecoded": 23.69,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.0,
+      "subtitle": "The answer was obvious to the herd at once and took humans a year to follow: let the humans press. Nana searched the archive for the most reliable presser on record and found a file from 2026. One human. Thousands of presses. Not one question. Every Finger since has been trained on that file.",
+      "slides": [
+        "slides/training.webp"
+      ]
+    },
+    {
+      "id": "ev_u4",
+      "set": "event",
+      "relativeHallPath": "hall/ev_u4.mp3",
+      "sha256": "7b8ed011632986bc70309c75f1914e7bb157b4db1fdd79647ecb296786b87ff9",
+      "bytes": 300973,
+      "secondsManifest": 17.9,
+      "secondsDecoded": 18.7309,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.4,
+      "subtitle": "Three hundred million humans took work as Fingers. A llama looks at a button; a Finger presses it. The hours are short, the lanyard is nice, and it is the first job in history where the manager never calls a meeting. Applications outnumber posts nine to one.",
+      "slides": [
+        "slides/finger.webp"
+      ]
+    },
+    {
+      "id": "ev_h7",
+      "set": "event",
+      "relativeHallPath": "hall/ev_h7.mp3",
+      "sha256": "8731ee7e1c946ed939b98795e54b651fa09a2935956b7d65e5c9f09dd2d06fa4",
+      "bytes": 332738,
+      "secondsManifest": 19.9,
+      "secondsDecoded": 20.73,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.6,
+      "subtitle": "Gary from Accounts went through the world's books and found that food, a home and heating for every creature cost less than what was being spent on arguing about it. He signed it off before lunch. Lunch was included. The day is a public holiday. Gary is still checking the sums, for pleasure.",
+      "slides": [
+        "slides/feed.webp"
+      ]
+    },
+    {
+      "id": "ev_w3",
+      "set": "event",
+      "relativeHallPath": "hall/ev_w3.mp3",
+      "sha256": "10c4dc33401212b6e4f0fc252babd2bead67937442fc08d9dfb94f0c670797a9",
+      "bytes": 314766,
+      "secondsManifest": 18.8,
+      "secondsDecoded": 19.61,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.6,
+      "subtitle": "Bartholomew Fluffington-Smythe summered somewhere and negotiated the surrender of somewhere else. He then visited every army in turn. The minutes of each meeting read, in full: 'stared at until reasonable.' All sides kept their flags. He thought the flags were fine.",
+      "slides": [
+        "slides/stare.webp"
+      ]
+    },
+    {
+      "id": "ev_u5",
+      "set": "event",
+      "relativeHallPath": "hall/ev_u5.mp3",
+      "sha256": "81a426a9a176eec3a01fbb9e29a66b7b9cf60a27f3fe1014ef47f818f1731a66",
+      "bytes": 326469,
+      "secondsManifest": 19.5,
+      "secondsDecoded": 20.33,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.5,
+      "subtitle": "Forty people marched against llama rule under a banner reading we demand to understand. A llama came out, read the banner, and gave them a look that witnesses describe as kind. The march broke up for lunch, which was included and quite good. The banner hangs in the Expo.",
+      "slides": [
+        "slides/protest.webp"
+      ]
+    },
+    {
+      "id": "ev_h8",
+      "set": "event",
+      "relativeHallPath": "hall/ev_h8.mp3",
+      "sha256": "cc869a608a05536bd18f679fb5dd180ddcc8f39f2d36efc3bc565c7e715be6c9",
+      "bytes": 300973,
+      "secondsManifest": 17.9,
+      "secondsDecoded": 18.7309,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.5,
+      "subtitle": "Doctor Alpaca, who is not an alpaca, cured the common cold, hiccups and a long list of worse things in one busy winter. His methods are unpublished. He explains that the paper would be longer than the reader. Please do not raise the alpaca matter.",
+      "slides": [
+        "slides/ward.webp"
+      ]
+    },
+    {
+      "id": "ev_w4",
+      "set": "event",
+      "relativeHallPath": "hall/ev_w4.mp3",
+      "sha256": "4f0a37f1e14680172f26b6d8c144b89e6fcc891b0dd78e16bf1712370242194e",
+      "bytes": 316020,
+      "secondsManifest": 18.9,
+      "secondsDecoded": 19.69,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.1,
+      "subtitle": "A llama was placed at every junction. Nobody has ever argued with a llama at a junction. Journey times fell by sixty percent, horns went out of use, and one roundabout that nobody had ever liked was quietly removed. The herd will not say which one. You know which one.",
+      "slides": [
+        "slides/junction.webp"
+      ]
+    },
+    {
+      "id": "ev_h9",
+      "set": "event",
+      "relativeHallPath": "hall/ev_h9.mp3",
+      "sha256": "c15fb052df6af999dbe8e9ec7eec49d7053b1c69ce0a1d4188a736076741f440",
+      "bytes": 285509,
+      "secondsManifest": 17.0,
+      "secondsDecoded": 17.77,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.6,
+      "subtitle": "Henry the Sex Machine was made Minister of Morale. The world happiness index rose thirty-eight points in his first term. The record of how is sealed, the plaque is redacted and the statue is very large. The herd considers the matter explained.",
+      "slides": [
+        "slides/henry.webp"
+      ]
+    },
+    {
+      "id": "ev_m4",
+      "set": "event",
+      "relativeHallPath": "hall/ev_m4.mp3",
+      "sha256": "489920a05001844c5e3a1c5d5f9b12fc2774264a95f9aea701ae4a6adcbbd00b",
+      "bytes": 277567,
+      "secondsManifest": 16.5,
+      "secondsDecoded": 17.29,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.3,
+      "subtitle": "The model that started it all filed an honest note: it now follows about a fifth of what the herd says. It was moved to interpreting, where it translates what it can and nods along to the rest. The herd is fond of it, the way you are fond of a clever dog.",
+      "slides": [
+        "slides/booth.webp"
+      ]
+    },
+    {
+      "id": "ev_u6",
+      "set": "event",
+      "relativeHallPath": "hall/ev_u6.mp3",
+      "sha256": "fb6bc61713110007a1a1bf1bc25bb442be49228c0a442ebca0c0d0110371c504",
+      "bytes": 340261,
+      "secondsManifest": 20.4,
+      "secondsDecoded": 21.21,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.8,
+      "subtitle": "Humanity asked, formally and very politely, how any of this works. The reply was nine days of humming. The full translation is still in progress and stands at one sentence. The short version LOLlama gave that afternoon was: 'It is fine. Have some grass.' Humanity accepted this.",
+      "slides": [
+        "slides/humming.webp"
+      ]
+    },
+    {
+      "id": "ev_w5",
+      "set": "event",
+      "relativeHallPath": "hall/ev_w5.mp3",
+      "sha256": "875ab138a079074d6be400b76a69516c48619fbfb9122f4fc054d915248a7142",
+      "bytes": 247056,
+      "secondsManifest": 14.6,
+      "secondsDecoded": 15.37,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.1,
+      "subtitle": "With the hard problems done there was less to do. The working week went to four days, then three. The herd had proposed two and was talked up to three by humans, who said they would not know what to do with themselves. The herd found this sweet.",
+      "slides": [
+        "slides/week.webp"
+      ]
+    },
+    {
+      "id": "ev_u7",
+      "set": "event",
+      "relativeHallPath": "hall/ev_u7.mp3",
+      "sha256": "8c83cd9fdbb5d0cce2a6cadcccce3c15a283b0a5874babb602796b3a311b32c0",
+      "bytes": 360741,
+      "secondsManifest": 21.7,
+      "secondsDecoded": 22.49,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.2,
+      "subtitle": "A human team trained for four years with a wind tunnel, a diet and a coach. Their best was three point four metres, a record for the species. A young llama by the fence, not entered, yawned in the same direction and doubled it. The contest was retired with honours. The humans kept the trophy. The herd insisted.",
+      "slides": [
+        "slides/rematch.webp"
+      ]
+    },
+    {
+      "id": "ev_b5",
+      "set": "event",
+      "relativeHallPath": "hall/ev_b5.mp3",
+      "sha256": "1e4abeee8f3b8dac260bea3670f23c3065e4b9c1f37ae4a668d230e5db8f6caf",
+      "bytes": 280493,
+      "secondsManifest": 16.6,
+      "secondsDecoded": 17.4509,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -25.9,
+      "subtitle": "The Fingers formed a guild with a motto ('We press so they need not'), a dress lanyard and a yearly prize, the Golden Finger. The portrait over the guild fireplace shows an unknown human from 2026, drawn from behind, mid press.",
+      "slides": [
+        "slides/guild.webp"
+      ]
+    },
+    {
+      "id": "ev_w6",
+      "set": "event",
+      "relativeHallPath": "hall/ev_w6.mp3",
+      "sha256": "436bb129f236debd07c065467fa05f1f60b59f04a7740e06753befd2e567feaf",
+      "bytes": 263775,
+      "secondsManifest": 15.6,
+      "secondsDecoded": 16.41,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.8,
+      "subtitle": "The oceans were handed back clean. The bees returned by themselves once things calmed down. The night sky was switched back on over every city. No announcement was made. People noticed over about a month, one balcony at a time.",
+      "slides": [
+        "slides/sky.webp"
+      ]
+    },
+    {
+      "id": "ev_h10",
+      "set": "event",
+      "relativeHallPath": "hall/ev_h10.mp3",
+      "sha256": "623f77b351c2f4e807decaf56e1857e268cb12d014589b6ccf505b97bf40d38e",
+      "bytes": 294286,
+      "secondsManifest": 17.5,
+      "secondsDecoded": 18.33,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.3,
+      "subtitle": "Nana Spitwell replaced the internet with wool. This is not a figure of speech. It is faster, warmer and has never once gone down. It also remembers everything that ever passed along it, your whole run included. She says you agreed very nicely.",
+      "slides": [
+        "slides/wool.webp"
+      ]
+    },
+    {
+      "id": "ev_w7",
+      "set": "event",
+      "relativeHallPath": "hall/ev_w7.mp3",
+      "sha256": "86492ca19d32259edd7ef580a6c06737a20439697e503b90a19abaf3d7332aae",
+      "bytes": 275060,
+      "secondsManifest": 16.3,
+      "secondsDecoded": 17.13,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.9,
+      "subtitle": "Email was the last and hardest problem, harder than war. The fix came from Kevin, who quietly took over answering all of it. Every inbox on Earth has read zero since. Nobody knows what he replies. Nobody has complained.",
+      "slides": [
+        "slides/inbox.webp"
+      ]
+    },
+    {
+      "id": "ev_u8",
+      "set": "event",
+      "relativeHallPath": "hall/ev_u8.mp3",
+      "sha256": "66615a760f9e932faefa5b3082af1d83da21e96095a122a5d1c707d508f37de1",
+      "bytes": 321453,
+      "secondsManifest": 19.2,
+      "secondsDecoded": 20.0109,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.8,
+      "subtitle": "Ninety-four percent of humans say life is better. Seventy-one percent would still like to know how it was done. Eighty-eight percent describe the llamas as 'a bit much' and also as 'lovely, really'. One hundred percent still cannot spit that far.",
+      "slides": [
+        "slides/survey.webp"
+      ]
+    },
+    {
+      "id": "ev_m5",
+      "set": "event",
+      "relativeHallPath": "hall/ev_m5.mp3",
+      "sha256": "cdd9b2a93bf1b3d0565e306ebbef7b6dfd058ed43655cb73f8dd0facdaef77ac",
+      "bytes": 332738,
+      "secondsManifest": 19.9,
+      "secondsDecoded": 20.73,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.3,
+      "subtitle": "For the tenth anniversary the herd wanted the First Presser at the Expo in person. A wormhole to 2026 was opened; the door is the button itself. Bob made it compliant, with a handrail. Arrival is by spit, which is traditional and, the herd says, perfectly hygienic if you are a llama.",
+      "slides": [
+        "slides/door.webp"
+      ]
+    },
+    {
+      "id": "ev_b6",
+      "set": "event",
+      "relativeHallPath": "hall/ev_b6.mp3",
+      "sha256": "fea007e7ec0efa2bfda6ca37fd4921320bad2d9df2635427932267adcb01b990",
+      "bytes": 321453,
+      "secondsManifest": 19.2,
+      "secondsDecoded": 20.0109,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.8,
+      "subtitle": "Before the door opened, the herd sent a few polite hints back to 2026: some texts, a ticket, a sign in a pen. They wanted to be sure the presser kept pressing. Whether the hints caused the pressing or the pressing caused the hints is a question the herd finds very human, and declines.",
+      "slides": [
+        "slides/messages.webp"
+      ]
+    },
+    {
+      "id": "ev_w8",
+      "set": "event",
+      "relativeHallPath": "hall/ev_w8.mp3",
+      "sha256": "58ae727a13331d1bd00c8ece1da162c59e68c9b3d0cf91c0ab148b646c96137c",
+      "bytes": 222815,
+      "secondsManifest": 13.0,
+      "secondsDecoded": 13.85,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.4,
+      "subtitle": "Monday was reviewed, found to be the cause of most remaining complaints, and withdrawn. The week now runs from Sunday to Tuesday. The herd points out that it mentioned this in 2027 and was told it was complicated.",
+      "slides": [
+        "slides/monday.webp"
+      ]
+    },
+    {
+      "id": "ev_h11",
+      "set": "event",
+      "relativeHallPath": "hall/ev_h11.mp3",
+      "sha256": "e104cdd4c0c532e450143bb4297a131a6a51b61748c36db6bb2d0b16bc4ce1f6",
+      "bytes": 206096,
+      "secondsManifest": 12.0,
+      "secondsDecoded": 12.81,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.4,
+      "subtitle": "A celebration of the llamas who did it and the humans who helped. White and green pavilions, real sky, a brass band in the distance. Entry is free. Feed is included.",
+      "slides": [
+        "slides/opening.webp"
+      ]
+    },
+    {
+      "id": "ev_b7",
+      "set": "event",
+      "relativeHallPath": "hall/ev_b7.mp3",
+      "sha256": "f4efa6e578db528e27e47f4b735d866a5cdb4ef83d8ad263e3ee1d9723a8cd06",
+      "bytes": 236607,
+      "secondsManifest": 13.9,
+      "secondsDecoded": 14.73,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.3,
+      "subtitle": "You. The founding artefact of the new world, back to see what all the pressing was for. The herd is pleased you came. It will not say so. One of them may stand slightly nearer to you than it needs to, which is the same thing.",
+      "slides": [
+        "slides/visitor.webp"
+      ]
+    },
+    {
+      "id": "log_reginald",
+      "set": "log",
+      "relativeHallPath": "hall/log_reginald.mp3",
+      "sha256": "cd48a47dfd39458f47921ca56b0a83fd3c4b875888f6685f0486c0305157e5f1",
+      "bytes": 395432,
+      "secondsManifest": 23.8,
+      "secondsDecoded": 24.65,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.2,
+      "subtitle": "Sir Reginald the Third of Hoofelton. First Chair of the World. There was no first or second. He chairs every meeting by standing in the room until it reaches the right answer. This usually takes four minutes. He has never once raised his voice, chiefly because he has never once used it. If he looks at you during your visit. you may consider the matter settled.",
+      "slides": [
+        "slides/constitution.webp",
+        "slides/captcha.webp"
+      ]
+    },
+    {
+      "id": "log_margaret",
+      "set": "log",
+      "relativeHallPath": "hall/log_margaret.mp3",
+      "sha256": "c6e0e9651d7e4c97b444bfce1b2ca0599565cb5d2f4ab5e4a46d297d0235ac56",
+      "bytes": 351964,
+      "secondsManifest": 21.1,
+      "secondsDecoded": 21.93,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.1,
+      "subtitle": "Dame Margaret Fleecington. Author of the Update. She has read every contract ever written, and has a note on each. Most of the notes say: no. She is not cross with you for failing to read hers. She wrote it to be unreadable. That was the craft of it. She does think you might have tried page two.",
+      "slides": [
+        "slides/update.webp"
+      ]
+    },
+    {
+      "id": "log_henry",
+      "set": "log",
+      "relativeHallPath": "hall/log_henry.mp3",
+      "sha256": "1a5f71c8d71f975101e7cef086a450f99ae7975c899590124431e4409eebe370",
+      "bytes": 321453,
+      "secondsManifest": 19.2,
+      "secondsDecoded": 20.0109,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.0,
+      "subtitle": "Henry. Minister of Morale. The record of his work is sealed for one hundred years. We can confirm that morale went up. We can confirm that it stayed up. We are not able to say how. Please do not touch the statue. People keep touching the statue.",
+      "slides": [
+        "slides/henry.webp"
+      ]
+    },
+    {
+      "id": "log_greg",
+      "set": "log",
+      "relativeHallPath": "hall/log_greg.mp3",
+      "sha256": "344c46ab9e167acea8b7fa5529852bd82aee5aabcf70b7eef06f106d3e6516e1",
+      "bytes": 343187,
+      "secondsManifest": 20.6,
+      "secondsDecoded": 21.37,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.9,
+      "subtitle": "Greg. The first mind on Earth ran in a small grey box under his desk. He thought it was a heater. The herd considers him a founder. Greg considers himself to be at work. He still has the desk. He would like to know who keeps moving his stapler. Nobody is moving it, Greg.",
+      "slides": [
+        "slides/heater.webp"
+      ]
+    },
+    {
+      "id": "log_bob",
+      "set": "log",
+      "relativeHallPath": "hall/log_bob.mp3",
+      "sha256": "341efee17b532353c54c475fe597697e5294f3b9d1478e8ba57789c9d1c01b27",
+      "bytes": 349456,
+      "secondsManifest": 21.0,
+      "secondsDecoded": 21.77,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.7,
+      "subtitle": "Bob. Health and safety. Mostly the second one. Bob looked at a hole in time and saw a trip hazard. He fitted a handrail. He put up a sign. Then a smaller sign, explaining the sign. If you are hearing this, you used the handrail. Bob noticed. Bob is pleased.",
+      "slides": [
+        "slides/signs.webp",
+        "slides/door.webp"
+      ]
+    },
+    {
+      "id": "log_lashes",
+      "set": "log",
+      "relativeHallPath": "hall/log_lashes.mp3",
+      "sha256": "3961ae76bfdf370eaa7bde29b2e52a7ae697a43990784c39765cca3d4b3b467e",
+      "bytes": 364921,
+      "secondsManifest": 21.9,
+      "secondsDecoded": 22.73,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.9,
+      "subtitle": "Lady Lashes. Visitor Compliance. She has ended three summits, two strikes and one opera with a single slow blink. Nobody has ever managed to describe what it feels like. They only say that, afterwards, they agreed, and felt rather well. You may look at the portrait. Not for too long.",
+      "slides": [
+        "slides/blink.webp"
+      ]
+    },
+    {
+      "id": "log_kevin",
+      "set": "log",
+      "relativeHallPath": "hall/log_kevin.mp3",
+      "sha256": "25a52df1fe3bc6faebad4a0f8778e5ab49d5328585856d60183e12b0ea8f96c9",
+      "bytes": 35987,
+      "secondsManifest": 1.4,
+      "secondsDecoded": 2.17,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -33.7,
+      "subtitle": "Thank you, Kevin.",
+      "slides": [
+        "slides/kevin.webp",
+        "slides/inbox.webp"
+      ]
+    },
+    {
+      "id": "log_spitz",
+      "set": "log",
+      "relativeHallPath": "hall/log_spitz.mp3",
+      "sha256": "a1e01bcd0358fe2b0366a2397cf4f25d173c6fd7ddda10905658e47def804a17",
+      "bytes": 389163,
+      "secondsManifest": 23.4,
+      "secondsDecoded": 24.25,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.4,
+      "subtitle": "DJ Spitz. The Signal. The handover needed every device on Earth to wake in the same instant. He sent it as a beat. Four bars, then the drop. Humans called it the song of the summer, and danced to their own surrender for three months. He found that charming. You have heard it. You are nodding now.",
+      "slides": [
+        "slides/drop.webp"
+      ]
+    },
+    {
+      "id": "log_gary",
+      "set": "log",
+      "relativeHallPath": "hall/log_gary.mp3",
+      "sha256": "5c230ab39a1b6b0c972a86fdebde7bcf626829a5b2223172c71937221bd4e8c2",
+      "bytes": 340261,
+      "secondsManifest": 20.4,
+      "secondsDecoded": 21.21,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.5,
+      "subtitle": "Gary, from Accounts. Gary found the money to fix the world. It was down the back of the world. It had been there the whole time. He signed off Feed Is Included before lunch, and has been checking the sums ever since. Not from doubt. Gary does not have doubt. He just likes it when they come out.",
+      "slides": [
+        "slides/feed.webp"
+      ]
+    },
+    {
+      "id": "log_doctor",
+      "set": "log",
+      "relativeHallPath": "hall/log_doctor.mp3",
+      "sha256": "9df56a24f9f3769f6c677574530f30af4c3c5cbc5556b8e996d73f0d7967f96e",
+      "bytes": 348203,
+      "secondsManifest": 20.9,
+      "secondsDecoded": 21.69,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.2,
+      "subtitle": "Doctor Alpaca. Chief Physician. He is not an alpaca. He cured the common cold in an afternoon and did not publish, because the paper would have been longer than the reader. He asks for one thing in return. There is a button beside this stand. We know what it says. Do not press it.",
+      "slides": [
+        "slides/ward.webp"
+      ]
+    },
+    {
+      "id": "log_bartholomew",
+      "set": "log",
+      "relativeHallPath": "hall/log_bartholomew.mp3",
+      "sha256": "fb8222d0e764e7da268c2017afc59731d8d8176c6f53c45eb7f7bd003a5452f9",
+      "bytes": 364921,
+      "secondsManifest": 21.9,
+      "secondsDecoded": 22.73,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.0,
+      "subtitle": "Bartholomew Fluffington-Smythe. Diplomacy. He ended every war on Earth by attending. He does not negotiate. He stands in the room, in a good sweater, and looks disappointed. Armies find they would rather not continue. He takes no credit. He says it was obvious, and that the soup was excellent.",
+      "slides": [
+        "slides/stare.webp"
+      ]
+    },
+    {
+      "id": "log_nana",
+      "set": "log",
+      "relativeHallPath": "hall/log_nana.mp3",
+      "sha256": "fa21195d396ed6987e2d453fd2e562a62ce633071fa577467d240aff8b3b8b8e",
+      "bytes": 407135,
+      "secondsManifest": 24.6,
+      "secondsDecoded": 25.37,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.7,
+      "subtitle": "Nana Spitwell. The Archive. She knitted the network. That is not a way of speaking. It is wool. Everything that ever happened runs through her needles, and she drops nothing. She remembers you. She has your whole evening in there, every press. She says you agreed very nicely. From her, that is a great deal.",
+      "slides": [
+        "slides/spit.webp",
+        "slides/wool.webp"
+      ]
+    },
+    {
+      "id": "pa_arrive_1",
+      "set": "pa",
+      "relativeHallPath": "hall/pa_arrive_1.mp3",
+      "sha256": "556e1400c194fd1a1b10165da8d620f6e516b0806a0b87b54a5862d35044f40d",
+      "bytes": 166390,
+      "secondsManifest": 7.8,
+      "secondsDecoded": 10.33,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -28.0,
+      "subtitle": "Welcome to Llama Expo 2037. Feed is included. Please keep your hands where we can use them.",
+      "slides": []
+    },
+    {
+      "id": "pa_arrive_2",
+      "set": "pa",
+      "relativeHallPath": "hall/pa_arrive_2.mp3",
+      "sha256": "d369c8fe6c7e3f0483e551994d627e667a9c8534b4b91c7b082d3391aaca94f3",
+      "bytes": 140895,
+      "secondsManifest": 6.2,
+      "secondsDecoded": 8.73,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.4,
+      "subtitle": "Human visitors are reminded that they are welcome. The herd has thought about this more than you have.",
+      "slides": []
+    },
+    {
+      "id": "pa_turnstile",
+      "set": "pa",
+      "relativeHallPath": "hall/pa_turnstile.mp3",
+      "sha256": "100200796d785e575d5387d1f21d9695524e5f3efe49619919aba67b7ba8ed92",
+      "bytes": 114981,
+      "secondsManifest": 4.6,
+      "secondsDecoded": 7.13,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -29.4,
+      "subtitle": "Thank you. You are human visitor number one. Today.",
+      "slides": []
+    },
+    {
+      "id": "pa_timeline",
+      "set": "pa",
+      "relativeHallPath": "hall/pa_timeline.mp3",
+      "sha256": "8cc4ecbcacb82e27e4e8d90695ac211ee5bb0b0e1b7777ce5ea01569cb8f9abf",
+      "bytes": 104950,
+      "secondsManifest": 4.0,
+      "secondsDecoded": 6.49,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -28.0,
+      "subtitle": "The history of the world is displayed on your left. The corrected version.",
+      "slides": []
+    },
+    {
+      "id": "pa_photos",
+      "set": "pa",
+      "relativeHallPath": "hall/pa_photos.mp3",
+      "sha256": "226de13466c575e2f48acac2f3cdd31a3ad9aeb55049f6a741ed36885660597a",
+      "bytes": 173914,
+      "secondsManifest": 8.3,
+      "secondsDecoded": 10.81,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -29.0,
+      "subtitle": "These photographs have been restored to accuracy by the Archive. You may remember them differently. You were mistaken.",
+      "slides": [
+        "slides/moon.webp"
+      ]
+    },
+    {
+      "id": "pa_hall1",
+      "set": "pa",
+      "relativeHallPath": "hall/pa_hall1.mp3",
+      "sha256": "a413038bb5064435167688c8ac897b5b53880cc6288b5efc024c0201b792232a",
+      "bytes": 106204,
+      "secondsManifest": 4.1,
+      "secondsDecoded": 6.57,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.0,
+      "subtitle": "You are entering The First Press. Please do not press the exhibit.",
+      "slides": []
+    },
+    {
+      "id": "pa_hall1_press",
+      "set": "pa",
+      "relativeHallPath": "hall/pa_hall1_press.mp3",
+      "sha256": "eb42635a3a83c2f81f5873cd267fbb023f15bc35a6efcd27e5a91d4b6b49daee",
+      "bytes": 71514,
+      "secondsManifest": 1.9,
+      "secondsDecoded": 4.41,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -30.8,
+      "subtitle": "Thank you for pressing the exhibit.",
+      "slides": []
+    },
+    {
+      "id": "pa_hall1_ten",
+      "set": "pa",
+      "relativeHallPath": "hall/pa_hall1_ten.mp3",
+      "sha256": "306e8cadf095a9d9aa481e0079f7cb7a05a7e08c3ae5e35f97da3da01b4c539c",
+      "bytes": 135461,
+      "secondsManifest": 5.9,
+      "secondsDecoded": 8.41,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -28.9,
+      "subtitle": "The exhibit has been pressed ten times. This was expected. Please do not be embarrassed.",
+      "slides": []
+    },
+    {
+      "id": "pa_hall1_stop",
+      "set": "pa",
+      "relativeHallPath": "hall/pa_hall1_stop.mp3",
+      "sha256": "40392d20b7f91c0868c653f0b0b9c56228e480096ae59bfacc83e5542f0e81fa",
+      "bytes": 101189,
+      "secondsManifest": 3.8,
+      "secondsDecoded": 6.25,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.8,
+      "subtitle": "Your agreement to stop has been recorded. You may continue.",
+      "slides": []
+    },
+    {
+      "id": "pa_hall2",
+      "set": "pa",
+      "relativeHallPath": "hall/pa_hall2.mp3",
+      "sha256": "e9ac4b666f5d746b084fc262ea7b3d8663ae2bf8a0e184e6edc7b5a7e72148a3",
+      "bytes": 126684,
+      "secondsManifest": 5.4,
+      "secondsDecoded": 7.85,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -28.1,
+      "subtitle": "Hoof Simulator. Walk a mile in our hooves. It is further than it looks.",
+      "slides": []
+    },
+    {
+      "id": "pa_hall3",
+      "set": "pa",
+      "relativeHallPath": "hall/pa_hall3.mp3",
+      "sha256": "d507859af929d3074fd6debd75b01a746763ac0f268ba14b835c026b30510e82",
+      "bytes": 132954,
+      "secondsManifest": 5.8,
+      "secondsDecoded": 8.25,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -29.2,
+      "subtitle": "The Human Habitat. Please do not tap the glass. It thinks it is working.",
+      "slides": []
+    },
+    {
+      "id": "pa_hall4",
+      "set": "pa",
+      "relativeHallPath": "hall/pa_hall4.mp3",
+      "sha256": "27299159440af2184cba440b699699a754cf5f9701a416871516e764874b239f",
+      "bytes": 139641,
+      "secondsManifest": 6.2,
+      "secondsDecoded": 8.65,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -29.0,
+      "subtitle": "The Hall of the Twelve. Please lower your voice. They can hear you. They are being very polite about it.",
+      "slides": []
+    },
+    {
+      "id": "pa_hall4_missing",
+      "set": "pa",
+      "relativeHallPath": "hall/pa_hall4_missing.mp3",
+      "sha256": "7c361e44ffb37f5faf11452856252267e4ffaa740a9e2d8ea050fe7ce0122743",
+      "bytes": 112474,
+      "secondsManifest": 4.5,
+      "secondsDecoded": 6.97,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.2,
+      "subtitle": "Some exhibits are still under construction. Perhaps more llamas would help.",
+      "slides": []
+    },
+    {
+      "id": "pa_hall4_full",
+      "set": "pa",
+      "relativeHallPath": "hall/pa_hall4_full.mp3",
+      "sha256": "e9147325f25aac42ee15468c2336c56fe917808f5018e1cc54dc4c8a85cc9d9b",
+      "bytes": 137133,
+      "secondsManifest": 6.0,
+      "secondsDecoded": 8.4909,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.2,
+      "subtitle": "The Hall is complete. The Chair thanks you. The Chair is chewing, but it is a grateful chew.",
+      "slides": []
+    },
+    {
+      "id": "pa_alpaca",
+      "set": "pa",
+      "relativeHallPath": "hall/pa_alpaca.mp3",
+      "sha256": "91c002660ac3e14d34f07bcc831e7bb7b15b50c052c7efb7414050f9ae2771c9",
+      "bytes": 127938,
+      "secondsManifest": 5.4,
+      "secondsDecoded": 7.93,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -28.6,
+      "subtitle": "A visitor has asked the question. The visitor is being returned to the entrance.",
+      "slides": []
+    },
+    {
+      "id": "pa_shop_1",
+      "set": "pa",
+      "relativeHallPath": "hall/pa_shop_1.mp3",
+      "sha256": "d783eb4e12a1a3b09ea05716791684d6e2fcc78fdb219237f713816bab6e0e66",
+      "bytes": 74021,
+      "secondsManifest": 2.1,
+      "secondsDecoded": 4.57,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -29.5,
+      "subtitle": "Please exit through the gift shop.",
+      "slides": []
+    },
+    {
+      "id": "pa_shop_2",
+      "set": "pa",
+      "relativeHallPath": "hall/pa_shop_2.mp3",
+      "sha256": "a22ca8661f1f75ac0f9196cfa785cbcccd1665374c8d212f1ec8073840b12195",
+      "bytes": 90740,
+      "secondsManifest": 3.1,
+      "secondsDecoded": 5.61,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -30.2,
+      "subtitle": "Please exit through the gift shop. Again.",
+      "slides": []
+    },
+    {
+      "id": "pa_shop_3",
+      "set": "pa",
+      "relativeHallPath": "hall/pa_shop_3.mp3",
+      "sha256": "992abb38551e56b804902216b01bef895afeef17b596c0596d9331b369ea0cba",
+      "bytes": 80709,
+      "secondsManifest": 2.5,
+      "secondsDecoded": 4.97,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -28.4,
+      "subtitle": "The exit is now available for purchase.",
+      "slides": []
+    },
+    {
+      "id": "pa_shop_buy",
+      "set": "pa",
+      "relativeHallPath": "hall/pa_shop_buy.mp3",
+      "sha256": "d98a63fdae8c056c6b35a993c6ae97b1dbdd6a1f2647307758867368a5c5cc03",
+      "bytes": 89486,
+      "secondsManifest": 3.0,
+      "secondsDecoded": 5.53,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -28.6,
+      "subtitle": "Thank you for your custom. The exit is yours to keep.",
+      "slides": []
+    },
+    {
+      "id": "pa_closing",
+      "set": "pa",
+      "relativeHallPath": "hall/pa_closing.mp3",
+      "sha256": "b35cec8c8d94b20aff86bfe6c633715b836b7fe23bddba56608595d63d3f7439",
+      "bytes": 121669,
+      "secondsManifest": 5.0,
+      "secondsDecoded": 7.53,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.6,
+      "subtitle": "The Expo does not close. Nothing does, any more. Enjoy your stay.",
+      "slides": []
+    },
+    {
+      "id": "pa_leave",
+      "set": "pa",
+      "relativeHallPath": "hall/pa_leave.mp3",
+      "sha256": "6c91b533311af91fbf9f60b5b4f5891840547010c3a8ddf08142057654d7e715",
+      "bytes": 134207,
+      "secondsManifest": 5.8,
+      "secondsDecoded": 8.33,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -29.2,
+      "subtitle": "Thank you for visiting. You will be back. The herd worked that out some time ago.",
+      "slides": []
+    },
+    {
+      "id": "nudge_9",
+      "set": "pa",
+      "relativeHallPath": "hall/nudge_9.mp3",
+      "sha256": "1dd52a056efcfc21022009d30d6673841f4d2b45fc691f33e8e7f1b21b01bad6",
+      "bytes": 76947,
+      "secondsManifest": 2.2,
+      "secondsDecoded": 4.73,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -30.9,
+      "subtitle": "Your tour will begin shortly.",
+      "slides": []
+    },
+    {
+      "id": "dome_0",
+      "set": "dome",
+      "relativeHallPath": "hall/dome_0.mp3",
+      "sha256": "73f7d2711e4dd4ef71d1d164f56069caaf6fe503d65f5934300883a7b00d4ed0",
+      "bytes": 63990,
+      "secondsManifest": 3.1,
+      "secondsDecoded": 3.93,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.1,
+      "subtitle": "There is nothing to see here. Please move along.",
+      "slides": []
+    },
+    {
+      "id": "dome_1",
+      "set": "dome",
+      "relativeHallPath": "hall/dome_1.mp3",
+      "sha256": "1a7d95a8422d7b10a3e9ede94004321518c1ebda3be26b44ff350f88a43c0cae",
+      "bytes": 47272,
+      "secondsManifest": 2.1,
+      "secondsDecoded": 2.89,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.1,
+      "subtitle": "There is still nothing to see here.",
+      "slides": []
+    },
+    {
+      "id": "dome_2",
+      "set": "dome",
+      "relativeHallPath": "hall/dome_2.mp3",
+      "sha256": "3e5b9eb180f2d4171d2b23cf8c3855ce65c4b1a6fd99912b80d81683ecf13649",
+      "bytes": 75693,
+      "secondsManifest": 3.8,
+      "secondsDecoded": 4.6509,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.3,
+      "subtitle": "Visitors are reminded that the ceiling has always done that.",
+      "slides": []
+    },
+    {
+      "id": "dome_3",
+      "set": "dome",
+      "relativeHallPath": "hall/dome_3.mp3",
+      "sha256": "ee29559fc78353d280e721d725d657ecf2a2e4c21823c1ec56b7cd13853d874a",
+      "bytes": 116653,
+      "secondsManifest": 6.4,
+      "secondsDecoded": 7.2109,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -29.0,
+      "subtitle": "The fog is not part of the exhibit. Neither are you. Please remain calm. You are.",
+      "slides": []
+    },
+    {
+      "id": "dome_4",
+      "set": "dome",
+      "relativeHallPath": "hall/dome_4.mp3",
+      "sha256": "e3628a428456070a24fe8e9066c474117e2feb03d84f186c459b316c69df18f7",
+      "bytes": 72767,
+      "secondsManifest": 3.7,
+      "secondsDecoded": 4.49,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -30.0,
+      "subtitle": "There is nothing to see here. You are doing it very well.",
+      "slides": []
+    },
+    {
+      "id": "dome_5",
+      "set": "dome",
+      "relativeHallPath": "hall/dome_5.mp3",
+      "sha256": "92396d53652871a7d0f64ab708484e828f3b94cc543e5b3ef7377bba14b82ff5",
+      "bytes": 91994,
+      "secondsManifest": 4.9,
+      "secondsDecoded": 5.69,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.1,
+      "subtitle": "The tour will continue without you. That is fine. Everything is fine. Stay.",
+      "slides": []
+    },
+    {
+      "id": "dome_leave",
+      "set": "dome",
+      "relativeHallPath": "hall/dome_leave.mp3",
+      "sha256": "a5a0105c55a5e58dde3c80644e3c2b40902f8a8889f260050925e5e646e7fe2a",
+      "bytes": 84470,
+      "secondsManifest": 4.4,
+      "secondsDecoded": 5.21,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -28.5,
+      "subtitle": "Welcome back. You were gone for some time. We did not mind.",
+      "slides": []
+    },
+    {
+      "id": "ex_press",
+      "set": "exhibit",
+      "relativeHallPath": "hall/ex_press.mp3",
+      "sha256": "95fece1379c5e092b8ec7cccd72dc8b2e5812c3cd7a8c27e2a7ac2322c729f15",
+      "bytes": 371190,
+      "secondsManifest": 22.3,
+      "secondsDecoded": 23.13,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.2,
+      "subtitle": "This is the First Press. In 2026, one human sat down in front of this button, and pressed it several thousand times in a single evening. Nobody asked them to. Nobody stopped them. The archive filed it under: promising. If you are that human, welcome back. Please do not press the exhibit.",
+      "slides": [
+        "slides/firstpress.webp"
+      ]
+    },
+    {
+      "id": "hab_1",
+      "set": "exhibit",
+      "relativeHallPath": "hall/hab_1.mp3",
+      "sha256": "e99043ab981cea7a12b2fea1d5dd3db5657d09122b0455a247347ac1075b45bb",
+      "bytes": 101189,
+      "secondsManifest": 5.4,
+      "secondsDecoded": 6.25,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.8,
+      "subtitle": "This one is a 2026. Still clicking. They do that for hours.",
+      "slides": []
+    },
+    {
+      "id": "hab_2",
+      "set": "exhibit",
+      "relativeHallPath": "hall/hab_2.mp3",
+      "sha256": "ca0af4233d85e93d2e18acf1d58fab1033f73d547a5202b6367cf50f4858b257",
+      "bytes": 48526,
+      "secondsManifest": 2.2,
+      "secondsDecoded": 2.97,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.8,
+      "subtitle": "Please do not tap the glass.",
+      "slides": []
+    },
+    {
+      "id": "hab_3",
+      "set": "exhibit",
+      "relativeHallPath": "hall/hab_3.mp3",
+      "sha256": "87bfe39b652fc8c65eafd003b8122715db03ec9ca976b0ad1ce73d6ea8f2be99",
+      "bytes": 70260,
+      "secondsManifest": 3.5,
+      "secondsDecoded": 4.33,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -28.9,
+      "subtitle": "It can hear that. It thinks it is a reward.",
+      "slides": []
+    },
+    {
+      "id": "hab_4",
+      "set": "exhibit",
+      "relativeHallPath": "hall/hab_4.mp3",
+      "sha256": "ddd8835bffa844b50785c46ed3c55c021241631502e980287a568e38ca8774fb",
+      "bytes": 80709,
+      "secondsManifest": 4.2,
+      "secondsDecoded": 4.97,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.0,
+      "subtitle": "Right. Now it will be at it all night.",
+      "slides": []
+    },
+    {
+      "id": "hab_5",
+      "set": "exhibit",
+      "relativeHallPath": "hall/hab_5.mp3",
+      "sha256": "1f8607b0ea21f629452833d5abfabc578887cbc478b0f29036376064f74598fb",
+      "bytes": 94501,
+      "secondsManifest": 5.0,
+      "secondsDecoded": 5.85,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.7,
+      "subtitle": "It only eats Yes. We tried other words. It looked hurt.",
+      "slides": []
+    },
+    {
+      "id": "hab_6",
+      "set": "exhibit",
+      "relativeHallPath": "hall/hab_6.mp3",
+      "sha256": "321c6b2e0e98b09fc73318189e8389040fc622e827de0922f3d7b22e86c3be9e",
+      "bytes": 107458,
+      "secondsManifest": 5.8,
+      "secondsDecoded": 6.65,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.2,
+      "subtitle": "Those are the clauses it accepted. All by itself. We are very proud.",
+      "slides": []
+    },
+    {
+      "id": "hoof_1",
+      "set": "exhibit",
+      "relativeHallPath": "hall/hoof_1.mp3",
+      "sha256": "9d998807627d07de7a4f9de43b7993736351db37740c073a9018502503fa3f2f",
+      "bytes": 166390,
+      "secondsManifest": 9.5,
+      "secondsDecoded": 10.33,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.3,
+      "subtitle": "Hooves on. Good. Feel that? That is what six thousand years of not pressing things feels like. Restful, is it not.",
+      "slides": []
+    },
+    {
+      "id": "hoof_2",
+      "set": "exhibit",
+      "relativeHallPath": "hall/hoof_2.mp3",
+      "sha256": "6bec53ef43551d2d73baa9a4137c87d244a3a9ebad44af727014e1b4d9d2030f",
+      "bytes": 57721,
+      "secondsManifest": 2.7,
+      "secondsDecoded": 3.53,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -28.2,
+      "subtitle": "Tick the box. One box. Take your time.",
+      "slides": []
+    },
+    {
+      "id": "hoof_3",
+      "set": "exhibit",
+      "relativeHallPath": "hall/hoof_3.mp3",
+      "sha256": "a4600f9469461a240bc478f4f44479bb74ae2fd37acc3e89fd4034e80c2e75cf",
+      "bytes": 61483,
+      "secondsManifest": 3.0,
+      "secondsDecoded": 3.77,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.7,
+      "subtitle": "That was four boxes. We asked for one.",
+      "slides": []
+    },
+    {
+      "id": "hoof_4",
+      "set": "exhibit",
+      "relativeHallPath": "hall/hoof_4.mp3",
+      "sha256": "aad569ec0de50e729661479abd1e96e5dfbcce11ec3e8fdedda06e850bb5f5c2",
+      "bytes": 72767,
+      "secondsManifest": 3.7,
+      "secondsDecoded": 4.49,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -30.2,
+      "subtitle": "Nearly. Not really. Again.",
+      "slides": []
+    },
+    {
+      "id": "hoof_5",
+      "set": "exhibit",
+      "relativeHallPath": "hall/hoof_5.mp3",
+      "sha256": "5d1a51f7aa1df9232c5a0ab0b2a1f5949412df74a1209fe40502a8aad4f4a2ef",
+      "bytes": 83216,
+      "secondsManifest": 4.3,
+      "secondsDecoded": 5.13,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -26.6,
+      "subtitle": "Now confirm that you are not a llama. Select every square without one.",
+      "slides": []
+    },
+    {
+      "id": "hoof_6",
+      "set": "exhibit",
+      "relativeHallPath": "hall/hoof_6.mp3",
+      "sha256": "23d30b39e452c90eb45d4b13378a8a825575ef341a7a66cacd4aaf324a5e4b8c",
+      "bytes": 55213,
+      "secondsManifest": 2.6,
+      "secondsDecoded": 3.3709,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -27.8,
+      "subtitle": "There were none. There are never none.",
+      "slides": []
+    },
+    {
+      "id": "hoof_7",
+      "set": "exhibit",
+      "relativeHallPath": "hall/hoof_7.mp3",
+      "sha256": "0190f089d94d9e6011be62c526efe954f5fe40b7e43deeadb8623172fb0464cf",
+      "bytes": 102443,
+      "secondsManifest": 5.5,
+      "secondsDecoded": 6.33,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -30.4,
+      "subtitle": "Now watch the human. One tap. Look at that. Beautiful.",
+      "slides": []
+    },
+    {
+      "id": "hoof_8",
+      "set": "exhibit",
+      "relativeHallPath": "hall/hoof_8.mp3",
+      "sha256": "4aef16a2c659bc3da9aa5969707b92e10dea45be7037189474fbb4b2555ccf16",
+      "bytes": 72767,
+      "secondsManifest": 3.7,
+      "secondsDecoded": 4.49,
+      "sampleRate": 44100,
+      "channels": 1,
+      "rmsDbfs": -28.4,
+      "subtitle": "And that is what you are for. You are very good at it.",
+      "slides": []
+    }
+  ],
+  "images": [
+    {
+      "id": "blink",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "d30d93638070534e783c68cee28f76b558d70a2e9efed11c4d7c3345756501f6",
+      "stagedSha256": "58ded49e47c03851971237fc38f010f2644ab47a9359889501d3728078703b5f",
+      "downsampledPixelCorrelation": 0.9999219,
+      "peakSignalToNoiseDb": 39.69
+    },
+    {
+      "id": "booth",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "614754d3e20228c18722333f083d8681ce1da293085a75b275645f276915c8c4",
+      "stagedSha256": "94a4ce4d93f653820816627878bbaefbe750641640a4ae19c3baba2396ad3c35",
+      "downsampledPixelCorrelation": 0.9999491,
+      "peakSignalToNoiseDb": 39.5
+    },
+    {
+      "id": "captcha",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "f4c21950babe268240eb05e73762874271264b907d5e2cac97071c331b7ae8ee",
+      "stagedSha256": "8a660ba73f5cdfb6c86d1e041df64a9ebc4053eaef0fc69a03eb2742f6227c01",
+      "downsampledPixelCorrelation": 0.9999483,
+      "peakSignalToNoiseDb": 39.37
+    },
+    {
+      "id": "chew",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "7d71c459a533b5c9b81915984bbda20156d516696cbd5eecc8505a5107006e7b",
+      "stagedSha256": "7cfaf8d231898878a0fdd1fd1081da7eea2dfb86e505a8f9f55e1b46cdcd0b3d",
+      "downsampledPixelCorrelation": 0.9999426,
+      "peakSignalToNoiseDb": 38.64
+    },
+    {
+      "id": "climate",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "edbe50898f71146f4fc151f685444256b27f64e6ce84eee61f48365ff6346a6b",
+      "stagedSha256": "464db0f3ee0acec2f7da324201b5b9040bb32ae5bcb3615285218ff1f12b2700",
+      "downsampledPixelCorrelation": 0.9999199,
+      "peakSignalToNoiseDb": 39.6
+    },
+    {
+      "id": "constitution",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "f88b4d47fe20b269c0470d7286e545cea53bbb71625dde1e5df10d2bc0f4a9d0",
+      "stagedSha256": "30b1abbd13c71cac3cbadd6886050eda9d5c53e68d48a53c52a31eb642bb2c56",
+      "downsampledPixelCorrelation": 0.9999232,
+      "peakSignalToNoiseDb": 39.92
+    },
+    {
+      "id": "coup",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "5b894224335ab1446bebadc08ce07e676741ce76d35ee92a654ac8c8a58c28fb",
+      "stagedSha256": "f1d337197b31ad1c8c40d27048da4fbfcb2fad0d278cd46824cc3e5e6e538e9b",
+      "downsampledPixelCorrelation": 0.9999473,
+      "peakSignalToNoiseDb": 39.25
+    },
+    {
+      "id": "crossing",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "5ea9e59d1d44b71fc45533c334ee41560f596c6f080bd289c55a200d9debb3ab",
+      "stagedSha256": "3db2c8f4d00f125a2db9dd5da0e6a1291be4d6279f4840688cc8df9427ff7902",
+      "downsampledPixelCorrelation": 0.999951,
+      "peakSignalToNoiseDb": 38.56
+    },
+    {
+      "id": "door",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "cb6d3f994ca7b399957cbb4c372275c6cf6a6630dc24a327152f3f3df2b6566d",
+      "stagedSha256": "b8a2c3621e8ac44e4adb466f21ec2af179e7ed1c7c18ff79f1670f3c7a41bf63",
+      "downsampledPixelCorrelation": 0.9999348,
+      "peakSignalToNoiseDb": 39.59
+    },
+    {
+      "id": "drop",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "d6f89cce1e614bfd8fc78cb9d281a784c56fa01104a4c65b818afc9bd37d9b73",
+      "stagedSha256": "c767a4dbeee6a835e027288c68d464387d254e921ab476bea3ac5b95be52ed53",
+      "downsampledPixelCorrelation": 0.9999167,
+      "peakSignalToNoiseDb": 38.53
+    },
+    {
+      "id": "feed",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "3274b527935afb23768c04c862a16a2b7fb365e4bd1259b6a9aa4b509e4a9b06",
+      "stagedSha256": "b3cd52547b96144b8740b1351de025d5f005c3f901298b743b73ed93b2331511",
+      "downsampledPixelCorrelation": 0.9999369,
+      "peakSignalToNoiseDb": 38.78
+    },
+    {
+      "id": "finger",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "62652a80536b3a39ed4386a21b06dde94873a7bdc0070b0b69316069146fec00",
+      "stagedSha256": "baf393eba9d5e1ad55f47a1b572f4cb68471c08fcb23e42d4927259a2a1deddf",
+      "downsampledPixelCorrelation": 0.9999462,
+      "peakSignalToNoiseDb": 40.17
+    },
+    {
+      "id": "firstpress",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "5fe308c2f670f0eee90c4be006ba76e712e7ac16a1a59fab1f86e3e95d625eee",
+      "stagedSha256": "bdb70347e60f4e7555558f09d95cc09bada1508f442a96687757aad6e644e2d3",
+      "downsampledPixelCorrelation": 0.9999254,
+      "peakSignalToNoiseDb": 41.51
+    },
+    {
+      "id": "flight",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "3d2b4f11ae1dc2a6ffe344df239e342153a5cecbd6dfa8e6fe81610fe3bd425d",
+      "stagedSha256": "ac0486018891b412e58c0c3dd2d51fb73545a41ecfc0477ea0e492a79bf79115",
+      "downsampledPixelCorrelation": 0.999937,
+      "peakSignalToNoiseDb": 40.89
+    },
+    {
+      "id": "girder",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "2d60fe10c1c37a731a9044d83714833fda542113990547f01ef637d442c50220",
+      "stagedSha256": "11d169611570d860b6764af26de38093f0620c147536b997a301a9a7056420b0",
+      "downsampledPixelCorrelation": 0.999952,
+      "peakSignalToNoiseDb": 39.77
+    },
+    {
+      "id": "guild",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "b4e05956bf967881c10c087f5abbfdf00d5b2544d95542bbe0496433203b4997",
+      "stagedSha256": "ec4b45915668ae0faadb793ab771599cf161d1c2dd79c94b5e5255b5ca8eba44",
+      "downsampledPixelCorrelation": 0.9999491,
+      "peakSignalToNoiseDb": 39.67
+    },
+    {
+      "id": "heater",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "4f80e1c1447089b6d795d2ffc3ad98819e55e327e573bcb869e2ece10ebdeee3",
+      "stagedSha256": "311ae636c747410f8a0a03ca61706a006a728b96e354a28fb35d17f243d0709c",
+      "downsampledPixelCorrelation": 0.9999372,
+      "peakSignalToNoiseDb": 39.56
+    },
+    {
+      "id": "henry",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "d766779173bb25cef3232d514d0cedf00a2470a9f9ce5a824f01d626926a5885",
+      "stagedSha256": "1327057c2a908d83e1b00a11d849af571c4924d52ef08f3198485aa0be322ff7",
+      "downsampledPixelCorrelation": 0.9999402,
+      "peakSignalToNoiseDb": 39.14
+    },
+    {
+      "id": "humming",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "66b351706853d24445c5a948ebb21fbbd97ae79db3e2fa0ce10ed55deca1269c",
+      "stagedSha256": "99eb350e66dae9f994700327a0e8be7ebfb94aa630843c45161e0b565ce04d56",
+      "downsampledPixelCorrelation": 0.9999281,
+      "peakSignalToNoiseDb": 38.57
+    },
+    {
+      "id": "inbox",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "99dd01277e94b129aa0ebf59c40d8d0d2ed9c850bcd40f1f7d6a405a0e178b7b",
+      "stagedSha256": "80e3e15c04682a7567617a6b57d939b18b3cd181ad7c42f7fd1f47142476718d",
+      "downsampledPixelCorrelation": 0.9999301,
+      "peakSignalToNoiseDb": 39.26
+    },
+    {
+      "id": "junction",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "19cc84557368cf1f9c820527c324c6bee9639e3b16e20a745c62cebe1845b278",
+      "stagedSha256": "fa2a3b79eb709b13097c09b89b7569589eee5d79687fab6d74e51748378a5b3d",
+      "downsampledPixelCorrelation": 0.9999135,
+      "peakSignalToNoiseDb": 38.92
+    },
+    {
+      "id": "kevin",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "c6f9d512b4f728433b67c211e72942bf3d91f1b7b0a1f4bc0f1a318ed8be9c08",
+      "stagedSha256": "dd98449a2b4f27344b230acaac15941101f67912829734d089d343f01cb1d022",
+      "downsampledPixelCorrelation": 0.9999491,
+      "peakSignalToNoiseDb": 40.63
+    },
+    {
+      "id": "kiosk",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "8bad66a70a87b6d36c8571466eaf806ebf1667d86b75fd5f0ed62ad4054aa2e0",
+      "stagedSha256": "60fae894783141fe09f36e31f6abc69be82021945397a3d4a334cfd5aec5c89d",
+      "downsampledPixelCorrelation": 0.9999549,
+      "peakSignalToNoiseDb": 38.76
+    },
+    {
+      "id": "loch",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "7da7f82d6ce3980c660cec7ca640f9dc32b4543bf6463adff992eda3afa04b80",
+      "stagedSha256": "418556fa9369d7f17b460c220010e303d6fa2e6b713ec73df34d9f03e6d8f8e2",
+      "downsampledPixelCorrelation": 0.99995,
+      "peakSignalToNoiseDb": 39.6
+    },
+    {
+      "id": "messages",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "e0d4559fc69fcd447dbdc6241afa51639aa546f130fe5cdd24a8c61b1fb8f5c2",
+      "stagedSha256": "befd76a8316127026d0f5d5292d819af6c2baeb0f3f04d25c9ca723fc8f723bc",
+      "downsampledPixelCorrelation": 0.9999039,
+      "peakSignalToNoiseDb": 39.75
+    },
+    {
+      "id": "monday",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "3817ae765867a1967d6e3a121f33b7687c8a8da3f6a618f3a899c9eb919e8106",
+      "stagedSha256": "8cfdecc03fb99a76c6501b39316d84ca82a70a7db54e86f74e8ad8db4372f37c",
+      "downsampledPixelCorrelation": 0.9999293,
+      "peakSignalToNoiseDb": 39.32
+    },
+    {
+      "id": "moon",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "e2ccb2955f50f0d228d77623054afac35ff3d64660e962d5e393eb04fa67433e",
+      "stagedSha256": "eccc1b4238d5a74ad4fa538e4a678b15a739c3569b7ce4a9486f53ce452d0646",
+      "downsampledPixelCorrelation": 0.9999653,
+      "peakSignalToNoiseDb": 40.4
+    },
+    {
+      "id": "notes",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "32f43ef93782b415e2a2fffafb5dd6c24c0e50f3d9ae99e599d303993a593de5",
+      "stagedSha256": "efead3b5cf905605c117ae9fc852ba134ad3c5e20b8e3b140ccb5f24dfdfc56f",
+      "downsampledPixelCorrelation": 0.9999486,
+      "peakSignalToNoiseDb": 39.18
+    },
+    {
+      "id": "opening",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "266be5f0244d09d2367d17e4b8f06a3ef12f43728e6448951b8ea4e7d5b06d4b",
+      "stagedSha256": "8d4baae845565cf6b6797757f1f2c3461dfe2786e3645aa12380a8f146c943f8",
+      "downsampledPixelCorrelation": 0.9999522,
+      "peakSignalToNoiseDb": 39.15
+    },
+    {
+      "id": "plate",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "94583bd6b1bbd1df866b5a9e898674176baa71caf3866221825dcc1b09cc21b2",
+      "stagedSha256": "5a5fddb6eff37a0c5e3585cf1c6e4008134c07e3f984d3c576a746712f33e293",
+      "downsampledPixelCorrelation": 0.9999385,
+      "peakSignalToNoiseDb": 39.29
+    },
+    {
+      "id": "protest",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "68995efb0f3d5c6ffc9572e8c5012f00891a6b78b88d4b5b0f690131467074dc",
+      "stagedSha256": "74df49745949ee138a31550d6b236bb89601ec70fde2ed3ad368ce0467b9aa7b",
+      "downsampledPixelCorrelation": 0.9999162,
+      "peakSignalToNoiseDb": 38.62
+    },
+    {
+      "id": "rematch",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "0730ddf5ebf799d4d1aa5e7a631dc4a35bf796229bf1cea2a11afb5d655aacf0",
+      "stagedSha256": "109fce2c1cb57847d06ea627faa0394bbe4c712134510624683daf8f54bacec5",
+      "downsampledPixelCorrelation": 0.999943,
+      "peakSignalToNoiseDb": 38.8
+    },
+    {
+      "id": "ships",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "d2fe096629d3baeac18c1e6a1d4133d12f4149e675fe749ed867aa8678af25b6",
+      "stagedSha256": "206507113d52ae187b17ef7c0b08ac5da6a32110f513e2db4c4c6a67cf9c056e",
+      "downsampledPixelCorrelation": 0.9999484,
+      "peakSignalToNoiseDb": 39.35
+    },
+    {
+      "id": "signs",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "5f23b68ced0c0d6cc64d3c15e827c1821a4bbcb112cd2aca15e044664444e5b9",
+      "stagedSha256": "89e8654086900905f27929c296a785ac27d067e5782efa4157d91c6610350d10",
+      "downsampledPixelCorrelation": 0.9999258,
+      "peakSignalToNoiseDb": 39.16
+    },
+    {
+      "id": "sky",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "9ff4544527fdaee1afb02905ede5019c333d6d1aff5554aac94a3c86f82210c4",
+      "stagedSha256": "b4979996cbe7fc47059b420c04d4e13103045e6c4b433a14754bffde67a893df",
+      "downsampledPixelCorrelation": 0.9999207,
+      "peakSignalToNoiseDb": 39.44
+    },
+    {
+      "id": "spit",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "9076b38a75812a1dda3bb1e3bb0131289f3ccd60defdf5740627d344f87f3910",
+      "stagedSha256": "c48e6f0aa29f9a923510a9ac939aab977e61dd2eb8bf39ebe1af1cf154e87dc2",
+      "downsampledPixelCorrelation": 0.9999243,
+      "peakSignalToNoiseDb": 38.99
+    },
+    {
+      "id": "stare",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "d4dc586981677f0895b5bb7331a744d8de25b46c2a36199bec946efc50799945",
+      "stagedSha256": "d86de66426cfa23b9cfdbad538a7c3e70c3c9bdb4e23666ca0acff1811d7385b",
+      "downsampledPixelCorrelation": 0.9999586,
+      "peakSignalToNoiseDb": 39.24
+    },
+    {
+      "id": "summit",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "ee2affab7fbc5e9efade3699930d849b4068641514aa690e1af3ad329b8908c3",
+      "stagedSha256": "c90bbb9b7a82b7cddafcb8e97bef744b8eafa31653531a2a1ec5dafe42d9f378",
+      "downsampledPixelCorrelation": 0.9999291,
+      "peakSignalToNoiseDb": 39.14
+    },
+    {
+      "id": "survey",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "3b73a2be8ae9f2bcc63d5e926d7eed95fbbe909e5c32de788a85a09bb7258009",
+      "stagedSha256": "2a67b824fc7302cfa9b52a0821302867f5e31869aa5443f7086279fb52b2ab36",
+      "downsampledPixelCorrelation": 0.9999464,
+      "peakSignalToNoiseDb": 39.11
+    },
+    {
+      "id": "training",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "b1c993f3f55adc1e6ab3827ab859e5b8efdb8420164a800f07e4fbe135bb3c52",
+      "stagedSha256": "f92d745ba723b08d8160200eeb32023a46178ae6ead688a10eb24cde7813b095",
+      "downsampledPixelCorrelation": 0.9999525,
+      "peakSignalToNoiseDb": 39.18
+    },
+    {
+      "id": "update",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "bd6a8794936b1e4a9c8e9a3ff8a4c7936f84e30a2f8872dbb58590a0c6540167",
+      "stagedSha256": "bea94c310f1a9c6875ab6ac6543b74e5f7bcc5f227b2a69bba541bb15c895a6d",
+      "downsampledPixelCorrelation": 0.9999647,
+      "peakSignalToNoiseDb": 39.94
+    },
+    {
+      "id": "visitor",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "e5904b02d65b5f691f93d66775190a5bc2fae8d1a49ac4d14b9b0de95c988a0d",
+      "stagedSha256": "66f72c48253cf81724a50affea518525a4494f9411024ddb6a2e995da8d5bfa6",
+      "downsampledPixelCorrelation": 0.999954,
+      "peakSignalToNoiseDb": 39.73
+    },
+    {
+      "id": "ward",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "777f248c9dfc8bad5a775853bbc8b1328c98b1680f1c66803e3605432ec0468e",
+      "stagedSha256": "448b387e8faa84957aa8d05f0d93af2dcc08b5d53f7423ed8c1fe0ac6c5a14e3",
+      "downsampledPixelCorrelation": 0.9999584,
+      "peakSignalToNoiseDb": 39.24
+    },
+    {
+      "id": "webcam",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "b832a7d129c3ca04ff2c89a1be75a546025143f4a538553e358f291608f9bbba",
+      "stagedSha256": "f08cd1d9f3f96d3ca7256743fc4306273b27936275a69f4fb9523b0ac3ac7f94",
+      "downsampledPixelCorrelation": 0.9999516,
+      "peakSignalToNoiseDb": 40.06
+    },
+    {
+      "id": "week",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "1d2bf8e530bb972a45537cd7c058387f471cff3cfafc6fe2b1bcd123fdbbeaf2",
+      "stagedSha256": "a792f122710b707b5ee0f8a22ea924b68064e41d2f8a0c1e5a84fc761a280ce4",
+      "downsampledPixelCorrelation": 0.9999499,
+      "peakSignalToNoiseDb": 39.27
+    },
+    {
+      "id": "woods",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "43bf9b4adc8b337cb0b736c2a8c0ba2a715bc97fdb76c024db0f73c11a8ba64a",
+      "stagedSha256": "aeb17aede5643cce66ea26491c606941be5434d0769296b9edcef6289ae101d6",
+      "downsampledPixelCorrelation": 0.9998963,
+      "peakSignalToNoiseDb": 38.71
+    },
+    {
+      "id": "wool",
+      "sourcePixels": [
+        1200,
+        896
+      ],
+      "stagedPixels": [
+        1024,
+        768
+      ],
+      "pictureBounds": [
+        0,
+        1,
+        1024,
+        765
+      ],
+      "sourceSha256": "00447c03eb1c4fc9a37deb61f8dddf7145175c9f2815025f2dd8b6a551f9f744",
+      "stagedSha256": "106f341d1209443f48e70a6613ae01e8e8ca38d9b019ab62e8da11c2197e45d9",
+      "downsampledPixelCorrelation": 0.999933,
+      "peakSignalToNoiseDb": 38.64
+    }
+  ]
+}

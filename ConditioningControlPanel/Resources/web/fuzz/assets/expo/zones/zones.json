@@ -215,12 +215,12 @@
         11.52,
         3.8
       ],
-      "file": "dome-00f5999d43830dee.glb",
-      "mobileFile": "dome-00f5999d43830dee-mobile.glb",
+      "file": "dome-806631c2f039058c.glb",
+      "mobileFile": "dome-806631c2f039058c-mobile.glb",
       "lightIntensity": 9.223864677273246,
       "reflectionIntensity": 0.33,
-      "assetStem": "dome-00f5999d43830dee",
-      "collision": "dome-00f5999d43830dee-collision.glb"
+      "assetStem": "dome-806631c2f039058c",
+      "collision": "dome-806631c2f039058c-collision.glb"
     },
     {
       "id": "chronology",

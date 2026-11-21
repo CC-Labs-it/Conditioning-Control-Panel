@@ -1,0 +1,74 @@
+[
+  {
+    "id": "reginald",
+    "status": "corrected, batch continuation authorized",
+    "glbSha256": "44cf6c27431a60fe86e158adcbeab02da63792bcd998f06ca0200f5836c70aa9",
+    "triangles": 39553
+  },
+  {
+    "id": "margaret",
+    "status": "locally visually verified",
+    "glbSha256": "952771f151df0467da135d4ba3bd90498230717c4953dce9a2466a04f3be8196",
+    "triangles": 41777
+  },
+  {
+    "id": "henry",
+    "status": "locally visually verified",
+    "glbSha256": "64ccbe9924cffd6ca76d4a88df25cee92e8c871bd589b3b14d80cbbfbd1612bd",
+    "triangles": 44477
+  },
+  {
+    "id": "greg",
+    "status": "locally visually verified",
+    "glbSha256": "40da7b0673719424043f384f77ac6a6035fcc4c3819f32cdd790ea68d971fb9e",
+    "triangles": 37186
+  },
+  {
+    "id": "bob",
+    "status": "locally visually verified",
+    "glbSha256": "8ee14cbf5eb8afe6f8cf787fa840cf782b96cd88b5fcb9c207c545c58ee2ac35",
+    "triangles": 39162
+  },
+  {
+    "id": "lashes",
+    "status": "locally visually verified",
+    "glbSha256": "e17cba79798c2c3ff7536059887bf335bfb6d7548c5915c715a29a249ae4dba5",
+    "triangles": 40267
+  },
+  {
+    "id": "kevin",
+    "status": "locally visually verified",
+    "glbSha256": "4070fcfe97031db8685e823b6fc2741e249b4b63dac1cb20981c2fe5d5ff4094",
+    "triangles": 33505
+  },
+  {
+    "id": "spitz",
+    "status": "locally visually verified",
+    "glbSha256": "045aec80782ab7272fed028a5395ff0481b46a369892b686165665650a0e253f",
+    "triangles": 42189
+  },
+  {
+    "id": "gary",
+    "status": "locally visually verified",
+    "glbSha256": "f36f3f019cbf68c3a8beaf46438655c955ef7902b769f19dec4068c4d06d6514",
+    "triangles": 29405
+  },
+  {
+    "id": "doctor",
+    "status": "locally visually verified",
+    "glbSha256": "c69f15937801954d7092ecfec445d71e7bb8c2ac8427658c652fd0b57455a7bd",
+    "triangles": 36391
+  },
+  {
+    "id": "bartholomew",
+    "status": "locally visually verified",
+    "glbSha256": "a79ad9fb05225044b06b48012efddb02b6ec044e75b545f15c73a84e7a4ffc7a",
+    "triangles": 49254
+  },
+  {
+    "id": "nana",
+    "status": "locally visually verified",
+    "glbSha256": "1eafccd020949949691f69a3a3f5f1231f576a807cdc24e2567c80fcc9da6747",
+    "triangles": 47548
+  }
+]

@@ -74,4 +74,5 @@ export async function muxWalk(video,audio,output,seconds=60,audioAfterVideo=null
   await exec('ffmpeg',['-hide_banner','-loglevel','error','-y','-ss',String(trim),'-i',video,...align,'-i',audio,
     '-t',String(seconds),'-map','0:v:0','-map','1:a:0','-c:v','libx264','-threads','4','-crf','19','-pix_fmt','yuv420p',
     '-c:a','aac','-b:a','144k','-movflags','+faststart',output]);
+  return {sourceDuration:duration,cutFrom:trim,cutTo:trim+seconds};
 }

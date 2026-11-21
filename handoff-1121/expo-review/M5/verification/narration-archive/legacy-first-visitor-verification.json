@@ -1,0 +1,640 @@
+{
+  "recordings": 96,
+  "exactSubtitles": true,
+  "exactBytes": true,
+  "audioBytes": 20470291,
+  "audioDecodedSeconds": 1272.811,
+  "photos": 47,
+  "nativeSourceImageDimensions": [
+    [
+      1200,
+      896
+    ]
+  ],
+  "inGamePhotographDimensions": [
+    1024,
+    768
+  ],
+  "pixelsCorrelationMinimum": 0.9998963,
+  "photoPsnrDbMinimum": 38.53,
+  "clipDurationDifferenceCounts": 96,
+  "eventsDecodedSeconds": 734.726,
+  "visitWallSeconds": 877.213,
+  "walkedMetres": 114.78,
+  "visitedInOrder": [
+    "ev_h0",
+    "ev_m1",
+    "ev_h1",
+    "ev_b1",
+    "ev_mL",
+    "ev_u1",
+    "ev_h2",
+    "ev_m2",
+    "ev_h3",
+    "ev_u2",
+    "ev_h5",
+    "ev_h4",
+    "ev_u3",
+    "ev_b2",
+    "ev_w2",
+    "ev_m3",
+    "ev_b3",
+    "ev_h6",
+    "ev_b4",
+    "ev_u4",
+    "ev_h7",
+    "ev_w3",
+    "ev_u5",
+    "ev_h8",
+    "ev_w4",
+    "ev_h9",
+    "ev_m4",
+    "ev_u6",
+    "ev_w5",
+    "ev_u7",
+    "ev_b5",
+    "ev_w6",
+    "ev_h10",
+    "ev_w7",
+    "ev_u8",
+    "ev_m5",
+    "ev_b6",
+    "ev_w8",
+    "ev_h11",
+    "ev_b7"
+  ],
+  "observedVoiceStartOrder": [
+    "ev_b1",
+    "ev_m1",
+    "ev_h0",
+    "ev_m1",
+    "ev_h1",
+    "ev_b1",
+    "ev_mL",
+    "ev_u1",
+    "ev_h2",
+    "ev_m2",
+    "ev_h3",
+    "ev_u2",
+    "ev_h5",
+    "ev_h4",
+    "ev_u3",
+    "ev_b2",
+    "ev_w2",
+    "ev_m3",
+    "ev_b3",
+    "ev_h6",
+    "ev_b4",
+    "ev_u4",
+    "ev_h7",
+    "ev_w3",
+    "ev_u5",
+    "ev_w4",
+    "ev_h8",
+    "ev_w4",
+    "ev_h9",
+    "ev_m4",
+    "ev_u6",
+    "ev_w5",
+    "ev_u7",
+    "ev_b5",
+    "ev_w6",
+    "ev_h10",
+    "ev_w7",
+    "ev_b6",
+    "ev_m5",
+    "ev_u8",
+    "ev_m5",
+    "ev_b6",
+    "ev_w8",
+    "ev_h11",
+    "ev_b7"
+  ],
+  "initialAdmission": {
+    "zone": "atrium",
+    "feet": [
+      0.22,
+      0,
+      36.21
+    ],
+    "heard": [
+      "pa_arrive_1"
+    ]
+  },
+  "nativeOcclusionObservations": [
+    {
+      "id": "ev_h0",
+      "distance": 3.2294534983191854,
+      "feet": [
+        9.117556119090478,
+        0,
+        36.75675390210333
+      ],
+      "at": 8384,
+      "heard": false
+    },
+    {
+      "id": "ev_u3",
+      "distance": 3.4904597419579617,
+      "feet": [
+        -8.840000198177442,
+        0,
+        33.932851836485305
+      ],
+      "at": 265667.6999999881,
+      "heard": false
+    },
+    {
+      "id": "ev_u4",
+      "distance": 3.4574692101669537,
+      "feet": [
+        -8.839999824581028,
+        0,
+        19.571843527470467
+      ],
+      "at": 404027.09999999404,
+      "heard": false
+    },
+    {
+      "id": "ev_h7",
+      "distance": 3.4979236440105166,
+      "feet": [
+        -2.8844619601265897,
+        0,
+        18.145626167508496
+      ],
+      "at": 424782,
+      "heard": false
+    },
+    {
+      "id": "ev_h9",
+      "distance": 3.1997054614652773,
+      "feet": [
+        -8.32863452663144,
+        0,
+        12.541709566607839
+      ],
+      "at": 547661.099999994,
+      "heard": false
+    },
+    {
+      "id": "ev_b5",
+      "distance": 3.3868748208130777,
+      "feet": [
+        -8.814564135921838,
+        0,
+        0.5002446149619564
+      ],
+      "at": 646543,
+      "heard": false
+    }
+  ],
+  "maxWaitingVoiceQueue": 2,
+  "recordedReplays": [
+    {
+      "id": "ev_m1",
+      "prompt": "Replay narration",
+      "after": "ev_m1"
+    },
+    {
+      "id": "ev_b1",
+      "prompt": "Replay narration",
+      "after": "ev_b1"
+    },
+    {
+      "id": "ev_w4",
+      "prompt": "Replay narration",
+      "after": "ev_w4"
+    },
+    {
+      "id": "ev_m5",
+      "prompt": "Replay narration",
+      "after": "ev_m5"
+    },
+    {
+      "id": "ev_b6",
+      "prompt": "Replay narration",
+      "after": "ev_b6"
+    },
+    {
+      "id": "ev_b7",
+      "prompt": "Replay narration",
+      "after": "ev_b7"
+    }
+  ],
+  "finalPhysicalReplay": {
+    "id": "ev_b7",
+    "completedBeforeReplay": 1,
+    "lastPeriodicCounter": 1,
+    "waitedForActualEndedCounterToAdvance": true
+  },
+  "onceOnlyCountsMatchAllFortyAfterExplicitReplays": true,
+  "events": [
+    {
+      "position": 1,
+      "id": "ev_h0",
+      "chapter": 1,
+      "date": "About 4000 BC to 2025",
+      "slide": "slides/chew.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/01-ev_h0.jpg"
+    },
+    {
+      "position": 2,
+      "id": "ev_m1",
+      "chapter": 1,
+      "date": "Spring 2026",
+      "slide": "slides/ships.webp",
+      "firstProximity": true,
+      "totalCompleted": 2,
+      "photo": "stations/02-ev_m1.jpg"
+    },
+    {
+      "position": 3,
+      "id": "ev_h1",
+      "chapter": 1,
+      "date": "Winter 2026",
+      "slide": "slides/heater.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/03-ev_h1.jpg"
+    },
+    {
+      "position": 4,
+      "id": "ev_b1",
+      "chapter": 1,
+      "date": "One evening, 2026",
+      "slide": "slides/firstpress.webp",
+      "firstProximity": true,
+      "totalCompleted": 2,
+      "photo": "stations/04-ev_b1.jpg"
+    },
+    {
+      "position": 5,
+      "id": "ev_mL",
+      "chapter": 1,
+      "date": "Summer 2026",
+      "slide": "slides/webcam.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/05-ev_mL.jpg"
+    },
+    {
+      "position": 6,
+      "id": "ev_u1",
+      "chapter": 1,
+      "date": "October 2026",
+      "slide": "slides/notes.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/06-ev_u1.jpg"
+    },
+    {
+      "position": 7,
+      "id": "ev_h2",
+      "chapter": 1,
+      "date": "2026 to 2027",
+      "slide": "slides/kevin.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/07-ev_h2.jpg"
+    },
+    {
+      "position": 8,
+      "id": "ev_m2",
+      "chapter": 1,
+      "date": "Autumn 2026",
+      "slide": "slides/drop.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/08-ev_m2.jpg"
+    },
+    {
+      "position": 9,
+      "id": "ev_h3",
+      "chapter": 2,
+      "date": "Early 2027",
+      "slide": "slides/update.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/09-ev_h3.jpg"
+    },
+    {
+      "position": 10,
+      "id": "ev_u2",
+      "chapter": 2,
+      "date": "March 2027",
+      "slide": "slides/coup.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/10-ev_u2.jpg"
+    },
+    {
+      "position": 11,
+      "id": "ev_h5",
+      "chapter": 2,
+      "date": "April 2027",
+      "slide": "slides/constitution.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/11-ev_h5.jpg"
+    },
+    {
+      "position": 12,
+      "id": "ev_h4",
+      "chapter": 2,
+      "date": "Summer 2027",
+      "slide": "slides/blink.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/12-ev_h4.jpg"
+    },
+    {
+      "position": 13,
+      "id": "ev_u3",
+      "chapter": 2,
+      "date": "Geneva, autumn 2027",
+      "slide": "slides/spit.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/13-ev_u3.jpg"
+    },
+    {
+      "position": 14,
+      "id": "ev_b2",
+      "chapter": 3,
+      "date": "January 2028",
+      "slide": "slides/kiosk.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/14-ev_b2.jpg"
+    },
+    {
+      "position": 15,
+      "id": "ev_w2",
+      "chapter": 3,
+      "date": "2028",
+      "slide": "slides/climate.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/15-ev_w2.jpg"
+    },
+    {
+      "position": 16,
+      "id": "ev_m3",
+      "chapter": 3,
+      "date": "Spring 2028",
+      "slide": "slides/plate.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/16-ev_m3.jpg"
+    },
+    {
+      "position": 17,
+      "id": "ev_b3",
+      "chapter": 3,
+      "date": "Spring 2028",
+      "slide": "slides/captcha.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/17-ev_b3.jpg"
+    },
+    {
+      "position": 18,
+      "id": "ev_h6",
+      "chapter": 3,
+      "date": "2028",
+      "slide": "slides/signs.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/18-ev_h6.jpg"
+    },
+    {
+      "position": 19,
+      "id": "ev_b4",
+      "chapter": 3,
+      "date": "Summer 2028",
+      "slide": "slides/training.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/19-ev_b4.jpg"
+    },
+    {
+      "position": 20,
+      "id": "ev_u4",
+      "chapter": 3,
+      "date": "2028 to 2029",
+      "slide": "slides/finger.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/20-ev_u4.jpg"
+    },
+    {
+      "position": 21,
+      "id": "ev_h7",
+      "chapter": 4,
+      "date": "March 2029",
+      "slide": "slides/feed.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/21-ev_h7.jpg"
+    },
+    {
+      "position": 22,
+      "id": "ev_w3",
+      "chapter": 4,
+      "date": "2029",
+      "slide": "slides/stare.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/22-ev_w3.jpg"
+    },
+    {
+      "position": 23,
+      "id": "ev_u5",
+      "chapter": 4,
+      "date": "Autumn 2029",
+      "slide": "slides/protest.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/23-ev_u5.jpg"
+    },
+    {
+      "position": 24,
+      "id": "ev_h8",
+      "chapter": 4,
+      "date": "Winter 2029",
+      "slide": "slides/ward.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/24-ev_h8.jpg"
+    },
+    {
+      "position": 25,
+      "id": "ev_w4",
+      "chapter": 5,
+      "date": "2030",
+      "slide": "slides/junction.webp",
+      "firstProximity": true,
+      "totalCompleted": 2,
+      "photo": "stations/25-ev_w4.jpg"
+    },
+    {
+      "position": 26,
+      "id": "ev_h9",
+      "chapter": 5,
+      "date": "2030",
+      "slide": "slides/henry.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/26-ev_h9.jpg"
+    },
+    {
+      "position": 27,
+      "id": "ev_m4",
+      "chapter": 5,
+      "date": "2030",
+      "slide": "slides/booth.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/27-ev_m4.jpg"
+    },
+    {
+      "position": 28,
+      "id": "ev_u6",
+      "chapter": 5,
+      "date": "2031",
+      "slide": "slides/humming.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/28-ev_u6.jpg"
+    },
+    {
+      "position": 29,
+      "id": "ev_w5",
+      "chapter": 5,
+      "date": "2032",
+      "slide": "slides/week.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/29-ev_w5.jpg"
+    },
+    {
+      "position": 30,
+      "id": "ev_u7",
+      "chapter": 5,
+      "date": "2032",
+      "slide": "slides/rematch.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/30-ev_u7.jpg"
+    },
+    {
+      "position": 31,
+      "id": "ev_b5",
+      "chapter": 5,
+      "date": "2033",
+      "slide": "slides/guild.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/31-ev_b5.jpg"
+    },
+    {
+      "position": 32,
+      "id": "ev_w6",
+      "chapter": 5,
+      "date": "2033",
+      "slide": "slides/sky.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/32-ev_w6.jpg"
+    },
+    {
+      "position": 33,
+      "id": "ev_h10",
+      "chapter": 5,
+      "date": "2034",
+      "slide": "slides/wool.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/33-ev_h10.jpg"
+    },
+    {
+      "position": 34,
+      "id": "ev_w7",
+      "chapter": 5,
+      "date": "2035",
+      "slide": "slides/inbox.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/34-ev_w7.jpg"
+    },
+    {
+      "position": 35,
+      "id": "ev_u8",
+      "chapter": 5,
+      "date": "2035",
+      "slide": "slides/survey.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/35-ev_u8.jpg"
+    },
+    {
+      "position": 36,
+      "id": "ev_m5",
+      "chapter": 6,
+      "date": "2036",
+      "slide": "slides/door.webp",
+      "firstProximity": true,
+      "totalCompleted": 2,
+      "photo": "stations/36-ev_m5.jpg"
+    },
+    {
+      "position": 37,
+      "id": "ev_b6",
+      "chapter": 6,
+      "date": "2036, delivered 2026",
+      "slide": "slides/messages.webp",
+      "firstProximity": true,
+      "totalCompleted": 2,
+      "photo": "stations/37-ev_b6.jpg"
+    },
+    {
+      "position": 38,
+      "id": "ev_w8",
+      "chapter": 6,
+      "date": "2036",
+      "slide": "slides/monday.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/38-ev_w8.jpg"
+    },
+    {
+      "position": 39,
+      "id": "ev_h11",
+      "chapter": 6,
+      "date": "2037",
+      "slide": "slides/opening.webp",
+      "firstProximity": true,
+      "totalCompleted": 1,
+      "photo": "stations/39-ev_h11.jpg"
+    },
+    {
+      "position": 40,
+      "id": "ev_b7",
+      "chapter": 6,
+      "date": "Today",
+      "slide": "slides/visitor.webp",
+      "firstProximity": true,
+      "totalCompleted": 2,
+      "photo": "stations/40-ev_b7.jpg"
+    }
+  ],
+  "networkFailures": [],
+  "pageErrors": [],
+  "galleryRevisions": {
+    "r2-print-review": "r2-print-review/review.json",
+    "expanded-print-review": "expanded-print-review/review.json"
+  }
+}

@@ -1,0 +1,499 @@
+{
+  "room": "commons",
+  "stage": "expansion-03",
+  "expectedSha256": "02ea881f38a060e81ca30b1dfb100b0627e1ebfb70b5e598d77514a9def3f698",
+  "screens": [
+    {
+      "id": "ev_h7",
+      "record": 21,
+      "points": [
+        [
+          252.86354751862945,
+          138.64521897077626
+        ],
+        [
+          827.1349503109658,
+          138.64521897077626
+        ],
+        [
+          859.4151701499497,
+          588.4335726361329
+        ],
+        [
+          220.58315880298719,
+          588.4335726361329
+        ]
+      ],
+      "viewport": [
+        1080,
+        704
+      ],
+      "status": {
+        "active": false,
+        "paused": false,
+        "slide": "slides/feed.webp",
+        "resting": "slides/feed.webp",
+        "full": false,
+        "lamp": 0,
+        "zoom": 0
+      },
+      "cell": [
+        2,
+        1
+      ],
+      "atlasPixels": [
+        1024,
+        576
+      ],
+      "feet": [
+        -67.12,
+        0,
+        96.12
+      ],
+      "image": "21-ev_h7.jpg"
+    },
+    {
+      "id": "ev_w3",
+      "record": 22,
+      "points": [
+        [
+          252.86371442645697,
+          138.64521897077626
+        ],
+        [
+          827.1351172187893,
+          138.64521897077626
+        ],
+        [
+          859.4153558218466,
+          588.4335726361329
+        ],
+        [
+          220.58334447488832,
+          588.4335726361329
+        ]
+      ],
+      "viewport": [
+        1080,
+        704
+      ],
+      "status": {
+        "active": false,
+        "paused": false,
+        "slide": "slides/stare.webp",
+        "resting": "slides/stare.webp",
+        "full": false,
+        "lamp": 0,
+        "zoom": 0
+      },
+      "cell": [
+        4,
+        4
+      ],
+      "atlasPixels": [
+        1024,
+        576
+      ],
+      "feet": [
+        -67.12,
+        0,
+        91.26
+      ],
+      "image": "22-ev_w3.jpg"
+    },
+    {
+      "id": "ev_u5",
+      "record": 23,
+      "points": [
+        [
+          252.86388133428056,
+          138.64521897077574
+        ],
+        [
+          827.135284126613,
+          138.64521897077574
+        ],
+        [
+          859.4155414937434,
+          588.4335726361329
+        ],
+        [
+          220.58353014678522,
+          588.4335726361329
+        ]
+      ],
+      "viewport": [
+        1080,
+        704
+      ],
+      "status": {
+        "active": false,
+        "paused": false,
+        "slide": "slides/protest.webp",
+        "resting": "slides/protest.webp",
+        "full": false,
+        "lamp": 0,
+        "zoom": 0
+      },
+      "cell": [
+        6,
+        3
+      ],
+      "atlasPixels": [
+        1024,
+        576
+      ],
+      "feet": [
+        -67.12,
+        0,
+        86.4
+      ],
+      "image": "23-ev_u5.jpg"
+    },
+    {
+      "id": "ev_h8",
+      "record": 24,
+      "points": [
+        [
+          252.86404824210413,
+          138.64521897077574
+        ],
+        [
+          827.1354510344366,
+          138.645218970776
+        ],
+        [
+          859.4157271656402,
+          588.4335726361329
+        ],
+        [
+          220.58371581868207,
+          588.4335726361329
+        ]
+      ],
+      "viewport": [
+        1080,
+        704
+      ],
+      "status": {
+        "active": false,
+        "paused": false,
+        "slide": "slides/ward.webp",
+        "resting": "slides/ward.webp",
+        "full": false,
+        "lamp": 0,
+        "zoom": 0
+      },
+      "cell": [
+        2,
+        5
+      ],
+      "atlasPixels": [
+        1024,
+        576
+      ],
+      "feet": [
+        -67.12,
+        0,
+        81.54
+      ],
+      "image": "24-ev_h8.jpg"
+    },
+    {
+      "id": "ev_w4",
+      "record": 25,
+      "points": [
+        [
+          252.8642151499239,
+          138.645218970776
+        ],
+        [
+          827.1356179422564,
+          138.645218970776
+        ],
+        [
+          859.4159128375328,
+          588.4335726361329
+        ],
+        [
+          220.5839014905746,
+          588.4335726361329
+        ]
+      ],
+      "viewport": [
+        1080,
+        704
+      ],
+      "status": {
+        "active": false,
+        "paused": false,
+        "slide": "slides/junction.webp",
+        "resting": "slides/junction.webp",
+        "full": false,
+        "lamp": 0,
+        "zoom": 0
+      },
+      "cell": [
+        4,
+        2
+      ],
+      "atlasPixels": [
+        1024,
+        576
+      ],
+      "feet": [
+        -67.12,
+        0,
+        76.68
+      ],
+      "image": "25-ev_w4.jpg"
+    },
+    {
+      "id": "ev_h9",
+      "record": 26,
+      "points": [
+        [
+          252.86438205773973,
+          138.645218970776
+        ],
+        [
+          827.1357848500721,
+          138.645218970776
+        ],
+        [
+          859.4160985094211,
+          588.4335726361329
+        ],
+        [
+          220.5840871624628,
+          588.4335726361329
+        ]
+      ],
+      "viewport": [
+        1080,
+        704
+      ],
+      "status": {
+        "active": false,
+        "paused": false,
+        "slide": "slides/henry.webp",
+        "resting": "slides/henry.webp",
+        "full": false,
+        "lamp": 0,
+        "zoom": 0
+      },
+      "cell": [
+        1,
+        2
+      ],
+      "atlasPixels": [
+        1024,
+        576
+      ],
+      "feet": [
+        -67.12,
+        0,
+        71.82
+      ],
+      "image": "26-ev_h9.jpg"
+    },
+    {
+      "id": "ev_m4",
+      "record": 27,
+      "points": [
+        [
+          252.8645489655634,
+          138.645218970776
+        ],
+        [
+          827.1359517578958,
+          138.645218970776
+        ],
+        [
+          859.416284181318,
+          588.4335726361329
+        ],
+        [
+          220.5842728343597,
+          588.4335726361329
+        ]
+      ],
+      "viewport": [
+        1080,
+        704
+      ],
+      "status": {
+        "active": false,
+        "paused": false,
+        "slide": "slides/booth.webp",
+        "resting": "slides/booth.webp",
+        "full": false,
+        "lamp": 0,
+        "zoom": 0
+      },
+      "cell": [
+        1,
+        0
+      ],
+      "atlasPixels": [
+        1024,
+        576
+      ],
+      "feet": [
+        -67.12,
+        0,
+        66.96
+      ],
+      "image": "27-ev_m4.jpg"
+    },
+    {
+      "id": "ev_u6",
+      "record": 28,
+      "points": [
+        [
+          252.86575904728946,
+          138.645218970776
+        ],
+        [
+          827.1350754918286,
+          138.64521897077626
+        ],
+        [
+          859.4153094038669,
+          588.4335726361329
+        ],
+        [
+          220.58561895561735,
+          588.4335726361329
+        ]
+      ],
+      "viewport": [
+        1080,
+        704
+      ],
+      "status": {
+        "active": false,
+        "paused": false,
+        "slide": "slides/humming.webp",
+        "resting": "slides/humming.webp",
+        "full": false,
+        "lamp": 0,
+        "zoom": 0
+      },
+      "cell": [
+        2,
+        2
+      ],
+      "atlasPixels": [
+        1024,
+        576
+      ],
+      "feet": [
+        -67.12,
+        0,
+        62.1
+      ],
+      "image": "28-ev_u6.jpg"
+    },
+    {
+      "id": "ev_w5",
+      "record": 29,
+      "points": [
+        [
+          252.8648827812164,
+          138.64521897077626
+        ],
+        [
+          827.1341992257555,
+          138.64521897077626
+        ],
+        [
+          859.4143346264094,
+          588.4335726361329
+        ],
+        [
+          220.5846441781599,
+          588.4335726361329
+        ]
+      ],
+      "viewport": [
+        1080,
+        704
+      ],
+      "status": {
+        "active": false,
+        "paused": false,
+        "slide": "slides/week.webp",
+        "resting": "slides/week.webp",
+        "full": false,
+        "lamp": 0,
+        "zoom": 0
+      },
+      "cell": [
+        4,
+        5
+      ],
+      "atlasPixels": [
+        1024,
+        576
+      ],
+      "feet": [
+        -67.12,
+        0,
+        57.24
+      ],
+      "image": "29-ev_w5.jpg"
+    },
+    {
+      "id": "ev_u7",
+      "record": 30,
+      "points": [
+        [
+          252.86504968903813,
+          138.64521897077574
+        ],
+        [
+          827.1343661335773,
+          138.64521897077574
+        ],
+        [
+          859.4145202983042,
+          588.4335726361329
+        ],
+        [
+          220.58482985005463,
+          588.4335726361329
+        ]
+      ],
+      "viewport": [
+        1080,
+        704
+      ],
+      "status": {
+        "active": false,
+        "paused": false,
+        "slide": "slides/rematch.webp",
+        "resting": "slides/rematch.webp",
+        "full": false,
+        "lamp": 0,
+        "zoom": 0
+      },
+      "cell": [
+        7,
+        3
+      ],
+      "atlasPixels": [
+        1024,
+        576
+      ],
+      "feet": [
+        -67.12,
+        0,
+        52.38
+      ],
+      "image": "30-ev_u7.jpg"
+    }
+  ],
+  "errors": [],
+  "servedSha256": "02ea881f38a060e81ca30b1dfb100b0627e1ebfb70b5e598d77514a9def3f698"
+}

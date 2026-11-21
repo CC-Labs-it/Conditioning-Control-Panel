@@ -1,0 +1,48 @@
+{
+  "scope": "Isolated browser context with synthetic controllers, before entry to WebGL",
+  "checks": {
+    "new-run": "One held press armed existing confirmation once. Back returned to the visit.",
+    "forget": "One held press armed existing confirmation once. Back returned to the visit.",
+    "mixer": true,
+    "pictures": "Native controls deferred. Back restored the originating pause button.",
+    "sticker": true,
+    "narrowSticker": true,
+    "save-out": {
+      "offered": true
+    },
+    "save-in": {
+      "offered": true
+    },
+    "twoPads": {
+      "first": "resume",
+      "selected": "mute",
+      "returned": true
+    },
+    "pointerAfterPad": true
+  },
+  "errors": [],
+  "launchPointer": [
+    [
+      "pointerdown",
+      "BUTTON",
+      673,
+      651,
+      695
+    ],
+    [
+      "pointerup",
+      "BUTTON",
+      673,
+      651,
+      695
+    ],
+    [
+      "click",
+      "BUTTON",
+      673,
+      651,
+      695
+    ]
+  ],
+  "passed": true
+}

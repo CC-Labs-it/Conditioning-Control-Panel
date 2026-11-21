@@ -1,0 +1,938 @@
+{
+  "rooms": {
+    "aquarium": {
+      "desktopSha256": "be9eae5838bc2993e8c74bcd6b3651e9b47f6cc7e9edd141ba0590a6de6387a9",
+      "mobileSha256": "a281dfd285c0b9fdf92f02a8c94e01f87ba97034a05367f8f7eba9733863a8c2",
+      "controls": {
+        "expo_replay_ev_b5": {
+          "target": "expo_replay_ev_b5",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_b6": {
+          "target": "expo_replay_ev_b6",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_b7": {
+          "target": "expo_replay_ev_b7",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_h10": {
+          "target": "expo_replay_ev_h10",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_h11": {
+          "target": "expo_replay_ev_h11",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_m5": {
+          "target": "expo_replay_ev_m5",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_u8": {
+          "target": "expo_replay_ev_u8",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_w6": {
+          "target": "expo_replay_ev_w6",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_w7": {
+          "target": "expo_replay_ev_w7",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_w8": {
+          "target": "expo_replay_ev_w8",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        }
+      }
+    },
+    "atrium": {
+      "desktopSha256": "4308d0fb1096f20257984e4b4453ab10f6f3ecdf38dc2dabb5f5e2bb69dca9dc",
+      "mobileSha256": "3c8681a24c36d9032b4b8af9342c831598aae74a0f36a5392692ee1732f21b45",
+      "controls": {
+        "expo_control_greenhouse": {
+          "target": "expo_control_greenhouse",
+          "axis": null,
+          "metres": null,
+          "conditional": false
+        }
+      }
+    },
+    "catwalk": {
+      "desktopSha256": "4425583931f77cf77ecd14ec1d8e7a68fa2ea8ae9c1494ecfb38c15363167f7b",
+      "mobileSha256": "a240ecb373afb19cfc647557b3e032a4c9887c0c991ac0aecfb33fcb33537705",
+      "controls": {
+        "expo_control_terrace": {
+          "target": "expo_control_terrace",
+          "axis": null,
+          "metres": null,
+          "conditional": false
+        }
+      }
+    },
+    "chronology": {
+      "desktopSha256": "b26531fb332d9b90467cc5552cf1327f6b29bf1976eec23cc7a661148ece67cc",
+      "mobileSha256": "b6672cd290b9977e19115c4f43d98393e1bd83cd1b44cd7104fdcd84b3eec574",
+      "controls": {
+        "expo_replay_ev_b1": {
+          "target": "expo_replay_ev_b1",
+          "axis": [
+            1,
+            0,
+            0
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_h0": {
+          "target": "expo_replay_ev_h0",
+          "axis": [
+            1,
+            0,
+            0
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_h1": {
+          "target": "expo_replay_ev_h1",
+          "axis": [
+            1,
+            0,
+            0
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_h2": {
+          "target": "expo_replay_ev_h2",
+          "axis": [
+            1,
+            0,
+            0
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_h3": {
+          "target": "expo_replay_ev_h3",
+          "axis": [
+            1,
+            0,
+            0
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_m1": {
+          "target": "expo_replay_ev_m1",
+          "axis": [
+            1,
+            0,
+            0
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_m2": {
+          "target": "expo_replay_ev_m2",
+          "axis": [
+            1,
+            0,
+            0
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_mL": {
+          "target": "expo_replay_ev_mL",
+          "axis": [
+            1,
+            0,
+            0
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_u1": {
+          "target": "expo_replay_ev_u1",
+          "axis": [
+            1,
+            0,
+            0
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_u2": {
+          "target": "expo_replay_ev_u2",
+          "axis": [
+            1,
+            0,
+            0
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        }
+      }
+    },
+    "commons": {
+      "desktopSha256": "02ea881f38a060e81ca30b1dfb100b0627e1ebfb70b5e598d77514a9def3f698",
+      "mobileSha256": "ffa171d75bf4323c9c71f62ccccd64dbf88c66afca61540032f33244934d6623",
+      "controls": {
+        "expo_replay_ev_h7": {
+          "target": "expo_replay_ev_h7",
+          "axis": [
+            -1,
+            0,
+            0
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_h8": {
+          "target": "expo_replay_ev_h8",
+          "axis": [
+            -1,
+            0,
+            0
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_h9": {
+          "target": "expo_replay_ev_h9",
+          "axis": [
+            -1,
+            0,
+            0
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_m4": {
+          "target": "expo_replay_ev_m4",
+          "axis": [
+            -1,
+            0,
+            0
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_u5": {
+          "target": "expo_replay_ev_u5",
+          "axis": [
+            -1,
+            0,
+            0
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_u6": {
+          "target": "expo_replay_ev_u6",
+          "axis": [
+            -1,
+            0,
+            0
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_u7": {
+          "target": "expo_replay_ev_u7",
+          "axis": [
+            -1,
+            0,
+            0
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_w3": {
+          "target": "expo_replay_ev_w3",
+          "axis": [
+            -1,
+            0,
+            0
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_w4": {
+          "target": "expo_replay_ev_w4",
+          "axis": [
+            -1,
+            0,
+            0
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_w5": {
+          "target": "expo_replay_ev_w5",
+          "axis": [
+            -1,
+            0,
+            0
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        }
+      }
+    },
+    "dome": {
+      "desktopSha256": "57d7fdea4c632d272d45fc178cd5bf3e2013d74697697b393eeaacfc57426bae",
+      "mobileSha256": "e807f66580f451aefbdf95c4193decfbdc503610401aaabbb8fc24f9f73b8287",
+      "controls": {
+        "expo_replay_dome_0": {
+          "target": "expo_replay_dome_0",
+          "axis": [
+            1,
+            0,
+            0
+          ],
+          "metres": 0.021,
+          "conditional": false
+        }
+      }
+    },
+    "forum": {
+      "desktopSha256": "839d736f05589ca0b1519d5b5e06ab9f2f8ff7b0dc9bdefebbffd62fcd2bb2b5",
+      "mobileSha256": "484f739d1d9e7bbb3f22b79948817724fc3296a2c2fab4077c8694d9448dcbed",
+      "controls": {
+        "expo_replay_ev_b2": {
+          "target": "expo_replay_ev_b2",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_b3": {
+          "target": "expo_replay_ev_b3",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_b4": {
+          "target": "expo_replay_ev_b4",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_h4": {
+          "target": "expo_replay_ev_h4",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_h5": {
+          "target": "expo_replay_ev_h5",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_h6": {
+          "target": "expo_replay_ev_h6",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_m3": {
+          "target": "expo_replay_ev_m3",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_u3": {
+          "target": "expo_replay_ev_u3",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_u4": {
+          "target": "expo_replay_ev_u4",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_ev_w2": {
+          "target": "expo_replay_ev_w2",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        }
+      }
+    },
+    "habitat": {
+      "desktopSha256": "44fa385387ade94cc0c9253beeadfde24e4922162dbb1eb482bc8abb7a70a0e4",
+      "mobileSha256": "fe85dde3cae2215f22a5735a398072a6a9cd2c73eeab3cd380b66e00c1292b5d",
+      "controls": {
+        "expo_press_feeding_slot": {
+          "target": "feeding_slot",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.016,
+          "conditional": false
+        },
+        "expo_press_habitat_glass": {
+          "target": "habitat_glass",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.016,
+          "conditional": false
+        },
+        "expo_press_habitat_plaque": {
+          "target": "habitat_plaque",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.016,
+          "conditional": false
+        },
+        "expo_replay_hab_1": {
+          "target": "expo_replay_hab_1",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.021,
+          "conditional": false
+        }
+      }
+    },
+    "hall": {
+      "desktopSha256": "2fb2f447c7474ad1d2e89ddfde3a22cdf0af259ad00049e13a8e8eed07e6fc0e",
+      "mobileSha256": "2d2011f0d1e649a4d036c46855dd2a95731e86c1b7466e09fff39e4e0f4dce39",
+      "controls": {
+        "expo_control_grid": {
+          "target": "expo_control_grid",
+          "axis": null,
+          "metres": null,
+          "conditional": false
+        },
+        "expo_replay_ex_press": {
+          "target": "expo_replay_ex_press",
+          "axis": [
+            0,
+            0,
+            -1
+          ],
+          "metres": 0.02576,
+          "conditional": false
+        },
+        "expo_replay_pa_photos": {
+          "target": "expo_replay_pa_photos",
+          "axis": [
+            -1,
+            0,
+            0
+          ],
+          "metres": 0.021,
+          "conditional": false
+        },
+        "press_main": {
+          "target": "press_main",
+          "axis": [
+            0,
+            -1,
+            0
+          ],
+          "metres": 0.034,
+          "conditional": false
+        },
+        "press_stop": {
+          "target": "press_stop",
+          "axis": [
+            0,
+            -1,
+            0
+          ],
+          "metres": 0.032,
+          "conditional": false
+        }
+      }
+    },
+    "hoof": {
+      "desktopSha256": "b7b2b876d4935991f75a26d04f5602a6b287555cab63a199b7bb8cd01ce2e2d1",
+      "mobileSha256": "7f3a6d2378642c8a9fb3f0457fd9b60028cbe8ed8937d97b7144567a43d030c3",
+      "controls": {
+        "expo_press_hoof_checkbox_0": {
+          "target": "hoof_console",
+          "axis": [
+            0,
+            -1,
+            0
+          ],
+          "metres": 0.018,
+          "conditional": false
+        },
+        "expo_press_hoof_checkbox_1": {
+          "target": "hoof_console",
+          "axis": [
+            0,
+            -1,
+            0
+          ],
+          "metres": 0.018,
+          "conditional": false
+        },
+        "expo_press_hoof_checkbox_2": {
+          "target": "hoof_console",
+          "axis": [
+            0,
+            -1,
+            0
+          ],
+          "metres": 0.018,
+          "conditional": false
+        },
+        "expo_press_hoof_checkbox_3": {
+          "target": "hoof_console",
+          "axis": [
+            0,
+            -1,
+            0
+          ],
+          "metres": 0.018,
+          "conditional": false
+        },
+        "expo_replay_hoof_1": {
+          "target": "expo_replay_hoof_1",
+          "axis": [
+            0,
+            0,
+            1
+          ],
+          "metres": 0.021,
+          "conditional": false
+        }
+      }
+    },
+    "secret": {
+      "desktopSha256": "077822a3213c6c2ce0814a25743312cc624afd05ef5f15dcd580513e71c51bb9",
+      "mobileSha256": "93223841e954e3c3cc28502148ce9fecc0c41d955b626305288ecf18301a771c",
+      "controls": {}
+    },
+    "service": {
+      "desktopSha256": "b83ffbf3b78cdfc47f9fd1d54172bf54ebc14d1639b8fee5f8696e30f1c83815",
+      "mobileSha256": "60b8c08064c3f4c3abdabbfe5dbdf56fee34887c11b87d852928c6a203051760",
+      "controls": {
+        "expo_control_station": {
+          "target": "expo_control_station",
+          "axis": null,
+          "metres": null,
+          "conditional": false
+        }
+      }
+    },
+    "shop": {
+      "desktopSha256": "3bc47be339b4e49ccb0dcf518b893111b813dadc78b40ecfb60b891b685b4437",
+      "mobileSha256": "c8ff27cbe65e28eb7e9dc73b5b648380d04f52bd51ac6bf72e49a7c7d1bc27af",
+      "controls": {
+        "expo_press_exit_sale": {
+          "target": "exit_sale",
+          "axis": [
+            0,
+            -1,
+            0
+          ],
+          "metres": 0.016,
+          "conditional": true
+        },
+        "expo_press_framed_contract": {
+          "target": "framed_contract",
+          "axis": [
+            0,
+            -1,
+            0
+          ],
+          "metres": 0.016,
+          "conditional": false
+        },
+        "expo_press_till_display": {
+          "target": "till_display",
+          "axis": [
+            0,
+            -1,
+            0
+          ],
+          "metres": 0.016,
+          "conditional": false
+        }
+      }
+    },
+    "twelve": {
+      "desktopSha256": "16b4938fff3f903bb486d95fc37d0b72a57b856d83da41d124f30e16af88ed98",
+      "mobileSha256": "3b668c64d45d5c46d9e02c8a86d4ab0cd89d4436b3ce2e3fde3d511812f6ff75",
+      "controls": {
+        "alpaca_button": {
+          "target": "alpaca_button",
+          "axis": null,
+          "metres": null,
+          "conditional": true
+        },
+        "expo_replay_log_bartholomew": {
+          "target": "expo_replay_log_bartholomew",
+          "axis": [
+            0.742188572883606,
+            0,
+            -0.6701911091804504
+          ],
+          "metres": 0.02352,
+          "conditional": true
+        },
+        "expo_replay_log_bob": {
+          "target": "expo_replay_log_bob",
+          "axis": [
+            -0.8466156721115112,
+            0,
+            0.532204806804657
+          ],
+          "metres": 0.02352,
+          "conditional": true
+        },
+        "expo_replay_log_doctor": {
+          "target": "expo_replay_log_doctor",
+          "axis": [
+            0.9713985919952393,
+            0,
+            -0.23745471239089966
+          ],
+          "metres": 0.02352,
+          "conditional": true
+        },
+        "expo_replay_log_gary": {
+          "target": "expo_replay_log_gary",
+          "axis": [
+            0.9676691889762878,
+            0,
+            0.2522228956222534
+          ],
+          "metres": 0.02352,
+          "conditional": true
+        },
+        "expo_replay_log_greg": {
+          "target": "expo_replay_log_greg",
+          "axis": [
+            -0.9977909326553345,
+            0,
+            0.06643221527338028
+          ],
+          "metres": 0.02352,
+          "conditional": true
+        },
+        "expo_replay_log_henry": {
+          "target": "expo_replay_log_henry",
+          "axis": [
+            -0.9096978902816772,
+            0,
+            -0.41527068614959717
+          ],
+          "metres": 0.02352,
+          "conditional": true
+        },
+        "expo_replay_log_kevin": {
+          "target": "expo_replay_log_kevin",
+          "axis": [
+            0.32061299681663513,
+            0,
+            0.9472102522850037
+          ],
+          "metres": 0.02352,
+          "conditional": true
+        },
+        "expo_replay_log_lashes": {
+          "target": "expo_replay_log_lashes",
+          "axis": [
+            -0.49242356419563293,
+            0,
+            0.8703557252883911
+          ],
+          "metres": 0.02352,
+          "conditional": true
+        },
+        "expo_replay_log_margaret": {
+          "target": "expo_replay_log_margaret",
+          "axis": [
+            -0.6034610271453857,
+            0,
+            -0.7973924875259399
+          ],
+          "metres": 0.02352,
+          "conditional": true
+        },
+        "expo_replay_log_nana": {
+          "target": "expo_replay_log_nana",
+          "axis": [
+            0.3350031077861786,
+            0,
+            -0.9422169923782349
+          ],
+          "metres": 0.02352,
+          "conditional": true
+        },
+        "expo_replay_log_reginald": {
+          "target": "expo_replay_log_reginald",
+          "axis": [
+            -0.15251542627811432,
+            0,
+            -0.9883010983467102
+          ],
+          "metres": 0.02352,
+          "conditional": true
+        },
+        "expo_replay_log_spitz": {
+          "target": "expo_replay_log_spitz",
+          "axis": [
+            0.7318944931030273,
+            0,
+            0.6814179420471191
+          ],
+          "metres": 0.02352,
+          "conditional": true
+        },
+        "log_bartholomew": {
+          "target": "expo_replay_log_bartholomew",
+          "axis": [
+            0.742188572883606,
+            0,
+            -0.6701911091804504
+          ],
+          "metres": 0.022,
+          "conditional": true
+        },
+        "log_bob": {
+          "target": "expo_replay_log_bob",
+          "axis": [
+            -0.8466156721115112,
+            0,
+            0.532204806804657
+          ],
+          "metres": 0.022,
+          "conditional": true
+        },
+        "log_doctor": {
+          "target": "expo_replay_log_doctor",
+          "axis": [
+            0.9713985919952393,
+            0,
+            -0.23745471239089966
+          ],
+          "metres": 0.022,
+          "conditional": true
+        },
+        "log_gary": {
+          "target": "expo_replay_log_gary",
+          "axis": [
+            0.9676691889762878,
+            0,
+            0.2522228956222534
+          ],
+          "metres": 0.022,
+          "conditional": true
+        },
+        "log_greg": {
+          "target": "expo_replay_log_greg",
+          "axis": [
+            -0.9977909326553345,
+            0,
+            0.06643221527338028
+          ],
+          "metres": 0.022,
+          "conditional": true
+        },
+        "log_henry": {
+          "target": "expo_replay_log_henry",
+          "axis": [
+            -0.9096978902816772,
+            0,
+            -0.41527068614959717
+          ],
+          "metres": 0.022,
+          "conditional": true
+        },
+        "log_kevin": {
+          "target": "expo_replay_log_kevin",
+          "axis": [
+            0.32061299681663513,
+            0,
+            0.9472102522850037
+          ],
+          "metres": 0.022,
+          "conditional": true
+        },
+        "log_lashes": {
+          "target": "expo_replay_log_lashes",
+          "axis": [
+            -0.49242356419563293,
+            0,
+            0.8703557252883911
+          ],
+          "metres": 0.022,
+          "conditional": true
+        },
+        "log_margaret": {
+          "target": "expo_replay_log_margaret",
+          "axis": [
+            -0.6034610271453857,
+            0,
+            -0.7973924875259399
+          ],
+          "metres": 0.022,
+          "conditional": true
+        },
+        "log_nana": {
+          "target": "expo_replay_log_nana",
+          "axis": [
+            0.3350031077861786,
+            0,
+            -0.9422169923782349
+          ],
+          "metres": 0.022,
+          "conditional": true
+        },
+        "log_reginald": {
+          "target": "expo_replay_log_reginald",
+          "axis": [
+            -0.15251542627811432,
+            0,
+            -0.9883010983467102
+          ],
+          "metres": 0.022,
+          "conditional": true
+        },
+        "log_spitz": {
+          "target": "expo_replay_log_spitz",
+          "axis": [
+            0.7318944931030273,
+            0,
+            0.6814179420471191
+          ],
+          "metres": 0.022,
+          "conditional": true
+        },
+        "photo_release": {
+          "target": "photo_release",
+          "axis": null,
+          "metres": null,
+          "conditional": true
+        }
+      }
+    }
+  },
+  "count": 87,
+  "replays": 57,
+  "timeline": 40,
+  "logs": 12,
+  "greenLogCaps": 12
+}

@@ -1,0 +1,136 @@
+{
+  "errors": [],
+  "checks": {
+    "lineOfSight": {
+      "blocked": true,
+      "offAxisStarted": false,
+      "interruptedDwellReset": true,
+      "hiddenUnowned": true
+    },
+    "mix": {
+      "farGain": 0.052087768980799025,
+      "queued": [
+        "pa_timeline",
+        "ev_h0",
+        "pa_turnstile"
+      ],
+      "active": "log_kevin",
+      "paWaiting": true
+    },
+    "pause": {
+      "from": 0.01680000001192093,
+      "to": 0.01680000001192093
+    },
+    "planter": {
+      "timedSeconds": 6,
+      "subtitle": "Oh, you thought, “I am so clever. I am going to break the game and jump down.”",
+      "interrupted": "log_kevin",
+      "pausedAt": 1.339946,
+      "resumedAt": 1.339946
+    },
+    "kevinRoomToneSeconds": 15,
+    "projectors": {
+      "gentleZoom": 0,
+      "rest": {
+        "active": false,
+        "slide": "slides/chew.webp",
+        "full": false,
+        "lamp": 9.044765648317312e-13,
+        "zoom": 0.03999558809175208
+      },
+      "clicks": [
+        {
+          "at": 4797.0999999940395,
+          "args": [
+            "press",
+            0.34049470043789093,
+            0
+          ]
+        },
+        {
+          "at": 20183.20000001788,
+          "args": [
+            "press",
+            0.34049470043789093,
+            -0.09316823539599328
+          ]
+        },
+        {
+          "at": 35307.59999999404,
+          "args": [
+            "press",
+            0.061076797097985164,
+            0.94
+          ]
+        }
+      ]
+    },
+    "revisit": {
+      "finished": {
+        "planter_10": 1,
+        "log_kevin": 1,
+        "pa_timeline": 1,
+        "ev_h0": 1,
+        "pa_turnstile": 1
+      },
+      "replay": "log_kevin"
+    },
+    "speechOccupancy": {
+      "peak": 1,
+      "decodedVoiceElements": 1,
+      "dualCaptions": 0
+    }
+  },
+  "sources": [
+    [
+      200,
+      "manifest.json"
+    ],
+    [
+      200,
+      "resting-atlas.webp"
+    ],
+    [
+      200,
+      "hall/log_kevin.mp3"
+    ],
+    [
+      200,
+      "slides/kevin.webp"
+    ],
+    [
+      200,
+      "manifest.json"
+    ],
+    [
+      200,
+      "slides/inbox.webp"
+    ],
+    [
+      200,
+      "hall/pa_timeline.mp3"
+    ],
+    [
+      200,
+      "hall/ev_h0.mp3"
+    ],
+    [
+      200,
+      "slides/chew.webp"
+    ],
+    [
+      200,
+      "hall/pa_turnstile.mp3"
+    ],
+    [
+      200,
+      "hall/log_kevin.mp3"
+    ],
+    [
+      200,
+      "slides/kevin.webp"
+    ]
+  ],
+  "started": "2026-11-21T14:50:49.603Z",
+  "ended": "2026-11-21T14:51:54.166Z"
+}

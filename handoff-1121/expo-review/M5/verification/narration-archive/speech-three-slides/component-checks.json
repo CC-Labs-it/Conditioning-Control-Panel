@@ -1,0 +1,240 @@
+{
+  "errors": [],
+  "checks": {
+    "lineOfSight": {
+      "blocked": true,
+      "offAxisStarted": false,
+      "interruptedDwellReset": true,
+      "hiddenUnowned": true
+    },
+    "mix": {
+      "farGain": 0.052087768980799025,
+      "queued": [
+        "pa_timeline",
+        "ev_h0",
+        "pa_turnstile"
+      ],
+      "active": "log_kevin",
+      "paWaiting": true
+    },
+    "pause": {
+      "from": 0.016700000017881394,
+      "to": 0.016700000017881394
+    },
+    "planter": {
+      "timedSeconds": 6,
+      "subtitle": "Oh, you thought, “I am so clever. I am going to break the game and jump down.”",
+      "interrupted": "log_kevin",
+      "pausedAt": 1.331089,
+      "resumedAt": 1.331089
+    },
+    "kevinRoomToneSeconds": 15,
+    "slideProgram": {
+      "displayed": [
+        {
+          "file": "slides/chew_a.webp",
+          "seconds": 0.02322,
+          "duration": 20.49
+        },
+        {
+          "file": "slides/chew.webp",
+          "seconds": 6.179681,
+          "duration": 20.49
+        },
+        {
+          "file": "slides/chew_c.webp",
+          "seconds": 14.361542,
+          "duration": 20.49
+        }
+      ],
+      "clicks": [
+        {
+          "at": 35257.29999998212,
+          "args": [
+            "press",
+            0.061076797097985164,
+            0.94
+          ],
+          "source": "ev_h0.mp3",
+          "seconds": 0,
+          "duration": 20.49
+        },
+        {
+          "at": 41416.59999999404,
+          "args": [
+            "press",
+            0.3271880172884673,
+            -0.05376875194014948
+          ],
+          "source": "ev_h0.mp3",
+          "seconds": 6.161995,
+          "duration": 20.49
+        },
+        {
+          "at": 49606.19999998808,
+          "args": [
+            "press",
+            0.3271880172884673,
+            -0.05376875194014948
+          ],
+          "source": "ev_h0.mp3",
+          "seconds": 14.352834,
+          "duration": 20.49
+        }
+      ],
+      "middleAtRest": "slides/chew.webp"
+    },
+    "projectors": {
+      "gentleZoom": 0,
+      "rest": {
+        "active": false,
+        "paused": false,
+        "slide": "slides/chew.webp",
+        "resting": "slides/chew.webp",
+        "full": false,
+        "lamp": 9.047841390384285e-13,
+        "zoom": 0
+      },
+      "clicks": [
+        {
+          "at": 4780.199999988079,
+          "args": [
+            "press",
+            0.34049470043789093,
+            0
+          ],
+          "source": "twelve.ogg",
+          "seconds": 0,
+          "duration": 0.919688
+        },
+        {
+          "at": 20150.19999998808,
+          "args": [
+            "press",
+            0.34049470043789093,
+            -0.09316823539599328
+          ],
+          "source": "twelve.ogg",
+          "seconds": 2.288,
+          "duration": 3.154
+        },
+        {
+          "at": 35257.29999998212,
+          "args": [
+            "press",
+            0.061076797097985164,
+            0.94
+          ],
+          "source": "ev_h0.mp3",
+          "seconds": 0,
+          "duration": 20.49
+        },
+        {
+          "at": 41416.59999999404,
+          "args": [
+            "press",
+            0.3271880172884673,
+            -0.05376875194014948
+          ],
+          "source": "ev_h0.mp3",
+          "seconds": 6.161995,
+          "duration": 20.49
+        },
+        {
+          "at": 49606.19999998808,
+          "args": [
+            "press",
+            0.3271880172884673,
+            -0.05376875194014948
+          ],
+          "source": "ev_h0.mp3",
+          "seconds": 14.352834,
+          "duration": 20.49
+        }
+      ]
+    },
+    "revisit": {
+      "finished": {
+        "planter_10": 1,
+        "log_kevin": 1,
+        "pa_timeline": 1,
+        "ev_h0": 1,
+        "pa_turnstile": 1
+      },
+      "replay": "log_kevin"
+    },
+    "speechOccupancy": {
+      "peak": 1,
+      "decodedVoiceElements": 1,
+      "dualCaptions": 0
+    }
+  },
+  "sources": [
+    [
+      200,
+      "manifest.json"
+    ],
+    [
+      200,
+      "resting-atlas.webp"
+    ],
+    [
+      200,
+      "resting-index.json"
+    ],
+    [
+      200,
+      "hall/log_kevin.mp3"
+    ],
+    [
+      200,
+      "slides/kevin.webp"
+    ],
+    [
+      200,
+      "slides/inbox.webp"
+    ],
+    [
+      200,
+      "manifest.json"
+    ],
+    [
+      200,
+      "hall/pa_timeline.mp3"
+    ],
+    [
+      200,
+      "hall/ev_h0.mp3"
+    ],
+    [
+      200,
+      "slides/chew_a.webp"
+    ],
+    [
+      200,
+      "slides/chew.webp"
+    ],
+    [
+      200,
+      "slides/chew_c.webp"
+    ],
+    [
+      200,
+      "hall/pa_turnstile.mp3"
+    ],
+    [
+      200,
+      "hall/log_kevin.mp3"
+    ],
+    [
+      200,
+      "slides/kevin.webp"
+    ],
+    [
+      200,
+      "slides/inbox.webp"
+    ]
+  ],
+  "started": "2026-11-21T15:07:37.974Z",
+  "ended": "2026-11-21T15:08:42.459Z"
+}

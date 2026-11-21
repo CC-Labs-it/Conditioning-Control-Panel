@@ -1,0 +1,44 @@
+{
+  "id": "doctor",
+  "sourceSha256": "e69a19e3107f215c417d33aed859f651834655f389e9d9880a2e1c4c52ca4816",
+  "sourceTriangles": 292698,
+  "glbSha256": "c69f15937801954d7092ecfec445d71e7bb8c2ac8427658c652fd0b57455a7bd",
+  "glbBytes": 5467508,
+  "triangles": 36391,
+  "boundsHeight": 1.000076,
+  "fourSolesAboveLowest": {
+    "left fore": 2e-06,
+    "right fore": 0.0,
+    "left hind": 0.0,
+    "right hind": 0.0
+  },
+  "sharedOcularRimVertices": {
+    "Doctor, solid right eye": 206,
+    "Doctor, solid left eye": 156
+  },
+  "components": {
+    "Binaural spring tube": 300,
+    "Binaural spring tube.001": 300,
+    "Binaural Y-block": 284,
+    "Diaphragm seal": 560,
+    "Doctor, inset left pupil": 202,
+    "Doctor, inset right pupil": 204,
+    "Doctor, solid left eye": 3100,
+    "Doctor, solid right eye": 3976,
+    "Flexible stethoscope tubing": 3056,
+    "hero_doctor_cast": 22989,
+    "Shallow bell diaphragm": 460,
+    "Soft flanged eartip": 242,
+    "Soft flanged eartip.001": 242,
+    "Turned diagnostic chestpiece": 476
+  },
+  "materials": [
+    "fitting_dark_brass",
+    "fitting_polished_brass",
+    "fitting_satin_brass",
+    "hero_doctor_cast",
+    "hero_herd_globe_eye",
+    "hero_herd_pupil"
+  ],
+  "forward": "+X"
+}

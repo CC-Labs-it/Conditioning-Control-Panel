@@ -1,0 +1,600 @@
+{
+  "mode": "live",
+  "start": [
+    0.22,
+    0,
+    36.21
+  ],
+  "zoneTransitions": [
+    "atrium",
+    "catwalk",
+    "atrium",
+    "service",
+    "secret",
+    "service",
+    "atrium",
+    "service",
+    "atrium",
+    "hall",
+    "atrium",
+    "chronology",
+    "forum",
+    "commons",
+    "aquarium",
+    "atrium",
+    "hall",
+    "hoof",
+    "hall",
+    "habitat",
+    "hall",
+    "twelve",
+    "hall",
+    "shop",
+    "hall",
+    "dome"
+  ],
+  "steps": 18126,
+  "metres": 1174.85,
+  "jumps": [
+    {
+      "before": [
+        22.421363847524244,
+        5.099999904632568,
+        21.944969804031842
+      ],
+      "after": [
+        22.42090931318342,
+        1.7000000476837158,
+        22.00996821477036
+      ]
+    },
+    {
+      "before": [
+        80.00999999999839,
+        0,
+        41
+      ],
+      "after": [
+        85.94499999999839,
+        0,
+        51
+      ]
+    },
+    {
+      "before": [
+        86.13999999999838,
+        0,
+        51
+      ],
+      "after": [
+        80.42499999999838,
+        -5.551115123125783e-17,
+        41
+      ]
+    },
+    {
+      "before": [
+        80.03499999999839,
+        0,
+        41
+      ],
+      "after": [
+        85.9699999999984,
+        0,
+        51
+      ]
+    },
+    {
+      "before": [
+        33.51500000000023,
+        0,
+        51
+      ],
+      "after": [
+        34.15000000000023,
+        0,
+        41
+      ]
+    },
+    {
+      "before": [
+        22.423000798736787,
+        1.7000000476837158,
+        21.960069223857147
+      ],
+      "after": [
+        22.422250848657846,
+        5.099999904632568,
+        21.89507355034822
+      ]
+    }
+  ],
+  "segments": [
+    {
+      "label": "Arrival and grand curved stair",
+      "start": [
+        0.22,
+        0,
+        36.21
+      ],
+      "minY": 0,
+      "maxY": 3.4000000953674316,
+      "points": 44,
+      "end": [
+        -3.0999999999999996,
+        3.4000000953674316,
+        30.02
+      ],
+      "metres": 11.678
+    },
+    {
+      "label": "West mezzanine and spiral stair",
+      "start": [
+        -3.0999999999999996,
+        3.4000000953674316,
+        30.02
+      ],
+      "minY": 3.4000000953674316,
+      "maxY": 6.800000190734863,
+      "points": 47,
+      "end": [
+        -12.184999999999986,
+        6.800000190734863,
+        21
+      ],
+      "metres": 43.839
+    },
+    {
+      "label": "Catwalk and dome oculus",
+      "start": [
+        -12.184999999999986,
+        6.800000190734863,
+        21
+      ],
+      "minY": 6.800000190734863,
+      "maxY": 11.950000762939453,
+      "points": 7,
+      "end": [
+        -22,
+        11.950000762939453,
+        -5.785000000000002
+      ],
+      "metres": 38.169
+    },
+    {
+      "label": "Return from oculus and view through small door",
+      "start": [
+        -22,
+        11.950000762939453,
+        -5.785000000000002
+      ],
+      "minY": 6.800000190734863,
+      "maxY": 11.950000762939453,
+      "points": 9,
+      "end": [
+        -12.550000000000004,
+        6.800000190734863,
+        28
+      ],
+      "metres": 44.807
+    },
+    {
+      "label": "Across the upper atrium into staff access",
+      "start": [
+        -12.550000000000004,
+        6.800000190734863,
+        28
+      ],
+      "minY": 6.800000190734863,
+      "maxY": 6.800000190734863,
+      "points": 7,
+      "end": [
+        12.5,
+        6.800000190734863,
+        23
+      ],
+      "metres": 40.335
+    },
+    {
+      "label": "Descend service flight and hidden extra storey",
+      "start": [
+        12.5,
+        6.800000190734863,
+        23
+      ],
+      "minY": 0,
+      "maxY": 6.800000190734863,
+      "points": 12,
+      "end": [
+        30.3,
+        0,
+        32
+      ],
+      "metres": 47.748
+    },
+    {
+      "label": "Break room, store room and server cupboard",
+      "start": [
+        30.3,
+        0,
+        32
+      ],
+      "minY": 0,
+      "maxY": 0,
+      "points": 9,
+      "end": [
+        18,
+        0,
+        32
+      ],
+      "metres": 40.61
+    },
+    {
+      "label": "Contract gallery and chair",
+      "start": [
+        18,
+        0,
+        32
+      ],
+      "minY": 0,
+      "maxY": 0,
+      "points": 4,
+      "end": [
+        84.68999999999822,
+        0,
+        41
+      ],
+      "metres": 75.69
+    },
+    {
+      "label": "Longer return, then walk back in through original doorway",
+      "start": [
+        84.68999999999822,
+        0,
+        41
+      ],
+      "minY": 0,
+      "maxY": 0,
+      "points": 7,
+      "end": [
+        29.18,
+        0,
+        32
+      ],
+      "metres": 73.12
+    },
+    {
+      "label": "Return to atrium and approach service doorway again",
+      "start": [
+        29.18,
+        0,
+        32
+      ],
+      "minY": 0,
+      "maxY": 0,
+      "points": 4,
+      "end": [
+        30.28500000000002,
+        0,
+        32
+      ],
+      "metres": 38.155
+    },
+    {
+      "label": "Climb service stair in reverse through the extra storey",
+      "start": [
+        30.28500000000002,
+        0,
+        32
+      ],
+      "minY": 0,
+      "maxY": 6.800000190734863,
+      "points": 16,
+      "end": [
+        -10.3,
+        6.800000190734863,
+        21
+      ],
+      "metres": 77.552
+    },
+    {
+      "label": "Descend spiral and grand stairs to the turnstile",
+      "start": [
+        -10.3,
+        6.800000190734863,
+        21
+      ],
+      "minY": 0,
+      "maxY": 6.800000190734863,
+      "points": 90,
+      "end": [
+        0,
+        0,
+        37.2
+      ],
+      "metres": 52.593
+    },
+    {
+      "label": "Atrium to Expo hall and back",
+      "start": [
+        0,
+        0,
+        37.2
+      ],
+      "minY": 0,
+      "maxY": 0,
+      "points": 6,
+      "end": [
+        -5.1875772625062914e-05,
+        0,
+        16.583166435399814
+      ],
+      "metres": 26.125
+    },
+    {
+      "label": "Approach the chronology from the admission gate",
+      "start": [
+        -5.1875772625062914e-05,
+        0,
+        16.583166435399814
+      ],
+      "minY": 0,
+      "maxY": 0,
+      "points": 20,
+      "end": [
+        7.8,
+        0,
+        41
+      ],
+      "metres": 39.13
+    },
+    {
+      "label": "Walk the chronology gallery",
+      "start": [
+        7.8,
+        0,
+        41
+      ],
+      "minY": -2.7755575615628914e-17,
+      "maxY": 2.7755575615628914e-17,
+      "points": 85,
+      "end": [
+        3.4,
+        2.7755575615628914e-17,
+        103
+      ],
+      "metres": 65.367
+    },
+    {
+      "label": "Walk the forum gallery",
+      "start": [
+        3.4,
+        2.7755575615628914e-17,
+        103
+      ],
+      "minY": -2.7755575615628914e-17,
+      "maxY": 2.7755575615628914e-17,
+      "points": 70,
+      "end": [
+        -66.2,
+        0,
+        98.6
+      ],
+      "metres": 73.545
+    },
+    {
+      "label": "Walk the commons gallery",
+      "start": [
+        -66.2,
+        0,
+        98.6
+      ],
+      "minY": 0,
+      "maxY": 2.7755575615628914e-17,
+      "points": 62,
+      "end": [
+        -61.8,
+        0,
+        45.5
+      ],
+      "metres": 56.939
+    },
+    {
+      "label": "Walk the aquarium gallery",
+      "start": [
+        -61.8,
+        0,
+        45.5
+      ],
+      "minY": -2.7755575615628914e-17,
+      "maxY": 2.7755575615628914e-17,
+      "points": 70,
+      "end": [
+        -7.8,
+        0,
+        41
+      ],
+      "metres": 57.675
+    },
+    {
+      "label": "Return through the aquarium and atrium",
+      "start": [
+        -7.8,
+        0,
+        41
+      ],
+      "minY": 0,
+      "maxY": 0,
+      "points": 12,
+      "end": [
+        -0.10003418511675997,
+        0,
+        16.011438791249716
+      ],
+      "metres": 29.034
+    },
+    {
+      "label": "First Press and Hoof trainer",
+      "start": [
+        -0.10003418511675997,
+        0,
+        16.011438791249716
+      ],
+      "minY": 0,
+      "maxY": 0,
+      "points": 20,
+      "end": [
+        -16.5,
+        0,
+        7.06
+      ],
+      "metres": 55.577
+    },
+    {
+      "label": "Across the hall to the viewing habitat",
+      "start": [
+        -16.5,
+        0,
+        7.06
+      ],
+      "minY": 0,
+      "maxY": 0,
+      "points": 18,
+      "end": [
+        16.3,
+        0,
+        6.62
+      ],
+      "metres": 33.945
+    },
+    {
+      "label": "From the viewing habitat into the sunken gallery",
+      "start": [
+        16.3,
+        0,
+        6.62
+      ],
+      "minY": -0.6800000071525574,
+      "maxY": 0,
+      "points": 23,
+      "end": [
+        0.9191567470041947,
+        -0.6800000071525574,
+        -19.648918305108534
+      ],
+      "metres": 48.413
+    },
+    {
+      "label": "From the gallery to the gift shop till",
+      "start": [
+        0.9191567470041947,
+        -0.6800000071525574,
+        -19.648918305108534
+      ],
+      "minY": -0.6800000071525574,
+      "maxY": 0,
+      "points": 22,
+      "end": [
+        20.774978497469267,
+        0,
+        -9.699891210858562
+      ],
+      "metres": 40.832
+    },
+    {
+      "label": "Gift shop to the optical dome",
+      "start": [
+        20.774978497469267,
+        0,
+        -9.699891210858562
+      ],
+      "minY": -2.7755575615628914e-17,
+      "maxY": 2.7755575615628914e-17,
+      "points": 25,
+      "end": [
+        -23.62,
+        0,
+        -4.95
+      ],
+      "metres": 63.968
+    }
+  ],
+  "fail": null,
+  "end": [
+    -23.62,
+    0,
+    -4.95
+  ],
+  "collisions": {
+    "hall": "f189e2701aefbd6ad1f2e2bf5dbf834eb252074a4599a75a531dd7eab4ad2c8c",
+    "service": "a1a94cb71420e0648332735c9350710a5b9b446cb719b74723a6776e6c19789e",
+    "secret": "5adda094699f700b2b31ea326e989b8f8f795a46bc06d2352f6412984c8afff6",
+    "atrium": "e45d7a9eee5b7ec05fa222c53d5d75989b36fe33b574d533270dc38c7377f0c7",
+    "catwalk": "752d54bcd4d17832b197777a940221c48f13c158403a24fec5a376735dc7565e",
+    "dome": "d8810f80c5707f5895350bc8d1514d723c4c6eef0767d2385e20b0cf113c921b",
+    "chronology": "cf0feb628fc07502e44d6867a75f87d4f46a7cbf22c0a02b3fed1d74284d305a",
+    "forum": "74f6f1bfdf04ad633151bd96cd4a02b14114518b4b0687f18c425fcad5643b2d",
+    "commons": "791e9c846f960c3baedd0b63e9b4a5f49e917bc115c7c5064d7325c120750db6",
+    "aquarium": "fc4b8d767eaf012332e386d82f82ccc35b780633a7040b091e222d749e47bfca",
+    "hoof": "aa8b7c80dea961e60397bfb697547e6c8323a912799ced229c1b5a9694fa13ee",
+    "habitat": "0dba376d5a5836db2697df1fe3f0596820c655e3c5d44e7191a81202feaa655e",
+    "twelve": "ca7861659b963febd51b501e381eac33a5a0bd5b211df8742bc038911d746383",
+    "shop": "d176d3106dc9a6f9a2dc025ebfaf323c4dc7b70e22729bf96a839564adb0c2ab"
+  },
+  "servedCollisions": {
+    "atrium-collision.glb": "e45d7a9eee5b7ec05fa222c53d5d75989b36fe33b574d533270dc38c7377f0c7",
+    "catwalk-collision.glb": "752d54bcd4d17832b197777a940221c48f13c158403a24fec5a376735dc7565e",
+    "hall-collision.glb": "f189e2701aefbd6ad1f2e2bf5dbf834eb252074a4599a75a531dd7eab4ad2c8c",
+    "dome-collision.glb": "d8810f80c5707f5895350bc8d1514d723c4c6eef0767d2385e20b0cf113c921b",
+    "hoof-collision.glb": "aa8b7c80dea961e60397bfb697547e6c8323a912799ced229c1b5a9694fa13ee",
+    "service-collision.glb": "a1a94cb71420e0648332735c9350710a5b9b446cb719b74723a6776e6c19789e",
+    "secret-collision.glb": "5adda094699f700b2b31ea326e989b8f8f795a46bc06d2352f6412984c8afff6",
+    "chronology-collision.glb": "cf0feb628fc07502e44d6867a75f87d4f46a7cbf22c0a02b3fed1d74284d305a",
+    "forum-collision.glb": "74f6f1bfdf04ad633151bd96cd4a02b14114518b4b0687f18c425fcad5643b2d",
+    "commons-collision.glb": "791e9c846f960c3baedd0b63e9b4a5f49e917bc115c7c5064d7325c120750db6",
+    "aquarium-collision.glb": "fc4b8d767eaf012332e386d82f82ccc35b780633a7040b091e222d749e47bfca",
+    "habitat-collision.glb": "0dba376d5a5836db2697df1fe3f0596820c655e3c5d44e7191a81202feaa655e",
+    "shop-collision.glb": "d176d3106dc9a6f9a2dc025ebfaf323c4dc7b70e22729bf96a839564adb0c2ab",
+    "twelve-collision.glb": "ca7861659b963febd51b501e381eac33a5a0bd5b211df8742bc038911d746383"
+  },
+  "domeReplay": {
+    "feet": [
+      -23.62,
+      0,
+      -4.95
+    ],
+    "zone": "dome",
+    "aim": [
+      -22.0585,
+      1.14,
+      -4.95
+    ],
+    "target": {
+      "owner": "expo_replay_dome_0",
+      "lineage": [
+        "expo_replay_dome_0_2",
+        "expo_replay_dome_0",
+        "Scene"
+      ],
+      "distance": 1.6122069097844278
+    }
+  },
+  "versions": {
+    "zoneRevisions": {
+      "atrium": "03",
+      "hall": "01",
+      "twelve": "02",
+      "hoof": "01",
+      "habitat": "01",
+      "shop": "02",
+      "dome": "01",
+      "service": "01",
+      "secret": "01",
+      "catwalk": "01",
+      "chronology": "02",
+      "aquarium": "04",
+      "forum": "02",
+      "commons": "03"
+    }
+  }
+}

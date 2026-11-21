@@ -1,0 +1,142 @@
+{
+  "programs": [],
+  "stream_groups": [],
+  "streams": [
+    {
+      "codec_name": "h264",
+      "codec_type": "video",
+      "width": 1920,
+      "height": 1080,
+      "side_data_list": [
+        {}
+      ]
+    },
+    {
+      "codec_name": "aac",
+      "codec_type": "audio",
+      "sample_rate": "48000"
+    }
+  ],
+  "format": {
+    "duration": "60.000000",
+    "size": "56690867"
+  },
+  "acceptedRoomGeometry": {
+    "atrium": "4308d0fb1096f20257984e4b4453ab10f6f3ecdf38dc2dabb5f5e2bb69dca9dc",
+    "hall": "2fb2f447c7474ad1d2e89ddfde3a22cdf0af259ad00049e13a8e8eed07e6fc0e",
+    "service": "b83ffbf3b78cdfc47f9fd1d54172bf54ebc14d1639b8fee5f8696e30f1c83815",
+    "secret": "077822a3213c6c2ce0814a25743312cc624afd05ef5f15dcd580513e71c51bb9",
+    "catwalk": "4425583931f77cf77ecd14ec1d8e7a68fa2ea8ae9c1494ecfb38c15363167f7b",
+    "dome": "57d7fdea4c632d272d45fc178cd5bf3e2013d74697697b393eeaacfc57426bae"
+  },
+  "shotAudio": [
+    {
+      "shot": "arrival",
+      "fromSeconds": 0,
+      "toSeconds": 8,
+      "rmsDbFS": -36.19,
+      "peakDbFS": -19.99,
+      "spoken": [
+        {
+          "recording": "pa_arrive_1",
+          "channel": "pa",
+          "fromSeconds": 0.0,
+          "toSeconds": 8.0
+        }
+      ]
+    },
+    {
+      "shot": "grand",
+      "fromSeconds": 8,
+      "toSeconds": 15,
+      "rmsDbFS": -41.26,
+      "peakDbFS": -25.33,
+      "spoken": [
+        {
+          "recording": "pa_turnstile",
+          "channel": "pa",
+          "fromSeconds": 8.0,
+          "toSeconds": 8.685
+        },
+        {
+          "recording": "pa_arrive_2",
+          "channel": "pa",
+          "fromSeconds": 11.29,
+          "toSeconds": 15.0
+        }
+      ]
+    },
+    {
+      "shot": "upper",
+      "fromSeconds": 15,
+      "toSeconds": 20,
+      "rmsDbFS": -44.67,
+      "peakDbFS": -24.63,
+      "spoken": []
+    },
+    {
+      "shot": "service",
+      "fromSeconds": 20,
+      "toSeconds": 24,
+      "rmsDbFS": -43.5,
+      "peakDbFS": -29.19,
+      "spoken": []
+    },
+    {
+      "shot": "server",
+      "fromSeconds": 24,
+      "toSeconds": 29,
+      "rmsDbFS": -44.4,
+      "peakDbFS": -32.71,
+      "spoken": []
+    },
+    {
+      "shot": "impossible",
+      "fromSeconds": 29,
+      "toSeconds": 33,
+      "rmsDbFS": -41.89,
+      "peakDbFS": -28.61,
+      "spoken": []
+    },
+    {
+      "shot": "contract",
+      "fromSeconds": 33,
+      "toSeconds": 38,
+      "rmsDbFS": -42.95,
+      "peakDbFS": -24.2,
+      "spoken": []
+    },
+    {
+      "shot": "chair",
+      "fromSeconds": 38,
+      "toSeconds": 44,
+      "rmsDbFS": -44.54,
+      "peakDbFS": -30.22,
+      "spoken": []
+    },
+    {
+      "shot": "longer",
+      "fromSeconds": 44,
+      "toSeconds": 49,
+      "rmsDbFS": -43.16,
+      "peakDbFS": -24.86,
+      "spoken": []
+    },
+    {
+      "shot": "tiny",
+      "fromSeconds": 49,
+      "toSeconds": 53,
+      "rmsDbFS": -44.86,
+      "peakDbFS": -30.8,
+      "spoken": []
+    },
+    {
+      "shot": "crown",
+      "fromSeconds": 53,
+      "toSeconds": 60,
+      "rmsDbFS": -44.0,
+      "peakDbFS": -26.25,
+      "spoken": []
+    }
+  ]
+}

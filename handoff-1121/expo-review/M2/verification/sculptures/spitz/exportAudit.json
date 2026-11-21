@@ -1,0 +1,52 @@
+{
+  "id": "spitz",
+  "sourceSha256": "bbc3f80dfe3daacef7dc7e6f79a2728f92e048f5e7cde067cab3ef020810a18c",
+  "sourceTriangles": 329380,
+  "glbSha256": "045aec80782ab7272fed028a5395ff0481b46a369892b686165665650a0e253f",
+  "glbBytes": 6308588,
+  "triangles": 42189,
+  "boundsHeight": 1.000689,
+  "fourSolesAboveLowest": {
+    "left fore": 0.0,
+    "right fore": 0.0,
+    "left hind": 0.0,
+    "right hind": 0.0
+  },
+  "sharedOcularRimVertices": {
+    "Spitz, solid right eye": 152,
+    "Spitz, solid left eye": 152
+  },
+  "components": {
+    "Adjustable backward snap tab": 108,
+    "Backward bill": 1118,
+    "Backward bill turned edge": 626,
+    "Bound adjustment opening": 524,
+    "Bound lower cap band": 788,
+    "Brim saddle-stitch row": 304,
+    "Brim saddle-stitch row.001": 320,
+    "Brim saddle-stitch row.002": 320,
+    "Cast sizing stud": 132,
+    "Cast sizing stud.001": 132,
+    "Cast sizing stud.002": 132,
+    "Cast sizing stud.003": 132,
+    "Covered crown button": 476,
+    "hero_spitz_cast": 22604,
+    "Raised crown seams": 1946,
+    "Rolled lips around individual ear ports": 790,
+    "Six-panel soft cap crown": 5349,
+    "Spitz, inset left pupil": 204,
+    "Spitz, inset right pupil": 202,
+    "Spitz, solid left eye": 2996,
+    "Spitz, solid right eye": 2986
+  },
+  "materials": [
+    "fitting_aged_brass",
+    "fitting_dark_brass",
+    "fitting_polished_brass",
+    "fitting_satin_brass",
+    "hero_herd_globe_eye",
+    "hero_herd_pupil",
+    "hero_spitz_cast"
+  ],
+  "forward": "+X"
+}

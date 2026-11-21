@@ -1,0 +1,515 @@
+{
+  "devices": [
+    {
+      "name": "desktop",
+      "controls": [],
+      "floors": [],
+      "rapid": [
+        {
+          "zone": "hoof",
+          "count": 6,
+          "start": {
+            "target": {
+              "owner": "hoof_display",
+              "lineage": [
+                "hoof_display",
+                "Scene"
+              ],
+              "distance": 1.5474964565291993
+            },
+            "state": "idle",
+            "taps": 0,
+            "caps": [
+              {
+                "node": "expo_press_hoof_checkbox_0",
+                "zone": "hoof",
+                "target": "hoof_console",
+                "depth": 0.018,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_press_hoof_checkbox_1",
+                "zone": "hoof",
+                "target": "hoof_console",
+                "depth": 0.018,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_press_hoof_checkbox_2",
+                "zone": "hoof",
+                "target": "hoof_console",
+                "depth": 0.018,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_press_hoof_checkbox_3",
+                "zone": "hoof",
+                "target": "hoof_console",
+                "depth": 0.018,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_replay_hoof_1",
+                "zone": "hoof",
+                "target": "expo_replay_hoof_1",
+                "depth": 0.021,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              }
+            ]
+          },
+          "end": {
+            "state": "change",
+            "misses": 5,
+            "taps": 0,
+            "caps": [
+              {
+                "node": "expo_press_hoof_checkbox_0",
+                "zone": "hoof",
+                "target": "hoof_console",
+                "depth": 0.018,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_press_hoof_checkbox_1",
+                "zone": "hoof",
+                "target": "hoof_console",
+                "depth": 0.018,
+                "amount": 0.38,
+                "travel": 0.00684,
+                "pressed": 1,
+                "coalesced": 5,
+                "authored": true
+              },
+              {
+                "node": "expo_press_hoof_checkbox_2",
+                "zone": "hoof",
+                "target": "hoof_console",
+                "depth": 0.018,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_press_hoof_checkbox_3",
+                "zone": "hoof",
+                "target": "hoof_console",
+                "depth": 0.018,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_replay_hoof_1",
+                "zone": "hoof",
+                "target": "expo_replay_hoof_1",
+                "depth": 0.021,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              }
+            ]
+          }
+        },
+        {
+          "zone": "habitat",
+          "count": 10,
+          "start": {
+            "target": {
+              "owner": "habitat_glass",
+              "lineage": [
+                "habitat_glass",
+                "Scene"
+              ],
+              "distance": 1.403056594011032
+            },
+            "state": "pictures",
+            "taps": 0,
+            "caps": [
+              {
+                "node": "expo_press_feeding_slot",
+                "zone": "habitat",
+                "target": "feeding_slot",
+                "depth": 0.016,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_press_habitat_glass",
+                "zone": "habitat",
+                "target": "habitat_glass",
+                "depth": 0.016,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_press_habitat_plaque",
+                "zone": "habitat",
+                "target": "habitat_plaque",
+                "depth": 0.016,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_replay_hab_1",
+                "zone": "habitat",
+                "target": "expo_replay_hab_1",
+                "depth": 0.021,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              }
+            ]
+          },
+          "end": {
+            "state": "pictures",
+            "misses": 5,
+            "taps": 10,
+            "caps": [
+              {
+                "node": "expo_press_feeding_slot",
+                "zone": "habitat",
+                "target": "feeding_slot",
+                "depth": 0.016,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_press_habitat_glass",
+                "zone": "habitat",
+                "target": "habitat_glass",
+                "depth": 0.016,
+                "amount": 0.42490957610029434,
+                "travel": 0.006798553217604709,
+                "pressed": 1,
+                "coalesced": 9,
+                "authored": true
+              },
+              {
+                "node": "expo_press_habitat_plaque",
+                "zone": "habitat",
+                "target": "habitat_plaque",
+                "depth": 0.016,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_replay_hab_1",
+                "zone": "habitat",
+                "target": "expo_replay_hab_1",
+                "depth": 0.021,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "touch",
+      "controls": [],
+      "floors": [],
+      "rapid": [
+        {
+          "zone": "hoof",
+          "count": 6,
+          "start": {
+            "target": {
+              "owner": "hoof_display",
+              "lineage": [
+                "hoof_display",
+                "Scene"
+              ],
+              "distance": 1.5474964565291993
+            },
+            "state": "idle",
+            "taps": 0,
+            "caps": [
+              {
+                "node": "expo_press_hoof_checkbox_0",
+                "zone": "hoof",
+                "target": "hoof_console",
+                "depth": 0.018,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_press_hoof_checkbox_1",
+                "zone": "hoof",
+                "target": "hoof_console",
+                "depth": 0.018,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_press_hoof_checkbox_2",
+                "zone": "hoof",
+                "target": "hoof_console",
+                "depth": 0.018,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_press_hoof_checkbox_3",
+                "zone": "hoof",
+                "target": "hoof_console",
+                "depth": 0.018,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_replay_hoof_1",
+                "zone": "hoof",
+                "target": "expo_replay_hoof_1",
+                "depth": 0.021,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              }
+            ]
+          },
+          "end": {
+            "state": "change",
+            "misses": 5,
+            "taps": 0,
+            "caps": [
+              {
+                "node": "expo_press_hoof_checkbox_0",
+                "zone": "hoof",
+                "target": "hoof_console",
+                "depth": 0.018,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_press_hoof_checkbox_1",
+                "zone": "hoof",
+                "target": "hoof_console",
+                "depth": 0.018,
+                "amount": 1,
+                "travel": 0.018,
+                "pressed": 3,
+                "coalesced": 3,
+                "authored": true
+              },
+              {
+                "node": "expo_press_hoof_checkbox_2",
+                "zone": "hoof",
+                "target": "hoof_console",
+                "depth": 0.018,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_press_hoof_checkbox_3",
+                "zone": "hoof",
+                "target": "hoof_console",
+                "depth": 0.018,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_replay_hoof_1",
+                "zone": "hoof",
+                "target": "expo_replay_hoof_1",
+                "depth": 0.021,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              }
+            ]
+          }
+        },
+        {
+          "zone": "habitat",
+          "count": 10,
+          "start": {
+            "target": {
+              "owner": "habitat_glass",
+              "lineage": [
+                "habitat_glass",
+                "Scene"
+              ],
+              "distance": 1.403056594011032
+            },
+            "state": "pictures",
+            "taps": 0,
+            "caps": [
+              {
+                "node": "expo_press_feeding_slot",
+                "zone": "habitat",
+                "target": "feeding_slot",
+                "depth": 0.016,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_press_habitat_glass",
+                "zone": "habitat",
+                "target": "habitat_glass",
+                "depth": 0.016,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_press_habitat_plaque",
+                "zone": "habitat",
+                "target": "habitat_plaque",
+                "depth": 0.016,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_replay_hab_1",
+                "zone": "habitat",
+                "target": "expo_replay_hab_1",
+                "depth": 0.021,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              }
+            ]
+          },
+          "end": {
+            "state": "pictures",
+            "misses": 5,
+            "taps": 10,
+            "caps": [
+              {
+                "node": "expo_press_feeding_slot",
+                "zone": "habitat",
+                "target": "feeding_slot",
+                "depth": 0.016,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_press_habitat_glass",
+                "zone": "habitat",
+                "target": "habitat_glass",
+                "depth": 0.016,
+                "amount": 1,
+                "travel": 0.016,
+                "pressed": 5,
+                "coalesced": 5,
+                "authored": true
+              },
+              {
+                "node": "expo_press_habitat_plaque",
+                "zone": "habitat",
+                "target": "habitat_plaque",
+                "depth": 0.016,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              },
+              {
+                "node": "expo_replay_hab_1",
+                "zone": "habitat",
+                "target": "expo_replay_hab_1",
+                "depth": 0.021,
+                "amount": 0,
+                "travel": 0,
+                "pressed": 0,
+                "coalesced": 0,
+                "authored": true
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "errors": []
+}

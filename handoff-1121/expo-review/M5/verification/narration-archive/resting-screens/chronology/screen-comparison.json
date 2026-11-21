@@ -1,0 +1,167 @@
+{
+  "room": "chronology",
+  "geometrySha256": "d01f0e36bd75c48c11f8a165ec27ee735302d5c12450290cc51a31ee7e64d2b6",
+  "screens": [
+    {
+      "record": 1,
+      "id": "ev_h0",
+      "actualImage": "01-ev_h0.jpg",
+      "expectedWide": "slides/chew.webp",
+      "nearestPrint": "slides/chew.webp",
+      "rank": 1,
+      "correlation": 0.9196,
+      "secondBest": 0.6654,
+      "screenContrast": 24.25,
+      "atlasCell": [
+        3,
+        0
+      ],
+      "pass": true
+    },
+    {
+      "record": 2,
+      "id": "ev_m1",
+      "actualImage": "02-ev_m1.jpg",
+      "expectedWide": "slides/ships.webp",
+      "nearestPrint": "slides/ships.webp",
+      "rank": 1,
+      "correlation": 0.8778,
+      "secondBest": 0.2779,
+      "screenContrast": 23.36,
+      "atlasCell": [
+        0,
+        4
+      ],
+      "pass": true
+    },
+    {
+      "record": 3,
+      "id": "ev_h1",
+      "actualImage": "03-ev_h1.jpg",
+      "expectedWide": "slides/heater.webp",
+      "nearestPrint": "slides/heater.webp",
+      "rank": 1,
+      "correlation": 0.8718,
+      "secondBest": 0.2709,
+      "screenContrast": 20.27,
+      "atlasCell": [
+        0,
+        2
+      ],
+      "pass": true
+    },
+    {
+      "record": 4,
+      "id": "ev_b1",
+      "actualImage": "04-ev_b1.jpg",
+      "expectedWide": "slides/firstpress.webp",
+      "nearestPrint": "slides/firstpress.webp",
+      "rank": 1,
+      "correlation": 0.9118,
+      "secondBest": 0.3437,
+      "screenContrast": 20.67,
+      "atlasCell": [
+        4,
+        1
+      ],
+      "pass": true
+    },
+    {
+      "record": 5,
+      "id": "ev_mL",
+      "actualImage": "05-ev_mL.jpg",
+      "expectedWide": "slides/webcam.webp",
+      "nearestPrint": "slides/webcam.webp",
+      "rank": 1,
+      "correlation": 0.8239,
+      "secondBest": 0.2314,
+      "screenContrast": 21.83,
+      "atlasCell": [
+        3,
+        5
+      ],
+      "pass": true
+    },
+    {
+      "record": 6,
+      "id": "ev_u1",
+      "actualImage": "06-ev_u1.jpg",
+      "expectedWide": "slides/notes.webp",
+      "nearestPrint": "slides/notes.webp",
+      "rank": 1,
+      "correlation": 0.8649,
+      "secondBest": 0.4304,
+      "screenContrast": 21.38,
+      "atlasCell": [
+        3,
+        3
+      ],
+      "pass": true
+    },
+    {
+      "record": 7,
+      "id": "ev_h2",
+      "actualImage": "07-ev_h2.jpg",
+      "expectedWide": "slides/kevin.webp",
+      "nearestPrint": "slides/kevin.webp",
+      "rank": 1,
+      "correlation": 0.9017,
+      "secondBest": 0.2763,
+      "screenContrast": 24.69,
+      "atlasCell": [
+        5,
+        2
+      ],
+      "pass": true
+    },
+    {
+      "record": 8,
+      "id": "ev_m2",
+      "actualImage": "08-ev_m2.jpg",
+      "expectedWide": "slides/drop.webp",
+      "nearestPrint": "slides/drop.webp",
+      "rank": 1,
+      "correlation": 0.8837,
+      "secondBest": 0.3838,
+      "screenContrast": 16.02,
+      "atlasCell": [
+        1,
+        1
+      ],
+      "pass": true
+    },
+    {
+      "record": 9,
+      "id": "ev_h3",
+      "actualImage": "09-ev_h3.jpg",
+      "expectedWide": "slides/update.webp",
+      "nearestPrint": "slides/update.webp",
+      "rank": 1,
+      "correlation": 0.9421,
+      "secondBest": 0.3249,
+      "screenContrast": 25.91,
+      "atlasCell": [
+        0,
+        5
+      ],
+      "pass": true
+    },
+    {
+      "record": 10,
+      "id": "ev_u2",
+      "actualImage": "10-ev_u2.jpg",
+      "expectedWide": "slides/coup.webp",
+      "nearestPrint": "slides/coup.webp",
+      "rank": 1,
+      "correlation": 0.9298,
+      "secondBest": 0.2978,
+      "screenContrast": 21.46,
+      "atlasCell": [
+        6,
+        0
+      ],
+      "pass": true
+    }
+  ],
+  "pass": true
+}

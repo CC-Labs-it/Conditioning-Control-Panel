@@ -1,6 +1,6 @@
 # The chamber
 
-One active clock moves from a white plaster chamber to a spiral well. The native room has a polished marble floor, a brass and enamel sign, six separate bevelled words, framed prints, an open oculus below the inspection deck and one working doorway. Two photographs per phase are in `shots/`. The one-minute film draws six ten-second excerpts from a single 225.619-second visit driven by the live game's clock. The print fades into its raised letters at the first threshold. The floor, sky, floating objects and sound follow the same clock at full depth.
+One active clock moves from a white plaster chamber to a spiral well. The native room has a polished marble floor, a brass and enamel sign, six separate bevelled words, framed prints, an open oculus below the inspection deck and one working doorway. Two photographs per phase are in `shots/`. The one-minute film draws six ten-second excerpts from a single visit driven by the live game's clock. The print fades into its raised letters at the first threshold. The floor, sky, floating objects and sound follow the same clock at full depth.
 
 ## Reproduce the visit
 
@@ -35,7 +35,7 @@ node dev/expo-dome-drive.mjs ./dev-captures/dome-controls
 | 150 | Picture frames orbit at different radii. Some show prints of discovered llamas. Other frames and bubbles display the run's permitted media through the same cache and source settings as the museum ending. The wall recedes into a distant optical tunnel. |
 | 210 | The floor becomes an optical window onto a second shaft with viewpoint-dependent depth and probe reflections. A slow common beat passes through light and bubbles. The central sign cycles the current run's words. The original bright doorway still leads into the hall. |
 
-The final threshold holds while the player stays. On leaving, depth recedes at a quarter of the normal rate and the exterior plaque records the visit. The visual film uses the recorded game output, including room sound, effects, depth layers and the supplied stand-in takes for phases 0, 3 and 5. The other cues display their approved subtitles.
+The final threshold holds while the player stays. On leaving, depth recedes at a quarter of the normal rate and the exterior plaque records the visit. The room has seven approved museum-speaker recordings, one for entering each phase and one for leaving. The film captures the live mix of the narrator, room sound, effects and depth layers. Each recording carries the owner's exact subtitle.
 
 ## Inspected passes
 
@@ -43,6 +43,7 @@ The final threshold holds while the player stays. On leaving, depth recedes at a
 - **Round 2.** Changed the solid letters to dark patinated brass, constrained their paths to chords of the actual hemisphere, lowered extinction and introduced moving gaps in the fog. Reduced the hard disc edge on the bubble pictures and moved the frame camera inside the orbit. The floor began reading as glossy and transparent. Hard bands on the drum still followed the room's small physical radius.
 - **Round 3.** Projected the far Loom field beyond the drum and added soft light variation across the bands. A virtual underfloor shaft calculates parallax at the actual viewing angle. Increased the floor watermark and full-depth text contrast. Verified the real-time phase progression with the full 210-second stay.
 - **Final crown pass.** Bound the chamber and the overhead deck as streaming sightlines. Looking upwards revealed a narrow underside of an exterior wall where it met the plaster. Clipped the hidden join to the real crown radius. The revised native catwalk also clears the shell by at least 5.3 cm, with zero intersections among 24,578 triangles. The oculus now shows the steel deck and lamps. Repeated the room photographs and recorded the actual visit with the repaired join.
+- **Media pass.** The full-depth walk exposed the plain wooden backs of two orbiting prints. A second print face and brass lip now finish each frame. The museum's selected media stay visible on both faces. The chamber speaker is mounted to the vestibule lintel.
 
 ## Verification and limits
 
@@ -55,3 +56,9 @@ The regular inspection photographs load four local test pictures. Real online pi
 A temporary native WPF review host ran the installed WebView2 157.0.4341.60. Its mapped resource host loaded the GLB, the baked lightmap and Three r169. The hosted game then received its ordinary protocol-1 init, completed a local ending purchase, registered a physical First Press, rendered the full-depth chamber and disposed it on panic. The native capture and receipts are in `verification/wpf/`.
 
 The standing sign, PA lines and visitor-time plaque use the bible's text. “Visitor Services” is the added civic department masthead. The full-depth phrase comes from the run's selected theme vocabulary.
+
+The sign's foot, post and enamel plate have separately fitted collision shapes. Keyboard and touch both operated its replay button from 1.19 m away. The cap travelled 21 mm and returned to rest.
+
+## Pavilion inspection
+
+The three pavilion photography rounds use the same walking-height camera positions. The room-by-room images are in `rounds/1`, `rounds/2` and `shots`. The shared correction log is in `verification/pavilion-review.md`.

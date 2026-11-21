@@ -1,0 +1,620 @@
+{
+  "zone": "shop",
+  "entryMs": 1902,
+  "width": 1440,
+  "height": 810,
+  "coarse": false,
+  "timing": {
+    "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5080 (0x00002C02) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "frames": 178,
+    "medianMs": 16.699999999999818,
+    "p95Ms": 16.80000000000109,
+    "firstViewBytes": 4718576
+  },
+  "shots": [
+    {
+      "name": "01-entrance",
+      "at": [
+        12.62,
+        0,
+        -5
+      ],
+      "look": [
+        19,
+        1.45,
+        -7.2
+      ],
+      "zone": "shop",
+      "feet": [
+        12.62,
+        5.551115123125783e-17,
+        -5
+      ],
+      "surface": "wood",
+      "elapsed": 7.069699999648355,
+      "ready": true,
+      "loaded": [
+        "atrium",
+        "shop"
+      ],
+      "textures": {
+        "residentSources": 97,
+        "sharedHits": 51,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 305570304
+      },
+      "calls": 51,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "02-plush-gondola",
+      "at": [
+        15.61,
+        0,
+        -1.85
+      ],
+      "look": [
+        16.2,
+        0.98,
+        -3.7
+      ],
+      "zone": "shop",
+      "feet": [
+        15.61,
+        5.551115123125783e-17,
+        -1.85
+      ],
+      "surface": "wood",
+      "elapsed": 7.334499999612595,
+      "ready": true,
+      "loaded": [
+        "shop"
+      ],
+      "textures": {
+        "residentSources": 116,
+        "sharedHits": 103,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 208385536
+      },
+      "calls": 55,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "03-books-and-bags",
+      "at": [
+        18.68,
+        0,
+        -6
+      ],
+      "look": [
+        16.4,
+        0.7,
+        -3.72
+      ],
+      "zone": "shop",
+      "feet": [
+        18.68,
+        5.551115123125783e-17,
+        -6
+      ],
+      "surface": "wood",
+      "elapsed": 7.760999999600673,
+      "ready": true,
+      "loaded": [
+        "shop",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 116,
+        "sharedHits": 103,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 367129472
+      },
+      "calls": 112,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "04-merchandise",
+      "at": [
+        22.4,
+        0,
+        -4.47
+      ],
+      "look": [
+        21.1,
+        1.03,
+        -7.2
+      ],
+      "zone": "shop",
+      "feet": [
+        22.4,
+        5.551115123125783e-17,
+        -4.47
+      ],
+      "surface": "wood",
+      "elapsed": 8.018899999618556,
+      "ready": true,
+      "loaded": [
+        "shop",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 116,
+        "sharedHits": 103,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 367129472
+      },
+      "calls": 99,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "05-till",
+      "at": [
+        20.84,
+        0,
+        -9.75
+      ],
+      "look": [
+        21.2,
+        1.32,
+        -11.42
+      ],
+      "zone": "shop",
+      "feet": [
+        20.84,
+        5.551115123125783e-17,
+        -9.75
+      ],
+      "surface": "wood",
+      "elapsed": 8.283899999600676,
+      "ready": true,
+      "loaded": [
+        "shop",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 116,
+        "sharedHits": 103,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 367129472
+      },
+      "calls": 22,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "06-contract",
+      "at": [
+        19.66,
+        0,
+        -10
+      ],
+      "look": [
+        19.67,
+        1.53,
+        -11.53
+      ],
+      "zone": "shop",
+      "feet": [
+        19.66,
+        5.551115123125783e-17,
+        -10
+      ],
+      "surface": "wood",
+      "elapsed": 8.480999999600677,
+      "ready": true,
+      "loaded": [
+        "shop",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 116,
+        "sharedHits": 103,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 367129472
+      },
+      "calls": 26,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "07-return-door",
+      "at": [
+        15.72,
+        0,
+        -11.25
+      ],
+      "look": [
+        15,
+        1.48,
+        -13.78
+      ],
+      "zone": "shop",
+      "feet": [
+        15.72,
+        5.551115123125783e-17,
+        -11.25
+      ],
+      "surface": "wood",
+      "elapsed": 8.696599999576827,
+      "ready": true,
+      "loaded": [
+        "shop",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 116,
+        "sharedHits": 103,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 367129472
+      },
+      "calls": 30,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "08-price-board",
+      "at": [
+        22.43,
+        0,
+        -3.48
+      ],
+      "look": [
+        24.85,
+        1.75,
+        -3.34
+      ],
+      "zone": "shop",
+      "feet": [
+        22.43,
+        5.551115123125783e-17,
+        -3.48
+      ],
+      "surface": "wood",
+      "elapsed": 9.293999999535108,
+      "ready": true,
+      "loaded": [
+        "shop",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 116,
+        "sharedHits": 103,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 367129472
+      },
+      "calls": 17,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "09-retail-floor",
+      "at": [
+        23.37,
+        0,
+        -9.28
+      ],
+      "look": [
+        15.5,
+        1,
+        -3.94
+      ],
+      "zone": "shop",
+      "feet": [
+        23.37,
+        5.551115123125783e-17,
+        -9.28
+      ],
+      "surface": "wood",
+      "elapsed": 9.51069999952318,
+      "ready": true,
+      "loaded": [
+        "shop",
+        "hall"
+      ],
+      "textures": {
+        "residentSources": 122,
+        "sharedHits": 157,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 367129472
+      },
+      "calls": 173,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "10-sold-separately",
+      "at": [
+        22.76,
+        0,
+        -9.89
+      ],
+      "look": [
+        22.77,
+        1.37,
+        -11.43
+      ],
+      "zone": "shop",
+      "feet": [
+        22.76,
+        5.551115123125783e-17,
+        -9.89
+      ],
+      "surface": "wood",
+      "elapsed": 10.206399999463573,
+      "ready": true,
+      "loaded": [
+        "shop",
+        "hall",
+        "habitat"
+      ],
+      "textures": {
+        "residentSources": 122,
+        "sharedHits": 157,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 383611776
+      },
+      "calls": 23,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "11-wormhole",
+      "at": [
+        15.14,
+        0,
+        -11.57
+      ],
+      "look": [
+        15.03,
+        1.2,
+        -13.73
+      ],
+      "zone": "shop",
+      "feet": [
+        15.14,
+        5.551115123125783e-17,
+        -11.57
+      ],
+      "surface": "wood",
+      "elapsed": 10.385499999481452,
+      "ready": true,
+      "loaded": [
+        "shop",
+        "hall",
+        "habitat"
+      ],
+      "textures": {
+        "residentSources": 122,
+        "sharedHits": 157,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 383611776
+      },
+      "calls": 28,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "12-room-return",
+      "at": [
+        22.73,
+        0,
+        -11
+      ],
+      "look": [
+        12.1,
+        1.44,
+        -5
+      ],
+      "zone": "shop",
+      "feet": [
+        22.73,
+        5.551115123125783e-17,
+        -11
+      ],
+      "surface": "wood",
+      "elapsed": 10.64829999943973,
+      "ready": true,
+      "loaded": [
+        "shop",
+        "hall",
+        "habitat"
+      ],
+      "textures": {
+        "residentSources": 122,
+        "sharedHits": 157,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 383611776
+      },
+      "calls": 201,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    },
+    {
+      "name": "13-paper-press",
+      "at": [
+        14.36,
+        0,
+        -8.95
+      ],
+      "look": [
+        12.56,
+        1.15,
+        -9.55
+      ],
+      "zone": "shop",
+      "feet": [
+        14.36,
+        5.551115123125783e-17,
+        -8.95
+      ],
+      "surface": "wood",
+      "elapsed": 10.912799999463573,
+      "ready": true,
+      "loaded": [
+        "shop",
+        "hall",
+        "habitat"
+      ],
+      "textures": {
+        "residentSources": 122,
+        "sharedHits": 157,
+        "fullDetailMaps": 70,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 383611776
+      },
+      "calls": 121,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "planter": {
+        "used": false,
+        "held": false,
+        "seconds": 0,
+        "cues": 0
+      },
+      "requiredNeighbors": [],
+      "coldNeighborCheck": false
+    }
+  ],
+  "issues": [],
+  "nativeSceneSha256": "3bc47be339b4e49ccb0dcf518b893111b813dadc78b40ecfb60b891b685b4437",
+  "nativePass": "shop-expansion-02"
+}

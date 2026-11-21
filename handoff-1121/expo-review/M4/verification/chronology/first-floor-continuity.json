@@ -1,0 +1,79 @@
+{
+  "zones": {
+    "atrium": "07e0e7ef539606cccfd5308e10145936fbae35f9d183300fe6ca5fb17d1ae3aa",
+    "chronology": "65283e91edb8ea8e612346b416ba5e986603b0925122395a7f47391ad4bcf585",
+    "forum": "cf8e6602ac451cd6eb939d1a33717e8ee3ba50af2d7509b8d19a4dacb61aa1e7",
+    "commons": "b61533c9ec709d395737dd87472d67282a89ca450d92f947851d9fce9d0beb76",
+    "aquarium": "fc4b8d767eaf012332e386d82f82ccc35b780633a7040b091e222d749e47bfca"
+  },
+  "seams": [
+    {
+      "from": "atrium",
+      "to": "chronology",
+      "seamCentreXZ": [
+        7.8,
+        41.0
+      ],
+      "checkedWidthMetres": 2.2,
+      "upwardContacts": 78
+    },
+    {
+      "from": "chronology",
+      "to": "forum",
+      "seamCentreXZ": [
+        3.4,
+        103.0
+      ],
+      "checkedWidthMetres": 5.72,
+      "upwardContacts": 78
+    },
+    {
+      "from": "forum",
+      "to": "commons",
+      "seamCentreXZ": [
+        -66.2,
+        98.6
+      ],
+      "checkedWidthMetres": 5.72,
+      "upwardContacts": 78
+    },
+    {
+      "from": "commons",
+      "to": "aquarium",
+      "seamCentreXZ": [
+        -61.8,
+        45.5
+      ],
+      "checkedWidthMetres": 5.72,
+      "upwardContacts": 78
+    },
+    {
+      "from": "aquarium",
+      "to": "atrium",
+      "seamCentreXZ": [
+        -7.8,
+        41.0
+      ],
+      "checkedWidthMetres": 2.2,
+      "upwardContacts": 78
+    }
+  ],
+  "stationFeet": [
+    {
+      "zone": "chronology",
+      "groundedStationContacts": 50
+    },
+    {
+      "zone": "forum",
+      "groundedStationContacts": 50
+    },
+    {
+      "zone": "commons",
+      "groundedStationContacts": 50
+    },
+    {
+      "zone": "aquarium",
+      "groundedStationContacts": 50
+    }
+  ]
+}

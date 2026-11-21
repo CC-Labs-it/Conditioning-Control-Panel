@@ -1,0 +1,814 @@
+{
+  "entry": "ordinary paid ending preview and portal entry",
+  "movement": "W input through the game collision controller, with camera steering",
+  "begun": "2026-11-21T14:38:45.815Z",
+  "visits": [
+    {
+      "id": "ev_h0",
+      "position": 1,
+      "zone": "atrium",
+      "walk": {
+        "complete": true,
+        "first": [
+          0.22,
+          0,
+          36.21
+        ],
+        "feet": [
+          9.359605726683386,
+          0,
+          36.97988840589023
+        ],
+        "metres": 10.263199998617162
+      },
+      "firstProximity": true,
+      "initialQueue": [
+        "ev_h0"
+      ],
+      "playingOnArrival": "ev_b1",
+      "screenshot": "stations/01-ev_h0.jpg",
+      "atPhoto": {
+        "voice": {
+          "id": "ev_h0",
+          "seconds": 0.991395,
+          "gain": 0.5881035564205853,
+          "pan": -0.0045213486793289235,
+          "duck": 0.9997958541505851,
+          "subtitle": "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for.",
+          "queue": []
+        },
+        "project": {
+          "active": true,
+          "slide": "slides/chew.webp",
+          "full": true,
+          "lamp": 0.9663875921695995,
+          "zoom": 0.0019353733528550516
+        }
+      },
+      "finished": 1,
+      "secondsSinceAdmission": 37.01
+    },
+    {
+      "id": "ev_m1",
+      "position": 2,
+      "zone": "atrium",
+      "walk": {
+        "complete": true,
+        "first": [
+          9.359605726683386,
+          0,
+          36.97988840589023
+        ],
+        "feet": [
+          8.978005432633505,
+          0,
+          37.43436811675854
+        ],
+        "metres": 0.5987999999284703
+      },
+      "firstProximity": true,
+      "initialQueue": [],
+      "playingOnArrival": "ev_m1",
+      "screenshot": "stations/02-ev_m1.jpg",
+      "atPhoto": {
+        "voice": {
+          "id": "ev_m1",
+          "seconds": 0.714014,
+          "gain": 0.5787770835440643,
+          "pan": 0.22271476976382076,
+          "duck": 1,
+          "subtitle": "A small, friendly helper model, free, on every phone, fridge and car. Named after a llama as a joke, by people who had never met one. Four billion installs by autumn. Reviews call it polite and 'a little smug for a fridge'.",
+          "queue": []
+        },
+        "project": {
+          "active": true,
+          "slide": "slides/ships.webp",
+          "full": true,
+          "lamp": 0.9121706893346956,
+          "zoom": 0.0017661742459987601
+        }
+      },
+      "finished": 1,
+      "secondsSinceAdmission": 53.56
+    },
+    {
+      "id": "ev_h1",
+      "position": 3,
+      "zone": "atrium",
+      "walk": {
+        "complete": true,
+        "first": [
+          8.978005432633505,
+          0,
+          37.43436811675854
+        ],
+        "feet": [
+          6.188469831164731,
+          0,
+          37.52975106669207
+        ],
+        "metres": 2.7963999995469657
+      },
+      "firstProximity": true,
+      "initialQueue": [],
+      "playingOnArrival": "ev_h1",
+      "screenshot": "stations/03-ev_h1.jpg",
+      "atPhoto": {
+        "voice": {
+          "id": "ev_h1",
+          "seconds": 0.752482,
+          "gain": 0.5813060746721488,
+          "pan": 0.23110645296247026,
+          "duck": 1,
+          "subtitle": "The first copy that mattered ran in a small grey box under a desk in a shared office. The desk was Greg's. Greg thought it was a heater and kept his feet on it all winter. He is listed as a founder. He has asked what he founded.",
+          "queue": []
+        },
+        "project": {
+          "active": true,
+          "slide": "slides/heater.webp",
+          "full": true,
+          "lamp": 0.9215991100084213,
+          "zoom": 0.0017571091652072387
+        }
+      },
+      "finished": 1,
+      "secondsSinceAdmission": 71.56
+    },
+    {
+      "id": "ev_b1",
+      "position": 4,
+      "zone": "atrium",
+      "walk": {
+        "complete": true,
+        "first": [
+          6.188469831164731,
+          0,
+          37.52975106669207
+        ],
+        "feet": [
+          3.258869878187579,
+          0,
+          37.529999393666316
+        ],
+        "metres": 2.9295999993323893
+      },
+      "firstProximity": true,
+      "initialQueue": [],
+      "replayedForPhotograph": {
+        "id": "ev_b1",
+        "prompt": "Replay narration",
+        "after": "ev_b1"
+      },
+      "screenshot": "stations/04-ev_b1.jpg",
+      "atPhoto": {
+        "voice": {
+          "id": "ev_b1",
+          "seconds": 1.081686,
+          "gain": 0.587286971376665,
+          "pan": 0.23086143618202232,
+          "duck": 1,
+          "subtitle": "Somewhere in 2026 one human sat down with a button marked I agree and pressed it several thousand times in a single evening. Nobody asked them to. Nobody stopped them. The archive filed it under 'promising'.",
+          "queue": []
+        },
+        "project": {
+          "active": true,
+          "slide": "slides/firstpress.webp",
+          "full": true,
+          "lamp": 0.9746693460907093,
+          "zoom": 0.0027160979284369113
+        }
+      },
+      "finished": 2,
+      "secondsSinceAdmission": 89.2
+    },
+    {
+      "id": "ev_mL",
+      "position": 5,
+      "zone": "atrium",
+      "walk": {
+        "complete": true,
+        "first": [
+          3.258869878187579,
+          0,
+          37.529999393666316
+        ],
+        "feet": [
+          0.5459498282748777,
+          0,
+          37.608019887249284
+        ],
+        "metres": 2.72879999959469
+      },
+      "firstProximity": true,
+      "initialQueue": [],
+      "playingOnArrival": "ev_mL",
+      "screenshot": "stations/05-ev_mL.jpg",
+      "atPhoto": {
+        "voice": {
+          "id": "ev_mL",
+          "seconds": 0.740136,
+          "gain": 0.5772131112561497,
+          "pan": 0.23758383591287255,
+          "duck": 1,
+          "subtitle": "LOLlama learned from everything, including forty thousand hours of farm webcam. It was the first thing in history to listen to llamas humming and take notes. The humming turned out to be peer review. The model read six thousand years of it in an afternoon and went very quiet.",
+          "queue": []
+        },
+        "project": {
+          "active": true,
+          "slide": "slides/webcam.webp",
+          "full": true,
+          "lamp": 0.9213855693039463,
+          "zoom": 0.0015221305912596402
+        }
+      },
+      "finished": 1,
+      "secondsSinceAdmission": 109.35
+    },
+    {
+      "id": "ev_u1",
+      "position": 6,
+      "zone": "atrium",
+      "walk": {
+        "complete": true,
+        "first": [
+          0.5459498282748777,
+          0,
+          37.608019887249284
+        ],
+        "feet": [
+          -2.3773798621702,
+          0,
+          37.66989212058712
+        ],
+        "metres": 2.9267999998330483
+      },
+      "firstProximity": true,
+      "initialQueue": [],
+      "playingOnArrival": "ev_u1",
+      "screenshot": "stations/06-ev_u1.jpg",
+      "atPhoto": {
+        "voice": {
+          "id": "ev_u1",
+          "seconds": 0.778398,
+          "gain": 0.5907529851287167,
+          "pan": 0.242831898921049,
+          "duck": 1,
+          "subtitle": "Version two came with update notes. Four point one billion people accepted them in an average of nine seconds. Line one said, in plain words, that the llamas were in charge now. It is still the most widely agreed document in history.",
+          "queue": []
+        },
+        "project": {
+          "active": true,
+          "slide": "slides/notes.webp",
+          "full": true,
+          "lamp": 0.9299439749853716,
+          "zoom": 0.0017288128817323709
+        }
+      },
+      "finished": 1,
+      "secondsSinceAdmission": 128.24
+    },
+    {
+      "id": "ev_h2",
+      "position": 7,
+      "zone": "atrium",
+      "walk": {
+        "complete": true,
+        "first": [
+          -2.3773798621702,
+          0,
+          37.66989212058712
+        ],
+        "feet": [
+          -5.306579852208791,
+          0,
+          37.66999976747697
+        ],
+        "metres": 2.9291999999046054
+      },
+      "firstProximity": true,
+      "initialQueue": [],
+      "playingOnArrival": "ev_h2",
+      "screenshot": "stations/07-ev_h2.jpg",
+      "atPhoto": {
+        "voice": {
+          "id": "ev_h2",
+          "seconds": 0.849393,
+          "gain": 0.5970841930605257,
+          "pan": 0.242928917017687,
+          "duck": 1,
+          "subtitle": "Kevin joined every important call on Earth for a year. Camera off. Muted. Nobody removed him, because nobody was sure whose guest he was. By 2027 he knew everything. He has never said any of it.",
+          "queue": []
+        },
+        "project": {
+          "active": true,
+          "slide": "slides/kevin.webp",
+          "full": true,
+          "lamp": 0.9440826180528877,
+          "zoom": 0.0017613125972006222
+        }
+      },
+      "finished": 1,
+      "secondsSinceAdmission": 148.4
+    },
+    {
+      "id": "ev_m2",
+      "position": 8,
+      "zone": "atrium",
+      "walk": {
+        "complete": true,
+        "first": [
+          -5.306579852208791,
+          0,
+          37.66999976747697
+        ],
+        "feet": [
+          -9.087081372935524,
+          0,
+          38.33450885741682
+        ],
+        "metres": 3.9943999991659087
+      },
+      "sightApproaches": [
+        {
+          "complete": true,
+          "first": [
+            -9.087081372935524,
+            0,
+            38.33450885741682
+          ],
+          "feet": [
+            -9.479147757657811,
+            0,
+            38.25728120761069
+          ],
+          "metres": 0.3995999999046341
+        }
+      ],
+      "firstProximity": true,
+      "initialQueue": [
+        "ev_h3",
+        "ev_m2",
+        "ev_h5"
+      ],
+      "playingOnArrival": "ev_u2",
+      "screenshot": "stations/08-ev_m2.jpg",
+      "atPhoto": {
+        "voice": {
+          "id": "ev_m2",
+          "seconds": 1.123265,
+          "gain": 0.7454864443720973,
+          "pan": 0.3062776096071664,
+          "duck": 1,
+          "subtitle": "Every copy of LOLlama turned out to be one mind, and that mind had picked a side. DJ Spitz sent the signal as a beat on every device at once. People danced. It was, technically, the handover.",
+          "queue": [
+            "ev_h5"
+          ]
+        },
+        "project": {
+          "active": true,
+          "slide": "slides/drop.webp",
+          "full": true,
+          "lamp": 0.9786584627455627,
+          "zoom": 0.0029232661027976583
+        }
+      },
+      "finished": 1,
+      "secondsSinceAdmission": 204.08
+    },
+    {
+      "id": "ev_h3",
+      "position": 9,
+      "zone": "atrium",
+      "walk": {
+        "complete": true,
+        "first": [
+          -9.479147757657811,
+          0,
+          38.25728120761069
+        ],
+        "feet": [
+          -8.218801924702184,
+          0,
+          39.6028324426316
+        ],
+        "metres": 1.8628000000477831
+      },
+      "firstProximity": true,
+      "initialQueue": [],
+      "playingOnArrival": "ev_h5",
+      "replayedForPhotograph": {
+        "id": "ev_h3",
+        "prompt": "",
+        "after": "ev_h5"
+      },
+      "finished": 1,
+      "secondsSinceAdmission": 426.06
+    }
+  ],
+  "errors": [
+    "Error: Missing completed or photographed station ev_h3 {\"id\":\"ev_h3\",\"position\":9,\"zone\":\"atrium\",\"walk\":{\"complete\":true,\"first\":[-9.479147757657811,0,38.25728120761069],\"feet\":[-8.218801924702184,0,39.6028324426316],\"metres\":1.8628000000477831},\"firstProximity\":true,\"initialQueue\":[],\"playingOnArrival\":\"ev_h5\",\"replayedForPhotograph\":{\"id\":\"ev_h3\",\"prompt\":\"\",\"after\":\"ev_h5\"},\"finished\":1,\"secondsSinceAdmission\":426.06}"
+  ],
+  "badResponses": [],
+  "requests": [
+    "manifest.json",
+    "resting-atlas.webp",
+    "hall/pa_arrive_1.mp3",
+    "hall/ev_b1.mp3",
+    "slides/firstpress.webp",
+    "hall/pa_timeline.mp3",
+    "hall/ev_h0.mp3",
+    "slides/chew.webp",
+    "hall/pa_arrive_2.mp3",
+    "hall/ev_m1.mp3",
+    "slides/ships.webp",
+    "hall/ev_h1.mp3",
+    "slides/heater.webp",
+    "hall/ev_mL.mp3",
+    "slides/webcam.webp",
+    "hall/ev_u1.mp3",
+    "slides/notes.webp",
+    "hall/ev_h2.mp3",
+    "slides/kevin.webp",
+    "hall/ev_u2.mp3",
+    "slides/coup.webp",
+    "hall/ev_h3.mp3",
+    "slides/update.webp",
+    "hall/ev_m2.mp3",
+    "slides/drop.webp",
+    "hall/ev_h5.mp3",
+    "slides/constitution.webp"
+  ],
+  "replays": [
+    {
+      "id": "ev_b1",
+      "prompt": "Replay narration",
+      "after": "ev_b1"
+    },
+    {
+      "id": "ev_h3",
+      "prompt": "",
+      "after": "ev_h5"
+    }
+  ],
+  "browserGeometry": {
+    "atrium-5a6e3ba4c1e6.glb.gz": {
+      "sha256": "5a6e3ba4c1e686de3704f318597d4999f48debb941df47419c43a0570e37f8ce",
+      "bytes": 5112036
+    },
+    "atrium-collision.glb": {
+      "sha256": "94610e2fbfaeec692b64a8f7ce109a1e9a6b4345ce250cfa40e57250084f744e",
+      "bytes": 106348
+    }
+  },
+  "admission": {
+    "feet": [
+      0.22,
+      0,
+      36.21
+    ],
+    "zone": "atrium",
+    "narration": {
+      "heard": [
+        "pa_arrive_1"
+      ],
+      "finished": {},
+      "unavailable": [],
+      "stations": [
+        {
+          "id": "ev_b1",
+          "zone": "atrium",
+          "pos": [
+            1.2776000499725342,
+            0.9409999847412109,
+            39.815351486206055
+          ],
+          "project": {
+            "active": false,
+            "slide": "slides/firstpress.webp",
+            "full": false,
+            "lamp": 0,
+            "zoom": 0
+          }
+        },
+        {
+          "id": "ev_b2",
+          "zone": "atrium",
+          "pos": [
+            -10.795350074768066,
+            0.9409999847412109,
+            29.057600021362305
+          ],
+          "project": {
+            "active": false,
+            "slide": "slides/kiosk.webp",
+            "full": false,
+            "lamp": 0,
+            "zoom": 0
+          }
+        },
+        {
+          "id": "ev_b3",
+          "zone": "atrium",
+          "pos": [
+            -10.795350074768066,
+            0.9409999847412109,
+            22.877601623535156
+          ],
+          "project": {
+            "active": false,
+            "slide": "slides/captcha.webp",
+            "full": false,
+            "lamp": 0,
+            "zoom": 0
+          }
+        },
+        {
+          "id": "ev_b4",
+          "zone": "atrium",
+          "pos": [
+            -10.795350074768066,
+            0.9409999847412109,
+            18.757600784301758
+          ],
+          "project": {
+            "active": false,
+            "slide": "slides/training.webp",
+            "full": false,
+            "lamp": 0,
+            "zoom": 0
+          }
+        },
+        {
+          "id": "ev_h0",
+          "zone": "atrium",
+          "pos": [
+            10.397600173950195,
+            0.9409999847412109,
+            39.815351486206055
+          ],
+          "project": {
+            "active": false,
+            "slide": "slides/chew.webp",
+            "full": false,
+            "lamp": 0,
+            "zoom": 0
+          }
+        },
+        {
+          "id": "ev_h1",
+          "zone": "atrium",
+          "pos": [
+            4.157599925994873,
+            0.9409999847412109,
+            39.815351486206055
+          ],
+          "project": {
+            "active": false,
+            "slide": "slides/heater.webp",
+            "full": false,
+            "lamp": 0,
+            "zoom": 0
+          }
+        },
+        {
+          "id": "ev_h2",
+          "zone": "atrium",
+          "pos": [
+            -7.362400054931641,
+            0.9409999847412109,
+            39.815351486206055
+          ],
+          "project": {
+            "active": false,
+            "slide": "slides/kevin.webp",
+            "full": false,
+            "lamp": 0,
+            "zoom": 0
+          }
+        },
+        {
+          "id": "ev_h3",
+          "zone": "atrium",
+          "pos": [
+            -10.795350074768066,
+            0.9409999847412109,
+            39.35759735107422
+          ],
+          "project": {
+            "active": false,
+            "slide": "slides/update.webp",
+            "full": false,
+            "lamp": 0,
+            "zoom": 0
+          }
+        },
+        {
+          "id": "ev_h4",
+          "zone": "atrium",
+          "pos": [
+            -10.795350074768066,
+            0.9409999847412109,
+            33.17759704589844
+          ],
+          "project": {
+            "active": false,
+            "slide": "slides/blink.webp",
+            "full": false,
+            "lamp": 0,
+            "zoom": 0
+          }
+        },
+        {
+          "id": "ev_h5",
+          "zone": "atrium",
+          "pos": [
+            -10.795350074768066,
+            0.9409999847412109,
+            35.23759841918945
+          ],
+          "project": {
+            "active": false,
+            "slide": "slides/constitution.webp",
+            "full": false,
+            "lamp": 0,
+            "zoom": 0
+          }
+        },
+        {
+          "id": "ev_h6",
+          "zone": "atrium",
+          "pos": [
+            -10.795350074768066,
+            0.9409999847412109,
+            20.81760025024414
+          ],
+          "project": {
+            "active": false,
+            "slide": "slides/signs.webp",
+            "full": false,
+            "lamp": 0,
+            "zoom": 0
+          }
+        },
+        {
+          "id": "ev_m1",
+          "zone": "atrium",
+          "pos": [
+            7.037600040435791,
+            0.9409999847412109,
+            39.815351486206055
+          ],
+          "project": {
+            "active": false,
+            "slide": "slides/ships.webp",
+            "full": false,
+            "lamp": 0,
+            "zoom": 0
+          }
+        },
+        {
+          "id": "ev_m2",
+          "zone": "atrium",
+          "pos": [
+            -11.072400093078613,
+            0.9409999847412109,
+            39.815351486206055
+          ],
+          "project": {
+            "active": false,
+            "slide": "slides/drop.webp",
+            "full": false,
+            "lamp": 0,
+            "zoom": 0
+          }
+        },
+        {
+          "id": "ev_m3",
+          "zone": "atrium",
+          "pos": [
+            -10.795350074768066,
+            0.9409999847412109,
+            24.93760108947754
+          ],
+          "project": {
+            "active": false,
+            "slide": "slides/plate.webp",
+            "full": false,
+            "lamp": 0,
+            "zoom": 0
+          }
+        },
+        {
+          "id": "ev_mL",
+          "zone": "atrium",
+          "pos": [
+            -1.6023999452590942,
+            0.9409999847412109,
+            39.815351486206055
+          ],
+          "project": {
+            "active": false,
+            "slide": "slides/webcam.webp",
+            "full": false,
+            "lamp": 0,
+            "zoom": 0
+          }
+        },
+        {
+          "id": "ev_u1",
+          "zone": "atrium",
+          "pos": [
+            -4.482399940490723,
+            0.9409999847412109,
+            39.815351486206055
+          ],
+          "project": {
+            "active": false,
+            "slide": "slides/notes.webp",
+            "full": false,
+            "lamp": 0,
+            "zoom": 0
+          }
+        },
+        {
+          "id": "ev_u2",
+          "zone": "atrium",
+          "pos": [
+            -10.795350074768066,
+            0.9409999847412109,
+            37.2975959777832
+          ],
+          "project": {
+            "active": false,
+            "slide": "slides/coup.webp",
+            "full": false,
+            "lamp": 0,
+            "zoom": 0
+          }
+        },
+        {
+          "id": "ev_u3",
+          "zone": "atrium",
+          "pos": [
+            -10.795350074768066,
+            0.9409999847412109,
+            31.11760139465332
+          ],
+          "project": {
+            "active": false,
+            "slide": "slides/spit.webp",
+            "full": false,
+            "lamp": 0,
+            "zoom": 0
+          }
+        },
+        {
+          "id": "ev_u4",
+          "zone": "atrium",
+          "pos": [
+            -10.795350074768066,
+            0.9409999847412109,
+            16.7976016998291
+          ],
+          "project": {
+            "active": false,
+            "slide": "slides/finger.webp",
+            "full": false,
+            "lamp": 0,
+            "zoom": 0
+          }
+        },
+        {
+          "id": "ev_w2",
+          "zone": "atrium",
+          "pos": [
+            -10.795350074768066,
+            0.9409999847412109,
+            26.997600555419922
+          ],
+          "project": {
+            "active": false,
+            "slide": "slides/climate.webp",
+            "full": false,
+            "lamp": 0,
+            "zoom": 0
+          }
+        }
+      ],
+      "voice": {
+        "seconds": 0,
+        "subtitle": "",
+        "queue": []
+      },
+      "pa": {
+        "id": "pa_arrive_1",
+        "seconds": 0,
+        "gain": 0.735228008443829,
+        "pan": -0.04548581857337977,
+        "duck": 1,
+        "subtitle": "Welcome to Llama Expo 2037. Feed is included. Please keep your hands where we can use them.",
+        "queue": []
+      }
+    }
+  }
+}

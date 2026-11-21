@@ -1,0 +1,155 @@
+{
+  "zone": "shop",
+  "records": [
+    {
+      "zone": "shop",
+      "hoof": "idle",
+      "misses": 0,
+      "taps": 0,
+      "feeds": 0,
+      "clauses": [],
+      "realTaps": 7,
+      "name": "contract",
+      "herd": [
+        "reginald",
+        "margaret",
+        "henry",
+        "greg",
+        "bob",
+        "lashes",
+        "kevin",
+        "spitz",
+        "gary",
+        "doctor",
+        "bartholomew",
+        "nana"
+      ],
+      "loops": 0,
+      "contract": true,
+      "exit": false,
+      "photo": false,
+      "turnstile": false,
+      "line": "Your contract, framed.",
+      "heard": [
+        "pa_arrive_1",
+        "pa_shop_1"
+      ],
+      "visitor": "Signee #1805"
+    },
+    {
+      "zone": "shop",
+      "hoof": "idle",
+      "misses": 0,
+      "taps": 0,
+      "feeds": 0,
+      "clauses": [],
+      "realTaps": 7,
+      "name": "door-loop-1",
+      "herd": [
+        "reginald",
+        "margaret",
+        "henry",
+        "greg",
+        "bob",
+        "lashes",
+        "kevin",
+        "spitz",
+        "gary",
+        "doctor",
+        "bartholomew",
+        "nana"
+      ],
+      "loops": 1,
+      "contract": true,
+      "exit": false,
+      "photo": false,
+      "turnstile": false,
+      "line": "Your contract, framed.",
+      "heard": [
+        "pa_arrive_1",
+        "pa_shop_1"
+      ],
+      "visitor": "Signee #1805"
+    },
+    {
+      "zone": "shop",
+      "hoof": "idle",
+      "misses": 0,
+      "taps": 0,
+      "feeds": 0,
+      "clauses": [],
+      "realTaps": 7,
+      "name": "door-loop-2",
+      "herd": [
+        "reginald",
+        "margaret",
+        "henry",
+        "greg",
+        "bob",
+        "lashes",
+        "kevin",
+        "spitz",
+        "gary",
+        "doctor",
+        "bartholomew",
+        "nana"
+      ],
+      "loops": 2,
+      "contract": true,
+      "exit": false,
+      "photo": false,
+      "turnstile": false,
+      "line": "Your contract, framed.",
+      "heard": [
+        "pa_arrive_1",
+        "pa_shop_1"
+      ],
+      "visitor": "Signee #1805"
+    },
+    {
+      "zone": "shop",
+      "hoof": "idle",
+      "misses": 0,
+      "taps": 0,
+      "feeds": 0,
+      "clauses": [],
+      "realTaps": 7,
+      "name": "exit-purchased",
+      "herd": [
+        "reginald",
+        "margaret",
+        "henry",
+        "greg",
+        "bob",
+        "lashes",
+        "kevin",
+        "spitz",
+        "gary",
+        "doctor",
+        "bartholomew",
+        "nana"
+      ],
+      "loops": 2,
+      "contract": true,
+      "exit": true,
+      "photo": false,
+      "turnstile": false,
+      "line": "Your contract, framed.",
+      "heard": [
+        "pa_arrive_1",
+        "pa_shop_1"
+      ],
+      "visitor": "Signee #1805"
+    },
+    {
+      "name": "return-to-recap",
+      "text": "THE END\nLlama Expo 2037\n\nHuman visitor no. 1 (today). Thank you for your custom.\n\n0:02\n140\nNEW IN YOUR STICKER BOOK · 4\nYOUR ROAD\nOTHER ROADS\nWatch\nRest\nSlideshow\nMore Ads\nTrance\nENDINGS\n1/7\n?\n?\n?\n?\n?\n?\nLlama Expo 2037. Human visitor no. 1 (today). Thank you for your custom.\n150/316\nseen. You have seen more of this than anyone needs to.\nNEXT RUN\n+7\nSTARDUST\nRenew\n+\nTake one along\na Look you owned\nFREE\nToday 2/5\nNew run\nRUN 2\nTRANCE\nAD #1,805\n0terms\nACCEPTED\nSignee #1,805 sank for 1 minute and liked it down there.\n\nSo quiet in there. So empty.\n\nKinky pics & vids\n0\nFuzz gained\n0\nGolden Buttons\n0\nLlamas sheltered\n0\n🦙\n🦙\n🦙\n🦙\n🦙\n🦙\n🦙\n🦙\n🦙\n🦙\n🦙\nPlay free: tc.cclabs.app\nMore kink: cclabs.app\nSHARE\nSAVE\nA game by\nCC Labs\ncclabs.app",
+      "ending": {
+        "id": "ll_end",
+        "at": 2288.4000000894057
+      },
+      "sticker": true
+    }
+  ],
+  "issues": []
+}

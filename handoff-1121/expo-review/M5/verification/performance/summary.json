@@ -1,0 +1,224 @@
+{
+  "measuredRooms": 14,
+  "network": {
+    "megabitsPerSecond": 20,
+    "latencyMs": 35
+  },
+  "devices": {
+    "desktop": {
+      "resolution": {
+        "width": 1920,
+        "height": 1080
+      },
+      "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "targetFps": 60,
+      "firstVisibleSeconds": 3.772,
+      "fullyOpenSeconds": 4.189,
+      "firstVisibleFromPurchaseSeconds": 4.026,
+      "fullyOpenFromPurchaseSeconds": 4.444,
+      "changeFromPriorMs": {
+        "visibleFromYesMs": 349,
+        "fullyRevealedFromYesMs": 365
+      },
+      "firstRoomBytes": 4796185,
+      "entry": {
+        "medianMs": 16.7,
+        "p95Ms": 18.6
+      },
+      "rooms": {
+        "dome": {
+          "medianMs": 16.7,
+          "p95Ms": 17.1,
+          "frames": 234,
+          "p95ChangeFromPriorMs": 0.0
+        },
+        "secret": {
+          "medianMs": 16.7,
+          "p95Ms": 16.9,
+          "frames": 239,
+          "p95ChangeFromPriorMs": 0.0
+        },
+        "hoof": {
+          "medianMs": 16.7,
+          "p95Ms": 16.9,
+          "frames": 239,
+          "p95ChangeFromPriorMs": -0.1
+        },
+        "habitat": {
+          "medianMs": 16.7,
+          "p95Ms": 17,
+          "frames": 240,
+          "p95ChangeFromPriorMs": 0
+        },
+        "service": {
+          "medianMs": 16.7,
+          "p95Ms": 16.9,
+          "frames": 239,
+          "p95ChangeFromPriorMs": 0.0
+        },
+        "catwalk": {
+          "medianMs": 16.7,
+          "p95Ms": 16.9,
+          "frames": 226,
+          "p95ChangeFromPriorMs": -0.1
+        },
+        "hall": {
+          "medianMs": 16.7,
+          "p95Ms": 17,
+          "frames": 237,
+          "p95ChangeFromPriorMs": 0
+        },
+        "chronology": {
+          "medianMs": 16.7,
+          "p95Ms": 16.9,
+          "frames": 239,
+          "p95ChangeFromPriorMs": -0.1
+        },
+        "shop": {
+          "medianMs": 16.7,
+          "p95Ms": 16.9,
+          "frames": 238,
+          "p95ChangeFromPriorMs": -0.1
+        },
+        "aquarium": {
+          "medianMs": 16.7,
+          "p95Ms": 16.9,
+          "frames": 240,
+          "p95ChangeFromPriorMs": -0.1
+        },
+        "forum": {
+          "medianMs": 16.7,
+          "p95Ms": 16.9,
+          "frames": 239,
+          "p95ChangeFromPriorMs": -0.0
+        },
+        "twelve": {
+          "medianMs": 16.7,
+          "p95Ms": 16.9,
+          "frames": 239,
+          "p95ChangeFromPriorMs": -0.1
+        },
+        "commons": {
+          "medianMs": 16.7,
+          "p95Ms": 16.9,
+          "frames": 240,
+          "p95ChangeFromPriorMs": 0.0
+        },
+        "atrium": {
+          "medianMs": 16.7,
+          "p95Ms": 16.9,
+          "frames": 239,
+          "p95ChangeFromPriorMs": -0.1
+        }
+      }
+    },
+    "phone": {
+      "resolution": {
+        "width": 393,
+        "height": 852
+      },
+      "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "targetFps": 30,
+      "firstVisibleSeconds": 3.23,
+      "fullyOpenSeconds": 3.514,
+      "firstVisibleFromPurchaseSeconds": 3.343,
+      "fullyOpenFromPurchaseSeconds": 3.627,
+      "changeFromPriorMs": {
+        "visibleFromYesMs": 151,
+        "fullyRevealedFromYesMs": 151
+      },
+      "firstRoomBytes": 4679965,
+      "entry": {
+        "medianMs": 33.4,
+        "p95Ms": 33.6
+      },
+      "rooms": {
+        "dome": {
+          "medianMs": 33.4,
+          "p95Ms": 34.2,
+          "frames": 118,
+          "p95ChangeFromPriorMs": 0.1
+        },
+        "secret": {
+          "medianMs": 33.4,
+          "p95Ms": 33.5,
+          "frames": 119,
+          "p95ChangeFromPriorMs": -0.1
+        },
+        "hoof": {
+          "medianMs": 33.4,
+          "p95Ms": 33.8,
+          "frames": 119,
+          "p95ChangeFromPriorMs": 0.1
+        },
+        "habitat": {
+          "medianMs": 33.4,
+          "p95Ms": 33.7,
+          "frames": 118,
+          "p95ChangeFromPriorMs": 0.0
+        },
+        "service": {
+          "medianMs": 33.4,
+          "p95Ms": 33.7,
+          "frames": 118,
+          "p95ChangeFromPriorMs": -0.7
+        },
+        "catwalk": {
+          "medianMs": 33.3,
+          "p95Ms": 37.7,
+          "frames": 118,
+          "p95ChangeFromPriorMs": 3.9
+        },
+        "hall": {
+          "medianMs": 33.4,
+          "p95Ms": 38.9,
+          "frames": 117,
+          "p95ChangeFromPriorMs": 4.7
+        },
+        "chronology": {
+          "medianMs": 33.4,
+          "p95Ms": 41.9,
+          "frames": 117,
+          "p95ChangeFromPriorMs": 7.8
+        },
+        "shop": {
+          "medianMs": 33.4,
+          "p95Ms": 33.8,
+          "frames": 118,
+          "p95ChangeFromPriorMs": 0.1
+        },
+        "aquarium": {
+          "medianMs": 33.4,
+          "p95Ms": 33.6,
+          "frames": 118,
+          "p95ChangeFromPriorMs": -0.0
+        },
+        "forum": {
+          "medianMs": 33.4,
+          "p95Ms": 35.2,
+          "frames": 117,
+          "p95ChangeFromPriorMs": 1.7
+        },
+        "twelve": {
+          "medianMs": 33.4,
+          "p95Ms": 33.8,
+          "frames": 118,
+          "p95ChangeFromPriorMs": -0.2
+        },
+        "commons": {
+          "medianMs": 33.4,
+          "p95Ms": 33.7,
+          "frames": 118,
+          "p95ChangeFromPriorMs": 0.1
+        },
+        "atrium": {
+          "medianMs": 33.3,
+          "p95Ms": 38.2,
+          "frames": 118,
+          "p95ChangeFromPriorMs": 4.7
+        }
+      }
+    }
+  },
+  "errors": []
+}

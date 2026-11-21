@@ -1,0 +1,45 @@
+{
+  "url": "http://127.0.0.1:8937/fuzz/",
+  "roomStem": "dome-806631c2f039058c",
+  "collisionFile": "dome-806631c2f039058c-collision.glb",
+  "sha256": "d8810f80c5707f5895350bc8d1514d723c4c6eef0767d2385e20b0cf113c921b",
+  "bytes": 32848,
+  "devices": {
+    "keyboard": {
+      "feet": [
+        -23.17850124359131,
+        0,
+        -4.949999809265137
+      ],
+      "ray": {
+        "owner": "expo_replay_dome_0",
+        "lineage": [
+          "expo_replay_dome_0_2",
+          "expo_replay_dome_0",
+          "Scene"
+        ],
+        "distance": 1.1945686348366538
+      },
+      "nativeTravelMetres": 0.021,
+      "pressedAndReleased": true
+    },
+    "touch": {
+      "feet": [
+        -23.17850124359131,
+        0,
+        -4.949999809265137
+      ],
+      "ray": {
+        "owner": "expo_replay_dome_0",
+        "lineage": [
+          "expo_replay_dome_0_2",
+          "expo_replay_dome_0",
+          "Scene"
+        ],
+        "distance": 1.1945686348366538
+      },
+      "nativeTravelMetres": 0.021,
+      "pressedAndReleased": true
+    }
+  }
+}

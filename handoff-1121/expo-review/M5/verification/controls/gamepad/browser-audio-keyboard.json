@@ -1,0 +1,74 @@
+{
+  "gesture": "keyboard",
+  "before": {
+    "active": false,
+    "frameActive": false,
+    "audio": [],
+    "ready": false,
+    "hint": false,
+    "streams": []
+  },
+  "wormhole": {
+    "active": false,
+    "frameActive": false,
+    "audio": [
+      "suspended"
+    ],
+    "ready": false,
+    "hint": true,
+    "streams": []
+  },
+  "arrival": {
+    "active": false,
+    "frameActive": false,
+    "audio": [
+      "suspended"
+    ],
+    "ready": true,
+    "hint": true,
+    "streams": [
+      {
+        "name": "atrium.ogg",
+        "paused": true,
+        "position": 0
+      },
+      {
+        "name": "band.ogg",
+        "paused": true,
+        "position": 0
+      },
+      {
+        "name": "pa_arrive_1.mp3",
+        "paused": true,
+        "position": 0
+      }
+    ]
+  },
+  "after": {
+    "active": true,
+    "frameActive": true,
+    "audio": [
+      "running"
+    ],
+    "ready": true,
+    "hint": false,
+    "streams": [
+      {
+        "name": "atrium.ogg",
+        "paused": false,
+        "position": 0.723763
+      },
+      {
+        "name": "band.ogg",
+        "paused": false,
+        "position": 0.723769
+      },
+      {
+        "name": "pa_arrive_1.mp3",
+        "paused": false,
+        "position": 0.722721
+      }
+    ]
+  },
+  "passed": true
+}

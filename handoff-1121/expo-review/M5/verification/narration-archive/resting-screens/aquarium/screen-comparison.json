@@ -1,0 +1,167 @@
+{
+  "room": "aquarium",
+  "geometrySha256": "69a43f5cf8ce7ba3c7e737ad20927e6ed368c491282c28fe17c600b32ae9fea8",
+  "screens": [
+    {
+      "record": 31,
+      "id": "ev_b5",
+      "actualImage": "31-ev_b5.jpg",
+      "expectedWide": "slides/guild.webp",
+      "nearestPrint": "slides/guild.webp",
+      "rank": 1,
+      "correlation": 0.8978,
+      "secondBest": 0.4602,
+      "screenContrast": 21.53,
+      "atlasCell": [
+        7,
+        1
+      ],
+      "pass": true
+    },
+    {
+      "record": 32,
+      "id": "ev_w6",
+      "actualImage": "32-ev_w6.jpg",
+      "expectedWide": "slides/sky.webp",
+      "nearestPrint": "slides/sky.webp",
+      "rank": 1,
+      "correlation": 0.9173,
+      "secondBest": 0.3542,
+      "screenContrast": 17.82,
+      "atlasCell": [
+        2,
+        4
+      ],
+      "pass": true
+    },
+    {
+      "record": 33,
+      "id": "ev_h10",
+      "actualImage": "33-ev_h10.jpg",
+      "expectedWide": "slides/wool.webp",
+      "nearestPrint": "slides/wool.webp",
+      "rank": 1,
+      "correlation": 0.8722,
+      "secondBest": 0.3383,
+      "screenContrast": 20.1,
+      "atlasCell": [
+        6,
+        5
+      ],
+      "pass": true
+    },
+    {
+      "record": 34,
+      "id": "ev_w7",
+      "actualImage": "34-ev_w7.jpg",
+      "expectedWide": "slides/inbox.webp",
+      "nearestPrint": "slides/inbox.webp",
+      "rank": 1,
+      "correlation": 0.8055,
+      "secondBest": 0.1586,
+      "screenContrast": 19.83,
+      "atlasCell": [
+        3,
+        2
+      ],
+      "pass": true
+    },
+    {
+      "record": 35,
+      "id": "ev_u8",
+      "actualImage": "35-ev_u8.jpg",
+      "expectedWide": "slides/survey.webp",
+      "nearestPrint": "slides/survey.webp",
+      "rank": 1,
+      "correlation": 0.8896,
+      "secondBest": 0.1694,
+      "screenContrast": 21.14,
+      "atlasCell": [
+        6,
+        4
+      ],
+      "pass": true
+    },
+    {
+      "record": 36,
+      "id": "ev_m5",
+      "actualImage": "36-ev_m5.jpg",
+      "expectedWide": "slides/door.webp",
+      "nearestPrint": "slides/door.webp",
+      "rank": 1,
+      "correlation": 0.9142,
+      "secondBest": 0.3971,
+      "screenContrast": 21.82,
+      "atlasCell": [
+        0,
+        1
+      ],
+      "pass": true
+    },
+    {
+      "record": 37,
+      "id": "ev_b6",
+      "actualImage": "37-ev_b6.jpg",
+      "expectedWide": "slides/messages.webp",
+      "nearestPrint": "slides/messages.webp",
+      "rank": 1,
+      "correlation": 0.9221,
+      "secondBest": 0.2084,
+      "screenContrast": 17.2,
+      "atlasCell": [
+        0,
+        3
+      ],
+      "pass": true
+    },
+    {
+      "record": 38,
+      "id": "ev_w8",
+      "actualImage": "38-ev_w8.jpg",
+      "expectedWide": "slides/monday.webp",
+      "nearestPrint": "slides/monday.webp",
+      "rank": 1,
+      "correlation": 0.9498,
+      "secondBest": 0.4493,
+      "screenContrast": 23.7,
+      "atlasCell": [
+        1,
+        3
+      ],
+      "pass": true
+    },
+    {
+      "record": 39,
+      "id": "ev_h11",
+      "actualImage": "39-ev_h11.jpg",
+      "expectedWide": "slides/opening.webp",
+      "nearestPrint": "slides/opening.webp",
+      "rank": 1,
+      "correlation": 0.9185,
+      "secondBest": 0.4117,
+      "screenContrast": 23.95,
+      "atlasCell": [
+        4,
+        3
+      ],
+      "pass": true
+    },
+    {
+      "record": 40,
+      "id": "ev_b7",
+      "actualImage": "40-ev_b7.jpg",
+      "expectedWide": "slides/visitor.webp",
+      "nearestPrint": "slides/visitor.webp",
+      "rank": 1,
+      "correlation": 0.946,
+      "secondBest": 0.2183,
+      "screenContrast": 25.04,
+      "atlasCell": [
+        1,
+        5
+      ],
+      "pass": true
+    }
+  ],
+  "pass": true
+}

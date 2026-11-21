@@ -1,0 +1,36 @@
+{
+  "id": "margaret",
+  "sourceSha256": "bddd185b8f4b7e97b7ca932a4bc9ba2a447525504f4a5c83530c8d405da87d8e",
+  "sourceTriangles": 365254,
+  "glbSha256": "952771f151df0467da135d4ba3bd90498230717c4953dce9a2466a04f3be8196",
+  "glbBytes": 6149108,
+  "triangles": 41777,
+  "boundsHeight": 1.000495,
+  "fourSolesAboveLowest": {
+    "left fore": 7.3e-05,
+    "right fore": 0.0,
+    "left hind": 0.000156,
+    "right hind": 0.000104
+  },
+  "sharedOcularRimVertices": {
+    "Margaret, solid right eye": 187,
+    "Margaret, solid left eye": 135
+  },
+  "components": {
+    "Dame Margaret Fleecington, bare cast": 21125,
+    "Fine brass threading cord": 2016,
+    "Graduated brass pearls, 44 individually drilled beads": 14784,
+    "Margaret, inset left pupil": 204,
+    "Margaret, inset right pupil": 204,
+    "Margaret, solid left eye": 1062,
+    "Margaret, solid right eye": 1822,
+    "Three-piece filigree barrel clasp and release tab": 560
+  },
+  "materials": [
+    "hero_herd_eye",
+    "hero_herd_pupil",
+    "hero_margaret_cast",
+    "hero_reginald_gold"
+  ],
+  "forward": "+X"
+}

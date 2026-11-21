@@ -1,0 +1,109 @@
+{
+  "branch": "codex/tc-expo-2037-v3",
+  "head": "e34d25840b4d5cc8f92bed8fbd85f086dc11fbe9",
+  "stagedCatalogBlob": "4632328e82cc20672237071a390aff6a16b632fd",
+  "headCatalogBlob": "6195ab228d9bfd8c0f2438e5f49184523a168371",
+  "headRooms": 14,
+  "indexRooms": 14,
+  "uniqueDependencies": 1085,
+  "groups": {
+    "catalogs": 5,
+    "geometry": 42,
+    "GLB images": 588,
+    "arrival mobile lookups": 80,
+    "lighting and reflections": 112,
+    "compressed arrival": 1,
+    "narration audio": 96,
+    "voice slideshow": 121,
+    "resting pictures": 48,
+    "effects and ambience": 39,
+    "shared sound": 1,
+    "shared image": 1,
+    "sticker book": 2,
+    "runtime": 58,
+    "roster portraits": 12
+  },
+  "verifiedLFSObjects": 139,
+  "geometryLFSPointers": 42,
+  "checkedRuntimeModules": 57,
+  "verifiedBytes": 178963557,
+  "worktreeDifferences": [],
+  "sparseWorkingTreeOmissions": [
+    "ConditioningControlPanel/Resources/web/dtrh/vendor/omggif/omggif.module.js"
+  ],
+  "sparseNote": "The shared arcade reel lazily imports a GIF decoder for WebGL reels. Expo uses only needsDomMedia from the shared module. Its optional decoder is present in the Git index.",
+  "issues": [],
+  "rooms": {
+    "secret": {
+      "file": "077822a3213c6c2ce0814a25743312cc624afd05ef5f15dcd580513e71c51bb9",
+      "mobileFile": "93223841e954e3c3cc28502148ce9fecc0c41d955b626305288ecf18301a771c",
+      "collision": "5adda094699f700b2b31ea326e989b8f8f795a46bc06d2352f6412984c8afff6"
+    },
+    "hoof": {
+      "file": "b7b2b876d4935991f75a26d04f5602a6b287555cab63a199b7bb8cd01ce2e2d1",
+      "mobileFile": "7f3a6d2378642c8a9fb3f0457fd9b60028cbe8ed8937d97b7144567a43d030c3",
+      "collision": "aa8b7c80dea961e60397bfb697547e6c8323a912799ced229c1b5a9694fa13ee"
+    },
+    "habitat": {
+      "file": "44fa385387ade94cc0c9253beeadfde24e4922162dbb1eb482bc8abb7a70a0e4",
+      "mobileFile": "fe85dde3cae2215f22a5735a398072a6a9cd2c73eeab3cd380b66e00c1292b5d",
+      "collision": "0dba376d5a5836db2697df1fe3f0596820c655e3c5d44e7191a81202feaa655e"
+    },
+    "service": {
+      "file": "b83ffbf3b78cdfc47f9fd1d54172bf54ebc14d1639b8fee5f8696e30f1c83815",
+      "mobileFile": "60b8c08064c3f4c3abdabbfe5dbdf56fee34887c11b87d852928c6a203051760",
+      "collision": "a1a94cb71420e0648332735c9350710a5b9b446cb719b74723a6776e6c19789e"
+    },
+    "catwalk": {
+      "file": "4425583931f77cf77ecd14ec1d8e7a68fa2ea8ae9c1494ecfb38c15363167f7b",
+      "mobileFile": "a240ecb373afb19cfc647557b3e032a4c9887c0c991ac0aecfb33fcb33537705",
+      "collision": "752d54bcd4d17832b197777a940221c48f13c158403a24fec5a376735dc7565e"
+    },
+    "hall": {
+      "file": "2fb2f447c7474ad1d2e89ddfde3a22cdf0af259ad00049e13a8e8eed07e6fc0e",
+      "mobileFile": "2d2011f0d1e649a4d036c46855dd2a95731e86c1b7466e09fff39e4e0f4dce39",
+      "collision": "f189e2701aefbd6ad1f2e2bf5dbf834eb252074a4599a75a531dd7eab4ad2c8c"
+    },
+    "dome": {
+      "file": "57d7fdea4c632d272d45fc178cd5bf3e2013d74697697b393eeaacfc57426bae",
+      "mobileFile": "e807f66580f451aefbdf95c4193decfbdc503610401aaabbb8fc24f9f73b8287",
+      "collision": "d8810f80c5707f5895350bc8d1514d723c4c6eef0767d2385e20b0cf113c921b"
+    },
+    "chronology": {
+      "file": "b26531fb332d9b90467cc5552cf1327f6b29bf1976eec23cc7a661148ece67cc",
+      "mobileFile": "b6672cd290b9977e19115c4f43d98393e1bd83cd1b44cd7104fdcd84b3eec574",
+      "collision": "cf0feb628fc07502e44d6867a75f87d4f46a7cbf22c0a02b3fed1d74284d305a"
+    },
+    "shop": {
+      "file": "3bc47be339b4e49ccb0dcf518b893111b813dadc78b40ecfb60b891b685b4437",
+      "mobileFile": "c8ff27cbe65e28eb7e9dc73b5b648380d04f52bd51ac6bf72e49a7c7d1bc27af",
+      "collision": "d176d3106dc9a6f9a2dc025ebfaf323c4dc7b70e22729bf96a839564adb0c2ab"
+    },
+    "aquarium": {
+      "file": "be9eae5838bc2993e8c74bcd6b3651e9b47f6cc7e9edd141ba0590a6de6387a9",
+      "mobileFile": "a281dfd285c0b9fdf92f02a8c94e01f87ba97034a05367f8f7eba9733863a8c2",
+      "collision": "fc4b8d767eaf012332e386d82f82ccc35b780633a7040b091e222d749e47bfca"
+    },
+    "forum": {
+      "file": "839d736f05589ca0b1519d5b5e06ab9f2f8ff7b0dc9bdefebbffd62fcd2bb2b5",
+      "mobileFile": "484f739d1d9e7bbb3f22b79948817724fc3296a2c2fab4077c8694d9448dcbed",
+      "collision": "74f6f1bfdf04ad633151bd96cd4a02b14114518b4b0687f18c425fcad5643b2d"
+    },
+    "twelve": {
+      "file": "16b4938fff3f903bb486d95fc37d0b72a57b856d83da41d124f30e16af88ed98",
+      "mobileFile": "3b668c64d45d5c46d9e02c8a86d4ab0cd89d4436b3ce2e3fde3d511812f6ff75",
+      "collision": "ca7861659b963febd51b501e381eac33a5a0bd5b211df8742bc038911d746383"
+    },
+    "commons": {
+      "file": "02ea881f38a060e81ca30b1dfb100b0627e1ebfb70b5e598d77514a9def3f698",
+      "mobileFile": "ffa171d75bf4323c9c71f62ccccd64dbf88c66afca61540032f33244934d6623",
+      "collision": "791e9c846f960c3baedd0b63e9b4a5f49e917bc115c7c5064d7325c120750db6"
+    },
+    "atrium": {
+      "file": "4308d0fb1096f20257984e4b4453ab10f6f3ecdf38dc2dabb5f5e2bb69dca9dc",
+      "mobileFile": "3c8681a24c36d9032b4b8af9342c831598aae74a0f36a5392692ee1732f21b45",
+      "collision": "e45d7a9eee5b7ec05fa222c53d5d75989b36fe33b574d533270dc38c7377f0c7"
+    }
+  },
+  "networkCheck": "Local Git index and local LFS media store only."
+}

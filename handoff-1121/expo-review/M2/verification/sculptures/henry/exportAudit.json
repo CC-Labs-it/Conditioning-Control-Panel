@@ -1,0 +1,38 @@
+{
+  "id": "henry",
+  "sourceSha256": "9847a936588ef9ca0e1d752ca6cd2821cf4e7b70b28394abe57b47f92c953e17",
+  "sourceTriangles": 322108,
+  "glbSha256": "64ccbe9924cffd6ca76d4a88df25cee92e8c871bd589b3b14d80cbbfbd1612bd",
+  "glbBytes": 5038232,
+  "triangles": 44477,
+  "boundsHeight": 1.000272,
+  "fourSolesAboveLowest": {
+    "left fore": 0.0,
+    "right fore": 0.0,
+    "left hind": 0.0,
+    "right hind": 0.0
+  },
+  "sharedOcularRimVertices": {
+    "Henry, solid right eye": 154,
+    "Henry, solid left eye": 152
+  },
+  "components": {
+    "Henry, inset left pupil": 204,
+    "Henry, inset right pupil": 202,
+    "Henry, solid left eye": 3010,
+    "Henry, solid right eye": 3042,
+    "hero_henry_cast": 20827,
+    "Interlocked oval curb links": 16848,
+    "Rear clasp toggle": 36,
+    "Toggle retaining ring": 308
+  },
+  "materials": [
+    "fitting_aged_brass",
+    "fitting_polished_brass",
+    "fitting_satin_brass",
+    "hero_henry_cast",
+    "hero_herd_globe_eye",
+    "hero_herd_pupil"
+  ],
+  "forward": "+X"
+}

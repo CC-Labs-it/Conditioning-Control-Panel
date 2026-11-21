@@ -1,0 +1,60 @@
+{
+  "zone": "service",
+  "entryMs": 3361,
+  "width": 1440,
+  "height": 810,
+  "coarse": false,
+  "timing": {
+    "gpu": "ANGLE (NVIDIA, NVIDIA GeForce RTX 5080 (0x00002C02) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "frames": 178,
+    "medianMs": 16.699999999999818,
+    "p95Ms": 16.800000000000182,
+    "firstViewBytes": 7692035
+  },
+  "shots": [
+    {
+      "name": "12-return-to-atrium",
+      "at": [
+        20.3,
+        6.8,
+        23
+      ],
+      "look": [
+        12.4,
+        8,
+        23
+      ],
+      "zone": "service",
+      "feet": [
+        20.3,
+        6.800000190734863,
+        23
+      ],
+      "surface": "carpet",
+      "elapsed": 7.545999999171489,
+      "ready": true,
+      "loaded": [
+        "secret",
+        "service",
+        "atrium"
+      ],
+      "textures": {
+        "residentSources": 69,
+        "sharedHits": 74,
+        "fullDetailMaps": 22,
+        "pendingDetailMaps": 0,
+        "decodedBytes": 270819328
+      },
+      "calls": 50,
+      "pixelRatio": 1,
+      "depth": 0,
+      "phase": 0,
+      "seconds": 0,
+      "requiredNeighbors": [
+        "atrium"
+      ],
+      "coldNeighborCheck": true
+    }
+  ],
+  "issues": []
+}

@@ -1,0 +1,72 @@
+{
+  "transport": {
+    "riseSeconds": 2.4,
+    "holdStartSeconds": 1.2,
+    "holdEndSeconds": 2.2,
+    "arrivalSeconds": 3.2,
+    "crossfadeSeconds": 0.14,
+    "profiles": {
+      "standard": {
+        "rise": "portal-rise.ogg",
+        "arrival": "portal-arrival.ogg"
+      },
+      "gentle": {
+        "rise": "portal-rise-gentle.ogg",
+        "arrival": "portal-arrival-gentle.ogg"
+      }
+    }
+  },
+  "roomSourceSha256": "fa225679f80ba872d255e40cc46e3780de93d4ed00142ac1764b1c0c1c82a363",
+  "files": {
+    "portal-rise.ogg": {
+      "frames": 115200,
+      "channels": 2,
+      "seconds": 2.4,
+      "truePeakDbtp": -11.81,
+      "rmsDbfs": -27.18,
+      "sha256": "f0cd41546b645ba5682933854aed0474d8f8f3760f8d29aa61a145863afde984",
+      "loopBoundaryStep": 0.005827,
+      "periodicHoldRmsError": 0.007025
+    },
+    "portal-arrival.ogg": {
+      "frames": 153600,
+      "channels": 2,
+      "seconds": 3.2,
+      "truePeakDbtp": -17.02,
+      "rmsDbfs": -33.74,
+      "sha256": "02ed7b8dc78fb704ec05ac4c31caccac4f1422786df3b3c71fc46e1e99f5e46e"
+    },
+    "portal-rise-gentle.ogg": {
+      "frames": 115200,
+      "channels": 2,
+      "seconds": 2.4,
+      "truePeakDbtp": -17.03,
+      "rmsDbfs": -33.39,
+      "sha256": "3a1af704b29705890169249d6b6b08091e970f65c41c6647f1a53e526c1311b2",
+      "loopBoundaryStep": 0.002581,
+      "periodicHoldRmsError": 0.002985
+    },
+    "portal-arrival-gentle.ogg": {
+      "frames": 153600,
+      "channels": 2,
+      "seconds": 3.2,
+      "truePeakDbtp": -23.06,
+      "rmsDbfs": -39.9,
+      "sha256": "b49b6e902fbbc7979fb96b5bd263574e0db1628b4286ea5bff8944b4089f2b56"
+    }
+  },
+  "continuousListeningExamples": {
+    "standard": {
+      "file": "joined-standard.ogg",
+      "seconds": 6.26,
+      "heldAdditionalSeconds": 1.0,
+      "sha256": "0c53f1f53f2c7898054fc36cef4fdb842efb669b29b79f1142c9b5bf85f8cdd9"
+    },
+    "gentle": {
+      "file": "joined-gentle.ogg",
+      "seconds": 6.26,
+      "heldAdditionalSeconds": 1.0,
+      "sha256": "535784db24626fb861be423d519bca7f924e55f529e7bae0ec0a6a9672c6c7a0"
+    }
+  }
+}

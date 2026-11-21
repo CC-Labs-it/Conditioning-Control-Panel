@@ -1,0 +1,85 @@
+{
+  "flight": {
+    "centre": [
+      -11.7,
+      4.96,
+      10
+    ],
+    "width": 1.38,
+    "height": 1.035,
+    "imageSha256": "ac0486018891b412e58c0c3dd2d51fb73545a41ecfc0477ea0e492a79bf79115",
+    "captionSha256": "2d1aac0dcb94d4955855dfdd65a10bc5d601bf5668f9cab07175cae0f4b64818"
+  },
+  "loch": {
+    "centre": [
+      -11.7,
+      4.96,
+      6
+    ],
+    "width": 1.38,
+    "height": 1.035,
+    "imageSha256": "418556fa9369d7f17b460c220010e303d6fa2e6b713ec73df34d9f03e6d8f8e2",
+    "captionSha256": "d17283636cc6786cc8e364afec5eaf13cf38f38142e085e96809b8004320e919"
+  },
+  "summit": {
+    "centre": [
+      -11.7,
+      4.96,
+      2.58
+    ],
+    "width": 1.38,
+    "height": 1.035,
+    "imageSha256": "c90bbb9b7a82b7cddafcb8e97bef744b8eafa31653531a2a1ec5dafe42d9f378",
+    "captionSha256": "27977f9aaae44474316160b5d3dc38fb55fac15a306bff4e8872d75b494a1042"
+  },
+  "woods": {
+    "centre": [
+      -11.7,
+      4.96,
+      -2
+    ],
+    "width": 1.38,
+    "height": 1.035,
+    "imageSha256": "aeb17aede5643cce66ea26491c606941be5434d0769296b9edcef6289ae101d6",
+    "captionSha256": "b9cf8db0974494b014a21190c17df15d853c6fd93b023a4147953402e7eb6f10"
+  },
+  "moon": {
+    "centre": [
+      -11.7,
+      4.96,
+      -6
+    ],
+    "width": 1.38,
+    "height": 1.035,
+    "imageSha256": "eccc1b4238d5a74ad4fa538e4a678b15a739c3569b7ce4a9486f53ce452d0646",
+    "captionSha256": "ad27a38fa09d6ade3d88823a9c4bb9a0f1e3eea19b2e7a7dd75413022bd26e52"
+  },
+  "crossing": {
+    "centre": [
+      -11.7,
+      4.96,
+      -10
+    ],
+    "width": 1.38,
+    "height": 1.035,
+    "imageSha256": "3db2c8f4d00f125a2db9dd5da0e6a1291be4d6279f4840688cc8df9427ff7902",
+    "captionSha256": "22b0de0d2d5291cc24a03a7d93beedc90733aaaafdb8c856b0ff663ef80ab7ae"
+  },
+  "girder": {
+    "centre": [
+      -11.7,
+      4.96,
+      -14
+    ],
+    "width": 1.38,
+    "height": 1.035,
+    "imageSha256": "414146d3b86f1a987ec9a0e9b66eeb648f678b69cd1478c1fa83619bb61fda90",
+    "captionSha256": "7d2907e4c8b6704e3899e962762996842bf08a5cdfa4b5837f1ed236421df107"
+  },
+  "controls": [
+    "expo_screen_pa_photos",
+    "expo_lens_pa_photos",
+    "expo_station_pa_photos",
+    "expo_replay_pa_photos"
+  ]
+}
