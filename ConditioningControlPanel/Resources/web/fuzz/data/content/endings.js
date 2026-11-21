@@ -137,15 +137,14 @@ export const ENDINGS = Object.freeze({
     'Chair: a llama',
     'Panel: three (3) llamas, as agreed',
     'Your file: entered into the record, then eaten',
-    'Bench: longer than it needed to be',
+    'Table: dragged into a field for the occasion',
     'Appeal: chewed',
   ], 'No one has reached the llama and returned unchanged.', {
     scenes: [
-      { card: 'The panel sits behind a long bench. Your file is on it.' },
+      { card: 'The panel has dragged a table into a field. Your file is on it.' },
       { card: 'The chair reads it. Chews it. Spits.', verdict: 'Verdict: mostly chewing.' },
       { card: 'New sticker.', sub: 'The chair joins your Living Ad card.' },
     ],
-    plate: 'CHAIR',
     next: 'Next',
     go: 'Go on',
   }),

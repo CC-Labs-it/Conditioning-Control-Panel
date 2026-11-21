@@ -142,7 +142,7 @@ test('the ending: three scenes, Section 50 to close, a sealed sticker, under the
   assert.deepEqual(Object.keys(group).sort(), ['ft_panel', 'll_end']);
   assert.equal(typeof group.ll_end.ending, 'function');
   assert.equal(group.ll_end.fadeColour, PANEL_PAPER);
-  assert.ok(OWED.length >= 4 && OWED.every((o) => o.file && o.size && o.what));
+  assert.ok(OWED.length >= 4 && OWED.every((o) => o.file && o.size && o.what && /^real/.test(o.now)), 'every owed picture is real now');
 
   const st = STICKER_BY_ID.e_ll_end;
   assert.ok(st && st.hidden && st.page === 'endings' && st.when === 'ending:ll_end' && st.scope === 'life');
@@ -173,8 +173,9 @@ test('the chair joins the Living Ad card: this run, and every card after', () =>
   const later = cardModel({ run, life: { llamas: 12, endings: { ll_end: 1 } } });
   assert.equal(later.chair, true);
   const html = herdHtml(later);
-  assert.equal((html.match(/\u{1F999}/gu) || []).length, 12, 'the chair is one of the herd, not an extra');
+  assert.equal((html.match(/\u{1F999}/gu) || []).length, 11, 'the chair is one of the herd, not an extra');
   assert.ok(html.startsWith('<span class="chair"'));
+  assert.match(html, /^<span class="chair"[^>]*><img src="[^"]*assets\/adcard\/chair\.webp"/, 'the chair is Sir Reginald, round');
   assert.ok(!herdHtml({ llamas: 3, chair: false }).includes('chair'));
 });
 

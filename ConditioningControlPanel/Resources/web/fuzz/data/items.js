@@ -315,7 +315,7 @@ export const ITEMS = Object.freeze([
   {"id":"ft_gift","emoji":"🛍️","name":"Exit Through the Gift Shop","what":"The shop is renamed Gift Shop. Prices stay the same.","line":"Everything must go.","cost":1100000,"lane":"fate","req":["ft_rope"],"pay":"f","kind":"item","group":"run","fps":1400,"fate":"museum","step":4},
   {"id":"go_mus","emoji":"🏛️","name":"Ending: Gooning Museum","what":"Ends the run: the tour starts. Keep your hands inside the cart.","line":"Admission is free. You are the exhibit.","cost":1700000,"lane":"goon","req":["ft_gift"],"pay":"-","flags":"aE","kind":"end","group":"run","fate":"museum"},
   {"id":"ft_panel","emoji":"🦙","name":"Section 17: The Panel","what":"Binding arbitration before three (3) llamas. Their decision is final and mostly chewing.","line":"Feed is still not included.","cost":55000,"lane":"fate","req":["taste2"],"pay":"f","kind":"item","group":"run","fps":130,"fate":"llama","step":1},
-  {"id":"ll_end","emoji":"⚖️","name":"Ending: The Panel","what":"Ends the run: your case is heard. Three (3) llamas, one long bench, no appeal.","line":"All rise. Or do not. They are llamas.","cost":1500000,"lane":"fate","req":["ft_panel"],"pay":"-","flags":"E","kind":"end","group":"run","fate":"llama"},
+  {"id":"ll_end","emoji":"⚖️","name":"Ending: The Panel","what":"Ends the run: your case is heard. Three (3) llamas, one table in a field, no appeal.","line":"All rise. Or do not. They are llamas.","cost":1500000,"lane":"fate","req":["ft_panel"],"pay":"-","flags":"E","kind":"end","group":"run","fate":"llama"},
 ]);
 export const LANES = Object.freeze([
   {"id":"trunk","name":"Main path","what":"Everyone takes this path, from the first tap to the end."},

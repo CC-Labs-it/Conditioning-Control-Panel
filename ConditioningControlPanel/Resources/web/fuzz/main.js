@@ -308,7 +308,7 @@ function start(init) {
     playing = true;
     syncMedia();
     engine.mountAll(!!saved?.run);
-    mountLlamaPen({ doc: document, life, extras, gentle: ui.gentle, save: persist });   // the herd, top left, from the first second
+    mountLlamaPen({ doc: document, life, extras, gentle: ui.gentle, frozen: () => engine.paused || engine.suspended || engine.stopped, save: persist });   // the herd, top left, from the first second
     mountHomeTip({ doc: document, win: window, storage: fresh ? memoryStorage() : preferenceStorage });   // iPhone Safari, once
     engine.syncQuiet();
     ui.drawPhrase();

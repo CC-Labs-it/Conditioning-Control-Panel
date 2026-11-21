@@ -680,8 +680,29 @@ html[data-bubble-type] :is(.row .cost,.row .tag,.mix-name,.mix-value,.scr-tag,.x
 .lp-fence::after { content: ''; position: absolute; inset: auto 0 0 0; height: 9px; pointer-events: none; opacity: .85;
   background: linear-gradient(#8a5a33, #8a5a33) 0 2px / 100% 2px no-repeat, repeating-linear-gradient(90deg, #8a5a33 0 2px, transparent 2px 15px); }
 .lp-herd { display: flex; align-items: flex-end; }
-.lp-l { display: flex; justify-content: center; width: var(--lp-step, 18px); font-size: 20px; line-height: 24px; }
+.lp-l { display: flex; justify-content: center; width: var(--lp-step, 18px); height: 24px; align-items: flex-end; }
 .lp-l:last-child { margin-right: 6px; }
+.lp-ic { display: block; flex: none; overflow: visible; }
+.lp-ic .lp-head { transform-box: fill-box; transform-origin: 25% 95%; }
+.lp-ic .lp-drop { opacity: 0; transform-box: fill-box; }
+/* The spit (one llama every 7 to 13 s, ui/llama-pen.js): head back, a forward snap, a small white droplet arc that fades. */
+.lp-spit .lp-head { animation: lp-spit-head 1000ms ease-in-out; }
+.lp-spit .lp-drop { animation: lp-spit-drop 1000ms linear; }
+@keyframes lp-spit-head {
+  0% { transform: none; }
+  35% { transform: rotate(-16deg); }
+  48% { transform: rotate(9deg); }
+  62% { transform: rotate(-2deg); }
+  100% { transform: none; }
+}
+@keyframes lp-spit-drop {
+  0%, 46% { opacity: 0; transform: none; }
+  50% { opacity: 1; transform: translate(1px, -1px); }
+  70% { opacity: 1; transform: translate(9px, -3px); }
+  100% { opacity: 0; transform: translate(17px, 5px) scale(.7); }
+}
+body.gentle .lp-spit .lp-head, body.gentle .lp-spit .lp-drop { animation: none; }
+@media (prefers-reduced-motion: reduce) { .lp-spit .lp-head, .lp-spit .lp-drop { animation: none; } }
 .lp-gate { display: block; margin-left: 4px; transform: perspective(40px) rotateY(-38deg); transform-origin: left center; }
 .lp-n { padding-left: 2px; color: var(--ink-soft); white-space: nowrap; }
 .lp-chip { display: none; }
@@ -700,12 +721,17 @@ body.gentle .lp-walk { animation: none; }
 @media (prefers-reduced-motion: reduce) { .lp-walk { animation: none; } }
 .lp-say { position: fixed; left: max(8px, env(safe-area-inset-left)); top: calc(max(4px, env(safe-area-inset-top)) + 44px); z-index: 64; width: max-content; max-width: min(280px, calc(100vw - 16px)); padding: 7px 10px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); box-shadow: 2px 3px 0 #0003; font: 13px/1.3 var(--font); }
 .lp-say[hidden] { display: none; }
+/* One llama's card on hover (a tap on touch): round portrait, name, one-liner, in the bubble's look. */
+.lp-card { display: flex; align-items: center; gap: 9px; max-width: min(300px, calc(100vw - 16px)); pointer-events: auto; }
+.lp-card img { flex: none; width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line); background: #efe6d2; }
+.lp-card b { display: block; font-weight: 700; }
+.lp-card b + span { display: block; color: var(--ink-soft); }
 /* Under the rail width the corner is the ticker's: the pen folds to a chip with the number, the same bevel as Wake Up. */
 @media (max-width: 1099.98px) {
   #llama-pen { top: max(8px, env(safe-area-inset-top)); }
   #llama-pen .lp-fence, #llama-pen .lp-n { display: none; }
   #llama-pen .lp-chip { display: flex; align-items: center; gap: 3px; min-height: 36px; padding: 2px 8px; background: #d4d0c8; color: #000; border: 2px outset #fff; font: 15px "Times New Roman", Times, serif; }
-  #llama-pen .lp-chip i { font-style: normal; font-size: 17px; }
+  #llama-pen .lp-chip i { display: flex; font-style: normal; }
   #llama-pen:active .lp-chip { border-style: inset; }
   .lp-say { top: calc(max(8px, env(safe-area-inset-top)) + 42px); }
 }

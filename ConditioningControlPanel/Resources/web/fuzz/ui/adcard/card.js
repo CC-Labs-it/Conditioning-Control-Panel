@@ -113,12 +113,12 @@ function livePortrait(doc, pic, theme) {
 }
 
 /* ---------- DOM ---------- */
-/** The herd row: one llama per sheltered llama. After The Panel ending the first one is the chair, wearing the scales
- *  (placeholder until the owed chair drawing, handoff-1121/TC-LLAMA-ROUND-BRIEF.md). */
+/** The herd row: one llama per sheltered llama. After The Panel ending the first one is the chair: Sir Reginald, round
+ *  (assets/adcard/chair.webp, handoff-1121/llamas). */
 export function herdHtml(m) {
   const one = '<span>\u{1F999}</span>';
   if (!m.chair || m.llamas < 1) return one.repeat(m.llamas);
-  return `<span class="chair" title="${esc(ADCARD_COPY.chair)}">\u{1F999}<i aria-hidden="true">\u2696\uFE0F</i></span>` + one.repeat(m.llamas - 1);
+  return `<span class="chair" title="${esc(ADCARD_COPY.chair)}"><img src="${ASSETS}chair.webp" alt="${esc(ADCARD_COPY.chair)}"></span>` + one.repeat(m.llamas - 1);
 }
 
 function cardHtml(m) {
