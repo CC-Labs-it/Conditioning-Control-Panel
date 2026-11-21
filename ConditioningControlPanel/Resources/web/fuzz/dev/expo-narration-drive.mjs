@@ -34,7 +34,8 @@ try{
       if(options.bus==='voice')speechHandles.push(handle);
       return handle;
     }};
-    const ctx={audio,paused:false,gentle:false,reduced:false};
+    const memory=new Map();
+    const ctx={audio,paused:false,gentle:false,reduced:false,store:{get:k=>memory.get(k),set:(k,v)=>memory.set(k,v)}};
     const root=document.createElement('main');root.style.cssText='position:fixed;inset:0;z-index:10000;background:#18211c;color:white';document.body.append(root);
     const renderer=new T.WebGLRenderer({antialias:true});renderer.setSize(960,540);root.append(renderer.domElement);
     const lamp=new T.AmbientLight(0xffffff,2);scene.add(lamp);
@@ -49,7 +50,7 @@ try{
       add('expo_screen_'+id,screen,[x,1.4,0],0xffffff);
       add('expo_lens_'+id,new T.SphereGeometry(.04,12,8),[x,.99,.52],0xe6c56c);
     }
-    station('log_kevin',0);station('ev_h0',8);station('log_greg',15);station('log_nana',21);
+    station('log_kevin',0);station('slot_01',8);station('log_greg',15);station('log_nana',21);
     add('expo_horn_test',new T.BoxGeometry(.22,.16,.1),[1,2.7,0],0x888888);
     scene.add(group);scene.updateMatrixWorld(true);
     const controls={register:(m,l,f)=>{buttons.set(m.name,f);return()=>buttons.delete(m.name);},
@@ -65,7 +66,7 @@ try{
       if(!ctx.paused)n.tick(Math.min(1,(now-previous)/1000));previous=now;renderer.render(scene,camera);
       const count=[...root.querySelectorAll('.expo-narration p')].filter(p=>p.textContent).length;
       if(count>1)occupancy.dualCaptions++;
-      const state=n.debug(),project=state.stations.find(s=>s.id==='ev_h0')?.project;
+      const state=n.debug(),project=state.stations.find(s=>s.id==='slot_01')?.project;
       if(state.voice.id==='ev_h0'&&project?.full&&projected.at(-1)?.file!==project.texture)
         projected.push({file:project.texture,seconds:state.voice.seconds,duration:state.voice.duration});
       const playing=speechHandles.filter(h=>h.el&&!h.el.paused&&!h.el.ended).length;
@@ -93,49 +94,51 @@ try{
   await beginGameAudio(page);
   await page.evaluate(()=>{narrationBench.camera.position.x=7.8;narrationBench.camera.lookAt(8,1.4,0);});
   await wait(()=>narrationBench.n.debug().voice.queue.includes('ev_h0'));
-  const distant=(await peek()).voice;assert(distant.gain<.30);
+  const distant=(await peek()).voice;
+  // Kevin's opening room tone is mixed at 32 percent of his eventual speaking level.
+  assert.equal(distant.id,'log_kevin');
+  assert(distant.gain>=.34*.32 && distant.gain<.60*.32);
   await page.evaluate(()=>{narrationBench.camera.position.set(0,1.6,2);void narrationBench.n.cue('pa_turnstile');});
   await wait(()=>narrationBench.n.debug().pa.queue.includes('pa_turnstile'));
   const queued=await peek();assert.equal(queued.voice.id,'log_kevin');assert(!queued.pa.id);
   const canonical=await page.evaluate(async()=>await(await fetch('assets/expo/narration/manifest.json')).json());
   report.checks.mix={farGain:distant.gain,queued:queued.speech.queue,active:queued.speech.playing,paWaiting:true};
-  const interruptedAt=queued.voice.seconds;
   await page.evaluate(()=>{void narrationBench.n.planter('planter_10');});
-  await wait(()=>narrationBench.n.debug().voice.id==='planter_10');
-  const plant=await peek();assert.equal(plant.speech.interrupted,'log_kevin');
-  const heldPanel=plant.stations.find(s=>s.id==='log_kevin').project;
-  assert(heldPanel.paused&&heldPanel.active);
-  const lines=await page.evaluate(async()=>await(await fetch('assets/expo/audio/planter-voices.json')).json());
-  assert.equal(plant.voice.subtitle,lines.planter_10.subtitle);
+  await wait(()=>narrationBench.n.debug().speech.queue.includes('planter_10'));
+  assert.equal((await peek()).voice.id,'log_kevin');
   await page.evaluate(()=>narrationBench.hold(true));const a=await peek();
   await page.waitForTimeout(750);const b=await peek();assert.equal(a.voice.seconds,b.voice.seconds);
-  assert.deepEqual(b.stations.find(s=>s.id==='log_kevin').project,heldPanel);
+  assert(b.stations.find(s=>s.id==='log_kevin').project.paused);
   report.checks.pause={from:a.voice.seconds,to:b.voice.seconds};
   await page.evaluate(()=>narrationBench.hold(false));
-  await wait(()=>narrationBench.n.debug().voice.id==='log_kevin');
-  const resumed=await peek();assert(resumed.voice.seconds>=interruptedAt&&resumed.voice.seconds<interruptedAt+.8);
-  report.checks.planter={timedSeconds:lines.planter_10.seconds,subtitle:plant.voice.subtitle,
-    interrupted:plant.speech.interrupted,pausedAt:interruptedAt,resumedAt:resumed.voice.seconds};
   await wait(()=>narrationBench.n.debug().voice.subtitle==='Thank you, Kevin.',null,26000);
   const kevin=await peek();assert(kevin.voice.seconds>=15);report.checks.kevinRoomToneSeconds=kevin.voice.seconds;
+  await wait(()=>narrationBench.n.debug().voice.id==='planter_10');
+  const plant=await peek();assert.equal(plant.finished.log_kevin,1);
+  const lines=await page.evaluate(async()=>await(await fetch('assets/expo/audio/planter-voices.json')).json());
+  assert.equal(plant.voice.subtitle,lines.planter_10.subtitle);
+  report.checks.planter={timedSeconds:lines.planter_10.seconds,subtitle:plant.voice.subtitle,previousVoiceFinished:true};
   await wait(()=>narrationBench.n.debug().voice.id==='ev_h0');
   s=await peek();assert.equal(s.voice.subtitle,canonical.find(r=>r.id==='ev_h0').subtitle);
   await page.evaluate(()=>{const b=narrationBench;b.camera.position.set(8.55,1.6,2.1);b.camera.lookAt(8,1.4,0);});
-  await wait(()=>narrationBench.n.debug().stations.find(s=>s.id==='ev_h0').project.lamp>.8);
+  await wait(()=>narrationBench.n.debug().stations.find(s=>s.id==='slot_01').project.lamp>.8);
   await page.screenshot({path:path.join(dir,'component-projection.jpg'),quality:90,type:'jpeg'});
   await page.evaluate(()=>{narrationBench.ctx.gentle=true;});
   await page.waitForTimeout(180);
-  const gentle=(await peek()).stations.find(s=>s.id==='ev_h0');assert.equal(gentle.project.zoom,0);
+  const gentle=(await peek()).stations.find(s=>s.id==='slot_01');assert.equal(gentle.project.zoom,0);
   await page.evaluate(()=>{narrationBench.ctx.gentle=false;});
+  await wait(()=>narrationBench.projected.length===3,null,30000);
+  await look([8,1.6,12]);
   await wait(()=>narrationBench.n.debug().finished.ev_h0===1,null,30000);
   await wait(()=>narrationBench.n.debug().pa.id==='pa_turnstile');
   assert.equal((await peek()).pa.subtitle,canonical.find(r=>r.id==='pa_turnstile').subtitle);
   await wait(()=>narrationBench.n.debug().finished.pa_turnstile===1);
   await page.waitForTimeout(1000);
-  const rest=(await peek()).stations.find(s=>s.id==='ev_h0');
+  const rest=(await peek()).stations.find(s=>s.id==='slot_01');
   const expected=canonical.find(r=>r.id==='ev_h0').slides;
-  assert(rest.project.lamp<.1&&!rest.project.active&&!rest.project.full);
-  assert.equal(rest.project.slide,expected[1]);assert.equal(rest.project.resting,expected[1]);
+  assert(rest.project.lamp<.1 && !rest.project.active && rest.project.full);
+  const following=canonical.find(r=>r.archive?.number===2).slides[1];
+  assert.equal(rest.project.slide,following);assert.equal(rest.project.resting,following);
   const clocks=await page.evaluate(()=>({displayed:narrationBench.projected,clicks:narrationBench.clicks.filter(c=>c.source==='ev_h0.mp3')}));
   assert.deepEqual(clocks.displayed.map(v=>v.file),expected);
   assert.equal(clocks.clicks.length,3);

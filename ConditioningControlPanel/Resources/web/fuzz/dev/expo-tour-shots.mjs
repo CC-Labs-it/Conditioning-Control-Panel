@@ -1,7 +1,7 @@
 // Camera cuts are separated by unrecorded travel. Within a shot, movement uses the real floor and wall controller.
 const shots = {
   admission:{admission:true},
-  arrival:{zone:'atrium',at:[.22,0,36.21],aim:[1.7,3.65,26.5],path:[[0,35.5],[.95,34.07]]},
+  arrival:{zone:'atrium',guideEntrance:true},
   grand:{zone:'atrium',at:[.95,0,34.07],aim:[1.7,4.55,26.5],
     path:Array.from({length:12},(_,i)=>{const a=(i+1)*Math.PI/24;return [-3.1+4.05*Math.cos(a),34.07-4.05*Math.sin(a)];})},
   upper:{zone:'atrium',at:[-3.1,6.8,18.34],aim:[1.80,3.75,26.7],to:[1,18.34]},
@@ -17,7 +17,7 @@ const shots = {
   tiny:{zone:'catwalk',at:[-14.12,6.8,28],aim:[-5.2,6.18,28],to:[-12.53,28],visibleRooms:['atrium']},
   crown:{zone:'catwalk',at:[-22.45,11.95,-2.8],aim:[-22,1.05,-5],to:[-22.05,-4.86],visibleRooms:['dome']},
   hall:{zone:'hall',at:[0,0,13.2],aim:[0,2.4,-9],to:[0,3.1]},
-  chronology:{zone:'chronology',at:[8.72,0,46.85],aim:[10.91,1.93,46.85],expectedStation:'ev_h0'},
+  chronology:{zone:'chronology',archiveSlot:'slot_02'},
   forum:{zone:'forum',at:[2.7,0,103],aim:[-13.6,2.2,103],to:[-.7,103]},
   commons:{zone:'commons',at:[-66.2,0,97.9],aim:[-66.2,2.2,81.6],to:[-66.2,94.6]},
   aquarium:{zone:'aquarium',at:[-49.4,0,45.38],aimObject:'aquarium_ray_2',

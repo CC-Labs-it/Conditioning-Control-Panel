@@ -1,0 +1,305 @@
+{
+  "profile": "M5",
+  "rehearse": false,
+  "duration": 14,
+  "startedUtc": "2026-11-21T18:59:54.860Z",
+  "cameraCuts": "Cuts reposition the player between shots. Movement, interactions, sound and room transitions within each shot are live.",
+  "edits": [
+    {
+      "id": "chess",
+      "seconds": 7,
+      "cutTo": [
+        8.85,
+        0,
+        63.92
+      ],
+      "before": {
+        "zone": "chronology",
+        "feet": [
+          8.85,
+          0,
+          63.92
+        ],
+        "surface": "stone",
+        "elapsed": 2.7646999997198543,
+        "ready": true,
+        "loaded": [
+          "chronology"
+        ],
+        "textures": {
+          "residentSources": 55,
+          "sharedHits": 43,
+          "fullDetailMaps": 89,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 237142016
+        },
+        "calls": 65,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "id": "pa_arrive_1",
+          "seconds": 2.160709,
+          "duration": 10.33,
+          "gain": 0.511577481811332,
+          "pan": -0.5359110291726742,
+          "duck": 1,
+          "subtitle": "Welcome to Llama Expo 2037. Feed is included. Please keep your hands where we can use them.",
+          "queue": []
+        },
+        "finished": {}
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "chronology",
+        "feet": [
+          9.170363298223934,
+          0,
+          64.26948723442611
+        ],
+        "surface": "stone",
+        "elapsed": 10.512799998939037,
+        "ready": true,
+        "loaded": [
+          "chronology"
+        ],
+        "textures": {
+          "residentSources": 55,
+          "sharedHits": 43,
+          "fullDetailMaps": 89,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 237142016
+        },
+        "calls": 60,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "id": "pa_arrive_1",
+          "seconds": 9.943946,
+          "duration": 10.33,
+          "gain": 0.509730447566111,
+          "pan": -0.5337912094534213,
+          "duck": 1,
+          "subtitle": "Welcome to Llama Expo 2037. Feed is included. Please keep your hands where we can use them.",
+          "queue": []
+        },
+        "finished": {}
+      },
+      "speechChanges": [
+        {
+          "at": 0.002,
+          "voice": "",
+          "pa": "pa_arrive_1"
+        }
+      ],
+      "cut": {
+        "sourceDuration": 7.72,
+        "cutFrom": 0.31999999999999973,
+        "cutTo": 7.319999999999999
+      }
+    },
+    {
+      "id": "classifieds",
+      "seconds": 7,
+      "cutTo": [
+        -22.25,
+        0,
+        104.31
+      ],
+      "before": {
+        "zone": "forum",
+        "feet": [
+          -22.25,
+          0,
+          104.31
+        ],
+        "surface": "stone",
+        "elapsed": 18.450699997687334,
+        "ready": true,
+        "loaded": [
+          "chronology",
+          "forum"
+        ],
+        "textures": {
+          "residentSources": 60,
+          "sharedHits": 89,
+          "fullDetailMaps": 95,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 258113536
+        },
+        "calls": 57,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1
+        }
+      },
+      "inputs": [],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "forum",
+        "feet": [
+          -22.201871574336877,
+          0,
+          104.67577603503953
+        ],
+        "surface": "stone",
+        "elapsed": 26.199799996626428,
+        "ready": true,
+        "loaded": [
+          "chronology",
+          "forum"
+        ],
+        "textures": {
+          "residentSources": 60,
+          "sharedHits": 89,
+          "fullDetailMaps": 95,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 258113536
+        },
+        "calls": 56,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "finished": {
+          "pa_arrive_1": 1
+        }
+      },
+      "speechChanges": [
+        {
+          "at": 0.002,
+          "voice": "",
+          "pa": ""
+        }
+      ],
+      "cut": {
+        "sourceDuration": 7.72,
+        "cutFrom": 0.31999999999999973,
+        "cutTo": 7.319999999999999
+      }
+    }
+  ],
+  "faults": [],
+  "mediaRequests": [
+    "manifest.json",
+    "resting-index.json",
+    "resting-atlas.webp",
+    "hall/pa_arrive_1.mp3",
+    "slides/chew.webp"
+  ],
+  "roomGeometry": {
+    "atrium-08a61de17d70b835.glb.gz": {
+      "bytes": 4259748,
+      "sha256": "25d17aa9f385fe6c0342af2d25f983b5d9fdaa05a840876f0a8e3a9c4a115f38"
+    },
+    "chronology-5d57b523d603219f.glb": {
+      "bytes": 2220124,
+      "sha256": "84666b8335fa9509e964a126cda45a02eaef6c7e8ee11122593aa99fe288ed59"
+    },
+    "forum-3486233e3a3b4b2d.glb": {
+      "bytes": 1336000,
+      "sha256": "d5bcc7928a7477215939e1a5581e8c86fece495afd5f393df4b78381a6c53d3f"
+    }
+  },
+  "collectionGeometry": {
+    "collection-d1fafb54fde3.glb": {
+      "sha256": "d1fafb54fde3ffe694f51efcfe4d1a2c7abc2fb01895543a5791bbde6b512248",
+      "bytes": 1462384
+    },
+    "guest-chess.glb": {
+      "sha256": "2295cd98c3a1afed1f5b90b6b9178d5c821f4456a8e8a02269eab37a22e8f36e",
+      "bytes": 662140
+    },
+    "guest-classifieds.glb": {
+      "sha256": "f51f782a8761fd24b4ff8f38c3a6bb162e2121f2064e573d809acf28fe554556",
+      "bytes": 849168
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "browser": "157.0.8103.80",
+  "entrance": "atrium",
+  "stagedRooms": [
+    "aquarium",
+    "service",
+    "secret",
+    "twelve",
+    "dome",
+    "chronology",
+    "commons",
+    "forum",
+    "atrium",
+    "hall",
+    "catwalk",
+    "shop",
+    "hoof",
+    "habitat"
+  ],
+  "manualPresses": 3,
+  "recordedMix": "Room tone, music, movement and controls with the Voices mixer source muted"
+}

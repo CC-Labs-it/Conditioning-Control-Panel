@@ -1,0 +1,424 @@
+{
+  "zone": "habitat",
+  "base": "http://127.0.0.1:8937/fuzz/",
+  "touch": true,
+  "viewAsset": {
+    "url": "http://127.0.0.1:8937/fuzz/assets/expo/zones/habitat-f7dc893cfcac2ed0-mobile.glb",
+    "sha256": "dfd755cdd073438cedc6f095d7247f14b414601c8d8e4634078a47112ab045cd",
+    "bytes": 787488,
+    "nativeSha256": "c322484671c8f6f32883b4817c569f076f18288bfab7dba166228f877d9d4291",
+    "edition": "habitat-listening-02"
+  },
+  "collection": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45",
+  "receipts": [
+    {
+      "file": "01.jpg",
+      "pose": {
+        "eye": [
+          12.97,
+          1.6,
+          7.12
+        ],
+        "target": [
+          18.5,
+          1.65,
+          10
+        ]
+      },
+      "feet": [
+        12.97,
+        0,
+        7.12
+      ],
+      "camera": [
+        12.97,
+        1.6,
+        7.12
+      ],
+      "rooms": [
+        "hall",
+        "hoof",
+        "habitat"
+      ],
+      "mounted": [
+        "hab_1",
+        "slot_13"
+      ]
+    },
+    {
+      "file": "02.jpg",
+      "pose": {
+        "eye": [
+          21.996,
+          1.6,
+          11.6
+        ],
+        "target": [
+          18,
+          1.25,
+          9.1
+        ]
+      },
+      "feet": [
+        21.996,
+        0,
+        11.6
+      ],
+      "camera": [
+        21.996,
+        1.6,
+        11.6
+      ],
+      "rooms": [
+        "hall",
+        "hoof",
+        "habitat"
+      ],
+      "mounted": [
+        "hab_1",
+        "slot_13"
+      ]
+    },
+    {
+      "file": "03.jpg",
+      "pose": {
+        "eye": [
+          13.896,
+          1.6,
+          4.65
+        ],
+        "target": [
+          18,
+          1.25,
+          9.1
+        ]
+      },
+      "feet": [
+        13.896,
+        0,
+        4.65
+      ],
+      "camera": [
+        13.896,
+        1.6,
+        4.65
+      ],
+      "rooms": [
+        "hall",
+        "hoof",
+        "habitat"
+      ],
+      "mounted": [
+        "hab_1",
+        "slot_13"
+      ]
+    },
+    {
+      "file": "04.jpg",
+      "pose": {
+        "eye": [
+          22.212,
+          1.6,
+          4.5
+        ],
+        "target": [
+          18,
+          1.25,
+          9.1
+        ]
+      },
+      "feet": [
+        22.212,
+        0,
+        4.5
+      ],
+      "camera": [
+        22.212,
+        1.6,
+        4.5
+      ],
+      "rooms": [
+        "hall",
+        "hoof",
+        "habitat"
+      ],
+      "mounted": [
+        "hab_1",
+        "slot_13"
+      ]
+    },
+    {
+      "file": "05.jpg",
+      "pose": {
+        "eye": [
+          13.248,
+          1.6,
+          7.75
+        ],
+        "target": [
+          18,
+          1.25,
+          9.1
+        ]
+      },
+      "feet": [
+        13.248,
+        0,
+        7.75
+      ],
+      "camera": [
+        13.248,
+        1.6,
+        7.75
+      ],
+      "rooms": [
+        "hall",
+        "hoof",
+        "habitat"
+      ],
+      "mounted": [
+        "hab_1",
+        "slot_13"
+      ]
+    },
+    {
+      "file": "06.jpg",
+      "pose": {
+        "eye": [
+          16.12,
+          1.6,
+          9.17
+        ],
+        "target": [
+          17.48,
+          1.59,
+          12.6
+        ]
+      },
+      "feet": [
+        16.12,
+        0,
+        9.17
+      ],
+      "camera": [
+        16.12,
+        1.6,
+        9.17
+      ],
+      "rooms": [
+        "hall",
+        "hoof",
+        "habitat"
+      ],
+      "mounted": [
+        "hab_1",
+        "slot_13"
+      ]
+    },
+    {
+      "file": "07.jpg",
+      "pose": {
+        "eye": [
+          20.2,
+          1.6,
+          4.85
+        ],
+        "target": [
+          17.65,
+          0.8,
+          9.7
+        ]
+      },
+      "feet": [
+        20.2,
+        0,
+        4.85
+      ],
+      "camera": [
+        20.2,
+        1.6,
+        4.85
+      ],
+      "rooms": [
+        "hall",
+        "hoof",
+        "habitat"
+      ],
+      "mounted": [
+        "hab_1",
+        "slot_13"
+      ]
+    },
+    {
+      "file": "08.jpg",
+      "pose": {
+        "eye": [
+          18.81,
+          1.6,
+          3.8
+        ],
+        "target": [
+          18,
+          1.25,
+          9.1
+        ]
+      },
+      "feet": [
+        18.81,
+        0,
+        3.8
+      ],
+      "camera": [
+        18.81,
+        1.6,
+        3.8
+      ],
+      "rooms": [
+        "hall",
+        "hoof",
+        "habitat"
+      ],
+      "mounted": [
+        "hab_1",
+        "slot_13"
+      ]
+    },
+    {
+      "file": "09.jpg",
+      "pose": {
+        "eye": [
+          15.516,
+          1.6,
+          9.25
+        ],
+        "target": [
+          18,
+          1.25,
+          9.1
+        ]
+      },
+      "feet": [
+        15.516,
+        0,
+        9.25
+      ],
+      "camera": [
+        15.516,
+        1.6,
+        9.25
+      ],
+      "rooms": [
+        "hall",
+        "hoof",
+        "habitat"
+      ],
+      "mounted": [
+        "hab_1",
+        "slot_13"
+      ]
+    },
+    {
+      "file": "10.jpg",
+      "pose": {
+        "eye": [
+          20.484,
+          1.6,
+          9.65
+        ],
+        "target": [
+          18,
+          1.25,
+          9.1
+        ]
+      },
+      "feet": [
+        20.484,
+        0,
+        9.65
+      ],
+      "camera": [
+        20.484,
+        1.6,
+        9.65
+      ],
+      "rooms": [
+        "hall",
+        "hoof",
+        "habitat"
+      ],
+      "mounted": [
+        "hab_1",
+        "slot_13"
+      ]
+    },
+    {
+      "file": "11.jpg",
+      "pose": {
+        "eye": [
+          16.11,
+          1.6,
+          5.95
+        ],
+        "target": [
+          18,
+          1.25,
+          9.1
+        ]
+      },
+      "feet": [
+        16.11,
+        0,
+        5.95
+      ],
+      "camera": [
+        16.11,
+        1.6,
+        5.95
+      ],
+      "rooms": [
+        "hall",
+        "hoof",
+        "habitat"
+      ],
+      "mounted": [
+        "hab_1",
+        "slot_13"
+      ]
+    },
+    {
+      "file": "12.jpg",
+      "pose": {
+        "eye": [
+          19.782,
+          1.6,
+          5.95
+        ],
+        "target": [
+          18,
+          1.25,
+          9.1
+        ]
+      },
+      "feet": [
+        19.782,
+        0,
+        5.95
+      ],
+      "camera": [
+        19.782,
+        1.6,
+        5.95
+      ],
+      "rooms": [
+        "hall",
+        "hoof",
+        "habitat"
+      ],
+      "mounted": [
+        "hab_1",
+        "slot_13"
+      ]
+    }
+  ],
+  "errors": []
+}

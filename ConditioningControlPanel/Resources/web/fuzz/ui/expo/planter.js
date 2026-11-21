@@ -8,14 +8,20 @@ export function isPlanterCollider(node) {
   return node.userData.expoPlanter === true || oldBeds.has(node.name.toLowerCase().replaceAll('_',' '));
 }
 
-export function createPlanterVisit(cue) {
-  let used=false, planter=null, origin=null, elapsed=0, next=0;
+export function createPlanterVisit(cue, claim = () => true) {
+  let used=false, planter=null, origin=null, elapsed=0, next=0, pending=false;
   function land(support,takeoff) {
     if (used || !support?.planter || !takeoff || takeoff.support?.planter) return;
-    used=true; planter=support; origin=takeoff;
+    used=true;
+    planter=support; origin=takeoff;
+    const result=claim();
+    if(result?.then){
+      pending=true;
+      result.then(allowed=>{pending=false;if(!allowed)leave();},()=>{pending=false;leave();});
+    }else if(!result)leave();
   }
   function tick(seconds) {
-    if (!planter || next===cues.length) return;
+    if (!planter || pending || next===cues.length) return;
     elapsed+=seconds;
     while (next<cues.length && elapsed+.000001>=cues[next][0]) {
       const id=cues[next++][1];

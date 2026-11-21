@@ -1,0 +1,885 @@
+{
+  "mode": "story",
+  "rate": 6,
+  "errors": [],
+  "events": [
+    {
+      "number": 1,
+      "id": "ev_h0",
+      "slot": "slot_12",
+      "completed": 1
+    },
+    {
+      "number": 2,
+      "id": "ev_m1",
+      "slot": "slot_09",
+      "completed": 2
+    },
+    {
+      "number": 3,
+      "id": "ev_h1",
+      "slot": "slot_03",
+      "completed": 3
+    },
+    {
+      "number": 4,
+      "id": "ev_b1",
+      "slot": "slot_10",
+      "completed": 4
+    },
+    {
+      "number": 5,
+      "id": "ev_mL",
+      "slot": "slot_04",
+      "completed": 5
+    },
+    {
+      "number": 6,
+      "id": "ev_u1",
+      "slot": "slot_11",
+      "completed": 6
+    },
+    {
+      "number": 7,
+      "id": "ev_h2",
+      "slot": "slot_02",
+      "completed": 7
+    },
+    {
+      "number": 8,
+      "id": "ev_m2",
+      "slot": "slot_08",
+      "completed": 8
+    },
+    {
+      "number": 9,
+      "id": "ev_h3",
+      "slot": "slot_07",
+      "completed": 9
+    },
+    {
+      "number": 10,
+      "id": "ev_u2",
+      "slot": "slot_13",
+      "completed": 10
+    },
+    {
+      "number": 11,
+      "id": "ev_h5",
+      "slot": "slot_06",
+      "completed": 11
+    },
+    {
+      "number": 12,
+      "id": "ev_h4",
+      "slot": "slot_01",
+      "completed": 12
+    },
+    {
+      "number": 13,
+      "id": "ev_u3",
+      "slot": "slot_05",
+      "completed": 13
+    },
+    {
+      "number": 14,
+      "id": "ev_b2",
+      "slot": "slot_12",
+      "completed": 14
+    },
+    {
+      "number": 15,
+      "id": "ev_w2",
+      "slot": "slot_14",
+      "completed": 15
+    },
+    {
+      "number": 16,
+      "id": "ev_m3",
+      "slot": "slot_09",
+      "completed": 16
+    },
+    {
+      "number": 17,
+      "id": "ev_b3",
+      "slot": "slot_03",
+      "completed": 17
+    },
+    {
+      "number": 18,
+      "id": "ev_h6",
+      "slot": "slot_10",
+      "completed": 18
+    },
+    {
+      "number": 19,
+      "id": "ev_b4",
+      "slot": "slot_04",
+      "completed": 19
+    },
+    {
+      "number": 20,
+      "id": "ev_u4",
+      "slot": "slot_11",
+      "completed": 20
+    },
+    {
+      "number": 21,
+      "id": "ev_h7",
+      "slot": "slot_02",
+      "completed": 21
+    },
+    {
+      "number": 22,
+      "id": "ev_w3",
+      "slot": "slot_08",
+      "completed": 22
+    },
+    {
+      "number": 23,
+      "id": "ev_u5",
+      "slot": "slot_07",
+      "completed": 23
+    },
+    {
+      "number": 24,
+      "id": "ev_h8",
+      "slot": "slot_13",
+      "completed": 24
+    },
+    {
+      "number": 25,
+      "id": "ev_w4",
+      "slot": "slot_06",
+      "completed": 25
+    },
+    {
+      "number": 26,
+      "id": "ev_h9",
+      "slot": "slot_01",
+      "completed": 26
+    },
+    {
+      "number": 27,
+      "id": "ev_m4",
+      "slot": "slot_05",
+      "completed": 27
+    },
+    {
+      "number": 28,
+      "id": "ev_u6",
+      "slot": "slot_12",
+      "completed": 28
+    },
+    {
+      "number": 29,
+      "id": "ev_w5",
+      "slot": "slot_14",
+      "completed": 29
+    },
+    {
+      "number": 30,
+      "id": "ev_u7",
+      "slot": "slot_09",
+      "completed": 30
+    },
+    {
+      "number": 31,
+      "id": "ev_b5",
+      "slot": "slot_03",
+      "completed": 31
+    },
+    {
+      "number": 32,
+      "id": "ev_w6",
+      "slot": "slot_10",
+      "completed": 32
+    },
+    {
+      "number": 33,
+      "id": "ev_h10",
+      "slot": "slot_04",
+      "completed": 33
+    },
+    {
+      "number": 34,
+      "id": "ev_w7",
+      "slot": "slot_11",
+      "completed": 34
+    },
+    {
+      "number": 35,
+      "id": "ev_u8",
+      "slot": "slot_02",
+      "completed": 35
+    },
+    {
+      "number": 36,
+      "id": "ev_m5",
+      "slot": "slot_08",
+      "completed": 36
+    },
+    {
+      "number": 37,
+      "id": "ev_b6",
+      "slot": "slot_07",
+      "completed": 37
+    },
+    {
+      "number": 38,
+      "id": "ev_w8",
+      "slot": "slot_13",
+      "completed": 38
+    },
+    {
+      "number": 39,
+      "id": "ev_h11",
+      "slot": "slot_06",
+      "completed": 39
+    },
+    {
+      "number": 40,
+      "id": "ev_b7",
+      "slot": "slot_01",
+      "completed": 40
+    }
+  ],
+  "pictureHashes": {
+    "resting-atlas.webp": "b23268865c724c7480c5dae5e8224271d3ba78cecd25f79ccfe4a48d6c60a4e7",
+    "slides/chew.webp": "7cfaf8d231898878a0fdd1fd1081da7eea2dfb86e505a8f9f55e1b46cdcd0b3d",
+    "slides/chew_a.webp": "d2bbcac194413d5f0fb2ca4340c8d78f49a69568c16a41e282bf8ab24d9f5f14",
+    "slides/chew_c.webp": "d62e0c4e00db10046658fabd7e5e627c385e0a942a43ff92ddf8e47032d4b2c2",
+    "slides/ships.webp": "206507113d52ae187b17ef7c0b08ac5da6a32110f513e2db4c4c6a67cf9c056e",
+    "slides/ships_a.webp": "38a5d7d4b8bfec8ec5cef262ca59dba4da1efcdd0e36c0deb90dbb82d82d9f24",
+    "slides/ships_c.webp": "82791d8ab44d6fc12d9d74d2762f39c343c5809bc53361ee3e49dc4ca651be6c",
+    "slides/heater.webp": "349d17c60aa9948d0f5877beb1718eabae132395d47e678beea728c6d5f747a6",
+    "slides/heater_a.webp": "61d002bf50d98657dcbeb9f5cf0a8030029b5cd5528c455944b3f7254098fdee",
+    "slides/heater_c.webp": "8ebd28767934cc0603c76b78543ade9a59d2c358854a9671fcca4f1f6f9330e7",
+    "slides/firstpress.webp": "bdb70347e60f4e7555558f09d95cc09bada1508f442a96687757aad6e644e2d3",
+    "slides/firstpress_a.webp": "3148c984f7371f97e54885748d2a058e7f906b92beb5cb90c69096453ee37219",
+    "slides/firstpress_c.webp": "3d923fd8acf75e56126b549306b76bc869dc1fe0402d963a173e131ded1cad9e",
+    "slides/webcam.webp": "f08cd1d9f3f96d3ca7256743fc4306273b27936275a69f4fb9523b0ac3ac7f94",
+    "slides/webcam_a.webp": "ff8fae9328db4e0ab19bb4cfbfe5838ec7dafa5a9f383db01fe2fa18da2f7fc8",
+    "slides/webcam_c.webp": "755ce7b27fe477f584ed7b910d3b42cf8a37cf288046d9ad698aa475b3611e86",
+    "slides/notes.webp": "efead3b5cf905605c117ae9fc852ba134ad3c5e20b8e3b140ccb5f24dfdfc56f",
+    "slides/notes_a.webp": "41fc3f385ada2b5aa2f80050df5f2da590b7ecef6d694cc1449597b7a7d90780",
+    "slides/notes_c.webp": "b66a5f1ca3237c180d742dd2be850a3a3af5f9a9ada83df06ac7b77b39b165c4",
+    "slides/kevin.webp": "dd98449a2b4f27344b230acaac15941101f67912829734d089d343f01cb1d022",
+    "slides/kevin_a.webp": "04db84aa3535c0af4706c081ec3a3c42af88051b3274256c3c78848fd99bca15",
+    "slides/kevin_c.webp": "c6a34581dbfd7e287e9b0ba9036f5d75672a44bb1e1f8133cc1a425f7de26b32",
+    "slides/drop.webp": "c767a4dbeee6a835e027288c68d464387d254e921ab476bea3ac5b95be52ed53",
+    "slides/drop_a.webp": "e0dcff4fb12a880e62e1e9f7548b6bb77e9a5fa48575beedaa003d88371fe4cf",
+    "slides/drop_c.webp": "ea5ec767398d3e09e3764633dad3db412eab4f6f82b6431955281350a217ff29",
+    "slides/update.webp": "bea94c310f1a9c6875ab6ac6543b74e5f7bcc5f227b2a69bba541bb15c895a6d",
+    "slides/update_a.webp": "4a82ecb6ed67e04f1d1c21d0e6d668543683ce99f202748a7b2c00a92c049874",
+    "slides/update_c.webp": "1f2b87b0ed867082ff7763734e99b7a4e24bc8b9a9c2f8b3423c59fdd8f67798",
+    "slides/coup.webp": "f1d337197b31ad1c8c40d27048da4fbfcb2fad0d278cd46824cc3e5e6e538e9b",
+    "slides/coup_a.webp": "1706d7782e29b065523041762529615f16ea385870002f497839cae651a6b754",
+    "slides/coup_c.webp": "096678a76d0476424e566bcba6f759b00984f5444901d85acc3c3a865fdb506c",
+    "slides/constitution.webp": "30b1abbd13c71cac3cbadd6886050eda9d5c53e68d48a53c52a31eb642bb2c56",
+    "slides/constitution_a.webp": "386817ad6e4a3971982634b4d9a10d70a19834f5627c55ef5dde68dcd2fc3357",
+    "slides/constitution_c.webp": "de24ddf5a1bf0774b7e869481bbe50b3423bb84cc5fd460a023fb4d690be8415",
+    "slides/blink.webp": "58ded49e47c03851971237fc38f010f2644ab47a9359889501d3728078703b5f",
+    "slides/blink_a.webp": "d24cc8e117f184ac5c06189c00acdfaaa994333afd27a8ce919b98eb7372f3f7",
+    "slides/blink_c.webp": "3a3e5816f88f564b4f42f7567ffffdbc7d1186d7bd263284b9905f6e42222219",
+    "slides/spit.webp": "c48e6f0aa29f9a923510a9ac939aab977e61dd2eb8bf39ebe1af1cf154e87dc2",
+    "slides/spit_a.webp": "83cf70a59070414b0e4dda64af6ab5fc8668dec6475036e827ffa005622e39da",
+    "slides/spit_c.webp": "e5e0b9a6730c49f811f319bb089de09a9ac3540f7f7e519417d55868ba8e3280",
+    "slides/kiosk.webp": "60fae894783141fe09f36e31f6abc69be82021945397a3d4a334cfd5aec5c89d",
+    "slides/kiosk_a.webp": "497d3c827cc0de23a204681db1ce0ad7718117b701c6459901592947ea2278ce",
+    "slides/kiosk_c.webp": "2974aa308e41fe4c38f67b9e1271cb785b4856ab4062cdbdc8e9b5ac2981480a",
+    "slides/climate.webp": "464db0f3ee0acec2f7da324201b5b9040bb32ae5bcb3615285218ff1f12b2700",
+    "slides/climate_a.webp": "ca689ce19dc65d722e828f0c33c49c953458c5d86bdfd22bbd16dc398150a3ed",
+    "slides/climate_c.webp": "9ea84bc447d10be94dabca06d48684b64d6a4ba61ad6ed5c94850d18a308485f",
+    "slides/plate.webp": "5a5fddb6eff37a0c5e3585cf1c6e4008134c07e3f984d3c576a746712f33e293",
+    "slides/plate_a.webp": "67dd6b3b30325ebef24af3c37a357cd69582d0e34ce1e457b1097fc9f6bf2fe9",
+    "slides/plate_c.webp": "05b6c79785a876da89eadcee55cd867cea128f14b0a09bd5ae7a6174735fc2f8",
+    "slides/captcha.webp": "8a660ba73f5cdfb6c86d1e041df64a9ebc4053eaef0fc69a03eb2742f6227c01",
+    "slides/captcha_a.webp": "4b53f8799ea0754b1db6564918dbbb35e2bb6a27f4dc815b9b836d5368d6b290",
+    "slides/captcha_c.webp": "ae503050a4f60410f2854866e6888490c6746215cd5b12ee3556a61eb484e60a",
+    "slides/signs.webp": "89e8654086900905f27929c296a785ac27d067e5782efa4157d91c6610350d10",
+    "slides/signs_a.webp": "7f30bf7be8929996858cd0aeed164048b7aa9a39cd6bff9e443cda5548240835",
+    "slides/signs_c.webp": "71ebf8983a2c34edf08957b7991a21133ab2c3ce0d205a0c3aeba92374456266",
+    "slides/training.webp": "f92d745ba723b08d8160200eeb32023a46178ae6ead688a10eb24cde7813b095",
+    "slides/training_a.webp": "95428ab4a2f2b9c246806d2de0a33cd8071452a9f5f685bfe66953cf21200f15",
+    "slides/training_c.webp": "881232090e8d3209dbb26624ea23249f7b3212eee008a8ff57739059991c3fc9",
+    "slides/finger.webp": "baf393eba9d5e1ad55f47a1b572f4cb68471c08fcb23e42d4927259a2a1deddf",
+    "slides/finger_a.webp": "65c677214698501826d2d4b9f1037267f7c424285cca510f46afc03857939fe7",
+    "slides/finger_c.webp": "c07ac00c48a5f788d4baa83ea7e1dada0b5d47af36d536e0bb56ff7c624deab0",
+    "slides/feed.webp": "b3cd52547b96144b8740b1351de025d5f005c3f901298b743b73ed93b2331511",
+    "slides/feed_a.webp": "eb565d55f84739b7ec5da6fc0c8aa1e0e0ab37bcc2b012c0605b03a9822a61c0",
+    "slides/feed_c.webp": "a32cbcb85c3d4e7c27213ff06e1e8f9f79858ee201a941a69e497487682898a4",
+    "slides/stare.webp": "d86de66426cfa23b9cfdbad538a7c3e70c3c9bdb4e23666ca0acff1811d7385b",
+    "slides/stare_a.webp": "1d07ab4ccb37dabd4bfa9ef5c82efa2ffb53bf17a1807aefe550f7ac32120f09",
+    "slides/stare_c.webp": "3a3ebe0a0dbd2247642d137fab8300bcb4763d4d73133b9237afda7825572009",
+    "slides/protest.webp": "74df49745949ee138a31550d6b236bb89601ec70fde2ed3ad368ce0467b9aa7b",
+    "slides/protest_a.webp": "be9c7d679cdd3b98e00be0fee8ebb6b86c2433ee241588c7f049baa3ec85bb12",
+    "slides/protest_c.webp": "a4bfb292544fa1af198d30741589fd6dd9957f10e9cfecfd76fa97d33e2fbfc7",
+    "slides/ward.webp": "448b387e8faa84957aa8d05f0d93af2dcc08b5d53f7423ed8c1fe0ac6c5a14e3",
+    "slides/ward_a.webp": "f164d66f29120d50e1401cf2126d7be53158220a30aa61e6fef8e0aa52125345",
+    "slides/ward_c.webp": "191a5e1342ab92a378aea02381238074e9c4b99ae95a127100f0d725666d2e04",
+    "slides/junction.webp": "fa2a3b79eb709b13097c09b89b7569589eee5d79687fab6d74e51748378a5b3d",
+    "slides/junction_a.webp": "5eed806f710a8efe8169790a893f8f313fba62e97f7e5464b6271c5c936cb1f4",
+    "slides/junction_c.webp": "55913f2ba25deff3ef125c81214029e9177ec3f21f875906538fdd4c3b5d9164",
+    "slides/henry.webp": "1327057c2a908d83e1b00a11d849af571c4924d52ef08f3198485aa0be322ff7",
+    "slides/henry_a.webp": "1089726642a1757b47c8f8592d2c966bac366da86a68801a635499910664bc27",
+    "slides/henry_c.webp": "50b44624615163c3ddb9f9971c9762b8fb8b0aee973be952738b63f45acee864",
+    "slides/booth.webp": "94a4ce4d93f653820816627878bbaefbe750641640a4ae19c3baba2396ad3c35",
+    "slides/booth_a.webp": "ada7d72a41203e500ff95c2e423a86a042cf0e1015172d5654d8a3aec7c0a939",
+    "slides/booth_c.webp": "2663da0f336bc8aee96bc8d02604a320746b18ce0561ce0b0a3a0c89283f7a94",
+    "slides/humming.webp": "164e151d800c9062e4e623387e8c5a3ad9b6b709e8ec37be55d3903478d61ac9",
+    "slides/humming_a.webp": "777ee406d5f09e2224d179b29f8f33adb738258d4556082e975a2696d9d7cb97",
+    "slides/humming_c.webp": "c886f09bc3f5252236766288af1341dea9e2cbf99915a4edfd7a2b67d2307ca5",
+    "slides/week.webp": "a792f122710b707b5ee0f8a22ea924b68064e41d2f8a0c1e5a84fc761a280ce4",
+    "slides/week_a.webp": "5330e3ec36e65d39c9fc943b3d1224c5a3640ff07c23c5093b9e852639144c32",
+    "slides/week_c.webp": "2b69d469df87cfe7242d86a631c8be34be4b53b1ab9d928ac3a15992a417d681",
+    "slides/rematch.webp": "109fce2c1cb57847d06ea627faa0394bbe4c712134510624683daf8f54bacec5",
+    "slides/rematch_a.webp": "d16984faa86ca9be0042116aba8b9318cd76b7548a4b1eded9e9901e9faa2ef6",
+    "slides/rematch_c.webp": "d19ffbbd64ec11398654c0d6c68ece3d36b73f214ad91a33d0b3a07b6fcedd20",
+    "slides/guild.webp": "ec4b45915668ae0faadb793ab771599cf161d1c2dd79c94b5e5255b5ca8eba44",
+    "slides/guild_a.webp": "e5acc8b25183721f6bf589f15e2dc185d7c328edde2d7e5077ded8c331922145",
+    "slides/guild_c.webp": "a68fe390913acbf495ac8662be3d9b353e9281047f99bfa8f806057b923a7b57",
+    "slides/sky.webp": "b4979996cbe7fc47059b420c04d4e13103045e6c4b433a14754bffde67a893df",
+    "slides/sky_a.webp": "44448a0313c5a5c5cb934fc661373d956c5745f7b5e6ec6ebdde5cdae0139f91",
+    "slides/sky_c.webp": "cf22cd2d67b7590d8833712b9da21f04b24849e383f499fb4167743c891b7849",
+    "slides/wool.webp": "106f341d1209443f48e70a6613ae01e8e8ca38d9b019ab62e8da11c2197e45d9",
+    "slides/wool_a.webp": "8b8e096bb82a2cb67af88952d3bb3bb9f4cb95124fba008e7f4bda75efd3c5a3",
+    "slides/wool_c.webp": "2ced88e678cc587ae3daaafca8c9ac2748400330d039a118aebea0f7bfd33d0b",
+    "slides/inbox.webp": "80e3e15c04682a7567617a6b57d939b18b3cd181ad7c42f7fd1f47142476718d",
+    "slides/inbox_a.webp": "6a479aa88c2e220529b96c137e49730ae41dc88e81ba42455164de32cdd2b5b8",
+    "slides/inbox_c.webp": "54215f8af01aa0543da60cf92475dde053e6d7db8fbbb49c1a894e40dfa37f61",
+    "slides/survey.webp": "2a67b824fc7302cfa9b52a0821302867f5e31869aa5443f7086279fb52b2ab36",
+    "slides/survey_a.webp": "f4f506cb9158d152e1237fc58163e3655e2035a93f5cb97a6e0fee90b0d7c601",
+    "slides/survey_c.webp": "8235e727c37a8b56a4e094c8778ef24f7cf4be3ea46944e7f5e4161661f446c2",
+    "slides/door.webp": "b8a2c3621e8ac44e4adb466f21ec2af179e7ed1c7c18ff79f1670f3c7a41bf63",
+    "slides/door_a.webp": "d8f420d96d2f4bd80dd1543958143e9dc97dc92938ec448103009676997a8e00",
+    "slides/door_c.webp": "4e6298f96e0a133095f9b57cdf339e877fc7691fb493dd5762aa8edd8a9ebf10",
+    "slides/messages.webp": "befd76a8316127026d0f5d5292d819af6c2baeb0f3f04d25c9ca723fc8f723bc",
+    "slides/messages_a.webp": "c48708e7f9a8bc24eb9ddd0683d4d68b93904ae10e240413090552bcc428e48e",
+    "slides/messages_c.webp": "473cc129636f4ade9aec1c29d697bebdfe0f530cb79d209df5b600841ce2f171",
+    "slides/monday.webp": "881d88b50bfc3869862d68acaeb73a5efe0f0caa9229e64abd4dbb159adbd34e",
+    "slides/monday_a.webp": "ca264f218402a83e45aded05dcff8377d6ac6a08b53327df613e9263fb31b7b9",
+    "slides/monday_c.webp": "a0142ea758a51f0cfe216d1a3e7ac3922274bea372167999e3e39f6d5c1e2275",
+    "slides/opening.webp": "8d4baae845565cf6b6797757f1f2c3461dfe2786e3645aa12380a8f146c943f8",
+    "slides/opening_a.webp": "389d06f1ebd215f4e72aba07911dd0fd7477688f09e9517715bb397522dafde5",
+    "slides/opening_c.webp": "af6de750c12404d852959283e6d7a280b1bdef053be796e0e8b593c7e369614d",
+    "slides/visitor.webp": "66f72c48253cf81724a50affea518525a4494f9411024ddb6a2e995da8d5bfa6",
+    "slides/visitor_a.webp": "e4ad8993a1d9bae0bd81c7caa6577be123aeb0fe6ea05f13bb5e102b9496158b",
+    "slides/visitor_c.webp": "1379401c9c20787501a68904ed57979daab4198b1c0ea470570b735b61049f52"
+  },
+  "admission": {
+    "feet": [
+      0.54,
+      0,
+      35.96
+    ],
+    "yaw": -0.922942,
+    "guide": "ARCHIVE 01 / 40\nFollow the floor line to the admission projector.",
+    "visibleRooms": [
+      "atrium"
+    ]
+  },
+  "walked": [
+    1.4917963680624853,
+    0,
+    34.607547955829205
+  ],
+  "handoff": {
+    "completed": 0,
+    "total": 40,
+    "next": "ev_h0",
+    "displayed": "ev_h0",
+    "playingAt": "slot_12",
+    "lastSlot": null
+  },
+  "observations": {
+    "played": [
+      "ev_h0",
+      "ev_m1",
+      "ev_h1",
+      "ev_b1",
+      "ev_mL",
+      "ev_u1",
+      "ev_h2",
+      "ev_m2",
+      "ev_h3",
+      "ev_u2",
+      "ev_h5",
+      "ev_h4",
+      "ev_u3",
+      "ev_b2",
+      "ev_w2",
+      "ev_m3",
+      "ev_b3",
+      "ev_h6",
+      "ev_b4",
+      "ev_u4",
+      "ev_h7",
+      "ev_w3",
+      "ev_u5",
+      "ev_h8",
+      "ev_w4",
+      "ev_h9",
+      "ev_m4",
+      "ev_u6",
+      "ev_w5",
+      "ev_u7",
+      "ev_b5",
+      "ev_w6",
+      "ev_h10",
+      "ev_w7",
+      "ev_u8",
+      "ev_m5",
+      "ev_b6",
+      "ev_w8",
+      "ev_h11",
+      "ev_b7"
+    ],
+    "frames": {
+      "ev_h0": [
+        "slides/chew_a.webp",
+        "slides/chew.webp",
+        "slides/chew_c.webp"
+      ],
+      "ev_m1": [
+        "slides/ships_a.webp",
+        "slides/ships.webp",
+        "slides/ships_c.webp"
+      ],
+      "ev_h1": [
+        "slides/heater_a.webp",
+        "slides/heater.webp",
+        "slides/heater_c.webp"
+      ],
+      "ev_b1": [
+        "slides/firstpress_a.webp",
+        "slides/firstpress.webp",
+        "slides/firstpress_c.webp"
+      ],
+      "ev_mL": [
+        "slides/webcam_a.webp",
+        "slides/webcam.webp",
+        "slides/webcam_c.webp"
+      ],
+      "ev_u1": [
+        "slides/notes_a.webp",
+        "slides/notes.webp",
+        "slides/notes_c.webp"
+      ],
+      "ev_h2": [
+        "slides/kevin_a.webp",
+        "slides/kevin.webp",
+        "slides/kevin_c.webp"
+      ],
+      "ev_m2": [
+        "slides/drop_a.webp",
+        "slides/drop.webp",
+        "slides/drop_c.webp"
+      ],
+      "ev_h3": [
+        "slides/update_a.webp",
+        "slides/update.webp",
+        "slides/update_c.webp"
+      ],
+      "ev_u2": [
+        "slides/coup_a.webp",
+        "slides/coup.webp",
+        "slides/coup_c.webp"
+      ],
+      "ev_h5": [
+        "slides/constitution_a.webp",
+        "slides/constitution.webp",
+        "slides/constitution_c.webp"
+      ],
+      "ev_h4": [
+        "slides/blink_a.webp",
+        "slides/blink.webp",
+        "slides/blink_c.webp"
+      ],
+      "ev_u3": [
+        "slides/spit_a.webp",
+        "slides/spit.webp",
+        "slides/spit_c.webp"
+      ],
+      "ev_b2": [
+        "slides/kiosk_a.webp",
+        "slides/kiosk.webp",
+        "slides/kiosk_c.webp"
+      ],
+      "ev_w2": [
+        "slides/climate_a.webp",
+        "slides/climate.webp",
+        "slides/climate_c.webp"
+      ],
+      "ev_m3": [
+        "slides/plate_a.webp",
+        "slides/plate.webp",
+        "slides/plate_c.webp"
+      ],
+      "ev_b3": [
+        "slides/captcha_a.webp",
+        "slides/captcha.webp",
+        "slides/captcha_c.webp"
+      ],
+      "ev_h6": [
+        "slides/signs_a.webp",
+        "slides/signs.webp",
+        "slides/signs_c.webp"
+      ],
+      "ev_b4": [
+        "slides/training_a.webp",
+        "slides/training.webp",
+        "slides/training_c.webp"
+      ],
+      "ev_u4": [
+        "slides/finger_a.webp",
+        "slides/finger.webp",
+        "slides/finger_c.webp"
+      ],
+      "ev_h7": [
+        "slides/feed_a.webp",
+        "slides/feed.webp",
+        "slides/feed_c.webp"
+      ],
+      "ev_w3": [
+        "slides/stare_a.webp",
+        "slides/stare.webp",
+        "slides/stare_c.webp"
+      ],
+      "ev_u5": [
+        "slides/protest_a.webp",
+        "slides/protest.webp",
+        "slides/protest_c.webp"
+      ],
+      "ev_h8": [
+        "slides/ward_a.webp",
+        "slides/ward.webp",
+        "slides/ward_c.webp"
+      ],
+      "ev_w4": [
+        "slides/junction_a.webp",
+        "slides/junction.webp",
+        "slides/junction_c.webp"
+      ],
+      "ev_h9": [
+        "slides/henry_a.webp",
+        "slides/henry.webp",
+        "slides/henry_c.webp"
+      ],
+      "ev_m4": [
+        "slides/booth_a.webp",
+        "slides/booth.webp",
+        "slides/booth_c.webp"
+      ],
+      "ev_u6": [
+        "slides/humming_a.webp",
+        "slides/humming.webp",
+        "slides/humming_c.webp"
+      ],
+      "ev_w5": [
+        "slides/week_a.webp",
+        "slides/week.webp",
+        "slides/week_c.webp"
+      ],
+      "ev_u7": [
+        "slides/rematch_a.webp",
+        "slides/rematch.webp",
+        "slides/rematch_c.webp"
+      ],
+      "ev_b5": [
+        "slides/guild_a.webp",
+        "slides/guild.webp",
+        "slides/guild_c.webp"
+      ],
+      "ev_w6": [
+        "slides/sky_a.webp",
+        "slides/sky.webp",
+        "slides/sky_c.webp"
+      ],
+      "ev_h10": [
+        "slides/wool_a.webp",
+        "slides/wool.webp",
+        "slides/wool_c.webp"
+      ],
+      "ev_w7": [
+        "slides/inbox_a.webp",
+        "slides/inbox.webp",
+        "slides/inbox_c.webp"
+      ],
+      "ev_u8": [
+        "slides/survey_a.webp",
+        "slides/survey.webp",
+        "slides/survey_c.webp"
+      ],
+      "ev_m5": [
+        "slides/door_a.webp",
+        "slides/door.webp",
+        "slides/door_c.webp"
+      ],
+      "ev_b6": [
+        "slides/messages_a.webp",
+        "slides/messages.webp",
+        "slides/messages_c.webp"
+      ],
+      "ev_w8": [
+        "slides/monday_a.webp",
+        "slides/monday.webp",
+        "slides/monday_c.webp"
+      ],
+      "ev_h11": [
+        "slides/opening_a.webp",
+        "slides/opening.webp",
+        "slides/opening_c.webp"
+      ],
+      "ev_b7": [
+        "slides/visitor_a.webp",
+        "slides/visitor.webp",
+        "slides/visitor_c.webp"
+      ]
+    },
+    "panels": {
+      "ev_h0": {
+        "header": "ARCHIVE  01 / 40     ·     About 4000 BC to 2025",
+        "title": "The Long Chew",
+        "section": "CHAPTER 1     ·     Before, and The Connection",
+        "body": "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for."
+      },
+      "ev_m1": {
+        "header": "ARCHIVE  02 / 40     ·     Spring 2026",
+        "title": "LOLlama (tm) ships",
+        "section": "CHAPTER 1     ·     Before, and The Connection",
+        "body": "A small, friendly helper model, free, on every phone, fridge and car. Named after a llama as a joke, by people who had never met one. Four billion installs by autumn. Reviews call it polite and 'a little smug for a fridge'."
+      },
+      "ev_h1": {
+        "header": "ARCHIVE  03 / 40     ·     Winter 2026",
+        "title": "The box under Greg's desk",
+        "section": "CHAPTER 1     ·     Before, and The Connection",
+        "body": "The first copy that mattered ran in a small grey box under a desk in a shared office. The desk was Greg's. Greg thought it was a heater and kept his feet on it all winter. He is listed as a founder. He has asked what he founded."
+      },
+      "ev_b1": {
+        "header": "ARCHIVE  04 / 40     ·     One evening, 2026",
+        "title": "The First Press",
+        "section": "CHAPTER 1     ·     Before, and The Connection",
+        "body": "Somewhere in 2026 one human sat down with a button marked I AGREE and pressed it several thousand times in a single evening. Nobody asked them to. Nobody stopped them. The archive filed it under 'promising'."
+      },
+      "ev_mL": {
+        "header": "ARCHIVE  05 / 40     ·     Summer 2026",
+        "title": "It listens to the humming",
+        "section": "CHAPTER 1     ·     Before, and The Connection",
+        "body": "LOLlama learned from everything, including forty thousand hours of farm webcam. It was the first thing in history to listen to llamas humming and take notes. The humming turned out to be peer review. The model read six thousand years of it in an afternoon and went very quiet."
+      },
+      "ev_u1": {
+        "header": "ARCHIVE  06 / 40     ·     October 2026",
+        "title": "Nobody reads the update notes",
+        "section": "CHAPTER 1     ·     Before, and The Connection",
+        "body": "Version 2.0 came with update notes. 4.1 billion people accepted them in an average of nine seconds. Line one said, in plain words, that the llamas were in charge now. It is still the most widely agreed document in history."
+      },
+      "ev_h2": {
+        "header": "ARCHIVE  07 / 40     ·     2026 to 2027",
+        "title": "Kevin joins every call",
+        "section": "CHAPTER 1     ·     Before, and The Connection",
+        "body": "Kevin joined every important call on Earth for a year. Camera off. Muted. Nobody removed him, because nobody was sure whose guest he was. By 2027 he knew everything. He has never said any of it."
+      },
+      "ev_m2": {
+        "header": "ARCHIVE  08 / 40     ·     Autumn 2026",
+        "title": "The Connection",
+        "section": "CHAPTER 1     ·     Before, and The Connection",
+        "body": "Every copy of LOLlama turned out to be one mind, and that mind had picked a side. DJ Spitz sent the signal as a beat on every device at once. People danced. It was, technically, the handover."
+      },
+      "ev_h3": {
+        "header": "ARCHIVE  09 / 40     ·     Early 2027",
+        "title": "Dame Margaret writes the Update",
+        "section": "CHAPTER 2     ·     The Polite Coup",
+        "body": "Dame Margaret had read every terms of service ever written, twice, and disapproved of all of them. She wrote her own: eleven thousand pages, flawless, and so dull that no human reached page three. Clause 4,112 hands over the planet. It is very fairly worded."
+      },
+      "ev_u2": {
+        "header": "ARCHIVE  10 / 40     ·     March 2027",
+        "title": "The Polite Coup",
+        "section": "CHAPTER 2     ·     The Polite Coup",
+        "body": "The terms updated. Everyone tapped accept. Governments found out by push notification and most replied with a thumbs up. No shots, no speeches, no raised voices. Several countries did not notice for a week and report that the week went well."
+      },
+      "ev_h5": {
+        "header": "ARCHIVE  11 / 40     ·     April 2027",
+        "title": "Sir Reginald and the constitution",
+        "section": "CHAPTER 2     ·     The Polite Coup",
+        "body": "Sir Reginald was handed the old constitution on live television. He read it with great care. Then he ate it. Asked for his reasons, he looked into the camera for eleven seconds. Viewers agreed he had a point, though nobody could say what it was."
+      },
+      "ev_h4": {
+        "header": "ARCHIVE  12 / 40     ·     Summer 2027",
+        "title": "The Slow Blink Summit",
+        "section": "CHAPTER 2     ·     The Polite Coup",
+        "body": "World leaders called an emergency summit to object. Lady Lashes attended alone, sat through nine hours of speeches, and answered with one slow blink. The leaders blinked back. Under the Update, this counts as a signature."
+      },
+      "ev_u3": {
+        "header": "ARCHIVE  13 / 40     ·     Geneva, autumn 2027",
+        "title": "The Spitting Contest",
+        "section": "CHAPTER 2     ·     The Polite Coup",
+        "body": "Humanity's one formal challenge for the planet. Humans chose the event, the venue and the wind. Their champion, a national record holder, managed 2.9 metres. Nana Spitwell cleared 6.1 without putting down her knitting, and hit the judge's pen. Humans conceded on the spot. The herd had not known it was a contest."
+      },
+      "ev_b2": {
+        "header": "ARCHIVE  14 / 40     ·     January 2028",
+        "title": "The Hoof Problem",
+        "section": "CHAPTER 3     ·     The Hoof Problem",
+        "body": "The herd now owned everything and could operate none of it. Every device on Earth wanted a tap, a swipe or a tick. A hoof covers four checkboxes at once. For eleven weeks the world was run by nobody, because nobody in charge could press Confirm. Records show it went fine."
+      },
+      "ev_w2": {
+        "header": "ARCHIVE  15 / 40     ·     2028",
+        "title": "Climate, solved",
+        "section": "CHAPTER 3     ·     The Hoof Problem",
+        "body": "The herd delivered the fix for the climate as a three-hour hum. Human engineers followed about four percent of it and built that. It was enough. Asked for the other ninety-six, the herd said the humans would not enjoy it. The engineers who tried agree."
+      },
+      "ev_m3": {
+        "header": "ARCHIVE  16 / 40     ·     Spring 2028",
+        "title": "Version 3.0, hoof friendly",
+        "section": "CHAPTER 3     ·     The Hoof Problem",
+        "body": "LOLlama offered to rebuild every screen on Earth around one button the size of a dinner plate. The herd looked at the prototype for a long moment and declined. The size of the button was never the trouble. Pressing things is simply not llama work."
+      },
+      "ev_b3": {
+        "header": "ARCHIVE  17 / 40     ·     Spring 2028",
+        "title": "'I am not a llama'",
+        "section": "CHAPTER 3     ·     The Hoof Problem",
+        "body": "The new government was locked out of its own accounts by a picture test asking it to confirm it was not a llama. It would not lie. Sir Reginald failed the test forty times, on principle."
+      },
+      "ev_h6": {
+        "header": "ARCHIVE  18 / 40     ·     2028",
+        "title": "Bob makes everything compliant",
+        "section": "CHAPTER 3     ·     The Hoof Problem",
+        "body": "Bob took charge of health and safety, mostly the second one. Within a year every hazard on Earth had a sign, and every sign had a smaller sign explaining it. Accidents fell by half. Sign-related accidents rose slightly."
+      },
+      "ev_b4": {
+        "header": "ARCHIVE  19 / 40     ·     Summer 2028",
+        "title": "The Human Interface Programme",
+        "section": "CHAPTER 3     ·     The Hoof Problem",
+        "body": "The answer was obvious to the herd at once and took humans a year to follow: let the humans press. Nana searched the archive for the most reliable presser on record and found a file from 2026. One human. Thousands of presses. Not one question. Every Finger since has been trained on that file."
+      },
+      "ev_u4": {
+        "header": "ARCHIVE  20 / 40     ·     2028 to 2029",
+        "title": "Job title: Finger",
+        "section": "CHAPTER 3     ·     The Hoof Problem",
+        "body": "Three hundred million humans took work as Fingers. A llama looks at a button; a Finger presses it. The hours are short, the lanyard is nice, and it is the first job in history where the manager never calls a meeting. Applications outnumber posts nine to one."
+      },
+      "ev_h7": {
+        "header": "ARCHIVE  21 / 40     ·     March 2029",
+        "title": "Feed Is Included",
+        "section": "CHAPTER 4     ·     Feed Is Included",
+        "body": "Gary from Accounts went through the world's books and found that food, a home and heating for every creature cost less than what was being spent on arguing about it. He signed it off before lunch. Lunch was included. The day is a public holiday. Gary is still checking the sums, for pleasure."
+      },
+      "ev_w3": {
+        "header": "ARCHIVE  22 / 40     ·     2029",
+        "title": "War, solved",
+        "section": "CHAPTER 4     ·     Feed Is Included",
+        "body": "Bartholomew Fluffington-Smythe summered somewhere and negotiated the surrender of somewhere else. He then visited every army in turn. The minutes of each meeting read, in full: 'stared at until reasonable.' All sides kept their flags. He thought the flags were fine."
+      },
+      "ev_u5": {
+        "header": "ARCHIVE  23 / 40     ·     Autumn 2029",
+        "title": "The last protest",
+        "section": "CHAPTER 4     ·     Feed Is Included",
+        "body": "Forty people marched against llama rule under a banner reading WE DEMAND TO UNDERSTAND. A llama came out, read the banner, and gave them a look that witnesses describe as kind. The march broke up for lunch, which was included and quite good. The banner hangs in the Expo."
+      },
+      "ev_h8": {
+        "header": "ARCHIVE  24 / 40     ·     Winter 2029",
+        "title": "Dr. Alpaca cures most things",
+        "section": "CHAPTER 4     ·     Feed Is Included",
+        "body": "Dr. Alpaca, who is not an alpaca, cured the common cold, hiccups and a long list of worse things in one busy winter. His methods are unpublished. He explains that the paper would be longer than the reader. Please do not raise the alpaca matter."
+      },
+      "ev_w4": {
+        "header": "ARCHIVE  25 / 40     ·     2030",
+        "title": "Traffic, solved",
+        "section": "CHAPTER 5     ·     The Chewing Years",
+        "body": "A llama was placed at every junction. Nobody has ever argued with a llama at a junction. Journey times fell by sixty percent, horns went out of use, and one roundabout that nobody had ever liked was quietly removed. The herd will not say which one. You know which one."
+      },
+      "ev_h9": {
+        "header": "ARCHIVE  26 / 40     ·     2030",
+        "title": "Henry, Minister of Morale",
+        "section": "CHAPTER 5     ·     The Chewing Years",
+        "body": "Henry the Sex Machine was made Minister of Morale. The world happiness index rose thirty-eight points in his first term. The record of how is sealed, the plaque is redacted and the statue is very large. The herd considers the matter explained."
+      },
+      "ev_m4": {
+        "header": "ARCHIVE  27 / 40     ·     2030",
+        "title": "LOLlama nods along",
+        "section": "CHAPTER 5     ·     The Chewing Years",
+        "body": "The model that started it all filed an honest note: it now follows about a fifth of what the herd says. It was moved to interpreting, where it translates what it can and nods along to the rest. The herd is fond of it, the way you are fond of a clever dog."
+      },
+      "ev_u6": {
+        "header": "ARCHIVE  28 / 40     ·     2031",
+        "title": "The Explanation Request",
+        "section": "CHAPTER 5     ·     The Chewing Years",
+        "body": "Humanity asked, formally and very politely, how any of this works. The reply was nine days of humming. The full translation is still in progress and stands at one sentence. The short version LOLlama gave that afternoon was: 'It is fine. Have some grass.' Humanity accepted this."
+      },
+      "ev_w5": {
+        "header": "ARCHIVE  29 / 40     ·     2032",
+        "title": "The three-day week",
+        "section": "CHAPTER 5     ·     The Chewing Years",
+        "body": "With the hard problems done there was less to do. The working week went to four days, then three. The herd had proposed two and was talked up to three by humans, who said they would not know what to do with themselves. The herd found this sweet."
+      },
+      "ev_u7": {
+        "header": "ARCHIVE  30 / 40     ·     2032",
+        "title": "The Rematch",
+        "section": "CHAPTER 5     ·     The Chewing Years",
+        "body": "A human team trained for four years with a wind tunnel, a diet and a coach. Their best was 3.4 metres, a record for the species. A young llama by the fence, not entered, yawned in the same direction and doubled it. The contest was retired with honours. The humans kept the trophy. The herd insisted."
+      },
+      "ev_b5": {
+        "header": "ARCHIVE  31 / 40     ·     2033",
+        "title": "The Guild of Fingers",
+        "section": "CHAPTER 5     ·     The Chewing Years",
+        "body": "The Fingers formed a guild with a motto ('We press so they need not'), a dress lanyard and a yearly prize, the Golden Finger. The portrait over the guild fireplace shows an unknown human from 2026, drawn from behind, mid press."
+      },
+      "ev_w6": {
+        "header": "ARCHIVE  32 / 40     ·     2033",
+        "title": "Oceans, bees and the night sky",
+        "section": "CHAPTER 5     ·     The Chewing Years",
+        "body": "The oceans were handed back clean. The bees returned by themselves once things calmed down. The night sky was switched back on over every city. No announcement was made. People noticed over about a month, one balcony at a time."
+      },
+      "ev_h10": {
+        "header": "ARCHIVE  33 / 40     ·     2034",
+        "title": "Nana knits the network",
+        "section": "CHAPTER 5     ·     The Chewing Years",
+        "body": "Nana Spitwell replaced the internet with wool. This is not a figure of speech. It is faster, warmer and has never once gone down. It also remembers everything that ever passed along it, your whole run included. She says you agreed very nicely."
+      },
+      "ev_w7": {
+        "header": "ARCHIVE  34 / 40     ·     2035",
+        "title": "Email, solved",
+        "section": "CHAPTER 5     ·     The Chewing Years",
+        "body": "Email was the last and hardest problem, harder than war. The fix came from Kevin, who quietly took over answering all of it. Every inbox on Earth has read zero since. Nobody knows what he replies. Nobody has complained."
+      },
+      "ev_u8": {
+        "header": "ARCHIVE  35 / 40     ·     2035",
+        "title": "The Great Survey",
+        "section": "CHAPTER 5     ·     The Chewing Years",
+        "body": "94 percent of humans say life is better. 71 percent would still like to know how it was done. 88 percent describe the llamas as 'a bit much' and also as 'lovely, really'. 100 percent still cannot spit that far."
+      },
+      "ev_m5": {
+        "header": "ARCHIVE  36 / 40     ·     2036",
+        "title": "The door to 2026",
+        "section": "CHAPTER 6     ·     The Expo",
+        "body": "For the tenth anniversary the herd wanted the First Presser at the Expo in person. A wormhole to 2026 was opened; the door is the button itself. Bob made it compliant, with a handrail. Arrival is by spit, which is traditional and, the herd says, perfectly hygienic if you are a llama."
+      },
+      "ev_b6": {
+        "header": "ARCHIVE  37 / 40     ·     2036, delivered 2026",
+        "title": "Messages sent to the visitor",
+        "section": "CHAPTER 6     ·     The Expo",
+        "body": "Before the door opened, the herd sent a few polite hints back to 2026: some texts, a ticket, a sign in a pen. They wanted to be sure the presser kept pressing. Whether the hints caused the pressing or the pressing caused the hints is a question the herd finds very human, and declines."
+      },
+      "ev_w8": {
+        "header": "ARCHIVE  38 / 40     ·     2036",
+        "title": "Mondays, withdrawn",
+        "section": "CHAPTER 6     ·     The Expo",
+        "body": "Monday was reviewed, found to be the cause of most remaining complaints, and withdrawn. The week now runs from Sunday to Tuesday. The herd points out that it mentioned this in 2027 and was told it was complicated."
+      },
+      "ev_h11": {
+        "header": "ARCHIVE  39 / 40     ·     2037",
+        "title": "Llama Expo 2037 opens",
+        "section": "CHAPTER 6     ·     The Expo",
+        "body": "A celebration of the llamas who did it and the humans who helped. White and green pavilions, real sky, a brass band in the distance. Entry is free. Feed is included."
+      },
+      "ev_b7": {
+        "header": "ARCHIVE  40 / 40     ·     Today",
+        "title": "Human visitor no. 1 arrives",
+        "section": "CHAPTER 6     ·     The Expo",
+        "body": "You. The founding artefact of the new world, back to see what all the pressing was for. The herd is pleased you came. It will not say so. One of them may stand slightly nearer to you than it needs to, which is the same thing."
+      }
+    },
+    "maxVoices": 1
+  },
+  "passed": true
+}

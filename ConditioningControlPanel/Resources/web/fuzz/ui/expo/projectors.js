@@ -106,6 +106,7 @@ export function createProjector({group,id,scene,assetURL,lite,atlas}) {
   const face=meshIn(group.getObjectByName('expo_screen_'+id)), lens=meshIn(group.getObjectByName('expo_lens_'+id));
   if(!face||!lens)return null;
   const original=face.material, lensOriginal=lens.material;
+  const archive=id.startsWith('slot_');
   const viewPoint=centre(face);
   const viewNormal=new T.Vector3().fromBufferAttribute(face.geometry.attributes.normal,0)
     .applyNormalMatrix(new T.Matrix3().getNormalMatrix(face.matrixWorld));
@@ -155,9 +156,15 @@ export function createProjector({group,id,scene,assetURL,lite,atlas}) {
     if(paused)return;
     age+=dt;
     shown=active?slide:rest;
-    if(rest!==restKey){restKey=rest;const i=atlas.index.get(rest)??47;uniforms.cell.value.set(i%8,Math.floor(i/8));}
+    if(rest!==restKey){
+      // A new record changes the digital plaque and its idle picture on the same frame.
+      if(!active && key)clearSlides();
+      restKey=rest;const i=atlas.index.get(rest)??47;uniforms.cell.value.set(i%8,Math.floor(i/8));
+    }
+    const closePrint=archive && !active && rest && distance<(key?7:5.5);
     if(slide&&active&&distance<13){image(slide);prime(following);}
-    if(!active&&key){
+    if(closePrint){image(rest);if(nextPromise)dropNext();}
+    if(!active && !closePrint && key){
       request++;key='';dropNext();previous?.dispose();previous=current;current=null;
       uniforms.oldSlide.value=previous||blank;uniforms.oldDetail.value=previous?1:0;
       uniforms.newSlide.value=blank;uniforms.newDetail.value=0;uniforms.blend.value=0;
@@ -175,7 +182,12 @@ export function createProjector({group,id,scene,assetURL,lite,atlas}) {
       dust.material.opacity=.23*level.value;
       dust.position.set(gentle?0:.009*Math.sin(age*.28),gentle?0:.012*Math.sin(age*.21),0);}
   }
-  return {pos,viewPoint,viewNormal,step,setPaused(on){paused=on;},setActive(on){active=on;},
+  function setActive(on,slide){
+    active=on;
+    // The audio can start between render frames while the idle wide shot is still displayed.
+    if(on && slide){shown=slide;image(slide);}
+  }
+  return {pos,viewPoint,viewNormal,step,setPaused(on){paused=on;},setActive,
     get stats(){return {active,paused,slide:shown,texture:current?.userData.expoSlidePath,resting:restKey,
       full:!!current&&current.userData.expoSlidePath===shown,lamp:level.value,zoom:uniforms.zoom.value};},
     dispose(){dead=true;clearSlides();dropNext();face.material=original;lens.material=lensOriginal;light?.dispose();print.dispose();

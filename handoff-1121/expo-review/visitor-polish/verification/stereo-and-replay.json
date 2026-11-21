@@ -1,0 +1,242 @@
+{
+  "devices": [
+    {
+      "device": "desktop",
+      "arrival": [
+        0.54,
+        0,
+        35.96
+      ],
+      "arrivalHeard": [
+        "pa_arrive_1"
+      ],
+      "stations": 1,
+      "requests": [
+        {
+          "status": 200,
+          "name": "manifest.json"
+        },
+        {
+          "status": 200,
+          "name": "resting-atlas.webp"
+        },
+        {
+          "status": 200,
+          "name": "resting-index.json"
+        },
+        {
+          "status": 200,
+          "name": "hall/pa_arrive_1.mp3"
+        },
+        {
+          "status": 200,
+          "name": "hall/pa_timeline.mp3"
+        },
+        {
+          "status": 200,
+          "name": "hall/ev_h0.mp3"
+        },
+        {
+          "status": 200,
+          "name": "slides/chew_a.webp"
+        },
+        {
+          "status": 200,
+          "name": "slides/chew.webp"
+        },
+        {
+          "status": 200,
+          "name": "manifest.json"
+        },
+        {
+          "status": 200,
+          "name": "slides/chew_c.webp"
+        },
+        {
+          "status": 200,
+          "name": "hall/ev_h0.mp3"
+        }
+      ],
+      "near": {
+        "id": "ev_h0",
+        "seconds": 0.502132,
+        "duration": 20.49,
+        "gain": 0.8671983014090459,
+        "pan": 0.820506769885782,
+        "duck": 1,
+        "subtitle": "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for.",
+        "queue": []
+      },
+      "projector": {
+        "id": "slot_02",
+        "zone": "chronology",
+        "pos": [
+          9.38248062133789,
+          0.9491999745368958,
+          59.178001403808594
+        ],
+        "record": "ev_h0",
+        "project": {
+          "active": true,
+          "paused": false,
+          "slide": "slides/chew_a.webp",
+          "texture": "slides/chew_a.webp",
+          "resting": "slides/chew.webp",
+          "full": true,
+          "lamp": 0.9679282596646936,
+          "zoom": 0.002090815031722792
+        }
+      },
+      "stereo": [
+        {
+          "voice": "ev_h0",
+          "pan": 0.9274531846186822,
+          "rmsDbFS": [
+            -50.00701348234051,
+            -33.42770803656636
+          ]
+        },
+        {
+          "voice": "ev_h0",
+          "pan": -0.9274531846186822,
+          "rmsDbFS": [
+            -32.51668487171334,
+            -51.3168007679419
+          ]
+        }
+      ],
+      "away": {
+        "id": "ev_h0",
+        "seconds": 3.422041,
+        "duration": 20.49,
+        "gain": 0.12323237100826714,
+        "pan": 0.2159728046068057,
+        "duck": 1,
+        "subtitle": "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for.",
+        "queue": []
+      },
+      "pauseSeconds": 3.422041,
+      "replay": {
+        "id": "ev_h0",
+        "seconds": 0.101587,
+        "duration": 20.49,
+        "gain": 0.8671983014090459,
+        "pan": 0.11240951960621078,
+        "duck": 1,
+        "subtitle": "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for.",
+        "queue": []
+      },
+      "panic": true
+    },
+    {
+      "device": "touch",
+      "arrival": [
+        0.54,
+        0,
+        35.96
+      ],
+      "arrivalHeard": [
+        "pa_arrive_1"
+      ],
+      "stations": 1,
+      "requests": [
+        {
+          "status": 200,
+          "name": "manifest.json"
+        },
+        {
+          "status": 200,
+          "name": "resting-index.json"
+        },
+        {
+          "status": 200,
+          "name": "resting-atlas.webp"
+        },
+        {
+          "status": 200,
+          "name": "hall/pa_arrive_1.mp3"
+        },
+        {
+          "status": 200,
+          "name": "hall/pa_timeline.mp3"
+        },
+        {
+          "status": 200,
+          "name": "hall/ev_h0.mp3"
+        },
+        {
+          "status": 200,
+          "name": "slides/chew_a.webp"
+        },
+        {
+          "status": 200,
+          "name": "slides/chew.webp"
+        },
+        {
+          "status": 200,
+          "name": "manifest.json"
+        },
+        {
+          "status": 200,
+          "name": "slides/chew_c.webp"
+        },
+        {
+          "status": 200,
+          "name": "hall/ev_h0.mp3"
+        }
+      ],
+      "near": {
+        "id": "ev_h0",
+        "seconds": 0.609104,
+        "duration": 20.49,
+        "gain": 0.8671983014090459,
+        "pan": 0.820506769885782,
+        "duck": 1,
+        "subtitle": "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for.",
+        "queue": []
+      },
+      "projector": {
+        "id": "slot_02",
+        "zone": "chronology",
+        "pos": [
+          9.38248062133789,
+          0.9491999745368958,
+          59.178001403808594
+        ],
+        "record": "ev_h0",
+        "project": {
+          "active": true,
+          "paused": false,
+          "slide": "slides/chew_a.webp",
+          "texture": "slides/chew_a.webp",
+          "resting": "slides/chew.webp",
+          "full": true,
+          "lamp": 0.8819621566956394,
+          "zoom": 0
+        }
+      },
+      "away": {
+        "id": "ev_h0",
+        "seconds": 1.44254,
+        "duration": 20.49,
+        "gain": 0.12323237100826714,
+        "pan": 0.2159728046068057,
+        "duck": 1,
+        "subtitle": "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for.",
+        "queue": []
+      },
+      "replay": {
+        "id": "ev_h0",
+        "seconds": 0.10449,
+        "duration": 20.49,
+        "gain": 0.8671983014090459,
+        "pan": 0.11240951960621078,
+        "duck": 1,
+        "subtitle": "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for.",
+        "queue": []
+      },
+      "panic": true
+    }
+  ],
+  "errors": []
+}

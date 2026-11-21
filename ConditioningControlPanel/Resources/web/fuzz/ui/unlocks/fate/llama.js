@@ -13,6 +13,7 @@ export default {
     fadeColour: PORTAL_DARK,
     fadeMs: 180,
     take: expoEnding,
+    resumeTake: true,
     takeMaxMs: null,
     showMaxMs: null,
   },

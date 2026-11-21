@@ -33,6 +33,27 @@ export function roomAsset(def,suffix){
   return (def.assetStem||def.id)+suffix;
 }
 
+// Surface colour and fine normals can sharpen after the doorway is usable. Authored lettering,
+// display art and emissive photographs retain the original resolution from the first frame.
+export function surfaceDetails(gltf,details=new Set()){
+  const imageFor=slot=>{
+    const texture=gltf.textures?.[slot?.index];
+    return gltf.images?.[texture?.extensions?.EXT_texture_webp?.source ?? texture?.source]?.uri;
+  };
+  const printed=new Set();
+  for(const mat of gltf.materials||[]){
+    const pbr=mat.pbrMetallicRoughness||{},colour=imageFor(pbr.baseColorTexture);
+    if(/^(art_|.*readout)/i.test(mat.name||''))printed.add(colour);
+    else if(colour&&textureFile.test(colour))details.add(colour);
+    printed.add(imageFor(mat.emissiveTexture));
+    for(const slot of [mat.normalTexture,pbr.metallicRoughnessTexture]){
+      const name=imageFor(slot);if(name&&textureFile.test(name))details.add(name);
+    }
+  }
+  for(const name of printed)details.delete(name);
+  return details;
+}
+
 async function firstTextureNames(response,details){
   const reader=response.clone().body.getReader(),chunks=[];
   let bytes=0,end=20;
@@ -53,24 +74,7 @@ async function firstTextureNames(response,details){
     const data=new Uint8Array(end);let offset=0;
     for(const chunk of chunks){const count=Math.min(end-offset,chunk.length);data.set(chunk.subarray(0,count),offset);offset+=count;}
     const gltf=JSON.parse(new TextDecoder().decode(data.subarray(20)));
-    const imageFor=slot=>{
-      const texture=gltf.textures?.[slot?.index];
-      return gltf.images?.[texture?.extensions?.EXT_texture_webp?.source ?? texture?.source]?.uri;
-    };
-    if(details){
-      const printed=new Set();
-      for(const mat of gltf.materials||[]){
-        const pbr=mat.pbrMetallicRoughness||{};
-        const colour=imageFor(pbr.baseColorTexture);
-        if(/^(art_|.*readout)/i.test(mat.name||''))printed.add(colour);
-        else if(colour&&textureFile.test(colour))details.add(colour);
-        printed.add(imageFor(mat.emissiveTexture));
-        for(const slot of [mat.normalTexture,pbr.metallicRoughnessTexture]){
-          const name=imageFor(slot);if(name&&textureFile.test(name))details.add(name);
-        }
-      }
-      for(const name of printed)details.delete(name);
-    }
+    if(details)surfaceDetails(gltf,details);
     return (gltf.images||[]).map(image=>image.uri).filter(uri=>textureFile.test(uri));
   }finally{void reader.cancel().catch(()=>{});}
 }

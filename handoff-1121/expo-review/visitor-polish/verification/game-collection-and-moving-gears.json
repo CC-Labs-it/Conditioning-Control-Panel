@@ -1,0 +1,334 @@
+{
+  "base": "http://127.0.0.1:8937/fuzz/",
+  "errors": [],
+  "pieces": [
+    {
+      "id": "chess",
+      "zone": "chronology",
+      "feet": [
+        7.86,
+        5.551115123125783e-17,
+        63.48
+      ],
+      "eye": [
+        7.86,
+        1.6,
+        63.48
+      ],
+      "target": [
+        10.12,
+        0.98,
+        64.25
+      ],
+      "firstHit": [
+        "Cube_4",
+        "guest_chess",
+        "Scene",
+        "guest_anchor_chess",
+        "collection_chess",
+        "Scene",
+        ""
+      ],
+      "threeBounds": [
+        [
+          9.506999458551062,
+          0,
+          63.46499978903053
+        ],
+        [
+          10.730000084607624,
+          1.1530000418424606,
+          65.03500021096947
+        ]
+      ],
+      "anchor": {
+        "name": "guest_anchor_chess",
+        "world": [
+          10.119999885559082,
+          0.9100000262260437,
+          64.25
+        ],
+        "min": [
+          -0.41999998688696394,
+          0,
+          -0.41999998688697815
+        ],
+        "max": [
+          0.41999998688699236,
+          0.24300001561641693,
+          0.41999998688697815
+        ]
+      },
+      "calls": 66
+    },
+    {
+      "id": "classifieds",
+      "zone": "forum",
+      "feet": [
+        -21.19,
+        0,
+        102.99
+      ],
+      "eye": [
+        -21.19,
+        1.6,
+        102.99
+      ],
+      "target": [
+        -22.2,
+        1.23,
+        105.48
+      ],
+      "firstHit": [
+        "Cube003_1",
+        "guest_classifieds",
+        "Scene",
+        "guest_anchor_classifieds",
+        "collection_classifieds",
+        "Scene",
+        ""
+      ],
+      "threeBounds": [
+        [
+          -23.07500080035629,
+          0,
+          105.02500327029801
+        ],
+        [
+          -21.32500072412363,
+          1.9785000085830688,
+          105.94700471682177
+        ]
+      ],
+      "anchor": {
+        "name": "guest_anchor_classifieds",
+        "world": [
+          -22.200000762939453,
+          0.8799999952316284,
+          105.4800033569336
+        ],
+        "min": [
+          -0.5899999737739563,
+          -1.1102230246251565e-16,
+          -0.2549999952316284
+        ],
+        "max": [
+          0.5899999737739563,
+          0.8304999470710753,
+          0.2549999952316284
+        ]
+      },
+      "calls": 63
+    },
+    {
+      "id": "weather",
+      "zone": "commons",
+      "feet": [
+        -66.27,
+        0,
+        68.39
+      ],
+      "eye": [
+        -66.27,
+        1.6,
+        68.39
+      ],
+      "target": [
+        -68.45,
+        1.25,
+        66.95
+      ],
+      "firstHit": [
+        "weather_gauge",
+        "collection_weather",
+        "Scene",
+        ""
+      ],
+      "threeBounds": [
+        [
+          -68.85365661509182,
+          0,
+          66.45339897877268
+        ],
+        [
+          -68.00691435733377,
+          2.1640000343322754,
+          67.42399428240327
+        ]
+      ],
+      "anchor": null,
+      "calls": 58
+    },
+    {
+      "id": "drive",
+      "zone": "hall",
+      "feet": [
+        9.15,
+        0,
+        -0.62
+      ],
+      "eye": [
+        9.15,
+        1.6,
+        -0.62
+      ],
+      "target": [
+        11.36,
+        1.07,
+        -1.75
+      ],
+      "firstHit": [
+        "drive_gear_bed",
+        "collection_drive",
+        "Scene",
+        ""
+      ],
+      "threeBounds": [
+        [
+          10.889999407634809,
+          0,
+          -2.6550001441752578
+        ],
+        [
+          11.766999834707946,
+          1.497499942779541,
+          -0.8449998558247422
+        ]
+      ],
+      "anchor": null,
+      "calls": 175
+    },
+    {
+      "id": "tea",
+      "zone": "hall",
+      "feet": [
+        9.89,
+        3.4000000953674316,
+        12.55
+      ],
+      "eye": [
+        9.89,
+        5.000000095367431,
+        12.55
+      ],
+      "target": [
+        11,
+        4.16,
+        10.5
+      ],
+      "firstHit": [
+        "tea_trays",
+        "collection_tea",
+        "Scene",
+        ""
+      ],
+      "threeBounds": [
+        [
+          10.683000472002018,
+          3.400000177323818,
+          9.900999843972869
+        ],
+        [
+          11.306000107408112,
+          4.60000009393692,
+          11.099000156027131
+        ]
+      ],
+      "anchor": null,
+      "calls": 319
+    }
+  ],
+  "labels": {
+    "chess_label_ink": {
+      "title": "Piece by Piece",
+      "body": "Game board and pieces",
+      "date": "",
+      "section": ""
+    },
+    "classifieds_label_ink": {
+      "title": "A lamp with opinions",
+      "body": "Discount Stairs advertisement",
+      "date": "",
+      "section": ""
+    },
+    "collection_forum_plate_ink": {
+      "title": "TECHNICAL FORUM",
+      "body": "",
+      "section": "",
+      "date": ""
+    },
+    "weather_label_ink": {
+      "title": "The conservatory weather recorder",
+      "body": "Wind, rainfall and air pressure",
+      "date": "",
+      "section": ""
+    },
+    "drive_label_ink": {
+      "title": "Sectioned reduction drive",
+      "body": "Turn the handwheel to trace the gear train",
+      "date": "",
+      "section": ""
+    },
+    "tea_label_ink": {
+      "title": "Reading room tea trolley",
+      "body": "Please return cups to the lower shelf",
+      "date": "",
+      "section": ""
+    },
+    "collection_assay_plate_ink": {
+      "title": "WATER SAMPLER",
+      "body": "",
+      "section": "",
+      "date": ""
+    },
+    "collection_hoof_plate_ink": {
+      "title": "HOOF CALIBRATOR",
+      "body": "",
+      "section": "",
+      "date": ""
+    }
+  },
+  "requests": [
+    [
+      "http://127.0.0.1:8937/fuzz/ui/unlocks/basics/collection-trail.js",
+      200
+    ],
+    [
+      "http://127.0.0.1:8937/fuzz/assets/expo/collection/collection-d1fafb54fde3.glb",
+      200
+    ],
+    [
+      "http://127.0.0.1:8937/fuzz/assets/expo/guest-chess.glb",
+      200
+    ],
+    [
+      "http://127.0.0.1:8937/fuzz/assets/expo/guest-classifieds.glb",
+      200
+    ]
+  ],
+  "wheel": {
+    "center": [
+      10.932999406428314,
+      1.1770000457763672,
+      -1.0419999622451745
+    ],
+    "target": {
+      "owner": "drive_handwheel",
+      "lineage": [
+        "drive_handwheel_3",
+        "drive_handwheel",
+        "collection_drive",
+        "Scene"
+      ],
+      "distance": 1.8351017938815595
+    },
+    "before": 0,
+    "after": [
+      4.139016303276143,
+      6.7259014928237315,
+      -4.483934328549155,
+      4.139016303276143
+    ]
+  },
+  "passed": true
+}

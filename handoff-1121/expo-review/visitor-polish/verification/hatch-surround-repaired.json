@@ -1,0 +1,391 @@
+{
+  "base": "http://127.0.0.1:8937/fuzz/",
+  "expectedStem": "catwalk-c34fe0dbd0386ebd",
+  "priorStem": "catwalk-b69a1d1a66810688",
+  "profiles": {
+    "desktop": {
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "shots": {
+        "inspection-cold": {
+          "feet": [
+            -13.39,
+            6.800000190734863,
+            27.5
+          ],
+          "rooms": [
+            "catwalk"
+          ]
+        },
+        "inspection-open": {
+          "feet": [
+            -13.39,
+            6.800000190734863,
+            27.5
+          ],
+          "rooms": [
+            "catwalk",
+            "atrium"
+          ]
+        }
+      },
+      "occlusion": {
+        "inspection-cold": {
+          "pixels": 2073600,
+          "changedBy24": 0,
+          "belowRails": 0,
+          "peak": 0,
+          "rooms": [
+            "catwalk"
+          ]
+        },
+        "inspection-open": {
+          "pixels": 2073600,
+          "changedBy24": 0,
+          "belowRails": 0,
+          "peak": 0,
+          "rooms": [
+            "catwalk",
+            "atrium"
+          ]
+        }
+      },
+      "timing": {},
+      "heldRequests": {
+        "atrium": 1,
+        "dome": 0
+      },
+      "inspectionCold": {
+        "feet": [
+          -13.39,
+          6.800000190734863,
+          27.5
+        ],
+        "rooms": [
+          "catwalk"
+        ],
+        "door": {
+          "id": "inspection-shutter",
+          "progress": 0,
+          "ready": false,
+          "distance": 1.7984946748062887,
+          "rooms": [
+            "atrium",
+            "catwalk"
+          ],
+          "leaves": [
+            {
+              "hinge": [
+                -12.04,
+                7.74,
+                27.69
+              ],
+              "tip": [
+                -12.04,
+                7.74,
+                28.310000000000002
+              ],
+              "degrees": 0
+            }
+          ]
+        },
+        "rays": {
+          "atrium": false,
+          "instances": 5,
+          "faces": [
+            {
+              "name": "catwalk_inspection_wall_return",
+              "material": "pale_shell",
+              "distance": 1.279999918093944
+            },
+            {
+              "name": "catwalk_inspection_wall_return",
+              "material": "pale_shell",
+              "distance": 1.279999918093944
+            },
+            {
+              "name": "catwalk_inspection_wall_return",
+              "material": "pale_shell",
+              "distance": 1.279999918093944
+            },
+            {
+              "name": "catwalk_inspection_wall_return",
+              "material": "pale_shell",
+              "distance": 1.279999918093944
+            }
+          ],
+          "aperture": {
+            "name": "Leaf_staff_utility_aqua",
+            "material": "utility_aqua",
+            "distance": 1.2934998626667067
+          },
+          "fixedParts": 5
+        }
+      },
+      "inspectionWarm": {
+        "feet": [
+          -13.39,
+          6.800000190734863,
+          27.5
+        ],
+        "rooms": [
+          "catwalk",
+          "atrium"
+        ],
+        "door": {
+          "id": "inspection-shutter",
+          "progress": 1,
+          "ready": true,
+          "distance": 1.7984946748062887,
+          "rooms": [
+            "atrium",
+            "catwalk"
+          ],
+          "leaves": [
+            {
+              "hinge": [
+                -12.04,
+                8.68,
+                27.69
+              ],
+              "tip": [
+                -12.04,
+                8.68,
+                28.310000000000002
+              ],
+              "degrees": 0
+            }
+          ]
+        },
+        "rays": {
+          "atrium": true,
+          "instances": 0,
+          "faces": [
+            {
+              "name": "Architecture_4",
+              "material": "pale_shell",
+              "distance": 1.2797872859889523
+            },
+            {
+              "name": "Architecture_4",
+              "material": "pale_shell",
+              "distance": 1.2797872859889523
+            },
+            {
+              "name": "Architecture_4",
+              "material": "pale_shell",
+              "distance": 1.2797872859889523
+            },
+            {
+              "name": "Architecture_4",
+              "material": "pale_shell",
+              "distance": 1.2797872859889523
+            }
+          ],
+          "aperture": null,
+          "fixedParts": 0
+        }
+      },
+      "model": {
+        "file": "catwalk-c34fe0dbd0386ebd.glb",
+        "bytes": 883852,
+        "sha256": "53d95df438a717b5cf93a04ae9b5bfe995c90243d9d22cb4146d556049e219f9"
+      }
+    },
+    "phone": {
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "shots": {
+        "inspection-cold": {
+          "feet": [
+            -13.39,
+            6.800000190734863,
+            27.5
+          ],
+          "rooms": [
+            "catwalk"
+          ]
+        },
+        "inspection-open": {
+          "feet": [
+            -13.39,
+            6.800000190734863,
+            27.5
+          ],
+          "rooms": [
+            "catwalk",
+            "atrium"
+          ]
+        }
+      },
+      "occlusion": {
+        "inspection-cold": {
+          "pixels": 334836,
+          "changedBy24": 0,
+          "belowRails": 0,
+          "peak": 0,
+          "rooms": [
+            "catwalk"
+          ]
+        },
+        "inspection-open": {
+          "pixels": 334836,
+          "changedBy24": 0,
+          "belowRails": 0,
+          "peak": 0,
+          "rooms": [
+            "catwalk",
+            "atrium"
+          ]
+        }
+      },
+      "timing": {},
+      "heldRequests": {
+        "atrium": 1,
+        "dome": 0
+      },
+      "inspectionCold": {
+        "feet": [
+          -13.39,
+          6.800000190734863,
+          27.5
+        ],
+        "rooms": [
+          "catwalk"
+        ],
+        "door": {
+          "id": "inspection-shutter",
+          "progress": 0,
+          "ready": false,
+          "distance": 1.7984946748062887,
+          "rooms": [
+            "atrium",
+            "catwalk"
+          ],
+          "leaves": [
+            {
+              "hinge": [
+                -12.04,
+                7.74,
+                27.69
+              ],
+              "tip": [
+                -12.04,
+                7.74,
+                28.310000000000002
+              ],
+              "degrees": 0
+            }
+          ]
+        },
+        "rays": {
+          "atrium": false,
+          "instances": 5,
+          "faces": [
+            {
+              "name": "catwalk_inspection_wall_return",
+              "material": "pale_shell",
+              "distance": 1.279999918093944
+            },
+            {
+              "name": "catwalk_inspection_wall_return",
+              "material": "pale_shell",
+              "distance": 1.279999918093944
+            },
+            {
+              "name": "catwalk_inspection_wall_return",
+              "material": "pale_shell",
+              "distance": 1.279999918093944
+            },
+            {
+              "name": "catwalk_inspection_wall_return",
+              "material": "pale_shell",
+              "distance": 1.279999918093944
+            }
+          ],
+          "aperture": {
+            "name": "Leaf_staff_utility_aqua",
+            "material": "utility_aqua",
+            "distance": 1.2934998626667067
+          },
+          "fixedParts": 5
+        }
+      },
+      "inspectionWarm": {
+        "feet": [
+          -13.39,
+          6.800000190734863,
+          27.5
+        ],
+        "rooms": [
+          "catwalk",
+          "atrium"
+        ],
+        "door": {
+          "id": "inspection-shutter",
+          "progress": 1,
+          "ready": true,
+          "distance": 1.7984946748062887,
+          "rooms": [
+            "atrium",
+            "catwalk"
+          ],
+          "leaves": [
+            {
+              "hinge": [
+                -12.04,
+                8.68,
+                27.69
+              ],
+              "tip": [
+                -12.04,
+                8.68,
+                28.310000000000002
+              ],
+              "degrees": 0
+            }
+          ]
+        },
+        "rays": {
+          "atrium": true,
+          "instances": 0,
+          "faces": [
+            {
+              "name": "Architecture_4",
+              "material": "pale_shell",
+              "distance": 1.2797872859889523
+            },
+            {
+              "name": "Architecture_4",
+              "material": "pale_shell",
+              "distance": 1.2797872859889523
+            },
+            {
+              "name": "Architecture_4",
+              "material": "pale_shell",
+              "distance": 1.2797872859889523
+            },
+            {
+              "name": "Architecture_4",
+              "material": "pale_shell",
+              "distance": 1.2797872859889523
+            }
+          ],
+          "aperture": null,
+          "fixedParts": 0
+        }
+      },
+      "model": {
+        "file": "catwalk-c34fe0dbd0386ebd-mobile.glb",
+        "bytes": 884180,
+        "sha256": "7b196d8f4c9fbadb5d4bb9c04759b77ba1f8483df28aae5136100015ece4aa1a"
+      }
+    }
+  },
+  "errors": [],
+  "complete": true
+}

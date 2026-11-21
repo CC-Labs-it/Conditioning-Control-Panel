@@ -505,24 +505,37 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     endingBegun = true;
     stopped = true;
     const interactiveVisit = registry[id]?.showMaxMs === null;
+    const visitState = registry[id]?.resumeTake ? (run.store[id] ||= {}) : null;
+    function finishVisit() {
+      if (visitState?.visitOpen !== true) return;
+      delete visitState.visitOpen;
+      save();
+    }
     let visitAborted = interactiveVisit && suspendReason === 'panic';
     const unwatch = interactiveVisit && subscribe('suspend', event => {
-      if (event?.on && event.reason === 'panic') visitAborted = true;
+      if (event?.on && event.reason === 'panic') {
+        visitAborted = true;
+        finishVisit();
+      }
     });
     /* take(ctx) -> Promise: an optional phase BEFORE the fade, while the page is still mounted (and frozen: `stopped`
      * stops every unlock's frames). Streams keep playing until it resolves. Capped on the game clock. */
-    const take = !restored && registry[id]?.take;
+    const take = (!restored || visitState?.visitOpen === true) && registry[id]?.take;
     if (!take || registry[id]?.cutAudioOnTake) audio?.stopStreams?.();
     emit('ending', { id });
     if (!restored) {
+      if (visitState && !visitAborted) visitState.visitOpen = true;
       recordEnding(life, run, id);
       save();
       host.send?.('fuzz-ended', {
         total: Math.round(run.total), minutes: Math.round(run.clock / 60000), items: run.order.length,
         ending: id, route: E.routeOf(run), dayUtc: new Date().toISOString().slice(0, 10),
       });
+    }
+    if (!restored || take) {
       if (take && !visitAborted) {
         const scope = newScope(BY_ID[id]);
+        scope.restored = restored;
         scopes.set(ENDING_SCOPE, scope);
         scope.ctx = makeContext(api, scope);
         try {
@@ -537,6 +550,7 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
         } catch (e) { console.error(e); }
         audio?.stopStreams?.();
       }
+      finishVisit();
       audio?.setQuiet(true);
       await ui.ending?.(id, { colour: registry[id]?.fadeColour, ms: registry[id]?.fadeMs });
     }

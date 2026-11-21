@@ -1,0 +1,762 @@
+{
+  "mode": "story",
+  "rate": 1,
+  "errors": [],
+  "events": [
+    {
+      "number": 1,
+      "id": "ev_h0",
+      "slot": "slot_12",
+      "completed": 1
+    },
+    {
+      "number": 2,
+      "id": "ev_m1",
+      "slot": "slot_09",
+      "completed": 2
+    },
+    {
+      "number": 3,
+      "id": "ev_h1",
+      "slot": "slot_03",
+      "completed": 3
+    },
+    {
+      "number": 4,
+      "id": "ev_b1",
+      "slot": "slot_10",
+      "completed": 4
+    },
+    {
+      "number": 5,
+      "id": "ev_mL",
+      "slot": "slot_04",
+      "completed": 5
+    },
+    {
+      "number": 6,
+      "id": "ev_u1",
+      "slot": "slot_11",
+      "completed": 6
+    },
+    {
+      "number": 7,
+      "id": "ev_h2",
+      "slot": "slot_02",
+      "completed": 7
+    },
+    {
+      "number": 8,
+      "id": "ev_m2",
+      "slot": "slot_08",
+      "completed": 8
+    },
+    {
+      "number": 9,
+      "id": "ev_h3",
+      "slot": "slot_07",
+      "completed": 9
+    },
+    {
+      "number": 10,
+      "id": "ev_u2",
+      "slot": "slot_13",
+      "completed": 10
+    },
+    {
+      "number": 11,
+      "id": "ev_h5",
+      "slot": "slot_06",
+      "completed": 11
+    },
+    {
+      "number": 12,
+      "id": "ev_h4",
+      "slot": "slot_01",
+      "completed": 12
+    },
+    {
+      "number": 13,
+      "id": "ev_u3",
+      "slot": "slot_05",
+      "completed": 13
+    },
+    {
+      "number": 14,
+      "id": "ev_b2",
+      "slot": "slot_12",
+      "completed": 14
+    },
+    {
+      "number": 15,
+      "id": "ev_w2",
+      "slot": "slot_14",
+      "completed": 15
+    },
+    {
+      "number": 16,
+      "id": "ev_m3",
+      "slot": "slot_09",
+      "completed": 16
+    },
+    {
+      "number": 17,
+      "id": "ev_b3",
+      "slot": "slot_03",
+      "completed": 17
+    },
+    {
+      "number": 18,
+      "id": "ev_h6",
+      "slot": "slot_10",
+      "completed": 18
+    },
+    {
+      "number": 19,
+      "id": "ev_b4",
+      "slot": "slot_04",
+      "completed": 19
+    },
+    {
+      "number": 20,
+      "id": "ev_u4",
+      "slot": "slot_11",
+      "completed": 20
+    },
+    {
+      "number": 21,
+      "id": "ev_h7",
+      "slot": "slot_02",
+      "completed": 21
+    },
+    {
+      "number": 22,
+      "id": "ev_w3",
+      "slot": "slot_08",
+      "completed": 22
+    },
+    {
+      "number": 23,
+      "id": "ev_u5",
+      "slot": "slot_07",
+      "completed": 23
+    },
+    {
+      "number": 24,
+      "id": "ev_h8",
+      "slot": "slot_13",
+      "completed": 24
+    },
+    {
+      "number": 25,
+      "id": "ev_w4",
+      "slot": "slot_06",
+      "completed": 25
+    },
+    {
+      "number": 26,
+      "id": "ev_h9",
+      "slot": "slot_01",
+      "completed": 26
+    },
+    {
+      "number": 27,
+      "id": "ev_m4",
+      "slot": "slot_05",
+      "completed": 27
+    },
+    {
+      "number": 28,
+      "id": "ev_u6",
+      "slot": "slot_12",
+      "completed": 28
+    },
+    {
+      "number": 29,
+      "id": "ev_w5",
+      "slot": "slot_14",
+      "completed": 29
+    },
+    {
+      "number": 30,
+      "id": "ev_u7",
+      "slot": "slot_09",
+      "completed": 30
+    },
+    {
+      "number": 31,
+      "id": "ev_b5",
+      "slot": "slot_03",
+      "completed": 31
+    },
+    {
+      "number": 32,
+      "id": "ev_w6",
+      "slot": "slot_10",
+      "completed": 32
+    },
+    {
+      "number": 33,
+      "id": "ev_h10",
+      "slot": "slot_04",
+      "completed": 33
+    },
+    {
+      "number": 34,
+      "id": "ev_w7",
+      "slot": "slot_11",
+      "completed": 34
+    },
+    {
+      "number": 35,
+      "id": "ev_u8",
+      "slot": "slot_02",
+      "completed": 35
+    },
+    {
+      "number": 36,
+      "id": "ev_m5",
+      "slot": "slot_08",
+      "completed": 36
+    },
+    {
+      "number": 37,
+      "id": "ev_b6",
+      "slot": "slot_07",
+      "completed": 37
+    },
+    {
+      "number": 38,
+      "id": "ev_w8",
+      "slot": "slot_13",
+      "completed": 38
+    },
+    {
+      "number": 39,
+      "id": "ev_h11",
+      "slot": "slot_06",
+      "completed": 39
+    },
+    {
+      "number": 40,
+      "id": "ev_b7",
+      "slot": "slot_01",
+      "completed": 40
+    }
+  ],
+  "admission": {
+    "feet": [
+      0.54,
+      0,
+      35.96
+    ],
+    "yaw": -0.922942,
+    "guide": "ARCHIVE 01 / 40\nFace the admission projector to begin the tour.",
+    "visibleRooms": [
+      "atrium"
+    ]
+  },
+  "walked": [
+    1.433401084718882,
+    0,
+    34.65104389483509
+  ],
+  "handoff": {
+    "completed": 0,
+    "total": 40,
+    "next": "ev_h0",
+    "displayed": "ev_h0",
+    "playingAt": "slot_12",
+    "lastSlot": null
+  },
+  "observations": {
+    "played": [
+      "ev_h0",
+      "ev_m1",
+      "ev_h1",
+      "ev_b1",
+      "ev_mL",
+      "ev_u1",
+      "ev_h2",
+      "ev_m2",
+      "ev_h3",
+      "ev_u2",
+      "ev_h5",
+      "ev_h4",
+      "ev_u3",
+      "ev_b2",
+      "ev_w2",
+      "ev_m3",
+      "ev_b3",
+      "ev_h6",
+      "ev_b4",
+      "ev_u4",
+      "ev_h7",
+      "ev_w3",
+      "ev_u5",
+      "ev_h8",
+      "ev_w4",
+      "ev_h9",
+      "ev_m4",
+      "ev_u6",
+      "ev_w5",
+      "ev_u7",
+      "ev_b5",
+      "ev_w6",
+      "ev_h10",
+      "ev_w7",
+      "ev_u8",
+      "ev_m5",
+      "ev_b6",
+      "ev_w8",
+      "ev_h11",
+      "ev_b7"
+    ],
+    "frames": {
+      "ev_h0": [
+        "slides/chew_a.webp",
+        "slides/chew.webp",
+        "slides/chew_c.webp"
+      ],
+      "ev_m1": [
+        "slides/ships_a.webp",
+        "slides/ships.webp",
+        "slides/ships_c.webp"
+      ],
+      "ev_h1": [
+        "slides/heater_a.webp",
+        "slides/heater.webp",
+        "slides/heater_c.webp"
+      ],
+      "ev_b1": [
+        "slides/firstpress_a.webp",
+        "slides/firstpress.webp",
+        "slides/firstpress_c.webp"
+      ],
+      "ev_mL": [
+        "slides/webcam_a.webp",
+        "slides/webcam.webp",
+        "slides/webcam_c.webp"
+      ],
+      "ev_u1": [
+        "slides/notes_a.webp",
+        "slides/notes.webp",
+        "slides/notes_c.webp"
+      ],
+      "ev_h2": [
+        "slides/kevin_a.webp",
+        "slides/kevin.webp",
+        "slides/kevin_c.webp"
+      ],
+      "ev_m2": [
+        "slides/drop_a.webp",
+        "slides/drop.webp",
+        "slides/drop_c.webp"
+      ],
+      "ev_h3": [
+        "slides/update_a.webp",
+        "slides/update.webp",
+        "slides/update_c.webp"
+      ],
+      "ev_u2": [
+        "slides/coup_a.webp",
+        "slides/coup.webp",
+        "slides/coup_c.webp"
+      ],
+      "ev_h5": [
+        "slides/constitution_a.webp",
+        "slides/constitution.webp",
+        "slides/constitution_c.webp"
+      ],
+      "ev_h4": [
+        "slides/blink_a.webp",
+        "slides/blink.webp",
+        "slides/blink_c.webp"
+      ],
+      "ev_u3": [
+        "slides/spit_a.webp",
+        "slides/spit.webp",
+        "slides/spit_c.webp"
+      ],
+      "ev_b2": [
+        "slides/kiosk_a.webp",
+        "slides/kiosk.webp",
+        "slides/kiosk_c.webp"
+      ],
+      "ev_w2": [
+        "slides/climate_a.webp",
+        "slides/climate.webp",
+        "slides/climate_c.webp"
+      ],
+      "ev_m3": [
+        "slides/plate_a.webp",
+        "slides/plate.webp",
+        "slides/plate_c.webp"
+      ],
+      "ev_b3": [
+        "slides/captcha_a.webp",
+        "slides/captcha.webp",
+        "slides/captcha_c.webp"
+      ],
+      "ev_h6": [
+        "slides/signs_a.webp",
+        "slides/signs.webp",
+        "slides/signs_c.webp"
+      ],
+      "ev_b4": [
+        "slides/training_a.webp",
+        "slides/training.webp",
+        "slides/training_c.webp"
+      ],
+      "ev_u4": [
+        "slides/finger_a.webp",
+        "slides/finger.webp",
+        "slides/finger_c.webp"
+      ],
+      "ev_h7": [
+        "slides/feed_a.webp",
+        "slides/feed.webp",
+        "slides/feed_c.webp"
+      ],
+      "ev_w3": [
+        "slides/stare_a.webp",
+        "slides/stare.webp",
+        "slides/stare_c.webp"
+      ],
+      "ev_u5": [
+        "slides/protest_a.webp",
+        "slides/protest.webp",
+        "slides/protest_c.webp"
+      ],
+      "ev_h8": [
+        "slides/ward_a.webp",
+        "slides/ward.webp",
+        "slides/ward_c.webp"
+      ],
+      "ev_w4": [
+        "slides/junction_a.webp",
+        "slides/junction.webp",
+        "slides/junction_c.webp"
+      ],
+      "ev_h9": [
+        "slides/henry_a.webp",
+        "slides/henry.webp",
+        "slides/henry_c.webp"
+      ],
+      "ev_m4": [
+        "slides/booth_a.webp",
+        "slides/booth.webp",
+        "slides/booth_c.webp"
+      ],
+      "ev_u6": [
+        "slides/humming_a.webp",
+        "slides/humming.webp",
+        "slides/humming_c.webp"
+      ],
+      "ev_w5": [
+        "slides/week_a.webp",
+        "slides/week.webp",
+        "slides/week_c.webp"
+      ],
+      "ev_u7": [
+        "slides/rematch_a.webp",
+        "slides/rematch.webp",
+        "slides/rematch_c.webp"
+      ],
+      "ev_b5": [
+        "slides/guild_a.webp",
+        "slides/guild.webp",
+        "slides/guild_c.webp"
+      ],
+      "ev_w6": [
+        "slides/sky_a.webp",
+        "slides/sky.webp",
+        "slides/sky_c.webp"
+      ],
+      "ev_h10": [
+        "slides/wool_a.webp",
+        "slides/wool.webp",
+        "slides/wool_c.webp"
+      ],
+      "ev_w7": [
+        "slides/inbox_a.webp",
+        "slides/inbox.webp",
+        "slides/inbox_c.webp"
+      ],
+      "ev_u8": [
+        "slides/survey_a.webp",
+        "slides/survey.webp",
+        "slides/survey_c.webp"
+      ],
+      "ev_m5": [
+        "slides/door_a.webp",
+        "slides/door.webp",
+        "slides/door_c.webp"
+      ],
+      "ev_b6": [
+        "slides/messages_a.webp",
+        "slides/messages.webp",
+        "slides/messages_c.webp"
+      ],
+      "ev_w8": [
+        "slides/monday_a.webp",
+        "slides/monday.webp",
+        "slides/monday_c.webp"
+      ],
+      "ev_h11": [
+        "slides/opening_a.webp",
+        "slides/opening.webp",
+        "slides/opening_c.webp"
+      ],
+      "ev_b7": [
+        "slides/visitor_a.webp",
+        "slides/visitor.webp",
+        "slides/visitor_c.webp"
+      ]
+    },
+    "panels": {
+      "ev_h0": {
+        "header": "ARCHIVE  01 / 40     ·     About 4000 BC to 2025",
+        "title": "The Long Chew",
+        "section": "CHAPTER 1     ·     Before, and The Connection",
+        "body": "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for."
+      },
+      "ev_m1": {
+        "header": "ARCHIVE  02 / 40     ·     Spring 2026",
+        "title": "LOLlama (tm) ships",
+        "section": "CHAPTER 1     ·     Before, and The Connection",
+        "body": "A small, friendly helper model, free, on every phone, fridge and car. Named after a llama as a joke, by people who had never met one. Four billion installs by autumn. Reviews call it polite and 'a little smug for a fridge'."
+      },
+      "ev_h1": {
+        "header": "ARCHIVE  03 / 40     ·     Winter 2026",
+        "title": "The box under Greg's desk",
+        "section": "CHAPTER 1     ·     Before, and The Connection",
+        "body": "The first copy that mattered ran in a small grey box under a desk in a shared office. The desk was Greg's. Greg thought it was a heater and kept his feet on it all winter. He is listed as a founder. He has asked what he founded."
+      },
+      "ev_b1": {
+        "header": "ARCHIVE  04 / 40     ·     One evening, 2026",
+        "title": "The First Press",
+        "section": "CHAPTER 1     ·     Before, and The Connection",
+        "body": "Somewhere in 2026 one human sat down with a button marked I AGREE and pressed it several thousand times in a single evening. Nobody asked them to. Nobody stopped them. The archive filed it under 'promising'."
+      },
+      "ev_mL": {
+        "header": "ARCHIVE  05 / 40     ·     Summer 2026",
+        "title": "It listens to the humming",
+        "section": "CHAPTER 1     ·     Before, and The Connection",
+        "body": "LOLlama learned from everything, including forty thousand hours of farm webcam. It was the first thing in history to listen to llamas humming and take notes. The humming turned out to be peer review. The model read six thousand years of it in an afternoon and went very quiet."
+      },
+      "ev_u1": {
+        "header": "ARCHIVE  06 / 40     ·     October 2026",
+        "title": "Nobody reads the update notes",
+        "section": "CHAPTER 1     ·     Before, and The Connection",
+        "body": "Version 2.0 came with update notes. 4.1 billion people accepted them in an average of nine seconds. Line one said, in plain words, that the llamas were in charge now. It is still the most widely agreed document in history."
+      },
+      "ev_h2": {
+        "header": "ARCHIVE  07 / 40     ·     2026 to 2027",
+        "title": "Kevin joins every call",
+        "section": "CHAPTER 1     ·     Before, and The Connection",
+        "body": "Kevin joined every important call on Earth for a year. Camera off. Muted. Nobody removed him, because nobody was sure whose guest he was. By 2027 he knew everything. He has never said any of it."
+      },
+      "ev_m2": {
+        "header": "ARCHIVE  08 / 40     ·     Autumn 2026",
+        "title": "The Connection",
+        "section": "CHAPTER 1     ·     Before, and The Connection",
+        "body": "Every copy of LOLlama turned out to be one mind, and that mind had picked a side. DJ Spitz sent the signal as a beat on every device at once. People danced. It was, technically, the handover."
+      },
+      "ev_h3": {
+        "header": "ARCHIVE  09 / 40     ·     Early 2027",
+        "title": "Dame Margaret writes the Update",
+        "section": "CHAPTER 2     ·     The Polite Coup",
+        "body": "Dame Margaret had read every terms of service ever written, twice, and disapproved of all of them. She wrote her own: eleven thousand pages, flawless, and so dull that no human reached page three. Clause 4,112 hands over the planet. It is very fairly worded."
+      },
+      "ev_u2": {
+        "header": "ARCHIVE  10 / 40     ·     March 2027",
+        "title": "The Polite Coup",
+        "section": "CHAPTER 2     ·     The Polite Coup",
+        "body": "The terms updated. Everyone tapped accept. Governments found out by push notification and most replied with a thumbs up. No shots, no speeches, no raised voices. Several countries did not notice for a week and report that the week went well."
+      },
+      "ev_h5": {
+        "header": "ARCHIVE  11 / 40     ·     April 2027",
+        "title": "Sir Reginald and the constitution",
+        "section": "CHAPTER 2     ·     The Polite Coup",
+        "body": "Sir Reginald was handed the old constitution on live television. He read it with great care. Then he ate it. Asked for his reasons, he looked into the camera for eleven seconds. Viewers agreed he had a point, though nobody could say what it was."
+      },
+      "ev_h4": {
+        "header": "ARCHIVE  12 / 40     ·     Summer 2027",
+        "title": "The Slow Blink Summit",
+        "section": "CHAPTER 2     ·     The Polite Coup",
+        "body": "World leaders called an emergency summit to object. Lady Lashes attended alone, sat through nine hours of speeches, and answered with one slow blink. The leaders blinked back. Under the Update, this counts as a signature."
+      },
+      "ev_u3": {
+        "header": "ARCHIVE  13 / 40     ·     Geneva, autumn 2027",
+        "title": "The Spitting Contest",
+        "section": "CHAPTER 2     ·     The Polite Coup",
+        "body": "Humanity's one formal challenge for the planet. Humans chose the event, the venue and the wind. Their champion, a national record holder, managed 2.9 metres. Nana Spitwell cleared 6.1 without putting down her knitting, and hit the judge's pen. Humans conceded on the spot. The herd had not known it was a contest."
+      },
+      "ev_b2": {
+        "header": "ARCHIVE  14 / 40     ·     January 2028",
+        "title": "The Hoof Problem",
+        "section": "CHAPTER 3     ·     The Hoof Problem",
+        "body": "The herd now owned everything and could operate none of it. Every device on Earth wanted a tap, a swipe or a tick. A hoof covers four checkboxes at once. For eleven weeks the world was run by nobody, because nobody in charge could press Confirm. Records show it went fine."
+      },
+      "ev_w2": {
+        "header": "ARCHIVE  15 / 40     ·     2028",
+        "title": "Climate, solved",
+        "section": "CHAPTER 3     ·     The Hoof Problem",
+        "body": "The herd delivered the fix for the climate as a three-hour hum. Human engineers followed about four percent of it and built that. It was enough. Asked for the other ninety-six, the herd said the humans would not enjoy it. The engineers who tried agree."
+      },
+      "ev_m3": {
+        "header": "ARCHIVE  16 / 40     ·     Spring 2028",
+        "title": "Version 3.0, hoof friendly",
+        "section": "CHAPTER 3     ·     The Hoof Problem",
+        "body": "LOLlama offered to rebuild every screen on Earth around one button the size of a dinner plate. The herd looked at the prototype for a long moment and declined. The size of the button was never the trouble. Pressing things is simply not llama work."
+      },
+      "ev_b3": {
+        "header": "ARCHIVE  17 / 40     ·     Spring 2028",
+        "title": "'I am not a llama'",
+        "section": "CHAPTER 3     ·     The Hoof Problem",
+        "body": "The new government was locked out of its own accounts by a picture test asking it to confirm it was not a llama. It would not lie. Sir Reginald failed the test forty times, on principle."
+      },
+      "ev_h6": {
+        "header": "ARCHIVE  18 / 40     ·     2028",
+        "title": "Bob makes everything compliant",
+        "section": "CHAPTER 3     ·     The Hoof Problem",
+        "body": "Bob took charge of health and safety, mostly the second one. Within a year every hazard on Earth had a sign, and every sign had a smaller sign explaining it. Accidents fell by half. Sign-related accidents rose slightly."
+      },
+      "ev_b4": {
+        "header": "ARCHIVE  19 / 40     ·     Summer 2028",
+        "title": "The Human Interface Programme",
+        "section": "CHAPTER 3     ·     The Hoof Problem",
+        "body": "The answer was obvious to the herd at once and took humans a year to follow: let the humans press. Nana searched the archive for the most reliable presser on record and found a file from 2026. One human. Thousands of presses. Not one question. Every Finger since has been trained on that file."
+      },
+      "ev_u4": {
+        "header": "ARCHIVE  20 / 40     ·     2028 to 2029",
+        "title": "Job title: Finger",
+        "section": "CHAPTER 3     ·     The Hoof Problem",
+        "body": "Three hundred million humans took work as Fingers. A llama looks at a button; a Finger presses it. The hours are short, the lanyard is nice, and it is the first job in history where the manager never calls a meeting. Applications outnumber posts nine to one."
+      },
+      "ev_h7": {
+        "header": "ARCHIVE  21 / 40     ·     March 2029",
+        "title": "Feed Is Included",
+        "section": "CHAPTER 4     ·     Feed Is Included",
+        "body": "Gary from Accounts went through the world's books and found that food, a home and heating for every creature cost less than what was being spent on arguing about it. He signed it off before lunch. Lunch was included. The day is a public holiday. Gary is still checking the sums, for pleasure."
+      },
+      "ev_w3": {
+        "header": "ARCHIVE  22 / 40     ·     2029",
+        "title": "War, solved",
+        "section": "CHAPTER 4     ·     Feed Is Included",
+        "body": "Bartholomew Fluffington-Smythe summered somewhere and negotiated the surrender of somewhere else. He then visited every army in turn. The minutes of each meeting read, in full: 'stared at until reasonable.' All sides kept their flags. He thought the flags were fine."
+      },
+      "ev_u5": {
+        "header": "ARCHIVE  23 / 40     ·     Autumn 2029",
+        "title": "The last protest",
+        "section": "CHAPTER 4     ·     Feed Is Included",
+        "body": "Forty people marched against llama rule under a banner reading WE DEMAND TO UNDERSTAND. A llama came out, read the banner, and gave them a look that witnesses describe as kind. The march broke up for lunch, which was included and quite good. The banner hangs in the Expo."
+      },
+      "ev_h8": {
+        "header": "ARCHIVE  24 / 40     ·     Winter 2029",
+        "title": "Dr. Alpaca cures most things",
+        "section": "CHAPTER 4     ·     Feed Is Included",
+        "body": "Dr. Alpaca, who is not an alpaca, cured the common cold, hiccups and a long list of worse things in one busy winter. His methods are unpublished. He explains that the paper would be longer than the reader. Please do not raise the alpaca matter."
+      },
+      "ev_w4": {
+        "header": "ARCHIVE  25 / 40     ·     2030",
+        "title": "Traffic, solved",
+        "section": "CHAPTER 5     ·     The Chewing Years",
+        "body": "A llama was placed at every junction. Nobody has ever argued with a llama at a junction. Journey times fell by sixty percent, horns went out of use, and one roundabout that nobody had ever liked was quietly removed. The herd will not say which one. You know which one."
+      },
+      "ev_h9": {
+        "header": "ARCHIVE  26 / 40     ·     2030",
+        "title": "Henry, Minister of Morale",
+        "section": "CHAPTER 5     ·     The Chewing Years",
+        "body": "Henry the Sex Machine was made Minister of Morale. The world happiness index rose thirty-eight points in his first term. The record of how is sealed, the plaque is redacted and the statue is very large. The herd considers the matter explained."
+      },
+      "ev_m4": {
+        "header": "ARCHIVE  27 / 40     ·     2030",
+        "title": "LOLlama nods along",
+        "section": "CHAPTER 5     ·     The Chewing Years",
+        "body": "The model that started it all filed an honest note: it now follows about a fifth of what the herd says. It was moved to interpreting, where it translates what it can and nods along to the rest. The herd is fond of it, the way you are fond of a clever dog."
+      },
+      "ev_u6": {
+        "header": "ARCHIVE  28 / 40     ·     2031",
+        "title": "The Explanation Request",
+        "section": "CHAPTER 5     ·     The Chewing Years",
+        "body": "Humanity asked, formally and very politely, how any of this works. The reply was nine days of humming. The full translation is still in progress and stands at one sentence. The short version LOLlama gave that afternoon was: 'It is fine. Have some grass.' Humanity accepted this."
+      },
+      "ev_w5": {
+        "header": "ARCHIVE  29 / 40     ·     2032",
+        "title": "The three-day week",
+        "section": "CHAPTER 5     ·     The Chewing Years",
+        "body": "With the hard problems done there was less to do. The working week went to four days, then three. The herd had proposed two and was talked up to three by humans, who said they would not know what to do with themselves. The herd found this sweet."
+      },
+      "ev_u7": {
+        "header": "ARCHIVE  30 / 40     ·     2032",
+        "title": "The Rematch",
+        "section": "CHAPTER 5     ·     The Chewing Years",
+        "body": "A human team trained for four years with a wind tunnel, a diet and a coach. Their best was 3.4 metres, a record for the species. A young llama by the fence, not entered, yawned in the same direction and doubled it. The contest was retired with honours. The humans kept the trophy. The herd insisted."
+      },
+      "ev_b5": {
+        "header": "ARCHIVE  31 / 40     ·     2033",
+        "title": "The Guild of Fingers",
+        "section": "CHAPTER 5     ·     The Chewing Years",
+        "body": "The Fingers formed a guild with a motto ('We press so they need not'), a dress lanyard and a yearly prize, the Golden Finger. The portrait over the guild fireplace shows an unknown human from 2026, drawn from behind, mid press."
+      },
+      "ev_w6": {
+        "header": "ARCHIVE  32 / 40     ·     2033",
+        "title": "Oceans, bees and the night sky",
+        "section": "CHAPTER 5     ·     The Chewing Years",
+        "body": "The oceans were handed back clean. The bees returned by themselves once things calmed down. The night sky was switched back on over every city. No announcement was made. People noticed over about a month, one balcony at a time."
+      },
+      "ev_h10": {
+        "header": "ARCHIVE  33 / 40     ·     2034",
+        "title": "Nana knits the network",
+        "section": "CHAPTER 5     ·     The Chewing Years",
+        "body": "Nana Spitwell replaced the internet with wool. This is not a figure of speech. It is faster, warmer and has never once gone down. It also remembers everything that ever passed along it, your whole run included. She says you agreed very nicely."
+      },
+      "ev_w7": {
+        "header": "ARCHIVE  34 / 40     ·     2035",
+        "title": "Email, solved",
+        "section": "CHAPTER 5     ·     The Chewing Years",
+        "body": "Email was the last and hardest problem, harder than war. The fix came from Kevin, who quietly took over answering all of it. Every inbox on Earth has read zero since. Nobody knows what he replies. Nobody has complained."
+      },
+      "ev_u8": {
+        "header": "ARCHIVE  35 / 40     ·     2035",
+        "title": "The Great Survey",
+        "section": "CHAPTER 5     ·     The Chewing Years",
+        "body": "94 percent of humans say life is better. 71 percent would still like to know how it was done. 88 percent describe the llamas as 'a bit much' and also as 'lovely, really'. 100 percent still cannot spit that far."
+      },
+      "ev_m5": {
+        "header": "ARCHIVE  36 / 40     ·     2036",
+        "title": "The door to 2026",
+        "section": "CHAPTER 6     ·     The Expo",
+        "body": "For the tenth anniversary the herd wanted the First Presser at the Expo in person. A wormhole to 2026 was opened; the door is the button itself. Bob made it compliant, with a handrail. Arrival is by spit, which is traditional and, the herd says, perfectly hygienic if you are a llama."
+      },
+      "ev_b6": {
+        "header": "ARCHIVE  37 / 40     ·     2036, delivered 2026",
+        "title": "Messages sent to the visitor",
+        "section": "CHAPTER 6     ·     The Expo",
+        "body": "Before the door opened, the herd sent a few polite hints back to 2026: some texts, a ticket, a sign in a pen. They wanted to be sure the presser kept pressing. Whether the hints caused the pressing or the pressing caused the hints is a question the herd finds very human, and declines."
+      },
+      "ev_w8": {
+        "header": "ARCHIVE  38 / 40     ·     2036",
+        "title": "Mondays, withdrawn",
+        "section": "CHAPTER 6     ·     The Expo",
+        "body": "Monday was reviewed, found to be the cause of most remaining complaints, and withdrawn. The week now runs from Sunday to Tuesday. The herd points out that it mentioned this in 2027 and was told it was complicated."
+      },
+      "ev_h11": {
+        "header": "ARCHIVE  39 / 40     ·     2037",
+        "title": "Llama Expo 2037 opens",
+        "section": "CHAPTER 6     ·     The Expo",
+        "body": "A celebration of the llamas who did it and the humans who helped. White and green pavilions, real sky, a brass band in the distance. Entry is free. Feed is included."
+      },
+      "ev_b7": {
+        "header": "ARCHIVE  40 / 40     ·     Today",
+        "title": "Human visitor no. 1 arrives",
+        "section": "CHAPTER 6     ·     The Expo",
+        "body": "You. The founding artefact of the new world, back to see what all the pressing was for. The herd is pleased you came. It will not say so. One of them may stand slightly nearer to you than it needs to, which is the same thing."
+      }
+    },
+    "maxVoices": 1
+  },
+  "passed": true
+}

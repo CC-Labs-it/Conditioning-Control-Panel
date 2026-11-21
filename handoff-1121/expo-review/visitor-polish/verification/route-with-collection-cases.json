@@ -1,0 +1,515 @@
+{
+  "collisions": {
+    "aquarium": "540eda9d4f16d705e5427de39d14278baa9c3231750e6a2b2d4d37cf5756fbd6",
+    "service": "61952fdc7dd939c83ee9da53ee17b72c30a32f47b3cf00c71b539a0b3e4ab316",
+    "secret": "2d0db725da14ce9d6b36e14f2a6cf88a98cccd2e7b1d495e6a4f336465967a07",
+    "twelve": "ca7861659b963febd51b501e381eac33a5a0bd5b211df8742bc038911d746383",
+    "dome": "d8810f80c5707f5895350bc8d1514d723c4c6eef0767d2385e20b0cf113c921b",
+    "chronology": "4688129c4947700d8d26ec7e37327aac75d0d6fe327798e349fe674660cb32bb",
+    "commons": "6df04eb7bbee275d9ae6d753e9043435c042d744727dcc13c0a7203589f93a42",
+    "forum": "4fd9c3e4fd42774e82d786b58c472a8ba847e7d4e4c2a179f26f17652f8db334",
+    "atrium": "c8fd993162449d0f2855e304d4b5d4c381aa774612678c5e7925f6e321e486b4",
+    "hall": "e008db15caf54a5127dea3a1507f85d363fbb226e17b4a6d8351c167ef83333d",
+    "shop": "2f2b4f63c9224f32471287dd729ab5e2e2419d687c28be469eac3f86d2fcf056",
+    "hoof": "9cd503e6a2784a8797509e155f3a4e46dd7f8cb4a503cc74d0b54600cb0229ce",
+    "habitat": "aa7396174d00b97274c07149d44f2c453af6e2d96f9ac0b2c46930a6bbc85725",
+    "catwalk": "00de5d16cc529c7c8caea842d733fef31d5212f60c099d82b17a274998d46362"
+  },
+  "segments": [
+    {
+      "zone": "atrium",
+      "from": "admission",
+      "to": "slot_01",
+      "metres": 3.5999999999999654,
+      "at": [
+        3.0128210500580774,
+        0,
+        34.594819547792696
+      ]
+    },
+    {
+      "zone": "atrium",
+      "from": "slot_01",
+      "to": "slot_02",
+      "metres": 8.567846422464424,
+      "at": [
+        7.8,
+        0,
+        41
+      ]
+    },
+    {
+      "zone": "chronology",
+      "from": "slot_01",
+      "to": "slot_02",
+      "metres": 16.74000000000064,
+      "at": [
+        8.628487956467533,
+        0,
+        57.71948586847128
+      ]
+    },
+    {
+      "zone": "chronology",
+      "from": "slot_02",
+      "to": "slot_03",
+      "metres": 27.299999999998853,
+      "at": [
+        6.971873890564401,
+        0,
+        84.96917632243047
+      ]
+    },
+    {
+      "zone": "chronology",
+      "from": "slot_03",
+      "to": "slot_04",
+      "metres": 20.562190539886288,
+      "at": [
+        3.4,
+        2.7755575615628914e-17,
+        103
+      ]
+    },
+    {
+      "zone": "forum",
+      "from": "slot_03",
+      "to": "slot_04",
+      "metres": 16.499999999999957,
+      "at": [
+        -13.079113269001763,
+        0,
+        103.82995534061114
+      ]
+    },
+    {
+      "zone": "forum",
+      "from": "slot_04",
+      "to": "slot_05",
+      "metres": 33.09254546628423,
+      "at": [
+        -46.13,
+        0,
+        102.17
+      ]
+    },
+    {
+      "zone": "forum",
+      "from": "slot_05",
+      "to": "slot_06",
+      "metres": 22.59390240428772,
+      "at": [
+        -66.19998308396875,
+        0,
+        98.60142977741341
+      ]
+    },
+    {
+      "zone": "commons",
+      "from": "slot_05",
+      "to": "slot_06",
+      "metres": 12.22962864088881,
+      "at": [
+        -67.03,
+        0,
+        86.4
+      ]
+    },
+    {
+      "zone": "commons",
+      "from": "slot_06",
+      "to": "slot_07",
+      "metres": 24.356633593335413,
+      "at": [
+        -65.37,
+        0,
+        62.1
+      ]
+    },
+    {
+      "zone": "commons",
+      "from": "slot_07",
+      "to": "slot_08",
+      "metres": 19.134435087001986,
+      "at": [
+        -61.8,
+        0,
+        45.5
+      ]
+    },
+    {
+      "zone": "aquarium",
+      "from": "slot_07",
+      "to": "slot_08",
+      "metres": 12.479999999999388,
+      "at": [
+        -49.32144374850627,
+        0,
+        45.68982591575531
+      ]
+    },
+    {
+      "zone": "aquarium",
+      "from": "slot_08",
+      "to": "slot_09",
+      "metres": 25.119602504668055,
+      "at": [
+        -24.21,
+        -2.7755575615628914e-17,
+        46.33
+      ]
+    },
+    {
+      "zone": "aquarium",
+      "from": "slot_09",
+      "to": "slot_10",
+      "metres": 19.04487779167925,
+      "at": [
+        -7.8,
+        0,
+        41
+      ]
+    },
+    {
+      "zone": "atrium",
+      "from": "slot_09",
+      "to": "slot_10",
+      "metres": 24.25185853761348,
+      "at": [
+        12,
+        0,
+        32
+      ]
+    },
+    {
+      "zone": "service",
+      "from": "slot_09",
+      "to": "slot_10",
+      "metres": 9.72498241498542,
+      "at": [
+        17.27,
+        0,
+        28.4
+      ]
+    },
+    {
+      "zone": "service",
+      "from": "slot_10",
+      "to": "slot_11",
+      "metres": 9.736026579705085,
+      "at": [
+        12,
+        0,
+        32
+      ]
+    },
+    {
+      "zone": "atrium",
+      "from": "slot_10",
+      "to": "slot_11",
+      "metres": 22.251284223086063,
+      "at": [
+        0,
+        0,
+        16.000000000000046
+      ]
+    },
+    {
+      "zone": "hall",
+      "from": "slot_10",
+      "to": "slot_11",
+      "metres": 18.463824366864692,
+      "at": [
+        -9.367437823845272,
+        0,
+        2.1520516116835613
+      ]
+    },
+    {
+      "zone": "hall",
+      "from": "slot_11",
+      "to": "slot_12",
+      "metres": 6.718918921159756,
+      "at": [
+        -12,
+        0,
+        7
+      ]
+    },
+    {
+      "zone": "hoof",
+      "from": "slot_11",
+      "to": "slot_12",
+      "metres": 11.727560074185973,
+      "at": [
+        -22.3598538433418,
+        0,
+        11.149836535316489
+      ]
+    },
+    {
+      "zone": "hoof",
+      "from": "slot_12",
+      "to": "slot_13",
+      "metres": 11.808637040865092,
+      "at": [
+        -12.005118131468747,
+        0,
+        7.0000007441851935
+      ]
+    },
+    {
+      "zone": "hall",
+      "from": "slot_12",
+      "to": "slot_13",
+      "metres": 24.318575792048556,
+      "at": [
+        12,
+        0,
+        7
+      ]
+    },
+    {
+      "zone": "habitat",
+      "from": "slot_12",
+      "to": "slot_13",
+      "metres": 6.479028333082089,
+      "at": [
+        17.78,
+        0,
+        4.64
+      ]
+    },
+    {
+      "zone": "habitat",
+      "from": "slot_13",
+      "to": "slot_14",
+      "metres": 6.476492174801139,
+      "at": [
+        12.020116250908327,
+        0,
+        6.999763338224608
+      ]
+    },
+    {
+      "zone": "hall",
+      "from": "slot_13",
+      "to": "slot_14",
+      "metres": 15.599999976176173,
+      "at": [
+        12,
+        0,
+        -5
+      ]
+    },
+    {
+      "zone": "shop",
+      "from": "slot_13",
+      "to": "slot_14",
+      "metres": 8.800578547520207,
+      "at": [
+        14.64,
+        0,
+        -11.95
+      ]
+    },
+    {
+      "zone": "shop",
+      "from": "slot_14",
+      "to": "slot_01",
+      "metres": 8.800578547520201,
+      "at": [
+        12,
+        0,
+        -5
+      ]
+    },
+    {
+      "zone": "hall",
+      "from": "slot_14",
+      "to": "slot_01",
+      "metres": 25.376731594914624,
+      "at": [
+        0,
+        0,
+        16
+      ]
+    },
+    {
+      "zone": "atrium",
+      "from": "slot_14",
+      "to": "slot_01",
+      "metres": 19.838505701655972,
+      "at": [
+        3.0336,
+        0,
+        34.5946
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "slot": "slot_01",
+      "zone": "atrium",
+      "feet": [
+        3.0128210500580774,
+        0,
+        34.594819547792696
+      ],
+      "clear": true
+    },
+    {
+      "slot": "slot_02",
+      "zone": "chronology",
+      "feet": [
+        8.628487956467533,
+        0,
+        57.71948586847128
+      ],
+      "clear": true
+    },
+    {
+      "slot": "slot_03",
+      "zone": "chronology",
+      "feet": [
+        6.971873890564401,
+        0,
+        84.96917632243047
+      ],
+      "clear": true
+    },
+    {
+      "slot": "slot_04",
+      "zone": "forum",
+      "feet": [
+        -13.079113269001763,
+        0,
+        103.82995534061114
+      ],
+      "clear": true
+    },
+    {
+      "slot": "slot_05",
+      "zone": "forum",
+      "feet": [
+        -46.13,
+        0,
+        102.17
+      ],
+      "clear": true
+    },
+    {
+      "slot": "slot_06",
+      "zone": "commons",
+      "feet": [
+        -67.03,
+        0,
+        86.4
+      ],
+      "clear": true
+    },
+    {
+      "slot": "slot_07",
+      "zone": "commons",
+      "feet": [
+        -65.37,
+        0,
+        62.1
+      ],
+      "clear": true
+    },
+    {
+      "slot": "slot_08",
+      "zone": "aquarium",
+      "feet": [
+        -49.32144374850627,
+        0,
+        45.68982591575531
+      ],
+      "clear": true
+    },
+    {
+      "slot": "slot_09",
+      "zone": "aquarium",
+      "feet": [
+        -24.21,
+        -2.7755575615628914e-17,
+        46.33
+      ],
+      "clear": true
+    },
+    {
+      "slot": "slot_10",
+      "zone": "service",
+      "feet": [
+        17.27,
+        0,
+        28.4
+      ],
+      "clear": true
+    },
+    {
+      "slot": "slot_11",
+      "zone": "hall",
+      "feet": [
+        -9.367437823845272,
+        0,
+        2.1520516116835613
+      ],
+      "clear": true
+    },
+    {
+      "slot": "slot_12",
+      "zone": "hoof",
+      "feet": [
+        -22.3598538433418,
+        0,
+        11.149836535316489
+      ],
+      "clear": true
+    },
+    {
+      "slot": "slot_13",
+      "zone": "habitat",
+      "feet": [
+        17.78,
+        0,
+        4.64
+      ],
+      "clear": true
+    },
+    {
+      "slot": "slot_14",
+      "zone": "shop",
+      "feet": [
+        14.64,
+        0,
+        -11.95
+      ],
+      "clear": true
+    },
+    {
+      "slot": "slot_01",
+      "zone": "atrium",
+      "feet": [
+        3.0336,
+        0,
+        34.5946
+      ],
+      "clear": true
+    }
+  ],
+  "failed": [],
+  "metres": 491.7,
+  "collection": {
+    "model": "collection-c7d4642df857.glb",
+    "supports": [
+      "chess",
+      "classifieds",
+      "weather",
+      "drive",
+      "tea"
+    ]
+  },
+  "movingDoorLeaves": true
+}

@@ -1119,191 +1119,191 @@
   "restingAtlas": [
     {
       "key": "slides/blink.webp",
-      "correlation": 0.9974913
+      "correlation": 0.9974886
     },
     {
       "key": "slides/booth.webp",
-      "correlation": 0.9986976
+      "correlation": 0.9987293
     },
     {
       "key": "slides/captcha.webp",
-      "correlation": 0.9982625
+      "correlation": 0.9982956
     },
     {
       "key": "slides/chew.webp",
-      "correlation": 0.9987754
+      "correlation": 0.9988439
     },
     {
       "key": "slides/climate.webp",
-      "correlation": 0.9981053
+      "correlation": 0.9981919
     },
     {
       "key": "slides/constitution.webp",
-      "correlation": 0.9971957
+      "correlation": 0.9972568
     },
     {
       "key": "slides/coup.webp",
-      "correlation": 0.9985066
+      "correlation": 0.9986119
     },
     {
       "key": "slides/crossing.webp",
-      "correlation": 0.9982623
+      "correlation": 0.9983093
     },
     {
       "key": "slides/door.webp",
-      "correlation": 0.9975306
+      "correlation": 0.9975094
     },
     {
       "key": "slides/drop.webp",
-      "correlation": 0.9967102
+      "correlation": 0.9966764
     },
     {
       "key": "slides/feed.webp",
-      "correlation": 0.9977287
+      "correlation": 0.9977875
     },
     {
       "key": "slides/finger.webp",
-      "correlation": 0.9985031
+      "correlation": 0.9985608
     },
     {
       "key": "slides/firstpress.webp",
-      "correlation": 0.9989066
+      "correlation": 0.9989778
     },
     {
       "key": "slides/flight.webp",
-      "correlation": 0.9994159
+      "correlation": 0.9994685
     },
     {
       "key": "slides/girder.webp",
-      "correlation": 0.9997477
+      "correlation": 0.9997777
     },
     {
       "key": "slides/guild.webp",
-      "correlation": 0.9987067
+      "correlation": 0.9987681
     },
     {
       "key": "slides/heater.webp",
-      "correlation": 0.9985185
+      "correlation": 0.9973209
     },
     {
       "key": "slides/henry.webp",
-      "correlation": 0.9977524
+      "correlation": 0.9977933
     },
     {
       "key": "slides/humming.webp",
-      "correlation": 0.9976688
+      "correlation": 0.9977581
     },
     {
       "key": "slides/inbox.webp",
-      "correlation": 0.9972991
+      "correlation": 0.9972611
     },
     {
       "key": "slides/junction.webp",
-      "correlation": 0.9975589
+      "correlation": 0.9976382
     },
     {
       "key": "slides/kevin.webp",
-      "correlation": 0.9989398
+      "correlation": 0.9990054
     },
     {
       "key": "slides/kiosk.webp",
-      "correlation": 0.9984599
+      "correlation": 0.9984565
     },
     {
       "key": "slides/loch.webp",
-      "correlation": 0.9994779
+      "correlation": 0.9995099
     },
     {
       "key": "slides/messages.webp",
-      "correlation": 0.9976386
+      "correlation": 0.9977544
     },
     {
       "key": "slides/monday.webp",
-      "correlation": 0.9987609
+      "correlation": 0.9988421
     },
     {
       "key": "slides/moon.webp",
-      "correlation": 0.9994028
+      "correlation": 0.9994344
     },
     {
       "key": "slides/notes.webp",
-      "correlation": 0.9982352
+      "correlation": 0.9983039
     },
     {
       "key": "slides/opening.webp",
-      "correlation": 0.9977653
+      "correlation": 0.9978304
     },
     {
       "key": "slides/plate.webp",
-      "correlation": 0.9980394
+      "correlation": 0.9980752
     },
     {
       "key": "slides/protest.webp",
-      "correlation": 0.9971956
+      "correlation": 0.9972722
     },
     {
       "key": "slides/rematch.webp",
-      "correlation": 0.9978407
+      "correlation": 0.997847
     },
     {
       "key": "slides/ships.webp",
-      "correlation": 0.9987192
+      "correlation": 0.9987374
     },
     {
       "key": "slides/signs.webp",
-      "correlation": 0.9964873
+      "correlation": 0.9965395
     },
     {
       "key": "slides/sky.webp",
-      "correlation": 0.9983788
+      "correlation": 0.9984159
     },
     {
       "key": "slides/spit.webp",
-      "correlation": 0.9970271
+      "correlation": 0.9970412
     },
     {
       "key": "slides/stare.webp",
-      "correlation": 0.9991877
+      "correlation": 0.999239
     },
     {
       "key": "slides/summit.webp",
-      "correlation": 0.9975633
+      "correlation": 0.997601
     },
     {
       "key": "slides/survey.webp",
-      "correlation": 0.9980285
+      "correlation": 0.9980724
     },
     {
       "key": "slides/training.webp",
-      "correlation": 0.998028
+      "correlation": 0.9981139
     },
     {
       "key": "slides/update.webp",
-      "correlation": 0.9993686
+      "correlation": 0.9993779
     },
     {
       "key": "slides/visitor.webp",
-      "correlation": 0.9986054
+      "correlation": 0.9986966
     },
     {
       "key": "slides/ward.webp",
-      "correlation": 0.9990083
+      "correlation": 0.9990628
     },
     {
       "key": "slides/webcam.webp",
-      "correlation": 0.9989731
+      "correlation": 0.9989995
     },
     {
       "key": "slides/week.webp",
-      "correlation": 0.9986928
+      "correlation": 0.9987417
     },
     {
       "key": "slides/woods.webp",
-      "correlation": 0.9960676
+      "correlation": 0.9960879
     },
     {
       "key": "slides/wool.webp",
-      "correlation": 0.9974825
+      "correlation": 0.9975445
     }
   ],
   "audio": [
@@ -2903,10 +2903,10 @@
         1024,
         765
       ],
-      "sourceSha256": "3c0f1b39459fc347282a81a928976c495c0471b1290e8bef568a6f18de9e82f0",
-      "stagedSha256": "a3928d8784a27bf463a099d881327c48fbb52e192d131912bb01112a88afbc37",
-      "downsampledPixelCorrelation": 0.999952,
-      "peakSignalToNoiseDb": 39.31
+      "sourceSha256": "01960d5415d815c3a1e4a0bc4b69be60c55692cc3071c9ab042debecf2aaf560",
+      "stagedSha256": "3a3e5816f88f564b4f42f7567ffffdbc7d1186d7bd263284b9905f6e42222219",
+      "downsampledPixelCorrelation": 0.9999185,
+      "peakSignalToNoiseDb": 41.15
     },
     {
       "id": "booth",
@@ -3428,10 +3428,10 @@
         1024,
         765
       ],
-      "sourceSha256": "3cc85cad64a507a6a6322a8e476ffacc4d14759d926954132761c7a1ff3b7454",
-      "stagedSha256": "da0d6fa166427484a1f4ecdf815ae67d5f5f6fd5a27891c79d5d7fc266ce2ec4",
-      "downsampledPixelCorrelation": 0.9999234,
-      "peakSignalToNoiseDb": 38.52
+      "sourceSha256": "6da0167970f0445393cc38b18012c14ddcdbe9abc8c6bc3544878ffc6c67081c",
+      "stagedSha256": "ea5ec767398d3e09e3764633dad3db412eab4f6f82b6431955281350a217ff29",
+      "downsampledPixelCorrelation": 0.9999322,
+      "peakSignalToNoiseDb": 38.83
     },
     {
       "id": "feed",
@@ -3617,10 +3617,10 @@
         1024,
         765
       ],
-      "sourceSha256": "140b037648eda3235eac32f157ef3b3e3f8f77e36e1cd58f8b1667c785131b87",
-      "stagedSha256": "422ba464bc3e72d29a64e79c71aaa70341e9cf77b80db4304f78bb03784604c3",
-      "downsampledPixelCorrelation": 0.9997513,
-      "peakSignalToNoiseDb": 41.16
+      "sourceSha256": "ca00334129a2735f4e71205606d2979e25960655148fc9e183e7bfe979a7c4ac",
+      "stagedSha256": "3d923fd8acf75e56126b549306b76bc869dc1fe0402d963a173e131ded1cad9e",
+      "downsampledPixelCorrelation": 0.9996551,
+      "peakSignalToNoiseDb": 40.37
     },
     {
       "id": "flight",
@@ -3743,10 +3743,10 @@
         1024,
         765
       ],
-      "sourceSha256": "4f80e1c1447089b6d795d2ffc3ad98819e55e327e573bcb869e2ece10ebdeee3",
-      "stagedSha256": "311ae636c747410f8a0a03ca61706a006a728b96e354a28fb35d17f243d0709c",
-      "downsampledPixelCorrelation": 0.9999372,
-      "peakSignalToNoiseDb": 39.56
+      "sourceSha256": "de7aa6b47aaab0dfb06e0a8522f77d126eec2ab67d200096c52cbb09fef5e5a2",
+      "stagedSha256": "349d17c60aa9948d0f5877beb1718eabae132395d47e678beea728c6d5f747a6",
+      "downsampledPixelCorrelation": 0.9998701,
+      "peakSignalToNoiseDb": 39.31
     },
     {
       "id": "heater_a",
@@ -3764,10 +3764,10 @@
         1024,
         765
       ],
-      "sourceSha256": "9d63ccb621af7b68c0edf235fe658f05a5cc8de38d1afd6e00e4ec722df05bef",
-      "stagedSha256": "0c5e1ad7282aa95a3059db4d2820979e51ca21272bf3a54fa7c3b9bc473686a9",
-      "downsampledPixelCorrelation": 0.99992,
-      "peakSignalToNoiseDb": 39.25
+      "sourceSha256": "d414160bd9d6a57c6673a6505bd68ea44db88716ddea6df31dd2db75628e1f6a",
+      "stagedSha256": "61d002bf50d98657dcbeb9f5cf0a8030029b5cd5528c455944b3f7254098fdee",
+      "downsampledPixelCorrelation": 0.9998784,
+      "peakSignalToNoiseDb": 39.23
     },
     {
       "id": "heater_c",
@@ -3785,10 +3785,10 @@
         1024,
         765
       ],
-      "sourceSha256": "a42d2b627b02fb6ecc8b1af27ed6afc0558c4bf23c9f5819a616f967fd3a42b5",
-      "stagedSha256": "49bdd647d24c8614da15041cedfa0b79b5020ebd14a8115b0d1fb5785b08b19b",
-      "downsampledPixelCorrelation": 0.9998366,
-      "peakSignalToNoiseDb": 42.2
+      "sourceSha256": "bb3552e8a10ee769d4faf2faff3642ab511c60b4863b0faf4f6a5af6e06ab763",
+      "stagedSha256": "8ebd28767934cc0603c76b78543ade9a59d2c358854a9671fcca4f1f6f9330e7",
+      "downsampledPixelCorrelation": 0.9998802,
+      "peakSignalToNoiseDb": 40.4
     },
     {
       "id": "henry",
@@ -4373,10 +4373,10 @@
         1024,
         765
       ],
-      "sourceSha256": "a463fddc53aa511cf9b83d04fe9acaf2683d7b5093439a70435bea22dcffd578",
-      "stagedSha256": "78d48aac77923d69bad14462a124952b33ae103a8cb1ace581954b520d6732fa",
-      "downsampledPixelCorrelation": 0.9999608,
-      "peakSignalToNoiseDb": 40.84
+      "sourceSha256": "b331ee35ae227d33fa868837ed0243f5351bff67854457cc31972610a311e49b",
+      "stagedSha256": "41fc3f385ada2b5aa2f80050df5f2da590b7ecef6d694cc1449597b7a7d90780",
+      "downsampledPixelCorrelation": 0.9999489,
+      "peakSignalToNoiseDb": 41.3
     },
     {
       "id": "notes_c",
@@ -4709,10 +4709,10 @@
         1024,
         765
       ],
-      "sourceSha256": "141e8f2092cfb70cf644cd9b4b808af3d00dc15bbd7d96c0012d6a40ce5ec2b7",
-      "stagedSha256": "9c552100aa678e27c6fad03d504fd8f35ef69c89632820b0ee7d3e2ad8dbde76",
-      "downsampledPixelCorrelation": 0.9998256,
-      "peakSignalToNoiseDb": 42.26
+      "sourceSha256": "6b44de3ddd4300aa1bc1b58663428cb8829d9931ff65df4ea593ebf283732920",
+      "stagedSha256": "82791d8ab44d6fc12d9d74d2762f39c343c5809bc53361ee3e49dc4ca651be6c",
+      "downsampledPixelCorrelation": 0.9997655,
+      "peakSignalToNoiseDb": 40.65
     },
     {
       "id": "signs",
@@ -5402,10 +5402,10 @@
         1024,
         765
       ],
-      "sourceSha256": "8f242a5a716b7705480a7e8d6c550d3616f69b434b88b8d1ce77942f8cd944cd",
-      "stagedSha256": "f154d97e3718080e1ceb0c148f149921e71523f40ccf937e2999600d2429d022",
-      "downsampledPixelCorrelation": 0.9999685,
-      "peakSignalToNoiseDb": 38.63
+      "sourceSha256": "bfa39680d593adc2dbfa37021e8f37badee865812d79cc831eeb8d1154def167",
+      "stagedSha256": "5330e3ec36e65d39c9fc943b3d1224c5a3640ff07c23c5093b9e852639144c32",
+      "downsampledPixelCorrelation": 0.9999637,
+      "peakSignalToNoiseDb": 38.66
     },
     {
       "id": "week_c",

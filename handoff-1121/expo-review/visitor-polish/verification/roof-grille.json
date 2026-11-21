@@ -1,0 +1,35 @@
+{
+  "cold": {
+    "rooms": [
+      "catwalk"
+    ],
+    "shutter": {
+      "id": "crown-shutter",
+      "progress": 0,
+      "ready": false,
+      "distance": 0.7060691660119122,
+      "rooms": [
+        "catwalk",
+        "dome"
+      ],
+      "leaves": []
+    }
+  },
+  "warm": {
+    "rooms": [
+      "catwalk",
+      "dome"
+    ],
+    "shutter": {
+      "id": "crown-shutter",
+      "progress": 1,
+      "ready": true,
+      "distance": 0.7060691660119122,
+      "rooms": [
+        "catwalk",
+        "dome"
+      ],
+      "leaves": []
+    }
+  }
+}

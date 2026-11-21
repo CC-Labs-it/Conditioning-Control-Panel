@@ -1,0 +1,26 @@
+{
+  "collectionSha256": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45",
+  "base": "http://127.0.0.1:8937/fuzz/",
+  "source": "expo-review\\collection-quiet-intel\\drive-clamped\\phone-collection-drive.jpg",
+  "fixture": {
+    "beforeMs": {
+      "medianMs": 33.400000005960464,
+      "p95Ms": 37.5,
+      "gpuDrawMs": 1.444375
+    },
+    "afterMs": {
+      "medianMs": 33.400000005960464,
+      "p95Ms": 33.79999998211861,
+      "gpuDrawMs": 1.435
+    },
+    "renderer": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "clampScreenPixels": 492,
+    "screenRect": [
+      0,
+      305,
+      392,
+      330
+    ],
+    "triangles": 352
+  }
+}

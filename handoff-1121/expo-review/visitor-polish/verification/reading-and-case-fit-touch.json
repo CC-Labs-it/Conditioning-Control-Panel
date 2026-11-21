@@ -1,0 +1,53 @@
+{
+  "format": "touch",
+  "errors": [],
+  "cases": [
+    {
+      "id": "chess",
+      "file": "guest-chess.glb",
+      "size": [
+        0.8399999737739563,
+        0.24300001561641693,
+        0.8399999737739563
+      ],
+      "bottom": 0,
+      "limits": [
+        1.36,
+        0.68,
+        1.08
+      ],
+      "maps": 1,
+      "tris": 17904,
+      "missingProbe": 0,
+      "embeddedModelSeen": true,
+      "plaqueTitle": "Piece by Piece"
+    },
+    {
+      "id": "classifieds",
+      "file": "guest-classifieds.glb",
+      "size": [
+        1.1799999475479126,
+        0.8304999470710754,
+        0.5099999904632568
+      ],
+      "bottom": -1.1102230246251565e-16,
+      "limits": [
+        1.44,
+        0.98,
+        0.75
+      ],
+      "maps": 1,
+      "tris": 15002,
+      "missingProbe": 0,
+      "embeddedModelSeen": true,
+      "plaqueTitle": "A lamp with opinions",
+      "enlargedAds": "It thinks you could do better.\n\nDiscount Stairs\nAll of the height. Some of the steps."
+    }
+  ],
+  "plaque": {
+    "title": "The Long Chew",
+    "body": "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for.",
+    "openedWith": "Touch Interact",
+    "closed": true
+  }
+}

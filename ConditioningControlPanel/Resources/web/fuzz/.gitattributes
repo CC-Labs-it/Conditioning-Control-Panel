@@ -3,6 +3,8 @@ assets/audio/themes/bimbo/*.mp3 filter=lfs diff=lfs merge=lfs -text
 assets/audio/themes/bimbo/ending/*.mp3 filter=lfs diff=lfs merge=lfs -text
 dev/bambi-demo/*.webm filter=lfs diff=lfs merge=lfs -text
 assets/img/bambi-sky.webp binary
+assets/expo/*.glb filter=lfs diff=lfs merge=lfs -text
+assets/expo/collection/*.glb filter=lfs diff=lfs merge=lfs -text
 assets/expo/zones/*.glb filter=lfs diff=lfs merge=lfs -text
 assets/expo/zones/*.glb.gz filter=lfs diff=lfs merge=lfs -text
 assets/expo/zones/*.webp binary

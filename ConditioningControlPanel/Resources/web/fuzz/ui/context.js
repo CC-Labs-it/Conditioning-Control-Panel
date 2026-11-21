@@ -340,6 +340,14 @@ export function makeContext(engine, scope) {
     get identity() { return engine.env.identity || null; },
 
     store: {
+      claimLifetime(key) {
+        const flags = (engine.life.store[item.id] ||= {});
+        const record=()=>{
+          if(flags[key]===true)return false;
+          flags[key]=true;engine.save();return true;
+        };
+        return engine.env.claimLifetime ? engine.env.claimLifetime(item.id,key,record) : record();
+      },
       getLayout: (key) => ui.getWindowLayout?.(key) || {},
       setLayout: (key, point) => ui.saveWindowLayout?.(key, point),
       get: (k) => bag()[k],

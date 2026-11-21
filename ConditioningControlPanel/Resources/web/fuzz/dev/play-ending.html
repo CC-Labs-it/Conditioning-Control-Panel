@@ -63,6 +63,7 @@ for (const key of ['pictures', 'lite', 'herd']) {
 }
 if (bubble) previewQuery.set('pictures', demoReel ? 'none' : 'scrolller');
 if (endId === 'll_end' && !qs.has('herd')) previewQuery.set('herd', '12');   // Preview the full Expo collection.
+if (endId === 'll_end') previewQuery.set('expoPreview', '1');
 if (endId === 'o_out' && !qs.has('pictures')) previewQuery.set('pictures', 'scrolller');
 if (buttonCheckpoint) {
   previewQuery.set('buttonCheckpoint', 'finale');

@@ -9,7 +9,8 @@ import { GROUPS, REGISTRY } from '../ui/unlocks/index.js';
 import { mergeGroups } from '../ui/unlocks/merge.js';
 import { BY_ID } from '../data/items.js';
 import * as E from '../sim/economy.js';
-import { createLife } from '../sim/save.js';
+import { createLife, load, store } from '../sim/save.js';
+import { createArchiveStory } from '../ui/expo/archive-story.js';
 
 class FakeEl {
   constructor(tag) { this.tag = tag; this.children = []; this.style = { cssText: '', setProperty() {}, getPropertyValue: () => '', removeProperty() {} }; this.parent = null; this.dataset = {}; this.classList = { add() {}, remove() {} }; }
@@ -75,6 +76,83 @@ test('a finite ending releases its wall timer when it completes early', async t 
   await engine.end('ll_end');
   assert.equal(timer.ms, 12345);
   assert.equal(released, timer, 'the safety cap must not keep the process or scene alive');
+});
+
+test('quit resumes the Expo archive, while exit, panic and legacy recaps stay closed', async () => {
+  const catalogue = JSON.parse(readFileSync(new URL('../assets/expo/narration/manifest.json', import.meta.url), 'utf8'));
+  const values = new Map();
+  const storage = { getItem: key => values.get(key), setItem: (key, raw) => values.set(key, raw) };
+  const notified = [];
+  function boot(life, run) {
+    const state = { credits: 0 };
+    const ui = fakeUi();
+    ui.credits = () => { state.credits++; };
+    const registry = { ll_end: { ...REGISTRY.ll_end, take(ctx) {
+      state.ctx = ctx;
+      state.story = createArchiveStory(catalogue, ctx.store.get('lastArchiveRecord'), id => ctx.store.set('lastArchiveRecord', id));
+      return new Promise(resolve => {
+        state.leave = resolve;
+        ctx.on('suspend', event => { if (event.on && event.reason === 'panic') resolve(); });
+      });
+    } } };
+    state.engine = createEngine({ run, life, ui, registry, save: () => store(storage, run, life),
+      host: { send: type => notified.push(type) } });
+    return state;
+  }
+  function restore() {
+    const {life, run} = load(storage);
+    const state = boot(life, run);
+    state.done = state.engine.end('ll_end', { restored: true });
+    return state;
+  }
+  function freshEnding(life) {
+    const run = E.createRun();
+    E.grant(run, 'll_end');
+    run.ended = { id: 'll_end', at: run.clock };
+    const state = boot(life, run);
+    state.done = state.engine.end('ll_end');
+    return state;
+  }
+  const first = freshEnding(createLife());
+  assert.equal(first.ctx.store.claimLifetime('planterDetour'), true);
+  first.story.finish(first.story.request('slot_01'), true);
+  first.story.request('slot_02'); // Closing during record two should retry it.
+  first.engine.setSuspended(true, 'focus');
+  first.engine.save(); // Regular pagehide and native host close flush the same save.
+  const resumed = restore();
+  assert.equal(resumed.ctx.restored, true);
+  assert.equal(resumed.story.next.archive.number, 2);
+  assert.equal(resumed.ctx.store.claimLifetime('planterDetour'), false);
+  assert.equal(load(storage).life.runs, 1);
+  assert.deepEqual(notified, ['fuzz-ended']);
+  resumed.leave(); // The gift shop hands the visitor back to the recap.
+  await resumed.done;
+  assert.equal(resumed.credits, 1);
+  const recap = restore();
+  await recap.done;
+  assert.equal(recap.ctx, undefined);
+  assert.equal(recap.credits, 1);
+  const sameLife = load(storage).life;
+  store(storage, null, sameLife, { again: 1 });
+  const next = freshEnding(load(storage).life);
+  assert.equal(next.story.next.archive.number, 1);
+  assert.equal(next.ctx.store.claimLifetime('planterDetour'), false);
+  next.engine.setSuspended(true, 'panic');
+  assert.equal(load(storage).run.store.ll_end.visitOpen, undefined);
+  await next.done;
+  const afterPanic = restore();
+  await afterPanic.done;
+  assert.equal(afterPanic.ctx, undefined);
+  const beforeMarkers = load(storage);
+  delete beforeMarkers.run.store.ll_end;
+  store(storage, beforeMarkers.run, beforeMarkers.life);
+  const old = restore();
+  await old.done;
+  assert.equal(old.ctx, undefined);
+  assert.equal(old.credits, 1);
+  assert.deepEqual(notified, ['fuzz-ended','fuzz-ended']);
+  first.leave();
+  await first.done;
 });
 
 test('a mount gets a ctx with every documented member', () => {

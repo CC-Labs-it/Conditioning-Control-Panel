@@ -1,23 +1,12 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { roomRequest as request, clearEntrance, firstSurfaceMap, viewFile, phoneMap, roomAsset } from './entrance.js';
+import { roomRequest as request, clearEntrance, firstSurfaceMap, viewFile, phoneMap, roomAsset, surfaceDetails } from './entrance.js';
+import {createDoors,loadDoorHardware,streamingPriority} from './doors.js';
 
 export const assetURL = path => new URL('../../assets/expo/' + path, import.meta.url).href;
 const url = name => assetURL('zones/' + name);
 const faces = ['px', 'nx', 'py', 'ny', 'pz', 'nz'];
-// Both the inspection skylight and the rotunda stair reveal rooms beyond their floor bounds.
-const sightlines = { dome:['catwalk','hall'], catwalk:['dome'], twelve:['hall'] };
-const galleryDoors = [
-  ['atrium','chronology',7.8,41],['chronology','forum',3.4,103],
-  ['forum','commons',-66.2,98.6],['commons','aquarium',-61.8,45.5],['aquarium','atrium',-7.8,41]
-];
-const gallerySections=new Set(['chronology','forum','commons','aquarium']);
-function galleryDoorDistance(from,to,p){
-  if(!gallerySections.has(from)&&!gallerySections.has(to))return null;
-  const door=galleryDoors.find(([a,b])=>(from===a&&to===b)||(from===b&&to===a));
-  return door?Math.hypot(p.x-door[2],p.z-door[3],Math.max(0,Math.abs(p.y)-.8)):Infinity;
-}
 
 export async function loadPlan(signal) {
   return (await request('zones.json', signal)).json();
@@ -46,22 +35,25 @@ function disposeGroup(group) {
 }
 
 /** A zone becomes walkable in the same frame that its visible scene and interaction targets mount. */
-export function createZones({ scene, renderer, walker, exhibits, plan, lite, report }) {
+export function createZones({ scene, renderer, walker, exhibits, plan, lite, report, ctx={},camera,play }) {
   const pmrem = new THREE.PMREMGenerator(renderer);
   const known = new Map(plan.zones.map(z => [z.id, z]));
   const resident = new Map(), pending = new Map(), retries = new Map();
   const photoSources = new Map();
   const earlySources=new WeakMap();
-  let sharedHits=0,fullDetailMaps=0,firstRoom=true,promotionTimer=0;
+  let sharedHits=0,fullDetailMaps=0,firstRoom=true,detailWorkers=0;
+  const promotionQueue=new Set();
   const anisotropy = Math.min(lite ? 4 : 8, renderer.capabilities.getMaxAnisotropy());
   let disposed = false, streamClock = 0;
-  function syncDoors() {
-    for (const zone of resident.values()) {
-      for (const [object, id] of zone.doors) object.visible = !resident.has(id);
-    }
-  }
+  const direction=new THREE.Vector3(),doorController = new AbortController(), doors=createDoors(scene,walker,ctx,camera,play);
+  walker.setDoors?.(doors);
+  const hardware=loadDoorHardware(assetURL('door-hardware.glb'),doorController.signal).then(asset=>{
+    if(disposed){asset.dispose();return;}
+    doors.setHardware(asset);
+  });
+  hardware.catch(()=>{});
   function release(zone) {
-    zone.released=true;zone.lightController?.abort();
+    zone.released=true;clearTimeout(zone.promotionTimer);zone.lightController?.abort();
     zone.originalMaterials?.forEach(m => m.dispose());
     disposeGroup(zone.view); disposeGroup(zone.collider);
     zone.light?.dispose(); zone.probe?.dispose(); zone.environment?.dispose();
@@ -72,6 +64,7 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
     for (const [uri,entry] of zone.sources) {
       if (--entry.references) continue;
       photoSources.delete(uri);
+      promotionQueue.delete(entry);
       entry.controller.abort(); entry.source?.data?.close?.();
     }
     zone.sources.clear();
@@ -88,11 +81,17 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
       texture.dispose();texture.source=entry.source;texture.needsUpdate=true;
     }else if(entry.preview)entry.users.add(texture);
   }
-  async function sharpenEntrance(entries){
-    const queue=entries.filter(entry=>entry.preview);
+  function sharpenSurfaces(entries){
+    for(const entry of entries)if(entry.preview&&!entry.upgrading)promotionQueue.add(entry);
     async function worker(){
-      while(queue.length&&!disposed){
-        const entry=queue.shift(),signal=entry.controller.signal;
+      detailWorkers++;
+      while(promotionQueue.size&&!disposed){
+        if(pending.size){
+          await new Promise(resolve=>setTimeout(resolve,100));
+          continue;
+        }
+        const entry=promotionQueue.values().next().value,signal=entry.controller.signal;
+        promotionQueue.delete(entry);entry.upgrading=true;
         if(signal.aborted)continue;
         try{
           const image=await pixels(entry.file,signal);
@@ -101,9 +100,20 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
           for(const texture of entry.users)useCurrentSource(texture);
           entry.users.clear();old.data.close();fullDetailMaps++;
         }catch(error){if(!signal.aborted&&!disposed)report(error);}
+        finally{entry.upgrading=false;}
       }
+      detailWorkers--;
     }
-    await Promise.all([worker(),worker()]);
+    while(detailWorkers<2&&promotionQueue.size)void worker();
+  }
+  function promote(zone){
+    if(lite||!zone||zone.promoted)return;
+    zone.promoted=true;
+    zone.promotionTimer=setTimeout(()=>{
+      if(zone.released)return;
+      if(!zone.entrance&&walker.zone!==zone.id){zone.promoted=false;return;}
+      void sharpenLighting(zone);sharpenSurfaces(zone.sources.values());
+    },zone.entrance?250:650);
   }
   async function sharpenLighting(zone){
     if(!zone.previewLight||zone.released)return;
@@ -128,7 +138,8 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
         if(zone.mobileTransfer)uri=url(phoneMap(uri.slice(url('').length),zone.definition));
         let entry=photoSources.get(uri);
         if (!entry) {
-          const relative=uri.slice(url('').length),file=zone.entrance?firstSurfaceMap(relative):relative;
+          const relative=uri.slice(url('').length);
+          const file=zone.entrance?firstSurfaceMap(relative):zone.details?.has(relative)?relative.replace(/\.webp$/,'-mobile.webp'):relative;
           entry={references:0,source:null,controller:new AbortController(),file:relative,preview:file!==relative};
           const item=entry;
           item.promise=pixels(file,item.controller.signal).catch(error=>{
@@ -150,11 +161,33 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
     });
     return new GLTFLoader(manager).setMeshoptDecoder(MeshoptDecoder);
   }
+  async function warmGraphics(zone,signal){
+    if(zone.entrance||!camera)return;
+    const maps=new Set([zone.light]);
+    zone.view.traverse(node=>{
+      if(node.isMesh)for(const material of [node.material].flat()){
+        for(const key of ['map','normalMap','roughnessMap','metalnessMap','aoMap','emissiveMap']){
+          if(material[key])maps.add(material[key]);
+        }
+      }
+    });
+    const nextFrame=()=>new Promise(resolve=>document.hidden?setTimeout(resolve,20):requestAnimationFrame(resolve));
+    // Upload a few maps between frames while the closed doors still cover this room.
+    let started=performance.now(),count=0;
+    for(const texture of maps){
+      if(signal.aborted||disposed)throw new DOMException('Visit ended','AbortError');
+      renderer.initTexture(texture);
+      if(++count>=8||performance.now()-started>3){
+        await nextFrame();started=performance.now();count=0;
+      }
+    }
+    await renderer.compileAsync(zone.view,camera,scene);
+  }
   async function load(def, controller) {
-    const { id } = def, zone = { id, doors: [], images: [], originalMaterials: new Set(),sources:new Map(),entrance:firstRoom&&id===plan.start.id };
+    const { id } = def, zone = { id, images: [], originalMaterials: new Set(),sources:new Map(),entrance:firstRoom&&id===plan.start.id };
     const primary=viewFile(def,lite);
     zone.definition=def;zone.mobileTransfer=lite&&primary===def.arrivalGzip;
-    zone.previewLight=!lite&&zone.entrance&&!!def.mobileFile;
+    zone.previewLight=!lite&&!!def.mobileFile;
     const { signal } = controller;
     const loader=zoneLoader(zone,signal);
     signal.addEventListener('abort',()=>releaseSources(zone),{once:true});
@@ -173,9 +206,14 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
         if(primary!==def.arrivalGzip||signal.aborted)throw error;
         data=await bytes((lite&&def.mobileFile)||def.file||id+'.glb');
       }
+      if(!lite&&!zone.entrance&&def.mobileFile){
+        const length=new DataView(data).getUint32(12,true);
+        zone.details=surfaceDetails(JSON.parse(new TextDecoder().decode(new Uint8Array(data,20,length))));
+      }
       return parse(data);
     }
     const jobs = [
+      hardware,
       view().then(group => { zone.view = group; }),
       bytes(def.collision||roomAsset(def,'-collision.glb')).then(parse).then(group=>{zone.collider=group;}),
       image(roomAsset(def,lite||zone.previewLight ? '-light-mobile.webp' : '-light.webp')).then(img => {
@@ -200,8 +238,6 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
       zone.view.updateMatrixWorld(true);
       const baked = new Map();
       zone.view.traverse(mesh => {
-        const portal = mesh.userData.portal || /^door_([a-z]+)$/.exec(mesh.name)?.[1];
-        if (portal) zone.doors.push([mesh, portal]);
         if (!mesh.isMesh) return;
         const apply = m => {
           for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap']) {
@@ -246,85 +282,86 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
           m.customProgramCacheKey=()=>'expo-crown-cut';
         }
       }
+      await warmGraphics(zone,signal);
+      if(signal.aborted||disposed)throw new DOMException('Visit ended','AbortError');
       walker.add(id, zone.collider, def.crossings);
       scene.add(zone.view); resident.set(id, zone);
+      doors.mount(id,zone);
       exhibits.mount?.(id, zone.view);
-      syncDoors();
-      if(zone.entrance){
-        firstRoom=false;
-        promotionTimer=setTimeout(()=>{void sharpenLighting(zone);void sharpenEntrance([...zone.sources.values()]);},250);
-      }
+      if(zone.entrance){firstRoom=false;promote(zone);}
       return zone;
     } catch (error) {
       if (resident.get(id) === zone) {
         exhibits.unmount?.(id, zone.view);
+        doors.unmount(id);
         resident.delete(id);
       }
       walker.remove(id); release(zone); throw error;
     }
   }
-  function ensure(id) {
+  function ensure(id,speculative=false) {
     if (disposed) return Promise.reject(new DOMException('Visit ended', 'AbortError'));
     if (resident.has(id)) return Promise.resolve(resident.get(id));
-    if (pending.has(id)) return pending.get(id).promise;
+    const existing=pending.get(id);
+    if(existing){
+      if(!speculative){
+        if(existing.controller.signal.aborted)return existing.promise.catch(()=>ensure(id));
+        existing.speculative=false;
+      }
+      return existing.promise;
+    }
     if (!known.has(id)) return Promise.reject(new Error('Unknown Expo zone: ' + id));
     const controller = new AbortController();
     const promise = load(known.get(id), controller).finally(() => pending.delete(id));
-    pending.set(id, { promise, controller }); return promise;
+    pending.set(id,{promise,controller,speculative,outsideSince:0});return promise;
   }
   function unload(id) {
     const zone = resident.get(id);
     if (!zone) return;
-    exhibits.unmount?.(id, zone.view); walker.remove(id); resident.delete(id); release(zone); syncDoors();
-  }
-  function distance(bounds, p) {
-    return Math.hypot(Math.max(bounds[0] - p.x, 0, p.x - bounds[3]),
-      Math.max(bounds[1] - p.y, 0, p.y - bounds[4]), Math.max(bounds[2] - p.z, 0, p.z - bounds[5]));
-  }
-  function looksIntoAtrium(zone,p){
-    if(zone==='service'&&p.x<=21.5){
-      const ground=p.y<1.5&&Math.abs(p.z-32)<=1.6;
-      const gallery=p.y>5.9&&p.y<7.7&&Math.abs(p.z-23)<=1.6;
-      return ground||gallery;
-    }
-    return zone==='catwalk'&&p.x>=-16&&p.y>5.9&&p.y<7.7&&Math.abs(p.z-28)<=2.1;
+    exhibits.unmount?.(id, zone.view);walker.remove(id);resident.delete(id);doors.unmount(id);release(zone);
   }
   function stream(dt) {
+    doors.tick(dt);
     streamClock += dt;
     if (streamClock < .18) return;
     streamClock = 0;
+    promote(resident.get(walker.zone));
+    camera?.getWorldDirection(direction);
     let next = null, score = Infinity;
+    const now=performance.now();
     for (const def of known.values()) {
       if (def.id === walker.zone) continue;
-      const visibleFromHere = (known.get(walker.zone)?.sightlines || sightlines[walker.zone] || []).includes(def.id);
-      const opening=def.id==='atrium'&&looksIntoAtrium(walker.zone,walker.feet);
-      const passage=galleryDoorDistance(walker.zone,def.id,walker.feet);
-      const d = passage??(opening ? -1 : visibleFromHere ? 0 : distance(def.bounds, walker.feet));
-      const insideGallery=passage!=null&&gallerySections.has(walker.zone);
-      const p=walker.feet;
-      const southApproach=walker.zone==='atrium'&&p.y<1.2&&p.z>=36.95&&
-        ((def.id==='chronology'&&p.x>=0)||(def.id==='aquarium'&&p.x<-.5));
-      // The far wall of the next gallery becomes visible around a bend before the floor seam.
-      if (d > (insideGallery ? (lite?20:24) : (lite?12:18))) unload(def.id);
-      const near=insideGallery?(lite?13:15):southApproach?10:(lite?4:6);
-      if (d < near && !resident.has(def.id) && d < score && (retries.get(def.id) || 0) < performance.now()) {
+      const {distance:d,near,keep}=streamingPriority(walker.zone,def.id,walker.feet,lite,direction);
+      if (d>keep && !doors.holds(def.id))unload(def.id);
+      const job=pending.get(def.id);
+      if(job?.speculative){
+        if(d<near+2.5)job.outsideSince=0;
+        else if(!job.outsideSince)job.outsideSince=now;
+        else if(d>keep&&now-job.outsideSince>800)job.controller.abort();
+      }
+      if (d < near && !resident.has(def.id) && !job && d < score && (retries.get(def.id) || 0) < now) {
         next = def; score = d;
       }
     }
-    if (next && !pending.size) ensure(next.id).catch(error => {
+    // Turning away from an entrance must not keep a different, approaching room waiting on its download.
+    if(next)for(const job of pending.values()){
+      if(job.speculative&&job.outsideSince&&now-job.outsideSince>1200)job.controller.abort();
+    }
+    if (next && (!pending.size||score<3.1&&pending.size<2)) ensure(next.id,true).catch(error => {
       if (disposed || error.name === 'AbortError') return;
       retries.set(next.id, performance.now() + 6000);
       report(error);
     });
   }
-  return { ensure, stream, resident,
-    textureStats:()=>({residentSources:photoSources.size,sharedHits,fullDetailMaps,pendingDetailMaps:[...photoSources.values()].filter(e=>e.preview).length+[...resident.values()].filter(z=>z.previewLight).length,
+  return { ensure, stream, resident, doors:doors.debug,registerDoorLeaf:doors.registerLeaf,
+    textureStats:()=>({residentSources:photoSources.size,sharedHits,fullDetailMaps,pendingDetailMaps:[...(resident.get(walker.zone)?.sources.values()||[])].filter(e=>e.preview).length+Number(!!resident.get(walker.zone)?.previewLight),
       decodedBytes:[...photoSources.values()].reduce((n,e)=>n+(e.source?e.source.data.width*e.source.data.height*4:0),0)}),
     dispose() {
-    clearTimeout(promotionTimer);clearEntrance();
+    promotionQueue.clear();clearEntrance();doorController.abort();
     disposed = true;
     for (const { controller } of pending.values()) controller.abort();
     for (const id of resident.keys()) unload(id);
+    walker.setDoors?.(null);doors.dispose();
     pmrem.dispose();
   } };
 }

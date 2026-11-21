@@ -1,0 +1,68 @@
+[
+  {
+    "id": "pa_arrive_1",
+    "start": 5.25394,
+    "decodedSeconds": 10.33,
+    "firstActive": 0.0,
+    "lastActive": 9.24,
+    "probes": [
+      {
+        "sourceSeconds": 0,
+        "lagSeconds": 0.0086,
+        "agreement": 0.6095
+      },
+      {
+        "sourceSeconds": 4.12,
+        "lagSeconds": 0.0086,
+        "agreement": 0.8805
+      },
+      {
+        "sourceSeconds": 8.04,
+        "lagSeconds": 0.0086,
+        "agreement": 0.7305
+      }
+    ],
+    "voicedCoverage": {
+      "windows": 67,
+      "windowSeconds": 0.24,
+      "hopSeconds": 0.12,
+      "relativeFloorDbfs": -47,
+      "minimumAgreement": 0.4065,
+      "medianAgreement": 0.9061,
+      "belowPointOneFive": []
+    }
+  },
+  {
+    "id": "ev_h0",
+    "start": 15.63004,
+    "decodedSeconds": 20.49,
+    "firstActive": 0.17,
+    "lastActive": 19.72,
+    "probes": [
+      {
+        "sourceSeconds": 0.145,
+        "lagSeconds": 0.0005,
+        "agreement": 0.9783
+      },
+      {
+        "sourceSeconds": 9.445,
+        "lagSeconds": 0.0005,
+        "agreement": 0.9558
+      },
+      {
+        "sourceSeconds": 18.52,
+        "lagSeconds": 0.0005,
+        "agreement": 0.8821
+      }
+    ],
+    "voicedCoverage": {
+      "windows": 152,
+      "windowSeconds": 0.24,
+      "hopSeconds": 0.12,
+      "relativeFloorDbfs": -47,
+      "minimumAgreement": 0.2714,
+      "medianAgreement": 0.9391,
+      "belowPointOneFive": []
+    }
+  }
+]

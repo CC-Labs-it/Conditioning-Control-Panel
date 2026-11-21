@@ -1,0 +1,513 @@
+{
+  "edition": "touch",
+  "base": "http://127.0.0.1:8937/fuzz/",
+  "shots": [
+    {
+      "id": "mood-aquarium",
+      "feet": [
+        -61.1,
+        5.551115123125783e-17,
+        45.5
+      ],
+      "eye": [
+        -61.1,
+        1.6,
+        45.5
+      ],
+      "aim": [
+        -44.8,
+        2.2,
+        45.5
+      ],
+      "targetMetres": 16.311039206623228,
+      "hit": {
+        "name": "Architecture_1",
+        "material": "sea_tile",
+        "distance": 55.24997457919675,
+        "parent": "Architecture"
+      },
+      "bounds": null,
+      "zone": "aquarium",
+      "resources": [
+        "http://127.0.0.1:8937/fuzz/assets/expo/zones/atrium-08a61de17d70b835.glb.gz",
+        "http://127.0.0.1:8937/fuzz/assets/expo/collection/collection-d1fafb54fde3.glb"
+      ]
+    },
+    {
+      "id": "mood-catwalk",
+      "feet": [
+        -22.68,
+        11.950000762939453,
+        -3.8
+      ],
+      "eye": [
+        -22.68,
+        13.550000762939453,
+        -3.8
+      ],
+      "aim": [
+        -22.05,
+        6.4,
+        -5
+      ],
+      "targetMetres": 7.277321685210484,
+      "hit": {
+        "name": "CrownShutter_steel",
+        "material": "steel",
+        "distance": 2.248330678797414,
+        "parent": ""
+      },
+      "bounds": null,
+      "zone": "catwalk",
+      "resources": [
+        "http://127.0.0.1:8937/fuzz/assets/expo/zones/atrium-08a61de17d70b835.glb.gz",
+        "http://127.0.0.1:8937/fuzz/assets/expo/collection/collection-d1fafb54fde3.glb"
+      ]
+    },
+    {
+      "id": "sampler-left",
+      "pathReceipt": {
+        "from": [
+          16.12,
+          0,
+          9.14
+        ],
+        "requested": [
+          15.21,
+          0,
+          9.18
+        ],
+        "actual": [
+          15.217871096307913,
+          0,
+          9.179654017744706
+        ],
+        "steps": 22
+      },
+      "feet": [
+        15.217871096307913,
+        0,
+        9.179654017744706
+      ],
+      "eye": [
+        15.217871096307913,
+        1.6,
+        9.179654017744706
+      ],
+      "aim": [
+        17.15,
+        1.24,
+        12.79
+      ],
+      "targetMetres": 4.110635013239355,
+      "hit": {
+        "name": "Fabrication_habitat_sampling_bench_3",
+        "material": "utility_aqua",
+        "distance": 4.391327653425355,
+        "parent": "Fabrication_habitat_sampling_bench"
+      },
+      "label": "Fabrication_collection_habitat_assay_optics",
+      "bounds": [
+        [
+          16.453001022338867,
+          0.7958333492279053,
+          12.442499160766602
+        ],
+        [
+          17.78299903869629,
+          1.5709999799728394,
+          13.062000274658203
+        ]
+      ],
+      "zone": "habitat",
+      "resources": [
+        "http://127.0.0.1:8937/fuzz/assets/expo/zones/atrium-08a61de17d70b835.glb.gz",
+        "http://127.0.0.1:8937/fuzz/assets/expo/collection/collection-d1fafb54fde3.glb"
+      ]
+    },
+    {
+      "id": "sampler-left-close",
+      "pathReceipt": {
+        "from": [
+          16.12,
+          0,
+          9.14
+        ],
+        "requested": [
+          15.71,
+          0,
+          9.32
+        ],
+        "actual": [
+          15.71,
+          0,
+          9.29590025177002
+        ],
+        "steps": 12
+      },
+      "feet": [
+        15.71,
+        0,
+        9.29590025177002
+      ],
+      "eye": [
+        15.71,
+        1.6,
+        9.29590025177002
+      ],
+      "aim": [
+        17.15,
+        1.24,
+        12.79
+      ],
+      "targetMetres": 3.7963051840678985,
+      "hit": {
+        "name": "Fabrication_collection_habitat_assay_optics_2",
+        "material": "art_collection_assay_scale",
+        "distance": 3.8767058080714802,
+        "parent": "Fabrication_collection_habitat_assay_optics"
+      },
+      "label": "Fabrication_collection_habitat_assay_optics",
+      "bounds": [
+        [
+          16.453001022338867,
+          0.7958333492279053,
+          12.442499160766602
+        ],
+        [
+          17.78299903869629,
+          1.5709999799728394,
+          13.062000274658203
+        ]
+      ],
+      "zone": "habitat",
+      "resources": [
+        "http://127.0.0.1:8937/fuzz/assets/expo/zones/atrium-08a61de17d70b835.glb.gz",
+        "http://127.0.0.1:8937/fuzz/assets/expo/collection/collection-d1fafb54fde3.glb"
+      ]
+    },
+    {
+      "id": "chess-board",
+      "pathReceipt": {
+        "from": [
+          8.35,
+          0,
+          64.25
+        ],
+        "requested": [
+          9.19,
+          0,
+          64.33
+        ],
+        "actual": [
+          9.19,
+          0,
+          64.33
+        ],
+        "steps": 21
+      },
+      "feet": [
+        9.19,
+        0,
+        64.33
+      ],
+      "eye": [
+        9.19,
+        1.6,
+        64.33
+      ],
+      "aim": [
+        10.12,
+        0.99,
+        64.25
+      ],
+      "targetMetres": 1.1150784725749123,
+      "hit": {
+        "name": "Cube_4",
+        "material": "Tournament board",
+        "distance": 1.144326379013345,
+        "parent": "guest_chess"
+      },
+      "label": "guest_chess",
+      "bounds": [
+        [
+          9.699999787019898,
+          0.9100000262260437,
+          63.829999901460816
+        ],
+        [
+          10.539999984098266,
+          1.1530000418424606,
+          64.67000009853919
+        ]
+      ],
+      "zone": "chronology",
+      "resources": [
+        "http://127.0.0.1:8937/fuzz/assets/expo/zones/atrium-08a61de17d70b835.glb.gz",
+        "http://127.0.0.1:8937/fuzz/assets/expo/collection/collection-d1fafb54fde3.glb"
+      ]
+    },
+    {
+      "id": "chess-corner",
+      "pathReceipt": {
+        "from": [
+          8.35,
+          0,
+          64.25
+        ],
+        "requested": [
+          9.25,
+          0,
+          63.83
+        ],
+        "actual": [
+          9.246215125455322,
+          0,
+          63.83176627478751
+        ],
+        "steps": 24
+      },
+      "feet": [
+        9.246215125455322,
+        0,
+        63.83176627478751
+      ],
+      "eye": [
+        9.246215125455322,
+        1.6,
+        63.83176627478751
+      ],
+      "aim": [
+        10.08,
+        1,
+        64.32
+      ],
+      "targetMetres": 1.137351918912674,
+      "hit": {
+        "name": "Cube_4",
+        "material": "Tournament board",
+        "distance": 1.1866371132562168,
+        "parent": "guest_chess"
+      },
+      "label": "guest_chess",
+      "bounds": [
+        [
+          9.699999787019898,
+          0.9100000262260437,
+          63.829999901460816
+        ],
+        [
+          10.539999984098266,
+          1.1530000418424606,
+          64.67000009853919
+        ]
+      ],
+      "zone": "chronology",
+      "resources": [
+        "http://127.0.0.1:8937/fuzz/assets/expo/zones/atrium-08a61de17d70b835.glb.gz",
+        "http://127.0.0.1:8937/fuzz/assets/expo/collection/collection-d1fafb54fde3.glb"
+      ]
+    },
+    {
+      "id": "classifieds-paper",
+      "pathReceipt": {
+        "from": [
+          -22.25,
+          0,
+          103.25
+        ],
+        "requested": [
+          -22.2,
+          0,
+          104.67
+        ],
+        "actual": [
+          -22.20006615650148,
+          0,
+          104.66812115535788
+        ],
+        "steps": 34
+      },
+      "feet": [
+        -22.20006615650148,
+        0,
+        104.66812115535788
+      ],
+      "eye": [
+        -22.20006615650148,
+        1.6,
+        104.66812115535788
+      ],
+      "aim": [
+        -22.2,
+        1.55,
+        105.63
+      ],
+      "targetMetres": 0.9631775101956713,
+      "hit": {
+        "name": "Cube003_4",
+        "material": "Original classified advertisements",
+        "distance": 0.9822065239730309,
+        "parent": "guest_classifieds"
+      },
+      "label": "guest_classifieds",
+      "bounds": [
+        [
+          -22.7900007577823,
+          0.8799999952316284,
+          105.22500331134644
+        ],
+        [
+          -21.610000768096608,
+          1.7104999423027039,
+          105.73500340252075
+        ]
+      ],
+      "zone": "forum",
+      "resources": [
+        "http://127.0.0.1:8937/fuzz/assets/expo/zones/atrium-08a61de17d70b835.glb.gz",
+        "http://127.0.0.1:8937/fuzz/assets/expo/collection/collection-d1fafb54fde3.glb"
+      ]
+    },
+    {
+      "id": "classifieds-left",
+      "pathReceipt": {
+        "from": [
+          -22.25,
+          0,
+          103.25
+        ],
+        "requested": [
+          -22.38,
+          0,
+          104.73
+        ],
+        "actual": [
+          -22.377926360171028,
+          0,
+          104.70639240810095
+        ],
+        "steps": 35
+      },
+      "feet": [
+        -22.377926360171028,
+        0,
+        104.70639240810095
+      ],
+      "eye": [
+        -22.377926360171028,
+        1.6,
+        104.70639240810095
+      ],
+      "aim": [
+        -22.41,
+        1.52,
+        105.62
+      ],
+      "targetMetres": 0.9176641816849246,
+      "hit": {
+        "name": "Cube003_4",
+        "material": "Original classified advertisements",
+        "distance": 0.9467963372762463,
+        "parent": "guest_classifieds"
+      },
+      "label": "guest_classifieds",
+      "bounds": [
+        [
+          -22.7900007577823,
+          0.8799999952316284,
+          105.22500331134644
+        ],
+        [
+          -21.610000768096608,
+          1.7104999423027039,
+          105.73500340252075
+        ]
+      ],
+      "zone": "forum",
+      "resources": [
+        "http://127.0.0.1:8937/fuzz/assets/expo/zones/atrium-08a61de17d70b835.glb.gz",
+        "http://127.0.0.1:8937/fuzz/assets/expo/collection/collection-d1fafb54fde3.glb"
+      ]
+    },
+    {
+      "id": "classifieds-right",
+      "pathReceipt": {
+        "from": [
+          -22.25,
+          0,
+          103.25
+        ],
+        "requested": [
+          -22,
+          0,
+          104.73
+        ],
+        "actual": [
+          -22,
+          0,
+          104.73
+        ],
+        "steps": 36
+      },
+      "feet": [
+        -22,
+        0,
+        104.73
+      ],
+      "eye": [
+        -22,
+        1.6,
+        104.73
+      ],
+      "aim": [
+        -21.98,
+        1.52,
+        105.62
+      ],
+      "targetMetres": 0.8938120607823554,
+      "hit": {
+        "name": "Cube003_4",
+        "material": "Original classified advertisements",
+        "distance": 0.9229396256987955,
+        "parent": "guest_classifieds"
+      },
+      "label": "guest_classifieds",
+      "bounds": [
+        [
+          -22.7900007577823,
+          0.8799999952316284,
+          105.22500331134644
+        ],
+        [
+          -21.610000768096608,
+          1.7104999423027039,
+          105.73500340252075
+        ]
+      ],
+      "zone": "forum",
+      "resources": [
+        "http://127.0.0.1:8937/fuzz/assets/expo/zones/atrium-08a61de17d70b835.glb.gz",
+        "http://127.0.0.1:8937/fuzz/assets/expo/collection/collection-d1fafb54fde3.glb"
+      ]
+    }
+  ],
+  "errors": [],
+  "downloads": {
+    "collection-d1fafb54fde3.glb": {
+      "url": "http://127.0.0.1:8937/fuzz/assets/expo/collection/collection-d1fafb54fde3.glb",
+      "sha256": "d1fafb54fde3ffe694f51efcfe4d1a2c7abc2fb01895543a5791bbde6b512248",
+      "bytes": 1462384
+    },
+    "guest-chess.glb": {
+      "url": "http://127.0.0.1:8937/fuzz/assets/expo/guest-chess.glb",
+      "sha256": "2295cd98c3a1afed1f5b90b6b9178d5c821f4456a8e8a02269eab37a22e8f36e",
+      "bytes": 662140
+    },
+    "guest-classifieds.glb": {
+      "url": "http://127.0.0.1:8937/fuzz/assets/expo/guest-classifieds.glb",
+      "sha256": "f51f782a8761fd24b4ff8f38c3a6bb162e2121f2064e573d809acf28fe554556",
+      "bytes": 849168
+    }
+  }
+}

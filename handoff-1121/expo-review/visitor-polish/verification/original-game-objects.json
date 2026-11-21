@@ -1,0 +1,97 @@
+{
+  "pieces": {
+    "king.glb": "a3f4b9ef3819f0b3e08b23023ed207a6d7136ef64dae6d41e820310706dde4fe",
+    "queen.glb": "8f28c6db68609ca902ea1d26ef96094ccb0f5a4ab690783a050df4f92e6a99ae",
+    "rook.glb": "7234a84f8057a100adc3304f00215ccbae4140b962b489c1f9d1f1460628a44c",
+    "pawn.glb": "eef62ef5bf91c0cc5e9543a5df4027f8a43419f7c63ca2b741d38e64caac37fe",
+    "king_purple.glb": "2af3d46ae7407d3e45f89fbfacf733a3d0b18ade3654e0e0c6417e3d7b7d0659",
+    "knight_purple.glb": "010a332cc916232be953ec2125758f703ec7f6cc32ffbf07ca33a9b3d39f6716",
+    "rook_purple.glb": "dd1571102280921fe2509c878a3fc953c31d64e2b2d4e495af7286c9862f6c68",
+    "pawn_purple.glb": "86bbc31bb411486b3607780ef2749d512500cfdf59dde012b7c23c4433796d4c"
+  },
+  "museum": {
+    "guest-chess": {
+      "bytes": 662140,
+      "sha256": "2295cd98c3a1afed1f5b90b6b9178d5c821f4456a8e8a02269eab37a22e8f36e",
+      "triangles": 17904,
+      "sizeMetres": [
+        0.8399999737739563,
+        0.24300001561641693,
+        0.8399999737739563
+      ],
+      "atShelfMetres": 0.0,
+      "materials": {
+        "Waxed walnut": 188,
+        "Spun brass": 188,
+        "Graphite enamel": 188,
+        "Bookcloth covered sample case": 2288,
+        "Tournament board": 2,
+        "gold": 588,
+        "king_silicone": 1698,
+        "queen_silicone": 1698,
+        "silver": 284,
+        "rook_silicone": 1698,
+        "pawn_silicone": 1700,
+        "gold.001": 588,
+        "king_silicone.001": 1698,
+        "knight_silicone": 1700,
+        "rook_silicone.001": 1698,
+        "pawn_silicone.001": 1700
+      },
+      "embeddedImages": [
+        {
+          "name": "guest_board",
+          "width": 1024,
+          "height": 1024
+        }
+      ],
+      "printedSurface": "Tournament board",
+      "coincidentFacesAcrossMaterials": {},
+      "vertexPaintLinearRGB": {
+        "king_silicone": [
+          0.9651656074556549,
+          0.16939662402657618,
+          0.45761014131450106
+        ],
+        "king_silicone.001": [
+          0.16590345557674663,
+          0.029672952182331506,
+          0.38523538117117384
+        ]
+      }
+    },
+    "guest-classifieds": {
+      "bytes": 849168,
+      "sha256": "f51f782a8761fd24b4ff8f38c3a6bb162e2121f2064e573d809acf28fe554556",
+      "triangles": 15002,
+      "sizeMetres": [
+        1.1799999475479126,
+        0.8304999470710754,
+        0.5099999904632568
+      ],
+      "atShelfMetres": 0.0,
+      "materials": {
+        "Bookcloth covered sample case": 188,
+        "Spun brass": 8532,
+        "Waxed walnut": 188,
+        "Graphite enamel": 3016,
+        "Original classified advertisements": 2,
+        "Fired porcelain": 240,
+        "Opal lamp diffuser": 572,
+        "Polished steel": 572,
+        "Industrial celadon": 1128,
+        "Varnished oak": 564
+      },
+      "embeddedImages": [
+        {
+          "name": "guest_classifieds",
+          "width": 1920,
+          "height": 600
+        }
+      ],
+      "printedSurface": "Original classified advertisements",
+      "coincidentFacesAcrossMaterials": {},
+      "vertexPaintLinearRGB": {}
+    }
+  }
+}

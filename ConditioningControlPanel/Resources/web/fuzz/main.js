@@ -85,6 +85,21 @@ function start(init) {
   document.title = BRAND.game;
   const saved = load(storage);
   const life = saved?.life || createLife();
+  // The Expo launcher creates a disposable run. Its lifetime flags have a private preview slot.
+  const expoPreview = fresh && qs.get('expoPreview') === '1';
+  const flagKey = (item,key) => (expoPreview ? 'fuzz.dev.expo' : SAVE_KEY+'.once')+'.'+item+'.'+key;
+  function claimLifetime(item,key,record) {
+    const shelf=expoPreview?preferenceStorage:storage, name=flagKey(item,key);
+    const claim=()=>{
+      try {
+        if(shelf.getItem(name)==='1'){record();return false;}
+        // Keep the one-time visit independent of an older save open in another tab.
+        shelf.setItem(name,'1');
+      } catch { /* The current save can still record the claim. */ }
+      return record();
+    };
+    return navigator.locks?.request ? navigator.locks.request(name,claim).catch(()=>false) : claim();
+  }
   const extras = toyPreview ? readPreviewPreferences(preferenceStorage) : saved?.extras || {};
   /* New run reloads the page: that is not a visit, so it does not ask again. One shot, set only by newRun below. */
   const newRunReload = !!extras.again && life.contract;
@@ -133,6 +148,7 @@ function start(init) {
     host: { send: bridge.send, isHosted: bridge.isHosted },
     env: { journey: JOURNEY_PREVIEW, featuredShop: [...EMI_UPGRADES.slice(1), ...(feedPreview ? ['d_autoscroll'] : []), ...(trailPreview ? ['starburst', 'word_comet'] : [])], caps: init.caps || {}, identity: typeof init.identity?.displayName === 'string' && init.identity.displayName.trim() ? { displayName: init.identity.displayName.trim().slice(0, 40) } : null, mod: init.mod || 'default', hosted: bridge.isHosted, pictureSource: pictureDoor || 'none' },
   });
+  engine.env.claimLifetime = claimLifetime;
   engine.subscribe('wave-equipped', persist);
   engine.subscribe('wardrobe-equipped',persist);
   engine.subscribe('bounce-equipped',persist);
@@ -217,7 +233,12 @@ function start(init) {
       pictureCard.close();
       return true;
     },
-    forget() { leaving = true; forget(storage); if (toyPreview) preferenceStorage.removeItem(PREVIEW_PREFS_KEY); location.reload(); },
+    forget() {
+      leaving=true;forget(storage);
+      if(toyPreview)preferenceStorage.removeItem(PREVIEW_PREFS_KEY);
+      try{(expoPreview?preferenceStorage:storage).removeItem(flagKey('ll_end','planterDetour'));}catch{}
+      location.reload();
+    },
     exportSave: () => serialize(run, life, extras),
     importSave(text) {
       if (!parse(text)) return false;
@@ -316,8 +337,8 @@ function start(init) {
   const go = () => {
     bindPalette(engine, document);
     previewBar();
-    if (run.ended) { engine.end(run.ended.id, { restored: true }); ui.start(); return; }
     playing = true;
+    if (run.ended) { engine.end(run.ended.id, { restored: true }); ui.start(); return; }
     syncMedia();
     engine.mountAll(!!saved?.run);
     pen();   // the herd, top left, from the first second

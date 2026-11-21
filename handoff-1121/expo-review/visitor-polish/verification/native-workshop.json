@@ -1,0 +1,30 @@
+{
+  "roomScenes": 14,
+  "herdScenes": 12,
+  "roomMeshObjects": 941,
+  "roomCollisionTriangles": 8900,
+  "bakedSidecars": 112,
+  "physicalStations": 14,
+  "actualWalkingMetres": 489.57,
+  "acceptedVersions": {
+    "atrium": "listening-03",
+    "chronology": "listening-02",
+    "forum": "listening-03",
+    "commons": "listening-02",
+    "aquarium": "listening-01",
+    "hall": "listening-02",
+    "hoof": "listening-02",
+    "habitat": "listening-02",
+    "shop": "listening-02",
+    "twelve": "listening-01",
+    "secret": "listening-01",
+    "service": "listening-01",
+    "catwalk": "listening-02",
+    "dome": "listening-01"
+  },
+  "canonicalDirectory": "C:\\Projects\\blender-scripting\\expo",
+  "verifiedFilesIncludingManifest": 905,
+  "verifiedBytesIncludingManifest": 1120588715,
+  "manifestSha256": "dc66a540acd7f5e976be2a00dd2c3127804f29f743249baf0a2b5b487c263cee",
+  "previousOriginalsRetained": 111
+}

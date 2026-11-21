@@ -1,0 +1,44 @@
+[
+  {
+    "record": "ev_h0",
+    "archive": {
+      "completed": 0,
+      "total": 40,
+      "next": "ev_h0",
+      "displayed": "ev_h0",
+      "playingAt": "slot_02",
+      "lastSlot": null
+    },
+    "project": {
+      "active": true,
+      "paused": false,
+      "slide": "slides/chew.webp",
+      "texture": "slides/chew.webp",
+      "resting": "slides/chew.webp",
+      "full": true,
+      "lamp": 0.9999999999629702,
+      "zoom": 0.014369401659346024
+    }
+  },
+  {
+    "record": "ev_m1",
+    "archive": {
+      "completed": 1,
+      "total": 40,
+      "next": "ev_m1",
+      "displayed": "ev_m1",
+      "playingAt": "slot_02",
+      "lastSlot": "slot_02"
+    },
+    "project": {
+      "active": true,
+      "paused": false,
+      "slide": "slides/ships.webp",
+      "texture": "slides/ships.webp",
+      "resting": "slides/ships.webp",
+      "full": true,
+      "lamp": 0.9999999952831372,
+      "zoom": 0.014351952295431127
+    }
+  }
+]

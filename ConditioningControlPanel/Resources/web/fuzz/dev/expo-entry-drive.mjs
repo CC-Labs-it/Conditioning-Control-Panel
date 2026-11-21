@@ -31,6 +31,12 @@ try{
   const name=phone?'phone':'desktop',size=phone?{width:393,height:852}:{width:1920,height:1080};
   const cx=await browser.newContext({viewport:size,deviceScaleFactor:1,hasTouch:phone,isMobile:phone,reducedMotion:phone?'reduce':'no-preference'});
   const page=await cx.newPage();page.on('pageerror',e=>report.errors.push(name+' '+e.message));
+  let kitReceived;
+  if(process.env.EXPO_COLLECTION_ART||process.env.EXPO_COLLECTION_ONLY)page.on('response',response=>{
+    if(/\/collection\/collection-[a-f0-9]+\.glb(?:\?|$)/.test(response.url()))
+      kitReceived=response.body().then(body=>({file:new URL(response.url()).pathname.split('/').at(-1),
+        sha256:createHash('sha256').update(body).digest('hex'),bytes:body.byteLength}));
+  });
   page.on('console',m=>{if(/(WebGL|GL_).*INVALID_(OPERATION|VALUE|ENUM)|THREE\.WebGLProgram: Shader Error/i.test(m.text()))report.errors.push(name+' '+m.text());});
   const cdp=await cx.newCDPSession(page);await cdp.send('Network.enable');
   const files=new Map(),before=new Set(),otherExpo=new Map();let arrived=false;
@@ -110,6 +116,30 @@ try{
     return {gpu:ext?d.getParameter(ext.UNMASKED_RENDERER_WEBGL):'Unavailable',medianMs:intervals[Math.floor(intervals.length*.5)],p95Ms:intervals[Math.floor(intervals.length*.95)],
       gpuDrawMs:gpuTimes.length?gpuTimes[Math.floor(gpuTimes.length/2)]:null,frames:intervals.length,pixelRatio:e.state().pixelRatio,textureMemory:e.state().textures};
   });}
+  async function collectionTiming(only){
+    const manifest=await frame.evaluate(async()=>((await(await fetch('assets/expo/collection/collection.json')).json())));
+    const selected=manifest.pieces.filter(p=>!only||p.id===only);
+    if(!selected.length)throw Error('Missing collection artwork '+only);
+    const views={};
+    for(const piece of selected){
+      await frame.evaluate(async p=>{
+        const feet=[p.camera[0],p.camera[1]-1.6,p.camera[2]];
+        await __expo.go(p.zone,feet);__expo.lookAt(...p.target);
+      },piece);
+      await frame.waitForFunction(id=>{
+        const root=__expo.scene.getObjectByName('collection_'+id);
+        if(!root)return false;
+        const guest=root.getObjectByName('guest_anchor_'+id);
+        return !guest||guest.children.some(n=>n.isGroup||n.isScene);
+      },piece.id,{timeout:60000});
+      views[piece.id]=await frameTiming();
+      await page.screenshot({path:path.join(dir,name+'-collection-'+piece.id+'.jpg'),type:'jpeg',quality:92});
+    }
+    const model=await kitReceived;
+    if(model?.sha256!==manifest.sha256||model.file!==manifest.model)throw Error('Received collection differs from its manifest.');
+    if(process.env.EXPECT_COLLECTION_SHA&&model.sha256!==process.env.EXPECT_COLLECTION_SHA)throw Error('Unexpected kit '+model.sha256);
+    return {views,model};
+  }
   const initialTiming=await frameTiming();
   if(process.env.EXPECT_GPU&&!initialTiming.gpu.toLowerCase().includes(process.env.EXPECT_GPU.toLowerCase()))report.errors.push(name+' unexpected GPU '+initialTiming.gpu);
   if(state.textures.pendingDetailMaps>0){
@@ -117,6 +147,24 @@ try{
     await page.screenshot({path:path.join(dir,name+'-full-detail.jpg'),quality:92,type:'jpeg'});
   }
   const detailAfter=await frame.evaluate(()=>__expo.state().textures);
+  if(process.env.EXPO_COLLECTION_ONLY){
+    const {views,model}=await collectionTiming(process.env.EXPO_COLLECTION_ONLY);
+    let partReceipt;
+    if(process.env.EXPO_PROOF_PART){
+      const proof=await frame.evaluate(part=>{
+        const e=__expo,mesh=e.scene.getObjectByName(part);
+        if(!mesh)throw Error('Missing fitted part '+part);
+        let triangles=0;mesh.traverse(n=>{if(n.geometry)triangles+=(n.geometry.index?.count||n.geometry.attributes.position.count)/3;});
+        const expose=value=>{mesh.visible=value;e.draw();return e.renderer.domElement.toDataURL('image/png').split(',')[1];};
+        const before=expose(false),after=expose(true);
+        return {before,after,part,triangles,feet:e.state().feet,aim:e.camera.getWorldDirection(e.camera.position.clone()).toArray()};
+      },process.env.EXPO_PROOF_PART);
+      for(const key of ['before','after'])await writeFile(path.join(dir,name+'-fitting-'+key+'.png'),Buffer.from(proof[key],'base64'));
+      const {before:unusedBefore,after:unusedAfter,...record}=proof;partReceipt=record;
+    }
+    report.devices.push({name,size,entryMs,initialTiming,collectionViews:views,collectionModel:model,partReceipt});
+    await frame.evaluate(()=>fuzz.engine.setSuspended(true,'panic'));await cx.close();continue;
+  }
   let alloyComparison;
   if(!phone&&process.env.COMPARE_ALLOY==='1'){
     alloyComparison=await frame.evaluate(()=>{
@@ -169,9 +217,9 @@ try{
     visible:[...document.querySelectorAll('.expo-media-face')].filter(el=>!el.hidden&&el.querySelector('img,video')).length}));
   if(dreamMedia.pictures===0)report.errors.push(name+' missing museum-source pictures at full depth');
   const shared=await frame.evaluate(()=>__expo.state().textures);
-  const rooms={dome:dreamTiming};
+  const rooms={dome:dreamTiming};let collectionViews={},collectionModel;
   if(process.env.ALL_ROOMS==='1'){
-    const cameras={atrium:[[.22,0,36.21],[1.7,3.65,26.5]],hall:[[0,0,13.2],[0,2.4,-9]],
+    const cameras={atrium:[state.feet,[1.7,3.65,26.5]],hall:[[0,0,13.2],[0,2.4,-9]],
       hoof:[[-18.46,0,8.92],[-18.4,1.75,10.45]],habitat:[[19.4,0,8.13],[19.4,1.56,9.55]],
       twelve:[[.1,-.68,-21.95],[-.38,.94,-30.12]],shop:[[20.84,0,-9.75],[21.2,1.32,-11.42]],
       service:[[25.02,0,29.59],[25.01,1.04,27.21]],secret:[[81.44,0,40.3],[85.8,1.30,41.19]],
@@ -185,13 +233,16 @@ try{
       if(zone==='twelve')await frame.waitForFunction(()=>__expo.state().loaded.includes('hall'),null,{timeout:90000});
       rooms[zone]=await frameTiming();
     }
+    if(process.env.EXPO_COLLECTION_ART==='1'){
+      ({views:collectionViews,model:collectionModel}=await collectionTiming());
+    }
   }
   await frame.evaluate(async({zone,at})=>{await __expo.go(zone,at);}, {zone:state.zone,at:state.feet});
   await frame.waitForTimeout(900);
   const returned=await frame.evaluate(()=>__expo.state());
   if(shared.sharedHits===0)report.errors.push(name+' shared textures were not reused');
   const list=[...files.values()],firstBytes=firstFiles.reduce((sum,file)=>sum+file.bytes,0);
-  report.devices.push({name,size,entryMs,purchaseToRoomMs,commandTiming,firstBytes,allExpoFirstBytes,mediaBeforePaint,firstFiles,state,initialTiming,detailAfter,dreamTiming,dreamMedia,rooms,walkedMeters:distance,shared,returned,
+  report.devices.push({name,size,entryMs,purchaseToRoomMs,commandTiming,firstBytes,allExpoFirstBytes,mediaBeforePaint,firstFiles,state,initialTiming,detailAfter,dreamTiming,dreamMedia,rooms,collectionViews,collectionModel,walkedMeters:distance,shared,returned,
     usedSmallerTextures:list.some(f=>f.name.includes('-mobile.webp'))});
   await frame.evaluate(()=>fuzz.engine.setSuspended(true,'panic'));await frame.locator('.expo-root').waitFor({state:'detached'});await cx.close();
  }

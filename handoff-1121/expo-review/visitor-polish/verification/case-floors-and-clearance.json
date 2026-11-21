@@ -1,0 +1,141 @@
+{
+  "sourceSha256": "28155289a25b6b46bad0af30dde23ad149b203eed2438647fb42eb3ae8b0fcdc",
+  "pieces": [
+    {
+      "id": "chess",
+      "zone": "chronology",
+      "bounds": [
+        [
+          9.507,
+          0.0,
+          63.465
+        ],
+        [
+          10.73,
+          0.91,
+          65.035
+        ]
+      ],
+      "triangles": 4258,
+      "footHeightOverFloorMetres": 0.0,
+      "nearestGuidedCapsuleClearanceMetres": 0.9829,
+      "nearestProjectorSightlineClearanceMetres": 5.7719,
+      "overlappingExistingColliders": [],
+      "collisionSha256": "4688129c4947700d8d26ec7e37327aac75d0d6fe327798e349fe674660cb32bb",
+      "proxyWorldHalfExtents": [
+        0.575,
+        0.44,
+        0.75
+      ]
+    },
+    {
+      "id": "classifieds",
+      "zone": "forum",
+      "bounds": [
+        [
+          -23.075,
+          0.0,
+          105.025
+        ],
+        [
+          -21.325,
+          1.9785,
+          105.947
+        ]
+      ],
+      "triangles": 1438,
+      "footHeightOverFloorMetres": 0.0,
+      "nearestGuidedCapsuleClearanceMetres": 1.3671,
+      "nearestProjectorSightlineClearanceMetres": 8.245,
+      "overlappingExistingColliders": [],
+      "collisionSha256": "4fd9c3e4fd42774e82d786b58c472a8ba847e7d4e4c2a179f26f17652f8db334",
+      "proxyWorldHalfExtents": [
+        0.825,
+        0.92,
+        0.43
+      ]
+    },
+    {
+      "id": "weather",
+      "zone": "commons",
+      "bounds": [
+        [
+          -68.85366,
+          0.0,
+          66.43599
+        ],
+        [
+          -68.00691,
+          2.164,
+          67.42399
+        ]
+      ],
+      "triangles": 6248,
+      "footHeightOverFloorMetres": 0.0,
+      "nearestGuidedCapsuleClearanceMetres": 2.0279,
+      "nearestProjectorSightlineClearanceMetres": 5.0749,
+      "overlappingExistingColliders": [],
+      "collisionSha256": "6df04eb7bbee275d9ae6d753e9043435c042d744727dcc13c0a7203589f93a42",
+      "proxyWorldHalfExtents": [
+        0.365,
+        0.64,
+        0.47
+      ]
+    },
+    {
+      "id": "drive",
+      "zone": "hall",
+      "bounds": [
+        [
+          10.89,
+          0.0,
+          -2.655
+        ],
+        [
+          11.767,
+          1.4975,
+          -0.845
+        ]
+      ],
+      "triangles": 6902,
+      "footHeightOverFloorMetres": 0.0,
+      "nearestGuidedCapsuleClearanceMetres": 0.45,
+      "nearestProjectorSightlineClearanceMetres": 20.4903,
+      "overlappingExistingColliders": [],
+      "collisionSha256": "e008db15caf54a5127dea3a1507f85d363fbb226e17b4a6d8351c167ef83333d",
+      "proxyWorldHalfExtents": [
+        0.385,
+        0.405,
+        0.84
+      ]
+    },
+    {
+      "id": "tea",
+      "zone": "hall",
+      "bounds": [
+        [
+          10.683,
+          3.4,
+          9.901
+        ],
+        [
+          11.306,
+          4.385,
+          11.099
+        ]
+      ],
+      "triangles": 6478,
+      "footHeightOverFloorMetres": 0.0,
+      "nearestGuidedCapsuleClearanceMetres": 3.1024,
+      "nearestProjectorSightlineClearanceMetres": 21.5834,
+      "overlappingExistingColliders": [],
+      "collisionSha256": "e008db15caf54a5127dea3a1507f85d363fbb226e17b4a6d8351c167ef83333d",
+      "proxyWorldHalfExtents": [
+        0.32,
+        0.43,
+        0.67
+      ]
+    }
+  ],
+  "failed": []
+}

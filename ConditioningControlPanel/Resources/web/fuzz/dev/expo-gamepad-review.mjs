@@ -141,7 +141,9 @@ try {
   }
   await shopPress([19.67,0,-10.14],[19.67,1.53,-11.53],'contract');
   for(let n=0;n<2;n++) {
-    await shopPress([15.03,0,-12.14],[15.03,1.14,-13.93],'exit door'); await page.waitForTimeout(350);
+    await shopPress([15.03,0,-12.14],[15.03,1.14,-13.93],'exit door');
+    await game.waitForFunction(()=>Math.abs(__expo.walker.feet.z+5)<.1);
+    await game.waitForFunction(()=>__expo.doors().find(d=>d.id==='shop-exit')?.progress<.01);
   }
   await shopPress([22.77,0,-10.05],[22.77,1.37,-11.43],'Buy Exit');
   await shopPress([15.03,0,-12.14],[15.03,1.06,-13.75],'Go home');

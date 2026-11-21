@@ -1,0 +1,1039 @@
+{
+  "edition": "desktop",
+  "base": "http://127.0.0.1:8937/fuzz/",
+  "shots": [
+    {
+      "id": "mood-atrium",
+      "feet": [
+        0.54,
+        0,
+        35.96
+      ],
+      "eye": [
+        0.54,
+        1.6,
+        35.96
+      ],
+      "aim": [
+        4.57,
+        1.84,
+        32.91
+      ],
+      "targetMetres": 5.059743076481259,
+      "hit": {
+        "name": "expo_screen_slot_01",
+        "material": "",
+        "distance": 5.0495606646395945,
+        "parent": "Scene"
+      },
+      "bounds": null,
+      "zone": "atrium",
+      "resources": []
+    },
+    {
+      "id": "mood-chronology",
+      "feet": [
+        6.04,
+        0,
+        69.58
+      ],
+      "eye": [
+        6.04,
+        1.6,
+        69.58
+      ],
+      "aim": [
+        10.43,
+        1.74,
+        72.4
+      ],
+      "targetMetres": 5.219588106354757,
+      "hit": {
+        "name": "Architecture_1",
+        "material": "archive_oak",
+        "distance": 4.973047591717155,
+        "parent": "Architecture"
+      },
+      "bounds": null,
+      "zone": "chronology",
+      "resources": []
+    },
+    {
+      "id": "mood-forum",
+      "feet": [
+        -22.24,
+        0,
+        103.1
+      ],
+      "eye": [
+        -22.24,
+        1.6,
+        103.1
+      ],
+      "aim": [
+        -30.45,
+        2.08,
+        105.72
+      ],
+      "targetMetres": 8.631274529291721,
+      "hit": {
+        "name": "Fabrication_collection_forum_speaker_3",
+        "material": "collection_woven_blue",
+        "distance": 7.616614060226121,
+        "parent": "Fabrication_collection_forum_speaker"
+      },
+      "bounds": null,
+      "zone": "forum",
+      "resources": []
+    },
+    {
+      "id": "mood-commons",
+      "feet": [
+        -64.55,
+        0,
+        77.92
+      ],
+      "eye": [
+        -64.55,
+        1.6,
+        77.92
+      ],
+      "aim": [
+        -68.32,
+        1.53,
+        75.19
+      ],
+      "targetMetres": 4.655179910594218,
+      "hit": {
+        "name": "Propagation_specimen_foliage_1",
+        "material": "garden_fern",
+        "distance": 4.51707324915229,
+        "parent": "Propagation_specimen_foliage"
+      },
+      "bounds": null,
+      "zone": "commons",
+      "resources": []
+    },
+    {
+      "id": "mood-aquarium",
+      "feet": [
+        -23.73,
+        0,
+        45.82
+      ],
+      "eye": [
+        -23.73,
+        1.6,
+        45.82
+      ],
+      "aim": [
+        -24.21,
+        1.78,
+        48.61
+      ],
+      "targetMetres": 2.836705836000623,
+      "hit": {
+        "name": "",
+        "material": "",
+        "distance": 2.4887442287703023,
+        "parent": ""
+      },
+      "bounds": null,
+      "zone": "aquarium",
+      "resources": []
+    },
+    {
+      "id": "mood-hall",
+      "feet": [
+        0,
+        0,
+        13.2
+      ],
+      "eye": [
+        0,
+        1.6,
+        13.2
+      ],
+      "aim": [
+        0,
+        2.35,
+        -6.3
+      ],
+      "targetMetres": 19.51441774688653,
+      "hit": {
+        "name": "Architecture_10",
+        "material": "lagoon",
+        "distance": 24.29641389481637,
+        "parent": "Architecture"
+      },
+      "bounds": null,
+      "zone": "hall",
+      "resources": []
+    },
+    {
+      "id": "mood-hoof",
+      "feet": [
+        -13.22,
+        0,
+        7.12
+      ],
+      "eye": [
+        -13.22,
+        1.6,
+        7.12
+      ],
+      "aim": [
+        -18.72,
+        1.48,
+        10.1
+      ],
+      "targetMetres": 6.256580535723965,
+      "hit": {
+        "name": "hoof_display",
+        "material": "PressReadout",
+        "distance": 7.029206111152884,
+        "parent": "Scene"
+      },
+      "bounds": null,
+      "zone": "hoof",
+      "resources": []
+    },
+    {
+      "id": "mood-habitat",
+      "feet": [
+        12.97,
+        0,
+        7.12
+      ],
+      "eye": [
+        12.97,
+        1.6,
+        7.12
+      ],
+      "aim": [
+        18.5,
+        1.65,
+        10
+      ],
+      "targetMetres": 6.235206492170087,
+      "hit": {
+        "name": "Architecture_5",
+        "material": "ash",
+        "distance": 11.845004618001195,
+        "parent": "Architecture"
+      },
+      "bounds": null,
+      "zone": "habitat",
+      "resources": []
+    },
+    {
+      "id": "mood-twelve",
+      "feet": [
+        -1.57024,
+        -0.6800000071525574,
+        -29.91515
+      ],
+      "eye": [
+        -1.57024,
+        0.9199999928474427,
+        -29.91515
+      ],
+      "aim": [
+        -1.06151,
+        0.59,
+        -32.97858
+      ],
+      "targetMetres": 3.122868804973932,
+      "hit": {
+        "name": "statue_reginald_1",
+        "material": "hero_reginald_cast",
+        "distance": 2.795263836703975,
+        "parent": "statue_reginald"
+      },
+      "bounds": null,
+      "zone": "twelve",
+      "resources": []
+    },
+    {
+      "id": "mood-dome",
+      "feet": [
+        -15.28,
+        0,
+        -5
+      ],
+      "eye": [
+        -15.28,
+        1.6,
+        -5
+      ],
+      "aim": [
+        -22,
+        1.32,
+        -5
+      ],
+      "targetMetres": 6.725830803700016,
+      "hit": {
+        "name": "dome_sign",
+        "material": "art_dome_stand",
+        "distance": 6.686797407103093,
+        "parent": "Scene"
+      },
+      "bounds": null,
+      "zone": "dome",
+      "resources": []
+    },
+    {
+      "id": "mood-shop",
+      "feet": [
+        14.054,
+        0,
+        -1.354
+      ],
+      "eye": [
+        14.054,
+        1.6,
+        -1.354
+      ],
+      "aim": [
+        19,
+        1.5,
+        -8.3
+      ],
+      "targetMetres": 8.527592391759821,
+      "hit": {
+        "name": "shelf_left_10",
+        "material": "hero_plush",
+        "distance": 2.787777707233496,
+        "parent": "shelf_left"
+      },
+      "bounds": null,
+      "zone": "shop",
+      "resources": []
+    },
+    {
+      "id": "mood-service",
+      "feet": [
+        12.72,
+        0,
+        32
+      ],
+      "eye": [
+        12.72,
+        1.6,
+        32
+      ],
+      "aim": [
+        29,
+        1.4,
+        32
+      ],
+      "targetMetres": 16.28122845488018,
+      "hit": {
+        "name": "Architecture_2",
+        "material": "service_zinc",
+        "distance": 20.641950559458927,
+        "parent": "Architecture"
+      },
+      "bounds": null,
+      "zone": "service",
+      "resources": []
+    },
+    {
+      "id": "mood-secret",
+      "feet": [
+        31.13,
+        0,
+        41
+      ],
+      "eye": [
+        31.13,
+        1.6,
+        41
+      ],
+      "aim": [
+        60.5,
+        1.5,
+        41
+      ],
+      "targetMetres": 29.37017024124988,
+      "hit": {
+        "name": "dust",
+        "material": "",
+        "distance": 16.130967782994485,
+        "parent": "ambience_secret"
+      },
+      "bounds": null,
+      "zone": "secret",
+      "resources": []
+    },
+    {
+      "id": "mood-catwalk",
+      "feet": [
+        -13.39,
+        6.800000190734863,
+        27.5
+      ],
+      "eye": [
+        -13.39,
+        8.400000190734863,
+        27.5
+      ],
+      "aim": [
+        -11.95,
+        8.2,
+        28
+      ],
+      "targetMetres": 1.5374004280908684,
+      "hit": {
+        "name": "Architecture_7",
+        "material": "graphite",
+        "distance": 14.338075936787524,
+        "parent": "Architecture"
+      },
+      "bounds": null,
+      "zone": "catwalk",
+      "resources": []
+    },
+    {
+      "id": "chess-context",
+      "feet": [
+        7.86,
+        5.551115123125783e-17,
+        63.48
+      ],
+      "eye": [
+        7.86,
+        1.6,
+        63.48
+      ],
+      "aim": [
+        10.12,
+        0.98,
+        64.25
+      ],
+      "targetMetres": 2.466759007280606,
+      "hit": {
+        "name": "Cube_4",
+        "material": "Tournament board",
+        "distance": 2.4906307522028825,
+        "parent": "guest_chess"
+      },
+      "label": "chess_label_ink",
+      "bounds": [
+        [
+          9.53499966083833,
+          0.6310000419616699,
+          63.88999985872576
+        ],
+        [
+          9.53499975757671,
+          0.8109999895095825,
+          64.60999998407436
+        ]
+      ],
+      "zone": "chronology",
+      "resources": []
+    },
+    {
+      "id": "chess-print",
+      "feet": [
+        8.399999999999999,
+        0,
+        64.69
+      ],
+      "eye": [
+        8.399999999999999,
+        1.6,
+        64.69
+      ],
+      "aim": [
+        9.53499970920752,
+        0.7210000157356262,
+        64.24999992140006
+      ],
+      "targetMetres": 1.5014877226956866,
+      "hit": {
+        "name": "chess_label_ink",
+        "material": "art_collection_label_chess",
+        "distance": 1.5014877226956869,
+        "parent": "collection_chess"
+      },
+      "label": "chess_label_ink",
+      "bounds": [
+        [
+          9.53499966083833,
+          0.6310000419616699,
+          63.88999985872576
+        ],
+        [
+          9.53499975757671,
+          0.8109999895095825,
+          64.60999998407436
+        ]
+      ],
+      "zone": "chronology",
+      "resources": []
+    },
+    {
+      "id": "classifieds-context",
+      "feet": [
+        -21.19,
+        0,
+        102.99
+      ],
+      "eye": [
+        -21.19,
+        1.6,
+        102.99
+      ],
+      "aim": [
+        -22.2,
+        1.23,
+        105.48
+      ],
+      "targetMetres": 2.71239746349978,
+      "hit": {
+        "name": "Cube003_1",
+        "material": "Spun brass",
+        "distance": 2.5902871385281157,
+        "parent": "guest_classifieds"
+      },
+      "label": "classifieds_label_ink",
+      "bounds": [
+        [
+          -22.560000816147845,
+          0.460999995470047,
+          105.03500169348622
+        ],
+        [
+          -21.840000787537615,
+          0.6410000324249268,
+          105.03500175643062
+        ]
+      ],
+      "zone": "forum",
+      "resources": []
+    },
+    {
+      "id": "classifieds-print",
+      "feet": [
+        -22.64,
+        0,
+        103.76
+      ],
+      "eye": [
+        -22.64,
+        1.6,
+        103.76
+      ],
+      "aim": [
+        -22.20000080184273,
+        0.5510000139474869,
+        105.03500172495842
+      ],
+      "targetMetres": 1.7086923841827548,
+      "hit": {
+        "name": "classifieds_label_ink",
+        "material": "art_collection_label_classifieds",
+        "distance": 1.7086923841827546,
+        "parent": "collection_classifieds"
+      },
+      "label": "classifieds_label_ink",
+      "bounds": [
+        [
+          -22.560000816147845,
+          0.460999995470047,
+          105.03500169348622
+        ],
+        [
+          -21.840000787537615,
+          0.6410000324249268,
+          105.03500175643062
+        ]
+      ],
+      "zone": "forum",
+      "resources": []
+    },
+    {
+      "id": "weather-context",
+      "feet": [
+        -66.27,
+        0,
+        68.39
+      ],
+      "eye": [
+        -66.27,
+        1.6,
+        68.39
+      ],
+      "aim": [
+        -68.45,
+        1.25,
+        66.95
+      ],
+      "targetMetres": 2.636000758725237,
+      "hit": {
+        "name": "weather_gauge",
+        "material": "brass",
+        "distance": 2.3349165135808723,
+        "parent": "collection_weather"
+      },
+      "label": "weather_label_ink",
+      "bounds": [
+        [
+          -68.15999896274823,
+          0.7400000095367432,
+          66.58999386723569
+        ],
+        [
+          -68.15999886600986,
+          0.9199999570846558,
+          67.3099939925843
+        ]
+      ],
+      "zone": "commons",
+      "resources": []
+    },
+    {
+      "id": "weather-print",
+      "feet": [
+        -66.73,
+        0,
+        66.51
+      ],
+      "eye": [
+        -66.73,
+        1.6,
+        66.51
+      ],
+      "aim": [
+        -68.15999891437905,
+        0.8299999833106995,
+        66.94999392991
+      ],
+      "targetMetres": 1.682673937274954,
+      "hit": {
+        "name": "weather_label_ink",
+        "material": "art_collection_label_weather",
+        "distance": 1.682673937274949,
+        "parent": "collection_weather"
+      },
+      "label": "weather_label_ink",
+      "bounds": [
+        [
+          -68.15999896274823,
+          0.7400000095367432,
+          66.58999386723569
+        ],
+        [
+          -68.15999886600986,
+          0.9199999570846558,
+          67.3099939925843
+        ]
+      ],
+      "zone": "commons",
+      "resources": []
+    },
+    {
+      "id": "drive-context",
+      "feet": [
+        8.89,
+        0,
+        -0.62
+      ],
+      "eye": [
+        8.89,
+        1.6,
+        -0.62
+      ],
+      "aim": [
+        11,
+        1.07,
+        -1.75
+      ],
+      "targetMetres": 2.4515097389160005,
+      "hit": {
+        "name": "drive_gear_bed",
+        "material": "green",
+        "distance": 2.6226529069224673,
+        "parent": "collection_drive"
+      },
+      "label": "drive_label_ink",
+      "bounds": [
+        [
+          10.63800030186724,
+          0.5859999656677246,
+          -2.1100001113121576
+        ],
+        [
+          10.63800039860562,
+          0.7660000324249268,
+          -1.3899999859635475
+        ]
+      ],
+      "zone": "hall",
+      "resources": []
+    },
+    {
+      "id": "drive-print",
+      "feet": [
+        9.28,
+        0,
+        -1.31
+      ],
+      "eye": [
+        9.28,
+        1.6,
+        -1.31
+      ],
+      "aim": [
+        10.63800035023643,
+        0.6759999990463257,
+        -1.7500000486378524
+      ],
+      "targetMetres": 1.7004531736587076,
+      "hit": {
+        "name": "drive_label_ink",
+        "material": "art_collection_label_drive",
+        "distance": 1.7004531736587079,
+        "parent": "collection_drive"
+      },
+      "label": "drive_label_ink",
+      "bounds": [
+        [
+          10.63800030186724,
+          0.5859999656677246,
+          -2.1100001113121576
+        ],
+        [
+          10.63800039860562,
+          0.7660000324249268,
+          -1.3899999859635475
+        ]
+      ],
+      "zone": "hall",
+      "resources": []
+    },
+    {
+      "id": "tea-context",
+      "feet": [
+        9.89,
+        3.4000000953674316,
+        12.55
+      ],
+      "eye": [
+        9.89,
+        5.000000095367431,
+        12.55
+      ],
+      "aim": [
+        11,
+        4.16,
+        10.5
+      ],
+      "targetMetres": 2.477942727388447,
+      "hit": {
+        "name": "tea_trays",
+        "material": "collection_oiled_oak",
+        "distance": 2.4233686531326577,
+        "parent": "collection_tea"
+      },
+      "label": "tea_label_ink",
+      "bounds": [
+        [
+          10.6860002267773,
+          3.960000157356262,
+          10.139999895137057
+        ],
+        [
+          10.68600032351568,
+          4.140000224113464,
+          10.860000020485666
+        ]
+      ],
+      "zone": "hall",
+      "resources": []
+    },
+    {
+      "id": "tea-print",
+      "feet": [
+        9.53,
+        3.7200000286102295,
+        10.94
+      ],
+      "eye": [
+        9.53,
+        5.320000028610229,
+        10.94
+      ],
+      "aim": [
+        10.68600027514649,
+        4.050000190734863,
+        10.499999957811362
+      ],
+      "targetMetres": 1.7728046315001047,
+      "hit": {
+        "name": "tea_label_ink",
+        "material": "art_collection_label_tea",
+        "distance": 1.772804631500105,
+        "parent": "collection_tea"
+      },
+      "label": "tea_label_ink",
+      "bounds": [
+        [
+          10.6860002267773,
+          3.960000157356262,
+          10.139999895137057
+        ],
+        [
+          10.68600032351568,
+          4.140000224113464,
+          10.860000020485666
+        ]
+      ],
+      "zone": "hall",
+      "resources": []
+    },
+    {
+      "id": "hoof-optic",
+      "feet": [
+        -16.93,
+        0,
+        5.97
+      ],
+      "eye": [
+        -16.93,
+        1.6,
+        5.97
+      ],
+      "aim": [
+        -17.53,
+        1.87,
+        4.51
+      ],
+      "targetMetres": 1.6014056325615948,
+      "hit": {
+        "name": "Fabrication_hoof_compliance_jig_6",
+        "material": "art_utility_manometer",
+        "distance": 1.6122235298336776,
+        "parent": "Fabrication_hoof_compliance_jig"
+      },
+      "label": "Fabrication_collection_hoof_optical_head",
+      "bounds": [
+        [
+          -18.045000076293945,
+          1.8619999885559082,
+          4.227999687194824
+        ],
+        [
+          -16.95400047302246,
+          2.1421666145324707,
+          4.635000228881836
+        ]
+      ],
+      "zone": "hoof",
+      "resources": []
+    },
+    {
+      "id": "hoof-grazing",
+      "feet": [
+        -16.7,
+        0,
+        5.61
+      ],
+      "eye": [
+        -16.7,
+        1.6,
+        5.61
+      ],
+      "aim": [
+        -17.15,
+        1.99,
+        4.53
+      ],
+      "targetMetres": 1.2332882874656677,
+      "hit": {
+        "name": "Fabrication_hoof_compliance_jig_1",
+        "material": "utility_silver",
+        "distance": 1.3683804626352813,
+        "parent": "Fabrication_hoof_compliance_jig"
+      },
+      "label": "Fabrication_collection_hoof_optical_head",
+      "bounds": [
+        [
+          -18.045000076293945,
+          1.8619999885559082,
+          4.227999687194824
+        ],
+        [
+          -16.95400047302246,
+          2.1421666145324707,
+          4.635000228881836
+        ]
+      ],
+      "zone": "hoof",
+      "resources": []
+    },
+    {
+      "id": "sampler",
+      "feet": [
+        16.12,
+        0,
+        9.17
+      ],
+      "eye": [
+        16.12,
+        1.6,
+        9.17
+      ],
+      "aim": [
+        17.15,
+        1.2,
+        12.72
+      ],
+      "targetMetres": 3.7179833243305436,
+      "hit": {
+        "name": "Fabrication_habitat_sampling_bench_3",
+        "material": "utility_aqua",
+        "distance": 4.049491972235565,
+        "parent": "Fabrication_habitat_sampling_bench"
+      },
+      "label": "Fabrication_collection_habitat_assay_optics",
+      "bounds": [
+        [
+          16.453001022338867,
+          0.7958333492279053,
+          12.439000129699707
+        ],
+        [
+          17.78299903869629,
+          1.5709999799728394,
+          13.062000274658203
+        ]
+      ],
+      "zone": "habitat",
+      "resources": []
+    },
+    {
+      "id": "sampler-grazing",
+      "feet": [
+        17.86,
+        0,
+        9.21
+      ],
+      "eye": [
+        17.86,
+        1.6,
+        9.21
+      ],
+      "aim": [
+        17.16,
+        1.19,
+        12.72
+      ],
+      "targetMetres": 3.602526890947519,
+      "hit": {
+        "name": "Fabrication_collection_habitat_assay_optics_2",
+        "material": "art_collection_assay_scale",
+        "distance": 3.750323194842276,
+        "parent": "Fabrication_collection_habitat_assay_optics"
+      },
+      "label": "Fabrication_collection_habitat_assay_optics",
+      "bounds": [
+        [
+          16.453001022338867,
+          0.7958333492279053,
+          12.439000129699707
+        ],
+        [
+          17.78299903869629,
+          1.5709999799728394,
+          13.062000274658203
+        ]
+      ],
+      "zone": "habitat",
+      "resources": []
+    },
+    {
+      "id": "acoustic-cabinets",
+      "feet": [
+        -30.55,
+        0,
+        101.22
+      ],
+      "eye": [
+        -30.55,
+        1.6,
+        101.22
+      ],
+      "aim": [
+        -30.8,
+        1.88,
+        105.33
+      ],
+      "targetMetres": 4.127105523245074,
+      "hit": {
+        "name": "Architecture_3",
+        "material": "forum_acoustic",
+        "distance": 5.1012621107567355,
+        "parent": "Architecture"
+      },
+      "label": "Fabrication_collection_forum_speaker",
+      "bounds": [
+        [
+          -32.78999710083008,
+          0.33500003814697266,
+          105.06449890136719
+        ],
+        [
+          -28.809999465942383,
+          2.924999952316284,
+          105.80000305175781
+        ]
+      ],
+      "zone": "forum",
+      "resources": []
+    },
+    {
+      "id": "acoustic-grazing",
+      "feet": [
+        -28.6,
+        0,
+        103.04
+      ],
+      "eye": [
+        -28.6,
+        1.6,
+        103.04
+      ],
+      "aim": [
+        -31.27,
+        1.58,
+        105.39
+      ],
+      "targetMetres": 3.556936884455495,
+      "hit": {
+        "name": "Architecture_3",
+        "material": "forum_acoustic",
+        "distance": 3.0660892070631593,
+        "parent": "Architecture"
+      },
+      "label": "Fabrication_collection_forum_speaker",
+      "bounds": [
+        [
+          -32.78999710083008,
+          0.33500003814697266,
+          105.06449890136719
+        ],
+        [
+          -28.809999465942383,
+          2.924999952316284,
+          105.80000305175781
+        ]
+      ],
+      "zone": "forum",
+      "resources": []
+    }
+  ],
+  "errors": []
+}

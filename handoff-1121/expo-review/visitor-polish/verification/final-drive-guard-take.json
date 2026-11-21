@@ -1,0 +1,197 @@
+{
+  "profile": "M5",
+  "rehearse": false,
+  "duration": 7,
+  "startedUtc": "2026-11-21T19:09:51.562Z",
+  "cameraCuts": "Cuts reposition the player between shots. Movement, interactions, sound and room transitions within each shot are live.",
+  "edits": [
+    {
+      "id": "drive",
+      "seconds": 7,
+      "cutTo": [
+        9.15,
+        0,
+        -0.62
+      ],
+      "before": {
+        "zone": "hall",
+        "feet": [
+          9.15,
+          0,
+          -0.62
+        ],
+        "surface": "stone",
+        "elapsed": 2.5351999998271375,
+        "ready": true,
+        "loaded": [
+          "atrium",
+          "hall",
+          "shop",
+          "habitat"
+        ],
+        "textures": {
+          "residentSources": 155,
+          "sharedHits": 189,
+          "fullDetailMaps": 77,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 471925632
+        },
+        "calls": 190,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "id": "pa_arrive_1",
+          "seconds": 1.843084,
+          "duration": 10.33,
+          "gain": 0.4712561859989556,
+          "pan": 0.4831914733727524,
+          "duck": 1,
+          "subtitle": "Welcome to Llama Expo 2037. Feed is included. Please keep your hands where we can use them.",
+          "queue": []
+        },
+        "finished": {}
+      },
+      "inputs": [
+        {
+          "key": "E",
+          "at": 0.8628171000000002,
+          "prompt": "Turn the handwheel"
+        }
+      ],
+      "audioAfterVideoSeconds": 0.001,
+      "crossings": [],
+      "after": {
+        "zone": "hall",
+        "feet": [
+          9.468256325595046,
+          0,
+          -0.8707474080445787
+        ],
+        "surface": "stone",
+        "elapsed": 10.278499998956887,
+        "ready": true,
+        "loaded": [
+          "atrium",
+          "hall",
+          "shop",
+          "habitat"
+        ],
+        "textures": {
+          "residentSources": 155,
+          "sharedHits": 189,
+          "fullDetailMaps": 77,
+          "pendingDetailMaps": 0,
+          "decodedBytes": 471925632
+        },
+        "calls": 201,
+        "pixelRatio": 1,
+        "depth": 0,
+        "phase": 0,
+        "seconds": 0,
+        "planter": {
+          "used": false,
+          "held": false,
+          "seconds": 0,
+          "cues": 0
+        },
+        "voice": {
+          "seconds": 0,
+          "subtitle": "",
+          "queue": []
+        },
+        "pa": {
+          "id": "pa_arrive_1",
+          "seconds": 9.621769,
+          "duration": 10.33,
+          "gain": 0.4708917867456371,
+          "pan": 0.4826203831088791,
+          "duck": 1,
+          "subtitle": "Welcome to Llama Expo 2037. Feed is included. Please keep your hands where we can use them.",
+          "queue": []
+        },
+        "finished": {}
+      },
+      "speechChanges": [
+        {
+          "at": 0.002,
+          "voice": "",
+          "pa": "pa_arrive_1"
+        }
+      ],
+      "cut": {
+        "sourceDuration": 7.72,
+        "cutFrom": 0.31999999999999973,
+        "cutTo": 7.319999999999999
+      }
+    }
+  ],
+  "faults": [],
+  "mediaRequests": [
+    "manifest.json",
+    "resting-index.json",
+    "resting-atlas.webp",
+    "hall/pa_arrive_1.mp3",
+    "slides/chew.webp"
+  ],
+  "roomGeometry": {
+    "atrium-08a61de17d70b835.glb.gz": {
+      "bytes": 4259748,
+      "sha256": "25d17aa9f385fe6c0342af2d25f983b5d9fdaa05a840876f0a8e3a9c4a115f38"
+    },
+    "hall-01878d1412b58f6d.glb": {
+      "bytes": 4247344,
+      "sha256": "506869b520da9461341818a80a67fd3153b4f7e30a5d56a0f71a327ae84bdc25"
+    },
+    "shop-8746baacd50a80aa.glb": {
+      "bytes": 1000400,
+      "sha256": "cf912b490b194002fb73a4d62ec46c99fad54e70170705a67f5c587e219ae9ba"
+    },
+    "habitat-f7dc893cfcac2ed0.glb": {
+      "bytes": 786992,
+      "sha256": "c322484671c8f6f32883b4817c569f076f18288bfab7dba166228f877d9d4291"
+    }
+  },
+  "collectionGeometry": {
+    "collection-c7d4642df857.glb": {
+      "sha256": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45",
+      "bytes": 1477148
+    }
+  },
+  "viewport": {
+    "width": 1920,
+    "height": 1080
+  },
+  "browser": "157.0.8103.80",
+  "entrance": "atrium",
+  "stagedRooms": [
+    "aquarium",
+    "service",
+    "secret",
+    "twelve",
+    "dome",
+    "chronology",
+    "commons",
+    "forum",
+    "atrium",
+    "hall",
+    "catwalk",
+    "shop",
+    "hoof",
+    "habitat"
+  ],
+  "manualPresses": 3,
+  "recordedMix": "Room tone, music, movement and controls with the Voices mixer source muted"
+}

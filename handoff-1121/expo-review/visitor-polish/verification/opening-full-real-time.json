@@ -1,0 +1,3077 @@
+{
+  "base": "http://127.0.0.1:8937/fuzz/",
+  "origin": 4.902664950005961,
+  "audioAfterVideo": 0.00426155000000017,
+  "seconds": 51.2,
+  "route": {
+    "start": [
+      0.54,
+      0,
+      35.96
+    ],
+    "points": [
+      [
+        0.6,
+        0,
+        35.1
+      ],
+      [
+        0.8,
+        0,
+        34.6
+      ],
+      [
+        3.0336,
+        0,
+        34.5946
+      ]
+    ],
+    "feet": [
+      3.0336,
+      0,
+      34.5946
+    ],
+    "slot": "slot_01",
+    "aim": [
+      4.57,
+      1.84,
+      32.91
+    ]
+  },
+  "errors": [],
+  "capture": {
+    "events": [
+      {
+        "key": "pa_arrive_1",
+        "type": "playing",
+        "at": 10.156600000023841,
+        "media": 0,
+        "duration": 10.33,
+        "rate": 1,
+        "caption": [
+          {
+            "id": "pa_arrive_1",
+            "text": "Welcome to Llama Expo 2037. Feed is included. Please keep your hands where we can use them."
+          }
+        ]
+      },
+      {
+        "key": "pa_arrive_1",
+        "type": "pause",
+        "at": 20.4965,
+        "media": 10.33,
+        "duration": 10.33,
+        "rate": 1,
+        "caption": [
+          {
+            "id": "pa_arrive_1",
+            "text": "Welcome to Llama Expo 2037. Feed is included. Please keep your hands where we can use them."
+          }
+        ]
+      },
+      {
+        "key": "pa_arrive_1",
+        "type": "ended",
+        "at": 20.49670000001788,
+        "media": 10.33,
+        "duration": 10.33,
+        "rate": 1,
+        "caption": [
+          {
+            "id": "pa_arrive_1",
+            "text": "Welcome to Llama Expo 2037. Feed is included. Please keep your hands where we can use them."
+          }
+        ]
+      },
+      {
+        "key": "pa_turnstile",
+        "type": "playing",
+        "at": 20.510400000005962,
+        "media": 0,
+        "duration": 7.13,
+        "rate": 1,
+        "caption": [
+          {
+            "id": "pa_turnstile",
+            "text": "Thank you. You are human visitor number one. Today."
+          }
+        ]
+      },
+      {
+        "key": "pa_turnstile",
+        "type": "pause",
+        "at": 27.64840000000596,
+        "media": 7.13,
+        "duration": 7.13,
+        "rate": 1,
+        "caption": [
+          {
+            "id": "pa_turnstile",
+            "text": "Thank you. You are human visitor number one. Today."
+          }
+        ]
+      },
+      {
+        "key": "pa_turnstile",
+        "type": "ended",
+        "at": 27.64840000000596,
+        "media": 7.13,
+        "duration": 7.13,
+        "rate": 1,
+        "caption": [
+          {
+            "id": "pa_turnstile",
+            "text": "Thank you. You are human visitor number one. Today."
+          }
+        ]
+      },
+      {
+        "key": "pa_timeline",
+        "type": "playing",
+        "at": 27.65680000001192,
+        "media": 0,
+        "duration": 6.49,
+        "rate": 1,
+        "caption": [
+          {
+            "id": "pa_timeline",
+            "text": "The history of the world is displayed on your left. The corrected version."
+          }
+        ]
+      },
+      {
+        "key": "pa_timeline",
+        "type": "pause",
+        "at": 34.18110000002384,
+        "media": 6.49,
+        "duration": 6.49,
+        "rate": 1,
+        "caption": [
+          {
+            "id": "pa_timeline",
+            "text": "The history of the world is displayed on your left. The corrected version."
+          }
+        ]
+      },
+      {
+        "key": "pa_timeline",
+        "type": "ended",
+        "at": 34.18120000001788,
+        "media": 6.49,
+        "duration": 6.49,
+        "rate": 1,
+        "caption": [
+          {
+            "id": "pa_timeline",
+            "text": "The history of the world is displayed on your left. The corrected version."
+          }
+        ]
+      },
+      {
+        "key": "ev_h0",
+        "type": "playing",
+        "at": 34.21270000001788,
+        "media": 0,
+        "duration": 20.49,
+        "rate": 1,
+        "caption": [
+          {
+            "id": "ev_h0",
+            "text": "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for."
+          }
+        ]
+      },
+      {
+        "key": "ev_h0",
+        "type": "pause",
+        "at": 54.70840000000596,
+        "media": 20.49,
+        "duration": 20.49,
+        "rate": 1,
+        "caption": [
+          {
+            "id": "ev_h0",
+            "text": "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for."
+          }
+        ]
+      },
+      {
+        "key": "ev_h0",
+        "type": "ended",
+        "at": 54.70840000000596,
+        "media": 20.49,
+        "duration": 20.49,
+        "rate": 1,
+        "caption": [
+          {
+            "id": "ev_h0",
+            "text": "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for."
+          }
+        ]
+      },
+      {
+        "key": "pa_arrive_2",
+        "type": "playing",
+        "at": 54.71720000001788,
+        "media": 0,
+        "duration": 8.73,
+        "rate": 1,
+        "caption": [
+          {
+            "id": "pa_arrive_2",
+            "text": "Human visitors are reminded that they are welcome. The herd has thought about this more than you have."
+          }
+        ]
+      }
+    ],
+    "dom": [
+      {
+        "at": 9.8925,
+        "ids": "pa_arrive_1",
+        "lines": [
+          "Welcome to Llama Expo 2037. Feed is included. Please keep your hands where we can use them."
+        ]
+      },
+      {
+        "at": 20.49740000000596,
+        "ids": "pa_turnstile",
+        "lines": [
+          "Thank you. You are human visitor number one. Today."
+        ]
+      },
+      {
+        "at": 27.6505,
+        "ids": "pa_timeline",
+        "lines": [
+          "The history of the world is displayed on your left. The corrected version."
+        ]
+      },
+      {
+        "at": 34.18280000001192,
+        "ids": "ev_h0",
+        "lines": [
+          "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for."
+        ]
+      },
+      {
+        "at": 54.709400000005964,
+        "ids": "",
+        "lines": []
+      }
+    ],
+    "readings": [
+      {
+        "at": 10.088100000023841,
+        "id": "pa_arrive_1",
+        "seconds": 0,
+        "slide": "slides/chew.webp",
+        "feet": [
+          0.5595070011101669,
+          0,
+          35.68039965075428
+        ]
+      },
+      {
+        "at": 10.275700000017881,
+        "id": "pa_arrive_1",
+        "seconds": 0.088884,
+        "slide": "slides/chew.webp",
+        "feet": [
+          0.5663003483496388,
+          0,
+          35.583028340321846
+        ]
+      },
+      {
+        "at": 10.48730000001192,
+        "id": "pa_arrive_1",
+        "seconds": 0.329646,
+        "slide": "slides/chew.webp",
+        "feet": [
+          0.575533532292476,
+          0,
+          35.45068603714118
+        ]
+      },
+      {
+        "at": 10.748100000023841,
+        "id": "pa_arrive_1",
+        "seconds": 0.591641,
+        "slide": "slides/chew.webp",
+        "feet": [
+          0.578441069321025,
+          0,
+          35.409011339731975
+        ]
+      },
+      {
+        "at": 10.84480000001192,
+        "id": "pa_arrive_1",
+        "seconds": 0.641451,
+        "slide": "slides/chew.webp",
+        "feet": [
+          0.5814421464150755,
+          0,
+          35.36599590138392
+        ]
+      },
+      {
+        "at": 11.127800000011922,
+        "id": "pa_arrive_1",
+        "seconds": 0.960726,
+        "slide": "slides/chew.webp",
+        "feet": [
+          0.5862438697662533,
+          0,
+          35.29717120001703
+        ]
+      },
+      {
+        "at": 11.17490000000596,
+        "id": "pa_arrive_1",
+        "seconds": 0.981043,
+        "slide": "slides/chew.webp",
+        "feet": [
+          0.5868674702013807,
+          0,
+          35.28823292711354
+        ]
+      },
+      {
+        "at": 11.35290000000596,
+        "id": "pa_arrive_1",
+        "seconds": 1.181025,
+        "slide": "slides/chew.webp",
+        "feet": [
+          0.5917978111416067,
+          0,
+          35.21756470697031
+        ]
+      },
+      {
+        "at": 11.59780000001192,
+        "id": "pa_arrive_1",
+        "seconds": 1.401578,
+        "slide": "slides/chew.webp",
+        "feet": [
+          0.6,
+          0,
+          35.1
+        ]
+      },
+      {
+        "at": 11.74590000000596,
+        "id": "pa_arrive_1",
+        "seconds": 1.483175,
+        "slide": "slides/chew.webp",
+        "feet": [
+          0.6174910152923332,
+          0,
+          35.05627246176917
+        ]
+      },
+      {
+        "at": 11.914100000023842,
+        "id": "pa_arrive_1",
+        "seconds": 1.700862,
+        "slide": "slides/chew.webp",
+        "feet": [
+          0.6494989493444749,
+          0,
+          34.97625262663881
+        ]
+      },
+      {
+        "at": 12.078200000017882,
+        "id": "pa_arrive_1",
+        "seconds": 1.880816,
+        "slide": "slides/chew.webp",
+        "feet": [
+          0.6701304442010173,
+          0,
+          34.924673889497456
+        ]
+      },
+      {
+        "at": 12.26590000000596,
+        "id": "pa_arrive_1",
+        "seconds": 2.030559,
+        "slide": "slides/chew.webp",
+        "feet": [
+          0.7009528992105176,
+          0,
+          34.84761775197371
+        ]
+      },
+      {
+        "at": 12.436700000017881,
+        "id": "pa_arrive_1",
+        "seconds": 2.249433,
+        "slide": "slides/chew.webp",
+        "feet": [
+          0.7358101425353673,
+          0,
+          34.76047464366158
+        ]
+      },
+      {
+        "at": 12.62080000001192,
+        "id": "pa_arrive_1",
+        "seconds": 2.44968,
+        "slide": "slides/chew.webp",
+        "feet": [
+          0.7745357911376843,
+          0,
+          34.66366052215579
+        ]
+      },
+      {
+        "at": 12.79390000000596,
+        "id": "pa_arrive_1",
+        "seconds": 2.620952,
+        "slide": "slides/chew.webp",
+        "feet": [
+          0.8387505280348143,
+          0,
+          34.6179855089227
+        ]
+      },
+      {
+        "at": 12.9735,
+        "id": "pa_arrive_1",
+        "seconds": 2.768595,
+        "slide": "slides/chew.webp",
+        "feet": [
+          0.9066186758535265,
+          0,
+          34.6172623927379
+        ]
+      },
+      {
+        "at": 13.226100000023841,
+        "id": "pa_arrive_1",
+        "seconds": 3.062132,
+        "slide": "slides/chew.webp",
+        "feet": [
+          1.0335634704692283,
+          0,
+          34.6159098313595
+        ]
+      },
+      {
+        "at": 13.3785,
+        "id": "pa_arrive_1",
+        "seconds": 3.181134,
+        "slide": "slides/chew.webp",
+        "feet": [
+          1.0999757009123567,
+          0,
+          34.61520222756825
+        ]
+      },
+      {
+        "at": 13.6975,
+        "id": "pa_arrive_1",
+        "seconds": 3.379668,
+        "slide": "slides/chew.webp",
+        "feet": [
+          1.2100654522224699,
+          0,
+          34.61402925197496
+        ]
+      },
+      {
+        "at": 13.87680000001192,
+        "id": "pa_arrive_1",
+        "seconds": 3.711285,
+        "slide": "slides/chew.webp",
+        "feet": [
+          1.3281627490315386,
+          0,
+          34.612770958217894
+        ]
+      },
+      {
+        "at": 14.06990000000596,
+        "id": "pa_arrive_1",
+        "seconds": 3.883537,
+        "slide": "slides/chew.webp",
+        "feet": [
+          1.4339967419015398,
+          0,
+          34.61164332654375
+        ]
+      },
+      {
+        "at": 14.384600000023841,
+        "id": "pa_arrive_1",
+        "seconds": 4.220227,
+        "slide": "slides/chew.webp",
+        "feet": [
+          1.5128402667385963,
+          0,
+          34.61080327077814
+        ]
+      },
+      {
+        "at": 14.41990000000596,
+        "id": "pa_arrive_1",
+        "seconds": 4.249252,
+        "slide": "slides/chew.webp",
+        "feet": [
+          1.530031290970593,
+          0,
+          34.610620105209975
+        ]
+      },
+      {
+        "at": 14.62,
+        "id": "pa_arrive_1",
+        "seconds": 4.403084,
+        "slide": "slides/chew.webp",
+        "feet": [
+          1.6157064280558322,
+          0,
+          34.609707260521375
+        ]
+      },
+      {
+        "at": 14.77790000000596,
+        "id": "pa_arrive_1",
+        "seconds": 4.490159,
+        "slide": "slides/chew.webp",
+        "feet": [
+          1.6549042031928696,
+          0,
+          34.60928961916058
+        ]
+      },
+      {
+        "at": 14.96390000000596,
+        "id": "pa_arrive_1",
+        "seconds": 4.792018,
+        "slide": "slides/chew.webp",
+        "feet": [
+          1.756650428094307,
+          0,
+          34.60820554151395
+        ]
+      },
+      {
+        "at": 15.14140000000596,
+        "id": "pa_arrive_1",
+        "seconds": 4.963265,
+        "slide": "slides/chew.webp",
+        "feet": [
+          1.8542528881755171,
+          0,
+          34.60716561452567
+        ]
+      },
+      {
+        "at": 15.313,
+        "id": "pa_arrive_1",
+        "seconds": 5.140317,
+        "slide": "slides/chew.webp",
+        "feet": [
+          1.9542072147749625,
+          0,
+          34.60610062905563
+        ]
+      },
+      {
+        "at": 15.513900000005961,
+        "id": "pa_arrive_1",
+        "seconds": 5.3508,
+        "slide": "slides/chew.webp",
+        "feet": [
+          2.0665368389667376,
+          0,
+          34.60490378824155
+        ]
+      },
+      {
+        "at": 15.703700000017882,
+        "id": "pa_arrive_1",
+        "seconds": 5.511837,
+        "slide": "slides/chew.webp",
+        "feet": [
+          2.1597155501362875,
+          0,
+          34.60391099506402
+        ]
+      },
+      {
+        "at": 15.855,
+        "id": "pa_arrive_1",
+        "seconds": 5.671474,
+        "slide": "slides/chew.webp",
+        "feet": [
+          2.2484145155925783,
+          0,
+          34.60296593232754
+        ]
+      },
+      {
+        "at": 16.05070000001788,
+        "id": "pa_arrive_1",
+        "seconds": 5.883356,
+        "slide": "slides/chew.webp",
+        "feet": [
+          2.3004915597032136,
+          0,
+          34.602411065948196
+        ]
+      },
+      {
+        "at": 16.22090000000596,
+        "id": "pa_arrive_1",
+        "seconds": 6.048798,
+        "slide": "slides/chew.webp",
+        "feet": [
+          2.3954061723564686,
+          0,
+          34.60139977722455
+        ]
+      },
+      {
+        "at": 16.39320000001788,
+        "id": "pa_arrive_1",
+        "seconds": 6.231655,
+        "slide": "slides/chew.webp",
+        "feet": [
+          2.4931206260909407,
+          0,
+          34.60035865697513
+        ]
+      },
+      {
+        "at": 16.57810000002384,
+        "id": "pa_arrive_1",
+        "seconds": 6.417542,
+        "slide": "slides/chew.webp",
+        "feet": [
+          2.596770742914255,
+          0,
+          34.59925429389112
+        ]
+      },
+      {
+        "at": 16.758600000023844,
+        "id": "pa_arrive_1",
+        "seconds": 6.579955,
+        "slide": "slides/chew.webp",
+        "feet": [
+          2.6916293587492226,
+          0,
+          34.59824360179796
+        ]
+      },
+      {
+        "at": 16.937100000023843,
+        "id": "pa_arrive_1",
+        "seconds": 6.771519,
+        "slide": "slides/chew.webp",
+        "feet": [
+          2.749810056420249,
+          0,
+          34.597623702692395
+        ]
+      },
+      {
+        "at": 17.11740000000596,
+        "id": "pa_arrive_1",
+        "seconds": 6.951474,
+        "slide": "slides/chew.webp",
+        "feet": [
+          2.8476925006262697,
+          0,
+          34.59658079255136
+        ]
+      },
+      {
+        "at": 17.308300000011922,
+        "id": "pa_arrive_1",
+        "seconds": 7.140136,
+        "slide": "slides/chew.webp",
+        "feet": [
+          2.9575022678282616,
+          0,
+          34.59541080011064
+        ]
+      },
+      {
+        "at": 17.47610000002384,
+        "id": "pa_arrive_1",
+        "seconds": 7.308544,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 17.65760000002384,
+        "id": "pa_arrive_1",
+        "seconds": 7.498211,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 17.83560000002384,
+        "id": "pa_arrive_1",
+        "seconds": 7.659683,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 18.02940000000596,
+        "id": "pa_arrive_1",
+        "seconds": 7.869408,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 18.19860000002384,
+        "id": "pa_arrive_1",
+        "seconds": 8.040467,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 18.387100000023842,
+        "id": "pa_arrive_1",
+        "seconds": 8.219864,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 18.5585,
+        "id": "pa_arrive_1",
+        "seconds": 8.391128,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 18.747300000011922,
+        "id": "pa_arrive_1",
+        "seconds": 8.579773,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 18.937100000023843,
+        "id": "pa_arrive_1",
+        "seconds": 8.777746,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 19.0935,
+        "id": "pa_arrive_1",
+        "seconds": 8.922268,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 19.280100000023843,
+        "id": "pa_arrive_1",
+        "seconds": 9.121181,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 19.45610000002384,
+        "id": "pa_arrive_1",
+        "seconds": 9.290884,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 19.634100000023842,
+        "id": "pa_arrive_1",
+        "seconds": 9.462132,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 19.8325,
+        "id": "pa_arrive_1",
+        "seconds": 9.668684,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 19.999,
+        "id": "pa_arrive_1",
+        "seconds": 9.830748,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 20.17370000001788,
+        "id": "pa_arrive_1",
+        "seconds": 10.010703,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 20.3595,
+        "id": "pa_arrive_1",
+        "seconds": 10.202268,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 20.538700000017883,
+        "id": "pa_turnstile",
+        "seconds": 0.020317,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 20.71330000001192,
+        "id": "pa_turnstile",
+        "seconds": 0.203175,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 20.89490000000596,
+        "id": "pa_turnstile",
+        "seconds": 0.380155,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 21.0755,
+        "id": "pa_turnstile",
+        "seconds": 0.563084,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 21.25530000001192,
+        "id": "pa_turnstile",
+        "seconds": 0.73126,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 21.4485,
+        "id": "pa_turnstile",
+        "seconds": 0.929772,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 21.6165,
+        "id": "pa_turnstile",
+        "seconds": 1.100045,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 21.80070000001788,
+        "id": "pa_turnstile",
+        "seconds": 1.291379,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 21.97980000001192,
+        "id": "pa_turnstile",
+        "seconds": 1.471565,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 22.16,
+        "id": "pa_turnstile",
+        "seconds": 1.648707,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 22.3395,
+        "id": "pa_turnstile",
+        "seconds": 1.83134,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 22.52460000002384,
+        "id": "pa_turnstile",
+        "seconds": 2.011429,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 22.69970000001788,
+        "id": "pa_turnstile",
+        "seconds": 2.188863,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 22.88720000001788,
+        "id": "pa_turnstile",
+        "seconds": 2.37424,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 23.06910000002384,
+        "id": "pa_turnstile",
+        "seconds": 2.551293,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 23.23530000001192,
+        "id": "pa_turnstile",
+        "seconds": 2.722289,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 23.415700000017882,
+        "id": "pa_turnstile",
+        "seconds": 2.899592,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 23.599100000023842,
+        "id": "pa_turnstile",
+        "seconds": 3.092093,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 23.78290000000596,
+        "id": "pa_turnstile",
+        "seconds": 3.271111,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 23.95880000001192,
+        "id": "pa_turnstile",
+        "seconds": 3.441458,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 24.133900000005962,
+        "id": "pa_turnstile",
+        "seconds": 3.61941,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 24.316200000017883,
+        "id": "pa_turnstile",
+        "seconds": 3.802268,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 24.50390000000596,
+        "id": "pa_turnstile",
+        "seconds": 3.99093,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 24.69030000001192,
+        "id": "pa_turnstile",
+        "seconds": 4.179592,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 24.86080000001192,
+        "id": "pa_turnstile",
+        "seconds": 4.349482,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 25.03410000002384,
+        "id": "pa_turnstile",
+        "seconds": 4.522086,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 25.21930000001192,
+        "id": "pa_turnstile",
+        "seconds": 4.709891,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 25.40460000002384,
+        "id": "pa_turnstile",
+        "seconds": 4.881995,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 25.58070000001788,
+        "id": "pa_turnstile",
+        "seconds": 5.069268,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 25.757,
+        "id": "pa_turnstile",
+        "seconds": 5.241905,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 25.95060000002384,
+        "id": "pa_turnstile",
+        "seconds": 5.442062,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 26.1185,
+        "id": "pa_turnstile",
+        "seconds": 5.612001,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 26.30040000000596,
+        "id": "pa_turnstile",
+        "seconds": 5.790093,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 26.48830000001192,
+        "id": "pa_turnstile",
+        "seconds": 5.980943,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 26.65440000000596,
+        "id": "pa_turnstile",
+        "seconds": 6.141678,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 26.83590000000596,
+        "id": "pa_turnstile",
+        "seconds": 6.321633,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 27.01390000000596,
+        "id": "pa_turnstile",
+        "seconds": 6.48127,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 27.20040000000596,
+        "id": "pa_turnstile",
+        "seconds": 6.679625,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 27.38930000001192,
+        "id": "pa_turnstile",
+        "seconds": 6.88174,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 27.56070000001788,
+        "id": "pa_turnstile",
+        "seconds": 7.052678,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 27.73520000001788,
+        "id": "pa_timeline",
+        "seconds": 0.072562,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 27.912900000005962,
+        "id": "pa_timeline",
+        "seconds": 0.252517,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 28.097,
+        "id": "pa_timeline",
+        "seconds": 0.439315,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 28.273300000011922,
+        "id": "pa_timeline",
+        "seconds": 0.600816,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 28.46020000001788,
+        "id": "pa_timeline",
+        "seconds": 0.792381,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 28.64110000002384,
+        "id": "pa_timeline",
+        "seconds": 0.983946,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 28.814700000017883,
+        "id": "pa_timeline",
+        "seconds": 1.15229,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 28.99260000002384,
+        "id": "pa_timeline",
+        "seconds": 1.332245,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 29.17710000002384,
+        "id": "pa_timeline",
+        "seconds": 1.515121,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 29.36190000000596,
+        "id": "pa_timeline",
+        "seconds": 1.703764,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 29.53410000002384,
+        "id": "pa_timeline",
+        "seconds": 1.863401,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 29.72270000001788,
+        "id": "pa_timeline",
+        "seconds": 2.063673,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 29.89890000000596,
+        "id": "pa_timeline",
+        "seconds": 2.238966,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 30.074,
+        "id": "pa_timeline",
+        "seconds": 2.403265,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 30.25980000001192,
+        "id": "pa_timeline",
+        "seconds": 2.603304,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 30.4445,
+        "id": "pa_timeline",
+        "seconds": 2.783492,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 30.62670000001788,
+        "id": "pa_timeline",
+        "seconds": 2.969654,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 30.79570000001788,
+        "id": "pa_timeline",
+        "seconds": 3.131791,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 30.97890000000596,
+        "id": "pa_timeline",
+        "seconds": 3.311746,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 31.16430000001192,
+        "id": "pa_timeline",
+        "seconds": 3.503311,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 31.338800000011922,
+        "id": "pa_timeline",
+        "seconds": 3.670573,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 31.51270000001788,
+        "id": "pa_timeline",
+        "seconds": 3.85161,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 31.703,
+        "id": "pa_timeline",
+        "seconds": 4.043175,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 31.8765,
+        "id": "pa_timeline",
+        "seconds": 4.211519,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 32.05790000000596,
+        "id": "pa_timeline",
+        "seconds": 4.40088,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 32.24330000001192,
+        "id": "pa_timeline",
+        "seconds": 4.583039,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 32.42320000001788,
+        "id": "pa_timeline",
+        "seconds": 4.762993,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 32.595,
+        "id": "pa_timeline",
+        "seconds": 4.93424,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 32.78240000000596,
+        "id": "pa_timeline",
+        "seconds": 5.122902,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 32.96520000001788,
+        "id": "pa_timeline",
+        "seconds": 5.302857,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 33.145400000005964,
+        "id": "pa_timeline",
+        "seconds": 5.481754,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 33.31590000000596,
+        "id": "pa_timeline",
+        "seconds": 5.642449,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 33.49480000001192,
+        "id": "pa_timeline",
+        "seconds": 5.822404,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 33.6745,
+        "id": "pa_timeline",
+        "seconds": 6.002358,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 33.86340000000596,
+        "id": "pa_timeline",
+        "seconds": 6.20263,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 34.03740000000596,
+        "id": "pa_timeline",
+        "seconds": 6.373878,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 34.213600000023845,
+        "id": "ev_h0",
+        "seconds": 0,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 34.40210000002384,
+        "id": "ev_h0",
+        "seconds": 0.194467,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 34.57340000000596,
+        "id": "ev_h0",
+        "seconds": 0.362812,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 34.7685,
+        "id": "ev_h0",
+        "seconds": 0.561765,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 34.933600000023844,
+        "id": "ev_h0",
+        "seconds": 0.722721,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 35.1155,
+        "id": "ev_h0",
+        "seconds": 0.902676,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 35.29420000001788,
+        "id": "ev_h0",
+        "seconds": 1.08263,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 35.47310000002384,
+        "id": "ev_h0",
+        "seconds": 1.253878,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 35.66220000001788,
+        "id": "ev_h0",
+        "seconds": 1.44254,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 35.83990000000596,
+        "id": "ev_h0",
+        "seconds": 1.621552,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 36.01420000001788,
+        "id": "ev_h0",
+        "seconds": 1.802449,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 36.20030000001192,
+        "id": "ev_h0",
+        "seconds": 1.9926,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 36.385300000011924,
+        "id": "ev_h0",
+        "seconds": 2.173968,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 36.55530000001192,
+        "id": "ev_h0",
+        "seconds": 2.340434,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 36.74840000000596,
+        "id": "ev_h0",
+        "seconds": 2.540467,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 36.92530000001192,
+        "id": "ev_h0",
+        "seconds": 2.713832,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 37.1025,
+        "id": "ev_h0",
+        "seconds": 2.893787,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 37.28240000000596,
+        "id": "ev_h0",
+        "seconds": 3.071271,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 37.46660000002384,
+        "id": "ev_h0",
+        "seconds": 3.253246,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 37.64270000001788,
+        "id": "ev_h0",
+        "seconds": 3.433651,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 37.81480000001192,
+        "id": "ev_h0",
+        "seconds": 3.601995,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 38.00080000001192,
+        "id": "ev_h0",
+        "seconds": 3.784853,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 38.18780000001192,
+        "id": "ev_h0",
+        "seconds": 3.961905,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 38.35830000001192,
+        "id": "ev_h0",
+        "seconds": 4.152599,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 38.54240000000596,
+        "id": "ev_h0",
+        "seconds": 4.333424,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 38.7175,
+        "id": "ev_h0",
+        "seconds": 4.493061,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 38.90170000001788,
+        "id": "ev_h0",
+        "seconds": 4.693333,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 39.07390000000596,
+        "id": "ev_h0",
+        "seconds": 4.852971,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 39.258800000011924,
+        "id": "ev_h0",
+        "seconds": 5.052274,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 39.43390000000596,
+        "id": "ev_h0",
+        "seconds": 5.21288,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 39.62210000002384,
+        "id": "ev_h0",
+        "seconds": 5.413152,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 39.807,
+        "id": "ev_h0",
+        "seconds": 5.599606,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 39.98060000002384,
+        "id": "ev_h0",
+        "seconds": 5.770931,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 40.153,
+        "id": "ev_h0",
+        "seconds": 5.942565,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 40.336700000017885,
+        "id": "ev_h0",
+        "seconds": 6.131042,
+        "slide": "slides/chew_a.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 40.51340000000596,
+        "id": "ev_h0",
+        "seconds": 6.304218,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 40.69440000000596,
+        "id": "ev_h0",
+        "seconds": 6.48032,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 40.87330000001192,
+        "id": "ev_h0",
+        "seconds": 6.652517,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 41.06390000000596,
+        "id": "ev_h0",
+        "seconds": 6.841179,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 41.246100000023844,
+        "id": "ev_h0",
+        "seconds": 7.032744,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 41.41260000002384,
+        "id": "ev_h0",
+        "seconds": 7.201088,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 41.59470000001788,
+        "id": "ev_h0",
+        "seconds": 7.372336,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 41.78220000001788,
+        "id": "ev_h0",
+        "seconds": 7.572608,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 41.954,
+        "id": "ev_h0",
+        "seconds": 7.743855,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 42.13520000001788,
+        "id": "ev_h0",
+        "seconds": 7.920907,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 42.33080000001192,
+        "id": "ev_h0",
+        "seconds": 8.118787,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 42.49860000002384,
+        "id": "ev_h0",
+        "seconds": 8.280816,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 42.6865,
+        "id": "ev_h0",
+        "seconds": 8.475283,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 42.86190000000596,
+        "id": "ev_h0",
+        "seconds": 8.652336,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 43.03860000002384,
+        "id": "ev_h0",
+        "seconds": 8.834078,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 43.2235,
+        "id": "ev_h0",
+        "seconds": 9.012245,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 43.40640000000596,
+        "id": "ev_h0",
+        "seconds": 9.195102,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 43.58160000002384,
+        "id": "ev_h0",
+        "seconds": 9.372154,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 43.77330000001192,
+        "id": "ev_h0",
+        "seconds": 9.560816,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 43.935100000023844,
+        "id": "ev_h0",
+        "seconds": 9.723356,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 44.12030000001192,
+        "id": "ev_h0",
+        "seconds": 9.914921,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 44.3025,
+        "id": "ev_h0",
+        "seconds": 10.083265,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 44.48510000002384,
+        "id": "ev_h0",
+        "seconds": 10.27483,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 44.66810000002384,
+        "id": "ev_h0",
+        "seconds": 10.461566,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 44.838200000017885,
+        "id": "ev_h0",
+        "seconds": 10.623129,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 45.019700000017885,
+        "id": "ev_h0",
+        "seconds": 10.811791,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 45.201200000017884,
+        "id": "ev_h0",
+        "seconds": 10.994432,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 45.3875,
+        "id": "ev_h0",
+        "seconds": 11.171701,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 45.55760000002384,
+        "id": "ev_h0",
+        "seconds": 11.342948,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 45.73740000000596,
+        "id": "ev_h0",
+        "seconds": 11.522902,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 45.92390000000596,
+        "id": "ev_h0",
+        "seconds": 11.702857,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 46.10220000001788,
+        "id": "ev_h0",
+        "seconds": 11.891519,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 46.29080000001192,
+        "id": "ev_h0",
+        "seconds": 12.080624,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 46.45320000001788,
+        "id": "ev_h0",
+        "seconds": 12.240235,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 46.63810000002384,
+        "id": "ev_h0",
+        "seconds": 12.422676,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 46.8215,
+        "id": "ev_h0",
+        "seconds": 12.61424,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 46.997200000017884,
+        "id": "ev_h0",
+        "seconds": 12.791798,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 47.17990000000596,
+        "id": "ev_h0",
+        "seconds": 12.972015,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 47.35560000002384,
+        "id": "ev_h0",
+        "seconds": 13.133787,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 47.54280000001192,
+        "id": "ev_h0",
+        "seconds": 13.334059,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 47.7135,
+        "id": "ev_h0",
+        "seconds": 13.502404,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 47.90570000001788,
+        "id": "ev_h0",
+        "seconds": 13.682358,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 48.07640000000596,
+        "id": "ev_h0",
+        "seconds": 13.853605,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 48.25390000000596,
+        "id": "ev_h0",
+        "seconds": 14.042268,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 48.44740000000596,
+        "id": "ev_h0",
+        "seconds": 14.240258,
+        "slide": "slides/chew.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 48.61610000002384,
+        "id": "ev_h0",
+        "seconds": 14.402177,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 48.79720000001788,
+        "id": "ev_h0",
+        "seconds": 14.59171,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 48.98780000001192,
+        "id": "ev_h0",
+        "seconds": 14.773696,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 49.15380000001192,
+        "id": "ev_h0",
+        "seconds": 14.942041,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 49.34980000001192,
+        "id": "ev_h0",
+        "seconds": 15.142276,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 49.51360000002384,
+        "id": "ev_h0",
+        "seconds": 15.304853,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 49.7075,
+        "id": "ev_h0",
+        "seconds": 15.492378,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 49.87440000000596,
+        "id": "ev_h0",
+        "seconds": 15.653152,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 50.06070000001788,
+        "id": "ev_h0",
+        "seconds": 15.841814,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 50.24320000001788,
+        "id": "ev_h0",
+        "seconds": 16.024671,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 50.41920000001788,
+        "id": "ev_h0",
+        "seconds": 16.193016,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 50.59790000000596,
+        "id": "ev_h0",
+        "seconds": 16.38458,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 50.775700000017885,
+        "id": "ev_h0",
+        "seconds": 16.561633,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 50.965,
+        "id": "ev_h0",
+        "seconds": 16.753197,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 51.1465,
+        "id": "ev_h0",
+        "seconds": 16.942014,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 51.315700000017884,
+        "id": "ev_h0",
+        "seconds": 17.104399,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 51.49880000001192,
+        "id": "ev_h0",
+        "seconds": 17.293061,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 51.68710000002384,
+        "id": "ev_h0",
+        "seconds": 17.473016,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 51.85320000001788,
+        "id": "ev_h0",
+        "seconds": 17.641361,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 52.04740000000596,
+        "id": "ev_h0",
+        "seconds": 17.832925,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 52.22890000000596,
+        "id": "ev_h0",
+        "seconds": 18.01288,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 52.39270000001788,
+        "id": "ev_h0",
+        "seconds": 18.172517,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 52.57630000001192,
+        "id": "ev_h0",
+        "seconds": 18.361179,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 52.75540000000596,
+        "id": "ev_h0",
+        "seconds": 18.543791,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 52.94730000001192,
+        "id": "ev_h0",
+        "seconds": 18.732698,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 53.13520000001788,
+        "id": "ev_h0",
+        "seconds": 18.921361,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 53.29340000000596,
+        "id": "ev_h0",
+        "seconds": 19.080998,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 53.48720000001788,
+        "id": "ev_h0",
+        "seconds": 19.274366,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 53.65520000001788,
+        "id": "ev_h0",
+        "seconds": 19.438276,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 53.84690000000596,
+        "id": "ev_h0",
+        "seconds": 19.635374,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 54.01420000001788,
+        "id": "ev_h0",
+        "seconds": 19.800816,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 54.195600000023845,
+        "id": "ev_h0",
+        "seconds": 19.983469,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 54.37280000001192,
+        "id": "ev_h0",
+        "seconds": 20.160726,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 54.558200000017884,
+        "id": "ev_h0",
+        "seconds": 20.353758,
+        "slide": "slides/chew_c.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 54.73370000001788,
+        "id": "pa_arrive_2",
+        "seconds": 0,
+        "slide": "slides/ships.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 54.91420000001788,
+        "id": "pa_arrive_2",
+        "seconds": 0.191565,
+        "slide": "slides/ships.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 55.10490000000596,
+        "id": "pa_arrive_2",
+        "seconds": 0.371519,
+        "slide": "slides/ships.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 55.27370000001788,
+        "id": "pa_arrive_2",
+        "seconds": 0.539864,
+        "slide": "slides/ships.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 55.46220000001788,
+        "id": "pa_arrive_2",
+        "seconds": 0.740136,
+        "slide": "slides/ships.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 55.64260000002384,
+        "id": "pa_arrive_2",
+        "seconds": 0.911383,
+        "slide": "slides/ships.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 55.818,
+        "id": "pa_arrive_2",
+        "seconds": 1.091338,
+        "slide": "slides/ships.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      },
+      {
+        "at": 56.00530000001192,
+        "id": "pa_arrive_2",
+        "seconds": 1.282902,
+        "slide": "slides/ships.webp",
+        "feet": [
+          3.0336,
+          0,
+          34.5946
+        ]
+      }
+    ]
+  },
+  "finished": {
+    "pa_arrive_1": 1,
+    "pa_turnstile": 1,
+    "pa_timeline": 1,
+    "ev_h0": 1
+  },
+  "zone": "atrium"
+}

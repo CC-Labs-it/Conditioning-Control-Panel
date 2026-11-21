@@ -1,0 +1,30 @@
+[
+  {
+    "zone": "commons",
+    "changedBy5": 0,
+    "changedBy12": 0,
+    "fraction": 0.0,
+    "clockDelta": 0.0
+  },
+  {
+    "zone": "aquarium",
+    "changedBy5": 0,
+    "changedBy12": 0,
+    "fraction": 0.0,
+    "clockDelta": 0.0
+  },
+  {
+    "zone": "service",
+    "changedBy5": 0,
+    "changedBy12": 0,
+    "fraction": 0.0,
+    "clockDelta": 0.0
+  },
+  {
+    "zone": "hall-tea",
+    "changedBy5": 0,
+    "changedBy12": 0,
+    "fraction": 0.0,
+    "clockDelta": 0.0
+  }
+]

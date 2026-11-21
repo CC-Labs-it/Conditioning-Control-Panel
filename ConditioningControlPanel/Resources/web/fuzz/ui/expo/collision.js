@@ -8,19 +8,20 @@ const up = new Vector3(0, 1, 0), down = new Vector3(0, -1, 0);
 const HEAD_SAMPLES = [[0,0], [.16,0], [-.16,0], [0,.16], [0,-.16]];
 
 /** The body stays on connected walkable surfaces. A missing floor stops movement at a streaming boundary. */
-export function createWalker(camera, onFootstep, onPlanterCue) {
+export function createWalker(camera, onFootstep, onPlanterCue, claimPlanter) {
   const sectors = new Map(), feet = new Vector3(), proposed = new Vector3(), previous = new Vector3();
   const disabled = new Set(), crossings = new Map();
-  const inactive = m => sectors.has(m.portal) || disabled.has(m.label);
+  let doors=null;
+  const inactive = m => (m.portal&&(doors||sectors.has(m.portal))) || disabled.has(m.label);
   const segment = new Line3(), bodyBox = new Box3(), face = new Vector3();
   const onBody = new Vector3(), onWall = new Vector3(), correction = new Vector3();
   const ray = new Ray(), ground = { y: 0, surface: '', id: '', collider:null };
-  const planter = createPlanterVisit(onPlanterCue);
+  const planter = createPlanterVisit(onPlanterCue,claimPlanter);
   let zone = '', surface = '', stride = 0, eyeY = 0;
   let supportY = 0, velocityY = 0, airborne = false;
   let support = null, takeoff = null;
 
-  function add(id, group, gates = []) {
+  function add(id, group, gates = [], room = id) {
     const meshes = [];
     group.updateMatrixWorld(true);
     group.traverse(node => {
@@ -29,7 +30,7 @@ export function createWalker(camera, onFootstep, onPlanterCue) {
       geometry.clearGroups();
       geometry.computeBoundingBox();
       const bvh = new MeshBVH(geometry);
-      meshes.push({ geometry, bvh, box: geometry.boundingBox, surface: node.userData.surface || 'stone',
+      meshes.push({ geometry, bvh, box: geometry.boundingBox, room, surface: node.userData.surface || 'stone',
         portal: node.userData.portal, label: node.userData.collider || node.name, planter:isPlanterCollider(node) });
     });
     sectors.set(id, meshes); crossings.set(id,gates);
@@ -42,17 +43,18 @@ export function createWalker(camera, onFootstep, onPlanterCue) {
     ray.origin.copy(point); ray.origin.y += rise + .002;
     ray.direction.copy(down);
     let best = -Infinity;
-    for (const [id, meshes] of sectors) for (const m of meshes) {
+    for (const meshes of sectors.values()) for (const m of meshes) {
       if (inactive(m) || !ray.intersectsBox(m.box)) continue;
       const hit = m.bvh.raycastFirst(ray, DoubleSide, 0, rise + drop + .004);
       if (!hit || Math.abs(hit.face.normal.y) < .66) continue;
       const y = hit.point.y;
-      if (y < best || (y === best && id !== preferred)) continue;
-      best = y; ground.y = y; ground.surface = m.surface; ground.id = id; ground.collider = m;
+      if (y < best || (y === best && m.room !== preferred)) continue;
+      best = y; ground.y = y; ground.surface = m.surface; ground.id = m.room; ground.collider = m;
     }
     return Number.isFinite(best);
   }
   function resolveWalls(point) {
+    doors?.pushOut(point,RADIUS,HEIGHT,feet);
     segment.start.copy(point); segment.start.y += RADIUS + .004;
     segment.end.copy(point); segment.end.y += HEIGHT - RADIUS;
     bodyBox.makeEmpty().expandByPoint(segment.start).expandByPoint(segment.end).expandByScalar(RADIUS);
@@ -175,6 +177,7 @@ export function createWalker(camera, onFootstep, onPlanterCue) {
     camera.position.y = eyeY;
   }
   function blocked(ray, distance) {
+    if(doors?.blocked(ray,distance-.08))return true;
     for (const meshes of sectors.values()) for (const m of meshes) {
       if (!inactive(m) && ray.intersectsBox(m.box) && m.bvh.raycastFirst(ray, DoubleSide, 0, distance - .08)) return true;
     }
@@ -190,7 +193,7 @@ export function createWalker(camera, onFootstep, onPlanterCue) {
     place(id,at,camera.rotation.y); camera.rotation.x=pitch;
     return true;
   }
-  return { add, remove, place, move, jump, step, blocked, setColliderEnabled, feet, planter, stepOffPlanter,
+  return { add, remove, place, move, jump, step, blocked, setColliderEnabled, feet, planter, stepOffPlanter,setDoors(value){doors=value;},
     get airborne(){return airborne;}, get zone() { return zone; }, get surface() { return surface; },
     dispose() { for (const id of sectors.keys()) remove(id); } };
 }

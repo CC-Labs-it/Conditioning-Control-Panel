@@ -1,0 +1,2835 @@
+{
+  "records": 40,
+  "stations": 14,
+  "stats": {
+    "slot_08": {
+      "1": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "2": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "3": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "4": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "5": {
+        "headline": "bold 74px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "6": {
+        "headline": "bold 60px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "7": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "8": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "9": {
+        "headline": "bold 55px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "10": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "11": {
+        "headline": "bold 56px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "12": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "13": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 26px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "14": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 28px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "15": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "16": {
+        "headline": "bold 73px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "17": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 35px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "18": {
+        "headline": "bold 57px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "19": {
+        "headline": "bold 55px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "20": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "21": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 28px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "22": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "23": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "24": {
+        "headline": "bold 65px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "25": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "26": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "27": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "28": {
+        "headline": "bold 75px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "29": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "30": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "31": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "32": {
+        "headline": "bold 61px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "33": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "34": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "35": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "36": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "37": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "38": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "39": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "40": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      }
+    },
+    "slot_09": {
+      "1": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "2": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "3": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "4": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "5": {
+        "headline": "bold 74px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "6": {
+        "headline": "bold 60px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "7": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "8": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "9": {
+        "headline": "bold 55px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "10": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "11": {
+        "headline": "bold 56px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "12": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "13": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 25px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "14": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 28px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "15": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "16": {
+        "headline": "bold 73px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "17": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 35px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "18": {
+        "headline": "bold 57px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "19": {
+        "headline": "bold 55px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "20": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "21": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 28px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "22": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "23": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "24": {
+        "headline": "bold 65px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "25": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "26": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "27": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "28": {
+        "headline": "bold 75px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "29": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "30": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "31": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "32": {
+        "headline": "bold 61px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "33": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "34": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "35": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 31px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "36": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "37": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "38": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "39": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "40": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      }
+    },
+    "slot_10": {
+      "1": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "2": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "3": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "4": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "5": {
+        "headline": "bold 74px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "6": {
+        "headline": "bold 67px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "7": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 39px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "8": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 39px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "9": {
+        "headline": "bold 67px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "10": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "11": {
+        "headline": "bold 67px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "12": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 36px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "13": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 31px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "14": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "15": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "16": {
+        "headline": "bold 73px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "17": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 39px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "18": {
+        "headline": "bold 67px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "19": {
+        "headline": "bold 67px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "20": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "21": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "22": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "23": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "24": {
+        "headline": "bold 67px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "25": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "26": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "27": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "28": {
+        "headline": "bold 75px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "29": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "30": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "31": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 35px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "32": {
+        "headline": "bold 67px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "33": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "34": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 36px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "35": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 39px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "36": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "37": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "38": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "39": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 39px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "40": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      }
+    },
+    "slot_02": {
+      "1": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "2": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "3": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "4": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "5": {
+        "headline": "bold 74px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "6": {
+        "headline": "bold 60px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "7": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "8": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "9": {
+        "headline": "bold 55px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "10": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "11": {
+        "headline": "bold 56px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "12": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "13": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 25px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "14": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 28px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "15": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "16": {
+        "headline": "bold 73px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "17": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 35px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "18": {
+        "headline": "bold 57px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "19": {
+        "headline": "bold 55px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "20": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "21": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 28px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "22": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "23": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "24": {
+        "headline": "bold 65px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "25": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "26": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "27": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "28": {
+        "headline": "bold 75px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "29": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "30": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "31": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "32": {
+        "headline": "bold 61px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "33": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "34": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "35": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 31px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "36": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "37": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "38": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "39": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "40": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      }
+    },
+    "slot_03": {
+      "1": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "2": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "3": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "4": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "5": {
+        "headline": "bold 74px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "6": {
+        "headline": "bold 60px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "7": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "8": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "9": {
+        "headline": "bold 55px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "10": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "11": {
+        "headline": "bold 56px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "12": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "13": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 25px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "14": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 28px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "15": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "16": {
+        "headline": "bold 73px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "17": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 35px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "18": {
+        "headline": "bold 57px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "19": {
+        "headline": "bold 55px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "20": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "21": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 28px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "22": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "23": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "24": {
+        "headline": "bold 65px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "25": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "26": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "27": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "28": {
+        "headline": "bold 75px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "29": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "30": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "31": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "32": {
+        "headline": "bold 61px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "33": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "34": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "35": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 31px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "36": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "37": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "38": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "39": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "40": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      }
+    },
+    "slot_06": {
+      "1": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "2": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "3": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "4": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "5": {
+        "headline": "bold 74px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "6": {
+        "headline": "bold 60px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "7": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "8": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "9": {
+        "headline": "bold 55px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "10": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "11": {
+        "headline": "bold 56px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "12": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "13": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 25px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "14": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 28px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "15": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "16": {
+        "headline": "bold 73px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "17": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 35px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "18": {
+        "headline": "bold 57px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "19": {
+        "headline": "bold 55px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "20": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "21": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 28px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "22": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "23": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "24": {
+        "headline": "bold 65px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "25": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "26": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "27": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "28": {
+        "headline": "bold 75px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "29": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "30": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "31": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "32": {
+        "headline": "bold 61px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "33": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "34": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "35": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 31px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "36": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "37": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "38": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "39": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "40": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      }
+    },
+    "slot_07": {
+      "1": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "2": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "3": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "4": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "5": {
+        "headline": "bold 74px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "6": {
+        "headline": "bold 60px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "7": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "8": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "9": {
+        "headline": "bold 55px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "10": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "11": {
+        "headline": "bold 56px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "12": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "13": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 25px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "14": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 28px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "15": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "16": {
+        "headline": "bold 73px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "17": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 35px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "18": {
+        "headline": "bold 57px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "19": {
+        "headline": "bold 55px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "20": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "21": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 28px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "22": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "23": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "24": {
+        "headline": "bold 65px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "25": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "26": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "27": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "28": {
+        "headline": "bold 75px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "29": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "30": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "31": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "32": {
+        "headline": "bold 61px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "33": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "34": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "35": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 31px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "36": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "37": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "38": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "39": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "40": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      }
+    },
+    "slot_04": {
+      "1": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "2": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "3": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "4": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "5": {
+        "headline": "bold 74px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "6": {
+        "headline": "bold 60px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "7": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "8": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "9": {
+        "headline": "bold 55px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "10": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "11": {
+        "headline": "bold 56px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "12": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "13": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 25px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "14": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 28px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "15": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "16": {
+        "headline": "bold 73px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "17": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 35px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "18": {
+        "headline": "bold 57px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "19": {
+        "headline": "bold 55px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "20": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "21": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 28px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "22": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "23": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "24": {
+        "headline": "bold 65px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "25": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "26": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "27": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "28": {
+        "headline": "bold 75px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "29": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "30": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "31": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "32": {
+        "headline": "bold 61px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "33": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "34": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "35": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 31px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "36": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "37": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "38": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "39": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "40": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      }
+    },
+    "slot_05": {
+      "1": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "2": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "3": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "4": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "5": {
+        "headline": "bold 74px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "6": {
+        "headline": "bold 60px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "7": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "8": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "9": {
+        "headline": "bold 55px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "10": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "11": {
+        "headline": "bold 56px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "12": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "13": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 25px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "14": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 28px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "15": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "16": {
+        "headline": "bold 73px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "17": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 35px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "18": {
+        "headline": "bold 57px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "19": {
+        "headline": "bold 55px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "20": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "21": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 28px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "22": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "23": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "24": {
+        "headline": "bold 65px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "25": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "26": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "27": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "28": {
+        "headline": "bold 75px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "29": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "30": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 27px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "31": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "32": {
+        "headline": "bold 61px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "33": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "34": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "35": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 31px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "36": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "37": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "38": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "39": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "40": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      }
+    },
+    "slot_01": {
+      "1": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "2": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "3": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "4": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "5": {
+        "headline": "bold 74px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "6": {
+        "headline": "bold 60px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "7": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "8": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "9": {
+        "headline": "bold 56px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "10": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "11": {
+        "headline": "bold 56px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "12": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 36px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "13": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "14": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "15": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "16": {
+        "headline": "bold 73px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "17": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "18": {
+        "headline": "bold 57px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "19": {
+        "headline": "bold 56px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "20": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "21": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "22": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "23": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "24": {
+        "headline": "bold 65px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "25": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "26": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "27": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "28": {
+        "headline": "bold 75px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "29": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "30": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "31": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 35px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "32": {
+        "headline": "bold 61px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "33": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "34": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 36px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "35": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "36": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "37": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "38": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "39": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "40": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      }
+    },
+    "slot_11": {
+      "1": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "2": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "3": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "4": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "5": {
+        "headline": "bold 74px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "6": {
+        "headline": "bold 60px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "7": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "8": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "9": {
+        "headline": "bold 56px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "10": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "11": {
+        "headline": "bold 56px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "12": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 36px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "13": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "14": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "15": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "16": {
+        "headline": "bold 73px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "17": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "18": {
+        "headline": "bold 57px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "19": {
+        "headline": "bold 56px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "20": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "21": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "22": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "23": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "24": {
+        "headline": "bold 65px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "25": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "26": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "27": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "28": {
+        "headline": "bold 75px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "29": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "30": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "31": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 35px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "32": {
+        "headline": "bold 61px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "33": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "34": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 36px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "35": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "36": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "37": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "38": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "39": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "40": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      }
+    },
+    "slot_14": {
+      "1": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 31px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "2": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "3": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "4": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "5": {
+        "headline": "bold 74px Georgia, \"Times New Roman\", serif",
+        "body": "500 31px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "6": {
+        "headline": "bold 60px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "7": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 39px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "8": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 39px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "9": {
+        "headline": "bold 60px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "10": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "11": {
+        "headline": "bold 60px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "12": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 36px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "13": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 31px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "14": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 31px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "15": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "16": {
+        "headline": "bold 73px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "17": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 39px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "18": {
+        "headline": "bold 60px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "19": {
+        "headline": "bold 60px Georgia, \"Times New Roman\", serif",
+        "body": "500 31px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "20": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "21": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 31px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "22": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 31px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "23": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 31px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "24": {
+        "headline": "bold 65px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "25": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 31px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "26": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "27": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "28": {
+        "headline": "bold 75px Georgia, \"Times New Roman\", serif",
+        "body": "500 31px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "29": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "30": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 31px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "31": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 35px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "32": {
+        "headline": "bold 61px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "33": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "34": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 36px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "35": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 39px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "36": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 31px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "37": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 31px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "38": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "39": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 39px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "40": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      }
+    },
+    "slot_12": {
+      "1": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "2": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "3": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "4": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "5": {
+        "headline": "bold 74px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "6": {
+        "headline": "bold 60px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "7": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "8": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "9": {
+        "headline": "bold 57px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "10": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "11": {
+        "headline": "bold 57px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "12": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 36px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "13": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "14": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "15": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "16": {
+        "headline": "bold 73px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "17": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "18": {
+        "headline": "bold 57px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "19": {
+        "headline": "bold 57px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "20": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "21": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "22": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "23": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "24": {
+        "headline": "bold 65px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "25": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "26": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "27": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "28": {
+        "headline": "bold 75px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "29": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "30": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 29px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "31": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 35px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "32": {
+        "headline": "bold 61px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "33": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "34": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 36px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "35": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "36": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "37": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "38": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "39": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "40": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      }
+    },
+    "slot_13": {
+      "1": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "2": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "3": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "4": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "5": {
+        "headline": "bold 74px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "6": {
+        "headline": "bold 60px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "7": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "8": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "9": {
+        "headline": "bold 59px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "10": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "11": {
+        "headline": "bold 59px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "12": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 36px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "13": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "14": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "15": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "16": {
+        "headline": "bold 73px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "17": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "18": {
+        "headline": "bold 59px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "19": {
+        "headline": "bold 59px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "20": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 32px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "21": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "22": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "23": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "24": {
+        "headline": "bold 65px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "25": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "26": {
+        "headline": "bold 71px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "27": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "28": {
+        "headline": "bold 75px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "29": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "30": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 5
+      },
+      "31": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 35px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "32": {
+        "headline": "bold 61px Georgia, \"Times New Roman\", serif",
+        "body": "500 33px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "33": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 34px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "34": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 36px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "35": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "36": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "37": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 30px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "38": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      },
+      "39": {
+        "headline": "bold 78px Georgia, \"Times New Roman\", serif",
+        "body": "500 38px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 3
+      },
+      "40": {
+        "headline": "bold 68px Georgia, \"Times New Roman\", serif",
+        "body": "500 37px \"Segoe UI\", Arial, sans-serif",
+        "bodyLines": 4
+      }
+    }
+  },
+  "failures": []
+}

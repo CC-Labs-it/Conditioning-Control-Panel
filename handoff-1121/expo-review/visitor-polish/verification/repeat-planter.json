@@ -1,0 +1,55 @@
+{
+  "mode": "planter",
+  "rate": 8,
+  "errors": [],
+  "events": [],
+  "admission": {
+    "feet": [
+      0.22,
+      0,
+      36.21
+    ],
+    "yaw": 0,
+    "guide": "ARCHIVE 01 / 40\nFace the admission projector to begin the tour.",
+    "visibleRooms": [
+      "atrium"
+    ]
+  },
+  "walked": [
+    0.22,
+    0.16357795132832964,
+    33.817600000238414
+  ],
+  "firstLanding": {
+    "planter": {
+      "used": true,
+      "held": true,
+      "seconds": 0.4642999998986726,
+      "cues": 0
+    },
+    "feet": [
+      9.4276,
+      3.7200000286102295,
+      -6.583899898783327
+    ]
+  },
+  "secondLanding": {
+    "planter": {
+      "used": true,
+      "held": false,
+      "seconds": 0,
+      "cues": 0
+    },
+    "feet": [
+      9.4276,
+      3.7200000286102295,
+      -6.583212215006751
+    ]
+  },
+  "free": [
+    11.156799999594687,
+    3.4000000953674316,
+    -6.583212215006751
+  ],
+  "passed": true
+}

@@ -133,7 +133,7 @@ export async function expoEnding(ctx, releaseWorld) {
           if (!started) { started = true; start = ctx.activeMs; portal.arrive(); scene.beginArrival(); }
           const seconds = (ctx.activeMs-start)/1000;
           portal.reveal(seconds);
-          if (seconds >= .7) off?.();
+          if (seconds >= .7) { scene.finishArrival();off?.(); }
         };
         let started = false, start = 0;
         off = ctx.frame(reveal); ctx.cleanup(off); reveal();

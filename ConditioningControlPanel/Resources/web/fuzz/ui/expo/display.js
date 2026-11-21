@@ -39,13 +39,13 @@ function linesOf(g, text, width) {
 
 export function placard(panel, caption, body, foot = '') {
   panel?.draw((g,w,h) => {
-    g.strokeStyle = GOLD; g.lineWidth = 4; g.strokeRect(17,17,w-34,h-34);
-    g.fillStyle = INK; g.textBaseline = 'top'; g.font = 'bold '+Math.round(h*.075)+'px "Segoe UI",sans-serif';
+    g.fillStyle = '#284d48';g.fillRect(0,0,w,h*.188);
+    g.fillStyle = '#fbf3da'; g.textBaseline = 'top'; g.font = '600 '+Math.round(h*.077)+'px "Segoe UI",sans-serif';
     g.fillText(caption.toUpperCase(), w*.047,h*.085,w*.906);
-    g.fillStyle = GOLD; g.fillRect(w*.047,h*.195,w*.906,3);
+    g.fillStyle = GOLD; g.fillRect(0,h*.188,w,4);
     let size = Math.round(h*.214), lines;
     for (; size >= 18; size -= 2) {
-      g.font = size+'px Georgia,serif'; lines = linesOf(g,body,w*.906);
+      g.font = '500 '+size+'px Georgia,serif'; lines = linesOf(g,body,w*.906);
       if (lines.length * size * 1.19 <= h*(foot ? .56 : .67)) break;
     }
     g.fillStyle = INK;
@@ -59,7 +59,7 @@ export function placard(panel, caption, body, foot = '') {
 
 export function terminal(panel,{title,rows,foot,good=false,pictureGrid=false,eyebrow='HUMAN INTERFACE PROGRAMME'}) {
   panel?.draw((g,w,h) => {
-    g.fillStyle = '#123f38'; g.fillRect(0,0,w,h);
+    g.fillStyle = '#113437'; g.fillRect(0,0,w,h);
     if(pictureGrid){
       // The printed tile in front of the monitor carries the title and nine photographs.
       g.fillStyle='#f1f0d9';g.textAlign='center';g.font='bold 57px "Segoe UI",sans-serif';
@@ -67,12 +67,16 @@ export function terminal(panel,{title,rows,foot,good=false,pictureGrid=false,eye
       g.fillStyle='#6c8d73';g.fillRect(w*.045,h*.166,w*.91,3);
       return;
     }
-    g.fillStyle = '#d2e8b3'; g.font = 'bold 45px "Segoe UI",sans-serif'; g.fillText(eyebrow,48,69,w-96);
-    g.strokeStyle = '#6c8d77'; g.beginPath(); g.moveTo(50,100); g.lineTo(w-50,100); g.stroke();
-    g.fillStyle = '#f8f1d8'; g.font = 'bold 80px Georgia,serif'; g.fillText(title,50,197,w-100);
+    g.fillStyle = '#98bdae';g.fillRect(0,0,12,203);
+    g.fillStyle = '#c7ded0'; g.font = '600 42px "Segoe UI",sans-serif'; g.fillText(eyebrow,48,68,w-96);
+    g.fillStyle = '#f8f1d8'; g.font = 'bold 85px Georgia,serif'; g.fillText(title,48,176,w-96);
+    g.fillStyle = '#839c8d';g.fillRect(48,202,w-96,2);
     const rowHeight=Math.min(88,Math.floor((h-294)/Math.max(1,rows.length)));
-    g.font = Math.min(64,rowHeight-12)+'px Consolas,monospace';
-    rows.forEach((line,i) => g.fillText(line,50,282+i*rowHeight,w-100));
+    g.font = '550 '+Math.min(61,rowHeight-12)+'px "Segoe UI",sans-serif';
+    rows.forEach((line,i) => {
+      g.fillStyle=i%2?'#1b4141':'#214848';g.fillRect(47,224+i*rowHeight,w-94,rowHeight-4);
+      g.fillStyle='#f6f6de';g.fillText(line,66,224+(i+.73)*rowHeight,w-132);
+    });
     g.fillStyle = good ? '#e2ee9b' : '#d8e5d3'; g.font = '42px "Segoe UI",sans-serif';
     if(foot) g.fillText(foot,50,h-38,w-100);
   });

@@ -1,0 +1,35 @@
+{
+  "input": "Standard-mapped virtual gamepad through navigator.getGamepads()",
+  "checks": {
+    "admission": {
+      "feet": [
+        0.54,
+        0,
+        35.96
+      ],
+      "yaw": -0.922942,
+      "pitch": 0,
+      "roll": 0
+    },
+    "analog": {
+      "partial": 0.5500045132939638,
+      "full": 1.2368359774392628,
+      "yaw": -0.6670799999892848,
+      "pitch": 0.3780119999939277
+    },
+    "jump": {
+      "peak": 0.37054233600054176,
+      "end": 0,
+      "takeoffs": 1
+    },
+    "switch": 2,
+    "pause": {
+      "initialFocus": "resume",
+      "nextFocus": "new-run"
+    },
+    "disconnectAndReconnect": true,
+    "controllerReturnToRecap": true
+  },
+  "errors": [],
+  "passed": true
+}

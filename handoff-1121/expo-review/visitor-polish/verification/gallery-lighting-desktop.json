@@ -1,0 +1,386 @@
+{
+  "base": "http://127.0.0.1:8937/fuzz/",
+  "touch": false,
+  "rows": [
+    {
+      "zone": "atrium",
+      "feet": [
+        0.54,
+        0,
+        35.96
+      ],
+      "target": [
+        1.7,
+        3.65,
+        26.5
+      ],
+      "clockBefore": 8.270100000017885,
+      "clockAfter": 8.94849999996424,
+      "room": {
+        "particles": 130,
+        "layers": [
+          "pollen",
+          "light-shafts",
+          "incident-floor-light"
+        ]
+      },
+      "fittings": [],
+      "residentEffects": [
+        "atrium"
+      ]
+    },
+    {
+      "zone": "chronology",
+      "feet": [
+        7.86,
+        0,
+        64.68
+      ],
+      "target": [
+        7.22,
+        2.24,
+        69.78
+      ],
+      "clockBefore": 10.541199999803295,
+      "clockAfter": 11.190999999707923,
+      "room": {
+        "particles": 107,
+        "layers": [
+          "dust",
+          "light-shafts",
+          "incident-floor-light"
+        ]
+      },
+      "fittings": [],
+      "residentEffects": [
+        "chronology"
+      ]
+    },
+    {
+      "zone": "forum",
+      "feet": [
+        -26.9,
+        0,
+        101.1
+      ],
+      "target": [
+        -30.75,
+        2.1,
+        105.6
+      ],
+      "clockBefore": 12.722699999600634,
+      "clockAfter": 13.391799999535056,
+      "room": {
+        "particles": 69,
+        "layers": [
+          "dust",
+          "light-shafts",
+          "incident-floor-light",
+          "lectern-voice-inlay"
+        ]
+      },
+      "fittings": [
+        "collection-cabinet-wash"
+      ],
+      "residentEffects": [
+        "forum"
+      ]
+    },
+    {
+      "zone": "commons",
+      "feet": [
+        -66.12,
+        0,
+        93.08
+      ],
+      "target": [
+        -67.86,
+        2.26,
+        87.94
+      ],
+      "clockBefore": 14.972699999225103,
+      "clockAfter": 15.626799999129732,
+      "room": {
+        "particles": 118,
+        "layers": [
+          "seeds",
+          "light-shafts",
+          "incident-floor-light"
+        ]
+      },
+      "fittings": [
+        "collection-cabinet-wash"
+      ],
+      "residentEffects": [
+        "forum",
+        "commons"
+      ]
+    },
+    {
+      "zone": "aquarium",
+      "feet": [
+        -59.3,
+        0,
+        44.94
+      ],
+      "target": [
+        -47.9,
+        1.1,
+        46.77
+      ],
+      "clockBefore": 17.37559999893305,
+      "clockAfter": 18.03479999882577,
+      "room": {
+        "particles": 179,
+        "layers": [
+          "bubbles",
+          "incident-floor-light"
+        ]
+      },
+      "fittings": [],
+      "residentEffects": [
+        "commons",
+        "aquarium"
+      ]
+    },
+    {
+      "zone": "hall",
+      "feet": [
+        0,
+        0,
+        12.6
+      ],
+      "target": [
+        3.22,
+        2.63,
+        -1.7
+      ],
+      "clockBefore": 20.97719999874829,
+      "clockAfter": 21.64699999859332,
+      "room": {
+        "particles": 145,
+        "layers": [
+          "dust",
+          "light-shafts",
+          "incident-floor-light"
+        ]
+      },
+      "fittings": [
+        "teapot-spout-steam"
+      ],
+      "residentEffects": [
+        "hall",
+        "atrium"
+      ]
+    },
+    {
+      "zone": "service",
+      "feet": [
+        18.65,
+        0,
+        31.67
+      ],
+      "target": [
+        23.94,
+        2.13,
+        32.65
+      ],
+      "clockBefore": 23.27899999854565,
+      "clockAfter": 23.94159999846817,
+      "room": {
+        "particles": 23,
+        "layers": [
+          "dust",
+          "light-shafts",
+          "incident-floor-light",
+          "service-conductor"
+        ]
+      },
+      "fittings": [],
+      "residentEffects": [
+        "atrium",
+        "service"
+      ]
+    },
+    {
+      "zone": "secret",
+      "feet": [
+        43.5,
+        0,
+        40.94
+      ],
+      "target": [
+        47.8,
+        1.65,
+        42.04
+      ],
+      "clockBefore": 25.54889999827743,
+      "clockAfter": 26.227999998247622,
+      "room": {
+        "particles": 42,
+        "layers": [
+          "dust",
+          "light-shafts"
+        ]
+      },
+      "fittings": [],
+      "residentEffects": [
+        "service",
+        "secret"
+      ]
+    },
+    {
+      "zone": "hoof",
+      "feet": [
+        -18.45,
+        0,
+        6.72
+      ],
+      "target": [
+        -18.45,
+        1.9,
+        10.3
+      ],
+      "clockBefore": 28.072199998098615,
+      "clockAfter": 28.726699998086694,
+      "room": {
+        "particles": 20,
+        "layers": [
+          "dust",
+          "light-shafts"
+        ]
+      },
+      "fittings": [
+        "teapot-spout-steam"
+      ],
+      "residentEffects": [
+        "hoof",
+        "hall"
+      ]
+    },
+    {
+      "zone": "habitat",
+      "feet": [
+        16.78,
+        0,
+        9.1
+      ],
+      "target": [
+        18.45,
+        1.96,
+        11.92
+      ],
+      "clockBefore": 30.293199998050934,
+      "clockAfter": 30.96689999805092,
+      "room": {
+        "particles": 21,
+        "layers": [
+          "pollen",
+          "light-shafts"
+        ]
+      },
+      "fittings": [
+        "teapot-spout-steam"
+      ],
+      "residentEffects": [
+        "hall",
+        "habitat"
+      ]
+    },
+    {
+      "zone": "shop",
+      "feet": [
+        20.6,
+        0,
+        -8.7
+      ],
+      "target": [
+        21.4,
+        1.91,
+        -11.54
+      ],
+      "clockBefore": 32.55809999787213,
+      "clockAfter": 33.218699997735065,
+      "room": {
+        "particles": 18,
+        "layers": [
+          "dust",
+          "light-shafts"
+        ]
+      },
+      "fittings": [
+        "teapot-spout-steam"
+      ],
+      "residentEffects": [
+        "hall",
+        "shop"
+      ]
+    },
+    {
+      "zone": "forum-cabinet",
+      "feet": [
+        -21.19,
+        0,
+        102.99
+      ],
+      "target": [
+        -22.2,
+        1.23,
+        105.48
+      ],
+      "clockBefore": 34.85669999763977,
+      "clockAfter": 35.52919999758022,
+      "room": {
+        "particles": 69,
+        "layers": [
+          "dust",
+          "light-shafts",
+          "incident-floor-light",
+          "lectern-voice-inlay"
+        ]
+      },
+      "fittings": [
+        "collection-cabinet-wash"
+      ],
+      "residentEffects": [
+        "forum"
+      ]
+    },
+    {
+      "zone": "hall-tea",
+      "feet": [
+        9.89,
+        3.4,
+        12.55
+      ],
+      "target": [
+        11,
+        4.16,
+        10.5
+      ],
+      "clockBefore": 37.874499997467126,
+      "clockAfter": 38.54349999744929,
+      "room": {
+        "particles": 145,
+        "layers": [
+          "dust",
+          "light-shafts",
+          "incident-floor-light"
+        ]
+      },
+      "fittings": [
+        "teapot-spout-steam"
+      ],
+      "residentEffects": [
+        "hall",
+        "habitat",
+        "atrium"
+      ],
+      "pauseHolds": true
+    }
+  ],
+  "errors": [],
+  "renderer": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "panicked": true,
+  "complete": true
+}

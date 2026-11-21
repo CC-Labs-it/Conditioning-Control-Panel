@@ -1,0 +1,80 @@
+{
+  "url": "http://127.0.0.1:8937/fuzz/index.html",
+  "saveKey": "fuzz.save.v2",
+  "seconds": 9.09,
+  "regularUrl": true,
+  "hardwareRenderer": false,
+  "chromium": "ephemeral storage, GPU/WebGL and software rasterizer disabled",
+  "fixture": "one seeded earned ending, the 3D stage replaced by an archive reader using the actual story module and item context, room prefetch suppressed",
+  "passed": true,
+  "checks": [
+    {
+      "scenario": "restored ended game passes normal consent and wormhole",
+      "record": 2,
+      "firstClaim": true
+    },
+    {
+      "scenario": "real pagehide saves record two and interrupts record three, reload resumes three",
+      "record": 3,
+      "repeatClaim": false,
+      "storage": {
+        "record": "ev_m1",
+        "visitOpen": true,
+        "planter": true,
+        "ending": "ll_end",
+        "finishedRuns": 1,
+        "separatePlanterClaim": true,
+        "webglCalls": 0
+      }
+    },
+    {
+      "scenario": "voluntary exit callback closes visit and reaches real recap",
+      "storage": {
+        "record": "ev_m1",
+        "visitOpen": false,
+        "planter": true,
+        "ending": "ll_end",
+        "finishedRuns": 1,
+        "separatePlanterClaim": true,
+        "webglCalls": 0
+      }
+    },
+    {
+      "scenario": "physical New run resets archive but preserves planter in the same saved lifetime",
+      "storage": {
+        "record": null,
+        "visitOpen": false,
+        "planter": true,
+        "ending": null,
+        "finishedRuns": 1,
+        "separatePlanterClaim": true,
+        "webglCalls": 0
+      }
+    },
+    {
+      "scenario": "panic opens recap without re-awarding the ending",
+      "storage": {
+        "record": "ev_h0",
+        "visitOpen": false,
+        "planter": false,
+        "ending": "ll_end",
+        "finishedRuns": 1,
+        "separatePlanterClaim": false,
+        "webglCalls": 0
+      }
+    },
+    {
+      "scenario": "old finished save opens recap without re-awarding the ending",
+      "storage": {
+        "record": "ev_h0",
+        "visitOpen": false,
+        "planter": false,
+        "ending": "ll_end",
+        "finishedRuns": 1,
+        "separatePlanterClaim": false,
+        "webglCalls": 0
+      }
+    }
+  ],
+  "errors": []
+}

@@ -1,0 +1,400 @@
+{
+  "base": "http://127.0.0.1:8942/fuzz/",
+  "rooms": [
+    {
+      "zone": "chronology",
+      "other": "forum",
+      "gate": "archive-to-forum",
+      "frames": [
+        {
+          "id": "12",
+          "feet": [
+            7.28045,
+            -5.551115123125783e-17,
+            100.67415
+          ],
+          "loaded": [
+            "chronology"
+          ],
+          "door": {
+            "id": "archive-to-forum",
+            "progress": 0,
+            "ready": false,
+            "distance": 4.524098852257763,
+            "rooms": [
+              "chronology",
+              "forum"
+            ],
+            "leaves": [
+              {
+                "hinge": [
+                  3.399999999999999,
+                  0,
+                  99.7
+                ],
+                "tip": [
+                  3.4,
+                  0,
+                  103
+                ],
+                "degrees": 0
+              },
+              {
+                "hinge": [
+                  3.400000000000001,
+                  0,
+                  106.3
+                ],
+                "tip": [
+                  3.4,
+                  0,
+                  103
+                ],
+                "degrees": 0
+              }
+            ]
+          },
+          "sealed": true,
+          "rays": 20
+        }
+      ],
+      "heldRequests": 1,
+      "afterUnlock": {
+        "id": "archive-to-forum",
+        "progress": 0,
+        "ready": true,
+        "distance": 4.524098852257763,
+        "rooms": [
+          "chronology",
+          "forum"
+        ],
+        "leaves": [
+          {
+            "hinge": [
+              3.399999999999999,
+              0,
+              99.7
+            ],
+            "tip": [
+              3.4,
+              0,
+              103
+            ],
+            "degrees": 0
+          },
+          {
+            "hinge": [
+              3.400000000000001,
+              0,
+              106.3
+            ],
+            "tip": [
+              3.4,
+              0,
+              103
+            ],
+            "degrees": 0
+          }
+        ]
+      }
+    },
+    {
+      "zone": "forum",
+      "other": "commons",
+      "gate": "forum-to-commons",
+      "frames": [
+        {
+          "id": "12",
+          "feet": [
+            -63.87415,
+            0,
+            102.48045
+          ],
+          "loaded": [
+            "forum"
+          ],
+          "door": {
+            "id": "forum-to-commons",
+            "progress": 0,
+            "ready": false,
+            "distance": 4.524098852257772,
+            "rooms": [
+              "forum",
+              "commons"
+            ],
+            "leaves": [
+              {
+                "hinge": [
+                  -69.5,
+                  0,
+                  98.6
+                ],
+                "tip": [
+                  -66.2,
+                  0,
+                  98.6
+                ],
+                "degrees": 0
+              },
+              {
+                "hinge": [
+                  -62.900000000000006,
+                  0,
+                  98.6
+                ],
+                "tip": [
+                  -66.2,
+                  0,
+                  98.6
+                ],
+                "degrees": 0
+              }
+            ]
+          },
+          "sealed": true,
+          "rays": 20
+        }
+      ],
+      "heldRequests": 1,
+      "afterUnlock": {
+        "id": "forum-to-commons",
+        "progress": 0,
+        "ready": true,
+        "distance": 4.524098852257772,
+        "rooms": [
+          "forum",
+          "commons"
+        ],
+        "leaves": [
+          {
+            "hinge": [
+              -69.5,
+              0,
+              98.6
+            ],
+            "tip": [
+              -66.2,
+              0,
+              98.6
+            ],
+            "degrees": 0
+          },
+          {
+            "hinge": [
+              -62.900000000000006,
+              0,
+              98.6
+            ],
+            "tip": [
+              -66.2,
+              0,
+              98.6
+            ],
+            "degrees": 0
+          }
+        ]
+      }
+    },
+    {
+      "zone": "commons",
+      "other": "aquarium",
+      "gate": "aquarium-climate-doors",
+      "frames": [
+        {
+          "id": "09",
+          "feet": [
+            -66.2,
+            0,
+            60.61401
+          ],
+          "loaded": [
+            "commons"
+          ],
+          "door": {
+            "id": "aquarium-climate-doors",
+            "progress": 0,
+            "ready": false,
+            "distance": 15.741451593804813,
+            "rooms": [
+              "commons",
+              "aquarium"
+            ],
+            "leaves": [
+              {
+                "hinge": [
+                  -61.8,
+                  0,
+                  42.2
+                ],
+                "tip": [
+                  -61.8,
+                  0,
+                  45.5
+                ],
+                "degrees": 0
+              },
+              {
+                "hinge": [
+                  -61.8,
+                  0,
+                  48.8
+                ],
+                "tip": [
+                  -61.8,
+                  0,
+                  45.5
+                ],
+                "degrees": 0
+              }
+            ]
+          },
+          "sealed": true,
+          "rays": 20
+        },
+        {
+          "id": "10",
+          "feet": [
+            -66.2,
+            0,
+            55.744
+          ],
+          "loaded": [
+            "commons"
+          ],
+          "door": {
+            "id": "aquarium-climate-doors",
+            "progress": 0,
+            "ready": false,
+            "distance": 11.148970176657574,
+            "rooms": [
+              "commons",
+              "aquarium"
+            ],
+            "leaves": [
+              {
+                "hinge": [
+                  -61.8,
+                  0,
+                  42.2
+                ],
+                "tip": [
+                  -61.8,
+                  0,
+                  45.5
+                ],
+                "degrees": 0
+              },
+              {
+                "hinge": [
+                  -61.8,
+                  0,
+                  48.8
+                ],
+                "tip": [
+                  -61.8,
+                  0,
+                  45.5
+                ],
+                "degrees": 0
+              }
+            ]
+          },
+          "sealed": true,
+          "rays": 20
+        },
+        {
+          "id": "12",
+          "feet": [
+            -65.68045,
+            -5.551115123125783e-17,
+            47.82586
+          ],
+          "loaded": [
+            "commons"
+          ],
+          "door": {
+            "id": "aquarium-climate-doors",
+            "progress": 0,
+            "ready": false,
+            "distance": 4.5241039932897165,
+            "rooms": [
+              "commons",
+              "aquarium"
+            ],
+            "leaves": [
+              {
+                "hinge": [
+                  -61.8,
+                  0,
+                  42.2
+                ],
+                "tip": [
+                  -61.8,
+                  0,
+                  45.5
+                ],
+                "degrees": 0
+              },
+              {
+                "hinge": [
+                  -61.8,
+                  0,
+                  48.8
+                ],
+                "tip": [
+                  -61.8,
+                  0,
+                  45.5
+                ],
+                "degrees": 0
+              }
+            ]
+          },
+          "sealed": true,
+          "rays": 20
+        }
+      ],
+      "heldRequests": 1,
+      "afterUnlock": {
+        "id": "aquarium-climate-doors",
+        "progress": 0,
+        "ready": true,
+        "distance": 4.5241039932897165,
+        "rooms": [
+          "commons",
+          "aquarium"
+        ],
+        "leaves": [
+          {
+            "hinge": [
+              -61.8,
+              0,
+              42.2
+            ],
+            "tip": [
+              -61.8,
+              0,
+              45.5
+            ],
+            "degrees": 0
+          },
+          {
+            "hinge": [
+              -61.8,
+              0,
+              48.8
+            ],
+            "tip": [
+              -61.8,
+              0,
+              45.5
+            ],
+            "degrees": 0
+          }
+        ]
+      }
+    }
+  ],
+  "errors": [],
+  "complete": true
+}

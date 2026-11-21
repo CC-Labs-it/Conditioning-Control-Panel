@@ -1,0 +1,5884 @@
+{
+  "base": "http://127.0.0.1:8942/fuzz/",
+  "devices": [
+    {
+      "device": "keyboard",
+      "rows": [
+        {
+          "zone": "hall",
+          "node": "expo_control_grid",
+          "authored": true,
+          "depth": 0.01624,
+          "approach": {
+            "feet": [
+              9.734299545288085,
+              0,
+              -8.619999885559082
+            ],
+            "focus": {
+              "owner": "expo_control_grid",
+              "lineage": [
+                "expo_control_grid_3",
+                "expo_control_grid",
+                "Scene"
+              ],
+              "distance": 1.2175392163705336
+            },
+            "centre": [
+              10.854299545288086,
+              1.0959999561309814,
+              -8.619999885559082
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hall",
+          "node": "expo_replay_ex_press",
+          "authored": true,
+          "depth": 0.017918656,
+          "approach": {
+            "feet": [
+              -4.569680213928223,
+              0,
+              -6.321200733184814
+            ],
+            "focus": {
+              "owner": "expo_replay_ex_press",
+              "lineage": [
+                "expo_replay_ex_press_2",
+                "expo_replay_ex_press",
+                "Scene"
+              ],
+              "distance": 1.2851694243658613
+            },
+            "centre": [
+              -4.569680213928223,
+              0.9473599493503571,
+              -7.4412007331848145
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hall",
+          "node": "expo_replay_pa_photos",
+          "authored": true,
+          "depth": 0.01624,
+          "approach": {
+            "feet": [
+              -10.389899616241454,
+              3.4000000953674316,
+              -0.4199999868869781
+            ],
+            "focus": {
+              "owner": "expo_replay_pa_photos",
+              "lineage": [
+                "expo_replay_pa_photos_2",
+                "expo_replay_pa_photos",
+                "Scene"
+              ],
+              "distance": 1.230111179462326
+            },
+            "centre": [
+              -11.509899616241455,
+              4.46999979019165,
+              -0.41999998688697815
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hall",
+          "node": "expo_replay_slot_11",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -8.995272045135497,
+              0,
+              0.5815200954675676
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_11",
+              "lineage": [
+                "expo_replay_slot_11_2",
+                "expo_replay_slot_11",
+                "Scene"
+              ],
+              "distance": 1.2757139217356146
+            },
+            "centre": [
+              -10.115272045135498,
+              0.9473599791526794,
+              0.5815200954675674
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hall",
+          "node": "expo_review_slot_11",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -8.99275005340576,
+              0,
+              1.3248801231384277
+            ],
+            "focus": {
+              "owner": "expo_review_slot_11",
+              "lineage": [
+                "expo_review_slot_11_1",
+                "expo_review_slot_11",
+                "Scene"
+              ],
+              "distance": 1.283173784455141
+            },
+            "centre": [
+              -10.112750053405762,
+              0.9473599791526794,
+              1.3248801231384277
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hall",
+          "node": "press_main",
+          "authored": true,
+          "depth": 0.034,
+          "approach": {
+            "feet": [
+              0,
+              0,
+              -7.88
+            ],
+            "focus": {
+              "owner": "press_main",
+              "lineage": [
+                "press_main_1",
+                "press_main",
+                "Scene"
+              ],
+              "distance": 1.1644808430018496
+            },
+            "centre": [
+              0,
+              1.0369999706745148,
+              -9
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hall",
+          "node": "press_stop",
+          "authored": true,
+          "depth": 0.032,
+          "approach": {
+            "feet": [
+              -1.5499999523162842,
+              0,
+              -7.8400000381469725
+            ],
+            "focus": {
+              "owner": "press_stop",
+              "lineage": [
+                "press_stop_1",
+                "press_stop",
+                "Scene"
+              ],
+              "distance": 1.1908207433222588
+            },
+            "centre": [
+              -1.5499999523162842,
+              1.0158622329598663,
+              -8.960000038146973
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "atrium",
+          "node": "expo_control_greenhouse",
+          "authored": true,
+          "depth": 0.01624,
+          "approach": {
+            "feet": [
+              9.46430004119873,
+              0,
+              23.469999313354492
+            ],
+            "focus": {
+              "owner": "expo_control_greenhouse",
+              "lineage": [
+                "expo_control_greenhouse_3",
+                "expo_control_greenhouse",
+                "Scene"
+              ],
+              "distance": 1.2075804215362937
+            },
+            "centre": [
+              10.58430004119873,
+              1.121000051498413,
+              23.469999313354492
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "atrium",
+          "node": "expo_replay_slot_01",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              3.936214448419734,
+              0,
+              35.932488573448595
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_01",
+              "lineage": [
+                "expo_replay_slot_01_2",
+                "expo_replay_slot_01",
+                "Scene"
+              ],
+              "distance": 1.270545854999852
+            },
+            "centre": [
+              4.690944671630859,
+              0.9473599791526794,
+              35.10497283935547
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "atrium",
+          "node": "expo_review_slot_01",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              3.3877449049627026,
+              0,
+              35.43072046126598
+            ],
+            "focus": {
+              "owner": "expo_review_slot_01",
+              "lineage": [
+                "expo_review_slot_01_1",
+                "expo_review_slot_01",
+                "Scene"
+              ],
+              "distance": 1.2737666146853805
+            },
+            "centre": [
+              4.142475128173828,
+              0.9473599791526794,
+              34.60320472717285
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hoof",
+          "node": "expo_press_hoof_checkbox_0",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -19.6200008392334,
+              0,
+              11.199999923706056
+            ],
+            "focus": {
+              "owner": "hoof_console",
+              "lineage": [
+                "expo_press_hoof_checkbox_0_1",
+                "expo_press_hoof_checkbox_0",
+                "Scene"
+              ],
+              "distance": 1.1448893237282811
+            },
+            "centre": [
+              -19.6200008392334,
+              1.2346224188804626,
+              10.079999923706055
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hoof",
+          "node": "expo_press_hoof_checkbox_1",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -17.339999439589,
+              0,
+              10.080891809622075
+            ],
+            "focus": {
+              "owner": "hoof_console",
+              "lineage": [
+                "expo_press_hoof_checkbox_1_1",
+                "expo_press_hoof_checkbox_1",
+                "Scene"
+              ],
+              "distance": 1.144889323728276
+            },
+            "centre": [
+              -18.459999084472656,
+              1.2346224188804626,
+              10.079999923706055
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hoof",
+          "node": "expo_press_hoof_checkbox_2",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -19.6200008392334,
+              0,
+              10.90499984741211
+            ],
+            "focus": {
+              "owner": "hoof_console",
+              "lineage": [
+                "expo_press_hoof_checkbox_2_1",
+                "expo_press_hoof_checkbox_2",
+                "Scene"
+              ],
+              "distance": 1.1448893237282811
+            },
+            "centre": [
+              -19.6200008392334,
+              1.2346224188804626,
+              9.78499984741211
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hoof",
+          "node": "expo_press_hoof_checkbox_3",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -17.9889615696284,
+              0,
+              10.355721898509968
+            ],
+            "focus": {
+              "owner": "hoof_console",
+              "lineage": [
+                "expo_press_hoof_checkbox_3_1",
+                "expo_press_hoof_checkbox_3",
+                "Scene"
+              ],
+              "distance": 0.8020288374663281
+            },
+            "centre": [
+              -18.459999084472656,
+              1.2346224188804626,
+              9.78499984741211
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hoof",
+          "node": "expo_replay_hoof_1",
+          "authored": true,
+          "depth": 0.01624,
+          "approach": {
+            "feet": [
+              -19.3700008392334,
+              0,
+              8.58490026473999
+            ],
+            "focus": {
+              "owner": "expo_replay_hoof_1",
+              "lineage": [
+                "expo_replay_hoof_1_2",
+                "expo_replay_hoof_1",
+                "Scene"
+              ],
+              "distance": 1.2855864434610287
+            },
+            "centre": [
+              -19.3700008392334,
+              0.9499999582767487,
+              9.70490026473999
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hoof",
+          "node": "expo_replay_slot_12",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -21.97527015686035,
+              0,
+              9.59511947631836
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_12",
+              "lineage": [
+                "expo_replay_slot_12_2",
+                "expo_replay_slot_12",
+                "Scene"
+              ],
+              "distance": 1.2757133698481582
+            },
+            "centre": [
+              -23.09527015686035,
+              0.9473599791526794,
+              9.59511947631836
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hoof",
+          "node": "expo_review_slot_12",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -21.972748641967772,
+              0,
+              10.338479995727539
+            ],
+            "focus": {
+              "owner": "expo_review_slot_12",
+              "lineage": [
+                "expo_review_slot_12_1",
+                "expo_review_slot_12",
+                "Scene"
+              ],
+              "distance": 1.2831726806802302
+            },
+            "centre": [
+              -23.092748641967773,
+              0.9473599791526794,
+              10.338479995727539
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "habitat",
+          "node": "expo_press_feeding_slot",
+          "authored": true,
+          "depth": 0.017197600000000004,
+          "approach": {
+            "feet": [
+              21.780000686645508,
+              0,
+              7.568445568084717
+            ],
+            "focus": {
+              "owner": "feeding_slot",
+              "lineage": [
+                "expo_press_feeding_slot_3",
+                "expo_press_feeding_slot",
+                "Scene"
+              ],
+              "distance": 1.3463455980094319
+            },
+            "centre": [
+              21.780000686645508,
+              0.8299999833106995,
+              8.688445568084717
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "habitat",
+          "node": "expo_press_habitat_glass",
+          "authored": true,
+          "depth": 0.019779312000000004,
+          "approach": {
+            "feet": [
+              19.450000762939453,
+              0,
+              8.379140262603759
+            ],
+            "focus": {
+              "owner": "habitat_glass",
+              "lineage": [
+                "expo_press_habitat_glass_3",
+                "expo_press_habitat_glass",
+                "Scene"
+              ],
+              "distance": 1.1570306768951217
+            },
+            "centre": [
+              19.450000762939453,
+              1.2599999904632568,
+              9.49914026260376
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "habitat",
+          "node": "expo_press_habitat_plaque",
+          "authored": true,
+          "depth": 0.017908296000000004,
+          "approach": {
+            "feet": [
+              19.1299991607666,
+              0,
+              8.380810623168944
+            ],
+            "focus": {
+              "owner": "habitat_plaque",
+              "lineage": [
+                "expo_press_habitat_plaque_3",
+                "expo_press_habitat_plaque",
+                "Scene"
+              ],
+              "distance": 1.2870122342512746
+            },
+            "centre": [
+              19.1299991607666,
+              0.9399999976158142,
+              9.500810623168945
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "habitat",
+          "node": "expo_replay_hab_1",
+          "authored": true,
+          "depth": 0.01624,
+          "approach": {
+            "feet": [
+              20.18000030517578,
+              -0.14000000059604645,
+              8.294900302886962
+            ],
+            "focus": {
+              "owner": "expo_replay_hab_1",
+              "lineage": [
+                "expo_replay_hab_1_2",
+                "expo_replay_hab_1",
+                "Scene"
+              ],
+              "distance": 1.5950859790275798
+            },
+            "centre": [
+              20.18000030517578,
+              0.30799999088048935,
+              9.414900302886963
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "habitat",
+          "node": "expo_replay_slot_13",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              19.307680130004883,
+              0,
+              5.024728174209595
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_13",
+              "lineage": [
+                "expo_replay_slot_13_2",
+                "expo_replay_slot_13",
+                "Scene"
+              ],
+              "distance": 1.2757139217356135
+            },
+            "centre": [
+              19.307680130004883,
+              0.9473599791526794,
+              3.9047281742095947
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "habitat",
+          "node": "expo_review_slot_13",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              18.564321517944336,
+              0,
+              5.027249927520752
+            ],
+            "focus": {
+              "owner": "expo_review_slot_13",
+              "lineage": [
+                "expo_review_slot_13_1",
+                "expo_review_slot_13",
+                "Scene"
+              ],
+              "distance": 1.2831732325676857
+            },
+            "centre": [
+              18.564321517944336,
+              0.9473599791526794,
+              3.907249927520752
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "shop",
+          "node": "expo_press_framed_contract",
+          "authored": true,
+          "depth": 0.018977448,
+          "approach": {
+            "feet": [
+              19.610000610351562,
+              0,
+              -10.109999542236327
+            ],
+            "focus": {
+              "owner": "framed_contract",
+              "lineage": [
+                "expo_press_framed_contract_2",
+                "expo_press_framed_contract",
+                "Scene"
+              ],
+              "distance": 1.2014755657175422
+            },
+            "centre": [
+              19.610000610351562,
+              1.0971441864967346,
+              -11.229999542236328
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "shop",
+          "node": "expo_press_till_display",
+          "authored": true,
+          "depth": 0.018977448,
+          "approach": {
+            "feet": [
+              21.200000762939453,
+              0,
+              -10.109999542236327
+            ],
+            "focus": {
+              "owner": "till_display",
+              "lineage": [
+                "expo_press_till_display_2",
+                "expo_press_till_display",
+                "Scene"
+              ],
+              "distance": 1.2014755657175422
+            },
+            "centre": [
+              21.200000762939453,
+              1.0971441864967346,
+              -11.229999542236328
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "shop",
+          "node": "expo_replay_slot_14",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              15.024727458953858,
+              0,
+              -13.464079856872559
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_14",
+              "lineage": [
+                "expo_replay_slot_14_2",
+                "expo_replay_slot_14",
+                "Scene"
+              ],
+              "distance": 1.2757139217356146
+            },
+            "centre": [
+              13.904727458953857,
+              0.9473599791526794,
+              -13.464079856872559
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "shop",
+          "node": "expo_review_slot_14",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              15.027249450683595,
+              0,
+              -12.720719337463379
+            ],
+            "focus": {
+              "owner": "expo_review_slot_14",
+              "lineage": [
+                "expo_review_slot_14_1",
+                "expo_review_slot_14",
+                "Scene"
+              ],
+              "distance": 1.283173784455141
+            },
+            "centre": [
+              13.907249450683594,
+              0.9473599791526794,
+              -12.720719337463379
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "shop",
+          "node": "expo_press_exit_sale",
+          "authored": true,
+          "depth": 0.018977448,
+          "locked": true,
+          "lockedFocus": null,
+          "approach": {
+            "feet": [
+              22.8799991607666,
+              0,
+              -10.109999542236327
+            ],
+            "focus": {
+              "owner": "exit_sale",
+              "lineage": [
+                "expo_press_exit_sale_2",
+                "expo_press_exit_sale",
+                "Scene"
+              ],
+              "distance": 1.2014755657175422
+            },
+            "centre": [
+              22.8799991607666,
+              1.0971441864967346,
+              -11.229999542236328
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "alpaca_button",
+          "authored": true,
+          "depth": 0.01624,
+          "approach": {
+            "feet": [
+              5.251742124573605,
+              -0.6800000071525574,
+              -25.495735135188298
+            ],
+            "focus": {
+              "owner": "alpaca_button",
+              "lineage": [
+                "alpaca_button_3",
+                "alpaca_button",
+                "Scene"
+              ],
+              "distance": 1.2286401517193386
+            },
+            "centre": [
+              6.339708566665649,
+              0.33730004727840424,
+              -25.76168441772461
+            ]
+          },
+          "returnedTo": "atrium",
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_bartholomew",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              4.558362903820874,
+              -0.6800000071525574,
+              -28.300209169591806
+            ],
+            "focus": {
+              "owner": "expo_replay_log_bartholomew",
+              "lineage": [
+                "expo_replay_log_bartholomew_2",
+                "expo_replay_log_bartholomew",
+                "Scene"
+              ],
+              "distance": 1.4721131488625525
+            },
+            "centre": [
+              5.389614105224609,
+              -0.05799996480345726,
+              -29.050823211669922
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_bob",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              -4.8691348993058705,
+              -0.6800000071525574,
+              -24.71858504633521
+            ],
+            "focus": {
+              "owner": "expo_replay_log_bob",
+              "lineage": [
+                "expo_replay_log_bob_2",
+                "expo_replay_log_bob",
+                "Scene"
+              ],
+              "distance": 1.4724375606643156
+            },
+            "centre": [
+              -5.817344427108765,
+              -0.05799996852874756,
+              -24.12251567840576
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_doctor",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              5.054928302781002,
+              -0.6800000071525574,
+              -25.872163739314274
+            ],
+            "focus": {
+              "owner": "expo_replay_log_doctor",
+              "lineage": [
+                "expo_replay_log_doctor_2",
+                "expo_replay_log_doctor",
+                "Scene"
+              ],
+              "distance": 1.4740728480770233
+            },
+            "centre": [
+              6.142894744873047,
+              -0.05799996852874756,
+              -26.138113021850586
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_gary",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              4.340551974758865,
+              -0.6800000071525574,
+              -23.498745777927496
+            ],
+            "focus": {
+              "owner": "expo_replay_log_gary",
+              "lineage": [
+                "expo_replay_log_gary_2",
+                "expo_replay_log_gary",
+                "Scene"
+              ],
+              "distance": 1.473987141565442
+            },
+            "centre": [
+              5.424341440200806,
+              -0.05799996852874756,
+              -23.216256141662598
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_greg",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              -4.939338408400964,
+              -0.6800000071525574,
+              -27.19614919124035
+            ],
+            "focus": {
+              "owner": "expo_replay_log_greg",
+              "lineage": [
+                "expo_replay_log_greg_2",
+                "expo_replay_log_greg",
+                "Scene"
+              ],
+              "distance": 1.474924847012356
+            },
+            "centre": [
+              -6.056864261627197,
+              -0.05799996480345726,
+              -27.121745109558105
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_henry",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              -3.827734601007674,
+              -0.6800000071525574,
+              -29.41086480963157
+            ],
+            "focus": {
+              "owner": "expo_replay_log_henry",
+              "lineage": [
+                "expo_replay_log_henry_2",
+                "expo_replay_log_henry",
+                "Scene"
+              ],
+              "distance": 1.4730948881542105
+            },
+            "centre": [
+              -4.8465962409973145,
+              -0.05799996480345726,
+              -29.875967979431152
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_kevin",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              0.21051674465795583,
+              -0.6800000071525574,
+              -21.043991655927286
+            ],
+            "focus": {
+              "owner": "expo_replay_log_kevin",
+              "lineage": [
+                "expo_replay_log_kevin_2",
+                "expo_replay_log_kevin",
+                "Scene"
+              ],
+              "distance": 1.4736148562602498
+            },
+            "centre": [
+              0.5696033090353012,
+              -0.05799996852874756,
+              -19.983116149902344
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_lashes",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              -3.6297059163449577,
+              -0.6800000071525574,
+              -22.572752181845534
+            ],
+            "focus": {
+              "owner": "expo_replay_log_lashes",
+              "lineage": [
+                "expo_replay_log_lashes_2",
+                "expo_replay_log_lashes",
+                "Scene"
+              ],
+              "distance": 1.4726611228996611
+            },
+            "centre": [
+              -4.181220293045044,
+              -0.05799996852874756,
+              -21.59795379638672
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_margaret",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              -1.797558809866489,
+              -0.6800000071525574,
+              -30.831634688879586
+            ],
+            "focus": {
+              "owner": "expo_replay_log_margaret",
+              "lineage": [
+                "expo_replay_log_margaret_2",
+                "expo_replay_log_margaret",
+                "Scene"
+              ],
+              "distance": 1.472113079679318
+            },
+            "centre": [
+              -2.473435163497925,
+              -0.05799996852874756,
+              -31.724714279174805
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_nana",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              2.967187165048556,
+              -0.6800000071525574,
+              -30.199515827596
+            ],
+            "focus": {
+              "owner": "expo_replay_log_nana",
+              "lineage": [
+                "expo_replay_log_nana_2",
+                "expo_replay_log_nana",
+                "Scene"
+              ],
+              "distance": 1.4735383818470118
+            },
+            "centre": [
+              3.3423906564712524,
+              -0.05799996852874756,
+              -31.254798889160156
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_reginald",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              0.6644855193329239,
+              -0.6800000071525574,
+              -31.11594785635772
+            ],
+            "focus": {
+              "owner": "expo_replay_log_reginald",
+              "lineage": [
+                "expo_replay_log_reginald_2",
+                "expo_replay_log_reginald",
+                "Scene"
+              ],
+              "distance": 1.4745054035842218
+            },
+            "centre": [
+              0.49366824328899384,
+              -0.05799996480345726,
+              -32.22284507751465
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_spitz",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              2.5863656693874963,
+              -0.6800000071525574,
+              -21.749103294080548
+            ],
+            "focus": {
+              "owner": "expo_replay_log_spitz",
+              "lineage": [
+                "expo_replay_log_spitz_2",
+                "expo_replay_log_spitz",
+                "Scene"
+              ],
+              "distance": 1.472111531910173
+            },
+            "centre": [
+              3.4060875177383423,
+              -0.05799996480345726,
+              -20.985915184020996
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_bartholomew",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              4.380114498364331,
+              -0.6800000071525574,
+              -28.49226964017286
+            ],
+            "focus": {
+              "owner": "expo_replay_log_bartholomew",
+              "lineage": [
+                "log_bartholomew_2",
+                "log_bartholomew",
+                "Scene"
+              ],
+              "distance": 1.4655458465701716
+            },
+            "centre": [
+              5.211365699768066,
+              -0.05799996852874756,
+              -29.242883682250977
+            ]
+          },
+          "log": {
+            "id": "log_bartholomew",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_bob",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              -4.726573702024987,
+              -0.6800000071525574,
+              -24.498673471017828
+            ],
+            "focus": {
+              "owner": "expo_replay_log_bob",
+              "lineage": [
+                "log_bob_2",
+                "log_bob",
+                "Scene"
+              ],
+              "distance": 1.465976613528375
+            },
+            "centre": [
+              -5.674783229827881,
+              -0.05799996852874756,
+              -23.90260410308838
+            ]
+          },
+          "log": {
+            "id": "log_bob",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_doctor",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              4.988808155075924,
+              -0.6800000071525574,
+              -26.125817265620427
+            ],
+            "focus": {
+              "owner": "expo_replay_log_doctor",
+              "lineage": [
+                "log_doctor_2",
+                "log_doctor",
+                "Scene"
+              ],
+              "distance": 1.4680636367503332
+            },
+            "centre": [
+              6.076774597167969,
+              -0.05799996852874756,
+              -26.39176654815674
+            ]
+          },
+          "log": {
+            "id": "log_doctor",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_gary",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              4.4027334475371855,
+              -0.6800000071525574,
+              -23.75317654880152
+            ],
+            "focus": {
+              "owner": "expo_replay_log_gary",
+              "lineage": [
+                "log_gary_2",
+                "log_gary",
+                "Scene"
+              ],
+              "distance": 1.4679835697159496
+            },
+            "centre": [
+              5.486522912979126,
+              -0.05799996852874756,
+              -23.47068691253662
+            ]
+          },
+          "log": {
+            "id": "log_gary",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_greg",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              -4.917746983458947,
+              -0.6800000071525574,
+              -26.934966406206172
+            ],
+            "focus": {
+              "owner": "expo_replay_log_greg",
+              "lineage": [
+                "log_greg_2",
+                "log_greg",
+                "Scene"
+              ],
+              "distance": 1.4691735098412457
+            },
+            "centre": [
+              -6.035272836685181,
+              -0.05799996852874756,
+              -26.860562324523926
+            ]
+          },
+          "log": {
+            "id": "log_greg",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_henry",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              -3.9330378885137773,
+              -0.6800000071525574,
+              -29.171037653564674
+            ],
+            "focus": {
+              "owner": "expo_replay_log_henry",
+              "lineage": [
+                "log_henry_2",
+                "log_henry",
+                "Scene"
+              ],
+              "distance": 1.466820936760405
+            },
+            "centre": [
+              -4.951899528503418,
+              -0.05799996852874756,
+              -29.636140823364258
+            ]
+          },
+          "log": {
+            "id": "log_henry",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_kevin",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              0.45753855387826986,
+              -0.6800000071525574,
+              -21.13173541508256
+            ],
+            "focus": {
+              "owner": "expo_replay_log_kevin",
+              "lineage": [
+                "log_kevin_2",
+                "log_kevin",
+                "Scene"
+              ],
+              "distance": 1.467491692732065
+            },
+            "centre": [
+              0.8166251182556152,
+              -0.05799996852874756,
+              -20.070859909057617
+            ]
+          },
+          "log": {
+            "id": "log_kevin",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_lashes",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              -3.3999099835751823,
+              -0.6800000071525574,
+              -22.446995918112624
+            ],
+            "focus": {
+              "owner": "expo_replay_log_lashes",
+              "lineage": [
+                "log_lashes_2",
+                "log_lashes",
+                "Scene"
+              ],
+              "distance": 1.4662603004663353
+            },
+            "centre": [
+              -3.9514243602752686,
+              -0.05799996852874756,
+              -21.47219753265381
+            ]
+          },
+          "log": {
+            "id": "log_lashes",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_margaret",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              -2.0043109909196506,
+              -0.6800000071525574,
+              -30.670677352453804
+            ],
+            "focus": {
+              "owner": "expo_replay_log_margaret",
+              "lineage": [
+                "log_margaret_2",
+                "log_margaret",
+                "Scene"
+              ],
+              "distance": 1.4655483512988519
+            },
+            "centre": [
+              -2.6801873445510864,
+              -0.05799996852874756,
+              -31.563756942749023
+            ]
+          },
+          "log": {
+            "id": "log_margaret",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_nana",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              2.7191267001895474,
+              -0.6800000071525574,
+              -30.28357935756426
+            ],
+            "focus": {
+              "owner": "expo_replay_log_nana",
+              "lineage": [
+                "log_nana_2",
+                "log_nana",
+                "Scene"
+              ],
+              "distance": 1.4673917391558617
+            },
+            "centre": [
+              3.0943301916122437,
+              -0.05799996852874756,
+              -31.338862419128418
+            ]
+          },
+          "log": {
+            "id": "log_nana",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_reginald",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              0.40609714905742644,
+              -0.6800000071525574,
+              -31.071918620517877
+            ],
+            "focus": {
+              "owner": "expo_replay_log_reginald",
+              "lineage": [
+                "log_reginald_2",
+                "log_reginald",
+                "Scene"
+              ],
+              "distance": 1.4686418371252086
+            },
+            "centre": [
+              0.2352798730134964,
+              -0.05799996852874756,
+              -32.178815841674805
+            ]
+          },
+          "log": {
+            "id": "log_reginald",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_spitz",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              2.7622803145825037,
+              -0.6800000071525574,
+              -21.943302856153302
+            ],
+            "focus": {
+              "owner": "expo_replay_log_spitz",
+              "lineage": [
+                "log_spitz_2",
+                "log_spitz",
+                "Scene"
+              ],
+              "distance": 1.4655462632602636
+            },
+            "centre": [
+              3.5820021629333496,
+              -0.05799996852874756,
+              -21.18011474609375
+            ]
+          },
+          "log": {
+            "id": "log_spitz",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "photo_release",
+          "authored": false,
+          "depth": 0.029,
+          "floorHatchOpened": true,
+          "approach": {
+            "feet": [
+              0,
+              -0.6800000071525575,
+              -24.03000057220459
+            ],
+            "focus": {
+              "owner": "photo_release",
+              "lineage": [
+                "photo_release_2",
+                "photo_release",
+                "Scene"
+              ],
+              "distance": 1.887595933552571
+            },
+            "centre": [
+              0,
+              -0.6480000019073486,
+              -25.15000057220459
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "catwalk",
+          "node": "expo_control_terrace",
+          "authored": true,
+          "depth": 0.01624,
+          "approach": {
+            "feet": [
+              -13.74429977416992,
+              6.800000190734863,
+              25.09000015258789
+            ],
+            "focus": {
+              "owner": "expo_control_terrace",
+              "lineage": [
+                "expo_control_terrace_3",
+                "expo_control_terrace",
+                "Scene"
+              ],
+              "distance": 1.1848035719878238
+            },
+            "centre": [
+              -14.864299774169922,
+              7.982874631881714,
+              25.09000015258789
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "service",
+          "node": "expo_control_station",
+          "authored": true,
+          "depth": 0.01624,
+          "approach": {
+            "feet": [
+              25.574300651550292,
+              0,
+              28.939998626708984
+            ],
+            "focus": {
+              "owner": "expo_control_station",
+              "lineage": [
+                "expo_control_station_3",
+                "expo_control_station",
+                "Scene"
+              ],
+              "distance": 1.191418060774755
+            },
+            "centre": [
+              26.694300651550293,
+              1.1641249656677246,
+              28.939998626708984
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "service",
+          "node": "expo_replay_slot_10",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              17.65472900390625,
+              0,
+              26.974319458007812
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_10",
+              "lineage": [
+                "expo_replay_slot_10_2",
+                "expo_replay_slot_10",
+                "Scene"
+              ],
+              "distance": 1.275713369848158
+            },
+            "centre": [
+              16.53472900390625,
+              0.9473599791526794,
+              26.974319458007812
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "service",
+          "node": "expo_review_slot_10",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              17.65725051879883,
+              0,
+              27.71767807006836
+            ],
+            "focus": {
+              "owner": "expo_review_slot_10",
+              "lineage": [
+                "expo_review_slot_10_1",
+                "expo_review_slot_10",
+                "Scene"
+              ],
+              "distance": 1.2831726806802302
+            },
+            "centre": [
+              16.537250518798828,
+              0.9473599791526794,
+              27.71767807006836
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "dome",
+          "node": "expo_replay_dome_0",
+          "authored": true,
+          "depth": 0.01624,
+          "approach": {
+            "feet": [
+              -23.17210018157959,
+              0,
+              -4.949999809265137
+            ],
+            "focus": {
+              "owner": "expo_replay_dome_0",
+              "lineage": [
+                "expo_replay_dome_0_2",
+                "expo_replay_dome_0",
+                "Scene"
+              ],
+              "distance": 1.2020287856868135
+            },
+            "centre": [
+              -22.05210018157959,
+              1.1399999856948853,
+              -4.949999809265137
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "chronology",
+          "node": "expo_replay_slot_02",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              8.245272045135497,
+              5.551115123125783e-17,
+              59.5496826171875
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_02",
+              "lineage": [
+                "expo_replay_slot_02_2",
+                "expo_replay_slot_02",
+                "Scene"
+              ],
+              "distance": 1.2757139217356146
+            },
+            "centre": [
+              9.365272045135498,
+              0.9473599791526794,
+              59.5496826171875
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "chronology",
+          "node": "expo_replay_slot_03",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              7.354728336334229,
+              0,
+              83.2003173828125
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_03",
+              "lineage": [
+                "expo_replay_slot_03_2",
+                "expo_replay_slot_03",
+                "Scene"
+              ],
+              "distance": 1.2757139217356135
+            },
+            "centre": [
+              6.2347283363342285,
+              0.9473599791526794,
+              83.2003173828125
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "chronology",
+          "node": "expo_review_slot_02",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              8.24275005340576,
+              5.551115123125783e-17,
+              58.80632019042969
+            ],
+            "focus": {
+              "owner": "expo_review_slot_02",
+              "lineage": [
+                "expo_review_slot_02_1",
+                "expo_review_slot_02",
+                "Scene"
+              ],
+              "distance": 1.283173784455141
+            },
+            "centre": [
+              9.362750053405762,
+              0.9473599791526794,
+              58.80632019042969
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "chronology",
+          "node": "expo_review_slot_03",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              7.357250089645386,
+              0,
+              83.94367980957031
+            ],
+            "focus": {
+              "owner": "expo_review_slot_03",
+              "lineage": [
+                "expo_review_slot_03_1",
+                "expo_review_slot_03",
+                "Scene"
+              ],
+              "distance": 1.2831729566239585
+            },
+            "centre": [
+              6.237250089645386,
+              0.9473599791526794,
+              83.94367980957031
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "forum",
+          "node": "expo_replay_slot_04",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -14.879679679870605,
+              0,
+              103.44526947021484
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_04",
+              "lineage": [
+                "expo_replay_slot_04_2",
+                "expo_replay_slot_04",
+                "Scene"
+              ],
+              "distance": 1.2757133698481655
+            },
+            "centre": [
+              -14.879679679870605,
+              0.9473599791526794,
+              104.56526947021484
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "forum",
+          "node": "expo_replay_slot_05",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -44.330318450927734,
+              0,
+              102.55473052978516
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_05",
+              "lineage": [
+                "expo_replay_slot_05_2",
+                "expo_replay_slot_05",
+                "Scene"
+              ],
+              "distance": 1.2757133698481655
+            },
+            "centre": [
+              -44.330318450927734,
+              0.9473599791526794,
+              101.43473052978516
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "forum",
+          "node": "expo_review_slot_04",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -14.136319160461426,
+              0,
+              103.44274795532226
+            ],
+            "focus": {
+              "owner": "expo_review_slot_04",
+              "lineage": [
+                "expo_review_slot_04_1",
+                "expo_review_slot_04",
+                "Scene"
+              ],
+              "distance": 1.2831704731304205
+            },
+            "centre": [
+              -14.136319160461426,
+              0.9473599791526794,
+              104.56274795532227
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "forum",
+          "node": "expo_review_slot_05",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -45.07368087768555,
+              0,
+              102.55725204467774
+            ],
+            "focus": {
+              "owner": "expo_review_slot_05",
+              "lineage": [
+                "expo_review_slot_05_1",
+                "expo_review_slot_05",
+                "Scene"
+              ],
+              "distance": 1.2831704731304205
+            },
+            "centre": [
+              -45.07368087768555,
+              0.9473599791526794,
+              101.43725204467773
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "commons",
+          "node": "expo_replay_slot_06",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -66.64526641845703,
+              0,
+              84.6003189086914
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_06",
+              "lineage": [
+                "expo_replay_slot_06_2",
+                "expo_replay_slot_06",
+                "Scene"
+              ],
+              "distance": 1.2757133698481655
+            },
+            "centre": [
+              -67.76526641845703,
+              0.9473599791526794,
+              84.6003189086914
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "commons",
+          "node": "expo_replay_slot_07",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -65.75472747802735,
+              0,
+              63.899681091308594
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_07",
+              "lineage": [
+                "expo_replay_slot_07_2",
+                "expo_replay_slot_07",
+                "Scene"
+              ],
+              "distance": 1.2757133698481655
+            },
+            "centre": [
+              -64.63472747802734,
+              0.9473599791526794,
+              63.899681091308594
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "commons",
+          "node": "expo_review_slot_06",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -66.64274490356445,
+              0,
+              85.34368133544922
+            ],
+            "focus": {
+              "owner": "expo_review_slot_06",
+              "lineage": [
+                "expo_review_slot_06_1",
+                "expo_review_slot_06",
+                "Scene"
+              ],
+              "distance": 1.2831704731304205
+            },
+            "centre": [
+              -67.76274490356445,
+              0.9473599791526794,
+              85.34368133544922
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "commons",
+          "node": "expo_review_slot_07",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -65.75724899291993,
+              0,
+              63.15631866455078
+            ],
+            "focus": {
+              "owner": "expo_review_slot_07",
+              "lineage": [
+                "expo_review_slot_07_1",
+                "expo_review_slot_07",
+                "Scene"
+              ],
+              "distance": 1.2831704731304205
+            },
+            "centre": [
+              -64.63724899291992,
+              0.9473599791526794,
+              63.15631866455078
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "aquarium",
+          "node": "expo_replay_slot_08",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -47.632720947265625,
+              5.551115123125783e-17,
+              46.074730987548826
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_08",
+              "lineage": [
+                "expo_replay_slot_08_2",
+                "expo_replay_slot_08",
+                "Scene"
+              ],
+              "distance": 1.275713369848159
+            },
+            "centre": [
+              -47.632720947265625,
+              0.9473599791526794,
+              44.95473098754883
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "aquarium",
+          "node": "expo_replay_slot_09",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -26.00967788696289,
+              5.551115123125783e-17,
+              45.945269470214846
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_09",
+              "lineage": [
+                "expo_replay_slot_09_2",
+                "expo_replay_slot_09",
+                "Scene"
+              ],
+              "distance": 1.275713369848159
+            },
+            "centre": [
+              -26.00967788696289,
+              0.9473599791526794,
+              47.065269470214844
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "aquarium",
+          "node": "expo_review_slot_08",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -48.37608337402344,
+              5.551115123125783e-17,
+              46.077252502441404
+            ],
+            "focus": {
+              "owner": "expo_review_slot_08",
+              "lineage": [
+                "expo_review_slot_08_1",
+                "expo_review_slot_08",
+                "Scene"
+              ],
+              "distance": 1.2831748882300484
+            },
+            "centre": [
+              -48.37608337402344,
+              0.9473599791526794,
+              44.957252502441406
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "aquarium",
+          "node": "expo_review_slot_09",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -25.266319274902344,
+              5.551115123125783e-17,
+              45.94274795532227
+            ],
+            "focus": {
+              "owner": "expo_review_slot_09",
+              "lineage": [
+                "expo_review_slot_09_1",
+                "expo_review_slot_09",
+                "Scene"
+              ],
+              "distance": 1.2831748882300484
+            },
+            "centre": [
+              -25.266319274902344,
+              0.9473599791526794,
+              47.062747955322266
+            ]
+          },
+          "passed": true
+        }
+      ],
+      "files": [
+        {
+          "file": "atrium-9b8ecd44a176.glb.gz",
+          "bytes": 2109791,
+          "sha256": "258aea753b2b578906354870fa6ff2b9cbdb59b7bdc68254926e6b6ded69febb"
+        },
+        {
+          "file": "atrium-collision.glb",
+          "bytes": 100064,
+          "sha256": "c8fd993162449d0f2855e304d4b5d4c381aa774612678c5e7925f6e321e486b4"
+        },
+        {
+          "file": "hall.glb",
+          "bytes": 4248388,
+          "sha256": "8f582a0857f0d4306f18270f05c54c2d60b635474df05d3143ddd7fc8add4c8c"
+        },
+        {
+          "file": "hall-collision.glb",
+          "bytes": 92436,
+          "sha256": "e008db15caf54a5127dea3a1507f85d363fbb226e17b4a6d8351c167ef83333d"
+        },
+        {
+          "file": "shop.glb",
+          "bytes": 999968,
+          "sha256": "a21bfa13734c641883904dda3244bda4fb44385076f7d8148b2e6bf40b21665b"
+        },
+        {
+          "file": "shop-collision.glb",
+          "bytes": 19716,
+          "sha256": "2f2b4f63c9224f32471287dd729ab5e2e2419d687c28be469eac3f86d2fcf056"
+        },
+        {
+          "file": "twelve.glb",
+          "bytes": 11878656,
+          "sha256": "0b632ab6cc1bd7e99ac308db35f2f7d3f2b32728262eb973ffe02d76f09172b3"
+        },
+        {
+          "file": "twelve-collision.glb",
+          "bytes": 76708,
+          "sha256": "ca7861659b963febd51b501e381eac33a5a0bd5b211df8742bc038911d746383"
+        },
+        {
+          "file": "dome.glb",
+          "bytes": 3562520,
+          "sha256": "cf56f8946c0f20b2ca23cf7b9fd17a01ffa2756325b314edd61f7517f04dfa2e"
+        },
+        {
+          "file": "dome-collision.glb",
+          "bytes": 32848,
+          "sha256": "d8810f80c5707f5895350bc8d1514d723c4c6eef0767d2385e20b0cf113c921b"
+        },
+        {
+          "file": "hoof.glb",
+          "bytes": 824964,
+          "sha256": "00834f844d52d21f1f62ff2db6e7ac7d6b57553776d67fe1ef6fd7c9ec8e898c"
+        },
+        {
+          "file": "hoof-collision.glb",
+          "bytes": 13736,
+          "sha256": "9cd503e6a2784a8797509e155f3a4e46dd7f8cb4a503cc74d0b54600cb0229ce"
+        },
+        {
+          "file": "shop.glb",
+          "bytes": 999968,
+          "sha256": "a21bfa13734c641883904dda3244bda4fb44385076f7d8148b2e6bf40b21665b"
+        },
+        {
+          "file": "shop-collision.glb",
+          "bytes": 19716,
+          "sha256": "2f2b4f63c9224f32471287dd729ab5e2e2419d687c28be469eac3f86d2fcf056"
+        },
+        {
+          "file": "atrium-9b8ecd44a176.glb.gz",
+          "bytes": 2109791,
+          "sha256": "258aea753b2b578906354870fa6ff2b9cbdb59b7bdc68254926e6b6ded69febb"
+        },
+        {
+          "file": "atrium-collision.glb",
+          "bytes": 100064,
+          "sha256": "c8fd993162449d0f2855e304d4b5d4c381aa774612678c5e7925f6e321e486b4"
+        },
+        {
+          "file": "service.glb",
+          "bytes": 1397808,
+          "sha256": "4a67f9ab443c222c8c8279064414e1db0ab76d20980d324ec698c4f9f9f597e8"
+        },
+        {
+          "file": "service-collision.glb",
+          "bytes": 55576,
+          "sha256": "61952fdc7dd939c83ee9da53ee17b72c30a32f47b3cf00c71b539a0b3e4ab316"
+        },
+        {
+          "file": "hoof.glb",
+          "bytes": 824964,
+          "sha256": "00834f844d52d21f1f62ff2db6e7ac7d6b57553776d67fe1ef6fd7c9ec8e898c"
+        },
+        {
+          "file": "hoof-collision.glb",
+          "bytes": 13736,
+          "sha256": "9cd503e6a2784a8797509e155f3a4e46dd7f8cb4a503cc74d0b54600cb0229ce"
+        },
+        {
+          "file": "habitat.glb",
+          "bytes": 784624,
+          "sha256": "73c4f27a8b42745f6c05f07e1d69cdfa4e731c2255ab9fe8223c91364d620051"
+        },
+        {
+          "file": "habitat-collision.glb",
+          "bytes": 27504,
+          "sha256": "aa7396174d00b97274c07149d44f2c453af6e2d96f9ac0b2c46930a6bbc85725"
+        },
+        {
+          "file": "shop.glb",
+          "bytes": 999968,
+          "sha256": "a21bfa13734c641883904dda3244bda4fb44385076f7d8148b2e6bf40b21665b"
+        },
+        {
+          "file": "shop-collision.glb",
+          "bytes": 19716,
+          "sha256": "2f2b4f63c9224f32471287dd729ab5e2e2419d687c28be469eac3f86d2fcf056"
+        },
+        {
+          "file": "twelve.glb",
+          "bytes": 11878656,
+          "sha256": "0b632ab6cc1bd7e99ac308db35f2f7d3f2b32728262eb973ffe02d76f09172b3"
+        },
+        {
+          "file": "twelve-collision.glb",
+          "bytes": 76708,
+          "sha256": "ca7861659b963febd51b501e381eac33a5a0bd5b211df8742bc038911d746383"
+        },
+        {
+          "file": "atrium-9b8ecd44a176.glb.gz",
+          "bytes": 2109791,
+          "sha256": "258aea753b2b578906354870fa6ff2b9cbdb59b7bdc68254926e6b6ded69febb"
+        },
+        {
+          "file": "atrium-collision.glb",
+          "bytes": 100064,
+          "sha256": "c8fd993162449d0f2855e304d4b5d4c381aa774612678c5e7925f6e321e486b4"
+        },
+        {
+          "file": "twelve.glb",
+          "bytes": 11878656,
+          "sha256": "0b632ab6cc1bd7e99ac308db35f2f7d3f2b32728262eb973ffe02d76f09172b3"
+        },
+        {
+          "file": "twelve-collision.glb",
+          "bytes": 76708,
+          "sha256": "ca7861659b963febd51b501e381eac33a5a0bd5b211df8742bc038911d746383"
+        },
+        {
+          "file": "catwalk.glb",
+          "bytes": 1478844,
+          "sha256": "5fd6da33257dc82d671dbe1758257c22d00dbf303ed576259b48a491948bb3b0"
+        },
+        {
+          "file": "catwalk-collision.glb",
+          "bytes": 20232,
+          "sha256": "00de5d16cc529c7c8caea842d733fef31d5212f60c099d82b17a274998d46362"
+        },
+        {
+          "file": "atrium-9b8ecd44a176.glb.gz",
+          "bytes": 2109791,
+          "sha256": "258aea753b2b578906354870fa6ff2b9cbdb59b7bdc68254926e6b6ded69febb"
+        },
+        {
+          "file": "atrium-collision.glb",
+          "bytes": 100064,
+          "sha256": "c8fd993162449d0f2855e304d4b5d4c381aa774612678c5e7925f6e321e486b4"
+        },
+        {
+          "file": "service.glb",
+          "bytes": 1397808,
+          "sha256": "4a67f9ab443c222c8c8279064414e1db0ab76d20980d324ec698c4f9f9f597e8"
+        },
+        {
+          "file": "service-collision.glb",
+          "bytes": 55576,
+          "sha256": "61952fdc7dd939c83ee9da53ee17b72c30a32f47b3cf00c71b539a0b3e4ab316"
+        },
+        {
+          "file": "secret.glb",
+          "bytes": 2004624,
+          "sha256": "7534398fbcc1bbf92b3efbfac76fecc9badcd9ca6d9bb36337dbf552a76fe15a"
+        },
+        {
+          "file": "secret-collision.glb",
+          "bytes": 16424,
+          "sha256": "2d0db725da14ce9d6b36e14f2a6cf88a98cccd2e7b1d495e6a4f336465967a07"
+        },
+        {
+          "file": "dome.glb",
+          "bytes": 3562520,
+          "sha256": "cf56f8946c0f20b2ca23cf7b9fd17a01ffa2756325b314edd61f7517f04dfa2e"
+        },
+        {
+          "file": "dome-collision.glb",
+          "bytes": 32848,
+          "sha256": "d8810f80c5707f5895350bc8d1514d723c4c6eef0767d2385e20b0cf113c921b"
+        },
+        {
+          "file": "catwalk.glb",
+          "bytes": 1478844,
+          "sha256": "5fd6da33257dc82d671dbe1758257c22d00dbf303ed576259b48a491948bb3b0"
+        },
+        {
+          "file": "catwalk-collision.glb",
+          "bytes": 20232,
+          "sha256": "00de5d16cc529c7c8caea842d733fef31d5212f60c099d82b17a274998d46362"
+        },
+        {
+          "file": "hall.glb",
+          "bytes": 4248388,
+          "sha256": "8f582a0857f0d4306f18270f05c54c2d60b635474df05d3143ddd7fc8add4c8c"
+        },
+        {
+          "file": "hall-collision.glb",
+          "bytes": 92436,
+          "sha256": "e008db15caf54a5127dea3a1507f85d363fbb226e17b4a6d8351c167ef83333d"
+        },
+        {
+          "file": "chronology.glb",
+          "bytes": 2220124,
+          "sha256": "84666b8335fa9509e964a126cda45a02eaef6c7e8ee11122593aa99fe288ed59"
+        },
+        {
+          "file": "chronology-collision.glb",
+          "bytes": 21068,
+          "sha256": "4688129c4947700d8d26ec7e37327aac75d0d6fe327798e349fe674660cb32bb"
+        },
+        {
+          "file": "forum.glb",
+          "bytes": 1336000,
+          "sha256": "d5bcc7928a7477215939e1a5581e8c86fece495afd5f393df4b78381a6c53d3f"
+        },
+        {
+          "file": "forum-collision.glb",
+          "bytes": 24564,
+          "sha256": "4fd9c3e4fd42774e82d786b58c472a8ba847e7d4e4c2a179f26f17652f8db334"
+        },
+        {
+          "file": "commons.glb",
+          "bytes": 1920856,
+          "sha256": "89654a496358b3bc93e223e494c43f0c896d0b7d5e758072ee740299defff0e6"
+        },
+        {
+          "file": "commons-collision.glb",
+          "bytes": 52600,
+          "sha256": "6df04eb7bbee275d9ae6d753e9043435c042d744727dcc13c0a7203589f93a42"
+        },
+        {
+          "file": "forum.glb",
+          "bytes": 1336000,
+          "sha256": "d5bcc7928a7477215939e1a5581e8c86fece495afd5f393df4b78381a6c53d3f"
+        },
+        {
+          "file": "forum-collision.glb",
+          "bytes": 24564,
+          "sha256": "4fd9c3e4fd42774e82d786b58c472a8ba847e7d4e4c2a179f26f17652f8db334"
+        },
+        {
+          "file": "aquarium.glb",
+          "bytes": 2088876,
+          "sha256": "5641cdac49fa74014918462bd4733c31f8dec4dea0927085132620c76f1a8fef"
+        },
+        {
+          "file": "aquarium-collision.glb",
+          "bytes": 16932,
+          "sha256": "540eda9d4f16d705e5427de39d14278baa9c3231750e6a2b2d4d37cf5756fbd6"
+        },
+        {
+          "file": "commons.glb",
+          "bytes": 1920856,
+          "sha256": "89654a496358b3bc93e223e494c43f0c896d0b7d5e758072ee740299defff0e6"
+        },
+        {
+          "file": "commons-collision.glb",
+          "bytes": 52600,
+          "sha256": "6df04eb7bbee275d9ae6d753e9043435c042d744727dcc13c0a7203589f93a42"
+        }
+      ],
+      "unrecruited": {
+        "recruited": [
+          "reginald",
+          "margaret",
+          "henry",
+          "greg",
+          "bob",
+          "lashes",
+          "kevin",
+          "spitz"
+        ],
+        "hidden": [
+          {
+            "node": "expo_replay_log_bartholomew",
+            "visible": false,
+            "focus": null,
+            "rosterStations": [
+              "slot_01",
+              "log_bob",
+              "log_greg",
+              "log_henry",
+              "log_kevin",
+              "log_lashes",
+              "log_margaret",
+              "log_reginald",
+              "log_spitz",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing"
+            ],
+            "strokes": 0
+          },
+          {
+            "node": "expo_replay_log_doctor",
+            "visible": false,
+            "focus": null,
+            "rosterStations": [
+              "log_bob",
+              "log_greg",
+              "log_henry",
+              "log_kevin",
+              "log_lashes",
+              "log_margaret",
+              "log_reginald",
+              "log_spitz",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing"
+            ],
+            "strokes": 0
+          },
+          {
+            "node": "expo_replay_log_gary",
+            "visible": false,
+            "focus": null,
+            "rosterStations": [
+              "log_bob",
+              "log_greg",
+              "log_henry",
+              "log_kevin",
+              "log_lashes",
+              "log_margaret",
+              "log_reginald",
+              "log_spitz",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing"
+            ],
+            "strokes": 0
+          },
+          {
+            "node": "expo_replay_log_nana",
+            "visible": false,
+            "focus": null,
+            "rosterStations": [
+              "log_bob",
+              "log_greg",
+              "log_henry",
+              "log_kevin",
+              "log_lashes",
+              "log_margaret",
+              "log_reginald",
+              "log_spitz",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing"
+            ],
+            "strokes": 0
+          },
+          {
+            "node": "log_bartholomew",
+            "visible": false,
+            "focus": null,
+            "rosterStations": [
+              "log_bob",
+              "log_greg",
+              "log_henry",
+              "log_kevin",
+              "log_lashes",
+              "log_margaret",
+              "log_reginald",
+              "log_spitz",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing"
+            ],
+            "strokes": 0
+          },
+          {
+            "node": "log_doctor",
+            "visible": false,
+            "focus": null,
+            "rosterStations": [
+              "log_bob",
+              "log_greg",
+              "log_henry",
+              "log_kevin",
+              "log_lashes",
+              "log_margaret",
+              "log_reginald",
+              "log_spitz",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing"
+            ],
+            "strokes": 0
+          },
+          {
+            "node": "log_gary",
+            "visible": false,
+            "focus": null,
+            "rosterStations": [
+              "log_bob",
+              "log_greg",
+              "log_henry",
+              "log_kevin",
+              "log_lashes",
+              "log_margaret",
+              "log_reginald",
+              "log_spitz",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing"
+            ],
+            "strokes": 0
+          },
+          {
+            "node": "log_nana",
+            "visible": false,
+            "focus": null,
+            "rosterStations": [
+              "log_bob",
+              "log_greg",
+              "log_henry",
+              "log_kevin",
+              "log_lashes",
+              "log_margaret",
+              "log_reginald",
+              "log_spitz",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing"
+            ],
+            "strokes": 0
+          }
+        ]
+      }
+    },
+    {
+      "device": "touch",
+      "rows": [
+        {
+          "zone": "hall",
+          "node": "expo_control_grid",
+          "authored": true,
+          "depth": 0.01624,
+          "approach": {
+            "feet": [
+              9.734299545288085,
+              0,
+              -8.619999885559082
+            ],
+            "focus": {
+              "owner": "expo_control_grid",
+              "lineage": [
+                "expo_control_grid_3",
+                "expo_control_grid",
+                "Scene"
+              ],
+              "distance": 1.2175392163705336
+            },
+            "centre": [
+              10.854299545288086,
+              1.0959999561309814,
+              -8.619999885559082
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hall",
+          "node": "expo_replay_ex_press",
+          "authored": true,
+          "depth": 0.017918656,
+          "approach": {
+            "feet": [
+              -4.569680213928223,
+              0,
+              -6.321200733184814
+            ],
+            "focus": {
+              "owner": "expo_replay_ex_press",
+              "lineage": [
+                "expo_replay_ex_press_2",
+                "expo_replay_ex_press",
+                "Scene"
+              ],
+              "distance": 1.2851694243658613
+            },
+            "centre": [
+              -4.569680213928223,
+              0.9473599493503571,
+              -7.4412007331848145
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hall",
+          "node": "expo_replay_pa_photos",
+          "authored": true,
+          "depth": 0.01624,
+          "approach": {
+            "feet": [
+              -10.389899616241454,
+              3.4000000953674316,
+              -0.4199999868869781
+            ],
+            "focus": {
+              "owner": "expo_replay_pa_photos",
+              "lineage": [
+                "expo_replay_pa_photos_2",
+                "expo_replay_pa_photos",
+                "Scene"
+              ],
+              "distance": 1.230111179462326
+            },
+            "centre": [
+              -11.509899616241455,
+              4.46999979019165,
+              -0.41999998688697815
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hall",
+          "node": "expo_replay_slot_11",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -8.995272045135497,
+              0,
+              0.5815200954675676
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_11",
+              "lineage": [
+                "expo_replay_slot_11_2",
+                "expo_replay_slot_11",
+                "Scene"
+              ],
+              "distance": 1.2757139217356146
+            },
+            "centre": [
+              -10.115272045135498,
+              0.9473599791526794,
+              0.5815200954675674
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hall",
+          "node": "expo_review_slot_11",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -8.99275005340576,
+              0,
+              1.3248801231384277
+            ],
+            "focus": {
+              "owner": "expo_review_slot_11",
+              "lineage": [
+                "expo_review_slot_11_1",
+                "expo_review_slot_11",
+                "Scene"
+              ],
+              "distance": 1.283173784455141
+            },
+            "centre": [
+              -10.112750053405762,
+              0.9473599791526794,
+              1.3248801231384277
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hall",
+          "node": "press_main",
+          "authored": true,
+          "depth": 0.034,
+          "approach": {
+            "feet": [
+              0,
+              0,
+              -7.88
+            ],
+            "focus": {
+              "owner": "press_main",
+              "lineage": [
+                "press_main_1",
+                "press_main",
+                "Scene"
+              ],
+              "distance": 1.1644808430018496
+            },
+            "centre": [
+              0,
+              1.0369999706745148,
+              -9
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hall",
+          "node": "press_stop",
+          "authored": true,
+          "depth": 0.032,
+          "approach": {
+            "feet": [
+              -1.5499999523162842,
+              0,
+              -7.8400000381469725
+            ],
+            "focus": {
+              "owner": "press_stop",
+              "lineage": [
+                "press_stop_1",
+                "press_stop",
+                "Scene"
+              ],
+              "distance": 1.1885293339252223
+            },
+            "centre": [
+              -1.5499999523162842,
+              1.020000010728836,
+              -8.960000038146973
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "atrium",
+          "node": "expo_control_greenhouse",
+          "authored": true,
+          "depth": 0.01624,
+          "approach": {
+            "feet": [
+              9.46430004119873,
+              0,
+              23.469999313354492
+            ],
+            "focus": {
+              "owner": "expo_control_greenhouse",
+              "lineage": [
+                "expo_control_greenhouse_3",
+                "expo_control_greenhouse",
+                "Scene"
+              ],
+              "distance": 1.2075804215362937
+            },
+            "centre": [
+              10.58430004119873,
+              1.121000051498413,
+              23.469999313354492
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "atrium",
+          "node": "expo_replay_slot_01",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              3.936214448419734,
+              0,
+              35.932488573448595
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_01",
+              "lineage": [
+                "expo_replay_slot_01_2",
+                "expo_replay_slot_01",
+                "Scene"
+              ],
+              "distance": 1.270545854999852
+            },
+            "centre": [
+              4.690944671630859,
+              0.9473599791526794,
+              35.10497283935547
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "atrium",
+          "node": "expo_review_slot_01",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              3.3877449049627026,
+              0,
+              35.43072046126598
+            ],
+            "focus": {
+              "owner": "expo_review_slot_01",
+              "lineage": [
+                "expo_review_slot_01_1",
+                "expo_review_slot_01",
+                "Scene"
+              ],
+              "distance": 1.2737666146853805
+            },
+            "centre": [
+              4.142475128173828,
+              0.9473599791526794,
+              34.60320472717285
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hoof",
+          "node": "expo_press_hoof_checkbox_0",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -19.6200008392334,
+              0,
+              11.199999923706056
+            ],
+            "focus": {
+              "owner": "hoof_console",
+              "lineage": [
+                "expo_press_hoof_checkbox_0_1",
+                "expo_press_hoof_checkbox_0",
+                "Scene"
+              ],
+              "distance": 1.1448893237282811
+            },
+            "centre": [
+              -19.6200008392334,
+              1.2346224188804626,
+              10.079999923706055
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hoof",
+          "node": "expo_press_hoof_checkbox_1",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -17.339999439589,
+              0,
+              10.080891809622075
+            ],
+            "focus": {
+              "owner": "hoof_console",
+              "lineage": [
+                "expo_press_hoof_checkbox_1_1",
+                "expo_press_hoof_checkbox_1",
+                "Scene"
+              ],
+              "distance": 1.144889323728276
+            },
+            "centre": [
+              -18.459999084472656,
+              1.2346224188804626,
+              10.079999923706055
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hoof",
+          "node": "expo_press_hoof_checkbox_2",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -19.6200008392334,
+              0,
+              10.90499984741211
+            ],
+            "focus": {
+              "owner": "hoof_console",
+              "lineage": [
+                "expo_press_hoof_checkbox_2_1",
+                "expo_press_hoof_checkbox_2",
+                "Scene"
+              ],
+              "distance": 1.1448893237282811
+            },
+            "centre": [
+              -19.6200008392334,
+              1.2346224188804626,
+              9.78499984741211
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hoof",
+          "node": "expo_press_hoof_checkbox_3",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -17.9889615696284,
+              0,
+              10.355721898509968
+            ],
+            "focus": {
+              "owner": "hoof_console",
+              "lineage": [
+                "expo_press_hoof_checkbox_3_1",
+                "expo_press_hoof_checkbox_3",
+                "Scene"
+              ],
+              "distance": 0.8020288374663281
+            },
+            "centre": [
+              -18.459999084472656,
+              1.2346224188804626,
+              9.78499984741211
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hoof",
+          "node": "expo_replay_hoof_1",
+          "authored": true,
+          "depth": 0.01624,
+          "approach": {
+            "feet": [
+              -19.3700008392334,
+              0,
+              8.58490026473999
+            ],
+            "focus": {
+              "owner": "expo_replay_hoof_1",
+              "lineage": [
+                "expo_replay_hoof_1_2",
+                "expo_replay_hoof_1",
+                "Scene"
+              ],
+              "distance": 1.2855864434610287
+            },
+            "centre": [
+              -19.3700008392334,
+              0.9499999582767487,
+              9.70490026473999
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hoof",
+          "node": "expo_replay_slot_12",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -21.97527015686035,
+              0,
+              9.59511947631836
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_12",
+              "lineage": [
+                "expo_replay_slot_12_2",
+                "expo_replay_slot_12",
+                "Scene"
+              ],
+              "distance": 1.2757133698481582
+            },
+            "centre": [
+              -23.09527015686035,
+              0.9473599791526794,
+              9.59511947631836
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "hoof",
+          "node": "expo_review_slot_12",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -21.972748641967772,
+              0,
+              10.338479995727539
+            ],
+            "focus": {
+              "owner": "expo_review_slot_12",
+              "lineage": [
+                "expo_review_slot_12_1",
+                "expo_review_slot_12",
+                "Scene"
+              ],
+              "distance": 1.2831726806802302
+            },
+            "centre": [
+              -23.092748641967773,
+              0.9473599791526794,
+              10.338479995727539
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "habitat",
+          "node": "expo_press_feeding_slot",
+          "authored": true,
+          "depth": 0.017197600000000004,
+          "approach": {
+            "feet": [
+              21.780000686645508,
+              0,
+              7.568445568084717
+            ],
+            "focus": {
+              "owner": "feeding_slot",
+              "lineage": [
+                "expo_press_feeding_slot_3",
+                "expo_press_feeding_slot",
+                "Scene"
+              ],
+              "distance": 1.3463455980094319
+            },
+            "centre": [
+              21.780000686645508,
+              0.8299999833106995,
+              8.688445568084717
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "habitat",
+          "node": "expo_press_habitat_glass",
+          "authored": true,
+          "depth": 0.019779312000000004,
+          "approach": {
+            "feet": [
+              19.450000762939453,
+              0,
+              8.379140262603759
+            ],
+            "focus": {
+              "owner": "habitat_glass",
+              "lineage": [
+                "expo_press_habitat_glass_3",
+                "expo_press_habitat_glass",
+                "Scene"
+              ],
+              "distance": 1.1570306768951217
+            },
+            "centre": [
+              19.450000762939453,
+              1.2599999904632568,
+              9.49914026260376
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "habitat",
+          "node": "expo_press_habitat_plaque",
+          "authored": true,
+          "depth": 0.017908296000000004,
+          "approach": {
+            "feet": [
+              19.1299991607666,
+              0,
+              8.380810623168944
+            ],
+            "focus": {
+              "owner": "habitat_plaque",
+              "lineage": [
+                "expo_press_habitat_plaque_3",
+                "expo_press_habitat_plaque",
+                "Scene"
+              ],
+              "distance": 1.2870122342512746
+            },
+            "centre": [
+              19.1299991607666,
+              0.9399999976158142,
+              9.500810623168945
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "habitat",
+          "node": "expo_replay_hab_1",
+          "authored": true,
+          "depth": 0.01624,
+          "approach": {
+            "feet": [
+              20.18000030517578,
+              -0.14000000059604645,
+              8.294900302886962
+            ],
+            "focus": {
+              "owner": "expo_replay_hab_1",
+              "lineage": [
+                "expo_replay_hab_1_2",
+                "expo_replay_hab_1",
+                "Scene"
+              ],
+              "distance": 1.5950859790275798
+            },
+            "centre": [
+              20.18000030517578,
+              0.30799999088048935,
+              9.414900302886963
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "habitat",
+          "node": "expo_replay_slot_13",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              19.307680130004883,
+              0,
+              5.024728174209595
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_13",
+              "lineage": [
+                "expo_replay_slot_13_2",
+                "expo_replay_slot_13",
+                "Scene"
+              ],
+              "distance": 1.2757139217356135
+            },
+            "centre": [
+              19.307680130004883,
+              0.9473599791526794,
+              3.9047281742095947
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "habitat",
+          "node": "expo_review_slot_13",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              18.564321517944336,
+              0,
+              5.027249927520752
+            ],
+            "focus": {
+              "owner": "expo_review_slot_13",
+              "lineage": [
+                "expo_review_slot_13_1",
+                "expo_review_slot_13",
+                "Scene"
+              ],
+              "distance": 1.2831732325676857
+            },
+            "centre": [
+              18.564321517944336,
+              0.9473599791526794,
+              3.907249927520752
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "shop",
+          "node": "expo_press_framed_contract",
+          "authored": true,
+          "depth": 0.018977448,
+          "approach": {
+            "feet": [
+              19.610000610351562,
+              0,
+              -10.109999542236327
+            ],
+            "focus": {
+              "owner": "framed_contract",
+              "lineage": [
+                "expo_press_framed_contract_2",
+                "expo_press_framed_contract",
+                "Scene"
+              ],
+              "distance": 1.2014755657175422
+            },
+            "centre": [
+              19.610000610351562,
+              1.0971441864967346,
+              -11.229999542236328
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "shop",
+          "node": "expo_press_till_display",
+          "authored": true,
+          "depth": 0.018977448,
+          "approach": {
+            "feet": [
+              21.200000762939453,
+              0,
+              -10.109999542236327
+            ],
+            "focus": {
+              "owner": "till_display",
+              "lineage": [
+                "expo_press_till_display_2",
+                "expo_press_till_display",
+                "Scene"
+              ],
+              "distance": 1.2014755657175422
+            },
+            "centre": [
+              21.200000762939453,
+              1.0971441864967346,
+              -11.229999542236328
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "shop",
+          "node": "expo_replay_slot_14",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              15.024727458953858,
+              0,
+              -13.464079856872559
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_14",
+              "lineage": [
+                "expo_replay_slot_14_2",
+                "expo_replay_slot_14",
+                "Scene"
+              ],
+              "distance": 1.2757139217356146
+            },
+            "centre": [
+              13.904727458953857,
+              0.9473599791526794,
+              -13.464079856872559
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "shop",
+          "node": "expo_review_slot_14",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              15.027249450683595,
+              0,
+              -12.720719337463379
+            ],
+            "focus": {
+              "owner": "expo_review_slot_14",
+              "lineage": [
+                "expo_review_slot_14_1",
+                "expo_review_slot_14",
+                "Scene"
+              ],
+              "distance": 1.283173784455141
+            },
+            "centre": [
+              13.907249450683594,
+              0.9473599791526794,
+              -12.720719337463379
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "shop",
+          "node": "expo_press_exit_sale",
+          "authored": true,
+          "depth": 0.018977448,
+          "locked": true,
+          "lockedFocus": null,
+          "approach": {
+            "feet": [
+              22.8799991607666,
+              0,
+              -10.109999542236327
+            ],
+            "focus": {
+              "owner": "exit_sale",
+              "lineage": [
+                "expo_press_exit_sale_2",
+                "expo_press_exit_sale",
+                "Scene"
+              ],
+              "distance": 1.2014755657175422
+            },
+            "centre": [
+              22.8799991607666,
+              1.0971441864967346,
+              -11.229999542236328
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "alpaca_button",
+          "authored": true,
+          "depth": 0.01624,
+          "approach": {
+            "feet": [
+              5.251742124573605,
+              -0.6800000071525574,
+              -25.495735135188298
+            ],
+            "focus": {
+              "owner": "alpaca_button",
+              "lineage": [
+                "alpaca_button_3",
+                "alpaca_button",
+                "Scene"
+              ],
+              "distance": 1.2286401517193386
+            },
+            "centre": [
+              6.339708566665649,
+              0.33730004727840424,
+              -25.76168441772461
+            ]
+          },
+          "returnedTo": "atrium",
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_bartholomew",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              4.558362903820874,
+              -0.6800000071525574,
+              -28.300209169591806
+            ],
+            "focus": {
+              "owner": "expo_replay_log_bartholomew",
+              "lineage": [
+                "expo_replay_log_bartholomew_2",
+                "expo_replay_log_bartholomew",
+                "Scene"
+              ],
+              "distance": 1.4721131488625525
+            },
+            "centre": [
+              5.389614105224609,
+              -0.05799996480345726,
+              -29.050823211669922
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_bob",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              -4.8691348993058705,
+              -0.6800000071525574,
+              -24.71858504633521
+            ],
+            "focus": {
+              "owner": "expo_replay_log_bob",
+              "lineage": [
+                "expo_replay_log_bob_2",
+                "expo_replay_log_bob",
+                "Scene"
+              ],
+              "distance": 1.4724375606643156
+            },
+            "centre": [
+              -5.817344427108765,
+              -0.05799996852874756,
+              -24.12251567840576
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_doctor",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              5.054928302781002,
+              -0.6800000071525574,
+              -25.872163739314274
+            ],
+            "focus": {
+              "owner": "expo_replay_log_doctor",
+              "lineage": [
+                "expo_replay_log_doctor_2",
+                "expo_replay_log_doctor",
+                "Scene"
+              ],
+              "distance": 1.4740728480770233
+            },
+            "centre": [
+              6.142894744873047,
+              -0.05799996852874756,
+              -26.138113021850586
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_gary",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              4.340551974758865,
+              -0.6800000071525574,
+              -23.498745777927496
+            ],
+            "focus": {
+              "owner": "expo_replay_log_gary",
+              "lineage": [
+                "expo_replay_log_gary_2",
+                "expo_replay_log_gary",
+                "Scene"
+              ],
+              "distance": 1.473987141565442
+            },
+            "centre": [
+              5.424341440200806,
+              -0.05799996852874756,
+              -23.216256141662598
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_greg",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              -4.939338408400964,
+              -0.6800000071525574,
+              -27.19614919124035
+            ],
+            "focus": {
+              "owner": "expo_replay_log_greg",
+              "lineage": [
+                "expo_replay_log_greg_2",
+                "expo_replay_log_greg",
+                "Scene"
+              ],
+              "distance": 1.474924847012356
+            },
+            "centre": [
+              -6.056864261627197,
+              -0.05799996480345726,
+              -27.121745109558105
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_henry",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              -3.827734601007674,
+              -0.6800000071525574,
+              -29.41086480963157
+            ],
+            "focus": {
+              "owner": "expo_replay_log_henry",
+              "lineage": [
+                "expo_replay_log_henry_2",
+                "expo_replay_log_henry",
+                "Scene"
+              ],
+              "distance": 1.473094888154211
+            },
+            "centre": [
+              -4.8465962409973145,
+              -0.05799996480345726,
+              -29.875967979431152
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_kevin",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              0.21051674465795583,
+              -0.6800000071525574,
+              -21.043991655927286
+            ],
+            "focus": {
+              "owner": "expo_replay_log_kevin",
+              "lineage": [
+                "expo_replay_log_kevin_2",
+                "expo_replay_log_kevin",
+                "Scene"
+              ],
+              "distance": 1.4736148562602494
+            },
+            "centre": [
+              0.5696033090353012,
+              -0.05799996852874756,
+              -19.983116149902344
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_lashes",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              -3.6297059163449577,
+              -0.6800000071525574,
+              -22.572752181845534
+            ],
+            "focus": {
+              "owner": "expo_replay_log_lashes",
+              "lineage": [
+                "expo_replay_log_lashes_2",
+                "expo_replay_log_lashes",
+                "Scene"
+              ],
+              "distance": 1.4726611228996611
+            },
+            "centre": [
+              -4.181220293045044,
+              -0.05799996852874756,
+              -21.59795379638672
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_margaret",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              -1.797558809866489,
+              -0.6800000071525574,
+              -30.831634688879586
+            ],
+            "focus": {
+              "owner": "expo_replay_log_margaret",
+              "lineage": [
+                "expo_replay_log_margaret_2",
+                "expo_replay_log_margaret",
+                "Scene"
+              ],
+              "distance": 1.4721130796793178
+            },
+            "centre": [
+              -2.473435163497925,
+              -0.05799996852874756,
+              -31.724714279174805
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_nana",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              2.967187165048556,
+              -0.6800000071525574,
+              -30.199515827596
+            ],
+            "focus": {
+              "owner": "expo_replay_log_nana",
+              "lineage": [
+                "expo_replay_log_nana_2",
+                "expo_replay_log_nana",
+                "Scene"
+              ],
+              "distance": 1.4735383818470118
+            },
+            "centre": [
+              3.3423906564712524,
+              -0.05799996852874756,
+              -31.254798889160156
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_reginald",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              0.6644855193329239,
+              -0.6800000071525574,
+              -31.11594785635772
+            ],
+            "focus": {
+              "owner": "expo_replay_log_reginald",
+              "lineage": [
+                "expo_replay_log_reginald_2",
+                "expo_replay_log_reginald",
+                "Scene"
+              ],
+              "distance": 1.4745054035842218
+            },
+            "centre": [
+              0.49366824328899384,
+              -0.05799996480345726,
+              -32.22284507751465
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "expo_replay_log_spitz",
+          "authored": true,
+          "depth": 0.016360512,
+          "approach": {
+            "feet": [
+              2.5863656693874963,
+              -0.6800000071525574,
+              -21.749103294080548
+            ],
+            "focus": {
+              "owner": "expo_replay_log_spitz",
+              "lineage": [
+                "expo_replay_log_spitz_2",
+                "expo_replay_log_spitz",
+                "Scene"
+              ],
+              "distance": 1.4721115319101705
+            },
+            "centre": [
+              3.4060875177383423,
+              -0.05799996480345726,
+              -20.985915184020996
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_bartholomew",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              4.380114498364331,
+              -0.6800000071525574,
+              -28.49226964017286
+            ],
+            "focus": {
+              "owner": "expo_replay_log_bartholomew",
+              "lineage": [
+                "log_bartholomew_2",
+                "log_bartholomew",
+                "Scene"
+              ],
+              "distance": 1.4655458465701716
+            },
+            "centre": [
+              5.211365699768066,
+              -0.05799996852874756,
+              -29.242883682250977
+            ]
+          },
+          "log": {
+            "id": "log_bartholomew",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_bob",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              -4.726573702024987,
+              -0.6800000071525574,
+              -24.498673471017828
+            ],
+            "focus": {
+              "owner": "expo_replay_log_bob",
+              "lineage": [
+                "log_bob_2",
+                "log_bob",
+                "Scene"
+              ],
+              "distance": 1.465976613528375
+            },
+            "centre": [
+              -5.674783229827881,
+              -0.05799996852874756,
+              -23.90260410308838
+            ]
+          },
+          "log": {
+            "id": "log_bob",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_doctor",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              4.988808155075924,
+              -0.6800000071525574,
+              -26.125817265620427
+            ],
+            "focus": {
+              "owner": "expo_replay_log_doctor",
+              "lineage": [
+                "log_doctor_2",
+                "log_doctor",
+                "Scene"
+              ],
+              "distance": 1.4680636367503332
+            },
+            "centre": [
+              6.076774597167969,
+              -0.05799996852874756,
+              -26.39176654815674
+            ]
+          },
+          "log": {
+            "id": "log_doctor",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_gary",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              4.4027334475371855,
+              -0.6800000071525574,
+              -23.75317654880152
+            ],
+            "focus": {
+              "owner": "expo_replay_log_gary",
+              "lineage": [
+                "log_gary_2",
+                "log_gary",
+                "Scene"
+              ],
+              "distance": 1.4679835697159496
+            },
+            "centre": [
+              5.486522912979126,
+              -0.05799996852874756,
+              -23.47068691253662
+            ]
+          },
+          "log": {
+            "id": "log_gary",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_greg",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              -4.917746983458947,
+              -0.6800000071525574,
+              -26.934966406206172
+            ],
+            "focus": {
+              "owner": "expo_replay_log_greg",
+              "lineage": [
+                "log_greg_2",
+                "log_greg",
+                "Scene"
+              ],
+              "distance": 1.4691735098412457
+            },
+            "centre": [
+              -6.035272836685181,
+              -0.05799996852874756,
+              -26.860562324523926
+            ]
+          },
+          "log": {
+            "id": "log_greg",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_henry",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              -3.9330378885137773,
+              -0.6800000071525574,
+              -29.171037653564674
+            ],
+            "focus": {
+              "owner": "expo_replay_log_henry",
+              "lineage": [
+                "log_henry_2",
+                "log_henry",
+                "Scene"
+              ],
+              "distance": 1.466820936760405
+            },
+            "centre": [
+              -4.951899528503418,
+              -0.05799996852874756,
+              -29.636140823364258
+            ]
+          },
+          "log": {
+            "id": "log_henry",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_kevin",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              0.45753855387826986,
+              -0.6800000071525574,
+              -21.13173541508256
+            ],
+            "focus": {
+              "owner": "expo_replay_log_kevin",
+              "lineage": [
+                "log_kevin_2",
+                "log_kevin",
+                "Scene"
+              ],
+              "distance": 1.4674916927320647
+            },
+            "centre": [
+              0.8166251182556152,
+              -0.05799996852874756,
+              -20.070859909057617
+            ]
+          },
+          "log": {
+            "id": "log_kevin",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_lashes",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              -3.3999099835751823,
+              -0.6800000071525574,
+              -22.446995918112624
+            ],
+            "focus": {
+              "owner": "expo_replay_log_lashes",
+              "lineage": [
+                "log_lashes_2",
+                "log_lashes",
+                "Scene"
+              ],
+              "distance": 1.4662603004663353
+            },
+            "centre": [
+              -3.9514243602752686,
+              -0.05799996852874756,
+              -21.47219753265381
+            ]
+          },
+          "log": {
+            "id": "log_lashes",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_margaret",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              -2.0043109909196506,
+              -0.6800000071525574,
+              -30.670677352453804
+            ],
+            "focus": {
+              "owner": "expo_replay_log_margaret",
+              "lineage": [
+                "log_margaret_2",
+                "log_margaret",
+                "Scene"
+              ],
+              "distance": 1.4655483512988514
+            },
+            "centre": [
+              -2.6801873445510864,
+              -0.05799996852874756,
+              -31.563756942749023
+            ]
+          },
+          "log": {
+            "id": "log_margaret",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_nana",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              2.7191267001895474,
+              -0.6800000071525574,
+              -30.28357935756426
+            ],
+            "focus": {
+              "owner": "expo_replay_log_nana",
+              "lineage": [
+                "log_nana_2",
+                "log_nana",
+                "Scene"
+              ],
+              "distance": 1.4673917391558617
+            },
+            "centre": [
+              3.0943301916122437,
+              -0.05799996852874756,
+              -31.338862419128418
+            ]
+          },
+          "log": {
+            "id": "log_nana",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_reginald",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              0.40609714905742644,
+              -0.6800000071525574,
+              -31.071918620517877
+            ],
+            "focus": {
+              "owner": "expo_replay_log_reginald",
+              "lineage": [
+                "log_reginald_2",
+                "log_reginald",
+                "Scene"
+              ],
+              "distance": 1.4686418371252081
+            },
+            "centre": [
+              0.2352798730134964,
+              -0.05799996852874756,
+              -32.178815841674805
+            ]
+          },
+          "log": {
+            "id": "log_reginald",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "log_spitz",
+          "authored": true,
+          "depth": 0.0211344,
+          "approach": {
+            "feet": [
+              2.7622803145825037,
+              -0.6800000071525574,
+              -21.943302856153302
+            ],
+            "focus": {
+              "owner": "expo_replay_log_spitz",
+              "lineage": [
+                "log_spitz_2",
+                "log_spitz",
+                "Scene"
+              ],
+              "distance": 1.4655462632602636
+            },
+            "centre": [
+              3.5820021629333496,
+              -0.05799996852874756,
+              -21.18011474609375
+            ]
+          },
+          "log": {
+            "id": "log_spitz",
+            "heard": true,
+            "playing": "ex_press",
+            "queued": true
+          },
+          "passed": true
+        },
+        {
+          "zone": "twelve",
+          "node": "photo_release",
+          "authored": false,
+          "depth": 0.029,
+          "floorHatchOpened": true,
+          "approach": {
+            "feet": [
+              0,
+              -0.6800000071525575,
+              -24.03000057220459
+            ],
+            "focus": {
+              "owner": "photo_release",
+              "lineage": [
+                "photo_release_2",
+                "photo_release",
+                "Scene"
+              ],
+              "distance": 1.887595933552571
+            },
+            "centre": [
+              0,
+              -0.6480000019073486,
+              -25.15000057220459
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "catwalk",
+          "node": "expo_control_terrace",
+          "authored": true,
+          "depth": 0.01624,
+          "approach": {
+            "feet": [
+              -13.74429977416992,
+              6.800000190734863,
+              25.09000015258789
+            ],
+            "focus": {
+              "owner": "expo_control_terrace",
+              "lineage": [
+                "expo_control_terrace_3",
+                "expo_control_terrace",
+                "Scene"
+              ],
+              "distance": 1.1848035719878238
+            },
+            "centre": [
+              -14.864299774169922,
+              7.982874631881714,
+              25.09000015258789
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "service",
+          "node": "expo_control_station",
+          "authored": true,
+          "depth": 0.01624,
+          "approach": {
+            "feet": [
+              25.574300651550292,
+              0,
+              28.939998626708984
+            ],
+            "focus": {
+              "owner": "expo_control_station",
+              "lineage": [
+                "expo_control_station_3",
+                "expo_control_station",
+                "Scene"
+              ],
+              "distance": 1.191418060774755
+            },
+            "centre": [
+              26.694300651550293,
+              1.1641249656677246,
+              28.939998626708984
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "service",
+          "node": "expo_replay_slot_10",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              17.65472900390625,
+              0,
+              26.974319458007812
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_10",
+              "lineage": [
+                "expo_replay_slot_10_2",
+                "expo_replay_slot_10",
+                "Scene"
+              ],
+              "distance": 1.275713369848158
+            },
+            "centre": [
+              16.53472900390625,
+              0.9473599791526794,
+              26.974319458007812
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "service",
+          "node": "expo_review_slot_10",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              17.65725051879883,
+              0,
+              27.71767807006836
+            ],
+            "focus": {
+              "owner": "expo_review_slot_10",
+              "lineage": [
+                "expo_review_slot_10_1",
+                "expo_review_slot_10",
+                "Scene"
+              ],
+              "distance": 1.2831726806802302
+            },
+            "centre": [
+              16.537250518798828,
+              0.9473599791526794,
+              27.71767807006836
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "dome",
+          "node": "expo_replay_dome_0",
+          "authored": true,
+          "depth": 0.01624,
+          "approach": {
+            "feet": [
+              -23.17210018157959,
+              0,
+              -4.949999809265137
+            ],
+            "focus": {
+              "owner": "expo_replay_dome_0",
+              "lineage": [
+                "expo_replay_dome_0_2",
+                "expo_replay_dome_0",
+                "Scene"
+              ],
+              "distance": 1.2020287856868135
+            },
+            "centre": [
+              -22.05210018157959,
+              1.1399999856948853,
+              -4.949999809265137
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "chronology",
+          "node": "expo_replay_slot_02",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              8.245272045135497,
+              5.551115123125783e-17,
+              59.5496826171875
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_02",
+              "lineage": [
+                "expo_replay_slot_02_2",
+                "expo_replay_slot_02",
+                "Scene"
+              ],
+              "distance": 1.2757139217356146
+            },
+            "centre": [
+              9.365272045135498,
+              0.9473599791526794,
+              59.5496826171875
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "chronology",
+          "node": "expo_replay_slot_03",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              7.354728336334229,
+              0,
+              83.2003173828125
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_03",
+              "lineage": [
+                "expo_replay_slot_03_2",
+                "expo_replay_slot_03",
+                "Scene"
+              ],
+              "distance": 1.2757139217356135
+            },
+            "centre": [
+              6.2347283363342285,
+              0.9473599791526794,
+              83.2003173828125
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "chronology",
+          "node": "expo_review_slot_02",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              8.24275005340576,
+              5.551115123125783e-17,
+              58.80632019042969
+            ],
+            "focus": {
+              "owner": "expo_review_slot_02",
+              "lineage": [
+                "expo_review_slot_02_1",
+                "expo_review_slot_02",
+                "Scene"
+              ],
+              "distance": 1.283173784455141
+            },
+            "centre": [
+              9.362750053405762,
+              0.9473599791526794,
+              58.80632019042969
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "chronology",
+          "node": "expo_review_slot_03",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              7.357250089645386,
+              0,
+              83.94367980957031
+            ],
+            "focus": {
+              "owner": "expo_review_slot_03",
+              "lineage": [
+                "expo_review_slot_03_1",
+                "expo_review_slot_03",
+                "Scene"
+              ],
+              "distance": 1.2831729566239585
+            },
+            "centre": [
+              6.237250089645386,
+              0.9473599791526794,
+              83.94367980957031
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "forum",
+          "node": "expo_replay_slot_04",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -14.879679679870605,
+              0,
+              103.44526947021484
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_04",
+              "lineage": [
+                "expo_replay_slot_04_2",
+                "expo_replay_slot_04",
+                "Scene"
+              ],
+              "distance": 1.2757133698481655
+            },
+            "centre": [
+              -14.879679679870605,
+              0.9473599791526794,
+              104.56526947021484
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "forum",
+          "node": "expo_replay_slot_05",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -44.330318450927734,
+              0,
+              102.55473052978516
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_05",
+              "lineage": [
+                "expo_replay_slot_05_2",
+                "expo_replay_slot_05",
+                "Scene"
+              ],
+              "distance": 1.2757133698481655
+            },
+            "centre": [
+              -44.330318450927734,
+              0.9473599791526794,
+              101.43473052978516
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "forum",
+          "node": "expo_review_slot_04",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -14.136319160461426,
+              0,
+              103.44274795532226
+            ],
+            "focus": {
+              "owner": "expo_review_slot_04",
+              "lineage": [
+                "expo_review_slot_04_1",
+                "expo_review_slot_04",
+                "Scene"
+              ],
+              "distance": 1.2831704731304205
+            },
+            "centre": [
+              -14.136319160461426,
+              0.9473599791526794,
+              104.56274795532227
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "forum",
+          "node": "expo_review_slot_05",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -45.07368087768555,
+              0,
+              102.55725204467774
+            ],
+            "focus": {
+              "owner": "expo_review_slot_05",
+              "lineage": [
+                "expo_review_slot_05_1",
+                "expo_review_slot_05",
+                "Scene"
+              ],
+              "distance": 1.2831704731304205
+            },
+            "centre": [
+              -45.07368087768555,
+              0.9473599791526794,
+              101.43725204467773
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "commons",
+          "node": "expo_replay_slot_06",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -66.64526641845703,
+              0,
+              84.6003189086914
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_06",
+              "lineage": [
+                "expo_replay_slot_06_2",
+                "expo_replay_slot_06",
+                "Scene"
+              ],
+              "distance": 1.2757133698481655
+            },
+            "centre": [
+              -67.76526641845703,
+              0.9473599791526794,
+              84.6003189086914
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "commons",
+          "node": "expo_replay_slot_07",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -65.75472747802735,
+              0,
+              63.899681091308594
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_07",
+              "lineage": [
+                "expo_replay_slot_07_2",
+                "expo_replay_slot_07",
+                "Scene"
+              ],
+              "distance": 1.2757133698481655
+            },
+            "centre": [
+              -64.63472747802734,
+              0.9473599791526794,
+              63.899681091308594
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "commons",
+          "node": "expo_review_slot_06",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -66.64274490356445,
+              0,
+              85.34368133544922
+            ],
+            "focus": {
+              "owner": "expo_review_slot_06",
+              "lineage": [
+                "expo_review_slot_06_1",
+                "expo_review_slot_06",
+                "Scene"
+              ],
+              "distance": 1.2831704731304205
+            },
+            "centre": [
+              -67.76274490356445,
+              0.9473599791526794,
+              85.34368133544922
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "commons",
+          "node": "expo_review_slot_07",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -65.75724899291993,
+              0,
+              63.15631866455078
+            ],
+            "focus": {
+              "owner": "expo_review_slot_07",
+              "lineage": [
+                "expo_review_slot_07_1",
+                "expo_review_slot_07",
+                "Scene"
+              ],
+              "distance": 1.2831704731304205
+            },
+            "centre": [
+              -64.63724899291992,
+              0.9473599791526794,
+              63.15631866455078
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "aquarium",
+          "node": "expo_replay_slot_08",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -47.632720947265625,
+              5.551115123125783e-17,
+              46.074730987548826
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_08",
+              "lineage": [
+                "expo_replay_slot_08_2",
+                "expo_replay_slot_08",
+                "Scene"
+              ],
+              "distance": 1.2757133698481589
+            },
+            "centre": [
+              -47.632720947265625,
+              0.9473599791526794,
+              44.95473098754883
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "aquarium",
+          "node": "expo_replay_slot_09",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -26.00967788696289,
+              5.551115123125783e-17,
+              45.945269470214846
+            ],
+            "focus": {
+              "owner": "expo_replay_slot_09",
+              "lineage": [
+                "expo_replay_slot_09_2",
+                "expo_replay_slot_09",
+                "Scene"
+              ],
+              "distance": 1.2757133698481589
+            },
+            "centre": [
+              -26.00967788696289,
+              0.9473599791526794,
+              47.065269470214844
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "aquarium",
+          "node": "expo_review_slot_08",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -48.37608337402344,
+              5.551115123125783e-17,
+              46.077252502441404
+            ],
+            "focus": {
+              "owner": "expo_review_slot_08",
+              "lineage": [
+                "expo_review_slot_08_1",
+                "expo_review_slot_08",
+                "Scene"
+              ],
+              "distance": 1.283174888230048
+            },
+            "centre": [
+              -48.37608337402344,
+              0.9473599791526794,
+              44.957252502441406
+            ]
+          },
+          "passed": true
+        },
+        {
+          "zone": "aquarium",
+          "node": "expo_review_slot_09",
+          "authored": true,
+          "depth": 0.024,
+          "approach": {
+            "feet": [
+              -25.266319274902344,
+              5.551115123125783e-17,
+              45.94274795532227
+            ],
+            "focus": {
+              "owner": "expo_review_slot_09",
+              "lineage": [
+                "expo_review_slot_09_1",
+                "expo_review_slot_09",
+                "Scene"
+              ],
+              "distance": 1.283174888230048
+            },
+            "centre": [
+              -25.266319274902344,
+              0.9473599791526794,
+              47.062747955322266
+            ]
+          },
+          "passed": true
+        }
+      ],
+      "files": [
+        {
+          "file": "atrium-9b8ecd44a176.glb.gz",
+          "bytes": 2109791,
+          "sha256": "258aea753b2b578906354870fa6ff2b9cbdb59b7bdc68254926e6b6ded69febb"
+        },
+        {
+          "file": "atrium-collision.glb",
+          "bytes": 100064,
+          "sha256": "c8fd993162449d0f2855e304d4b5d4c381aa774612678c5e7925f6e321e486b4"
+        },
+        {
+          "file": "hall-mobile.glb",
+          "bytes": 4249124,
+          "sha256": "3ad2fee7364e34b086d83cd1720d61d92d0efa580b8dd767e46bec0306887cbe"
+        },
+        {
+          "file": "hall-collision.glb",
+          "bytes": 92436,
+          "sha256": "e008db15caf54a5127dea3a1507f85d363fbb226e17b4a6d8351c167ef83333d"
+        },
+        {
+          "file": "shop-mobile.glb",
+          "bytes": 1000544,
+          "sha256": "5ac7a0948995b3dcc8d20fabb061833a4caa1783a0609ee449e2aad829068dfe"
+        },
+        {
+          "file": "shop-collision.glb",
+          "bytes": 19716,
+          "sha256": "2f2b4f63c9224f32471287dd729ab5e2e2419d687c28be469eac3f86d2fcf056"
+        },
+        {
+          "file": "twelve-collision.glb",
+          "bytes": 76708,
+          "sha256": "ca7861659b963febd51b501e381eac33a5a0bd5b211df8742bc038911d746383"
+        },
+        {
+          "file": "twelve-mobile.glb",
+          "bytes": 11879624,
+          "sha256": "96fb66c46b3715cac0fc566e296681bf18052565e670f423760a2259cc77aea8"
+        },
+        {
+          "file": "dome-collision.glb",
+          "bytes": 32848,
+          "sha256": "d8810f80c5707f5895350bc8d1514d723c4c6eef0767d2385e20b0cf113c921b"
+        },
+        {
+          "file": "dome-mobile.glb",
+          "bytes": 3562804,
+          "sha256": "18c0eccd8347b20302564a332766dcf4bcd53b4516df5ff084cbf4fd04d56c4c"
+        },
+        {
+          "file": "hoof-mobile.glb",
+          "bytes": 825492,
+          "sha256": "126e6b0fa6f0bf8d6432462d8a93345daceff40cccadf9f414fd4e9066b2df4d"
+        },
+        {
+          "file": "hoof-collision.glb",
+          "bytes": 13736,
+          "sha256": "9cd503e6a2784a8797509e155f3a4e46dd7f8cb4a503cc74d0b54600cb0229ce"
+        },
+        {
+          "file": "atrium-9b8ecd44a176.glb.gz",
+          "bytes": 2109791,
+          "sha256": "258aea753b2b578906354870fa6ff2b9cbdb59b7bdc68254926e6b6ded69febb"
+        },
+        {
+          "file": "atrium-collision.glb",
+          "bytes": 100064,
+          "sha256": "c8fd993162449d0f2855e304d4b5d4c381aa774612678c5e7925f6e321e486b4"
+        },
+        {
+          "file": "service-mobile.glb",
+          "bytes": 1398324,
+          "sha256": "83c98c7010967c030c80e37c6e52aaa12b8d0628462c439eaa7854a7e66f8700"
+        },
+        {
+          "file": "service-collision.glb",
+          "bytes": 55576,
+          "sha256": "61952fdc7dd939c83ee9da53ee17b72c30a32f47b3cf00c71b539a0b3e4ab316"
+        },
+        {
+          "file": "chronology-mobile.glb",
+          "bytes": 2220516,
+          "sha256": "a2f24244509c799324a7b5bb46e2a6ab10685effae3943e71d83f403b66fda5f"
+        },
+        {
+          "file": "chronology-collision.glb",
+          "bytes": 21068,
+          "sha256": "4688129c4947700d8d26ec7e37327aac75d0d6fe327798e349fe674660cb32bb"
+        },
+        {
+          "file": "hoof-mobile.glb",
+          "bytes": 825492,
+          "sha256": "126e6b0fa6f0bf8d6432462d8a93345daceff40cccadf9f414fd4e9066b2df4d"
+        },
+        {
+          "file": "hoof-collision.glb",
+          "bytes": 13736,
+          "sha256": "9cd503e6a2784a8797509e155f3a4e46dd7f8cb4a503cc74d0b54600cb0229ce"
+        },
+        {
+          "file": "hall-mobile.glb",
+          "bytes": 4249124,
+          "sha256": "3ad2fee7364e34b086d83cd1720d61d92d0efa580b8dd767e46bec0306887cbe"
+        },
+        {
+          "file": "hall-collision.glb",
+          "bytes": 92436,
+          "sha256": "e008db15caf54a5127dea3a1507f85d363fbb226e17b4a6d8351c167ef83333d"
+        },
+        {
+          "file": "habitat-mobile.glb",
+          "bytes": 785120,
+          "sha256": "7456c6767448bc0506795f2b39b696ad7bd3ba8fc0b6313ea7fd091e655bd5c4"
+        },
+        {
+          "file": "habitat-collision.glb",
+          "bytes": 27504,
+          "sha256": "aa7396174d00b97274c07149d44f2c453af6e2d96f9ac0b2c46930a6bbc85725"
+        },
+        {
+          "file": "shop-mobile.glb",
+          "bytes": 1000544,
+          "sha256": "5ac7a0948995b3dcc8d20fabb061833a4caa1783a0609ee449e2aad829068dfe"
+        },
+        {
+          "file": "shop-collision.glb",
+          "bytes": 19716,
+          "sha256": "2f2b4f63c9224f32471287dd729ab5e2e2419d687c28be469eac3f86d2fcf056"
+        },
+        {
+          "file": "twelve-collision.glb",
+          "bytes": 76708,
+          "sha256": "ca7861659b963febd51b501e381eac33a5a0bd5b211df8742bc038911d746383"
+        },
+        {
+          "file": "twelve-mobile.glb",
+          "bytes": 11879624,
+          "sha256": "96fb66c46b3715cac0fc566e296681bf18052565e670f423760a2259cc77aea8"
+        },
+        {
+          "file": "atrium-9b8ecd44a176.glb.gz",
+          "bytes": 2109791,
+          "sha256": "258aea753b2b578906354870fa6ff2b9cbdb59b7bdc68254926e6b6ded69febb"
+        },
+        {
+          "file": "atrium-collision.glb",
+          "bytes": 100064,
+          "sha256": "c8fd993162449d0f2855e304d4b5d4c381aa774612678c5e7925f6e321e486b4"
+        },
+        {
+          "file": "twelve-collision.glb",
+          "bytes": 76708,
+          "sha256": "ca7861659b963febd51b501e381eac33a5a0bd5b211df8742bc038911d746383"
+        },
+        {
+          "file": "twelve-mobile.glb",
+          "bytes": 11879624,
+          "sha256": "96fb66c46b3715cac0fc566e296681bf18052565e670f423760a2259cc77aea8"
+        },
+        {
+          "file": "hall-mobile.glb",
+          "bytes": 4249124,
+          "sha256": "3ad2fee7364e34b086d83cd1720d61d92d0efa580b8dd767e46bec0306887cbe"
+        },
+        {
+          "file": "hall-collision.glb",
+          "bytes": 92436,
+          "sha256": "e008db15caf54a5127dea3a1507f85d363fbb226e17b4a6d8351c167ef83333d"
+        },
+        {
+          "file": "catwalk-mobile.glb",
+          "bytes": 1479172,
+          "sha256": "186f29bdd51466760fc4097aee86dd8b88965c5f41c09fb274dc9f0b1f4f3bcd"
+        },
+        {
+          "file": "catwalk-collision.glb",
+          "bytes": 20232,
+          "sha256": "00de5d16cc529c7c8caea842d733fef31d5212f60c099d82b17a274998d46362"
+        },
+        {
+          "file": "atrium-9b8ecd44a176.glb.gz",
+          "bytes": 2109791,
+          "sha256": "258aea753b2b578906354870fa6ff2b9cbdb59b7bdc68254926e6b6ded69febb"
+        },
+        {
+          "file": "atrium-collision.glb",
+          "bytes": 100064,
+          "sha256": "c8fd993162449d0f2855e304d4b5d4c381aa774612678c5e7925f6e321e486b4"
+        },
+        {
+          "file": "service-mobile.glb",
+          "bytes": 1398324,
+          "sha256": "83c98c7010967c030c80e37c6e52aaa12b8d0628462c439eaa7854a7e66f8700"
+        },
+        {
+          "file": "service-collision.glb",
+          "bytes": 55576,
+          "sha256": "61952fdc7dd939c83ee9da53ee17b72c30a32f47b3cf00c71b539a0b3e4ab316"
+        },
+        {
+          "file": "secret-mobile.glb",
+          "bytes": 2004944,
+          "sha256": "8b5dcf19dfaee459688cc9e9cc5655a4893a6733171a4a25fec49c0ef3525498"
+        },
+        {
+          "file": "secret-collision.glb",
+          "bytes": 16424,
+          "sha256": "2d0db725da14ce9d6b36e14f2a6cf88a98cccd2e7b1d495e6a4f336465967a07"
+        },
+        {
+          "file": "dome-collision.glb",
+          "bytes": 32848,
+          "sha256": "d8810f80c5707f5895350bc8d1514d723c4c6eef0767d2385e20b0cf113c921b"
+        },
+        {
+          "file": "dome-mobile.glb",
+          "bytes": 3562804,
+          "sha256": "18c0eccd8347b20302564a332766dcf4bcd53b4516df5ff084cbf4fd04d56c4c"
+        },
+        {
+          "file": "catwalk-mobile.glb",
+          "bytes": 1479172,
+          "sha256": "186f29bdd51466760fc4097aee86dd8b88965c5f41c09fb274dc9f0b1f4f3bcd"
+        },
+        {
+          "file": "catwalk-collision.glb",
+          "bytes": 20232,
+          "sha256": "00de5d16cc529c7c8caea842d733fef31d5212f60c099d82b17a274998d46362"
+        },
+        {
+          "file": "hall-mobile.glb",
+          "bytes": 4249124,
+          "sha256": "3ad2fee7364e34b086d83cd1720d61d92d0efa580b8dd767e46bec0306887cbe"
+        },
+        {
+          "file": "hall-collision.glb",
+          "bytes": 92436,
+          "sha256": "e008db15caf54a5127dea3a1507f85d363fbb226e17b4a6d8351c167ef83333d"
+        },
+        {
+          "file": "chronology-mobile.glb",
+          "bytes": 2220516,
+          "sha256": "a2f24244509c799324a7b5bb46e2a6ab10685effae3943e71d83f403b66fda5f"
+        },
+        {
+          "file": "chronology-collision.glb",
+          "bytes": 21068,
+          "sha256": "4688129c4947700d8d26ec7e37327aac75d0d6fe327798e349fe674660cb32bb"
+        },
+        {
+          "file": "forum-mobile.glb",
+          "bytes": 1336364,
+          "sha256": "d90841969cb4ecc14ffd07a58c778dd852e863ba359fcb18475f9f8c804c6490"
+        },
+        {
+          "file": "forum-collision.glb",
+          "bytes": 24564,
+          "sha256": "4fd9c3e4fd42774e82d786b58c472a8ba847e7d4e4c2a179f26f17652f8db334"
+        },
+        {
+          "file": "commons-mobile.glb",
+          "bytes": 1921280,
+          "sha256": "c293bf162faa618a22efdc5574dc2045ead41d0e604fda712f024c102af41251"
+        },
+        {
+          "file": "commons-collision.glb",
+          "bytes": 52600,
+          "sha256": "6df04eb7bbee275d9ae6d753e9043435c042d744727dcc13c0a7203589f93a42"
+        },
+        {
+          "file": "forum-mobile.glb",
+          "bytes": 1336364,
+          "sha256": "d90841969cb4ecc14ffd07a58c778dd852e863ba359fcb18475f9f8c804c6490"
+        },
+        {
+          "file": "forum-collision.glb",
+          "bytes": 24564,
+          "sha256": "4fd9c3e4fd42774e82d786b58c472a8ba847e7d4e4c2a179f26f17652f8db334"
+        },
+        {
+          "file": "aquarium-mobile.glb",
+          "bytes": 2089356,
+          "sha256": "430663eff3b7b8deeb1f59db2463833edc8a296e2caba3f5ac7b33f5639b899d"
+        },
+        {
+          "file": "aquarium-collision.glb",
+          "bytes": 16932,
+          "sha256": "540eda9d4f16d705e5427de39d14278baa9c3231750e6a2b2d4d37cf5756fbd6"
+        },
+        {
+          "file": "commons-mobile.glb",
+          "bytes": 1921280,
+          "sha256": "c293bf162faa618a22efdc5574dc2045ead41d0e604fda712f024c102af41251"
+        },
+        {
+          "file": "commons-collision.glb",
+          "bytes": 52600,
+          "sha256": "6df04eb7bbee275d9ae6d753e9043435c042d744727dcc13c0a7203589f93a42"
+        }
+      ],
+      "unrecruited": {
+        "recruited": [
+          "reginald",
+          "margaret",
+          "henry",
+          "greg",
+          "bob",
+          "lashes",
+          "kevin",
+          "spitz"
+        ],
+        "hidden": [
+          {
+            "node": "expo_replay_log_bartholomew",
+            "visible": false,
+            "focus": null,
+            "rosterStations": [
+              "slot_01",
+              "log_bob",
+              "log_greg",
+              "log_henry",
+              "log_kevin",
+              "log_lashes",
+              "log_margaret",
+              "log_reginald",
+              "log_spitz",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing"
+            ],
+            "strokes": 0
+          },
+          {
+            "node": "expo_replay_log_doctor",
+            "visible": false,
+            "focus": null,
+            "rosterStations": [
+              "log_bob",
+              "log_greg",
+              "log_henry",
+              "log_kevin",
+              "log_lashes",
+              "log_margaret",
+              "log_reginald",
+              "log_spitz",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing"
+            ],
+            "strokes": 0
+          },
+          {
+            "node": "expo_replay_log_gary",
+            "visible": false,
+            "focus": null,
+            "rosterStations": [
+              "log_bob",
+              "log_greg",
+              "log_henry",
+              "log_kevin",
+              "log_lashes",
+              "log_margaret",
+              "log_reginald",
+              "log_spitz",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing"
+            ],
+            "strokes": 0
+          },
+          {
+            "node": "expo_replay_log_nana",
+            "visible": false,
+            "focus": null,
+            "rosterStations": [
+              "log_bob",
+              "log_greg",
+              "log_henry",
+              "log_kevin",
+              "log_lashes",
+              "log_margaret",
+              "log_reginald",
+              "log_spitz",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing"
+            ],
+            "strokes": 0
+          },
+          {
+            "node": "log_bartholomew",
+            "visible": false,
+            "focus": null,
+            "rosterStations": [
+              "log_bob",
+              "log_greg",
+              "log_henry",
+              "log_kevin",
+              "log_lashes",
+              "log_margaret",
+              "log_reginald",
+              "log_spitz",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing"
+            ],
+            "strokes": 0
+          },
+          {
+            "node": "log_doctor",
+            "visible": false,
+            "focus": null,
+            "rosterStations": [
+              "log_bob",
+              "log_greg",
+              "log_henry",
+              "log_kevin",
+              "log_lashes",
+              "log_margaret",
+              "log_reginald",
+              "log_spitz",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing"
+            ],
+            "strokes": 0
+          },
+          {
+            "node": "log_gary",
+            "visible": false,
+            "focus": null,
+            "rosterStations": [
+              "log_bob",
+              "log_greg",
+              "log_henry",
+              "log_kevin",
+              "log_lashes",
+              "log_margaret",
+              "log_reginald",
+              "log_spitz",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "ex_press",
+              "pa_photos",
+              "slot_11"
+            ],
+            "strokes": 0
+          },
+          {
+            "node": "log_nana",
+            "visible": false,
+            "focus": null,
+            "rosterStations": [
+              "log_bob",
+              "log_greg",
+              "log_henry",
+              "log_kevin",
+              "log_lashes",
+              "log_margaret",
+              "log_reginald",
+              "log_spitz",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "pa_hall4_missing",
+              "ex_press",
+              "pa_photos",
+              "slot_11"
+            ],
+            "strokes": 0
+          }
+        ]
+      }
+    }
+  ],
+  "errors": []
+}

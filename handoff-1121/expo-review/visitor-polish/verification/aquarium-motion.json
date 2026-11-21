@@ -1,0 +1,519 @@
+{
+  "url": "http://127.0.0.1:8942/fuzz/assets/expo/zones/aquarium.glb",
+  "sha256": "5641cdac49fa74014918462bd4733c31f8dec4dea0927085132620c76f1a8fef",
+  "feet": [
+    -55.55,
+    5.551115123125783e-17,
+    44.65
+  ],
+  "swimmers": [
+    {
+      "key": "aquarium_ray_1",
+      "family": "ray",
+      "dxMin": -0.9993360521665058,
+      "dxMax": 0.9993363993765654,
+      "minDot": 0.9999970447454162,
+      "distance": 9.480979291108467,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_ray_2",
+      "family": "ray",
+      "dxMin": -0.9993252049428996,
+      "dxMax": 0.9993281553849046,
+      "minDot": 0.9999997757905814,
+      "distance": 8.71237751581393,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_1_fish_1",
+      "family": "bream",
+      "dxMin": -0.9977383545867647,
+      "dxMax": 0.9977040130270627,
+      "minDot": 0.9999976507657506,
+      "distance": 8.121505028276108,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_1_fish_2",
+      "family": "bream",
+      "dxMin": -0.9977454206609667,
+      "dxMax": 0.9977393704064078,
+      "minDot": 0.9999975960778559,
+      "distance": 8.121919676194219,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_1_fish_3",
+      "family": "bream",
+      "dxMin": -0.9977440447979974,
+      "dxMax": 0.9977378769764447,
+      "minDot": 0.9999975977101545,
+      "distance": 8.123028310102445,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_4_fish_1",
+      "family": "bream",
+      "dxMin": -0.9977461832839375,
+      "dxMax": 0.9977564615017501,
+      "minDot": 0.9999987669598593,
+      "distance": 7.523830394555966,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_4_fish_2",
+      "family": "bream",
+      "dxMin": -0.997731809333319,
+      "dxMax": 0.9977557852366937,
+      "minDot": 0.9999990513067492,
+      "distance": 7.533591988388834,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_4_fish_3",
+      "family": "bream",
+      "dxMin": -0.9977414714262037,
+      "dxMax": 0.9977550025269928,
+      "minDot": 0.999999243138094,
+      "distance": 7.541254762053624,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_7_fish_1",
+      "family": "bream",
+      "dxMin": -0.9977386530585859,
+      "dxMax": 0.9977435648766116,
+      "minDot": 0.9999874670418483,
+      "distance": 6.317763949513266,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_7_fish_2",
+      "family": "bream",
+      "dxMin": -0.9977565034410578,
+      "dxMax": 0.9977544472241724,
+      "minDot": 0.9999862232529825,
+      "distance": 6.318174273727105,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_7_fish_3",
+      "family": "bream",
+      "dxMin": -0.9977576028411015,
+      "dxMax": 0.9977579007484306,
+      "minDot": 0.9999882841547567,
+      "distance": 6.318540585186038,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_10_fish_1",
+      "family": "bream",
+      "dxMin": -0.9977396170071258,
+      "dxMax": 0.9977562592612119,
+      "minDot": 0.9999994796381453,
+      "distance": 5.612198112372186,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_10_fish_2",
+      "family": "bream",
+      "dxMin": -0.9977530223352408,
+      "dxMax": 0.9977384726824843,
+      "minDot": 0.9999995747578145,
+      "distance": 5.603476366894104,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_10_fish_3",
+      "family": "bream",
+      "dxMin": -0.9977482673416208,
+      "dxMax": 0.997743085444883,
+      "minDot": 0.999999636770635,
+      "distance": 5.596536019591271,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_2_fish_1",
+      "family": "silverfish",
+      "dxMin": -0.9982696180829784,
+      "dxMax": 0.9982583038109323,
+      "minDot": 0.9999960256132098,
+      "distance": 8.71829312868302,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_2_fish_2",
+      "family": "silverfish",
+      "dxMin": -0.9982712899636326,
+      "dxMax": 0.9982715548009682,
+      "minDot": 0.999994379249928,
+      "distance": 8.73540105317121,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_2_fish_3",
+      "family": "silverfish",
+      "dxMin": -0.9982695761712371,
+      "dxMax": 0.9982715843534887,
+      "minDot": 0.9999922221074156,
+      "distance": 8.754209214329702,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_2_fish_4",
+      "family": "silverfish",
+      "dxMin": -0.9982710826652567,
+      "dxMax": 0.9982715814342262,
+      "minDot": 0.9999894185323183,
+      "distance": 8.774628398654741,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_2_fish_5",
+      "family": "silverfish",
+      "dxMin": -0.9982717334243005,
+      "dxMax": 0.9982710335384584,
+      "minDot": 0.999985486788123,
+      "distance": 8.796546093858822,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_2_fish_6",
+      "family": "silverfish",
+      "dxMin": -0.9982711203268088,
+      "dxMax": 0.9982716843347065,
+      "minDot": 0.9999811145961165,
+      "distance": 8.819824703309799,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_2_fish_7",
+      "family": "silverfish",
+      "dxMin": -0.9982693514471229,
+      "dxMax": 0.9982714059944111,
+      "minDot": 0.9999755640813848,
+      "distance": 8.844324078292711,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_3_fish_1",
+      "family": "silverfish",
+      "dxMin": -0.9986286304984152,
+      "dxMax": 0.9986276384173894,
+      "minDot": 0.9999740497694307,
+      "distance": 9.23697078769077,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_3_fish_2",
+      "family": "silverfish",
+      "dxMin": -0.9986287046600048,
+      "dxMax": 0.9986243130912908,
+      "minDot": 0.9999410513666975,
+      "distance": 9.279642977315923,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_3_fish_3",
+      "family": "silverfish",
+      "dxMin": -0.9986287632849237,
+      "dxMax": 0.9986247966621602,
+      "minDot": 0.9999259266050927,
+      "distance": 9.321264723613261,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_3_fish_4",
+      "family": "silverfish",
+      "dxMin": -0.9986271880822509,
+      "dxMax": 0.9986251997903087,
+      "minDot": 0.999931396937553,
+      "distance": 9.361234618099914,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_3_fish_5",
+      "family": "silverfish",
+      "dxMin": -0.9986288165981317,
+      "dxMax": 0.9986215525594989,
+      "minDot": 0.9999461761414044,
+      "distance": 9.399042054242535,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_3_fish_6",
+      "family": "silverfish",
+      "dxMin": -0.9986276274036461,
+      "dxMax": 0.9986206196674978,
+      "minDot": 0.9999615685168131,
+      "distance": 9.434258952081473,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_3_fish_7",
+      "family": "silverfish",
+      "dxMin": -0.9986278420980453,
+      "dxMax": 0.9986227606622556,
+      "minDot": 0.9999739264717101,
+      "distance": 9.466547293759417,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_5_fish_1",
+      "family": "silverfish",
+      "dxMin": -0.9982727893986818,
+      "dxMax": 0.9982717396740649,
+      "minDot": 0.9999977169099907,
+      "distance": 7.831923415387863,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_5_fish_2",
+      "family": "silverfish",
+      "dxMin": -0.9982686298532069,
+      "dxMax": 0.9982709359289453,
+      "minDot": 0.9999978958809048,
+      "distance": 7.822994473184303,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_5_fish_3",
+      "family": "silverfish",
+      "dxMin": -0.9982642327421978,
+      "dxMax": 0.9982723070400792,
+      "minDot": 0.9999981367777542,
+      "distance": 7.812320427886795,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_5_fish_4",
+      "family": "silverfish",
+      "dxMin": -0.9982585910366076,
+      "dxMax": 0.9982704256295387,
+      "minDot": 0.9999980002865582,
+      "distance": 7.799951717218334,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_5_fish_5",
+      "family": "silverfish",
+      "dxMin": -0.9982391672680592,
+      "dxMax": 0.9982684687804733,
+      "minDot": 0.9999979697345523,
+      "distance": 7.7859316906716645,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_5_fish_6",
+      "family": "silverfish",
+      "dxMin": -0.9982563734585705,
+      "dxMax": 0.9982727832616937,
+      "minDot": 0.9999978281672307,
+      "distance": 7.770326024160612,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_5_fish_7",
+      "family": "silverfish",
+      "dxMin": -0.9982624900654512,
+      "dxMax": 0.9982719027040733,
+      "minDot": 0.9999975985656927,
+      "distance": 7.753188374545074,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_6_fish_1",
+      "family": "silverfish",
+      "dxMin": -0.9986222419821474,
+      "dxMax": 0.9986261377286698,
+      "minDot": 0.9999982525616093,
+      "distance": 8.257539977818094,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_6_fish_2",
+      "family": "silverfish",
+      "dxMin": -0.9986144015323887,
+      "dxMax": 0.9986134147620731,
+      "minDot": 0.9999985155982619,
+      "distance": 8.244874330670157,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_6_fish_3",
+      "family": "silverfish",
+      "dxMin": -0.9985986554433307,
+      "dxMax": 0.9986137822813022,
+      "minDot": 0.9999982946060147,
+      "distance": 8.231677651226352,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_6_fish_4",
+      "family": "silverfish",
+      "dxMin": -0.9986191569032249,
+      "dxMax": 0.9986262098528683,
+      "minDot": 0.9999981613592255,
+      "distance": 8.218014355869075,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_6_fish_5",
+      "family": "silverfish",
+      "dxMin": -0.9986251755014113,
+      "dxMax": 0.9986279766355668,
+      "minDot": 0.9999981452029943,
+      "distance": 8.203977283193598,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_6_fish_6",
+      "family": "silverfish",
+      "dxMin": -0.9986278252850667,
+      "dxMax": 0.9986264381424531,
+      "minDot": 0.9999985745504721,
+      "distance": 8.189667730283452,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_6_fish_7",
+      "family": "silverfish",
+      "dxMin": -0.9986237076189604,
+      "dxMax": 0.9986279745547462,
+      "minDot": 0.9999983648639557,
+      "distance": 8.175215071806623,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_8_fish_1",
+      "family": "silverfish",
+      "dxMin": -0.9982567258014902,
+      "dxMax": 0.9982677756360697,
+      "minDot": 0.9999948110333075,
+      "distance": 7.0357961324521705,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_8_fish_2",
+      "family": "silverfish",
+      "dxMin": -0.9982510004605862,
+      "dxMax": 0.9982708699868263,
+      "minDot": 0.9999960847909513,
+      "distance": 7.027446948476799,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_8_fish_3",
+      "family": "silverfish",
+      "dxMin": -0.9982668204014041,
+      "dxMax": 0.9982716976262993,
+      "minDot": 0.9999972512591413,
+      "distance": 7.017843983282598,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_8_fish_4",
+      "family": "silverfish",
+      "dxMin": -0.9982706576732018,
+      "dxMax": 0.9982713491959738,
+      "minDot": 0.9999978857097849,
+      "distance": 7.007253471883327,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_8_fish_5",
+      "family": "silverfish",
+      "dxMin": -0.9982656973905968,
+      "dxMax": 0.9982688377451235,
+      "minDot": 0.9999985210396898,
+      "distance": 6.99592989282254,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_8_fish_6",
+      "family": "silverfish",
+      "dxMin": -0.9982486754531423,
+      "dxMax": 0.9982702170112552,
+      "minDot": 0.9999988783782024,
+      "distance": 6.984095427135633,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_8_fish_7",
+      "family": "silverfish",
+      "dxMin": -0.9982599072255254,
+      "dxMax": 0.9982705604722873,
+      "minDot": 0.9999991656353091,
+      "distance": 6.97195181499153,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_9_fish_1",
+      "family": "silverfish",
+      "dxMin": -0.9986286733913431,
+      "dxMax": 0.9986287422049278,
+      "minDot": 0.9999979595041708,
+      "distance": 7.212706603267307,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_9_fish_2",
+      "family": "silverfish",
+      "dxMin": -0.9986225383981124,
+      "dxMax": 0.9986287139717902,
+      "minDot": 0.9999983879580694,
+      "distance": 7.187333488790623,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_9_fish_3",
+      "family": "silverfish",
+      "dxMin": -0.9986219335264045,
+      "dxMax": 0.9986256046244306,
+      "minDot": 0.9999983354707028,
+      "distance": 7.1629906110662525,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_9_fish_4",
+      "family": "silverfish",
+      "dxMin": -0.9986285748854727,
+      "dxMax": 0.9986246875563167,
+      "minDot": 0.9999981007307872,
+      "distance": 7.139813036294271,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_9_fish_5",
+      "family": "silverfish",
+      "dxMin": -0.9986224254850375,
+      "dxMax": 0.9986278297472458,
+      "minDot": 0.9999978901314,
+      "distance": 7.117922399184774,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_9_fish_6",
+      "family": "silverfish",
+      "dxMin": -0.9986165151799518,
+      "dxMax": 0.998628816971809,
+      "minDot": 0.9999982815963333,
+      "distance": 7.0974184228577695,
+      "seen": 220
+    },
+    {
+      "key": "aquarium_school_9_fish_7",
+      "family": "silverfish",
+      "dxMin": -0.9986285913043517,
+      "dxMax": 0.9986201870157414,
+      "minDot": 0.999997972385279,
+      "distance": 7.078397817195096,
+      "seen": 220
+    }
+  ],
+  "duration": 32.12,
+  "gentleSeconds": 3.32,
+  "gentleMatrixChange": 0,
+  "errors": []
+}

@@ -1,0 +1,134 @@
+[
+  {
+    "id": "pa_arrive_1",
+    "start": 5.25394,
+    "decodedSeconds": 10.33,
+    "firstActive": 0.0,
+    "lastActive": 9.24,
+    "probes": [
+      {
+        "sourceSeconds": 0,
+        "lagSeconds": 0.0086,
+        "agreement": 0.6095
+      },
+      {
+        "sourceSeconds": 4.12,
+        "lagSeconds": 0.0086,
+        "agreement": 0.8805
+      },
+      {
+        "sourceSeconds": 8.04,
+        "lagSeconds": 0.0086,
+        "agreement": 0.7305
+      }
+    ],
+    "voicedCoverage": {
+      "windows": 67,
+      "windowSeconds": 0.24,
+      "hopSeconds": 0.12,
+      "relativeFloorDbfs": -47,
+      "minimumAgreement": 0.4065,
+      "medianAgreement": 0.9061,
+      "belowPointOneFive": []
+    }
+  },
+  {
+    "id": "pa_turnstile",
+    "start": 15.60774,
+    "decodedSeconds": 7.13,
+    "firstActive": 0.0,
+    "lastActive": 6.22,
+    "probes": [
+      {
+        "sourceSeconds": 0,
+        "lagSeconds": 0.0041,
+        "agreement": 0.7295
+      },
+      {
+        "sourceSeconds": 2.61,
+        "lagSeconds": 0.0041,
+        "agreement": 0.8885
+      },
+      {
+        "sourceSeconds": 5.02,
+        "lagSeconds": 0.0041,
+        "agreement": 0.9032
+      }
+    ],
+    "voicedCoverage": {
+      "windows": 39,
+      "windowSeconds": 0.24,
+      "hopSeconds": 0.12,
+      "relativeFloorDbfs": -47,
+      "minimumAgreement": 0.3456,
+      "medianAgreement": 0.8589,
+      "belowPointOneFive": []
+    }
+  },
+  {
+    "id": "pa_timeline",
+    "start": 22.75414,
+    "decodedSeconds": 6.49,
+    "firstActive": 0.0,
+    "lastActive": 5.79,
+    "probes": [
+      {
+        "sourceSeconds": 0,
+        "lagSeconds": -0.0031,
+        "agreement": 0.4087
+      },
+      {
+        "sourceSeconds": 2.395,
+        "lagSeconds": 0.007,
+        "agreement": 0.9251
+      },
+      {
+        "sourceSeconds": 4.59,
+        "lagSeconds": 0.007,
+        "agreement": 0.8819
+      }
+    ],
+    "voicedCoverage": {
+      "windows": 42,
+      "windowSeconds": 0.24,
+      "hopSeconds": 0.12,
+      "relativeFloorDbfs": -47,
+      "minimumAgreement": 0.3024,
+      "medianAgreement": 0.8598,
+      "belowPointOneFive": []
+    }
+  },
+  {
+    "id": "ev_h0",
+    "start": 29.31004,
+    "decodedSeconds": 20.49,
+    "firstActive": 0.17,
+    "lastActive": 19.72,
+    "probes": [
+      {
+        "sourceSeconds": 0.145,
+        "lagSeconds": 0.0005,
+        "agreement": 0.9777
+      },
+      {
+        "sourceSeconds": 9.445,
+        "lagSeconds": 0.0005,
+        "agreement": 0.9556
+      },
+      {
+        "sourceSeconds": 18.52,
+        "lagSeconds": 0.0005,
+        "agreement": 0.8824
+      }
+    ],
+    "voicedCoverage": {
+      "windows": 152,
+      "windowSeconds": 0.24,
+      "hopSeconds": 0.12,
+      "relativeFloorDbfs": -47,
+      "minimumAgreement": 0.2713,
+      "medianAgreement": 0.9403,
+      "belowPointOneFive": []
+    }
+  }
+]

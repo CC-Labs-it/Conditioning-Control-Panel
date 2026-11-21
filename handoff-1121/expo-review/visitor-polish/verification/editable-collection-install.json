@@ -1,0 +1,15 @@
+{
+  "verifiedFilesIncludingManifest": 984,
+  "collectionFiles": 81,
+  "canonicalDirectory": "C:\\Projects\\blender-scripting\\expo",
+  "previousRegistrySha256": "dc66a540acd7f5e976be2a00dd2c3127804f29f743249baf0a2b5b487c263cee",
+  "newRegistrySha256": "30160f24cf0c33f4e3503b884623a99d5a364f596c76e2e83a106568e88aa9ae",
+  "runtimeGlbSha256": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45",
+  "collectionBlendSha256": "e2fc861e8c500706ec37abe764adb54c0fa3f4eb0ced88a97d5577e1d6b0d98c",
+  "guestBlendSha256": "853c3256c6e46acf63b19cbb078c070f7ed6fc7b7d8f291abba038bf8a1878c1",
+  "evidence": "native/collection/verification",
+  "preservedPreviousOriginals": [
+    "README.md",
+    "materials/manifest.json"
+  ]
+}

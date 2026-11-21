@@ -38,7 +38,9 @@ export function createControls({ root, canvas, camera, move, onInteract, onJump,
     .expo-stick-knob { position:absolute; left:35px; top:35px; width:38px; height:38px; border:2px solid #fff;
       border-radius:50%; background:#d7eadbd9; pointer-events:none; }
     .expo-interact { right:max(18px,env(safe-area-inset-right)); bottom:max(38px,env(safe-area-inset-bottom)); min-width:92px;
-      min-height:60px; padding:12px; border:2px solid white; border-radius:30px; background:#174b3be6; color:white; font:700 16px system-ui; }
+      min-height:60px; padding:12px; border:3px solid #f47b4f; border-radius:30px; background:#1b3233ef; color:white; font:700 16px system-ui; }
+    .expo-root:has(.expo-aim[data-action]) .expo-interact { background:#fa8254; color:#172b2b; border-color:#ffe8c5; }
+    .expo-interact:active { transform:translateY(2px); }
     .expo-has-touch .expo-touch { display:block; }
     @media(pointer:coarse) { .expo-touch { display:block; } }
   `;

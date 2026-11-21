@@ -14,30 +14,30 @@ function studio() {
   return {s,log,voices};
 }
 
-test('announcements, pictures and exhibits keep their order across spoken planter interruptions',()=>{
+test('a planter waits for the full spoken line, then goes first among waiting announcements',()=>{
   const {s,log}=studio(),event={id:'picture'},pa={id:'announcement'},exhibit={id:'exhibit'};
   const ten={id:'10',priority:'planter'},sixty={id:'60',priority:'planter'};
   s.submit(event);s.submit(pa);s.submit(exhibit);s.submit(ten);s.submit(sixty);
-  assert.equal(s.interrupted,event);assert.equal(s.available,false);
-  s.finish(ten);s.finish(sixty);s.finish(event);s.finish(pa);s.finish(exhibit);
+  assert.equal(s.current,event);assert.equal(s.available,false);
+  s.finish(event);s.finish(ten);s.finish(sixty);s.finish(pa);s.finish(exhibit);
   assert.equal(s.available,true);
-  assert.deepEqual(log,['start picture','pause picture','start 10','finish 10','start 60','finish 60',
-    'resume picture','finish picture','start announcement','finish announcement','start exhibit','finish exhibit']);
+  assert.deepEqual(log,['start picture','finish picture','start 10','finish 10','start 60','finish 60',
+    'start announcement','finish announcement','start exhibit','finish exhibit']);
 });
 
 test('a paused visit holds a planter and a queued exhibit; Panic disposes all three',()=>{
   const {s,voices}=studio(),event={id:'picture'},p={id:'10',priority:'planter'},e={id:'exhibit'};
   s.submit(event);s.pause(true);s.submit(p);s.submit(e);assert.equal(voices.size,0);
-  s.pause(false);assert.deepEqual([...voices],['10']);assert.equal(s.interrupted,event);
+  s.pause(false);assert.deepEqual([...voices],['picture']);assert.equal(s.current,event);
   s.pause(true);assert.equal(voices.size,0);s.dispose();s.pause(false);s.finish(p);
-  assert.equal(s.current,null);assert.equal(s.interrupted,null);assert.equal(s.queue.length,0);
+  assert.equal(s.current,null);assert.equal(s.queue.length,0);
   assert.equal(voices.size,0);assert.equal(s.available,false);
 });
 
-test('a recording already at its end is retired while the planter is speaking',()=>{
+test('an old ended event cannot release the next speaking voice',()=>{
   const {s,log}=studio(),event={id:'picture'},planter={id:'taunt',priority:'planter'},next={id:'next'};
   s.submit(event);s.submit(planter);s.submit(next);
-  s.finish(event);assert.equal(s.current,planter);assert.equal(s.interrupted,null);
+  s.finish(event);s.finish(event);assert.equal(s.current,planter);
   s.finish(planter);s.finish(next);
-  assert.deepEqual(log,['start picture','pause picture','start taunt','finish picture','finish taunt','start next','finish next']);
+  assert.deepEqual(log,['start picture','finish picture','start taunt','finish taunt','start next','finish next']);
 });

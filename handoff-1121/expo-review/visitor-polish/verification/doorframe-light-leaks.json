@@ -1,0 +1,65 @@
+[
+  {
+    "id": "staff-entrance",
+    "at": [
+      7.4,
+      0,
+      32
+    ],
+    "center": [
+      12,
+      0,
+      32
+    ],
+    "turn": true,
+    "width": 2.4,
+    "height": 2.18,
+    "rooms": [
+      "atrium"
+    ],
+    "rays": 81,
+    "missing": []
+  },
+  {
+    "id": "hall-entrance",
+    "at": [
+      0,
+      0,
+      19.6
+    ],
+    "center": [
+      0,
+      0,
+      16
+    ],
+    "turn": false,
+    "width": 3.24,
+    "height": 2.46,
+    "rooms": [
+      "atrium"
+    ],
+    "rays": 81,
+    "missing": []
+  },
+  {
+    "id": "staff-upper",
+    "at": [
+      10.3,
+      6.8,
+      23
+    ],
+    "center": [
+      12,
+      6.8,
+      23
+    ],
+    "turn": true,
+    "width": 2.4,
+    "height": 2.18,
+    "rooms": [
+      "atrium"
+    ],
+    "rays": 81,
+    "missing": []
+  }
+]

@@ -1,0 +1,385 @@
+{
+  "base": "http://127.0.0.1:8937/fuzz/",
+  "touch": true,
+  "rows": [
+    {
+      "zone": "atrium",
+      "feet": [
+        0.54,
+        0,
+        35.96
+      ],
+      "target": [
+        1.7,
+        3.65,
+        26.5
+      ],
+      "clockBefore": 7.23,
+      "clockAfter": 7.23,
+      "room": {
+        "particles": 74,
+        "layers": [
+          "pollen",
+          "light-shafts",
+          "incident-floor-light"
+        ]
+      },
+      "fittings": [],
+      "residentEffects": [
+        "atrium"
+      ]
+    },
+    {
+      "zone": "chronology",
+      "feet": [
+        7.86,
+        0,
+        64.68
+      ],
+      "target": [
+        7.22,
+        2.24,
+        69.78
+      ],
+      "clockBefore": 7.23,
+      "clockAfter": 7.23,
+      "room": {
+        "particles": 60,
+        "layers": [
+          "dust",
+          "light-shafts",
+          "incident-floor-light"
+        ]
+      },
+      "fittings": [],
+      "residentEffects": [
+        "chronology"
+      ]
+    },
+    {
+      "zone": "forum",
+      "feet": [
+        -26.9,
+        0,
+        101.1
+      ],
+      "target": [
+        -30.75,
+        2.1,
+        105.6
+      ],
+      "clockBefore": 7.23,
+      "clockAfter": 7.23,
+      "room": {
+        "particles": 40,
+        "layers": [
+          "dust",
+          "light-shafts",
+          "incident-floor-light",
+          "lectern-voice-inlay"
+        ]
+      },
+      "fittings": [
+        "collection-cabinet-wash"
+      ],
+      "residentEffects": [
+        "forum"
+      ]
+    },
+    {
+      "zone": "commons",
+      "feet": [
+        -66.12,
+        0,
+        93.08
+      ],
+      "target": [
+        -67.86,
+        2.26,
+        87.94
+      ],
+      "clockBefore": 7.23,
+      "clockAfter": 7.23,
+      "room": {
+        "particles": 67,
+        "layers": [
+          "seeds",
+          "light-shafts",
+          "incident-floor-light"
+        ]
+      },
+      "fittings": [
+        "collection-cabinet-wash"
+      ],
+      "residentEffects": [
+        "forum",
+        "commons"
+      ]
+    },
+    {
+      "zone": "aquarium",
+      "feet": [
+        -59.3,
+        0,
+        44.94
+      ],
+      "target": [
+        -47.9,
+        1.1,
+        46.77
+      ],
+      "clockBefore": 7.23,
+      "clockAfter": 7.23,
+      "room": {
+        "particles": 102,
+        "layers": [
+          "bubbles",
+          "incident-floor-light"
+        ]
+      },
+      "fittings": [],
+      "residentEffects": [
+        "commons",
+        "aquarium"
+      ]
+    },
+    {
+      "zone": "hall",
+      "feet": [
+        0,
+        0,
+        12.6
+      ],
+      "target": [
+        3.22,
+        2.63,
+        -1.7
+      ],
+      "clockBefore": 7.23,
+      "clockAfter": 7.23,
+      "room": {
+        "particles": 82,
+        "layers": [
+          "dust",
+          "light-shafts",
+          "incident-floor-light"
+        ]
+      },
+      "fittings": [
+        "teapot-spout-steam"
+      ],
+      "residentEffects": [
+        "hall",
+        "atrium"
+      ]
+    },
+    {
+      "zone": "service",
+      "feet": [
+        18.65,
+        0,
+        31.67
+      ],
+      "target": [
+        23.94,
+        2.13,
+        32.65
+      ],
+      "clockBefore": 7.23,
+      "clockAfter": 7.23,
+      "room": {
+        "particles": 13,
+        "layers": [
+          "dust",
+          "light-shafts",
+          "incident-floor-light",
+          "service-conductor"
+        ]
+      },
+      "fittings": [],
+      "residentEffects": [
+        "atrium",
+        "service"
+      ]
+    },
+    {
+      "zone": "secret",
+      "feet": [
+        43.5,
+        0,
+        40.94
+      ],
+      "target": [
+        47.8,
+        1.65,
+        42.04
+      ],
+      "clockBefore": 7.23,
+      "clockAfter": 7.23,
+      "room": {
+        "particles": 24,
+        "layers": [
+          "dust",
+          "light-shafts"
+        ]
+      },
+      "fittings": [],
+      "residentEffects": [
+        "service",
+        "secret"
+      ]
+    },
+    {
+      "zone": "hoof",
+      "feet": [
+        -18.45,
+        0,
+        6.72
+      ],
+      "target": [
+        -18.45,
+        1.9,
+        10.3
+      ],
+      "clockBefore": 7.23,
+      "clockAfter": 7.23,
+      "room": {
+        "particles": 11,
+        "layers": [
+          "dust",
+          "light-shafts"
+        ]
+      },
+      "fittings": [
+        "teapot-spout-steam"
+      ],
+      "residentEffects": [
+        "hoof",
+        "hall"
+      ]
+    },
+    {
+      "zone": "habitat",
+      "feet": [
+        16.78,
+        0,
+        9.1
+      ],
+      "target": [
+        18.45,
+        1.96,
+        11.92
+      ],
+      "clockBefore": 7.23,
+      "clockAfter": 7.23,
+      "room": {
+        "particles": 12,
+        "layers": [
+          "pollen",
+          "light-shafts"
+        ]
+      },
+      "fittings": [
+        "teapot-spout-steam"
+      ],
+      "residentEffects": [
+        "hall",
+        "habitat"
+      ]
+    },
+    {
+      "zone": "shop",
+      "feet": [
+        20.6,
+        0,
+        -8.7
+      ],
+      "target": [
+        21.4,
+        1.91,
+        -11.54
+      ],
+      "clockBefore": 7.23,
+      "clockAfter": 7.23,
+      "room": {
+        "particles": 10,
+        "layers": [
+          "dust",
+          "light-shafts"
+        ]
+      },
+      "fittings": [
+        "teapot-spout-steam"
+      ],
+      "residentEffects": [
+        "hall",
+        "shop"
+      ]
+    },
+    {
+      "zone": "forum-cabinet",
+      "feet": [
+        -21.19,
+        0,
+        102.99
+      ],
+      "target": [
+        -22.2,
+        1.23,
+        105.48
+      ],
+      "clockBefore": 7.23,
+      "clockAfter": 7.23,
+      "room": {
+        "particles": 40,
+        "layers": [
+          "dust",
+          "light-shafts",
+          "incident-floor-light",
+          "lectern-voice-inlay"
+        ]
+      },
+      "fittings": [
+        "collection-cabinet-wash"
+      ],
+      "residentEffects": [
+        "forum"
+      ]
+    },
+    {
+      "zone": "hall-tea",
+      "feet": [
+        9.89,
+        3.4,
+        12.55
+      ],
+      "target": [
+        11,
+        4.16,
+        10.5
+      ],
+      "clockBefore": 7.23,
+      "clockAfter": 7.23,
+      "room": {
+        "particles": 82,
+        "layers": [
+          "dust",
+          "light-shafts",
+          "incident-floor-light"
+        ]
+      },
+      "fittings": [
+        "teapot-spout-steam"
+      ],
+      "residentEffects": [
+        "hall",
+        "habitat"
+      ],
+      "pauseHolds": true
+    }
+  ],
+  "errors": [],
+  "renderer": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+  "panicked": true,
+  "complete": true
+}

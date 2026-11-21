@@ -1,0 +1,114 @@
+{
+  "films": {
+    "tour": {
+      "sha256": "bfff53812b7343983da2ebee745cfa8524568f47af8108223c7ea97c7fbfcc8f",
+      "catwalk": [
+        {
+          "shot": "crown",
+          "file": "work\\expo-review\\visitor-polish\\walk-audio-v2\\plates\\12-crown.mp4",
+          "at": 1.12,
+          "audioAt": 1.12,
+          "seconds": 4,
+          "inputs": [],
+          "mix": "room, movement, music and action sounds",
+          "zone": "catwalk",
+          "atInFilm": 96.56
+        }
+      ]
+    },
+    "walk": {
+      "sha256": "46e252c31396478529859af715a4c33edaec8da7f537190911a84da9e65cb9ab",
+      "catwalk": []
+    }
+  },
+  "photos": [
+    {
+      "file": "07.jpg",
+      "pose": {
+        "eye": [
+          -21.68,
+          13.55,
+          8.13
+        ],
+        "target": [
+          -22,
+          12.55,
+          -5.3
+        ]
+      },
+      "feet": [
+        -21.68,
+        11.949999809265137,
+        8.13
+      ],
+      "camera": [
+        -21.68,
+        13.549999809265136,
+        8.13
+      ],
+      "rooms": [
+        "catwalk",
+        "atrium"
+      ],
+      "mounted": []
+    },
+    {
+      "file": "12.jpg",
+      "pose": {
+        "eye": [
+          -22.08,
+          13.55,
+          -6.35
+        ],
+        "target": [
+          -21.99,
+          14.43,
+          6.75
+        ]
+      },
+      "feet": [
+        -22.08,
+        11.950000762939453,
+        -6.35
+      ],
+      "camera": [
+        -22.08,
+        13.550000762939453,
+        -6.35
+      ],
+      "rooms": [
+        "catwalk",
+        "atrium",
+        "dome"
+      ],
+      "mounted": []
+    }
+  ],
+  "sampleSeconds": [
+    96.56,
+    97.04,
+    97.52,
+    98.0,
+    98.48,
+    98.96000000000001,
+    99.44,
+    99.92,
+    100.52
+  ],
+  "cameraFeetStart": [
+    -22.45,
+    11.949999809265137,
+    -2.8
+  ],
+  "cameraFeetEnd": [
+    -22.052627011444375,
+    11.950000762939453,
+    -4.846470891061469
+  ],
+  "lookAt": [
+    -22,
+    1.05,
+    -5
+  ],
+  "review": "The camera looks down the central circular oculus at the Dome floor and its agreement stand. The two longitudinal side bays visible in photographs 07 and 12 are outside the movie view. The short film has no catwalk shot."
+}

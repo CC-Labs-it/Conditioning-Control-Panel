@@ -1,5 +1,7 @@
 # Museum playtest follow-up
 
+The fourteen stations carry the same ordered archive across ten rooms. The latest edition adds the chessboard, classified advertisements, weather recorder, sectioned drive and tea trolley, room-specific lighting and enlarged reading cards. The review includes complete narration checks for all 96 recordings and desktop and touch photographs of the whole building. [Play and review the museum](visitor-polish/NOTES.md)
+
 The November 21 balcony screenshot shows a visitor beside a timber handrail and a planted trough. The playable preview includes the balcony fixes and four connected galleries. The checks below cover that spot and the route through the exhibition.
 
 | Playtest item | Change | Acceptance check |

@@ -1,0 +1,444 @@
+{
+  "variant": "walk",
+  "duration": 60,
+  "fps": 25,
+  "featured": [
+    {
+      "id": "pa_arrive_1",
+      "at": 5.25394,
+      "seconds": 10.33,
+      "subtitle": "Welcome to Llama Expo 2037. Feed is included. Please keep your hands where we can use them."
+    },
+    {
+      "id": "ev_h0",
+      "at": 15.63004,
+      "seconds": 20.49,
+      "subtitle": "For six thousand years llamas stood on hills and looked unimpressed. Humans took this for attitude. It was attitude. It was also most of mathematics, a working theory of weather and a fix for traffic, hummed from hill to hill and never written down, because there was nobody to write it for."
+    }
+  ],
+  "edits": [
+    {
+      "shot": "welcome",
+      "file": "work\\expo-review\\visitor-polish\\walk-audio-v2\\opening-final\\opening.mp4",
+      "at": 0,
+      "audioAt": 0,
+      "seconds": 15.6,
+      "mix": "actual dialogue, captions and room",
+      "atInFilm": 0
+    },
+    {
+      "shot": "first archive",
+      "file": "work\\expo-review\\visitor-polish\\walk-audio-v2\\opening-final\\opening.mp4",
+      "at": 29.44,
+      "audioAt": 29.28,
+      "seconds": 21.04,
+      "mix": "actual dialogue, captions and room",
+      "atInFilm": 15.6
+    },
+    {
+      "shot": "chess",
+      "file": "work\\expo-review\\visitor-polish\\walk-audio-v2\\guest-plates\\01-chess.mp4",
+      "at": 0.4,
+      "audioAt": 0.4,
+      "seconds": 2.16,
+      "inputs": [],
+      "mix": "room, movement, music and action sounds",
+      "zone": "chronology",
+      "atInFilm": 36.64
+    },
+    {
+      "shot": "classifieds",
+      "file": "work\\expo-review\\visitor-polish\\walk-audio-v2\\guest-plates\\02-classifieds.mp4",
+      "at": 0.48,
+      "audioAt": 0.48,
+      "seconds": 1.88,
+      "inputs": [],
+      "mix": "room, movement, music and action sounds",
+      "zone": "forum",
+      "atInFilm": 38.8
+    },
+    {
+      "shot": "aquarium",
+      "file": "work\\expo-review\\visitor-polish\\walk-audio-v2\\plates\\07-aquarium.mp4",
+      "at": 1.28,
+      "audioAt": 1.28,
+      "seconds": 1.88,
+      "inputs": [],
+      "mix": "room, movement, music and action sounds",
+      "zone": "aquarium",
+      "atInFilm": 40.68
+    },
+    {
+      "shot": "press",
+      "file": "work\\expo-review\\visitor-polish\\walk-audio-v2\\plates\\17-press.mp4",
+      "at": 0.4,
+      "audioAt": 0.4,
+      "seconds": 2.16,
+      "inputs": [
+        {
+          "key": "E",
+          "at": 1.099490300000005,
+          "prompt": "Press I AGREE"
+        }
+      ],
+      "mix": "room, movement, music and action sounds",
+      "zone": "hall",
+      "atInFilm": 42.56
+    },
+    {
+      "shot": "hoof",
+      "file": "work\\expo-review\\visitor-polish\\walk-audio-v2\\plates\\18-hoof.mp4",
+      "at": 0.84,
+      "audioAt": 0.84,
+      "seconds": 2.52,
+      "inputs": [
+        {
+          "key": "E",
+          "at": 0.6568482000000077,
+          "prompt": "Try the test"
+        },
+        {
+          "key": "E",
+          "at": 1.3875327999999862,
+          "prompt": "Try the test"
+        },
+        {
+          "key": "E",
+          "at": 1.9591644999999844,
+          "prompt": "Try the test"
+        },
+        {
+          "key": "E",
+          "at": 2.5068758999999847,
+          "prompt": "Try the test"
+        },
+        {
+          "key": "E",
+          "at": 3.052635999999999,
+          "prompt": "Try the test"
+        },
+        {
+          "key": "E",
+          "at": 3.625972399999999,
+          "prompt": "Try the test"
+        },
+        {
+          "key": "E",
+          "at": 6.804980699999986,
+          "prompt": "Submit picture test"
+        }
+      ],
+      "mix": "room, movement, music and action sounds",
+      "zone": "hoof",
+      "atInFilm": 44.72
+    },
+    {
+      "shot": "habitat",
+      "file": "work\\expo-review\\visitor-polish\\walk-audio-v2\\plates\\19-habitat.mp4",
+      "at": 0.48,
+      "audioAt": 0.48,
+      "seconds": 1.68,
+      "inputs": [
+        {
+          "key": "E",
+          "at": 1.1038150000000024,
+          "prompt": "Tap the glass"
+        }
+      ],
+      "mix": "room, movement, music and action sounds",
+      "zone": "habitat",
+      "atInFilm": 47.24
+    },
+    {
+      "shot": "photo",
+      "file": "work\\expo-review\\visitor-polish\\walk-audio-v2\\plates\\21-photo.mp4",
+      "at": 0.6,
+      "audioAt": 0.6,
+      "seconds": 2.6,
+      "inputs": [
+        {
+          "key": "E",
+          "at": 1.1040993000000017,
+          "prompt": "Take the group photograph"
+        }
+      ],
+      "mix": "room, movement, music and action sounds",
+      "zone": "twelve",
+      "atInFilm": 48.92
+    },
+    {
+      "shot": "dome5",
+      "file": "work\\expo-review\\visitor-polish\\walk-audio-v2\\plates\\24-dome5.mp4",
+      "at": 2.12,
+      "audioAt": 2.12,
+      "seconds": 3.52,
+      "inputs": [],
+      "mix": "room, movement, music and action sounds",
+      "zone": "dome",
+      "atInFilm": 51.52
+    },
+    {
+      "shot": "sale",
+      "file": "work\\expo-review\\visitor-polish\\walk-audio-v2\\plates\\29-sale.mp4",
+      "at": 0.44,
+      "audioAt": 0.44,
+      "seconds": 2.28,
+      "inputs": [
+        {
+          "key": "E",
+          "at": 1.1090443000000088,
+          "prompt": "Buy Exit"
+        }
+      ],
+      "mix": "room, movement, music and action sounds",
+      "zone": "shop",
+      "atInFilm": 55.04
+    },
+    {
+      "shot": "home",
+      "file": "work\\expo-review\\visitor-polish\\walk-audio-v2\\plates\\30-home.mp4",
+      "at": 14.32,
+      "audioAt": 14.32,
+      "seconds": 2.68,
+      "inputs": [
+        {
+          "key": "E",
+          "at": 1.1116644000000087,
+          "prompt": "Go home"
+        },
+        {
+          "action": "Skip the recap introduction after the natural departure",
+          "at": 17.771551299999935
+        }
+      ],
+      "mix": "room, movement, music and action sounds",
+      "zone": "shop",
+      "atInFilm": 57.32
+    }
+  ],
+  "media": {
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "codec_name": "h264",
+        "width": 1920,
+        "height": 1080,
+        "r_frame_rate": "25/1",
+        "duration": "60.000000",
+        "nb_frames": "1500"
+      },
+      {
+        "codec_name": "aac",
+        "sample_rate": "48000",
+        "r_frame_rate": "0/0",
+        "duration": "60.000000",
+        "nb_frames": "2814"
+      }
+    ],
+    "format": {
+      "duration": "60.000000",
+      "size": "21193530"
+    }
+  },
+  "sha256": "46e252c31396478529859af715a4c33edaec8da7f537190911a84da9e65cb9ab",
+  "ordinaryArrival": {
+    "start": [
+      0.54,
+      0,
+      35.96
+    ],
+    "points": [
+      [
+        0.6,
+        0,
+        35.1
+      ],
+      [
+        0.8,
+        0,
+        34.6
+      ],
+      [
+        3.0336,
+        0,
+        34.5946
+      ]
+    ],
+    "feet": [
+      3.0336,
+      0,
+      34.5946
+    ],
+    "slot": "slot_01",
+    "aim": [
+      4.57,
+      1.84,
+      32.91
+    ]
+  },
+  "openingTake": "opening-final",
+  "plateMix": "Room tone, music, movement and controls with the Voices mixer source muted",
+  "roomGeometry": {
+    "atrium-08a61de17d70b835.glb.gz": {
+      "bytes": 4259748,
+      "sha256": "25d17aa9f385fe6c0342af2d25f983b5d9fdaa05a840876f0a8e3a9c4a115f38"
+    },
+    "chronology-5d57b523d603219f.glb": {
+      "bytes": 2220124,
+      "sha256": "84666b8335fa9509e964a126cda45a02eaef6c7e8ee11122593aa99fe288ed59"
+    },
+    "forum-3486233e3a3b4b2d.glb": {
+      "bytes": 1336000,
+      "sha256": "d5bcc7928a7477215939e1a5581e8c86fece495afd5f393df4b78381a6c53d3f"
+    },
+    "commons-ee325f2b7e9dcde5.glb": {
+      "bytes": 1920856,
+      "sha256": "89654a496358b3bc93e223e494c43f0c896d0b7d5e758072ee740299defff0e6"
+    },
+    "aquarium-eda56523e4349034.glb": {
+      "bytes": 2088876,
+      "sha256": "5641cdac49fa74014918462bd4733c31f8dec4dea0927085132620c76f1a8fef"
+    },
+    "service-6ed5400ae5f2f674.glb": {
+      "bytes": 1397808,
+      "sha256": "4a67f9ab443c222c8c8279064414e1db0ab76d20980d324ec698c4f9f9f597e8"
+    },
+    "secret-297d8ebfb80254d9.glb": {
+      "bytes": 2004624,
+      "sha256": "7534398fbcc1bbf92b3efbfac76fecc9badcd9ca6d9bb36337dbf552a76fe15a"
+    },
+    "catwalk-b69a1d1a66810688.glb": {
+      "bytes": 823956,
+      "sha256": "2ef3382a9c651c8565cdbe7719a070ef2e81c858cd4aa7f05db5a8b414c69ac2"
+    },
+    "dome-a324bf093ead639d.glb": {
+      "bytes": 3562520,
+      "sha256": "cf56f8946c0f20b2ca23cf7b9fd17a01ffa2756325b314edd61f7517f04dfa2e"
+    },
+    "hall-01878d1412b58f6d.glb": {
+      "bytes": 4247344,
+      "sha256": "506869b520da9461341818a80a67fd3153b4f7e30a5d56a0f71a327ae84bdc25"
+    },
+    "twelve-d569b4e279d71e48.glb": {
+      "bytes": 11878656,
+      "sha256": "0b632ab6cc1bd7e99ac308db35f2f7d3f2b32728262eb973ffe02d76f09172b3"
+    },
+    "hoof-b6990a9ac15946bc.glb": {
+      "bytes": 824940,
+      "sha256": "e43f9c69158a1ceb0ffb697a37f328029e5fcb626c26610e24b160f9bb5d7439"
+    },
+    "habitat-f7dc893cfcac2ed0.glb": {
+      "bytes": 786992,
+      "sha256": "c322484671c8f6f32883b4817c569f076f18288bfab7dba166228f877d9d4291"
+    },
+    "shop-8746baacd50a80aa.glb": {
+      "bytes": 1000400,
+      "sha256": "cf912b490b194002fb73a4d62ec46c99fad54e70170705a67f5c587e219ae9ba"
+    }
+  },
+  "recap": {
+    "recap": true,
+    "ending": "ll_end",
+    "photoCharacters": 118415
+  },
+  "completeSourceAudio": true,
+  "sourceComparison": [
+    {
+      "id": "pa_arrive_1",
+      "start": 5.25394,
+      "decodedSeconds": 10.33,
+      "firstActive": 0.0,
+      "lastActive": 9.24,
+      "probes": [
+        {
+          "sourceSeconds": 0,
+          "lagSeconds": 0.0086,
+          "agreement": 0.6095
+        },
+        {
+          "sourceSeconds": 4.12,
+          "lagSeconds": 0.0086,
+          "agreement": 0.8805
+        },
+        {
+          "sourceSeconds": 8.04,
+          "lagSeconds": 0.0086,
+          "agreement": 0.7305
+        }
+      ],
+      "voicedCoverage": {
+        "windows": 67,
+        "windowSeconds": 0.24,
+        "hopSeconds": 0.12,
+        "relativeFloorDbfs": -47,
+        "minimumAgreement": 0.4065,
+        "medianAgreement": 0.9061,
+        "belowPointOneFive": []
+      }
+    },
+    {
+      "id": "ev_h0",
+      "start": 15.63004,
+      "decodedSeconds": 20.49,
+      "firstActive": 0.17,
+      "lastActive": 19.72,
+      "probes": [
+        {
+          "sourceSeconds": 0.145,
+          "lagSeconds": 0.0005,
+          "agreement": 0.9783
+        },
+        {
+          "sourceSeconds": 9.445,
+          "lagSeconds": 0.0005,
+          "agreement": 0.9558
+        },
+        {
+          "sourceSeconds": 18.52,
+          "lagSeconds": 0.0005,
+          "agreement": 0.8821
+        }
+      ],
+      "voicedCoverage": {
+        "windows": 152,
+        "windowSeconds": 0.24,
+        "hopSeconds": 0.12,
+        "relativeFloorDbfs": -47,
+        "minimumAgreement": 0.2714,
+        "medianAgreement": 0.9391,
+        "belowPointOneFive": []
+      }
+    }
+  ],
+  "approvedRooms": {
+    "atrium": "25d17aa9f385fe6c0342af2d25f983b5d9fdaa05a840876f0a8e3a9c4a115f38",
+    "chronology": "84666b8335fa9509e964a126cda45a02eaef6c7e8ee11122593aa99fe288ed59",
+    "forum": "d5bcc7928a7477215939e1a5581e8c86fece495afd5f393df4b78381a6c53d3f",
+    "commons": "89654a496358b3bc93e223e494c43f0c896d0b7d5e758072ee740299defff0e6",
+    "aquarium": "5641cdac49fa74014918462bd4733c31f8dec4dea0927085132620c76f1a8fef",
+    "hall": "506869b520da9461341818a80a67fd3153b4f7e30a5d56a0f71a327ae84bdc25",
+    "hoof": "e43f9c69158a1ceb0ffb697a37f328029e5fcb626c26610e24b160f9bb5d7439",
+    "habitat": "c322484671c8f6f32883b4817c569f076f18288bfab7dba166228f877d9d4291",
+    "shop": "cf912b490b194002fb73a4d62ec46c99fad54e70170705a67f5c587e219ae9ba",
+    "twelve": "0b632ab6cc1bd7e99ac308db35f2f7d3f2b32728262eb973ffe02d76f09172b3",
+    "dome": "cf56f8946c0f20b2ca23cf7b9fd17a01ffa2756325b314edd61f7517f04dfa2e",
+    "service": "4a67f9ab443c222c8c8279064414e1db0ab76d20980d324ec698c4f9f9f597e8",
+    "secret": "7534398fbcc1bbf92b3efbfac76fecc9badcd9ca6d9bb36337dbf552a76fe15a",
+    "catwalk": "2ef3382a9c651c8565cdbe7719a070ef2e81c858cd4aa7f05db5a8b414c69ac2"
+  },
+  "collectionGeometry": {
+    "collection-d1fafb54fde3.glb": {
+      "sha256": "d1fafb54fde3ffe694f51efcfe4d1a2c7abc2fb01895543a5791bbde6b512248",
+      "bytes": 1462384
+    },
+    "guest-chess.glb": {
+      "sha256": "2295cd98c3a1afed1f5b90b6b9178d5c821f4456a8e8a02269eab37a22e8f36e",
+      "bytes": 662140
+    },
+    "guest-classifieds.glb": {
+      "sha256": "f51f782a8761fd24b4ff8f38c3a6bb162e2121f2064e573d809acf28fe554556",
+      "bytes": 849168
+    }
+  }
+}

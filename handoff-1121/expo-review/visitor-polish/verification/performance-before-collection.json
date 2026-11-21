@@ -1,0 +1,892 @@
+{
+  "profiles": {
+    "desktop": {
+      "render": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "entry": {
+        "name": "desktop",
+        "readyFromYesMs": 3512,
+        "visibleFromYesMs": 3776,
+        "visibleFromPurchaseMs": 3991,
+        "firstCover": 0.627,
+        "fullyRevealedFromYesMs": 4177,
+        "fullyRevealedFromPurchaseMs": 4391
+      },
+      "bytes": 5647196,
+      "roomBytes": 5012608,
+      "rooms": {
+        "dome": {
+          "p50": 16.7,
+          "p95": 17.1,
+          "gpu": 8.78
+        },
+        "aquarium": {
+          "p50": 16.7,
+          "p95": 17.9,
+          "gpu": 5.82
+        },
+        "service": {
+          "p50": 16.7,
+          "p95": 17,
+          "gpu": 4.88
+        },
+        "secret": {
+          "p50": 16.7,
+          "p95": 17,
+          "gpu": 4.11
+        },
+        "twelve": {
+          "p50": 16.7,
+          "p95": 19.2,
+          "gpu": 7.7
+        },
+        "chronology": {
+          "p50": 16.7,
+          "p95": 18.5,
+          "gpu": 5.99
+        },
+        "commons": {
+          "p50": 16.7,
+          "p95": 17.2,
+          "gpu": 5.15
+        },
+        "forum": {
+          "p50": 16.7,
+          "p95": 17.1,
+          "gpu": 4.84
+        },
+        "atrium": {
+          "p50": 16.7,
+          "p95": 17.8,
+          "gpu": 9.63
+        },
+        "hall": {
+          "p50": 16.7,
+          "p95": 17.1,
+          "gpu": 7.71
+        },
+        "catwalk": {
+          "p50": 16.7,
+          "p95": 17.2,
+          "gpu": 7.95
+        },
+        "shop": {
+          "p50": 16.7,
+          "p95": 17,
+          "gpu": 5.77
+        },
+        "hoof": {
+          "p50": 16.7,
+          "p95": 17.1,
+          "gpu": 6.46
+        },
+        "habitat": {
+          "p50": 16.7,
+          "p95": 17.2,
+          "gpu": 7.91
+        }
+      }
+    },
+    "phone": {
+      "render": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "entry": {
+        "name": "phone",
+        "readyFromYesMs": 3097,
+        "visibleFromYesMs": 3279,
+        "visibleFromPurchaseMs": 3395,
+        "firstCover": 0.604,
+        "fullyRevealedFromYesMs": 3546,
+        "fullyRevealedFromPurchaseMs": 3662
+      },
+      "bytes": 5396853,
+      "roomBytes": 4775456,
+      "rooms": {
+        "dome": {
+          "p50": 33.4,
+          "p95": 33.7,
+          "gpu": 2.3
+        },
+        "aquarium": {
+          "p50": 33.4,
+          "p95": 33.7,
+          "gpu": 1.46
+        },
+        "service": {
+          "p50": 33.4,
+          "p95": 33.6,
+          "gpu": 1.05
+        },
+        "secret": {
+          "p50": 33.4,
+          "p95": 34.1,
+          "gpu": 0.81
+        },
+        "twelve": {
+          "p50": 33.4,
+          "p95": 34.5,
+          "gpu": 1.97
+        },
+        "chronology": {
+          "p50": 33.3,
+          "p95": 34,
+          "gpu": 1.79
+        },
+        "commons": {
+          "p50": 33.4,
+          "p95": 33.9,
+          "gpu": 1.54
+        },
+        "forum": {
+          "p50": 33.4,
+          "p95": 33.6,
+          "gpu": 1.49
+        },
+        "atrium": {
+          "p50": 33.4,
+          "p95": 33.6,
+          "gpu": 2.03
+        },
+        "hall": {
+          "p50": 33.4,
+          "p95": 33.6,
+          "gpu": 2.37
+        },
+        "catwalk": {
+          "p50": 33.4,
+          "p95": 34.7,
+          "gpu": 1.54
+        },
+        "shop": {
+          "p50": 33.3,
+          "p95": 33.7,
+          "gpu": 1.09
+        },
+        "hoof": {
+          "p50": 33.4,
+          "p95": 34.1,
+          "gpu": 1.89
+        },
+        "habitat": {
+          "p50": 33.4,
+          "p95": 33.8,
+          "gpu": 1.5
+        }
+      }
+    }
+  },
+  "walking": [
+    {
+      "driver": "route",
+      "profile": "keyboard",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "stage": "cold-hall-and-four-risers",
+      "cadence": {
+        "frames": 1117,
+        "medianMs": 16.7,
+        "p95Ms": 17.9,
+        "p99Ms": 20.6,
+        "worstMs": 118.1,
+        "over50ms": 4,
+        "seconds": 18.84
+      },
+      "stalls": [
+        {
+          "seconds": 0.38640000000595975,
+          "at": [
+            0.1747466523260525,
+            0,
+            -15.714290499522408
+          ]
+        }
+      ],
+      "firstOpen": {
+        "hall-entrance": {
+          "t": 5.53,
+          "feet": [
+            -0.16,
+            0,
+            19.65
+          ],
+          "loaded": [
+            "atrium",
+            "hall"
+          ]
+        },
+        "portrait-rotunda": {
+          "t": 15.97,
+          "feet": [
+            0.16,
+            0,
+            -15.71
+          ],
+          "loaded": [
+            "hall",
+            "twelve"
+          ]
+        }
+      }
+    },
+    {
+      "driver": "route",
+      "profile": "keyboard",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "stage": "cold-staff-from-admission",
+      "cadence": {
+        "frames": 390,
+        "medianMs": 16.7,
+        "p95Ms": 18.1,
+        "p99Ms": 23.7,
+        "worstMs": 31.7,
+        "over50ms": 0,
+        "seconds": 6.51
+      },
+      "stalls": [
+        {
+          "seconds": 0.6015999999940398,
+          "at": [
+            11.719123469990924,
+            0,
+            32.16050670869017
+          ]
+        }
+      ],
+      "firstOpen": {
+        "staff-entrance": {
+          "t": 4.85,
+          "feet": [
+            11.72,
+            0,
+            32.16
+          ],
+          "loaded": [
+            "atrium",
+            "chronology",
+            "service"
+          ]
+        }
+      }
+    },
+    {
+      "driver": "route",
+      "profile": "keyboard",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "stage": "ground-return",
+      "cadence": {
+        "frames": 155,
+        "medianMs": 16.6,
+        "p95Ms": 19.5,
+        "p99Ms": 31,
+        "worstMs": 39.1,
+        "over50ms": 0,
+        "seconds": 2.59
+      },
+      "stalls": [],
+      "firstOpen": {
+        "staff-entrance": {
+          "t": 0.01,
+          "feet": [
+            17.99,
+            0,
+            32.0
+          ],
+          "loaded": [
+            "atrium",
+            "service"
+          ]
+        }
+      }
+    },
+    {
+      "driver": "route",
+      "profile": "keyboard",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "stage": "upper-return",
+      "cadence": {
+        "frames": 248,
+        "medianMs": 16.7,
+        "p95Ms": 17.2,
+        "p99Ms": 18.1,
+        "worstMs": 24.2,
+        "over50ms": 0,
+        "seconds": 4.14
+      },
+      "stalls": [],
+      "firstOpen": {
+        "staff-entrance": {
+          "t": 0.01,
+          "feet": [
+            27,
+            6.8,
+            22.95
+          ],
+          "loaded": [
+            "atrium",
+            "service"
+          ]
+        },
+        "staff-upper": {
+          "t": 2.84,
+          "feet": [
+            15.69,
+            6.8,
+            22.98
+          ],
+          "loaded": [
+            "atrium",
+            "service"
+          ]
+        }
+      }
+    },
+    {
+      "driver": "route",
+      "profile": "keyboard",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "stage": "staff-floor",
+      "cadence": {
+        "frames": 698,
+        "medianMs": 16.7,
+        "p95Ms": 17,
+        "p99Ms": 17.4,
+        "worstMs": 22.1,
+        "over50ms": 0,
+        "seconds": 11.65
+      },
+      "stalls": [],
+      "firstOpen": {
+        "staff-upper": {
+          "t": 0.03,
+          "feet": [
+            14,
+            0,
+            31.93
+          ],
+          "loaded": [
+            "atrium",
+            "service"
+          ]
+        }
+      }
+    },
+    {
+      "driver": "route",
+      "profile": "keyboard",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "stage": "extra-stair",
+      "cadence": {
+        "frames": 620,
+        "medianMs": 16.7,
+        "p95Ms": 17.1,
+        "p99Ms": 17.3,
+        "worstMs": 23,
+        "over50ms": 0,
+        "seconds": 10.35
+      },
+      "stalls": [],
+      "firstOpen": {
+        "staff-upper": {
+          "t": 9.1,
+          "feet": [
+            15.5,
+            6.8,
+            22.99
+          ],
+          "loaded": [
+            "atrium",
+            "service"
+          ]
+        }
+      }
+    },
+    {
+      "driver": "route",
+      "profile": "touch",
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "stage": "cold-hall-and-four-risers",
+      "cadence": {
+        "frames": 542,
+        "medianMs": 33.4,
+        "p95Ms": 34,
+        "p99Ms": 49.8,
+        "worstMs": 88,
+        "over50ms": 5,
+        "seconds": 18.27
+      },
+      "stalls": [],
+      "firstOpen": {
+        "hall-entrance": {
+          "t": 5.53,
+          "feet": [
+            -0.17,
+            0,
+            19.47
+          ],
+          "loaded": [
+            "atrium",
+            "hall"
+          ]
+        },
+        "portrait-rotunda": {
+          "t": 14.7,
+          "feet": [
+            2.21,
+            0,
+            -13.58
+          ],
+          "loaded": [
+            "hall",
+            "twelve"
+          ]
+        }
+      }
+    },
+    {
+      "driver": "route",
+      "profile": "touch",
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "stage": "cold-staff-from-admission",
+      "cadence": {
+        "frames": 174,
+        "medianMs": 33.4,
+        "p95Ms": 34.7,
+        "p99Ms": 49.7,
+        "worstMs": 50.1,
+        "over50ms": 1,
+        "seconds": 5.86
+      },
+      "stalls": [],
+      "firstOpen": {
+        "staff-entrance": {
+          "t": 4.16,
+          "feet": [
+            11.72,
+            0,
+            32.06
+          ],
+          "loaded": [
+            "atrium",
+            "chronology",
+            "service"
+          ]
+        }
+      }
+    },
+    {
+      "driver": "route",
+      "profile": "touch",
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "stage": "ground-return",
+      "cadence": {
+        "frames": 77,
+        "medianMs": 33.4,
+        "p95Ms": 33.9,
+        "p99Ms": 47.5,
+        "worstMs": 47.5,
+        "over50ms": 0,
+        "seconds": 2.59
+      },
+      "stalls": [],
+      "firstOpen": {
+        "staff-entrance": {
+          "t": 0.01,
+          "feet": [
+            17.94,
+            0,
+            32.0
+          ],
+          "loaded": [
+            "atrium",
+            "service"
+          ]
+        }
+      }
+    },
+    {
+      "driver": "route",
+      "profile": "touch",
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "stage": "upper-return",
+      "cadence": {
+        "frames": 124,
+        "medianMs": 33.3,
+        "p95Ms": 34,
+        "p99Ms": 49.9,
+        "worstMs": 50.2,
+        "over50ms": 1,
+        "seconds": 4.17
+      },
+      "stalls": [],
+      "firstOpen": {
+        "staff-entrance": {
+          "t": 0.01,
+          "feet": [
+            27,
+            6.8,
+            23
+          ],
+          "loaded": [
+            "atrium",
+            "service"
+          ]
+        },
+        "staff-upper": {
+          "t": 2.93,
+          "feet": [
+            15.42,
+            6.8,
+            23
+          ],
+          "loaded": [
+            "atrium",
+            "service"
+          ]
+        }
+      }
+    },
+    {
+      "driver": "route",
+      "profile": "touch",
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "stage": "staff-floor",
+      "cadence": {
+        "frames": 353,
+        "medianMs": 33.4,
+        "p95Ms": 33.9,
+        "p99Ms": 36.8,
+        "worstMs": 48.7,
+        "over50ms": 0,
+        "seconds": 11.84
+      },
+      "stalls": [],
+      "firstOpen": {
+        "staff-upper": {
+          "t": 0.01,
+          "feet": [
+            14,
+            -0.0,
+            32
+          ],
+          "loaded": [
+            "atrium",
+            "service"
+          ]
+        }
+      }
+    },
+    {
+      "driver": "route",
+      "profile": "touch",
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "stage": "extra-stair",
+      "cadence": {
+        "frames": 309,
+        "medianMs": 33.4,
+        "p95Ms": 33.9,
+        "p99Ms": 39.4,
+        "worstMs": 50,
+        "over50ms": 0,
+        "seconds": 10.38
+      },
+      "stalls": [],
+      "firstOpen": {
+        "staff-upper": {
+          "t": 9.17,
+          "feet": [
+            15.4,
+            6.8,
+            22.99
+          ],
+          "loaded": [
+            "service",
+            "atrium"
+          ]
+        }
+      }
+    },
+    {
+      "driver": "desktop-route",
+      "profile": "keyboard",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "stage": "cold-hall-and-four-risers",
+      "cadence": {
+        "frames": 1121,
+        "medianMs": 16.7,
+        "p95Ms": 17.9,
+        "p99Ms": 22,
+        "worstMs": 85.7,
+        "over50ms": 2,
+        "seconds": 18.81
+      },
+      "stalls": [
+        {
+          "seconds": 0.3383000000119214,
+          "at": [
+            0.18090228083563342,
+            0,
+            -15.714301320090112
+          ]
+        }
+      ],
+      "firstOpen": {
+        "hall-entrance": {
+          "t": 5.56,
+          "feet": [
+            -0.14,
+            0,
+            19.43
+          ],
+          "loaded": [
+            "atrium",
+            "hall"
+          ]
+        },
+        "portrait-rotunda": {
+          "t": 15.94,
+          "feet": [
+            0.16,
+            0,
+            -15.71
+          ],
+          "loaded": [
+            "hall",
+            "twelve"
+          ]
+        }
+      }
+    },
+    {
+      "driver": "desktop-route",
+      "profile": "keyboard",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "stage": "cold-staff-from-admission",
+      "cadence": {
+        "frames": 390,
+        "medianMs": 16.7,
+        "p95Ms": 18.2,
+        "p99Ms": 20.8,
+        "worstMs": 41,
+        "over50ms": 0,
+        "seconds": 6.52
+      },
+      "stalls": [
+        {
+          "seconds": 0.6339999999999995,
+          "at": [
+            11.719877850825709,
+            0,
+            32.16053050908142
+          ]
+        }
+      ],
+      "firstOpen": {
+        "staff-entrance": {
+          "t": 4.9,
+          "feet": [
+            11.73,
+            0,
+            32.16
+          ],
+          "loaded": [
+            "atrium",
+            "chronology",
+            "service"
+          ]
+        }
+      }
+    },
+    {
+      "driver": "desktop-route",
+      "profile": "keyboard",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "stage": "ground-return",
+      "cadence": {
+        "frames": 153,
+        "medianMs": 16.7,
+        "p95Ms": 18.9,
+        "p99Ms": 29.2,
+        "worstMs": 32.7,
+        "over50ms": 0,
+        "seconds": 2.55
+      },
+      "stalls": [],
+      "firstOpen": {
+        "staff-entrance": {
+          "t": 0.0,
+          "feet": [
+            17.88,
+            0,
+            32.0
+          ],
+          "loaded": [
+            "atrium",
+            "service"
+          ]
+        }
+      }
+    },
+    {
+      "driver": "desktop-route",
+      "profile": "keyboard",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "stage": "upper-return",
+      "cadence": {
+        "frames": 248,
+        "medianMs": 16.7,
+        "p95Ms": 17.1,
+        "p99Ms": 18.4,
+        "worstMs": 22.5,
+        "over50ms": 0,
+        "seconds": 4.15
+      },
+      "stalls": [],
+      "firstOpen": {
+        "staff-entrance": {
+          "t": 0.01,
+          "feet": [
+            27,
+            6.8,
+            22.95
+          ],
+          "loaded": [
+            "atrium",
+            "service"
+          ]
+        },
+        "staff-upper": {
+          "t": 2.85,
+          "feet": [
+            15.69,
+            6.8,
+            22.98
+          ],
+          "loaded": [
+            "atrium",
+            "service"
+          ]
+        }
+      }
+    },
+    {
+      "driver": "desktop-route",
+      "profile": "keyboard",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "stage": "staff-floor",
+      "cadence": {
+        "frames": 698,
+        "medianMs": 16.7,
+        "p95Ms": 17.1,
+        "p99Ms": 17.4,
+        "worstMs": 22.4,
+        "over50ms": 0,
+        "seconds": 11.66
+      },
+      "stalls": [],
+      "firstOpen": {
+        "staff-upper": {
+          "t": 0.03,
+          "feet": [
+            14,
+            0,
+            31.93
+          ],
+          "loaded": [
+            "atrium",
+            "service"
+          ]
+        }
+      }
+    },
+    {
+      "driver": "desktop-route",
+      "profile": "keyboard",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "stage": "extra-stair",
+      "cadence": {
+        "frames": 620,
+        "medianMs": 16.7,
+        "p95Ms": 17.1,
+        "p99Ms": 17.3,
+        "worstMs": 23.2,
+        "over50ms": 0,
+        "seconds": 10.36
+      },
+      "stalls": [],
+      "firstOpen": {
+        "staff-upper": {
+          "t": 9.11,
+          "feet": [
+            15.5,
+            6.8,
+            22.99
+          ],
+          "loaded": [
+            "atrium",
+            "service"
+          ]
+        }
+      }
+    }
+  ],
+  "errors": []
+}

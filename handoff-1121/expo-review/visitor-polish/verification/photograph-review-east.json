@@ -1,0 +1,345 @@
+{
+  "source": "Final visitor images at the normal 8937 preview",
+  "profiles": {
+    "desktop": "1280 by 760",
+    "touch": "844 by 390"
+  },
+  "rooms": {
+    "habitat": {
+      "observations": [
+        "The keeper desk, sampler vessels, turquoise tile and integrated observation glass are visible together on desktop 06. The sampler nameplate and the three-line habitat heading can be read.",
+        "At the low exterior touch stance 12, a suspended strip and the guide overlay cross part of the rear room heading. The nearer accepted-clauses and glass notices remain in view. The right doorway opens onto actual hall furnishings."
+      ],
+      "status": "One view-specific overlap on the distant room heading.",
+      "fullResolutionOpened": [
+        "desktop/06",
+        "touch/12"
+      ],
+      "evidence": {
+        "desktop": {
+          "contact": "desktop-art-final/habitat/contact.jpg",
+          "sheetSha256": "1ab3ee9df5607404429cd98dda6e57929e43102e841286a4c36a15063ce2c5e8",
+          "frameCount": 12,
+          "frameDimensions": [
+            1280,
+            760
+          ],
+          "roomModel": {
+            "url": "http://127.0.0.1:8937/fuzz/assets/expo/zones/habitat-f7dc893cfcac2ed0.glb",
+            "sha256": "c322484671c8f6f32883b4817c569f076f18288bfab7dba166228f877d9d4291",
+            "bytes": 786992,
+            "nativeSha256": "c322484671c8f6f32883b4817c569f076f18288bfab7dba166228f877d9d4291",
+            "edition": "habitat-listening-02"
+          },
+          "collectionSha256": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45"
+        },
+        "touch": {
+          "contact": "touch-art-final/habitat/contact.jpg",
+          "sheetSha256": "d7abec28f1e443c7b0e420114a606fdc50280c36f05714c8f0882308e33b0f60",
+          "frameCount": 12,
+          "frameDimensions": [
+            844,
+            390
+          ],
+          "roomModel": {
+            "url": "http://127.0.0.1:8937/fuzz/assets/expo/zones/habitat-f7dc893cfcac2ed0-mobile.glb",
+            "sha256": "dfd755cdd073438cedc6f095d7247f14b414601c8d8e4634078a47112ab045cd",
+            "bytes": 787488,
+            "nativeSha256": "c322484671c8f6f32883b4817c569f076f18288bfab7dba166228f877d9d4291",
+            "edition": "habitat-listening-02"
+          },
+          "collectionSha256": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45"
+        }
+      }
+    },
+    "twelve": {
+      "observations": [
+        "The individual portraits and the twelve centered standings keep the cast figures visible down to their feet at both aspect ratios. The close portrait, headphones, ears, feet and Kevin label in 07 clear the stair opening and its lintel.",
+        "The wide phone aspect includes neighboring plaques and figures at the edges. In 05 the centered hard-hat Bob remains paired with the Bob label on his right, while Lady Lashes is labeled on the neighboring foreground stand. No doubled name surface is visible."
+      ],
+      "status": "Neighbor names are peripheral on the wide phone view.",
+      "fullResolutionOpened": [
+        "desktop/07",
+        "touch/05"
+      ],
+      "evidence": {
+        "desktop": {
+          "contact": "desktop-art-final/twelve/contact.jpg",
+          "sheetSha256": "8d014206f4a58f060c761e98f0fb1a475ce37bdaebdee5e5e862dabe147a9e13",
+          "frameCount": 12,
+          "frameDimensions": [
+            1280,
+            760
+          ],
+          "roomModel": {
+            "url": "http://127.0.0.1:8937/fuzz/assets/expo/zones/twelve-d569b4e279d71e48.glb",
+            "sha256": "0b632ab6cc1bd7e99ac308db35f2f7d3f2b32728262eb973ffe02d76f09172b3",
+            "bytes": 11878656,
+            "nativeSha256": "0b632ab6cc1bd7e99ac308db35f2f7d3f2b32728262eb973ffe02d76f09172b3",
+            "edition": "twelve-listening-01"
+          },
+          "collectionSha256": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45"
+        },
+        "touch": {
+          "contact": "touch-art-final/twelve/contact.jpg",
+          "sheetSha256": "871433d1289084350455ef97c4f35c1020bfe7e0175a8a147686c6f86ad92afb",
+          "frameCount": 12,
+          "frameDimensions": [
+            844,
+            390
+          ],
+          "roomModel": {
+            "url": "http://127.0.0.1:8937/fuzz/assets/expo/zones/twelve-d569b4e279d71e48-mobile.glb",
+            "sha256": "96fb66c46b3715cac0fc566e296681bf18052565e670f423760a2259cc77aea8",
+            "bytes": 11879624,
+            "nativeSha256": "0b632ab6cc1bd7e99ac308db35f2f7d3f2b32728262eb973ffe02d76f09172b3",
+            "edition": "twelve-listening-01"
+          },
+          "collectionSha256": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45"
+        }
+      }
+    },
+    "dome": {
+      "observations": [
+        "The deliberately bare first room shows the standing sign, its brass foot and curved shell seams in 01. In 03 the real replay cap is mounted on its reverse. The crown opening appears closed or detailed according to its state in 04, 08 and 12.",
+        "Views 07 to 12 progress to spirals, bubbles, framed photographs and suspended letters. In desktop 10 the floating word NOTHING is viewed from the reverse and reads backwards. The print and door remain framed. The effect is the back of extruded geometry; it affects reading from this direction."
+      ],
+      "status": "Reverse of turning type visible in late phase.",
+      "fullResolutionOpened": [
+        "desktop/01",
+        "desktop/10"
+      ],
+      "evidence": {
+        "desktop": {
+          "contact": "desktop-art-final/dome/contact.jpg",
+          "sheetSha256": "71a2272a892d9f570208ddf716622c7575511f2afe3acc89ee97bd044f12cac5",
+          "frameCount": 12,
+          "frameDimensions": [
+            1280,
+            760
+          ],
+          "roomModel": {
+            "url": "http://127.0.0.1:8937/fuzz/assets/expo/zones/dome-a324bf093ead639d.glb",
+            "sha256": "cf56f8946c0f20b2ca23cf7b9fd17a01ffa2756325b314edd61f7517f04dfa2e",
+            "bytes": 3562520,
+            "nativeSha256": "cf56f8946c0f20b2ca23cf7b9fd17a01ffa2756325b314edd61f7517f04dfa2e",
+            "edition": "dome-listening-01"
+          },
+          "collectionSha256": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45"
+        },
+        "touch": {
+          "contact": "touch-art-final/dome/contact.jpg",
+          "sheetSha256": "9973329d6d462f77d8a3c8e0f751fd5ba552323c4e8d72ae09aecff56100f4b4",
+          "frameCount": 12,
+          "frameDimensions": [
+            844,
+            390
+          ],
+          "roomModel": {
+            "url": "http://127.0.0.1:8937/fuzz/assets/expo/zones/dome-a324bf093ead639d-mobile.glb",
+            "sha256": "18c0eccd8347b20302564a332766dcf4bcd53b4516df5ff084cbf4fd04d56c4c",
+            "bytes": 3562804,
+            "nativeSha256": "cf56f8946c0f20b2ca23cf7b9fd17a01ffa2756325b314edd61f7517f04dfa2e",
+            "edition": "dome-listening-01"
+          },
+          "collectionSha256": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45"
+        }
+      }
+    },
+    "shop": {
+      "observations": [
+        "The center sales shelving, stocked back wall, counter, green exit and packing press give the room distinct near, middle and far subjects. The green press has a separate screw, sliding top, paper bed and the three upright rolls in 04.",
+        "Desktop 08 reads Framed contract / 1 Yes and Balance / 1 Yes above the physical orange button. In touch 06 the center interaction hint temporarily crosses the lower lines of the framed document; its title, register text and purchase button remain visible."
+      ],
+      "status": "Small document text shares the center of the screen with the action prompt while aimed.",
+      "fullResolutionOpened": [
+        "desktop/08",
+        "touch/06"
+      ],
+      "evidence": {
+        "desktop": {
+          "contact": "desktop-art-final/shop/contact.jpg",
+          "sheetSha256": "aa98c1f76cd3dc7675b149824dadea895ee50dfc08b00c7990f381e089a558a0",
+          "frameCount": 12,
+          "frameDimensions": [
+            1280,
+            760
+          ],
+          "roomModel": {
+            "url": "http://127.0.0.1:8937/fuzz/assets/expo/zones/shop-8746baacd50a80aa.glb",
+            "sha256": "cf912b490b194002fb73a4d62ec46c99fad54e70170705a67f5c587e219ae9ba",
+            "bytes": 1000400,
+            "nativeSha256": "cf912b490b194002fb73a4d62ec46c99fad54e70170705a67f5c587e219ae9ba",
+            "edition": "shop-listening-02"
+          },
+          "collectionSha256": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45"
+        },
+        "touch": {
+          "contact": "touch-art-final/shop/contact.jpg",
+          "sheetSha256": "8d7d1d47d37ac766f93ec3264aa1e0a498c5abc7f8bdd1cd4bffa681adc6730d",
+          "frameCount": 12,
+          "frameDimensions": [
+            844,
+            390
+          ],
+          "roomModel": {
+            "url": "http://127.0.0.1:8937/fuzz/assets/expo/zones/shop-8746baacd50a80aa-mobile.glb",
+            "sha256": "6ffe08ca18023b8a440518f37c8d9dac4126db36833a15631de6a915c63a680f",
+            "bytes": 1000972,
+            "nativeSha256": "cf912b490b194002fb73a4d62ec46c99fad54e70170705a67f5c587e219ae9ba",
+            "edition": "shop-listening-02"
+          },
+          "collectionSha256": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45"
+        }
+      }
+    },
+    "service": {
+      "observations": [
+        "A numbered 014 break-room door, counter, fridge and chairs break up the corridor shots. The spare-parts room and the solitary small appliance have distinct compositions in 05 and 07.",
+        "The pale landing in 11 has visible thickness, connecting floor and continuous perimeter rails, a treaded stair and the lit Service stair sign. The second blue-floor landing remains visible beneath. The dark side spaces are bounded by walls."
+      ],
+      "status": "Landing edges and door signs are present.",
+      "fullResolutionOpened": [
+        "desktop/11"
+      ],
+      "evidence": {
+        "desktop": {
+          "contact": "desktop-art-final/service/contact.jpg",
+          "sheetSha256": "1eea254ca633d0618a38f36b34e2edd331352aebc57c57ab974aeaaf04951287",
+          "frameCount": 12,
+          "frameDimensions": [
+            1280,
+            760
+          ],
+          "roomModel": {
+            "url": "http://127.0.0.1:8937/fuzz/assets/expo/zones/service-6ed5400ae5f2f674.glb",
+            "sha256": "4a67f9ab443c222c8c8279064414e1db0ab76d20980d324ec698c4f9f9f597e8",
+            "bytes": 1397808,
+            "nativeSha256": "4a67f9ab443c222c8c8279064414e1db0ab76d20980d324ec698c4f9f9f597e8",
+            "edition": "service-listening-01"
+          },
+          "collectionSha256": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45"
+        },
+        "touch": {
+          "contact": "touch-art-final/service/contact.jpg",
+          "sheetSha256": "1c1d3ab53ef02b56b614272de3893956be0141faaf898f4a3333ea85d6fde986",
+          "frameCount": 12,
+          "frameDimensions": [
+            844,
+            390
+          ],
+          "roomModel": {
+            "url": "http://127.0.0.1:8937/fuzz/assets/expo/zones/service-6ed5400ae5f2f674-mobile.glb",
+            "sha256": "83c98c7010967c030c80e37c6e52aaa12b8d0628462c439eaa7854a7e66f8700",
+            "bytes": 1398324,
+            "nativeSha256": "4a67f9ab443c222c8c8279064414e1db0ab76d20980d324ec698c4f9f9f597e8",
+            "edition": "service-listening-01"
+          },
+          "collectionSha256": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45"
+        }
+      }
+    },
+    "secret": {
+      "observations": [
+        "The long rows of 81 contract frames read as illuminated folios from the entrance and in reverse. In 11 the section numbers, long §56 paragraphs and §57 line See Footnote 12 are distinct from the frame, wall and lamps. There are no black chevrons over that paper.",
+        "The final small room actually contains the single chair and the wall-mounted You read it. panel in 07 and 08. The unadorned surrounding wall is part of the composition. The Return sign is readable in 12."
+      ],
+      "status": "The end room is intentionally spare.",
+      "fullResolutionOpened": [
+        "desktop/11",
+        "touch/07"
+      ],
+      "evidence": {
+        "desktop": {
+          "contact": "desktop-art-final/secret/contact.jpg",
+          "sheetSha256": "303a5cd823e50f2fa30114e1ef9a7dbc44373903eea33413b374c07acc40a045",
+          "frameCount": 12,
+          "frameDimensions": [
+            1280,
+            760
+          ],
+          "roomModel": {
+            "url": "http://127.0.0.1:8937/fuzz/assets/expo/zones/secret-297d8ebfb80254d9.glb",
+            "sha256": "7534398fbcc1bbf92b3efbfac76fecc9badcd9ca6d9bb36337dbf552a76fe15a",
+            "bytes": 2004624,
+            "nativeSha256": "7534398fbcc1bbf92b3efbfac76fecc9badcd9ca6d9bb36337dbf552a76fe15a",
+            "edition": "secret-listening-01"
+          },
+          "collectionSha256": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45"
+        },
+        "touch": {
+          "contact": "touch-art-final/secret/contact.jpg",
+          "sheetSha256": "ab34599b3c68728e2ca462bfd756330ccf450015e82a5d357434b0d4f26975d3",
+          "frameCount": 12,
+          "frameDimensions": [
+            844,
+            390
+          ],
+          "roomModel": {
+            "url": "http://127.0.0.1:8937/fuzz/assets/expo/zones/secret-297d8ebfb80254d9-mobile.glb",
+            "sha256": "8b5dcf19dfaee459688cc9e9cc5655a4893a6733171a4a25fec49c0ef3525498",
+            "bytes": 2004944,
+            "nativeSha256": "7534398fbcc1bbf92b3efbfac76fecc9badcd9ca6d9bb36337dbf552a76fe15a",
+            "edition": "secret-listening-01"
+          },
+          "collectionSha256": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45"
+        }
+      }
+    },
+    "catwalk": {
+      "observations": [
+        "The small wall opening in 02 is fitted with a projecting sill and a miniature hinged leaf. The actual atrium and guardrails can be seen past it. The physical descent and the expanded metal grille are distinct in 06, 09 and 10.",
+        "The revised desktop and touch views 07 and 12 show continuous dark steel pans below the rail glass. The joints and bright pipe along the side lead to the existing crown apron. Both old pale rectangles are gone. At 09 and 10 the white tile, brass sign foot and curved wall inside the dome are visible below the actual metal lattice. The ring and its opening are intact."
+      ],
+      "status": "Catwalk listening-03 verified in both sets of 12 visitor photographs.",
+      "fullResolutionOpened": [
+        "desktop/07",
+        "desktop/09",
+        "desktop/12",
+        "touch/07",
+        "touch/10",
+        "touch/12"
+      ],
+      "evidence": {
+        "desktop": {
+          "contact": "desktop-art-final/catwalk/contact.jpg",
+          "sheetSha256": "84f9437441ee5158800bad72ed0f31fe365147fedfca1957de41045cfac33966",
+          "frameCount": 12,
+          "frameDimensions": [
+            1280,
+            760
+          ],
+          "roomModel": {
+            "url": "http://127.0.0.1:8937/fuzz/assets/expo/zones/catwalk-c34fe0dbd0386ebd.glb",
+            "sha256": "53d95df438a717b5cf93a04ae9b5bfe995c90243d9d22cb4146d556049e219f9",
+            "bytes": 883852,
+            "nativeSha256": "53d95df438a717b5cf93a04ae9b5bfe995c90243d9d22cb4146d556049e219f9",
+            "edition": "catwalk-listening-03"
+          },
+          "collectionSha256": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45"
+        },
+        "touch": {
+          "contact": "touch-art-final/catwalk/contact.jpg",
+          "sheetSha256": "7f19430c1dbde94266aca61e65a8959140228ad2d1083738f4fda1f212425075",
+          "frameCount": 12,
+          "frameDimensions": [
+            844,
+            390
+          ],
+          "roomModel": {
+            "url": "http://127.0.0.1:8937/fuzz/assets/expo/zones/catwalk-c34fe0dbd0386ebd-mobile.glb",
+            "sha256": "7b196d8f4c9fbadb5d4bb9c04759b77ba1f8483df28aae5136100015ece4aa1a",
+            "bytes": 884180,
+            "nativeSha256": "53d95df438a717b5cf93a04ae9b5bfe995c90243d9d22cb4146d556049e219f9",
+            "edition": "catwalk-listening-03"
+          },
+          "collectionSha256": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45"
+        }
+      }
+    }
+  },
+  "sheetsOpened": 14,
+  "framesOnInspectedSheets": 168,
+  "additionalFullFramesOpened": 17,
+  "scope": "Visual review of stills. The appearance of frame-to-frame flicker requires a motion sequence."
+}

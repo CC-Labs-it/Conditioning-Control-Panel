@@ -1,0 +1,49 @@
+{
+  "passed": true,
+  "edition": "catwalk-listening-03",
+  "webview2": "157.0.4341.60",
+  "scope": "Offscreen local WPF host using WebView2, with muted system output. Trusted input, rendered captions, and native media events are measured inside the running game.",
+  "assets": {
+    "collision": {
+      "bytes": 20232,
+      "magic": "glTF",
+      "name": "catwalk-c34fe0dbd0386ebd-collision.glb",
+      "sha256": "00de5d16cc529c7c8caea842d733fef31d5212f60c099d82b17a274998d46362"
+    },
+    "file": {
+      "bytes": 883852,
+      "magic": "glTF",
+      "name": "catwalk-c34fe0dbd0386ebd.glb",
+      "sha256": "53d95df438a717b5cf93a04ae9b5bfe995c90243d9d22cb4146d556049e219f9"
+    },
+    "mobileFile": {
+      "bytes": 884180,
+      "magic": "glTF",
+      "name": "catwalk-c34fe0dbd0386ebd-mobile.glb",
+      "sha256": "7b196d8f4c9fbadb5d4bb9c04759b77ba1f8483df28aae5136100015ece4aa1a"
+    }
+  },
+  "completeOriginalSeconds": {
+    "pa_arrive_1": 10.33,
+    "ev_h0": 20.49
+  },
+  "trustedYes": true,
+  "realKeyboardOpening": "catwalk-access",
+  "doorBefore": [
+    -10.3,
+    6.800000190734863,
+    21
+  ],
+  "doorAfter": [
+    -13.429999999499293,
+    6.800000190734863,
+    21
+  ],
+  "press": true,
+  "domePhase": 5,
+  "panic": true,
+  "cores": 4,
+  "peakSystemRamPercent": 54.2,
+  "hostSha256": "235c231bb63ba2d6eb2dad68681bddac9a9302b49672a2566233b4e2ee7dc003",
+  "inspectionSha256": "bc98d96ce9c156ee9c5cb0bed4c0e7dc9cb852b5d2f0485ca87f1865b0d04fd0"
+}

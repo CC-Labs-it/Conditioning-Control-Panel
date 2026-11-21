@@ -1,0 +1,46 @@
+{
+  "checks": {
+    "tests": 43,
+    "pass": 43,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0
+  },
+  "command": [
+    "node",
+    "--test",
+    "--test-concurrency=2",
+    "--test-reporter=tap",
+    "tests/contract.test.mjs",
+    "tests/expo-archive-story.test.mjs",
+    "tests/save.test.mjs"
+  ],
+  "project": "C:\\Users\\Admin\\Documents\\Codex\\tc-expo-2037-v3\\ConditioningControlPanel\\Resources\\web\\fuzz",
+  "actualGamePath": "main.js go() -> engine.end(run.ended.id, {restored:true}) -> registry.ll_end.take",
+  "oldSaveBehavior": "Recap opens when visitOpen is absent. Prior saves cannot distinguish an intentional exit from a close during an Expo.",
+  "newSaveBehavior": "The earned ending is awarded once. A close while visitOpen is true permits re-entry. The next uncompleted record restarts. A gift-shop exit or panic clears visitOpen. A genuinely new run clears archive progress and retains the planter lifetime.",
+  "scenarios": [
+    "quit resumes the Expo archive, while exit, panic and legacy recaps stay closed",
+    "abandoned, stale and interrupted events cannot advance progress",
+    "the planter claims the lifetime on first landing, including a visit abandoned before the first cue",
+    "a simultaneous planter claim cannot start a second set of timed cues",
+    "a save round-trips the run and the lifetime",
+    "a save with no run keeps the lifetime: that is what New run writes"
+  ],
+  "liveStorageModified": false,
+  "unitFixture": "Real engine/ending registry and save parser plus an in-memory storage double and a controllable 3D take; no WebGL.",
+  "sourcesAndTestsSha256": {
+    "main.js": "addbb2db530dd050794ad7a82db5c850a4559eaca5d260fcc876c99f942adda4",
+    "ui/engine.js": "5b754b7b00620a077747cfe3c82f05cb688652854b8e767e3af9ebfde1c199cb",
+    "ui/context.js": "94b1f4b81b065f5386b4454a80399d08079e6747bd0a2a06ba2890fc429bdea3",
+    "ui/unlocks/fate/llama.js": "ab8885432c5fa93bf73f933ea3559440d7d034fa805894b5e541a173daeda91c",
+    "ui/unlocks/fate/llama/ending.js": "7ffa5a5721957cfd826ee608bcd793691b8dbd0363c2fed8d8755ae4a6eff37a",
+    "ui/expo/archive-story.js": "5e255898d4c34d93df88f30cbfec4df951c26115a720917d927a0e1ce15d4865",
+    "ui/expo/narration.js": "4db558375806009644456bbed7fedc7a084d5deeba5ba0296ca080df262958da",
+    "ui/expo/planter.js": "deaa693b269d6745738268131365bcbdf11fe620df5c7930eaa994c2f71cc853",
+    "sim/save.js": "75d578cd15f04731eada59e5587a75109de70f3b2911b3f4c161a7729ee01187",
+    "tests/contract.test.mjs": "33a918f97e55b65ce22f1d84402fafce02c062711104a1b6e28e1500e547e100",
+    "tests/expo-archive-story.test.mjs": "7e232c6e41e389b8064759517da1556355bc81544c243bbdc8a069b9ca846c1e",
+    "tests/save.test.mjs": "925ac8c9050a328f83650af0a37a7e7163ee6aeb7a24996e2915ee7b2ccb2c16"
+  }
+}

@@ -25,11 +25,18 @@ try{
   const context=await browser.newContext({viewport:{width:Number(process.env.W||1600),height:Number(process.env.H||900)}});
   await installGameAudio(context);
   const page=await context.newPage();page.on('pageerror',e=>audit.faults.push(e.message));
-  audit.mediaRequests=[];audit.roomGeometry={};
+  audit.mediaRequests=[];audit.roomGeometry={};audit.collectionGeometry={};
   const geometryReads=[];
   page.on('response',response=>{
     const name=response.url().split('/assets/expo/narration/')[1];
     if(name&&!audit.mediaRequests.includes(name))audit.mediaRequests.push(name);
+    const piece=new URL(response.url()).pathname.split('/').pop();
+    if(/^(?:collection-[a-f0-9]+|guest-(?:chess|classifieds))\.glb$/.test(piece)&&!audit.collectionGeometry[piece]){
+      const row=audit.collectionGeometry[piece]={};
+      geometryReads.push(response.body().then(bytes=>{
+        row.sha256=createHash('sha256').update(bytes).digest('hex');row.bytes=bytes.length;
+      }).catch(error=>audit.faults.push('Reading '+piece+': '+error.message)));
+    }
     const room=new URL(response.url()).pathname.split('/assets/expo/zones/')[1];
     if(room&&/\.glb(?:\.gz)?$/.test(room)&&!room.includes('collision')&&!audit.roomGeometry[room]){
       const row=audit.roomGeometry[room]={};
@@ -49,6 +56,17 @@ try{
   const missing=[...new Set(shots.map(s=>s.zone).filter(id=>id&&!available.zones.some(z=>z.id===id)))];
   if(missing.length)throw Error('The film needs finished rooms: '+missing.join(', '));
   if(profile==='M5'&&!customPlan&&available.start.id!=='atrium')throw Error('The final film requires the finished atrium admission.');
+  if(shots.some(shot=>shot.guideEntrance||shot.archiveSlot)){
+    const route=await frame.evaluate(async()=>(await(await fetch('assets/expo/station-route.json')).json()));
+    for(const shot of shots){
+      if(shot.guideEntrance){
+        shot.at=route.start.at;shot.aim=route.slots[0].screen;
+        shot.path=route.route[0].points.slice(1).map(([x,y,z])=>[x,z]);
+      }else if(shot.archiveSlot){
+        shot.at=route.slots.find(slot=>slot.id===shot.archiveSlot).standing;
+      }
+    }
+  }
   for(let i=0;i<3;i++)await frame.locator('#btn').press('Enter');
   await frame.evaluate(async()=>{
     const files=await Promise.all(['margaret','gary','reginald','nana'].map(async id=>
@@ -56,6 +74,13 @@ try{
     fuzz.engine.pictures.addOwn(files);fuzz.engine.pictures.setSource('own');
   });
   audit.manualPresses=await frame.evaluate(()=>fuzz.state.taps);
+  if(process.env.EXPO_CLEAN_PLATES==='1'){
+    // In this isolated review context the real mixer keeps the environment and control sounds.
+    // Hide the corresponding captions together with the muted voice stem.
+    await frame.evaluate(()=>fuzz.engine.audio.mixer.setMuted('voices',true));
+    await frame.addStyleTag({content:'.expo-narration{visibility:hidden!important}'});
+    audit.recordedMix='Room tone, music, movement and controls with the Voices mixer source muted';
+  }
   let purchased=false;
   async function purchase(){
     if(!purchased){await admit.click();await frame.locator('.expo-worm #btn').waitFor();purchased=true;}
@@ -74,10 +99,14 @@ try{
   else{await openGate();await frame.waitForFunction(()=>!__expo.state().textures.pendingDetailMaps);}
   for(const [i,shot] of shots.entries()){
     if(shot.zone){
-      const aim=await frame.evaluate(async({zone,at,aim,expectedStation,aimObject})=>{
-        const e=__expo;await e.go(zone,at);
-        if(expectedStation||aimObject){const T=await import('three'),face=e.scene.getObjectByName(aimObject||'expo_screen_'+expectedStation);
-          if(!face)throw Error('Missing filmed object '+(aimObject||expectedStation));
+      await frame.evaluate(async({zone,at})=>__expo.go(zone,at),shot);
+      if(shot.visibleObject)await frame.waitForFunction(name=>{
+        const node=__expo.scene.getObjectByName(name);return node?.visible&&(node.isMesh||node.children.length>0);
+      },shot.visibleObject,{timeout:30000});
+      const aim=await frame.evaluate(async({zone,at,aim,expectedStation,archiveSlot,aimObject})=>{
+        const e=__expo;
+        if(expectedStation||archiveSlot||aimObject){const T=await import('three'),face=e.scene.getObjectByName(aimObject||'expo_screen_'+(archiveSlot||expectedStation));
+          if(!face)throw Error('Missing filmed object '+(aimObject||archiveSlot||expectedStation));
           aim=new T.Box3().setFromObject(face,true).getCenter(new T.Vector3()).toArray();}
         e.lookAt(...aim);e.root.focus();return aim;
       },{...shot});
@@ -86,6 +115,21 @@ try{
       if(shot.waitForCue)await frame.waitForFunction(id=>{
         const s=__expo.narrationState();return s.pa.id===id||s.voice.id===id;
       },shot.waitForCue,{timeout:180000});
+      if(shot.archiveSlot){
+        // The visitor may already be listening at admission. Bring that record to this speaker.
+        await frame.evaluate(async id=>{
+          const e=__expo,T=await import('three');
+          e.lookAt(...new T.Box3().setFromObject(e.scene.getObjectByName('expo_replay_'+id),true).getCenter(new T.Vector3()).toArray());
+          e.root.focus();
+        },shot.archiveSlot);
+        await page.keyboard.press('e');
+        await frame.evaluate(aim=>__expo.lookAt(...aim),aim);
+        await frame.waitForFunction(id=>{
+          const state=__expo.narrationState();
+          return state.archive.playingAt===id && state.voice.id?.startsWith('ev_') &&
+            state.stations.find(s=>s.id===id)?.project?.full;
+        },shot.archiveSlot,{timeout:90000});
+      }
       if(shot.expectedStation){
         if(shot.aimObject)await frame.evaluate(async id=>{
           const T=await import('three'),face=__expo.scene.getObjectByName('expo_screen_'+id);
@@ -126,6 +170,13 @@ try{
       }
     }
     const name=String(i+1).padStart(2,'0')+'-'+shot.id;
+    if(process.env.EXPO_CLEAN_PLATES==='1') {
+      const correct=await frame.evaluate(()=>{
+        const node=document.querySelector('.expo-narration');
+        return fuzz.engine.audio.mixer.snapshot().voices?.muted && (!node||getComputedStyle(node).visibility==='hidden');
+      });
+      if(!correct)throw Error('Clean plate requires a muted Voices source and hidden voice captions.');
+    }
     const raw=path.join(dir,name+'-raw.mp4'),audio=path.join(dir,name+'-audio.webm'),part=path.join(dir,name+'.mp4');
     const item={id:shot.id,seconds:shot.seconds,cutTo:shot.at||null,before:await activeState(),inputs:[]};audit.edits.push(item);
     const stop=rehearse?null:await beginTabVideo(page,raw);
@@ -183,6 +234,10 @@ try{
       const expected=shot.expectCrossings??(shot.travel?1:0);
       if(expected&&!rehearse&&item.crossings.length!==expected)throw Error(shot.id+' missed its architectural crossing.');
     }else if(remaining>0)await page.waitForTimeout(remaining*1000);
+    if(shot.id==='loop'){
+      await frame.waitForFunction(()=>Math.abs(__expo.walker.feet.z+5)<.1,null,{timeout:8000});
+      await frame.waitForFunction(()=>__expo.doors().find(d=>d.id==='shop-exit')?.progress<.01,null,{timeout:8000});
+    }
     if(shot.home){
       await frame.locator('.expo-root').waitFor({state:'detached',timeout:160000});
       await frame.locator('.rr').waitFor({state:'attached',timeout:16000});
@@ -215,12 +270,13 @@ try{
   }
   await Promise.all(geometryReads);
   if(audit.faults.length)throw Error('The film has recorded game or resource errors.');
-  if(!rehearse){
+  if(!rehearse&&!(process.env.EXPO_KEEP_PARTS==='1'&&process.env.EXPO_CLEAN_PLATES==='1')){
     const list=path.join(dir,'shots.txt');await writeFile(list,parts.map(p=>"file '"+path.basename(p)+"'").join('\n')+'\n');
     await exec('ffmpeg',['-v','error','-nostdin','-y','-f','concat','-safe','1','-i',list,'-vf','setpts=PTS-STARTPTS',
       '-af','asetpts=PTS-STARTPTS','-t',String(duration),'-c:v','libx264','-crf','23','-preset','fast','-threads','4',
       '-pix_fmt','yuv420p','-c:a','aac','-b:a','144k','-movflags','+faststart',path.join(dir,'walk.mp4')]);
-    for(const p of parts)await unlink(p);await unlink(list);
+    if(process.env.EXPO_KEEP_PARTS!=='1')for(const p of parts)await unlink(p);
+    await unlink(list);
   }
 }catch(error){audit.faults.push(error.message);throw error;}
 finally{await writeFile(path.join(dir,'edit-log.json'),JSON.stringify(audit,null,2));await browser.close();}

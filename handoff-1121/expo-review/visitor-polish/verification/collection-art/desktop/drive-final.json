@@ -1,0 +1,26 @@
+{
+  "collectionSha256": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45",
+  "base": "http://127.0.0.1:8937/fuzz/",
+  "source": "expo-review\\collection-quiet-intel\\drive-clamped\\desktop-collection-drive.jpg",
+  "fixture": {
+    "beforeMs": {
+      "medianMs": 16.69999998807907,
+      "p95Ms": 17.30000001192093,
+      "gpuDrawMs": 6.096406
+    },
+    "afterMs": {
+      "medianMs": 16.69999998807907,
+      "p95Ms": 17.400000005960464,
+      "gpuDrawMs": 5.845989
+    },
+    "renderer": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "clampScreenPixels": 2241,
+    "screenRect": [
+      666,
+      364,
+      1296,
+      422
+    ],
+    "triangles": 352
+  }
+}

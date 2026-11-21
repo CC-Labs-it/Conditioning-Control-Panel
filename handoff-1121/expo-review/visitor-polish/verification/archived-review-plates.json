@@ -1,0 +1,18 @@
+{
+  "zip": "C:\\Users\\Admin\\Documents\\Codex\\2026-11-21\\x20-read-x20-c-projects-conditioning\\outputs\\M5-review.zip",
+  "oldSha256": "9ec20c9ed278aa07e5da1ed66813ef638d3128cae46a2844afed1a424029730d",
+  "newSha256": "f62cbd6283b43ac8b17b362d2a50547a241ec48274e2df8f5b100f8cbf434a2b",
+  "members": 1202,
+  "unmodifiedMembersMatchedCRCAndLength": 1193,
+  "sourceFilesReplacedAndReadBack": [
+    "M5/verification/narration-archive/media-audit.json",
+    "M5/verification/narration-archive/three-slide-audit/media-audit.json",
+    "M5/verification/narration-archive/three-slide-audit/source-slide-plate-1.jpg",
+    "M5/verification/narration-archive/three-slide-audit/source-slide-plate-2.jpg",
+    "M5/verification/narration-archive/three-slide-audit/source-slide-plate-3.jpg",
+    "M5/verification/narration-archive/three-slide-audit/source-slide-plate-5.jpg",
+    "M5/verification/narration-archive/three-slide-audit/source-slide-plate-6.jpg",
+    "M5/verification/narration-archive/three-slide-audit/source-slide-plate-8.jpg",
+    "M5/verification/narration-archive/source-slide-plate-2.jpg"
+  ]
+}

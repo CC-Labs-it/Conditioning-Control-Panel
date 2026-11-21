@@ -1,0 +1,743 @@
+{
+  "base": "http://127.0.0.1:8937/fuzz/",
+  "expectedStem": "catwalk-c34fe0dbd0386ebd",
+  "priorStem": "catwalk-b69a1d1a66810688",
+  "profiles": {
+    "desktop": {
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "shots": {
+        "inspection-cold": {
+          "feet": [
+            -13.39,
+            6.800000190734863,
+            27.5
+          ],
+          "rooms": [
+            "catwalk"
+          ]
+        },
+        "inspection-open": {
+          "feet": [
+            -13.39,
+            6.800000190734863,
+            27.5
+          ],
+          "rooms": [
+            "catwalk",
+            "atrium"
+          ]
+        },
+        "07-cold": {
+          "feet": [
+            -21.68,
+            11.949999809265137,
+            8.13
+          ],
+          "rooms": [
+            "catwalk",
+            "atrium"
+          ]
+        },
+        "12-cold": {
+          "feet": [
+            -22.08,
+            11.950000762939453,
+            -6.35
+          ],
+          "rooms": [
+            "catwalk",
+            "atrium"
+          ]
+        },
+        "09-roof-closed": {
+          "feet": [
+            -22.68,
+            11.950000762939453,
+            -3.8
+          ],
+          "rooms": [
+            "catwalk",
+            "atrium"
+          ]
+        },
+        "10-roof-closed": {
+          "feet": [
+            -22.02,
+            11.950000762939453,
+            -5.3
+          ],
+          "rooms": [
+            "catwalk",
+            "atrium"
+          ]
+        },
+        "10-roof-open": {
+          "feet": [
+            -22.02,
+            11.950000762939453,
+            -5.3
+          ],
+          "rooms": [
+            "catwalk",
+            "dome"
+          ]
+        },
+        "09-roof-open": {
+          "feet": [
+            -22.68,
+            11.950000762939453,
+            -3.8
+          ],
+          "rooms": [
+            "catwalk",
+            "dome"
+          ]
+        },
+        "07-after-release": {
+          "feet": [
+            -21.68,
+            11.949999809265137,
+            8.13
+          ],
+          "rooms": [
+            "catwalk",
+            "dome"
+          ]
+        },
+        "12-after-release": {
+          "feet": [
+            -22.08,
+            11.950000762939453,
+            -6.35
+          ],
+          "rooms": [
+            "catwalk",
+            "dome"
+          ]
+        },
+        "07-original-format": {
+          "feet": [
+            -21.68,
+            11.949999809265137,
+            8.13
+          ],
+          "rooms": [
+            "catwalk",
+            "dome"
+          ]
+        },
+        "12-original-format": {
+          "feet": [
+            -22.08,
+            11.950000762939453,
+            -6.35
+          ],
+          "rooms": [
+            "catwalk",
+            "dome"
+          ]
+        }
+      },
+      "occlusion": {
+        "07-cold": {
+          "pixels": 2073600,
+          "changedBy24": 0,
+          "belowRails": 0,
+          "peak": 0,
+          "rooms": [
+            "catwalk",
+            "atrium"
+          ]
+        },
+        "12-cold": {
+          "pixels": 2073600,
+          "changedBy24": 0,
+          "belowRails": 0,
+          "peak": 0,
+          "rooms": [
+            "catwalk",
+            "atrium"
+          ]
+        },
+        "07-after-release": {
+          "pixels": 2073600,
+          "changedBy24": 0,
+          "belowRails": 0,
+          "peak": 0,
+          "rooms": [
+            "catwalk",
+            "dome"
+          ]
+        },
+        "12-after-release": {
+          "pixels": 2073600,
+          "changedBy24": 0,
+          "belowRails": 0,
+          "peak": 0,
+          "rooms": [
+            "catwalk",
+            "dome"
+          ]
+        },
+        "07-original-format": {
+          "pixels": 972800,
+          "changedBy24": 0,
+          "belowRails": 0,
+          "peak": 0,
+          "rooms": [
+            "catwalk",
+            "dome"
+          ]
+        },
+        "12-original-format": {
+          "pixels": 972800,
+          "changedBy24": 0,
+          "belowRails": 0,
+          "peak": 0,
+          "rooms": [
+            "catwalk",
+            "dome"
+          ]
+        }
+      },
+      "timing": {
+        "12": {
+          "renderer": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "frames": 239,
+          "medianMs": 16.69999998807907,
+          "p95Ms": 17,
+          "gpuDrawMs": 6.951302,
+          "pixelRatio": 1
+        },
+        "07": {
+          "renderer": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "frames": 239,
+          "medianMs": 16.69999998807907,
+          "p95Ms": 17,
+          "gpuDrawMs": 7.328281,
+          "pixelRatio": 1
+        },
+        "oculus": {
+          "renderer": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "frames": 239,
+          "medianMs": 16.69999998807907,
+          "p95Ms": 17,
+          "gpuDrawMs": 7.93052,
+          "pixelRatio": 1
+        }
+      },
+      "heldRequests": {
+        "atrium": 1,
+        "dome": 1
+      },
+      "inspectionCold": {
+        "feet": [
+          -13.39,
+          6.800000190734863,
+          27.5
+        ],
+        "rooms": [
+          "catwalk"
+        ],
+        "door": {
+          "id": "inspection-shutter",
+          "progress": 0,
+          "ready": false,
+          "distance": 1.7984946748062887,
+          "rooms": [
+            "atrium",
+            "catwalk"
+          ],
+          "leaves": [
+            {
+              "hinge": [
+                -12.04,
+                7.74,
+                27.69
+              ],
+              "tip": [
+                -12.04,
+                7.74,
+                28.310000000000002
+              ],
+              "degrees": 0
+            }
+          ]
+        }
+      },
+      "inspectionWarm": {
+        "feet": [
+          -13.39,
+          6.800000190734863,
+          27.5
+        ],
+        "rooms": [
+          "catwalk",
+          "atrium"
+        ],
+        "door": {
+          "id": "inspection-shutter",
+          "progress": 1,
+          "ready": true,
+          "distance": 1.7984946748062887,
+          "rooms": [
+            "atrium",
+            "catwalk"
+          ],
+          "leaves": [
+            {
+              "hinge": [
+                -12.04,
+                8.68,
+                27.69
+              ],
+              "tip": [
+                -12.04,
+                8.68,
+                28.310000000000002
+              ],
+              "degrees": 0
+            }
+          ]
+        }
+      },
+      "roofCold": {
+        "feet": [
+          -22.68,
+          11.950000762939453,
+          -3.8
+        ],
+        "rooms": [
+          "catwalk",
+          "atrium"
+        ],
+        "door": {
+          "id": "crown-shutter",
+          "progress": 0,
+          "ready": false,
+          "distance": 1.433190031779721,
+          "rooms": [
+            "catwalk",
+            "dome"
+          ],
+          "leaves": []
+        }
+      },
+      "roofWarm": {
+        "feet": [
+          -22.02,
+          11.950000762939453,
+          -5.3
+        ],
+        "rooms": [
+          "catwalk",
+          "dome"
+        ],
+        "door": {
+          "id": "crown-shutter",
+          "progress": 1,
+          "ready": true,
+          "distance": 0.4919691730106246,
+          "rooms": [
+            "catwalk",
+            "dome"
+          ],
+          "leaves": []
+        }
+      },
+      "priorOculus": {
+        "p50": 16.7,
+        "p95": 17.3,
+        "gpu": 8.14
+      },
+      "originalPhotoViewport": {
+        "width": 1280,
+        "height": 760
+      },
+      "model": {
+        "file": "catwalk-c34fe0dbd0386ebd.glb",
+        "bytes": 883852,
+        "sha256": "53d95df438a717b5cf93a04ae9b5bfe995c90243d9d22cb4146d556049e219f9"
+      },
+      "actualUnderdeckNodes": [
+        "Fabrication_catwalk_underdeck",
+        "Fabrication_catwalk_underdeck_seams",
+        "Fabrication_catwalk_underdeck_seams_1",
+        "Fabrication_catwalk_underdeck_seams_2",
+        "Fabrication_catwalk_underdeck_seams_3"
+      ]
+    },
+    "phone": {
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "shots": {
+        "inspection-cold": {
+          "feet": [
+            -13.39,
+            6.800000190734863,
+            27.5
+          ],
+          "rooms": [
+            "catwalk"
+          ]
+        },
+        "inspection-open": {
+          "feet": [
+            -13.39,
+            6.800000190734863,
+            27.5
+          ],
+          "rooms": [
+            "catwalk",
+            "atrium"
+          ]
+        },
+        "07-cold": {
+          "feet": [
+            -21.68,
+            11.949999809265137,
+            8.13
+          ],
+          "rooms": [
+            "catwalk",
+            "atrium"
+          ]
+        },
+        "12-cold": {
+          "feet": [
+            -22.08,
+            11.950000762939453,
+            -6.35
+          ],
+          "rooms": [
+            "catwalk",
+            "atrium"
+          ]
+        },
+        "09-roof-closed": {
+          "feet": [
+            -22.68,
+            11.950000762939453,
+            -3.8
+          ],
+          "rooms": [
+            "catwalk",
+            "atrium"
+          ]
+        },
+        "10-roof-closed": {
+          "feet": [
+            -22.02,
+            11.950000762939453,
+            -5.3
+          ],
+          "rooms": [
+            "catwalk",
+            "atrium"
+          ]
+        },
+        "10-roof-open": {
+          "feet": [
+            -22.02,
+            11.950000762939453,
+            -5.3
+          ],
+          "rooms": [
+            "catwalk",
+            "dome"
+          ]
+        },
+        "09-roof-open": {
+          "feet": [
+            -22.68,
+            11.950000762939453,
+            -3.8
+          ],
+          "rooms": [
+            "catwalk",
+            "dome"
+          ]
+        },
+        "07-after-release": {
+          "feet": [
+            -21.68,
+            11.949999809265137,
+            8.13
+          ],
+          "rooms": [
+            "catwalk",
+            "dome"
+          ]
+        },
+        "12-after-release": {
+          "feet": [
+            -22.08,
+            11.950000762939453,
+            -6.35
+          ],
+          "rooms": [
+            "catwalk",
+            "dome"
+          ]
+        },
+        "07-original-format": {
+          "feet": [
+            -21.68,
+            11.949999809265137,
+            8.13
+          ],
+          "rooms": [
+            "catwalk",
+            "dome"
+          ]
+        },
+        "12-original-format": {
+          "feet": [
+            -22.08,
+            11.950000762939453,
+            -6.35
+          ],
+          "rooms": [
+            "catwalk",
+            "dome"
+          ]
+        }
+      },
+      "occlusion": {
+        "07-cold": {
+          "pixels": 334836,
+          "changedBy24": 0,
+          "belowRails": 0,
+          "peak": 0,
+          "rooms": [
+            "catwalk",
+            "atrium"
+          ]
+        },
+        "12-cold": {
+          "pixels": 334836,
+          "changedBy24": 0,
+          "belowRails": 0,
+          "peak": 0,
+          "rooms": [
+            "catwalk",
+            "atrium"
+          ]
+        },
+        "07-after-release": {
+          "pixels": 334836,
+          "changedBy24": 0,
+          "belowRails": 0,
+          "peak": 0,
+          "rooms": [
+            "catwalk",
+            "dome"
+          ]
+        },
+        "12-after-release": {
+          "pixels": 334836,
+          "changedBy24": 0,
+          "belowRails": 0,
+          "peak": 0,
+          "rooms": [
+            "catwalk",
+            "dome"
+          ]
+        },
+        "07-original-format": {
+          "pixels": 329160,
+          "changedBy24": 0,
+          "belowRails": 0,
+          "peak": 0,
+          "rooms": [
+            "catwalk",
+            "dome"
+          ]
+        },
+        "12-original-format": {
+          "pixels": 329160,
+          "changedBy24": 0,
+          "belowRails": 0,
+          "peak": 0,
+          "rooms": [
+            "catwalk",
+            "dome"
+          ]
+        }
+      },
+      "timing": {
+        "12": {
+          "renderer": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "frames": 119,
+          "medianMs": 33.400000005960464,
+          "p95Ms": 33.69999998807907,
+          "gpuDrawMs": 1.489062,
+          "pixelRatio": 1
+        },
+        "07": {
+          "renderer": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "frames": 119,
+          "medianMs": 33.400000005960464,
+          "p95Ms": 33.69999998807907,
+          "gpuDrawMs": 1.469635,
+          "pixelRatio": 1
+        },
+        "oculus": {
+          "renderer": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+          "frames": 119,
+          "medianMs": 33.400000005960464,
+          "p95Ms": 33.69999998807907,
+          "gpuDrawMs": 1.456875,
+          "pixelRatio": 1
+        }
+      },
+      "heldRequests": {
+        "atrium": 1,
+        "dome": 1
+      },
+      "inspectionCold": {
+        "feet": [
+          -13.39,
+          6.800000190734863,
+          27.5
+        ],
+        "rooms": [
+          "catwalk"
+        ],
+        "door": {
+          "id": "inspection-shutter",
+          "progress": 0,
+          "ready": false,
+          "distance": 1.7984946748062887,
+          "rooms": [
+            "atrium",
+            "catwalk"
+          ],
+          "leaves": [
+            {
+              "hinge": [
+                -12.04,
+                7.74,
+                27.69
+              ],
+              "tip": [
+                -12.04,
+                7.74,
+                28.310000000000002
+              ],
+              "degrees": 0
+            }
+          ]
+        }
+      },
+      "inspectionWarm": {
+        "feet": [
+          -13.39,
+          6.800000190734863,
+          27.5
+        ],
+        "rooms": [
+          "catwalk",
+          "atrium"
+        ],
+        "door": {
+          "id": "inspection-shutter",
+          "progress": 1,
+          "ready": true,
+          "distance": 1.7984946748062887,
+          "rooms": [
+            "atrium",
+            "catwalk"
+          ],
+          "leaves": [
+            {
+              "hinge": [
+                -12.04,
+                8.68,
+                27.69
+              ],
+              "tip": [
+                -12.04,
+                8.68,
+                28.310000000000002
+              ],
+              "degrees": 0
+            }
+          ]
+        }
+      },
+      "roofCold": {
+        "feet": [
+          -22.68,
+          11.950000762939453,
+          -3.8
+        ],
+        "rooms": [
+          "catwalk",
+          "atrium"
+        ],
+        "door": {
+          "id": "crown-shutter",
+          "progress": 0,
+          "ready": false,
+          "distance": 1.433190031779721,
+          "rooms": [
+            "catwalk",
+            "dome"
+          ],
+          "leaves": []
+        }
+      },
+      "roofWarm": {
+        "feet": [
+          -22.02,
+          11.950000762939453,
+          -5.3
+        ],
+        "rooms": [
+          "catwalk",
+          "dome"
+        ],
+        "door": {
+          "id": "crown-shutter",
+          "progress": 1,
+          "ready": true,
+          "distance": 0.4919691730106246,
+          "rooms": [
+            "catwalk",
+            "dome"
+          ],
+          "leaves": []
+        }
+      },
+      "priorOculus": {
+        "p50": 33.4,
+        "p95": 43.8,
+        "gpu": 1.55
+      },
+      "originalPhotoViewport": {
+        "width": 844,
+        "height": 390
+      },
+      "model": {
+        "file": "catwalk-c34fe0dbd0386ebd-mobile.glb",
+        "bytes": 884180,
+        "sha256": "7b196d8f4c9fbadb5d4bb9c04759b77ba1f8483df28aae5136100015ece4aa1a"
+      },
+      "actualUnderdeckNodes": [
+        "Fabrication_catwalk_underdeck",
+        "Fabrication_catwalk_underdeck_seams",
+        "Fabrication_catwalk_underdeck_seams_1",
+        "Fabrication_catwalk_underdeck_seams_2",
+        "Fabrication_catwalk_underdeck_seams_3"
+      ]
+    }
+  },
+  "errors": [],
+  "complete": true
+}

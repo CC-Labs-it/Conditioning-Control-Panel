@@ -1,0 +1,30 @@
+{
+  "http://127.0.0.1:8937/fuzz/assets/expo/narration/": {
+    "slides/heater_a.webp": "61d002bf50d98657dcbeb9f5cf0a8030029b5cd5528c455944b3f7254098fdee",
+    "slides/heater.webp": "349d17c60aa9948d0f5877beb1718eabae132395d47e678beea728c6d5f747a6",
+    "slides/heater_c.webp": "8ebd28767934cc0603c76b78543ade9a59d2c358854a9671fcca4f1f6f9330e7",
+    "slides/ships_c.webp": "82791d8ab44d6fc12d9d74d2762f39c343c5809bc53361ee3e49dc4ca651be6c",
+    "slides/firstpress_c.webp": "3d923fd8acf75e56126b549306b76bc869dc1fe0402d963a173e131ded1cad9e",
+    "slides/notes_a.webp": "41fc3f385ada2b5aa2f80050df5f2da590b7ecef6d694cc1449597b7a7d90780",
+    "slides/drop_c.webp": "ea5ec767398d3e09e3764633dad3db412eab4f6f82b6431955281350a217ff29",
+    "slides/blink_c.webp": "3a3e5816f88f564b4f42f7567ffffdbc7d1186d7bd263284b9905f6e42222219",
+    "slides/week_a.webp": "5330e3ec36e65d39c9fc943b3d1224c5a3640ff07c23c5093b9e852639144c32",
+    "resting-atlas.webp": "b23268865c724c7480c5dae5e8224271d3ba78cecd25f79ccfe4a48d6c60a4e7",
+    "manifest.json": "1895f70a326ddeee8b3afc7ce316b36a99b1f23dbccf64a05aec2f35ee3162bd",
+    "resting-index.json": "659339d0c089e6453b558005ce3127831b10e7946504d76cafe66d6f4e264016"
+  },
+  "http://127.0.0.1:8942/fuzz/assets/expo/narration/": {
+    "slides/heater_a.webp": "61d002bf50d98657dcbeb9f5cf0a8030029b5cd5528c455944b3f7254098fdee",
+    "slides/heater.webp": "349d17c60aa9948d0f5877beb1718eabae132395d47e678beea728c6d5f747a6",
+    "slides/heater_c.webp": "8ebd28767934cc0603c76b78543ade9a59d2c358854a9671fcca4f1f6f9330e7",
+    "slides/ships_c.webp": "82791d8ab44d6fc12d9d74d2762f39c343c5809bc53361ee3e49dc4ca651be6c",
+    "slides/firstpress_c.webp": "3d923fd8acf75e56126b549306b76bc869dc1fe0402d963a173e131ded1cad9e",
+    "slides/notes_a.webp": "41fc3f385ada2b5aa2f80050df5f2da590b7ecef6d694cc1449597b7a7d90780",
+    "slides/drop_c.webp": "ea5ec767398d3e09e3764633dad3db412eab4f6f82b6431955281350a217ff29",
+    "slides/blink_c.webp": "3a3e5816f88f564b4f42f7567ffffdbc7d1186d7bd263284b9905f6e42222219",
+    "slides/week_a.webp": "5330e3ec36e65d39c9fc943b3d1224c5a3640ff07c23c5093b9e852639144c32",
+    "resting-atlas.webp": "b23268865c724c7480c5dae5e8224271d3ba78cecd25f79ccfe4a48d6c60a4e7",
+    "manifest.json": "1895f70a326ddeee8b3afc7ce316b36a99b1f23dbccf64a05aec2f35ee3162bd",
+    "resting-index.json": "659339d0c089e6453b558005ce3127831b10e7946504d76cafe66d6f4e264016"
+  }
+}

@@ -1,0 +1,179 @@
+{
+  "beforeSha256": "74fb92340dba1fea7e670a3917ec593a000c7692691d333135bc1f626b7f02e4",
+  "afterSha256": "a880617f1e9eae72a9d24565940503333edd27e876ec432344bd6ad07f0cbe40",
+  "roomGeometry": "Desktop source GLBs before mesh compression. Depth tests include both triangle windings and pass through the transparent balustrade and observation glass.",
+  "newPieces": {
+    "Fabrication_catwalk_underdeck": {
+      "triangles": 132,
+      "bounds": [
+        [
+          -25.725,
+          11.1425,
+          -0.685
+        ],
+        [
+          -18.275,
+          11.3755,
+          11.74
+        ]
+      ]
+    },
+    "Fabrication_catwalk_underdeck_seams": {
+      "triangles": 1840,
+      "bounds": [
+        [
+          -25.715,
+          11.205,
+          -0.7015
+        ],
+        [
+          -18.285,
+          11.3795,
+          11.74
+        ]
+      ]
+    }
+  },
+  "pixelCoordinates": "1280 by 760 visitor camera, 58 degree vertical field, top-left origin",
+  "visitorRayComparisons": {
+    "07": [
+      {
+        "pixel": [
+          180,
+          710
+        ],
+        "before": null,
+        "after": {
+          "mesh": "Fabrication_catwalk_underdeck",
+          "distanceMetres": 5.45
+        }
+      },
+      {
+        "pixel": [
+          250,
+          700
+        ],
+        "before": null,
+        "after": {
+          "mesh": "Fabrication_catwalk_underdeck",
+          "distanceMetres": 5.3581
+        }
+      },
+      {
+        "pixel": [
+          283,
+          680
+        ],
+        "before": null,
+        "after": {
+          "mesh": "Fabrication_catwalk_underdeck",
+          "distanceMetres": 5.5163
+        }
+      },
+      {
+        "pixel": [
+          1050,
+          725
+        ],
+        "before": null,
+        "after": {
+          "mesh": "Fabrication_catwalk_underdeck",
+          "distanceMetres": 5.1349
+        }
+      },
+      {
+        "pixel": [
+          150,
+          685
+        ],
+        "before": null,
+        "after": {
+          "mesh": "Fabrication_catwalk_underdeck",
+          "distanceMetres": 5.8784
+        }
+      },
+      {
+        "pixel": [
+          305,
+          705
+        ],
+        "before": null,
+        "after": {
+          "mesh": "Fabrication_catwalk_underdeck",
+          "distanceMetres": 5.1517
+        }
+      }
+    ],
+    "12": [
+      {
+        "pixel": [
+          910,
+          672
+        ],
+        "before": null,
+        "after": {
+          "mesh": "Fabrication_catwalk_underdeck",
+          "distanceMetres": 7.5212
+        }
+      },
+      {
+        "pixel": [
+          925,
+          675
+        ],
+        "before": null,
+        "after": {
+          "mesh": "Fabrication_catwalk_underdeck",
+          "distanceMetres": 7.4903
+        }
+      },
+      {
+        "pixel": [
+          875,
+          638
+        ],
+        "before": null,
+        "after": {
+          "mesh": "Fabrication_catwalk_underdeck",
+          "distanceMetres": 8.4683
+        }
+      },
+      {
+        "pixel": [
+          765,
+          560
+        ],
+        "before": null,
+        "after": {
+          "mesh": "Fabrication_catwalk_underdeck",
+          "distanceMetres": 12.5178
+        }
+      },
+      {
+        "pixel": [
+          756,
+          570
+        ],
+        "before": null,
+        "after": {
+          "mesh": "Fabrication_catwalk_underdeck",
+          "distanceMetres": 11.6684
+        }
+      },
+      {
+        "pixel": [
+          900,
+          650
+        ],
+        "before": null,
+        "after": {
+          "mesh": "Fabrication_catwalk_underdeck",
+          "distanceMetres": 8.1414
+        }
+      }
+    ]
+  },
+  "sealedPanSamples": 42,
+  "clearCrownSamples": 96,
+  "crownInnerRadiusMetres": 1.49
+}

@@ -1,0 +1,204 @@
+{
+  "edition": 1,
+  "coordinateSystem": "Three world metres, Y up. A piece faces local +Z.",
+  "pieces": [
+    {
+      "id": "chess",
+      "zone": "chronology",
+      "center": [
+        10.12,
+        0,
+        64.25
+      ],
+      "yaw": -90,
+      "dimensions": [
+        1.57,
+        1.08,
+        1.22
+      ],
+      "camera": [
+        7.86,
+        1.6,
+        63.48
+      ],
+      "target": [
+        10.12,
+        0.98,
+        64.25
+      ],
+      "collision": [
+        0,
+        0.44,
+        0,
+        1.5,
+        0.88,
+        1.15
+      ],
+      "anchor": {
+        "name": "guest_anchor_chess",
+        "at": [
+          0,
+          0.91,
+          0
+        ],
+        "maximum": [
+          1.36,
+          0.68,
+          1.08
+        ]
+      }
+    },
+    {
+      "id": "classifieds",
+      "zone": "forum",
+      "center": [
+        -22.2,
+        0,
+        105.48
+      ],
+      "yaw": 180,
+      "dimensions": [
+        1.72,
+        2,
+        0.9
+      ],
+      "camera": [
+        -21.19,
+        1.6,
+        102.99
+      ],
+      "target": [
+        -22.2,
+        1.23,
+        105.48
+      ],
+      "collision": [
+        0,
+        0.92,
+        0,
+        1.65,
+        1.84,
+        0.86
+      ],
+      "anchor": {
+        "name": "guest_anchor_classifieds",
+        "at": [
+          0,
+          0.88,
+          0
+        ],
+        "maximum": [
+          1.44,
+          0.98,
+          0.75
+        ]
+      }
+    },
+    {
+      "id": "weather",
+      "zone": "commons",
+      "center": [
+        -68.45,
+        0,
+        66.95
+      ],
+      "yaw": 90,
+      "dimensions": [
+        1.1,
+        2.41,
+        0.89
+      ],
+      "camera": [
+        -66.27,
+        1.6,
+        68.39
+      ],
+      "target": [
+        -68.45,
+        1.25,
+        66.95
+      ],
+      "collision": [
+        0,
+        0.64,
+        0,
+        0.94,
+        1.28,
+        0.73
+      ]
+    },
+    {
+      "id": "drive",
+      "zone": "hall",
+      "center": [
+        11.36,
+        0,
+        -1.75
+      ],
+      "yaw": -90,
+      "dimensions": [
+        1.85,
+        1.53,
+        0.86
+      ],
+      "camera": [
+        9.15,
+        1.6,
+        -0.62
+      ],
+      "target": [
+        11.36,
+        1.07,
+        -1.75
+      ],
+      "collision": [
+        0,
+        0.405,
+        0,
+        1.68,
+        0.81,
+        0.77
+      ]
+    },
+    {
+      "id": "tea",
+      "zone": "hall",
+      "center": [
+        11,
+        3.4,
+        10.5
+      ],
+      "yaw": -90,
+      "dimensions": [
+        1.47,
+        1.02,
+        0.66
+      ],
+      "camera": [
+        9.89,
+        5,
+        12.55
+      ],
+      "target": [
+        11,
+        4.16,
+        10.5
+      ],
+      "collision": [
+        0,
+        0.43,
+        0,
+        1.34,
+        0.86,
+        0.64
+      ]
+    }
+  ],
+  "model": "collection-c7d4642df857.glb",
+  "sha256": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45",
+  "finishRooms": [
+    "hoof",
+    "habitat",
+    "forum"
+  ]
+}

@@ -5,7 +5,7 @@ import {join,resolve} from 'node:path';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 const {chromium}=createRequire('C:/wt-fe/e2e/')('playwright');
-const base=process.env.FUZZ_BASE||'http://127.0.0.1:8941/fuzz/';
+const base=process.env.FUZZ_BASE||'http://127.0.0.1:8942/fuzz/';
 if(!['localhost','127.0.0.1','[::1]'].includes(new URL(base).hostname))throw Error('Use a local preview.');
 const out=resolve(process.argv[2]),filter=new Set((process.argv[3]||'').split(',').filter(Boolean));
 await mkdir(out,{recursive:true});
@@ -20,6 +20,11 @@ const required={
  shop:['expo_press_framed_contract','expo_press_till_display','expo_press_exit_sale'],
  catwalk:['expo_control_terrace'],service:['expo_control_station'],twelve:['photo_release']
 };
+const slots={atrium:[1],chronology:[2,3],forum:[4,5],commons:[6,7],aquarium:[8,9],service:[10],
+ hall:[11],hoof:[12],habitat:[13],shop:[14]};
+function requiredSlots(zone){
+ return (slots[zone]||[]).flatMap(number=>['replay','review'].map(type=>'expo_'+type+'_slot_'+String(number).padStart(2,'0')));
+}
 const browser=await chromium.launch({headless:true,executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',
  args:['--mute-audio','--force_low_power_gpu']});
 try{
@@ -47,12 +52,14 @@ try{
    if(zone==='twelve')await f.waitForTimeout(1300);
    const caps=await f.evaluate(z=>__expo.buttons().filter(c=>c.zone===z),zone);
    for(const name of required[zone]||[])if(!caps.some(c=>c.node===name))report.errors.push(device+' missing '+zone+' '+name);
-   if(['chronology','forum','commons','aquarium'].includes(zone)&&caps.filter(c=>c.node.startsWith('expo_replay_ev_')).length!==10)
-    report.errors.push(device+' expected ten native dated projector buttons in '+zone);
+   const present=caps.filter(c=>/^expo_(?:replay|review)_slot_/.test(c.node)).map(c=>c.node).sort();
+   const expected=requiredSlots(zone).sort();
+   if(JSON.stringify(present)!==JSON.stringify(expected))report.errors.push(device+' '+zone+' listening controls expected '+expected+'; found '+present);
+   if(caps.some(c=>c.node.startsWith('expo_replay_ev_')))report.errors.push(device+' obsolete fixed chronological cap in '+zone);
    if(zone==='twelve'&&caps.filter(c=>c.node.startsWith('expo_replay_log_')).length!==12)
     report.errors.push(device+' expected twelve native herd log buttons');
    if(zone==='twelve'&&caps.filter(c=>c.node.startsWith('log_')).length!==12)
-    report.errors.push(device+' expected twelve independently sprung green log buttons');
+    report.errors.push(device+' expected twelve independently sprung herd log buttons');
    // Offer the till/contract before the locked Exit. The main hall switch precedes its rising partner.
    const last=new Set(['press_stop','expo_press_exit_sale']);
    caps.sort((a,b)=>Number(last.has(a.node))-Number(last.has(b.node)));
@@ -60,6 +67,11 @@ try{
     const row={zone,node:cap.node,authored:cap.authored,depth:cap.depth};rows.push(row);
     try{
      await f.evaluate(async({zone,spawn})=>{if(__expo.state().zone!==zone)await __expo.go(zone,spawn);},{zone,spawn});
+     if(cap.node==='photo_release'){
+      await f.evaluate(async()=>{await __expo.go('twelve',[0,-.68,-24.03]);});
+      await f.waitForFunction(()=>__expo.scene.getObjectByName('photo_release')?.visible,null,{timeout:5000});
+      row.floorHatchOpened=true;
+     }
      if(cap.node==='press_stop'){
       await f.evaluate(async()=>{const e=__expo,T=await import('three');await e.go('hall',[0,0,-7.48]);
        e.lookAt(...new T.Box3().setFromObject(e.scene.getObjectByName('press_main'),true).getCenter(new T.Vector3()).toArray());});
@@ -78,7 +90,9 @@ try{
       assert(!locked.focus?.lineage.includes(cap.node)&&locked.focus?.owner!=='exit_sale','Locked sale cap accepted a hit');
       for(let i=0;i<2;i++){
        await f.evaluate(async()=>{const e=__expo;await e.go('shop',[15.03,0,-12.14]);e.lookAt(15.03,1.14,-13.93);});
-       await use();await f.waitForTimeout(200);
+       await use();
+       await f.waitForFunction(()=>Math.abs(__expo.walker.feet.x-14.2)<.1&&Math.abs(__expo.walker.feet.z+5)<.1);
+       await f.waitForFunction(()=>__expo.doors().find(d=>d.id==='shop-exit')?.progress<.01);
       }
      }
      const target=await f.evaluate(async({zone,name})=>{
@@ -109,6 +123,10 @@ try{
      },{zone,name:cap.node});
      row.approach=target;if(!target?.focus)throw Error('No reachable direct cap ray');
      if(cap.node.startsWith('log_'))assert.equal(target.focus.owner,'expo_replay_'+cap.node);
+     if(/^expo_(?:replay|review)_slot_/.test(cap.node)){
+      assert.equal(target.focus.owner,cap.node,'The two adjacent station buttons need independent actions');
+      assert(cap.authored&&cap.depth>=.015,'Listening control lacks its physical stroke');
+     }
      const before=await f.evaluate(n=>__expo.buttons().find(c=>c.node===n).pressed,cap.node);
      await use();
      await f.waitForFunction(({name,before})=>__expo.buttons().some(c=>c.node===name&&c.pressed>before),{name:cap.node,before},{timeout:2000});
@@ -116,7 +134,12 @@ try{
       row.log=await f.evaluate(id=>{
        const n=__expo.narrationState();return {id,heard:n.heard.includes(id),playing:n.speech.playing,queued:n.speech.queue.includes(id)};
       },cap.node);
-      assert(row.log.heard||row.log.queued||row.log.playing===cap.node,'The green cap did not enter its recruited recording');
+      assert(row.log.heard||row.log.queued||row.log.playing===cap.node,'The herd cap did not enter its recruited recording');
+     }
+     if(cap.node==='alpaca_button'){
+      // The exhibit deliberately sends the visitor back to admission after its chime.
+      await f.waitForFunction(()=>__expo.state().zone==='atrium',null,{timeout:15000});
+      row.returnedTo='atrium';await f.evaluate(async p=>{await __expo.go('twelve',p);},points.twelve);
      }
      await f.waitForFunction(n=>__expo.buttons().some(c=>c.node===n&&c.amount===0),cap.node,{timeout:3000});
      row.passed=true;

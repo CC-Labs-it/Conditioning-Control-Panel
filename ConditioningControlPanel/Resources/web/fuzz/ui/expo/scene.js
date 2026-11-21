@@ -13,7 +13,11 @@ import { createExpoMedia } from './media-panes.js';
 import { createDomeEffects } from './dome-effects.js';
 import { groupPhotograph } from './group-photo.js';
 import { createNarration } from './narration.js';
+import { createVisitGuide } from './visit-guide.js';
 import { createInstruments } from './instruments.js';
+import { createAmbience } from './ambience.js';
+import { createCollection } from './collection.js';
+import { createGuestCollection, guestInscription } from './guest-collection.js';
 
 const CSS = `
 .expo-root {position:absolute;inset:0;background:#152a2d;overflow:hidden;touch-action:none;pointer-events:auto;outline:none;color:white;font:500 16px/1.35 system-ui}
@@ -22,6 +26,9 @@ const CSS = `
 .expo-caption {top:max(18px,env(safe-area-inset-top));left:18px;transform:none;width:max-content;max-width:min(55%,500px);text-align:left;background:#edf3ebf5;border-left:4px solid #258375;color:#163137;padding:.48em .75em;font-size:clamp(14px,1.3vw,17px);text-wrap:pretty}
 .expo-prompt {top:calc(50% + 22px);padding:.28em .65em;background:#10272be8;border-radius:3px;font-size:14px}
 .expo-aim {position:absolute;top:50%;left:50%;width:4px;height:4px;background:#fafaf2;box-shadow:0 0 2px 1px #27292782;border-radius:50%;pointer-events:none}
+.expo-aim[data-action]{width:12px;height:12px;box-sizing:border-box;transform:translate(-50%,-50%) rotate(45deg);border:2px solid #172b2b;outline:1.5px solid #fff2d4;border-radius:2px;background:#f66b3c;box-shadow:none}
+.expo-aim[data-pressed]{background:#fff0c4;border-color:#ad4328}
+.expo-aim[data-pressed=full]{width:15px;height:15px}
 .expo-guide {bottom:max(18px,env(safe-area-inset-bottom));color:#fff;background:#10272be0;padding:.38em .8em;border-radius:2px;font-size:13px;max-width:80%;width:max-content}
 .expo-prompt:empty,.expo-caption:empty {display:none}
 .expo-step-down {position:absolute;left:50%;bottom:max(20%,95px);transform:translateX(-50%);color:white;background:#153f40;border:1px solid #bdd1b9;border-radius:4px;padding:.62em 1.15em;font:600 16px system-ui;pointer-events:auto}
@@ -34,8 +41,21 @@ const CSS = `
 .expo-return-recap{padding:.55em 1.15em;border:1px solid #afcdb7;border-radius:3px;background:#e4efdb;color:#153537;font:600 16px/1.25 system-ui;cursor:pointer}
 .expo-return-recap:focus-visible{outline:3px solid white;outline-offset:4px}
 .expo-leaving .expo-aim,.expo-leaving .expo-prompt,.expo-leaving .expo-guide,.expo-leaving .expo-touch{display:none!important}
+.expo-route-guide{position:absolute;top:max(12px,env(safe-area-inset-top));left:12px;max-width:min(40vw,340px);padding:9px 14px 10px;border-left:3px solid #dfbf84;border-radius:0 4px 4px 0;background:#112d31ef;box-shadow:0 2px 9px #09282b28;text-align:left;pointer-events:none}
+.expo-route-guide span,.expo-route-guide strong{display:block}.expo-route-guide span{font:650 11px/1.35 "Segoe UI",sans-serif;letter-spacing:.12em;color:#edd0a3;margin-bottom:2px}.expo-route-guide strong{font:550 clamp(14px,1.23vw,18px)/1.32 "Segoe UI",sans-serif;color:#fff8e8}
+.expo-reading-card{position:absolute;z-index:4;top:max(12px,env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left));box-sizing:border-box;width:min(465px,calc(100% - 24px));max-height:62%;overflow:auto;padding:17px 22px 15px;border:1px solid #a29d86;border-top:4px solid #476e60;border-radius:3px;background:#f1ecda;color:#173135;box-shadow:0 4px 20px #12252955;touch-action:pan-y}
+.expo-reading-card[hidden],.expo-root:has(.expo-reading-card:not([hidden])) .expo-route-guide{display:none}
+.expo-reading-card p,.expo-reading-card h2{margin:0}.expo-reading-card .expo-reading-date{font:600 13px/1.3 "Segoe UI",sans-serif;letter-spacing:.015em;color:#3c5951}
+.expo-reading-card p:empty{display:none}
+.expo-reading-card h2{font:bold clamp(23px,2.2vw,34px)/1.12 Georgia,serif;padding:6px 0 9px;border-bottom:1px solid #a8b6a3}
+.expo-reading-card h2+p{margin:9px 0 10px;font:500 clamp(16px,1.3vw,19px)/1.43 "Segoe UI",sans-serif;white-space:pre-line}
+.expo-reading-card button{font:650 14px/1.2 "Segoe UI",sans-serif;padding:6px 13px;border:1px solid #a55a3b;border-radius:3px;background:#f28b60;color:#242d2c;cursor:pointer}
+@media(max-height:480px){.expo-reading-card{top:5px;left:5px;width:min(47%,450px);max-height:70%;padding:7px 12px}.expo-reading-card h2+p{font-size:15px;line-height:1.29}.expo-reading-card h2{padding:3px 0 4px}}
+.expo-leaving .expo-route-guide,.expo-root:has(.expo-caption:not(:empty)) .expo-route-guide{display:none}
+@media(max-width:660px){.expo-route-guide{top:max(42px,env(safe-area-inset-top));max-width:min(72vw,305px);padding:4px 8px}}
 @media(pointer:coarse),(max-width:660px){.expo-narration{bottom:max(108px,env(safe-area-inset-bottom));width:94%}.expo-narration p{font-size:clamp(17px,4vw,22px)}}
 @media(max-height:480px){.expo-narration{bottom:5px;width:min(78%,880px)}.expo-narration p{font-size:16px}}
+@media(pointer:coarse) and (max-height:480px) and (min-width:640px){.expo-narration{left:calc(50% - 30px);width:calc(100% - 350px)}}
 @media(pointer:coarse),(max-width:660px){.expo-caption{top:max(52px,env(safe-area-inset-top));left:10px;max-width:min(85%,450px)}.expo-guide{bottom:154px}}
 `;
 
@@ -83,7 +103,10 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     const camera = new THREE.PerspectiveCamera(LITE ? 65 : 58, 1, .08, 140);
     camera.rotation.order = 'YXZ';
     const sound = createSound(ctx); clean.push(() => sound.dispose());
-    const walker = createWalker(camera, sound.footstep, id=>narration?.planter?.(id)); clean.push(() => walker.dispose());
+    const visitorGuide=createVisitGuide(root,assetURL);clean.push(()=>visitorGuide.dispose());
+    let waitingForEntrance=arrival;
+    const walker = createWalker(camera, sound.footstep, id=>narration?.planter?.(id),
+      () => ctx.store.claimLifetime('planterDetour')); clean.push(() => walker.dispose());
     const buttons=createButtonTravel(ctx);
     const targets = new Map(), pointer = new THREE.Vector2(), ray = new THREE.Raycaster(), hits = [];
     let targetMeshes = [], maxReach = 0, zones, exhibits, dome, controls, narration, returnButton, targetTime = 0, loading = false;
@@ -107,17 +130,23 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       }
       return null;
     }
+    let pressedUntil = 0;
     function interact(point) {
       if (!ctx.paused && !doc.hidden && walker.stepOffPlanter()) { updatePrompt(); return true; }
       const target = targetAt(point);
-      if (target) target.action.callback(target.hit);
+      if (target) {
+        pressedUntil=elapsed+.19; aim.dataset.pressed=ctx.gentle||ctx.reduced?'gentle':'full';
+        target.action.callback(target.hit);
+      }
       return !!target;
     }
     function updatePrompt(){
       stepDown.hidden=!walker.planter.released;
-      if (!stepDown.hidden) { prompt.textContent = inputMode === 'gamepad' ? expoInteractionText('Step down', inputMode) : 'E to step down'; return; }
+      if (elapsed>=pressedUntil) aim.removeAttribute('data-pressed');
+      if (!stepDown.hidden) { aim.setAttribute('data-action',''); prompt.textContent = inputMode === 'touch' ? 'Tap Step down' : inputMode === 'gamepad' ? expoInteractionText('Step down', inputMode) : 'E to step down'; return; }
       const action = targetAt()?.action;
       const label = action ? (typeof action.label === 'function' ? action.label() : action.label) : '';
+      aim.toggleAttribute('data-action', !!label);
       prompt.textContent = expoInteractionText(label, inputMode);
     }
     stepDown.addEventListener('click',()=>{if(interact())root.focus({preventScroll:true});});
@@ -170,16 +199,25 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       return media;
     }
     narration=createNarration({ctx,camera,scene,root,register,walker,sound,assetURL,lite:LITE,owned:()=>exhibits.state.file.herd});
+    narration.pause(waitingForEntrance || ctx.paused || doc.hidden);
     const instruments=createInstruments({ctx,camera,register,play:sound.play,meter:narration.meter,lite:LITE});
+    const ambience=createAmbience({ctx,renderer,lite:LITE,meter:narration.meter});
     exhibits = createExhibits({ THREE, ctx, camera, scene, root, say, cue:narration.cue, play: sound.play, setSoundDepth: sound.setDepth,
       go, exit: onExit, farewell, register, assetURL, bindMedia, capturePhoto, setColliderEnabled:walker.setColliderEnabled,
-      setButtonAvailable:buttons.setAvailable });
+      setButtonAvailable:buttons.setAvailable,registerDoorLeaf:(...args)=>zones?.registerDoorLeaf(...args) });
     dome = createDomeEffects({ctx,camera,cue:narration.cue,play:sound.play,register,bindMedia,setSoundDepth:sound.setDepth,lite:LITE});
+    const guests=createGuestCollection(assetURL);
+    const collection=createCollection({assetURL,walker,register,
+      onLabel:(mesh,label)=>narration.registerPlaque(mesh,guestInscription(mesh,label)),
+      onAnchor(name,anchor) { guests.mount(name,anchor); return () => guests.unmount(anchor); },
+      onAssembly:group => ambience.fitCollection?.(group)});
     const rooms = {
-      mount(id, group) { buttons.mount(id,group);exhibits.mount?.(id,group); dome.mount(id,group); narration.mount(id,group);instruments.mount(id,group); },
-      unmount(id, group) { instruments.unmount(id);narration.unmount(id); dome.unmount(id); exhibits.unmount?.(id,group);buttons.unmount(id); }
+      mount(id, group) { buttons.mount(id,group);exhibits.mount?.(id,group); dome.mount(id,group); narration.mount(id,group);instruments.mount(id,group);ambience.mount(id,group);collection.mount(id,group); },
+      unmount(id, group) { collection.unmount(id);ambience.unmount(id);instruments.unmount(id);narration.unmount(id); dome.unmount(id); exhibits.unmount?.(id,group);buttons.unmount(id); }
     };
     clean.push(() => { instruments.dispose();narration.dispose(); dome.dispose(); media?.dispose(); exhibits.dispose?.(); targets.clear(); });
+    clean.push(() => ambience.dispose());
+    clean.push(() => { collection.dispose(); guests.dispose(); });
     controls = createControls({ root, canvas, camera, initialInputMode:inputMode, onInputMode:inputChanged,
       move: walker.move, onInteract: interact, onJump: () => walker.jump?.(),
       onPause: () => { if (!ctx.paused) doc.getElementById('wake')?.click(); },
@@ -199,7 +237,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     let previous = ctx.activeMs, paintTime = 0;
     function sync() {
       const hold = ctx.paused || doc.hidden;
-      previous = ctx.activeMs; controls.reset(); media?.pause(hold); sound.pause(hold); narration.pause(hold); exhibits.pause?.(hold);
+      previous = ctx.activeMs; controls.reset(); media?.pause(hold); sound.pause(hold); narration.pause(hold || waitingForEntrance); exhibits.pause?.(hold);
       if (!hold && ready) (returnButton||root).focus({ preventScroll: true });
     }
     for (const key of ['pause','resume','suspend']) clean.push(ctx.on(key, sync));
@@ -209,6 +247,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       if (!ready || dead || ctx.paused || doc.hidden) return;
       elapsed += dt; controls.step(dt); walker.step(dt); entered(); sound.setListener(walker.feet);
       zones.stream(dt); exhibits.tick?.(dt, walker.zone); dome.step(dt,walker.zone); narration.tick(dt);instruments.tick(dt,walker.zone);buttons.tick(dt);
+      ambience.tick(dt);collection.tick(dt,ctx.gentle||ctx.reduced);
       if(dt<.12 && dt>0){budgetTime+=dt;budgetFrames++;}
       if(budgetTime>=1.75){
         const average=budgetTime/budgetFrames,goal=LITE?1/30:1/60;
@@ -221,6 +260,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       if (elapsed > guideUntil) guide.hidden = true;
       targetTime -= dt;
       if (targetTime <= 0) {
+        visitorGuide.update(narration.story,walker.zone,walker.feet,exhibits.state);
         updatePrompt();
         targetTime = .09;
       }
@@ -230,7 +270,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     const firstFrame = (async () => {
       const plan = await loadPlan(abort.signal);
       if (dead) return;
-      zones = createZones({ scene, renderer, walker, exhibits:rooms, plan, lite: LITE, report: error => console.warn(error) });
+      zones = createZones({ scene, renderer, walker, exhibits:rooms, plan, lite: LITE,ctx,camera,play:sound.play, report: error => console.warn(error) });
       clean.push(() => zones.dispose());
       await zones.ensure(plan.start.id);
       if (dead) return;
@@ -238,14 +278,18 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     })();
     const api = { ready: firstFrame, dispose, beginArrival() {
       if (arrival && !dead) { arrival = false; arrivalStart = ctx.activeMs; draw(); }
+    },finishArrival() {
+      waitingForEntrance=false;
+      if(!dead)narration.pause(ctx.paused || doc.hidden);
     } };
     if (['localhost','127.0.0.1','[::1]'].includes(win.location.hostname)) Object.assign(api, {
-      root, camera, scene, renderer, interact, draw, go, warp: go, exhibits, walker, narrationState:narration.debug,plantState:instruments.debug,footfalls:sound.footfalls,buttons:buttons.debug,
+      root, camera, scene, renderer, interact, draw, go, warp: go, exhibits, walker, narrationState:narration.debug,plantState:instruments.debug,ambience:ambience.debug,footfalls:sound.footfalls,buttons:buttons.debug,
       focusTarget:()=>{
         const target=targetAt();if(!target)return null;
         const lineage=[];for(let n=target.hit.object;n;n=n.parent)if(n.name)lineage.push(n.name);
         return {owner:target.action.owner.name,lineage,distance:target.hit.distance};
       },
+      doors:()=>zones.doors(),
       deepen: seconds => { if (!ctx.paused && walker.zone === 'dome') { dome.step(Math.min(300,Math.max(0,seconds)),'dome'); draw(); } },
       state: () => ({ zone: walker.zone, feet: walker.feet.toArray(), surface: walker.surface, elapsed, ready,
         loaded: [...(zones?.resident.keys() || [])], textures:zones?.textureStats(), calls: renderer.info.render.calls, pixelRatio, depth:dome.state.depth, phase:dome.state.phase, seconds:dome.state.seconds, planter:walker.planter.state(), ...exhibits.debug?.() }),

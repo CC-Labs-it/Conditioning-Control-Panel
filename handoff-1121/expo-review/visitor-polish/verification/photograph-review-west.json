@@ -1,0 +1,54 @@
+{
+  "review": "Final desktop and Gentle touch visitor photography",
+  "complete": true,
+  "framesReviewed": 168,
+  "collectionSha256": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45",
+  "releaseBlockingFindings": 0,
+  "sourceFolders": ["desktop-art-final", "touch-art-final"],
+  "scope": ["atrium", "chronology", "forum", "commons", "aquarium", "hall", "hoof"],
+  "method": "Visual review of each twelve-frame contact sheet, followed by original-size inspection of questionable views. Frame numbers refer to the numbered JPEGs in the source folder for that room.",
+  "rooms": {
+    "atrium": {
+      "desktop": "The stair silhouette, skylight, greenhouse console and monument read separately. The broadside views in 07 and 08 show the head and plinth. In 12 the open miniature door frames the opposite wall, where only part of its sign is visible.",
+      "touch": "The admission slide, stairs and orange physical control are recognizable. The welcome caption and touch controls crowd the lower right of 02. The resident catwalk is visible through the miniature opening in 12.",
+      "photoUse": "Use 08 for the monument and 12 for the scale of the hatch. Use the opposite room's direct view to show the wording on its plaque.",
+      "fullSizeInspected": ["desktop/12", "touch/02"]
+    },
+    "chronology": {
+      "desktop": "The first archive heading, date and transcript are legible together in 02. Warm shelves, slatted light and the bronze floor line continue around the bend to the fitted double doors.",
+      "touch": "The chessboard sits securely on its four-leg table in 04. The opposing dark and red pieces remain distinct. The title is readable at this camera distance and the table stays clear of the touch controls.",
+      "photoUse": "Use 04 for the table in context. Use the existing closer chess photograph for individual piece shapes and the small subtitle.",
+      "fullSizeInspected": ["desktop/02", "touch/04"]
+    },
+    "forum": {
+      "desktop": "Both illustrated adverts, the gooseneck lamp, and the model stairs fit inside the lit case in 04. The independent lower caption clears the shelf. Frames 05 and 06 show the blue acoustic stage and its bronze relief.",
+      "touch": "The stage front, two dark speaker grilles and three brass arcs remain distinct in 06. Frame 04 establishes the cabinet shape at aisle distance; its editorial body text needs the closer printed-detail view.",
+      "photoUse": "Use 04 alongside the existing close paper view when both headlines and caption copy need to be read.",
+      "fullSizeInspected": ["desktop/04", "touch/06"]
+    },
+    "commons": {
+      "desktop": "The three planted tiers, their working light, weather instrument and aisle are clearly separated in 06. Frames 09, 10 and 12 show a continuous tiled corner up to the doors.",
+      "touch": "The weather instrument in 04 has three visible feet, a dial and distinct rotor cups. The touch controls leave its silhouette clear. The little caption sits low and its text is small at this viewing distance.",
+      "photoUse": "Use 04 for the whole instrument, with the existing closer weather label photograph for small text.",
+      "fullSizeInspected": ["desktop/06", "touch/04"]
+    },
+    "aquarium": {
+      "desktop": "The acrylic ribs, light on the blue pavement, fish and floor guide are distinct in the tunnel views. In 12 the underside and gills of a ray are visible through the roof; a real rib crosses its lower silhouette.",
+      "touch": "Frame 05 shows a school of small fish, larger fish, plants and a bubble plume beyond the acrylic. The pale caption sits below the fish. The tiled return gallery remains enclosed at its turn.",
+      "photoUse": "Use 03 or 11 for the complete tunnel, and 12 for the overhead ray. The existing swimming closeup is better for an unobstructed animal silhouette.",
+      "fullSizeInspected": ["desktop/12", "touch/05"]
+    },
+    "hall": {
+      "desktop": "Frame 04 shows the guard seated on both posts of the drive, its handwheel and its caption. Frame 05 shows the tea service on the mezzanine. In 02 a nearby branch crosses both the Expo title and the First Press heading.",
+      "touch": "The drive and trolley remain visible in 04 and 05. Frame 06 centers the First Press button, while its adjacent count panel runs beyond the right edge and behind the controls. Open floor and exit doors read clearly in 01, 03 and 12.",
+      "photoUse": "Choose 01 for the hall's entrance photograph. If 02 is used as a second establishing view, move that review camera sideways into the aisle. Frame 06 works as a button detail; use a dedicated readout photograph for the full count.",
+      "fullSizeInspected": ["desktop/02", "desktop/04", "touch/06"]
+    },
+    "hoof": {
+      "desktop": "The four orange console caps, hoof glove, replay fixture and prompt are distinguishable at close range in 07. The concise instruction board in 03 reads clearly as a separate object.",
+      "touch": "The optical head, gauge, plungers and worktop remain visible above the subtitle in 08. The angled console view in 10 shows the gloves standing on the desktop and the large test screen behind them.",
+      "photoUse": "Use 07 for the controls and 08 for the calibration assembly. Frame 03 supplies a compact legible instruction view.",
+      "fullSizeInspected": ["desktop/07", "touch/08", "touch/10"]
+    }
+  }
+}

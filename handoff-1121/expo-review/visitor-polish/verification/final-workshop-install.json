@@ -1,0 +1,36 @@
+{
+  "canonicalDirectory": "C:\\Projects\\blender-scripting\\expo",
+  "verifiedFilesIncludingManifest": 1057,
+  "previousRegistrySha256": "30160f24cf0c33f4e3503b884623a99d5a364f596c76e2e83a106568e88aa9ae",
+  "newRegistrySha256": "282d0f80d8a2074949f5939db21041fe3be25a26ad44ae3c049c8962cea448fe",
+  "room": {
+    "scene": "44ed2be25012f22db16f86130af3fad4f882f31dd3c70aafdfb845f7445d4226",
+    "source": "catwalk-listening-03/catwalk.blend",
+    "sourceSha256": "8eb2510e5c10385c56e878fa8a58e9d5d65d28ff89e583960f1d5c178fc3fbe7",
+    "collision": "00de5d16cc529c7c8caea842d733fef31d5212f60c099d82b17a274998d46362",
+    "mobileGlbSha256": "7b196d8f4c9fbadb5d4bb9c04759b77ba1f8483df28aae5136100015ece4aa1a",
+    "runtime": {
+      "glbSha256": "53d95df438a717b5cf93a04ae9b5bfe995c90243d9d22cb4146d556049e219f9",
+      "publishedPass": "listening-03",
+      "lightIntensity": 20.362771043719643,
+      "reflectionIntensity": 0.33
+    }
+  },
+  "assetStem": "catwalk-c34fe0dbd0386ebd",
+  "preservedWorkshopOriginals": [
+    "README.md",
+    "freeze_room.py",
+    "native/build-recipes.json",
+    "native/reviewed-passes.json",
+    "native/scenes/catwalk.archive.json",
+    "native/scenes/catwalk.blend",
+    "native/verification/catwalk.readback.json",
+    "native/verification/catwalk.runtime.json",
+    "native/verification/listening/geometry-and-wall-counts.json",
+    "zone_catwalk.py"
+  ],
+  "previousRegistry": "native/editions/collection-pre-catwalk-liner/native/source-handoff.json",
+  "museumCollectionSha256": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45",
+  "otherRoomsUnchanged": 13,
+  "evidence": "native/verification/catwalk-underdeck"
+}

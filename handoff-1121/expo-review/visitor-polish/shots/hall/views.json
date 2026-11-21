@@ -1,0 +1,421 @@
+{
+  "zone": "hall",
+  "base": "http://127.0.0.1:8937/fuzz/",
+  "touch": false,
+  "viewAsset": {
+    "url": "http://127.0.0.1:8937/fuzz/assets/expo/zones/hall-01878d1412b58f6d.glb",
+    "sha256": "506869b520da9461341818a80a67fd3153b4f7e30a5d56a0f71a327ae84bdc25",
+    "bytes": 4247344,
+    "nativeSha256": "506869b520da9461341818a80a67fd3153b4f7e30a5d56a0f71a327ae84bdc25",
+    "edition": "hall-listening-02"
+  },
+  "collection": "c7d4642df857de3acd178747c42448316d43c034c81ccdb066bad6d729d8ab45",
+  "receipts": [
+    {
+      "file": "01.jpg",
+      "pose": {
+        "eye": [
+          0,
+          1.6,
+          13.2
+        ],
+        "target": [
+          0,
+          2.35,
+          -6.3
+        ]
+      },
+      "feet": [
+        0,
+        0,
+        13.2
+      ],
+      "camera": [
+        0,
+        1.6,
+        13.2
+      ],
+      "rooms": [
+        "aquarium",
+        "commons",
+        "hall"
+      ],
+      "mounted": [
+        "ex_press",
+        "pa_photos",
+        "slot_11"
+      ]
+    },
+    {
+      "file": "02.jpg",
+      "pose": {
+        "eye": [
+          -5,
+          1.6,
+          7.4
+        ],
+        "target": [
+          1.2,
+          2.65,
+          -7.7
+        ]
+      },
+      "feet": [
+        -5,
+        0,
+        7.4
+      ],
+      "camera": [
+        -5,
+        1.6,
+        7.4
+      ],
+      "rooms": [
+        "hall",
+        "atrium"
+      ],
+      "mounted": [
+        "ex_press",
+        "pa_photos",
+        "slot_11"
+      ]
+    },
+    {
+      "file": "03.jpg",
+      "pose": {
+        "eye": [
+          5.8,
+          1.6,
+          7.2
+        ],
+        "target": [
+          -4.6,
+          1.8,
+          12.2
+        ]
+      },
+      "feet": [
+        5.8,
+        0,
+        7.2
+      ],
+      "camera": [
+        5.8,
+        1.6,
+        7.2
+      ],
+      "rooms": [
+        "hall",
+        "atrium"
+      ],
+      "mounted": [
+        "ex_press",
+        "pa_photos",
+        "slot_11"
+      ]
+    },
+    {
+      "file": "04.jpg",
+      "pose": {
+        "eye": [
+          9.15,
+          1.6,
+          -0.62
+        ],
+        "target": [
+          11.36,
+          1.07,
+          -1.75
+        ]
+      },
+      "feet": [
+        9.15,
+        0,
+        -0.62
+      ],
+      "camera": [
+        9.15,
+        1.6,
+        -0.62
+      ],
+      "rooms": [
+        "hall",
+        "atrium"
+      ],
+      "mounted": [
+        "ex_press",
+        "pa_photos",
+        "slot_11"
+      ]
+    },
+    {
+      "file": "05.jpg",
+      "pose": {
+        "eye": [
+          9.89,
+          5,
+          12.55
+        ],
+        "target": [
+          11,
+          4.16,
+          10.5
+        ]
+      },
+      "feet": [
+        9.89,
+        3.4000000953674316,
+        12.55
+      ],
+      "camera": [
+        9.89,
+        5.000000095367431,
+        12.55
+      ],
+      "rooms": [
+        "hall",
+        "atrium"
+      ],
+      "mounted": [
+        "ex_press",
+        "pa_photos",
+        "slot_11"
+      ]
+    },
+    {
+      "file": "06.jpg",
+      "pose": {
+        "eye": [
+          1.6,
+          1.53,
+          -7.88
+        ],
+        "target": [
+          0.72,
+          0.87,
+          -8.92
+        ]
+      },
+      "feet": [
+        1.6,
+        0,
+        -7.88
+      ],
+      "camera": [
+        1.6,
+        1.6,
+        -7.88
+      ],
+      "rooms": [
+        "hall",
+        "atrium"
+      ],
+      "mounted": [
+        "ex_press",
+        "pa_photos",
+        "slot_11"
+      ]
+    },
+    {
+      "file": "07.jpg",
+      "pose": {
+        "eye": [
+          6.8,
+          1.6,
+          -12.2
+        ],
+        "target": [
+          -1,
+          3.18,
+          7.4
+        ]
+      },
+      "feet": [
+        6.8,
+        0,
+        -12.2
+      ],
+      "camera": [
+        6.8,
+        1.6,
+        -12.2
+      ],
+      "rooms": [
+        "hall"
+      ],
+      "mounted": [
+        "ex_press",
+        "pa_photos",
+        "slot_11"
+      ]
+    },
+    {
+      "file": "08.jpg",
+      "pose": {
+        "eye": [
+          -9.9,
+          1.65,
+          -9.5
+        ],
+        "target": [
+          -3.5,
+          1.55,
+          -8.6
+        ]
+      },
+      "feet": [
+        -9.9,
+        0,
+        -9.5
+      ],
+      "camera": [
+        -9.9,
+        1.6,
+        -9.5
+      ],
+      "rooms": [
+        "hall"
+      ],
+      "mounted": [
+        "ex_press",
+        "pa_photos",
+        "slot_11"
+      ]
+    },
+    {
+      "file": "09.jpg",
+      "pose": {
+        "eye": [
+          -9.8,
+          5,
+          11
+        ],
+        "target": [
+          0.5,
+          2.9,
+          -6.5
+        ]
+      },
+      "feet": [
+        -9.8,
+        3.4000000953674316,
+        11
+      ],
+      "camera": [
+        -9.8,
+        5.000000095367431,
+        11
+      ],
+      "rooms": [
+        "hall"
+      ],
+      "mounted": [
+        "ex_press",
+        "pa_photos",
+        "slot_11"
+      ]
+    },
+    {
+      "file": "10.jpg",
+      "pose": {
+        "eye": [
+          9.8,
+          5,
+          -11.5
+        ],
+        "target": [
+          -3.3,
+          3.15,
+          9
+        ]
+      },
+      "feet": [
+        9.8,
+        3.4000000953674316,
+        -11.5
+      ],
+      "camera": [
+        9.8,
+        5.000000095367431,
+        -11.5
+      ],
+      "rooms": [
+        "hall"
+      ],
+      "mounted": [
+        "ex_press",
+        "pa_photos",
+        "slot_11"
+      ]
+    },
+    {
+      "file": "11.jpg",
+      "pose": {
+        "eye": [
+          0.3,
+          1.6,
+          4
+        ],
+        "target": [
+          0.1,
+          6.45,
+          -6.7
+        ]
+      },
+      "feet": [
+        0.3,
+        0,
+        4
+      ],
+      "camera": [
+        0.3,
+        1.6,
+        4
+      ],
+      "rooms": [
+        "hall",
+        "twelve"
+      ],
+      "mounted": [
+        "ex_press",
+        "pa_photos",
+        "slot_11"
+      ]
+    },
+    {
+      "file": "12.jpg",
+      "pose": {
+        "eye": [
+          0,
+          5,
+          -14
+        ],
+        "target": [
+          1,
+          2.4,
+          7.4
+        ]
+      },
+      "feet": [
+        0,
+        3.4000000953674316,
+        -14
+      ],
+      "camera": [
+        0,
+        5.000000095367431,
+        -14
+      ],
+      "rooms": [
+        "hall",
+        "twelve"
+      ],
+      "mounted": [
+        "ex_press",
+        "pa_photos",
+        "slot_11"
+      ]
+    }
+  ],
+  "errors": []
+}

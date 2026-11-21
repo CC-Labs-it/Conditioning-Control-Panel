@@ -1,6 +1,8 @@
 import { livePanel, placard, runMonitor, terminal } from './display.js';
 import { createVisit } from './visit.js';
 import { createDoorGlass } from './door-glass.js';
+import {mountShopDoor} from './shop-door.js';
+import { mountAquariumLife } from './aquarium-life.js';
 import { LLAMAS } from '../../data/content/llamas.js';
 
 const hallCues = { hoof:'pa_hall2', habitat:'pa_hall3', twelve:'pa_hall4', shop:'pa_shop_1', atrium:'pa_arrive_1' };
@@ -142,14 +144,17 @@ export function createExhibits(api) {
         ],foot:'Visitor Services   /   Till 01',eyebrow:'VISITOR SERVICES   /   POINT OF SALE'});
         if(ui.exitSale)ui.exitSale.visible=available;
         api.setButtonAvailable?.('exit_sale',available);
-        if(ui.portal)ui.portal.visible=state.boughtExit;
+        if(ui.portal)ui.portal.visible=!!(state.boughtExit||ui.shopTransit)&&ui.swing>.05;
       };
       ui.shelves=['shelf_left','shelf_right'].map(obj);
       for (const shelf of ui.shelves) if(shelf)shelf.userData.expoRest=shelf.position.clone();
       ui.exitSale=obj('exit_sale');ui.portal=obj('shop_wormhole');
+      ui.swing=0;ui.exitDoor=mountShopDoor(THREE,group,api);clean.push(()=>ui.exitDoor?.dispose());
+      if(ui.portal)ui.portal.position.z-=.235;
       ui.doorGlass=createDoorGlass(THREE,ui.portal);clean.push(()=>ui.doorGlass.dispose());
       ui.home=()=>{
-        if(returning)return;
+        if(returning||!state.boughtExit)return;
+        ui.shopTransit='home';
         returning=true;api.farewell(leave);play('spit');
         cue('pa_leave').then(()=>{departureDone=true;});
       };
@@ -162,9 +167,12 @@ export function createExhibits(api) {
       bind('till_display','Use the till',purchase);
       bind('framed_contract','Buy your framed contract',purchase);
       bind('exit_sale','Buy Exit',purchase);
-      bind('shop_door','Open the exit door',()=>{play('door');if(state.boughtExit){ui.home();return;}
-        cue(state.shopReturn());ui.refresh();void go('shop',[14.2,0,-5],-Math.PI/2);},2.6);
-      bind('shop_wormhole','Go home',ui.home,2.8);ui.refresh();
+      bind('shop_door',()=>state.boughtExit?'Go home':'Open the exit door',()=>{
+        if(ui.shopTransit)return;
+        play('door');if(state.boughtExit){ui.home();return;}
+        ui.shopTransit='loop';cue(state.shopReturn());ui.refresh();
+      },2.6);
+      bind('shop_wormhole',()=>state.boughtExit?'Go home':'Returning to the gift shop',ui.home,2.8);ui.refresh();
     }
     if(id==='atrium') {
       const readout=surface('turnstile_counter',{width:672,height:672});
@@ -196,10 +204,8 @@ export function createExhibits(api) {
       }
     }
     if(id==='aquarium'){
-      ui.schools=[];group.traverse(node=>{
-        const swim=node.userData.aquariumSwim;
-        if(Array.isArray(swim)&&swim.length===5&&swim[3]>0)ui.schools.push({node,rest:node.position.clone(),swim});
-      });
+      ui.waterLife=mountAquariumLife(THREE,group,ctx.gentle||ctx.reduced);
+      clean.push(()=>ui.waterLife.dispose());
     }
     return view;
   }
@@ -232,13 +238,7 @@ export function createExhibits(api) {
       ui.alpacaReturnAt=null;
       void go('atrium',[0,0,36],0).then(()=>cue('pa_alpaca'));
     }
-    if(ui.schools)for(const {node,rest,swim:[x,y,z,period,offset]} of ui.schools){
-      node.position.copy(rest);
-      if(!ctx.gentle&&!ctx.reduced){
-        const phase=hudClock*2*Math.PI/period+offset;
-        node.position.x+=x*Math.sin(phase);node.position.y+=y*Math.sin(2*phase);node.position.z+=z*Math.cos(phase);
-      }
-    }
+    ui.waterLife?.tick(dt,ctx.gentle||ctx.reduced);
     if(id==='hall') {
       if(Math.hypot(camera.position.x,camera.position.z+9)<5.2)once('pa_hall1');
       if(ui.secondary) {ui.secondary.visible=state.presses>=50;ui.secondary.position.y=ui.secondary.userData.expoRest.y-.19*(1-clamp((hudClock-stopShown)/.9));}
@@ -272,9 +272,17 @@ export function createExhibits(api) {
       ui.photo.visible=ui.aperture>.35;
     }
     if(id==='shop'){
+      const swingTime=ctx.gentle||ctx.reduced ? .84 : .67;
+      const travel=Math.min(dt,1/18);
+      ui.swing=clamp(ui.swing+(ui.shopTransit?travel/swingTime:-travel/.92));
+      ui.exitDoor?.set(ui.swing);
+      if(ui.portal)ui.portal.visible=!!(state.boughtExit||ui.shopTransit)&&ui.swing>.05;
+      if(ui.shopTransit)ui.doorGlass.step(dt,ctx.gentle||ctx.reduced);
+      if(ui.shopTransit==='loop'&&ui.swing>=.98){
+        ui.shopTransit=null;void go('shop',[14.2,0,-5],-Math.PI/2);
+      }
       ui.shelves.forEach((node,i)=>{if(node)node.position.z=node.userData.expoRest.z+(i?1:-1)*Math.min(1,state.loops)*1.1;});
       if(state.boughtExit){
-        ui.doorGlass.step(dt,ctx.gentle||ctx.reduced);
         if(Math.abs(camera.position.x-15.03)<.62 && camera.position.z < -13.29)ui.home();
       }
     }

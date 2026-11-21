@@ -1,0 +1,95 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {createArchiveStory} from '../ui/expo/archive-story.js';
+import {createPlanterVisit} from '../ui/expo/planter.js';
+import {visitDirection} from '../ui/expo/visit-guide.js';
+import {serialize,parse,createLife} from '../sim/save.js';
+
+const manifest=JSON.parse(await readFile(new URL('../assets/expo/narration/manifest.json',import.meta.url),'utf8'));
+test('the archive follows the approved order in freely chosen rooms and repeats only on request',()=>{
+  const story=createArchiveStory([...manifest].reverse());
+  const expected=manifest.filter(row=>row.set==='event');
+  assert.equal(expected.length,40);
+  for(const [i,row] of expected.entries()){
+    const from=['aquarium','hall','service'][i%3], ticket=story.request(from);
+    assert.equal(ticket.row.id,row.id);
+    assert.equal(story.request('another'),null);
+    story.move('atrium');
+    assert.equal(story.current.slot,'atrium');
+    story.finish(ticket,true);
+    const review=story.request(from,true);
+    assert.equal(review.row.id,row.id);
+    story.finish(review,true);
+    assert.equal(story.completed,i+1);
+    assert.ok(row.archive.title && row.archive.date && row.archive.body);
+    assert.equal(row.slides.length,3);
+  }
+  assert.equal(story.request('last'),null);
+  assert.equal(story.displayed.id,expected.at(-1).id);
+});
+test('abandoned, stale and interrupted events cannot advance progress',()=>{
+  let saved;
+  const story=createArchiveStory(manifest,'bad-old-id',id=>{saved=id;});
+  const lost=story.request('slot_13');
+  story.finish(lost,false);
+  const retry=story.request('slot_01');
+  story.finish(lost,true);
+  assert.equal(story.completed,0);
+  story.finish(retry,true);
+  assert.equal(createArchiveStory(manifest,saved).next.archive.number,2);
+  for(let i=0;i<2;i++)story.finish(story.request('slot_01'),true);
+  assert.equal(story.canAutoplay('slot_01'),false);
+  assert.equal(story.canAutoplay('slot_11'),true);
+  assert.equal(story.request('slot_01').row.archive.number,4);
+});
+test('the planter claims the lifetime on first landing, including a visit abandoned before the first cue',()=>{
+  const life=createLife();
+  function visit(owner) {
+    const once=()=>{const flags=owner.store.ll_end||={};if(flags.planterDetour)return false;flags.planterDetour=true;return true;};
+    return createPlanterVisit(()=>{},once);
+  }
+  const first=visit(life);
+  first.land({planter:true},{support:{planter:false}});
+  assert.equal(first.held,true);
+  first.leave();
+  const imported=visit(parse(serialize(null,life)).life);
+  imported.land({planter:true},{support:{planter:false}});
+  assert.equal(imported.held,false);
+});
+
+test('the tour points from admission through alternating gallery walls and gives the local exhibit action at a detour',async()=>{
+  const route=JSON.parse(await readFile(new URL('../assets/expo/station-route.json',import.meta.url),'utf8'));
+  const story=createArchiveStory(manifest);
+  const position=([x,y,z])=>({x,y,z});
+  const at=position(route.start.at);
+  const [entry]=route.slots;
+  assert.match(visitDirection(route,story,'atrium',at,{}),/admission projector/i);
+  assert.match(visitDirection(route,story,'atrium',{...position(entry.standing),y:3.4},{}),/downstairs/);
+  const ticket=story.request(entry.id);
+  assert.match(visitDirection(route,story,'atrium',position(entry.standing),{}),/Listen here/);
+  story.finish(ticket,true);
+  assert.equal(visitDirection(route,story,'atrium',at,{}),entry.directions[0].text);
+  const wings=new Set(['chronology','forum','commons','aquarium']);
+  const stations=route.slots.filter(s=>wings.has(s.zone));
+  assert.deepEqual(stations.map(s=>s.side),Array.from({length:8},(_,i)=>i%2?'right':'left'));
+  assert.match(visitDirection(route,story,'hoof',at,{hoof:'pictures'}),/picture grid/);
+  assert.match(visitDirection(route,story,'shop',at,{contract:false,loops:0}),/exit contract at the till/);
+  assert.match(visitDirection(route,story,'shop',at,{contract:true,loops:2,boughtExit:true}),/Go home/);
+  assert.equal(visitDirection(route,story,'secret',at,{}),'');
+});
+
+test('a simultaneous planter claim cannot start a second set of timed cues',async()=>{
+  let resolve;
+  const claim=new Promise(r=>{resolve=r;});
+  const cues=[];
+  const other=createPlanterVisit(id=>cues.push(id),()=>claim);
+  other.land({planter:true},{support:{}});
+  other.tick(120);
+  assert.deepEqual(cues,[]);
+  resolve(false);
+  await claim;
+  other.tick(120);
+  assert.equal(other.held,false);
+  assert.deepEqual(cues,[]);
+});
