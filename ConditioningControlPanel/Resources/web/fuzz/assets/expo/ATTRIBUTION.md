@@ -18,3 +18,5 @@ All source sets are licensed under Creative Commons CC0 1.0. The tints, carpet m
 ## Exhibition artwork
 
 The llama castings, monument, clothed attendant, hoof glove, plush and living-wall cassette were reconstructed with Tripo from project references and finished in Blender. The gallery portraits use the original approved game artwork. Monocles, chains, necklace beads, badges, headwear, clothing details, plinths and plaques were modeled or typeset for this exhibition.
+
+The chronology and statue projectors carry the approved Llama Expo photographs. The west mezzanine has seven separately framed photographs from the project's “Famous photographs, corrected by the Archive” series. Their captions follow the original slide register. The recordings in `narration/hall` are the approved museum-speaker versions. Their exact subtitles and slide associations are in `narration/manifest.json`.
