@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { normalizeParams2, loomStyleT, loomLayerRotationRad, loomHelix } from '../../../arcademy/engine/loom/loomField.js';
-import { createDepth, DOME_CUES } from './depth.js';
+import { createDepth } from './depth.js';
 import { STRAY_WORDS, THEME_STRAY_WORDS } from '../../data/content/side.js';
 import { herdRoster, llamaPortrait } from '../../data/content/llamas.js';
 import { livePanel, placard } from './display.js';
@@ -128,7 +128,7 @@ void main(){
 }`;
 
 /** The clock belongs to the visit, so leaving, unloading and returning preserve depth and the real visit duration. */
-export function createDomeEffects({ctx,camera,say,play,register,bindMedia,setSoundDepth,lite}) {
+export function createDomeEffects({ctx,camera,cue,play,register,bindMedia,setSoundDepth,lite}) {
   const state=createDepth(), heard=new Set(), weather={density:0,time:0};
   const uniforms={depth:{value:0},rotation:{value:0},tunnelRotation:{value:0},pulse:{value:0}};
   let art=null, hallPanel=null, inside=false, motion=0, lifetime=0, actualVisit=0,lastVisit=0,totalVisit=0, visits=0;
@@ -187,7 +187,7 @@ export function createDomeEffects({ctx,camera,say,play,register,bindMedia,setSou
         mesh.material=Array.isArray(original)?original.map(change):change(original);
         clean.push(()=>{mesh.material=original;});
       });
-      const pane={object:frame,width:1.43,height:1.05,offset:.053,opacity:0};
+      const pane={object:frame,width:1.43,height:1.05,offset:.053,twoSided:true,opacity:0};
       frames.push({node:frame,pane}); if(i%3!==0) panes.push(pane);
       walkMeshes(frame,mesh=>occluders.push({mesh,owner:frame}));
     }
@@ -265,8 +265,9 @@ export function createDomeEffects({ctx,camera,say,play,register,bindMedia,setSou
       node.position.set(centre.x+r*Math.cos(phase),2.16+.65*Math.sin(phase*2+i),centre.z+r*Math.sin(phase));
       // Slowly turning frames keep their picture faces within reach around either side of the orbit.
       node.rotation.y=Math.atan2(centre.x-node.position.x,centre.z-node.position.z)+.24*Math.sin(phase+i);
-      pane.opacity=dreams*.94;node.visible=dreams>.008&&(!still||i<4);
-      node.scale.setScalar(Math.max(.001,dreams)*(1+pulse*.04));
+      const clearance=smooth(.72,1.82,node.position.distanceTo(camera.position));
+      pane.opacity=dreams*.94*clearance;node.visible=dreams>.008&&clearance>.008&&(!still||i<4);
+      node.scale.setScalar(Math.max(.001,dreams*clearance)*(1+pulse*.04));
     });
     for(const b of bubbles){
       const {mesh,anchor,pane,i,radius,mat}=b, orbit=1.95+(i%5)*1.12, a=i*2.39996+motion*.028;
@@ -289,12 +290,12 @@ export function createDomeEffects({ctx,camera,say,play,register,bindMedia,setSou
     if(inside)for(let i=1;i<=state.phase;i++)if(!heard.has(i))hear(i);
     if(change.left){
       lastVisit=actualVisit;totalVisit+=actualVisit;visits++;actualVisit=0;label();
-      if(lastVisit>=60)say(DOME_CUES.dome_leave,'dome_leave');
+      if(lastVisit>=60)cue('dome_leave');
     }
     if(inside||was)setSoundDepth(inside?state.depth:0);
     if(inside||art){motion+=dt*(ctx.reduced ? .075 : ctx.gentle ? .23 : 1);update(dt);}
   }
-  function hear(i){heard.add(i);const id='dome_'+i;say(DOME_CUES[id],id);}
+  function hear(i){heard.add(i);cue('dome_'+i);}
   function unmount(id) {
     if(id==='hall'){hallPanel?.dispose();hallPanel=null;}
     if(id!=='dome'||!art)return;

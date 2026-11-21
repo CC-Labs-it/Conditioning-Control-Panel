@@ -21,11 +21,19 @@ const hall = [
   ['05-mezzanine',[-9.8,3.4,11],[.5,2.9,-6.5]],
   ['06-information',[3.4,0,12.8],[5.5,.88,10]],
   ['07-first-press-approach',[-2.9,0,-4.25],[0,1.7,-10]],
-  ['08-button',[.08,0,-7.73],[0,1.03,-9]],
-  ['09-accession',[1.46,0,-7.68],[1.46,.92,-8.874]],
+  ['08-button',[.08,0,-7.48],[0,1.077,-9]],
+  ['09-accession',[1.82,0,-7.38],[1.82,.97,-8.67]],
   ['10-west-reverse',[-7.25,0,-10.8],[1.1,3,12.4]],
   ['11-east-gallery',[9.8,3.4,-11.5],[-3.3,3.15,9]],
   ['12-north-axis',[0,3.4,-14],[1,2.4,7.4]],
+  ['13-corrected-photographs',[-9.63,3.4,-9.92],[-11.67,4.93,-12.58]],
+  ['14-archive-carousel',[-9.66,3.4,1.62],[-11.64,4.80,.88]],
+  ['15-founding-projector',[-2.94,0,-6.42],[-3.27,1.61,-8.86]],
+  ['16-feed-is-included',[-2.431,0,13.980],[-3.35,1.86,15.74]],
+  ['17-accession-lettering',[-3.11,0,14.31],[-3.35,1.34,15.71]],
+  ['18-crossing-and-girder',[-9.64,3.4,-11.91],[-11.7,4.89,-12.03]],
+  ['19-microgrid-workbench',[8.89,0,-8.12],[10.92,1.23,-8.42]],
+  ['20-garden-and-balcony',[3.1,0,-.78],[5.76,2.36,-5.52]],
 ];
 const custom = routeFile ? JSON.parse(await (await import('node:fs/promises')).readFile(routeFile,'utf8')) : null;
 if (!custom && zone !== 'hall') throw new Error('A route JSON file must supply the fixed cameras for ' + zone);
@@ -90,19 +98,32 @@ try {
       return document.querySelector('.expo-prompt').textContent;
     },{zone,at,look});
     if(!label.includes(expected))throw Error('Expected '+expected+' at action position, saw '+label);
-    for(let i=0;i<repeats;i++)await page.keyboard.press('KeyE');
+    for(let i=0;i<repeats;i++){
+      await page.keyboard.press('KeyE');
+      if(i+1<repeats)await page.waitForTimeout(300);
+    }
   }
   let domeReviewTime=0;
   for (const [name, at, look] of shots) {
     const number=Number(name.slice(0,2));
+    const joins={chronology:['atrium','forum'],forum:['chronology','commons'],
+      commons:['forum','aquarium'],aquarium:['commons',null]};
+    const across=joins[zone]?.[number-11];
     const needsAtrium=available.includes('atrium')&&((zone==='service'&&number===12)||(zone==='catwalk'&&(number===2||number===3)));
-    const cold=needsAtrium&&process.env.EXPO_COLD_NEIGHBORS==='1';
+    const neighbor=across&&available.includes(across)?across:needsAtrium?'atrium':zone==='twelve'&&available.includes('hall')?'hall':
+      zone==='atrium'&&number===12&&available.includes('catwalk')?'catwalk':null;
+    const cold=!!neighbor&&process.env.EXPO_COLD_NEIGHBORS==='1';
     if(cold){
       await frame.evaluate(()=>__expo.go('secret',[84.2,0,41]));
-      await frame.waitForFunction(()=>!__expo.state().loaded.includes('atrium'),null,{timeout:60000});
+      await frame.waitForFunction(id=>!__expo.state().loaded.includes(id),neighbor,{timeout:60000});
     }
     if(process.env.EXPO_EXHIBIT_STATES==='1'){
       const n=Number(name.slice(0,2));
+      if(zone==='hall'&&name==='16-second-switch'){
+        await useAt([.18,0,-7.38],[0,1.055,-9],'I AGREE',50);
+        await frame.waitForFunction(()=>__expo.exhibits.state.presses>=50);
+        await page.waitForTimeout(1100);
+      }
       if(zone==='hoof'){
         const consoleAt=[-18.42,0,8.93],consoleLook=[-18.4,1.77,10.468];
         if(n===7)await useAt(consoleAt,consoleLook,'Try',1);
@@ -132,31 +153,39 @@ try {
       const ex = window.__expo; await ex.go(zone,at); ex.lookAt(...look); ex.draw();
       await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
     },{zone,at,look});
-    if(needsAtrium){
-      await frame.waitForFunction(()=>__expo.state().loaded.includes('atrium'),null,{timeout:60000});
+    if(neighbor){
+      await frame.waitForFunction(id=>__expo.state().loaded.includes(id),neighbor,{timeout:60000});
       await frame.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+    }
+    const timedScene=zone==='dome'||(zone==='hoof'&&number===10);
+    if (process.env.EXPO_QUIET_SHOTS === '1'&&!timedScene) {
+      await frame.waitForFunction(() => [...document.querySelectorAll('.expo-narration p')]
+        .every(line => !line.textContent.trim()), null, {timeout: 180000});
+      await frame.evaluate(() => new Promise(done => requestAnimationFrame(done)));
     }
     const state = await frame.evaluate(()=>window.__expo.state());
     const shot = await cdp.send('Page.captureScreenshot',{format:'png', fromSurface:true});
     await writeFile(path.join(target, name+'.png'),Buffer.from(shot.data,'base64'));
-    results.push({ name, at, look, ...state,requiredNeighbors:needsAtrium?['atrium']:[],coldNeighborCheck:cold });
+    results.push({ name, at, look, ...state,requiredNeighbors:neighbor?[neighbor]:[],coldNeighborCheck:cold });
   }
   if (film) {
     const nodes = custom?.walk || [[0,13],[0,-7.67],[0,-3],[3.1,0],[3.1,7.65],[8.35,7.65],[8.35,-.9],[10.3,-.9],[10.3,-14.55],[0,-14.55]];
+    await frame.evaluate(async({zone,nodes})=>{await __expo.go(zone,[nodes[0][0],0,nodes[0][1]]);},{zone,nodes});
     const raw=path.join(target,'walk-raw.mp4'),audio=path.join(target,'walk-audio.webm');
     const stopVideo=await beginTabVideo(page,raw);
-    await beginGameAudio(frame);
+    const audioAfterVideo=((await beginGameAudio(frame))-stopVideo.startedAt)/1000;
     const walk=await frame.evaluate(async ({nodes,zone})=>{
-      const ex = window.__expo; await ex.go(zone,[nodes[0][0],0,nodes[0][1]]);
-      const start = performance.now(); let previous = start, segment = 1, wait=0, pressed=false;const checkpoints=[];
+      const ex = window.__expo;
+      const start = performance.now(); let previous = start, segment = 1, wait=0, pressed=false;const checkpoints=[],voices=[];
       while (performance.now()-start < 60500) {
         await new Promise(r=>requestAnimationFrame(r));
         const now = performance.now(), dt = Math.min((now-previous)/1000,.1); previous=now;
+        if(voices.length<=(now-start)/1000){const {voice,pa}=ex.narrationState();voices.push({at:(now-start)/1000,voice:voice.id,pa:pa.id});}
         const dst=nodes[Math.min(segment,nodes.length-1)],dx=dst[0]-ex.walker.feet.x,dz=dst[1]-ex.walker.feet.z,dist=Math.hypot(dx,dz);
         let aimX=dst[0],aimY=ex.camera.position.y,aimZ=dst[1];
         if(segment>=nodes.length){aimX=0;aimY=1.8;aimZ=8;}
         else if(zone==='hall' && segment===1 && dist<.18){aimX=0;aimY=1.04;aimZ=-9;wait+=dt;if(wait>2.3&&!pressed){pressed=ex.interact();} }
-        else if(zone==='hall' && segment===8){aimX=0;aimY=2.5;aimZ=-7;}
+        else if(zone==='hall' && (segment===7||segment===8)){aimX=0;aimY=2.5;aimZ=-7;}
         const yaw=Math.atan2(ex.camera.position.x-aimX,ex.camera.position.z-aimZ);
         const pitch=Math.atan2(aimY-ex.camera.position.y,Math.max(.01,Math.hypot(aimX-ex.camera.position.x,aimZ-ex.camera.position.z)));
         ex.camera.rotation.y+=Math.atan2(Math.sin(yaw-ex.camera.rotation.y),Math.cos(yaw-ex.camera.rotation.y))*Math.min(1,dt*3);
@@ -168,11 +197,11 @@ try {
         }
         const moved=Math.min(dist,dt*1.6);ex.walker.move(dx/dist*moved,dz/dist*moved);
       }
-      return {checkpoints,pressed,routeComplete:segment>=nodes.length,feet:ex.walker.feet.toArray()};
+      return {checkpoints,pressed,routeComplete:segment>=nodes.length,feet:ex.walker.feet.toArray(),voices};
     },{nodes,zone});
     await finishGameAudio(frame,audio);
     await stopVideo();
-    await muxWalk(raw,audio,path.join(target,'walk.mp4'));
+    await muxWalk(raw,audio,path.join(target,'walk.mp4'),60,audioAfterVideo);
     const {unlink}=await import('node:fs/promises');await unlink(raw);await unlink(audio);
     await writeFile(path.join(target,'walk.json'),JSON.stringify(walk,null,2));
     if(!walk.routeComplete || (zone==='hall'&&!walk.pressed))issues.push('Recorded walk missed a waypoint or button press; see walk.json.');

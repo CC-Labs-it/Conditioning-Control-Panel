@@ -81,13 +81,13 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
    * ending swallows an object and its sound goes underwater). Off = the plain route to master, as before. */
   const muffles = new Map();
   const outFor = (source) => muffles.get(source)?.f || master;
-  function toMaster(node, pan, source) {
+  function toMaster(node, pan, source, spatial = false) {
     const g = ctx.createGain();
     g.gain.value = sourceLevel(source);
     node.connect(g);
-    const p = Number.isFinite(pan) && pan !== 0 && ctx.createStereoPanner ? ctx.createStereoPanner() : null;
+    const p = Number.isFinite(pan) && (spatial || pan !== 0) && ctx.createStereoPanner ? ctx.createStereoPanner() : null;
     if (p) { p.pan.value = Math.max(-1, Math.min(1, pan)); g.connect(p).connect(outFor(source)); } else g.connect(outFor(source));
-    const route = { source, g, tail: p || g, disconnect() { sourceNodes.delete(route); g.disconnect?.(); p?.disconnect?.(); } };
+    const route = { source, g, p, tail: p || g, disconnect() { sourceNodes.delete(route); g.disconnect?.(); p?.disconnect?.(); } };
     sourceNodes.add(route);
     return route;
   }
@@ -100,7 +100,7 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
       s.media = ctx.createMediaElementSource(s.el);
       s.g = ctx.createGain();
       s.media.connect(s.g);
-      s.route = toMaster(s.g, s.pan, s.source);
+      s.route = toMaster(s.g, s.pan, s.source, s.spatial);
       s.routed = true;
     } catch { /* native playback remains available without Web Audio media routing */ }
     syncStream(s);
@@ -130,13 +130,13 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
     s.media?.disconnect?.(); s.g?.disconnect?.(); s.route?.disconnect();
   }
 
-  /** Returns {el, play(), pause(), setGain(v), stop(ms), playing}. Starts on the first gesture unless autoplay is false. */
+  /** Long media follows the kit's master and source levels. Spatial streams also accept a live stereo pan. */
   /* preload 'metadata' (2026-11-08): 'auto' pulled whole podcast episodes and radio tracks at once (4 MB a minute). A play()
    * still fetches as it goes; pass preload: 'auto' for a short clip that must start with no wait. */
-  function stream(url, { bus = 'podcast', gain = 1, loop: looped = false, autoplay = true, pan = 0, preload = 'metadata', source, sourceLabel } = {}) {
+  function stream(url, { bus = 'podcast', gain = 1, loop: looped = false, autoplay = true, pan = 0, spatial = false, preload = 'metadata', source, sourceLabel } = {}) {
     source = registerSource(bus, source, sourceLabel);
     const el = makeMedia();
-    const s = { el, bus, gain, source, pan: Number.isFinite(pan) ? pan : 0, routed: false, routeTried: false, fade: 1, expected: 0, wanted: !!autoplay, dead: false, fadeTimer: 0 };
+    const s = { el, bus, gain, source, spatial, pan: Number.isFinite(pan) ? pan : 0, routed: false, routeTried: false, fade: 1, expected: 0, wanted: !!autoplay, dead: false, fadeTimer: 0 };
     el.crossOrigin = 'anonymous';  // the graph hears nothing from a cross-origin file without it
     el.preload = preload === 'auto' || preload === 'none' ? preload : 'metadata';
     el.loop = !!looped;
@@ -153,6 +153,14 @@ export function createKit({ makeMedia = () => new Audio(), now = () => performan
       play() { s.wanted = true; playStream(s); },
       pause() { s.wanted = false; if (!s.dead) el.pause(); },
       setGain(v) { if (Number.isFinite(v)) { s.gain = Math.max(0, v); syncStream(s); } },
+      setPan(v) {
+        if (s.dead || !Number.isFinite(v)) return;
+        const pan = Math.max(-1, Math.min(1, v));
+        if (Math.abs(s.pan - pan) < .001) return;
+        s.pan = pan;
+        const param = s.route?.p?.pan;
+        if (param) { param.cancelScheduledValues(ctx.currentTime); param.setTargetAtTime(pan, ctx.currentTime, .045); }
+      },
       stop(ms = 0) {
         if (s.dead || s.fadeTimer) return;
         if (!(ms > 0) || held) { killStream(s); return; }

@@ -48,7 +48,17 @@ async function snap(ad, s, t, width) {
   } finally { restore(); }
 }
 
+async function drawPhotograph(image, width) {
+  await image.decode();
+  const canvas = image.ownerDocument.createElement('canvas');
+  canvas.width = width;
+  canvas.height = Math.round(image.naturalHeight * width / image.naturalWidth);
+  canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
 async function frames(ad, fps, width, progress, stop) {
+  if (ad.photograph) return [await drawPhotograph(ad.photograph, width)];
   const s = ad.build(true), END = s.end + (s.tail || 0);
   const total = Math.ceil(END / 1000 * fps) + 1, out = [];
   try {
@@ -114,6 +124,10 @@ async function video(list, fps, doc, progress) {
 }
 
 async function png(ad) {
+  if (ad.photograph) {
+    const canvas = await drawPhotograph(ad.photograph, ad.photograph.naturalWidth || 1100);
+    return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+  }
   const s = ad.build(true);
   try {
     const c = await snap(ad, s, s.end, 1080);
@@ -157,7 +171,9 @@ export async function exportCard(ad, kind, { progress = () => {}, stop = () => f
   }
   const fps = kind === 'gif' ? 12 : 15, width = kind === 'gif' ? 432 : 640;
   const list = await frames(ad, fps, width, progress, stop);
-  const blob = kind === 'gif' ? await gif(list, fps, doc, progress) : await video(list, fps, doc, progress);
+  // MediaRecorder timestamps a canvas on each draw. Keep the still visible for the usual poster hold.
+  const videoFrames = ad.photograph && kind === 'video' ? Array(Math.ceil(2.5 * fps)).fill(list[0]) : list;
+  const blob = kind === 'gif' ? await gif(list, fps, doc, progress) : await video(videoFrames, fps, doc, progress);
   if (stop()) return { status: 'cancelled' };
   const ext = kind === 'gif' ? 'gif' : blob.type.includes('mp4') ? 'mp4' : 'webm';
   return { status: await saveBlob(doc, blob, filename + '.' + ext), blob };

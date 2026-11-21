@@ -243,7 +243,6 @@ export function createIntro({ doc, root, scroller, fx, sfx, stars, poster, onSet
     fx.replaceChildren();
     qa('[data-rr]').forEach((s) => { s.style.opacity = ''; });
     queue = [];
-    if (!running) return;
     running = false;
     if (settle && !done) { done = true; poster?.start(0); onSettled?.(); }
   }
@@ -251,6 +250,7 @@ export function createIntro({ doc, root, scroller, fx, sfx, stars, poster, onSet
   return {
     get running() { return running; },
     start() {
+      if (done || running) return;
       const list = order();
       running = true;
       hideAll(list);

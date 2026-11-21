@@ -23,7 +23,12 @@ try{
   const context=await browser.newContext({viewport:{width:Number(process.env.W||1600),height:Number(process.env.H||900)}});
   await installGameAudio(context);
   const page=await context.newPage();page.on('pageerror',e=>audit.faults.push(e.message));
-  page.on('response',response=>{if(response.status()>=400&&response.url().includes('/assets/expo/'))audit.faults.push(response.status()+' '+new URL(response.url()).pathname);});
+  audit.mediaRequests=[];
+  page.on('response',response=>{
+    const name=response.url().split('/assets/expo/narration/')[1];
+    if(name&&!audit.mediaRequests.includes(name))audit.mediaRequests.push(name);
+    if(response.status()>=400&&response.url().includes('/assets/expo/'))audit.faults.push(response.status()+' '+new URL(response.url()).pathname);
+  });
   page.on('console',m=>{if(/(WebGL|GL_).*INVALID_(OPERATION|VALUE|ENUM)|THREE\.WebGLProgram: Shader Error/i.test(m.text()))audit.faults.push(m.text());});
   await page.goto(base+'dev/play-ending.html?end=ll_end&pictures=none&herd='+encodeURIComponent(process.env.HERD||'12'));
   const admit=page.getByRole('button',{name:'Play Llama Expo 2037'});await admit.waitFor({timeout:90000});
@@ -50,14 +55,27 @@ try{
     await frame.waitForFunction(()=>window.__expo?.state().ready,null,{timeout:120000});
   }
   const objectNames={press:'press_main',hoof:'hoof_display',habitat:'habitat_glass',photo:'photo_release',till:'till_display',loop:'shop_door',sale:'exit_sale',home:'shop_wormhole'};
-  const activeState=()=>frame.evaluate(()=>window.__expo?.state()||{recap:!!document.querySelector('.rr'),ending:fuzz.state.ended?.id,
-    photoCharacters:fuzz.state.store?.ll_end?.groupPhoto?.length||0});
+  const activeState=()=>frame.evaluate(()=>{
+    if(window.__expo){const s=__expo.narrationState();return {...__expo.state(),voice:s.voice,pa:s.pa,finished:s.finished};}
+    return {recap:!!document.querySelector('.rr'),ending:fuzz.state.ended?.id,photoCharacters:fuzz.state.store?.ll_end?.groupPhoto?.length||0};
+  });
   if(shots[0].admission)await purchase();
   else{await openGate();await frame.waitForFunction(()=>!__expo.state().textures.pendingDetailMaps);}
   for(const [i,shot] of shots.entries()){
     if(shot.zone){
-      await frame.evaluate(async({zone,at,aim})=>{const e=__expo;await e.go(zone,at);e.lookAt(...aim);e.root.focus();},{...shot});
+      const aim=await frame.evaluate(async({zone,at,aim,expectedStation,aimObject})=>{
+        const e=__expo;await e.go(zone,at);
+        if(expectedStation||aimObject){const T=await import('three'),face=e.scene.getObjectByName(aimObject||'expo_screen_'+expectedStation);
+          if(!face)throw Error('Missing filmed object '+(aimObject||expectedStation));
+          aim=new T.Box3().setFromObject(face,true).getCenter(new T.Vector3()).toArray();}
+        e.lookAt(...aim);e.root.focus();return aim;
+      },{...shot});
+      shot.aim=aim;
       if(shot.visibleRooms)await frame.waitForFunction(ids=>ids.every(id=>__expo.state().loaded.includes(id)),shot.visibleRooms,{timeout:45000});
+      if(shot.expectedStation)await frame.waitForFunction(id=>{
+        const s=__expo.narrationState();return s[id.startsWith('pa_')?'pa':'voice'].id===id;
+      },shot.expectedStation,{timeout:160000});
+      if(shot.settleSeconds)await page.waitForTimeout(shot.settleSeconds*1000);
       if(shot.dwell){
         if(rehearse)await frame.evaluate(t=>__expo.deepen(Math.max(0,t-__expo.state().seconds)),shot.dwell);
         else await frame.waitForFunction(t=>__expo.state().seconds>=t,shot.dwell,{timeout:600000});
@@ -94,7 +112,7 @@ try{
     }
     const remaining=(rehearse?.2:shot.seconds+.68)-sec();
     if(remaining>0 && (shot.to||shot.afterAim||shot.path||shot.travel)){
-      item.crossings=await frame.evaluate(async({to,aim,afterAim,path,travel,remaining})=>{
+      item.crossings=await frame.evaluate(async({to,aim,afterAim,path,pathLook,travel,remaining})=>{
         const e=__expo,begin=performance.now(),feet=e.walker.feet,start=feet.clone(),crossings=[];
         const stops=path||(to?[to]:[]);let index=0,length=0,from=[start.x,start.z];
         for(const point of stops){length+=Math.hypot(point[0]-from[0],point[1]-from[1]);from=point;}
@@ -104,27 +122,37 @@ try{
         let prev=begin;
         while(performance.now()-begin<remaining*1000){
           await new Promise(r=>requestAnimationFrame(r));const now=performance.now(),dt=Math.min(.07,(now-prev)/1000);prev=now;
-          if(travel){const before=feet.clone();e.walker.move(travel[0]*dt/remaining,travel[1]*dt/remaining);
-            if(feet.distanceTo(before)>1.5)crossings.push({from:before.toArray(),to:feet.toArray()});}
+          const before=feet.clone();
+          if(travel)e.walker.move(travel[0]*dt/remaining,travel[1]*dt/remaining);
           else if(index<stops.length){const point=stops[index],x=point[0]-feet.x,z=point[1]-feet.z,l=Math.hypot(x,z);
             if(l>.015){const d=Math.min(l,dt*metersPerSecond);e.walker.move(x/l*d,z/l*d);}else index++;}
+          if(feet.distanceTo(before)>1.5)crossings.push({from:before.toArray(),to:feet.toArray()});
           if(afterAim){const t=Math.min(1,(now-begin)/(Math.min(2,remaining)*1000));
             e.camera.quaternion.slerpQuaternions(turnStart,turnEnd.quaternion,t*t*(3-2*t));}
+          else if(pathLook){const point=stops[Math.min(index,stops.length-1)],x=point[0]-feet.x,z=point[1]-feet.z;
+            if(Math.hypot(x,z)>.02){const yaw=Math.atan2(-x,-z),delta=yaw-e.camera.rotation.y;
+              e.camera.rotation.y+=Math.atan2(Math.sin(delta),Math.cos(delta))*Math.min(1,dt*5);e.camera.rotation.x=.035;}}
           else if(travel)e.camera.lookAt(aim[0]+feet.x-start.x,aim[1]+feet.y-start.y,aim[2]+feet.z-start.z);
           else e.camera.lookAt(...aim);
           e.camera.rotation.z=0;
         }
         return crossings;
       },{...shot,remaining});
-      if(shot.travel&&!rehearse&&item.crossings.length!==1)throw Error(shot.id+' missed its architectural crossing.');
+      const expected=shot.expectCrossings??(shot.travel?1:0);
+      if(expected&&!rehearse&&item.crossings.length!==expected)throw Error(shot.id+' missed its architectural crossing.');
     }else if(remaining>0)await page.waitForTimeout(remaining*1000);
     if(shot.home){
-      await frame.locator('.expo-root').waitFor({state:'detached',timeout:16000});
+      await frame.locator('.expo-root').waitFor({state:'detached',timeout:160000});
       await frame.locator('.rr').waitFor({state:'attached',timeout:16000});
       if(shots.some(s=>s.id==='photo')){
         const photo=frame.locator('.rr img[alt="Group photograph in the Hall of the Twelve"]');
         await photo.waitFor({state:'attached',timeout:10000});
         item.recapPhoto=await photo.evaluate(async img=>{await img.decode();return {width:img.naturalWidth,height:img.naturalHeight,characters:img.src.length};});
+        await frame.waitForFunction(()=>document.querySelector('.rr.settled,.rr-skip'),null,{timeout:30000});
+        const skip=frame.locator('.rr-skip');
+        if(await skip.count()){await skip.click();item.inputs.push({action:'Skip the recap introduction after the natural departure',at:sec()});}
+        await frame.locator('.rr.settled').waitFor({state:'visible',timeout:10000});
+        if(!rehearse)await page.waitForTimeout(2550);
       }
     }
     item.after=await activeState();

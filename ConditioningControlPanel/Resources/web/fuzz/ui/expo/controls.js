@@ -2,9 +2,15 @@ const WALK_SPEED = 4;
 const LOOK_SPEED = 0.0025;
 const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight']);
 const UI = 'button,a,input,textarea,select,[contenteditable=true],[role=button]';
+const EDITOR = 'input,textarea,select,[contenteditable=true],[role=slider],[role=menu],[role=listbox],[role=tablist]';
+const keyCodes={w:'KeyW',a:'KeyA',s:'KeyS',d:'KeyD',e:'KeyE',' ':'Space',Spacebar:'Space',
+  Enter:'Enter',ArrowUp:'ArrowUp',ArrowDown:'ArrowDown',ArrowLeft:'ArrowLeft',ArrowRight:'ArrowRight'};
+function codeFor(event){
+  return event.code&&event.code!=='Unidentified'?event.code:keyCodes[event.key]||keyCodes[event.key?.toLowerCase()];
+}
 
 /** The same walk on mouse, keyboard and touch. The camera never bobs or rolls. */
-export function createControls({ root, canvas, camera, move, onInteract, onPause, isPaused = () => false }) {
+export function createControls({ root, canvas, camera, move, onInteract, onJump, onPause, isPaused = () => false }) {
   const doc = root.ownerDocument, win = doc.defaultView, keys = new Set(), off = [];
   let disposed = false, drag = null, stickId = null, stickX = 0, stickY = 0, locked = false;
   let releasing = false;
@@ -36,6 +42,7 @@ export function createControls({ root, canvas, camera, move, onInteract, onPause
     off.push(() => target.removeEventListener(event, fn, options));
   }
   const active = () => !disposed && !isPaused() && !doc.hidden;
+  function focusGame(){root.focus({preventScroll:true});}
   const capture = (el, id) => { try { el.setPointerCapture(id); } catch {} };
   const release = (el, id) => { try { if (id != null && el.hasPointerCapture(id)) el.releasePointerCapture(id); } catch {} };
   function clearPointers() {
@@ -68,7 +75,7 @@ export function createControls({ root, canvas, camera, move, onInteract, onPause
   listen(doc, 'pointerlockchange', () => {
     const wasLocked = locked;
     locked = doc.pointerLockElement === canvas;
-    if (!locked) {
+    if (!locked && wasLocked) {
       keys.clear(); clearPointers();
       if (wasLocked && !releasing && active()) onPause?.();
     }
@@ -77,21 +84,35 @@ export function createControls({ root, canvas, camera, move, onInteract, onPause
   listen(doc, 'mousemove', event => {
     if (locked) look(event.movementX || 0, event.movementY || 0);
   });
-  listen(doc, 'keydown', event => {
-    // Escape belongs to the game's existing pause handler.
-    if (!active() || event.ctrlKey || event.altKey || event.metaKey || event.target?.closest?.(UI)) return;
-    if (MOVE_KEYS.has(event.code)) {
-      event.preventDefault(); event.stopPropagation(); keys.add(event.code);
-    } else if (event.code === 'KeyE' || event.code === 'Enter') {
-      event.preventDefault(); event.stopPropagation();
-      if (!event.repeat) onInteract();
+  function keyDown(event){
+    if (!active() || event.ctrlKey || event.altKey || event.metaKey || event.target?.closest?.(EDITOR)) return;
+    const code=codeFor(event);
+    if (MOVE_KEYS.has(code)) {
+      if(doc.activeElement!==root||!doc.hasFocus())focusGame();
+      event.preventDefault();event.stopPropagation();keys.add(code);return;
     }
-  }, true);
-  listen(doc, 'keyup', event => { keys.delete(event.code); }, true);
+    if(event.target?.closest?.(UI)||!['KeyE','Enter','Space'].includes(code))return;
+    event.preventDefault();event.stopPropagation();
+    if(!event.repeat){if(code==='Space')onJump?.();else onInteract();}
+  }
+  const keyUp=event=>keys.delete(codeFor(event));
+  listen(win,'keydown',keyDown,true);listen(win,'keyup',keyUp,true);
+  // A launcher can retain focus on its document after its play button is removed.
+  // Only accept its background keystrokes while the embedded visit is active.
+  try{
+    const host=win.frameElement?.ownerDocument;
+    if(host){
+      listen(host,'keydown',event=>{
+        if(event.target===host.body||event.target===host.documentElement||event.target===win.frameElement)keyDown(event);
+      },true);
+      listen(host,'keyup',keyUp,true);
+    }
+  }catch{}
   listen(win, 'blur', reset);
   listen(doc, 'visibilitychange', () => { if (doc.hidden) reset(); });
   listen(canvas, 'pointerdown', event => {
     if (!active() || event.button !== 0 || drag) return;
+    focusGame();
     event.preventDefault();
     if (event.pointerType === 'touch') root.classList.add('expo-has-touch');
     if (locked) { onInteract(); return; }

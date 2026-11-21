@@ -789,7 +789,7 @@ export const CLAUSES = Object.freeze({
   "I accept binding arbitration before three (3) llamas, and I agree in advance with whatever they chew."
  ],
  "ll_end": [
-  "This run ends before the panel. I bring my file. I do not get it back."
+  "I accept admission to Llama Expo 2037. I consent to being exhibited as the First Presser."
  ],
  "lo_head": [
   "I accept chastity pictures on my page and ads about what CCP can lock. Click.",

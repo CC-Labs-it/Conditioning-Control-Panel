@@ -8,12 +8,13 @@ Writes, relative to the fuzz root:
     assets/fate/llama/panel.webp       the panel scene, kept at its own size
     assets/fate/llama/chair-chew.webp  640 x 794 (kept aspect)
     assets/fate/llama/chair-spit.webp  640 x 794
-    assets/stickers/e_ll_end.webp      Sir Reginald, round die-cut with a white border, 512 x 512, transparent outside
+    assets/stickers/e_ll_end.webp      Expo 2037 souvenir seal, 512 x 512, transparent outside
     assets/adcard/chair.webp           Sir Reginald, round, 160 x 160, transparent outside
 and prints the bytes of each and the total. Needs Pillow.
 """
 import json, os, sys
 from PIL import Image, ImageDraw
+from expo_sticker import souvenir
 
 FUZZ = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 MAIN = 'C:/Projects/Conditioning-Control-Panel---CSharp-WPF/handoff-1121/llamas'
@@ -66,9 +67,8 @@ for n in ('chair-chew', 'chair-spit'):
 chair = Image.open(f'{SRC}/reginald.png').convert('RGB')
 # Square boxes around Sir Reginald's head in the 1024 portrait (the wild set: head top left, monocle); re-pick them if
 # the portrait is regenerated with a different pose.
-STICKER_BOX = (200, 40, 880, 720)
 CHAIR_BOX = (300, 70, 760, 530)
-save(round_crop(chair, 512, 22, STICKER_BOX), 'assets/stickers/e_ll_end.webp')
+save(souvenir(chair), 'assets/stickers/e_ll_end.webp')
 save(round_crop(chair, 160, 0, CHAIR_BOX), 'assets/adcard/chair.webp')
 
 total = 0

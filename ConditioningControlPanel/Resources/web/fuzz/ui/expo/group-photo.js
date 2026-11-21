@@ -56,7 +56,13 @@ export function groupPhotograph({gallery,scene,renderer,doc,draw}) {
     paper.fillStyle='#173d33';paper.font='16px Georgia';
     paper.fillText('Back row   Spitz, Greg, Bartholomew, Henry, Doctor, Nana',22,710);
     paper.fillText('Front row   Reginald, Margaret, Bob, Lashes, Kevin, Gary',22,736);
-    return out.toDataURL('image/webp',.83);
+    // The recap stores the photograph inside the run's existing save record.
+    // Keep even a detailed gallery view within the poster's encoded size limit.
+    for(const quality of [.83,.70,.55,.40]){
+      const photograph=out.toDataURL('image/webp',quality);
+      if(photograph.length<=240023)return photograph;
+    }
+    return null;
   }finally{
     party.removeFromParent();
     for(const [object,visible] of visibility)object.visible=visible;

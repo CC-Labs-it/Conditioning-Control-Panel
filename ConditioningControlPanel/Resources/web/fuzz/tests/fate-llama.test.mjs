@@ -15,7 +15,7 @@ import { createLife, recordEnding } from '../sim/save.js';
 import { cardModel } from '../ui/adcard/model.js';
 import { herdHtml } from '../ui/adcard/card.js';
 import { GROUPS } from '../ui/unlocks/index.js';
-import { expoEnding, EXPO_PAPER } from '../ui/unlocks/fate/llama/ending.js';
+import { expoEnding, PORTAL_DARK } from '../ui/unlocks/fate/llama/ending.js';
 import { OWED } from '../ui/unlocks/fate/llama/art.js';
 import { fateShut } from '../ui/guide-world-model.js';
 import { createJourney, EXTRAS } from '../sim/journey.js';
@@ -134,8 +134,9 @@ test('the Expo keeps the ending identity and sticker, with no forced wall-clock 
   assert.ok(!e.link, 'no link out: the llamas are not a product');
   const group = GROUPS['fate-llama'];
   assert.deepEqual(Object.keys(group).sort(), ['ft_panel', 'll_end']);
-  assert.equal(group.ll_end.ending, expoEnding);
-  assert.equal(group.ll_end.fadeColour, EXPO_PAPER);
+  assert.equal(group.ll_end.take, expoEnding);
+  assert.equal(group.ll_end.takeMaxMs, null, 'the visit owns the wormhole through the return to recap');
+  assert.equal(group.ll_end.fadeColour, PORTAL_DARK);
   assert.equal(group.ll_end.showMaxMs, null, 'the visitor decides when to leave');
   assert.ok(OWED.length >= 4 && OWED.every((o) => o.file && o.size && o.what && /^real/.test(o.now)), 'every owed picture is real now');
 

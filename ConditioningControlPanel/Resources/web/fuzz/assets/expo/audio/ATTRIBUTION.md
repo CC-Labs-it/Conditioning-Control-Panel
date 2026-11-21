@@ -13,3 +13,5 @@ All source recordings are licensed CC0 1.0. Excerpts are edited, filtered, loope
 - [The Shop](https://opengameart.org/content/the-shop) by LEGIT Audio. `shop.ogg`, `service.ogg`, `server.ogg`.
 
 [Creative Commons CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+
+The portal rise, held field and arrival glints were synthesized for the Expo. The arrival tail includes a quiet excerpt of the existing atrium room recording, from [100 CC0 SFX #2](https://opengameart.org/content/100-cc0-sfx-2) by rubberduck. The standard and Gentle renditions share the same transfer timing.

@@ -1,4 +1,3 @@
-import { LINES } from './lines.js';
 import { livePanel, placard, runMonitor, terminal } from './display.js';
 import { createVisit } from './visit.js';
 import { createDoorGlass } from './door-glass.js';
@@ -10,8 +9,8 @@ const clamp = n => Math.min(1,Math.max(0,n));
 export function createExhibits(api) {
   const {THREE,ctx,camera,register,play,say,go,exit} = api;
   const state = createVisit(ctx), zones = new Map();
-  let here = '', hudClock = 0, pending = [], lastPress = -20, lastStop = -20, stopShown = -20, returnAt = null;
-  const cue = id => { if (id && LINES[id]) say(LINES[id],id); };
+  let here = '', hudClock = 0, pending = [], stopShown = -20, returning = false, departureDone=false, disposed=false;
+  const cue = api.cue;
   function once(id) { if (!state.heard.has(id)) { state.heard.add(id); cue(id); } }
   function later(id, delay) { pending.push({id, at:hudClock+delay, zone:here}); }
 
@@ -47,7 +46,6 @@ export function createExhibits(api) {
         if(stop && state.presses<50) return;
         state.heard.add('pa_hall1');
         const line = state.press(stop);
-        if(stop) lastStop=hudClock; else lastPress=hudClock;
         if(state.presses===50) stopShown=hudClock;
         play('press'); record(); cue(line);
       }
@@ -77,14 +75,14 @@ export function createExhibits(api) {
           change:['[X]   [X]','[X]   [X]'], pictures:['Select every square without a llama.'],
           failed:['Result: 0 eligible squares.'], assistant:['Human assistance requested.'], complete:['[✓]   [ ]','[ ]   [ ]']
         };
-        terminal(panel,{title:page==='pictures'||page==='failed'?'I am not a llama':'Tick one box', rows:rows[page],
+        terminal(panel,{title:'Tick one box',rows:rows[page],pictureGrid:!!ui.photos?.visible,
           foot:page==='complete'?'This is why.':page==='idle'?'Applied Sciences  /  Hoof Simulator':'Human Interface Programme',good:page==='complete'});
       };
       if(ui.human)ui.human.userData.expoRest=ui.human.position.clone();
       const use=()=>{const previous=state.hoof; const line=state.useHoof();
         if(previous==='checkbox'||previous==='pictures')ui.lastAttempt=hudClock;
         play('press');cue(line);ui.refresh();
-        if(previous==='idle'||previous==='complete')later('hoof_2',3.2); };
+        if(previous==='idle'||previous==='complete')cue('hoof_2'); };
       for(const name of ['hoof_hand_left','hoof_hand_right'])bind(name,'Put on the hooves',use);
       bind('hoof_console','Try the console',use); bind('hoof_display','Try the test',use);
       bind('hoof_mosaic','Submit picture test',use);
@@ -105,18 +103,21 @@ export function createExhibits(api) {
     if (id==='twelve') {
       for (const llama of LLAMAS) {
         const found=state.file.herd.includes(llama.id);
+        api.setColliderEnabled?.('expo_fixture_log_'+llama.id,found);
         for (const kind of ['statue','portrait','nameplate','log','panel','archive','accession']) {
           const node=obj(kind+'_'+llama.id); if(node)node.visible=found;
         }
         for (const kind of ['cover','scaffold','helmet','redacted']) {
           const node=obj(kind+'_'+llama.id); if(node)node.visible=!found;
         }
-        if(found)bind('log_'+llama.id,'Play audio log',()=>{cue('log_'+llama.id);if(llama.id==='kevin')later('kevin_thanks',15);});
-        else bind('redacted_'+llama.id,'Read construction notice',()=>cue('pa_hall4_missing'));
+        if(!found)bind('redacted_'+llama.id,'Read construction notice',()=>cue('pa_hall4_missing',{replay:true}));
       }
       const doctorFound=state.file.herd.includes('doctor'), alpaca=obj('alpaca_button');
       if(alpaca)alpaca.visible=doctorFound;
-      if(doctorFound)bind('alpaca_button','Is he an alpaca?',()=>{play('chime');void go('atrium',[0,0,36],0).then(()=>cue('pa_alpaca'));});
+      if(doctorFound)bind('alpaca_button','Is he an alpaca?',()=>{
+        if(ui.alpacaReturnAt!=null)return;
+        play('chime');ui.alpacaReturnAt=hudClock+.32;
+      });
       const photo=obj('photo_release');
       ui.photo=photo;ui.aperture=0;
       if(obj('photo_terrace'))obj('photo_terrace').visible=false;
@@ -127,7 +128,7 @@ export function createExhibits(api) {
         if(!api.capturePhoto?.())return;
         state.photo=true;play('chime');say('Group photograph filed.');
       });
-      bind('chewed_file','Read your file',()=>say(state.file.name+' · '+state.file.taps.toLocaleString()+' presses. Verdict: mostly chewing.'));
+      bind('chewed_file','Read your file',()=>say(state.file.name+' · '+state.file.taps.toLocaleString()+' presses. The file has been chewed.'));
     }
     if (id==='shop') {
       const till=surface('till_display',{emission:.36});
@@ -140,13 +141,18 @@ export function createExhibits(api) {
           available?'Contract holder price   0 Yes':'Balance               '+(state.contract?'0':'1')+' Yes'
         ],foot:'Visitor Services   /   Till 01',eyebrow:'VISITOR SERVICES   /   POINT OF SALE'});
         if(ui.exitSale)ui.exitSale.visible=available;
+        api.setButtonAvailable?.('exit_sale',available);
         if(ui.portal)ui.portal.visible=state.boughtExit;
       };
       ui.shelves=['shelf_left','shelf_right'].map(obj);
       for (const shelf of ui.shelves) if(shelf)shelf.userData.expoRest=shelf.position.clone();
       ui.exitSale=obj('exit_sale');ui.portal=obj('shop_wormhole');
       ui.doorGlass=createDoorGlass(THREE,ui.portal);clean.push(()=>ui.doorGlass.dispose());
-      ui.home=()=>{if(returnAt!=null)return;returnAt=hudClock+5.3;play('spit');cue('pa_leave');};
+      ui.home=()=>{
+        if(returning)return;
+        returning=true;api.farewell(leave);play('spit');
+        cue('pa_leave').then(()=>{departureDone=true;});
+      };
       function purchase(){
         if(!state.contract){state.contract=true;play('register');say('Your contract, framed.');}
         else if(state.loops>=2 && !state.boughtExit){state.boughtExit=true;play('door');cue('pa_shop_buy');}
@@ -174,45 +180,68 @@ export function createExhibits(api) {
       ui.count=()=>{if(state.turnstile)return;state.turnstile=true;ui.turn=0;tally();play('turnstile');once('pa_turnstile');};
       ui.turnstile=bind('turnstile_arm','Pass the turnstile',ui.count);
       if(ui.turnstile){
-        ui.pivot=new THREE.Group();ui.pivot.position.set(-1.11,.90,35.33);
-        group.add(ui.pivot);ui.pivot.attach(ui.turnstile);
+        const arm=ui.turnstile,data=arm.userData;
+        const bearing=new THREE.Vector3().fromArray(data.pivotThree||[-1.11,.90,35.33]);
+        if(data.pivotThree&&arm.getWorldPosition(new THREE.Vector3()).distanceTo(bearing)<.003)ui.pivot=arm;
+        else{
+          ui.pivot=new THREE.Group();ui.pivot.position.copy(group.worldToLocal(bearing));
+          group.add(ui.pivot);ui.pivot.attach(arm);
+        }
+        const axis=new THREE.Vector3().fromArray(data.axis||[.819152,-.573576,0]).normalize();
+        const rest=ui.pivot.quaternion.clone(),delta=new THREE.Quaternion();
+        ui.travel=Number.isFinite(data.travelDegrees)?data.travelDegrees:-120;
+        ui.setAngle=degrees=>ui.pivot.quaternion.copy(rest).multiply(delta.setFromAxisAngle(axis,THREE.MathUtils.degToRad(degrees)));
         ui.turn=state.turnstile?1:0;
+        ui.setAngle(ui.travel*ui.turn);
       }
-      bind('timeline_panel','Read the timeline',()=>cue('pa_timeline'));
+    }
+    if(id==='aquarium'){
+      ui.schools=[];group.traverse(node=>{
+        const swim=node.userData.aquariumSwim;
+        if(Array.isArray(swim)&&swim.length===5&&swim[3]>0)ui.schools.push({node,rest:node.position.clone(),swim});
+      });
     }
     return view;
   }
 
   function unmount(id) {const view=zones.get(id); if(view){for(const fn of view.clean.reverse())fn?.();zones.delete(id);}}
+  function leave(){if(returning&&!disposed){returning=false;exit();}}
   function enter(id) {
     if(id===here)return;
     const worn=zones.get('hoof')?.ui.worn;
     if(worn)for(const glove of worn)glove.visible=false;
     here=id;
     if(hallCues[id])once(hallCues[id]);
-    if(id==='habitat')later('keep_1',4);
     if(id==='twelve' && state.file.herd.length===12)later('pa_hall4_full',6);
     if(id==='atrium'&&!state.heard.has('pa_arrive_2'))later('pa_arrive_2',20);
   }
   function tick(dt,id) {
     if(ctx.paused)return;
+    if(returning&&departureDone){leave();return;}
     hudClock+=dt;
-    if(returnAt!=null && hudClock>=returnAt){exit();return;}
     if(hudClock>=900)once('pa_closing');
     pending=pending.filter(event=>{
       if(event.zone!==here)return false;
       if(event.at>hudClock)return true;
-      if(event.id==='kevin_thanks')say('Thank you, Kevin.');else once(event.id);
+      once(event.id);
       return false;
     });
     const ui=zones.get(id)?.ui;
     if (!ui)return;
+    if(ui.alpacaReturnAt!=null&&hudClock>=ui.alpacaReturnAt){
+      ui.alpacaReturnAt=null;
+      void go('atrium',[0,0,36],0).then(()=>cue('pa_alpaca'));
+    }
+    if(ui.schools)for(const {node,rest,swim:[x,y,z,period,offset]} of ui.schools){
+      node.position.copy(rest);
+      if(!ctx.gentle&&!ctx.reduced){
+        const phase=hudClock*2*Math.PI/period+offset;
+        node.position.x+=x*Math.sin(phase);node.position.y+=y*Math.sin(2*phase);node.position.z+=z*Math.cos(phase);
+      }
+    }
     if(id==='hall') {
       if(Math.hypot(camera.position.x,camera.position.z+9)<5.2)once('pa_hall1');
-      const travel=ctx.gentle||ctx.reduced ? .32 : .18;
-      const bounce = time => Math.sin(clamp((hudClock-time)/travel)*Math.PI)*.022;
-      if(ui.primary) ui.primary.position.y=ui.primary.userData.expoRest.y-bounce(lastPress);
-      if(ui.secondary) {ui.secondary.visible=state.presses>=50;ui.secondary.position.y=ui.secondary.userData.expoRest.y-.19*(1-clamp((hudClock-stopShown)/.9))-bounce(lastStop);}
+      if(ui.secondary) {ui.secondary.visible=state.presses>=50;ui.secondary.position.y=ui.secondary.userData.expoRest.y-.19*(1-clamp((hudClock-stopShown)/.9));}
     }
     if(id==='habitat') {
       const old=Math.floor(state.habitatTime);state.habitatTime+=dt;
@@ -253,10 +282,19 @@ export function createExhibits(api) {
       const z=camera.position.z;
       if(Math.abs(camera.position.x)<1.05 && camera.position.y<2.1 && ui.lastZ>=35.33 && z<=35.33)ui.count();
       ui.lastZ=z;
-      if(state.turnstile){ui.turn=clamp(ui.turn+dt/.72);ui.pivot.rotation.x=(ui.turn*ui.turn*(3-2*ui.turn))*Math.PI*2/3;}
+      if(state.turnstile&&ui.turn<1){
+        ui.turn=clamp(ui.turn+dt/.72);
+        if(ui.inspectionAngle==null)ui.setAngle(ui.travel*ui.turn*ui.turn*(3-2*ui.turn));
+      }
     }
   }
-  const dispose=()=>{for(const id of [...zones.keys()])unmount(id);pending=[];};
-  return {mount,unmount,enter,tick,dispose,state};
+  const dispose=()=>{disposed=true;for(const id of [...zones.keys()])unmount(id);pending=[];};
+  function setTurnstileAngle(degrees){
+    const ui=zones.get('atrium')?.ui;if(!ui?.setAngle)return false;
+    ui.inspectionAngle=Number.isFinite(degrees)?degrees:null;
+    ui.setAngle(ui.inspectionAngle??ui.travel*ui.turn*ui.turn*(3-2*ui.turn));
+    return true;
+  }
+  return {mount,unmount,enter,tick,dispose,state,setTurnstileAngle};
 }
 

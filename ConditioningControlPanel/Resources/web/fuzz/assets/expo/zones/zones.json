@@ -2,96 +2,13 @@
   "start": {
     "id": "atrium",
     "at": [
+      0.22,
       0,
-      0,
-      37.2
+      36.21
     ],
     "yaw": 0
   },
   "zones": [
-    {
-      "id": "dome",
-      "bounds": [
-        -31,
-        -0.1,
-        -13.8,
-        -12,
-        11.52,
-        3.8
-      ],
-      "file": "dome.glb",
-      "mobileFile": "dome-mobile.glb",
-      "lightIntensity": 9.179523794137484,
-      "reflectionIntensity": 0.33
-    },
-    {
-      "id": "habitat",
-      "bounds": [
-        12,
-        0,
-        2.1,
-        24,
-        4.6,
-        13.8
-      ],
-      "file": "habitat.glb",
-      "mobileFile": "habitat-mobile.glb",
-      "lightIntensity": 10.57822215720712,
-      "reflectionIntensity": 0.33
-    },
-    {
-      "id": "service",
-      "bounds": [
-        12,
-        -0.16,
-        18.3,
-        35.5,
-        10.0,
-        42.2
-      ],
-      "file": "service.glb",
-      "mobileFile": "service-mobile.glb",
-      "lightIntensity": 66.27363857503994,
-      "reflectionIntensity": 0.33,
-      "crossings": [
-        {
-          "axis": "z",
-          "direction": -1,
-          "at": 21.93,
-          "across": [
-            21.4,
-            23.44
-          ],
-          "height": [
-            1.37,
-            2.03
-          ],
-          "offset": [
-            0,
-            3.4,
-            0
-          ]
-        },
-        {
-          "axis": "z",
-          "direction": 1,
-          "at": 21.96,
-          "across": [
-            21.4,
-            23.44
-          ],
-          "height": [
-            4.77,
-            5.43
-          ],
-          "offset": [
-            0,
-            -3.4,
-            0
-          ]
-        }
-      ]
-    },
     {
       "id": "secret",
       "bounds": [
@@ -102,9 +19,9 @@
         3.75,
         53.5
       ],
-      "file": "secret.glb",
-      "mobileFile": "secret-mobile.glb",
-      "lightIntensity": 12.2361655204716,
+      "file": "secret-48b34ee5bcd1b749.glb",
+      "mobileFile": "secret-48b34ee5bcd1b749-mobile.glb",
+      "lightIntensity": 12.121988064727985,
       "reflectionIntensity": 0.33,
       "crossings": [
         {
@@ -161,7 +78,98 @@
             -10
           ]
         }
-      ]
+      ],
+      "assetStem": "secret-48b34ee5bcd1b749",
+      "collision": "secret-48b34ee5bcd1b749-collision.glb"
+    },
+    {
+      "id": "hoof",
+      "bounds": [
+        -25,
+        0,
+        3.97,
+        -12,
+        4.7,
+        13.7
+      ],
+      "file": "hoof-a9d81076bc008833.glb",
+      "mobileFile": "hoof-a9d81076bc008833-mobile.glb",
+      "lightIntensity": 9.536979517431723,
+      "reflectionIntensity": 0.33,
+      "assetStem": "hoof-a9d81076bc008833",
+      "collision": "hoof-a9d81076bc008833-collision.glb"
+    },
+    {
+      "id": "habitat",
+      "bounds": [
+        12,
+        0,
+        2.1,
+        24,
+        4.6,
+        13.8
+      ],
+      "file": "habitat-daf49481ca2b66d0.glb",
+      "mobileFile": "habitat-daf49481ca2b66d0-mobile.glb",
+      "lightIntensity": 12.091085991795467,
+      "reflectionIntensity": 0.33,
+      "assetStem": "habitat-daf49481ca2b66d0",
+      "collision": "habitat-daf49481ca2b66d0-collision.glb"
+    },
+    {
+      "id": "service",
+      "bounds": [
+        12,
+        -0.16,
+        18.3,
+        35.5,
+        10.0,
+        42.2
+      ],
+      "file": "service-a01201da45e10b4a.glb",
+      "mobileFile": "service-a01201da45e10b4a-mobile.glb",
+      "lightIntensity": 64.46113840824135,
+      "reflectionIntensity": 0.33,
+      "crossings": [
+        {
+          "axis": "z",
+          "direction": -1,
+          "at": 21.93,
+          "across": [
+            21.4,
+            23.44
+          ],
+          "height": [
+            1.37,
+            2.03
+          ],
+          "offset": [
+            0,
+            3.4,
+            0
+          ]
+        },
+        {
+          "axis": "z",
+          "direction": 1,
+          "at": 21.96,
+          "across": [
+            21.4,
+            23.44
+          ],
+          "height": [
+            4.77,
+            5.43
+          ],
+          "offset": [
+            0,
+            -3.4,
+            0
+          ]
+        }
+      ],
+      "assetStem": "service-a01201da45e10b4a",
+      "collision": "service-a01201da45e10b4a-collision.glb"
     },
     {
       "id": "catwalk",
@@ -173,40 +181,12 @@
         16.1,
         29.55
       ],
-      "file": "catwalk.glb",
-      "mobileFile": "catwalk-mobile.glb",
-      "lightIntensity": 21.582901459643242,
-      "reflectionIntensity": 0.33
-    },
-    {
-      "id": "shop",
-      "bounds": [
-        12,
-        0,
-        -14.1,
-        25,
-        4.7,
-        1.55
-      ],
-      "file": "shop.glb",
-      "mobileFile": "shop-mobile.glb",
-      "lightIntensity": 9.968282034592772,
-      "reflectionIntensity": 0.33
-    },
-    {
-      "id": "hoof",
-      "bounds": [
-        -25,
-        0,
-        2.2,
-        -12,
-        4.7,
-        13.7
-      ],
-      "file": "hoof.glb",
-      "mobileFile": "hoof-mobile.glb",
-      "lightIntensity": 9.570697134202945,
-      "reflectionIntensity": 0.33
+      "file": "catwalk-3cdf86715bf917bd.glb",
+      "mobileFile": "catwalk-3cdf86715bf917bd-mobile.glb",
+      "lightIntensity": 22.46295852148376,
+      "reflectionIntensity": 0.33,
+      "assetStem": "catwalk-3cdf86715bf917bd",
+      "collision": "catwalk-3cdf86715bf917bd-collision.glb"
     },
     {
       "id": "hall",
@@ -218,10 +198,131 @@
         10.8,
         16
       ],
-      "file": "hall.glb",
-      "mobileFile": "hall-mobile.glb",
-      "lightIntensity": 31.139902871821533,
-      "reflectionIntensity": 0.33
+      "file": "hall-2bc40eedb7ec4e81.glb",
+      "mobileFile": "hall-2bc40eedb7ec4e81-mobile.glb",
+      "lightIntensity": 33.99838019624718,
+      "reflectionIntensity": 0.33,
+      "assetStem": "hall-2bc40eedb7ec4e81",
+      "collision": "hall-2bc40eedb7ec4e81-collision.glb"
+    },
+    {
+      "id": "dome",
+      "bounds": [
+        -31,
+        -0.1,
+        -13.8,
+        -12,
+        11.52,
+        3.8
+      ],
+      "file": "dome-00f5999d43830dee.glb",
+      "mobileFile": "dome-00f5999d43830dee-mobile.glb",
+      "lightIntensity": 9.223864677273246,
+      "reflectionIntensity": 0.33,
+      "assetStem": "dome-00f5999d43830dee",
+      "collision": "dome-00f5999d43830dee-collision.glb"
+    },
+    {
+      "id": "chronology",
+      "bounds": [
+        0.05,
+        -0.15,
+        41.0,
+        11.2,
+        5.2,
+        106.4
+      ],
+      "file": "chronology-7cef6ed6b8cededf.glb",
+      "mobileFile": "chronology-7cef6ed6b8cededf-mobile.glb",
+      "lightIntensity": 5.107204401300294,
+      "reflectionIntensity": 0.33,
+      "assetStem": "chronology-7cef6ed6b8cededf",
+      "collision": "chronology-7cef6ed6b8cededf-collision.glb"
+    },
+    {
+      "id": "shop",
+      "bounds": [
+        12,
+        0,
+        -14.1,
+        25,
+        4.7,
+        1.55
+      ],
+      "file": "shop-77f71f9181f8dd59.glb",
+      "mobileFile": "shop-77f71f9181f8dd59-mobile.glb",
+      "lightIntensity": 10.221973095558038,
+      "reflectionIntensity": 0.33,
+      "assetStem": "shop-77f71f9181f8dd59",
+      "collision": "shop-77f71f9181f8dd59-collision.glb"
+    },
+    {
+      "id": "aquarium",
+      "bounds": [
+        -61.8,
+        -1.52,
+        35.6,
+        -4.4,
+        8.7,
+        55.4
+      ],
+      "file": "aquarium-bbe25ba3842672c6.glb",
+      "mobileFile": "aquarium-bbe25ba3842672c6-mobile.glb",
+      "lightIntensity": 8.6464400038693,
+      "reflectionIntensity": 0.33,
+      "assetStem": "aquarium-bbe25ba3842672c6",
+      "collision": "aquarium-bbe25ba3842672c6-collision.glb"
+    },
+    {
+      "id": "forum",
+      "bounds": [
+        -69.6,
+        -0.15,
+        95.25,
+        3.4,
+        5.2,
+        106.4
+      ],
+      "file": "forum-c7d30a800df69799.glb",
+      "mobileFile": "forum-c7d30a800df69799-mobile.glb",
+      "lightIntensity": 4.97475324961818,
+      "reflectionIntensity": 0.33,
+      "assetStem": "forum-c7d30a800df69799",
+      "collision": "forum-c7d30a800df69799-collision.glb"
+    },
+    {
+      "id": "twelve",
+      "bounds": [
+        -9.1,
+        -0.7,
+        -35.5,
+        9.1,
+        7.2,
+        -16
+      ],
+      "file": "twelve-7655aa9fd0f8ed2d.glb",
+      "mobileFile": "twelve-7655aa9fd0f8ed2d-mobile.glb",
+      "lightIntensity": 9.30810104511894,
+      "reflectionIntensity": 0.33,
+      "assetStem": "twelve-7655aa9fd0f8ed2d",
+      "collision": "twelve-7655aa9fd0f8ed2d-collision.glb"
+    },
+    {
+      "id": "commons",
+      "bounds": [
+        -69.6,
+        -0.15,
+        42.1,
+        -58.45,
+        6.3,
+        98.6
+      ],
+      "file": "commons-b538a4067b66d3fa.glb",
+      "mobileFile": "commons-b538a4067b66d3fa-mobile.glb",
+      "lightIntensity": 5.432711304517938,
+      "reflectionIntensity": 0.33,
+      "assetStem": "commons-b538a4067b66d3fa",
+      "collision": "commons-b538a4067b66d3fa-collision.glb"
     },
     {
       "id": "atrium",
@@ -233,10 +334,14 @@
         12.56,
         41
       ],
-      "file": "atrium.glb",
-      "mobileFile": "atrium-mobile.glb",
-      "lightIntensity": 23.055842096001562,
-      "reflectionIntensity": 0.33
+      "file": "atrium-2e8788419b327c54.glb",
+      "mobileFile": "atrium-2e8788419b327c54-mobile.glb",
+      "arrivalGzip": "atrium-2e8788419b327c54.glb.gz",
+      "arrivalMobileMaps": {},
+      "lightIntensity": 33.33694985132697,
+      "reflectionIntensity": 0.33,
+      "assetStem": "atrium-2e8788419b327c54",
+      "collision": "atrium-2e8788419b327c54-collision.glb"
     }
   ]
 }

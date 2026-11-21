@@ -1,5 +1,6 @@
 // Cold desktop and touch entries with the ordinary purchase, an active room route and the owner settings.
 import {createRequire} from 'node:module';
+import {createHash} from 'node:crypto';
 import {mkdir,writeFile} from 'node:fs/promises';
 import path from 'node:path';
 const {chromium}=createRequire('C:/wt-fe/e2e/')(process.env.PW_DIR||'playwright');
@@ -8,32 +9,80 @@ if(!['localhost','127.0.0.1','[::1]'].includes(new URL(base).hostname))throw Err
 const expected=process.env.EXPECT_START||'atrium';
 const link=Number(process.env.MBPS||20),rtt=Number(process.env.RTT||35);
 const integrated=process.env.GPU==='integrated';
-const report={expected,integrated,network:{megabitsPerSecond:link,latencyMs:rtt},devices:[],errors:[]};
+const report={expected,integrated,network:{megabitsPerSecond:link,latencyMs:rtt},
+  measurement:'First room bytes count completed zone geometry, collision, surface maps, lightmaps and reflection probes. Wall-clock timing also includes other game loading. Phone uses touch input on the same physical GPU.',devices:[],errors:[]};
+async function entranceReceipts(){
+  const folder=new URL('assets/expo/zones/',base);
+  const plan=await(await fetch(new URL('zones.json',folder))).json();
+  const def=plan.zones.find(z=>z.id===plan.start.id);
+  const result={};
+  for(const file of new Set([def.file||def.id+'.glb',def.mobileFile].filter(Boolean))){
+    const response=await fetch(new URL(file,folder));if(!response.ok)throw Error('Missing served room '+file);
+    const bytes=Buffer.from(await response.arrayBuffer());result[file]={bytes:bytes.byteLength,sha256:createHash('sha256').update(bytes).digest('hex')};
+  }
+  return result;
+}
 await mkdir(dir,{recursive:true});
 const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_EXE||'C:/Program Files/Google/Chrome/Application/chrome.exe',
   args:['--mute-audio','--autoplay-policy=no-user-gesture-required',...(integrated?['--force_low_power_gpu']:[])]});
 try{
  for(const phone of [false,true]){
+  (report.roomVersions||=[]).push(await entranceReceipts());
   const name=phone?'phone':'desktop',size=phone?{width:393,height:852}:{width:1920,height:1080};
   const cx=await browser.newContext({viewport:size,deviceScaleFactor:1,hasTouch:phone,isMobile:phone,reducedMotion:phone?'reduce':'no-preference'});
   const page=await cx.newPage();page.on('pageerror',e=>report.errors.push(name+' '+e.message));
   page.on('console',m=>{if(/(WebGL|GL_).*INVALID_(OPERATION|VALUE|ENUM)|THREE\.WebGLProgram: Shader Error/i.test(m.text()))report.errors.push(name+' '+m.text());});
   const cdp=await cx.newCDPSession(page);await cdp.send('Network.enable');
-  const ids=new Set(),files=new Map(),before=new Set();let arrived=false;
+  const files=new Map(),before=new Set(),otherExpo=new Map();let arrived=false;
   cdp.on('Network.responseReceived',e=>{
-    if(!e.response.url.includes('/assets/expo/zones/'))return;
-    ids.add(e.requestId);files.set(e.requestId,{name:new URL(e.response.url).pathname.split('/zones/')[1],bytes:0,beforeArrival:!arrived});
+    const name=new URL(e.response.url).pathname.split('/assets/expo/')[1];if(!name)return;
+    if(!name.startsWith('zones/')){otherExpo.set(e.requestId,{name,bytes:0,beforeArrival:false});return;}
+    files.set(e.requestId,{name:name.slice(6),bytes:0,beforeArrival:!arrived});
   });
-  cdp.on('Network.loadingFinished',e=>{const f=files.get(e.requestId);if(f){f.bytes=e.encodedDataLength;if(!arrived)before.add(e.requestId);}});
+  cdp.on('Network.loadingFinished',e=>{
+    const f=files.get(e.requestId);if(f){f.bytes=e.encodedDataLength;if(!arrived)before.add(e.requestId);}
+    const media=otherExpo.get(e.requestId);if(media){media.bytes=e.encodedDataLength;media.beforeArrival=!arrived;}
+  });
   await page.goto(base+'dev/play-ending.html?end=ll_end&pictures=none');
   const button=page.getByRole('button',{name:'Play Llama Expo 2037'});await button.waitFor();
   const frame=page.frames().find(f=>f.url().includes('/fuzz/index.html'));
+  await button.evaluate(el=>el.ownerDocument.addEventListener('click',function record(event){
+    if(!el.contains(event.target))return;window.__expoPurchaseTime=performance.timeOrigin+performance.now();
+    el.ownerDocument.removeEventListener('click',record,true);
+  },true));
+  await frame.evaluate(()=>{
+    document.addEventListener('click',function record(event){
+      if(!event.target.closest?.('.expo-worm #btn'))return;
+      document.removeEventListener('click',record,true);
+      const now=()=>performance.timeOrigin+performance.now();
+      const timing=window.__expoEntryTime={yes:now(),rendered:0,paint:0,uncovered:0,firstCover:null};
+      const wait=()=>{
+        if(window.__expo?.state().ready){
+          const curtain=document.querySelector('.expo-crossing'),cover=curtain?Number(curtain.dataset.cover??1):0;
+          if(!timing.rendered)timing.rendered=now();
+          if(!timing.paint&&cover<.65){timing.firstCover=cover;timing.paint=now();}
+          if(!curtain){timing.uncovered=now();return;}
+        }
+        requestAnimationFrame(wait);
+      };
+      requestAnimationFrame(wait);
+    },true);
+  });
   if(link>0)await cdp.send('Network.emulateNetworkConditions',{offline:false,latency:rtt,downloadThroughput:link*125000,uploadThroughput:link*125000,connectionType:phone?'cellular4g':'wifi'});
   const purchase=Date.now();await button.click();await frame.locator('.expo-worm #btn').waitFor();
   const then=Date.now();
   if(phone)await frame.locator('.expo-worm #btn').tap();else await frame.locator('.expo-worm #btn').click();
-  await frame.waitForFunction(()=>window.__expo?.state().ready,null,{timeout:120000});arrived=true;
-  const entryMs=Date.now()-then,purchaseToRoomMs=Date.now()-purchase,firstFiles=[...before].map(id=>files.get(id));
+  await frame.waitForFunction(()=>window.__expoEntryTime?.paint>0,null,{timeout:120000});arrived=true;
+  const commandTiming={yesToRoomMs:Date.now()-then,purchaseToRoomMs:Date.now()-purchase};
+  await frame.waitForFunction(()=>window.__expoEntryTime?.uncovered>0,null,{timeout:30000});
+  const time=await frame.evaluate(()=>({...window.__expoEntryTime,purchase:parent.__expoPurchaseTime}));
+  const reveal={readyFromYesMs:Math.round(time.rendered-time.yes),visibleFromYesMs:Math.round(time.paint-time.yes),
+    visibleFromPurchaseMs:Math.round(time.paint-time.purchase),firstCover:time.firstCover,
+    fullyRevealedFromYesMs:Math.round(time.uncovered-time.yes),fullyRevealedFromPurchaseMs:Math.round(time.uncovered-time.purchase)};
+  (report.reveals||=[]).push({name,...reveal});
+  const entryMs=Math.round(time.paint-time.yes),purchaseToRoomMs=Math.round(time.paint-time.purchase),firstFiles=[...before].map(id=>files.get(id));
+  const mediaBeforePaint=[...otherExpo.values()].filter(r=>r.beforeArrival);
+  const allExpoFirstBytes=[...firstFiles,...mediaBeforePaint].reduce((sum,r)=>sum+r.bytes,0);
   const state=await frame.evaluate(()=>__expo.state());
   if(state.zone!==expected)throw Error('Expected '+expected+' entry but found '+state.zone);
   console.log(name+' first room '+entryMs+' ms, '+(firstFiles.reduce((n,f)=>n+f.bytes,0)/1e6).toFixed(2)+' MB');
@@ -62,41 +111,78 @@ try{
       gpuDrawMs:gpuTimes.length?gpuTimes[Math.floor(gpuTimes.length/2)]:null,frames:intervals.length,pixelRatio:e.state().pixelRatio,textureMemory:e.state().textures};
   });}
   const initialTiming=await frameTiming();
+  if(process.env.EXPECT_GPU&&!initialTiming.gpu.toLowerCase().includes(process.env.EXPECT_GPU.toLowerCase()))report.errors.push(name+' unexpected GPU '+initialTiming.gpu);
   if(state.textures.pendingDetailMaps>0){
     await frame.waitForFunction(()=>__expo.state().textures.pendingDetailMaps===0,null,{timeout:60000});
     await page.screenshot({path:path.join(dir,name+'-full-detail.jpg'),quality:92,type:'jpeg'});
   }
   const detailAfter=await frame.evaluate(()=>__expo.state().textures);
+  let alloyComparison;
+  if(!phone&&process.env.COMPARE_ALLOY==='1'){
+    alloyComparison=await frame.evaluate(()=>{
+      const e=__expo;window.__expoReviewAim=e.camera.quaternion.clone();e.lookAt(1.7,3.65,26.5);const selected=new Set(),others=new Set();
+      e.scene.traverse(n=>{if(n.isMesh)for(const m of [n.material].flat())
+        if(m.lightMap){if(m.name==='alloy'||m.name==='utility_silver')selected.add(m);else others.add(m);}});
+      window.__expoReviewMetal=[...selected];return {targetMaterials:[...selected].map(m=>({name:m.name,final:m.envMapIntensity})),
+        otherMaterials:[...others].map(m=>({name:m.name,intensity:m.envMapIntensity}))};
+    });
+    if(!alloyComparison.targetMaterials.length)throw Error('Missing baked alloy material for entrance comparison.');
+    for(const [name,intensity] of [['prior',.33],['revised',1.25]]){
+      await frame.evaluate(value=>{for(const m of window.__expoReviewMetal)m.envMapIntensity=value;__expo.draw();},intensity);
+      await page.screenshot({path:path.join(dir,'entrance-metal-'+name+'.png')});
+    }
+    await frame.evaluate(()=>{__expo.camera.quaternion.copy(window.__expoReviewAim);delete window.__expoReviewAim;delete window.__expoReviewMetal;});
+  }
   if(process.env.ENTRY_ONLY==='1'){
-    report.devices.push({name,size,entryMs,purchaseToRoomMs,firstBytes:firstFiles.reduce((sum,file)=>sum+file.bytes,0),firstFiles,state,initialTiming,detailAfter});
+    report.devices.push({name,size,entryMs,purchaseToRoomMs,commandTiming,firstBytes:firstFiles.reduce((sum,file)=>sum+file.bytes,0),allExpoFirstBytes,mediaBeforePaint,firstFiles,state,initialTiming,detailAfter});
     await frame.evaluate(()=>fuzz.engine.setSuspended(true,'panic'));await cx.close();continue;
   }
   async function touch(kind,x,y){await cdp.send('Input.dispatchTouchEvent',{type:kind,touchPoints:kind==='touchEnd'?[]:[{x,y,radiusX:5,radiusY:5,id:1}]});}
   await frame.locator('.expo-root').focus();
+  const pilot=process.env.ENTRY_ONLY==='walk';
+  const whileWalking=()=>pilot?frameTiming():page.waitForTimeout(900);
+  let walkTiming;
   if(phone){
     const stick=await frame.locator('.expo-stick').boundingBox();if(!stick)throw Error('Missing phone stick.');
     const x=stick.x+stick.width/2,y=stick.y+stick.height/2;
-    await touch('touchStart',x,y);await touch('touchMove',x,y-32);await page.waitForTimeout(900);await touch('touchEnd');
+    await touch('touchStart',x,y);await touch('touchMove',x,y-32);walkTiming=await whileWalking();await touch('touchEnd');
     await touch('touchStart',291,315);await touch('touchMove',241,315);await touch('touchEnd');
-  }else{await page.keyboard.down('w');await page.waitForTimeout(900);await page.keyboard.up('w');}
+  }else{await page.keyboard.down('w');walkTiming=await whileWalking();await page.keyboard.up('w');}
   const walked=await frame.evaluate(()=>__expo.state());
   const distance=Math.hypot(walked.feet[0]-state.feet[0],walked.feet[2]-state.feet[2]);
   if(distance<.3)report.errors.push(name+' physical walk failed');
+  if(pilot){
+    const firstBytes=firstFiles.reduce((sum,item)=>sum+item.bytes,0);
+    report.devices.push({name,size,entryMs,purchaseToRoomMs,commandTiming,firstBytes,allExpoFirstBytes,
+      mediaBeforePaint,firstFiles,state,initialTiming,detailAfter,walkTiming,walkedMeters:distance,alloyComparison});
+    await frame.evaluate(()=>fuzz.engine.setSuspended(true,'panic'));await cx.close();continue;
+  }
+  await frame.evaluate(async()=>{
+    const files=await Promise.all(['margaret','gary','reginald','nana'].map(async id=>new File([await(await fetch('assets/llamas/'+id+'.webp')).blob()],id+'.webp',{type:'image/webp'})));
+    fuzz.engine.pictures.addOwn(files);fuzz.engine.pictures.setSource('own');
+  });
   await frame.evaluate(async()=>{await __expo.go('dome',[-19,0,-5]);__expo.lookAt(-22,1.45,-5);});
   await frame.waitForFunction(()=>__expo.state().loaded.includes('catwalk'),null,{timeout:90000});
   await frame.evaluate(()=>{__expo.deepen(300);__expo.deepen(125);});
   const dreamTiming=await frameTiming();
+  const dreamMedia=await frame.evaluate(()=>({source:'own',pictures:[...document.querySelectorAll('.expo-media-face img')].filter(im=>im.complete&&im.naturalWidth>0).length,
+    visible:[...document.querySelectorAll('.expo-media-face')].filter(el=>!el.hidden&&el.querySelector('img,video')).length}));
+  if(dreamMedia.pictures===0)report.errors.push(name+' missing museum-source pictures at full depth');
   const shared=await frame.evaluate(()=>__expo.state().textures);
-  const rooms={};
+  const rooms={dome:dreamTiming};
   if(process.env.ALL_ROOMS==='1'){
-    const cameras={atrium:[[0,0,37.2],[1.7,4.1,26.5]],hall:[[0,0,13.2],[0,2.4,-9]],
+    const cameras={atrium:[[.22,0,36.21],[1.7,3.65,26.5]],hall:[[0,0,13.2],[0,2.4,-9]],
       hoof:[[-18.46,0,8.92],[-18.4,1.75,10.45]],habitat:[[19.4,0,8.13],[19.4,1.56,9.55]],
-      twelve:[[-.83,-.68,-29.28],[-1.24,1.75,-33.7]],shop:[[20.84,0,-9.75],[21.2,1.32,-11.42]],
+      twelve:[[.1,-.68,-21.95],[-.38,.94,-30.12]],shop:[[20.84,0,-9.75],[21.2,1.32,-11.42]],
       service:[[25.02,0,29.59],[25.01,1.04,27.21]],secret:[[81.44,0,40.3],[85.8,1.30,41.19]],
-      catwalk:[[-22.45,11.95,-4.62],[-22,6,-5]]};
+      catwalk:[[-22.45,11.95,-4.62],[-22,6,-5]],chronology:[[7.84,0,47.52],[8,1.56,59]],
+      forum:[[-18.8,0,103.18],[-30,1.72,104.1]],commons:[[-66.14,0,83.2],[-67,1.72,70.1]],aquarium:[[-44.29,0,45.38],[-32.28,1.71,44.36]]};
     const known=await frame.evaluate(async()=>((await(await fetch('assets/expo/zones/zones.json')).json()).zones.map(z=>z.id)));
+    if(process.env.EXPO_REQUIRED_ROOMS&&known.length!==Number(process.env.EXPO_REQUIRED_ROOMS))
+      throw Error('Expected '+process.env.EXPO_REQUIRED_ROOMS+' rooms, served '+known.length);
     for(const zone of known.filter(id=>cameras[id])){
       await frame.evaluate(async({zone,view})=>{await __expo.go(zone,view[0]);__expo.lookAt(...view[1]);},{zone,view:cameras[zone]});
+      if(zone==='twelve')await frame.waitForFunction(()=>__expo.state().loaded.includes('hall'),null,{timeout:90000});
       rooms[zone]=await frameTiming();
     }
   }
@@ -105,7 +191,7 @@ try{
   const returned=await frame.evaluate(()=>__expo.state());
   if(shared.sharedHits===0)report.errors.push(name+' shared textures were not reused');
   const list=[...files.values()],firstBytes=firstFiles.reduce((sum,file)=>sum+file.bytes,0);
-  report.devices.push({name,size,entryMs,purchaseToRoomMs,firstBytes,firstFiles,state,initialTiming,detailAfter,dreamTiming,rooms,walkedMeters:distance,shared,returned,
+  report.devices.push({name,size,entryMs,purchaseToRoomMs,commandTiming,firstBytes,allExpoFirstBytes,mediaBeforePaint,firstFiles,state,initialTiming,detailAfter,dreamTiming,dreamMedia,rooms,walkedMeters:distance,shared,returned,
     usedSmallerTextures:list.some(f=>f.name.includes('-mobile.webp'))});
   await frame.evaluate(()=>fuzz.engine.setSuspended(true,'panic'));await frame.locator('.expo-root').waitFor({state:'detached'});await cx.close();
  }

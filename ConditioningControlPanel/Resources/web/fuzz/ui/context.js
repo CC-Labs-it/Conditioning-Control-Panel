@@ -253,9 +253,9 @@ export function makeContext(engine, scope) {
       },
       stream(url, opts) {
         const s = !scope.dead && audio?.stream?.(url, soundOptions(opts));
-        if (!s) return { el: null, play() {}, pause() {}, setGain() {}, stop() {}, playing: false };
+        if (!s) return { el: null, play() {}, pause() {}, setGain() {}, setPan() {}, stop() {}, playing: false };
         const h = {
-          el: s.el, play: s.play, pause: s.pause, setGain: s.setGain,
+          el: s.el, play: s.play, pause: s.pause, setGain: s.setGain, setPan: s.setPan,
           stop(ms) { scope.loops.delete(h); s.stop(ms); },
           get playing() { return s.playing; },
         };

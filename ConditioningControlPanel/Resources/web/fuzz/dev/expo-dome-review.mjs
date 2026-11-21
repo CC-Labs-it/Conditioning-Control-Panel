@@ -47,6 +47,7 @@ try {
    if(real)await frame.waitForFunction(n=>__expo.state().seconds>=Math.min(n,210),seconds,{timeout:600000});
    else await frame.evaluate(n=>{const delta=n-__expo.state().seconds;if(delta>0)__expo.deepen(delta*(document.body.classList.contains('gentle')||matchMedia('(prefers-reduced-motion:reduce)').matches?1/.65:1));},seconds);
  }
+ if(film)await frame.waitForFunction(()=>__expo.narrationState().finished.pa_arrive_1>=1,null,{timeout:22000});
  const begin=Date.now();await pose(phases[0][0],phases[0][1]);
  if(!film)await frame.waitForFunction(()=>__expo.state().elapsed>7);
  for(let i=0;i<6;i++){
@@ -55,16 +56,18 @@ try {
    await pose(a,ta);
    if(film){
      const raw=path.join(dir,'stage-'+i+'-raw.mp4'),aud=path.join(dir,'stage-'+i+'-audio.webm'),part=path.join(dir,'stage-'+i+'.mp4');
-     const stop=await beginTabVideo(page,raw);await beginGameAudio(frame);
-     await frame.evaluate(async({i,aim})=>{
-       const ex=__expo,t0=performance.now();let prev=t0;
+     const stop=await beginTabVideo(page,raw);const audioAfterVideo=((await beginGameAudio(frame))-stop.startedAt)/1000;
+     const voices=await frame.evaluate(async({i,aim})=>{
+       const ex=__expo,t0=performance.now(),voices=[];let prev=t0;
        while(performance.now()-t0<10520){
          await new Promise(r=>requestAnimationFrame(r));const now=performance.now(),dt=Math.min(.08,(now-prev)/1000),t=(now-t0)/1000;prev=now;
+         if(voices.length<=t){const {voice,pa}=ex.narrationState();voices.push({at:t,voice:voice.id,pa:pa.id});}
          const dz=Math.cos(i+1)*.09,dx=Math.sin(i+.6)*.09;ex.walker.move(dx*dt,dz*dt);
          ex.camera.lookAt(aim[0]+.38*Math.sin(t*.17),aim[1]+.14*Math.sin(t*.22),aim[2]);
-       }
+       }return voices;
      },{i,aim:ta});
-     await finishGameAudio(frame,aud);await stop();await muxWalk(raw,aud,part,10);await unlink(raw);await unlink(aud);parts.push(part);
+     await finishGameAudio(frame,aud);await stop();await muxWalk(raw,aud,part,10,audioAfterVideo);await unlink(raw);await unlink(aud);parts.push(part);
+     await writeFile(path.join(dir,'stage-'+i+'-voices.json'),JSON.stringify(voices,null,2));
      await reach(inspect[i],true);
    }
    for(const [j,at,targ] of [[0,a,ta],[1,b,tb]]){
@@ -81,8 +84,12 @@ try {
  }
  if(film){
    const list=path.join(dir,'film-input.txt');await writeFile(list,parts.map(p=>"file '"+path.basename(p)+"'").join('\n')+'\n');
-   await exec('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','concat','-safe','1','-i',list,'-c','copy','-movflags','+faststart',path.join(dir,'walk.mp4')]);
-   for(const p of parts)await unlink(p);await unlink(list);
+   await exec('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','concat','-safe','1','-i',list,'-t','60','-c:v','copy',
+     '-bsf:v','setts=pts=round((PTS-STARTPTS)*TB*25)/(TB*25):dts=round((DTS-STARTPTS)*TB*25)/(TB*25):duration=1/(TB*25)',
+     '-af','atrim=end=60,asetpts=PTS-STARTPTS','-c:a','aac',
+     '-ar','48000','-b:a','144k','-movflags','+faststart',path.join(dir,'walk.mp4')]);
+   if(process.env.KEEP_PHASE_FILMS!=='1')for(const p of parts)await unlink(p);
+   await unlink(list);
  }
  // The doorway remains where it was at full depth. Use collision movement for the crossing.
  const escape=await frame.evaluate(async()=>{

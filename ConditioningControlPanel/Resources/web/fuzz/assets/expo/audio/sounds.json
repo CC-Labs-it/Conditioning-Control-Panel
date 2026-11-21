@@ -47,5 +47,22 @@
     "note": "note.ogg",
     "fog": "fog.ogg",
     "dream": "dream.ogg"
+  },
+  "portal": {
+    "riseSeconds": 2.4,
+    "holdStartSeconds": 1.2,
+    "holdEndSeconds": 2.2,
+    "arrivalSeconds": 3.2,
+    "crossfadeSeconds": 0.14,
+    "profiles": {
+      "standard": {
+        "rise": "portal-rise.ogg",
+        "arrival": "portal-arrival.ogg"
+      },
+      "gentle": {
+        "rise": "portal-rise-gentle.ogg",
+        "arrival": "portal-arrival-gentle.ogg"
+      }
+    }
   }
 }

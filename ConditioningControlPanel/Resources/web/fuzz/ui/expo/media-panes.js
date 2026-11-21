@@ -25,6 +25,7 @@ export function createExpoMedia(ctx, root, camera, dome, { lite = false } = {}) 
   root.insertBefore(viewport, root.children[1] || null); ctx.css(CSS);
   const point = new THREE.Vector3(), normal = new THREE.Vector3(), toEye = new THREE.Vector3();
   const matrix = new THREE.Matrix4(), offset = new THREE.Matrix4(), eye = new THREE.Vector3();
+  const reverse = new THREE.Matrix4().makeRotationY(Math.PI);
   let disposed = false, held = false, mediaState = '';
   const pauseMedia = on => {
     const state = `${!!on}:${!!ctx.gentle}:${!!ctx.reduced}`;
@@ -78,6 +79,10 @@ export function createExpoMedia(ctx, root, camera, dome, { lite = false } = {}) 
       offset.makeTranslation(0, 0, pane.offset); matrix.copy(pane.object.matrixWorld).multiply(offset);
       point.setFromMatrixPosition(matrix); normal.set(0, 0, 1).transformDirection(matrix);
       toEye.copy(eye).sub(point);
+      if(pane.twoSided && normal.dot(toEye)<0){
+        matrix.copy(pane.object.matrixWorld).multiply(reverse).multiply(offset);
+        normal.negate();point.setFromMatrixPosition(matrix);toEye.copy(eye).sub(point);
+      }
       if (pane.opacity < 0.01 || !visible(pane.object) || normal.dot(toEye) <= 0) { hide(slot); continue; }
       const bounds = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity, far: 0 };
       let inFront = true;

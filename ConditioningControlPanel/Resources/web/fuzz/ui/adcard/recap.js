@@ -9,11 +9,25 @@ import { createAdCard, loadCardCss } from './card.js';
 const GIF_HOLD_MS = 2500;
 
 export function mountRunPoster({ doc, host, run, life, name, onBeat, autoplay = true, loop = false, unit = true }) {
+  const model = unit ? cardModel({ run, life, name, adNumber: run.store?.dr_serial?.serial, serialLabel: ADCARD_COPY.unit }) : cardModel({ run, life, name });
+  if (model.groupPhoto) {
+    const photograph = doc.createElement('img');
+    photograph.alt = 'Group photograph in the Hall of the Twelve';
+    photograph.width = 1100;
+    photograph.height = 756;
+    photograph.style.cssText = 'display:block;width:100%;height:auto';
+    photograph.src = model.groupPhoto;
+    host.append(photograph);
+    const unmount = () => photograph.remove();
+    unmount.start = () => {};
+    unmount.export = (format, options) => exportCard({ card: photograph, photograph }, format,
+      { ...options, stop: () => !photograph.isConnected });
+    return unmount;
+  }
   const box = doc.createElement('div');
   box.className = 'adc-box';
   box.style.aspectRatio = '4 / 5';
   host.append(box);
-  const model = unit ? cardModel({ run, life, name, adNumber: run.store?.dr_serial?.serial, serialLabel: ADCARD_COPY.unit }) : cardModel({ run, life, name });
   const win = doc.defaultView, cards = host.closest('#cards');
   const motion = win.matchMedia('(prefers-reduced-motion: reduce)');
   const reduced = () => doc.body.classList.contains('gentle') || motion.matches;

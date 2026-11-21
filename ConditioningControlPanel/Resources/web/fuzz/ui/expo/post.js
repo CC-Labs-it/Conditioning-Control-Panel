@@ -11,13 +11,24 @@ uniform sampler2D sceneDepth;
 uniform float strength;
 uniform float steam;
 uniform float steamTime;
+uniform float arrivalTime;
+uniform float aspect;
 uniform mat4 viewToWorld;
 uniform mat4 inverseProjection;
 varying vec2 st;
 void main() {
-  vec3 colour = texture2D(colorBuffer,st).rgb + texture2D(glowBuffer,st).rgb * strength;
+  vec2 uv = st;
+  if (arrivalTime >= 0. && arrivalTime < 1.25) {
+    vec2 delta = st - vec2(.5,.49);
+    float r = length(delta * vec2(aspect,1.));
+    float decay = 1. - smoothstep(.08,1.25,arrivalTime);
+    float edge = smoothstep(0.,.09,min(min(st.x,1.-st.x),min(st.y,1.-st.y)));
+    float wave = sin(16.*r - 11.*arrivalTime) * .045 + sin(8.*r - 6.*arrivalTime) * .025;
+    uv += delta * wave * decay * edge;
+  }
+  vec3 colour = texture2D(colorBuffer,uv).rgb + texture2D(glowBuffer,uv).rgb * strength;
   if(steam>.001){
-    vec4 endView=inverseProjection*vec4(st*2.-1.,texture2D(sceneDepth,st).r*2.-1.,1.);
+    vec4 endView=inverseProjection*vec4(uv*2.-1.,texture2D(sceneDepth,uv).r*2.-1.,1.);
     vec3 worldEnd=(viewToWorld*vec4(endView.xyz/endView.w,1.)).xyz;
     vec3 eye=viewToWorld[3].xyz;
     vec3 travel=worldEnd-eye;
@@ -66,7 +77,7 @@ void main() {
 export function createPost(renderer, lite) {
   const hdr = renderer.extensions.has('EXT_color_buffer_float');
   const type = hdr ? THREE.HalfFloatType : THREE.UnsignedByteType;
-  const target = new THREE.WebGLRenderTarget(1, 1, { type, samples: Math.min(lite ? 0 : 2,renderer.capabilities.maxSamples) });
+  const target = new THREE.WebGLRenderTarget(1, 1, { type, samples: Math.min(2,renderer.capabilities.maxSamples) });
   target.depthTexture = new THREE.DepthTexture(1, 1, THREE.UnsignedIntType);
   const a = new THREE.WebGLRenderTarget(1, 1, { type, depthBuffer: false });
   const b = a.clone();
@@ -75,7 +86,8 @@ export function createPost(renderer, lite) {
   const finish = new THREE.ShaderMaterial({ vertexShader, fragmentShader, depthTest: false, depthWrite: false,
     defines: { STEAM_SAMPLES: lite ? 8 : 14 },
     uniforms: { colorBuffer: { value: target.texture }, glowBuffer: { value: b.texture }, strength: { value: .12 },
-      sceneDepth:{value:target.depthTexture}, steam:{value:0}, steamTime:{value:0}, viewToWorld:{value:null}, inverseProjection:{value:null} } });
+      sceneDepth:{value:target.depthTexture}, steam:{value:0}, steamTime:{value:0}, arrivalTime:{value:-1}, aspect:{value:1},
+      viewToWorld:{value:null}, inverseProjection:{value:null} } });
   const tri = new THREE.BufferGeometry();
   tri.setAttribute('position', new THREE.Float32BufferAttribute([-1,-1,0, 3,-1,0, -1,3,0], 3));
   tri.setAttribute('uv', new THREE.Float32BufferAttribute([0,0, 2,0, 0,2], 2));
@@ -86,7 +98,7 @@ export function createPost(renderer, lite) {
       target.setSize(w, h); a.setSize(Math.max(1, Math.ceil(w / 4)), Math.max(1, Math.ceil(h / 4)));
       b.setSize(a.width, a.height);
     },
-    draw(scene, camera, calm, weather) {
+    draw(scene, camera, calm, weather, arrivalTime = -1) {
       target.resolveDepthBuffer = (weather?.density || 0) > .001;
       renderer.setRenderTarget(target); renderer.render(scene, camera);
       surface.material = bright;
@@ -100,6 +112,8 @@ export function createPost(renderer, lite) {
       surface.material = finish; finish.uniforms.strength.value = calm ? .055 : .12;
       finish.uniforms.steam.value = weather?.density || 0;
       finish.uniforms.steamTime.value = weather?.time || 0;
+      finish.uniforms.arrivalTime.value = arrivalTime;
+      finish.uniforms.aspect.value = camera.aspect;
       finish.uniforms.viewToWorld.value = camera.matrixWorld;
       finish.uniforms.inverseProjection.value = camera.projectionMatrixInverse;
       renderer.setRenderTarget(null); renderer.render(screen, eye);

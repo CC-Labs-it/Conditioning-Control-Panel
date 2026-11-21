@@ -1,0 +1,17 @@
+{
+  "planter_10": {
+    "subtitle": "Oh, you thought, “I am so clever. I am going to break the game and jump down.”",
+    "seconds": 6,
+    "audio": null
+  },
+  "planter_60": {
+    "subtitle": "You have been in the planter for one minute. The fern would like its place back.",
+    "seconds": 6,
+    "audio": null
+  },
+  "planter_120": {
+    "subtitle": "You may climb down and continue. We might not be so indulgent next time.",
+    "seconds": 6,
+    "audio": null
+  }
+}

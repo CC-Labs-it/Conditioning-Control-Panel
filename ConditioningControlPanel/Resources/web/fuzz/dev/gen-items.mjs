@@ -120,7 +120,7 @@ const EXTRA_ROWS = [
   /* The Panel (owner 2026-11-21, handoff-1121/TC-LLAMA-ROUND-BRIEF.md change 2): one extra open card, only for a full pen
    * (data/fate.js HERD_SETS), and its ending. Card copy is Section 17 of the contract, word for word. */
   { id: 'ft_panel', emoji: '🦙', name: 'Section 17: The Panel', what: 'Binding arbitration before three (3) llamas. Their decision is final and mostly chewing.', line: 'Feed is still not included.', cost: 0, lane: 'fate', req: [], pay: '-' },
-  { id: 'll_end', emoji: '⚖️', name: 'Ending: The Panel', what: 'Ends the run: your case is heard. Three (3) llamas, one table in a field, no appeal.', line: 'All rise. Or do not. They are llamas.', cost: 1500000, lane: 'fate', req: [], pay: '-', kind: 'end', flags: 'E' },
+  { id: 'll_end', emoji: '🦙', name: 'Ending: Llama Expo 2037', what: 'Ends the run with admission to the Expo. The founding artefact is expected in person.', line: 'Your tour will begin shortly.', cost: 1500000, lane: 'fate', req: [], pay: '-', kind: 'end', flags: 'E' },
 ];
 
 /* ---- FATE (owner 2026-11-10, handoff-1110/TC-FATE-CARDS-BRIEF.md): four cards per ending set, card 1 is the seed. ----
