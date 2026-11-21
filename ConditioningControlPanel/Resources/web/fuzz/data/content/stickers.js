@@ -124,6 +124,9 @@ const RAW = [
   add('e_in_end', 'endings', 'Flatline', 'The line stopped being a line and started turning.', 'Reach the Flatline ending.', 'ending:in_end', clip('pulse')),
   add('e_outside', 'endings', 'Go Outside', 'You went outside. It looked lovely on the monitor.', 'Reach the Go Outside ending.', 'ending:outside', { k: 'scene', src: 'assets/outside/meadow.jpg' }),
   add('e_go_mus', 'endings', 'Gooning Museum', 'You took the tour. You were on it.', 'Reach the Gooning Museum ending.', 'ending:go_mus', clip('gallery')),
+  /* The Panel (owner 2026-11-21): sealed until found, so a player with a small herd is never shown a door they lack.
+   * Art: the chair, Sir Reginald the Third of Hoofelton, as a round die-cut (handoff-1121/llamas). */
+  add('e_ll_end', 'endings', 'The Panel', 'Heard by three (3) llamas. Mostly chewed.', 'Reach The Panel ending.', 'ending:ll_end', drawn('e_ll_end'), true),
   add('e_onemore', 'endings', 'One More', 'You could have stopped. There were several good places.', 'Reach the One More ending.', 'ending:onemore', drawn('e_onemore')),
   add('e_three', 'endings', 'Three Ways Out', 'Endless is open now.', 'See three different endings.', 'endings:3', clip('infinity')),
   add('e_all', 'endings', 'Every Ending', 'You have seen how it ends. All of the ways.', 'See every ending still on offer.', 'shelfEndings:6', clip('book')),

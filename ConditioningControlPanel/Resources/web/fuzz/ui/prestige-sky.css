@@ -39,10 +39,11 @@
 #ps-sky .ps-wallet.bump { animation: psBump .35s ease; }
 #ps-sky .ps-wallet.spend b { color: var(--stamp); }
 @keyframes psBump { 40% { transform: scale(1.12) rotate(-2deg); } }
-#ps-sky .ps-stamp { display: grid; place-items: center; width: 66px; height: 58px; background: var(--paper); color: var(--stamp); border: 3px solid var(--stamp); border-radius: 10px 7px 11px 6px;
+#ps-sky .ps-stamp { display: grid; place-items: center; align-content: center; width: 104px; min-height: 100px; padding: 6px 4px; background: var(--paper); color: var(--stamp); border: 3px solid var(--stamp); border-radius: 10px 7px 11px 6px;
   transform: rotate(-6deg); box-shadow: 3px 4px 0 rgba(0,0,0,.45); line-height: .95; text-transform: uppercase; }
-#ps-sky .ps-stamp small { font-size: 10px; letter-spacing: .14em; font-weight: 600; }
-#ps-sky .ps-stamp b { font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+#ps-sky .ps-stamp small { font-size: 13px; letter-spacing: .16em; font-weight: 600; }
+#ps-sky .ps-stamp b { font-size: 60px; line-height: .9; font-weight: 700; font-variant-numeric: tabular-nums; }
+#ps-sky .ps-stamp i { font-style: normal; font-size: 11px; letter-spacing: .1em; font-weight: 600; color: var(--ink-soft); text-transform: none; }
 #ps-sky .ps-stamp.slam { animation: psSlam .55s cubic-bezier(.2,1.6,.4,1); }
 @keyframes psSlam { 0% { transform: rotate(-16deg) scale(2.3); opacity: 0; } 55% { transform: rotate(-4deg) scale(.92); opacity: 1; } 100% { transform: rotate(-6deg) scale(1); } }
 #ps-sky .ps-clock { display: inline-flex; align-items: center; gap: 4px; background: var(--paper); color: var(--ink); border: 3px solid var(--ink); border-radius: 14px 12px 15px 11px;
@@ -173,7 +174,7 @@
   #ps-sky .ps-legend { flex-basis: 100%; }
   #ps-sky .ps-pill { font-size: 17px; } #ps-sky .ps-pill img, #ps-sky .ps-dust { width: 24px; height: 24px; }
   #ps-sky .ps-pill.mult { display: none; }
-  #ps-sky .ps-stamp { width: 56px; height: 50px; } #ps-sky .ps-stamp b { font-size: 23px; }
+  #ps-sky .ps-stamp { width: 80px; min-height: 78px; } #ps-sky .ps-stamp b { font-size: 44px; } #ps-sky .ps-stamp small { font-size: 11px; }
   #ps-sky .ps-clock b { font-size: 17px; } #ps-sky .ps-clock svg { width: 30px; height: 30px; }
   #ps-sky .ps-zoom { display: none; }
 }
@@ -204,3 +205,6 @@
 #ps-sky .ps-look .lit { font-weight: 700; color: var(--stamp); border: 2.5px solid var(--stamp); border-radius: 8px 5px 8px 5px; padding: 1px 7px; transform: rotate(-5deg); text-transform: uppercase; letter-spacing: .1em; font-size: 12px; }
 #ps-sky .ps-look.own { border-style: solid; border-color: var(--stamp); }
 @media (max-width: 600px) { #ps-sky .ps-next.ps-looks span { display: none; } #ps-sky .ps-next.ps-looks { padding: 6px 8px; } }
+
+/* Browse mode (the Renewal menu, mid-run): "Back to the run" leads the bottom right, in paper */
+#ps-sky .ps-next.ps-back { background: var(--paper); }

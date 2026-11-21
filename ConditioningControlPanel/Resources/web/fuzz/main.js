@@ -27,6 +27,9 @@ import { loadPrestige, prestigeNow, openRenewal, openSky, SKY_CURRENCY } from '.
 import { applyLooks } from './sim/prestige-looks.js';
 import { canKeepPlaying as keepPlayingOk, keepPlaying as keepPlayingRun } from './sim/prestige-endings.js';   // Endless (onemore)
 import { sealedFor, showSeal } from './ui/seal.js';
+import { mountLlamaPen } from './ui/llama-pen.js';
+import { mountHomeTip } from './ui/phone.js';
+import { previewBarAllowed } from './ui/preview-bar-model.js';
 
 const qs = new URLSearchParams(location.search);
 /* Dev doors (jumps, granted items, cheat wallets, the age-gate skip they carry) open only on a local preview.
@@ -92,6 +95,10 @@ function start(init) {
     && qs.get('pictures') !== 'scrolller' ? qs.get('pictures') || (toyPreview ? 'online' : 'none') : null;
   const mood = MOODS[moodArg] ? moodArg : rollMood(life.runs);
   const run = saved?.run || E.createRun({ pace: paceArg || 1, mood, seed: Math.floor(Math.random() * 2 ** 32), perk: life.perk });
+  /* The Panel (data/fate.js HERD_SETS): the sim reads the herd live from the life save, so an opt-out on this visit's
+     terms counts at once. A getter, so it is never saved with the run. ?herd=12 sets a fresh (unsaved) life's herd. */
+  if (fresh && Number(qs.get('herd')) > 0) life.llamas = Math.min(12, Math.floor(Number(qs.get('herd'))));
+  Object.defineProperty(run, 'herd', { get: () => Number(life.llamas) || 0, configurable: true, enumerable: false });
   /* A saved run's pace already carries its Renewal Sky pay (sim/save.js); a dev ?pace keeps it on a reload. */
   if (paceArg) run.pace = Math.min(CONFIG.MAX_PACE, paceArg) * (saved?.run && run.prestige?.pay > 0 ? run.prestige.pay : 1);
   /* PRESTIGE LOOKS HOOK (sim/prestige-looks.js): looks bought in the Sky after the core are owned from the first second of
@@ -296,12 +303,25 @@ function start(init) {
     prestige: { get p() { return life.prestige; }, get view() { return engine.prestige; }, renew: () => engine.renew() },
   };
 
+  /* The dev preview bar (ui/preview-bar.js): local and *.pages.dev previews only, loaded only there. Never saved. */
+  const pen = () => mountLlamaPen({ doc: document, life, extras, gentle: ui.gentle, frozen: () => engine.paused || engine.suspended || engine.stopped, save: persist });
+  const previewBar = () => {
+    let framed = false;
+    try { framed = window.top !== window.self; } catch { framed = true; }
+    if (!previewBarAllowed(location, { framed, framedBy: framed ? bridge.pickParentOrigin(window) : '', hosted: bridge.isHosted, automated: !!navigator.webdriver })) return;
+    import('./ui/preview-bar.js')
+      .then((m) => { window.fuzz.bar = m.mountPreviewBar({ doc: document, win: window, engine, ui, life, hooks, remountPen: pen }); })
+      .catch((err) => console.error('preview bar:', err));
+  };
   const go = () => {
     bindPalette(engine, document);
+    previewBar();
     if (run.ended) { engine.end(run.ended.id, { restored: true }); ui.start(); return; }
     playing = true;
     syncMedia();
     engine.mountAll(!!saved?.run);
+    pen();   // the herd, top left, from the first second
+    mountHomeTip({ doc: document, win: window, storage: fresh ? memoryStorage() : preferenceStorage });   // iPhone Safari, once
     engine.syncQuiet();
     ui.drawPhrase();
     if (run.mood && run.clock < 500) {

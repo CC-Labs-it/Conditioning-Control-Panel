@@ -11,6 +11,7 @@
 import { LIFE_TALLIES, STICKER_BY_ID, STICKERS } from '../data/content/stickers.js';
 import { THEME_IDS } from '../data/content/themes.js';
 import { OFF_SHELF } from './economy.js';
+import { HERD_ENDINGS } from '../data/fate.js';
 
 export const METER_CELLS = 10;
 export const METER_STEP = 0.1;
@@ -42,7 +43,8 @@ export function met(sticker, st, life) {
     case 'owns': return !!st.owned?.[raw];
     case 'ending': return (life?.endings?.[raw] || 0) > 0;
     case 'endings': return Object.keys(life?.endings || {}).length >= need;
-    case 'shelfEndings': return Object.keys(life?.endings || {}).filter((id) => !OFF_SHELF.has(id)).length >= need;
+    /* The Panel (a herd ending) is a bonus: Every Ending never needs it. */
+    case 'shelfEndings': return Object.keys(life?.endings || {}).filter((id) => !OFF_SHELF.has(id) && !HERD_ENDINGS.includes(id)).length >= need;
     case 'themes': return STICKERS.filter((s) => s.id.startsWith('t_') && s.when.startsWith('theme:') && life?.stickers?.[s.id]).length >= need;
     case 'depth': return (life?.prestige?.depth || 0) >= need;
     case 'core': return !!life?.prestige?.core;

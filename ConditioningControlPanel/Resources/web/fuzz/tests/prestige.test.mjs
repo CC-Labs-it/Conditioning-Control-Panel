@@ -15,7 +15,7 @@ const ui = () => ({ doc: {}, buttonFor: () => ({}), layer: () => ({}) });
 
 test('createPrestige has the contract shape, and the currency name lives in one constant', () => {
   const p = P.createPrestige();
-  assert.deepEqual({ ...p, store: undefined }, { depth: 0, dust: 0, spent: 0, own: {}, lit: {}, core: false, next: { rules: [], words: [], keep: [] }, store: undefined, last: null });
+  assert.deepEqual({ ...p, store: undefined }, { depth: 0, dust: 0, spent: 0, own: {}, lit: {}, core: false, next: { rules: [], words: [], keep: [] }, later: { own: {}, core: false }, store: undefined, last: null });
   for (const l of LANES) assert.deepEqual(p.store[l.id], {});
   assert.equal(PRESTIGE_CURRENCY, 'Stardust');
 });

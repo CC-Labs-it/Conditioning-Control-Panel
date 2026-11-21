@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { COPY_MARKS, markCopy } from './copy-marks.mjs';
-import { FATE_SETS, SEEDS } from '../data/fate.js';
+import { ALL_SETS, SEEDS } from '../data/fate.js';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const tree = join(here, '..');
@@ -117,6 +117,10 @@ const EXTRA_ROWS = [
   { id: 'ft_rope', emoji: '🪢', name: 'Velvet Rope', what: 'A rope goes up round the button. Tapping still works. Someone coughs.', line: 'Please do not touch. Go on.', cost: 0, lane: 'fate', req: [], pay: '-' },
   { id: 'ft_gift', emoji: '🛍️', name: 'Exit Through the Gift Shop', what: 'The shop is renamed Gift Shop. Prices stay the same.', line: 'Everything must go.', cost: 0, lane: 'fate', req: [], pay: '-' },
   { id: 'go_mus', emoji: '🏛️', name: 'Ending: Gooning Museum', what: 'Ends the run: the tour starts. Keep your hands inside the cart.', line: 'Admission is free. You are the exhibit.', cost: 1700000, lane: 'goon', req: [], pay: '-', kind: 'end', flags: 'aE' },
+  /* The Panel (owner 2026-11-21, handoff-1121/TC-LLAMA-ROUND-BRIEF.md change 2): one extra open card, only for a full pen
+   * (data/fate.js HERD_SETS), and its ending. Card copy is Section 17 of the contract, word for word. */
+  { id: 'ft_panel', emoji: '🦙', name: 'Section 17: The Panel', what: 'Binding arbitration before three (3) llamas. Their decision is final and mostly chewing.', line: 'Feed is still not included.', cost: 0, lane: 'fate', req: [], pay: '-' },
+  { id: 'll_end', emoji: '⚖️', name: 'Ending: The Panel', what: 'Ends the run: your case is heard. Three (3) llamas, one table in a field, no appeal.', line: 'All rise. Or do not. They are llamas.', cost: 1500000, lane: 'fate', req: [], pay: '-', kind: 'end', flags: 'E' },
 ];
 
 /* ---- FATE (owner 2026-11-10, handoff-1110/TC-FATE-CARDS-BRIEF.md): four cards per ending set, card 1 is the seed. ----
@@ -135,7 +139,7 @@ const NEW_CARDS = new Set(EXTRA_ROWS.filter((r) => r.lane === 'fate').map((r) =>
 function fateRows(items) {
   const by = new Map(items.map((it) => [it.id, it]));
   const get = (id) => { const it = by.get(id); if (!it) throw new Error('FATE_SETS names a missing row ' + id); return it; };
-  for (const set of FATE_SETS) {
+  for (const set of ALL_SETS) {
     set.cards.forEach((id, k) => {
       const it = get(id), { cost, fps } = FATE_STEP[k];
       if (NEW_CARDS.has(id)) { it.pay = 'f'; it.fps = fps; }
@@ -147,7 +151,7 @@ function fateRows(items) {
       Object.assign(it, { cost, lane: 'fate', req: k ? [set.cards[k - 1]] : ['taste2'], fate: set.id, step: k + 1 });
     });
     const end = get(set.end);
-    end.req = [set.cards[3]];
+    end.req = [set.cards.at(-1)];   // card 4, or a herd set's only card
     end.fate = set.id;
     if (!set.theme && ['goon', 'sell'].includes(end.lane)) end.lane = 'fate';
   }

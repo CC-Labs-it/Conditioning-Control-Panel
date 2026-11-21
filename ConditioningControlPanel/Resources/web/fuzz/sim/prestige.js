@@ -32,6 +32,7 @@ export function createPrestige() {
   return {
     depth: 0, dust: 0, spent: 0, own: {}, lit: {}, core: false,
     next: { rules: [], words: [], keep: [] },
+    later: { own: {}, core: false },   // bought mid-run (the Renewal menu): paid now, felt from the next run (settleLater)
     store: Object.fromEntries(LANES.map((l) => [l.id, {}])),
     last: null,
   };
@@ -54,6 +55,9 @@ export function parsePrestige(src) {
   for (const id of Object.keys(obj(src.own))) if (STAR_BY_ID[id] && src.own[id]) p.own[id] = 1;
   for (const id of Object.keys(obj(src.lit))) if (ENDING_BY_ID[id] && src.lit[id]) p.lit[id] = 1;
   p.core = !!src.core;
+  const later = obj(src.later);
+  for (const id of Object.keys(obj(later.own))) if (STAR_BY_ID[id] && later.own[id] && !p.own[id]) p.later.own[id] = 1;
+  p.later.core = !!later.core && !p.core;
   const next = obj(src.next);
   p.next = {
     rules: strs(next.rules, (id) => !!RULE_BY_ID[id], FINE_RULES.length),
@@ -65,8 +69,14 @@ export function parsePrestige(src) {
   return p;
 }
 
+/** Owned and felt now. A star bought mid-run (p.later) is NOT here until the next run starts (settleLater). */
 export const has = (p, starId) => !!p?.own?.[starId];
 export const lit = (p, endingId) => !!p?.lit?.[endingId];
+/** Bought mid-run, felt from the next run. */
+export const isLater = (p, starId) => !!p?.later?.own?.[starId] && !has(p, starId);
+/** Owned now or bought for the next run: what the Sky shows as taken and what lane order counts. */
+export const taken = (p, starId) => has(p, starId) || isLater(p, starId);
+export const coreTaken = (p) => !!p?.core || !!p?.later?.core;
 
 /** Stars owned in a row from the tip: 0..10. */
 export function level(p, laneId) {
@@ -74,13 +84,19 @@ export function level(p, laneId) {
   while (n < STEPS && has(p, `${laneId}_${n + 1}`)) n += 1;
   return n;
 }
+/** Like level, counting the stars bought for the next run too. */
+export function takenLevel(p, laneId) {
+  let n = 0;
+  while (n < STEPS && taken(p, `${laneId}_${n + 1}`)) n += 1;
+  return n;
+}
 
 export function canBuy(p, starId) {
   const s = STAR_BY_ID[starId];
   if (!s) return { ok: false, reason: 'unknown' };
-  if (has(p, starId)) return { ok: false, reason: 'owned' };
+  if (taken(p, starId)) return { ok: false, reason: 'owned' };
   if (p.depth < s.depth) return { ok: false, reason: 'depth' };
-  if (s.n > 1 && !has(p, `${s.lane}_${s.n - 1}`)) return { ok: false, reason: 'previous' };
+  if (s.n > 1 && !taken(p, `${s.lane}_${s.n - 1}`)) return { ok: false, reason: 'previous' };
   if (p.dust < s.cost) return { ok: false, reason: 'dust' };
   return { ok: true, reason: null };
 }
@@ -93,10 +109,25 @@ export function buyStar(p, starId) {
   return { ok: true, cost };
 }
 
+const laterBag = (p) => {
+  if (!p.later || typeof p.later !== 'object') p.later = { own: {}, core: false };
+  if (!p.later.own || typeof p.later.own !== 'object') p.later.own = {};
+  return p.later;
+};
+
+/** Mid-run buy (the Renewal menu): Stardust is paid now, the star goes into p.later and is felt from the next run. */
+export function buyLater(p, starId) {
+  const c = canBuy(p, starId);
+  if (!c.ok) return c;
+  const cost = STAR_BY_ID[starId].cost;
+  p.dust -= cost; p.spent += cost; laterBag(p).own[starId] = 1;
+  return { ok: true, cost };
+}
+
 export function canCore(p) {
-  if (p.core) return { ok: false, reason: 'owned' };
+  if (coreTaken(p)) return { ok: false, reason: 'owned' };
   if (p.depth < MAX_DEPTH) return { ok: false, reason: 'depth' };
-  if (!LANES.every((l) => level(p, l.id) === STEPS)) return { ok: false, reason: 'lanes' };
+  if (!LANES.every((l) => takenLevel(p, l.id) === STEPS)) return { ok: false, reason: 'lanes' };
   if (p.dust < CORE.cost) return { ok: false, reason: 'dust' };
   return { ok: true, reason: null };
 }
@@ -106,6 +137,28 @@ export function buyCore(p) {
   if (!c.ok) return c;
   p.dust -= CORE.cost; p.spent += CORE.cost; p.core = true;
   return { ok: true, cost: CORE.cost };
+}
+
+export function buyCoreLater(p) {
+  const c = canCore(p);
+  if (!c.ok) return c;
+  p.dust -= CORE.cost; p.spent += CORE.cost; laterBag(p).core = true;
+  return { ok: true, cost: CORE.cost };
+}
+
+/** Moves the next-run bag into what is owned. Called once when a fresh run takes its stamp (ui/engine.js) and by renew,
+ *  never on a reload. Returns the moved ids ('core' for the Core). */
+export function settleLater(p) {
+  if (!p || typeof p !== 'object') return [];
+  const bag = laterBag(p), moved = [];
+  if (!p.own || typeof p.own !== 'object') p.own = {};
+  for (const id of Object.keys(bag.own)) {
+    if (!STAR_BY_ID[id] || !bag.own[id]) continue;
+    if (!p.own[id]) { p.own[id] = 1; moved.push(id); }
+  }
+  if (bag.core && !p.core) { p.core = true; moved.push('core'); }
+  p.later = { own: {}, core: false };
+  return moved;
 }
 
 /* ---- Fine Print ---- */
@@ -251,6 +304,7 @@ export const ENDLESS_AFTER = 3;
 export function renew(life, run) {
   const p = (life.prestige ||= createPrestige());
   if (run?.prestige?.renewed) return { dust: 0, depth: p.depth };
+  settleLater(p);   // stars bought mid-run count from here: the next run is the first that feels them
   const dust = dustFor(run, p);
   p.dust += dust;
   p.depth = Math.min(MAX_DEPTH, p.depth + 1);

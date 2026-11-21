@@ -67,6 +67,9 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
   /* A brand new run (nothing played, nothing bought) takes the stamp; a saved run keeps the one it started with, and a run
    * from before prestige existed plays as Depth 0. */
   const freshRun = !run.prestige && !run.clock && run.buys === 0 && !run.ended;
+  /* Stars bought mid-run (the Renewal menu, sim/prestige.js buyLater) are felt from here: once, as the fresh run takes its
+   * stamp. A reload of a saved run keeps its stamp and never settles. */
+  if (freshRun && life?.prestige) P.settleLater(life.prestige);
   const stamp = freshRun ? stampRun(run, prestigeOf()) : run.prestige || null;
   const journey = env.journey ? createJourney(run) : null;
   if (freshRun && stamp) {
@@ -598,6 +601,9 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     pstore: (lane) => { const p = prestigeOf(); return (p.store[lane] ||= {}); },
     renew() { const r = P.renew(life, run); save(); return r; },
     get freeBuys() { return stamp?.free || 0; },
+    /** The run's own Journey shop (null on the plain shop): the dev preview bar steps the reference player on it. A second
+     *  createJourney would replace run.store.journey under this one. */
+    get journey() { return journey; },
     shop: (size) => journey ? journey.shop(size) : E.shopWindow(run, mods, size, env.featuredShop),
     /** The Next up strip (ui/shop-next-model.js): items after what the shop shows, read only. */
     peek: (n, size = 6) => journey ? journey.peek(n) : plainPeek(run, E.shopWindow(run, mods, size, env.featuredShop), n, mods),

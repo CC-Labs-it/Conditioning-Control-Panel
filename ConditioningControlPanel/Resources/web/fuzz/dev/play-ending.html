@@ -58,10 +58,11 @@ const demoReel = qs.get('reel') === 'demo' && ['localhost','127.0.0.1'].includes
 const bubble = endId === 'bi_end';
 if (bubble) note.hidden = true;
 const previewQuery = new URLSearchParams({ buy: buy.join(',') });
-for (const key of ['pictures', 'lite']) {
+for (const key of ['pictures', 'lite', 'herd']) {
   if (qs.has(key)) previewQuery.set(key, qs.get(key));
 }
 if (bubble) previewQuery.set('pictures', demoReel ? 'none' : 'scrolller');
+if (endId === 'll_end' && !qs.has('herd')) previewQuery.set('herd', '12');   // The Panel needs a full pen
 if (endId === 'o_out' && !qs.has('pictures')) previewQuery.set('pictures', 'scrolller');
 if (buttonCheckpoint) {
   previewQuery.set('buttonCheckpoint', 'finale');

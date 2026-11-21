@@ -279,6 +279,50 @@ body.gentle .dk-chip.dk-new .dk-i { animation: none; }
 .ur-nudge { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 .ur-nudge button { min-height: 32px; padding: 3px 12px; background: #d4d0c8; color: #000; font: 14px "Times New Roman", Times, serif; border: 2px outset #fff; cursor: pointer; touch-action: manipulation; }
 .ur-nudge button:active { border-style: inset; }
+/* The Depth badge (ui/depth-badge.js): a round bevel with the Depth numeral, and a speech bubble of Renewal bonuses.
+ * The bubble is fixed and placed by script so its tail points at the badge on any width. Gentle / reduced motion: fades only. */
+#depth-badge { position: relative; display: flex; }
+#depth-badge[hidden], #depth-badge [hidden] { display: none; }
+.db-icon { position: relative; display: grid; place-items: center; width: 38px; height: 38px; margin-top: -1px; padding: 0; border-radius: 50%; background: #d4d0c8; border: 2px outset #fff; cursor: pointer; touch-action: manipulation; }
+.db-icon::before { content: ''; position: absolute; inset: 2px; border-radius: 50%; background: radial-gradient(circle at 34% 28%, #3d3878, #17142f 70%); box-shadow: inset 0 0 0 1px #0007; }
+.db-icon::after { content: ''; position: absolute; right: 3px; top: 3px; width: 9px; height: 9px; background: #ffd76a; clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); }
+.db-icon b { position: relative; font: 900 20px/1 "Arial Black", Arial, Helvetica, sans-serif; color: #ffd76a; text-shadow: 0 1px 0 #000a; font-variant-numeric: tabular-nums; }
+#depth-badge[data-digits="2"] .db-icon b { font-size: 15px; letter-spacing: -0.5px; }
+.db-icon:active, .db-icon[aria-expanded=true] { border-style: inset; }
+.db-icon:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; }
+@media (pointer: coarse) { .db-icon { width: 44px; height: 44px; } .db-icon b { font-size: 23px; } #depth-badge[data-digits="2"] .db-icon b { font-size: 18px; } }
+.db-bubble { position: fixed; z-index: 1; display: flex; flex-direction: column; width: min(312px, calc(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right))); max-height: min(430px, calc(100dvh - 72px - env(safe-area-inset-top) - env(safe-area-inset-bottom))); box-sizing: border-box; padding: 10px 6px 8px 12px; background: var(--panel); color: var(--ink); border: 2px solid var(--line); border-radius: 14px; box-shadow: 2px 3px 0 #0003; font: 14px/1.3 var(--font); animation: db-in 170ms ease-out; }
+.db-bubble::before, .db-bubble::after { content: ''; position: absolute; left: var(--db-tail, 80%); width: 0; height: 0; transform: translateX(-50%); border: solid transparent; pointer-events: none; }
+.db-bubble::before { top: -12px; border-width: 0 10px 12px; border-bottom-color: var(--line); }
+.db-bubble::after { top: -8px; border-width: 0 8px 9px; border-bottom-color: var(--panel); }
+.db-bubble.db-out { animation: db-out 180ms ease-in forwards; pointer-events: none; }
+@keyframes db-in { from { opacity: 0; transform: translateY(-5px) scale(.97); } to { opacity: 1; transform: none; } }
+@keyframes db-out { from { opacity: 1; } to { opacity: 0; transform: translateY(-3px); } }
+@keyframes db-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes db-fade-out { from { opacity: 1; } to { opacity: 0; } }
+body.gentle .db-bubble { animation-name: db-fade-in; }
+body.gentle .db-bubble.db-out { animation-name: db-fade-out; }
+@media (prefers-reduced-motion: reduce) { .db-bubble { animation-name: db-fade-in; } .db-bubble.db-out { animation-name: db-fade-out; } }
+.db-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 0 6px 6px 0; border-bottom: 1px solid var(--line); }
+.db-title { margin: 0; font-size: 16px; }
+.db-title b { font: 900 26px/1 "Arial Black", Arial, Helvetica, sans-serif; font-variant-numeric: tabular-nums; }
+.db-dust { margin: 0; font-size: 13px; white-space: nowrap; }
+.db-scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px 6px 4px 0; }
+.db-grid { display: grid; grid-template-columns: repeat(auto-fill, 42px); gap: 7px 6px; }
+.db-cell { position: relative; display: grid; place-items: center; width: 42px; height: 42px; padding: 0; border: 2px solid var(--db-hue); border-radius: 10px; background: color-mix(in srgb, var(--db-hue) 22%, #fff); cursor: help; touch-action: manipulation; -webkit-touch-callout: none; user-select: none; }
+.db-cell img { width: 30px; height: 30px; pointer-events: none; }
+.db-cell:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.db-cell.db-next { border-style: dashed; background: #f4f2ee; }
+.db-cell.db-next img { opacity: .45; filter: grayscale(.6); }
+.db-cell i { position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%); padding: 0 3px; border-radius: 4px; background: var(--ink); color: var(--panel); font: bold 8px/12px Arial, Helvetica, sans-serif; font-style: normal; white-space: nowrap; }
+.db-group { margin: 12px 0 6px; font-size: 13px; font-weight: bold; }
+.db-empty { margin: 4px 0; opacity: .75; }
+.db-tip { position: absolute; z-index: 2; width: min(220px, calc(100% - 12px)); box-sizing: border-box; padding: 7px 9px; background: #1d1b22; color: #fff; border-left: 4px solid var(--db-hue, #888); border-radius: 6px; box-shadow: 1px 2px 0 #0005; pointer-events: none; font: 13px/1.3 var(--font); }
+.db-tip p { margin: 0; }
+.db-t-name { font-weight: bold; font-size: 14px; }
+.db-t-line { font-style: italic; opacity: .9; }
+.db-t-plain { margin-top: 3px !important; }
+.db-t-next { margin-top: 4px !important; color: #ffd76a; font-weight: bold; }
 #audio-controls > button { display: grid; place-items: center; height: 36px; padding: 0; color: #171717; background: #d4d0c8; border: 2px outset #fff; touch-action: manipulation; cursor: pointer; }
 #audio-mute { width: 38px; }
 #audio-controls > #audio-toggle { width: 26px; border-left: 1px solid #8a867d; }
@@ -628,3 +672,81 @@ html[data-bubble-type] :is(.row .cost,.row .tag,.mix-name,.mix-value,.scr-tag,.x
   .cursor-kit-footer {margin-top:5px;}
 }
 
+
+/* ---- the llama pen (ui/llama-pen.js): top left, above the dock windows' 48 px band, never under the top right controls ---- */
+#llama-pen { position: fixed; left: max(8px, env(safe-area-inset-left)); top: max(4px, env(safe-area-inset-top)); z-index: 15; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; margin: 0; padding: 0; border: 0; background: none; color: var(--ink); font: 11px/1.1 var(--font); cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+#llama-pen:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.lp-fence { position: relative; display: flex; align-items: flex-end; height: 28px; min-width: 70px; padding: 0 6px; border-bottom: 2px solid #6b4a2b; }
+.lp-fence::after { content: ''; position: absolute; inset: auto 0 0 0; height: 9px; pointer-events: none; opacity: .85;
+  background: linear-gradient(#8a5a33, #8a5a33) 0 2px / 100% 2px no-repeat, repeating-linear-gradient(90deg, #8a5a33 0 2px, transparent 2px 15px); }
+.lp-herd { display: flex; align-items: flex-end; }
+.lp-l { display: flex; justify-content: center; width: var(--lp-step, 18px); height: 24px; align-items: flex-end; }
+.lp-l:last-child { margin-right: 6px; }
+.lp-ic { display: block; flex: none; overflow: visible; }
+.lp-ic .lp-head { transform-box: fill-box; transform-origin: 25% 95%; }
+.lp-ic .lp-drop { opacity: 0; transform-box: fill-box; }
+/* The spit (one llama every 7 to 13 s, ui/llama-pen.js): head back, a forward snap, a small white droplet arc that fades. */
+.lp-spit .lp-head { animation: lp-spit-head 1000ms ease-in-out; }
+.lp-spit .lp-drop { animation: lp-spit-drop 1000ms linear; }
+@keyframes lp-spit-head {
+  0% { transform: none; }
+  35% { transform: rotate(-16deg); }
+  48% { transform: rotate(9deg); }
+  62% { transform: rotate(-2deg); }
+  100% { transform: none; }
+}
+@keyframes lp-spit-drop {
+  0%, 46% { opacity: 0; transform: none; }
+  50% { opacity: 1; transform: translate(1px, -1px); }
+  70% { opacity: 1; transform: translate(9px, -3px); }
+  100% { opacity: 0; transform: translate(17px, 5px) scale(.7); }
+}
+body.gentle .lp-spit .lp-head, body.gentle .lp-spit .lp-drop { animation: none; }
+@media (prefers-reduced-motion: reduce) { .lp-spit .lp-head, .lp-spit .lp-drop { animation: none; } }
+.lp-gate { display: block; margin-left: 4px; transform: perspective(40px) rotateY(-38deg); transform-origin: left center; }
+.lp-n { padding-left: 2px; color: var(--ink-soft); white-space: nowrap; }
+.lp-chip { display: none; }
+.lp-walk { animation: lp-walk 1400ms ease-out backwards; }
+@keyframes lp-walk {
+  0% { transform: translate(44px, 0); opacity: 0; }
+  12% { transform: translate(37px, -4px); opacity: 1; }
+  26% { transform: translate(29px, 0); }
+  40% { transform: translate(21px, -4px); }
+  54% { transform: translate(13px, 0); }
+  68% { transform: translate(6px, -5px); }
+  84% { transform: scale(1.1, .9); }
+  100% { transform: none; }
+}
+body.gentle .lp-walk { animation: none; }
+@media (prefers-reduced-motion: reduce) { .lp-walk { animation: none; } }
+.lp-say { position: fixed; left: max(8px, env(safe-area-inset-left)); top: calc(max(4px, env(safe-area-inset-top)) + 44px); z-index: 64; width: max-content; max-width: min(280px, calc(100vw - 16px)); padding: 7px 10px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); box-shadow: 2px 3px 0 #0003; font: 13px/1.3 var(--font); }
+.lp-say[hidden] { display: none; }
+/* One llama's card on hover (a tap on touch): round portrait, name, one-liner, in the bubble's look. */
+.lp-card { display: flex; align-items: center; gap: 9px; max-width: min(300px, calc(100vw - 16px)); pointer-events: auto; }
+.lp-card img { flex: none; width: 44px; height: 44px; border-radius: 50%; object-fit: cover; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line); background: #efe6d2; }
+.lp-card b { display: block; font-weight: 700; }
+.lp-card b + span { display: block; color: var(--ink-soft); }
+/* Under the rail width the corner is the ticker's: the pen folds to a chip with the number, the same bevel as Wake Up. */
+@media (max-width: 1099.98px) {
+  #llama-pen { top: max(8px, env(safe-area-inset-top)); }
+  #llama-pen .lp-fence, #llama-pen .lp-n { display: none; }
+  #llama-pen .lp-chip { display: flex; align-items: center; gap: 3px; min-height: 36px; padding: 2px 8px; background: #d4d0c8; color: #000; border: 2px outset #fff; font: 15px "Times New Roman", Times, serif; }
+  #llama-pen .lp-chip i { display: flex; font-style: normal; }
+  #llama-pen:active .lp-chip { border-style: inset; }
+  .lp-say { top: calc(max(8px, env(safe-area-inset-top)) + 42px); }
+}
+@media (pointer: coarse) and (max-width: 1099.98px) {
+  #llama-pen .lp-chip { min-height: 44px; }
+  .lp-say { top: calc(max(8px, env(safe-area-inset-top)) + 50px); }
+}
+
+/* ---- phone ticker (ui/phone.js PHONE_QUERY): its own row under the controls, bigger, bolder, slower, held by a finger ---- */
+@media (pointer: coarse) and (max-width: 759px) {
+  #stage:has(> #l-ticker.on) { padding-top: calc(max(8px, env(safe-area-inset-top)) + 90px); }
+  #stage > #l-ticker.on { top: calc(max(8px, env(safe-area-inset-top)) + 50px); left: 0; right: 0; height: 34px; line-height: 34px; font-size: 19px; font-weight: 700; filter: saturate(1.35) brightness(1.08);
+    pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 5%, #000 95%, transparent 100%); mask-image: linear-gradient(to right, transparent 0, #000 5%, #000 95%, transparent 100%); }
+}
+/* The iPhone home screen tip (ui/phone.js): once, over the dock strip, gone on a tap. */
+#home-tip { position: fixed; left: 50%; bottom: calc(var(--dock-h) + env(safe-area-inset-bottom, 0px) + 12px); z-index: 90; transform: translateX(-50%); max-width: calc(100vw - 24px); min-height: 44px; padding: 6px 14px; background: var(--panel); color: var(--ink); border: 1px solid var(--line); box-shadow: 2px 3px 0 #0003; font: 15px/1.3 var(--font); touch-action: manipulation; animation: home-tip-in .3s ease-out; }
+@keyframes home-tip-in { from { opacity: 0; } }

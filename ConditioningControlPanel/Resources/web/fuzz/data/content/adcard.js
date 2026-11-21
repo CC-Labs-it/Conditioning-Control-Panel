@@ -66,6 +66,7 @@ export const ADCARD_COPY = Object.freeze({
   signee: 'Signee #{n}',
   unit: 'Unit {n}',
   stats: Object.freeze({ pics: 'Kinky pics & vids', fuzz: '{cur} gained', golden: 'Golden Buttons', llamas: 'Llamas sheltered' }),
+  chair: 'The chair of the panel',   // The Panel ending: the first llama of the herd, ever after
   play: 'Play free:',
   more: 'More kink:',
   playUrl: 'tc.cclabs.app',
