@@ -601,6 +601,9 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     pstore: (lane) => { const p = prestigeOf(); return (p.store[lane] ||= {}); },
     renew() { const r = P.renew(life, run); save(); return r; },
     get freeBuys() { return stamp?.free || 0; },
+    /** The run's own Journey shop (null on the plain shop): the dev preview bar steps the reference player on it. A second
+     *  createJourney would replace run.store.journey under this one. */
+    get journey() { return journey; },
     shop: (size) => journey ? journey.shop(size) : E.shopWindow(run, mods, size, env.featuredShop),
     /** The Next up strip (ui/shop-next-model.js): items after what the shop shows, read only. */
     peek: (n, size = 6) => journey ? journey.peek(n) : plainPeek(run, E.shopWindow(run, mods, size, env.featuredShop), n, mods),

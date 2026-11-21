@@ -29,6 +29,7 @@ import { canKeepPlaying as keepPlayingOk, keepPlaying as keepPlayingRun } from '
 import { sealedFor, showSeal } from './ui/seal.js';
 import { mountLlamaPen } from './ui/llama-pen.js';
 import { mountHomeTip } from './ui/phone.js';
+import { previewBarAllowed } from './ui/preview-bar-model.js';
 
 const qs = new URLSearchParams(location.search);
 /* Dev doors (jumps, granted items, cheat wallets, the age-gate skip they carry) open only on a local preview.
@@ -302,13 +303,24 @@ function start(init) {
     prestige: { get p() { return life.prestige; }, get view() { return engine.prestige; }, renew: () => engine.renew() },
   };
 
+  /* The dev preview bar (ui/preview-bar.js): local and *.pages.dev previews only, loaded only there. Never saved. */
+  const pen = () => mountLlamaPen({ doc: document, life, extras, gentle: ui.gentle, frozen: () => engine.paused || engine.suspended || engine.stopped, save: persist });
+  const previewBar = () => {
+    let framed = false;
+    try { framed = window.top !== window.self; } catch { framed = true; }
+    if (!previewBarAllowed(location, { framed, framedBy: framed ? bridge.pickParentOrigin(window) : '', hosted: bridge.isHosted, automated: !!navigator.webdriver })) return;
+    import('./ui/preview-bar.js')
+      .then((m) => { window.fuzz.bar = m.mountPreviewBar({ doc: document, win: window, engine, ui, life, hooks, remountPen: pen }); })
+      .catch((err) => console.error('preview bar:', err));
+  };
   const go = () => {
     bindPalette(engine, document);
+    previewBar();
     if (run.ended) { engine.end(run.ended.id, { restored: true }); ui.start(); return; }
     playing = true;
     syncMedia();
     engine.mountAll(!!saved?.run);
-    mountLlamaPen({ doc: document, life, extras, gentle: ui.gentle, frozen: () => engine.paused || engine.suspended || engine.stopped, save: persist });   // the herd, top left, from the first second
+    pen();   // the herd, top left, from the first second
     mountHomeTip({ doc: document, win: window, storage: fresh ? memoryStorage() : preferenceStorage });   // iPhone Safari, once
     engine.syncQuiet();
     ui.drawPhrase();
