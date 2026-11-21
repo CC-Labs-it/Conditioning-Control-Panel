@@ -9,13 +9,14 @@ import { STICKER_PAGES, STICKERS, STICKER_BY_ID } from '../data/content/stickers
 import { ENDING_IDS, createLife, parse, recordEnding, serialize } from '../sim/save.js';
 import { dueThisRun, earnSticker, met, meterMult, noteLife, pageView, parseCardSnapshot, shown, snapshotRun, syncLife } from '../sim/stickers.js';
 import { OFF_SHELF } from '../sim/economy.js';
+import { HERD_ENDINGS } from '../data/fate.js';
 import { THEME_IDS } from '../data/content/index.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const st = (o = {}) => ({ taps: 0, buys: 0, total: 0, clock: 0, picks: {}, owned: {}, tally: {}, ...o });
 
-test('the book: 78 stickers on 9 pages, every old achievement kept, every page and picture real', () => {
-  assert.equal(STICKERS.length, 78);
+test('the book: 79 stickers on 9 pages, every old achievement kept, every page and picture real', () => {
+  assert.equal(STICKERS.length, 79);
   assert.equal(new Set(STICKERS.map((s) => s.id)).size, STICKERS.length);
   for (const a of ACHIEVEMENTS) {
     const s = STICKER_BY_ID[a.id];
@@ -23,7 +24,7 @@ test('the book: 78 stickers on 9 pages, every old achievement kept, every page a
     assert.equal(s.when, a.when);
     assert.equal(s.hidden, a.hidden);
   }
-  assert.equal(STICKERS.length - ACHIEVEMENTS.length, 45);
+  assert.equal(STICKERS.length - ACHIEVEMENTS.length, 46);   // 45, then The Panel (2026-11-21)
   const pages = new Set(STICKER_PAGES.map((p) => p.id));
   for (const s of STICKERS) {
     assert.ok(pages.has(s.page), `${s.id} page`);
@@ -38,7 +39,7 @@ test('retired endings: Drop and One More show only once earned, and Every Ending
   const life = createLife();
   assert.deepEqual(STICKERS.filter((s) => s.legacy).map((s) => s.id).sort(), [...OFF_SHELF].map((id) => `e_${id}`).sort());
   assert.equal(shown(life).length, STICKERS.length - OFF_SHELF.size);
-  const shelf = ENDING_IDS.filter((id) => !OFF_SHELF.has(id));
+  const shelf = ENDING_IDS.filter((id) => !OFF_SHELF.has(id) && !HERD_ENDINGS.includes(id));   // The Panel is a bonus, never needed
   assert.equal(STICKER_BY_ID.e_all.when, `shelfEndings:${shelf.length}`);
   for (const id of shelf) life.endings[id] = 1;
   assert.ok(met(STICKER_BY_ID.e_all, st(), life));

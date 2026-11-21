@@ -785,6 +785,12 @@ export const CLAUSES = Object.freeze({
  "go_mus": [
   "This run ends with a guided tour. I keep my hands inside the cart and my mind wherever it is put."
  ],
+ "ft_panel": [
+  "I accept binding arbitration before three (3) llamas, and I agree in advance with whatever they chew."
+ ],
+ "ll_end": [
+  "This run ends before the panel. I bring my file. I do not get it back."
+ ],
  "lo_head": [
   "I accept chastity pictures on my page and ads about what CCP can lock. Click.",
   "Click was the sound of the theme, not of anything else, yet. Yet made me go soft and still.",

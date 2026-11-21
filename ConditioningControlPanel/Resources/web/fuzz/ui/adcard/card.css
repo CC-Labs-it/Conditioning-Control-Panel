@@ -62,6 +62,9 @@
 .adc .llamas.herd span { position: relative; }
 .adc .llamas.herd span:nth-child(odd) { top: -.7cqw; z-index: 1; }
 .adc .llamas.herd span:nth-child(even) { top: .2cqw; }
+/* The Panel: the chair wears the scales over its head (placeholder for the owed chair drawing) */
+.adc .llamas span.chair { position: relative; }
+.adc .llamas span.chair i { position: absolute; left: 50%; bottom: 82%; translate: -50% 0; font-size: .52em; font-style: normal; line-height: 1; pointer-events: none; }
 .adc .ac-foot { display: flex; justify-content: space-between; align-items: center; gap: 3cqw; background: var(--ink); color: #fff; margin: 0 -5cqw -4cqw; padding: 1.3cqw 5cqw; }
 .adc .links { display: grid; gap: .5cqw; font: 600 2.7cqw/1.15 var(--display); min-width: 0; }
 .adc .links span b { color: var(--hot); }

@@ -136,3 +136,6 @@ export function flyerUrl(kind = 0) {
   flyCache.set(kind, u);
   return u;
 }
+
+/* The same hand for the other fate pieces drawn in code (ui/unlocks/fate/llama/art.js, The Panel). */
+export { svg, cutout, inked, wax };

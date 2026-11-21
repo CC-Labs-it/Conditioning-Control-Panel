@@ -11,7 +11,7 @@ import { ICON_CATALOG } from './icon-catalog.js';
 import { THEME_PALETTES } from './palette.js';
 import * as E from '../sim/economy.js';
 import { gateLine, gateOf, gateOpen } from './shop-gates.js';
-import { FATE_BY_ID, FATE_SETS } from '../data/fate.js';
+import { FATE_BY_ID, ALL_SETS, herdOpens } from '../data/fate.js';
 
 /* ---- types: what kind of thing a power-up is. Shape family first, then per-item corrections read off the names. ---- */
 export const TYPES = Object.freeze({
@@ -28,7 +28,7 @@ export const TYPES = Object.freeze({
   face: ['Button styles', 'button'], themeface: ['Theme faces', 'tag'], wave: ['Ribbons', 'speaker'], kinetic: ['Kinetic waves', 'metronome'],
   pointer: ['Cursors', 'cursor'], trail: ['Trails', 'cursor'], family: ['Trail families', 'palette'],
   /* Fate cards (data/fate.js): one row per set in the Fate pocket, named after its seed, drawn with the seed's shape. */
-  ...Object.fromEntries(FATE_SETS.map((set) => ['fate_' + set.id, [BY_ID[set.cards[0]]?.name || set.id, ICON_CATALOG[set.cards[0]]?.shape || 'card']])),
+  ...Object.fromEntries(ALL_SETS.map((set) => ['fate_' + set.id, [BY_ID[set.cards[0]]?.name || set.id, ICON_CATALOG[set.cards[0]]?.shape || 'card']])),
 });
 const SHAPE_TYPE = {
   button: 'button', lipstick: 'button', paddle: 'button', cursor: 'cursor', palette: 'page', numbers: 'number', chart: 'number', meter: 'number',
@@ -343,6 +343,7 @@ export function fateShut(run, it) {
   if (!it.fate) return false;
   const picked = E.fateOf(run), theme = FATE_BY_ID[it.fate]?.theme;
   if (picked) return picked !== it.fate;
+  if (!herdOpens(FATE_BY_ID[it.fate], run.herd)) return true;   // The Panel: shut without a full pen
   return Boolean(theme && run.picks?.f5 && run.picks.f5 !== theme);
 }
 /** An island's look: pocket (every run), picked, open (fork still ahead) or shut. */

@@ -131,6 +131,25 @@ export const ENDINGS = Object.freeze({
     'Gift shop: same prices',
   ], 'Please exit through the gift shop. You already did.', { link: link('More of this lives in CCP') }),
 
+  /* The Panel (owner 2026-11-21, handoff-1121/TC-LLAMA-ROUND-BRIEF.md change 2): only for a full pen. Three scenes, one
+   * text card each (ui/unlocks/fate/llama), no narration. The closing line is Section 50 of the contract, word for word. */
+  ll_end: e('ll_end', 'The Panel', 'Your case was heard. Mostly it was chewed.', [
+    'Chair: a llama',
+    'Panel: three (3) llamas, as agreed',
+    'Your file: entered into the record, then eaten',
+    'Bench: longer than it needed to be',
+    'Appeal: chewed',
+  ], 'No one has reached the llama and returned unchanged.', {
+    scenes: [
+      { card: 'The panel sits behind a long bench. Your file is on it.' },
+      { card: 'The chair reads it. Chews it. Spits.', verdict: 'Verdict: mostly chewing.' },
+      { card: 'New sticker.', sub: 'The chair joins your Living Ad card.' },
+    ],
+    plate: 'CHAIR',
+    next: 'Next',
+    go: 'Go on',
+  }),
+
   onemore: e('onemore', 'One More', 'You could have stopped. There were several good places.', [
     'The credits were going to go here',
     'They have gone home',

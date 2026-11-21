@@ -22,9 +22,9 @@ const {
   COMBO_LINES, SLEEP_STORY, AUDIO_DRAMA, INDUCTION, MOODS, MOOD_CARD, AFTER_RUN,
 } = content;
 
-const PINNED_ENDS = ['drop', 'o_out', 'p_life', 'tr_end', 'bi_end', 'dr_end', 'si_end', 'go_end', 'lo_end', 'ce_end', 'in_end', 'outside', 'onemore', 'go_mus'];
-/* Endings the generator adds after the design source (dev/gen-items.mjs EXTRA_ROWS): the Gooning Museum fate set. */
-const EXTRA_ENDS = ['go_mus'];
+const PINNED_ENDS = ['drop', 'o_out', 'p_life', 'tr_end', 'bi_end', 'dr_end', 'si_end', 'go_end', 'lo_end', 'ce_end', 'in_end', 'outside', 'onemore', 'go_mus', 'll_end'];
+/* Endings the generator adds after the design source (dev/gen-items.mjs EXTRA_ROWS): the Gooning Museum fate set and The Panel. */
+const EXTRA_ENDS = ['go_mus', 'll_end'];
 const ROWS = 'C:/Projects/Conditioning-Control-Panel---CSharp-WPF/handoff-1102/fuzz-tree/rows.json';
 
 /** Every string under a value, with a path for the failure message. */

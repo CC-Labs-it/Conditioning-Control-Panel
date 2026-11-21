@@ -14,9 +14,10 @@ export function measureJourney(picks, {
   share = .125,
   option = 0,
   restore = null,
-  toys = TOY_PLAY
+  toys = TOY_PLAY,
+  herd = 0   // life.llamas: 12 opens The Panel's seed (data/fate.js HERD_SETS)
 } = {}) {
-  let s = E.createRun(),
+  let s = E.createRun({ herd }),
     shop = createJourney(s);
   const mods = [{
     fps: (v, s) => s.owned.depth ? v * 1.1 : v,

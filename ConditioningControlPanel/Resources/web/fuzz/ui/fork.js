@@ -22,6 +22,7 @@ function loadDemos() {
     await import('./demos/fate-button.js');
     await import('./demos/fate-themes.js');
     await import('./demos/fate-museum.js');
+    await import('./demos/fate-llama.js');
     return Demo;
   })();
   return demos;
