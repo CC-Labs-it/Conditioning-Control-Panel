@@ -3456,6 +3456,25 @@ namespace ConditioningControlPanel
             NavigateBrowserToCurrentSiteHome();
         }
 
+        /// <summary>
+        /// Toolbar + / - (ccp-bugs #1694): 10% page zoom a press, the Deeper player's steps
+        /// (<see cref="Services.Browser.BrowserZoomStep"/>). Same zoom as Ctrl + scroll on the
+        /// page; a site switch still resets it to 50%. Silent while the browser is not up.
+        /// </summary>
+        internal void AdjustBrowserZoom(int direction)
+        {
+            try
+            {
+                if (_browser?.WebView?.CoreWebView2 == null) return;
+                _browser.ZoomFactor = Services.Browser.BrowserZoomStep.Next(_browser.ZoomFactor, direction);
+            }
+            catch (Exception ex)
+            {
+                // A crashed browser process throws from any WebView2 property.
+                App.Logger?.Debug("Browser zoom adjust failed: {Error}", ex.Message);
+            }
+        }
+
         #endregion
     }
 }
