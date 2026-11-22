@@ -37,7 +37,7 @@ export function createGuestCollection(assetURL) {
       const pending = (async () => {
         const response = await fetch(assetURL(file), {signal:request.signal});
         if (!response.ok) throw Error(file + ' HTTP ' + response.status);
-        const {scene} = await loader.parseAsync(await response.arrayBuffer(), '');
+        const {scene} = await loader.parseAsync(await response.arrayBuffer(), assetURL(''));
         if (request.signal.aborted) { release(scene); return null; }
         return scene;
       })().catch(error => {

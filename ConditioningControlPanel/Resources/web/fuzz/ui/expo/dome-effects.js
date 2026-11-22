@@ -2,7 +2,8 @@ import * as T from 'three';
 import { normalizeParams2, loomStyleT, loomLayerRotationRad, loomHelix } from '../../../arcademy/engine/loom/loomField.js';
 import { createDepth } from './depth.js';
 import { domeVisit, TRANSLATION } from './dome-visit.js';
-import { herdRoster, llamaPortrait } from '../../data/content/llamas.js';
+import { herdRoster } from '../../data/content/llamas.js';
+import { assetURL } from './asset-base.js';
 import { livePanel, placard } from './display.js';
 
 const centre = new T.Vector3(-22,0,-5), tau = 2*Math.PI;
@@ -148,7 +149,7 @@ export function createDomeEffects({ctx,camera,cue,play,register,bindMedia,setSou
     const clean=[], words=[], frames=[], bubbles=[], panes=[], occluders=[];
     const own=x=>(clean.push(()=>x.dispose()),x);
     const table=own(radiusTable()), room=group.userData.reflectionProbe;
-    const bubbleArt=own(new T.TextureLoader().load(new URL('../../assets/img/bubble.png',import.meta.url).href));
+    const bubbleArt=own(new T.TextureLoader().load(assetURL('dome/bubble.png')));
     bubbleArt.colorSpace=T.SRGBColorSpace;
     for(const name of ['dome_floor','dome_shell'])walkMeshes(group.getObjectByName(name),mesh=>{
       const original=mesh.material;
@@ -182,7 +183,7 @@ export function createDomeEffects({ctx,camera,cue,play,register,bindMedia,setSou
       if(panel)walkMeshes(frame,mesh=>{
         const original=mesh.material;
         const change=m=>{ if(!/portrait/i.test(m.name))return m;const copy=own(m.clone());
-          const map=own(loader.load(llamaPortrait(panel.id)));map.colorSpace=T.SRGBColorSpace;map.flipY=false;copy.map=map;return copy; };
+          const map=own(loader.load(assetURL('dome/'+panel.id+'.webp')));map.colorSpace=T.SRGBColorSpace;map.flipY=false;copy.map=map;return copy; };
         mesh.material=Array.isArray(original)?original.map(change):change(original);
         clean.push(()=>{mesh.material=original;});
       });

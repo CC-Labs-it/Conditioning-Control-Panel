@@ -14,7 +14,7 @@ export function loadHoofPhotos(assetURL,refresh){
       const img=new Image();entry={img,ready:false,wait:[]};images.set(url,entry);
       img.onload=()=>{entry.ready=true;for(const done of entry.wait.splice(0))done();};
       img.onerror=()=>{images.delete(url);entry.wait.length=0;};
-      img.src=url;
+      img.crossOrigin='anonymous';img.src=url;
     }
     if(!entry.ready)entry.wait.push(()=>{if(mounted)refresh();});
   }

@@ -1,10 +1,10 @@
-import { assetURL } from './zones.js';
+import { assetURL } from './asset-base.js';
 
 export function createSound(ctx) {
   const controller = new AbortController();
   const rotations = new Map(), layers = new Map(), streams = new Set();
   let dead = false, held = false, bank = {}, room = '', depth = 0, heaterPower = true;
-  const meadowFootfall='assets/audio/sfx/thud.mp3';
+  const meadowFootfall=assetURL('audio/sfx/thud.mp3');
   let footfallCount=0,lastFootfall=null;
   const resolve = file => assetURL('audio/' + file);
   fetch(resolve('sounds.json'), { signal: controller.signal }).then(response => {
@@ -21,7 +21,7 @@ export function createSound(ctx) {
   function play(id, gain = .58, pan = 0) {
     if (held || dead) return;
     if(id==='loan_tick'){
-      ctx.audio.play('assets/audio/sfx/tally_tick.mp3',{bus:'sfx',source:'expo-loan',sourceLabel:'Loan locator',gain,pan,signal:controller.signal});return;
+      ctx.audio.play(resolve('sfx/tally_tick.mp3'),{bus:'sfx',source:'expo-loan',sourceLabel:'Loan locator',gain,pan,signal:controller.signal});return;
     }
     const path = bank.effects?.[id];
     if (path) ctx.audio.play(resolve(path), { bus: 'sfx', gain, pan, signal: controller.signal });

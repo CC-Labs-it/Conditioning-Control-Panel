@@ -48,7 +48,7 @@ export function createCollection({ assetURL, walker, register, onAnchor, onAssem
     if (!loading) loading = (async () => {
       const manifest = await fetchAsset('collection.json', 'json');
       const data = await fetchAsset(manifest.model, 'arrayBuffer');
-      const {scene} = await loader.parseAsync(data, '');
+      const {scene} = await loader.parseAsync(data, assetURL('collection/'));
       if (request.signal.aborted) { releaseTemplate(scene); return null; }
       template = {scene, manifest};
       return template;

@@ -11,7 +11,8 @@ import { pickExhibits } from './exhibit-picking.js';
 import { mountExpoRadio, RADIO_STYLE } from './music-controls.js';
 import { MOBILE_OVERLAY_STYLE } from './mobile-overlay-style.js';
 import { createWalker } from './collision.js';
-import { assetURL, createZones, loadPlan } from './zones.js';
+import { assetURL } from './asset-base.js';
+import { createZones, loadPlan } from './zones.js';
 import { createPost } from './post.js';
 import { createExpoPaintClock } from './frame-pacing.js';
 import { createSound } from './audio.js';
@@ -359,7 +360,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       const { id, at, yaw } = plan.start; walker.place(id, at, yaw); ready = true; entered(); resize(); sync();
     })();
     const music = createMuseumMusic(ctx, {
-      document: doc, ready: firstFrame, source: 'expo-music', label: 'Expo music', level: .22, speechLevel: .06,
+      document: doc, ready: firstFrame, root:assetURL('audio/radio/'), source: 'expo-music', label: 'Expo music', level: .22, speechLevel: .06,
     });
     clean.push(() => music.dispose(),mountExpoRadio(doc,music,event=>ctx.audio.armFromUserPress?.(event)));
     const api = { ready: firstFrame, dispose, beginArrival() {

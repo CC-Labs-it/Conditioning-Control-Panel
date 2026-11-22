@@ -12,7 +12,7 @@ export function exhibitProps(assetURL, filename='renewal-collection.glb') {
     let removed=false,cleanup;const made=[],surfaces=new Map();
     if(!promise)promise=(async()=>{
       const r=await fetch(assetURL(filename),{signal:controller.signal});if(!r.ok)throw Error(filename+' '+r.status);
-      const model=await loader.parseAsync(await r.arrayBuffer(),'');source=model.scene;
+      const model=await loader.parseAsync(await r.arrayBuffer(),assetURL(''));source=model.scene;
       if(controller.signal.aborted){free(source);source=null;}
       return source;
     })().catch(err=>{promise=null;if(!controller.signal.aborted)console.warn(err);return null;});

@@ -1,4 +1,5 @@
-const audioRoot = new URL('../../assets/expo/audio/', import.meta.url);
+import {assetURL} from './asset-base.js';
+import {warmEntrance} from './entrance.js';
 const EASE = x => x * x * (3 - 2 * x);
 const clamp = x => Math.min(1, Math.max(0, x));
 
@@ -11,20 +12,22 @@ export function createPortal(ctx, parent) {
   curtain.setAttribute('aria-hidden','true'); curtain.append(lids);
   let disposed = false, arrived = false, entered = false, input, lift, tail;
   let mode = calm() ? 'gentle' : 'standard';
-  const bank = fetch(new URL('sounds.json', audioRoot)).then(r => r.ok ? r.json() : null)
-    .then(data => data?.portal).catch(() => null);
+  let bank;
+  const controller = new AbortController();
   const profiles = new Map();
   function buffers(profile) {
+    bank ??= fetch(assetURL('audio/sounds.json'),{signal:controller.signal}).then(r => r.ok ? r.json() : null)
+      .then(data => data?.portal).catch(() => null);
     if (!profiles.has(profile)) profiles.set(profile, bank.then(async plan => {
       if (!plan || disposed) return null;
       const files = plan.profiles[profile];
       const [rise, arrival] = await Promise.all([files.rise, files.arrival].map(
-        file => ctx.audio.preload(new URL(file, audioRoot).href)));
+        file => ctx.audio.preload(assetURL('audio/'+file))));
       return { plan, rise, arrival };
     }).catch(() => null));
     return profiles.get(profile);
   }
-  void buffers(mode);
+
   function source(buffer) {
     const ac = input.ac, node = ac.createBufferSource(), gain = ac.createGain();
     node.buffer = buffer; node.connect(gain); gain.connect(input.node);
@@ -34,6 +37,7 @@ export function createPortal(ctx, parent) {
   function begin() {
     if (entered || disposed) return;
     entered = true; parent.append(curtain); mode = calm() ? 'gentle' : 'standard';
+    warmEntrance(true);
     input = ctx.audio.input({bus:'sfx',gain:.95});
     void buffers(mode).then(clips => {
       if (disposed || arrived || !input || !clips?.rise) return;
@@ -53,7 +57,7 @@ export function createPortal(ctx, parent) {
     curtain.dataset.cover = p.toFixed(3);
   }
   function arrive() {
-    if (disposed || arrived) return;
+    if (disposed || !entered || arrived) return;
     arrived = true;
     void buffers(mode).then(clips => {
       if (disposed || !input || !clips) return;
@@ -70,7 +74,7 @@ export function createPortal(ctx, parent) {
   }
   function dispose() {
     if (disposed) return;
-    disposed = true; curtain.remove();
+    disposed = true; controller.abort(); curtain.remove();
     for (const voice of [lift,tail]) if (voice) {
       try { voice.node.stop(); } catch { /* already ended */ }
     }

@@ -44,7 +44,7 @@ export function streamingPriority(from,to,p,lite,forward){
 export async function loadDoorHardware(url,signal){
   const response=await fetch(url,{signal});
   if(!response.ok)throw Error('Door hardware HTTP '+response.status);
-  const {scene}=await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(await response.arrayBuffer(),'');
+  const {scene}=await new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).parseAsync(await response.arrayBuffer(),new URL('.',url).href);
   scene.updateMatrixWorld(true);
   const parts=new Map();
   scene.traverse(node=>{
