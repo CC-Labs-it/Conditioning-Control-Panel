@@ -28,7 +28,7 @@ namespace ConditioningControlPanel.Services.Compositor;
 /// immutable, never-freed SKImages (decode-once cache); per-bubble tease frames are owned by
 /// the item and disposed on <see cref="Remove"/>.
 /// </summary>
-public sealed class BubbleLayer : BaseLayer
+public sealed partial class BubbleLayer : BaseLayer
 {
     // Decode-once cache for the shared base sprites (bubble.png + the variant sprites from
     // ChaosArt). Keyed by the frozen WPF BitmapSource (ChaosArt hands out one shared frozen
@@ -110,7 +110,7 @@ public sealed class BubbleLayer : BaseLayer
     // UI thread only, like every other member of this class (see the Threading note above).
     private bool _dirty = true;
 
-    public override bool Dirty => _dirty;
+    public override bool Dirty => _dirty || _bloomFx.Count > 0 || SkinFxDue;
     public override void ClearDirty() => _dirty = false;
 
     /// <summary>A live bubble's draw state just changed (Bubble.SyncLayerItem's per-step copy).
@@ -127,11 +127,13 @@ public sealed class BubbleLayer : BaseLayer
 
     public void Remove(BubbleItem item)
     {
+        item.ReleaseFrothPictures();
         item.ReleaseTeaseFrames();
         item.ReleaseEffectCaches();
+        item.ReleaseSkinArt();
         _items.Remove(item);
         _dirty = true;      // the survivors must be repainted without this one
-        if (_items.Count == 0) SetActive(false);
+        if (_items.Count == 0 && _bloomFx.Count == 0 && _skinFx.Count == 0) SetActive(false);
     }
 
     public void Clear()
@@ -139,12 +141,16 @@ public sealed class BubbleLayer : BaseLayer
         _dirty = true;
         foreach (var it in _items)
         {
+            it.ReleaseFrothPictures();
             it.ReleaseTeaseFrames();
             it.ReleaseEffectCaches();
+            it.ReleaseSkinArt();
         }
         _items.Clear();
         foreach (var fx in _dashCache.Values) { try { fx.Dispose(); } catch { } }
         _dashCache.Clear();
+        ClearBlooms();
+        ClearSkinFx();
         SetActive(false);
     }
 
@@ -158,13 +164,18 @@ public sealed class BubbleLayer : BaseLayer
             float s = item.DpiScale;
             float cx = (float)item.CenterXPx, cy = (float)item.CenterYPx;
             // Generous cull radius: body scaled up on pop + glow/telegraph reach.
-            float reach = (Math.Max(item.SizeDip, item.HitSizeDip) * Math.Max(1f, item.Scale) * 0.75f
+            // FrothScale is 1 unless Super Froth has grown this bubble (merges) or the pool shrinks it.
+            float reach = (Math.Max(item.SizeDip, item.HitSizeDip) * Math.Max(1f, item.Scale) * 0.75f * Math.Max(1f, item.FrothScale)
                            + item.GlowBlurDip + 20f) * s;
             if (cx + reach < boundsPx.Left || cx - reach > boundsPx.Right
                 || cy + reach < boundsPx.Top || cy - reach > boundsPx.Bottom) continue;
 
+            // Super Inner Bloom: a popped bloom is drawn by its burst; a live one is film, not sprite.
+            if (item.HideBody) continue;
+            if (item.Bloom != null) { DrawBloomItem(canvas, item, cx, cy); continue; }
+
             byte ga = (byte)Math.Clamp(item.Opacity * 255f, 0, 255);   // group alpha
-            float half = item.SizeDip * 0.5f * s;                      // body radius (unscaled) in px
+            float half = item.SizeDip * 0.5f * s * item.FrothScale;    // body radius (unscaled) in px
 
             // ---- Freeze aura (behind everything): icy-blue ring-glow radial ----
             if (item.FreezeAuraOpacity > 0.003f)
@@ -202,18 +213,26 @@ public sealed class BubbleLayer : BaseLayer
 
             // ---- Base sprite (scaled + rotated about center) ----
             int saved = canvas.Save();
-            if (item.Scale != 1f || item.Angle != 0f)
+            if (item.Scale != 1f || item.Angle != 0f || item.FrothSquash != 1f)
             {
                 canvas.Translate(cx, cy);
                 if (item.Angle != 0f) canvas.RotateDegrees(item.Angle);
-                if (item.Scale != 1f) canvas.Scale(item.Scale, item.Scale);
+                // Froth: a just-merged bubble wobbles k wide and 2 - k tall (k is 1 everywhere else).
+                if (item.FrothSquash != 1f) canvas.Scale(item.Scale * item.FrothSquash, item.Scale * (2f - item.FrothSquash));
+                else if (item.Scale != 1f) canvas.Scale(item.Scale, item.Scale);
                 canvas.Translate(-cx, -cy);
             }
             var body = new SKRect(cx - half, cy - half, cx + half, cy + half);
-            if (item.Sprite != null)
+            // ---- Bubble skin under the film (Spiral): inside the glass, under the sprite ----
+            if (item.Skin != null && BubbleCore.BubbleSkins.UnderShell(item.Skin)) DrawSkinInterior(canvas, item, cx, cy, half);
+            if (item.Skin != null && SkinDrawsBody(item)) { /* Heart, Marble: the skin's own body (below), or its burst draws the pop */ }
+            else if (item.Sprite != null)
             {
                 _img.Color = SKColors.White.WithAlpha(ga);
+                var shell = item.Skin != null ? SkinPainter.ShellTint(item.Skin) : null;   // soap: null, untouched
+                if (shell != null) _img.ColorFilter = shell;
                 canvas.DrawImage(item.Sprite, Fit(item.Sprite, body), _img);
+                if (shell != null) _img.ColorFilter = null;
             }
             else
             {
@@ -225,7 +244,12 @@ public sealed class BubbleLayer : BaseLayer
                 _stroke.StrokeWidth = 2f * s;
                 canvas.DrawCircle(cx, cy, half, _stroke);
             }
+            // ---- Bubble skin interior: inside the glass, under the same scale and squash ----
+            if (item.Skin != null && !BubbleCore.BubbleSkins.UnderShell(item.Skin)) DrawSkinInterior(canvas, item, cx, cy, half);
             canvas.RestoreToCount(saved);
+
+            // ---- Super Froth: the gold rim of a ripe bubble ----
+            if (item.FrothRim > 0.003f) DrawFrothRim(canvas, item, cx, cy, half);
 
             // ---- Natasha's favourite: a short red blink across the body ----
             if (item.RedWash > 0.003f)
@@ -264,9 +288,14 @@ public sealed class BubbleLayer : BaseLayer
             }
 
             // ---- Picture face with a soft edge inside the glass ----
-            if (item.HasFace)
+            if (item.FrothPictures is { Count: > 0 })
             {
-                float ir = item.TeaseInnerDip * 0.5f * s;
+                // Super Froth: a merged bubble carries the pictures of its parts, circling each other.
+                DrawFrothPictures(canvas, item, cx, cy, half, ga);
+            }
+            else if (item.HasFace)
+            {
+                float ir = item.TeaseInnerDip * 0.5f * s * item.FrothScale;
                 int tsave = canvas.Save();
                 canvas.ClipRoundRect(new SKRoundRect(new SKRect(cx - ir, cy - ir, cx + ir, cy + ir), ir, ir), antialias: true);
                 var faceBounds = new SKRect(cx - ir, cy - ir, cx + ir, cy + ir);
@@ -385,6 +414,8 @@ public sealed class BubbleLayer : BaseLayer
             if (!string.IsNullOrEmpty(item.HintText) && item.HintOpacity > 0.003f)
                 DrawHint(canvas, item, cx, cy, s);
         }
+        if (_bloomFx.Count > 0) DrawBloomFx(canvas);
+        if (_skinFx.Count > 0) DrawSkinFx(canvas);
     }
 
     private void DrawHint(SKCanvas canvas, BubbleItem item, float cx, float cy, float s)
@@ -437,7 +468,7 @@ public sealed class BubbleLayer : BaseLayer
     /// dynamic fields are rewritten every frame by Bubble.SyncLayerItem from the (unshown) WPF
     /// tree's computed values, so the layer never re-derives animation - it just draws.
     /// </summary>
-    public sealed class BubbleItem
+    public sealed partial class BubbleItem
     {
         // ---- static (spawn) ----
         public float DpiScale = 1f;
@@ -460,6 +491,27 @@ public sealed class BubbleLayer : BaseLayer
         public float RedWash;
         /// <summary>Natasha's favourite held: 0..1 of the mint ring drawn round it (0 = none).</summary>
         public float HoldRing;
+        /// <summary>Super Inner Bloom: this bubble carries kids (drawn as soap film), and once popped hides for its burst.</summary>
+        public Super.InnerBloom.Node? Bloom;
+        public bool HideBody;
+        // ---- Super Froth (all neutral unless the star is on; see BubbleLayer.Froth.cs) ----
+        /// <summary>Body size multiple: merges grow it, the pool shrinks it. 1 = untouched.</summary>
+        public float FrothScale = 1f;
+        /// <summary>Merge wobble: drawn this wide and (2 - this) tall. 1 = round.</summary>
+        public float FrothSquash = 1f;
+        /// <summary>0..1 of the gold rim a ripe bubble wears.</summary>
+        public float FrothRim;
+        /// <summary>Seconds, drives the pictures circling inside.</summary>
+        public double FrothTime;
+        /// <summary>Stills of the pictures this bubble took in by merging. Owned here, freed on Remove.</summary>
+        public List<SKImage>? FrothPictures;
+
+        internal void ReleaseFrothPictures()
+        {
+            if (FrothPictures == null) return;
+            foreach (var p in FrothPictures) { try { p.Dispose(); } catch { } }
+            FrothPictures = null;
+        }
         public SKImage? PrismGhost;         // shared, cached, never disposed here
         public SKPoint[][]? Cracks;         // DIP points in the 0.._size box
         public string? HintText;

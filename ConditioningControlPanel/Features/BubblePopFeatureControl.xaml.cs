@@ -128,6 +128,7 @@ namespace ConditioningControlPanel.Features
         /// <inheritdoc/>
         public void RebindToCurrentSettings()
         {
+            LoadFrothRows();     // the gold box's rows show the new settings too
             (_settingsHook ??= new SettingsHook(OnSettingsPropertyChanged)).Rebind();
             LoadFromSettings();
         }
@@ -159,6 +160,7 @@ namespace ConditioningControlPanel.Features
                 SliderSpeed.Value = s.BubbleSpeedBoost;
                 TxtSpeed.Text = $"+{s.BubbleSpeedBoost}%";
                 ChkSolidMode.IsChecked = s.BubbleSharedHost;
+                ChkClassicPop.IsChecked = s.BubbleClassicPop;
                 SelectMotion(s.BubbleMotionStyle);
                 ChkBubbleGazePop.IsChecked = s.BubbleGazePopEnabled;
                 ChkBrainDrainBubble.IsChecked = s.BubbleBrainDrainEnabled;
@@ -324,7 +326,7 @@ namespace ConditioningControlPanel.Features
             MotionRow.Visibility = rain || spiral ? Visibility.Visible : Visibility.Collapsed;
             V2Box.Visibility = rain || spiral || !RowGetBubblesV2.IsRowHidden
                 ? Visibility.Visible : Visibility.Collapsed;
-            V2BoxBadge.Content ??= FeatureCard.NewV2Badge(new Thickness(0));
+            // The v2 section sits inside the gold SuperBox now, which wears the one v2 tag.
             bool wasLoading = _isLoading;
             _isLoading = true;
             try
@@ -402,6 +404,15 @@ namespace ConditioningControlPanel.Features
             if (CmbMotion.SelectedItem is not ComboBoxItem { Tag: Models.BubbleMotionStyle style }) return;
             if (s.BubbleMotionStyle == style) return;
             s.BubbleMotionStyle = style;
+            App.Settings?.Save();
+        }
+
+        private void ChkClassicPop_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.BubbleClassicPop = ChkClassicPop.IsChecked ?? false;
             App.Settings?.Save();
         }
 

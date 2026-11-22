@@ -141,7 +141,7 @@ public class FogPolish11Tests
         Assert.Contains("SectionEdgeParticles?.FogLive", painter, StringComparison.Ordinal);
         var canvas = File.ReadAllText(Path.Combine(root, "Controls", "AmbientFxCanvas.cs"));
         // The Reduced allowance is the fog's alone; every other layer keeps the Full-only gate.
-        Assert.Contains("!MotionFx.AllowAmbientLoops && !ReducedFogMayRun()", canvas, StringComparison.Ordinal);
+        Assert.Contains("!MotionFx.AmbientAllowedByLevel && !ReducedFogMayRun()", canvas, StringComparison.Ordinal);
     }
 
     [Fact]

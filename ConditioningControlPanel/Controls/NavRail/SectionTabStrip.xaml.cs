@@ -40,6 +40,48 @@ namespace ConditioningControlPanel.Controls.NavRail
         /// <summary>Pills that open their own window ask first, so the click is never a surprise.</summary>
         public static bool AsksBeforeOpening(NavTab tab) => tab.Kind == NavTabKind.Window;
 
+        // ---- declutter wave 1 (2026-11-15) ------------------------------------------------
+        // The strip holds ONE filled object, the pill of the page on screen. Every other pill is
+        // icon + label on the tray until the pointer (or a press) asks for its face.
+
+        /// <summary>Does a pill draw its face (plate, outline, drop band) in this state? The lit
+        /// pill always does; a resting one only under the pointer or a press.</summary>
+        public static bool ShowsFace(bool active, bool hovered, bool pressed) => active || hovered || pressed;
+
+        /// <summary>The crumb's section word is the room title: larger than the page word.</summary>
+        public const double CrumbTitleSize = 17;
+
+        /// <summary>The page word's size next to it.</summary>
+        public const double CrumbPageSize = 12.5;
+
+        /// <summary>The longest text a pill's count badge shows ("5 on", "12").</summary>
+        public const int BadgeTextMax = 8;
+
+        public const double CountBadgeFontSize = 11;
+
+        /// <summary>The count badge seam: tab key -> short text ("5 on") or null for no badge.
+        /// A page sets it once and calls <see cref="NotifyBadgesChanged"/> when its number moves;
+        /// the strip never reaches into a page.</summary>
+        public static Func<string, string?>? BadgeProvider { get; set; }
+
+        /// <summary>Raised by <see cref="NotifyBadgesChanged"/>; a mounted strip repaints its badges.</summary>
+        public static event Action? BadgesChanged;
+
+        public static void NotifyBadgesChanged() => BadgesChanged?.Invoke();
+
+        /// <summary>The badge text for a pill: the provider's answer, trimmed and capped at
+        /// <see cref="BadgeTextMax"/>; null for no provider, a blank answer or a provider that throws.</summary>
+        public static string? BadgeText(string? tabKey)
+        {
+            if (string.IsNullOrEmpty(tabKey)) return null;
+            string? text;
+            try { text = BadgeProvider?.Invoke(tabKey!); }
+            catch { return null; }
+            text = text?.Trim();
+            if (string.IsNullOrEmpty(text)) return null;
+            return text!.Length <= BadgeTextMax ? text : text.Substring(0, BadgeTextMax);
+        }
+
         /// <summary>The pills a section draws, in table order, hidden tabs skipped.</summary>
         /// <summary>Is a pill of this tier locked for the account on this machine? A paying
         /// account sees no tier sign on the pages it already owns (review fix, 2026-10-06: every
@@ -65,8 +107,9 @@ namespace ConditioningControlPanel.Controls.NavRail
 
         /// <summary>
         /// The pill a tab key lights. A pill key lights itself; the permanent alias "lab" lights
-        /// Games; pages that live inside a Play zone light that zone (Graded Intake and Lockdown
-        /// sit in Sessions, Blink Trainer in Eyes). Null when no pill owns the page (Spiral Room).
+        /// Eyes, where ShowTab lands it; pages that live inside a Play zone light that zone (Graded
+        /// Intake and Lockdown sit in Sessions, Blink Trainer in Eyes). Null when no pill owns the
+        /// page (Spiral Room).
         /// </summary>
         public static string? ActivePill(string? tab)
         {
@@ -74,7 +117,7 @@ namespace ConditioningControlPanel.Controls.NavRail
             var key = tab.ToLowerInvariant();
             switch (key)
             {
-                case "lab": return "play";
+                case "lab": return "playeyes";
                 case "gradedintake":
                 case "lockdown": return "playsessions";
                 case "blinktrainer": return "playeyes";
@@ -87,7 +130,8 @@ namespace ConditioningControlPanel.Controls.NavRail
         public static string? PageLabelKey(string? tab)
         {
             if (string.IsNullOrEmpty(tab)) return null;
-            var key = tab.ToLowerInvariant() == "lab" ? "play" : tab.ToLowerInvariant();
+            // "lab" lands on Eyes (declutter wave 2), so it names Eyes, never the Games pill.
+            var key = tab.ToLowerInvariant() == "lab" ? "playeyes" : tab.ToLowerInvariant();
             foreach (var t in NavSections.AllTabs)
                 if (t.Key == key) return t.LabelKey;
             return null;
@@ -578,6 +622,9 @@ namespace ConditioningControlPanel.Controls.NavRail
             public System.Windows.Shapes.Rectangle? Drop;
             public bool Pressed;
             public bool Hovered;
+            // Declutter wave 1: the count badge slot (collapsed while the provider says nothing).
+            public Border? CountPlate;
+            public TextBlock? Count;
         }
 
         private readonly List<PillParts> _pills = new();
@@ -602,7 +649,11 @@ namespace ConditioningControlPanel.Controls.NavRail
         {
             InitializeComponent();
             CrumbSep.Text = SafeLoc("nav_crumb_sep", "›");
+            CrumbSectionText.FontSize = NavStripRules.CrumbTitleSize;
+            CrumbSep.FontSize = CrumbPage.FontSize = NavStripRules.CrumbPageSize;
             PillRow.PreviewKeyDown += PillRow_PreviewKeyDown;
+            Loaded += (_, _) => { NavStripRules.BadgesChanged -= OnBadgesChanged; NavStripRules.BadgesChanged += OnBadgesChanged; RefreshBadges(); };
+            Unloaded += (_, _) => NavStripRules.BadgesChanged -= OnBadgesChanged;
             SizeChanged += (_, _) => PositionFill(animate: false);
         }
 
@@ -730,6 +781,7 @@ namespace ConditioningControlPanel.Controls.NavRail
         internal Brush TrackFill => PillTrack.Background;
         internal Brush TrackBorder => PillTrack.BorderBrush;
         internal Brush CrumbWordBrush => CrumbSectionText.Foreground;
+        internal double CrumbTitleSizeForTests => CrumbSectionText.FontSize;
         internal Brush MovedNoteBrush => MovedNoteText.Foreground;
         internal double PillHeight(string key) => PillFor(key)?.ActualHeight ?? 0;
         internal double TrackHeightForTests => PillTrack.ActualHeight;
@@ -749,7 +801,6 @@ namespace ConditioningControlPanel.Controls.NavRail
         {
             PillRow.Children.Clear();
             _pills.Clear();
-            _helpBadges.Clear();
             CloseConfirm();
             _activePill = null;
             ActiveFill.Width = 0;
@@ -806,6 +857,27 @@ namespace ConditioningControlPanel.Controls.NavRail
                     content.Children.Add(glyph);
                 }
                 content.Children.Add(label);
+                // The count badge slot ("5 on"): a dark plate like the tier sign's, so it reads the
+                // same on the lit fill and on the tray. Fed by NavStripRules.BadgeText only.
+                parts.Count = new TextBlock
+                {
+                    FontSize = NavStripRules.CountBadgeFontSize,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = parts.RestGlyph,
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                parts.CountPlate = new Border
+                {
+                    Margin = new Thickness(NavStripRules.BadgeGap, 0, 0, 0),
+                    Padding = new Thickness(7, 1, 7, 2),
+                    CornerRadius = new CornerRadius(8),
+                    Background = BadgePlate,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Visibility = Visibility.Collapsed,
+                    Child = parts.Count,
+                };
+                content.Children.Add(parts.CountPlate);
+                PaintBadge(parts);
                 bool locked = NavStripRules.PillLocked(tab.Tier);
                 if (locked)
                 {
@@ -841,18 +913,19 @@ namespace ConditioningControlPanel.Controls.NavRail
                     });
                 }
 
-                // The face: a raised plate in the tab's tint at rest (a lit-top gradient around
-                // 24%, a bevelled 75% border). Its 1 px outer ring is the focus ring, so border +
-                // ring never grow the pill.
+                // The face: a raised plate in the tab's tint (a lit-top gradient, a bevelled 75%
+                // border), drawn only when NavStripRules.ShowsFace says so (PaintFace): at rest a
+                // pill is icon + label on the tray. The border keeps its thickness while clear, so
+                // nothing moves. Its 1 px outer ring is the focus ring.
                 double rightPad = NavStripRules.PillPadding + (locked ? NavStripRules.BadgePadExtra : 0);
                 var face = new Border
                 {
                     CornerRadius = new CornerRadius(NavStripRules.PillHeight / 2 - 1),
                     Padding = new Thickness(NavStripRules.PillPadding, 0, rightPad, 0),
                     MinHeight = NavStripRules.PillHeight - 2,   // + the 1 px ring = a 38 px pill
-                    Background = parts.Plate,
+                    Background = Brushes.Transparent,
                     BorderThickness = new Thickness(NavStripRules.RestFaceThickness),
-                    BorderBrush = parts.Outline,
+                    BorderBrush = Brushes.Transparent,
                     Child = content,
                     // Polish wave 10: the face travels (lit = sunk, pressed = down); the ring
                     // around it keeps the hover lift and the squish.
@@ -890,8 +963,8 @@ namespace ConditioningControlPanel.Controls.NavRail
                 System.Windows.Automation.AutomationProperties.SetHelpText(pill, CrumbFor(section, label.Text));
                 System.Windows.Automation.AutomationProperties.SetAutomationId(pill, "NavPill_" + tab.Key);
 
-                pill.MouseEnter += (_, _) => { if (!IsActive(tab.Key)) face.Background = parts.Hover; DepthHover(parts, true); };
-                pill.MouseLeave += (_, _) => { face.Background = IsActive(tab.Key) ? Brushes.Transparent : parts.Plate; if (!pill.IsPressed) MotionFx.PressSquish(ring, false); DepthHover(parts, false); };
+                pill.MouseEnter += (_, _) => DepthHover(parts, true);
+                pill.MouseLeave += (_, _) => { if (!pill.IsPressed) MotionFx.PressSquish(ring, false); DepthHover(parts, false); };
                 pill.PreviewMouseLeftButtonDown += (_, _) => { MotionFx.PressSquish(ring, true); DepthPress(parts, true); };
                 pill.LostMouseCapture += (_, _) => { MotionFx.PressSquish(ring, false); DepthPress(parts, false); };
                 pill.Click += (_, e) =>
@@ -904,10 +977,15 @@ namespace ConditioningControlPanel.Controls.NavRail
                 pill.GotKeyboardFocus += (_, _) => ring.BorderBrush = FocusRing;
                 pill.LostKeyboardFocus += (_, _) => ring.BorderBrush = Brushes.Transparent;
 
-                // The pill rides in a host with its "?" badge (2026-10-07), so the gap and the
-                // badge live outside the button: hovering the badge never presses the pill.
-                PillRow.Children.Add(HostWithHelp(section, tab, pill, label.Text, parts.Tint,
-                    new Thickness(PillRow.Children.Count == 0 ? 0 : NavStripRules.PillGap, 0, 0, 0)));
+                // The pill rides in a host that carries the gap (and anchors the "opens a window"
+                // card). Its help line lives on the strip's one help button (declutter wave 1).
+                var host = new Grid
+                {
+                    Margin = new Thickness(PillRow.Children.Count == 0 ? 0 : NavStripRules.PillGap, 0, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                host.Children.Add(pill);
+                PillRow.Children.Add(host);
                 parts.Pill = pill;
                 parts.Face = face;
                 parts.RestPadding = face.Padding;
@@ -1042,7 +1120,9 @@ namespace ConditioningControlPanel.Controls.NavRail
             if (tab.Kind is NavTabKind.Tab or NavTabKind.Zone) SetActive(tab.Key, animate: true);
             if (focus) PillFor(tab.Key)?.Focus();
             // A pill that opens its own window asks first (owner, 2026-10-07: Just Drop).
-            if (NavStripRules.AsksBeforeOpening(tab)) { AskBeforeOpening(tab); return; }
+            // A launcher door Lockdown refuses (ccp-bugs #1701) never asks: the click goes straight
+            // to ShowTab, which keeps the panel and says why on the strip.
+            if (NavStripRules.AsksBeforeOpening(tab) && !PanelDoorLink.RefusedNow(tab.Key)) { AskBeforeOpening(tab); return; }
             TabRequested?.Invoke(tab);
         }
 
@@ -1054,27 +1134,73 @@ namespace ConditioningControlPanel.Controls.NavRail
                 bool on = IsActive(p.Tab.Key);
                 // Active: dark ink (or white) on the solid hue the ActiveFill slides under; the
                 // plate steps aside so the fill reads as one shape, and a near-white gloss ring in
-                // the tab's tint sits just inside it. Rest: the label on a raised plate in the tab's
-                // tint inside a bevelled border. The ExtraBold width stays reserved, so nothing
+                // the tab's tint sits just inside it. Rest: glyph + label on the tray, no face
+                // (PaintFace, from DepthSettle). The ExtraBold width stays reserved, so nothing
                 // moves either way. The glyph wears the tab's own tint in both states.
                 p.Label.Foreground = on ? _activeText : p.RestText;
                 p.Label.FontWeight = FontWeights.SemiBold;
                 if (p.Glyph != null) p.Glyph.Foreground = on ? p.ActiveGlyph : p.RestGlyph;
-                p.Face.BorderBrush = on ? p.ActiveRing : p.Outline;
                 // The lit ring is half a pixel heavier; the padding gives it back so the label
                 // and the pill's width stay exactly where they were (PillsStayPutWhenThePageChanges).
                 double grow = on ? NavStripRules.ActiveFaceThickness - NavStripRules.RestFaceThickness : 0;
                 p.Face.BorderThickness = new Thickness(on ? NavStripRules.ActiveFaceThickness : NavStripRules.RestFaceThickness);
                 var pad = p.RestPadding;
                 p.Face.Padding = new Thickness(Math.Max(0, pad.Left - grow), pad.Top, Math.Max(0, pad.Right - grow), pad.Bottom);
-                p.Face.Background = on ? Brushes.Transparent : (p.Pill.IsMouseOver ? p.Hover : p.Plate);
                 KeyboardNavigation.SetIsTabStop(p.Pill, on);
                 System.Windows.Automation.AutomationProperties.SetItemStatus(p.Pill, on ? "selected" : string.Empty);
                 DepthSettle(p, animate);
             }
             if (key == null && _pills.Count > 0) KeyboardNavigation.SetIsTabStop(_pills[0].Pill, true);
+            RefreshHelp();
             PositionFill(animate);
         }
+
+        /// <summary>
+        /// A pill's face for its state (declutter wave 1): the lit pill wears its gloss ring over
+        /// the sliding fill; a resting pill has no plate and no outline; the pointer or a press
+        /// brings the plate and the bevelled outline. Called from DepthSettle, the one place every
+        /// state change already passes through.
+        /// </summary>
+        private void PaintFace(PillParts p)
+        {
+            if (p.Face == null) return;
+            bool on = IsActive(p.Tab.Key);
+            bool hovered = p.Hovered || (p.Pill?.IsMouseOver ?? false);
+            bool face = NavStripRules.ShowsFace(on, hovered, p.Pressed);
+            p.Face.BorderBrush = on ? p.ActiveRing : face ? p.Outline : Brushes.Transparent;
+            p.Face.Background = on || !face ? Brushes.Transparent : p.Hover;
+        }
+
+        private static void PaintBadge(PillParts p)
+        {
+            if (p.CountPlate == null || p.Count == null) return;
+            var text = NavStripRules.BadgeText(p.Tab.Key);
+            p.Count.Text = text ?? string.Empty;
+            p.CountPlate.Visibility = text == null ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        /// <summary>NavStripRules.BadgesChanged fires on the caller's thread (a page's count can
+        /// move from a service or timer): hop to this strip's dispatcher before touching the pills.</summary>
+        internal void OnBadgesChanged()
+        {
+            if (Dispatcher.CheckAccess()) RefreshBadges();
+            else Dispatcher.BeginInvoke(new Action(RefreshBadges));
+        }
+
+        /// <summary>Ask the badge provider again for every pill (NavStripRules.NotifyBadgesChanged
+        /// lands here on a mounted strip, through <see cref="OnBadgesChanged"/>), then put the fill
+        /// back under its pill.</summary>
+        internal void RefreshBadges()
+        {
+            foreach (var p in _pills) PaintBadge(p);
+            if (_pills.Count == 0) return;
+            PillRow.UpdateLayout();
+            PositionFill(animate: false);
+        }
+
+        /// <summary>Test seam: the count badge a pill shows now, or null.</summary>
+        internal string? PillBadge(string key) =>
+            Part(key) is { CountPlate.Visibility: Visibility.Visible, Count: { } c } ? c.Text : null;
 
         private void PositionFill(bool animate)
         {

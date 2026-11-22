@@ -36,6 +36,9 @@ namespace ConditioningControlPanel.Services.Launcher;
 /// <see cref="Launch"/>, which owns its own refusal.</param>
 /// <param name="RequiresAccount">False only for entries that explicitly allow signed-out play.</param>
 /// <param name="IsNew">Shows the existing NEW badge on the card.</param>
+/// <param name="Door">Which door's page the card sits on (<see cref="LauncherDoorRules"/>).</param>
+/// <param name="Listed">False keeps the card off every page; <c>Find</c>, <c>--game</c> and a
+/// shortcut still reach it.</param>
 public sealed record LauncherEntry(
     string Id,
     string TitleKey,
@@ -49,8 +52,13 @@ public sealed record LauncherEntry(
     Func<bool> IsActive,
     Func<bool>? IsRevealed = null,
     bool RequiresAccount = true,
-    bool IsNew = false)
+    bool IsNew = false,
+    LauncherDoor Door = LauncherDoor.Games,
+    bool Listed = true)
 {
+    /// <summary>The entry as the door rules see it: no delegates left, no UI types.</summary>
+    public LauncherDoorCard Card => new(Id, Door, Listed, Available, IsNew, Locked);
+
     public string Title
     {
         get { try { return Loc.Get(TitleKey); } catch { return Id; } }
@@ -146,18 +154,34 @@ public static class LauncherCatalogue
     }
 
     private static readonly Lazy<IReadOnlyList<LauncherEntry>> _games = new(Build);
+    private static readonly Lazy<IReadOnlyList<LauncherEntry>> _tools = new(BuildTools);
 
+    /// <summary>The Games door, in screen order. Holds the unlisted Breakout demo as well.</summary>
     public static IReadOnlyList<LauncherEntry> Games => _games.Value;
+
+    /// <summary>The Tools door: editors and makers. No desktop shortcuts, no panic surface of
+    /// their own (each opens the panel or a host that is already registered).</summary>
+    public static IReadOnlyList<LauncherEntry> Tools => _tools.Value;
+
+    /// <summary>Every entry behind either door, games first.</summary>
+    public static IEnumerable<LauncherEntry> All => Games.Concat(Tools);
+
+    /// <summary>The cards a door's page shows, in order: listed and available.</summary>
+    public static IReadOnlyList<LauncherEntry> Page(LauncherDoor door)
+    {
+        var ids = LauncherDoorRules.Page(All.Select(e => e.Card), door);
+        return ids.Select(id => Find(id)!).ToList();
+    }
 
     public static LauncherEntry? Find(string? id)
     {
         if (string.IsNullOrWhiteSpace(id)) return null;
         var key = id.Trim();
-        return Games.FirstOrDefault(g => string.Equals(g.Id, key, StringComparison.OrdinalIgnoreCase));
+        return All.FirstOrDefault(g => string.Equals(g.Id, key, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>True when any catalogued game currently has a window up.</summary>
-    public static bool AnyActive => Games.Any(g => g.Active);
+    public static bool AnyActive => All.Any(g => g.Active);
 
     /// <summary>
     /// Starts a game by id. False when the id is unknown, the tile is unavailable or nobody is
@@ -215,10 +239,11 @@ public static class LauncherCatalogue
 
         void G(string id, string? art, string glyph, Color hue, Func<bool> available, Func<bool> locked,
                Action launch, Func<bool> active, Func<bool>? revealed = null,
-               bool requiresAccount = true, bool isNew = false)
+               bool requiresAccount = true, bool isNew = false, bool listed = true)
         {
             list.Add(new LauncherEntry(id, "launcher_game_" + id + "_title", "launcher_game_" + id + "_blurb",
-                art, glyph, hue, available, locked, launch, active, revealed, requiresAccount, isNew));
+                art, glyph, hue, available, locked, launch, active, revealed, requiresAccount, isNew,
+                LauncherDoor.Games, listed));
         }
 
         // Order is the order on the launcher: the newest, loudest room first, the quiet ones last.
@@ -228,13 +253,21 @@ public static class LauncherCatalogue
             () => BackRoom.BackRoomHostService.Launch(),
             () => BackRoom.BackRoomHostService.IsRoomActive);
 
+        // Breakout is ONE card (2026-11-15 declutter): the full game for whoever holds it, the
+        // free demo for everyone else, so it never wears a padlock and never asks for an account.
+        // The demo keeps its id for --game and old shortcuts, off the page.
         G("breakoutdemo", null, "●", Tile(0x8C, 0xF5, 0xC8), Always, Never,
             () => BackRoom.BreakoutHostService.LaunchDemo(),
-            () => BackRoom.BackRoomHostService.IsBreakoutDemoActive, requiresAccount: false, isNew: true);
-        G("breakout", null, "●", Tile(0x55, 0xB7, 0xFF), Always,
-            () => !BackRoom.BreakoutAccess.FullAllowed,
-            () => BackRoom.BreakoutHostService.LaunchFull(),
-            () => BackRoom.BackRoomHostService.IsBreakoutFullActive, isNew: true);
+            () => BackRoom.BackRoomHostService.IsBreakoutDemoActive, requiresAccount: false, isNew: true,
+            listed: false);
+        G("breakout", null, "●", Tile(0x55, 0xB7, 0xFF), Always, Never,
+            () =>
+            {
+                if (BreakoutFull()) BackRoom.BreakoutHostService.LaunchFull();
+                else BackRoom.BreakoutHostService.LaunchDemo();
+            },
+            () => BackRoom.BackRoomHostService.IsBreakoutFullActive || BackRoom.BackRoomHostService.IsBreakoutDemoActive,
+            requiresAccount: false, isNew: true);
 
         // Piece by Piece: free for everyone (owner, 2026-09-27), so no lock and no account: the
         // computer plays anyone, and the board's own lobby asks a signed-out player to sign in.
@@ -296,6 +329,47 @@ public static class LauncherCatalogue
             () => !(App.IntakePass?.CanStartIntake ?? false),
             () => LauncherHost.OpenPanelTab("gradedintake"),
             Never);
+
+        return list;
+    }
+
+    // A gate that cannot be read (no account, no tier service) plays the demo, never a refusal.
+    private static bool BreakoutFull()
+    {
+        try { return !NeedsAccount && BackRoom.BreakoutAccess.FullAllowed; }
+        catch (Exception ex) { Log.Debug(ex, "[Launcher] breakout gate probe failed"); return false; }
+    }
+
+    /// <summary>
+    /// The Tools door. Only doors that exist: two panel tabs, the Mod Manager (where a mod is
+    /// made), and the two standalone makers. None needs an account here; each surface keeps its
+    /// own gate.
+    /// </summary>
+    private static List<LauncherEntry> BuildTools()
+    {
+        var list = new List<LauncherEntry>();
+
+        void T(string id, string? art, string glyph, Color hue, Func<bool> available, Action launch, Func<bool> active)
+        {
+            list.Add(new LauncherEntry(id, "launcher_tool_" + id + "_title", "launcher_tool_" + id + "_blurb",
+                art, glyph, hue, available, Never, launch, active, null, false, false, LauncherDoor.Tools, true));
+        }
+
+        // The Deeper editor and the Session editor are panel tabs: the panel comes up on them.
+        T("deepereditor", "features/deeper_editor.png", "✎", Tile(0x7B, 0x5C, 0xFF), Always,
+            () => LauncherHost.OpenPanelTab("deeper"), Never);
+        T("sessioneditor", null, "▤", Tile(0xFF, 0x69, 0xB4), Always,
+            () => LauncherHost.OpenPanelTab("presets"), Never);
+        // Mods are made from the Mod Manager, a modal the panel owns: panel first, then the manager.
+        T("modcreator", null, "✂", Tile(0xFF, 0xB3, 0x6B), Always,
+            () => LauncherHost.OpenPanelModManager(), Never);
+        T("justdrop", "features/justdrop.png", "▼", Tile(0x8C, 0xF5, 0xC8),
+            () => JustDrop.JustDropService.DoorAvailable,
+            () => JustDrop.JustDropHostService.LaunchShop(),
+            () => JustDrop.JustDropHostService.IsActive);
+        T("loom", "features/loom.png", "◎", Tile(0x55, 0xB7, 0xFF), Always,
+            () => Chaos.LoomHostService.Launch(),
+            () => Chaos.LoomHostService.IsActive);
 
         return list;
     }

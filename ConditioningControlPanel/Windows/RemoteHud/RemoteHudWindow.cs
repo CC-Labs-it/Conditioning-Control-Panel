@@ -501,7 +501,7 @@ namespace ConditioningControlPanel.RemoteHud
 
         private void StartLiveDotPulse()
         {
-            if (!MotionFx.AllowAmbientLoops)
+            if (!MotionFx.AmbientAllowedByLevel)
             {
                 _liveDot.BeginAnimation(OpacityProperty, null);
                 _liveDot.Opacity = 1;

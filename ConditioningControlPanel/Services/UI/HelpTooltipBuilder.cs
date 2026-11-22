@@ -71,7 +71,10 @@ namespace ConditioningControlPanel.Services
         /// as a standalone panel. Shared by the legacy <see cref="Build"/> ToolTip
         /// wrapper and the interactive <see cref="Controls.HelpPopover"/>.
         /// </summary>
-        public static StackPanel BuildPanel(HelpContent content, FrameworkElement host)
+        public static StackPanel BuildPanel(HelpContent content, FrameworkElement host) => BuildPanel(content, host, null);
+
+        /// <summary>As above, with <paramref name="headerRight"/> sitting at the right of the title row.</summary>
+        public static StackPanel BuildPanel(HelpContent content, FrameworkElement host, FrameworkElement? headerRight)
         {
             var pinkBrush = TryFind<Brush>(host, "PinkBrush") ?? new SolidColorBrush(Color.FromRgb(255, 105, 180));
 
@@ -100,7 +103,15 @@ namespace ConditioningControlPanel.Services
                 FontWeight = FontWeights.Bold,
                 VerticalAlignment = VerticalAlignment.Center
             });
-            header.Child = headerStack;
+            if (headerRight != null)
+            {
+                var dock = new DockPanel { LastChildFill = true };
+                DockPanel.SetDock(headerRight, Dock.Right);
+                dock.Children.Add(headerRight);
+                dock.Children.Add(headerStack);
+                header.Child = dock;
+            }
+            else header.Child = headerStack;
             panel.Children.Add(header);
 
             // "What It Does" section

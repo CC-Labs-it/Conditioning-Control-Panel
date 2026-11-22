@@ -77,6 +77,7 @@
                                     Background="{StaticResource SectionHueStudioBrush}"/>
                             <StackPanel Margin="16,8,16,8">
 
+                                <feat:OptionSection Key="lockcard.basics" Title="{loc:Str studio_section_basics}" Theme="Main">
                                 <!-- Per hour -->
                                 <Grid Height="36" ToolTip="{loc:Str tooltip_lock_card_frequency_1_10_per_hour}">
                                     <Grid.ColumnDefinitions>
@@ -86,7 +87,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{loc:Str setting_per_hour}" FontSize="13" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                    <Slider Grid.Column="1" x:Name="SliderFreq" Minimum="1" Maximum="10" Value="2"
+                                    <Slider Grid.Column="1" x:Name="SliderFreq" feat:OptionSection.Setting="LockCardFrequency" Minimum="1" Maximum="10" Value="2"
                                             feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="10,0"
                                             ValueChanged="SliderFreq_Changed"/>
                                     <TextBlock Grid.Column="2" x:Name="TxtFreq" Text="2" HorizontalAlignment="Right"
@@ -103,7 +104,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{loc:Str setting_repeats}" FontSize="13" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                    <Slider Grid.Column="1" x:Name="SliderRepeats" Minimum="1" Maximum="10" Value="3"
+                                    <Slider Grid.Column="1" x:Name="SliderRepeats" feat:OptionSection.Setting="LockCardRepeats" Minimum="1" Maximum="10" Value="3"
                                             feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="10,0"
                                             ValueChanged="SliderRepeats_Changed"/>
                                     <TextBlock Grid.Column="2" x:Name="TxtRepeats" Text="3x" HorizontalAlignment="Right"
@@ -137,7 +138,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{loc:Str setting_lock_card_fewest_repeats}" FontSize="13" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                    <Slider Grid.Column="1" x:Name="SliderRepeatsMin" Minimum="1" Maximum="10" Value="1"
+                                    <Slider Grid.Column="1" x:Name="SliderRepeatsMin" feat:OptionSection.Setting="LockCardRepeatsMin" Minimum="1" Maximum="10" Value="1"
                                             feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="10,0"
                                             ValueChanged="SliderRepeatsMin_Changed"/>
                                     <TextBlock Grid.Column="2" x:Name="TxtRepeatsMin" Text="1x" HorizontalAlignment="Right"
@@ -166,7 +167,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{loc:Str setting_lock_card_target_characters}" FontSize="13" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                    <Slider Grid.Column="1" x:Name="SliderTargetLength" Minimum="20" Maximum="600" Value="120"
+                                    <Slider Grid.Column="1" x:Name="SliderTargetLength" feat:OptionSection.Setting="LockCardTargetLength" Minimum="20" Maximum="600" Value="120"
                                             TickFrequency="10" IsSnapToTickEnabled="True"
                                             feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="10,0"
                                             ValueChanged="SliderTargetLength_Changed"/>
@@ -184,7 +185,7 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{loc:Str setting_lock_card_length_variance}" FontSize="13" FontWeight="SemiBold"
                                                Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                    <Slider Grid.Column="1" x:Name="SliderTargetVariance" Minimum="0" Maximum="200" Value="20"
+                                    <Slider Grid.Column="1" x:Name="SliderTargetVariance" feat:OptionSection.Setting="LockCardTargetLengthVariance" Minimum="0" Maximum="200" Value="20"
                                             TickFrequency="5" IsSnapToTickEnabled="True"
                                             feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="10,0"
                                             ValueChanged="SliderTargetVariance_Changed"/>
@@ -192,9 +193,9 @@
                                                VerticalAlignment="Center" FontSize="13" FontWeight="Bold"
                                                Foreground="{DynamicResource PinkBrush}"/>
                                 </Grid>
+                                </feat:OptionSection>
 
-                                <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
-
+                                <feat:OptionSection Key="lockcard.rules" Title="{loc:Str studio_section_rules}" Theme="Interaction">
                                 <!-- Strict lock -->
                                 <Grid Height="34" ToolTip="{loc:Str tooltip_cannot_escape_must_complete_typing}">
                                     <Grid.ColumnDefinitions>
@@ -242,6 +243,7 @@
                                                   Checked="ChkResetOnTypo_Changed" Unchecked="ChkResetOnTypo_Changed"/>
                                     </Grid>
                                 </feat:MoreFold>
+                                </feat:OptionSection>
 
                             </StackPanel>
                         </Grid>

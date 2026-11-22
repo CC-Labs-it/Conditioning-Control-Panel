@@ -81,6 +81,20 @@ namespace ConditioningControlPanel
             catch (Exception ex) { App.Logger?.Debug("EnsureProfileMeFirst: {E}", ex.Message); }
         }
 
+        /// <summary>The own card's Link Discord button: only on your own card, only while no Discord is linked
+        /// (owner, 2026-11-17: the short way to a real picture). Same click as the Community one.</summary>
+        internal void RefreshProfileLinkDiscord()
+        {
+            try
+            {
+                if (DiscordTab?.BtnProfileLinkDiscord == null) return;
+                DiscordTab.BtnProfileLinkDiscord.Visibility =
+                    _profileViewingSelf && App.IsLoggedIn && App.Discord?.IsAuthenticated != true
+                        ? Visibility.Visible : Visibility.Collapsed;
+            }
+            catch (Exception ex) { App.Logger?.Debug("RefreshProfileLinkDiscord: {E}", ex.Message); }
+        }
+
         /// <summary>
         /// Shows or hides the header's "back to me" chip. Someone else's card is on screen ⇒ the
         /// chip is the way home. Also the single switch every self-only surface on the card reads,
@@ -107,6 +121,7 @@ namespace ConditioningControlPanel
                     DiscordTab.BtnProfileCustomize.Visibility = selfOnly;
                 if (DiscordTab?.BtnProfilePrivacy != null)
                     DiscordTab.BtnProfilePrivacy.Visibility = selfOnly;
+                RefreshProfileLinkDiscord();
                 if (DiscordTab?.BtnProfileBackToMe == null) return;
                 DiscordTab.BtnProfileBackToMe.Visibility = isSelf ? Visibility.Collapsed : Visibility.Visible;
             }

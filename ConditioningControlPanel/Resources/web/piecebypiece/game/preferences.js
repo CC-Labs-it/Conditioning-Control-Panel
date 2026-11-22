@@ -54,6 +54,9 @@ export function presentation() {
     // Camera drag direction (ccp-bugs #1329), off by default.
     invertX: saved.invertX === true,
     invertY: saved.invertY === true,
+    // Right-click arrows and circles (board/annotations.js, the HUD's "Arrows" button), on by default. Off: every right drag is the
+    // camera's again (owner, 2026-11-18: reaching to turn the board drew lines instead).
+    arrows: saved.arrows !== false,
     // Distraction dials (owner, 2026-10-02): how many pictures, how strong, how fast it climbs.
     amount: AMOUNTS.includes(saved.amount) ? saved.amount : 'normal',
     strength: Number.isFinite(saved.strength) ? strength(saved.strength) : 1,
@@ -89,6 +92,7 @@ export function setPresentation(patch) {
   if (['slam', 'ribbon', 'tag'].includes(patch.turnCard)) saved.turnCard = patch.turnCard;
   if (typeof patch.invertX === 'boolean') saved.invertX = patch.invertX;
   if (typeof patch.invertY === 'boolean') saved.invertY = patch.invertY;
+  if (typeof patch.arrows === 'boolean') saved.arrows = patch.arrows;
   if (AMOUNTS.includes(patch.amount)) saved.amount = patch.amount;
   if (Number.isFinite(patch.strength)) saved.strength = strength(patch.strength);
   if (SPEEDS.includes(patch.rampSpeed)) saved.rampSpeed = patch.rampSpeed;

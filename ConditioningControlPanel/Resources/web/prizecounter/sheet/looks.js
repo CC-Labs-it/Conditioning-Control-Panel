@@ -1,0 +1,163 @@
+/* sheet/looks.js - the screen-effect looks drawn on canvas, ported from the owner's mockup (prize-counter-v4.html): card
+ * frames and backs, the Deck card front, word styles with their own motion, fog colours (and the two-tone swirl), the spiral
+ * back with its phrase coming at you. Pure drawing on a 2D context; time goes in, nothing is kept here. */
+
+/* The fog wears the user's own pink filter colour (owner 2026-11-17: the shop sells no fog colours). Two-tone adds a
+ * second colour from this palette, in this order (CCP.Core FogLooks.Palette): one too close to the user's own would
+ * make the swirl vanish, so the next one stands in (secondFog). */
+export const FOGS = { pink: '#ff5fa8', lilac: '#a98bff', mint: '#5fe0b8', amber: '#ffb347', sky: '#5fc0ff', peach: '#ff937a' };
+export const FOG_CLOSE = 48;
+const rgbOf = (hex) => { const m = String(hex || '').replace('#', ''); return m.length === 6 ? [0, 2, 4].map((i) => parseInt(m.slice(i, i + 2), 16)) : null; };
+export const fogClose = (a, b) => { const x = rgbOf(a), y = rgbOf(b); return !!(x && y) && Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) < FOG_CLOSE; };
+/** The second colour shown for the pick over the user's own colour: { kind, skipped } (skipped = the pick was too close). */
+export function secondFog(pick, own) {
+  const keys = Object.keys(FOGS), want = keys.includes(pick) ? pick : 'lilac', at = keys.indexOf(want);
+  for (let k = 0; k < keys.length; k++) { const kind = keys[(at + k) % keys.length]; if (!fogClose(FOGS[kind], own)) return { kind, skipped: kind !== want }; }
+  return { kind: want, skipped: false };
+}
+export const WORDS = ['let go', 'sink', 'good', 'deeper', 'soft', 'obey', 'blank'];
+const TAU = Math.PI * 2;
+export const ease = (x) => { x = Math.max(0, Math.min(1, x)); return 1 - Math.pow(1 - x, 3); };
+export const hueOf = (id) => { const s = String(id).split('.').pop() + '..'; return (s.charCodeAt(0) * 37 + s.charCodeAt(1) * 61) % 360; };
+
+export function drawBack(g, kind, x, y, w, h) {
+  g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
+  g.fillStyle = kind === 'plain' ? '#ff5fa8' : kind === 'lace' ? '#f6e9f0' : kind === 'ink' ? '#f1efe6' : '#17202b'; g.fillRect(x, y, w, h);
+  if (kind === 'ink') { g.strokeStyle = '#17202b'; g.lineWidth = 1; for (let i = -h; i < w; i += 6) { g.beginPath(); g.moveTo(x + i, y + h); g.lineTo(x + i + h, y); g.stroke(); } }
+  else if (kind === 'check') { const s = Math.max(6, w / 6); g.fillStyle = '#ff5fa8'; for (let cy = 0; cy * s < h; cy++) for (let cx = 0; cx * s < w; cx++) if ((cx + cy) % 2 === 0) g.fillRect(x + cx * s, y + cy * s, s, s); }
+  else if (kind === 'lace') { g.fillStyle = '#d98bb0'; for (let ly = 5; ly < h; ly += 9) for (let lx = 5 + ((ly / 9) % 2) * 4.5; lx < w; lx += 9) { g.beginPath(); g.arc(x + lx, y + ly, 1.8, 0, TAU); g.fill(); } g.strokeStyle = '#d98bb0'; g.lineWidth = 1.5; g.strokeRect(x + 3, y + 3, w - 6, h - 6); }
+  g.restore(); g.strokeStyle = '#ffffff80'; g.lineWidth = 1; g.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+}
+/** A Deck card's face: a picture stand-in (a sky, a sun, hills) in one hue. */
+export function drawFront(g, x, y, w, h, hue) {
+  const gr = g.createLinearGradient(x, y, x + w, y + h); gr.addColorStop(0, `hsl(${hue},55%,62%)`); gr.addColorStop(1, `hsl(${hue + 40},50%,38%)`);
+  g.fillStyle = gr; g.fillRect(x, y, w, h);
+  g.fillStyle = '#ffffff8c'; g.beginPath(); g.arc(x + w * 0.72, y + h * 0.3, Math.min(w, h) * 0.11, 0, TAU); g.fill();
+  g.beginPath(); g.moveTo(x, y + h); g.lineTo(x + w * 0.38, y + h * 0.5); g.lineTo(x + w * 0.62, y + h * 0.78); g.lineTo(x + w * 0.8, y + h * 0.6); g.lineTo(x + w, y + h); g.closePath(); g.fillStyle = '#14101973'; g.fill();
+}
+/* Card frames (owner 2026-11-17): the patterns as a border round every Deck card, as the desktop draws them
+ * (CCP.Core DeckLooks.Frame*: the band is a small share of the shorter side, an ink line on both its edges). The page's
+ * cards are small, so the band is a little bolder here than the desktop's 5.5%. Plain = no frame. */
+const rrect = (g, x, y, w, h, r) => { r = Math.max(0, Math.min(r, w / 2, h / 2)); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+export const frameBand = (w, h) => Math.max(5, Math.min(26, Math.min(w, h) * 0.09));
+export function drawFrame(g, kind, x, y, w, h, r) {
+  if (kind === 'plain' || !kind) return 0;
+  const b = frameBand(w, h), ink = Math.max(1.2, b * 0.2), ir = Math.max(r - b, b * 0.5);
+  g.save(); g.beginPath(); rrect(g, x, y, w, h, r); rrect(g, x + b, y + b, w - 2 * b, h - 2 * b, ir); g.clip('evenodd');
+  g.fillStyle = kind === 'lace' ? '#f6e9f0' : kind === 'ink' ? '#f1efe6' : '#17202b'; g.fillRect(x, y, w, h);
+  if (kind === 'ink') { const s = Math.max(3, b * 0.5); g.strokeStyle = '#17202b'; g.lineWidth = Math.max(1, s * 0.24); g.beginPath(); for (let i = -h; i < w; i += s) { g.moveTo(x + i, y + h); g.lineTo(x + i + h, y); } g.stroke(); }
+  else if (kind === 'check') { const s = Math.max(2, b / 2); g.fillStyle = '#ff5fa8'; for (let cy = 0; cy * s < h; cy++) for (let cx = 0; cx * s < w; cx++) if ((cx + cy) % 2 === 0) g.fillRect(x + cx * s, y + cy * s, s, s); }
+  else if (kind === 'lace') {
+    const s = Math.max(3, b * 0.55), d = Math.max(0.9, s * 0.24); g.fillStyle = '#d98bb0'; g.beginPath();
+    for (let ly = s / 2, row = 0; ly < h; ly += s, row++) for (let lx = (row % 2) * s / 2 + s / 2; lx < w; lx += s) { g.moveTo(x + lx + d, y + ly); g.arc(x + lx, y + ly, d, 0, TAU); }
+    g.fill(); g.strokeStyle = '#d98bb0'; g.lineWidth = Math.max(0.8, ink * 0.5); g.beginPath(); rrect(g, x + b / 2, y + b / 2, w - b, h - b, Math.max(0, r - b / 2)); g.stroke();
+  }
+  g.restore();
+  g.save(); g.strokeStyle = '#17202b'; g.lineWidth = ink; g.beginPath(); rrect(g, x + ink / 2, y + ink / 2, w - ink, h - ink, Math.max(0, r - ink / 2)); g.stroke();
+  g.beginPath(); rrect(g, x + b - ink / 2, y + b - ink / 2, w - 2 * b + ink, h - 2 * b + ink, ir + ink / 2); g.stroke(); g.restore();
+  return b;
+}
+/** A Deck card as the desktop shows it: the picture with rounded corners and the worn frame round it. */
+export function drawCard(g, kind, x, y, w, h, hue) {
+  const r = Math.min(w, h) * 0.08;
+  g.save(); g.beginPath(); rrect(g, x, y, w, h, r); g.clip(); drawFront(g, x, y, w, h, hue); g.restore();
+  drawFrame(g, kind, x, y, w, h, r);
+}
+/** The Plain frame's picture on a chip or the stage: the bare card with a thin neutral edge and a small "none" mark (a
+ * ring with a slash), so "no frame" never reads as one more card. Pictures only: the Deck on "Your screen" stays bare. */
+export function drawNoFrame(g, x, y, w, h) {
+  const r = Math.min(w, h) * 0.08, s = Math.max(8, Math.min(w, h) * 0.27), cx = x + w - s * 0.95, cy = y + s * 0.95, lw = Math.max(1.2, s * 0.16);
+  g.save();
+  g.strokeStyle = '#ffffffa6'; g.lineWidth = Math.max(1, lw * 0.6); g.beginPath(); rrect(g, x + 0.5, y + 0.5, w - 1, h - 1, r); g.stroke();
+  g.fillStyle = '#1d0c26d9'; g.beginPath(); g.arc(cx, cy, s * 0.72, 0, TAU); g.fill();
+  g.strokeStyle = '#f4ecf7'; g.lineWidth = lw; g.lineCap = 'round';
+  g.beginPath(); g.arc(cx, cy, s * 0.48, 0, TAU); g.stroke();
+  const k = s * 0.48 * 0.7071; g.beginPath(); g.moveTo(cx - k, cy + k); g.lineTo(cx + k, cy - k); g.stroke();
+  g.restore();
+}
+/* Local or system fonts only: Segoe Print for chalk, Consolas for the typewriter, Rockwell for the marquee. */
+export function wordFont(kind, px) {
+  if (kind === 'chalk') return `600 ${px * 1.15}px "Segoe Print", "Comic Sans MS", cursive`;
+  if (kind === 'type') return `500 ${px * 0.82}px Consolas, "Cascadia Mono", "Courier New", monospace`;
+  if (kind === 'marquee') return `700 ${px * 0.9}px Rockwell, "Rockwell Extra Bold", Georgia, serif`;
+  return `700 ${px}px "Segoe UI", system-ui, sans-serif`;
+}
+export const wordColour = (kind) => (kind === 'marquee' ? '#ffd24a' : kind === 'chalk' ? '#fdf7e8' : '#ffffff');
+/** One word in its style. k = seconds into a 4 s life (the style's own motion: typed, written on, rising, echoing, lit). */
+export function drawWord(g, kind, text, cx, cy, px, k, strength) {
+  if (kind === 'marquee') text = text.toUpperCase();
+  const out = k < 2.8 ? 1 : k < 3.5 ? 1 - (k - 2.8) / 0.7 : 0, A = strength == null ? 0.92 : strength;
+  if (out <= 0) return;
+  g.save(); g.font = wordFont(kind, px); g.textBaseline = 'middle'; g.fillStyle = wordColour(kind); g.textAlign = 'left';
+  const full = g.measureText(text).width, x0 = cx - full / 2;
+  if (kind === 'type') {
+    const shown = text.slice(0, Math.ceil(text.length * Math.min(1, k / 1.0)));
+    g.globalAlpha = A * out; g.fillText(shown, x0, cy);
+    if (k < 2.8 && Math.floor(k * 3) % 2 === 0) g.fillRect(x0 + g.measureText(shown).width + 2, cy - px * 0.38, px * 0.08, px * 0.76);
+  } else if (kind === 'chalk') {
+    g.translate(cx, cy); g.rotate(-0.035); g.translate(-cx, -cy);
+    g.beginPath(); g.rect(x0 - 4, cy - px, (full + 8) * Math.min(1, k / 1.1), px * 2); g.clip(); g.globalAlpha = A * out; g.fillText(text, x0, cy);
+  } else if (kind === 'marquee' || kind === 'drift') {
+    let x = x0;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i], wch = g.measureText(ch).width;
+      if (kind === 'marquee') { const lit = k > 0.1 + i * 0.13, allAt = 0.1 + text.length * 0.13, blink = k > allAt + 0.15 && k < allAt + 0.27; g.globalAlpha = A * out * (lit ? (blink ? 0.45 : 1) : 0.2); g.fillText(ch, x, cy); }
+      else { const e = ease((k - i * 0.07) / 0.55); g.globalAlpha = A * out * e; g.fillText(ch, x, cy + (1 - e) * px * 0.55 - (1 - out) * px * 0.4); }
+      x += wch;
+    }
+  } else if (kind === 'echo') {
+    g.textAlign = 'center';
+    for (let i = 1; i <= 2; i++) { const fr = (k * 0.45 + i * 0.5) % 1; g.save(); g.translate(cx, cy); g.scale(1 + fr * 0.4, 1 + fr * 0.4); g.globalAlpha = A * out * (1 - fr) * 0.35; g.fillText(text, 0, 0); g.restore(); }
+    g.globalAlpha = A * out * Math.min(1, k / 0.3); g.fillText(text, cx, cy);
+  } else { g.textAlign = 'center'; g.globalAlpha = A * out * Math.min(1, k / 0.5); g.fillText(text, cx, cy); }
+  g.restore();
+}
+/** Fog blobs drifting: one colour, or the two-tone swirl (cols = several). */
+export function drawFogBlobs(k, cols, t, w, h, alpha = 0.55) {
+  for (let i = 0; i < 5; i++) {
+    const bx = w / 2 + Math.sin(t * (0.3 + i * 0.07) + i * 2.1) * w * 0.22, by = h * 0.45 + Math.cos(t * (0.25 + i * 0.05) + i * 1.3) * h * 0.18, rr = Math.max(w, h) * (0.3 + 0.06 * Math.sin(t * 0.4 + i));
+    const bl = k.createRadialGradient(bx, by, 0, bx, by, rr); bl.addColorStop(0, cols[i % cols.length]); bl.addColorStop(1, 'rgba(0,0,0,0)');
+    k.globalAlpha = alpha; k.fillStyle = bl; k.fillRect(0, 0, w, h);
+  }
+  k.globalAlpha = 1;
+}
+/* The spiral back (owner 2026-11-17, desktop CCP.Core DeckSpiralBack): with words behind the card worn, a Deck card is a
+ * picture on the front and a spiral on the back, and on every flip to the back one of the player's own phrases comes at
+ * the viewer from the spiral's centre: small and far, a quick zoom to full size with a little tilt, a breath, then on
+ * past the viewer as it fades into a pink and a blue ghost (the Back Room slot's word beat). */
+export const BACK_ZOOM = 1.1, BACK_HOLD = 0.35, BACK_OUT = 0.45, BACK_LIFE = BACK_ZOOM + BACK_HOLD + BACK_OUT;
+/** The phrase's pose `age` seconds after the back landed: { a, s, rot, split } (still = motion off: it fades in place). */
+export function backWord(age, still = false) {
+  if (age < 0 || age >= BACK_LIFE) return null;
+  if (still) return { a: Math.min(1, age / 0.35, (BACK_LIFE - age) / 0.5), s: 1, rot: 0, split: 0 };
+  if (age < BACK_ZOOM) { const u = age / BACK_ZOOM, bump = (c, w) => { const d = Math.abs(u - c) / w; return d >= 1 ? 0 : 0.5 + 0.5 * Math.cos(Math.PI * d); }; return { a: Math.min(1, u / 0.12), s: 0.14 + 0.86 * ease(u), rot: -0.052 * bump(0.4, 0.3) + 0.035 * bump(0.72, 0.22), split: 0 }; }
+  if (age < BACK_ZOOM + BACK_HOLD) return { a: 1, s: 1 - 0.03 * Math.sin(Math.PI * (age - BACK_ZOOM) / BACK_HOLD), rot: 0, split: 0 };
+  const u = (age - BACK_ZOOM - BACK_HOLD) / BACK_OUT;
+  return { a: 1 - u * u * (3 - 2 * u), s: 1 + 0.14 * (1 - (1 - u) * (1 - u)), rot: 0, split: 0.3 * (1 - (1 - u) * (1 - u)) };
+}
+/** A spiral back filling the card (x, y, w, h), turned by `turn`, with `word` at `age` seconds; the frame look on top. */
+export function drawSpiralBack(g, word, age, x, y, w, h, turn = 0, frame = 'plain', still = false) {
+  const r = Math.min(w, h) * 0.08, cx = x + w / 2, cy = y + h / 2, R = Math.hypot(w, h) / 2;
+  g.save(); g.beginPath(); rrect(g, x, y, w, h, r); g.clip();
+  g.fillStyle = '#24091a'; g.fillRect(x, y, w, h);
+  const cols = ['#ff69b4', '#c77dff', '#ffffff'];
+  g.lineCap = 'round'; g.lineWidth = Math.max(1.5, R * 0.1);
+  for (let arm = 0; arm < 3; arm++) {
+    g.strokeStyle = cols[arm]; g.beginPath();
+    for (let i = 0; i <= 48; i++) { const k = i / 48, ang = k * TAU * 2 + arm * TAU / 3 + turn, px = cx + Math.cos(ang) * R * k, py = cy + Math.sin(ang) * R * k; if (i) g.lineTo(px, py); else g.moveTo(px, py); }
+    g.stroke();
+  }
+  const dim = g.createRadialGradient(cx, cy, 0, cx, cy, Math.min(w, h) * 0.62); dim.addColorStop(0, 'rgba(0,0,0,.55)'); dim.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = dim; g.fillRect(x, y, w, h);
+  const p = word ? backWord(age, still) : null;
+  if (p && p.a > 0.01) {
+    const px = Math.max(8, Math.min(h * 0.22, w * 0.9 / 1.14 / (word.length * 0.58)));
+    g.translate(cx, cy); g.rotate(p.rot); g.scale(p.s, p.s);
+    g.font = `900 ${px}px "Segoe UI", system-ui, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    if (p.split > 0.01) { const off = p.split * px; g.globalAlpha = 0.6 * p.a; g.fillStyle = '#ff3d8f'; g.fillText(word, -off, 0); g.fillStyle = '#5fb0ff'; g.fillText(word, off, 0); }
+    g.globalAlpha = p.a; g.lineJoin = 'round'; g.lineWidth = Math.max(2, px * 0.17); g.strokeStyle = '#2a0b30'; g.strokeText(word, 0, px * 0.06);
+    g.strokeText(word, 0, 0); g.fillStyle = '#ffd6f4'; g.fillText(word, 0, 0);
+  }
+  g.restore();
+  drawFrame(g, frame, x, y, w, h, r);
+}

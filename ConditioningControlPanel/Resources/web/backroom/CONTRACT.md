@@ -2507,3 +2507,22 @@ sends `init.prizeCounter: true` gets it (the WPF host on the room page); any oth
   press holds it), takes the keyboard back on a plain back, and the page re-reads `counter/state`. Every row bought
   meanwhile gets its shelf stamp one after another (`STAMP_GAP_MS` apart, all at once when still).
 - The four 2D Racing Thoughts rows stay hidden: the server shows them only to owners on both counters.
+
+### 10.23 The worn bubble skin (2026-11-17, additive)
+
+The shop sells bubble skins (Champagne, Heart, Spiral, Marble, Disco, Frost; Soap is the free default). Breakout's
+picture bubbles wear the one the account has on.
+
+- Host -> page: `init` and `settings` MAY carry `bubbleSkin`, one of `soap`, `champagne`, `heart`, `spiral`, `marble`,
+  `disco`, `frost` (case and spaces ignored). Absent, not a string, or any other value = `soap`, which is exactly the
+  bubble every host shows today, so an older host needs no change. A `settings` frame that carries it restyles the
+  bubbles at once; one without it keeps the last value.
+- The WPF host fills it from the worn look (`WornLooks.Get("bubble")`, row `fx.bubble.<skin>`, through
+  `BubbleSkinChoice.Current`, so a skin not drawn yet is sent as `soap`). The web room and the phone shim fill it from
+  the account's worn bubble row the same way: strip the `fx.bubble.` prefix and send the rest; send nothing or `soap`
+  when the account wears nothing. The page never checks ownership: the host only sends a skin the account owns.
+- The page draws it (`stations/breakout/bubble-wear.js` over `bubble-skins.js`, a pinned copy of
+  `prizecounter/sheet/skins.js`): the skin's live interior over the picture in place of the soap shell, and its own
+  pop particles at `bubblePop`. Disco wears the fixed palette (pink, gold, cyan, lilac); the page takes no mod colours.
+  OS reduced motion (or `reduced`, or motion `off`) holds a still interior and skips the skin's pop particles; Calm
+  (`intensity: 'calm'`) runs the interior at half speed on each skin's gentle path. The pop sound is unchanged.

@@ -201,12 +201,8 @@ namespace ConditioningControlPanel
         }
 
         /// <summary>True when the signed-in account holds the item's grant (contract 2). Prime items stay owned
-        /// after Prime ends.</summary>
-        private static bool OwnsShopItem(ShopCosmeticItem item)
-        {
-            try { return App.Ownership?.IsGranted(item.Grant) == true; }
-            catch { return false; }
-        }
+        /// after Prime ends. In the DEBUG shop preview: what the preview owns (OwnProfileLook), so the dialog agrees with the shop.</summary>
+        private static bool OwnsShopItem(ShopCosmeticItem item) => OwnProfileLook.Owns(item);
 
         /// <summary>A locked shop row: visible, dimmed, never selectable, and says where it is sold.</summary>
         private static void LockTile(Border tile, ShopCosmeticItem item)
@@ -231,7 +227,7 @@ namespace ConditioningControlPanel
             FrameHost.Children.Add(BuildFrameTile(NoneKey, Loc.Get("profile_customize_none"), null));
             foreach (var item in items)
             {
-                var image = ShopCosmetics.GetImage(item.Id);
+                var image = CosmeticsCatalog.GetFrameImage(item.Id, 56);
                 if (image == null) continue;
                 var tile = BuildFrameTile(item.Id, Loc.Get(item.NameKey), image);
                 if (!OwnsShopItem(item)) LockTile(tile, item);
@@ -252,7 +248,12 @@ namespace ConditioningControlPanel
                 Background = TileBg
             });
             if (art != null)
-                stage.Children.Add(new Image { Source = art, Stretch = Stretch.Uniform });
+            {
+                var img = new Image { Source = art, Stretch = Stretch.Uniform };
+                // A drawn frame moves in the picker too (one shared clock, only while the dialog is up and active).
+                ProfileFrameArt.Attach(img, key, 56);
+                stage.Children.Add(img);
+            }
 
             var tile = new Border
             {

@@ -18,6 +18,7 @@ namespace ConditioningControlPanel.Tests;
 /// a hue-tinted drop band, the lit pill is pressed in; the leaderboard list is a well of floating
 /// rows with the player's own row pressed in; the lobby rows carry the card / plank paint.
 /// </summary>
+[Collection(SectionTabStripCollection.Name)]
 public class PageDepthTests
 {
     private static SectionTabStrip Laid(string section, string tab, double width = 1480)
@@ -75,8 +76,16 @@ public class PageDepthTests
                 {
                     bool lit = key == strip.ActivePillKey;
                     Assert.Equal(lit ? DepthRules.ActiveSinkPx : 0, strip.PillFaceTravel(key));
-                    Assert.Equal(lit ? 0 : DepthRules.RaisedPx, strip.PillDropLength(key));
-                    if (!lit) Assert.Equal(shadow, ColorAt(strip.PillDropBrush(key)!, 0));
+                    // Declutter wave 1: a resting pill has no face, so no drop band either; the
+                    // pointer raises it (face + hue-tinted drop).
+                    Assert.Equal(0, strip.PillDropLength(key));
+                    if (!lit)
+                    {
+                        strip.DepthHoverForTests(key, true);
+                        Assert.Equal(DepthRules.RaisedPx + DepthRules.HoverLiftPx, strip.PillDropLength(key));
+                        Assert.Equal(shadow, ColorAt(strip.PillDropBrush(key)!, 0));
+                        strip.DepthHoverForTests(key, false);
+                    }
                     // The drop band never grows the pill: still 38 px.
                     Assert.Equal(NavStripRules.PillHeight, strip.PillFor(key)!.ActualHeight, 1);
                 }
@@ -104,7 +113,7 @@ public class PageDepthTests
             strip.DepthPressForTests(idle, false);
             strip.DepthHoverForTests(idle, false);
             Assert.Equal(0, strip.PillFaceTravel(idle));
-            Assert.Equal(DepthRules.RaisedPx, strip.PillDropLength(idle));
+            Assert.Equal(0, strip.PillDropLength(idle));
         });
     }
 

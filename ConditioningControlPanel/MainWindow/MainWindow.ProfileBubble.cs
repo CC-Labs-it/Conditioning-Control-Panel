@@ -173,7 +173,8 @@ namespace ConditioningControlPanel
                 ProfileBubbleInitials.Visibility = Visibility.Visible;
 
                 // Equipped preset bust (Own It cosmetic) beats initials.
-                var presetArt = CosmeticsCatalog.GetAvatarImage(App.Settings?.Current?.ProfileCosmetics?.AvatarId);
+                var own = loggedIn ? OwnProfileLook.Current : default;
+                var presetArt = CosmeticsCatalog.GetAvatarImage(own.AvatarId);
                 if (presetArt != null)
                 {
                     ProfileBubbleFill.Fill = new ImageBrush(presetArt) { Stretch = Stretch.UniformToFill };
@@ -204,6 +205,7 @@ namespace ConditioningControlPanel
                     _profileBubblePhotoBrush = null;
                 }
 
+                ApplyProfileBubbleFrame(own.FrameId);
                 RefreshProfileBubbleTierBadge();
 
                 if (ProfileBubblePopup?.IsOpen == true) RefreshProfileMenu();
@@ -212,6 +214,16 @@ namespace ConditioningControlPanel
             {
                 App.Logger?.Debug("RefreshProfileBubble: {E}", ex.Message);
             }
+        }
+
+        /// <summary>The bubble's worn profile frame (made in code, between the ring and the tier badge), or null.</summary>
+        private System.Windows.Controls.Image? _profileBubbleFrame;
+
+        /// <summary>The worn profile frame round the header bubble (Controls/ProfileBubbleFrame).</summary>
+        private void ApplyProfileBubbleFrame(string? frameId)
+        {
+            if (ProfileBubbleVisual == null || ProfileBubbleRing == null || ProfileBubbleFill == null) return;
+            _profileBubbleFrame = Controls.ProfileBubbleFrame.Apply(ProfileBubbleVisual, ProfileBubbleFill, ProfileBubbleRing, _profileBubbleFrame, frameId);
         }
 
         /// <summary>Basic / Prime badge on the bubble's rim, from the canonical gates.</summary>

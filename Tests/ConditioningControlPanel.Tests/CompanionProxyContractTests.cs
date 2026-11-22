@@ -83,4 +83,27 @@ public class CompanionProxyContractTests
     [InlineData(AiPurpose.Summary, 300)]
     public void PreviewCaps_ArePurposeSized(AiPurpose purpose, int cap) =>
         Assert.Equal(cap, AiCallOptions.PreviewTokenLimit(purpose));
+
+    // ccp-bugs #1702: the hosted 80-token reaction cap rode along to the player's own model.
+    [Theory]
+    [InlineData(AiPurpose.Reaction, 240)]
+    [InlineData(AiPurpose.Chat, 512)]
+    [InlineData(AiPurpose.Memory, 512)]
+    [InlineData(AiPurpose.Summary, 512)]
+    public void OwnEndpoint_GetsMoreRoomThanTheHostedCap(AiPurpose purpose, int expected)
+    {
+        var hosted = AiCallOptions.ForPreview(new AiCallOptions { Purpose = purpose });
+        Assert.Equal(AiCallOptions.PreviewTokenLimit(purpose), hosted.MaxTokens);
+        Assert.Equal(expected, AiCallOptions.OwnEndpointTokenLimit(hosted));
+        Assert.True(AiCallOptions.OwnEndpointTokenLimit(hosted) > hosted.MaxTokens);
+    }
+
+    [Fact]
+    public void OwnEndpoint_KeepsALargerAskAndStaysBounded()
+    {
+        var reaction = AiCallOptions.Reaction with { MaxTokens = 300 };
+        Assert.Equal(300, AiCallOptions.OwnEndpointTokenLimit(reaction));
+        var huge = AiCallOptions.Chat with { MaxTokens = 100_000 };
+        Assert.Equal(AiCallOptions.OwnEndpointMaxTokens, AiCallOptions.OwnEndpointTokenLimit(huge));
+    }
 }

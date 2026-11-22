@@ -17,11 +17,12 @@ internal static class FriendsDrawerRules
     /// dashed row that opens the same menu as a right-click.</summary>
     public static readonly IReadOnlyList<string> CardActions = new[] { "invite", "poke", "watch", "more" };
 
-    /// <summary>The menu under "more" and under a right-click, in order. A null is a divider.</summary>
-    public static IReadOnlyList<string?> MenuItems(bool squelched) => new[]
-    {
-        squelched ? "unsquelch" : "squelch", null, "remove", "block", "report",
-    };
+    /// <summary>The menu under "more" and under a right-click, in order. A null is a divider.
+    /// <paramref name="dares"/>: Dares is open on this server, so "Dare" leads the menu (owner: right-click
+    /// a friend, Dare, the slip opens with the friend filled in).</summary>
+    public static IReadOnlyList<string?> MenuItems(bool squelched, bool dares = false) => dares
+        ? new[] { "dare", null, squelched ? "unsquelch" : "squelch", null, "remove", "block", "report" }
+        : new[] { squelched ? "unsquelch" : "squelch", null, "remove", "block", "report" };
 
     /// <summary>The fixed prefix every friend code wears. The box only takes the five after it.</summary>
     public const string CodePrefix = "CCP-";

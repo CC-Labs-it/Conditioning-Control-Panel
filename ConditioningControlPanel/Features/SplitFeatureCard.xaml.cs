@@ -68,7 +68,7 @@ namespace ConditioningControlPanel.Features
         private const double PeekScrimOpacity = 0.20;
         private const double TitleExpandedScale = 1.35;
         /// <summary>Half the ring's 3px stroke, so its OUTER edge lands on the card edge.</summary>
-        private const double RingInset = 1.5;
+        private const double RingInset = 2.5;
         /// <summary>ContentRoot's clip radius (RootBorder 12 minus its 1px border).</summary>
         private const double ContentCornerRadius = 11;
         /// <summary>Pill margin + padding, taken off before capping the grown title's width.</summary>
@@ -122,6 +122,59 @@ namespace ConditioningControlPanel.Features
         public static readonly DependencyProperty HelpSectionIdBProperty =
             DependencyProperty.Register(nameof(HelpSectionIdB), typeof(string), typeof(SplitFeatureCard),
                 new PropertyMetadata(null, (d, _) => ((SplitFeatureCard)d).RefreshHelp()));
+
+        /// <summary>The V2 each half owns, by SuperEffect name. Blank = no corner on that half.</summary>
+        public static readonly DependencyProperty SuperAProperty =
+            DependencyProperty.Register(nameof(SuperA), typeof(string), typeof(SplitFeatureCard),
+                new PropertyMetadata(null, (d, _) => ((SplitFeatureCard)d).ApplySuper()));
+
+        public static readonly DependencyProperty SuperBProperty =
+            DependencyProperty.Register(nameof(SuperB), typeof(string), typeof(SplitFeatureCard),
+                new PropertyMetadata(null, (d, _) => ((SplitFeatureCard)d).ApplySuper()));
+
+        public string? SuperA { get => (string?)GetValue(SuperAProperty); set => SetValue(SuperAProperty, value); }
+        public string? SuperB { get => (string?)GetValue(SuperBProperty); set => SetValue(SuperBProperty, value); }
+
+        private Controls.SuperCorner? _cornerA, _cornerB;
+        /// <summary>How far a title pill steps in from its corner when the half wears a V2 corner.</summary>
+        private const double CornerInset = Controls.SuperCorner.Leg + 2;
+
+        /// <summary>The cut corners that switch each half's V2: top-left for A, bottom-right for B.
+        /// The title pills step in so no name sits under a corner.</summary>
+        private void ApplySuper()
+        {
+            _cornerA = Swap(_cornerA, SuperA, bottomRight: false);
+            _cornerB = Swap(_cornerB, SuperB, bottomRight: true);
+            TitlePillA.Margin = new Thickness(_cornerA != null ? CornerInset : 8, 8, 0, 0);
+            TitlePillB.Margin = new Thickness(0, 0, _cornerB != null ? CornerInset : 8, 8);
+            ApplyTitleEmphasis(_halfHover);
+            ApplyHelpForHover();
+        }
+
+        private Controls.SuperCorner? Swap(Controls.SuperCorner? old, string? name, bool bottomRight)
+        {
+            // The corner lives in its half's region, just under that half's active ring, so the ring
+            // runs over it and the half's clip cuts it with the seam.
+            var region = bottomRight ? HalfRegionB : HalfRegionA;
+            if (old != null) region.Children.Remove(old);
+            if (!Enum.TryParse<Services.Super.SuperEffect>(name, out var effect)) return null;
+            var corner = new Controls.SuperCorner(effect, bottomRight) { Inverted = () => DashboardDepth && DashCardTip.Inverted };
+            region.Children.Insert(region.Children.IndexOf(bottomRight ? ActiveRingB : ActiveRingA), corner);
+            return corner;
+        }
+
+        /// <summary>
+        /// The room a resting title has before it meets the seam: the pill sits about 27 px in
+        /// from its edge, and the seam has come that far across by then. Past this the name ends
+        /// in an ellipsis instead of being cut by the half's clip.
+        /// </summary>
+        private double RestRoom(bool halfA)
+        {
+            double w = ContentRoot.ActualWidth, h = ContentRoot.ActualHeight;
+            if (w <= 0 || h <= 0) return double.PositiveInfinity;
+            double inset = (halfA ? _cornerA : _cornerB) != null ? CornerInset : 8;
+            return Math.Max(30, w * (1 - 27 / h) - inset - 19);
+        }
 
         /// <summary>HelpContentService section for half A's "?"; no button when it has no content.</summary>
         public string? HelpSectionIdA
@@ -191,6 +244,7 @@ namespace ConditioningControlPanel.Features
             ApplyHalfMute(0);
             Loaded += OnCardLoaded;
             Loaded += (_, _) => RefreshHelp();
+            DashCardTip.Attach(this, () => DashboardDepth, () => new UIElement?[] { BtnHelpA, BtnHelpB });
             Unloaded += OnCardUnloaded;
             // A tile hidden mid-hover (tab switch out of the dashboard) can be denied its
             // MouseLeave, and would come back still filled - so drop the fill on the way out.
@@ -265,6 +319,8 @@ namespace ConditioningControlPanel.Features
         {
             UpdateRoundedClip();
             SafeRebuildGeometry();
+            CapGrownTitle(TxtTitleA, _halfHover == true);
+            CapGrownTitle(TxtTitleB, _halfHover == false);
         }
 
         /// <summary>Rounded clip for the whole content stack, matching RootBorder's inner arc
@@ -487,6 +543,9 @@ namespace ConditioningControlPanel.Features
             BtnHelpA.IsHitTestVisible = _halfHover != false;
             BtnHelpB.Opacity = _halfHover == true ? 0 : 1;
             BtnHelpB.IsHitTestVisible = _halfHover != true;
+            // The V2 corners step aside the same way, so the other half's peek wedge stays its own.
+            if (_cornerA != null) { _cornerA.Opacity = _halfHover == false ? 0 : 1; _cornerA.IsHitTestVisible = _halfHover != false; }
+            if (_cornerB != null) { _cornerB.Opacity = _halfHover == true ? 0 : 1; _cornerB.IsHitTestVisible = _halfHover != true; }
         }
 
         private void RouteClick(MouseButtonEventArgs e, bool right)
@@ -495,6 +554,16 @@ namespace ConditioningControlPanel.Features
             bool invert = DashboardDepth && App.Settings?.Current?.DashboardInvertClicks == true;
             bool toggle = right != invert;
             bool halfA = ResolveHalfA(e.GetPosition(ContentRoot));
+            // A V2 corner follows the tile's own rule: the on/off click flips that half's V2, the
+            // other click opens that half's settings.
+            var corner = e.OriginalSource is DependencyObject cs
+                ? (_cornerA != null && IsWithin(cs, _cornerA) ? _cornerA : _cornerB != null && IsWithin(cs, _cornerB) ? _cornerB : null)
+                : null;
+            if (corner != null)
+            {
+                if (toggle) { e.Handled = true; corner.Press(); return; }
+                halfA = ReferenceEquals(corner, _cornerA);
+            }
             if (right || toggle) e.Handled = true;
             var evt = toggle ? (halfA ? ToggleAEvent : ToggleBEvent) : (halfA ? ClickAEvent : ClickBEvent);
             RaiseEvent(new RoutedEventArgs(evt, this));
@@ -621,9 +690,11 @@ namespace ConditioningControlPanel.Features
         private void CapGrownTitle(TextBlock text, bool grown)
         {
             double w = ContentRoot.ActualWidth;
+            bool halfA = ReferenceEquals(text, TxtTitleA);
+            double corner = (halfA ? _cornerA : _cornerB) != null ? CornerInset - 8 : 0;
             text.MaxWidth = grown && w > 0
-                ? Math.Max(40, (w - TitlePillChrome) / TitleExpandedScale)
-                : double.PositiveInfinity;
+                ? Math.Max(40, (w - TitlePillChrome - corner) / TitleExpandedScale)
+                : RestRoom(halfA);
         }
 
         /// <summary>
@@ -842,6 +913,7 @@ namespace ConditioningControlPanel.Features
             _hostWindow.Activated += OnHostWindowStateish;
             _hostWindow.Deactivated += OnHostWindowStateish;
             _hostWindow.StateChanged += OnHostWindowStateish;
+            MotionFx.AmbientChanged += RefreshFx;
         }
 
         private void UnhookWindow()
@@ -850,6 +922,7 @@ namespace ConditioningControlPanel.Features
             _hostWindow.Activated -= OnHostWindowStateish;
             _hostWindow.Deactivated -= OnHostWindowStateish;
             _hostWindow.StateChanged -= OnHostWindowStateish;
+            MotionFx.AmbientChanged -= RefreshFx;
             _hostWindow = null;
         }
 

@@ -1,3 +1,5 @@
+using ConditioningControlPanel.Looks;
+using ConditioningControlPanel.Services.Looks;
 using SkiaSharp;
 
 namespace ConditioningControlPanel.Services.Compositor;
@@ -132,6 +134,13 @@ public sealed class SubliminalLayer : BaseLayer
         /// <summary>The card's own fades (WPF storyboard parity: 50 ms each side unless the Flash named its own).</summary>
         public double FadeInMs = FadeMs, FadeOutMs = FadeMs;
 
+        /// <summary>The worn word style (shop). Classic draws exactly the card above; any other
+        /// style draws letter by letter from <see cref="Lines"/> (one per placement).</summary>
+        public WordStyle Style;
+        public WordMotion Motion;
+        public WordFace? Look;
+        public StyledLine[] Lines = Array.Empty<StyledLine>();
+
         /// <summary>0..1 fade envelope: ramp up over <see cref="FadeInMs"/>, hold, ramp down over <see cref="FadeOutMs"/>.</summary>
         public double Envelope()
         {
@@ -153,8 +162,11 @@ public sealed class SubliminalLayer : BaseLayer
     private volatile bool _dirty = true;
     private Item? _lastDrawn;      // UI thread (Update) only
     private int _lastAlpha = -1;
+    private long _lastKey;
+    private readonly WordFrame _frame = new();   // under _sync
     // Reused paints, only touched under _sync (no per-frame allocations).
     private readonly SKPaint _bgPaint = new();
+    private readonly SKPaint _layerPaint = new();
     private readonly SKPaint _textPaint = new()
     {
         IsAntialias = true,
@@ -178,11 +190,23 @@ public sealed class SubliminalLayer : BaseLayer
     public void Flash(IReadOnlyList<Placement> placements, string text,
         SKColor bg, SKColor textColor, SKColor border,
         bool bgTransparent, double targetOpacity, int holdMs, double fadeInMs = FadeMs, double fadeOutMs = FadeMs,
-        SKTypeface? face = null)
+        SKTypeface? face = null, WordStyle style = WordStyle.Classic, WordMotion motion = WordMotion.Full)
     {
         if (string.IsNullOrWhiteSpace(text) || placements.Count == 0) return;
         fadeInMs = Math.Max(1, fadeInMs);
         fadeOutMs = Math.Max(1, fadeOutMs);
+
+        // A worn word style brings its own face and colours (WordStyles, CCP.Core); its motion is
+        // fitted inside the same fade + hold + fade, so the card stays up exactly as long.
+        WordFace? look = null;
+        if (style != WordStyle.Classic)
+        {
+            look = WordStyles.FaceOf(style);
+            text = WordStyles.TextFor(style, text);
+            face = WordStyleSkia.FaceFor(look, face ?? BoldArial);
+            if (look.Colour is uint c) textColor = WordStyleSkia.Colour(c);
+            if (look.Border is uint b) border = WordStyleSkia.Colour(b);
+        }
 
         var runs = GlyphFallback.Split(text, face ?? BoldArial, SKFontStyle.Bold);
         if (runs.Length == 0) return;
@@ -204,7 +228,11 @@ public sealed class SubliminalLayer : BaseLayer
             TextWidthPx = new float[placements.Count],
             TextHeightPx = new float[placements.Count],
             RunWidthsPx = new float[placements.Count][],
-            BaselineOffsetPx = new float[placements.Count]
+            BaselineOffsetPx = new float[placements.Count],
+            Style = style,
+            Motion = motion,
+            Look = look,
+            Lines = look == null ? Array.Empty<StyledLine>() : new StyledLine[placements.Count]
         };
         item.Remaining = item.Total;
 
@@ -223,6 +251,16 @@ public sealed class SubliminalLayer : BaseLayer
                     out var ascent, out var descent);
                 item.TextHeightPx[i] = descent - ascent;
                 item.BaselineOffsetPx[i] = -(ascent + descent) / 2f;
+                if (look != null)
+                {
+                    var line = StyledLine.Build(text, face ?? BoldArial, look.Bold ? SKFontStyle.Bold : SKFontStyle.Normal,
+                        (float)(FontDip * placements[i].Scale * look.Size));
+                    item.Lines[i] = line;
+                    var (reach, riseEm) = WordStyles.Reach(style);
+                    item.TextWidthPx[i] = (float)(line.Width * reach);
+                    item.TextHeightPx[i] = (float)((line.Descent - line.Ascent) * reach + riseEm * 2 * line.Size);
+                    item.BaselineOffsetPx[i] = -(line.Ascent + line.Descent) / 2f;
+                }
             }
             _items.Add(item);
             _dirty = true;        // new top card: paint it on the very next tick
@@ -290,16 +328,46 @@ public sealed class SubliminalLayer : BaseLayer
             var top = _items.Count > 0 ? _items[^1] : null;
             int alpha = top == null ? -1
                 : (int)Math.Clamp(top.TargetOpacity * top.Envelope() * 255, 0, 255);
-            if (!ReferenceEquals(top, _lastDrawn) || alpha != _lastAlpha)
+            // A styled card moves through its life: repaint when its frame changes, not every tick.
+            long key = 0;
+            if (top != null && top.Look != null)
+            {
+                Fill(top);
+                key = _frame.Key();
+            }
+            if (!ReferenceEquals(top, _lastDrawn) || alpha != _lastAlpha || key != _lastKey)
             {
                 _lastDrawn = top;
                 _lastAlpha = alpha;
+                _lastKey = key;
                 _dirty = true;
             }
 
             if (_items.Count == 0)
                 SetActive(false);
         }
+    }
+
+    private void Fill(Item item)
+        => WordStyles.Fill(item.Style, item.Lines.Length > 0 ? item.Lines[0].Count : 0,
+            (item.Total - item.Remaining).TotalSeconds, item.Total.TotalSeconds, item.Motion, _frame);
+
+    /// <summary>
+    /// One screen of a styled card: echo ghosts, then each letter with the card's outline copies
+    /// under its fill, at its frame place, centred on the screen like the classic card. Static so
+    /// the stills test draws exactly this.
+    /// </summary>
+    internal static void DrawStyledCard(SKCanvas canvas, SKRectI screen, float scale, StyledLine line, WordFace look,
+        WordFrame f, SKColor text, SKColor border, double alpha, SKPaint paint, SKPaint layer)
+    {
+        float cx = screen.MidX, cy = screen.MidY;
+        float left = cx - line.Width / 2f, baseline = cy - (line.Ascent + line.Descent) / 2f;
+        canvas.Save();
+        if (look.Tilt != 0) canvas.RotateDegrees((float)look.Tilt, cx, cy);
+        WordStyleSkia.DrawGhosts(canvas, line, left, baseline, cx, cy, f, text, paint, alpha);
+        WordStyleSkia.DrawLetters(canvas, line, left, baseline, f, look, text, border, Offsets, scale, alpha, paint, layer);
+        WordStyleSkia.DrawCursor(canvas, line, left, baseline, f, text, paint, alpha);
+        canvas.Restore();
     }
 
     public override void Render(SKCanvas canvas, SKRectI boundsPx, double dpiScale, TimeSpan elapsed)
@@ -313,6 +381,7 @@ public sealed class SubliminalLayer : BaseLayer
             var alphaScale = item.TargetOpacity * item.Envelope();
             if (alphaScale <= 0) return;
             var alpha = (byte)Math.Clamp(alphaScale * 255, 0, 255);
+            if (item.Look != null) Fill(item);
 
             for (int i = 0; i < item.Placements.Length; i++)
             {
@@ -324,6 +393,13 @@ public sealed class SubliminalLayer : BaseLayer
                     // Legacy card bg is fully opaque, scaled only by the window opacity.
                     _bgPaint.Color = item.Bg.WithAlpha(alpha);
                     canvas.DrawRect(p.BoundsPx, _bgPaint);
+                }
+
+                if (item.Look != null)
+                {
+                    DrawStyledCard(canvas, p.BoundsPx, p.Scale, item.Lines[i], item.Look, _frame,
+                        item.TextColor, item.Border, alphaScale, _textPaint, _layerPaint);
+                    continue;
                 }
 
                 // #615/#717: the same faces and advances the card was measured with - metrics AND
