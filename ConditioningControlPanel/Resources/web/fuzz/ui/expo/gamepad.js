@@ -1,5 +1,6 @@
 const DEADZONE = .18;
-const BUTTONS = Object.entries({jump:0, interact:2, spit:7, back:1, start:9, up:12, down:13, left:14, right:15});
+const SPRINT_BUTTON = 5;
+const BUTTONS = Object.entries({jump:0, interact:2, sprint:SPRINT_BUTTON, spit:7, back:1, start:9, up:12, down:13, left:14, right:15});
 
 function stick(x, y) {
   x = Number.isFinite(x) ? x : 0;
@@ -57,13 +58,14 @@ export function createExpoGamepad(readPads = () => globalThis.navigator?.getGame
       const input = {index, moveX:moveReady ? mx : 0, moveY:moveReady ? my : 0,
         lookX:lookReady ? lx : 0, lookY:lookReady ? ly : 0};
       for (const [action,bit] of BUTTONS) input[action] = !!(edges & (1 << bit));
+      input.sprintHeld = !!(mask & (1 << SPRINT_BUTTON)) && (input.sprint || !!(known && old.sprintHeld));
       input.spitReleased=!!(known&&(old.mask&(1<<7))&&!(mask&(1<<7)));
       input.activity = !!(input.moveX || input.moveY || input.lookX || input.lookY || edges);
       if (edges || (known && ((moving && moveReady && !old.moving) || (looking && lookReady && !old.looking)))) {
         if (claimed === null || index === selected) claimed = index;
       }
       candidates.set(index,input);
-      previous.set(index,{id:pad.id,mask,moving,looking,moveReady,lookReady});
+      previous.set(index,{id:pad.id,mask,moving,looking,moveReady,lookReady,sprintHeld:input.sprintHeld});
     }
     for (const index of previous.keys()) if (!candidates.has(index)) disconnect(index);
     selected = claimed ?? (candidates.has(selected) ? selected : candidates.keys().next().value ?? null);

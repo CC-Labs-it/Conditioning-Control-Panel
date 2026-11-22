@@ -2,6 +2,8 @@ import { createExpoGamepad } from './gamepad.js';
 import { spitControls } from './spit-controls.js';
 
 const WALK_SPEED = 4;
+const SPRINT_SPEED = 6;
+const DOUBLE_TAP_MS = 300;
 const LOOK_SPEED = 0.0025;
 const PAD_YAW_SPEED = 2.25;
 const PAD_PITCH_SPEED = 1.70;
@@ -20,6 +22,7 @@ export function createControls({ root, canvas, camera, move, spit, onInteract, o
   const pad = createExpoGamepad(() => win.navigator.getGamepads?.());
   const primaryMode = () => win.matchMedia?.('(pointer:coarse)').matches ? 'touch' : 'keyboard';
   let inputMode = initialInputMode ?? primaryMode();
+  let lastMoveKey = null, lastPressAt = 0, sprintKey = null;
   function used(mode) {
     if (inputMode === mode) return;
     inputMode = mode;
@@ -67,8 +70,12 @@ export function createControls({ root, canvas, camera, move, spit, onInteract, o
     knob.style.transform = '';
     release(canvas, oldDrag?.id); release(stick, oldStick);
   }
+  function clearKeys() {
+    keys.clear();
+    lastMoveKey = sprintKey = null;
+  }
   function reset() {
-    keys.clear(); clearPointers(); pad.reset();spitting?.cancel();
+    clearKeys(); clearPointers(); pad.reset();spitting?.cancel();
     if (doc.pointerLockElement === canvas) {
       releasing = true;
       doc.exitPointerLock?.();
@@ -93,7 +100,7 @@ export function createControls({ root, canvas, camera, move, spit, onInteract, o
     const wasLocked = locked;
     locked = doc.pointerLockElement === canvas;
     if (!locked && wasLocked) {
-      keys.clear(); clearPointers();
+      clearKeys(); clearPointers();
       if (wasLocked && !releasing && active()) onPause?.();
     }
     releasing = false;
@@ -112,14 +119,31 @@ export function createControls({ root, canvas, camera, move, spit, onInteract, o
     if (MOVE_KEYS.has(code)) {
       used('keyboard');
       if(doc.activeElement!==root||!doc.hasFocus())focusGame();
-      event.preventDefault();event.stopPropagation();keys.add(code);return;
+      event.preventDefault();event.stopPropagation();
+      if (!event.repeat && !keys.has(code)) {
+        const now = win.performance.now();
+        if (code === lastMoveKey && now - lastPressAt <= DOUBLE_TAP_MS) {
+          sprintKey = code;
+          lastMoveKey = null;
+        } else {
+          lastMoveKey = code;
+          lastPressAt = now;
+        }
+        keys.add(code);
+      }
+      return;
     }
     if(event.target?.closest?.(UI)||!['KeyE','Enter','Space'].includes(code))return;
     used('keyboard');
     event.preventDefault();event.stopPropagation();
     if(!event.repeat){if(code==='Space')onJump?.();else onInteract();}
   }
-  const keyUp=event=>{const code=codeFor(event);keys.delete(code);if(code==='KeyQ')spitting?.end('key');};
+  function keyUp(event) {
+    const code = codeFor(event);
+    keys.delete(code);
+    if (code === sprintKey) sprintKey = null;
+    if (code === 'KeyQ') spitting?.end('key');
+  }
   listen(win,'keydown',keyDown,true);listen(win,'keyup',keyUp,true);
   // A launcher can retain focus on its document after its play button is removed.
   // Only accept its background keystrokes while the embedded visit is active.
@@ -233,7 +257,8 @@ export function createControls({ root, canvas, camera, move, spit, onInteract, o
       const length = Math.hypot(x, z);
       if (!length) return;
       if (length > 1) { x /= length; z /= length; }
-      const distance = seconds * WALK_SPEED, yaw = camera.rotation.y;
+      const sprint = sprintKey !== null || (input?.sprintHeld && (input.moveX || input.moveY));
+      const distance = seconds * (sprint ? SPRINT_SPEED : WALK_SPEED), yaw = camera.rotation.y;
       const dx = (x * Math.cos(yaw) - z * Math.sin(yaw)) * distance;
       const dz = (-z * Math.cos(yaw) - x * Math.sin(yaw)) * distance;
       move(dx, dz);

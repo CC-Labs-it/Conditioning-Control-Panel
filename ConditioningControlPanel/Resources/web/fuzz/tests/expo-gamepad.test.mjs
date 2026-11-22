@@ -73,9 +73,11 @@ function controlsFixture(initialInputMode){
   const controls=createControls({root,canvas,camera,initialInputMode,move:(dx,dz)=>{x+=dx;z+=dz;},
     onInputMode:m=>modes.push(m),onJump:()=>jumps++,onInteract:()=>uses++,
     onPause:()=>pauses++,isPaused:()=>paused});
-  const tick=(n=1,dt=1/60)=>{for(let i=0;i<n;i++)controls.step(dt);};
+  let now = 0;
+  win.performance = {now: () => now};
+  const tick=(n=1,dt=1/60)=>{for(let i=0;i<n;i++){now+=dt*1000;controls.step(dt);}};
   tick();
-  const key=(type,code)=>{const e=new Event(type);Object.defineProperty(e,'code',{value:code});win.dispatchEvent(e);};
+  const key=(type,code,repeat=false)=>{const e=new Event(type);Object.assign(e,{code,repeat});win.dispatchEvent(e);};
   return {p,controls,camera,tick,modes,key,state:()=>({x,z,jumps,uses,pauses}),
     focus:state=>{focused=state;},pause:state=>{paused=state;},unplug:()=>{pads=[];}};
 }
@@ -114,4 +116,43 @@ test('a held key keeps walking after pad disconnect and input hints follow the i
   near(f.state().x,x);near(f.state().z,z-4);
   f.key('keyup','KeyW');const done=f.state();f.tick(60);
   assert.deepEqual(f.state(),done);f.controls.dispose();
+});
+
+test('a quick double-tap sprints while held and diagonal steering keeps the same speed',()=>{
+  const f = controlsFixture();
+  f.key('keydown','ArrowUp'); f.tick(1,.1);
+  f.key('keydown','ArrowUp',true); f.tick(1,.1);
+  near(f.state().z,-.8);
+  f.key('keyup','ArrowUp'); f.key('keydown','ArrowUp'); f.key('keydown','KeyD');
+  const before = f.state();
+  f.tick(60);
+  near(Math.hypot(f.state().x-before.x,f.state().z-before.z),6);
+  f.key('keyup','ArrowUp');
+  const turn = f.state();
+  f.tick(60); near(f.state().x-turn.x,4); near(f.state().z,turn.z);
+  f.controls.dispose();
+});
+
+test('late taps, different directions and a key held through pause do not start a sprint',()=>{
+  const f = controlsFixture();
+  f.key('keydown','KeyW'); f.key('keyup','KeyW'); f.tick(4,.1);
+  f.key('keydown','KeyW'); f.tick(1,.1); near(f.state().z,-.4);
+  f.key('keyup','KeyW'); f.key('keydown','ArrowLeft'); f.tick(1,.1); near(f.state().x,-.4);
+  f.pause(true); f.tick(); f.pause(false);
+  f.key('keydown','ArrowLeft',true); f.tick(1,.1); near(f.state().x,-.4);
+  f.key('keyup','ArrowLeft'); f.key('keydown','ArrowLeft'); f.tick(1,.1); near(f.state().x,-.8);
+  f.controls.dispose();
+});
+
+test('RB scales an active analog stick, requires release after pause and never moves a resting player',()=>{
+  const f = controlsFixture();
+  f.p.buttons[5]=1; f.tick(60); near(f.state().x,0);
+  f.p.axes[0]=.59; f.tick(60); near(f.state().x,3);
+  f.p.buttons[5]=0; f.tick(60); near(f.state().x,5);
+  f.p.buttons[5]=1; f.tick(60); near(f.state().x,8);
+  f.pause(true); f.tick(); f.pause(false); f.tick(60); near(f.state().x,8);
+  f.p.axes[0]=0; f.tick(); f.p.axes[0]=1; f.tick(60); near(f.state().x,12);
+  f.p.buttons[5]=0; f.tick(); f.p.buttons[5]=1;
+  const before = f.state(); f.tick(60); near(f.state().x-before.x,6);
+  f.controls.dispose();
 });
