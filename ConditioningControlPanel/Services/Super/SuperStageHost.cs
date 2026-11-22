@@ -30,7 +30,7 @@ public static class SuperStageHost
     private static int _lastX, _lastY;
     private static bool _haveCursor;
     private static double _speedPx;
-    private static bool _mouseWasDown;
+    private static bool _mouseWasDown, _pollingClicks;
     private static readonly List<(System.Drawing.Rectangle Bounds, double Dip)> Screens = new();
 
     /// <summary>Cursor in virtual-desktop device pixels, as of the last step.</summary>
@@ -97,6 +97,8 @@ public static class SuperStageHost
         Stage.Reset();
         _steamAge = 0;
         _haveCursor = false;
+        _mouseWasDown = false;
+        _pollingClicks = false;
     }
 
     /// <summary>A layer saw this monitor: remember its pixels-per-DIP for the pool's tuning.</summary>
@@ -157,10 +159,9 @@ public static class SuperStageHost
         Stage.Pool.Eats = !centred;   // a parked pool pulls but never pops on its own
         Stage.Pool.Floor = WhirlpoolOptions.Floor(set?.WhirlpoolSmallest ?? WhirlpoolOptions.SmallestDefault);
         Stage.Pool.Restless = restless;
-        // A restless pool feeds on clicks: one kick per press (left or right), read on the rising edge.
-        bool down = restless && ((GetAsyncKeyState(VK_LBUTTON) | GetAsyncKeyState(VK_RBUTTON)) & 0x8000) != 0;
-        bool pressed = down && !_mouseWasDown;
-        _mouseWasDown = down;
+        // A restless pool feeds on clicks: one kick per press (left or right). Read only while it is on.
+        bool pressed = Stage.PoolOn && restless && PollClick();
+        if (!(Stage.PoolOn && restless)) { _mouseWasDown = false; _pollingClicks = false; }
         if (Stage.PoolOn)
         {
             if (pressed) Stage.Pool.Kick();
@@ -192,6 +193,24 @@ public static class SuperStageHost
     /// the edges at first, the whole screen later. The live step reads the player's Creep speed.</summary>
     internal static double SteamLevel(double ageSeconds)
         => SteamOptions.Level(ageSeconds, SteamOptions.CreepSeconds(SteamOptions.Normal));
+
+    /// <summary>One press since the last poll, left or right: the rising edge of the held bit, or the
+    /// "pressed since the last call" bit for a tap shorter than one step. The first poll after a pause
+    /// only clears that bit, so an old press never kicks.</summary>
+    private static bool PollClick()
+    {
+        short l = GetAsyncKeyState(VK_LBUTTON), r = GetAsyncKeyState(VK_RBUTTON);
+        bool down = ((l | r) & 0x8000) != 0, tapped = ((l | r) & 0x0001) != 0;
+        bool first = !_pollingClicks;
+        _pollingClicks = true;
+        bool pressed = ClickPressed(down, tapped, _mouseWasDown, first);
+        _mouseWasDown = down;
+        return pressed;
+    }
+
+    /// <summary>The click rule, pure for tests.</summary>
+    internal static bool ClickPressed(bool down, bool tappedSinceLastPoll, bool wasDown, bool firstPoll)
+        => !firstPoll && (tappedSinceLastPoll || (down && !wasDown));
 
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT { public int X, Y; }

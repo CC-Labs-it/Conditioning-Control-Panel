@@ -45,7 +45,23 @@ public sealed class Whirlpool
     public double ShortSide { get; private set; } = 1080;
     private bool _placed;
 
-    public bool Live => Size > LiveSize;
+    /// <summary>
+    /// Big enough to act: pull, swirl the fog, eat, take words. A pool held up only by its
+    /// <see cref="Floor"/> is drawn but does not act (owner intent for ccp-bugs #1719 is "visible all
+    /// the time", not "pulls all the time"): it acts once it has grown <see cref="FloorLiveMargin"/>
+    /// past the floor. With no floor this is the shipped rule.
+    /// </summary>
+    public bool Live => Size > LiveThreshold;
+    /// <summary>How far past its <see cref="Floor"/> a pool must grow before it acts.</summary>
+    public const double FloorLiveMargin = 0.05;
+    private double LiveThreshold
+    {
+        get
+        {
+            double floor = Math.Clamp(Floor, 0, 1);
+            return floor > 0 ? Math.Max(LiveSize, floor + FloorLiveMargin) : LiveSize;
+        }
+    }
     public double Eased => Ease(Size);
     /// <summary>The player's "Pool size" as a share of the stock reach (<see cref="WhirlpoolOptions.ReachScale"/>). 1 = as shipped.</summary>
     public double ReachScale { get; set; } = 1;
@@ -111,7 +127,8 @@ public sealed class Whirlpool
         else if (resting) Size += dt / GrowSeconds;
         else Size -= dt / ShrinkSeconds * pace;
         double floor = Math.Clamp(Floor, 0, 1);
-        if (Size < floor) Size = Math.Min(floor, before + dt / GrowSeconds);
+        // Under the floor it climbs at least at the rest pace, and faster when the rule above grew it faster.
+        if (Size < floor) Size = Math.Max(Size, Math.Min(floor, before + dt / GrowSeconds));
         Size = Math.Clamp(Size, 0, 1);
         Angle += dt * Spin * (gentle ? 0.5 : 1);
         if (Angle > 1e6) Angle -= 1e6;
