@@ -1,10 +1,11 @@
 import {createBackOfHouse} from './back-of-house.js';
 import {createSpit} from './spit.js';
+import {humanHabitat} from './habitat.js';
 import { mountSettlement } from './settlement.js';
 import { visitorHands } from './carried.js';
 import { firstPress } from './first-press.js';
 import { narratorAwareness } from './awareness.js';
-import { livePanel, placard, runMonitor, terminal } from './display.js';
+import { livePanel } from './display.js';
 import { createVisit } from './visit.js';
 import { createWornHooves, mountHoofLab } from './hoof-lab.js';
 import { mountAquariumLife } from './aquarium-life.js';
@@ -21,6 +22,7 @@ export function createExhibits(api) {
   const hands=visitorHands(api,state);api.hold=hands.hold;api.drop=hands.drop;
   const staff=createBackOfHouse(api,state),spit=createSpit(api,state);
   const founding=firstPress(api,state),worn=createWornHooves(api,state);
+  const habitat=humanHabitat(api,state,founding.habitatPress);
   api.endVisit=async ending=>{
     if(returning||disposed)return;returning=true;state.ending=ending;
     const titles={renewal:'Renewal',conduct:'Acceptance by Conduct',stayed:'Stayed',finger:'Finger',model:'Model Visitor',full:'The Thirteenth'};
@@ -59,22 +61,10 @@ export function createExhibits(api) {
       const panel=livePanel(THREE,face,dimensions);
       clean.push(()=>panel.dispose()); return panel;
     }
-    clean.push(spit.mount(id,group));
+    clean.push(spit.mount(id,group),habitat.mount(id,group));
     staff.mount(id,group,bind,surface,clean);founding.mount(id,group,bind,surface,clean);
     if (id==='hoof') {
       ui.lab=mountHoofLab(api,group,state,worn);clean.push(ui.lab.dispose);
-    }
-    if (id==='habitat') {
-      const display=surface('habitat_display'), clauses=surface('habitat_plaque');
-      let clause=state.file.clauses[0]||'No accepted clauses on file.';
-      placard(clauses,'Accepted clauses   /   Visitor record',clause);
-      ui.refresh=()=>runMonitor(display,{name:state.file.name,presses:state.file.taps+state.taps,
-        yes:state.file.total+state.feeds,pressed:ui.keyHeld,
-        time:new Date(Math.max(0,(ctx.state?.clock||0)+state.habitatTime*1000)).toISOString().slice(11,19)});
-      bind('habitat_glass','Tap the glass',()=>{ui.keyHeld=true;ui.releaseAt=hudClock+.19;play('glass');cue(state.glass());ui.refresh();},2.6);
-      bind('feeding_slot','Feed one Yes',()=>{state.feeds++;play('feed');cue('keep_5');ui.refresh();});
-      bind('habitat_plaque','Read next accepted clause',()=>{clause=state.nextClause();placard(clauses,'Accepted clauses   /   Visitor record',clause);if(!state.heard.has('keep_6'))once('keep_6');else say(clause);});
-      ui.refresh();
     }
     if (id==='twelve') {
       for (const llama of LLAMAS) {
@@ -160,7 +150,7 @@ export function createExhibits(api) {
   }
   function tick(dt,id) {
     if(ctx.paused)return;
-    worn.tick(dt);spit.tick(dt);
+    worn.tick(dt);spit.tick(dt);habitat.tick(dt,id);
     if(returning&&departureDone){leave();return;}
     staff.tick(dt,id);hands.tick();hudClock+=dt;awareness.tick(dt,id,camera,api.actionSerial());
     if(hudClock>=900)once('pa_closing');
@@ -175,12 +165,6 @@ export function createExhibits(api) {
     ui.waterLife?.tick(dt,ctx.gentle||ctx.reduced);
     founding.tick(dt,id);
     if(id==='hall' && Math.hypot(camera.position.x,camera.position.z+9)<5.2)once('pa_hall1');
-    if(id==='habitat') {
-      const old=Math.floor(state.habitatTime);state.habitatTime+=dt;
-      const release=ui.keyHeld && hudClock>=ui.releaseAt;
-      if(release)ui.keyHeld=false;
-      if(release || Math.floor(state.habitatTime)!==old)ui.refresh();
-    }
     if(id==='hoof')ui.lab?.tick(dt);
     if(id==='twelve' && state.file.herd.length===12 && ui.photo){
       if(Math.hypot(camera.position.x,camera.position.z+25.15)<4||ui.aperture>0)
