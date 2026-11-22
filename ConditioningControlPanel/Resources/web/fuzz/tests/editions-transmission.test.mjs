@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as Ed from '../ui/edition.js';
 import {
-  TRANSMISSION_COPY, TRANSMISSION_PLACEHOLDERS, cardWords, sizeLine, statusLine, createTransmission,
+  TRANSMISSION_COPY, TRANSMISSION_LINES, cardWords, sizeLine, statusLine, createTransmission,
   autoOfferDue, penSignDue, llama8Due, mountTransmission, transmissionAtWormhole,
 } from '../ui/transmission.js';
 
@@ -45,9 +45,8 @@ test('the approved words, character for character', () => {
   assert.deepEqual([fetch.title, fetch.body, fetch.size, fetch.yes, fetch.notNow],
     ['INCOMING TRANSMISSION', TRANSMISSION_COPY.body, '131 MB, saved to your CCP content folder.', 'YES', 'NOT NOW']);
   assert.equal(nudge.size, '', 'small: no size line');
-  assert.deepEqual([nudge.title, nudge.yes, nudge.notNow], ['INCOMING TRANSMISSION', 'YES', 'NOT NOW']);
-  for (const [slot, text] of Object.entries(TRANSMISSION_PLACEHOLDERS)) assert.match(text, /^\[PLACEHOLDER S6-[a-z0-9-]+\] /, slot);
-  for (const text of [...Object.values(TRANSMISSION_COPY), ...Object.values(TRANSMISSION_PLACEHOLDERS)]) {
+  assert.deepEqual([nudge.title, nudge.yes, nudge.notNow], ['INCOMING TRANSMISSION', 'THE FULL GAME', 'NOT NOW'], 'small: THE FULL GAME, not YES');
+  for (const text of [...Object.values(TRANSMISSION_COPY), ...Object.values(TRANSMISSION_LINES)]) {
     assert.doesNotMatch(text, /[–—!]/, 'no dashes, no exclamation marks');
   }
 });
@@ -64,7 +63,7 @@ test('YES sends exactly one expo-fetch, and only from a press', () => {
   assert.deepEqual(sent, ['expo-fetch']);
   tx.progress(40); tx.progress(30); tx.progress(140);
   assert.equal(tx.view.pct, 100, 'never back, never past 100');
-  assert.equal(statusLine(tx.view), '[PLACEHOLDER S6-progress] Receiving: 100%');
+  assert.equal(statusLine(tx.view), 'Receiving. 100%');
 });
 
 test('ready, failed, stop and try again', () => {
@@ -73,7 +72,7 @@ test('ready, failed, stop and try again', () => {
   const tx = createTransmission({ kind: 'fetch', send: (type) => sent.push(type), inPress: () => press.on });
   tx.yes();
   tx.failed('disk');
-  assert.equal(tx.view.state, 'failed'); assert.equal(statusLine(tx.view), TRANSMISSION_PLACEHOLDERS.disk);
+  assert.equal(tx.view.state, 'failed'); assert.equal(statusLine(tx.view), TRANSMISSION_LINES.disk);
   tx.failed('whatever');
   assert.equal(tx.view.reason, 'refused', 'an unknown reason reads as refused');
   assert.equal(tx.yes(), true, 'offered again after a failure');
@@ -222,7 +221,7 @@ test('mounted in small: the nudge card, then the llama-8 card', (t) => {
   assert.equal(page.opened[0].spec.body, TRANSMISSION_COPY.smallBody);
   assert.ok(page.opened[0].spec.node.children.some((c) => c.textContent === TRANSMISSION_COPY.smallLine));
   assert.ok(!page.opened[0].spec.node.children.some((c) => /MB/.test(c.textContent)), 'no size line in small');
-  assert.equal(page.opened[1].spec.title, TRANSMISSION_PLACEHOLDERS.llama8Title);
+  assert.equal(page.opened[1].spec.title, TRANSMISSION_LINES.llama8Title);
   page.win.navigator.userActivation.isActive = true;
   page.opened[0].press(0);
   page.opened[1].press(0);

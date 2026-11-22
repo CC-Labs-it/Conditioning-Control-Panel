@@ -11,37 +11,43 @@
  *   `save-result {ok, reason}` says it went, or why. One call at a time: a press while one flies does nothing.
  *   In small, after a send that went, one line points at the full game: the `save-sleep` nudge (the carry's own id).
  *
- * Nothing here reads the edition. COPY: every string is a PLACEHOLDER (survey list in tests/editions-placeholders). */
+ * Nothing here reads the edition. COPY: APPROVED AND FROZEN (owner 2026-11-22, fourth dialog): character for character, pinned in
+ * tests/editions-placeholders.test.mjs. */
 
 import { saveOfferFrame, readSaveIncoming, sendNudge } from './edition.js';
 import { realPress } from './nudges.js';
 
 export const SAVE_CARRY_COPY = Object.freeze({
-  send: '[PLACEHOLDER S7-save-send] Send this run to my account',
-  ask: '[PLACEHOLDER S7-save-ask] Bring my account\'s run here',
-  sent: '[PLACEHOLDER S7-save-sent] Sent. Your account keeps this run.',
-  'sign-in': '[PLACEHOLDER S7-save-reason-sign-in] Sign in first.',
-  'too-big': '[PLACEHOLDER S7-save-reason-too-big] This run is too big to send.',
-  offline: '[PLACEHOLDER S7-save-reason-offline] No connection. Try again later.',
-  refused: '[PLACEHOLDER S7-save-reason-refused] That did not go through.',
-  none: '[PLACEHOLDER S7-save-reason-none] Your account has no run yet.',
-  broken: '[PLACEHOLDER S7-save-broken] That run could not be read. Yours is unchanged.',
-  incomingTitle: '[PLACEHOLDER S7-save-incoming-title] A run from your account',
-  incomingBody: '[PLACEHOLDER S7-save-incoming-body] Saved on {from}, {when}. Play it here instead of this one?',
-  fromWeb: '[PLACEHOLDER S7-save-from-web] the website',
-  fromDesktop: '[PLACEHOLDER S7-save-from-desktop] the app',
-  accept: '[PLACEHOLDER S7-save-accept] Play that run',
-  keep: '[PLACEHOLDER S7-save-keep] Keep mine',
-  fullLine: '[PLACEHOLDER S7-save-full-line] The full game can pick it up.',
-  fullButton: '[PLACEHOLDER S7-save-full-button] See the full game',
+  send: "Send this run to my account",
+  ask: "Fetch my account's run",
+  sent: "Sent. Your account holds this run.",
+  'sign-in': "Sign in first.",
+  'too-big': "This run is too big to send.",
+  offline: "No signal. Try again later.",
+  refused: "That did not go through.",
+  none: "Your account holds no run yet.",
+  broken: "That run could not be read. Yours is untouched.",
+  incomingTitle: "A run from your account",
+  incomingBody: "Saved on {from}, {when}. Play it here instead of this one?",
+  fromWeb: "the website",
+  fromDesktop: "the app",
+  accept: "Play that run",
+  keep: "Keep mine",
+  fullLine: "The full game can pick it up.",
+  fullButton: "The full game",
 });
 export const SAVE_REASONS = Object.freeze(['sign-in', 'too-big', 'offline', 'refused', 'none']);
 
 /** The incoming card's sentence: where from, and when in the player's own local date and time. */
-export function incomingLine({ from, savedAt }, locale = undefined) {
+const MONTHS = Object.freeze(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']);
+/** {when} as the owner wrote it: "22 Nov 14:05", day, short month, 24-hour time, in the player's local time. */
+export function whenLine(savedAt) {
+  const d = new Date(savedAt), two = (n) => String(n).padStart(2, '0');
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${two(d.getHours())}:${two(d.getMinutes())}`;
+}
+export function incomingLine({ from, savedAt }) {
   const where = from === 'desktop' ? SAVE_CARRY_COPY.fromDesktop : SAVE_CARRY_COPY.fromWeb;
-  const when = new Date(savedAt).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' });
-  return SAVE_CARRY_COPY.incomingBody.replace('{from}', where).replace('{when}', when);
+  return SAVE_CARRY_COPY.incomingBody.replace('{from}', where).replace('{when}', whenLine(savedAt));
 }
 
 /** The carry's rules, no page. exportSave(): the whole save string now. accept(save): the caller's load path, answers

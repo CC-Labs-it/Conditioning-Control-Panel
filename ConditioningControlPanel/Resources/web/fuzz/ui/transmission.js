@@ -27,22 +27,25 @@ export const TRANSMISSION_COPY = Object.freeze({
   /* Small: the same title and first sentence, then this line (same record). */
   smallBody: 'A message from the future is transmitting some data.',
   smallLine: 'It does not fit here. The full game can receive it.',
+  /* Small: its first button (fourth dialog); the full card keeps YES. */
+  smallYes: 'THE FULL GAME',
 });
 
-/** Every other line: NOT APPROVED. One table, one survey for the owner; the slot ids are listed in the lane S note. */
-export const TRANSMISSION_PLACEHOLDERS = Object.freeze({
-  progress: '[PLACEHOLDER S6-progress] Receiving: {pct}%',
-  arrived: '[PLACEHOLDER S6-arrived] Transmission received.',
-  arrivedClose: '[PLACEHOLDER S6-arrived-close] Close',
-  offline: '[PLACEHOLDER S6-failed-offline] No connection. It can try again later.',
-  disk: '[PLACEHOLDER S6-failed-disk] Not enough room on the disk.',
-  refused: '[PLACEHOLDER S6-failed-refused] The transmission was refused. It can try again later.',
-  stop: '[PLACEHOLDER S6-stop] Stop',
-  stopped: '[PLACEHOLDER S6-stopped] Stopped. What arrived is kept.',
-  penSign: '[PLACEHOLDER S6-pen-sign] Transmission',
-  llama8Title: '[PLACEHOLDER S6-llama8-title] Eight llamas',
-  llama8Body: '[PLACEHOLDER S6-llama8-body] The herd is ready for the Expo. The Expo is in the full game.',
-  llama8Button: '[PLACEHOLDER S6-llama8-button] Get the full game',
+/** Every other line of the cards: APPROVED AND FROZEN (owner 2026-11-22, fourth dialog): character for character, pinned in
+ * tests/editions-placeholders.test.mjs. */
+export const TRANSMISSION_LINES = Object.freeze({
+  progress: "Receiving. {pct}%",
+  arrived: "Transmission received.",
+  arrivedClose: "CLOSE",
+  offline: "No signal. The future will try again.",
+  disk: "Not enough room on the disk.",
+  refused: "The transmission did not check out. It can be sent again.",
+  stop: "STOP",
+  stopped: "Stopped. What arrived is kept.",
+  penSign: "TRANSMISSION WAITING",
+  llama8Title: "A full pen.",
+  llama8Body: "Eight llamas open something this edition cannot show. It is in the full game.",
+  llama8Button: "The full game",
 });
 
 export const FAIL_REASONS = Object.freeze(['offline', 'disk', 'refused']);
@@ -57,13 +60,13 @@ export function sizeLine(mb) {
 /** The card's words for a kind: { title, body, size, line, yes, notNow }. */
 export function cardWords(kind, mb) {
   const C = TRANSMISSION_COPY;
-  if (kind === 'nudge') return { title: C.title, body: C.smallBody, size: '', line: C.smallLine, yes: C.yes, notNow: C.notNow };
+  if (kind === 'nudge') return { title: C.title, body: C.smallBody, size: '', line: C.smallLine, yes: C.smallYes, notNow: C.notNow };
   return { title: C.title, body: C.body, size: sizeLine(mb), line: '', yes: C.yes, notNow: C.notNow };
 }
 
 /** The status line for a state of the card ('' while it only asks). */
 export function statusLine({ state, pct = 0, reason = null }) {
-  const P = TRANSMISSION_PLACEHOLDERS;
+  const P = TRANSMISSION_LINES;
   if (state === 'fetching') return P.progress.replace('{pct}', String(pct));
   if (state === 'arrived') return P.arrived;
   if (state === 'failed') return P[FAIL_REASONS.includes(reason) ? reason : 'refused'];
@@ -178,7 +181,7 @@ export function mountTransmission({ doc = document, win = doc.defaultView, cards
     const due = tx && penSignDue({ llamas: herd(), extras, open: !!card, state: tx.view.state });
     if (due && !sign && pen?.isConnected) {
       sign = doc.createElement('button');
-      sign.id = 'llama-sign'; sign.type = 'button'; sign.textContent = TRANSMISSION_PLACEHOLDERS.penSign;
+      sign.id = 'llama-sign'; sign.type = 'button'; sign.textContent = TRANSMISSION_LINES.penSign;
       const r = pen.getBoundingClientRect();
       sign.style.left = `${Math.round(r.left)}px`; sign.style.top = `${Math.round(r.bottom + 4)}px`;
       sign.addEventListener('click', () => open());
@@ -196,7 +199,7 @@ export function mountTransmission({ doc = document, win = doc.defaultView, cards
     const status = el('p', 'tx-status');
     status.setAttribute('role', 'status');
     const bar = el('div', 'tx-bar'); const fill = doc.createElement('i'); bar.appendChild(fill);
-    const stop = el('button', 'tx-stop', TRANSMISSION_PLACEHOLDERS.stop); stop.type = 'button';
+    const stop = el('button', 'tx-stop', TRANSMISSION_LINES.stop); stop.type = 'button';
     stop.addEventListener('click', (ev) => tx.stop(ev));
     let yesBtn = null, shutBtn = null;
     const paint = (s = tx.view) => {
@@ -206,7 +209,7 @@ export function mountTransmission({ doc = document, win = doc.defaultView, cards
       fill.style.width = `${s.pct}%`;
       stop.hidden = s.state !== 'fetching';
       if (yesBtn) yesBtn.hidden = s.state === 'fetching' || s.state === 'arrived';
-      if (shutBtn) shutBtn.textContent = s.state === 'arrived' ? TRANSMISSION_PLACEHOLDERS.arrivedClose : w.notNow;
+      if (shutBtn) shutBtn.textContent = s.state === 'arrived' ? TRANSMISSION_LINES.arrivedClose : w.notNow;
     };
     card = cards.open({
       className: 'tx-card', title: w.title, body: w.body, node, front,
@@ -226,7 +229,7 @@ export function mountTransmission({ doc = document, win = doc.defaultView, cards
   }
 
   function openLlama8() {
-    const P = TRANSMISSION_PLACEHOLDERS;
+    const P = TRANSMISSION_LINES;
     cards.open({
       title: P.llama8Title, body: P.llama8Body,
       buttons: [

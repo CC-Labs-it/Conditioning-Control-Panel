@@ -3,18 +3,17 @@
  * covers the button, and shows once per card. Whether a page shows them is the caller's question to ui/edition.js
  * (isSmall); nothing here reads the edition.
  *
- * locked-tile: the small edition shows nothing locked in the game today (cut rows are never offered), so its only door
- * is the seal notice's "See plans" (main.js). Proposal in the lane S note, Run 10.
+ * locked-tile: one greyed tile at the end of the small shop list (ui/shop-locked.js), and the seal notice's "See plans".
  *
- * COPY: every string is a PLACEHOLDER until the owner words it (the survey list is pinned in
- * tests/editions-placeholders.test.mjs). */
+ * COPY: APPROVED AND FROZEN (owner 2026-11-22, fourth dialog): character for character, pinned in
+ * tests/editions-placeholders.test.mjs. */
 
 import { sendNudge } from './edition.js';
 
 export const NUDGE_COPY = Object.freeze({
-  endingButton: '[PLACEHOLDER S7-ending-button] The full game has more endings',
-  pauseLine: '[PLACEHOLDER S7-pause-line] This is the small edition.',
-  pauseButton: '[PLACEHOLDER S7-pause-button] See the full game',
+  endingButton: "More endings in the full game",
+  pauseLine: "This is the small edition.",
+  pauseButton: "The full game",
 });
 
 /** A real press, the ONE rule for every door (lane S7b): the press event when the caller has one (`isTrusted`, which a

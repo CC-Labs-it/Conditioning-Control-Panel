@@ -32,7 +32,8 @@ import { setEdition, expoArrived, editionState, renewalAllowed, sendNudge, isSma
 import { mountSaveCarry } from './ui/save-carry.js';   // the pause card's carry to and from the account (CONTRACT.md 6.3)
 import { mountLlamaPen } from './ui/llama-pen.js';
 import { mountTransmission } from './ui/transmission.js';
-import { endingNudge, mountPauseNudge } from './ui/nudges.js';   // small: the ending and pause doors to the full game   // the transmission card, the pen sign and the llama-8 card
+import { endingNudge, mountPauseNudge } from './ui/nudges.js';
+import { mountLockedTile } from './ui/shop-locked.js';   // small: one greyed tile at the end of the shop   // small: the ending and pause doors to the full game   // the transmission card, the pen sign and the llama-8 card
 import { mountHomeTip } from './ui/phone.js';
 import { previewBarAllowed } from './ui/preview-bar-model.js';
 
@@ -379,6 +380,7 @@ function start(init) {
     syncMedia();
     engine.mountAll(!!saved?.run);
     mountSaveCarry({ doc: document, win: window, cards: ui.cards, on: bridge.on, send: bridge.send, slot: saveSlotOn(ed), small: isSmall(ed), exportSave: () => serialize(run, life, extras), accept: acceptCarried, ed });
+    if (isSmall(ed)) mountLockedTile({ doc: document, win: window, send: bridge.send, ed });   // small: the one locked tile
     if (isSmall(ed)) mountPauseNudge({ doc: document, win: window, send: bridge.send, ed });   // small: one quiet line on the pause card
     const penView = pen();   // the herd, top left, from the first second
     /* The transmission (CONTRACT.md 6.5): at 4 llamas the card, then the pen sign; in small the nudge and the llama-8 card. */

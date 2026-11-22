@@ -134,7 +134,8 @@ export function expoArrived(base) {
 export function transmissionKind(llamas, ed = editionState()) {
   if (!(llamas >= TRANSMISSION_AT_LLAMAS)) return null;
   if (ed.edition === 'small') return 'nudge';
-  return ed.platform === 'desktop' && ed.expo?.state === 'absent' ? 'fetch' : null;
+  /* The size must be on the card before a download is offered (owner, fourth dialog): no size from the host, no offer. */
+  return ed.platform === 'desktop' && ed.expo?.state === 'absent' && expoMb(ed) > 0 ? 'fetch' : null;
 }
 
 /** What a nudge asks for here: the plan card in the app, an account for a visitor, the download for a signed-in one. */

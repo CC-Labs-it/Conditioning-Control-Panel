@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Ed from '../ui/edition.js';
 import { TRANSMISSION_MIN_RUN_MS, LLAMA8_GAP_MS } from '../data/editions.js';
-import { autoCardDue, penSignDue, mountTransmission, TRANSMISSION_PLACEHOLDERS } from '../ui/transmission.js';
+import { autoCardDue, penSignDue, mountTransmission, TRANSMISSION_LINES } from '../ui/transmission.js';
 
 const HOSTED = { hostname: 'app.cclabs.app', hosted: true };
 const small = Ed.readEdition({ caps: { edition: 'small', platform: 'web' } }, HOSTED);
@@ -69,6 +69,6 @@ test('mounted: nothing at second 5, the card at 3:00, and a herd that grows mid-
   herd = 4; now += 1000; tx2.tick();
   assert.equal(grow.opened.length, 1, 'the herd reached four past 3:00: the card at that moment');
   assert.equal(extras.transmissionSeen, 1);
-  assert.notEqual(grow.opened[0].title, TRANSMISSION_PLACEHOLDERS.llama8Title);
+  assert.notEqual(grow.opened[0].title, TRANSMISSION_LINES.llama8Title);
   tx2.close();
 });
