@@ -1,0 +1,1116 @@
+{
+  "scope": "Round 4 checkpoints and final verification",
+  "conditions": {
+    "browser": "Local Chrome, normal ending purchase and wormhole prompt",
+    "controls": "Native keyboard and emulated touch input. Room jumps between camera marks shorten travel. Actions go through the normal interaction controls.",
+    "windows": "Offscreen WPF WebView2 mapped directly to the v4 local assets, with standard gamepad input supplied through navigator.getGamepads.",
+    "renewalFixture": "The threshold case starts with eight completed ticket boxes, then uses ordinary shelf, till, door and walk controls. The day-ticket case earns its stamp from the original founding exhibit."
+  },
+  "speech": [
+    {
+      "input": "desktop",
+      "maximumSimultaneousNativeVoices": 1,
+      "hoofEvents": [
+        {
+          "id": "hoof_1",
+          "event": "playing",
+          "page": "idle"
+        },
+        {
+          "id": "hoof_1",
+          "event": "ended",
+          "page": "idle"
+        },
+        {
+          "id": "hoof_2",
+          "event": "playing",
+          "page": "idle"
+        },
+        {
+          "id": "hoof_2",
+          "event": "ended",
+          "page": "checkbox"
+        },
+        {
+          "id": "hoof_3",
+          "event": "playing",
+          "page": "checkbox"
+        },
+        {
+          "id": "hoof_3",
+          "event": "ended",
+          "page": "checkbox"
+        }
+      ]
+    },
+    {
+      "input": "touch",
+      "maximumSimultaneousNativeVoices": 1,
+      "hoofEvents": [
+        {
+          "id": "hoof_1",
+          "event": "playing",
+          "page": "idle"
+        },
+        {
+          "id": "hoof_1",
+          "event": "ended",
+          "page": "idle"
+        },
+        {
+          "id": "hoof_2",
+          "event": "playing",
+          "page": "idle"
+        },
+        {
+          "id": "hoof_2",
+          "event": "ended",
+          "page": "checkbox"
+        },
+        {
+          "id": "hoof_3",
+          "event": "playing",
+          "page": "checkbox"
+        },
+        {
+          "id": "hoof_3",
+          "event": "ended",
+          "page": "checkbox"
+        }
+      ]
+    }
+  ],
+  "admission": [
+    {
+      "input": "touch",
+      "walkedMetres": 1.38,
+      "ticketBoxes": 12,
+      "escapeResumed": true,
+      "panicDisposed": true,
+      "ticketBelowToolbarPx": 8,
+      "longCaptionClearancePx": {
+        "expo-jump": 10,
+        "expo-interact": 70,
+        "expo-stick": 32
+      }
+    },
+    {
+      "input": "desktop",
+      "walkedMetres": 1.16,
+      "ticketBoxes": 12,
+      "escapeResumed": true,
+      "panicDisposed": true
+    }
+  ],
+  "firstPress": [
+    {
+      "input": "desktop",
+      "ropePosts": 2,
+      "removedPost": true,
+      "relocationCount": 13,
+      "tenSecondCount": 26,
+      "sealVisible": true,
+      "stamps": [
+        "Pressed"
+      ]
+    },
+    {
+      "input": "phone",
+      "ropePosts": 2,
+      "removedPost": true,
+      "relocationCount": 13,
+      "tenSecondCount": 26,
+      "sealVisible": true,
+      "stamps": [
+        "Pressed"
+      ]
+    }
+  ],
+  "hoof": {
+    "acceptedCheck": "Gentle touch with authored grids and normal-speed recorded lines",
+    "fiveCenteredAttempts": "One miss after the spoken instruction ended",
+    "edge": "One cap advanced to the picture test",
+    "selectedMask": 11,
+    "filledSubmit": "Stayed on the picture page",
+    "emptySubmit": "Earned Hoofed",
+    "wearable": "First Press stayed at zero with gloves on. The turnstile admitted a llama. Returning the gloves restored button interaction."
+  },
+  "shop": {
+    "underEight": {
+      "readmitted": true,
+      "receipt": [
+        "Visitor Services",
+        "",
+        "Pressed the founding exhibit",
+        "Deviation",
+        "",
+        "Add a bag? YES",
+        "Yes",
+        "",
+        "Round up to full agreement? YES",
+        "Yes",
+        "",
+        "Stop being asked? NO",
+        "Yes",
+        "",
+        "Instructions followed",
+        "3",
+        "",
+        "Deviations converted to Yes",
+        "1",
+        "",
+        "Total agreements",
+        "4",
+        "",
+        "First Press register",
+        "1",
+        "",
+        "History absorbed",
+        "0 of 40",
+        "",
+        "Ticket",
+        "1 of 12",
+        "",
+        "Item",
+        "The moved button"
+      ]
+    },
+    "eightStampFixture": {
+      "recap": true,
+      "receipt": [
+        "Visitor Services",
+        "",
+        "Add a bag? YES",
+        "Yes",
+        "",
+        "Round up to full agreement? YES",
+        "Yes",
+        "",
+        "Stop being asked? NO",
+        "Yes",
+        "",
+        "Instructions followed",
+        "3",
+        "",
+        "Deviations converted to Yes",
+        "0",
+        "",
+        "Total agreements",
+        "3",
+        "",
+        "First Press register",
+        "0",
+        "",
+        "History absorbed",
+        "0 of 40",
+        "",
+        "Ticket",
+        "8 of 12",
+        "",
+        "Item",
+        "The moved button"
+      ]
+    }
+  },
+  "windows": {
+    "checks": {
+      "admission": "atrium",
+      "disconnectDriftMetres": 0,
+      "firstPressDelta": 1,
+      "jumpMetres": 0.2123564159640148,
+      "panic": true,
+      "pauseNext": "new-run",
+      "sticks": {
+        "metres": 0.4620623469353971,
+        "yawRadians": -0.21086140685994226
+      },
+      "ticketBoxes": 12
+    },
+    "input": "Synthetic standard gamepad supplied to navigator.getGamepads in an isolated WPF WebView2",
+    "native": {
+      "getGamepads": "function",
+      "hostBridge": true,
+      "origin": "https://localhost",
+      "originalPadCount": 0,
+      "secureContext": true
+    },
+    "passed": true,
+    "webView2": "157.0.4341.60",
+    "wpfAssembly": "1.0.2792.45"
+  },
+  "movie": {
+    "programs": [],
+    "stream_groups": [],
+    "streams": [
+      {
+        "codec_name": "h264",
+        "codec_type": "video",
+        "width": 720,
+        "height": 1280,
+        "r_frame_rate": "25/1",
+        "side_data_list": [
+          {}
+        ]
+      },
+      {
+        "codec_name": "aac",
+        "codec_type": "audio",
+        "r_frame_rate": "0/0"
+      }
+    ],
+    "format": {
+      "duration": "44.360000",
+      "size": "4918184"
+    }
+  },
+  "performance": {
+    "label": "all-rooms",
+    "profiles": [
+      {
+        "name": "desktop",
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "rooms": {
+          "atrium": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 270,
+            "median": 16.7,
+            "p95": 16.8,
+            "resolution": [
+              1920,
+              1080
+            ],
+            "drawCalls": 223
+          },
+          "hall": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 271,
+            "median": 16.7,
+            "p95": 16.8,
+            "resolution": [
+              1920,
+              1080
+            ],
+            "drawCalls": 643
+          },
+          "hoof": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 270,
+            "median": 16.7,
+            "p95": 16.8,
+            "resolution": [
+              1920,
+              1080
+            ],
+            "drawCalls": 88
+          },
+          "shop": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 270,
+            "median": 16.7,
+            "p95": 16.8,
+            "resolution": [
+              1920,
+              1080
+            ],
+            "drawCalls": 269
+          },
+          "habitat": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 270,
+            "median": 16.7,
+            "p95": 16.8,
+            "resolution": [
+              1920,
+              1080
+            ],
+            "drawCalls": 81
+          },
+          "twelve": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 269,
+            "median": 16.7,
+            "p95": 16.8,
+            "resolution": [
+              1920,
+              1080
+            ],
+            "drawCalls": 210
+          },
+          "service": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 270,
+            "median": 16.7,
+            "p95": 16.8,
+            "resolution": [
+              1920,
+              1080
+            ],
+            "drawCalls": 66
+          },
+          "secret": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 269,
+            "median": 16.7,
+            "p95": 16.8,
+            "resolution": [
+              1920,
+              1080
+            ],
+            "drawCalls": 53
+          },
+          "catwalk": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 270,
+            "median": 16.7,
+            "p95": 16.8,
+            "resolution": [
+              1920,
+              1080
+            ],
+            "drawCalls": 54
+          },
+          "chronology": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 270,
+            "median": 16.7,
+            "p95": 16.8,
+            "resolution": [
+              1920,
+              1080
+            ],
+            "drawCalls": 147
+          },
+          "forum": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 270,
+            "median": 16.7,
+            "p95": 16.8,
+            "resolution": [
+              1920,
+              1080
+            ],
+            "drawCalls": 93
+          },
+          "commons": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 270,
+            "median": 16.7,
+            "p95": 16.8,
+            "resolution": [
+              1920,
+              1080
+            ],
+            "drawCalls": 105
+          },
+          "aquarium": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 271,
+            "median": 16.7,
+            "p95": 16.8,
+            "resolution": [
+              1920,
+              1080
+            ],
+            "drawCalls": 89
+          },
+          "dome": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 270,
+            "median": 16.7,
+            "p95": 16.8,
+            "resolution": [
+              1920,
+              1080
+            ],
+            "drawCalls": 41
+          }
+        }
+      },
+      {
+        "name": "gentle",
+        "viewport": {
+          "width": 393,
+          "height": 852
+        },
+        "rooms": {
+          "atrium": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 135,
+            "median": 33.4,
+            "p95": 33.5,
+            "resolution": [
+              393,
+              852
+            ],
+            "drawCalls": 80
+          },
+          "hall": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 134,
+            "median": 33.4,
+            "p95": 33.5,
+            "resolution": [
+              393,
+              852
+            ],
+            "drawCalls": 490
+          },
+          "hoof": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 134,
+            "median": 33.4,
+            "p95": 33.5,
+            "resolution": [
+              393,
+              852
+            ],
+            "drawCalls": 61
+          },
+          "shop": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 134,
+            "median": 33.4,
+            "p95": 33.5,
+            "resolution": [
+              393,
+              852
+            ],
+            "drawCalls": 124
+          },
+          "habitat": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 134,
+            "median": 33.4,
+            "p95": 33.5,
+            "resolution": [
+              393,
+              852
+            ],
+            "drawCalls": 51
+          },
+          "twelve": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 132,
+            "median": 33.4,
+            "p95": 33.5,
+            "resolution": [
+              393,
+              852
+            ],
+            "drawCalls": 107
+          },
+          "service": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 133,
+            "median": 33.4,
+            "p95": 33.6,
+            "resolution": [
+              393,
+              852
+            ],
+            "drawCalls": 38
+          },
+          "secret": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 131,
+            "median": 33.4,
+            "p95": 49.9,
+            "resolution": [
+              393,
+              852
+            ],
+            "drawCalls": 34
+          },
+          "catwalk": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 130,
+            "median": 33.4,
+            "p95": 50,
+            "resolution": [
+              393,
+              852
+            ],
+            "drawCalls": 34
+          },
+          "chronology": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 132,
+            "median": 33.4,
+            "p95": 33.5,
+            "resolution": [
+              393,
+              852
+            ],
+            "drawCalls": 97
+          },
+          "forum": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 130,
+            "median": 33.4,
+            "p95": 50,
+            "resolution": [
+              393,
+              852
+            ],
+            "drawCalls": 93
+          },
+          "commons": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 132,
+            "median": 33.4,
+            "p95": 33.5,
+            "resolution": [
+              393,
+              852
+            ],
+            "drawCalls": 110
+          },
+          "aquarium": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 132,
+            "median": 33.4,
+            "p95": 33.5,
+            "resolution": [
+              393,
+              852
+            ],
+            "drawCalls": 89
+          },
+          "dome": {
+            "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+            "frames": 129,
+            "median": 33.4,
+            "p95": 50.1,
+            "resolution": [
+              393,
+              852
+            ],
+            "drawCalls": 37
+          }
+        }
+      }
+    ],
+    "errors": []
+  },
+  "windowsFinal": {
+    "checks": {
+      "admission": "atrium",
+      "disconnectDriftMetres": 0,
+      "firstPressDelta": 1,
+      "jumpMetres": 0.21175209596394762,
+      "panic": true,
+      "pauseNext": "new-run",
+      "sticks": {
+        "metres": 0.4626253538269386,
+        "yawRadians": -0.21125171026823153
+      },
+      "ticketBoxes": 12,
+      "triggerDistanceMetres": 3.0467269552615903
+    },
+    "input": "Synthetic standard gamepad supplied to navigator.getGamepads in an isolated WPF WebView2",
+    "native": {
+      "getGamepads": "function",
+      "hostBridge": true,
+      "origin": "https://localhost",
+      "originalPadCount": 0,
+      "secureContext": true
+    },
+    "passed": true,
+    "webView2": "157.0.4341.60",
+    "wpfAssembly": "1.0.2792.45"
+  },
+  "exitFixtures": {
+    "travel": "Each test enters through the ending launcher and wormhole. Room and camera positions shorten transit. The till, Bob exit, lanyard and purchased door use physical controls.",
+    "model": "Seeded six correct instructions and zero deviations. Used the till.",
+    "conduct": "Seeded eight boxes and a settled bill. Bought the exit and stood before the open door in real time.",
+    "renewal": "Seeded eight boxes and a settled bill. Bought the exit and walked through.",
+    "full": "Seeded all 13 marks in the 12 boxes, 12 llamas and a settled bill. Bought the exit and walked through.",
+    "finger": "Zero stamps. Used Bob's exit, then wore the lanyard behind the till.",
+    "stayed": "Zero initial stamps. Stood in the dome until translation, visited the Hall, then came back and stayed through the real ending."
+  },
+  "exits": [
+    {
+      "route": "renewal",
+      "ending": "Renewal",
+      "observedVoice": "v4_renew",
+      "storedRecap": true,
+      "ticketBoxesAtStart": 8,
+      "errors": [],
+      "print": {
+        "title": "Renewal",
+        "alt": "Renewal",
+        "width": 800,
+        "height": 900
+      }
+    },
+    {
+      "route": "finger",
+      "ending": "Finger",
+      "observedVoice": "v4_finger_end",
+      "storedRecap": true,
+      "ticketBoxesAtStart": 0,
+      "errors": [],
+      "print": {
+        "title": "Finger",
+        "alt": "Finger",
+        "width": 800,
+        "height": 900
+      }
+    },
+    {
+      "route": "model",
+      "ending": "Model Visitor",
+      "observedVoice": "v4_model_end",
+      "storedRecap": true,
+      "ticketBoxesAtStart": 0,
+      "errors": [],
+      "print": {
+        "title": "Model Visitor",
+        "alt": "Model Visitor",
+        "width": 800,
+        "height": 900
+      }
+    },
+    {
+      "route": "full",
+      "ending": "The Thirteenth",
+      "observedVoice": "v4_full_end",
+      "storedRecap": true,
+      "ticketBoxesAtStart": 12,
+      "errors": [],
+      "print": {
+        "title": "The Thirteenth",
+        "alt": "Group photograph in the Hall of the Twelve",
+        "width": 1100,
+        "height": 756
+      },
+      "photoChars": 108915,
+      "visitorMark": "The brass-trimmed green VISITOR spot is visible beneath both feet, immediately beside Gary in the front row.",
+      "exported": [
+        "visitor-export.png",
+        "visitor-export.gif",
+        "visitor-export.mp4"
+      ]
+    },
+    {
+      "route": "read",
+      "ending": "Acceptance by Conduct",
+      "observedVoice": "v4_conduct_read",
+      "storedRecap": true,
+      "ticketBoxesAtStart": 8,
+      "errors": [],
+      "refusalWallSeconds": 120.879,
+      "print": {
+        "title": "Acceptance by Conduct",
+        "alt": "Acceptance by Conduct",
+        "width": 800,
+        "height": 900
+      }
+    },
+    {
+      "route": "unread",
+      "ending": "Acceptance by Conduct",
+      "observedVoice": "v4_conduct_missed",
+      "storedRecap": true,
+      "ticketBoxesAtStart": 8,
+      "errors": [],
+      "refusalWallSeconds": 120.886,
+      "print": {
+        "title": "Acceptance by Conduct",
+        "alt": "Acceptance by Conduct",
+        "width": 800,
+        "height": 900
+      }
+    },
+    {
+      "route": "stayed",
+      "ending": "Stayed",
+      "observedVoice": "v4_stayed_end",
+      "storedRecap": true,
+      "ticketBoxesAtStart": 0,
+      "errors": [],
+      "translationWallSeconds": 140.837,
+      "departureWallSeconds": 204.507,
+      "print": {
+        "title": "Stayed",
+        "alt": "Stayed",
+        "width": 800,
+        "height": 900
+      }
+    }
+  ],
+  "printedTickets": {
+    "admission": "Ordinary pylon interaction issued the ticket. The 3D paper showed ADMIT ONE HUMAN, Llama Expo / 2037 and all 12 stamp boxes upright.",
+    "shop": {
+      "receipt": [
+        "Visitor Services",
+        "",
+        "Pressed the founding exhibit",
+        "Deviation",
+        "",
+        "Add a bag? YES",
+        "Yes",
+        "",
+        "Round up to full agreement? YES",
+        "Yes",
+        "",
+        "Stop being asked? NO",
+        "Yes",
+        "",
+        "Instructions followed",
+        "3",
+        "",
+        "Deviations converted to Yes",
+        "1",
+        "",
+        "Total agreements",
+        "4",
+        "",
+        "First Press register",
+        "1",
+        "",
+        "History absorbed",
+        "0 of 40",
+        "",
+        "Ticket",
+        "1 of 12",
+        "",
+        "Item",
+        "The moved button"
+      ],
+      "balanceAfterPayment": {
+        "yes": 3,
+        "originalDeviations": 1,
+        "balance": 4,
+        "outstanding": 0
+      },
+      "physicalPrint": {
+        "item": "The moved button",
+        "totalAgreements": 4,
+        "firstPressRegister": 1,
+        "historyAbsorbed": "0 of 40"
+      }
+    }
+  },
+  "rangeHabitatDome": [
+    {
+      "profile": "desktop",
+      "passed": [
+        "rematch",
+        "planter plate",
+        "oculus",
+        "habitat glass",
+        "habitat keeper",
+        "dome"
+      ],
+      "issues": [],
+      "errors": [],
+      "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "range": {
+        "metres": 3.045860457495408,
+        "stamp": true
+      },
+      "keeperWalk": [
+        20.809653955136774,
+        0,
+        12.114950907617853
+      ]
+    },
+    {
+      "profile": "touch",
+      "passed": [
+        "rematch",
+        "planter plate",
+        "oculus",
+        "habitat glass",
+        "habitat keeper",
+        "dome"
+      ],
+      "issues": [],
+      "errors": [],
+      "gpu": "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+      "range": {
+        "metres": 3.045935238125878,
+        "stamp": true
+      },
+      "keeperWalk": [
+        20.62374209669133,
+        0,
+        12.04468531127158
+      ]
+    }
+  ],
+  "gallery": {
+    "desktop": [
+      "filed flight",
+      "filed loch",
+      "filed summit",
+      "filed woods",
+      "filed moon",
+      "forty seconds of minutes",
+      "entire measured queue",
+      "ray"
+    ],
+    "phone": [
+      "filed flight",
+      "filed loch",
+      "filed summit",
+      "filed woods",
+      "filed moon",
+      "forty seconds of minutes",
+      "entire measured queue",
+      "ray"
+    ]
+  },
+  "serviceAndTwelve": [
+    {
+      "input": "keyboard",
+      "checks": [
+        "socket in reach",
+        "heater restored"
+      ]
+    },
+    {
+      "input": "keyboard",
+      "checks": [
+        "tea in reach",
+        "tea carried",
+        "Twelve gallery",
+        "signed form while tea reserved",
+        "tea returned after filing signed form"
+      ]
+    },
+    {
+      "input": "keyboard",
+      "checks": [
+        "Twelve gallery",
+        "Margaret third leaf",
+        "Henry physical touch",
+        "Greg desk return",
+        "Bob sign mounted",
+        "DJ played",
+        "Gary balance readable",
+        "Dr Alpaca readmission and glass",
+        "reginald standing",
+        "kevin standing",
+        "Nana thread",
+        "Bartholomew turns after Greg",
+        "Lady Lashes blinked"
+      ]
+    },
+    {
+      "input": "keyboard",
+      "checks": [
+        "clean ledger",
+        "turnstile forward",
+        "full queue walked",
+        "entered Hoof after the queue",
+        "left Hoof wearing shoes",
+        "stood through meeting",
+        "First Press left alone"
+      ]
+    },
+    {
+      "input": "keyboard",
+      "checks": [
+        "hat in reach",
+        "wearable hard hat",
+        "Twelve gallery",
+        "hard hat scaffold deck",
+        "dust sheet lifted"
+      ]
+    },
+    {
+      "input": "keyboard",
+      "checks": [
+        "first notice",
+        "seven signs and exported notice"
+      ]
+    },
+    {
+      "input": "keyboard",
+      "checks": [
+        "tea in reach",
+        "tea carried",
+        "balcony docket in reach",
+        "tea delivered"
+      ]
+    },
+    {
+      "input": "keyboard",
+      "checks": [
+        "nonreader shifted back a bay",
+        "eight clauses read",
+        "chair invitation in reach",
+        "knitting table",
+        "loose end withdrawn",
+        "wool restored"
+      ]
+    },
+    {
+      "input": "keyboard",
+      "checks": [
+        "socket in reach",
+        "heater restored",
+        "hat in reach"
+      ]
+    },
+    {
+      "input": "touch",
+      "checks": [
+        "socket in reach",
+        "heater restored",
+        "hat in reach",
+        "wearable hard hat",
+        "tea in reach",
+        "tea carried",
+        "balcony docket in reach",
+        "tea delivered",
+        "nonreader shifted back a bay",
+        "eight clauses read",
+        "chair invitation in reach",
+        "knitting table",
+        "loose end withdrawn",
+        "wool restored",
+        "Twelve gallery",
+        "Margaret third leaf",
+        "Henry physical touch",
+        "Greg desk return",
+        "Bob sign mounted",
+        "DJ played",
+        "Gary balance readable",
+        "Dr Alpaca readmission and glass",
+        "reginald standing",
+        "kevin standing",
+        "Nana thread",
+        "Bartholomew turns after Greg",
+        "Lady Lashes blinked"
+      ]
+    }
+  ],
+  "secondViewing": {
+    "log": [
+      "Walked backwards through admission",
+      "(again)",
+      "Second viewing. Several things have been improved."
+    ],
+    "errs": []
+  },
+  "cleanModelVisitor": {
+    "input": "Keyboard movement through all six instructions, including the full queue and real-time meeting. Review travel between room approaches.",
+    "stamps": [
+      "Queued",
+      "Attended"
+    ],
+    "ledger": [
+      "queued",
+      "agenda",
+      "left-button",
+      "glass-kept",
+      "dome-kept",
+      "heater-kept"
+    ],
+    "yes": 6,
+    "deviations": 0,
+    "ending": "Model Visitor",
+    "errors": []
+  },
+  "cleanThirteenth": {
+    "entry": "Normal preview purchase with a full herd, zero ticket stamps and an empty ledger. No stamps or agreements injected.",
+    "controls": "Virtual controller X and RT for exhibits, keyboard for walking into admission and through Renewal. Used room travel and aim marks between exhibits and collision-checked movement through the queue. All waits ran in real time.",
+    "route": [
+      "",
+      "",
+      "",
+      "",
+      "X / Square · Press I AGREE",
+      "X / Square · Listening",
+      "X / Square · Feed one Yes",
+      "X / Square · Press I AGREE",
+      "X / Square · Plug the heater back in",
+      "X / Square · Read the tea docket",
+      "X / Square · Pull the loose end",
+      "",
+      "",
+      "X / Square · Return carried item to its bay",
+      "X / Square · YES",
+      "X / Square · Buy Exit"
+    ],
+    "stamps": [
+      "Corrected",
+      "Attended",
+      "Queued",
+      "Spat",
+      "Pressed",
+      "Hoofed",
+      "Fed",
+      "Kept",
+      "Unplugged",
+      "Delivered",
+      "Read",
+      "Blinked",
+      "Stayed"
+    ],
+    "receipt": [
+      "Visitor Services",
+      "Hung a photograph face inward",
+      "Deviation",
+      "Filed the corrected photographs",
+      "Yes",
+      "Stood through the minutes",
+      "Yes",
+      "Walked the entire empty queue",
+      "Yes",
+      "Took part in the rematch",
+      "Yes",
+      "Pressed the founding exhibit",
+      "Deviation",
+      "Off the edge",
+      "Deviation",
+      "None selected",
+      "Yes",
+      "Fed the exhibit",
+      "Yes",
+      "Sat at the habitat desk",
+      "Deviation",
+      "Unplugged the heater",
+      "Deviation",
+      "Left the heater connected",
+      "Yes",
+      "Delivered the balcony tea",
+      "Yes",
+      "Sat and read the knitted record",
+      "Yes",
+      "Looked at Lady Lashes too long",
+      "Deviation",
+      "Stood still in the dome",
+      "Yes",
+      "Add a bag? YES",
+      "Yes",
+      "Round up to full agreement? YES",
+      "Yes",
+      "Stop being asked? NO",
+      "Yes",
+      "Instructions followed",
+      "13",
+      "Deviations converted to Yes",
+      "6",
+      "Total agreements",
+      "19",
+      "First Press register",
+      "1",
+      "History absorbed",
+      "0 of 40",
+      "Ticket",
+      "12 of 12",
+      "Item",
+      "The moved button"
+    ],
+    "ending": "The Thirteenth",
+    "reachedRecap": true,
+    "errors": []
+  }
+}
