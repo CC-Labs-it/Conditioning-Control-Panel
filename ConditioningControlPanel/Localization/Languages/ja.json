@@ -2218,6 +2218,7 @@
   "btn_end_session": "セッション終了",
   "label_drop_to_import": "ドロップでインポート",
   "label_images_videos_zips_folders": "画像、動画、ZIP、フォルダ",
+  "drop_import_busy": "展開中...",
   "label_how_to_use_the_app": "📖 アプリの使い方",
   "label_hover_over_any_control_for_tooltips_click_a_g": "どのコントロールでも、カーソルを合わせれば何をするか分かるよ。下のガイドを選べば手順を一緒に見ていけるからね。",
   "label_getting_started": "はじめに",

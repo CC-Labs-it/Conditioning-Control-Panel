@@ -1168,6 +1168,10 @@ namespace ConditioningControlPanel
                     // Accept it (the drop explains itself in a toast), no overlay.
                     e.Effects = DragDropEffects.Copy;
                 }
+                else if (_dropImportBusy)
+                {
+                    e.Effects = DragDropEffects.None;
+                }
                 else if (dropType != DropType.None)
                 {
                     e.Effects = DragDropEffects.Copy;
@@ -1535,12 +1539,14 @@ namespace ConditioningControlPanel
 
         private void Window_DragLeave(object sender, DragEventArgs e)
         {
+            if (_dropImportBusy) return;
             GlobalDropOverlay.Visibility = Visibility.Collapsed;
             SettingsTab.BrowserContainer.Visibility = Visibility.Visible;
         }
 
         private async void Window_Drop(object sender, DragEventArgs e)
         {
+            if (_dropImportBusy) { e.Handled = true; return; }
             GlobalDropOverlay.Visibility = Visibility.Collapsed;
             SettingsTab.BrowserContainer.Visibility = Visibility.Visible;
 
@@ -1791,19 +1797,53 @@ namespace ConditioningControlPanel
             }
         }
 
+        private bool _dropImportBusy;
+
+        /// <summary>Keeps the drop overlay up as a progress card while a dropped pack unpacks (ccp-bugs #1706).</summary>
+        private void ShowDropImportProgress(Services.ImportProgress? p)
+        {
+            _dropImportBusy = true;
+            DropOverlayPrompt.Visibility = Visibility.Collapsed;
+            DropImportProgress.Visibility = Visibility.Visible;
+            SettingsTab.BrowserContainer.Visibility = Visibility.Hidden;
+            GlobalDropOverlay.Visibility = Visibility.Visible;
+
+            var indeterminate = Services.ImportProgressText.IsIndeterminate(p);
+            DropImportBar.IsIndeterminate = indeterminate;
+            if (!indeterminate) DropImportBar.Value = Services.ImportProgressText.Percent(p);
+            DropImportCount.Text = Services.ImportProgressText.CountLine(p,
+                (c, t, f) => $"{c} / {t} - {f}");
+        }
+
+        private void HideDropImportProgress()
+        {
+            _dropImportBusy = false;
+            DropImportProgress.Visibility = Visibility.Collapsed;
+            DropOverlayPrompt.Visibility = Visibility.Visible;
+            DropImportBar.IsIndeterminate = true;
+            DropImportCount.Text = "";
+            GlobalDropOverlay.Visibility = Visibility.Collapsed;
+            SettingsTab.BrowserContainer.Visibility = Visibility.Visible;
+        }
+
         private async Task HandleAssetDropAsync(string[] paths)
         {
             try
             {
                 _assetImportService ??= new Services.AssetImportService();
 
-                var progress = new Progress<Services.ImportProgress>(p =>
-                {
-                    // Could update a progress indicator here if needed
-                    App.Logger?.Debug("Import progress: {Current}/{Total} - {File}", p.Current, p.Total, p.CurrentFile);
-                });
+                ShowDropImportProgress(null);
+                var progress = new Progress<Services.ImportProgress>(ShowDropImportProgress);
 
-                var result = await Task.Run(() => _assetImportService.ImportAsync(paths, progress));
+                Services.ImportResult result;
+                try
+                {
+                    result = await Task.Run(() => _assetImportService.ImportAsync(paths, progress));
+                }
+                finally
+                {
+                    HideDropImportProgress();
+                }
 
                 // Refresh the asset lists if any were imported
                 if (result.ImagesImported > 0)

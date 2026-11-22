@@ -2955,6 +2955,7 @@
   "btn_end_session": "结束疗程",
   "label_drop_to_import": "拖放导入",
   "label_images_videos_zips_folders": "图片、视频、ZIP、文件夹",
+  "drop_import_busy": "正在解压...",
   "label_how_to_use_the_app": "📖 如何使用应用",
   "label_hover_over_any_control_for_tooltips_click_a_g": "把鼠标悬停在任何控件上，就能看到它的作用。想一步步来的话，选下面的指南。",
   "label_getting_started": "入门指南",

@@ -2218,6 +2218,7 @@
   "btn_end_session": "세션 종료",
   "label_drop_to_import": "드롭하여 가져오기",
   "label_images_videos_zips_folders": "이미지, 영상, ZIP, 폴더",
+  "drop_import_busy": "압축 푸는 중...",
   "label_how_to_use_the_app": "📖 앱 사용법",
   "label_hover_over_any_control_for_tooltips_click_a_g": "아무 컨트롤에나 마우스를 올리면 무슨 일을 하는지 나와요. 아래 가이드를 고르면 차근차근 안내해요.",
   "label_getting_started": "시작하기",

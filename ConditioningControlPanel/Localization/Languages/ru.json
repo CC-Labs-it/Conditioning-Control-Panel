@@ -2218,6 +2218,7 @@
   "btn_end_session": "Завершить сессию",
   "label_drop_to_import": "Перетащи для импорта",
   "label_images_videos_zips_folders": "Изображения, видео, ZIP, папки",
+  "drop_import_busy": "Распаковка...",
   "label_how_to_use_the_app": "📖 Как пользоваться приложением",
   "label_hover_over_any_control_for_tooltips_click_a_g": "Наведи на любой элемент, чтобы увидеть, что он делает. Выбери руководство ниже, и оно проведёт тебя по шагам.",
   "label_getting_started": "Начало работы",

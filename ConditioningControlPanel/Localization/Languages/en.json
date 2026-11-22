@@ -3300,6 +3300,7 @@
   "btn_end_session": "End Session",
   "label_drop_to_import": "Drop to Import",
   "label_images_videos_zips_folders": "Images, Videos, ZIPs, Folders",
+  "drop_import_busy": "Unpacking...",
   "label_how_to_use_the_app": "📖 How to Use the App",
   "label_hover_over_any_control_for_tooltips_click_a_g": "Hover any control to see what it does. Pick a guide below for a walkthrough.",
   "label_getting_started": "Getting Started",

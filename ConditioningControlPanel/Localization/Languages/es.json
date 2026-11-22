@@ -2218,6 +2218,7 @@
   "btn_end_session": "Terminar Sesión",
   "label_drop_to_import": "Suelta para Importar",
   "label_images_videos_zips_folders": "Imágenes, Videos, ZIPs, Carpetas",
+  "drop_import_busy": "Descomprimiendo...",
   "label_how_to_use_the_app": "📖 Cómo Usar la App",
   "label_hover_over_any_control_for_tooltips_click_a_g": "Pasa el cursor por cualquier control para ver qué hace. Elige una guía abajo para un recorrido.",
   "label_getting_started": "Primeros Pasos",
