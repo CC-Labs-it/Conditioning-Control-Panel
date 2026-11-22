@@ -282,9 +282,13 @@ try{
       await frame.locator('.expo-root').waitFor({state:'detached',timeout:160000});
       await frame.locator('.rr').waitFor({state:'attached',timeout:16000});
       if(shots.some(s=>s.id==='photo')){
-        const photo=frame.locator('.rr img[alt="Group photograph in the Hall of the Twelve"]');
-        await photo.waitFor({state:'attached',timeout:10000});
-        item.recapPhoto=await photo.evaluate(async img=>{await img.decode();return {width:img.naturalWidth,height:img.naturalHeight,characters:img.src.length};});
+        const print=await frame.waitForFunction(()=>{
+          const visit=fuzz.state.store?.ll_end;
+          const souvenir=visit?.departurePrint||visit?.souvenirPrint;
+          const src=visit?.expoEnding==='The Thirteenth'?visit.groupPhoto||souvenir:souvenir||visit?.groupPhoto;
+          return [...document.querySelectorAll('.rr img')].find(img=>img.src===src);
+        },null,{timeout:20000});
+        item.recapPhoto=await print.evaluate(async img=>{await img.decode();return {alt:img.alt,width:img.naturalWidth,height:img.naturalHeight,characters:img.src.length};});
         await frame.waitForFunction(()=>document.querySelector('.rr.settled,.rr-skip'),null,{timeout:30000});
         const skip=frame.locator('.rr-skip');
         if(await skip.count()){await skip.click();item.inputs.push({action:'Skip the recap introduction after the natural departure',at:sec()});}
