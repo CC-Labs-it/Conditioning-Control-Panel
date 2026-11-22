@@ -10,6 +10,10 @@ const SURVEY = [
   'S6-progress', 'S6-arrived', 'S6-arrived-close', 'S6-failed-offline', 'S6-failed-disk', 'S6-failed-refused',
   'S6-stop', 'S6-stopped', 'S6-pen-sign', 'S6-llama8-title', 'S6-llama8-body', 'S6-llama8-button',
   'S7-ending-button', 'S7-pause-line', 'S7-pause-button',
+  'S7-save-send', 'S7-save-ask', 'S7-save-sent', 'S7-save-reason-sign-in', 'S7-save-reason-too-big',
+  'S7-save-reason-offline', 'S7-save-reason-refused', 'S7-save-reason-none', 'S7-save-broken',
+  'S7-save-incoming-title', 'S7-save-incoming-body', 'S7-save-from-web', 'S7-save-from-desktop',
+  'S7-save-accept', 'S7-save-keep', 'S7-save-full-line', 'S7-save-full-button',
 ];
 
 test('every placeholder in shipped code is on the owner survey list, and the list has no stale slot', () => {

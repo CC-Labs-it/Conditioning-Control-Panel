@@ -31,7 +31,8 @@ export function createCards(doc, host) {
         el.textContent = brandText(b.label);
         if (i === 0) el.className = 'primary';
         if (b.css) el.style.cssText = b.css;
-        el.addEventListener('click', () => { if (b.keepOpen) { b.onPress?.(); return; } spec.handle.close(); b.onPress?.(); });
+        /* onPress gets the press event: ui/nudges.js realPress reads its isTrusted. */
+        el.addEventListener('click', (ev) => { if (b.keepOpen) { b.onPress?.(ev); return; } spec.handle.close(); b.onPress?.(ev); });
         row.appendChild(el);
       });
       card.appendChild(row);

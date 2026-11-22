@@ -157,6 +157,8 @@ export function saveFits(save) {
   if (typeof save !== 'string' || save === '' || save.length > SAVE_CARRY_MAX_CHARS || bytes(save) > SAVE_CARRY_MAX_BYTES) return false;
   try { return typeof JSON.parse(save)?.v === 'number'; } catch { return false; }
 }
+/** The host keeps one save string for this account (caps.saveSlot): the carry buttons show only then. */
+export const saveSlotOn = (ed = editionState()) => ed.saveSlot === true;
 /** The `save-offer` fields for this save, or null when it may not travel. Only ever sent from a player's press. */
 export const saveOfferFrame = (save) => (saveFits(save) ? { save } : null);
 /** A host's `save-incoming`, checked: { save, savedAt, from } or null. Never applied without the player's yes. */
