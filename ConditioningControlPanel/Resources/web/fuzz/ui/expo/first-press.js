@@ -6,7 +6,7 @@ const stops=[['hall',[9.95,3.4,-5.3]],['hall',[-5.7,0,.66]],['shop',[17.48,1.23,
 const clamp=n=>Math.min(1,Math.max(0,n));
 
 // The original hall batches the stand, hand-hole glazing and furniture by finish.
-function liftCase(T,room){
+function liftCase(T,room,buttonAssembly){
   const slide=new T.Group(),cover=new T.Group(),label=new T.Group(),p=new T.Vector3(),pieces=[];
   slide.name='Accession lift';cover.name='Hand-hole cover';label.name='Accession label stand';
   function assembly(finish,x,y,z){
@@ -50,7 +50,8 @@ function liftCase(T,room){
       sub.boundingSphere=sub.boundingBox.getBoundingSphere(new T.Sphere());
       const part=new T.Mesh(sub,mesh.material);mesh.add(part);groups[i].attach(part);parts.push(sub);}
   }
-  const main=room.getObjectByName('press_main'),readout=room.getObjectByName('press_readout');
+  // The lift carries the spring as well as the red cap and its printed face.
+  const main=buttonAssembly(room.getObjectByName('press_main')),readout=room.getObjectByName('press_readout');
   const mainParent=main?.parent,readoutParent=readout?.parent;
   if(main)slide.attach(main);if(readout)label.attach(readout);
   label.position.x=1.18;
@@ -169,7 +170,7 @@ export function firstPress(api,state){
     if(id!=='hall'&&id!=='shop')return;
     const v={room,copies:[]};views.set(id,v);clean.push(()=>views.delete(id));
     if(id==='hall'){
-      v.case=liftCase(T,room);v.case.slide.position.y=count>=3&&!sealed?-1.85:0;v.case.cover.visible=!sealed;clean.push(v.case.free);
+      v.case=liftCase(T,room,api.buttonAssembly);v.case.slide.position.y=count>=3&&!sealed?-1.85:0;v.case.cover.visible=!sealed;clean.push(v.case.free);
       const readout=surface('press_readout');
       v.draw=()=>placard(readout,'Founding collection   /   First Press',text(),'REGISTER   '+(state.file.taps+state.presses).toLocaleString());
       v.main=bind('press_main',()=>sealed?'Read the sealed accession':'Press I AGREE',()=>sealed?api.say(text()):press());

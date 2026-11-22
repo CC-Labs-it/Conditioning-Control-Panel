@@ -121,5 +121,6 @@ export function createButtonTravel(ctx){
       activate(hit){press(caps,hit);return action(hit);}
     };
   }
-  return {mount,unmount,resolve,press,bind,tick,debug,setAvailable};
+  function assemblyFor(node){return all.get(node)?.group??node;}
+  return {mount,unmount,resolve,press,bind,tick,debug,setAvailable,assemblyFor};
 }

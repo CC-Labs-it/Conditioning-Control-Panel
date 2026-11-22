@@ -12,6 +12,7 @@ const hook=registerHooks({resolve(name,context,next){
   return next(name,context);
 }});
 const {GLTFLoader}=await import(new URL('addons/loaders/GLTFLoader.js',library));
+const {createButtonTravel}=await import('../ui/expo/button-travel.js');
 hook.deregister();
 const zones=new URL('../assets/expo/zones/',import.meta.url);
 const plan=JSON.parse(await readFile(new URL('zones.json',zones)));
@@ -40,13 +41,42 @@ test('a busy narrator drops the rope instruction once the plinth is moving',()=>
   assert.equal(spoken[0].needed(),false);
 });
 
+test('pressing I AGREE moves the shipped cap and lettering inside the fixed case',async()=>{
+  const room=await loadHall(hall.file),buttons=createButtonTravel({});
+  buttons.mount('hall',room);
+  const cap=room.getObjectByName('press_main'),clean=[];
+  const state={file:{taps:0},presses:0,ticket:{stamp(){},book(){}},pressRecord:()=>''};
+  const api={THREE,camera:new THREE.PerspectiveCamera(),props:()=>()=>{},cue(){},play(){},buttonAssembly:buttons.assemblyFor};
+  const exhibit=firstPress(api,state);
+  let activate;
+  exhibit.mount('hall',room,(name,label,action)=>{
+    const node=room.getObjectByName(name);
+    if(node===cap)activate=buttons.bind(node,action).activate;
+    return node;
+  },()=>null,clean);
+  const meshes=cap.children;
+  assert.deepEqual(meshes.map(m=>m.material.name).sort(),['action_coral','art_agree']);
+  const cover=room.getObjectByName('Hand-hole cover');
+  const height=node=>node.getWorldPosition(new THREE.Vector3()).y;
+  const rest=meshes.map(height),coverY=height(cover);
+  activate({object:meshes[0]});buttons.tick(.09);
+  assert.equal(state.presses,1);
+  meshes.forEach((mesh,i)=>assert.ok(Math.abs(rest[i]-height(mesh)-cap.userData.travelMetres)<1e-6,mesh.material.name));
+  assert.equal(height(cover),coverY);
+  buttons.tick(.4);
+  assert.deepEqual(meshes.map(height),rest);
+  for(const dispose of clean.reverse())dispose();
+  buttons.unmount('hall');
+  assert.deepEqual(meshes.map(height),rest);
+});
+
 test('the First Press moves its original cover and keeps the register clear',async()=>{
   const room=await loadHall(hall.file);
   const camera=new THREE.PerspectiveCamera();
   camera.position.set(0,1.6,-12);camera.updateMatrixWorld();
   const state={file:{taps:0},presses:0,ticket:{stamp(){},book(){}},pressRecord:()=>''};
   const lines=[],books=[];state.ticket.book=(...row)=>books.push(row);
-  const api={THREE,camera,props:()=>()=>{},cue(id){lines.push(id);},say(){},play(){},setColliderEnabled(){}};
+  const api={THREE,camera,props:()=>()=>{},buttonAssembly:node=>node,cue(id){lines.push(id);},say(){},play(){},setColliderEnabled(){}};
   const press=firstPress(api,state),clean=[];
   const register=room.getObjectByName('press_readout'),registerStart=new THREE.Vector3();
   room.updateMatrixWorld(true);register.getWorldPosition(registerStart);
