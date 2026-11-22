@@ -231,7 +231,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       storeSouvenir:(obj,label)=>souvenirPrint({THREE,renderer,draw,ctx},obj,label), actionSerial:()=>actionSerial, cue:narration.cue, play: sound.play, setSoundDepth: sound.setDepth,
       go, exit: onExit, farewell, register, assetURL, bindMedia, capturePhoto, setColliderEnabled:walker.setColliderEnabled,
       setButtonAvailable:buttons.setAvailable,registerDoorLeaf:(...args)=>zones?.registerDoorLeaf(...args) });
-    dome = createDomeEffects({ctx,camera,cue:narration.cue,play:sound.play,register,bindMedia,setSoundDepth:sound.setDepth,lite:LITE});
+    dome = createDomeEffects({ctx,camera,cue:narration.cue,play:sound.play,register,bindMedia,setSoundDepth:sound.setDepth,lite:LITE,visit:exhibits.state,finish:exhibits.endVisit});
     const guests=createGuestCollection(assetURL);
     const collection=createCollection({assetURL,walker,register,
       onLabel:(mesh,label)=>narration.registerPlaque(mesh,guestInscription(mesh,label)),

@@ -16,13 +16,13 @@ export function depthAt(seconds) {
 export function createDepth() {
   let seconds = 0, visitSeconds = 0, lastVisitSeconds = 0, inside = false;
   return {
-    step(dt, nextInside) {
+    step(dt, nextInside, pace=1) {
       const elapsed = validSeconds(dt), entered = !!nextInside && !inside, left = !nextInside && inside;
       const previousPhase = phaseAt(seconds);
       if (left) { lastVisitSeconds = visitSeconds; visitSeconds = 0; }
       if (entered) visitSeconds = 0;
       inside = !!nextInside;
-      if (inside) { seconds = Math.min(210, seconds + elapsed); visitSeconds += elapsed; }
+      if (inside) { seconds = Math.min(210, seconds + elapsed*pace); visitSeconds += elapsed; }
       else seconds = Math.max(0, seconds - elapsed * 0.25);
       return { entered, left, previousPhase };
     },

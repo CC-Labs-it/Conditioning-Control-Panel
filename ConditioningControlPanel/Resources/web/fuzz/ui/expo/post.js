@@ -11,6 +11,7 @@ uniform sampler2D sceneDepth;
 uniform float strength;
 uniform float steam;
 uniform float steamTime;
+uniform float afterglow;
 uniform float arrivalTime;
 uniform float aspect;
 uniform mat4 viewToWorld;
@@ -52,6 +53,7 @@ void main() {
   }
   vec2 around = (st - .5) * 1.55;
   colour *= 1.0 - .08 * smoothstep(.08,1.0,dot(around,around));
+  colour=mix(colour,colour*vec3(.96,1.05,1.07)+vec3(.018,.012,.025),afterglow);
   gl_FragColor = vec4(colour,1.);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -86,7 +88,7 @@ export function createPost(renderer, lite) {
   const finish = new THREE.ShaderMaterial({ vertexShader, fragmentShader, depthTest: false, depthWrite: false,
     defines: { STEAM_SAMPLES: lite ? 8 : 14 },
     uniforms: { colorBuffer: { value: target.texture }, glowBuffer: { value: b.texture }, strength: { value: .12 },
-      sceneDepth:{value:target.depthTexture}, steam:{value:0}, steamTime:{value:0}, arrivalTime:{value:-1}, aspect:{value:1},
+      sceneDepth:{value:target.depthTexture}, steam:{value:0}, steamTime:{value:0}, afterglow:{value:0}, arrivalTime:{value:-1}, aspect:{value:1},
       viewToWorld:{value:null}, inverseProjection:{value:null} } });
   const tri = new THREE.BufferGeometry();
   tri.setAttribute('position', new THREE.Float32BufferAttribute([-1,-1,0, 3,-1,0, -1,3,0], 3));
@@ -112,6 +114,7 @@ export function createPost(renderer, lite) {
       surface.material = finish; finish.uniforms.strength.value = calm ? .055 : .12;
       finish.uniforms.steam.value = weather?.density || 0;
       finish.uniforms.steamTime.value = weather?.time || 0;
+      finish.uniforms.afterglow.value=weather?.afterglow||0;
       finish.uniforms.arrivalTime.value = arrivalTime;
       finish.uniforms.aspect.value = camera.aspect;
       finish.uniforms.viewToWorld.value = camera.matrixWorld;

@@ -1,7 +1,7 @@
 import * as T from 'three';
 import { normalizeParams2, loomStyleT, loomLayerRotationRad, loomHelix } from '../../../arcademy/engine/loom/loomField.js';
 import { createDepth } from './depth.js';
-import { STRAY_WORDS, THEME_STRAY_WORDS } from '../../data/content/side.js';
+import { domeVisit, TRANSLATION } from './dome-visit.js';
 import { herdRoster, llamaPortrait } from '../../data/content/llamas.js';
 import { livePanel, placard } from './display.js';
 
@@ -128,13 +128,12 @@ void main(){
 }`;
 
 /** The clock belongs to the visit, so leaving, unloading and returning preserve depth and the real visit duration. */
-export function createDomeEffects({ctx,camera,cue,play,register,bindMedia,setSoundDepth,lite}) {
+export function createDomeEffects({ctx,camera,cue,play,register,bindMedia,setSoundDepth,lite,visit,finish}) {
   const state=createDepth(), heard=new Set(), weather={density:0,time:0};
   const uniforms={depth:{value:0},rotation:{value:0},tunnelRotation:{value:0},pulse:{value:0}};
   let art=null, hallPanel=null, inside=false, motion=0, lifetime=0, actualVisit=0,lastVisit=0,totalVisit=0, visits=0;
   const calm=()=>!!(ctx.gentle || ctx.reduced);
-  const phrases=[...(THEME_STRAY_WORDS[ctx.pick?.('f5')] || []),...(THEME_STRAY_WORDS[ctx.state?.store?.taste2?.theme] || [])];
-  if (!phrases.length) phrases.push(...STRAY_WORDS);
+  const behaviour=domeVisit(visit,cue,finish),aimPoint=new T.Vector3(),look=new T.Vector3(),forward=new T.Vector3();
   function label() {
     if (!hallPanel) return;
     const s=Math.floor(lastVisit), fmt=n=>Math.floor(n/60)+':'+String(n%60).padStart(2,'0');
@@ -223,15 +222,18 @@ export function createDomeEffects({ctx,camera,cue,play,register,bindMedia,setSou
     weather.time=motion;weather.density=inside?smooth(.5,.81,d)*(1+pulse*.075):0;
     const inkReveal=smooth(.1,.12,d);
     if(sign) {
-      const key=d>=1?phrases[Math.floor(motion/8)%phrases.length]:d>=.1?'':null;
-      const inkStep=Math.round(inkReveal*24);
+      const key=behaviour.inscription ?? (d>=1?TRANSLATION:d>=.1?'':null);
+      const inkStep=behaviour.inscription?24:Math.round(inkReveal*24);
       if(key!==art.phrase || inkStep!==art.inkStep){
         art.phrase=key;art.inkStep=inkStep;
         if(key!==null){
           const g=art.dynamic.getContext('2d');g.fillStyle='#eee8d5';g.fillRect(0,0,1152,768);
           g.strokeStyle='#b99c62';g.lineWidth=3;g.strokeRect(18,18,1116,732);
           g.fillStyle='#826839';g.textAlign='left';g.textBaseline='middle';g.font='600 29px system-ui';g.fillText('VISITOR SERVICES',76,75);
-          g.fillRect(76,108,1000,3);g.fillStyle='#15372c';g.textAlign='center';g.font='100px Georgia';g.fillText(key,576,382,1000);
+          g.fillRect(76,108,1000,3);g.fillStyle='#15372c';g.textAlign='center';
+          g.font=key.length>28?'72px Georgia':'100px Georgia';
+          const lines=key.length>28?key.match(/[^.]+\.?/g).map(line=>line.trim()):[key];
+          lines.forEach((line,i)=>g.fillText(line,576,382+(i-(lines.length-1)/2)*100,1000));
           if(inkStep<24&&signMap?.image){g.globalAlpha=1-inkStep/24;g.drawImage(signMap.image,0,0,1152,768);g.globalAlpha=1;}
           art.dynamicTex.needsUpdate=true; sign.material.map=art.dynamicTex;
         } else sign.material.map=signMap;
@@ -285,7 +287,18 @@ export function createDomeEffects({ctx,camera,cue,play,register,bindMedia,setSou
     const was=inside;inside=zone==='dome';
     lifetime+=dt;
     if(inside)actualVisit+=dt;
-    const change=state.step(dt*(inside && calm() ? .65 : 1),inside);
+    const pace=behaviour.pace(dt,inside,camera.position),before=state.seconds;
+    const change=state.step(dt,inside,pace);
+    const secondsAtFull=inside?Math.max(0,dt-(210-before)/pace):0;
+    let looking=false;
+    if(inside&&art?.sign){
+      aimPoint.set(-21.961,1.41,-5);
+      look.subVectors(aimPoint,camera.position);
+      const distance=look.length();
+      looking=camera.position.x>aimPoint.x && distance<6 && camera.getWorldDirection(forward).dot(look.normalize())>.986;
+    }
+    behaviour.observe(dt,inside,state.depth,secondsAtFull,looking);
+    weather.afterglow=zone==='hall'?behaviour.afterglow:0;
     if(change.entered && !heard.has(0)){hear(0);}
     if(inside)for(let i=1;i<=state.phase;i++)if(!heard.has(i))hear(i);
     if(change.left){
@@ -295,7 +308,7 @@ export function createDomeEffects({ctx,camera,cue,play,register,bindMedia,setSou
     if(inside||was)setSoundDepth(inside?state.depth:0);
     if(inside||art){motion+=dt*(ctx.reduced ? .075 : ctx.gentle ? .23 : 1);update(dt);}
   }
-  function hear(i){heard.add(i);cue('dome_'+i);}
+  function hear(i){cue('dome_'+i,{kind:'ambient',zone:'dome',onStart:()=>heard.add(i)});}
   function unmount(id) {
     if(id==='hall'){hallPanel?.dispose();hallPanel=null;}
     if(id!=='dome'||!art)return;
