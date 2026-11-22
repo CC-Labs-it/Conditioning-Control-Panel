@@ -60,39 +60,96 @@ internal static partial class TcHostService
         return File.Exists(Path.Combine(dir, TcExpoPackRules.RootProbe)) ? dir : null;
     }
 
-    /// <summary>At launch (full edition): read the disk, map a ready pack, read the manifest in the
-    /// background for the card's size. Returns the <c>ccp.expo</c> folder to map, or null.</summary>
+    private static DateTime _expoOpenedUtc;
+    private static Task? _expoSizeRead;
+
+    /// <summary>At launch (full edition): read the disk, map a ready pack, take the card's size from the
+    /// cached manifest and refresh it in the background. Returns the <c>ccp.expo</c> folder to map, or null.</summary>
     private static string? ExpoOnLaunch()
     {
         _expoSentUtc = null; _expoSentPct = -1; _expoServing = null;
+        _expoOpenedUtc = DateTime.UtcNow;
+        _expoSizeRead = null;
         if (!TcRules.IsFull(_edition)) { _expo = TcExpoState.Absent; return null; }
         var folder = ExpoReadyFolder(out var version);
         _expo = TcExpoRules.FromDisk(folder != null, 0, 0);
         if (folder != null) { _expoServing = version; return folder; }
-        if (App.Settings?.Current?.OfflineMode != true) _ = ReadManifestQuietlyAsync();
+        _expoManifest ??= ReadCachedManifest();
+        if (App.Settings?.Current?.OfflineMode != true) _expoSizeRead = Task.Run(RefreshSizeAsync);
         return null;
     }
 
-    private static async Task ReadManifestQuietlyAsync()
+    /// <summary>How long the init post waits for a first manifest read (<see cref="TcExpoPackRules.InitHold"/>).</summary>
+    private static TimeSpan ExpoInitHold()
+        => TcExpoPackRules.InitHold(TcRules.IsFull(_edition) && _expo.Phase != TcExpoPhase.Ready, _expoManifest != null,
+            _expoSizeRead?.IsCompleted != false, DateTime.UtcNow - _expoOpenedUtc);
+
+    private static TcExpoManifest? ReadCachedManifest()
     {
-        try { await ExpoManifestAsync(CancellationToken.None).ConfigureAwait(false); }
+        try
+        {
+            var path = TcExpoPackRules.CachePath(ContentRoot);
+            if (!File.Exists(path) || new FileInfo(path).Length > TcExpoPackRules.MaxManifestChars) return null;
+            return TcExpoPackRules.Parse(File.ReadAllText(path), UpdateService.AppVersion, out _);
+        }
+        catch (Exception ex) { Diag.Swallowed(ex); return null; }
+    }
+
+    private static void WriteCachedManifest(TcExpoManifest m)
+    {
+        try
+        {
+            var path = TcExpoPackRules.CachePath(ContentRoot);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path + ".tmp", TcExpoPackRules.CacheJson(m));
+            File.Move(path + ".tmp", path, overwrite: true);
+        }
+        catch (Exception ex) { Diag.Swallowed(ex); }
+    }
+
+    private static async Task RefreshSizeAsync()
+    {
+        try { await ReadLiveManifestAsync(CancellationToken.None).ConfigureAwait(false); }
         catch (Exception ex) { App.Logger?.Debug("Tc: expo manifest read failed: {E}", ex.Message); }
     }
 
-    private static async Task<TcExpoManifest?> ExpoManifestAsync(CancellationToken ct)
+    /// <summary>The live manifest of the tag. A good one replaces the size and the cache.</summary>
+    private static async Task<(TcExpoManifest? Manifest, string? Fail)> ReadLiveManifestAsync(CancellationToken ct)
     {
-        if (_expoManifest != null) return _expoManifest;
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(TimeSpan.FromSeconds(45));
-        var json = await ExpoHttp().GetStringAsync(TcExpoPackRules.ManifestUrl, cts.Token).ConfigureAwait(false);
-        var m = TcExpoPackRules.Parse(json, UpdateService.AppVersion, out var why);
-        if (m == null) App.Logger?.Warning("Tc: expo manifest refused ({Why})", why);
-        return _expoManifest = m;
+        try
+        {
+            using var resp = await ExpoHttp().GetAsync(TcExpoPackRules.ManifestUrl, cts.Token).ConfigureAwait(false);
+            if (!resp.IsSuccessStatusCode) return (null, TcExpoPackRules.FailForStatus((int)resp.StatusCode));
+            var json = await resp.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
+            var m = TcExpoPackRules.Parse(json, UpdateService.AppVersion, out var why);
+            if (m == null) { App.Logger?.Warning("Tc: expo manifest refused ({Why})", why); return (null, TcExpoRules.ReasonRefused); }
+            _expoManifest = m;
+            WriteCachedManifest(m);
+            return (m, null);
+        }
+        catch (HttpRequestException) { return (null, TcExpoRules.ReasonOffline); }
+        catch (TaskCanceledException) when (!ct.IsCancellationRequested) { return (null, TcExpoRules.ReasonOffline); }
     }
 
     /// <summary><c>init.caps.expo</c> (full edition only).</summary>
     private static JObject? ExpoCap()
         => TcRules.IsFull(_edition) ? TcExpoRules.Cap(_expo, TcRules.ExpoBase, _expoManifest is { } m ? TcExpoPackRules.Mb(m.Bytes) : null) : null;
+
+    /// <summary>Records the last HTTP status the download saw (redirects already followed), so a 404
+    /// on the zip reads as refused without changing <see cref="ResumableDownload"/>.</summary>
+    private sealed class StatusRecorder : DelegatingHandler
+    {
+        public int? Last;
+        public StatusRecorder() : base(new HttpClientHandler()) { }
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            var r = await base.SendAsync(request, ct).ConfigureAwait(false);
+            Last = (int)r.StatusCode;
+            return r;
+        }
+    }
 
     private static void PostExpo(bool progress = false)
     {
@@ -142,11 +199,11 @@ internal static partial class TcHostService
     {
         try
         {
-            TcExpoManifest? m;
-            try { m = await ExpoManifestAsync(ct).ConfigureAwait(false); }
-            catch (HttpRequestException) { ExpoOnUi(run, s => TcExpoRules.Fail(s, TcExpoRules.ReasonOffline)); return; }
-            catch (TaskCanceledException) when (!ct.IsCancellationRequested) { ExpoOnUi(run, s => TcExpoRules.Fail(s, TcExpoRules.ReasonOffline)); return; }
-            if (m == null) { ExpoOnUi(run, s => TcExpoRules.Fail(s, TcExpoRules.ReasonRefused)); return; }
+            // The cached manifest is only the size: a download reads the live one (file, bytes, sha256).
+            var cached = _expoManifest;
+            var (live, liveFail) = await ReadLiveManifestAsync(ct).ConfigureAwait(false);
+            var (m, fail) = TcExpoPackRules.ForDownload(cached, live, liveFail);
+            if (m == null) { ExpoOnUi(run, s => TcExpoRules.Fail(s, fail)); return; }
 
             var partial = TcExpoPackRules.PartialPath(ContentRoot, m);
             Directory.CreateDirectory(Path.GetDirectoryName(partial)!);
@@ -157,12 +214,17 @@ internal static partial class TcHostService
             var (folders, stamps) = ExpoDisk();
             RemoveStale(folders, stamps, TcExpoPackRules.ReadyVersion(folders, stamps), _expoServing);
 
-            var download = new ResumableDownload(ExpoHttp(), "TcExpo", 10);
+            // Own client per run: its recorder tells a gone zip (404) from a dropped line.
+            var recorder = new StatusRecorder();
+            using var http = new HttpClient(recorder) { Timeout = TimeSpan.FromMinutes(30) };
+            try { http.DefaultRequestHeaders.UserAgent.ParseAdd($"ConditioningControlPanel/{UpdateService.AppVersion}"); } catch (Exception ex) { Diag.Swallowed(ex); }
+            var download = new ResumableDownload(http, "TcExpo", 10);
             for (var pass = 1; ; pass++)
             {
+                recorder.Last = null;
                 var ok = await download.ToPartialAsync(TcExpoPackRules.Tag, TcExpoPackRules.ReleaseBase + Uri.EscapeDataString(m.File),
                     m.Bytes, partial, (pct, _, _) => ExpoOnUi(run, s => TcExpoRules.Progress(s, (int)pct), progress: true), ct).ConfigureAwait(false);
-                if (!ok) { ExpoOnUi(run, s => TcExpoRules.Fail(s, TcExpoRules.ReasonOffline)); return; }
+                if (!ok) { var why404 = TcExpoPackRules.FailForStatus(recorder.Last); ExpoOnUi(run, s => TcExpoRules.Fail(s, why404)); return; }
                 var sha = await ResumableDownload.Sha256Async(partial, ct).ConfigureAwait(false);
                 if (sha == m.Sha256) break;
                 App.Logger?.Warning("Tc: expo sha256 mismatch (pass {Pass})", pass);

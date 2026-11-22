@@ -125,5 +125,44 @@ internal static class TcExpoPackRules
         return (goDirs, goStamps);
     }
 
+    // ---------------------------------------------------------------- size cache, init hold, live read
+
+    /// <summary>The last good manifest, kept beside the version folders only for the card's SIZE
+    /// (<c>caps.expo.mb</c> on the next launch). A download always reads the live one.</summary>
+    public const string CacheName = "manifest.json";
+
+    /// <summary>The longest the init post waits for a first manifest read (no cache yet).</summary>
+    public static readonly TimeSpan InitHoldMax = TimeSpan.FromMilliseconds(1500);
+
+    public static string CachePath(string contentRoot) => Path.Combine(Root(contentRoot), CacheName);
+
+    /// <summary>The cache file for a manifest that passed <see cref="Parse"/>; it reads back through
+    /// <see cref="Parse"/> unchanged (a build reading it still applies <c>minApp</c>).</summary>
+    public static string CacheJson(TcExpoManifest m) => new JObject
+    {
+        ["v"] = 1, ["file"] = m.File, ["bytes"] = m.Bytes, ["sha256"] = m.Sha256,
+        ["version"] = m.Version, ["minApp"] = m.MinApp, ["unpacked"] = m.UnpackedBytes,
+    }.ToString(Newtonsoft.Json.Formatting.None);
+
+    /// <summary>How long <c>init</c> waits now: zero when the size is known, no size is needed (small
+    /// edition, Expo ready), or the read already finished; else what is left of <see cref="InitHoldMax"/>
+    /// since the window opened.</summary>
+    public static TimeSpan InitHold(bool needSize, bool haveSize, bool readDone, TimeSpan sinceOpen)
+    {
+        if (!needSize || haveSize || readDone) return TimeSpan.Zero;
+        var left = InitHoldMax - sinceOpen;
+        return left > TimeSpan.Zero ? left : TimeSpan.Zero;
+    }
+
+    /// <summary>A failed HTTP answer: 404 / 410 means the pack or manifest is gone or renamed
+    /// (<c>refused</c>); anything else, or no answer at all, is <c>offline</c>.</summary>
+    public static string FailForStatus(int? status)
+        => status is 404 or 410 ? TcExpoRules.ReasonRefused : TcExpoRules.ReasonOffline;
+
+    /// <summary>The manifest a download uses: always the LIVE read, never the cached one (that is only
+    /// the size). A failed live read answers its reason (offline when it gave none).</summary>
+    public static (TcExpoManifest? Manifest, string? Fail) ForDownload(TcExpoManifest? cached, TcExpoManifest? live, string? liveFail)
+        => live != null ? (live, null) : (null, liveFail ?? TcExpoRules.ReasonOffline);
+
     private static string? Str(JObject o, string key) => o[key] is JValue { Type: JTokenType.String } v ? (string?)v : null;
 }
