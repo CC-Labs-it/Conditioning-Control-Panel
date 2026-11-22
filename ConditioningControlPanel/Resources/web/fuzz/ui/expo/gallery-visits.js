@@ -117,7 +117,7 @@ export function galleryVisits(api,state){
         }
         batch(T,group,parts,off);return ()=>off.reverse().forEach(f=>f());
       }));
-      clean.push(api.annexProps(group,place=>{const off=[],sign=place('annex_sign',[X2+.42,0,Z1+4.6*PITCH],Math.PI/2);
+      clean.push(api.annexProps(group,place=>{const off=[],sign=place('annex_sign',[X2-.60,0,Z1+5*PITCH+.66],Math.PI/6);
         write(dial(api,sign,'sign_face',off),'Queue here','Current wait: 0 minutes.','Applied Hoof Sciences');return ()=>off.forEach(f=>f());}));
     }
   }
