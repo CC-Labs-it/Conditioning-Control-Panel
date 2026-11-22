@@ -132,12 +132,14 @@ export const PLAN_FATE = 'outside';
  * herd were there; it has one card, so its fate2..fate4 places become ordinary rows. */
 export const planFate = (fate, picks = {}) => (FATE_BY_ID[fate] && offeredTo(fate, picks, FATE_BY_ID[fate].herd) ? fate : PLAN_FATE);
 /* minutes: the run's planned length; priceMult: the run multiplier (prices scale with it, 1 = today); fate: the ending set
- * the plan places (fate1..fate4 anchors, then its ending last); picks.fate is read when no fate is given. */
-export function buildPlan(picks, minutes = T_RUN[0], priceMult = 1, fate = picks.fate) {
+ * the plan places (fate1..fate4 anchors, then its ending last); picks.fate is read when no fate is given.
+ * ed: the edition reading (sim/economy.js runEdition). In small a cut anchor or a specialty of a cut game becomes a free
+ * row, so the plan never names a cut row. */
+export function buildPlan(picks, minutes = T_RUN[0], priceMult = 1, fate = picks.fate, ed = null) {
   const planned = FATE_BY_ID[planFate(fate, picks)], cards = planned.cards;
   const { targetSeconds } = timeline(minutes);
   const pm = c => priceMult === 1 ? c : Math.max(1, Math.round(c * priceMult));
-  const shadow = E.createRun({ herd: planned.herd || 0 }),
+  const shadow = E.createRun({ herd: planned.herd || 0, ed }),
     j = setupJourney(shadow),
     entries = [],
     kinds = [];  // kinds[i] = the kind of paid plan row i (1-based; forks are not rows)
@@ -182,7 +184,7 @@ export function buildPlan(picks, minutes = T_RUN[0], priceMult = 1, fate = picks
     const rankable = families.filter(id => id && shadow.owned[id] && (j.ranks[id] || 0) < rankCap(id) && !(GAMES.includes(id) && !j.ranks[id] && i - arrived[id] < SAVOUR_BUYS));
     const spaced = rankable.filter(id => !(i - lastRank[id] < RANK_SPACING));
     const ranked = (spaced.length ? spaced : rankable).sort((a, b) => (j.ranks[a] || 0) - (j.ranks[b] || 0));
-    const specialty = SPECIALTIES[wanted];
+    const specialty = SPECIALTIES[wanted] && !E.asleep(shadow, SPECIALTIES[wanted].parent) ? SPECIALTIES[wanted] : null;
     let item = BY_ID[wanted === 'drop' ? E.heldEnding(shadow) : wanted],   // one ending a run: the plan ends on the held one
       parent,
       rank = 0;
@@ -221,6 +223,15 @@ export function buildPlan(picks, minutes = T_RUN[0], priceMult = 1, fate = picks
         };
       } else item = pick?.it;
     }
+    /* Small: once the free rows run dry, the next anchor that can be bought comes now, so the plan closes up and ends on
+     * the held ending. The balance pass (lane S8) sets the length on top of this. */
+    if (!item && ed) {
+      for (let k = i + 1; k <= PLAN_BUYS && !item; k++) {
+        const id = roles[anchors[k]] || anchors[k];
+        const it = id && BY_ID[id === 'drop' ? E.heldEnding(shadow) : id];
+        if (it && E.isOpen(shadow, it) && !LEAD_OF[it.id]) item = it;
+      }
+    }
     if (!item) throw Error('Missing journey offer at ' + i);
     kinds[i] = buyKind(item.id, item.lane);
     if (rank) ranks++;
@@ -249,6 +260,7 @@ export function buildPlan(picks, minutes = T_RUN[0], priceMult = 1, fate = picks
       shadow.fuzz = cost;
       if (!E.buy(shadow, item.id, null, cost).ok) throw Error('Invalid journey purchase ' + item.id);
       if (GAMES.includes(item.id)) arrived[item.id] = i;
+      if (ed && shadow.ended) break;   // small: the closed-up plan ends on its ending
     }
     const fork = forks.get(i);
     if (fork) {
@@ -286,7 +298,7 @@ export function createJourney(s) {
     const fate = E.fateOf(s);
     const key = Object.values(s.picks).join('/') + '#' + (fate || '');
     if (key !== previous) {
-      entries = buildPlan(s.picks, minutes, priceMult, fate);
+      entries = buildPlan(s.picks, minutes, priceMult, fate, E.runEdition(s));
       previous = key;
     }
     return entries;

@@ -74,7 +74,9 @@ export function serialize(run, life, extras = {}) {
 
 /* SLEEP (owner 2026-11-22, CONTRACT.md 6.4): small never deletes. A run saved with a Renewal stamp plays in small at
  * Depth 0 (no stamp, pace without the stamp's pay), and writes the stamp and the saved pace back as they were. Cut rows
- * stay in owned and order and sleep there (sim/economy.js has). The life's Renewal state is parsed as always and kept. */
+ * stay in owned and order and sleep there (sim/economy.js has). The life's Renewal state is parsed as always and kept.
+ * The toJSON below means a JSON clone of a sleeping run (JSON.parse(JSON.stringify(run))) wakes the stamp: never clone a
+ * run that way. */
 function sleepStamp(s, stamp, savedPace) {
   const pay = stamp.pay > 0 ? stamp.pay : 1;
   const playing = savedPace / pay;

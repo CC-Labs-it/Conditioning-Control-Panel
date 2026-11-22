@@ -63,14 +63,19 @@ function skipChapter(run, journey, st, last) {
 export function createEngine({ run, life, ui, audio, registry, prestigeRegistry = PRESTIGE_REGISTRY, host = {}, rng = Math.random, save = () => {}, env = {} }) {
   if (!env.journey) delete run.store.journey;
   if (life && typeof life === 'object' && !life.prestige) life.prestige = P.createPrestige();
-  const prestigeOf = () => life?.prestige || P.createPrestige();
+  /* EDITIONS: a small run (sim/economy.js runEdition) has no Renewal for anyone. The life's Renewal state SLEEPS: never
+   * read, settled or stamped here, so the save writes it back as it was (CONTRACT.md 6.4). Every Renewal question below
+   * reads an empty Depth 0. */
+  const small = !!E.runEdition(run);
+  const depthZero = small ? P.createPrestige() : null;
+  const prestigeOf = () => depthZero || life?.prestige || P.createPrestige();
   /* A brand new run (nothing played, nothing bought) takes the stamp; a saved run keeps the one it started with, and a run
    * from before prestige existed plays as Depth 0. */
   const freshRun = !run.prestige && !run.clock && run.buys === 0 && !run.ended;
   /* Stars bought mid-run (the Renewal menu, sim/prestige.js buyLater) are felt from here: once, as the fresh run takes its
    * stamp. A reload of a saved run keeps its stamp and never settles. */
-  if (freshRun && life?.prestige) P.settleLater(life.prestige);
-  const stamp = freshRun ? stampRun(run, prestigeOf()) : run.prestige || null;
+  if (freshRun && life?.prestige && !small) P.settleLater(life.prestige);
+  const stamp = small ? null : freshRun ? stampRun(run, prestigeOf()) : run.prestige || null;
   const journey = env.journey ? createJourney(run) : null;
   if (freshRun && stamp) {
     if (stamp.skip && journey) skipChapter(run, journey, stamp, prestigeOf().last);
@@ -142,7 +147,7 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     if (id === 'quiz' && emiRoams()) return false;
     const item = BY_ID[id];
     const entry = registry[id];
-    if (!item || !entry?.mount) return false;
+    if (!item || !entry?.mount || E.asleep(run, id)) return false;   // a sleeping row (small edition) never mounts
     if (scopes.has(id)) unmount(id);
     const scope = newScope(item);
     scope.restored = restored;
@@ -193,7 +198,7 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     },
   };
   function mountPrestige(restored = false) {
-    if (stopped) return;
+    if (stopped || small) return;   // no Renewal in the small edition, `always` entries included
     const p = prestigeOf();
     if (P.lit(p, 'si_end') || (!journey && (stamp?.price || 1) !== 1)) mountEntry(prestigeItem('prestige_core', 'Renewal Sky'), corePerks, null, restored);
     for (const [lane, entry] of Object.entries(prestigeRegistry)) {
@@ -504,6 +509,17 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     if (endingBegun) return;
     endingBegun = true;
     stopped = true;
+    /* A run that ended on a row the small edition cuts (the Expo) stays an ended run there: no take, no show, no resumed
+     * visit, nothing recorded; the plain credits card with New run (the player's own press). run.store keeps the visit. */
+    if (E.sleepingEnd(run)) {
+      audio?.stopStreams?.();
+      emit('ending', { id });
+      unmountAll();
+      ui.credits?.(id);
+      creditsUp = true;
+      for (const it of ITEMS) if (it.group === 'after') mount(it.id);
+      return;
+    }
     const interactiveVisit = registry[id]?.showMaxMs === null;
     const visitState = registry[id]?.resumeTake ? (run.store[id] ||= {}) : null;
     function finishVisit() {
@@ -627,7 +643,7 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
      * renew(): finish + New run bookkeeping (sim/prestige.js renew), saved at once. */
     prestige: prestigeView,
     pstore: (lane) => { const p = prestigeOf(); return (p.store[lane] ||= {}); },
-    renew() { const r = P.renew(life, run); save(); return r; },
+    renew() { if (small) return null; const r = P.renew(life, run); save(); return r; },   // small: Renewal sleeps
     get freeBuys() { return stamp?.free || 0; },
     /** The run's own Journey shop (null on the plain shop): the dev preview bar steps the reference player on it. A second
      *  createJourney would replace run.store.journey under this one. */

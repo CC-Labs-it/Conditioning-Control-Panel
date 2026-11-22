@@ -27,7 +27,7 @@ import { loadPrestige, prestigeNow, openRenewal, openSky, SKY_CURRENCY } from '.
 import { applyLooks } from './sim/prestige-looks.js';
 import { canKeepPlaying as keepPlayingOk, keepPlaying as keepPlayingRun } from './sim/prestige-endings.js';   // Endless (onemore)
 import { sealedFor, showSeal } from './ui/seal.js';
-import { setEdition, expoArrived } from './ui/edition.js';
+import { setEdition, expoArrived, editionState, renewalAllowed } from './ui/edition.js';
 import { mountLlamaPen } from './ui/llama-pen.js';
 import { mountHomeTip } from './ui/phone.js';
 import { previewBarAllowed } from './ui/preview-bar-model.js';
@@ -91,7 +91,9 @@ bridge.boot({ onInit: (init) => {
 
 function start(init) {
   document.title = BRAND.game;
-  const saved = load(storage);
+  /* The edition rides on the run (sim/economy.js runEdition): a small run sleeps its cut rows and its Renewal stamp. */
+  const ed = editionState(), renewal = renewalAllowed(ed);
+  const saved = load(storage, { ed });
   const life = saved?.life || createLife();
   // The Expo launcher creates a disposable run. Its lifetime flags have a private preview slot.
   const expoPreview = fresh && qs.get('expoPreview') === '1';
@@ -117,7 +119,7 @@ function start(init) {
   const pictureDoor = devDoor && (!combinedPreview || qs.get('pictures') === 'none')
     && qs.get('pictures') !== 'scrolller' ? qs.get('pictures') || (toyPreview ? 'online' : 'none') : null;
   const mood = MOODS[moodArg] ? moodArg : rollMood(life.runs);
-  const run = saved?.run || E.createRun({ pace: paceArg || 1, mood, seed: Math.floor(Math.random() * 2 ** 32), perk: life.perk });
+  const run = saved?.run || E.createRun({ pace: paceArg || 1, mood, seed: Math.floor(Math.random() * 2 ** 32), perk: life.perk, ed });
   /* The Panel (data/fate.js HERD_SETS): the sim reads the herd live from the life save, so an opt-out on this visit's
      terms counts at once. A getter, so it is never saved with the run. ?herd=12 sets a fresh (unsaved) life's herd. */
   if (fresh && Number(qs.get('herd')) > 0) life.llamas = Math.min(12, Math.floor(Number(qs.get('herd'))));
@@ -126,10 +128,10 @@ function start(init) {
   if (paceArg) run.pace = Math.min(CONFIG.MAX_PACE, paceArg) * (saved?.run && run.prestige?.pay > 0 ? run.prestige.pay : 1);
   /* PRESTIGE LOOKS HOOK (sim/prestige-looks.js): looks bought in the Sky after the core are owned from the first second of
      every run. Writes ownership flags only (never equips), idempotent, so it runs on every boot, fresh or saved. */
-  if (life.prestige) applyLooks(run, life.prestige);
+  if (life.prestige && renewal) applyLooks(run, life.prestige);   // small: the Sky's looks sleep with the rest of Renewal
   /* A Sky visit still open when the page went away (a reload or a closed tab between Renew and Sign and start): the
      renewal is already applied and saved, so the Sky reopens as it was instead of a run starting under it. */
-  const skyVisit = !saved?.run && life.prestige && extras.sky && typeof extras.sky === 'object' ? extras.sky : null;
+  const skyVisit = renewal && !saved?.run && life.prestige && extras.sky && typeof extras.sky === 'object' ? extras.sky : null;
   if (moodArg && MOODS[moodArg]) { run.mood = moodArg; E.recalc(run); }
 
   const audio = createKit();
@@ -223,13 +225,13 @@ function start(init) {
   };
   const hooks = {
     newRun,
-    renew,
-    keepPlaying,                                            // Endless (onemore): the credits card's Keep playing
-    canKeepPlaying: () => keepPlayingOk(life, run),
+    renew: renewal ? renew : null,                          // small: no Renewal, the ending leads to New run
+    keepPlaying: renewal ? keepPlaying : null,                                          // Endless (onemore): the credits card's Keep playing
+    canKeepPlaying: () => renewal && keepPlayingOk(life, run),
     renewCurrency: SKY_CURRENCY,
     renewDust() {
       const P = prestigeNow();
-      if (!P || !run.ended) return null;
+      if (!renewal || !P || !run.ended) return null;
       try { return P.dustFor(run, life.prestige || P.createPrestige()); } catch { return null; }
     },
     changePictures(redraw) {
@@ -249,7 +251,7 @@ function start(init) {
     },
     exportSave: () => serialize(run, life, extras),
     importSave(text) {
-      if (!parse(text)) return false;
+      if (!parse(text, { ed })) return false;
       try { storage.setItem(SAVE_KEY, text); } catch { return false; }
       leaving = true;
       location.reload();
@@ -395,7 +397,7 @@ function start(init) {
     });
   }
   if (skyVisit) reopenSky();
-  else if (skyDemo) {
+  else if (skyDemo && renewal) {
     const P = prestigeNow();
     const p = P.createPrestige();
     p.depth = 4; p.dust = 1400;
