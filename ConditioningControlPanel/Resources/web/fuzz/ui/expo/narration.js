@@ -27,7 +27,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     subtitle.append(p);captions[key]=p;
   }
   root.append(subtitle);
-  let held=ctx.paused, dead=false, check=0, ready=false, dwellStation=null, dwellTime=0, planterBook, story, lastAutoPosition=null;
+  let held=ctx.paused, dead=false, check=0, ready=false, dwellStation=null, dwellTime=0, planterBook, story;
   sequence.pause(held);
   const load=fetch(assetURL('narration/manifest.json'),{signal:abort.signal}).then(async r=>{
     if(!r.ok)throw new Error('Expo narration manifest HTTP '+r.status);
@@ -243,7 +243,6 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     if(!ready||dead||held||!station.project)return;
     const ticket=story.request(station.id,review);
     if(!ticket)return;
-    if(!ticket.review)lastAutoPosition=camera.position.clone();
     if(!heard.has('pa_timeline'))cue('pa_timeline',{zone:station.zone});
     return enqueue(ticket.row.id,{station,zone:station.zone,replay:true,ticket,kind:'beat'});
   }
@@ -270,10 +269,8 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     let focused=null,best=Infinity;
     const immediate=[];
     for(const room of rooms.values())for(const s of room.list){
-      if(s.archive){
-        if(!story.canAutoplay(s.id) || (lastAutoPosition && camera.position.distanceToSquared(lastAutoPosition)<4))continue;
-      }else if(heard.has(s.id)||!book.has(s.id))continue;
-      const row=s.archive?story.next:book.get(s.id);
+      if(s.archive || heard.has(s.id) || !book.has(s.id))continue;
+      const row=book.get(s.id);
       if(unavailable.has(row.id))continue;
       const eligible=row.set==='event'||row.set==='log'||['ex_press','hab_1','pa_timeline','pa_photos','pa_hall4_missing'].includes(s.id);
       if(!eligible)continue;
@@ -295,8 +292,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     else if(focused){
       dwellTime+=dt;
       if(dwellTime>=DWELL_SECONDS){
-        if(focused.archive)playArchive(focused);
-        else cue(focused.id,{station:focused,zone:focused.zone,kind:'ambient'});
+        cue(focused.id,{station:focused,zone:focused.zone,kind:'ambient'});
         dwellStation=null;dwellTime=0;
       }
     }

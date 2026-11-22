@@ -1,3 +1,4 @@
+import { visitTicket } from './ticket.js';
 import { acceptedTerms } from '../unlocks/fate/museum/terms.js';
 import { CLAUSES } from '../../data/content/clauses.js';
 import { herdRoster } from '../../data/content/llamas.js';
@@ -20,7 +21,7 @@ export function admission(ctx) {
 export function createVisit(ctx) {
   const file = admission(ctx);
   return {
-    file, presses:0, misses:0, hoof:'idle', hoofTime:0, taps:0, feeds:0, clause:0,
+    file, ticket:visitTicket(ctx.store), presses:0, misses:0, hoof:'idle', hoofTime:0, taps:0, feeds:0, clause:0,
     contract:false, loops:0, boughtExit:false, turnstile:false, timer:0, photo:false,
     heard:new Set(), habitatTime:0,
     press(stop=false) {

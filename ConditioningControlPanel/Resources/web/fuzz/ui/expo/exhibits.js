@@ -200,7 +200,7 @@ export function createExhibits(api) {
         g.fillStyle='#e4dbc1';g.font='48px Georgia,serif';g.fillText('(today)',w/2,563);
       });
       tally();
-      ui.count=()=>{if(state.turnstile)return;state.turnstile=true;ui.turn=0;tally();play('turnstile');once('pa_turnstile');};
+      ui.count=()=>{if(state.turnstile)return;state.turnstile=true;state.ticket.issue();ui.turn=0;tally();play('turnstile');once('pa_turnstile');};
       ui.turnstile=bind('turnstile_arm','Pass the turnstile',ui.count);
       if(ui.turnstile){
         const arm=ui.turnstile,data=arm.userData;

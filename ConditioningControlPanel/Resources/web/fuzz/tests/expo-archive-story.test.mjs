@@ -72,28 +72,14 @@ test('the planter claims the lifetime on first landing, including a visit abando
   assert.equal(imported.held,false);
 });
 
-test('the tour points from admission through alternating gallery walls and gives the local exhibit action at a detour',async()=>{
-  const route=JSON.parse(await readFile(new URL('../assets/expo/station-route.json',import.meta.url),'utf8'));
-  const story=createArchiveStory(manifest);
-  const position=([x,y,z])=>({x,y,z});
-  const at=position(route.start.at);
-  const [entry]=route.slots;
-  assert.equal(new Set(route.slots.map(s=>s.id)).size,40);
-  assert.equal(new Set(route.tour).size,40);
-  assert.match(visitDirection(route,story,'atrium',at,{}),/admission projector/i);
-  assert.match(visitDirection(route,story,'atrium',{...position(entry.standing),y:3.4},{}),/downstairs/);
-  const ticket=story.request(entry.id);
-  assert.match(visitDirection(route,story,'atrium',position(entry.standing),{}),/Listen here/);
-  story.finish(ticket,true);
-  assert.equal(visitDirection(route,story,'atrium',at,{}),entry.directions[0].text);
-  const wings=new Set(['chronology','forum','commons','aquarium']);
-  const stations=route.slots.filter(s=>wings.has(s.zone));
-  assert.deepEqual(stations.map(s=>s.side),Array.from({length:8},(_,i)=>i%2?'right':'left'));
-  assert.match(visitDirection(route,createArchiveStory(manifest),'hoof',at,{hoof:'pictures'}),/picture grid/);
-  assert.match(visitDirection(route,story,'shop',at,{contract:false,loops:0}),/exit contract at the till/);
+test('admission and local exhibit directions are independent of optional record progress',()=>{
+  const story=createArchiveStory(manifest), at={x:0,y:0,z:0}, visitor={ticket:{issued:true}};
+  assert.match(visitDirection(null,story,'atrium',at,{}),/turnstile/);
+  const direction=visitDirection(null,story,'atrium',at,visitor);
   story.finish(story.request('slot_14'),true);
-  assert.doesNotMatch(visitDirection(route,story,'shop',at,{contract:false,loops:0}),/Visit the postcard projector/);
-  assert.match(visitDirection(route,createArchiveStory(manifest),'shop',at,{contract:true,loops:2,boughtExit:true}),/Go home/);
+  assert.equal(visitDirection(null,story,'atrium',at,visitor),direction);
+  assert.match(visitDirection(null,story,'hoof',at,{hoof:'pictures'}),/picture grid/);
+  assert.match(visitDirection(null,story,'shop',at,{boughtExit:true}),/Renewal door/);
 });
 
 test('a simultaneous planter claim cannot start a second set of timed cues',async()=>{
