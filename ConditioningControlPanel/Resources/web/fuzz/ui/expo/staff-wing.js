@@ -1,4 +1,5 @@
 import {dial,layThread,sight,useCarry,write} from './staff-fixtures.js';
+import {balconyLamp,corridorText,pickupText,teaThread,trailDocket} from './trail-fittings.js';
 
 const notes=[
   'Please leave this notice here.','Please leave the previous notice there.','The previous notice has been left there.',
@@ -75,7 +76,7 @@ export function createStaffWing(api,state) {
       };
       r.group.traverse(n=>{
         if(n.isLight&&n!==r.light)lights.push([n,n.intensity]);
-        if(!n.isMesh||n.name==='Wool along the skirting')return;
+        if(!n.isMesh||n.name==='Wool along the skirting'||n.userData.expoGuideLight)return;
         const old=n.material,material=Array.isArray(old)?old.map(use):use(old);
         meshes.push([n,old,material]);n.material=material;
       });
@@ -111,6 +112,7 @@ export function createStaffWing(api,state) {
       const off=[];
       const bind=(node,label,fn,reach=2.3)=>off.push(api.register(node,label,fn,reach));
       layThread(api,group,place,routes[id],off);
+      r.teaPath=teaThread(api,group,place,id,off);
       if(id==='service'){
         r.signs=locations.map((at,i)=>{
           const n=place('annex_sign',at,i%2===0?Math.PI:0),panel=dial(api,n,'sign_face',off);
@@ -128,7 +130,8 @@ export function createStaffWing(api,state) {
         place('annex_heater',[25.52,.836,27.17]);
         const socket=place('annex_socket',[25.93,.96,26.92]);r.plug=socket.getObjectByName('heater_plug');
         r.plug.position.z=view.unplugged ? .11 : 0;
-        place('annex_notice',[25.31,1.71,26.79]);
+        const notice=place('annex_notice',[25.31,1.71,26.79]);
+        bind(notice,'Read the heater notice',()=>{state.ticket.discover('Unplugged');api.say('Do not unplug the heater.');});
         bind(socket,()=>view.unplugged?'Plug the heater back in':'Unplug the heater',plug);
         r.light=new T.PointLight(0x83e6a6,2.8,6.5,2);r.light.position.set(25.48,2.18,28.0);group.add(r.light);
         off.push(()=>{r.light.removeFromParent();r.light.dispose();});
@@ -136,6 +139,10 @@ export function createStaffWing(api,state) {
         write(dial(api,roster,'rota_face',off),'Staff rota','Tomorrow: '+state.file.name,'Reading balcony   /   Tea service');
         bind(roster,'Read tomorrow’s rota',()=>api.say('Tomorrow: '+state.file.name+'. Tea to the reading balcony.'));
         r.tray=place('annex_tea',[16.63,.920,25.52]);r.tray.visible=!view.delivered&&!api.isCarrying('tea');
+        const pickup=trailDocket(api,place,off,'tea',[16.82,1.23,25.01]);
+        bind(pickup,'Read the tea docket',()=>{state.ticket.discover('Delivered');api.say(pickupText);});
+        const corridor=trailDocket(api,place,off,'corridor',[30.225,1.26,38.86],-Math.PI/2);
+        bind(corridor,'Read the corridor sign',()=>{state.ticket.discover('Read');api.say(corridorText);api.trailTask('corridor','service');});
         bind(r.tray,'Carry the tea to the reading balcony',()=>{if(useCarry(api,state,'tea',r.tray,'Tea tray'))api.trailTask('tea','service');});
         const desk=place('annex_plinth',[19.32,.84,28.1]);
         const stapler=place('annex_stapler',[19.32,.912,28.1]);stapler.visible=view.staplerHome;
@@ -149,6 +156,7 @@ export function createStaffWing(api,state) {
         api.walker.add('balcony-tea-stand',stand,[],'hall');
         off.push(()=>api.walker.remove('balcony-tea-stand'));
         const docket=place('annex_docket',[10.775,4.00,11.95],-Math.PI/2);
+        r.teaLamp=balconyLamp(T,group,stand,off);
         const tray=place('annex_tea',[11,4.252,11.95],-Math.PI/2);tray.visible=view.delivered;
         const label=()=>state.carry?.key==='tea'?'Set down the tea':'Read the tea docket';
         function serve(){
@@ -166,6 +174,11 @@ export function createStaffWing(api,state) {
     pivotYaw=null;fromDesk=false;
   }
   function tick(dt,id) {
+    const tea=api.isCarrying('tea');
+    for(const r of rooms.values())if(r.teaPath){
+      if(r.serving!==tea){for(const piece of r.teaPath)piece.visible=tea;r.serving=tea;}
+      if(r.teaLamp)r.teaLamp.emissiveIntensity=tea?(api.ctx.gentle||api.ctx.reduced?1.6:1.20+.85*Math.cos(api.ctx.activeMs*.0028)):0;
+    }
     if(powerTime!==null){
       powerTime+=dt;
       lowRooms();dark.style.opacity=String(Math.min(.14,powerTime/14));
@@ -180,7 +193,8 @@ export function createStaffWing(api,state) {
     }
     if(id!=='service')return;
     const pos=camera.position;
-    if(Math.hypot(pos.x-25.42,pos.z-27.19)<2.8)fromDesk=true;
+    if(pos.y<3&&Math.hypot(pos.x-25.42,pos.z-27.19)<2.8){fromDesk=true;state.ticket.discover('Unplugged');}
+    if(pos.y<3&&Math.hypot(pos.x-16.63,pos.z-25.52)<2.5)state.ticket.discover('Delivered');
     const r=rooms.get('service');
     if(!r?.signs||pos.z<30.7||pos.z>33.3||pos.x<12||pos.x>33.5){pivotYaw=null;return;}
     const yaw=camera.rotation.y;

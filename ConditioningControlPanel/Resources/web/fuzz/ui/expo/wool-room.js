@@ -1,5 +1,6 @@
 import {COUNTERFOILS} from './ticket.js';
 import {dial,layThread,sight,write} from './staff-fixtures.js';
+import {clauseLight} from './trail-fittings.js';
 
 const swatches=COUNTERFOILS.flat();
 // The brass numbers also reserve space for acts that this visitor has yet to try.
@@ -91,6 +92,7 @@ export function createWoolRoom(api,state){
     clean.push(()=>{room=null;seated=null;candidate='';lastX=undefined;dwell=0;});
     clean.push(api.annexProps(group,place=>{
       const off=[],bind=(n,label,fn,reach=2.5)=>off.push(api.register(n,label,fn,reach));
+      local.readLight=clauseLight(T,group,off);
       for(const [route,z,start,end,bays] of [['out',41,30.4,80.4,41],['back',51,32.6,86.4,46]]){
         const spacing=(end-start-3.9)/(bays-1);
         for(let i=0;i<bays;i++)for(const side of [-1,1]){
@@ -100,7 +102,7 @@ export function createWoolRoom(api,state){
           const custom=route==='out'&&side===-1&&i<Math.min(8,state.file.clauses.length);
           const key=custom?'accepted-'+i:'folio-'+serial;
           const pos=new T.Vector3(x,1.365,depth);
-          local.panels.push({pos,key});
+          local.panels.push({pos,key,side,custom});
           if(custom){
             const node=place('annex_record',[x,1.016,depth+.01]);
             write(dial(api,node,'record_face',off,500,570),'From your run',state.file.clauses[i],'Accepted clause   /   '+(i+1));
@@ -136,7 +138,10 @@ export function createWoolRoom(api,state){
       refresh();return ()=>{for(const f of off.reverse())f();};
     }));
   }
-  function enter(id){if(id!=='secret'){seated=null;candidate='';dwell=0;lastX=undefined;restore();}}
+  function enter(id){
+    if(id==='secret'){ticket.discover('Read');return;}
+    seated=null;candidate='';dwell=0;lastX=undefined;room?.readLight?.(null);restore();
+  }
   function tick(dt,id){
     clock+=dt;
     for(const mark of ticket.stamps)if(!impressions.has(mark))impressions.set(mark,clock);
@@ -159,13 +164,14 @@ export function createWoolRoom(api,state){
           read.add(candidate);api.say(read.size===8?'The archive door is ready.':'Clause read. '+Math.min(8,read.size)+' of 8.');
         }
       }
+      room.readLight(found,dwell/.9,read.has(found?.key));
       // Shift exactly one evenly spaced bay, preserving the view through a straight walk.
       if(read.size<8&&Math.abs(p.z-41)<1.18&&p.x>=71.22&&(lastX===undefined||p.x>lastX)){
         const yaw=camera.rotation.y,pitch=camera.rotation.x;
         api.walker.place('secret',[p.x-1.1525,0,p.z],yaw);camera.rotation.x=pitch;
         if(!blockedOnce){blockedOnce=true;cue('corridor_loop');}
       }
-    }
+    }else{candidate='';dwell=0;room.readLight(null);}
     lastX=p.x;
     const key=[ticket.stamps.size,ticket.ledger.size,withdrawn.length].join('/');
     if(seenKey!==key){seenKey=key;refresh();}

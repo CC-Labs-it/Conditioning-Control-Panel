@@ -32,16 +32,16 @@ export function sight(api) {
 }
 
 // Follow the skirting with one instanced draw for each finish, including sloping landings.
-export function layThread(api,group,place,points,clean) {
+export function layThread(api,group,place,points,clean,tea=false) {
   const T=api.THREE,source=place('annex_thread',[0,0,0]);
   source.visible=false;
-  const chunks=[],a=new T.Vector3(),b=new T.Vector3(),axis=new T.Vector3(1,0,0),transform=new T.Object3D();
+  const chunks=[],pieces=[],a=new T.Vector3(),b=new T.Vector3(),axis=new T.Vector3(1,0,0),transform=new T.Object3D();
   for(let i=1;i<points.length;i++){
     a.fromArray(points[i-1]);b.fromArray(points[i]);
     const distance=a.distanceTo(b),n=Math.ceil(distance/1.5);
     if(!n)continue;
     transform.quaternion.setFromUnitVectors(axis,b.clone().sub(a).normalize());
-    transform.scale.set(distance/n,1,1);
+    transform.scale.set(distance/n,tea?1.65:1,tea?2.45:1);
     for(let k=0;k<n;k++){
       transform.position.lerpVectors(a,b,(k+.5)/n);transform.updateMatrix();chunks.push(transform.matrix.clone());
     }
@@ -49,16 +49,21 @@ export function layThread(api,group,place,points,clean) {
   source.traverse(piece=>{
     if(!piece.isMesh||!chunks.length)return;
     const material=piece.material.clone();
-    if(material.emissive){
+    if(tea){
+      material.color.setHex(material.name==='Linen'?0xffeed0:0xe3a953);
+      material.emissive.setHex(0xe6af63);material.emissiveIntensity=.33;
+    }else if(material.emissive){
       material.emissive.setHex(0xecbb9c);material.emissiveIntensity=group.userData.emergencyWool ? .55 : 0;
       (group.userData.woolFinishes??=new Set()).add(material);
     }
     const copies=new T.InstancedMesh(piece.geometry,material,chunks.length);
-    copies.name='Wool along the skirting';
+    copies.name=tea?'Tea round wool':'Wool along the skirting';
+    copies.visible=!tea;copies.userData.expoGuideLight=tea;pieces.push(copies);
     chunks.forEach((matrix,i)=>copies.setMatrixAt(i,matrix));
     copies.computeBoundingSphere();group.add(copies);
     clean.push(()=>{group.userData.woolFinishes?.delete(material);copies.removeFromParent();copies.dispose();material.dispose();});
   });
+  return pieces;
 }
 
 export function useCarry(api,state,key,node,label) {
