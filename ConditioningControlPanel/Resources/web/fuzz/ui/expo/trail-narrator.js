@@ -8,7 +8,7 @@ export function trailNarrator(api,state){
       case 'signed_form':return state.carry?.key==='signed-form';
       case 'hoof':return state.hoof==='idle'&&!state.hoofWorn;
       case 'first_press':return !stamps.has('Pressed');
-      case 'queue':return !stamps.has('Queued');
+      case 'queue':return !stamps.has('Queued')&&!(state.firstPressCount>=2&&state.firstPressCount<8);
       case 'meeting':return !stamps.has('Attended');
       case 'corrections':return !stamps.has('Corrected');
       case 'rematch':return !stamps.has('Spat');
@@ -18,7 +18,7 @@ export function trailNarrator(api,state){
       case 'corridor':return state.readClauses.size<8;
       case 'wool_chair':return !stamps.has('Read');
       case 'heater':return !state.staffVisit.unplugged;
-      case 'shop':return !state.souvenir&&!state.contract;
+      case 'shop':return !state.souvenir&&!state.contract&&!state.pressTask?.atShop;
       default:return true;
     }
   }

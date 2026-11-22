@@ -32,10 +32,9 @@ export function visitorCommentary(state,cue){
       case 'commons':if(offer('green_record',state.bestSpit>0))return;break;
       case 'hall':
         if(offer('queue_stamp',has('Queued'))||offer('queue_corner',state.queueProgress>3&&state.queueProgress<23)||
-          offer('press_mezz',state.presses>=12&&state.presses<25&&feet.y>3&&feet.x>8)||
-          offer('press_quiet',ledger('did-not-press'))||offer('press_last',state.presses>=25)||
-          offer('press_barrier',state.presses>=5&&state.presses<12)||
-          offer('press_first_again',state.presses>0&&state.presses<5&&Math.abs(feet.z+9)<4)||
+          offer('press_quiet',ledger('did-not-press'))||offer('press_last',state.pressSwitchReady)||
+          offer('press_barrier',state.firstPressCount===2)||
+          offer('press_first_again',state.firstPressCount===1&&Math.abs(feet.z+9)<4)||
           offer('dome_exit',from==='dome'&&state.domeSeconds>90))return;break;
       case 'hoof':
         if(offer('hoof_edge_again',ledger('hoof-edge'))||
@@ -55,7 +54,7 @@ export function visitorCommentary(state,cue){
         if(offer('conduct_last',state.doorWait>88)||offer('conduct_wait',state.doorWait>42)||
           offer('staff_badge',ledger('staff-exit'))||offer('shop_printed',state.contract)||
           offer('stock_return',returnedStock)||offer('shop_form',state.signedForm)||
-          offer('press_price',state.presses>=12&&state.presses<25&&Math.abs(feet.x-17.48)<2&&Math.abs(feet.z+3.7)<2)||
+
           offer('shop_intro',age>9)||offer('shop_bays',t.count<8))return;break;
     }
     if(offer('held_item',!!key)||offer('put_down',!key&&putDown))return;

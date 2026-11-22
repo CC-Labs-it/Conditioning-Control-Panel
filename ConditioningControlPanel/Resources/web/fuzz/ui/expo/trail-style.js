@@ -31,6 +31,7 @@ export const TRAIL_STYLE = `
 @keyframes expo-trail-ink{from{opacity:0;translate:0 -8px;scale:1.08}to{opacity:1;translate:0 0;scale:1}}
 @keyframes expo-trail-fade{from{opacity:0}to{opacity:1}}
 @media(prefers-reduced-motion:reduce){.expo-stamp-moment[data-new]{animation:expo-trail-fade .2s ease-out}}
+.expo-prompt[data-loan-card]{top:66%}
 .expo-root[data-hoof-board] .expo-guide{display:none}
 @media(pointer:coarse) and (orientation:landscape){
   .expo-root[data-hoof-board] .expo-narration{left:48%;bottom:max(6px,env(safe-area-inset-bottom));width:calc(100% - 310px)}

@@ -17,7 +17,7 @@ function codeFor(event){
 }
 
 /** All input methods share the same camera and collision-aware walk. */
-export function createControls({ root, canvas, camera, move, spit, trail, onInteract, onJump, onPause, onInputMode, initialInputMode, isPaused = () => false }) {
+export function createControls({ root, canvas, camera, move, spit, trail, onInteract, onJump, onPause, onInputMode, initialInputMode, isPaused = () => false, holdingView = () => false }) {
   const doc = root.ownerDocument, win = doc.defaultView, keys = new Set(), off = [];
   const pad = createExpoGamepad(() => win.navigator.getGamepads?.());
   const primaryMode = () => win.matchMedia?.('(pointer:coarse)').matches ? 'touch' : 'keyboard';
@@ -83,7 +83,7 @@ export function createControls({ root, canvas, camera, move, spit, trail, onInte
     }
   }
   function turn(yaw, pitch) {
-    if (!active()) return;
+    if (!active()||holdingView()) return;
     camera.rotation.y -= yaw;
     camera.rotation.x = Math.max(-1.45, Math.min(1.45, camera.rotation.x - pitch));
     camera.rotation.z = 0;
@@ -120,6 +120,7 @@ export function createControls({ root, canvas, camera, move, spit, trail, onInte
       return;
     }
     if(trail?.opened)return;
+    if(holdingView()&&code!=='KeyE'&&code!=='Enter')return;
     if(code==='KeyQ'&&!event.target?.closest?.(UI)){
       used('keyboard');event.preventDefault();event.stopPropagation();if(!event.repeat)spitting?.begin('key');return;
     }
@@ -237,6 +238,7 @@ export function createControls({ root, canvas, camera, move, spit, trail, onInte
   });
   return {
     get inputMode() { return inputMode; },
+    stopMoving(){clearKeys();clearPointers();spitting?.cancel();},
     step(dt) {
       if (!available()) { reset(); return; }
       if (!Number.isFinite(dt) || dt <= 0) return;
@@ -255,6 +257,7 @@ export function createControls({ root, canvas, camera, move, spit, trail, onInte
       }
       if(input?.trail&&trail){trail.toggle();return;}
       if (input?.back || input?.start) { onPause?.(); return; }
+      if(holdingView()){if(input?.interact)onInteract();return;}
       if (input) {
         const sensitivity = Math.hypot(input.lookX,input.lookY);
         if (sensitivity) turn(input.lookX*sensitivity*PAD_YAW_SPEED*seconds,input.lookY*sensitivity*PAD_PITCH_SPEED*seconds);

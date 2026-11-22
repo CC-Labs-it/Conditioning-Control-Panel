@@ -109,7 +109,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     camera.rotation.order = 'YXZ';
     const sound = createSound(ctx); clean.push(() => sound.dispose());
     const visitorGuide=createVisitGuide(root,{
-      onOpen:()=>controls?.reset(),canOpen:()=>ready&&!dead&&!loading&&!returnButton&&!ctx.paused
+      onOpen:()=>controls?.reset(),canOpen:()=>ready&&!dead&&!loading&&!returnButton&&!ctx.paused&&!exhibits?.state.pressWatching
     });clean.push(()=>visitorGuide.dispose());
     let waitingForEntrance=arrival;
     const walker = createWalker(camera, sound.footstep, id=>narration?.planter?.(id),
@@ -148,6 +148,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     }
     let pressedUntil = 0, actionSerial=0;
     function interact(point) {
+      if(exhibits?.state.pressWatching&&!ctx.paused&&!doc.hidden){sound.play('press',.24);say('The exhibit is moving.');return true;}
       if (!ctx.paused && !doc.hidden && walker.stepOffPlanter()) { updatePrompt(); return true; }
       const target = targetAt(point);
       if (target) {
@@ -163,6 +164,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       if (elapsed>=pressedUntil) aim.removeAttribute('data-pressed');
       if (!stepDown.hidden) { aim.setAttribute('data-action',''); prompt.textContent = inputMode === 'touch' ? 'Tap Step down' : inputMode === 'gamepad' ? expoInteractionText('Step down', inputMode) : 'E to step down'; return; }
       const action = targetAt()?.action;
+      prompt.toggleAttribute('data-loan-card',action?.owner.name==='First Press loan card');
       const label = action ? (typeof action.label === 'function' ? action.label() : action.label) : floorPlacement()?'Set down '+exhibits.state.carry.label:'';
       aim.toggleAttribute('data-action', !!label);
       prompt.textContent = expoInteractionText(label, inputMode);
@@ -233,6 +235,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     exhibits = createExhibits({ THREE, ctx, camera, scene, root, draw, say, walker, renderer, muffle:narration.muffle, setHeaterPower:sound.setHeaterPower, pauseMusic:on=>music.pause(on), signal:instruments.signal, props:kit.mount, annexProps:annex.mount, records:()=>narration.story?.completed||0,
       storeSouvenir:(obj,label)=>souvenirPrint({THREE,renderer,draw,ctx},obj,label), actionSerial:()=>actionSerial, cue:narration.cue, narrationAvailable:narration.available, closingLine:narration.closingLine, play: sound.play, setSoundDepth: sound.setDepth,
       go, exit: onExit, farewell, register, assetURL, bindMedia, capturePhoto, finalPhoto, setColliderEnabled:walker.setColliderEnabled,
+      holdPressView:()=>controls?.stopMoving(),
       setButtonAvailable:buttons.setAvailable,registerDoorLeaf:(...args)=>zones?.registerDoorLeaf(...args) });
     dome = createDomeEffects({ctx,camera,cue:narration.cue,play:sound.play,register,bindMedia,setSoundDepth:sound.setDepth,lite:LITE,visit:exhibits.state,finish:exhibits.endVisit});
     const guests=createGuestCollection(assetURL);
@@ -250,11 +253,12 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     visitorGuide.watch(exhibits.state.ticket);
     controls = createControls({ root, canvas, camera, trail:visitorGuide, initialInputMode:inputMode, onInputMode:inputChanged,
       move: walker.move, spit:exhibits.spit, onInteract: interact, onJump: () => walker.jump?.(),
+      holdingView:()=>exhibits.state.pressWatching,
       onPause: () => { if (!ctx.paused) doc.getElementById('wake')?.click(); },
       isPaused: () => !ready || dead || loading || !!returnButton || ctx.paused || doc.hidden });
     clean.push(() => controls.dispose());
     clean.push(mountJumpButton(root, () => {
-      if (ready && !ctx.paused && !dead && !loading && !returnButton && !doc.hidden) walker.jump();
+      if (ready && !ctx.paused && !dead && !loading && !returnButton && !doc.hidden && !exhibits.state.pressWatching) walker.jump();
     }));
     const drawingSize = new THREE.Vector2();
     const resize = () => {

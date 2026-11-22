@@ -20,6 +20,9 @@ export function createSound(ctx) {
 
   function play(id, gain = .58, pan = 0) {
     if (held || dead) return;
+    if(id==='loan_tick'){
+      ctx.audio.play('assets/audio/sfx/tally_tick.mp3',{bus:'sfx',source:'expo-loan',sourceLabel:'Loan locator',gain,pan,signal:controller.signal});return;
+    }
     const path = bank.effects?.[id];
     if (path) ctx.audio.play(resolve(path), { bus: 'sfx', gain, pan, signal: controller.signal });
   }

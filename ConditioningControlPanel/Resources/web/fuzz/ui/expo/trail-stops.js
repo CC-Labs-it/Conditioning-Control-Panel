@@ -47,7 +47,12 @@ export function trailTask(room,p,v,yaw=0){
   }
   if(key==='signed-form')return task('Signed form','Hand it in at the gift shop till.','Lady Lashes');
   if(key==='stapler')return task("Return Greg’s stapler","Staff desk, service corridor",'Office supplies');
-  if(key==='rope-post')return task('Set down the rope post','Look at the floor, or return it to the notice.','First Press');
+  if(key==='rope-post'){
+    if(v.pressTask&&v.firstPressCount>=3&&v.firstPressCount<8&&(room==='hall'||room==='shop')){
+      return {...v.pressTask,where:v.pressTask.where+' · Look down to set the post down.'};
+    }
+    return task('Set down the rope post','Look at the floor, or return it to the notice.','First Press');
+  }
   if(key?.startsWith('souvenir:'))return task('Carry your souvenir to the till','Gift shop');
   if(key?.startsWith('print-'))return task('Hang the photograph on an empty hook','Corrections Desk, along the same wall.');
   if(key?.startsWith('staff-sign-'))return task('Place Bob’s sign','Hall of the Twelve, beside Bob.');
@@ -56,7 +61,10 @@ export function trailTask(room,p,v,yaw=0){
     return n<8?task('Read 8 clauses to reach the end','Stop at a frame and look at it · '+n+' of 8',"Nana’s record · staff only"):
       task('Sit in the reading chair','End of the contract corridor · 8 of 8',"Nana’s record · staff only");
   }
-  if(v.pressTask && (room==='hall'||(room==='shop'&&v.pressTask.atShop)))return v.pressTask;
+  if(v.pressTask && (room==='hall'||(room==='shop'&&v.pressTask.atShop))){
+    const nearClosedCase=Math.hypot(p.x,p.z+9)<3 || Math.hypot(p.x+11.48,p.z+3.35)<3;
+    if(v.firstPressCount!==8||nearClosedCase)return v.pressTask;
+  }
   if(room==='atrium'){
     if(!t?.issued)return task('Pass the turnstile for your trail card','Visitor admission · straight ahead','Start here',[0,35.33]);
     if((t?.count||0)>=8)return task('Go to the gift shop','Eight stamps open the way home.','Home');
@@ -73,7 +81,11 @@ export function trailTask(room,p,v,yaw=0){
     return task('Follow the wool','Staff canteen and contract corridor.','Staff access');
   }
   if(room==='forum'&&v.meetingSeconds>0)return v.meetingSeconds>=40?task('Walk through the open gate','Forum · attendance recorded','The Meeting'):task('Stand still on the green disc','Forum · '+Math.ceil(40-v.meetingSeconds)+' s remaining','The Meeting');
-  if(room==='hall')return p.x<-6&&p.z>6.7&&p.y<1&&!marks?.has('Queued')?stopTask(3):stopTask(4);
+  if(room==='hall'){
+    if(p.x<-6&&p.z>6.7&&p.y<1&&!marks?.has('Queued'))return stopTask(3);
+    if(v.firstPressCount===8)return task('Choose another stop on your trail card','Grand Hall · First Press is closed.');
+    return stopTask(4);
+  }
   if(room==='hoof'){
     if(v.hoof==='practice')return v.hoofWorn?task('Press the large button','Hoof lab · on the desk','Hoof Sciences'):task('Put the hooves on','Hoof lab · brass desk','Hoof Sciences');
     if(v.hoof==='pictures'&&v.misses>=3&&v.hoofWorn)return task('Return the hooves to the desk','Then use one finger on the picture grid.','Hoof Sciences');
