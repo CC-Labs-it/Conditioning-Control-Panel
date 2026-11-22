@@ -17,7 +17,7 @@ import { createWornHooves, mountHoofLab } from './hoof-lab.js';
 import { mountAquariumLife } from './aquarium-life.js';
 import { LLAMAS } from '../../data/content/llamas.js';
 
-const hallCues = {twelve:'pa_hall4',atrium:'pa_arrive_1'};
+const hallCues = {twelve:'pa_hall4'};
 const clamp = n => Math.min(1,Math.max(0,n));
 
 export function createExhibits(api) {
@@ -125,7 +125,7 @@ export function createExhibits(api) {
         ui.turn=0;tally();play('turnstile');
         if(state.hoofWorn)state.ticket.book('hoof-admitted','Admitted as a llama',true);
         if(state.hoofWorn)cue('v4_hoof_arrival',{kind:'beat',zone:id,exhibit:'turnstile'});
-        else trail.offer('welcome',id);
+        else {trail.offer('welcome',id);if(!state.heard.has('pa_arrive_2'))later('pa_arrive_2',24);}
       };
       admissionPrinter(api,state,group,clean,ui);
       ui.turnstile=bind('turnstile_arm','Pass the turnstile',ui.count);
@@ -165,7 +165,7 @@ export function createExhibits(api) {
     gallery.enter(id,here);staff.enter(id,here);hands.enter(id,environment);here=id;awareness.enter(id);
     if(hallCues[id])once(hallCues[id]);
     if(id==='twelve' && state.file.herd.length===12)later('pa_hall4_full',6);
-    if(id==='atrium'&&!state.heard.has('pa_arrive_2'))later('pa_arrive_2',20);
+    if(id==='atrium'&&state.turnstile&&!state.heard.has('pa_arrive_2'))later('pa_arrive_2',24);
   }
   function tick(dt,id) {
     if(ctx.paused)return;
