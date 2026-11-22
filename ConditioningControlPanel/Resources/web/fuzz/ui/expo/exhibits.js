@@ -88,10 +88,6 @@ export function createExhibits(api) {
       }
       const doctorFound=state.file.herd.includes('doctor'), alpaca=obj('alpaca_button');
       if(alpaca)alpaca.visible=doctorFound;
-      if(doctorFound)bind('alpaca_button','Is he an alpaca?',()=>{
-        if(ui.alpacaReturnAt!=null)return;
-        play('chime');ui.alpacaReturnAt=hudClock+.32;
-      });
       const photo=obj('photo_release');
       ui.photo=photo;ui.aperture=0;
       if(obj('photo_terrace'))obj('photo_terrace').visible=false;
@@ -174,10 +170,6 @@ export function createExhibits(api) {
     });
     const ui=zones.get(id)?.ui;
     if (!ui)return;
-    if(ui.alpacaReturnAt!=null&&hudClock>=ui.alpacaReturnAt){
-      ui.alpacaReturnAt=null;
-      void go('atrium',[0,0,36],0).then(()=>cue('pa_alpaca'));
-    }
     ui.waterLife?.tick(dt,ctx.gentle||ctx.reduced);
     founding.tick(dt,id);
     if(id==='hall' && Math.hypot(camera.position.x,camera.position.z+9)<5.2)once('pa_hall1');
