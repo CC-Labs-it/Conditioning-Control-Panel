@@ -171,6 +171,16 @@ namespace ConditioningControlPanel.Services.Companion.Brain
         /// </summary>
         public const int ContextFitTokenBudget = 3400;
 
+        /// <summary>The same fit for Ollama and bring-your-own endpoints (owner 2026-11-22, ccp-bugs #1717):
+        /// a long personal prompt there pushed out nearly all chat history under the cloud's 4k budget.
+        /// Ollama is asked for a window that fits it (<c>LocalAiService.ComputeNumCtx</c>, at least 8k); a
+        /// bring-your-own server must offer about 8k of context or it trims the prompt itself.</summary>
+        public const int LocalContextFitTokenBudget = 7000;
+
+        /// <summary>The fit budget for a provider: the cloud keeps its 4k model's budget.</summary>
+        internal static int ContextFitTokenBudgetFor(ConditioningControlPanel.Models.AiProviderType provider)
+            => provider == ConditioningControlPanel.Models.AiProviderType.Cloud ? ContextFitTokenBudget : LocalContextFitTokenBudget;
+
         /// <summary>
         /// Deliberately pessimistic real-token estimate (chars/3). The brain's budgeting estimator
         /// (<see cref="ChatSession.ApproxTokens"/>, chars/4) tracks provider billing, but Llama-2
@@ -400,22 +410,23 @@ namespace ConditioningControlPanel.Services.Companion.Brain
         internal static void ShedHistoryToContextFit(List<ChatMessage> messages)
         {
             if (messages == null || messages.Count == 0) return;
+            var budget = ContextFitTokenBudgetFor(CurrentProvider());
 
             int Estimate() => messages.Sum(m => ConservativeRealTokens(m.Content));
 
             int before = messages.Count;
             // Index 1 is the oldest history message; keep at least the system message + newest.
-            while (messages.Count > 2 && Estimate() > ContextFitTokenBudget)
+            while (messages.Count > 2 && Estimate() > budget)
                 messages.RemoveAt(1);
 
             if (messages.Count != before)
             {
                 App.Logger?.Information(
                     "[AI-PROMPT] context-fit shed {Shed} oldest history message(s) ({Before}→{After}) to stay under ~{Budget} real tokens",
-                    before - messages.Count, before, messages.Count, ContextFitTokenBudget);
+                    before - messages.Count, before, messages.Count, budget);
             }
 
-            if (Estimate() > ContextFitTokenBudget)
+            if (Estimate() > budget)
             {
                 // Nothing left to shed: the system prompt alone brushes the model's window. The
                 // provider-side compressor may fire and gut it from the middle — this line is the
@@ -423,7 +434,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
                 App.Logger?.Warning(
                     "[AI-PROMPT] request still ~{Tokens} est. real tokens after shedding all history " +
                     "(budget {Budget}) — the system prompt alone risks provider-side middle-out truncation",
-                    Estimate(), ContextFitTokenBudget);
+                    Estimate(), budget);
             }
         }
 
@@ -655,16 +666,17 @@ namespace ConditioningControlPanel.Services.Companion.Brain
         /// the companion settings (cloud when nothing is saved, as <c>AiServiceStrategy</c> does).</summary>
         internal static Func<ConditioningControlPanel.Models.AiProviderType>? ProviderForTests;
 
-        private static bool CloudIsTheTransport()
+        private static bool CloudIsTheTransport() => CurrentProvider() == ConditioningControlPanel.Models.AiProviderType.Cloud;
+
+        private static ConditioningControlPanel.Models.AiProviderType CurrentProvider()
         {
             try
             {
-                var provider = ProviderForTests != null
+                return ProviderForTests != null
                     ? ProviderForTests()
                     : App.Settings?.Current?.CompanionPrompt?.AiProvider ?? ConditioningControlPanel.Models.AiProviderType.Cloud;
-                return provider == ConditioningControlPanel.Models.AiProviderType.Cloud;
             }
-            catch { return true; }
+            catch { return ConditioningControlPanel.Models.AiProviderType.Cloud; }
         }
 
         private static string WarnIfOversize(string systemPrompt)
