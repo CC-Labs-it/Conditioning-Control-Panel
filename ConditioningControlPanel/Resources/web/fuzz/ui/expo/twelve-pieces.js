@@ -5,7 +5,7 @@ const pages=['The Update proceeds as agreed.','All parties remain included.','']
 const names={reginald:'Reginald',margaret:'Margaret',henry:'Henry',greg:'Greg',bob:'Bob',lashes:'Lady Lashes',kevin:'Kevin',spitz:'DJ Spitz',gary:'Gary',doctor:'Dr. Alpaca',bartholomew:'Bartholomew',nana:'Nana'};
 
 export function createTwelvePieces(api,state){
-  const {THREE:T,camera,root}=api,look=sight(api),direction=new T.Vector3();
+  const {THREE:T,camera,root}=api,look=sight(api);
   const progress={page:0,touches:0,doctor:0,silence:0,minutes:0,stare:0,blink:null,dj:0,signPlaced:false};
   state.twelvePieces=progress;
   let room,previous,beat=0,away=0,moved=false;
@@ -15,7 +15,7 @@ export function createTwelvePieces(api,state){
   const cue=(key,kind='react')=>api.cue('v4_'+key,{kind,exhibit:'twelve'});
   function mount(id,group,clean){
     if(id!=='twelve')return;
-    room={casts:[],owned:new Set(state.file.herd),lamps:[]};const local=room;
+    room={casts:[],owned:new Set(state.file.herd)};const local=room;
     clean.push(()=>{room=null;previous=null;});
     clean.push(api.annexProps(group,place=>{
       const off=[],bind=(n,label,fn,reach=2.4)=>{if(n)off.push(api.register(n,label,fn,reach));};
@@ -43,26 +43,29 @@ export function createTwelvePieces(api,state){
         if(key==='henry')bind(figure,'Touch the bronze',()=>{
           progress.touches++;api.say('Touched today: '+progress.touches+'. The rest is sealed.');cue('desk_touch');local.writeHenry?.();
         },2.9);
+        if(['henry','margaret','greg','gary'].includes(key))place('annex_display_stand',at(1.19,-.68,-.89),yaw);
         if(key==='henry'){
-          const label=place('annex_record',at(1.22,-.53,-.69),yaw);label.scale.setScalar(.75);
+          const label=place('annex_record',at(1.19,.18,-.89),yaw);label.scale.setScalar(.75);
           const panel=dial(api,label,'record_face',off);
           local.writeHenry=()=>write(panel,'Henry','Touched today: '+progress.touches,'The record is sealed.');
           local.writeHenry();
         }
         if(key==='margaret'){
-          const book=place('annex_book',at(.6,.046),yaw);
-          const folio=place('annex_record',at(.84,.035,-.30),yaw);folio.scale.setScalar(.48);
+          const book=place('annex_book',at(1.23,.18,-.89),yaw);
+          const folio=place('annex_record',at(1.04,.24,-.89),yaw);folio.scale.setScalar(.55);
+          folio.rotation.x=-.08;
           const page=dial(api,folio,'record_face',off),read=()=>write(page,'The Update',pages[progress.page],'Leaf '+(progress.page+1));
-          read();bind(book,'Turn a page of the Update',()=>{
+          const turn=()=>{
             progress.page=(progress.page+1)%pages.length;read();api.play('feed',.27);
             if(progress.page===2){state.ticket.book('blank-leaf','Found Margaret’s blank page',true);cue('blank_page');}
-          });
+          };
+          read();bind(book,'Turn a page of the Update',turn);bind(folio,'Turn a page of the Update',turn);
         }
         if(key==='greg'){
-          local.stapler=place('annex_stapler',at(.63,.057),yaw);
+          local.stapler=place('annex_stapler',at(1.20,.18,-.89),yaw);
           local.stapler.scale.setScalar(1.45);local.stapler.visible=!state.staffVisit.staplerHome&&state.carry?.key!=='stapler';
           bind(local.stapler,'Borrow Greg’s stapler',()=>{
-            if(useCarry(api,state,'stapler',local.stapler,'Greg’s stapler')){away=0;api.say('Stationery. Staff desk, left side.');}
+            if(useCarry(api,state,'stapler',local.stapler,'Greg’s stapler')){away=0;api.say('Keep the stapler in sight. Greg likes it on the left of his staff desk.');}
           },2.9);
         }
         if(key==='bob'){
@@ -79,12 +82,12 @@ export function createTwelvePieces(api,state){
         }
         if(key==='spitz')bind(figure,'Play the Signal',()=>{
           if(progress.dj>0)return;
-          progress.dj=8;api.signal?.();api.play('band',.42);state.ticket.book('signal','Played the Signal',true);
+          progress.dj=8;api.signal?.();api.play('spit',.33);state.ticket.book('signal','Played the Signal',true);
         },2.9);
         if(key==='gary'){
-          const ledger=place('annex_record',at(.64,.05),yaw);ledger.scale.setScalar(.58);
-          const panel=dial(api,ledger,'record_face',off);local.ledger=()=>write(panel,'Gary from Accounts',state.ticket.yes+' Yes\n'+state.ticket.deviations+' Deviations','Balance reviewed.');
-          local.ledger();bind(ledger,'Read Gary’s ledger',()=>{local.ledger();api.say(state.ticket.yes+' Yes. '+state.ticket.deviations+' Deviations.');});
+          const ledger=place('annex_record',at(1.19,.18,-.89),yaw);ledger.scale.setScalar(.75);
+          const panel=dial(api,ledger,'record_face',off);local.ledger=()=>write(panel,'Gary from Accounts',state.ticket.balance+' Yes\n'+state.ticket.outstanding+' Deviations','Balance reviewed.');
+          local.ledger();bind(ledger,'Read Gary’s ledger',()=>{local.ledger();api.say(state.ticket.balance+' Yes. '+state.ticket.outstanding+' Deviations.');});
         }
         if(key==='doctor'){
           const doctor=group.getObjectByName('alpaca_button');
@@ -111,19 +114,20 @@ export function createTwelvePieces(api,state){
       }
       if(firstCover){
         const b=firstCover,scaffold=group.getObjectByName('scaffold_'+b.key),cover=group.getObjectByName('cover_'+b.key);
-        const deck=b.at(1.0,.63,.76),note=place('annex_dust_note',b.at(.57,.09,.21),b.yaw);
+        const deck=[b.x,1.64,b.z-.51],note=place('annex_dust_note',b.at(.57,.09,.21),b.yaw);
         const hooves=place('annex_hooves_under',b.at(.51,-.56,.23),b.yaw);
         note.scale.setScalar(.55);note.visible=hooves.visible=false;
         bind(scaffold,'Climb the scaffold',()=>{
           if(!state.staffVisit.hardHat){api.say('Hard hats must be worn. Stores have one.');return;}
-          const board=new T.Mesh(new T.BoxGeometry(.88,.095,.80),new T.MeshBasicMaterial());
+          api.walker.remove('visitor-scaffold');
+          const board=new T.Mesh(new T.BoxGeometry(1.91,.05,.36),new T.MeshBasicMaterial());
           board.position.fromArray(deck);api.walker.add('visitor-scaffold',board,[],'twelve');board.geometry.dispose();board.material.dispose();
           const yaw=camera.rotation.y;
-          api.walker.place('twelve',[deck[0],deck[1]+.05,deck[2]],yaw);
+          api.walker.place('twelve',[deck[0]-.51,deck[1]+.025,deck[2]],yaw);
           local.onScaffold=true;api.say('Lift the corner of the sheet.');
         },2.75);
         bind(cover,'Lift the dust sheet corner',()=>{
-          if(!state.staffVisit.hardHat||!local.onScaffold){api.say('The hem is above the rail.');return;}
+          if(!state.staffVisit.hardHat||!local.onScaffold||Math.hypot(camera.position.x-deck[0],camera.position.z-deck[2])>1.1){api.say('The hem is above the rail.');return;}
           if(!note.visible){
             const pivot=new T.Group();pivot.position.set(b.x,-.65,b.z);group.add(pivot);pivot.attach(cover);
             pivot.rotation.z=.16;pivot.position.y+=.32;
@@ -134,13 +138,6 @@ export function createTwelvePieces(api,state){
         },3.0);
         off.push(()=>api.walker.remove('visitor-scaffold'));
       }
-      // Mark the lenses, and keep their own base intensity for restoration after a Signal.
-      const seen=new Set();
-      group.traverse(n=>{if(n.isMesh)for(const m of [n.material].flat()){
-        if(!m?.emissive||!/(lumin|diffus|lamp|emit)/i.test(m.name)||seen.has(m))continue;
-        seen.add(m);local.lamps.push([m,m.emissive.clone(),m.emissiveIntensity]);
-      }});
-      off.push(()=>{for(const [m,c,v] of local.lamps){m.emissive.copy(c);m.emissiveIntensity=v;}});
       return ()=>{for(const f of off.reverse())f();};
     }));
     clean.push(api.props(group,place=>{
@@ -154,6 +151,16 @@ export function createTwelvePieces(api,state){
     }));
   }
   function tick(dt,id){
+    if(state.carry?.key==='stapler'){
+      away=camera.rotation.x<-.19?0:away+dt;
+      if(away>=4.5){api.drop('stapler');if(room?.stapler)room.stapler.visible=true;away=0;cue('stapler');}
+    }
+    if(progress.dj>0){
+      const last=Math.floor((8-progress.dj)*2);
+      progress.dj=Math.max(0,progress.dj-dt);
+      const n=Math.floor((8-progress.dj)*2);
+      if(last!==n&&n<16){api.play(n%4===0?'spit':n%2?'press':'chime',n%4===0?.32:.16,n%2?.12:-.12);}
+    }
     if(progress.blink!==null){
       progress.blink+=dt;
       const t=progress.blink,open=t<1?1-t:t<1.5?0:Math.min(1,(t-1.5)/1.4);
@@ -181,29 +188,17 @@ export function createTwelvePieces(api,state){
           if(!reg)cue('kevin');else api.say('Reginald has entered your attendance in the minutes.');
         }
       }
-      if(b.key==='greg'&&state.carry?.key==='stapler'){
-        // Greg gives the visitor a head start to reach his desk.
-        away=look.visible(b.pos,1.15)?0:away+dt;
-        if(away>=3&&p.distanceTo(b.pos)<3.5){api.drop('stapler');room.stapler.visible=true;away=0;cue('stapler');}
-      }
     }
     if(room.lashes&&!state.ticket.stamps.has('Blinked')){
       progress.stare=look.gaze(room.lashes,5,.16)?progress.stare+dt:0;
       if(progress.stare>=6){
         progress.blink=0;moved=false;state.signedForm=true;state.ticket.stamp('Blinked');
         state.ticket.book('blink','Looked at Lady Lashes too long',true);cue('blink','beat');
-        if(!state.carry&&room.form)api.hold('signed-form',room.form,'Signed visitor form');
+        api.exchange('signed-form',room.form,'Signed visitor form');
       }
     }
     if(room.threadStart&&p.distanceTo(room.threadStart)<2.15&&!state.threadSeen){state.threadSeen=true;cue('wool_start');}
-    if(progress.dj>0){
-      progress.dj=Math.max(0,progress.dj-dt);
-      const strength=progress.dj?(.5+.5*Math.cos(beat*(api.ctx.gentle||api.ctx.reduced?1.5:3.5))):0;
-      for(const [m,c,v] of room.lamps){
-        m.emissive.copy(c).lerp(new T.Color(0xa8d6ab),.18*strength);m.emissiveIntensity=v+.28*strength;
-      }
-    }
-    const signature=state.ticket.yes+'/'+state.ticket.deviations;
+    const signature=state.ticket.balance+'/'+state.ticket.outstanding;
     if(signature!==room.ledgerKey){room.ledgerKey=signature;room.ledger?.();}
   }
   function cueStatues(){

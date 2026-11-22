@@ -9,6 +9,7 @@ const locations=[[13.9,0,32.91],[16,0,30.99],[19.4,0,33.0],[21.7,0,30.99],[24.6,
 
 export function createStaffWing(api,state) {
   const {THREE:T,camera,root}=api,look=sight(api),rooms=new Map();
+  const emergencyTint=new T.Color(.42,1,.54),emergencyEmission=new T.Color(.22,1,.38);
   const view=state.staffVisit={signs:1,hardHat:false,unplugged:false,delivered:false,staplerHome:false};
   let pivotYaw=null,signCount=1,powerTime=null,blackout=false,fromDesk=false,signedOut=false;
   const dark=root.ownerDocument.createElement('div'),card=root.ownerDocument.createElement('p');
@@ -37,7 +38,12 @@ export function createStaffWing(api,state) {
     r.relights=null;
   }
   function lightRoom(id,r){
+    if(r.group.userData.emergencyWool!==view.unplugged){
+      r.group.userData.emergencyWool=view.unplugged;
+      for(const finish of r.group.userData.woolFinishes||[])finish.emissiveIntensity=view.unplugged ? .55 : 0;
+    }
     if(!view.unplugged){restoreRoom(r);return;}
+    if(r.dirty){restoreRoom(r);r.dirty=false;}
     if(!r.relights){
       const surfaces=new Map(),lights=[],meshes=[];
       const use=original=>{
@@ -60,20 +66,17 @@ export function createStaffWing(api,state) {
     const step=Math.round(fraction*18)/18;
     if(r.relights.last===step)return;
     r.relights.last=step;
-    const emergency=step===2,level=emergency?.37:1-.95*step;
+    const emergency=step===2,level=emergency ? .37 : 1-.95*step;
     for(const item of r.relights.surfaces.values()){
       const m=item.material;
-      if(item.tint){m.color.copy(item.tint).multiplyScalar(level);if(emergency)m.color.multiply(new T.Color(.42,1,.54));}
-      if(item.emission){m.emissive.copy(item.emission);if(emergency)m.emissive.multiply(new T.Color(.22,1,.38));m.emissiveIntensity=item.strength*level;}
+      if(item.tint){m.color.copy(item.tint).multiplyScalar(level);if(emergency)m.color.multiply(emergencyTint);}
+      if(item.emission){m.emissive.copy(item.emission);if(emergency)m.emissive.multiply(emergencyEmission);m.emissiveIntensity=item.strength*level;}
     }
     for(const [light,intensity] of r.relights.lights)light.intensity=intensity*level;
   }
   function lowRooms(){
     for(const [id,r] of rooms){
       lightRoom(id,r);
-      for(const m of r.threads||[]){
-        m.emissive?.setHex(view.unplugged?0xecbb9c:0x000000);if(m.emissive)m.emissiveIntensity=view.unplugged ? .55 : 0;
-      }
       if(r.light)r.light.visible=view.unplugged&&id==='service';
     }
   }
@@ -83,15 +86,16 @@ export function createStaffWing(api,state) {
       atrium:[[1.1,.025,16],[8.65,.025,18.5],[10.93,.025,31.08],[12,.025,31.08]],
       service:[[12,.025,31.08],[28.13,.025,31.08],[28.15,.025,39.95],[29.02,.025,40.14],[30.40,.025,40.14]],
     };
-    const r={group};rooms.set(id,r);clean.push(()=>{restoreRoom(r);rooms.delete(id);});
+    const r={group};rooms.set(id,r);
+    const added=()=>{if(view.unplugged)r.dirty=true;};
+    group.addEventListener('childadded',added);
+    clean.push(()=>{group.removeEventListener('childadded',added);restoreRoom(r);rooms.delete(id);});
     if(view.unplugged)lightRoom(id,r);
     if(!routes[id])return;
     clean.push(api.annexProps(group,place=>{
       const off=[];
       const bind=(node,label,fn,reach=2.3)=>off.push(api.register(node,label,fn,reach));
       layThread(api,group,place,routes[id],off);
-      r.threads=[];
-      group.traverse(n=>{if(n.name==='Wool along the skirting')r.threads.push(...[n.material].flat());});
       if(id==='service'){
         r.signs=locations.map((at,i)=>{
           const n=place('annex_sign',at,i%2===0?Math.PI:0),panel=dial(api,n,'sign_face',off);
@@ -100,7 +104,7 @@ export function createStaffWing(api,state) {
           bind(n,'Carry the notice',()=>{if(useCarry(api,state,'staff-sign-'+i,n,'Bob’s notice'))cue('bob_sign');});
           return n;
         });
-        const box=place('annex_crate',[24.45,0,38.51],Math.PI),hat=place('annex_hat',[24.44,.48,38.52],Math.PI);
+        const box=place('annex_crate',[24.62,0,34.82],Math.PI),hat=place('annex_hat',[24.62,.48,34.82],Math.PI);
         hat.visible=!view.hardHat;
         bind(hat,'Wear the hard hat',()=>{view.hardHat=true;hat.visible=false;api.say('Hard hat fitted. The scaffold is open to staff.');});
         bind(box,()=>view.hardHat?'Return the hard hat':'Read the packing note',()=>{
@@ -116,7 +120,7 @@ export function createStaffWing(api,state) {
         const roster=place('annex_rota',[21.65,1.70,27.1],-Math.PI/2);
         write(dial(api,roster,'rota_face',off),'Staff rota','Tomorrow: '+state.file.name,'Reading balcony   /   Tea service');
         bind(roster,'Read tomorrow’s rota',()=>api.say('Tomorrow: '+state.file.name+'. Tea to the reading balcony.'));
-        r.tray=place('annex_tea',[18.96,.92,25.45]);r.tray.visible=!view.delivered&&state.carry?.key!=='tea';
+        r.tray=place('annex_tea',[16.63,.920,25.52]);r.tray.visible=!view.delivered&&state.carry?.key!=='tea';
         bind(r.tray,'Carry the tea to the reading balcony',()=>{if(useCarry(api,state,'tea',r.tray,'Tea tray'))cue('tea');});
         const desk=place('annex_plinth',[19.32,.84,28.1]);
         const stapler=place('annex_stapler',[19.32,.912,28.1]);stapler.visible=view.staplerHome;
@@ -150,6 +154,9 @@ export function createStaffWing(api,state) {
         powerTime=null;blackout=false;card.style.display='none';dark.style.background='#125e39';dark.style.opacity='.07';lowRooms();
         cue('heater','beat');
       }
+    }
+    if(view.unplugged&&powerTime===null){
+      for(const [zone,r] of rooms)if(r.dirty)lightRoom(zone,r);
     }
     if(id!=='service')return;
     const pos=camera.position;

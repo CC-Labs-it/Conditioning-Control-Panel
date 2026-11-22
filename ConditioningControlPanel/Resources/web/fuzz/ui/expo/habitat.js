@@ -42,6 +42,7 @@ export function humanHabitat(api,state,pressRegister){
       const panel=face&&livePanel(T,face,{width:1152,height:660,emission:.38}),plaqueRaw=obj('habitat_plaque'),plaqueFace=plaqueRaw?.isMesh?plaqueRaw:plaqueRaw?.getObjectByProperty('isMesh',true);
       const plaque=plaqueFace&&livePanel(T,plaqueFace);
       const target=new T.WebGLRenderTarget(192,108,{depthBuffer:true});
+      const feedCamera=new T.PerspectiveCamera(camera.fov,192/108,camera.near,camera.far);
       target.texture.colorSpace=T.SRGBColorSpace;target.texture.repeat.y=-1;target.texture.offset.y=1;
       const eyeMat=new T.MeshBasicMaterial({map:target.texture,toneMapped:false}),normalMat=face?.material;
       const strip=document.createElement('canvas');strip.width=512;strip.height=54;
@@ -50,7 +51,17 @@ export function humanHabitat(api,state,pressRegister){
       const surface=new T.MeshBasicMaterial({map:stripTexture,depthTest:false,depthWrite:false,toneMapped:false});
       const overlay=new T.Scene(),eye=new T.OrthographicCamera(-1,1,1,-1,0,1),plate=new T.Mesh(new T.PlaneGeometry(2,.26),surface);
       plate.position.set(0,-.87,-.5);overlay.add(plate);
-      const stateView=view={panel,face,target,eyeMat,shadows:[],feed:null,overlay,eye,strip:()=>{
+      const frost=document.createElement('canvas');frost.width=256;frost.height=128;
+      const fg=frost.getContext('2d'),fog=fg.createLinearGradient(0,0,0,128);
+      for(const [stop,alpha] of [[0,0],[.045,.23],[.15,.52],[.52,.60],[.85,.52],[.955,.23],[1,0]])fog.addColorStop(stop,'rgba(214,227,213,'+alpha+')');
+      fg.fillStyle=fog;fg.fillRect(0,0,256,128);
+      fg.strokeStyle='rgba(232,238,210,.68)';fg.lineWidth=1;for(const y of [7,121]){fg.beginPath();fg.moveTo(0,y);fg.lineTo(256,y);fg.stroke();}
+      const frostMap=new T.CanvasTexture(frost);frostMap.colorSpace=T.SRGBColorSpace;
+      const frostMat=new T.MeshBasicMaterial({map:frostMap,side:T.DoubleSide,transparent:true,depthWrite:false});
+      const band=new T.Mesh(new T.PlaneGeometry(9.18,.76),frostMat);band.position.set(18.9,1.26,9.57);
+      band.renderOrder=3;group.add(band);
+      undo.push(()=>{band.removeFromParent();band.geometry.dispose();frostMat.dispose();frostMap.dispose();});
+      const stateView=view={panel,face,target,feedCamera,eyeMat,frostMat,shadows:[],feed:null,overlay,eye,strip:()=>{
         ink.fillStyle='#16392e';ink.fillRect(0,0,512,54);ink.fillStyle='#f9f1d7';ink.font='bold 31px system-ui';
         ink.fillText('LIVE   /   FIRST PRESS   '+(state.file.taps+state.presses).toLocaleString(),12,38,488);stripTexture.needsUpdate=true;
       }};
@@ -81,7 +92,12 @@ export function humanHabitat(api,state,pressRegister){
         off.push(register(cap,'Press I AGREE',desk,2.1));
         for(let i=0;i<4;i++){
           const shadow=place('annex_shadow',[17.1+i*.62,1.02,9.522]);
-          shadow.visible=false;view.shadows.push(shadow);
+          shadow.visible=false;
+          shadow.traverse(n=>{if(!n.isMesh)return;
+            const shade=new T.MeshBasicMaterial({color:0x23352e,transparent:true,opacity:.72,depthWrite:false});
+            const original=n.material;n.material=shade;n.renderOrder=2;off.push(()=>{n.material=original;shade.dispose();});
+          });
+          view.shadows.push(shadow);
         }
         view.feed=place('annex_token',[21.25,.78,8.67]);view.feed.visible=false;
       }
@@ -92,6 +108,7 @@ export function humanHabitat(api,state,pressRegister){
   function tick(dt,id){
     if(!view||id!=='habitat'){seated=false;return;}
     state.habitatTime+=dt;tapAge+=dt;tokenAge+=dt;
+    view.frostMat.opacity=camera.position.z>9.55 ? .57 : .18;
     if(seated){
       if(walker.feet.distanceToSquared(standing)>.0016||walker.airborne)seated=false;
       else{
@@ -102,7 +119,7 @@ export function humanHabitat(api,state,pressRegister){
     for(const [i,n] of view.shadows.entries()){
       n.visible=insidePresses>0;
       const reach=Math.min(1,insidePresses/8);
-      n.scale.setScalar(.35+reach*.55);n.position.y=.78+reach*.38+(tapAge<.3?Math.sin(tapAge/.3*Math.PI)*.018:0);
+      n.scale.setScalar(.36+reach*.75);n.position.y=.88+reach*.17+(tapAge<.3?Math.sin(tapAge/.3*Math.PI)*.018:0);
       n.position.x=18.6+(i-1.5)*(.65-.20*reach);
     }
     if(view.feed){view.feed.visible=insidePresses>=10;view.feed.position.y=.80+.27*Math.max(0,1-tokenAge/.55)**2;}
@@ -114,7 +131,7 @@ export function humanHabitat(api,state,pressRegister){
           terminal(view.panel,{title,rows,eyebrow:'HUMAN HABITAT   /   '+state.file.name,foot:'First Press   '+(state.file.taps+state.presses).toLocaleString()+'      Record   '+(index+1)+' / '+reel.length+'      '+speed.toFixed(1)+'x'});}
         return;
       }
-      caught=true;api.cue('v4_caught',{kind:'beat',exhibit:'habitat glass'});
+      caught=true;state.habitatCaught=true;api.cue('v4_caught',{kind:'beat',exhibit:'habitat glass'});
     }
     if(!view.face)return;
     view.face.material=view.eyeMat;liveTime-=dt;
@@ -122,7 +139,8 @@ export function humanHabitat(api,state,pressRegister){
     liveTime=.34;
     const previous=renderer.getRenderTarget(),visible=view.face.visible,clear=renderer.autoClear;
     try{
-      view.face.visible=false;renderer.setRenderTarget(view.target);renderer.render(api.scene,camera);
+      view.feedCamera.position.copy(camera.position);view.feedCamera.quaternion.copy(camera.quaternion);
+      view.face.visible=false;renderer.setRenderTarget(view.target);renderer.render(api.scene,view.feedCamera);
       view.strip();renderer.autoClear=false;renderer.render(view.overlay,view.eye);
     }finally{renderer.autoClear=clear;renderer.setRenderTarget(previous);view.face.visible=visible;}
   }

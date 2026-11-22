@@ -15,12 +15,18 @@ bpy.ops.wm.read_factory_settings(use_empty=True)
 bpy.ops.import_scene.gltf(filepath=str(a.glb))
 scene=bpy.context.scene
 roots={ob.name:ob for ob in scene.objects if not ob.parent}
-assert len(roots)==25,sorted(roots)
+services=a.glb.stem=="visitor-services"
 assert all(ob.location.length<1e-6 for ob in roots.values())
-assert len([ob for ob in scene.objects if ob.name.startswith("hoof_tile_")])==9
-assert len([ob for ob in scene.objects if ob.name.startswith("hoof_cap_")])==4
-assert len([name for name in roots if name.startswith("shop_item_")])==13
-for name in ("hoof_submit","receipt_sheet","moved_cap","moved_price"):assert name in scene.objects,name
+if services:
+    assert all(k.startswith("annex_") for k in roots)
+    assert all("annex_photo_"+k in roots for k in ("flight","loch","summit","woods","moon","visitor"))
+    for key in ("scarf_pattern","sign_face","flag_face","judge_face","heater_plug","record_face"):assert key in scene.objects,key
+else:
+    assert len(roots)==25,sorted(roots)
+    assert len([ob for ob in scene.objects if ob.name.startswith("hoof_tile_")])==9
+    assert len([ob for ob in scene.objects if ob.name.startswith("hoof_cap_")])==4
+    assert len([name for name in roots if name.startswith("shop_item_")])==13
+    for name in ("hoof_submit","receipt_sheet","moved_cap","moved_price"):assert name in scene.objects,name
 for image in bpy.data.images:
     if image.type=="IMAGE":assert image.size[0]>0 and image.packed_file,image.name
 
@@ -34,7 +40,7 @@ def tris(ob):
     return sum(len(face.vertices)-2 for face in ob.data.polygons) if ob.type=="MESH" else 0
 
 report={root.name:{"boundsBlender":limits(corners(root)),"triangles":sum(tris(child) for child in root.children_recursive)} for root in roots.values()}
-(a.evidence/"inspection.json").write_text(json.dumps(report,indent=2))
+(a.evidence/("services-inspection.json" if services else "inspection.json")).write_text(json.dumps(report,indent=2))
 
 scene.render.engine="CYCLES"
 scene.cycles.samples=5
@@ -95,6 +101,15 @@ def photograph(name, placements, direction=(.24,-1,.46), pad=1.14):
     scene.render.image_settings.file_format="JPEG"
     scene.render.image_settings.quality=91
     bpy.ops.render.render(write_still=True)
+
+if services:
+    photograph("photo-visitor",[("annex_photo_visitor",0,0,0,1)],(.04,-1,.03))
+    photograph("wool-joinery",[("annex_cabinet",0,.25,0,1),("annex_numbers_0",0,.25,0,1),("annex_swatch",-.63,.25,1.43,1),("annex_scarf",.32,-.62,0,1)],(.24,-1,.30))
+    photograph("staff-supplies",[("annex_heater",-.5,0,0,1),("annex_crate",.42,.10,0,1),("annex_hat",.42,.10,.476,1),("annex_tea",.02,-.42,0,1)],(.29,-1,.37))
+    photograph("gallery-furniture",[("annex_corrections_desk",0,0,0,1)]+[("annex_photo_"+name,(i-2)*.63,.073,.845,1) for i,name in enumerate(("flight","loch","summit","woods","moon"))],(.15,-1,.30))
+    photograph("staff-doors",[("annex_keeper_door",-1.42,0,0,1),("annex_fire_exit",0,0,0,1),("annex_forum_leaf",.81,0,0,1),("annex_lanyard",1.28,-.20,.91,1)],(.17,-1,.21))
+    photograph("range",[("annex_range_flag",-.73,-.15,0,1),("annex_judge",.13,.08,0,1),("annex_spit_plate",-.36,-.34,0,1)])
+    sys.exit(0)
 
 photograph("accession",[("rope_post",-1.12,.10,0,1),("rope_span",-.12,.10,0,1),("rope_notice",.88,.10,0,1),("sealed_glass",-.50,-.84,0,1),("moved_button",.43,-.81,0,1)])
 photograph("lab",[("hoof_panel",-.68,0,0,1),("hoof_pictures",.68,0,0,1)],(.11,-1,.20))

@@ -16,7 +16,7 @@ try{
   await installGameAudio(ctx);const page=await ctx.newPage();page.on('pageerror',e=>proof.errors.push(e.message));
   await ctx.addInitScript(() => {
     const media = new Set(), events = [], original = HTMLMediaElement.prototype.play;
-    window.expoVoiceAudit = {events, maximum:0, maxQueue:0};
+    window.expoVoiceAudit = {events, maximum:0};
     HTMLMediaElement.prototype.play = function(...args) {
       if (this.src.includes('/assets/expo/narration/') && !media.has(this)) {
         media.add(this);
@@ -99,7 +99,7 @@ try{
     }else assert.equal(end.taps-start.taps,count);
     (visit.rapid||=[]).push({zone,count,start,end});
   }
-  await rapid('hoof',[-18.42,0,8.93],[-18.4,1.77,10.468],5);
+  await rapid('hoof',[-18.4,0,8.02],[-18.4,1.58,9.84],5);
   await rapid('habitat',[19.4,0,8.13],[19.40,1.56,9.55],10);
   if(process.env.RAPID_ONLY==='1'){await ctx.close();continue;}
   await measure('hall','expo_replay_ex_press',[-2.409,0,-6.652]);

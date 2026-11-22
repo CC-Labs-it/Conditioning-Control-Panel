@@ -39,6 +39,8 @@ function signature(kind,p,detail){
 
 export function createInstruments({ctx,camera,register,play,meter,lite}){
   const plant=createBuildingPlant(),displays=new Map(),pages=new Map(),inputs={zone:'atrium',projectors:0,voices:0};
+  const signalLamps=new Map(),pulseColour=new T.Color(0xccecc5);
+  let wasSignalling=false;
   let sinceSample=0,clock=0;
   function paint(d,force=false){
     const p=plant.state,key=signature(d.kind,p,d.detail);
@@ -52,6 +54,14 @@ export function createInstruments({ctx,camera,register,play,meter,lite}){
   }
   function mount(zone,group){
     group.updateMatrixWorld(true);
+    const lamps=new Map();
+    group.traverse(n=>{
+      if(n.isMesh)for(const material of [n.material].flat()){
+        if(!material?.emissive||lamps.has(material)||!/(lumin|diffus|lamp|emit)/i.test(material.name))continue;
+        lamps.set(material,{colour:material.emissive.clone(),intensity:material.emissiveIntensity});
+      }
+    });
+    signalLamps.set(zone,lamps);
     for(const kind of kinds){
       const screen=firstMesh(group.getObjectByName('expo_display_'+kind));
       if(!screen)continue;
@@ -81,6 +91,8 @@ export function createInstruments({ctx,camera,register,play,meter,lite}){
     }
   }
   function unmount(zone){
+    for(const [m,rest] of signalLamps.get(zone)||[]){m.emissive.copy(rest.colour);m.emissiveIntensity=rest.intensity;}
+    signalLamps.delete(zone);
     for(const [kind,d] of displays)if(d.zone===zone){
       for(const release of d.undo)release();d.panel.dispose();d.indicator.dispose();displays.delete(kind);
     }
@@ -93,6 +105,15 @@ export function createInstruments({ctx,camera,register,play,meter,lite}){
     clock+=dt;sinceSample+=dt;inputs.zone=zone;
     if(sinceSample>=.25){sinceSample%=.25;meter(inputs);}
     plant.advance(dt,inputs);
+    const p=plant.state,signalling=p.time<(p.signalUntil||0);
+    if(signalling||wasSignalling){
+      const soft=ctx.gentle||ctx.reduced;
+      const level=signalling?(.5-.5*Math.cos(p.time*(soft?1.5:3.5))):0;
+      for(const lamps of signalLamps.values())for(const [m,rest] of lamps){
+        m.emissive.copy(rest.colour).lerp(pulseColour,level*(soft?.10:.18));m.emissiveIntensity=rest.intensity+.24*level;
+      }
+    }
+    wasSignalling=signalling;
     for(const d of displays.values()){
       if(d.blades?.length){
         const calm=ctx.gentle||ctx.reduced;

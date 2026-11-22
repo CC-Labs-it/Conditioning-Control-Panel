@@ -48,11 +48,16 @@ export function layThread(api,group,place,points,clean) {
   }
   source.traverse(piece=>{
     if(!piece.isMesh||!chunks.length)return;
-    const copies=new T.InstancedMesh(piece.geometry,piece.material,chunks.length);
+    const material=piece.material.clone();
+    if(material.emissive){
+      material.emissive.setHex(0xecbb9c);material.emissiveIntensity=group.userData.emergencyWool ? .55 : 0;
+      (group.userData.woolFinishes??=new Set()).add(material);
+    }
+    const copies=new T.InstancedMesh(piece.geometry,material,chunks.length);
     copies.name='Wool along the skirting';
     chunks.forEach((matrix,i)=>copies.setMatrixAt(i,matrix));
     copies.computeBoundingSphere();group.add(copies);
-    clean.push(()=>{copies.removeFromParent();copies.dispose();});
+    clean.push(()=>{group.userData.woolFinishes?.delete(material);copies.removeFromParent();copies.dispose();material.dispose();});
   });
 }
 

@@ -4,8 +4,10 @@ import {dial,layThread,sight,write} from './staff-fixtures.js';
 const swatches=COUNTERFOILS.flat();
 // The brass numbers also reserve space for acts that this visitor has yet to try.
 const deviations=[
-  'off-duty-notice','dust-sheet','blank-leaf','blink','unplug','doctor','signal','stapler',
-  'rope-post','withheld','wrong-way','queue-skip','planter-spit','ray','loose-end'
+  'off-duty-notice','dust-sheet','blank-leaf','blink','unplug','doctor','signal',
+  'rope-post','withheld','unarrived','left-queue','planter-spit','ray','loose-end',
+  'hoof-admitted','hoof-out','first-press','absent','keeper-chair','hab-glass',
+  'hab-still','hoof-edge','staff-exit','oculus-spit'
 ];
 const duration=seconds=>Math.floor(seconds/60)+':'+String(Math.floor(seconds%60)).padStart(2,'0');
 
@@ -29,7 +31,7 @@ export function createWoolRoom(api,state){
     if(seated){seated=null;api.say('You have stood up.');return;}
     const seat=[84.18,.96,41.80];
     api.walker.place('secret',seat,Math.PI/2);
-    camera.lookAt(83.57,.71,41.80);camera.rotation.z=0;
+    camera.position.y=1.18;camera.lookAt(83.62,.806,41.93);camera.rotation.z=0;
     seated=camera.position.clone();scroll=0;
     ticket.stamp('Read');ticket.book('reader','Sat and read the knitted record');
     void cue('wool_sit','beat').then(ok=>{if(ok&&seated&&!disposed)cue('wool_done','beat');});
@@ -61,10 +63,11 @@ export function createWoolRoom(api,state){
       for(let y=0;y<h;y+=12){g.strokeStyle='#daccae';g.beginPath();g.moveTo(0,y);g.lineTo(w,y+2);g.stroke();}
       g.fillStyle='#754052';g.fillRect(0,0,13,h);g.fillRect(w-13,0,13,h);
       g.fillStyle='#143e35';g.font='bold 50px Georgia';g.fillText('The visit',29,70,w-58);
-      g.font='29px Georgia';g.fillText('Nana’s working pattern',29,117,w-58);
-      for(let i=0;i<8;i++){
+      g.font='29px Georgia';g.fillText('Nana’s working pattern',29,113,w-58);
+      g.font='32px Georgia';
+      for(let i=0;i<5;i++){
         const line=rows[(start+i)%rows.length];
-        g.fillStyle=i===0?'#753f4c':'#29433a';g.fillText(line,29,190+i*67,w-58);
+        g.fillStyle=i===0?'#753f4c':'#29433a';g.fillText(line,29,169+i*52,w-58);
       }
     });
   }
@@ -127,7 +130,7 @@ export function createWoolRoom(api,state){
       const invitation=place('annex_read_invite',[84.18,.790,42.075]);
       invitation.scale.setScalar(.60);bind(invitation,()=>seated?'Stand up':'Sit in the reading chair',sit);
       const table=place('annex_scarf',[83.57,0,41.80],Math.PI/2);
-      local.pattern=dial(api,table,'scarf_pattern',off,440,720);
+      local.pattern=dial(api,table,'scarf_pattern',off,650,416);
       bind(table,'Pull the loose end',unravel,2.15);
       place('annex_thread_label',[83.32,.728,41.61],Math.PI/2).scale.setScalar(.42);
       refresh();return ()=>{for(const f of off.reverse())f();};
@@ -147,7 +150,7 @@ export function createWoolRoom(api,state){
       if(Math.hypot(p.x-seated.x,p.z-seated.z)>.24){seated=null;}
       else {camera.position.y=1.18;const was=Math.floor(scroll/2);scroll+=dt;if(was!==Math.floor(scroll/2))updateScarf();}
     }
-    if(p.x<80&&Math.abs(p.z-41)<1.23||Math.abs(p.z-51)<1.23){
+    if((p.x<80&&Math.abs(p.z-41)<1.23)||Math.abs(p.z-51)<1.23){
       const found=room.panels.find(f=>Math.abs(f.pos.x-p.x)<1.5&&Math.abs(f.pos.z-p.z)<2.0&&look.gaze(f.pos,2.45,.17));
       if(!found||found.key!==candidate){candidate=found?.key||'';dwell=0;}
       if(candidate&&!read.has(candidate)){

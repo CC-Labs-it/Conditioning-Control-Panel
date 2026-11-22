@@ -77,7 +77,7 @@ export function createSpit(api,state){
     if(distance<.00001)return;
     ray.direction.multiplyScalar(1/distance);ray.origin.copy(previous);
     if(shot.zone==='catwalk'&&previous.y>=11.89&&p.y<11.89&&Math.hypot(p.x+22,p.z+5)<1.46)shot.through=true;
-    const wall=walker.trace(ray,distance,label=>shot.zone==='catwalk'&&label==='Open grille');
+    const wall=walker.trace(ray,distance,label=>shot.zone==='catwalk'&&/^Open[ _]grille$/i.test(label));
     let closest=wall?.distance??distance,target=null,contact=wall;
     cast.ray.copy(ray);cast.near=0;cast.far=closest+.016;
     for(const room of rooms.values())for(const t of room.targets){

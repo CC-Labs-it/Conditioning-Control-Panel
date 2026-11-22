@@ -2,7 +2,7 @@
 import sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent))
-from build_collection import group,Part,box,lathe,tube,cushion,oval,print_face,save,sin,cos,pi
+from build_collection import group,Part,box,lathe,tube,cushion,oval,rings,print_face,save,sin,cos,pi
 
 def face(p,name,c,w,h):
     x,y,z=c
@@ -127,8 +127,16 @@ def filing():
         zz=.77+.020*j
         tube(p,"Linen",[(.283+.091*cos(k*pi/16),.034+.086*sin(k*pi/16),zz+.009*cos(k*pi/8)) for k in range(33)],.002,5)
     tube(p,"Madder",[(.31,-.03,.79),(.32,-.10,.731),(.28,-.163,.723),(.14,-.258,.698),(.13,-.279,.591),(.174,-.286,.471)],.007,8)
+    # The knitted register rolls up at the needles. Its open portion inclines towards the chair.
+    for i in range(4):
+        tube(p,"Linen" if i%2 else "Madder",[(-.418,.13,.756+i*.032),(.159,.13,.756+i*.032)],.029,14)
+    for x in (-.416,.158):
+        tube(p,"Madder",[(x,-.213,.730),(x,.135,.885)],.010)
     p.finish()
-    insert("scarf_pattern",(-.242,-.281,.457),.195,.359)
+    paper=Part("scarf_pattern")
+    paper.poly([(-.413,-.216,.730),(.155,-.216,.730),(.155,.136,.887),(-.413,.136,.887)],
+               "Cream",[(0,0),(1,0),(1,1),(0,1)])
+    paper.finish()
     group("annex_thread");p=Part()
     # One metre of skein, repeatable end to end along the skirting.
     knots=[(-.5+i/24,.011*sin(i*pi/6),.024+.005*(1-cos(i*pi/6))) for i in range(25)]
@@ -222,6 +230,13 @@ def keeper_range():
     p.finish();insert("judge_face",(0,-.056,1.00),.865,.341)
 
 def gallery_and_staff():
+    group("annex_display_stand");p=Part()
+    lathe(p,"Stone",(0,0,0),[(0,0),(.224,0),(.231,.025),(.221,.050),(.115,.065),(0,.071)],32)
+    lathe(p,"Enamel",(0,0,0),[(.116,.055),(.114,.094),(.076,.122),(.060,.66),(.075,.71),(.104,.73)],28)
+    lathe(p,"Brass",(0,0,0),[(.102,.706),(.120,.719),(.123,.743),(.097,.759)],28)
+    box(p,"Honey oak",(0,0,.790),(.625,.443,.068),.028)
+    box(p,"Brass",(0,0,.832),(.631,.449,.021),.020)
+    box(p,"Green felt",(0,0,.850),(.601,.419,.015),.019);p.finish()
     group("annex_corrections_desk");p=Part()
     for x in (-1.49,1.49):
         for y in (-.267,.267):
@@ -277,7 +292,62 @@ def gallery_and_staff():
                 oval(p,"Ink",(x+side*.021,y-.024,.044),(.030,.072,.043),18,8)
     p.finish()
 
-heater();hardhat();parcel();filing();accessories();keeper_range();gallery_and_staff()
+def photo_visitor():
+    group("annex_photo_visitor");p=Part()
+    def cut(material,profile):
+        loops=[]
+        for x,y,z,rx,ry in profile:
+            loops.append([(x+rx*cos(i*pi/12),y+ry*sin(i*pi/12),z) for i in range(24)])
+        rings(p,loops,material,smooth=True)
+    for side in (-1,1):
+        x=side*.105
+        oval(p,"Ink",(x,-.042,.057),(.080,.148,.057))
+        cut("Ink",[(x,.015,.085,.067,.087),(x,0,.113,.074,.087),
+                   (x*.95,.007,.440,.068,.077),(x*.99,.004,.595,.084,.098),
+                   (x*.85,.013,.829,.105,.122),(x*.76,.015,.882,.090,.112)])
+    cut("Green felt",[(0,.007,.776,.176,.114),(0,.007,.793,.190,.125),
+                      (0,.008,.878,.194,.135),(0,.014,1.02,.162,.117),
+                      (0,.012,1.159,.196,.128),(0,.012,1.268,.216,.132),
+                      (0,.009,1.324,.195,.112),(0,0,1.358,.116,.093),(0,0,1.366,.078,.077)])
+    # The pressed collar, chain and photo badge keep the silhouette plain at the cast's scale.
+    p.poly([(-.092,-.066,1.349),(0,-.128,1.169),(.097,-.066,1.349)],"Cream")
+    for side in (-1,1):
+        s=side
+        cut("Green felt",[(s*.243,-.029,.822,.043,.051),(s*.248,-.020,.890,.049,.058),
+                          (s*.243,.004,1.030,.065,.069),(s*.223,.008,1.183,.071,.078),
+                          (s*.193,.013,1.273,.063,.071),(s*.167,.012,1.296,.044,.049)])
+        oval(p,"Honey oak",(s*.240,-.035,.780),(.042,.046,.078))
+        oval(p,"Honey oak",(s*.213,-.062,.792),(.018,.020,.041),16,8)
+        tube(p,"Madder",[(s*.066,-.074,1.376),(s*.092,-.100,1.298),(s*.055,-.122,1.219),(s*.009,-.134,1.147)],.008,8)
+        p.poly([(s*.016,-.110,1.307),(s*.094,-.091,1.350),(s*.123,-.086,1.302),(s*.069,-.122,1.268)],"Linen")
+        tube(p,"Linen",[(s*.141,-.079,.925),(s*.093,-.104,.881)],.0036)
+    box(p,"Brass",(0,-.133,1.093),(.102,.016,.115),.009,True)
+    print_face(p,"docket",(0,-.143,1.093),.088,.079)
+    tube(p,"Honey oak",[(0,0,1.338),(0,0,1.415)],.063,20)
+    cut("Honey oak",[(0,-.018,1.390,.039,.045),(0,-.015,1.405,.064,.070),
+                     (0,-.005,1.435,.084,.090),(0,-.010,1.479,.097,.101),
+                     (0,-.003,1.533,.099,.110),(0,.004,1.595,.101,.109),
+                     (0,.010,1.637,.085,.090),(0,.010,1.657,.047,.065)])
+    for s in (-1,1):
+        oval(p,"Honey oak",(s*.099,.002,1.493),(.018,.030,.035),16,8)
+        oval(p,"Ink",(s*.041,-.104,1.534),(.009,.004,.009),12,8)
+        tube(p,"Ink",[(s*.026,-.105,1.550),(s*.042,-.102,1.554),(s*.058,-.092,1.551)],.0032,6)
+    oval(p,"Honey oak",(0,-.106,1.502),(.022,.025,.033),18,8)
+    tube(p,"Madder",[(-.027,-.100,1.460),(-.010,-.104,1.456),(.009,-.105,1.456),(.027,-.099,1.461)],.0032)
+    # A softly swept carved crown, cut higher over the forehead and lower at the nape.
+    hair=[]
+    for rad,z in [(1,1.572),(1.045,1.594),(.976,1.617),(.745,1.647),(.382,1.671),(.08,1.675)]:
+        row=[]
+        for i in range(24):
+            a=i*pi/12
+            fringe=max(0,1-(z-1.572)/.063)
+            row.append((.102*rad*cos(a)-.013*(1-rad),.010+.112*rad*sin(a),
+                        z+fringe*(-.044*sin(a)-.015*cos(a)-.013*cos(2*a))))
+        hair.append(row)
+    rings(p,hair,"Ink",smooth=True)
+    p.finish()
+
+heater();hardhat();parcel();filing();accessories();keeper_range();gallery_and_staff();photo_visitor()
 for name,ink in (("notice","heater"),("rota","rota"),("docket","trolley"),("thread_label","knit"),("read_invite","read"),("staff","keeper"),("safety","scaffold"),("dust_note","secret"),("permit","docket")):
     placard(name,ink,.60,.238,variable=name=="rota")
 placard("record","clause",.63,.72,True)

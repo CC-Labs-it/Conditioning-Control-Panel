@@ -32,7 +32,7 @@ export function galleryVisits(api,state){
   function mount(id,group,clean){
     if(id==='chronology')clean.push(api.annexProps(group,place=>{
       const off=[],items=[],hooks=[],records=[],desk=place('annex_corrections_desk',[5.38,0,49.5],Math.PI/2);
-      const sign=place('annex_record',[5.39,.85,51.3],Math.PI/2);
+      const sign=place('annex_record',[5.39,.85,51.38],Math.PI/2);sign.scale.set(.75,.58,1);
       write(dial(api,sign,'record_face',off),'Corrections Desk','Hang the photographs.','Archive accessions   /   Either face accepted');
       function update(){
         for(let i=0;i<5;i++){
@@ -46,8 +46,8 @@ export function galleryVisits(api,state){
       }
       for(let i=0;i<5;i++){
         const [kind,label]=photographs[i],z=53.05+i*.86,h=place('annex_hook',[4.65,1.8,z],Math.PI/2);
-        hooks.push(h);const plaque=place('annex_record',[4.65,1.03,z],Math.PI/2);
-        records.push(dial(api,plaque,'record_face',off));
+        hooks.push(h);const plaque=place('annex_record',[4.80,1.035,z],Math.PI/2);plaque.scale.y=.54;
+        records.push(dial(api,plaque,'record_face',off,640,380));
         const item=place('annex_photo_'+kind,[0,0,0]);items.push(item);
         off.push(api.register(item,'Carry '+label,()=>{
           if(!api.hold('print-'+i,item,label)){api.say('The desk can take the print you are carrying.');return;}
@@ -104,12 +104,13 @@ export function galleryVisits(api,state){
     const p=api.walker.feet;
     if(id==='hall'&&queue<route.length&&!t.stamps.has('Queued')&&p.y<.5){
       const [x,z]=route[queue];if(Math.hypot(x-p.x,z-p.z)<.53){
-        if(!queue)voice('queue',id);queue++;
+        if(!queue)voice('queue',id);state.queueProgress=++queue;
         if(queue===route.length){t.stamp('Queued');t.book('queued','Walked the entire empty queue');api.play('turnstile');}
       }else if(queue>0 && (p.x<X1-.7||p.x>X2+.7||p.z<Z1-.5||p.z>Z1+PITCH*5+.5))queue=0;
     }
     if(id==='forum'&&forumView){
       const inside=Math.hypot(p.x+26,p.z-103)<.56;
+      state.meetingSeconds=meeting;
       if(inside&&!finished){
         if(!meetingEngaged){meetingEngaged=true;meetingOrigin.copy(p);voice('meeting',id);}
         if(p.distanceToSquared(meetingOrigin)>.00045){if(meeting>1)voice('move_meeting',id);meeting=0;meetingOrigin.copy(p);}
