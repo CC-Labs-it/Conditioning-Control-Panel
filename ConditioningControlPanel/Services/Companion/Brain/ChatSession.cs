@@ -254,13 +254,16 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             var picked = new List<CompanionTurn>();
             int tokens = 0, barkEchoes = 0, dialogue = 0, ambient = 0;
 
+            // A tube line is an app-started AI line (awareness v2, a video or lock card reaction that
+            // no brain turn holds): it rides under the same ambient cap as a brain reaction
+            // (ccp-bugs #1717), so the player can answer it and the conversation is never pushed out.
             static bool IsAmbient(CompanionTurn t) =>
-                t.Kind is TurnKind.AmbientEvent or TurnKind.AmbientReply;
+                t.Kind is TurnKind.AmbientEvent or TurnKind.AmbientReply or TurnKind.TubeLine;
 
             for (int i = source.Count - 1; i >= 0; i--)
             {
                 var turn = source[i];
-                if (turn.Kind is TurnKind.SystemNote or TurnKind.TubeLine) continue;
+                if (turn.Kind == TurnKind.SystemNote) continue;
 
                 if (turn.Kind == TurnKind.BarkEcho)
                 {
@@ -295,7 +298,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
         /// <summary>Maps a window onto transport messages, preserving order.</summary>
         public static IReadOnlyList<ChatMessage> ToMessages(IEnumerable<CompanionTurn> turns) =>
             (turns ?? Enumerable.Empty<CompanionTurn>())
-                .Where(t => t != null && t.Kind is not (TurnKind.SystemNote or TurnKind.TubeLine))
+                .Where(t => t != null && t.Kind != TurnKind.SystemNote)
                 .Select(t => t.ToMessage())
                 .ToList();
 

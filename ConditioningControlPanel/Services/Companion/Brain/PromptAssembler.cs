@@ -365,7 +365,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
                     continue;
                 }
                 if (fence != null
-                    && turn.Kind is (TurnKind.AssistantChat or TurnKind.AmbientReply)
+                    && turn.Kind is (TurnKind.AssistantChat or TurnKind.AmbientReply or TurnKind.TubeLine)
                     && turn.Utc < fence.Value)
                 {
                     dropped++;
@@ -461,14 +461,14 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             for (int i = 0; i < window.Count; i++)
             {
                 var turn = window[i];
-                if (turn.Kind is not (TurnKind.AssistantChat or TurnKind.AmbientReply)) continue;
+                if (turn.Kind is not (TurnKind.AssistantChat or TurnKind.AmbientReply or TurnKind.TubeLine)) continue;
                 var text = Services.AiTextHygiene.StripInstructionLeak(turn.Text);
                 if (string.Equals(text, turn.Text, StringComparison.Ordinal)) continue;
                 cleaned ??= new List<CompanionTurn>(window);
                 cleaned[i] = turn with { Text = text };
             }
             if (cleaned == null) return window;
-            cleaned.RemoveAll(t => t.Kind is (TurnKind.AssistantChat or TurnKind.AmbientReply) && string.IsNullOrWhiteSpace(t.Text));
+            cleaned.RemoveAll(t => t.Kind is (TurnKind.AssistantChat or TurnKind.AmbientReply or TurnKind.TubeLine) && string.IsNullOrWhiteSpace(t.Text));
             return cleaned;
         }
 
@@ -510,7 +510,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             for (int i = window.Count - 1; i >= 0 && seen < 2; i--)
             {
                 var turn = window[i];
-                if (turn.Kind is not (TurnKind.AssistantChat or TurnKind.AmbientReply)) continue;
+                if (turn.Kind is not (TurnKind.AssistantChat or TurnKind.AmbientReply or TurnKind.TubeLine)) continue;
                 seen++;
                 foreach (var title in recent)
                 {
@@ -539,7 +539,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
                 for (int i = 0; i < window.Count; i++)
                 {
                     var turn = window[i];
-                    if (turn.Kind is not (TurnKind.AssistantChat or TurnKind.AmbientReply)) continue;
+                    if (turn.Kind is not (TurnKind.AssistantChat or TurnKind.AmbientReply or TurnKind.TubeLine)) continue;
 
                     pool ??= _linkPool() ?? Array.Empty<(string, string)>();
                     if (pool.Count == 0) return window;
