@@ -4193,6 +4193,7 @@
   "btn_mod_draft_discard": "丢弃",
   "mod_draft_strip": "{0} 的草稿尚未导出。",
   "mod_draft_restored": "草稿已恢复",
+  "mod_draft_restore_failed": "无法恢复草稿。草稿仍然保留。",
   "mod_loaded": "已加载：{0}",
   "mod_status_bar": "图片：{0}/{1}  |  音频：{2}/14  |  语音：{3}  |  短语：{4}  |  替换：{5}",
   "msg_settings_backed_up_to_cloud_successfully": "设置已成功备份到云端！",

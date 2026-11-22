@@ -4409,6 +4409,7 @@
   "btn_mod_draft_discard": "Scarta",
   "mod_draft_strip": "C'è una bozza del {0} non esportata.",
   "mod_draft_restored": "Bozza ripristinata",
+  "mod_draft_restore_failed": "Impossibile ripristinare la bozza. Resta salvata.",
   "mod_loaded": "Caricata: {0}",
   "mod_status_bar": "Immagini: {0}/{1}  |  Audio: {2}/14  |  Voci: {3}  |  Frasi: {4}  |  Sostituzioni: {5}",
   "msg_settings_backed_up_to_cloud_successfully": "Backup delle impostazioni nel cloud completato!",

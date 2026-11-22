@@ -375,13 +375,14 @@ namespace ConditioningControlPanel
         // Aggregate hooks the per-panel partials plug into: export writes each
         // panel's side files into the .ccpmod resources tree; load repopulates
         // panels from an extracted resources tree; clear resets panel state.
-        private void WriteSideFilesTo(string resourcesDir)
+        /// <returns>False when a copy failed and was only logged (an emote set), so the tree is incomplete.</returns>
+        private bool WriteSideFilesTo(string resourcesDir)
         {
             WriteBarksTo(resourcesDir);
             WriteMantrasTo(resourcesDir);
             WriteEventAudioTo(resourcesDir);
             WritePortraitsTo(resourcesDir);
-            WriteEmotesTo(resourcesDir);
+            return WriteEmotesTo(resourcesDir);
         }
 
         private void LoadSideFilesFrom(string resourcesDir)
@@ -1115,6 +1116,7 @@ namespace ConditioningControlPanel
         private void SetAudioSlot(string key, string filePath)
         {
             _audioSlots[key] = filePath;
+            NoteDraftEdit();
             if (_audioFileLabels.TryGetValue(key, out var label))
             {
                 label.Text = Path.GetFileName(filePath);
@@ -1143,6 +1145,7 @@ namespace ConditioningControlPanel
         private void ClearAudioSlot(string key)
         {
             _audioSlots[key] = null;
+            NoteDraftEdit();
             if (_audioFileLabels.TryGetValue(key, out var label))
             {
                 label.Text = Loc.Get("label_no_file");
@@ -1225,11 +1228,13 @@ namespace ConditioningControlPanel
             {
                 _voiceLinesPanel?.Children.Remove(capturedRow);
                 _voiceLines.RemoveAll(v => v.Row == capturedRow);
+                NoteDraftEdit();
                 UpdateStatusBar();
             };
             row.Children.Add(removeBtn);
 
             _voiceLines.Add((filePath, row));
+            NoteDraftEdit();
             _voiceLinesPanel?.Children.Add(row);
         }
 
@@ -1951,6 +1956,7 @@ namespace ConditioningControlPanel
                 _imageControls[key].Source = bitmap;
                 _imageControls[key].Visibility = Visibility.Visible;
                 _imageSlots[key] = filePath;
+                NoteDraftEdit();
 
                 // Find the border parent to update clear/plus visibility
                 var parent = VisualTreeHelper.GetParent(_imageControls[key]);
@@ -2012,6 +2018,7 @@ namespace ConditioningControlPanel
             _imageControls[key].Source = null;
             _imageControls[key].Visibility = Visibility.Collapsed;
             _imageSlots[key] = null;
+            NoteDraftEdit();
 
             // Framing goes with the image. Left behind, it would silently re-attach itself to
             // whatever the author picks next -- and to a manifest that no longer ships the file it

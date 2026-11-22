@@ -3415,6 +3415,7 @@
   "btn_mod_draft_discard": "Descartar",
   "mod_draft_strip": "Hay un borrador del {0} que no se exportó.",
   "mod_draft_restored": "Borrador restaurado",
+  "mod_draft_restore_failed": "No se pudo restaurar el borrador. Se conserva.",
   "mod_loaded": "Cargado: {0}",
   "mod_status_bar": "Imágenes: {0}/{1}  |  Audio: {2}/14  |  Líneas de Voz: {3}  |  Frases: {4}  |  Reemplazos: {5}",
   "msg_settings_backed_up_to_cloud_successfully": "¡Ajustes respaldados en la nube exitosamente!",

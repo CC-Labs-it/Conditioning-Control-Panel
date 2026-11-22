@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using ConditioningControlPanel.Models;
 using Newtonsoft.Json;
 
@@ -26,6 +28,8 @@ namespace ConditioningControlPanel.Services
     internal sealed class ModCreatorDraftStore
     {
         private readonly string _volatileRoot;
+        private readonly object _gate = new();
+        private DateTime _lastWrittenUtc = DateTime.MinValue;
 
         public ModCreatorDraftStore(string root, string? volatileRoot = null)
         {
@@ -44,8 +48,16 @@ namespace ConditioningControlPanel.Services
         public bool IsVolatile(string path) =>
             !string.IsNullOrEmpty(path) && IsUnder(Path.GetFullPath(path), _volatileRoot) && !IsUnder(Path.GetFullPath(path), Root);
 
+        /// <summary>Thread safe (autosave runs off the UI thread). A draft older than the last one written, or than an
+        /// export, is dropped, so an autosave that lands late never writes over a newer save.</summary>
         public void Save(ModCreatorDraft draft)
         {
+            lock (_gate) SaveLocked(draft);
+        }
+
+        private void SaveLocked(ModCreatorDraft draft)
+        {
+            if (draft.SavedAtUtc < _lastWrittenUtc) return;
             Directory.CreateDirectory(Root);
             draft.Images = draft.Images.ToDictionary(kv => kv.Key, kv => Keep("img", kv.Key, kv.Value));
             draft.Audio = draft.Audio.ToDictionary(kv => kv.Key, kv => Keep("audio", kv.Key, kv.Value));
@@ -55,6 +67,7 @@ namespace ConditioningControlPanel.Services
             File.WriteAllText(tmp, JsonConvert.SerializeObject(draft, Formatting.Indented,
                 new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore }));
             File.Move(tmp, DraftPath, overwrite: true);
+            _lastWrittenUtc = draft.SavedAtUtc;
         }
 
         public ModCreatorDraft? Load()
@@ -79,19 +92,39 @@ namespace ConditioningControlPanel.Services
         /// open finds no draft (<see cref="PruneIfNoDraft"/>), because the open form may still show them.</summary>
         public void MarkExported(DateTime utc)
         {
-            Directory.CreateDirectory(Root);
-            File.WriteAllText(ExportStampPath, utc.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture));
-            TryDelete(DraftPath);
+            lock (_gate)
+            {
+                Directory.CreateDirectory(Root);
+                File.WriteAllText(ExportStampPath, utc.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture));
+                TryDelete(DraftPath);
+                if (utc.ToUniversalTime() > _lastWrittenUtc) _lastWrittenUtc = utc.ToUniversalTime();
+            }
         }
 
-        public void Discard() { TryDelete(DraftPath); PruneIfNoDraft(); }
+        /// <summary>Drops the draft and its copies; <paramref name="keepSideDir"/> is a side folder the open form still reads.</summary>
+        public void Discard(string? keepSideDir = null) { lock (_gate) { TryDelete(DraftPath); PruneIfNoDraft(keepSideDir); } }
 
         /// <summary>On open with no draft on disk nothing can reference the copied files: clear them.</summary>
-        public void PruneIfNoDraft()
+        public void PruneIfNoDraft(string? keepSideDir = null)
         {
             if (File.Exists(DraftPath)) return;
             TryDeleteDir(FilesDir);
-            DropSideDirsExcept(null);
+            DropSideDirsExcept(keepSideDir);
+        }
+
+        /// <summary>Which side folder the draft keeps after a close wrote <paramref name="written"/>: that one when every
+        /// copy landed; otherwise the previous complete one (if it is still there), and the partial one goes.</summary>
+        public string SettleSideDir(string written, bool complete, string? previous)
+        {
+            if (complete || string.IsNullOrEmpty(previous) || !Directory.Exists(Path.Combine(Root, previous))) return written;
+            TryDeleteDir(Path.Combine(Root, written));
+            return previous;
+        }
+
+        public void DropSideDir(string name)
+        {
+            if (name.StartsWith("side-", StringComparison.OrdinalIgnoreCase) && name.IndexOfAny(new[] { '/', '\\' }) < 0)
+                TryDeleteDir(Path.Combine(Root, name));
         }
 
         public string NewSideDirName() => "side-" + Guid.NewGuid().ToString("N");
@@ -108,11 +141,19 @@ namespace ConditioningControlPanel.Services
         {
             if (!IsVolatile(path) || !File.Exists(path)) return path;
             var safeKey = string.Concat(key.Select(c => Path.GetInvalidFileNameChars().Contains(c) || c == '/' ? '_' : c));
-            var dir = Path.Combine(FilesDir, bucket, safeKey);
+            // Media identity is the whole path: two mods' same-named files never share a copy.
+            var full = Path.GetFullPath(path);
+            var id = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(full.ToUpperInvariant())))[..16];
+            var dir = Path.Combine(FilesDir, bucket, safeKey, id);
             Directory.CreateDirectory(dir);
             var dest = Path.Combine(dir, Path.GetFileName(path));
-            if (!File.Exists(dest) || new FileInfo(dest).Length != new FileInfo(path).Length)
-                File.Copy(path, dest, overwrite: true);
+            var src = new FileInfo(full);
+            var copy = new FileInfo(dest);
+            if (!copy.Exists || copy.Length != src.Length || copy.LastWriteTimeUtc != src.LastWriteTimeUtc)
+            {
+                File.Copy(full, dest, overwrite: true);
+                File.SetLastWriteTimeUtc(dest, src.LastWriteTimeUtc);
+            }
             return dest;
         }
 
