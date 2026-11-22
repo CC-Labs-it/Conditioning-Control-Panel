@@ -111,11 +111,11 @@ function fitHallEnd(doc, binary) {
   return changes;
 }
 
-function repair(input) {
+function repair(input, fit = fitHallEnd) {
   const jsonSize = input.readUInt32LE(12);
   const doc = JSON.parse(input.toString('utf8', 20, 20 + jsonSize));
   const binary = input.subarray(28 + jsonSize);
-  const changes = fitHallEnd(doc, binary);
+  const changes = fit(doc, binary);
   const chunks = [];
   let offset = 0;
   for (const [i,view] of doc.bufferViews.entries()) {
@@ -163,4 +163,5 @@ async function main() {
   // Texture maps and collision still belong to the existing room edition.
   fs.writeFileSync(planFile, text);
 }
-main().catch(e => {console.error(e);process.exitCode = 1;});
+module.exports = {readView, components, repair};
+if (require.main === module) main().catch(e => {console.error(e);process.exitCode = 1;});

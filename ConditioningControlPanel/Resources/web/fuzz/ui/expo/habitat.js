@@ -1,6 +1,7 @@
 import {BY_ID} from '../../data/items.js';
 import {LLAMAS} from '../../data/content/llamas.js';
 import {livePanel,placard,terminal} from './display.js';
+import {dial,write} from './staff-fixtures.js';
 
 // Purchases retain their real order. The admissions inventory and final counters are recorded separately.
 export function habitatReel(run,file){
@@ -18,7 +19,7 @@ export function habitatReel(run,file){
 
 export function humanHabitat(api,state,pressRegister){
   const {THREE:T,camera,renderer,walker,ctx,go,register}=api;
-  const reel=habitatReel(ctx.state||{},state.file),seat=new T.Vector3(19.66,1.19,11.60),standing=new T.Vector3(),monitor=new T.Vector3(18.3,1.4,11.05);
+  const reel=habitatReel(ctx.state||{},state.file),seat=new T.Vector3(20.28,1.19,11.60),standing=new T.Vector3(),monitor=new T.Vector3(18.3,1.4,11.05);
   let view=null,elapsed=0,speed=1,still=0,pending=0,frame=-1,caught=false,seated=false,insidePresses=0,tapAge=9,tokenAge=9,liveTime=0;
   function sit(){
     if(seated){seated=false;api.say('Back on your feet.');return;}
@@ -86,7 +87,15 @@ export function humanHabitat(api,state,pressRegister){
         seated=false;return outside?go('habitat',[22.62,0,12.68],Math.PI/2):go('service',[16,0,31.83],0);
       },2.85));
       if(!outside){
-        const cushion=place('annex_seat',[19.66,.53,11.60]);
+        const cushion=place('annex_seat',[seat.x,.53,seat.z]);
+        const wanted=place('annex_record',[22.71,.70,9.51],Math.PI);
+        wanted.scale.set(1.42,.63,1);
+        write(dial(api,wanted,'record_face',off,690,315),'Human Habitat','Keeper wanted.\nEnquire at the staff door.');
+        off.push(register(wanted,'Read the keeper notice',()=>api.say('Keeper wanted. Enquire at the staff door.')));
+        const lamp=new T.SpotLight(0xffd298,17,4.5,.50,.75,2);
+        lamp.name='Keeper chair reading light';lamp.position.set(seat.x+.18,2.92,10.76);
+        lamp.target.position.set(seat.x,.50,seat.z);group.add(lamp,lamp.target);
+        off.push(()=>{lamp.removeFromParent();lamp.target.removeFromParent();lamp.dispose();});
         const cap=place('annex_desk_cap',[18.78,.84,11.35]);
         off.push(register(cushion,()=>seated?'Stand up':'Sit at the habitat desk',sit,2.2));
         off.push(register(cap,'Press I AGREE',desk,2.1));
