@@ -96,6 +96,16 @@ export function createPost(renderer, lite) {
   const screen = new THREE.Scene(), eye = new THREE.Camera(), surface = new THREE.Mesh(tri, bright);
   surface.frustumCulled = false; screen.add(surface);
   return {
+    compileRoom(room, camera, scene) {
+      const previous=renderer.getRenderTarget(),face=renderer.getActiveCubeFace(),level=renderer.getActiveMipmapLevel();
+      // Three selects its output shader during compileAsync's synchronous setup.
+      try {
+        renderer.setRenderTarget(target);
+        return renderer.compileAsync(room,camera,scene);
+      } finally {
+        renderer.setRenderTarget(previous,face,level);
+      }
+    },
     resize(w, h) {
       target.setSize(w, h); a.setSize(Math.max(1, Math.ceil(w / 4)), Math.max(1, Math.ceil(h / 4)));
       b.setSize(a.width, a.height);

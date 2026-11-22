@@ -7,11 +7,13 @@ import { createCameraPreferences } from './camera-preferences.js';
 import { mountCameraOptions } from './camera-options.js';
 import { expoGuideText, expoInteractionText } from './controller-menu.js';
 import { createButtonTravel } from './button-travel.js';
+import { pickExhibits } from './exhibit-picking.js';
 import { mountExpoRadio, RADIO_STYLE } from './music-controls.js';
 import { MOBILE_OVERLAY_STYLE } from './mobile-overlay-style.js';
 import { createWalker } from './collision.js';
 import { assetURL, createZones, loadPlan } from './zones.js';
 import { createPost } from './post.js';
+import { createExpoPaintClock } from './frame-pacing.js';
 import { createSound } from './audio.js';
 import { createMuseumMusic } from '../../audio/museum-music.js';
 import { createExhibits } from './exhibits.js';
@@ -129,19 +131,19 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       () => ctx.store.claimLifetime('planterDetour')); clean.push(() => walker.dispose());
     const buttons=createButtonTravel(ctx);
     const targets = new Map(), pointer = new THREE.Vector2(), ray = new THREE.Raycaster(), hits = [];
-    let targetMeshes = [], maxReach = 0, zones, exhibits, dome, narration, returnButton, targetTime = 0, loading = false;
+    let maxReach = 0, zones, exhibits, dome, narration, returnButton, targetTime = 0, loading = false;
     function register(mesh, label, callback, reach = 2.3) {
       const {roots,activate}=buttons.bind(mesh,callback);
       const action={label,reach,owner:mesh,callback:activate};
       for(const target of roots)if(target===mesh||!targets.has(target))targets.set(target,action);
-      targetMeshes=[...targets.keys()];maxReach=Math.max(maxReach,reach);
-      return ()=>{for(const target of roots)if(targets.get(target)===action)targets.delete(target);targetMeshes=[...targets.keys()];};
+      maxReach=Math.max(maxReach,reach);
+      return ()=>{for(const target of roots)if(targets.get(target)===action)targets.delete(target);};
     }
     function targetAt(point) {
       if (!ready || ctx.paused || dead || loading || returnButton || visitorGuide.opened || doc.hidden) return null;
       camera.updateMatrixWorld();
       pointer.set(point?.x || 0, point?.y || 0); ray.setFromCamera(pointer, camera); ray.far = maxReach;
-      hits.length = 0; ray.intersectObjects(targetMeshes, true, hits);
+      pickExhibits(targets, ray, hits);
       for (const hit of hits) {
         let action = null, visible = true;
         for (let n = hit.object; n; n = n.parent) { visible &&= n.visible; action ||= targets.get(n); }
@@ -221,12 +223,14 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       exhibits.enter(lastZone,zones.resident.get(lastZone).environment.texture);instruments.enter(lastZone);
     }
     let arrivalStart = null;
-    function draw() {
+    function draw(allRoomDetails = false) {
       if (!ready || dead) return;
       renderer.info.reset();
       const calm = ctx.gentle || ctx.reduced;
       const sinceArrival = arrivalStart === null ? -1 : (ctx.activeMs - arrivalStart)/1000;
-      post.draw(scene, camera, calm, dome?.weather, calm ? -1 : sinceArrival);
+      if (allRoomDetails !== true) zones.visibility.prepare();
+      try { post.draw(scene, camera, calm, dome?.weather, calm ? -1 : sinceArrival); }
+      finally { zones.visibility.restore(); }
       if (sinceArrival >= 1.25) arrivalStart = null;
       media?.draw();
     }
@@ -299,14 +303,17 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     clean.push(() => cameraMenu.dispose());
 
     const drawingSize = new THREE.Vector2();
-    const resize = () => {
+    const sizeRenderer = () => {
       const { width:w, height:h } = root.getBoundingClientRect();
-      if (!w || !h || dead) return;
+      if (!w || !h || dead) return false;
       renderer.setSize(w, h, false); renderer.getDrawingBufferSize(drawingSize);
-      post.resize(drawingSize.x, drawingSize.y); camera.aspect = w/h; camera.updateProjectionMatrix(); draw();
+      post.resize(drawingSize.x, drawingSize.y); camera.aspect = w/h; camera.updateProjectionMatrix();
+      return true;
     };
+    const resize = () => { if (sizeRenderer()) draw(); };
     resize(); const observer = new ResizeObserver(resize); observer.observe(root); clean.push(() => observer.disconnect());
-    let previous = ctx.activeMs, paintTime = 0;
+    const paintDue = createExpoPaintClock(LITE);
+    let previous = ctx.activeMs;
     function sync() {
       const hold = ctx.paused || doc.hidden;
       previous = ctx.activeMs; controls.reset(); media?.pause(hold); sound.pause(hold); narration.pause(hold || waitingForEntrance); exhibits.pause?.(hold);
@@ -322,12 +329,13 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       zones.stream(dt); exhibits.tick?.(dt, walker.zone); dome.step(dt,walker.zone); narration.tick(dt);instruments.tick(dt,walker.zone);buttons.tick(dt);
       music.setSpeaking(narration.speaking);
       ambience.tick(dt);collection.tick(dt,ctx.gentle||ctx.reduced);
+      let resized=false;
       if(dt<.12 && dt>0){budgetTime+=dt;budgetFrames++;}
       if(budgetTime>=1.75){
         const average=budgetTime/budgetFrames,goal=LITE?1/30:1/60;
         const next=average>goal*1.28?Math.max(nativeRatio*.62,pixelRatio*.86):
           average<goal*.80?Math.min(nativeRatio,pixelRatio*1.06):pixelRatio;
-        if(Math.abs(next-pixelRatio)>.02){pixelRatio=next;renderer.setPixelRatio(pixelRatio);resize();}
+        if(Math.abs(next-pixelRatio)>.02){pixelRatio=next;renderer.setPixelRatio(pixelRatio);resized=sizeRenderer();}
         budgetTime=0;budgetFrames=0;
       }
       if (elapsed > captionUntil) caption.textContent = '';
@@ -338,14 +346,13 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
         updatePrompt();
         targetTime = .09;
       }
-      paintTime += dt;
-      if (!LITE || paintTime >= 1/30) { paintTime %= 1/30; draw(); }
+      if (paintDue(dt,resized)) draw();
     }));
     const firstFrame = (async () => {
       const plan = await loadPlan(abort.signal);
       if (dead) return;
       // Trail directions are independent of projector playback.
-      zones = createZones({ scene, renderer, walker, exhibits:rooms, plan, lite: LITE,ctx,camera,play:sound.play, report: error => console.warn(error) });
+      zones = createZones({ scene, renderer, walker, exhibits:rooms, plan, lite: LITE,ctx,camera,compileRoom:post.compileRoom,play:sound.play, report: error => console.warn(error) });
       clean.push(() => zones.dispose());
       await zones.ensure(plan.start.id);
       if (dead) return;
@@ -363,6 +370,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     } };
     if (['localhost','127.0.0.1','[::1]'].includes(win.location.hostname)) Object.assign(api, {
       root, camera, scene, renderer, interact, draw, go, warp: go, exhibits, walker, narrationState:narration.debug,musicState:music.debug,plantState:instruments.debug,ambience:ambience.debug,footfalls:sound.footfalls,buttons:buttons.debug,
+      drawAllRoomDetails:()=>draw(true),
       focusTarget:()=>{
         const target=targetAt();if(!target)return null;
         const lineage=[];for(let n=target.hit.object;n;n=n.parent)if(n.name)lineage.push(n.name);

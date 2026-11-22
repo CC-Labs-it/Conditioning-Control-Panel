@@ -3,7 +3,9 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { roomRequest as request, clearEntrance, firstSurfaceMap, viewFile, phoneMap, roomAsset, surfaceDetails } from './entrance.js';
 import {createDoors,loadDoorHardware,streamingPriority} from './doors.js';
-import {fitArchiveBays} from './archive-furniture.js';
+import {batchArchiveHousings,fitArchiveBays} from './archive-furniture.js';
+import {createRoomVisibility} from './room-visibility.js';
+import {createRoomDecoder} from './room-decoder.js';
 
 export const assetURL = path => new URL('../../assets/expo/' + path, import.meta.url).href;
 const url = name => assetURL('zones/' + name);
@@ -43,8 +45,9 @@ function disposeGroup(group) {
 }
 
 /** A zone becomes walkable in the same frame that its visible scene and interaction targets mount. */
-export function createZones({ scene, renderer, walker, exhibits, plan, lite, report, ctx={},camera,play }) {
+export function createZones({ scene, renderer, walker, exhibits, plan, lite, report, ctx={},camera,compileRoom,play }) {
   const pmrem = new THREE.PMREMGenerator(renderer);
+  const geometryDecoder=createRoomDecoder(MeshoptDecoder);
   const known = new Map(plan.zones.map(z => [z.id, z]));
   const resident = new Map(), pending = new Map(), retries = new Map();
   const photoSources = new Map();
@@ -54,6 +57,7 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
   const anisotropy = Math.min(lite ? 4 : 8, renderer.capabilities.getMaxAnisotropy());
   let disposed = false, streamClock = 0;
   const direction=new THREE.Vector3(),doorController = new AbortController(), doors=createDoors(scene,walker,ctx,camera,play);
+  const visibility = createRoomVisibility(resident,doors,walker);
   walker.setDoors?.(doors);
   const hardware=loadDoorHardware(assetURL('door-hardware.glb'),doorController.signal).then(asset=>{
     if(disposed){asset.dispose();return;}
@@ -62,6 +66,7 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
   hardware.catch(()=>{});
   function release(zone) {
     zone.released=true;clearTimeout(zone.promotionTimer);zone.lightController?.abort();
+    zone.releaseHousings?.();
     zone.originalMaterials?.forEach(m => m.dispose());
     disposeGroup(zone.view); disposeGroup(zone.collider);
     zone.light?.dispose(); zone.probe?.dispose(); zone.environment?.dispose();
@@ -167,7 +172,7 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
         }).catch(error=>{zone.materialError ||= error;fail(error);});
       }
     });
-    return new GLTFLoader(manager).setMeshoptDecoder(MeshoptDecoder);
+    return new GLTFLoader(manager).setMeshoptDecoder(geometryDecoder);
   }
   async function warmGraphics(zone,signal){
     if(zone.entrance||!camera)return;
@@ -189,7 +194,7 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
         await nextFrame();started=performance.now();count=0;
       }
     }
-    await renderer.compileAsync(zone.view,camera,scene);
+    await compileRoom(zone.view,camera,scene);
   }
   async function load(def, controller) {
     const { id } = def, zone = { id, images: [], originalMaterials: new Set(),sources:new Map(),entrance:firstRoom&&id===plan.start.id };
@@ -297,6 +302,7 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
       scene.add(zone.view); resident.set(id, zone);
       doors.mount(id,zone);
       exhibits.mount?.(id, zone.view);
+      zone.releaseHousings=batchArchiveHousings(zone.view);
       if(zone.entrance){firstRoom=false;promote(zone);}
       return zone;
     } catch (error) {
@@ -362,11 +368,11 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
       report(error);
     });
   }
-  return { ensure, stream, resident, doors:doors.debug,registerDoorLeaf:doors.registerLeaf,
+  return { ensure, stream, resident, visibility, doors:doors.debug,registerDoorLeaf:doors.registerLeaf,
     textureStats:()=>({residentSources:photoSources.size,sharedHits,fullDetailMaps,pendingDetailMaps:[...(resident.get(walker.zone)?.sources.values()||[])].filter(e=>e.preview).length+Number(!!resident.get(walker.zone)?.previewLight),
       decodedBytes:[...photoSources.values()].reduce((n,e)=>n+(e.source?e.source.data.width*e.source.data.height*4:0),0)}),
     dispose() {
-    promotionQueue.clear();clearEntrance();doorController.abort();
+    promotionQueue.clear();clearEntrance();doorController.abort();geometryDecoder.dispose();
     disposed = true;
     for (const { controller } of pending.values()) controller.abort();
     for (const id of resident.keys()) unload(id);

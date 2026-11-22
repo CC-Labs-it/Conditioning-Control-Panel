@@ -1,4 +1,45 @@
-import {Group, Matrix4} from 'three';
+import {Group, InstancedMesh, Matrix4} from 'three';
+
+// Only the fixed case and the station body share a draw. Screens, lenses,
+// labels, replay keys and their original interaction targets stay independent.
+export function batchArchiveHousings(room) {
+  room.updateWorldMatrix(true,false);
+  const groups = new Map(), inverse = room.matrixWorld.clone().invert();
+  for (const bay of room.children) {
+    if (!bay.name.startsWith('archive_bay_')) continue;
+    bay.updateWorldMatrix(true, true);
+    for (const part of bay.children) {
+      if (!/^expo_(fixture|station)_slot_\d+$/.test(part.name)) continue;
+      part.traverseVisible(mesh => {
+        if (!mesh.isMesh || mesh.material.transparent || Array.isArray(mesh.material) || mesh.matrixWorld.determinant() <= 0) return;
+        const key = mesh.geometry.uuid + ':' + mesh.material.uuid;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(mesh);
+      });
+    }
+  }
+  const batches=[];
+  for (const meshes of groups.values()) {
+    if (meshes.length < 2) continue;
+    const {geometry, material} = meshes[0];
+    const batch = new InstancedMesh(geometry, material, meshes.length);
+    batch.name = 'archive_bay_housings';
+    const local = new Matrix4();
+    for (const [i, mesh] of meshes.entries()) {
+      batch.setMatrixAt(i, local.multiplyMatrices(inverse,mesh.matrixWorld));
+      mesh.visible = false;
+    }
+    batch.computeBoundingSphere();
+    room.add(batch);
+    batches.push({batch,meshes});
+  }
+  return () => {
+    for (const {batch,meshes} of batches) {
+      batch.removeFromParent();batch.dispose();
+      for (const mesh of meshes) mesh.visible=true;
+    }
+  };
+}
 
 // Additional bays use their room's freestanding projector, including its moving caps and collision.
 export function fitArchiveBays(zone, route) {
