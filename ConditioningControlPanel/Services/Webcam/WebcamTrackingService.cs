@@ -1091,6 +1091,16 @@ namespace ConditioningControlPanel.Services
                     return false;
                 }
 
+                if (_disposed)
+                {
+                    // Shut down while the open or the model load ran: never start a capture thread
+                    // on a service nobody will stop again.
+                    ReleaseModels();
+                    ReleaseCapture();
+                    SetState(WebcamTrackingState.Stopped);
+                    return false;
+                }
+
                 ReportStartupProgress(0.92, "Starting capture…");
                 _stopRequested = false;
                 _captureThread = new Thread(CaptureLoop)
@@ -1134,11 +1144,23 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public Task StopAsync() => Task.Run(() => Stop());
 
-        public void Stop()
+        public void Stop() => StopCore(Timeout.InfiniteTimeSpan);
+
+        /// <summary>How long the shutdown path waits for a start that still holds the state lock.
+        /// A start can sit inside the camera open for the whole 90 s timeout on a wedged driver
+        /// (hang report 2026-11-16: the close waited 14 s in Dispose and the app had to be ended).</summary>
+        internal static readonly TimeSpan DisposeLockWait = TimeSpan.FromSeconds(2);
+
+        /// <returns>false when the state lock could not be taken within <paramref name="lockWait"/>.</returns>
+        private bool StopCore(TimeSpan lockWait)
         {
             Thread? thread;
-            lock (_stateLock)
+            bool taken = false;
+            try
             {
+                Monitor.TryEnter(_stateLock, lockWait, ref taken);
+                if (!taken) return false;
+
                 // #743: Error / CameraInUse / CameraDenied are exactly the states a failed start
                 // lands in, and they are also the states holding orphaned native handles. Returning
                 // early for them meant nothing ever released a failed attempt's capture graph or
@@ -1149,11 +1171,15 @@ namespace ConditioningControlPanel.Services
                     && _capture == null
                     && !HasLoadedModels)
                 {
-                    return;
+                    return true;
                 }
 
                 _stopRequested = true;
                 thread = _captureThread;
+            }
+            finally
+            {
+                if (taken) Monitor.Exit(_stateLock);
             }
 
             // Wait for the capture thread to exit before releasing any native
@@ -1175,7 +1201,7 @@ namespace ConditioningControlPanel.Services
                         {
                             SetState(WebcamTrackingState.Error);
                         }
-                        return;
+                        return true;
                     }
                 }
             }
@@ -1189,6 +1215,7 @@ namespace ConditioningControlPanel.Services
                 SetState(WebcamTrackingState.Stopped);
                 App.Logger?.Information("WebcamTrackingService: stopped");
             }
+            return true;
         }
 
         public void ApplyCalibration(WebcamCalibrationData data)
@@ -1314,7 +1341,18 @@ namespace ConditioningControlPanel.Services
             if (_disposed) return;
             _disposed = true;
             SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
-            try { Stop(); } catch (Exception ex) { App.Logger?.Warning(ex, "WebcamTrackingService.Dispose: Stop() threw"); }
+            try
+            {
+                if (!StopCore(DisposeLockWait))
+                {
+                    // A start is still inside the camera open. Invalidate that attempt so its worker
+                    // drops the handle when the driver returns; StartCore sees _disposed and starts
+                    // nothing. The process is exiting and frees the rest.
+                    Interlocked.Increment(ref _openGeneration);
+                    App.Logger?.Warning("WebcamTrackingService.Dispose: a camera start still holds the state lock after {Seconds}s; not waiting for it", DisposeLockWait.TotalSeconds);
+                }
+            }
+            catch (Exception ex) { App.Logger?.Warning(ex, "WebcamTrackingService.Dispose: Stop() threw"); }
             App.Logger?.Information("WebcamTrackingService: disposed");
         }
 
