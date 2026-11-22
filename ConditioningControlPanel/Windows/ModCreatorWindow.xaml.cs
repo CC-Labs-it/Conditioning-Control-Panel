@@ -216,6 +216,7 @@ namespace ConditioningControlPanel
             LoadActiveModAsPreset();
             NavigateToSection("info");
             UpdateStatusBar();
+            InitDraft();
 
             if (_startWithTutorial)
             {
@@ -2571,6 +2572,7 @@ namespace ConditioningControlPanel
                 // Cleanup temp
                 try { Directory.Delete(tempDir, recursive: true); } catch { }
 
+                OnDraftExported();
                 TxtStatus.Text = Loc.GetF("mod_exported_filename", Path.GetFileName(sfd.FileName));
                 MessageBox.Show(Loc.GetF("msg_mod_exported_successfully", sfd.FileName), Loc.Get("title_export_complete"),
                     MessageBoxButton.OK, MessageBoxImage.Information);
@@ -2656,6 +2658,15 @@ namespace ConditioningControlPanel
                 Loc.Get("title_confirm_reset"), MessageBoxButton.YesNo, MessageBoxImage.Warning);
             if (result != MessageBoxResult.Yes) return;
 
+            ResetForm();
+            NavigateToSection("info");
+            UpdateStatusBar();
+            TxtStatus.Text = Loc.Get("label_reset_to_defaults");
+        }
+
+        /// <summary>Clears every field and slot to the defaults. Shared by Reset and the draft restore.</summary>
+        private void ResetForm()
+        {
             // Clear all fields
             SetTextBoxValue(_txtModName, "");
             SetTextBoxValue(_txtAuthor, "");
@@ -2718,9 +2729,18 @@ namespace ConditioningControlPanel
             ClearAdvancedSection();
             ClearSideFileState();
 
-            NavigateToSection("info");
-            UpdateStatusBar();
-            TxtStatus.Text = Loc.Get("label_reset_to_defaults");
+            // Messages, browser, custom avatar sets: a restored draft must not inherit these from the active mod.
+            foreach (var tb in new[] { _txtAttentionFail, _txtAttentionMercy, _txtBubbleRetry, _txtAttentionTroll, _txtGazeCorrect,
+                _txtQuizTrickQuestion, _txtQuizTrickAnswer, _txtQuizPraise, _txtQuizObedienceQuestion,
+                _txtQuizPraiseHeardQuestion, _txtMarqueeBanner, _txtBrowserUrl, _txtBrowserSiteName })
+                SetTextBoxValue(tb, "");
+            _loadedMessages = null;
+            if (_chkShowBambiCloud != null) _chkShowBambiCloud.IsChecked = true;
+            _videoLinks.Clear();
+            _videoLinksPanel?.Children.Clear();
+            foreach (var cs in _customAvatarSets) _avatarSetsParent?.Children.Remove(cs.Container);
+            _customAvatarSets.Clear();
+            foreach (var (setNum, cb) in _avatarSetCheckboxes) { cb.IsChecked = true; ToggleAvatarSet(setNum, true); }
         }
 
         // ─── Status Bar ──────────────────────────────────────────
