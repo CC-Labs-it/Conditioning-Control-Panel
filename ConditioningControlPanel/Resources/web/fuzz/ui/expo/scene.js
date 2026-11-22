@@ -11,6 +11,7 @@ import { pickExhibits } from './exhibit-picking.js';
 import { mountExpoRadio, RADIO_STYLE } from './music-controls.js';
 import { MOBILE_OVERLAY_STYLE } from './mobile-overlay-style.js';
 import { createWalker } from './collision.js';
+import { expoAllowed } from '../edition.js';
 import { assetURL } from './asset-base.js';
 import { createZones, loadPlan } from './zones.js';
 import { createPost } from './post.js';
@@ -76,6 +77,7 @@ const CSS = `
 
 /** Construction is synchronous so panic can release the renderer while the first room is still downloading. */
 export function createExpo(ctx, parent, { onExit, arrival = false, initialInputMode, onInputMode } = {}) {
+  if (!expoAllowed()) throw new Error('The Expo transmission is unavailable.');
   const doc = parent.ownerDocument, win = doc.defaultView, clean = [];
   const root = doc.createElement('div');
   root.className = 'expo-root'; root.tabIndex = -1; root.setAttribute('aria-label', 'Llama Expo 2037'); parent.append(root);

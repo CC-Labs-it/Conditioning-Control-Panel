@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {gzipSync} from 'node:zlib';
 import {roomRequest,viewFile,roomAsset,warmEntrance,clearEntrance} from '../ui/expo/entrance.js';
-import {setExpoAssetBase} from '../ui/expo/asset-base.js';
+import {setEdition,expoArrived} from '../ui/edition.js';
 
 test('open visits retain lighting, collision and reflections from their own edition',()=>{
   const original={id:'atrium'};
@@ -44,14 +44,15 @@ test('the legacy preflight starts no asset request before a visitor accepts',asy
 });
 
 test('changing the transmission directory never reuses an earlier warmed manifest',async t=>{
-  t.after(()=>{clearEntrance();setExpoAssetBase(null);});
+  setEdition({caps:{edition:'full',platform:'desktop',expo:{state:'absent'}}},{hosted:true});
+  t.after(()=>{clearEntrance();setEdition(null,{noPage:true});});
   const requested=[];
   t.mock.method(globalThis,'fetch',async url=>{
     const host=new URL(url).host;requested.push(host);
     return Response.json({host,zones:[],start:{id:'atrium'}});
   });
-  setExpoAssetBase('https://first.example/edition/');warmEntrance(true);
-  setExpoAssetBase('https://next.example/updated/');
+  assert(expoArrived('https://first.example/edition/'));warmEntrance(true);
+  assert(expoArrived('https://next.example/updated/'));
   const data=await (await roomRequest('zones.json',new AbortController().signal)).json();
   assert.equal(data.host,'next.example');
   assert.deepEqual(requested,['first.example','next.example']);

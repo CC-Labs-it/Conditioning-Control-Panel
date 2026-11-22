@@ -1,3 +1,4 @@
+import {expoAllowed} from '../edition.js';
 import {assetURL} from './asset-base.js';
 import {warmEntrance} from './entrance.js';
 const EASE = x => x * x * (3 - 2 * x);
@@ -35,7 +36,7 @@ export function createPortal(ctx, parent) {
     return { node, gain: gain.gain };
   }
   function begin() {
-    if (entered || disposed) return;
+    if (entered || disposed || !expoAllowed()) return;
     entered = true; parent.append(curtain); mode = calm() ? 'gentle' : 'standard';
     warmEntrance(true);
     input = ctx.audio.input({bus:'sfx',gain:.95});

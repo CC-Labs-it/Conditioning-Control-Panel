@@ -1,3 +1,4 @@
+import {expoAllowed} from '../edition.js';
 import {assetURL} from './asset-base.js';
 
 const zoneURL=name=>assetURL('zones/'+name);
@@ -56,6 +57,7 @@ async function firstTextureNames(response){
 
 /** The accepted transmission can start its transfer while the arrival transition plays. */
 export function warmEntrance(accepted){
+  if(!expoAllowed()){clearEntrance();return;}
   if(accepted!==true)return;
   const base=zoneURL('');
   if(batch&&batch.base!==base)clearEntrance();

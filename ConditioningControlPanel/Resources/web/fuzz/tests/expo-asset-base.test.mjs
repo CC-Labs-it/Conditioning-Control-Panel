@@ -1,26 +1,51 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {assetURL,setExpoAssetBase} from '../ui/expo/asset-base.js';
+import {expoAllowed,expoArrived,setEdition} from '../ui/edition.js';
+import {assetURL} from '../ui/expo/asset-base.js';
 import {createSound} from '../ui/expo/audio.js';
 import {createPortal} from '../ui/expo/portal.js';
-import {clearEntrance} from '../ui/expo/entrance.js';
+import {clearEntrance,roomRequest,warmEntrance} from '../ui/expo/entrance.js';
 import {loadHoofPhotos} from '../ui/expo/hoof-screen.js';
 import {herdRoster} from '../data/content/llamas.js';
 
-test('a transmission directory can be mounted, replaced and reset before the next visit', () => {
-  const bundled=new URL('../assets/expo/',import.meta.url).href;
-  assert.equal(assetURL(),bundled);
+const desktop={hosted:true,hostname:'game.example.test'};
+const bundled=()=>setEdition(null,{noPage:true});
+const ready=base=>setEdition({caps:{edition:'full',platform:'desktop',expo:{state:'ready',base}}},desktop);
+
+test('the full desktop host supplies the transmission directory at boot or after download', () => {
+  const localBase=new URL('../assets/expo/',import.meta.url).href;
+  assert.equal(assetURL(),localBase);
   try {
-    setExpoAssetBase('https://packs.example.test/transmissions/2037');
+    setEdition({caps:{edition:'full',platform:'desktop',expo:{state:'absent'}}},desktop);
+    assert.equal(expoAllowed(),false);
+    assert.equal(expoArrived('https://packs.example.test/transmissions/2037/'),true);
     assert.equal(assetURL('zones/a.glb'),'https://packs.example.test/transmissions/2037/zones/a.glb');
     assert.equal(assetURL('zones/'),'https://packs.example.test/transmissions/2037/zones/');
     assert.throws(()=>assetURL('../audio/old.mp3'),/outside its pack/);
     assert.throws(()=>assetURL('https://other.example.test/clips/a.mp3'),/outside its pack/);
-    setExpoAssetBase(new URL('https://cdn.example.test/another/'));
+    ready('https://cdn.example.test/another/');
     assert.equal(assetURL('audio/sounds.json'),'https://cdn.example.test/another/audio/sounds.json');
-  } finally {setExpoAssetBase(null);}
-  assert.equal(assetURL(),bundled);
+  } finally {bundled();}
+  assert.equal(assetURL(),localBase);
+});
+
+test('a small edition or an absent transmission cannot start the portal or fetch a room', async t=>{
+  const calls=t.mock.method(globalThis,'fetch',()=>{throw Error('unexpected request');});
+  const el=()=>({setAttribute(){},append(){},remove(){}});
+  const parent={...el(),ownerDocument:{createElement:el}};
+  t.after(bundled);
+  for(const caps of [
+    {edition:'small',platform:'desktop',expo:{state:'ready',base:'https://packs.example.test/'}},
+    {edition:'full',platform:'desktop',expo:{state:'absent'}}
+  ]){
+    setEdition({caps},desktop);
+    const portal=createPortal({},parent);
+    warmEntrance(true);portal.begin();portal.arrive();portal.dispose();
+    assert.throws(()=>assetURL('zones/zones.json'),/unavailable/);
+    await assert.rejects(roomRequest('zones.json',new AbortController().signal),/unavailable/);
+  }
+  assert.equal(calls.mock.callCount(),0);
 });
 
 test('portal creation is quiet and its first accepted crossing requests the selected pack', async t => {
@@ -32,7 +57,7 @@ test('portal creation is quiet and its first accepted crossing requests the sele
   });
   const element=()=>({setAttribute(){},append(){},remove(){}});
   const parent={...element(),ownerDocument:{createElement:element}};
-  setExpoAssetBase('https://cdn.example.test/transmission/');
+  ready('https://cdn.example.test/transmission/');
   const portal=createPortal({audio:{input:()=>null,preload:url=>{preloads.push(url);}}},parent);
   try {
     portal.arrive();
@@ -42,20 +67,20 @@ test('portal creation is quiet and its first accepted crossing requests the sele
     assert.equal(files.filter(s=>s.endsWith('/audio/sounds.json')).length,1);
     assert(files.every(s=>s.startsWith('https://cdn.example.test/transmission/')));
     assert.deepEqual(preloads,['rise','arrive'].map(id=>assetURL('audio/'+id+'.ogg')));
-  } finally {portal.dispose();clearEntrance();setExpoAssetBase(null);}
+  } finally {portal.dispose();clearEntrance();bundled();}
 });
 
 test('the visitor footsteps and loan ticker play files from the selected pack', async t => {
   const requests=[],played=[];
   t.mock.method(globalThis,'fetch',async url=>{requests.push(String(url));return Response.json({steps:{wood:['step-wood-1.ogg']}});});
-  setExpoAssetBase('https://cdn.example.test/transmission/');
+  ready('https://cdn.example.test/transmission/');
   const sound=createSound({audio:{play:url=>played.push(url),preload(){}}});
   try {
     await new Promise(resolve=>setTimeout(resolve,0));
     sound.footstep('wood');sound.play('loan_tick');
     assert.deepEqual(requests,[assetURL('audio/sounds.json')]);
     assert.deepEqual(played,['sfx/thud.mp3','step-wood-1.ogg','sfx/tally_tick.mp3'].map(path=>assetURL('audio/'+path)));
-  } finally {sound.dispose();setExpoAssetBase(null);}
+  } finally {sound.dispose();bundled();}
 });
 
 test('all six Dome frames, the bubble and the two reused sounds are present in the pack', async () => {
@@ -66,11 +91,11 @@ test('all six Dome frames, the bubble and the two reused sounds are present in t
 test('cross-origin hoof photos request CORS before receiving their source URL', () => {
   const previous=globalThis.Image,issued=[];
   globalThis.Image=class {set src(value){issued.push([this.crossOrigin,value]);}};
-  setExpoAssetBase('https://pictures.example.test/package');
+  ready('https://pictures.example.test/package/');
   try {
     const photos=loadHoofPhotos(assetURL,()=>{});
     assert.equal(issued.length,16);
     assert(issued.every(([mode,url])=>mode==='anonymous' && url.startsWith(assetURL('hoof-photos/'))));
     photos.dispose();
-  } finally {setExpoAssetBase(null);if(previous)globalThis.Image=previous;else delete globalThis.Image;}
+  } finally {bundled();if(previous)globalThis.Image=previous;else delete globalThis.Image;}
 });
