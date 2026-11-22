@@ -1576,15 +1576,18 @@ namespace ConditioningControlPanel
                 // Glassroad (3D race preview) pauses on Escape like every game here.
                 bool glassroadInFront = Services.Glassroad.GlassroadHostService.IsInFront;
                 bool glassroadReady = Services.Glassroad.GlassroadHostService.IsReady;
+                // Terms & Conditioning (7.4.0): Escape is its pause card (fuzz/host-escape.js).
+                bool tcInFront = Services.Tc.TcHostService.IsInFront;
+                bool tcReady = Services.Tc.TcHostService.IsReady;
                 // Only a game that is up can pause: a booting page that kept the press did nothing.
                 bool frontGameReady = Services.Safety.PanicPolicy.KeptEscapeGoesTo(true,
                     raceInFront, raceReady, boardInFront, boardReady, breakoutInFront, breakoutReady,
                     dtrhInFront, dtrhReady, arcademyInFront, arcademyReady, goonInFront, goonReady,
                     roomInFront, roomReady, intakeInFront, intakeReady, counterInFront, counterReady,
-                    glassroadInFront, glassroadReady) != Services.Safety.PanicPolicy.KeptEscapePage.None;
+                    glassroadInFront, glassroadReady, tcInFront, tcReady) != Services.Safety.PanicPolicy.KeptEscapePage.None;
                 bool claim = Services.Safety.PanicPolicy.GameClaimsEscapeAsPause(
                     App.Settings?.Current?.PanicKey,
-                    gameInFront: raceInFront || boardInFront || breakoutInFront || dtrhInFront
+                    gameInFront: raceInFront || boardInFront || breakoutInFront || dtrhInFront || tcInFront
                         || arcademyInFront || goonInFront || roomInFront || intakeInFront || glassroadInFront || counterInFront,
                     engineRunning: _isRunning,
                     lockCardOpen: LockCardWindow.IsAnyOpen(),
@@ -1597,7 +1600,8 @@ namespace ConditioningControlPanel
                 var gameName = raceInFront ? "Racing Thoughts" : boardInFront ? "Piece by Piece"
                     : breakoutInFront ? "Breakout" : dtrhInFront ? "Down the Rabbit Hole"
                     : arcademyInFront ? "Arcademy" : goonInFront ? "Goon"
-                    : roomInFront ? "Back Room" : intakeInFront ? "Intake" : counterInFront ? "Prize Counter" : "Glassroad";
+                    : roomInFront ? "Back Room" : intakeInFront ? "Intake" : counterInFront ? "Prize Counter"
+                    : glassroadInFront ? "Glassroad" : "Terms & Conditioning";
                 VideoDiag.Log("PANIC", $"Escape kept by {gameName} as its pause (again within 2 s = full panic)");
                 // Each game pauses on its own keydown, which never comes while its WebView2 is out of
                 // keyboard focus, so the game in front is handed the kept press too; the page drops it
@@ -1606,7 +1610,7 @@ namespace ConditioningControlPanel
                             raceInFront, raceReady, boardInFront, boardReady, breakoutInFront, breakoutReady,
                             dtrhInFront, dtrhReady, arcademyInFront, arcademyReady, goonInFront, goonReady,
                             roomInFront, roomReady, intakeInFront, intakeReady, counterInFront, counterReady,
-                            glassroadInFront, glassroadReady))
+                            glassroadInFront, glassroadReady, tcInFront, tcReady))
                 {
                     case Services.Safety.PanicPolicy.KeptEscapePage.Counter:
                         Services.PrizeCounter.PrizeCounterHostService.PostKeptEscape(); break;
@@ -1628,6 +1632,8 @@ namespace ConditioningControlPanel
                         Services.Quiz.IntakeHostService.PostKeptEscape(); break;
                     case Services.Safety.PanicPolicy.KeptEscapePage.Glassroad:
                         Services.Glassroad.GlassroadHostService.PostKeptEscape(); break;
+                    case Services.Safety.PanicPolicy.KeptEscapePage.Tc:
+                        Services.Tc.TcHostService.PostKeptEscape(); break;
                 }
                 return true;
             }
