@@ -41,7 +41,7 @@ function pastSteps(run) {
   const leadStep = {};
   for (const id of run.order || []) {
     const it = BY_ID[id];
-    if (!onRoad(it)) continue;
+    if (!onRoad(it) || E.asleep(run, id)) continue;   // small: a sleeping row is not drawn
     const lead = LEAD_OF[id];
     if (lead && leadStep[lead]) { leadStep[lead].riders.push(id); continue; }
     if (it.kind === 'fork') { steps.push({ fork: id, pick: run.picks?.[id] || null }); continue; }
@@ -59,14 +59,16 @@ function futureSteps(run, items = ITEMS) {
   const picks = { ...(run.picks || {}) };
   const guessed = new Set();
   const steps = [];
-  const pool = items.filter((it) => onRoad(it) && it.kind !== 'end' && !owned.has(it.id));
+  /* Small: a cut row is never on the road, and needs read through the edition (sim/economy.js needsOf). */
+  const pool = items.filter((it) => onRoad(it) && it.kind !== 'end' && !owned.has(it.id) && !E.asleep(run, it.id));
   for (let guard = 0; guard < 600; guard++) {
     let best = null;
     for (const it of pool) {
       if (owned.has(it.id) || !laneOpen(picks, it)) continue;
-      if (LEAD_OF[it.id] && !owned.has(LEAD_OF[it.id])) continue;   // a rider comes with its lead
-      if (!it.req.every((q) => owned.has(q))) continue;
-      if (it.any && !it.any.some((q) => owned.has(q))) continue;
+      if (LEAD_OF[it.id] && !owned.has(LEAD_OF[it.id]) && !E.asleep(run, LEAD_OF[it.id])) continue;   // a rider comes with its lead
+      const n = E.needsOf(run, it);
+      if (!n.req.every((q) => owned.has(q))) continue;
+      if (n.any && !n.any.some((q) => owned.has(q))) continue;
       if (!best || it.cost < best.cost) best = it;
     }
     if (!best) break;
@@ -78,9 +80,10 @@ function futureSteps(run, items = ITEMS) {
       steps.push({ fork: best.id, pick: null });
       continue;
     }
-    const riders = ridersOf(best.id).filter((r) => BY_ID[r] && !owned.has(r));
+    const riders = ridersOf(best.id).filter((r) => BY_ID[r] && !owned.has(r) && !E.asleep(run, r));
     for (const r of riders) owned.add(r);
-    const guess = guessed.has(best.lane) || (best.req.concat(best.any || [])).some((q) => guessed.has(BY_ID[q]?.lane));
+    const bn = E.needsOf(run, best);
+    const guess = guessed.has(best.lane) || (bn.req.concat(bn.any || [])).some((q) => guessed.has(BY_ID[q]?.lane));
     steps.push({ id: best.id, riders, past: false, guess });
   }
   return steps;
@@ -88,7 +91,7 @@ function futureSteps(run, items = ITEMS) {
 
 /** Endings this route can still reach: the main one, the exits, and the ending of every lane already picked. */
 export function sealsOf(run, items = ITEMS) {
-  return items.filter((it) => it.kind === 'end' && it.group === 'run' && !E.has(run, it.id)
+  return items.filter((it) => it.kind === 'end' && it.group === 'run' && !E.has(run, it.id) && !E.asleep(run, it.id)
     && (!FORK_OF_LANE[it.lane] || run.picks?.[FORK_OF_LANE[it.lane]] === it.lane)).map((it) => it.id);
 }
 
@@ -163,7 +166,7 @@ export function buildRoad(run, items = ITEMS) {
     }
     ch.road = rowsOf(road);
     ch.pockets = pockets;
-    ch.riders = Object.fromEntries(stamps.filter((s) => s.riders.length || ridersOf(s.id).length).map((s) => [s.id, ridersOf(s.id).filter((r) => BY_ID[r])]));
+    ch.riders = Object.fromEntries(stamps.filter((s) => s.riders.length || ridersOf(s.id).length).map((s) => [s.id, ridersOf(s.id).filter((r) => BY_ID[r] && !E.asleep(run, r))]));
     delete ch.steps;
   }
   chapters[chapters.length - 1].seals = sealsOf(run, items);

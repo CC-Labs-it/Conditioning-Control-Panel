@@ -34,7 +34,8 @@ export const asleep = (s, id) => !!s[ED] && isCut(id, s[ED]);
  *  an ended run, shown plain (no take, no show, no resumed visit), and only the player's own New run leaves it. Small
  *  never starts a New run by itself: that would throw away the visit, and small never deletes. */
 export const sleepingEnd = (s) => !!s?.ended && asleep(s, s.ended.id);
-const needs = (s, it) => (s[ED] ? reqFor(it, s[ED]) : it);
+/** What a row needs on this run: { req, any } (ui/edition.js reqFor in small, the catalog row itself otherwise). */
+export const needsOf = (s, it) => (s[ED] ? reqFor(it, s[ED]) : it);
 
 /** prestige: a Renewal Sky run stamp (sim/prestige.js runStamp). Its pay multiplier rides on pace, which every income path
  *  already carries; its price scale and minutes are read by the Journey plan. null = a run that plays as Depth 0.
@@ -185,7 +186,7 @@ function reached(s, it) {
   if (it.group !== 'run' || it.id === 'start' || s.ended) return false;
   if (s[ED] && isCut(it.id, s[ED])) return false;   // small: a cut row is never on offer
   if (!laneOpen(s, it) || !canHaveMore(s, it) || !fateAllows(s, it)) return false;
-  const n = needs(s, it);
+  const n = needsOf(s, it);
   return n.req.every((q) => has(s, q)) && (!n.any || n.any.some((q) => has(s, q)));
 }
 
@@ -213,7 +214,7 @@ function fateAllows(s, it) {
  * the shop (owner 2026-11-10; perks, cards and stickers stay for players who already have them): Endless Mode, Drop, and
  * the theme and Premium endings that lost their set (Count Up, The Debut, Lost Key, Redacted, Flatline, Lifetime Plan). */
 export const OFF_SHELF = new Set(['onemore', 'drop', 'tr_end', 'si_end', 'lo_end', 'ce_end', 'in_end', 'p_life']);
-export const mainPathDone = (s) => needs(s, BY_ID.drop).req.every((q) => has(s, q));
+export const mainPathDone = (s) => needsOf(s, BY_ID.drop).req.every((q) => has(s, q));
 export function heldEnding(s) {
   const set = FATE_BY_ID[fateOf(s)];
   return set ? set.end : null;
@@ -240,7 +241,7 @@ export function goal(s) {
   for (const it of ITEMS) {
     if (it.lane !== 'trunk' || it.group !== 'run' || has(s, it.id) || asleep(s, it.id)) continue;
     /* Spiral Overlay waits for a fate seed (its `any`): until one is bought there is no goal, the seeds are the shop. */
-    if (it.kind !== 'end') { const any = needs(s, it).any; return !any || any.some((q) => has(s, q)) ? it : null; }
+    if (it.kind !== 'end') { const any = needsOf(s, it).any; return !any || any.some((q) => has(s, q)) ? it : null; }
     const held = BY_ID[heldEnding(s)];   // one ending a run: the held ending takes the main path's last place
     return held && isOpen(s, held) ? held : null;
   }
@@ -468,7 +469,7 @@ export function grant(s, id, added = []) {
       grant(s, 'f5', added);
     }
   }
-  const n = needs(s, it);
+  const n = needsOf(s, it);
   for (const q of n.req) grant(s, q, added);
   /* A row that needs one of several (Spiral Overlay needs a seed): the run's own set's seed, else the first one. */
   if (n.any?.length && !n.any.some((q) => has(s, q))) {

@@ -14,7 +14,7 @@ import { iconFor } from './icons.js';
 import { _loadDemos } from './fork.js';
 import { THEME_IDS, THEME_PALETTES } from './palette.js';
 import { sfx } from './unlocks/basics/fx.js';
-import { islandState, layoutWorld, SHOP_BY_ID, TYPES, worldStates } from './guide-world-model.js';
+import { islandGone, islandState, layoutWorld, SHOP_BY_ID, TYPES, worldStates } from './guide-world-model.js';
 import { createSea, depthLabel } from './guide-sea.js';
 import { paintBadges, standingBadges } from './repeat-badge.js';
 import { TIP_REPLAY } from '../data/content/tips.js';
@@ -222,6 +222,7 @@ export function createGuide(ctx) {
   const phone = () => ctx.bounds().w < 760;
   const W = layoutWorld();
   ctx.css(CSS);
+  ctx.css('[data-tc-gone] { display: none !important; }');   // small edition: cut rows and their islands (S3)
   ctx.css(FATE_GUIDE_CSS);   // the Fate pocket: the shop's fate card look (ui/fate-look.js)
   /* Rows this device cannot use (ui/platform.js) read as off, with the reason on their card. */
   const platform = devicePlatform(win, () => ctx.caps || {});
@@ -375,6 +376,7 @@ export function createGuide(ctx) {
     for (const [id, b] of Object.entries(tokens)) {
       const st = view.states[id];
       for (const s of ['own', 'offer', 'skip', 'later', 'off']) b.classList.toggle(s, s === st);
+      b.toggleAttribute('data-tc-gone', st === 'gone');   // small: a cut row is not on the map
       b.setAttribute('aria-label', `${nameOf(id)}, ${statusOf(id, st)}`);
       if (BY_ID[id]) paintBadges(b, standingBadges(BY_ID[id], ctx.state));   // level and copies, ui/repeat-badge.js
       if (BY_ID[id]?.fate) {   // the picked set lit; a seed this run can never take wears the stamp (ui/fate-look.js)
@@ -387,12 +389,16 @@ export function createGuide(ctx) {
       const el = world.querySelector(`.isl[data-isl="${i.id}"]`);
       el.classList.toggle('picked', st === 'picked');
       el.classList.toggle('shut', st === 'shut');
-      for (const l of world.querySelectorAll(`.lad[data-lad="${i.id}"]`)) l.classList.toggle('shut', st === 'shut');
+      const gone = islandGone(view, W, i);   // small: an island whose every row is cut
+      el.toggleAttribute('data-tc-gone', gone);
+      for (const l of world.querySelectorAll(`.lad[data-lad="${i.id}"]`)) { l.classList.toggle('shut', st === 'shut'); l.toggleAttribute('data-tc-gone', gone); }
+      for (const t of world.querySelectorAll(`path[data-lane="${i.id}"], circle[data-lane="${i.id}"]`)) t.toggleAttribute('data-tc-gone', gone);
       for (const t of world.querySelectorAll(`.roads [data-lane="${i.id}"]`)) {
         t.classList.toggle('shut', st === 'shut');
         t.classList.toggle('open', st === 'open');
       }
       mini.querySelector(`[data-mini="${i.id}"]`)?.classList.toggle('shut', st === 'shut');
+      mini.querySelector(`[data-mini="${i.id}"]`)?.toggleAttribute('data-tc-gone', gone);
     }
     for (const p of world.querySelectorAll('.plank')) {
       const pick = ctx.state.picks?.[p.dataset.fork];
@@ -577,6 +583,7 @@ export function createGuide(ctx) {
     if (line) mk('p', 'stl', t, line);
   }
   function chips(c, label, ids) {
+    ids = ids.filter((id) => !E.asleep(ctx.state, id));   // small: never list a cut row
     if (!ids.length) return;
     mk('h4', '', c, label);
     const list = mk('div', 'list', c);
@@ -616,8 +623,9 @@ export function createGuide(ctx) {
       if (it.line) mk('p', 'line', c, it.line);
       startDemo(mk('div', 'demo', c), id);
     }
-    chips(c, 'Needs', [...(it.req || []), ...(it.any || [])].filter((q) => BY_ID[q] && q !== 'start'));
-    chips(c, 'Opens', Object.values(BY_ID).filter((r) => r.group === 'run' && (r.req?.includes(id) || r.any?.includes(id))).map((r) => r.id).slice(0, 8));
+    const needs = E.needsOf(ctx.state, it), needsOf = (r) => E.needsOf(ctx.state, r);   // small: through the edition (reqFor)
+    chips(c, 'Needs', [...(needs.req || []), ...(needs.any || [])].filter((q) => BY_ID[q] && q !== 'start'));
+    chips(c, 'Opens', Object.values(BY_ID).filter((r) => r.group === 'run' && !E.asleep(ctx.state, r.id) && (needsOf(r).req?.includes(id) || needsOf(r).any?.includes(id))).map((r) => r.id).slice(0, 8));
     const foot = mk('div', 'foot', c);
     const type = W.nodes.find((n) => n.id === id)?.type;
     mk('span', '', foot, [laneLine(it.lane), type && TYPES[type] && it.lane !== 'trunk' ? `${TYPES[type][0]} row` : ''].filter(Boolean).join(', '));
