@@ -1,3 +1,4 @@
+import {reviewPack} from './expo-review-pack.mjs';
 import {createRequire} from 'node:module';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
@@ -16,6 +17,7 @@ try{
  const ctx=await browser.newContext({viewport:{width:1280,height:720}});await installGameAudio(ctx);
  const page=await ctx.newPage();page.on('pageerror',e=>report.errors.push(e.message));
  await page.goto(base+'dev/play-ending.html?end=ll_end&pictures=none');
+ const packRoot=await reviewPack(page);
  await page.getByRole('button',{name:'Play Llama Expo 2037'}).click();
  const f=page.frames().find(fr=>fr.url().includes('/fuzz/index.html'));await f.locator('.expo-worm #btn').click();
  await f.waitForFunction(()=>window.__expo?.state().ready&&!document.querySelector('.expo-crossing'),null,{timeout:120000});
@@ -39,7 +41,7 @@ try{
   await muxWalk(raw,audio,clip,2.7,(audioAt-stop.startedAt)/1000);await unlink(raw);await unlink(audio);
   report.shots.push({surface,room,...trace});
   assert(trace.trace.length>=3,surface+' had too few grounded steps');
-  assert(trace.trace.every(s=>s.surface===surface&&s.body==='assets/audio/sfx/thud.mp3'),surface+' changed underfoot');
+  assert(trace.trace.every(s=>s.surface===surface&&s.body===new URL('audio/sfx/thud.mp3',packRoot).href),surface+' changed underfoot');
  }
  const sequence=join(out,'surfaces.txt');
  await writeFile(sequence,report.shots.map(s=>"file '"+s.surface+".mp4'").join('\n'));

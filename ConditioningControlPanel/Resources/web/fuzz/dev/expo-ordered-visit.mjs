@@ -1,3 +1,4 @@
+import {reviewPack} from './expo-review-pack.mjs';
 import assert from 'node:assert/strict';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {createRequire} from 'node:module';
@@ -38,6 +39,7 @@ try {
       return original.call(this);
     };
   },rate);
+  let packRoot;
   const page=await context.newPage();
   const pictureReads=[];
   report.pictureHashes={};
@@ -51,6 +53,7 @@ try {
   page.on('pageerror',e=>report.errors.push(e.message));
   async function enter(){
     await page.goto(new URL('dev/play-ending.html?end=ll_end&pictures=none',base).href);
+    packRoot=await reviewPack(page);
     await page.getByRole('button',{name:'Play Llama Expo 2037'}).click();
     const g=page.frames().find(f=>f.url().includes('/fuzz/index.html'));
     await g.locator('.expo-worm #btn').click();
@@ -86,8 +89,8 @@ try {
     assert(Math.hypot(report.free[0]-report.secondLanding.feet[0],report.free[2]-report.secondLanding.feet[2])>.5);
   }
   if(mode==='story' || mode==='sample'){
-    const slots=(await (await context.request.get(new URL('assets/expo/station-route.json',base).href)).json()).slots;
-    const records=(await (await context.request.get(new URL('assets/expo/narration/manifest.json',base).href)).json()).filter(r=>r.set==='event');
+    const slots=(await (await context.request.get(new URL('station-route.json',packRoot).href)).json()).slots;
+    const records=(await (await context.request.get(new URL('narration/manifest.json',packRoot).href)).json()).filter(r=>r.set==='event');
     const byId=new Map(slots.map(s=>[s.id,s]));
     await game.evaluate(()=>{
       window.archiveObservations={played:[],frames:{},panels:{},maxVoices:0};

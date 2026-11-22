@@ -1,3 +1,4 @@
+import {reviewPack, packFile} from './expo-review-pack.mjs';
 // node dev/expo-tour.mjs M5 ./dev-captures/tour
 import {createRequire} from 'node:module';
 import {mkdir,readFile,writeFile,unlink} from 'node:fs/promises';
@@ -24,11 +25,12 @@ const browser=await chromium.launch({headless:true,executablePath:process.env.CH
 try{
   const context=await browser.newContext({viewport:{width:Number(process.env.W||1600),height:Number(process.env.H||900)}});
   await installGameAudio(context);
+  let packRoot;
   const page=await context.newPage();page.on('pageerror',e=>audit.faults.push(e.message));
   audit.mediaRequests=[];audit.roomGeometry={};audit.collectionGeometry={};
   const geometryReads=[];
   page.on('response',response=>{
-    const name=response.url().split('/assets/expo/narration/')[1];
+    const name=packFile(response.url(),packRoot,'narration/');
     if(name&&!audit.mediaRequests.includes(name))audit.mediaRequests.push(name);
     const piece=new URL(response.url()).pathname.split('/').pop();
     if(/^(?:collection-[a-f0-9]+|guest-(?:chess|classifieds))\.glb$/.test(piece)&&!audit.collectionGeometry[piece]){
@@ -37,7 +39,7 @@ try{
         row.sha256=createHash('sha256').update(bytes).digest('hex');row.bytes=bytes.length;
       }).catch(error=>audit.faults.push('Reading '+piece+': '+error.message)));
     }
-    const room=new URL(response.url()).pathname.split('/assets/expo/zones/')[1];
+    const room=packFile(response.url(),packRoot,'zones/');
     if(room&&/\.glb(?:\.gz)?$/.test(room)&&!room.includes('collision')&&!audit.roomGeometry[room]){
       const row=audit.roomGeometry[room]={};
       geometryReads.push(response.body().then(bytes=>{
@@ -45,19 +47,20 @@ try{
         row.bytes=native.byteLength;row.sha256=createHash('sha256').update(native).digest('hex');
       }).catch(error=>audit.faults.push('Reading '+room+': '+error.message)));
     }
-    if(response.status()>=400&&response.url().includes('/assets/expo/'))audit.faults.push(response.status()+' '+new URL(response.url()).pathname);
+    if(response.status()>=400&&packFile(response.url(),packRoot))audit.faults.push(response.status()+' '+new URL(response.url()).pathname);
   });
   page.on('console',m=>{if(/(WebGL|GL_).*INVALID_(OPERATION|VALUE|ENUM)|THREE\.WebGLProgram: Shader Error/i.test(m.text()))audit.faults.push(m.text());});
   await page.goto(base+'dev/play-ending.html?end=ll_end&pictures=none&herd='+encodeURIComponent(process.env.HERD||'12'));
+  packRoot=await reviewPack(page);
   const admit=page.getByRole('button',{name:'Play Llama Expo 2037'});await admit.waitFor({timeout:90000});
   const frame=page.frames().find(f=>f.url().includes('/fuzz/index.html'));
-  const available=await frame.evaluate(async()=>await(await fetch('assets/expo/zones/zones.json')).json());
+  const available=await frame.evaluate(async()=>await(await fetch(window.expoReviewAssetURL('zones/zones.json'))).json());
   audit.viewport=page.viewportSize();audit.browser=browser.version();audit.entrance=available.start.id;audit.stagedRooms=available.zones.map(z=>z.id);
   const missing=[...new Set(shots.map(s=>s.zone).filter(id=>id&&!available.zones.some(z=>z.id===id)))];
   if(missing.length)throw Error('The film needs finished rooms: '+missing.join(', '));
   if(profile==='M5'&&!customPlan&&available.start.id!=='atrium')throw Error('The final film requires the finished atrium admission.');
   if(shots.some(shot=>shot.guideEntrance||shot.archiveSlot)){
-    const route=await frame.evaluate(async()=>(await(await fetch('assets/expo/station-route.json')).json()));
+    const route=await frame.evaluate(async()=>(await(await fetch(window.expoReviewAssetURL('station-route.json'))).json()));
     for(const shot of shots){
       if(shot.guideEntrance){
         shot.at=route.start.at;shot.aim=route.slots[0].screen;

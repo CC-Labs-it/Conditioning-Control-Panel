@@ -1,3 +1,4 @@
+import {reviewPack} from './expo-review-pack.mjs';
 import {createRequire} from 'node:module';
 import {mkdir,writeFile} from 'node:fs/promises';
 import path from 'node:path';
@@ -13,11 +14,12 @@ try {
   page.on('pageerror',e=>report.errors.push(e.message));
   page.on('response',r=>{if (/collection-|guest-(chess|classifieds)\.glb/.test(r.url())) report.requests.push([r.url(),r.status()]);});
   await page.goto(route);
+  await reviewPack(page);
   await page.getByRole('button',{name:'Play Llama Expo 2037'}).click();
   const frame=page.frames().find(f=>f.url().includes('/fuzz/index.html'));
   await frame.locator('.expo-worm #btn').click();
   await frame.waitForFunction(()=>window.__expo?.state().ready,null,{timeout:100000});
-  const pieces=await frame.evaluate(async()=>(await (await fetch('assets/expo/collection/collection.json')).json()).pieces);
+  const pieces=await frame.evaluate(async()=>(await (await fetch(window.expoReviewAssetURL('collection/collection.json'))).json()).pieces);
   await frame.waitForFunction(()=>__expo.narrationState().finished.pa_arrive_1>0,null,{timeout:45000});
   const readLabels=()=>frame.evaluate(()=>{
     const result={};

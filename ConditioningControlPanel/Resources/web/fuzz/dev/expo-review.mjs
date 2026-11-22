@@ -1,3 +1,4 @@
+import {reviewPack, packFile} from './expo-review-pack.mjs';
 // Start the game with node dev/serve.mjs 8937, then run this script with a review output directory.
 import { createRequire } from 'node:module';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -46,15 +47,17 @@ try {
   const context = await browser.newContext({ viewport: {width,height}, isMobile: coarse, hasTouch: coarse,
     reducedMotion: process.env.REDUCED === '1' ? 'reduce' : 'no-preference' });
   if(film)await installGameAudio(context);
+  let packRoot;
   const page = await context.newPage();
   page.on('pageerror', error => issues.push(error.message));
   page.on('console', msg => { if (msg.type() === 'error' && !msg.text().includes('404') && !msg.text().includes('Blocked call to navigator.vibrate')) issues.push(msg.text()); });
   const cdp = await context.newCDPSession(page);
   const resources = new Set(); let zoneBytes = 0;
   await cdp.send('Network.enable');
-  cdp.on('Network.responseReceived',event=>{if(event.response.url.includes('/assets/expo/zones/')) resources.add(event.requestId);});
+  cdp.on('Network.responseReceived',event=>{if(packFile(event.response.url,packRoot,'zones/')) resources.add(event.requestId);});
   cdp.on('Network.loadingFinished',event=>{if(resources.has(event.requestId))zoneBytes+=event.encodedDataLength;});
   await page.goto(base+'dev/play-ending.html?end=ll_end&pictures=none'+(coarse?'&lite=1':''));
+  packRoot=await reviewPack(page);
   const admission=page.getByRole('button',{name:'Play Llama Expo 2037'});
   await admission.waitFor({timeout:90000});
   const frame = page.frames().find(f=>f.url().includes('/fuzz/index.html'));
@@ -76,7 +79,7 @@ try {
   await frame.waitForFunction(()=>!!window.__expo, null, {timeout:120000});
   const entryMs = Date.now()-admitted;
   const firstViewBytes=zoneBytes;
-  const available=await frame.evaluate(async()=>((await(await fetch('assets/expo/zones/zones.json')).json()).zones.map(z=>z.id)));
+  const available=await frame.evaluate(async()=>((await(await fetch(window.expoReviewAssetURL('zones/zones.json'))).json()).zones.map(z=>z.id)));
   await frame.evaluate(()=>document.fonts.ready);
   const timing=await frame.evaluate(async()=>{
     const ex=window.__expo,dt=[];

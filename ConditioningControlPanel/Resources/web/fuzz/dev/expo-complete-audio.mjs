@@ -1,3 +1,4 @@
+import {reviewPack} from './expo-review-pack.mjs';
 // Play each release recording to its own native media-ended event, without a 3D renderer.
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
@@ -52,7 +53,8 @@ try{
       '<style>body{margin:0;background:#14211f;color:#fff;font-family:Segoe UI,sans-serif}.expo-narration{padding:20px 45px;font-size:25px;line-height:1.3}.expo-narration p:empty{display:none}</style></head><body><main></main></body></html>'});
   });
   await page.goto(new URL('index.html',base).href);
-  for(const file of ['ui/expo/narration.js','ui/expo/speech-sequence.js','ui/expo/archive-story.js','audio/kit.js','assets/expo/narration/manifest.json']){
+  const packRoot=await reviewPack(page);
+  for(const file of ['ui/expo/narration.js','ui/expo/speech-sequence.js','ui/expo/archive-story.js','audio/kit.js',new URL('narration/manifest.json',packRoot).href]){
     const response=await context.request.get(new URL(file,base).href);
     assert.equal(response.status(),200);
     (report.inputSha256||={})[file]=sum(await response.body());
@@ -61,7 +63,7 @@ try{
     const T=await import('three');
     const {createNarration}=await import('./ui/expo/narration.js');
     const {createKit}=await import('./audio/kit.js');
-    const manifest=await (await fetch('assets/expo/narration/manifest.json')).json();
+    const manifest=await (await fetch(window.expoReviewAssetURL('narration/manifest.json'))).json();
     const byId=new Map(manifest.map(row=>[row.id,row]));
     const firstId=manifest.find(row=>row.archive?.number===1).id;
     const realTime=new Set(['pa_arrive_1','pa_timeline','pa_turnstile','dome_3',firstId]);
@@ -122,7 +124,7 @@ try{
       return {...h,setGain(value){meta.gain=value;h.setGain(value);},stop(ms){if(!ms)handles.delete(meta);h.stop(ms);}};
     }},gentle:true,reduced:true,paused:false,store:{get:key=>memory.get(key),set:(key,v)=>memory.set(key,v)}};
     const registration=(mesh,label,callback)=>{buttons.set(mesh.name,callback);return()=>buttons.delete(mesh.name);};
-    const n=createNarration({ctx,camera,scene,root,register:registration,walker,sound:{play(){}},assetURL:key=>'assets/expo/'+key,lite:true,
+    const n=createNarration({ctx,camera,scene,root,register:registration,walker,sound:{play(){}},assetURL:window.expoReviewAssetURL,lite:true,
       owned:()=>manifest.filter(row=>row.set==='log').map(row=>row.id.slice(4))});
     const groupById=new Map();
     function mount(zone,slot,x){

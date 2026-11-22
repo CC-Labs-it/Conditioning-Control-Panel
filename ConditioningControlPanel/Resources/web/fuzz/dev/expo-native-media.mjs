@@ -1,3 +1,4 @@
+import {reviewPack, packFile} from './expo-review-pack.mjs';
 // Enter the normal ending, walk up to the physical archive machine, and operate its replay control.
 import {createRequire} from 'node:module';
 import {mkdir,writeFile} from 'node:fs/promises';
@@ -15,11 +16,16 @@ try {
   const device=phone?'touch':'desktop',cx=await browser.newContext({viewport:phone?{width:393,height:852}:{width:1500,height:900},
     hasTouch:phone,isMobile:phone,deviceScaleFactor:1,reducedMotion:phone?'reduce':'no-preference'});
   await installGameAudio(cx);
+  let packRoot;
   const page=await cx.newPage(),requests=[];
-  page.on('response',r=>{if(r.url().includes('/assets/expo/narration/'))requests.push({status:r.status(),name:r.url().split('/narration/')[1]});});
+  page.on('response',r=>{
+    const file=packFile(r.url(),packRoot,'narration/');
+    if(file)requests.push({status:r.status(),name:file});
+  });
   page.on('console',m=>{if(/Shader Error|INVALID_OPERATION|recording unavailable/.test(m.text()))report.errors.push(m.text());});
   page.on('pageerror',e=>report.errors.push(e.message));
   await page.goto(base+'dev/play-ending.html?end=ll_end&pictures=none&herd=12');
+  packRoot=await reviewPack(page);
   const play=page.getByRole('button',{name:'Play Llama Expo 2037'});await play.waitFor();await play.click();
   const fr=page.frames().find(f=>f.url().includes('/fuzz/index.html'));
   const warp=fr.locator('.expo-worm #btn');if(phone)await warp.tap();else await warp.click();
@@ -27,7 +33,7 @@ try {
   const n=()=>fr.evaluate(()=>__expo.narrationState());const state=()=>fr.evaluate(()=>__expo.state());
   const wait=(fn,arg,ms=30000)=>fr.waitForFunction(fn,arg,{timeout:ms});
   await wait(()=>__expo.narrationState().pa.seconds>.25);
-  const route=await fr.evaluate(async()=>(await(await fetch('assets/expo/station-route.json')).json()));
+  const route=await fr.evaluate(async()=>(await(await fetch(window.expoReviewAssetURL('station-route.json'))).json()));
   const slot=route.slots.find(s=>s.id==='slot_02'),stationZone=slot.zone;
   const start=await n();
   assert(start.stations.some(s=>s.id==='slot_01') && start.heard.includes('pa_arrive_1'));
@@ -46,7 +52,7 @@ try {
   if(phone)await fr.locator('.expo-interact').tap();else await page.keyboard.press('e');
   await viewStation(slot.standing);
   await wait(()=>__expo.narrationState().voice.id==='ev_h0'&&__expo.narrationState().voice.seconds>.5);
-  const row=await fr.evaluate(async()=>(await(await fetch('assets/expo/narration/manifest.json')).json()).find(r=>r.id==='ev_h0'));
+  const row=await fr.evaluate(async()=>(await(await fetch(window.expoReviewAssetURL('narration/manifest.json'))).json()).find(r=>r.id==='ev_h0'));
   let started=await n();assert.equal(started.voice.subtitle,row.subtitle);
   item.near=started.voice;
   await viewStation(slot.standing);

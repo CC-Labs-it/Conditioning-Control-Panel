@@ -1,3 +1,4 @@
+import {reviewPack, packFile} from './expo-review-pack.mjs';
 // Real-time recording and projector regression. Component controls use isolated test geometry.
 // Final location captures use the ending's authored stations through its ordinary shop purchase.
 import {createRequire} from 'node:module';
@@ -15,11 +16,16 @@ const browser=await chromium.launch({headless:true,executablePath:process.env.CH
 try{
   const cx=await browser.newContext({viewport:{width:1280,height:720},deviceScaleFactor:1});
   await installGameAudio(cx);
+  let packRoot;
   const page=await cx.newPage();
   page.on('console',m=>{if(/Shader Error|INVALID_OPERATION|recording unavailable/.test(m.text()))report.errors.push(m.text());});
   page.on('pageerror',e=>report.errors.push(e.message));
-  page.on('response',r=>{if(r.url().includes('/assets/expo/narration/'))report.sources.push([r.status(),r.url().split('/narration/')[1]]);});
+  page.on('response',r=>{
+    const file=packFile(r.url(),packRoot,'narration/');
+    if(file)report.sources.push([r.status(),file]);
+  });
   await page.goto(base+'index.html');
+  packRoot=await reviewPack(page);
   // Use a fresh frame with the game's import map and the actual audio kit. It has no prior ending sounds.
   await page.evaluate(async()=>{
     const T=await import('three'),{createNarration}=await import('./ui/expo/narration.js');
@@ -57,8 +63,8 @@ try{
       walker:{zone:'test',blocked:()=>blocked.on},sound:{play:(...args)=>{
         const el=speechHandles.map(h=>h.el).find(el=>el&&!el.paused&&!el.ended);
         clicks.push({at:performance.now(),args,source:el?.currentSrc.split('/').at(-1),seconds:el?.currentTime,duration:el?.duration});
-        kit.play('assets/expo/audio/press.ogg',{bus:'sfx',gain:args[1],pan:args[2]});}}};
-    const n=createNarration({ctx,camera,scene,root,...controls,assetURL:p=>'assets/expo/'+p,lite:false,owned:()=>['kevin','greg']});
+        kit.play(window.expoReviewAssetURL('audio/press.ogg'),{bus:'sfx',gain:args[1],pan:args[2]});}}};
+    const n=createNarration({ctx,camera,scene,root,...controls,assetURL:window.expoReviewAssetURL,lite:false,owned:()=>['kevin','greg']});
     n.mount('test',group);
     const start=performance.now();let previous=performance.now(), stopped=false;
     const occupancy={peak:0,decodedVoiceElements:0,dualCaptions:0};
@@ -103,7 +109,7 @@ try{
   assert(distant.gain>=.34*.32 && distant.gain<.60*.32);
   assert.equal(await page.evaluate(()=>narrationBench.n.cue('pa_turnstile')),false);
   const queued=await peek();assert.equal(queued.voice.id,'log_kevin');assert(!queued.pa.id);
-  const canonical=await page.evaluate(async()=>await(await fetch('assets/expo/narration/manifest.json')).json());
+  const canonical=await page.evaluate(async()=>await(await fetch(window.expoReviewAssetURL('narration/manifest.json'))).json());
   report.checks.mix={farGain:distant.gain,queued:queued.speech.queue,active:queued.speech.playing,manualRequestRetained:true};
   assert.equal((await peek()).voice.id,'log_kevin');
   await page.evaluate(()=>narrationBench.hold(true));const a=await peek();
@@ -133,7 +139,7 @@ try{
   await page.evaluate(()=>{void narrationBench.n.planter('planter_10');});
   await wait(()=>narrationBench.n.debug().voice.id==='planter_10');
   const plant=await peek();
-  const lines=await page.evaluate(async()=>await(await fetch('assets/expo/audio/planter-voices.json')).json());
+  const lines=await page.evaluate(async()=>await(await fetch(window.expoReviewAssetURL('audio/planter-voices.json'))).json());
   assert.equal(plant.voice.subtitle,lines.planter_10.subtitle);
   report.checks.planter={timedSeconds:lines.planter_10.seconds,subtitle:plant.voice.subtitle,previousVoiceFinished:true};
   await wait(()=>narrationBench.n.debug().finished.planter_10===1);

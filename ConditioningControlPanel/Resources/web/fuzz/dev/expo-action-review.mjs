@@ -1,3 +1,4 @@
+import {reviewPack} from './expo-review-pack.mjs';
 import {createRequire} from 'node:module';
 import {mkdir,writeFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
@@ -18,7 +19,7 @@ try{
     const media = new Set(), events = [], original = HTMLMediaElement.prototype.play;
     window.expoVoiceAudit = {events, maximum:0};
     HTMLMediaElement.prototype.play = function(...args) {
-      if (this.src.includes('/assets/expo/narration/') && !media.has(this)) {
+      if (window.expoReviewAssetURL && this.src.startsWith(window.expoReviewAssetURL('narration/')) && !media.has(this)) {
         media.add(this);
         const id = this.src.split('/').pop().replace(/\.mp3$/, '');
         for (const type of ['playing','ended']) this.addEventListener(type, () => {
@@ -31,6 +32,7 @@ try{
     };
   });
   await page.goto(base+'dev/play-ending.html?end=ll_end&pictures=none&herd=12');
+  await reviewPack(page);
   await page.getByRole('button',{name:'Play Llama Expo 2037'}).click();
   const f=page.frames().find(fr=>fr.url().includes('/fuzz/index.html'));await f.locator('.expo-worm #btn').click();
   await f.waitForFunction(()=>window.__expo?.state().ready,null,{timeout:90000});

@@ -1,3 +1,4 @@
+import {reviewPack, packFile} from './expo-review-pack.mjs';
 // Exercise every published mechanical cap with real keyboard and touchscreen actions.
 import {createRequire} from 'node:module';
 import {mkdir,writeFile} from 'node:fs/promises';
@@ -31,21 +32,23 @@ try{
  for(const touch of [false,true]){
   const device=touch?'touch':'keyboard',ctx=await browser.newContext({hasTouch:touch,isMobile:touch,
    reducedMotion:touch?'reduce':'no-preference',viewport:touch?{width:393,height:852}:{width:1440,height:810}});
+  let packRoot;
   const page=await ctx.newPage(),rows=[],files=[],pending=[];
   report.devices.push({device,rows,files});page.on('pageerror',err=>report.errors.push(err.message));
   page.on('response',r=>{
-   const name=new URL(r.url()).pathname.split('/assets/expo/zones/')[1];
+   const name=packFile(r.url(),packRoot,'zones/');
    if(!name||!name.match(/\.glb(?:\.gz)?$/))return;
    const entry={file:name};files.push(entry);pending.push(r.body().then(bytes=>{
     entry.bytes=bytes.length;entry.sha256=createHash('sha256').update(bytes).digest('hex');
    }).catch(error=>{entry.error=error.message;}));
   });
   await page.goto(base+'dev/play-ending.html?end=ll_end&pictures=none&herd=12');
+  packRoot=await reviewPack(page);
   await page.getByRole('button',{name:'Play Llama Expo 2037'}).click();
   const f=page.frames().find(fr=>fr.url().includes('/fuzz/index.html'));await f.locator('.expo-worm #btn').click();
   await f.waitForFunction(()=>window.__expo?.state().ready,null,{timeout:120000});
   const use=()=>touch?f.locator('.expo-interact').tap():page.keyboard.press('e');
-  const known=await f.evaluate(async()=>(await(await fetch('assets/expo/zones/zones.json')).json()).zones.map(z=>z.id));
+  const known=await f.evaluate(async()=>(await(await fetch(window.expoReviewAssetURL('zones/zones.json'))).json()).zones.map(z=>z.id));
   for(const [zone,spawn] of Object.entries(points)){
    if(!known.includes(zone)||filter.size&&!filter.has(zone))continue;
    await f.evaluate(async p=>{await __expo.go(p.zone,p.spawn);},{zone,spawn});

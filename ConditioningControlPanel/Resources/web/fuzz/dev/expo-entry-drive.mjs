@@ -1,3 +1,4 @@
+import {reviewPack, packFile} from './expo-review-pack.mjs';
 // Cold desktop and touch entries with the ordinary purchase, an active room route and the owner settings.
 import {createRequire} from 'node:module';
 import {createHash} from 'node:crypto';
@@ -11,8 +12,8 @@ const link=Number(process.env.MBPS||20),rtt=Number(process.env.RTT||35);
 const integrated=process.env.GPU==='integrated';
 const report={expected,integrated,network:{megabitsPerSecond:link,latencyMs:rtt},
   measurement:'First room bytes count completed zone geometry, collision, surface maps, lightmaps and reflection probes. Wall-clock timing also includes other game loading. Phone uses touch input on the same physical GPU.',devices:[],errors:[]};
-async function entranceReceipts(){
-  const folder=new URL('assets/expo/zones/',base);
+async function entranceReceipts(packRoot){
+  const folder=new URL('zones/',packRoot);
   const plan=await(await fetch(new URL('zones.json',folder))).json();
   const def=plan.zones.find(z=>z.id===plan.start.id);
   const result={};
@@ -27,9 +28,9 @@ const browser=await chromium.launch({headless:true,executablePath:process.env.CH
   args:['--mute-audio','--autoplay-policy=no-user-gesture-required',...(integrated?['--force_low_power_gpu']:[])]});
 try{
  for(const phone of [false,true]){
-  (report.roomVersions||=[]).push(await entranceReceipts());
   const name=phone?'phone':'desktop',size=phone?{width:393,height:852}:{width:1920,height:1080};
   const cx=await browser.newContext({viewport:size,deviceScaleFactor:1,hasTouch:phone,isMobile:phone,reducedMotion:phone?'reduce':'no-preference'});
+  let packRoot;
   const page=await cx.newPage();page.on('pageerror',e=>report.errors.push(name+' '+e.message));
   let kitReceived;
   if(process.env.EXPO_COLLECTION_ART||process.env.EXPO_COLLECTION_ONLY)page.on('response',response=>{
@@ -41,7 +42,7 @@ try{
   const cdp=await cx.newCDPSession(page);await cdp.send('Network.enable');
   const files=new Map(),before=new Set(),otherExpo=new Map();let arrived=false;
   cdp.on('Network.responseReceived',e=>{
-    const name=new URL(e.response.url).pathname.split('/assets/expo/')[1];if(!name)return;
+    const name=packFile(e.response.url,packRoot);if(!name)return;
     if(!name.startsWith('zones/')){otherExpo.set(e.requestId,{name,bytes:0,beforeArrival:false});return;}
     files.set(e.requestId,{name:name.slice(6),bytes:0,beforeArrival:!arrived});
   });
@@ -50,6 +51,8 @@ try{
     const media=otherExpo.get(e.requestId);if(media){media.bytes=e.encodedDataLength;media.beforeArrival=!arrived;}
   });
   await page.goto(base+'dev/play-ending.html?end=ll_end&pictures=none');
+  packRoot=await reviewPack(page);
+  (report.roomVersions||=[]).push(await entranceReceipts(packRoot));
   const button=page.getByRole('button',{name:'Play Llama Expo 2037'});await button.waitFor();
   const frame=page.frames().find(f=>f.url().includes('/fuzz/index.html'));
   await button.evaluate(el=>el.ownerDocument.addEventListener('click',function record(event){
@@ -117,7 +120,7 @@ try{
       gpuDrawMs:gpuTimes.length?gpuTimes[Math.floor(gpuTimes.length/2)]:null,frames:intervals.length,pixelRatio:e.state().pixelRatio,textureMemory:e.state().textures};
   });}
   async function collectionTiming(only){
-    const manifest=await frame.evaluate(async()=>((await(await fetch('assets/expo/collection/collection.json')).json())));
+    const manifest=await frame.evaluate(async()=>((await(await fetch(window.expoReviewAssetURL('collection/collection.json'))).json())));
     const selected=manifest.pieces.filter(p=>!only||p.id===only);
     if(!selected.length)throw Error('Missing collection artwork '+only);
     const views={};
@@ -225,7 +228,7 @@ try{
       service:[[25.02,0,29.59],[25.01,1.04,27.21]],secret:[[81.44,0,40.3],[85.8,1.30,41.19]],
       catwalk:[[-22.45,11.95,-4.62],[-22,6,-5]],chronology:[[7.84,0,47.52],[8,1.56,59]],
       forum:[[-18.8,0,103.18],[-30,1.72,104.1]],commons:[[-66.14,0,83.2],[-67,1.72,70.1]],aquarium:[[-44.29,0,45.38],[-32.28,1.71,44.36]]};
-    const known=await frame.evaluate(async()=>((await(await fetch('assets/expo/zones/zones.json')).json()).zones.map(z=>z.id)));
+    const known=await frame.evaluate(async()=>((await(await fetch(window.expoReviewAssetURL('zones/zones.json'))).json()).zones.map(z=>z.id)));
     if(process.env.EXPO_REQUIRED_ROOMS&&known.length!==Number(process.env.EXPO_REQUIRED_ROOMS))
       throw Error('Expected '+process.env.EXPO_REQUIRED_ROOMS+' rooms, served '+known.length);
     for(const zone of known.filter(id=>cameras[id])){

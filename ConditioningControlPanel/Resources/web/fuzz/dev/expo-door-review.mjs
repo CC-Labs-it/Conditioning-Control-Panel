@@ -1,3 +1,4 @@
+import {reviewPack} from './expo-review-pack.mjs';
 import {createRequire} from 'node:module';
 import {createHash} from 'node:crypto';
 import {mkdir,writeFile} from 'node:fs/promises';
@@ -11,20 +12,21 @@ const dir=path.resolve(process.argv[2]||'./dev-captures/doors'),mode=process.arg
 const base=process.env.FUZZ_BASE||'http://127.0.0.1:8937/fuzz/';
 if(!['localhost','127.0.0.1','[::1]'].includes(new URL(base).hostname))throw Error('Use a local Expo preview.');
 await mkdir(dir,{recursive:true});
+let packRoot;
 const report={base,mode,devices:[],errors:[]};
-const manifestURL=new URL('assets/expo/zones/zones.json',base);
+
 async function current(receipt=false){
- const data=Buffer.from(await (await fetch(manifestURL)).arrayBuffer()),sha=bytes=>createHash('sha256').update(bytes).digest('hex');
+ const data=Buffer.from(await (await fetch(new URL('zones/zones.json',packRoot))).arrayBuffer()),sha=bytes=>createHash('sha256').update(bytes).digest('hex');
  const plan=JSON.parse(data),out={manifest:sha(data),start:plan.start,rooms:Object.fromEntries(plan.zones.map(room=>[room.id,room.file]))};
  if(receipt){
   out.sources={};
-  for(const file of ['assets/expo/door-hardware.glb','ui/expo/doors.js','ui/expo/zones.js','ui/expo/shop-door.js']){
+  for(const file of [new URL('door-hardware.glb',packRoot).href,'ui/expo/doors.js','ui/expo/zones.js','ui/expo/shop-door.js']){
    const response=await fetch(new URL(file,base));assert(response.ok);out.sources[file]=sha(Buffer.from(await response.arrayBuffer()));
   }
  }
  return out;
 }
-report.version=await current(true);
+
 const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_EXE||'C:/Program Files/Google/Chrome/Application/chrome.exe',
  args:['--mute-audio','--force_low_power_gpu']});
 try{
@@ -41,6 +43,8 @@ try{
   page.on('request',req=>{if(/\/zones\/[^/]+\.glb(?:\.gz)?$/.test(req.url()))record.requests.push(new URL(req.url()).pathname.split('/').at(-1));});
   await cdp.send('Network.enable');await cdp.send('Network.emulateNetworkConditions',{offline:false,latency:35,downloadThroughput:2500000,uploadThroughput:2500000});
   await page.goto(base+'dev/play-ending.html?end=ll_end&herd=12&pictures=none');
+  packRoot=await reviewPack(page);
+  report.version ??= await current(true);
   const choose=page.getByRole('button',{name:'Play Llama Expo 2037'});await choose[touch?'tap':'click']();
   const f=page.frames().find(x=>x.url().includes('/fuzz/index.html'));await f.locator('.expo-worm #btn')[touch?'tap':'click']();
   await f.waitForFunction(()=>window.__expo?.state().ready&&!document.querySelector('.expo-crossing'),null,{timeout:90000});

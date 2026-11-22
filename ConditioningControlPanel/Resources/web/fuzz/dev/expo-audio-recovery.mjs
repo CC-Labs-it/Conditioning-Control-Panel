@@ -1,3 +1,4 @@
+import {reviewPack} from './expo-review-pack.mjs';
 // Exercise the real narration module with a controllable media element for network failure cases.
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
@@ -15,6 +16,7 @@ try {
   const page=await browser.newPage();
   await page.route('**/main.js',route=>route.fulfill({contentType:'text/javascript',body:''}));
   await page.goto(new URL('index.html',base).href);
+  await reviewPack(page);
   const report=await page.evaluate(async()=>{
     const T=await import('three'),{createNarration}=await import('./ui/expo/narration.js');
     const saved=new Map(),handles=[],buttons=new Map(),labels=new Map(),root=document.createElement('div');
@@ -37,7 +39,7 @@ try {
     const ctx={audio:media,activeMs:0,store:{get:k=>saved.get(k),set:(k,v)=>saved.set(k,v)}};
     const n=createNarration({ctx,camera,scene,root,
       register:(mesh,label,action)=>{buttons.set(mesh.name,action);labels.set(mesh.name,label);return ()=>buttons.delete(mesh.name);},walker:{zone:'atrium',blocked:()=>false},
-      sound:{play(){}},assetURL:file=>new URL('assets/expo/'+file,location.href).href,lite:true,owned:()=>['kevin']});
+      sound:{play(){}},assetURL:window.expoReviewAssetURL,lite:true,owned:()=>['kevin']});
     n.mount('atrium',group);
     const blank=id=>group.getObjectByName('expo_screen_'+id).material.uniforms.hasProgram.value===0;
     if(!blank('slot_01')||!blank('slot_02')||!blank('log_kevin'))throw Error('screen exposed before catalogue load');
