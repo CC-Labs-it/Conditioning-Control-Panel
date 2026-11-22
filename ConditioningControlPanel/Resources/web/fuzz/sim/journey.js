@@ -4,6 +4,7 @@ import * as E from './economy.js';
 import { ACTIVITIES, GAMES, TOYS, SAVOUR_BUYS, PACE_MINUTES, PLAN_BUYS, PLAN_CLOCK, toyLift, bankRate, buyKind, trunkBoost, journeyStretch, rankCap, rankName, SPECIALTIES, rankDescription, setupJourney } from './journey-effects.js';
 import { T_RUN } from '../data/prestige.js';
 import { FATE_BY_ID, offeredTo } from '../data/fate.js';
+import { smallBalance } from '../ui/edition.js';
 
 // Durations calibrate sticker prices on an independent first-run economy.
 // The playable shop uses those prices and prerequisites. It never waits on a timer.
@@ -291,7 +292,8 @@ export function planTotal(minutes = T_RUN[0]) {
 }
 export function createJourney(s) {
   const j = setupJourney(s);
-  const minutes = s.prestige?.minutes || T_RUN[0], priceMult = s.prestige?.price || 1;
+  /* Small (lane S8): the plan's length comes from the balance table; a small run never carries a Renewal stamp. */
+  const minutes = s.prestige?.minutes || smallBalance(E.runEdition(s))?.minutes || T_RUN[0], priceMult = s.prestige?.price || 1;
   let previous = '',
     entries = [];
   function plan() {

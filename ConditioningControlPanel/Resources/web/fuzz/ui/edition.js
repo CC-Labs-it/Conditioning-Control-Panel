@@ -13,7 +13,7 @@
 
 import { BY_ID } from '../data/items.js';
 import {
-  SMALL_CUT_IDS, SMALL_REQ, PHONE_CAPS, NUDGE_WHERE, NUDGE_LINKS, SAVE_CARRY_MAX_BYTES, SAVE_CARRY_MAX_CHARS, SAVE_FROM,
+  SMALL_CUT_IDS, SMALL_REQ, SMALL_BALANCE, PHONE_CAPS, NUDGE_WHERE, NUDGE_LINKS, SAVE_CARRY_MAX_BYTES, SAVE_CARRY_MAX_CHARS, SAVE_FROM,
   TRANSMISSION_AT_LLAMAS, EXPO_DEFAULT_BASE,
 } from '../data/editions.js';
 import { allowedLink, openAllowedLink } from './links.js';
@@ -111,6 +111,8 @@ export function reqFor(item, ed = editionState()) {
 export const renewalAllowed = (ed = editionState()) => ed.edition === 'full';
 
 /** The phone caps, or null where they do not apply (full, or any screen that is not a phone). */
+/** The small edition's balance table (data/editions.js SMALL_BALANCE), or null: the full game is never rebalanced. */
+export const smallBalance = (ed = editionState()) => (ed?.edition === 'small' ? SMALL_BALANCE : null);
 export const phoneCaps = (win, ed = editionState()) => (ed.edition === 'small' && isPhone(win) ? PHONE_CAPS : null);
 
 /** The Expo may load: full edition and its files are within reach. */
