@@ -135,3 +135,10 @@ Each film starts on a fresh save at the turnstile. All three play at 720 by 1280
 - The 94 Expo and documentary tests passed. The full suite passed 1,082 of 1,083. The known race HUD test still lacks `assets/race/threshold-loop.mp4`.
 - Compared the starting build and the finished round on Intel Graphics 0x7D67 at the same viewpoints in the atrium, Grand Hall, Hoof Sciences, Habitat and Commons. All five matched on both profiles. Desktop median and 95th percentile frame times were 16.7 and 16.8 ms. Gentle measured 33.4 and 33.5 ms. The hall added three draw calls and the lab shed eighteen on each profile.
 - Keyboard, synthetic touch and a standard-mapped virtual gamepad exercised normal visitor actions. The filmed tours followed the physical routes. Focused checks also used review travel to position the visitor at individual exhibits.
+
+### Mobile visitor controls and lo-fi radio
+
+- The phone shows the trail count, current task, walking stick and Actions. An exhibit supplies its own action when in reach. First Press offers Jump at the rope, and the Rematch offers hold-to-spit. The full card keeps Close and View ledger reachable while the stops scroll. Stamps take the task's place briefly, and the hoof picture board clears the surrounding instructions.
+- On the welcome screen, visible controls and text occupied about 21% of the portrait view and 20% in landscape, down from 45% and 42%. Touch checks covered both orientations and a 320-pixel-wide phone, including using Actions and turning the ledger immediately after a swipe. [Portrait](round5/mobile-portrait.jpg) · [Landscape](round5/mobile-landscape.jpg)
+- The three-track radio has its own play/pause and skip controls beside volume. Skipping while paused selects the next track for the next press of Play. The mixer shows the track title. Touch checks verified that changing the music kept the welcome narration playing, and waking and resuming preserved an explicit music pause.
+- All 104 focused tests passed. The full suite passed 1,085 of 1,086 with the previously recorded missing race video.
