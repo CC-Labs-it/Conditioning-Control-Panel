@@ -5,6 +5,7 @@ import { themedDraw } from '../../theme-text.js';
 import { DARK, darkCss, mountSpiral, spiral, deck, burst, ring, flash, bar, claim, release, docOf, btnCentre, setLine, dropLine, meterRow } from './kit.js';
 import { bindBounce, FACE_CSS } from '../../bouncing-art.js';
 import { ROUTE_COPY } from './copy.js';
+import { capsFor, markStandIn, STAND_IN_CSS, wordPlan } from '../../phone-caps.js';   // small on a phone: one word drawn
 import { mountCountUp } from '../../../sim/prestige-endings.js';  // prestige hook (Renewal Sky): Count Up ending, spirals pay more
 
 const COLOURS = ['#ff69b4', '#7bd0ff', '#ffd24d', '#9dff9d', '#d9a6ff'];
@@ -40,7 +41,14 @@ const wordColour = (ctx, c) => {
 };
 
 /** A word on the old DVD path: a triangle wave on each axis, so true corners really happen, about every 24 s. */
-function dvdWord(ctx, startText, { crossX = 8, crossY = 6, phase = 0, size = 1 } = {}) {
+/* Phone caps (ui/phone-caps.js wordPlan): a small run on a phone draws ONE bouncing word of the three it may own. The
+ * drawn one pays every owned word's walls and corners and wears the owned count; the others hold still, hidden. */
+function wordSlot(ctx, id, i) {
+  const caps = capsFor(ctx.state);
+  if (caps) ctx.css(STAND_IN_CSS);
+  return () => { if (!caps) return { draws: true, times: 1 }; const p = wordPlan((q) => ctx.has(q), caps.bouncingWords); return { draws: p.draws(id, i), times: p.times, plan: p, first: p.first === id + ':' + i }; };
+}
+function dvdWord(ctx, startText, { crossX = 8, crossY = 6, phase = 0, size = 1, slot = () => ({ draws: true, times: 1 }) } = {}) {
   const el = ctx.el('div',`position:absolute;left:0;top:0;color:${wordColour(ctx,0)};will-change:transform;`);
   const art = bindBounce(ctx,el,{index:Math.floor(phase),word:startText,scale:size});
   const nextWord = themedDraw(ctx, 'bounce', deck(BOUNCE_WORDS,ctx));
@@ -50,6 +58,9 @@ function dvdWord(ctx, startText, { crossX = 8, crossY = 6, phase = 0, size = 1 }
   return {
     el,
     step(dt) {
+      const s = slot();
+      if (s.plan) { el.style.visibility = s.draws ? '' : 'hidden'; markStandIn(el, { owned: s.plan.owned, drawn: s.plan.drawn, first: s.first }); }
+      if (!s.draws) return;
       const {w,h} = art.sync();
       const slow = ctx.gentle ? 0.5 : 1;
       t += dt * slow;
@@ -63,11 +74,11 @@ function dvdWord(ctx, startText, { crossX = 8, crossY = 6, phase = 0, size = 1 }
       const corner = hx && hy;
       c = (c + 1) % COLOURS.length;
       el.style.color = wordColour(ctx, c);
-      const gain = ctx.wallHit({ x: x + w / 2, y: y + h / 2, corner });
+      const gain = ctx.wallHit({ x: x + w / 2, y: y + h / 2, corner, times: s.times });
       bounceNote(ctx, x + w / 2, corner);
       if (corner) {
         const r = ctx.rates(), big = Math.max(r.wall * 25, r.fps * 2);
-        ctx.pay(big, 'corner', { x: x + w / 2, y: y + h / 2 });
+        ctx.pay(big * s.times, 'corner', { x: x + w / 2, y: y + h / 2 });
         burst(ctx, x + w / 2, y + h / 2, 'var(--accent)', 18, 110);
         ctx.audio.play('assets/audio/sfx/golden_pop.mp3', { bus: 'sfx', gain: 0.6 });
         ctx.toast(ROUTE_COPY.corner);
@@ -122,7 +133,7 @@ export default {
   e_bounce: {
     mount(ctx) {
       ctx.css(FACE_CSS);
-      const w = dvdWord(ctx, 'DROP', { crossX: 8, crossY: 6, phase: 1.3 });
+      const w = dvdWord(ctx, 'DROP', { crossX: 8, crossY: 6, phase: 1.3, slot: wordSlot(ctx, 'e_bounce', 0) });
       ctx.stage.register(w.el);
       return { tick: (dt) => w.step(dt) };
     },
@@ -130,8 +141,8 @@ export default {
   e_words: {
     mount(ctx) {
       ctx.css(FACE_CSS);
-      const a = dvdWord(ctx, 'SINK', { crossX: 9, crossY: 7.2, phase: 3.1, size: 0.85 });
-      const b = dvdWord(ctx, 'SOFT', { crossX: 7, crossY: 10.5, phase: 6.7, size: 0.85 });
+      const a = dvdWord(ctx, 'SINK', { crossX: 9, crossY: 7.2, phase: 3.1, size: 0.85, slot: wordSlot(ctx, 'e_words', 0) });
+      const b = dvdWord(ctx, 'SOFT', { crossX: 7, crossY: 10.5, phase: 6.7, size: 0.85, slot: wordSlot(ctx, 'e_words', 1) });
       ctx.stage.register(a.el); ctx.stage.register(b.el);
       return { tick: (dt) => { a.step(dt); b.step(dt); } };
     },

@@ -13,6 +13,7 @@ import { bindBounce, FACE_CSS } from '../bouncing-art.js';
 import { createJelly, jellyShape, JELLY_PRESS, PRESS_KICK, WALL_KICK } from './basics/jelly.js';
 import { createOrbits, snapDiag } from './basics/pair-orbit.js';
 import { STRAY_WORDS, THEME_STRAY_WORDS } from '../../data/content/side.js';
+import { capPlan, capsFor, markStandIn, STAND_IN_CSS } from '../phone-caps.js';   // small edition on a phone: at most 4 drawn
 
 /* Owner 2026-11-08: the little copies read plain triggers; once a theme is picked they glitch over to that theme's words
  * (and a Second Theme's). A word changes every second wall hit. Gentle and reduced motion swap with a plain fade. */
@@ -35,7 +36,7 @@ function strayThemes(ctx) {
 const CORNER_NEAR = 6;
 
 /** One bouncing button. Speed is set from the page size so every screen gets the same wall hits per second. */
-function bouncer(ctx,index) {
+function bouncer(ctx,index,share=null) {
   /* Owner 2026-11-08: every copy presses like the main button. Only its own small box takes the pointer; a trusted
    * pointerdown goes through ctx.button.pressFrom (ui/app.js), the same engine.tap #btn uses, at the copy's position. */
   const el = ctx.el('div','position:absolute;left:0;top:0;will-change:transform;pointer-events:auto;touch-action:manipulation;cursor:pointer;user-select:none;-webkit-user-select:none;');
@@ -189,7 +190,7 @@ function bouncer(ctx,index) {
           el.style.setProperty('--bounce-ink',inks[ink]);
         }
         if (++hits % 2 === 0) swap(false);
-        const gain = ctx.wallHit({ x: x + W / 2, y: y + H / 2, corner: hx && hy });
+        const gain = ctx.wallHit({ x: x + W / 2, y: y + H / 2, corner: hx && hy, times: share?.times || 1 });
         if (gain) ctx.float(x + W / 2, y, `+${ctx.fmt(gain)}`, 'color:var(--stamp);');
       }
     },
@@ -210,7 +211,16 @@ export default {
       ctx.css(FACE_CSS);
       ctx.css(STRAY_CSS);
       const list = [];
-      const grow = (n) => { while (list.length < n) list.push(bouncer(ctx,list.length)); };
+      /* Phone caps (ui/phone-caps.js): a phone draws at most its cap, each drawn copy pays for its share of the rest
+       * and the first wears the owned count. Everywhere else every copy is drawn, exactly as before. */
+      const caps = capsFor(ctx.state), share = { times: 1 };
+      if (caps) ctx.css(STAND_IN_CSS);
+      const grow = (n) => {
+        const plan = capPlan(n, caps?.bouncingButtons);
+        share.times = plan.times;
+        while (list.length < plan.drawn) list.push(bouncer(ctx,list.length,share));
+        if (caps) markStandIn(list[0]?.el, { owned: n, drawn: plan.drawn, first: true });
+      };
       grow(ctx.count);
       /* Owner 2026-11-08: copies that pass close spiral into each other and bounce apart. Arrives with Corner Bonus (the
        * later of the two wall-feel rows); Gentle and reduced motion keep straight paths and pass through each other. */
