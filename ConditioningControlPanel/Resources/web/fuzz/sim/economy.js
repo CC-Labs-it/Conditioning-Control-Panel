@@ -30,6 +30,10 @@ export function setRunEdition(s, ed) {
 }
 /** True when this run plays small and the row is cut there: never offered, and asleep when owned. */
 export const asleep = (s, id) => !!s[ED] && isCut(id, s[ED]);
+/** THE rule for a run that ended on a cut row (the Expo ending, an open visit included) and is loaded in small: it stays
+ *  an ended run, shown plain (no take, no show, no resumed visit), and only the player's own New run leaves it. Small
+ *  never starts a New run by itself: that would throw away the visit, and small never deletes. */
+export const sleepingEnd = (s) => !!s?.ended && asleep(s, s.ended.id);
 const needs = (s, it) => (s[ED] ? reqFor(it, s[ED]) : it);
 
 /** prestige: a Renewal Sky run stamp (sim/prestige.js runStamp). Its pay multiplier rides on pace, which every income path

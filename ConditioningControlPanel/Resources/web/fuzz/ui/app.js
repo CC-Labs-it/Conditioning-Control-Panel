@@ -30,6 +30,8 @@ import { openClause, clauseLines, skipsCard } from './clause.js';
 import { tally } from './adcard/model.js';
 import { noteAcceptedTerms } from './unlocks/fate/museum/terms.js';
 import { ridersOf } from '../data/folds.js';
+import { has as owns, asleep } from '../sim/economy.js';
+import { renewalAllowed } from './edition.js';
 import { handFor, copyHandFor } from './hands.js';
 import { createTapWindow, emiBell } from '../sim/tap-rate.js';
 import { createAwayClock } from './away.js';
@@ -326,11 +328,11 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       return;
     }
     /* The terms card (ui/clause.js): accept first, then the purchase lands exactly as before. */
-    const riders = ridersOf(id).filter((r) => !engine.run.owned[r]);
+    const riders = ridersOf(id).filter((r) => !owns(engine.run, r) && !asleep(engine.run, r));
     /* Owner 2026-11-07: the terms come once per icon. A repeat buy (another Bouncing Button, a rank of something owned)
      * whose icon the player already bought this run goes straight through. */
     const iconKey = it.iconId || id;
-    const seenIcon = Object.keys(engine.run.owned).some((o) => engine.run.owned[o] > 0 && (o === iconKey || (engine.item(o) || {}).iconId === iconKey));
+    const seenIcon = Object.keys(engine.run.owned).some((o) => owns(engine.run, o) && (o === iconKey || (engine.item(o) || {}).iconId === iconKey));
     if (CONFIG.TERMS_CARD && !skipsCard(it) && !seenIcon && clauseLines(id, riders).length) {
       if (clauseCard && !clauseCard.closed) return;
       const offs = [
@@ -459,7 +461,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     engine.subscribe('picture-meter', ringRefresh);
     ringRefresh();
     /* The Depth badge: the Renewal bonuses on hover (ui/depth-badge.js, reads sim/ascension.js). */
-    mountDepthBadge({ doc, win, life: () => engine.life });
+    if (renewalAllowed()) mountDepthBadge({ doc, win, life: () => engine.life });   // no Renewal in the small edition
   }
 
   /* Signed in on the site (app.cclabs.app/tc): the account sits beside the sound button and opens the dashboard.
@@ -615,7 +617,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       wirePresses();
       wirePause(hooks);
       mountStickerBook({ doc, engine, gentle });   // the Sticker Book: pause card door + the meter's 'sticker-book' event
-      mountRenewalMenu({ doc, engine, audio, gentle });   // the Renewal menu: pause card door, bonuses, the Sky mid-run (browse)
+      if (renewalAllowed()) mountRenewalMenu({ doc, engine, audio, gentle });   // the Renewal menu: pause card door, bonuses, the Sky mid-run (browse)
       applyGentle();
       motionQuery?.addEventListener?.('change', applyGentle);
       const onResize = () => { dims = { w: win.innerWidth, h: win.innerHeight }; shop.fit(); };
