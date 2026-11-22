@@ -68,3 +68,14 @@ A fresh Model Visitor ticket earned all six instruction entries through play. Th
 A second fresh ticket earned every impression in one visit with all twelve llamas owned. A virtual controller operated the exhibits, including the aimed hoof test and charged spit. After real-time waits in the meeting and dome, the visitor carried the moved-button souvenir to the till, answered the three questions, completed both loops and walked through Renewal into The Thirteenth. The visit reached the normal recap with a full ticket.
 
 The targeted Expo tests passed 61 of 61. The full Fuzz run passed 1,061 of 1,062. The race HUD media test expects a separate racing preview file, `assets/race/threshold-loop.mp4`, absent from the starting branch.
+
+### Owner playtest follow-up
+
+- The Corrections Desk occupies two clear bays across from the signal racks. All five photographs, their hooks and the wall captions were checked from the aisle on desktop and Gentle, including a photograph hung face inward.
+- Unplayed projectors keep their screens, captions and reading cards blank until the visitor starts playback. A single press during room narration queues the selection. Desktop and Gentle visits confirmed that completing a screening reveals only that station's record on return.
+- The floor disc at Sir Reginald's meeting records attendance. The sign beside it stands on a weighted foot and explains the forty-second wait. On desktop and Gentle, moving restarted the countdown and standing still opened the gate.
+- The existing radio tracks Breathe In, Idle Cycle and Sealed rotate softly beneath the Expo. Playback drops about 11 dB during speech, follows the mixer and pauses for the staff blackout. The desktop and Gentle previews played all three original MP3s from the local radio pack.
+- Double-tap and hold any arrow or WASD key to sprint. On a controller, hold RB or R1 while moving the left stick. Browser playtests measured 4 metres per second walking and 6 sprinting. Releasing the bumper returned to a walk, and pausing cleared held input.
+- The Grand Hall end truss sat in the shared atrium wall at the first-floor spiral stairs. Moving it 25 centimetres into the hall cleared the wall. On desktop and Gentle, the flicker disappeared at all six viewpoints along a 2.6-metre walk across the landing. Both braces remain visible from the hall.
+
+All 71 targeted Expo and documentary music tests passed after these changes. The full Fuzz run passed 1,071 of 1,072, with the same missing racing preview video described above.
