@@ -39,6 +39,11 @@ export const SMALL_REQ = Object.freeze({});
 /** The most a phone shows at once in the small edition. Caps, not options: the late game stays readable. */
 export const PHONE_CAPS = Object.freeze({ bouncingButtons: 4, bouncingWords: 1, pictureFrames: 1, adBanners: 1 });
 
+/** The small edition's balance (lane S8): every small-only number, in one place. minutes: the Journey plan's planned
+ *  length (sim/journey.js timeline), the small run's only length knob. No row price or pay changes: the full game
+ *  plays T_RUN[0] and never reads this. */
+export const SMALL_BALANCE = Object.freeze({ minutes: 55 });
+
 /** Nudges: the only two things a `nudge` frame may say (CONTRACT.md 6.2). No free text, no url from the page. */
 export const NUDGE_WHERE = Object.freeze(['ending', 'llama8', 'transmission', 'locked-tile', 'pause', 'save-sleep']);
 export const NUDGE_WANT = Object.freeze(['account', 'download', 'upgrade']);

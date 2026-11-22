@@ -16,7 +16,8 @@ export function measureJourney(picks, {
   restore = null,
   toys = TOY_PLAY,
   herd = 0,   // life.llamas: 12 opens The Panel's seed (data/fate.js HERD_SETS)
-  ed = null   // an edition reading (ui/edition.js readEdition): small plays the small edition's plan
+  ed = null,   // an edition reading (ui/edition.js readEdition): small plays the small edition's plan
+  trace = null   // trace({ type: 'buy' | 'fork' | 'offer', id, at }): milestones for the balance notes (lane S8)
 } = {}) {
   let s = E.createRun({ herd, ed }),
     shop = createJourney(s);
@@ -34,6 +35,7 @@ export function measureJourney(picks, {
     const banks = Object.keys(j.banks).reduce((sum, id) => sum + bankRate(id, j.ranks[id]) * s.base.fps * trunkBoost(s), 0);
     return (active + r.fps) * (toyLift(s, toys) + (s.owned.gold ? share : 0)) + banks * s.pace * Math.min(1, share / .25);
   };
+  const seenEnds = new Set();
   let last = 0,
     nextClaim = 60,
     restored = false;
@@ -45,11 +47,13 @@ export function measureJourney(picks, {
     const offered = [shelf.goal, ...shelf.rows].filter(it => it && (it.kind !== 'end' || it.id === E.heldEnding(s)) && !EXTRAS.includes(it.id));
     const items = offered.some(it => it.id === seed) ? offered.filter(it => it.step !== 1 || it.id === seed) : offered;
     const ready = items.filter(it => (it.kind === 'fork' ? s.total : s.fuzz) + 1e-8 >= shop.price(it.id)).sort((a, b) => Number(b.kind === 'fork') - Number(a.kind === 'fork') || shop.price(a.id) - shop.price(b.id));
+    if (trace) for (const o of items) if (o.kind === 'end' && !seenEnds.has(o.id)) { seenEnds.add(o.id); trace({ type: 'offer', id: o.id, at: s.clock / 1000 }); }
     const it = ready[0];
     if (it) {
       const before = income();
       const res = it.kind === 'fork' ? shop.choose(it.id, picks[it.id], mods) : shop.buy(it.id, it.options?.[option]?.[0], mods);
       if (res.ok) {
+        trace?.({ type: it.kind === 'fork' ? 'fork' : 'buy', id: it.id, at: s.clock / 1000 });
         if (it.kind !== 'fork' && res.cost > 0) {
           paid.push({
             id: it.id,

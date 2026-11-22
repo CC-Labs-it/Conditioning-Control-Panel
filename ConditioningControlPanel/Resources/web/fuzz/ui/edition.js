@@ -13,7 +13,7 @@
 
 import { BY_ID } from '../data/items.js';
 import {
-  SMALL_CUT_IDS, SMALL_REQ, PHONE_CAPS, NUDGE_WHERE, NUDGE_LINKS, SAVE_CARRY_MAX_BYTES, SAVE_CARRY_MAX_CHARS, SAVE_FROM,
+  SMALL_CUT_IDS, SMALL_REQ, SMALL_BALANCE, PHONE_CAPS, NUDGE_WHERE, NUDGE_LINKS, SAVE_CARRY_MAX_BYTES, SAVE_CARRY_MAX_CHARS, SAVE_FROM,
   TRANSMISSION_AT_LLAMAS, EXPO_DEFAULT_BASE,
 } from '../data/editions.js';
 import { allowedLink, openAllowedLink } from './links.js';
@@ -111,6 +111,8 @@ export function reqFor(item, ed = editionState()) {
 export const renewalAllowed = (ed = editionState()) => ed.edition === 'full';
 
 /** The phone caps, or null where they do not apply (full, or any screen that is not a phone). */
+/** The small edition's balance table (data/editions.js SMALL_BALANCE), or null: the full game is never rebalanced. */
+export const smallBalance = (ed = editionState()) => (ed?.edition === 'small' ? SMALL_BALANCE : null);
 export const phoneCaps = (win, ed = editionState()) => (ed.edition === 'small' && isPhone(win) ? PHONE_CAPS : null);
 
 /** The Expo may load: full edition and its files are within reach. */
@@ -132,7 +134,8 @@ export function expoArrived(base) {
 export function transmissionKind(llamas, ed = editionState()) {
   if (!(llamas >= TRANSMISSION_AT_LLAMAS)) return null;
   if (ed.edition === 'small') return 'nudge';
-  return ed.platform === 'desktop' && ed.expo?.state === 'absent' ? 'fetch' : null;
+  /* The size must be on the card before a download is offered (owner, fourth dialog): no size from the host, no offer. */
+  return ed.platform === 'desktop' && ed.expo?.state === 'absent' && expoMb(ed) > 0 ? 'fetch' : null;
 }
 
 /** What a nudge asks for here: the plan card in the app, an account for a visitor, the download for a signed-in one. */
@@ -157,6 +160,8 @@ export function saveFits(save) {
   if (typeof save !== 'string' || save === '' || save.length > SAVE_CARRY_MAX_CHARS || bytes(save) > SAVE_CARRY_MAX_BYTES) return false;
   try { return typeof JSON.parse(save)?.v === 'number'; } catch { return false; }
 }
+/** The host keeps one save string for this account (caps.saveSlot): the carry buttons show only then. */
+export const saveSlotOn = (ed = editionState()) => ed.saveSlot === true;
 /** The `save-offer` fields for this save, or null when it may not travel. Only ever sent from a player's press. */
 export const saveOfferFrame = (save) => (saveFits(save) ? { save } : null);
 /** A host's `save-incoming`, checked: { save, savedAt, from } or null. Never applied without the player's yes. */

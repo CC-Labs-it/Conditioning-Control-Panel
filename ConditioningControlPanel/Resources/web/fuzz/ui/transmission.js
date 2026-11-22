@@ -14,6 +14,7 @@
 
 import { transmissionKind, sendNudge, editionState, expoAllowed, expoMb, isSmall } from './edition.js';
 import { TRANSMISSION_MIN_RUN_MS, LLAMA8_GAP_MS } from '../data/editions.js';
+import { realPress } from './nudges.js';   // the one press rule
 
 /** APPROVED AND FROZEN (owner 2026-11-22, handoff-1122/TC-EDITIONS-PLAN.md, third dialog, point 5). Character for
  *  character: never edit one of these without the owner. `{mb}` is the host's number (ui/edition.js expoMb). */
@@ -26,22 +27,25 @@ export const TRANSMISSION_COPY = Object.freeze({
   /* Small: the same title and first sentence, then this line (same record). */
   smallBody: 'A message from the future is transmitting some data.',
   smallLine: 'It does not fit here. The full game can receive it.',
+  /* Small: its first button (fourth dialog); the full card keeps YES. */
+  smallYes: 'THE FULL GAME',
 });
 
-/** Every other line: NOT APPROVED. One table, one survey for the owner; the slot ids are listed in the lane S note. */
-export const TRANSMISSION_PLACEHOLDERS = Object.freeze({
-  progress: '[PLACEHOLDER S6-progress] Receiving: {pct}%',
-  arrived: '[PLACEHOLDER S6-arrived] Transmission received.',
-  arrivedClose: '[PLACEHOLDER S6-arrived-close] Close',
-  offline: '[PLACEHOLDER S6-failed-offline] No connection. It can try again later.',
-  disk: '[PLACEHOLDER S6-failed-disk] Not enough room on the disk.',
-  refused: '[PLACEHOLDER S6-failed-refused] The transmission was refused. It can try again later.',
-  stop: '[PLACEHOLDER S6-stop] Stop',
-  stopped: '[PLACEHOLDER S6-stopped] Stopped. What arrived is kept.',
-  penSign: '[PLACEHOLDER S6-pen-sign] Transmission',
-  llama8Title: '[PLACEHOLDER S6-llama8-title] Eight llamas',
-  llama8Body: '[PLACEHOLDER S6-llama8-body] The herd is ready for the Expo. The Expo is in the full game.',
-  llama8Button: '[PLACEHOLDER S6-llama8-button] Get the full game',
+/** Every other line of the cards: APPROVED AND FROZEN (owner 2026-11-22, fourth dialog): character for character, pinned in
+ * tests/editions-placeholders.test.mjs. */
+export const TRANSMISSION_LINES = Object.freeze({
+  progress: "Receiving. {pct}%",
+  arrived: "Transmission received.",
+  arrivedClose: "CLOSE",
+  offline: "No signal. The future will try again.",
+  disk: "Not enough room on the disk.",
+  refused: "The transmission did not check out. It can be sent again.",
+  stop: "STOP",
+  stopped: "Stopped. What arrived is kept.",
+  penSign: "TRANSMISSION WAITING",
+  llama8Title: "A full pen.",
+  llama8Body: "Eight llamas open something this edition cannot show. It is in the full game.",
+  llama8Button: "The full game",
 });
 
 export const FAIL_REASONS = Object.freeze(['offline', 'disk', 'refused']);
@@ -56,13 +60,13 @@ export function sizeLine(mb) {
 /** The card's words for a kind: { title, body, size, line, yes, notNow }. */
 export function cardWords(kind, mb) {
   const C = TRANSMISSION_COPY;
-  if (kind === 'nudge') return { title: C.title, body: C.smallBody, size: '', line: C.smallLine, yes: C.yes, notNow: C.notNow };
+  if (kind === 'nudge') return { title: C.title, body: C.smallBody, size: '', line: C.smallLine, yes: C.smallYes, notNow: C.notNow };
   return { title: C.title, body: C.body, size: sizeLine(mb), line: '', yes: C.yes, notNow: C.notNow };
 }
 
 /** The status line for a state of the card ('' while it only asks). */
 export function statusLine({ state, pct = 0, reason = null }) {
-  const P = TRANSMISSION_PLACEHOLDERS;
+  const P = TRANSMISSION_LINES;
   if (state === 'fetching') return P.progress.replace('{pct}', String(pct));
   if (state === 'arrived') return P.arrived;
   if (state === 'failed') return P[FAIL_REASONS.includes(reason) ? reason : 'refused'];
@@ -71,7 +75,7 @@ export function statusLine({ state, pct = 0, reason = null }) {
 }
 
 /** The card's state. kind: 'fetch' or 'nudge'. send: the host frame sender. inPress: is this the player's own press.
- *  YES and stop act only inside a press; host frames (progress, ready, failed) move the state. */
+ *  YES and stop act only inside a press (inPress(ev): ev is the press event); host frames move the state. */
 export function createTransmission({ kind, send = () => {}, inPress = () => false, ed = editionState, nudge = sendNudge }) {
   const s = { kind, state: 'offer', pct: 0, reason: null };
   const fns = new Set();
@@ -80,17 +84,17 @@ export function createTransmission({ kind, send = () => {}, inPress = () => fals
     get view() { return { ...s }; },
     onChange(fn) { fns.add(fn); return () => fns.delete(fn); },
     /** YES. fetch: one `expo-fetch` (again only after a failure or a stop). nudge: the `transmission` nudge. */
-    yes() {
-      if (!inPress()) return false;
-      if (kind === 'nudge') return nudge('transmission', { inPress, send, ed: ed() });
+    yes(ev) {
+      if (!inPress(ev)) return false;
+      if (kind === 'nudge') return nudge('transmission', { inPress: () => inPress(ev), send, ed: ed() });
       if (kind !== 'fetch' || s.state === 'fetching' || s.state === 'arrived') return false;
       send('expo-fetch');
       s.state = 'fetching'; s.pct = 0; s.reason = null;
       changed();
       return true;
     },
-    stop() {
-      if (kind !== 'fetch' || s.state !== 'fetching' || !inPress()) return false;
+    stop(ev) {
+      if (kind !== 'fetch' || s.state !== 'fetching' || !inPress(ev)) return false;
       send('expo-cancel');
       s.state = 'stopped';
       changed();
@@ -135,8 +139,6 @@ export function autoCardDue({ clock, llamas, extras, opened = {}, ed = editionSt
   return t == null || clock >= t + LLAMA8_GAP_MS ? 'llama8' : null;
 }
 
-/** A real press: the browser's own transient activation, which a script-made click does not carry. */
-const realPress = (win) => () => !!win?.navigator?.userActivation?.isActive;
 
 const CSS = `
 .tx-card .tx-size { margin: 0 0 8px; opacity: .8; font-size: .9em; }
@@ -159,7 +161,7 @@ export function mountTransmission({ doc = document, win = doc.defaultView, cards
   host = null;
   if (!doc.getElementById('tx-css')) { const st = doc.createElement('style'); st.id = 'tx-css'; st.textContent = CSS; doc.head.appendChild(st); }
   const herd = typeof llamas === 'function' ? llamas : () => llamas;
-  const inPress = realPress(win);
+  const inPress = (ev) => realPress(win, ev)();
   const offs = [];
   let kind = null, tx = null, card = null, sign = null, waiters = [];
   const opened = { transmission: null, llama8: null };   // this run's self-opened cards, by run clock
@@ -179,7 +181,7 @@ export function mountTransmission({ doc = document, win = doc.defaultView, cards
     const due = tx && penSignDue({ llamas: herd(), extras, open: !!card, state: tx.view.state });
     if (due && !sign && pen?.isConnected) {
       sign = doc.createElement('button');
-      sign.id = 'llama-sign'; sign.type = 'button'; sign.textContent = TRANSMISSION_PLACEHOLDERS.penSign;
+      sign.id = 'llama-sign'; sign.type = 'button'; sign.textContent = TRANSMISSION_LINES.penSign;
       const r = pen.getBoundingClientRect();
       sign.style.left = `${Math.round(r.left)}px`; sign.style.top = `${Math.round(r.bottom + 4)}px`;
       sign.addEventListener('click', () => open());
@@ -197,8 +199,8 @@ export function mountTransmission({ doc = document, win = doc.defaultView, cards
     const status = el('p', 'tx-status');
     status.setAttribute('role', 'status');
     const bar = el('div', 'tx-bar'); const fill = doc.createElement('i'); bar.appendChild(fill);
-    const stop = el('button', 'tx-stop', TRANSMISSION_PLACEHOLDERS.stop); stop.type = 'button';
-    stop.addEventListener('click', () => tx.stop());
+    const stop = el('button', 'tx-stop', TRANSMISSION_LINES.stop); stop.type = 'button';
+    stop.addEventListener('click', (ev) => tx.stop(ev));
     let yesBtn = null, shutBtn = null;
     const paint = (s = tx.view) => {
       status.textContent = statusLine(s);
@@ -207,12 +209,12 @@ export function mountTransmission({ doc = document, win = doc.defaultView, cards
       fill.style.width = `${s.pct}%`;
       stop.hidden = s.state !== 'fetching';
       if (yesBtn) yesBtn.hidden = s.state === 'fetching' || s.state === 'arrived';
-      if (shutBtn) shutBtn.textContent = s.state === 'arrived' ? TRANSMISSION_PLACEHOLDERS.arrivedClose : w.notNow;
+      if (shutBtn) shutBtn.textContent = s.state === 'arrived' ? TRANSMISSION_LINES.arrivedClose : w.notNow;
     };
     card = cards.open({
       className: 'tx-card', title: w.title, body: w.body, node, front,
       buttons: [
-        { label: w.yes, keepOpen: true, onPress: () => { if (tx.yes() && kind === 'nudge') card?.close(); } },
+        { label: w.yes, keepOpen: true, onPress: (ev) => { if (tx.yes(ev) && kind === 'nudge') card?.close(); } },
         { label: w.notNow },
       ],
       onOpen: (dom) => { const row = dom.querySelectorAll?.('.card-buttons button') || []; yesBtn = row[0] || dom.querySelector('.card-buttons button'); shutBtn = row[1] || null; paint(v); },
@@ -227,11 +229,11 @@ export function mountTransmission({ doc = document, win = doc.defaultView, cards
   }
 
   function openLlama8() {
-    const P = TRANSMISSION_PLACEHOLDERS;
+    const P = TRANSMISSION_LINES;
     cards.open({
       title: P.llama8Title, body: P.llama8Body,
       buttons: [
-        { label: P.llama8Button, onPress: () => sendNudge('llama8', { inPress, send, win }) },
+        { label: P.llama8Button, onPress: (ev) => sendNudge('llama8', { inPress: realPress(win, ev), send, win }) },
         { label: TRANSMISSION_COPY.notNow },
       ],
     });

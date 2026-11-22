@@ -5,26 +5,25 @@
  *                on under it. Its button sends the `save-sleep` nudge from the player's own press (sendNudge).
  *   sky-asleep   an open Renewal Sky visit loaded in small: no Sky, a plain card with the nudge and New run.
  *
- * COPY: every string below is a PLACEHOLDER until the owner words it (lane S notes, Run 6). Gentle and reduced motion:
- * the card queue's own short fade, nothing else moves. */
+ * COPY: APPROVED AND FROZEN (owner 2026-11-22, fourth dialog): character for character, pinned in
+ * tests/editions-placeholders.test.mjs. Gentle and reduced motion: the card queue's own short fade, nothing else moves. */
 
 import { sendNudge } from './edition.js';
+import { realPress } from './nudges.js';   // the one press rule
 
 export const SAVE_SLEEP_COPY = Object.freeze({
-  title: '[PLACEHOLDER S4-sleep-title]',
-  body: '[PLACEHOLDER S4-sleep-body]',
-  nudge: '[PLACEHOLDER S4-sleep-nudge-button]',
-  dismiss: '[PLACEHOLDER S4-sleep-dismiss]',
+  title: "Some clauses are asleep.",
+  body: "This is the small edition. The parts of your run that do not fit here are asleep, not gone. They wake in the full game.",
+  nudge: "The full game",
+  dismiss: "Carry on",
 });
 export const SKY_ASLEEP_COPY = Object.freeze({
-  title: '[PLACEHOLDER S4-sky-title]',
-  body: '[PLACEHOLDER S4-ended-nudge-line]',
-  nudge: '[PLACEHOLDER S4-ended-nudge-button]',
-  newRun: '[PLACEHOLDER S4-sky-new-run]',
+  title: "This run has ended.",
+  body: "It ended somewhere this edition does not go. The full game picks it up.",
+  nudge: "The full game",
+  newRun: "New run",
 });
 
-/** A real press: the browser's own transient activation, which a script-made click does not carry. */
-const realPress = (win) => () => !!win?.navigator?.userActivation?.isActive;
 
 /** Mounts the once-per-save note on the game's own card queue (ui/cards.js, `corner`: no backdrop, play goes on under
  *  it, in the card's own theme). extras: the save's own extras (sleepSeen is set at once, saved with the next save).
@@ -39,7 +38,7 @@ export function mountSaveSleep({ cards, win = globalThis.window, extras, send = 
     corner: true,
     className: 'save-sleep',
     buttons: [
-      { label: SAVE_SLEEP_COPY.nudge, onPress: () => sendNudge('save-sleep', { inPress: realPress(win), send, win, ed }) },
+      { label: SAVE_SLEEP_COPY.nudge, onPress: (ev) => sendNudge('save-sleep', { inPress: realPress(win, ev), send, win, ed }) },
       { label: SAVE_SLEEP_COPY.dismiss },
     ],
   });
@@ -55,7 +54,7 @@ export function openSkyAsleep({ cards, win = globalThis.window, send = () => {},
     front: true,
     buttons: [
       { label: SKY_ASLEEP_COPY.newRun, onPress: () => newRun() },
-      { label: SKY_ASLEEP_COPY.nudge, keepOpen: true, onPress: () => sendNudge('ending', { inPress: realPress(win), send, win, ed }) },
+      { label: SKY_ASLEEP_COPY.nudge, keepOpen: true, onPress: (ev) => sendNudge('ending', { inPress: realPress(win, ev), send, win, ed }) },
     ],
   });
 }
