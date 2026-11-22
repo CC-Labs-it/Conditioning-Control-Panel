@@ -1,3 +1,7 @@
+import {admissionPrinter} from './admission-printer.js';
+import {departurePrint} from './departure-print.js';
+import {visitorCommentary} from './visitor-commentary.js';
+import {departureEnding,endingTitles,endingLines} from './renewal-endings.js';
 import {galleryVisits} from './gallery-visits.js';
 import {createBackOfHouse} from './back-of-house.js';
 import {createSpit} from './spit.js';
@@ -18,21 +22,25 @@ const clamp = n => Math.min(1,Math.max(0,n));
 export function createExhibits(api) {
   const {THREE,ctx,camera,register,play,say,go,exit} = api;
   const state = createVisit(ctx), zones = new Map();
-  let here = '', hudClock = 0, pending = [], stopShown = -20, returning = false, departureDone=false, disposed=false;
+  let here = '', hudClock = 0, pending = [], returning = false, departureDone=false, disposed=false;
   const cue = api.cue, awareness=narratorAwareness(state,cue);
-  const hands=visitorHands(api,state);api.hold=hands.hold;api.drop=hands.drop;
+  const commentary=visitorCommentary(state,cue);
+  const hands=visitorHands(api,state);api.hold=hands.hold;api.exchange=hands.exchange;api.drop=hands.drop;
   const gallery=galleryVisits(api,state);
   const staff=createBackOfHouse(api,state),spit=createSpit(api,state);
   const founding=firstPress(api,state),worn=createWornHooves(api,state);
   const habitat=humanHabitat(api,state,founding.habitatPress);
   api.endVisit=async ending=>{
-    if(returning||disposed)return;returning=true;state.ending=ending;
-    const titles={renewal:'Renewal',conduct:'Acceptance by Conduct',stayed:'Stayed',finger:'Finger',model:'Model Visitor',full:'The Thirteenth'};
-    const lines={renewal:'v4_renew',conduct:'v4_conduct',stayed:'v4_stayed_end',finger:'v4_finger_end',model:'v4_model_end',full:'v4_full_end'};
-    ctx.store.set('expoEnding',titles[ending]);api.farewell(leave,titles[ending]);
-    await cue(lines[ending],{kind:'beat',replay:true});
+    if(returning||disposed)return;returning=true;ending=departureEnding(ending,state);state.ending=ending;
+    ctx.store.set('expoEnding',endingTitles[ending]);
+    const print=departurePrint(api,state,endingTitles[ending]).catch(err=>console.warn('Expo print',err));
+    const portrait=ending==='full'?api.finalPhoto():Promise.resolve();
+    const souvenirs=Promise.all([print,portrait]);
+    api.farewell(()=>{void souvenirs.then(()=>{if(!disposed)leave();});},endingTitles[ending]);
+    await portrait;
+    await cue(endingLines[ending],{kind:'beat',replay:true});
     if(ending==='conduct'&&!disposed)await cue(state.ticket.stamps.has('Read')?'v4_conduct_read':'v4_conduct_missed',{kind:'beat'});
-    departureDone=true;
+    await print;departureDone=true;
   };
   function once(id) {
     if (!state.heard.has(id)) cue(id,{kind:'ambient',onStart:()=>state.heard.add(id)});
@@ -102,17 +110,19 @@ export function createExhibits(api) {
         g.fillStyle='#f3edda';g.font='bold 60px Georgia,serif';g.fillText(state.hoofAdmitted?'Llama visitor':'Human visitor',w/2,125);
         g.font='40px Georgia,serif';g.fillText('no.',w/2,203);
         g.fillStyle='#113229';g.fillRect(62,233,w-124,225);
-        g.fillStyle='#d6df9c';g.font='bold 180px Consolas,monospace';g.fillText(state.visitorNumber===2?'2':state.turnstile?'1':'0',w/2,417);
+        g.fillStyle='#d6df9c';g.font='bold 180px Consolas,monospace';g.fillText(ui.uncounted?'0':state.visitorNumber===2?'2':state.turnstile?'1':'0',w/2,417);
         g.fillStyle='#e4dbc1';g.font='48px Georgia,serif';g.fillText(ui.again?'(again)':'(today)',w/2,563);
       });
       ui.tally=tally;tally();
       ui.count=()=>{
-        if(state.turnstile && state.hoofAdmitted===state.hoofWorn)return;
+        if(state.turnstile && !ui.uncounted && state.hoofAdmitted===state.hoofWorn)return;
+        if(ui.uncounted){ui.again=true;ui.uncounted=false;}
         state.turnstile=true;state.hoofAdmitted=state.hoofWorn;state.ticket.issue();
         ui.turn=0;tally();play('turnstile');
         if(state.hoofWorn)state.ticket.book('hoof-admitted','Admitted as a llama',true);
         cue(state.hoofWorn?'v4_hoof_arrival':'v4_ticket',{kind:'beat',zone:id,exhibit:'turnstile'});
       };
+      admissionPrinter(api,state,group,clean,ui);
       ui.turnstile=bind('turnstile_arm','Pass the turnstile',ui.count);
       if(ui.turnstile){
         const arm=ui.turnstile,data=arm.userData;
@@ -145,6 +155,8 @@ export function createExhibits(api) {
     if(here==='hoof'&&state.hoofWorn&&state.ticket.book('hoof-out','Left wearing the hooves',true))cue('v4_hoof_out',{kind:'beat',zone:id,exhibit:'hooves'});
     worn.light(zones.get(id)?.group);
     zones.get(here)?.ui.shop?.leave();zones.get(id)?.ui.shop?.arrive();zones.get(id)?.ui.tally?.();
+    if(here==='dome' && state.domeSeconds>0 && state.domeSeconds<25)state.ticket.book('dome-kept','Moved along at the dome');
+    if(here==='habitat' && state.habitatTime>2 && !state.taps)state.ticket.book('glass-kept','Left the glass untapped');
     gallery.enter(id,here);staff.enter(id,here);hands.enter(id);here=id;awareness.enter(id);
     if(hallCues[id])once(hallCues[id]);
     if(id==='twelve' && state.file.herd.length===12)later('pa_hall4_full',6);
@@ -154,7 +166,7 @@ export function createExhibits(api) {
     if(ctx.paused)return;
     worn.tick(dt);spit.tick(dt);habitat.tick(dt,id);
     if(returning&&departureDone){leave();return;}
-    gallery.tick(dt,id);staff.tick(dt,id);hands.tick();hudClock+=dt;awareness.tick(dt,id,camera,api.actionSerial());
+    commentary(dt,id,api.walker.feet);gallery.tick(dt,id);staff.tick(dt,id);hands.tick();hudClock+=dt;awareness.tick(dt,id,camera,api.actionSerial());
     if(hudClock>=900)once('pa_closing');
     pending=pending.filter(event=>{
       if(event.zone!==here)return false;
@@ -180,12 +192,13 @@ export function createExhibits(api) {
     }
     ui.shop?.tick(dt);
     if(id==='atrium' && ui.pivot){
+      ui.paper?.(dt);
       const z=camera.position.z;
       if(Math.abs(camera.position.x)<1.05 && camera.position.y<2.1 && ui.lastZ>=35.33 && z<=35.33)ui.count();
       if(Math.abs(camera.position.x)<1.05 && camera.position.y<2.1 && state.turnstile && ui.lastZ<35.33 && z>=35.33){
         if(state.hoofWorn)ui.count();
         else{state.ticket.book('unarrived','Un-arrived',true);cue('v4_wrong_way',{kind:'react',exhibit:'turnstile'});}
-        ui.again=true;ui.tally?.();
+        ui.uncounted=true;ui.again=false;ui.tally?.();
       }
       ui.lastZ=z;
       if(state.turnstile&&ui.turn<1){

@@ -11,18 +11,20 @@ const GIF_HOLD_MS = 2500;
 export function mountRunPoster({ doc, host, run, life, name, onBeat, autoplay = true, loop = false, unit = true }) {
   const model = unit ? cardModel({ run, life, name, adNumber: run.store?.dr_serial?.serial, serialLabel: ADCARD_COPY.unit }) : cardModel({ run, life, name });
   const visit=run?.ended?.id==='ll_end'?run.store?.ll_end:null;
-  const souvenir=visit?.souvenirPrint;
+  const souvenir=visit?.departurePrint || visit?.souvenirPrint;
   const hasPrint=typeof souvenir==='string' && /^data:image\/webp;base64,[A-Za-z0-9+/=]{1,240000}$/.test(souvenir);
-  const print=model.groupPhoto || (hasPrint?souvenir:null);
+  const group=visit?.expoEnding==='The Thirteenth'||!hasPrint?model.groupPhoto:null;
+  const print=group || (hasPrint?souvenir:null);
   if (print) {
     const photograph = doc.createElement('img');
-    photograph.alt = model.groupPhoto?'Group photograph in the Hall of the Twelve':visit.souvenirLabel;
-    photograph.width = model.groupPhoto?1100:540;
-    photograph.height = model.groupPhoto?756:640;
+    photograph.alt = group?'Group photograph in the Hall of the Twelve':(visit.expoEnding||visit.souvenirLabel);
+    photograph.width = group?1100:visit.departurePrint?800:540;
+    photograph.height = group?756:visit.departurePrint?900:640;
     photograph.style.cssText = 'display:block;width:100%;height:auto';
     photograph.src = print;
     host.append(photograph);
-    const unmount = () => photograph.remove();
+    const label=doc.createElement('p');label.textContent=visit?.expoEnding||'Llama Expo 2037';host.append(label);
+    const unmount = () => {photograph.remove();label.remove();};
     unmount.start = () => {};
     unmount.export = (format, options) => exportCard({ card: photograph, photograph }, format,
       { ...options, stop: () => !photograph.isConnected });

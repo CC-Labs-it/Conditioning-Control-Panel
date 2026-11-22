@@ -1,6 +1,6 @@
 export function visitorHands(api,state) {
   const {THREE:T,camera,scene}=api;
-  let held;
+  let held,stowed;
   const putDown=new Map();
   function drop(key){
     if(!held||state.carry?.key!==key)return false;
@@ -18,11 +18,24 @@ export function visitorHands(api,state) {
       n.material=Array.isArray(n.material)?n.material.map(take):take(n.material);});
     scene.add(root);held={root,copies};state.carry={key,label};tick();return true;
   }
+  // The signed form temporarily takes the visitor's hand until the till files it.
+  function exchange(key,node,label){
+    if(!held)return hold(key,node,label);
+    if(!node||stowed)return false;
+    stowed={held,carry:state.carry};scene.remove(held.root);held=state.carry=null;
+    return hold(key,node,label);
+  }
   function tick(){
     if(!held)return;held.root.position.set(Math.min(.22,camera.aspect*.22),-.19,-.49).applyQuaternion(camera.quaternion).add(camera.position);
     held.root.quaternion.copy(camera.quaternion);held.root.rotateY(-.28);
   }
-  function release(key){if(!held||state.carry.key!==key)return false;for(const m of held.copies.values())m.dispose();return drop(key);}
+  function release(key){
+    if(!held||state.carry.key!==key)return false;
+    for(const m of held.copies.values())m.dispose();
+    drop(key);
+    if(stowed){held=stowed.held;state.carry=stowed.carry;stowed=null;scene.add(held.root);tick();}
+    return true;
+  }
   // Loose museum property can be left on a surface, then picked up again in another room.
   function canPlace(){return state.carry?.key==='rope-post';}
   function place(hit){
@@ -36,7 +49,7 @@ export function visitorHands(api,state) {
     });putDown.set(root,{off,copies,zone:api.walker.zone});return true;
   }
   function enter(zone){for(const [node,row] of putDown)node.visible=row.zone===zone;}
-  return {hold,drop:release,tick,canPlace,place,enter,dispose(){if(held)release(state.carry.key);
+  return {hold,exchange,drop:release,tick,canPlace,place,enter,dispose(){while(held)release(state.carry.key);
     for(const [node,row] of putDown){row.off();node.removeFromParent();for(const m of row.copies.values())m.dispose();}putDown.clear();}};
 
 }

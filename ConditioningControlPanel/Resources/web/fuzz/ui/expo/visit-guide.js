@@ -10,9 +10,16 @@ const instructions = {
 export function visitDirection(route,story,room,position,visit) {
   if(!room)return '';
   if(!visit.ticket?.issued && room==='atrium')return 'Pass the turnstile for your ticket.';
-  if(room==='hall')return visit.presses>=25?'Consult the First Press label.':'First Press. Please observe the sign.';
+  if(room==='hall')return visit.presses>=25?'Wait beside DO PRESS. The original plinth can seal it.':'First Press. Please observe the sign.';
   if(room==='hoof')return visit.hoof==='pictures'?'Submit your choice on the picture grid.':'Applied Hoof Sciences. Fit or return your hooves.';
-  if(room==='shop')return visit.boughtExit?'Walk through the Renewal door.':visit.contract?'Take the signed exit.':'Choose one souvenir and carry it to the till.';
+  if(room==='shop'){
+    if(visit.boughtExit)return 'Walk through the Renewal door.';
+    if(visit.contract && visit.loops>=2)return visit.ticket.count<8?'Collect a day ticket at the till.':'Buy Exit at the till.';
+    if(visit.contract)return 'Open the green exit door.';
+    if(visit.souvenir)return 'Answer the question on the till.';
+    if(visit.carry?.key?.startsWith('souvenir:'))return 'Carry your souvenir to the till.';
+    return 'Choose one souvenir and carry it to the till.';
+  }
   if(room==='atrium')return 'Galleries by the floor line. Grand Hall straight ahead.';
   return instructions[room] || '';
 }
@@ -26,12 +33,12 @@ export function createVisitGuide(root) {
   return {setRoute(value){route=value;},update(story,room,position,visit){
     const t=visit.ticket;
     const direction=visit.carry?'Carrying '+visit.carry.label+'. '+(visit.carry.key==='rope-post'?'Look at the floor to set it down.':visitDirection(route,story,room,position,visit)):visitDirection(route,story,room,position,visit);
-    const key=[t.issued,...t.stamps,t.yes,t.deviations,direction].join('|');
+    const key=[t.issued,...t.stamps,t.balance,t.outstanding,direction].join('|');
     if(signature===key)return;signature=key;
     title.textContent=t.issued?'ADMIT ONE HUMAN, 2037':'VISITOR ADMISSION';
     stubs.hidden=balance.hidden=!t.issued;
     cells.forEach((cell,i)=>{const box=COUNTERFOILS[i],filled=box.filter(m=>t.stamps.has(m));cell.dataset.filled=filled.length===box.length?'true':filled.length?'half':'false';
       cell.textContent=filled.length?filled.map(mark=>mark[0]).join(''):'·';cell.setAttribute('aria-label',box.join(' and ')+': '+(filled.join(', ')||'empty'));});
-    balance.textContent=t.count+' / 12 stamps   ·   '+t.yes+' Yes   ·   '+t.deviations+(t.deviations===1?' Deviation':' Deviations');hint.textContent=direction;
+    balance.textContent=t.count+' / 12 stamps   ·   '+t.balance+' Yes   ·   '+t.outstanding+(t.outstanding===1?' Deviation':' Deviations');hint.textContent=direction;
   },dispose(){box.remove();}};
 }
