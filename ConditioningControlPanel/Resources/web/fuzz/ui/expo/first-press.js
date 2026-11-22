@@ -71,7 +71,7 @@ export function firstPress(api,state){
           carriedPost=true;state.ticket.book('rope-post','Removed a rope post',true);cue('v4_post_taken');api.hold?.('rope-post',v.posts[0],'Rope post');
         }));
       }
-      stops.forEach(([zone,at],i)=>{if(zone!==id)return;const obj=place('moved_button',at);obj.visible=false;
+      stops.forEach(([zone,at],i)=>{if(zone!==id)return;const obj=place('moved_button',at);obj.visible=false;obj.userData.stockBay=zone==='shop';
         const cap=obj.getObjectByName('moved_cap');off.push(api.register(obj,()=>state.presses>=25?'DO PRESS':'Press the moved button',()=>{press();v.spring=.15;},2.4));
         v.copies.push({obj,cap,i});});
       return ()=>off.reverse().forEach(f=>f());

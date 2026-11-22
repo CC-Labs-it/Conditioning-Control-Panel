@@ -95,15 +95,16 @@ def filing():
     box(p,"Honey oak",(0,0,.087),(w+.042,d+.046,.131),.019)
     box(p,"Brass",(0,.004,1.852),(w+.078,d+.071,.049),.015)
     box(p,"Enamel",(0,.008,1.900),(w+.043,d+.053,.055),.014)
-    p.finish()
     for row in range(4):
         for col in range(6):
             x=-1.05+col*.42;z=.256+row*.409
-            plate=Part("cabinet_number_"+str(row*6+col))
-            box(plate,"Brass",(x,-.148,z-.073),(.123,.017,.044),.007,True)
-            # Card slots in each label rail accept stamped or blank ledgers.
-            face(plate,"Cream",(x,-.158,z-.072),.100,.025)
-            plate.finish()
+            box(p,"Brass",(x,-.148,z-.073),(.123,.017,.044),.007,True)
+    p.finish()
+    for bank in range(2):
+        group("annex_numbers_"+str(bank));labels=Part()
+        for i in range(24):
+            print_face(labels,"no"+str(i+24*bank),(-1.05+(i%6)*.42,-.158,.184+(i//6)*.409),.100,.033)
+        labels.finish()
     group("annex_swatch");p=Part()
     for i in range(3):
         cushion(p,("Madder","Linen","Green felt")[i],(0,.015,.030+i*.037),(.263,.174,.058))
@@ -220,8 +221,64 @@ def keeper_range():
     box(p,"Brass",(0,-.043,1.00),(.910,.020,.381),.029,True)
     p.finish();insert("judge_face",(0,-.056,1.00),.865,.341)
 
-heater();hardhat();parcel();filing();accessories();keeper_range()
-for name,ink in (("notice","heater"),("rota","rota"),("docket","trolley"),("thread_label","knit"),("staff","keeper"),("safety","scaffold"),("dust_note","secret"),("permit","docket")):
+def gallery_and_staff():
+    group("annex_corrections_desk");p=Part()
+    for x in (-1.49,1.49):
+        for y in (-.267,.267):
+            box(p,"Honey oak",(x,y,.397),(.11,.11,.748),.009)
+            box(p,"Brass",(x,y,.050),(.123,.123,.100),.015)
+        box(p,"Enamel",(x,0,.26),(.071,.595,.052),.007)
+    for s in (-1,1):
+        box(p,"Honey oak",(0,s*.267,.704),(3.10,.077,.177),.017)
+        box(p,"Brass",(0,s*.307,.717),(3.045,.012,.017),.005)
+    box(p,"Honey oak",(0,0,.799),(3.35,.75,.082),.035)
+    box(p,"Green felt",(0,0,.841),(3.15,.59,.005),.023)
+    for i in range(5):
+        x=(i-2)*.629
+        box(p,"Brass",(x,.16,.860),(.381,.040,.039),.005)
+        tube(p,"Brass",[(x-.120,.239,.84),(x-.12,.239,.919),(x+.12,.239,.919),(x+.12,.239,.84)],.007,8)
+    p.finish()
+    group("annex_forum_leaf");p=Part()
+    for x in (.045,1.155):
+        box(p,"Honey oak",(x,0,.546),(.078,.09,.870),.011)
+    for z in (.155,.496,.934):box(p,"Enamel",(.60,0,z),(1.11,.080,.07),.013)
+    for i in range(6):
+        x=.173+i*.172
+        tube(p,"Brass",[(x,0,.16),(x,0,.94)],.012,10)
+    box(p,"Honey oak",(.60,0,.979),(1.2,.125,.042),.016)
+    for z in (.187,.809):
+        tube(p,"Brass",[(.006,0,z),(.006,0,z+.081)],.024,14)
+        box(p,"Brass",(.085,-.046,z+.043),(.16,.014,.045),.008,True)
+    p.finish()
+    group("annex_fire_exit");p=Part()
+    for x in (-.615,.615):box(p,"Honey oak",(x,0,1.08),(.094,.156,2.16),.022)
+    box(p,"Honey oak",(0,0,2.17),(1.325,.156,.124),.021)
+    box(p,"Enamel",(0,.011,1.05),(1.145,.096,2.10),.031,True)
+    box(p,"Ink",(0,-.043,1.63),(.65,.018,.58),.021,True)
+    box(p,"Glass",(0,-.059,1.63),(.605,.018,.539),.019,True)
+    for x in (-.404,.404):box(p,"Brass",(x,-.069,1.07),(.091,.079,.104),.014,True)
+    tube(p,"Silver",[(-.407,-.105,1.067),(-.375,-.131,1.067),(.375,-.131,1.067),(.407,-.105,1.067)],.028,16)
+    box(p,"Brass",(0,-.066,.277),(1.054,.019,.375),.009,True)
+    print_face(p,"fire",(0,-.083,2.168),.334,.103);p.finish()
+    group("annex_lanyard");p=Part()
+    for s in (-1,1):
+        path=[(s*.093,.014,.431),(s*.092,.005,.383),(s*.061,-.008,.285),(s*.009,-.005,.177)]
+        tube(p,"Green felt",path,.010,8)
+        tube(p,"Brass",[(x+s*.006,y-.003,z) for x,y,z in path],.0018,4)
+    tube(p,"Green felt",[(-.093,.014,.431),(-.055,.040,.453),(.051,.040,.453),(.093,.014,.431)],.009)
+    oval(p,"Brass",(0,-.005,.169),(.021,.009,.019),16,6)
+    box(p,"Brass",(0,0,.087),(.150,.014,.152),.010,True)
+    print_face(p,"docket",(0,-.009,.087),.140,.092);p.finish()
+    group("annex_hooves_under");p=Part()
+    for x in (-.160,.160):
+        for y in (-.102,.102):
+            oval(p,"Linen",(x,y,.186),(.048,.052,.168),20,8)
+            for side in (-1,1):
+                oval(p,"Ink",(x+side*.021,y-.024,.044),(.030,.072,.043),18,8)
+    p.finish()
+
+heater();hardhat();parcel();filing();accessories();keeper_range();gallery_and_staff()
+for name,ink in (("notice","heater"),("rota","rota"),("docket","trolley"),("thread_label","knit"),("read_invite","read"),("staff","keeper"),("safety","scaffold"),("dust_note","secret"),("permit","docket")):
     placard(name,ink,.60,.238,variable=name=="rota")
 placard("record","clause",.63,.72,True)
 save(3.0)

@@ -31,6 +31,7 @@ cells=[
     ("keeper","HABITAT","Keeper entrance","The door stays open."),
     ("clock","HABITAT","I AGREE","Visitor desk."),
     ("docket","VISITOR SERVICES","Finger","Temporary appointment."),
+    ("fire","STAFF ACCESS","Fire exit","Keep clear."),
 ]
 def tile(name,im,i,w,h,across):
     x=i%across*w;y=i//across*h
@@ -50,5 +51,10 @@ for idx,key in enumerate(("flight","loch","summit","woods","moon")):
     im=ImageOps.fit(im,(376,282),method=Image.Resampling.LANCZOS)
     x=idx*384+3;y=992
     sheet.paste(im,(x,y));rects[key]=[(x+.5)/2048,1-(y+281.5)/2048,(x+375.5)/2048,1-(y+.5)/2048]
+for idx in range(48):
+    x=idx%12*114+2;y=1312+idx//12*52
+    card=Image.new("RGB",(108,45),"#e7cf9d")
+    d=ImageDraw.Draw(card);d.text((54,21),str(idx+1).zfill(2),font=ImageFont.truetype("C:/Windows/Fonts/georgiab.ttf",30),fill="#493a28",anchor="mm")
+    sheet.paste(card,(x,y));rects["no"+str(idx)]=[(x+.5)/2048,1-(y+44.5)/2048,(x+107.5)/2048,1-(y+.5)/2048]
 sheet.save(args.output/"collection-print.jpg",quality=91,subsampling=0,optimize=True)
 (args.output/"print-uv.json").write_text(json.dumps(rects))

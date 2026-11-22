@@ -47,7 +47,7 @@ export function mountAquariumLife(THREE, room, gentle) {
     });
     for (const body of family.bodies) body.node.visible = false;
   }
-  let seconds = 0;
+  let seconds = 0,guestRay=null,interest=0;const glass=new THREE.Vector3();
   function orient(motion) {
     swimPose(motion,seconds,offset,forward);
     across.crossVectors(forward,waterUp).normalize();
@@ -59,6 +59,7 @@ export function mountAquariumLife(THREE, room, gentle) {
       family.bodies.forEach((body,index) => {
         orient(body.motion);
         position.copy(body.origin).add(offset);
+        if(body===guestRay&&interest>0)position.lerp(glass,interest);
         placement.compose(position,rotation,scale.setScalar(body.size)).premultiply(local);
         for (const {mesh,rest} of family.parts) mesh.setMatrixAt(index,matrix.copy(placement).multiply(rest));
       });
@@ -72,9 +73,15 @@ export function mountAquariumLife(THREE, room, gentle) {
   }
   if (bodies.length || !gentle) pose();
   return {
-    tick(dt,calm) {
-      if (calm || !dt) return;
-      seconds += dt;
+    tick(dt,calm,visitor) {
+      if(!dt)return;
+      if(visitor&&!guestRay){const rays=bodies.filter(b=>b.species==='ray');
+        guestRay=rays.sort((a,b)=>a.origin.distanceToSquared(visitor)-b.origin.distanceToSquared(visitor))[0];}
+      if(visitor){glass.set(Math.max(-59,Math.min(-13,visitor.x+.75)),4.82,Math.max(44.1,Math.min(46.8,visitor.z)));}
+      if(!visitor&&!interest&&calm)return;
+      interest+=(Number(!!visitor)-interest)*(1-Math.exp(-dt*.37));
+      if(!visitor&&interest<.002){interest=0;guestRay=null;}
+      if(!calm)seconds += dt;
       pose();
     },
     dispose() {

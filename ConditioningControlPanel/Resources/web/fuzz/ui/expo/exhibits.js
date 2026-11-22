@@ -1,3 +1,4 @@
+import {galleryVisits} from './gallery-visits.js';
 import {createBackOfHouse} from './back-of-house.js';
 import {createSpit} from './spit.js';
 import {humanHabitat} from './habitat.js';
@@ -20,6 +21,7 @@ export function createExhibits(api) {
   let here = '', hudClock = 0, pending = [], stopShown = -20, returning = false, departureDone=false, disposed=false;
   const cue = api.cue, awareness=narratorAwareness(state,cue);
   const hands=visitorHands(api,state);api.hold=hands.hold;api.drop=hands.drop;
+  const gallery=galleryVisits(api,state);
   const staff=createBackOfHouse(api,state),spit=createSpit(api,state);
   const founding=firstPress(api,state),worn=createWornHooves(api,state);
   const habitat=humanHabitat(api,state,founding.habitatPress);
@@ -62,7 +64,7 @@ export function createExhibits(api) {
       clean.push(()=>panel.dispose()); return panel;
     }
     clean.push(spit.mount(id,group),habitat.mount(id,group));
-    staff.mount(id,group,bind,surface,clean);founding.mount(id,group,bind,surface,clean);
+    gallery.mount(id,group,clean);staff.mount(id,group,bind,surface,clean);founding.mount(id,group,bind,surface,clean);
     if (id==='hoof') {
       ui.lab=mountHoofLab(api,group,state,worn);clean.push(ui.lab.dispose);
     }
@@ -143,7 +145,7 @@ export function createExhibits(api) {
     if(here==='hoof'&&state.hoofWorn&&state.ticket.book('hoof-out','Left wearing the hooves',true))cue('v4_hoof_out',{kind:'beat',zone:id,exhibit:'hooves'});
     worn.light(zones.get(id)?.group);
     zones.get(here)?.ui.shop?.leave();zones.get(id)?.ui.shop?.arrive();zones.get(id)?.ui.tally?.();
-    staff.enter(id,here);hands.enter(id);here=id;awareness.enter(id);
+    gallery.enter(id,here);staff.enter(id,here);hands.enter(id);here=id;awareness.enter(id);
     if(hallCues[id])once(hallCues[id]);
     if(id==='twelve' && state.file.herd.length===12)later('pa_hall4_full',6);
     if(id==='atrium'&&!state.heard.has('pa_arrive_2'))later('pa_arrive_2',20);
@@ -152,7 +154,7 @@ export function createExhibits(api) {
     if(ctx.paused)return;
     worn.tick(dt);spit.tick(dt);habitat.tick(dt,id);
     if(returning&&departureDone){leave();return;}
-    staff.tick(dt,id);hands.tick();hudClock+=dt;awareness.tick(dt,id,camera,api.actionSerial());
+    gallery.tick(dt,id);staff.tick(dt,id);hands.tick();hudClock+=dt;awareness.tick(dt,id,camera,api.actionSerial());
     if(hudClock>=900)once('pa_closing');
     pending=pending.filter(event=>{
       if(event.zone!==here)return false;
@@ -162,7 +164,7 @@ export function createExhibits(api) {
     });
     const ui=zones.get(id)?.ui;
     if (!ui)return;
-    ui.waterLife?.tick(dt,ctx.gentle||ctx.reduced);
+    ui.waterLife?.tick(dt,ctx.gentle||ctx.reduced,gallery.rayApproaches?camera.position:null);
     founding.tick(dt,id);
     if(id==='hall' && Math.hypot(camera.position.x,camera.position.z+9)<5.2)once('pa_hall1');
     if(id==='hoof')ui.lab?.tick(dt);
