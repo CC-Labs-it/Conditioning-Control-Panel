@@ -7,6 +7,7 @@ import { deck, burst, ring, onDark, claim, release } from './kit.js';
 import { ROUTE_COPY } from './copy.js';
 import { screen, liveScreens, themeLists, themeNiche, mediaSlot } from '../../screens.js';
 import { addFrameCollection } from '../../frame-rank.js';
+import { capsFor, seatPool, STAND_IN_CSS } from '../../phone-caps.js';   // small on a phone: one picture frame drawn
 
 const NICHES = { base: 'pretty', second: 'close', third: 'soft', fav: 'favourite' };
 const shared = { favs: 0 };
@@ -86,23 +87,42 @@ function wallSlot(ctx, parent) {
   };
 }
 
-const pickFav = (ctx, niche) => () => (shared.favs > 0 && ctx.rng() < Math.min(0.75, shared.favs * 0.25) ? NICHES.fav : niche);
+const pickFav = (ctx, niche) => () => (shared.favs > 0 && ctx.rng() < Math.min(0.75, shared.favs * 0.25) ? NICHES.fav : (typeof niche === 'function' ? niche() : niche));
 
 function frame(ctx, { niche, every = 3400, first = 0, ratio = 1.15, scale = 1, hint = false }) {
   return screen(ctx, { kind: 'mixed', ratio, scale, every, first, hint, niche: pickFav(ctx, niche) });
 }
 
+/* Phone caps (ui/phone-caps.js seatPool): a small run on a phone draws ONE picture frame of the three it may own. The drawn
+ * one wears the owned count, turns over the niches of every frame it stands for, and its heart pays for each of them. A
+ * frame's per-second pay is the sim's and never changes. Everywhere else each frame draws its own, exactly as before. */
+const frameNiches = [];
+function seatedFrame(ctx, opts, after = null) {
+  const caps = capsFor(ctx.state);
+  if (!caps) { const view = frame(ctx, opts); after?.(view); return; }
+  ctx.css(STAND_IN_CSS);
+  frameNiches.push(opts.niche);
+  const mix = () => (frameNiches.length > 1 ? frameNiches[Math.floor(ctx.rng() * frameNiches.length)] : opts.niche);
+  const box = {};
+  box.seat = seatPool('pictureFrames', caps.pictureFrames).join({ draw: () => {
+    const view = frame(ctx, { ...opts, niche: mix });
+    view.seatBox = box;
+    after?.(view);
+    return view.el;
+  } });
+  ctx.cleanup(() => { const i = frameNiches.indexOf(opts.niche); if (i >= 0) frameNiches.splice(i, 1); box.seat.leave(); });
+}
+
 export default {
   /* Picture Frame: one framed picture, changing by itself. It pays, and you can put it anywhere. */
   v_frame: { mount(ctx) {
-    const view = frame(ctx, { niche: NICHES.base, hint: !ctx.store.get('spot') });
-    addFrameCollection(ctx, view.body);
+    seatedFrame(ctx, { niche: NICHES.base, hint: !ctx.store.get('spot') }, (view) => addFrameCollection(ctx, view.body));
     return {};
   } },
   /* Wider Picture Mix: a second frame, from one more general category. */
-  v_frame2: { mount(ctx) { frame(ctx, { niche: NICHES.second, every: 4100, first: 300 }); return {}; } },
+  v_frame2: { mount(ctx) { seatedFrame(ctx, { niche: NICHES.second, every: 4100, first: 300 }); return {}; } },
   /* Extra Frame: a third joins, smaller. */
-  v_frame3: { mount(ctx) { frame(ctx, { niche: NICHES.third, every: 4700, first: 600, ratio: 1, scale: 0.8 }); return {}; } },
+  v_frame3: { mount(ctx) { seatedFrame(ctx, { niche: NICHES.third, every: 4700, first: 600, ratio: 1, scale: 0.8 }); return {}; } },
 
   /* Corner GIF: a real gif, looping. With none to show, the test card asks for one. */
   v_gif: {
@@ -186,7 +206,7 @@ export default {
           const r = h.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
           burst(ctx, x, y, '#ff3b7a', 10, 60);
           ring(ctx, x, y, 90, '#ff3b7a', 500, 'over');
-          ctx.pay(ctx.rates().fps * 2, 'fav', { x, y });
+          ctx.pay(ctx.rates().fps * 2 * (s.seatBox?.seat?.times || 1), 'fav', { x, y });   // a capped phone frame stands for several
           ctx.toast(line());
           ctx.after(1500, () => { h.style.color = '#fff'; delete h.dataset.cool; });
         });

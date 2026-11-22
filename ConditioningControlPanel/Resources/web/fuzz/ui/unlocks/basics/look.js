@@ -403,9 +403,9 @@ body.gentle #fz-roll, body.tb-hidecount #fz-roll, #counter:has(#count[hidden]) #
         burst(ctx, cx, cy, { color: '#f0c24b', n: 24, reach: 150, size: 9, ms: 900, from: aim - 1, to: aim + 1 });
         if (paid) pop(ctx, Math.max(70, Math.min(w - 70, cx)), Math.max(60, Math.min(h - 60, cy)), `+${ctx.fmt(paid)}`, { color: '#c79400', size: 44, ms: 1300 });
       };
-      ctx.on('wall', ({ corner, x, y }) => {
+      ctx.on('wall', ({ corner, x, y, times = 1 }) => {
         if (!corner) return;
-        const got = ctx.pay(ctx.rates().wall * 9, 'corner', { x, y });
+        const got = ctx.pay(ctx.rates().wall * 9 * times, 'corner', { x, y });   // times: a capped phone copy pays its share
         ctx.emit('cornered', { x, y });
         party(x, y, got);
         sfx(ctx, 'sfx/pb_fanfare.mp3', 0.5);

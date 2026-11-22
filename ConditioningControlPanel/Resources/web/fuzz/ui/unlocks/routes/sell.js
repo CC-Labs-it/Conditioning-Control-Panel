@@ -7,6 +7,7 @@ import { ROUTE_COPY } from './copy.js';
 import { sellAllJoke, SELL_ALL_AD } from '../../sell-all.js';
 import { buttonEndingTake, isButtonFinaleReview } from '../../adcard/button-ending.js';
 import { createSponsorCard } from '../../sponsor-card.js';
+import { capsFor, seatPool, STAND_IN_CSS } from '../../phone-caps.js';   // small on a phone: one ad strip drawn
 
 const FONT = 'Arial,Helvetica,sans-serif';
 const CHIP = `font:700 10px ${FONT};background:#f0c24b;color:#000;padding:0 4px;border-radius:2px;flex:none;`;
@@ -58,14 +59,23 @@ export default {
   /* Second Banner: one more strip of ads, turning over, and each new ad is a little more pay. */
   o_second: {
     mount(ctx) {
-      const host = ctx.el('div', 'width:100%;margin-bottom:4px;', null, 'banner');
-      let card = null;
+      /* Phone caps (ui/phone-caps.js seatPool 'adBanners'): on a small phone run only one ad strip draws. Waiting here, this
+       * row still turns and pays on its clock, at the drawn strip, which wears the count. Everywhere else it draws its own. */
+      const caps = capsFor(ctx.state);
+      if (caps) ctx.css(STAND_IN_CSS);
+      let host = null, card = null;
+      const build = () => { host = ctx.el('div', caps ? 'position:relative;width:100%;margin-bottom:4px;' : 'width:100%;margin-bottom:4px;', null, 'banner'); return host; };
+      const seat = caps ? seatPool('adBanners', caps.adBanners).join({ draw: build }) : null;
+      if (seat) ctx.cleanup(seat.leave); else build();
       const turn = () => {
-        const rec = nextAd(ctx, 'banner');
-        card?.remove();
-        card = adCard(ctx, host, rec);
-        ctx.anim(card, ctx.gentle ? [{ opacity: 0 }, { opacity: 1 }] : [{ transform: 'translateX(40px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 300 });
-        const r = host.getBoundingClientRect();
+        const at = host || seat?.anchor();
+        if (host) {
+          const rec = nextAd(ctx, 'banner');
+          card?.remove();
+          card = adCard(ctx, host, rec);
+          ctx.anim(card, ctx.gentle ? [{ opacity: 0 }, { opacity: 1 }] : [{ transform: 'translateX(40px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 300 });
+        }
+        const r = at ? at.getBoundingClientRect() : { left: ctx.bounds().w / 2, width: 0, top: 60 };
         ctx.pay(ctx.rates().fps * 0.5, 'banner2', { x: r.left + r.width / 2, y: r.top + 10 });
       };
       turn();
