@@ -1,4 +1,5 @@
 import {dial,layThread,sight,useCarry,write} from './staff-fixtures.js';
+import {portraitBlink} from './portrait-blink.js';
 
 const roster=['reginald','margaret','henry','greg','bob','lashes','kevin','spitz','gary','doctor','bartholomew','nana'];
 const pages=['The Update proceeds as agreed.','All parties remain included.',''];
@@ -106,7 +107,13 @@ export function createTwelvePieces(api,state){
           local.threadStart=pos.clone();const route=[at(.39,-.65),at(.85,-.65),at(1.66,-.645),[1.46,-.645,-18.25],[1.46,.032,-16.40],[1.36,.025,-16]];
           layThread(api,group,place,route,off);
         }
-        if(key==='lashes'){local.lashes=gaze;local.form=place('annex_permit',at(.63,.06),yaw);local.form.visible=false;}
+        if(key==='lashes'){
+          local.lashes=gaze;local.form=place('annex_permit',at(.63,.06),yaw);local.form.visible=false;
+          const notice=place('annex_sign',at(1.13,-.68,-.89),yaw);
+          write(dial(api,notice,'sign_face',off),'Lady Lashes','Do not look too long.');
+          bind(notice,'Read the warning',()=>api.say('Do not look too long.'));
+          local.blinkPortrait=portraitBlink(T,group.getObjectByName('portrait_lashes'),figure,off);
+        }
       }
       if(!local.threadStart){
         const b=basis.at(-1);local.threadStart=b.pos;
@@ -163,12 +170,17 @@ export function createTwelvePieces(api,state){
     }
     if(progress.blink!==null){
       progress.blink+=dt;
-      const t=progress.blink,open=t<1?1-t:t<1.5?0:Math.min(1,(t-1.5)/1.4);
+      const t=progress.blink,open=t<1?.327*(1-t):t<1.5?0:Math.min(1,(t-1.5)/1.4);
       lids.style.opacity='1';lids.style.setProperty('--opening',Math.max(.01,open*150)+'%');
-      if(t>=1&&!moved){moved=true;void api.go('shop',[20.8,0,-9.98],0);}
+      if(t>=1&&!moved){moved=true;room?.blinkPortrait?.(0);void api.go('shop',[20.8,0,-9.98],0);}
       if(t>=2.9){progress.blink=null;lids.style.opacity='0';}
     }
-    if(id!=='twelve'||!room){previous=null;return;}
+    if(id!=='twelve'||!room){
+      previous=null;
+      if(progress.stare>0){progress.stare=0;room?.blinkPortrait?.(0);}
+      if(progress.blink===null)lids.style.opacity='0';
+      return;
+    }
     const p=camera.position,still=!!previous&&Math.hypot(previous.x-p.x,previous.z-p.z)<.012;
     previous??=new T.Vector3();previous.copy(p);beat+=dt;
     for(const b of room.casts){
@@ -192,6 +204,11 @@ export function createTwelvePieces(api,state){
     if(room.lashes&&!state.ticket.stamps.has('Blinked')){
       if(p.distanceToSquared(room.lashes)<22)api.trailTask('lashes',id);
       progress.stare=look.gaze(room.lashes,5,.16)?progress.stare+dt:0;
+      room.blinkPortrait?.(T.MathUtils.smoothstep(progress.stare,.16,6));
+      if(progress.blink===null){
+        const pressure=T.MathUtils.smoothstep(progress.stare,.30,6);
+        lids.style.opacity=String(pressure*.76);lids.style.setProperty('--opening',(148-99*pressure)+'%');
+      }
       if(progress.stare>=6){
         progress.blink=0;moved=false;state.signedForm=true;state.ticket.stamp('Blinked');
         state.ticket.book('blink','Looked at Lady Lashes too long',true);cue('blink','beat');
