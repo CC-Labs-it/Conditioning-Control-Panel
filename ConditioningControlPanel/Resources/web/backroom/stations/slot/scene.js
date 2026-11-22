@@ -138,6 +138,8 @@ function paintDisplay(ctx, w, h, marquee, text, aspect=1) {
  */
 export async function createScene(o) {
   const { reduced } = o;
+  // Embedded games may supply their active clock and pause gate.
+  const nowMs = typeof o.now === 'function' ? o.now : () => performance.now();
   const shared = o.stage || null, canvas = shared ? shared.canvas : o.canvas;
   let releaseView = null, rig = null, coinShower = null, retainReels = null, apronTicker = null, rimLighting = null, releaseEmiClick = null;
   const extras = [], borrowed = new Map(), roomVisibility=new Map();
@@ -147,7 +149,9 @@ export async function createScene(o) {
   // Law VI: reduced motion, Calm and Motion off all settle the cosmetic travel (station.js stillFx).
   const stillFx = typeof o.stillFx === 'function' ? o.stillFx : () => reduced;
   const budget = createRenderBudget(navigator, devicePixelRatio);
-  let lastDraw = -Infinity;
+  // A resize clears the drawing buffer; until the next render the cabinet is see-through (T&C report 2026-11-09:
+  // HUD and coins showing, cabinet gone, fold + reopen fixed it). staleBuffer draws on the first frame allowed.
+  let lastDraw = -Infinity, staleBuffer = false;
   const renderer = shared ? shared.renderer : new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'default' });
   const scene = shared ? shared.scene : new THREE.Scene();
   const camera = shared ? shared.camera : new THREE.PerspectiveCamera(LENS_DEG, 16 / 9, 0.015, 60);
@@ -209,13 +213,13 @@ export async function createScene(o) {
   let gltf, atlas = null;
   try {
     [gltf, atlas] = await Promise.all([
-      shared ? Promise.resolve({ scene:shared.fixture.children[0] }) : new GLTFLoader().loadAsync(asset('./assets/slot.glb')),
+      shared ? Promise.resolve({ scene:shared.fixture.children[0] }) : new GLTFLoader().setMeshoptDecoder(MeshoptDecoder).loadAsync(asset('./assets/slot.glb')),
       new THREE.TextureLoader().loadAsync(asset('./assets/emi-faces-slot.png')).catch(() => null),
     ]);
   } catch (e) { dispose(); throw e; }
   rig = gltf.scene;
   coinShower = createCoinShower(rig);
-  let coinTick = performance.now();
+  let coinTick = nowMs();
   if (!shared) scene.add(rig);
   else shared.fixture.userData.slotPlaying = true;
   const recoloured = applyPalette(rig, o.palette);   // a room variant's cabinet colours, before any other swap
@@ -226,7 +230,7 @@ export async function createScene(o) {
   const absent = OPTIONAL.filter(n => !get(n));
   if (absent.length) console.warn(`[slot] glb lacks optional nodes, degrading: ${absent.join(', ')}`);
 
-  if (!shared) customHandle = await attachSlotCustomHandle({rig,loader:new GLTFLoader().setMeshoptDecoder(MeshoptDecoder),base:asset('../../room/assets/'),style:slotHandleStyle(o.variant)}).catch(()=>null);
+  if (!shared) customHandle = await attachSlotCustomHandle({rig,loader:new GLTFLoader().setMeshoptDecoder(MeshoptDecoder),base:asset('../../room/assets/'),style:o.handleStyle ?? slotHandleStyle(o.variant)}).catch(()=>null);
   const cabinet = get('cabinet'), lever = get('lever'), rigRest = rig.position.clone();
   const reels = [1, 2, 3].map(i => get(`reel_${i}`)), restX = reels.map(() => 0), reelAngles = [0,0,0];
   const freezers = [1, 2, 3].map(i => get(`freeze_${i}`));
@@ -287,7 +291,7 @@ export async function createScene(o) {
     texture = canvasTexture(apronTicker.canvas);
     apronDisplay.material = new THREE.MeshBasicMaterial({ map: texture, toneMapped: false });
     owned.push(texture);
-    apronTicker.update(performance.now(), stillFx());
+    apronTicker.update(nowMs(), stillFx());
   }
 
   const spinFace=get('spin_button_face');
@@ -405,7 +409,7 @@ export async function createScene(o) {
       reels[r].material = new THREE.MeshBasicMaterial({ map: reelTex[r] });
     }
     owned.push(...reelTex);
-    paint(performance.now(), true);
+    paint(nowMs(), true);
   }
   // Keep the room's painted reels until the authoritative strip arrives.
   // Keep the final dealt picture on the very same room mesh after standing up.
@@ -492,6 +496,12 @@ export async function createScene(o) {
     const quarter = dir.clone().addScaledVector(side, 0.75).add(new THREE.Vector3(0, 0.45, 0)).normalize();
     rig.position.y = y; rig.updateMatrixWorld(true);
     const play = fit(playBox, dir, target);
+    // Movable clicker toys show the whole cabinet and its custom handle.
+    if (o.frameWhole) {
+      const full = withEmi(new THREE.Box3().setFromObject(rig), true);
+      const overview = fit(full, dir, null, { x: 0.90, y: 0.88 });
+      return { play: overview, arrive: overview, drop: 0, band: null, closeSeat: true };
+    }
     if (aspect < 0.8) {
       // UPRIGHT, to the owner's own reference frame (2026-09-16): the topper on top, the marquee under it, the
       // reels big, the lever and a little room to its right - and EMI ON THE SIDE SHELF, not on her topper.
@@ -555,7 +565,7 @@ export async function createScene(o) {
       return;
     }
     renderer.setPixelRatio(budget.dpr(w, h));
-    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); staleBuffer = true;
     poses = frame(camera.aspect, w, h);
     if (poses.band) camera.setViewOffset(w, h, (poses.band.right - poses.band.left) / 2, (poses.band.bottom - poses.band.top) / 2, w, h);
     else camera.clearViewOffset();
@@ -606,7 +616,7 @@ export async function createScene(o) {
   const emi = get('emi_topper'), emiRest = emi && { p: emi.position.clone(), s: emi.scale.clone(), r: emi.rotation.clone() };
   const emiArms = ['shoulderL','shoulderR'].map(name => {const node=emi?.getObjectByName(name); return node?{node,rest:node.rotation.clone()}:null;});
   let emiClickAt = -Infinity;
-  releaseEmiClick = shared?.onEmiClick?.(()=>{if(!stillFx())emiClickAt=performance.now();});
+  releaseEmiClick = shared?.onEmiClick?.(()=>{if(!stillFx())emiClickAt=nowMs();});
   const tmp = new THREE.Vector3(), nextColor = new THREE.Color(), GOLD = new THREE.Color(0xffc23a);
 
   /* EMI'S SHELF (owner, 2026-09-15). The close seat cuts her topper off the top of the frame, so while the player
@@ -666,7 +676,7 @@ export async function createScene(o) {
     faceName = FACES[name] !== undefined ? name : 'idle0_0';
     if (atlas && faceMesh) atlas.offset.set((FACES[faceName] * 152 + 0.5) / 1672, 0.5 / 137);
     const m = { jackpot: 'jackpot', hearts: 'win', melt: 'melt', spirals: 'free' }[faceName] || 'idle';
-    if (m !== mood) { mood = m; moodAt = performance.now(); }
+    if (m !== mood) { mood = m; moodAt = nowMs(); }
   }
   /** THE GLOW on the marquee heat: in fast, out slow; reduced motion steps to the state. */
   function heatNow(t) {
@@ -674,7 +684,7 @@ export async function createScene(o) {
     const q = clamp((t - heat.at) / (heat.to > heat.from ? FEEL.GLOW_IN_MS : FEEL.GLOW_OUT_MS));
     return heat.from + (heat.to - heat.from) * ease(q);
   }
-  function heatTo(level, gold) { const t = performance.now(); heat = { from: heatNow(t), to: level, at: t, gold: !!gold }; }
+  function heatTo(level, gold) { const t = nowMs(); heat = { from: heatNow(t), to: level, at: t, gold: !!gold }; }
 
   /* THE PAYLINE FRAME (playbook A6). The preview's landing frames sat at hard-coded coordinates and were not
    * ported; this one comes off live bounds instead, like the lever hint. The row is the reel window's own
@@ -846,7 +856,7 @@ export async function createScene(o) {
     if(customHandle){
       customHandle.scale.set(1/bulbStretchX,1/bulbStretchY,1);
       if(lever.rotation.x > .12) returning=true;
-      if(returning && sculptureAge >= 0){returning=false;if(!reduced)try{wobbleKit.play('silicone');}catch{}}
+      if(returning && sculptureAge >= 0){returning=false;if(!reduced)try{if(o.onReturn)o.onReturn();else wobbleKit.play('silicone');}catch{}}
       customHandle.userData.flexTip?.(stillFx()?0:siliconeRebound(sculptureAge));
     }
     const colors = PALETTES[m], period = m === 'spin' ? 420 : chaseMs(partyMood ? Math.max(h, pr.tier) : h);
@@ -1021,8 +1031,9 @@ export async function createScene(o) {
     }
     for (let i=0;i<3;i++) if(reelTex[i]) reelTex[i].offset.x=stripTransform(reelAngles[i],strips[i].length).offset;
     const gap = 1000 / (budget.mobile ? 30 : 60);
-    if (!shared && !document.hidden && t - lastDraw >= gap - 1) {
-      renderer.render(scene, camera); lastDraw = t;
+    if (t < lastDraw) lastDraw = -Infinity;   // a clock that restarts must not hold the next draw back
+    if (!shared && !document.hidden && (staleBuffer || t - lastDraw >= gap - 1)) {
+      renderer.render(scene, camera); lastDraw = t; staleBuffer = false;
     }
   }
   // A throw in one frame must not stop the loop (a spin in flight would never land). A tainted canvas
@@ -1030,7 +1041,8 @@ export async function createScene(o) {
   let frameFailed = false;
   const loop = t => {
     if (disposed) return;
-    try { update(t); } catch (err) {
+    if (o.paused?.()) { raf = requestAnimationFrame(loop); return; }
+    try { update(o.now ? nowMs() : t); } catch (err) {
       if (look.gif) { console.warn('[slot] reel media failed to upload, using fallback art', err); look = { ...look, gif: null }; setStrips(strips); }
       else if (!frameFailed) console.error('[slot] frame failed', err);
       frameFailed = true;
@@ -1058,7 +1070,7 @@ export async function createScene(o) {
   }
   function cancelPull() {
     if (!pull) return;
-    pullBack = { start: performance.now(), angle: lever.rotation.x };
+    pullBack = { start: nowMs(), angle: lever.rotation.x };
     if (canvas.hasPointerCapture(pull.id)) canvas.releasePointerCapture(pull.id);
     pull = null; canvas.style.cursor = '';
   }
@@ -1074,10 +1086,11 @@ export async function createScene(o) {
     if (parts.includes(ob)) ob = lever;
     const b = leverRect(), pad = 18;
     if (ob === lever || (!ob && e.clientX >= b.left - pad && e.clientX <= b.right + pad && e.clientY >= b.top - pad && e.clientY <= b.bottom + pad)) {
+      if (o.caseDraggable) { o.onControl?.(); e.stopPropagation(); }
       e.preventDefault(); pullBack = null; lean = null; pull = { id: e.pointerId, y: e.clientY, amount: 0 };
       canvas.setPointerCapture(e.pointerId); canvas.style.cursor = 'grabbing';
-    } else if (ob === spinButton) { e.preventDefault(); o.onLever(); }
-    else if (ob) o.onFreeze(freezers.indexOf(ob));
+    } else if (ob === spinButton) { if (o.caseDraggable) { o.onControl?.(); e.stopPropagation(); } e.preventDefault(); o.onLever(); }
+    else if (ob) { if (o.caseDraggable) { o.onControl?.(); e.stopPropagation(); } o.onFreeze(freezers.indexOf(ob)); }
   }
   // THE STROKE SOUNDS ON THE WAY DOWN, not when the hand lets go: the cue fires the frame the drag crosses
   // PULL_COMMIT, which is mid-stroke, so the pull and its sound share a frame however long the hand holds on.
@@ -1120,31 +1133,31 @@ export async function createScene(o) {
       const line = text == null ? '' : String(text).trim();
       marqueeMsg = line || null;
       apronTicker?.message(line);
-      marqueeAt = performance.now();
+      marqueeAt = nowMs();
     },
     get marqueeLine() { return marqueeMsg; },
-    meltShake() { meltShakeAt = performance.now(); },
-    setLook(next) { look = { ...next, reduced, face: atlas && atlas.image }; paint(performance.now(), true); },
+    meltShake() { meltShakeAt = nowMs(); },
+    setLook(next) { look = { ...next, reduced, face: atlas && atlas.image }; paint(nowMs(), true); },
     /** The freeze latch is a toggle: the held button goes down and stays down; the one that lost the hold
      *  (tapped again, moved to another column, or spent by a spin: sync passes null) completes its way up.
      *  Law VIII: this frame, before the server answers. */
     setHold(col) {
       if (col === hold) return;
-      const now = performance.now();
+      const now = nowMs();
       if (hold !== null) latchUpAt[hold] = now;
       if (col !== null) { latchDownAt[col] = now; latchUpAt[col] = -Infinity; }
       hold = col;
     },
     /** Law VIII: the lever leans into a press at once, before the tape or the server answers. */
-    answer() { if (spin || pull || phase !== 'play') return; pullBack = null; lean = { start: performance.now(), from: lever.rotation.x }; },
+    answer() { if (spin || pull || phase !== 'play') return; pullBack = null; lean = { start: nowMs(), from: lever.rotation.x }; },
     /** A press that was refused: the lean lets go. */
-    letGo() { if (!lean) return; lean = null; pullBack = { start: performance.now(), angle: lever.rotation.x }; },
+    letGo() { if (!lean) return; lean = null; pullBack = { start: nowMs(), angle: lever.rotation.x }; },
     setMelted(on) { melted = !!on; },
     /** One cabinet celebration per landed outcome (feel.recipe). Brake 2: a lesser party inside a running one merges. */
     celebrate(r, amount = 0, label = '') {
       coinShower.start(amount,r.tier,label);
-      if (r.gold) { reelMood = 'jackpot'; reelMoodAt = performance.now(); }
-      const t = performance.now();
+      if (r.gold) { reelMood = 'jackpot'; reelMoodAt = nowMs(); }
+      const t = nowMs();
       heatTo(Math.max(r.heat, party && t < party.end ? heat.to : 0), r.gold || (party && t < party.end && heat.gold));
       if (r.shiver) shiverAt = t;
       if (party && t < party.end && party.r.tier >= r.tier) return false;
@@ -1152,26 +1165,26 @@ export async function createScene(o) {
       return true;
     },
     /** THE BANK touches the tray: when a win starts paying out, or when a spend lands in it. */
-    trayThud() { trayAt = performance.now(); },
-    malus() { shiverAt = performance.now(); },
+    trayThud() { trayAt = nowMs(); },
+    malus() { shiverAt = nowMs(); },
     /** A6: frame the winning row for `ms` (THE BANK's rollup), then let THE GLOW out. It rides the landing
      *  beat the reveal already owns (Law X): tier 1 takes one soft pulse, reduced motion and a melted spin
      *  take a steady frame. `r` is feel.recipe's verdict for the outcome. */
     payline(ms, r) {
-      paylineAt = performance.now();
+      paylineAt = nowMs();
       // Reduced motion has no rollup to follow (THE BANK settles at once), so the frame is steady and holds
       // the reveal's own beat instead of the whole count (Law VI: the STATE, not a longer version of it).
       paylineHold = reduced ? PACE.REVEAL_MS : Math.max(0, Number(ms) || 0);
       paylinePulseN = paylinePulses(r ? r.tier : 0, { reduced, melted: !!(r && r.melted) });
     },
     /** Law VI: a press or a new spin takes the frame straight to its settled end, never a faster pulse. */
-    paylineOut() { if (paylineAt > -Infinity) paylineHold = Math.max(0, Math.min(paylineHold, performance.now() - paylineAt)); },
+    paylineOut() { if (paylineAt > -Infinity) paylineHold = Math.max(0, Math.min(paylineHold, nowMs() - paylineAt)); },
     /** Law VI: Back and suspend skip every ceremony to its settled state. */
     skip() { reelMood = 'idle'; settleMechanical(); meltShakeAt = -Infinity; apronTicker?.message(null); marqueeMsg = null; party = null; shiverAt = trayAt = -Infinity; stopAt.fill(-Infinity); revealAt = -Infinity; lean = null; ghost = null; teasing = false; heat = { ...heat, from: heat.to, at: -Infinity }; paylineAt = -Infinity; if (o.payline) o.payline.hidden = true; hitAt.fill(-Infinity); hitDirty = true; hazeOn = null; hazeOut = null; },
     /** THE GLYPH HIT (feel.highlightPlan): the landed cells on `plan` ([{ reel, at }]) glow from this frame, reel
      *  order, each `at` ms in, all out by HIGHLIGHT_MS. Nothing moves a stop; it lights what the tape landed. */
     highlight(plan) {
-      const now = performance.now();
+      const now = nowMs();
       for (const h of Array.isArray(plan) ? plan : []) if (h && h.reel >= 0 && h.reel < 3) { hitAt[h.reel] = now; hitStart[h.reel] = Math.max(0, Number(h.at) || 0); }
       hitDirty = true;
     },
@@ -1181,10 +1194,10 @@ export async function createScene(o) {
       if (on) {
         if (phase !== 'play' || reduced) return false;
         hazeMesh = hazeMesh || makeHaze();
-        if (!hazeOn) { hazeOn = { start: performance.now() }; hazeOut = null; }
+        if (!hazeOn) { hazeOn = { start: nowMs() }; hazeOut = null; }
         return true;
       }
-      if (hazeOn) hazeOut = { start: performance.now(), from: hazeAt(performance.now() - hazeOn.start) };
+      if (hazeOn) hazeOut = { start: nowMs(), from: hazeAt(nowMs() - hazeOn.start) };
       hazeOn = null;
       return true;
     },
@@ -1196,10 +1209,11 @@ export async function createScene(o) {
       if (!box || !strips[i]) return null;
       const image = makeCanvas(Math.round(cell.hw*2), Math.round(cell.hh*2));
       const g = image.getContext('2d'); g.translate(image.width/2,image.height/2);
-      drawSymbol(g, strips[i][stopsNow[i]], performance.now(), {...look, reduced:reduced||stillFx(), faceMood:reelMood, faceAge:performance.now()-reelMoodAt}, cell);
+      drawSymbol(g, strips[i][stopsNow[i]], nowMs(), {...look, reduced:reduced||stillFx(), faceMood:reelMood, faceAge:nowMs()-reelMoodAt}, cell);
       const rect = canvas.getBoundingClientRect();
-      return { canvas:image, x:rect.left+box.left+box.width/2, y:rect.top+box.top+box.height/2,
-        w:box.width, h:Math.min(box.height,box.width*image.height/image.width) };
+      const sx = rect.width / (canvas.clientWidth || 1), sy = rect.height / (canvas.clientHeight || 1);
+      return { canvas:image, x:rect.left+(box.left+box.width/2)*sx, y:rect.top+(box.top+box.height/2)*sy,
+        w:box.width*sx, h:Math.min(box.height,box.width*image.height/image.width)*sy };
     },
     project(name, top = false) {
       const n = get(name);
@@ -1211,13 +1225,13 @@ export async function createScene(o) {
       return { x: r.left + (p.x + 1) * r.width / 2, y: r.top + (1 - p.y) * r.height / 2 };
     },
     /** Light the landed payline for PACE.REVEAL_MS (a win lifts, nothing dims). The caller holds the pace. */
-    reveal(win) { revealAt = performance.now(); revealGain = win ? 0.45 : -0.25; },
+    reveal(win) { revealAt = nowMs(); revealGain = win ? 0.45 : -0.25; },
     /** Rise over the dimmed room, then ease to the seat. Resolves when interactive. */
     rise() {
       if (shared) { phase='play'; return Promise.resolve(); }
-      if (reduced) { rig.position.y = 0; phase = 'play'; aim(poses.play.pos, poses.play.look); return Promise.resolve(); }
+      if (reduced || o.frameWhole) { rig.position.y = 0; phase = 'play'; aim(poses.play.pos, poses.play.look); return Promise.resolve(); }
       phase = 'rise';
-      return new Promise(done => { tl = { kind: 'rise', start: performance.now(), done }; });
+      return new Promise(done => { tl = { kind: 'rise', start: nowMs(), done }; });
     },
     /** Slide down from wherever it is (Back at every phase). */
     sink() {
@@ -1225,7 +1239,7 @@ export async function createScene(o) {
       if (shared) { phase='hidden'; return Promise.resolve(); }
       if (reduced || phase === 'hidden') { tl = null; phase = 'hidden'; return Promise.resolve(); }
       const prev = tl; phase = 'sink';
-      return new Promise(done => { tl = { kind: 'sink', start: performance.now(), fromY: rig.position.y, done: () => { done(); if (prev && prev.done) prev.done(); } }; });
+      return new Promise(done => { tl = { kind: 'sink', start: nowMs(), fromY: rig.position.y, done: () => { done(); if (prev && prev.done) prev.done(); } }; });
     },
     /** Spin to `stops`, the held column stays put. Resolves when the last reel has thudded, reelsMs() from
      *  now with or without reduced motion (the pace is economy, not animation).
@@ -1241,7 +1255,7 @@ export async function createScene(o) {
       // `solo` drops the stagger, because there is nothing before reel 3 to stagger behind.
       const keep = Array.isArray(tease && tease.keep) ? tease.keep.filter(i => [0, 1, 2].includes(i)) : [];
       return new Promise(resolve => {
-        spin = { start: performance.now(), stops, held, keep, solo: keep.length > 0, leverFrom: lever.rotation.x,
+        spin = { start: nowMs(), stops, held, keep, solo: keep.length > 0, leverFrom: lever.rotation.x,
                  resolve, stopped: [false, false, false],
                  teaseMs: Math.max(0, (tease && tease.holdMs) || 0), teaseGold: !!(tease && tease.gold),
                  teaseDim: tease ? tease.dim !== false : true,
@@ -1252,19 +1266,19 @@ export async function createScene(o) {
     /** A2 THE ALMOST, from feel.almost: the off-by-one cell the server's own strip put next to the line
      *  ghosts gold and snaps back, once. Nothing is weighted, nudged or re-drawn; this shows what landed. */
     almost(near) {
-      if (near) { reelMood = 'near'; reelMoodAt = performance.now(); }
+      if (near) { reelMood = 'near'; reelMoodAt = nowMs(); }
       if (!near || !(near.cell >= 0)) return;
-      ghost = { r: near.reel === undefined ? 2 : near.reel, j: near.cell, at: performance.now() };
+      ghost = { r: near.reel === undefined ? 2 : near.reel, j: near.cell, at: nowMs() };
     },
     /** A4: the attract drift on or off (the station owns the idle timer and EMI's wink). `now` snaps back to
      *  the stops instead of easing home (Law VI: Back and suspend skip to the settled state). */
     attract(on, now = false) {
       if (on) {
         if (attract || attractOut || spin || reduced || phase !== 'play') return false;
-        attract = { start: performance.now() };
+        attract = { start: nowMs() };
         return true;
       }
-      const was = !!attract, at = performance.now();
+      const was = !!attract, at = nowMs();
       if (attract && !now) attractOut = { start: at, from: [0, 1, 2].map(i => wrapRad(attractRad(i, at - attract.start))) };
       attract = null;
       if (now) { attractOut = null; setStops(stopsNow); }
@@ -1272,12 +1286,12 @@ export async function createScene(o) {
     },
     get attracting() { return !!attract; },
     /** A5: reel `i` wiggles `delay` ms from now (its own thud goes first). The loop owns it: no timer. */
-    wiggle(i, delay = 0) { if (!reduced && i >= 0 && i < 3) wiggleAt[i] = performance.now() + Math.max(0, delay); },
+    wiggle(i, delay = 0) { if (!reduced && i >= 0 && i < 3) wiggleAt[i] = nowMs() + Math.max(0, delay); },
     settle: settleSpin,
     /** For dev.html and CDP checks only. */
     debug() {
-      const t = performance.now();
-      return { meltShakeAgeMs: performance.now()-meltShakeAt, crown: crownDisplay?.debug(), shared:!!shared, responsiveStretch:shared?.fixture.userData.slotStretch||1, fov:camera.fov, hiddenRoomObjects:roomVisibility.size, rigId:rig.uuid, reelIds:reels.map(r=>r.uuid), reelAngles:reelAngles.slice(), reelOffsets:reels.map(r=>r.material?.map?.offset.x), lever: lever.rotation.x, heat: heatNow(t), gold: heat.gold, party: party && t < party.end ? party.r.party : null,
+      const t = nowMs();
+      return { customHandle: !!get('chess_handle_socket'), handleStyle: o.handleStyle, frameWhole: !!o.frameWhole, meltShakeAgeMs: nowMs()-meltShakeAt, crown: crownDisplay?.debug(), shared:!!shared, responsiveStretch:shared?.fixture.userData.slotStretch||1, fov:camera.fov, hiddenRoomObjects:roomVisibility.size, rigId:rig.uuid, reelIds:reels.map(r=>r.uuid), reelAngles:reelAngles.slice(), reelOffsets:reels.map(r=>r.material?.map?.offset.x), lever: lever.rotation.x, heat: heatNow(t), gold: heat.gold, party: party && t < party.end ? party.r.party : null,
                tier: party && t < party.end ? party.r.tier : 0, face: faceName, gaze: { reel:gazeReel, yaw:gazeYaw, pitch:gazePitch }, shiverPx: reduced ? 0 : shiverPx(t - shiverAt),
                reelBrightness: reels.map(r => r.material && r.material.color ? r.material.color.r : 1), leaning: !!lean,
                tease: teasing, teaseMs: spin ? spin.teaseMs : 0, teaseGold: !!(spin && spin.teaseGold),

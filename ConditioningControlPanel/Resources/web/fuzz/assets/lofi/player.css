@@ -1,0 +1,23 @@
+.fm-object{position:relative;isolation:isolate;container-type:inline-size;display:flex;flex-direction:column;align-items:center;width:100%;user-select:none;background:transparent;color:#302a32;line-height:1;box-sizing:border-box}
+.fm-object .fm-art{display:block;width:100%;height:auto;aspect-ratio:1060 / 795;margin:0;padding:0;border:0;background:transparent;cursor:grab}
+.fm-object .fm-art:active{cursor:grabbing}
+.fm-object .fm-pill{order:-1;display:flex;flex-direction:column;align-items:stretch;gap:.16em;width:16.6em;max-width:100%;margin-bottom:clamp(5px,1.8cqw,12px);padding:.39em 1.05em .35em;border:1px solid #4b414db3;border-radius:99px;background:#fffaf0f7;box-shadow:0 1px 3px #32253026;font:clamp(8px,4cqw,20px)/1 Arial,sans-serif;box-sizing:border-box}
+.fm-object .fm-display{min-width:0;overflow:hidden;margin:0 .45em;font:500 max(10px,.91em)/1.2 "Segoe UI",Arial,sans-serif;text-align:left}
+.fm-object .fm-tape{display:flex;width:max-content;min-width:200%}
+.fm-object .fm-entry{flex:1 0 auto;padding-right:2em;white-space:nowrap;box-sizing:border-box}
+.fm-object .fm-entry strong{font-weight:650}.fm-object .fm-niche{color:var(--fm-ink)}
+.fm-object.fm-still .fm-tape{display:block;width:auto;min-width:0;transform:none!important}
+.fm-object.fm-still .fm-entry{display:block;padding:0;white-space:normal;overflow-wrap:anywhere}
+.fm-object.fm-still .fm-entry + .fm-entry{display:none}
+.fm-object .fm-controls{display:flex;align-items:center;justify-content:space-between;gap:.12em}
+.fm-object .fm-pill button{display:grid;place-items:center;position:relative;flex:none;width:2em;height:2em;min-width:0;min-height:0;margin:0;padding:0;color:#39303a;background:transparent;border:0;border-radius:50%;box-shadow:none;cursor:pointer;touch-action:manipulation;font:inherit}
+.fm-object .fm-pill button:hover{background:#ece4da;color:var(--fm-ink)}
+.fm-object .fm-pill button:focus-visible,.fm-object .fm-resize:focus-visible{outline:2px solid var(--fm-ink);outline-offset:1px}
+.fm-object .fm-pill .fm-toggle{background:var(--fm-ink);color:#fffaf0}
+.fm-object .fm-toggle i{width:0;height:0;border-top:.47em solid transparent;border-bottom:.47em solid transparent;border-left:.70em solid currentColor;margin-left:.17em}
+.fm-object .fm-toggle.fm-playing i{width:.62em;height:.9em;box-sizing:border-box;border:none;border-left:.22em solid currentColor;border-right:.22em solid currentColor;margin:0}
+.fm-object .fm-next i,.fm-object .fm-prev i{position:relative;width:.8em;height:.8em;box-sizing:border-box;border-right:.15em solid currentColor}
+.fm-object .fm-prev i{transform:rotate(180deg)}
+.fm-object .fm-next i::before,.fm-object .fm-prev i::before{content:"";position:absolute;top:0;left:0;border-left:.60em solid currentColor;border-top:.40em solid transparent;border-bottom:.40em solid transparent}
+.fm-object .fm-wave{display:block;flex:1;min-width:0;height:1.35em;margin:0 0 0 .55em;padding:0;background:transparent}
+.fm-object .fm-sr{position:absolute;width:1px;height:1px;margin:-1px;clip-path:inset(50%);overflow:hidden;white-space:nowrap}
