@@ -2,6 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {STOPS,stopSealed,trailMeter,trailTask} from '../ui/expo/trail-stops.js';
 import {COUNTERFOILS,visitTicket} from '../ui/expo/ticket.js';
+import {trailNarrator} from '../ui/expo/trail-narrator.js';
+
+test('the loan on the shop shelf takes priority over buying a souvenir',()=>{
+  const ticket=visitTicket(), state={ticket,firstPressCount:5,pressTask:{title:'Find the button',where:'2 of 4 · Gift shop shelf',atShop:true}};
+  const spoken=[];
+  const narrator=trailNarrator({isCarrying:()=>false,cue(id){spoken.push(id);return Promise.resolve(true);}},state);
+  narrator.tick(1,'shop',{});
+  assert.deepEqual(spoken,[]);
+  assert.equal(trailTask('shop',{},state).title,'Find the button');
+  state.carry={key:'rope-post'};
+  assert.match(trailTask('shop',{},state).where,/2 of 4.*set the post down/);
+  state.carry=null;state.pressTask=null;state.firstPressCount=8;
+  narrator.tick(1,'shop',{});
+  assert.deepEqual(spoken,['r5_shop']);
+});
 
 test('the printed trail and till agree on all twelve boxes and the eight-stamp threshold',()=>{
   assert.deepEqual(STOPS.map(s=>s.marks),COUNTERFOILS);

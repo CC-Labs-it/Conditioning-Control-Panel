@@ -27,6 +27,19 @@ async function loadHall(file){
   return (await loader.parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'')).scene;
 }
 
+test('a busy narrator drops the rope instruction once the plinth is moving',()=>{
+  const camera=new THREE.PerspectiveCamera();camera.position.set(0,1.6,-12);
+  let available=false;
+  const spoken=[],state={presses:0,ticket:{stamp(){},book(){}}};
+  const press=firstPress({THREE,camera,play(){},narrationAvailable:()=>available,
+    cue(id,options){spoken.push({id,needed:options.needed});}},state);
+  press.press();press.press();press.press();available=true;press.tick(.1,'hall');
+  assert.deepEqual(spoken.map(item=>item.id),['v4_press_moved']);
+  assert.ok(spoken[0].needed());
+  press.tick(2,'hall');press.press(false,0);
+  assert.equal(spoken[0].needed(),false);
+});
+
 for(const [profile,field] of [['desktop','file'],['Gentle','mobileFile']]){
   test('the First Press moves its original cover and keeps the register clear on '+profile,async()=>{
     const room=await loadHall(hall[field]);
