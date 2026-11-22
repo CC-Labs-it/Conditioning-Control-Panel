@@ -10,7 +10,7 @@ import * as E from '../sim/economy.js';
 import { createLife, parse, serialize } from '../sim/save.js';
 import { SAVE_CARRY_MAX_BYTES } from '../data/editions.js';
 import { realPress } from '../ui/nudges.js';
-import { SAVE_CARRY_COPY, SAVE_REASONS, createSaveCarry, incomingLine, mountSaveCarry } from '../ui/save-carry.js';
+import { SAVE_CARRY_COPY, SAVE_REASONS, createSaveCarry, incomingLine, whenLine, mountSaveCarry } from '../ui/save-carry.js';
 
 const small = Ed.readEdition({ caps: { edition: 'small', platform: 'web', saveSlot: true }, identity: {} }, { hostname: 'tc.cclabs.app', hosted: true });
 const goodSave = () => { const s = E.createRun({ seed: 3 }); E.lump(s, 500); return serialize(s, createLife(), {}); };
@@ -78,8 +78,10 @@ test('an incoming run never applies without accept, and only answers our own ask
   carry.askForRun(); carry.incoming(frame);
   asked[1][1](true);
   assert.deepEqual(applied, [save], 'accept applies it');
-  assert.match(incomingLine(frame, 'en-GB'), /S7-save-from-desktop/);
-  assert.match(incomingLine(frame, 'en-GB'), /2026/, 'the date in the player\'s locale');
+  const at = new Date(frame.savedAt), two = (n) => String(n).padStart(2, '0');
+  assert.equal(incomingLine(frame), `Saved on the app, ${at.getDate()} Nov ${two(at.getHours())}:${two(at.getMinutes())}. Play it here instead of this one?`);
+  assert.equal(whenLine(new Date(2026, 10, 22, 14, 5).getTime()), '22 Nov 14:05', 'day, short month, 24-hour local time');
+  assert.equal(whenLine(new Date(2026, 0, 3, 9, 7).getTime()), '3 Jan 09:07');
 });
 
 test('a broken incoming run is refused and the run is untouched', () => {

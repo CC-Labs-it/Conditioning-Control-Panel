@@ -103,5 +103,5 @@ test('the asleep Sky card: New run first, the nudge keeps the card open, placeho
   assert.equal(spec.buttons[1].keepOpen, true);
   spec.buttons[1].onPress();
   assert.deepEqual(sent, [['nudge', { where: 'ending', want: 'account' }]]);
-  for (const copy of [SAVE_SLEEP_COPY, SKY_ASLEEP_COPY]) for (const v of Object.values(copy)) assert.match(v, /^\[PLACEHOLDER S4-/);
+  assert.equal(SKY_ASLEEP_COPY.newRun, 'New run');   // every approved line is pinned in tests/editions-placeholders.test.mjs
 });

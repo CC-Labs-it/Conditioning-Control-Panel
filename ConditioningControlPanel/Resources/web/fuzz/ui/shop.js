@@ -67,6 +67,13 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
   let goalRow = null, size = 6, lastHop = -Infinity;
   /* A guest tile (EMI Takeover): one element another module owns, kept last in the grid. Never an engine row. */
   let guestEl = null, guestOff = null;
+  /* The tail tile (small edition, ui/shop-locked.js): one element kept at the very end, after any guest. Never a row. */
+  let tailEl = null;
+  const keepEnds = () => {
+    const after = tailEl?.parentNode === rowsEl ? tailEl : null;
+    if (guestEl && guestEl.nextSibling !== after) rowsEl.insertBefore(guestEl, after);
+    if (tailEl && rowsEl.lastElementChild !== tailEl) rowsEl.appendChild(tailEl);
+  };
   if (!doc.getElementById('shop-ready-css')) {
     const st = doc.createElement('style'); st.id = 'shop-ready-css'; st.textContent = SHOP_READY_CSS; doc.head.appendChild(st);
   }
@@ -278,7 +285,7 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
       if (rowsEl.children[i] !== r.el) rowsEl.insertBefore(r.el, rowsEl.children[i] || null);
       paint(r, false);
     });
-    if (guestEl && rowsEl.lastElementChild !== guestEl) rowsEl.appendChild(guestEl);
+    keepEnds();
     drawNext(win);
     nudge();
     if (moreEl.hidden !== !win.more) moreEl.hidden = !win.more;
@@ -400,7 +407,12 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
         guestEl = el || null;
         if (guestEl && item) guestOff = bindReadOnlyTip(guestEl, item, tip);
       }
-      if (guestEl && rowsEl.lastElementChild !== guestEl) rowsEl.appendChild(guestEl);
+      keepEnds();
+    },
+    /** The small edition's locked tile: kept last in the grid, never an engine row. null takes it away. */
+    tail(el) {
+      if (tailEl !== el) { tailEl?.remove(); tailEl = el || null; }
+      keepEnds();
     },
   };
 
