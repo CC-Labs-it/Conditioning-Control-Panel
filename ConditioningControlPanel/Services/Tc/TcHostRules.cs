@@ -59,18 +59,18 @@ internal static class TcHostRules
     /// <summary>
     /// The boot frame. <paramref name="v2Caps"/> comes from <see cref="TcRules.Caps"/>. Pictures go out as
     /// the device-origin Scrolller cap (<see cref="TcMediaRules.ScrolllerCap"/>, consent = the gate's answer);
-    /// <paramref name="sparkles"/> is true when a claim can be made (signed in). Toys stay off until their
-    /// slice. Words are the Circe recorded bank for every mod (never synthetic speech).
+    /// <paramref name="sparkles"/> is true when a claim can be made (signed in); <paramref name="toysConnected"/>
+    /// is the toy read at run start (CONTRACT.md 3.1). Words are the Circe recorded bank for every mod (never synthetic speech).
     /// </summary>
     public static JObject InitFrame(string? lang, MotionLevel motion, bool gentle, string? activeModId, JObject v2Caps,
-        bool picturesOn = false, bool sparkles = false)
+        bool picturesOn = false, bool sparkles = false, bool toys = false, bool toysConnected = false)
     {
         var caps = (JObject)v2Caps.DeepClone();
         caps["scrolller"] = TcMediaRules.ScrolllerCap(picturesOn);
         caps["sparkles"] = sparkles;
         caps["words"] = new JObject { ["bank"] = "circe" };
-        caps["toys"] = false;
-        caps["toysConnected"] = false;
+        caps["toys"] = toys;
+        caps["toysConnected"] = toys && toysConnected;
         return new JObject
         {
             ["type"] = "init",
