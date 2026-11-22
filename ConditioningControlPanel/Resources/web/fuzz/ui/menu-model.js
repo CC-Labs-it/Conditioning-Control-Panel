@@ -43,7 +43,7 @@ export const MENU_REUSED = Object.freeze({
   stickerBook: 'Sticker Book',   // ui/sticker-book.js door and heading (not exported there)
   renewal: RENEWAL_LABELS.door,
   expo: ENDINGS.ll_end.title,
-  playExpo: `Play ${ENDINGS.ll_end.title}`,
+  playExpo: 'Play Llama Expo 2037',   // a literal (owner's mockup line): a renamed ending never renames the row
   waiting: TRANSMISSION_LINES.penSign,
   moreInFull: LOCKED_TILE_COPY.label,
 });

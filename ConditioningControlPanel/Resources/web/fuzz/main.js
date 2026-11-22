@@ -39,6 +39,8 @@ import { previewBarAllowed } from './ui/preview-bar-model.js';
 import { menuDue, menuRows, MENU_REUSED } from './ui/menu-model.js';   // the main menu, from the second launch on
 import { openMainMenu } from './ui/main-menu.js';
 import { BOOK_EVENT } from './ui/sticker-book.js';
+import { expoFromMenu } from './ui/unlocks/fate/llama/ending.js';   // the menu's ready row: the ending's own entry
+import { TRANSMISSION_AT_LLAMAS } from './data/editions.js';
 
 const qs = new URLSearchParams(location.search);
 /* Dev doors (jumps, granted items, cheat wallets, the age-gate skip they carry) open only on a local preview.
@@ -491,14 +493,22 @@ function start(init) {
           document.getElementById('save-carry')?.scrollIntoView?.({ block: 'nearest' });
         },
         expo: (ev, el, row) => {
-          if (row.kind === 'wait') {
-            tx ||= mountTransmission({ doc: document, win: window, cards: ui.cards, on: bridge.on, send: bridge.send, llamas: () => run.herd, clock: () => run.clock, extras, save: persist });
+          if (row.kind === 'ready') {
+            /* The ending's own entry, minus the wormhole (ui/unlocks/fate/llama/ending.js expoFromMenu), on its own
+               engine scope (engine.visit). Leaving it comes back here. */
+            menu.hide();
+            engine.visit('ll_end', expoFromMenu).then(() => menu.show());
+          } else if (row.kind === 'wait') {
+            /* This player has been to the Expo: the run's own conditions (four llamas, the run clock) do not apply here,
+               only the host's size (no size, no offer: the row rattles). Clock 0 keeps the card from opening by itself. */
+            tx ||= mountTransmission({ doc: document, win: window, cards: ui.cards, on: bridge.on, send: bridge.send,
+              llamas: () => Math.max(run.herd, TRANSMISSION_AT_LLAMAS), clock: () => 0, extras, save: persist });
             if (!tx.open()) menu.rattle('expo');
           } else if (row.kind === 'door') {
             /* The small edition's existing door: the pause card's line "This is the small edition." / "The full game". */
             mountPauseNudge({ doc: document, win: window, send: bridge.send, ed });
             ui.pause();
-          } else menu.rattle('expo');   // sealed; ready waits on a way to open the Expo outside its ending (slice notes)
+          } else menu.rattle('expo');   // sealed
         },
       },
     });
