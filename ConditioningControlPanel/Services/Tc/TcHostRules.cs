@@ -57,15 +57,17 @@ internal static class TcHostRules
     };
 
     /// <summary>
-    /// The boot frame. <paramref name="v2Caps"/> comes from <see cref="TcRules.Caps"/>; the v1 caps that
-    /// later slices light up (pictures, Sparkles, toys) are sent off here, so the page draws none of
-    /// them yet. Words are the Circe recorded bank for every mod (never synthetic speech).
+    /// The boot frame. <paramref name="v2Caps"/> comes from <see cref="TcRules.Caps"/>. Pictures go out as
+    /// the device-origin Scrolller cap (<see cref="TcMediaRules.ScrolllerCap"/>, consent = the gate's answer);
+    /// <paramref name="sparkles"/> is true when a claim can be made (signed in). Toys stay off until their
+    /// slice. Words are the Circe recorded bank for every mod (never synthetic speech).
     /// </summary>
-    public static JObject InitFrame(string? lang, MotionLevel motion, bool gentle, string? activeModId, JObject v2Caps)
+    public static JObject InitFrame(string? lang, MotionLevel motion, bool gentle, string? activeModId, JObject v2Caps,
+        bool picturesOn = false, bool sparkles = false)
     {
         var caps = (JObject)v2Caps.DeepClone();
-        caps["scrolller"] = new JObject { ["consent"] = false };
-        caps["sparkles"] = false;
+        caps["scrolller"] = TcMediaRules.ScrolllerCap(picturesOn);
+        caps["sparkles"] = sparkles;
         caps["words"] = new JObject { ["bank"] = "circe" };
         caps["toys"] = false;
         caps["toysConnected"] = false;

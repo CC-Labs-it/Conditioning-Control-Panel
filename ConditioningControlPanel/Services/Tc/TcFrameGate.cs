@@ -21,6 +21,8 @@ internal sealed record TcPageFrame(string Type)
     public double Level { get; init; }
     public int Ms { get; init; }
     public bool Value { get; init; }
+    /// <summary><c>set-setting</c>: the page says this came from the player's own press (<c>ask:true</c>).</summary>
+    public bool Ask { get; init; }
 }
 
 /// <summary>The gate's answer. <paramref name="Refusal"/> is a fixed code; for <c>save-offer</c> it is
@@ -139,7 +141,11 @@ internal static class TcFrameGate
             {
                 if (Str(o, "key") != "media.remoteConsent" || o["value"] is not JValue { Type: JTokenType.Boolean } val)
                     return TcGateResult.No(RefuseField);
-                return TcGateResult.Ok(new TcPageFrame(type) { Value = (bool)val! });
+                return TcGateResult.Ok(new TcPageFrame(type)
+                {
+                    Value = (bool)val!,
+                    Ask = o["ask"] is JValue { Type: JTokenType.Boolean } a && (bool)a!,
+                });
             }
             case "scrolller-niches":
             {
