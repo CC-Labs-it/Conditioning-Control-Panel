@@ -1,0 +1,851 @@
+<title>Expo Trail Card</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Courier+Prime:wght@400;700&family=Public+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one column of four pokeable exhibits. The game screen and the paper card are objects
+   from the game, so they keep their own colours in both themes; the page around them follows the theme. */
+:root{
+  --bg:#e6eae3; --fg:#1b2a26; --muted:#56655f; --line:#c2cbc3; --panel:#f2f4ef;
+  --paper:#f6eedb; --paper-ink:#244535; --paper-line:#bcaa85; --paper-edge:#56705c;
+  --brass:#a9853f; --brass-hi:#e3c078;
+  --screen:#0f2326; --screen-fg:#fff8e8; --caption:#102124; --caption-fg:#ffffff;
+  --wool:#2f8a5b; --stamp:#2a6a48; --ok:#2a6a48; --ok-fg:#f1f7f1; --alert:#a5432f; --alert-fg:#fff4ee;
+  --wall-a:#d3dbd4; --wall-b:#c3cdc5; --wall-c:#e2e8e2; --ceil:#eef1ec; --floor:#b48652; --floor-line:#9a6f40; --door:#4f6a5e; --dark:#06140f;
+  --lab:#123b36; --lab-fg:#fff1d2; --lab-dim:#a7ccb9; --tile-on:#e9dfb8; --ring-fill:rgba(241,189,121,.22);
+  --sign:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"Public Sans","Segoe UI",system-ui,sans-serif;
+  --type:"Courier Prime","Courier New",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:#111b1a; --fg:#e4ebe5; --muted:#9db0a7; --line:#2b3a37; --panel:#192624; color-scheme:dark }
+}
+:root[data-theme="dark"]{ --bg:#111b1a; --fg:#e4ebe5; --muted:#9db0a7; --line:#2b3a37; --panel:#192624; color-scheme:dark }
+
+body{ background:var(--bg); color:var(--fg); font-family:var(--body); font-size:16px; line-height:1.5;
+  padding-block:28px 56px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); }
+.wrap{ max-width:980px; margin:0 auto; display:grid; gap:52px; }
+section{ display:grid; gap:16px; min-width:0; }
+.eyebrow{ font-family:var(--sign); font-weight:600; letter-spacing:.14em; text-transform:uppercase; font-size:.95rem; color:var(--muted); margin:0; }
+h1{ font-family:var(--sign); font-weight:700; font-size:clamp(2.1rem,5.4vw,3.4rem); line-height:1; text-transform:uppercase; letter-spacing:.01em; margin:6px 0 10px; text-wrap:balance; }
+h2{ font-family:var(--sign); font-weight:700; font-size:1.75rem; line-height:1.05; text-transform:uppercase; letter-spacing:.03em; margin:0; text-wrap:balance; }
+.lede{ margin:0; max-width:62ch; color:var(--muted); }
+header .lede{ color:var(--fg); font-size:1.06rem; }
+
+/* controls */
+.controls{ display:flex; flex-wrap:wrap; gap:10px 18px; align-items:center; justify-content:space-between; }
+.seg{ display:flex; flex-wrap:wrap; gap:6px; }
+.seg button{ font-family:var(--sign); font-weight:600; font-size:1.02rem; letter-spacing:.06em; text-transform:uppercase;
+  padding:6px 12px; border:1px solid var(--line); border-radius:3px; background:var(--panel); color:var(--fg); cursor:pointer; }
+.seg button[aria-pressed="true"]{ background:var(--fg); color:var(--bg); border-color:var(--fg); }
+.seg button:focus-visible, .box:focus-visible, .flip:focus-visible{ outline:3px solid var(--brass); outline-offset:2px; }
+
+/* the game screen */
+.screen{ position:relative; width:100%; aspect-ratio:16/9; min-height:300px; max-width:100%; overflow:hidden; border-radius:6px;
+  background:var(--screen); container-type:inline-size; }
+.screen > *{ font-size:clamp(10px,1.72cqw,16px); }
+.scene{ position:absolute; inset:0; width:100%; height:100%; }
+.ceil{ fill:var(--ceil) } .wl{ fill:var(--wall-a) } .wr{ fill:var(--wall-b) } .wb{ fill:var(--wall-c) } .fl{ fill:var(--floor) }
+.boards line{ stroke:var(--floor-line); stroke-width:1.5 } .door{ fill:var(--door) } .banner{ fill:var(--stamp) }
+.scene text{ font-family:var(--sign); font-weight:700; letter-spacing:.12em; fill:var(--paper); }
+.thread{ fill:none; stroke:var(--wool); stroke-width:5; stroke-linecap:round; }
+.lamp{ fill:var(--brass-hi) } .ring{ fill:none; stroke:var(--brass-hi); stroke-width:3; transform-box:fill-box; transform-origin:center; }
+.tray{ fill:var(--wall-b); stroke:var(--door); stroke-width:2 } .pot{ fill:var(--paper); stroke:var(--door); stroke-width:2 }
+.tint{ fill:var(--dark); opacity:.74 } .elamp{ fill:var(--wool) }
+.frame{ fill:var(--paper); stroke:var(--brass); stroke-width:3 } .reading{ fill:none; stroke:var(--brass-hi); stroke-width:7 }
+.plaque{ fill:var(--paper); stroke:var(--brass); stroke-width:2 } .plaque-t{ fill:var(--paper-ink) !important; letter-spacing:.06em !important; }
+.post{ fill:var(--door) } .bar{ fill:var(--brass) }
+.screen:not([data-scene="arrive"]) .s-arrive, .screen:not([data-scene="tea"]) .s-tea,
+.screen:not([data-scene="heater"]) .s-heater, .screen:not([data-scene="corridor"]) .s-corridor{ display:none; }
+.screen[data-mode="today"] .new-only{ display:none; }
+
+.hud-old{ position:absolute; top:2.4%; left:1.6%; max-width:min(64%,340px); padding:.6em .9em .65em; text-align:left;
+  background:var(--paper); color:var(--paper-ink); border:1px solid var(--paper-line); border-left:5px double var(--paper-edge); border-radius:0 4px 4px 0;
+  font-family:"Segoe UI",var(--body); }
+.hud-old .t{ display:block; font-size:.7em; font-weight:650; letter-spacing:.12em; }
+.hud-old .dots{ display:flex; gap:2px; margin:.35em 0; }
+.hud-old .dots i{ font-style:normal; min-width:1.3em; text-align:center; font-size:.78em; border:1px solid var(--paper-line); }
+.hud-old .b{ display:block; font-size:.7em; letter-spacing:.06em; white-space:pre-wrap; }
+.hud-old strong{ display:block; font-weight:500; font-size:.86em; margin-top:.2em; }
+
+.hud-new{ position:absolute; top:2.4%; left:1.6%; max-width:min(70%,420px); display:grid; gap:.45em; justify-items:start; text-align:left; }
+.mini{ display:grid; gap:.15em; padding:.5em .8em .55em; background:var(--paper); color:var(--paper-ink);
+  border:1px solid var(--paper-line); border-left:5px double var(--paper-edge); border-radius:0 4px 4px 0; }
+.mini .k{ font-family:var(--sign); font-weight:700; letter-spacing:.14em; text-transform:uppercase; font-size:.8em; }
+.mini b{ font-family:var(--type); font-size:1.25em; line-height:1; }
+.mini .h{ font-size:.74em; }
+.pips{ display:flex; align-items:center; gap:3px; flex-wrap:wrap; }
+.pips i{ width:.8em; height:.8em; border:1.5px solid var(--paper-ink); border-radius:1px; }
+.pips i[data-on="true"]{ background:var(--stamp); border-color:var(--stamp); }
+.pips em{ font-style:normal; font-family:var(--sign); font-weight:700; letter-spacing:.1em; text-transform:uppercase; font-size:.72em;
+  padding:0 .35em; border-left:2px solid var(--paper-ink); margin:0 .15em 0 .1em; }
+.task{ display:grid; gap:.1em; padding:.55em .85em .6em; background:var(--caption); color:var(--screen-fg); border-left:4px solid var(--brass-hi); border-radius:0 4px 4px 0; }
+.task .k{ font-family:var(--sign); font-weight:600; letter-spacing:.14em; text-transform:uppercase; font-size:.78em; color:var(--brass-hi); }
+.task strong{ font-size:1.08em; font-weight:600; line-height:1.2; }
+.task .w{ display:flex; align-items:center; gap:.45em; font-size:.84em; }
+.task .w svg{ width:1.1em; height:1.1em; flex:none; }
+.task .w path{ fill:none; stroke:var(--brass-hi); stroke-width:2.6; stroke-linecap:round; stroke-linejoin:round; }
+.key{ position:absolute; top:2.6%; right:1.6%; padding:.25em .6em; font-family:var(--type); font-size:.78em !important;
+  background:var(--caption); color:var(--screen-fg); border:1px solid var(--brass); border-radius:3px; }
+.cap{ position:absolute; left:50%; bottom:5%; transform:translateX(-50%); width:max-content; max-width:90%; margin:0; padding:.33em .68em;
+  background:var(--caption); color:var(--caption-fg); text-align:center; text-wrap:pretty; border-radius:3px; font-size:clamp(11px,1.95cqw,22px) !important; line-height:1.31; }
+.cap u{ text-decoration-color:var(--brass-hi); text-decoration-thickness:2px; text-underline-offset:3px; }
+.moment{ position:absolute; left:50%; top:16%; transform:translateX(-50%); width:min(74%,440px); display:grid; gap:.5em; justify-items:center; text-align:center;
+  padding:1em 1em .9em; background:var(--paper); color:var(--paper-ink); border:1px solid var(--paper-line); border-radius:3px; }
+.moment .ink{ position:static; font-size:1.9em; --r:-5deg; }
+.moment .sub{ font-family:var(--type); font-size:.86em; }
+.moment .plain{ font-weight:600; font-size:1.02em; }
+.moment .slip{ font-family:var(--type); font-size:.78em; padding:.25em .6em; border:1px dashed var(--paper-ink); }
+
+.ink{ display:inline-block; font-family:var(--sign); font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--stamp);
+  border:2px solid var(--stamp); outline:1px solid var(--stamp); outline-offset:2px; padding:.05em .45em; border-radius:3px; opacity:.88; transform:rotate(var(--r,-7deg)); }
+@media (prefers-reduced-motion: no-preference){
+  .fresh{ animation:thunk .22s cubic-bezier(.2,.9,.3,1.2) both; }
+  .ring{ animation:ring 1.6s ease-out infinite; }
+}
+@keyframes thunk{ from{ transform:rotate(var(--r,-7deg)) scale(1.7); opacity:0 } to{ transform:rotate(var(--r,-7deg)) scale(1); opacity:.88 } }
+@keyframes ring{ from{ transform:scale(.6); opacity:1 } to{ transform:scale(1.7); opacity:0 } }
+
+.verdict{ display:flex; gap:10px; align-items:baseline; margin:0; flex-wrap:wrap; }
+.tag{ font-family:var(--sign); font-weight:700; letter-spacing:.12em; text-transform:uppercase; font-size:.92rem; padding:1px 8px; border-radius:2px; }
+.tag[data-kind="today"]{ background:var(--alert); color:var(--alert-fg); }
+.tag[data-kind="next"]{ background:var(--ok); color:var(--ok-fg); }
+.verdict .txt{ flex:1 1 280px; min-width:0; font-weight:500; }
+.note{ margin:0; font-size:.88rem; color:var(--muted); }
+.rule{ margin:0; padding:12px 16px; border:1px solid var(--line); background:var(--panel); border-radius:3px; max-width:70ch; }
+.rule b{ font-family:var(--sign); font-size:1.15rem; letter-spacing:.05em; text-transform:uppercase; }
+
+/* trail card */
+.cardwrap{ display:grid; grid-template-columns:minmax(0,1.65fr) minmax(0,1fr); gap:20px; align-items:start; }
+@media (max-width:780px){ .cardwrap{ grid-template-columns:minmax(0,1fr); } }
+.tcard{ background:var(--paper); color:var(--paper-ink); border:1px solid var(--paper-line); border-left:7px double var(--paper-edge);
+  padding:16px 16px 14px; display:grid; gap:12px; box-shadow:3px 4px 0 var(--line); min-width:0; }
+.tcard header{ display:grid; gap:2px; padding-bottom:10px; border-bottom:2px dashed var(--paper-line); }
+.tcard .org{ font-family:var(--type); font-size:.74rem; letter-spacing:.08em; }
+.tcard h3{ font-family:var(--sign); font-weight:700; font-size:1.9rem; line-height:1; letter-spacing:.04em; text-transform:uppercase; margin:2px 0; }
+.tcard header p{ margin:0; font-weight:600; }
+.boxes{ list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; }
+@media (max-width:620px){ .boxes{ grid-template-columns:repeat(3,minmax(0,1fr)); } }
+@media (max-width:430px){ .boxes{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+.box{ position:relative; width:100%; min-height:108px; display:grid; gap:2px; align-content:start; text-align:left; padding:8px 9px 10px;
+  background:transparent; border:1px solid var(--paper-line); border-radius:2px; color:var(--paper-ink); font:inherit; cursor:pointer; overflow:hidden; }
+.box .n{ font-family:var(--type); font-size:.76rem; }
+.box .nm{ font-family:var(--sign); font-weight:600; font-size:1.16rem; line-height:1.05; text-transform:uppercase; letter-spacing:.03em; overflow-wrap:anywhere; }
+.box .pl{ font-family:var(--type); font-size:.72rem; line-height:1.25; overflow-wrap:anywhere; }
+.box[data-state="sealed"]{ background:repeating-linear-gradient(135deg, transparent 0 7px, var(--paper-line) 7px 8px); }
+.box[data-state="sealed"] .nm, .box[data-state="sealed"] .pl, .box[data-state="sealed"] .n{ background:var(--paper); width:max-content; max-width:100%; padding:0 3px; }
+.box[data-sel="true"]{ outline:2px solid var(--paper-ink); outline-offset:1px; }
+.box .ink{ position:absolute; right:5px; bottom:7px; font-size:.95rem; background:var(--paper); }
+.meter{ display:grid; gap:6px; padding-top:10px; border-top:2px dashed var(--paper-line); }
+.meter .pips{ font-size:1.25rem; }
+.meter span{ font-weight:600; }
+.cardfoot{ display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; justify-content:space-between; }
+.cardfoot small{ font-family:var(--type); font-size:.74rem; }
+.flip{ font-family:var(--sign); font-weight:600; letter-spacing:.08em; text-transform:uppercase; font-size:.98rem; padding:4px 10px;
+  background:transparent; color:var(--paper-ink); border:1px solid var(--paper-ink); border-radius:2px; cursor:pointer; }
+.ledger{ display:grid; gap:10px; }
+.ledger p{ margin:0; }
+.ledger ul{ list-style:none; margin:0; padding:0; display:grid; gap:4px; font-family:var(--type); font-size:.86rem; }
+.ledger li{ display:flex; gap:10px; justify-content:space-between; border-bottom:1px dotted var(--paper-line); padding-bottom:3px; }
+.ledger li b{ font-family:var(--sign); letter-spacing:.1em; text-transform:uppercase; white-space:nowrap; }
+.detail{ display:grid; gap:10px; padding:16px; background:var(--panel); border:1px solid var(--line); border-radius:3px; min-width:0; }
+.detail h3{ font-family:var(--sign); font-weight:700; font-size:1.5rem; text-transform:uppercase; letter-spacing:.03em; line-height:1.05; margin:0; }
+.detail dl{ margin:0; display:grid; gap:8px; }
+.detail dt{ font-family:var(--sign); font-weight:600; letter-spacing:.14em; text-transform:uppercase; font-size:.85rem; color:var(--muted); }
+.detail dd{ margin:0; }
+.detail .state{ font-family:var(--type); font-size:.84rem; }
+
+/* help ladder */
+.ladder{ display:grid; gap:12px; }
+.ladder-panel{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+@media (max-width:620px){ .ladder-panel{ grid-template-columns:minmax(0,1fr); } }
+.ladder-panel div{ padding:14px 16px; background:var(--panel); border:1px solid var(--line); border-radius:3px; min-width:0; }
+.ladder-panel h3{ margin:0 0 4px; font-family:var(--sign); font-weight:600; letter-spacing:.14em; text-transform:uppercase; font-size:.9rem; color:var(--muted); }
+.ladder-panel p{ margin:0; }
+
+/* build table */
+.tablewrap{ overflow-x:auto; border:1px solid var(--line); border-radius:3px; background:var(--panel); }
+table{ border-collapse:collapse; width:100%; min-width:640px; font-size:.94rem; }
+th, td{ text-align:left; vertical-align:top; padding:9px 12px; border-bottom:1px solid var(--line); }
+th{ font-family:var(--sign); font-weight:600; letter-spacing:.12em; text-transform:uppercase; font-size:.9rem; color:var(--muted); }
+tr:last-child td{ border-bottom:0; }
+td:first-child{ font-weight:600; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.size{ font-family:var(--type); white-space:nowrap; }
+table.wide{ min-width:860px; }
+table.wide td:first-child{ white-space:normal; min-width:9.5em; }
+h3.sub{ font-family:var(--sign); font-weight:600; font-size:1.25rem; letter-spacing:.06em; text-transform:uppercase; margin:8px 0 0; }
+a{ color:inherit; text-underline-offset:2px; }
+
+/* findings */
+.found{ margin:0; padding:0 0 0 1.15em; display:grid; gap:6px; max-width:76ch; }
+.found li::marker{ color:var(--alert); }
+.plainlist li::marker{ color:var(--muted); }
+.plainlist{ font-size:.94rem; }
+
+/* hoof captcha */
+.hoofwrap{ display:grid; grid-template-columns:minmax(0,340px) minmax(0,1fr); gap:20px; align-items:start; }
+@media (max-width:720px){ .hoofwrap{ grid-template-columns:minmax(0,1fr); } }
+.captcha{ background:var(--lab); color:var(--lab-fg); border-radius:4px; padding:12px; display:grid; gap:6px; min-width:0; }
+.cap-head{ display:grid; }
+.cap-head span{ font-size:.86rem; color:var(--lab-dim); }
+.cap-head b{ font-family:var(--sign); font-weight:700; font-size:1.9rem; line-height:1; text-transform:uppercase; letter-spacing:.04em; }
+.gridbox{ position:relative; padding:20px; touch-action:manipulation; cursor:crosshair; }
+.grid{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+.tile{ position:relative; aspect-ratio:1; display:grid; place-items:center; align-content:center; gap:3px; padding:4px; min-width:0;
+  background:var(--paper); color:var(--paper-ink); border:3px solid var(--paper); border-radius:2px; font:inherit; cursor:inherit; }
+.tile .pic{ font-size:clamp(1.6rem,7vw,2.3rem); line-height:1; }
+.tile .lab{ font-family:var(--type); font-size:.66rem; line-height:1; }
+.tile[aria-pressed="true"]{ border-color:var(--brass-hi); background:var(--tile-on); }
+.tile[aria-pressed="true"]::after{ content:"✓"; position:absolute; top:1px; left:5px; font-weight:700; color:var(--stamp); }
+.tile:focus-visible{ outline:3px solid var(--brass-hi); outline-offset:1px; }
+.hoofring{ position:absolute; border:3px solid var(--brass-hi); background:var(--ring-fill); border-radius:50%; pointer-events:none; transform:translate(-50%,-50%); }
+.cap-foot{ display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+.cap-foot span{ font-size:.9rem; min-width:0; flex:1 1 140px; }
+.btn{ font-family:var(--sign); font-weight:700; letter-spacing:.1em; text-transform:uppercase; font-size:1.05rem; padding:6px 16px;
+  border-radius:3px; border:1px solid var(--brass-hi); background:var(--brass-hi); color:var(--caption); cursor:pointer; }
+.btn.ghost{ background:transparent; color:var(--paper-ink); border-color:var(--paper-ink); }
+.btn:focus-visible{ outline:3px solid var(--wool); outline-offset:2px; }
+.hoofside{ display:grid; gap:12px; min-width:0; }
+.say{ margin:0; padding:.5em .8em .6em; background:var(--caption); color:var(--caption-fg); border-radius:3px; font-size:1.05rem; line-height:1.35; }
+.say small{ display:block; font-family:var(--sign); letter-spacing:.14em; text-transform:uppercase; font-size:.78rem; color:var(--brass-hi); }
+
+/* first press */
+.strip{ display:grid; gap:12px; }
+.strip-row{ display:grid; gap:4px; }
+.strip-row b{ font-family:var(--sign); letter-spacing:.12em; text-transform:uppercase; font-size:.98rem; }
+.strip-row span{ font-size:.9rem; color:var(--muted); max-width:80ch; }
+.presses{ display:flex; flex-wrap:wrap; gap:4px; }
+.presses i{ width:16px; height:16px; border-radius:50%; border:2px dashed var(--muted); }
+.presses i[data-k="event"]{ background:var(--ok); border:2px solid var(--ok); }
+.fp{ display:grid; grid-template-columns:minmax(0,300px) minmax(0,1fr); gap:20px; align-items:start; }
+@media (max-width:720px){ .fp{ grid-template-columns:minmax(0,1fr); } }
+.plinth{ display:grid; gap:12px; justify-items:center; text-align:center; padding:18px 14px; min-width:0;
+  background:var(--paper); color:var(--paper-ink); border:1px solid var(--paper-line); border-top:6px double var(--paper-edge); }
+.plinth .signbig{ font-family:var(--sign); font-weight:700; font-size:1.9rem; line-height:1; letter-spacing:.06em; text-transform:uppercase; text-wrap:balance; }
+.plinth .reg{ font-family:var(--type); font-size:.82rem; }
+.plinth .acts{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
+.fpside{ display:grid; gap:12px; min-width:0; }
+.fpside dl{ margin:0; display:grid; gap:8px; }
+.fpside dt{ font-family:var(--sign); font-weight:600; letter-spacing:.14em; text-transform:uppercase; font-size:.85rem; color:var(--muted); }
+.fpside dd{ margin:0; }
+
+/* rules */
+.rules{ margin:0; display:grid; gap:10px; max-width:80ch; }
+.rules div{ padding:12px 16px; border:1px solid var(--line); background:var(--panel); border-radius:3px; }
+.rules dt{ font-family:var(--sign); font-weight:700; font-size:1.25rem; letter-spacing:.02em; line-height:1.1; }
+.rules dd{ margin:4px 0 0; }
+</style>
+
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Llama Expo 2037 · visitor guidance · proposal</p>
+    <h1>The Expo has a game. It never says so.</h1>
+    <p class="lede">The game is 12 stamps, and 8 of them let you go home. Today the player sees a row of dots and a narrator who only jokes, so the tea, the heater and the corridor all read as random. The fix is one plain layer under the jokes: a trail card, a task line, and a stamp that lands on screen.</p>
+    <p class="lede">Second pass, further down: Hoof Sciences and First Press hide their own rules, so both are redesigned and playable here, and every other stop is checked against the code.</p>
+  </header>
+
+  <section aria-labelledby="h-screen">
+    <h2 id="h-screen">Same moment, today and proposed</h2>
+    <div class="controls">
+      <div class="seg" id="sceneSeg" role="group" aria-label="Moment"></div>
+      <div class="seg" id="modeSeg" role="group" aria-label="Version">
+        <button type="button" id="modeToday" data-mode="today" aria-pressed="false">Today</button>
+        <button type="button" id="modeNext" data-mode="next" aria-pressed="true">Proposed</button>
+      </div>
+    </div>
+    <div class="screen" id="screen" data-scene="tea" data-mode="next">
+      <svg class="scene" viewBox="0 0 800 450" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <polygon class="ceil" points="0,0 800,0 550,110 250,110"/>
+        <polygon class="wl" points="0,0 250,110 250,290 0,450"/>
+        <polygon class="wr" points="800,0 550,110 550,290 800,450"/>
+        <rect class="wb" x="250" y="110" width="300" height="180"/>
+        <polygon class="fl" points="0,450 800,450 550,290 250,290"/>
+        <g class="boards">
+          <line x1="160" y1="450" x2="310" y2="290"/><line x1="320" y1="450" x2="370" y2="290"/>
+          <line x1="480" y1="450" x2="430" y2="290"/><line x1="640" y1="450" x2="490" y2="290"/>
+        </g>
+        <rect class="door" x="372" y="172" width="56" height="118"/>
+
+        <g class="s-arrive">
+          <rect class="banner" x="292" y="124" width="216" height="30"/>
+          <text x="400" y="146" text-anchor="middle" font-size="19">LLAMA EXPO 2037</text>
+          <rect class="post" x="300" y="330" width="12" height="74"/><rect class="post" x="488" y="330" width="12" height="74"/>
+          <rect class="bar" x="312" y="352" width="176" height="8"/>
+        </g>
+
+        <g class="s-tea">
+          <rect class="banner" x="292" y="124" width="216" height="30"/>
+          <text x="400" y="146" text-anchor="middle" font-size="19">STAFF CANTEEN</text>
+          <g class="new-only">
+            <path class="thread" d="M 388 450 C 372 404, 446 368, 414 326 S 402 300, 400 290"/>
+            <circle class="lamp" cx="400" cy="160" r="6"/><circle class="ring" cx="400" cy="160" r="11"/>
+          </g>
+          <ellipse class="tray" cx="400" cy="440" rx="150" ry="24"/>
+          <ellipse class="pot" cx="372" cy="424" rx="30" ry="20"/><rect class="pot" x="398" y="416" width="18" height="7"/>
+          <ellipse class="pot" cx="446" cy="430" rx="16" ry="10"/><ellipse class="pot" cx="486" cy="434" rx="16" ry="10"/>
+        </g>
+
+        <g class="s-heater">
+          <rect class="tint" x="0" y="0" width="800" height="450"/>
+          <circle class="elamp" cx="400" cy="128" r="9"/>
+        </g>
+
+        <g class="s-corridor">
+          <path class="thread" d="M 400 450 L 400 290"/>
+          <polygon class="frame" points="62.5,142.3 105,147.2 105,254.9 62.5,264.7"/>
+          <polygon class="frame" points="130,150.1 160,153.6 160,242.3 130,249.2"/>
+          <polygon class="frame" points="180,155.9 200,158.2 200,233.1 180,237.7"/>
+          <polygon class="frame" points="737.5,142.3 695,147.2 695,254.9 737.5,264.7"/>
+          <polygon class="frame" points="670,150.1 640,153.6 640,242.3 670,249.2"/>
+          <polygon class="frame" points="620,155.9 600,158.2 600,233.1 620,237.7"/>
+          <g class="new-only">
+            <polygon class="reading" points="62.5,142.3 105,147.2 105,254.9 62.5,264.7"/>
+            <rect class="plaque" x="266" y="186" width="96" height="50"/>
+            <text class="plaque-t" x="314" y="206" text-anchor="middle" font-size="11">CONTRACT CORRIDOR</text>
+            <text class="plaque-t" x="314" y="224" text-anchor="middle" font-size="10">LENGTH: UNTIL READ</text>
+          </g>
+        </g>
+      </svg>
+
+      <div class="hud-old" id="hudOld" hidden>
+        <span class="t">ADMIT ONE HUMAN, 2037</span>
+        <div class="dots" id="oldDots"></div>
+        <span class="b" id="oldBal"></span>
+        <strong id="oldHint"></strong>
+      </div>
+
+      <div class="hud-new" id="hudNew">
+        <div class="mini">
+          <span class="k">Human trail</span>
+          <b id="newCount">1 of 12</b>
+          <div class="pips" id="newPips"></div>
+          <span class="h">8 stamps open the way home</span>
+        </div>
+        <div class="task">
+          <span class="k" id="taskKicker"></span>
+          <strong id="taskTitle"></strong>
+          <span class="w"><svg viewBox="0 0 24 24" id="taskArrow" aria-hidden="true"><path d="M12 20V4M5 11l7-7 7 7"/></svg><span id="taskWhere"></span></span>
+        </div>
+      </div>
+      <span class="key" id="keyHint">Tab: trail card</span>
+
+      <div class="moment" id="moment" hidden>
+        <span class="ink" id="momentInk"></span>
+        <span class="sub" id="momentSub"></span>
+        <span class="plain" id="momentPlain"></span>
+        <span class="slip" id="momentSlip"></span>
+      </div>
+
+      <p class="cap" id="cap"></p>
+    </div>
+    <p class="verdict"><span class="tag" id="verdictTag"></span><span class="txt" id="verdictTxt"></span></p>
+    <p class="note">Screen is a sketch, not game art. The Today text is copied from the current build. Underlined caption text is the new plain sentence; the rest is the line the game already has.</p>
+    <p class="rule"><b>One rule for every stop.</b> Say what to do and where, then be funny. The narrator keeps every joke; each task line just gets a plain first sentence.</p>
+  </section>
+
+  <section aria-labelledby="h-card">
+    <h2 id="h-card">The trail card</h2>
+    <p class="lede">Opens on Tab and replaces the row of dots. A museum activity trail, made by llamas for a human who needs things spelled out. Click a box: sealed, then found, then stamped.</p>
+    <div class="cardwrap">
+      <div class="tcard">
+        <header>
+          <span class="org">LLAMA EXPO 2037 · VISITOR SERVICES · ADMIT ONE HUMAN</span>
+          <h3>Human Activity Trail</h3>
+          <p>Twelve stamps. Collect eight and the gift shop lets you go home.</p>
+        </header>
+        <div id="front" style="display:grid;gap:12px">
+          <ol class="boxes" id="boxes"></ol>
+          <div class="meter"><div class="pips" id="cardPips"></div><span id="meterText"></span></div>
+        </div>
+        <div class="ledger" id="back" hidden>
+          <p><b>Yes</b> means you did what a sign asked. <b>Deviation</b> means you did not. The till counts both at the end. Neither one is wrong.</p>
+          <ul>
+            <li><span>Walked the entire empty queue</span><b>Yes</b></li>
+            <li><span>Left the heater connected</span><b>Yes</b></li>
+            <li><span>Removed a rope post</span><b>Deviation</b></li>
+            <li><span>Unplugged the heater</span><b>Deviation</b></li>
+            <li><span>Hung a photograph face inward</span><b>Deviation</b></li>
+          </ul>
+        </div>
+        <div class="cardfoot">
+          <small>Staff boxes are not for visitors. Please do not collect them.</small>
+          <button type="button" class="flip" id="flip" aria-pressed="false">Turn the card over</button>
+        </div>
+      </div>
+      <aside class="detail" id="detail" aria-live="polite"></aside>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-hoof">
+    <h2 id="h-hoof">Hoof Sciences, rebuilt as a real captcha</h2>
+    <p class="lede">Checked in the code and its aiming maths, not in a live run. The test does what it was coded to do, and what it was coded to do is a trick nobody is told about.</p>
+    <ul class="found">
+      <li>Tick boxes: aiming dead centre at any box presses two of them, never one. Ticks do not stay lit between presses. The round ends after three presses whatever you do.</li>
+      <li>Pictures: aiming dead centre at any picture marks 3 to 5 squares. One square alone only happens when the circle hangs off the edge of the board.</li>
+      <li>All nine pictures are llamas and the prompt asks for squares without one. The only right answer is to select nothing and press Submit.</li>
+      <li>While the narrator is speaking, presses are ignored and nothing shows it.</li>
+    </ul>
+    <p class="rule"><b>Proposed.</b> A captcha everyone already knows how to do, with llamas mixed in among other things. With hooves on it cannot be done, and you can see why. Take the hooves off and it takes three taps. That is the joke, and it is the whole point of the Human Interface Programme. Try it.</p>
+    <div class="hoofwrap">
+      <div class="captcha">
+        <div class="cap-head"><span>Select all squares with a</span><b>llama</b><span>Then press Verify.</span></div>
+        <div class="gridbox" id="gridbox">
+          <div class="grid" id="grid"></div>
+          <div class="hoofring" id="hoofRing" hidden></div>
+        </div>
+        <div class="cap-foot"><span id="capMsg" aria-live="polite"></span><button type="button" class="btn" id="verify">Verify</button></div>
+      </div>
+      <div class="hoofside">
+        <div class="seg" role="group" aria-label="Hooves">
+          <button type="button" id="hoofOn" aria-pressed="true">Hooves on</button>
+          <button type="button" id="hoofOff" aria-pressed="false">Hooves off</button>
+        </div>
+        <p class="say"><small>Narrator</small><span id="hoofSayText">Select every square with a llama. Take your time.</span></p>
+        <ul class="found plainlist">
+          <li>The circle is the hoof. Each press marks whatever it covers, and marks stay.</li>
+          <li>A wrong Verify deals new pictures, like the real thing. On the third miss the narrator tells you to take the hooves off.</li>
+          <li>Solving it with hooves stays possible for the stubborn, by hanging the circle off the edge. It books a Deviation.</li>
+          <li>Pictures here are placeholders. One is an alpaca, which is not a llama.</li>
+        </ul>
+      </div>
+    </div>
+    <p class="rule"><b>Hooves outside the lab.</b> Today seven named buttons refuse a hoof, with one spoken line that plays once per visit and is dropped if the narrator is already talking, which is why you never heard it. Proposed: every finger-sized thing refuses, each refusal gets a clop and a slipping hoof, and five short lines take turns. Drafts: "With hooves. Yes. Now you see the difficulty." · "That needs a finger. You are wearing the other thing." · "A hoof can open a country. It cannot press that." · "Try a door. Doors we can do." · "Your fingers are at the desk where you left them."</p>
+  </section>
+
+  <section aria-labelledby="h-press">
+    <h2 id="h-press">First Press, 25 presses down to 8</h2>
+    <p class="lede">Today the exhibit is a five-stage gag that needs 25 presses, and the turn that matters happens while you are not looking: after press 12 the button leaves, the plinth sinks and a card says "On loan". Nothing says you are meant to chase it, or for how long.</p>
+    <div class="strip">
+      <div class="strip-row"><b>Today · 25 presses</b><div class="presses" id="fpToday"></div><span>Stamp at 1, rope at 5, a line at 10, it vanishes unseen at 12, then twelve presses chasing it round four places with no count, and the sign flips at 25. Then wait ten seconds, then walk back to the first plinth to end it.</span></div>
+      <div class="strip-row"><b>Proposed · 8 presses</b><div class="presses" id="fpNext"></div><span>Filled dot: something new happens. Dashed: nothing new.</span></div>
+    </div>
+    <div class="fp">
+      <div class="plinth">
+        <span class="reg" id="fpReg"></span>
+        <span class="signbig" id="fpSign"></span>
+        <div class="acts">
+          <button type="button" class="btn" id="fpPressBtn">Press it</button>
+          <button type="button" class="btn ghost" id="fpKeepBtn">Keep hands off</button>
+        </div>
+        <span class="reg" id="fpCount"></span>
+      </div>
+      <div class="fpside">
+        <dl>
+          <dt>In the room</dt><dd id="fpRoom"></dd>
+          <dt>Task line</dt><dd id="fpTask"></dd>
+        </dl>
+        <p class="say"><small>Narrator</small><span id="fpSay"></span></p>
+      </div>
+    </div>
+    <p class="note">Every narrator line in this demo already exists in the build. What changes: fewer presses, the sinking happens in front of you, the loan card counts four places, the hidden button ticks and has a lamp, and the last switch is on the button instead of back across the hall. The register number is an example.</p>
+  </section>
+
+  <section aria-labelledby="h-audit">
+    <h2 id="h-audit">Every stop, checked against the code</h2>
+    <div class="tablewrap">
+      <table class="wide">
+        <thead><tr><th scope="col">Stop</th><th scope="col">The game today</th><th scope="col">Where it loses the player</th><th scope="col">Change</th></tr></thead>
+        <tbody>
+          <tr><td>Corrections Desk</td><td>Carry five prints, one at a time, to five hooks. Any print on any hook counts.</td><td>Ten walks, no decision, nothing answers.</td><td>The caption under each hook already rewrites itself around the print you hang. Add the payoff: when the fifth is up, the narrator reads your wall back in your order. Count on the desk sign.</td></tr>
+          <tr><td>The Meeting</td><td>Stand still on the disc for 40 seconds. Sign and countdown are clear.</td><td>Clear, and 40 seconds of nothing.</td><td>Bait the player: a phone rings behind them, a chair falls, a button lights up "Any objections?". Moving restarts. The game becomes not reacting.</td></tr>
+          <tr><td>The Rematch</td><td>Hold, aim, release. Any spit from the green stamps.</td><td>The real target, a plate at 6.1 m, and the fact that hooves spit further are both invisible.</td><td>The board shows "Llama line 6.1 m" beside your best. After three spits the judge says humans stop near 3 m and looks toward the hoof desk.</td></tr>
+          <tr><td>The Queue</td><td>Walk the whole empty rope maze.</td><td>Nowhere. It reads as a joke at once.</td><td>Leave it. Add "Now serving: you" at the end.</td></tr>
+          <tr><td>First Press</td><td>25 presses over five stages.</td><td>The button leaving is unseen and unexplained, and the chase has no count.</td><td>The 8-press version above.</td></tr>
+          <tr><td>Hoof Sciences</td><td>Tick one box, then a picture grid whose answer is to select nothing.</td><td>The rules are a trick, marks do not stay, presses are ignored while the narrator talks.</td><td>The captcha above.</td></tr>
+          <tr><td>The Habitat</td><td>Tap the glass, feed a Yes. Second half: find the keeper door in the staff wing and sit in the chair behind the glass.</td><td>Nothing points at the chair.</td><td>Light the empty chair inside the glass. Sign: "Keeper wanted. Enquire at the staff door."</td></tr>
+          <tr><td>Lady Lashes</td><td>Look at her for six seconds. You have then signed a form, which has to go to the till.</td><td>Nothing says a stare is the game, and nothing says what the form is for.</td><td>Sign: "Do not look too long." Her blink builds while you stare, so you feel the contest. Task line for the form: hand it in at the till.</td></tr>
+          <tr><td>The Dome</td><td>Stay while the sign says move along.</td><td>Nowhere. The instruction is clear and breaking it pays.</td><td>Leave it. It is the model for the others.</td></tr>
+          <tr><td>Tea, heater, corridor</td><td>The three staff stamps.</td><td>No where, no why, no sign that anything was earned.</td><td>Task line with the wool, stamp on screen, sign at the corridor door (top of this page).</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-rules">
+    <h2 id="h-rules">How we steer players</h2>
+    <p class="lede">Six rules to build every stop by. Five come from published developer notes, one from the hoof lab.</p>
+    <dl class="rules">
+      <div><dt>Say the intended action first.</dt><dd>Then breaking it is a choice the player knows they made. In The Stanley Parable the narrator names the door before you reach the two doors. Our signs do this at First Press and the dome, and nowhere else yet. <a href="https://media.gdcvault.com/gdc2016/GameNarrativeReview/Barton_Game%20Narrative%20Review.pdf">GDC narrative review</a></dd></div>
+      <div><dt>Stop the player when something must be seen.</dt><dd>Portal's team added forced pauses, which they called gates, so players would notice the one thing a room teaches. First Press does the opposite today: its big turn happens only when unseen. <a href="https://theportalwiki.com/wiki/Portal_developer_commentary">Portal developer commentary, wiki transcript</a></dd></div>
+      <div><dt>Teach one thing, one step early.</dt><dd>Portal 2 testers were lost in the last room until an earlier room trained the same action. Hoof Sciences: one big button the hoof can press, then small boxes it cannot, then the captcha. <a href="https://theportalwiki.com/wiki/Portal_developer_commentary">Same commentary</a></dd></div>
+      <div><dt>Pull with sight and sound before words.</dt><dd>Players rarely look up unless something prompts them, such as a ladder. Schell lists visual design and music among the ways to steer without taking freedom away. For us: wool on the floor, a lamp, a ticking button, a bell. <a href="https://gamefroot-developer.gitbooks.io/jesse-schell-the-art-of-game-design-lenses-1-to-1/content/072.html">Schell, the lens of indirect control</a></dd></div>
+      <div><dt>Every press gets an answer, and marks stay.</dt><dd>Mine, from the hoof lab. Ignored input reads as a broken game. If the narrator is talking, the press still clicks and still shows.</dd></div>
+      <div><dt>A fresh player every week.</dt><dd>Portal was play-tested about weekly and changed on what testers did. Someone who has never seen the Expo plays for 15 minutes, and we write down the first moment they ask what to do. <a href="https://www.gamedeveloper.com/business/still-alive-kim-swift-and-erik-wolpaw-talk-portal">Swift and Wolpaw interview</a></dd></div>
+    </dl>
+  </section>
+
+  <section aria-labelledby="h-help">
+    <h2 id="h-help">When the player is lost</h2>
+    <p class="lede">Help arrives in steps and only if nothing is happening. Example: the tea.</p>
+    <div class="ladder">
+      <div class="seg" id="ladderSeg" role="group" aria-label="Help step"></div>
+      <div class="ladder-panel">
+        <div><h3>Sees</h3><p id="ladSees"></p></div>
+        <div><h3>Hears</h3><p id="ladHears"></p></div>
+      </div>
+    </div>
+    <p class="note">Narrator sentences shown here are drafts for approval. Nothing repeats twice, and nothing fires while the player is moving toward the goal.</p>
+  </section>
+
+  <section aria-labelledby="h-build">
+    <h2 id="h-build">What to build, in this order</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th scope="col">Phase</th><th scope="col">What</th><th scope="col">Size (my estimate)</th><th scope="col">New material</th></tr></thead>
+        <tbody>
+          <tr><td>A. Guidance layer</td><td>Trail card and task line, stamp on screen, three signs, a plain first sentence on every task line.</td><td class="size">small</td><td>about 15 lines rendered again</td></tr>
+          <tr><td>B. Hoof Sciences</td><td>Real captcha with mixed pictures, marks that stay, the hooves-off payoff, refusals outside the lab.</td><td class="size">medium</td><td>9 or more pictures, about 8 lines</td></tr>
+          <tr><td>C. First Press</td><td>The 8-press arc, the sinking seen by the player, loan card with a count, ticking and lamp, last switch on the button.</td><td class="size">medium</td><td>none, the lines exist</td></tr>
+          <tr><td>D. Small fixes</td><td>Rematch board with the llama line, lit keeper chair, Lady Lashes sign and form task, queue sign.</td><td class="size">small</td><td>2 or 3 lines</td></tr>
+          <tr><td>E. Two richer games</td><td>The Meeting with bait, the Corrections Desk read-back.</td><td class="size">medium</td><td>about 12 lines</td></tr>
+          <tr><td>F. For wanderers</td><td>Carry target, lost help, map boards.</td><td class="size">medium</td><td>about 6 lines</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">A to C answer everything you hit. After each phase, one fresh player for 15 minutes.</p>
+    <h3 class="sub">Phases A and F, piece by piece</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th scope="col">Piece</th><th scope="col">What it fixes</th><th scope="col">Size (my estimate)</th><th scope="col">New voice</th></tr></thead>
+        <tbody>
+          <tr><td>1. Trail card and task line</td><td>The goal is visible: 12 stamps, 8 to go home, and the one thing in hand right now.</td><td class="size">small</td><td>none</td></tr>
+          <tr><td>2. Stamp on screen</td><td>Heater, tea and corridor read as finds, with a name and a number. Deviations get a slip.</td><td class="size">small</td><td>none</td></tr>
+          <tr><td>3. Three signs</td><td>Tea docket says where. Corridor door says how it ends. Heater card says it counted.</td><td class="size">small</td><td>none</td></tr>
+          <tr><td>4. Plain first sentence</td><td>Every task line says what and where before the joke, plus a welcome line at the turnstile.</td><td class="size">small, about 15 lines</td><td>about 15 lines rendered again in the same narrator</td></tr>
+          <tr><td>5. Carry target</td><td>Wool on the floor to the destination, a lamp on it, distance in the task line.</td><td class="size">medium</td><td>none</td></tr>
+          <tr><td>6. Lost help</td><td>The 1 minute repeat, the 2 minute lamp and bell, the information desk bell.</td><td class="size">medium</td><td>about 6 lines</td></tr>
+          <tr><td>7. Map boards</td><td>"You are here" boards in the atrium and hall with the stops marked.</td><td class="size">medium, later</td><td>none</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Pieces 1 to 4 are phase A. Pieces 5 to 7 are phase F.</p>
+  </section>
+</div>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+
+  /* ---------- 1. the screen ---------- */
+  var scenes = {
+    arrive: { label: "Arriving",
+      today: { dots: "............", bal: "0 / 12 stamps   ·   0 Yes   ·   0 Deviations",
+        hint: "Galleries by the floor line. Grand Hall straight ahead.",
+        cap: "This guide was recorded before your visit. Your ticket is still warm.",
+        verdict: "Nothing says what the ticket is for, or that there is anything to collect." },
+      next: { count: 0, kicker: "Start anywhere", title: "Collect 8 stamps to go home",
+        where: "Nearest stop: Corrections Desk, door on the left", arrow: -55,
+        plain: "This is your trail card. Twelve stamps. Collect eight and the gift shop lets you go home. Each stop has a sign. The sign says what to do.",
+        joke: "Your ticket is still warm.",
+        verdict: "The rule is said once, out loud and on the card, and the first stop is named." } },
+    tea: { label: "Holding the tea",
+      today: { dots: "....P.......", bal: "1 / 12 stamps   ·   2 Yes   ·   1 Deviation",
+        hint: "Carrying Tea tray. Visitor access ends at the staff notices.",
+        cap: "The tea is for the reading balcony. Your name is on tomorrow's rota as well.",
+        verdict: "The hint talks about the room, not the tea. Nothing says where the reading balcony is, or why you would go." },
+      next: { count: 1, kicker: "Tea round · staff only", title: "Carry the tea to the reading balcony",
+        where: "Grand Hall, upstairs · 38 m · follow the wool", arrow: 0,
+        plain: "Carry the tea to the reading balcony. It is upstairs in the Grand Hall. Follow the wool.",
+        joke: "Your name is on tomorrow's rota as well.",
+        verdict: "What, where and how to get there, before the joke. The wool on the floor runs to the balcony and a lamp marks it." } },
+    heater: { label: "Heater unplugged",
+      today: { dots: "....P.....U.", bal: "2 / 12 stamps   ·   2 Yes   ·   2 Deviations",
+        hint: "Visitor access ends at the staff notices.",
+        cap: "That was the heater. The mind moved to wool some years ago. Greg will be cold.",
+        verdict: "A stamp just landed: one letter changed in the corner. The player has no idea they found 1 of 12." },
+      next: { count: 2, kicker: "Optional", title: "Plug Greg back in", where: "The socket is behind you", arrow: 180,
+        plain: "", joke: "That was the heater. The mind moved to wool some years ago. Greg will be cold.",
+        moment: { ink: "Unplugged", sub: "Stamp 2 of 12 · staff only", plain: "You unplugged the building. It was only the heater.", slip: "Deviation noted: Unplugged the heater" },
+        verdict: "Every stamp lands on screen with its name, its number and one plain sentence. A secret reads as a find." } },
+    corridor: { label: "The long corridor",
+      today: { dots: "....P.....U.", bal: "2 / 12 stamps   ·   2 Yes   ·   2 Deviations",
+        hint: "Follow the wool. Read the clauses.",
+        cap: "You are not reading. The corridor can tell.",
+        verdict: "The corridor repeats until 8 frames have been looked at. Nothing says so, and it reads as a bug." },
+      next: { count: 2, kicker: "Nana's record · staff only", title: "Read 8 clauses to reach the end",
+        where: "Stop at a frame and look at it · 2 of 8", arrow: -90,
+        plain: "The corridor ends when you have read eight clauses. Stop at a frame and look at it.",
+        joke: "The corridor can tell.",
+        verdict: "A sign at the door, a counter in the task line, and the frame being read lights its edge." } }
+  };
+  var scene = "tea", mode = "next";
+
+  function fillPips(el, count){
+    el.textContent = "";
+    for (var i = 0; i < 12; i++){
+      var s = document.createElement("i");
+      if (i < count) s.dataset.on = "true";
+      el.appendChild(s);
+      if (i === 7){ var h = document.createElement("em"); h.textContent = "home"; el.appendChild(h); }
+    }
+  }
+  function renderScreen(){
+    var s = scenes[scene], t = s.today, n = s.next, screen = $("screen");
+    screen.dataset.scene = scene; screen.dataset.mode = mode;
+    var isNext = mode === "next";
+    $("hudOld").hidden = isNext; $("hudNew").hidden = !isNext; $("keyHint").hidden = !isNext;
+    var dots = $("oldDots"); dots.textContent = "";
+    t.dots.split("").forEach(function(ch){
+      var c = document.createElement("i"); c.textContent = ch === "." ? "·" : ch; dots.appendChild(c);
+    });
+    $("oldBal").textContent = t.bal; $("oldHint").textContent = t.hint;
+    $("newCount").textContent = n.count + " of 12"; fillPips($("newPips"), n.count);
+    $("taskKicker").textContent = n.kicker; $("taskTitle").textContent = n.title; $("taskWhere").textContent = n.where;
+    $("taskArrow").style.transform = "rotate(" + n.arrow + "deg)";
+    var cap = $("cap"); cap.textContent = "";
+    if (isNext){
+      if (n.plain){ var u = document.createElement("u"); u.textContent = n.plain; cap.appendChild(u); cap.appendChild(document.createTextNode(" ")); }
+      cap.appendChild(document.createTextNode(n.joke));
+    } else { cap.textContent = t.cap; }
+    var m = $("moment"), show = isNext && !!n.moment;
+    m.hidden = !show;
+    if (show){
+      var ink = $("momentInk"); ink.textContent = n.moment.ink;
+      ink.classList.remove("fresh"); void ink.offsetWidth; ink.classList.add("fresh");
+      $("momentSub").textContent = n.moment.sub; $("momentPlain").textContent = n.moment.plain; $("momentSlip").textContent = n.moment.slip;
+    }
+    var tag = $("verdictTag"); tag.dataset.kind = mode; tag.textContent = isNext ? "Proposed" : "Today";
+    $("verdictTxt").textContent = isNext ? n.verdict : t.verdict;
+    Array.prototype.forEach.call($("sceneSeg").children, function(b){ b.setAttribute("aria-pressed", String(b.dataset.scene === scene)); });
+    $("modeToday").setAttribute("aria-pressed", String(!isNext)); $("modeNext").setAttribute("aria-pressed", String(isNext));
+  }
+  Object.keys(scenes).forEach(function(key){
+    var b = document.createElement("button"); b.type = "button"; b.id = "scene-" + key; b.dataset.scene = key; b.textContent = scenes[key].label;
+    b.addEventListener("click", function(){ scene = key; renderScreen(); });
+    $("sceneSeg").appendChild(b);
+  });
+  $("modeToday").addEventListener("click", function(){ mode = "today"; renderScreen(); });
+  $("modeNext").addEventListener("click", function(){ mode = "next"; renderScreen(); });
+
+  /* ---------- 2. the trail card ---------- */
+  var stops = [
+    { name: "Corrections Desk", place: "Chronology gallery", todo: "Hang the five photographs on the hooks.", stamp: "Corrected", state: "open" },
+    { name: "The Meeting", place: "Forum", todo: "Stand on the green disc. Do nothing for 40 seconds.", stamp: "Attended", state: "open" },
+    { name: "The Rematch", place: "Commons", todo: "Step on the green. Spit as far as you can.", stamp: "Spat", state: "open" },
+    { name: "The Queue", place: "Outside Hoof Sciences", todo: "Walk the whole queue. Nobody is in it.", stamp: "Queued", state: "open",
+      then: "Your wait is now part of the collection. The herd is grateful for the loan." },
+    { name: "First Press", place: "Grand Hall", todo: "There is a button and a sign. Decide.", stamp: "Pressed", state: "stamped" },
+    { name: "Hoof Sciences", place: "Hoof lab", todo: "Put the hooves on. Take the picture test.", stamp: "Hoofed", state: "open" },
+    { name: "The Habitat", place: "Habitat", todo: "Feed one Yes through the slot. Then sit in the keeper's chair.", stamp: "Fed, Kept", state: "open" },
+    { name: "Lady Lashes", place: "Hall of the Twelve", todo: "Look her in the eye. Do not look away.", stamp: "Blinked", state: "open" },
+    { name: "The Dome", place: "Dome", todo: "There is nothing to see here. Stay anyway.", stamp: "Stayed", state: "open" },
+    { name: "Tea Round", place: "Staff canteen to reading balcony", todo: "Carry the tea upstairs to the Grand Hall balcony. Follow the wool.", stamp: "Delivered", staff: true, state: "open",
+      then: "Still warm. Your appointment as a Finger has gone through." },
+    { name: "The Heater", place: "Service corridor", todo: "Do not unplug.", stamp: "Unplugged", staff: true, state: "stamped",
+      then: "That was the heater. The mind moved to wool some years ago. Greg will be cold." },
+    { name: "Nana's Record", place: "Contract corridor", todo: "Read eight clauses. Then sit in the reading chair.", stamp: "Read", staff: true, state: "sealed",
+      then: "You read it." }
+  ];
+  var sel = 9, fresh = -1;
+  function count(){ return stops.filter(function(s){ return s.state === "stamped"; }).length; }
+  function renderCard(){
+    var list = $("boxes"); list.textContent = "";
+    stops.forEach(function(s, i){
+      var li = document.createElement("li"), b = document.createElement("button");
+      b.type = "button"; b.className = "box"; b.id = "stop-" + (i + 1); b.dataset.state = s.state; b.dataset.sel = String(i === sel);
+      b.setAttribute("aria-pressed", String(s.state === "stamped"));
+      var sealed = s.state === "sealed";
+      var n = document.createElement("span"); n.className = "n"; n.textContent = (i < 9 ? "0" : "") + (i + 1) + (s.staff ? " · staff" : "");
+      var nm = document.createElement("span"); nm.className = "nm"; nm.textContent = sealed ? "Staff only" : s.name;
+      var pl = document.createElement("span"); pl.className = "pl"; pl.textContent = sealed ? "Please do not collect" : s.place;
+      b.appendChild(n); b.appendChild(nm); b.appendChild(pl);
+      if (s.state === "stamped"){
+        var ink = document.createElement("span"); ink.className = "ink" + (i === fresh ? " fresh" : ""); ink.textContent = s.stamp;
+        ink.style.setProperty("--r", (-9 + (i * 37) % 13) + "deg"); b.appendChild(ink);
+      }
+      b.addEventListener("click", function(){
+        s.state = s.state === "sealed" ? "open" : s.state === "open" ? "stamped" : "open";
+        fresh = s.state === "stamped" ? i : -1; sel = i; renderCard();
+        var again = $("stop-" + (i + 1)); if (again) again.focus();
+      });
+      li.appendChild(b); list.appendChild(li);
+    });
+    var c = count(); fillPips($("cardPips"), c);
+    $("meterText").textContent = c >= 12 ? "12 of 12. Gary has initialled the margin."
+      : c >= 8 ? c + " of 12. The exit is on sale at the gift shop."
+      : c + " of 12. " + (8 - c) + " more and you may go home.";
+    var s = stops[sel], d = $("detail"); d.textContent = "";
+    var h = document.createElement("h3"); h.textContent = s.state === "sealed" ? "Staff only" : s.name; d.appendChild(h);
+    var st = document.createElement("span"); st.className = "state";
+    st.textContent = s.state === "sealed" ? "Sealed until the player finds the staff wing." : s.state === "stamped" ? "Stamped: " + s.stamp + "." : (s.staff ? "Found. Not stamped yet." : "Open. Not stamped yet.");
+    d.appendChild(st);
+    var dl = document.createElement("dl");
+    function row(k, v){ var dt = document.createElement("dt"); dt.textContent = k; var dd = document.createElement("dd"); dd.textContent = v; dl.appendChild(dt); dl.appendChild(dd); }
+    if (s.state === "sealed"){
+      row("The card says", "Staff only. Please do not collect.");
+      row("Why show it at all", "Three sealed boxes tell the player there is more behind the staff doors, without saying what.");
+    } else {
+      row("Where", s.place); row("Do", s.todo);
+      if (s.then) row("Narrator, after the stamp", s.then);
+    }
+    d.appendChild(dl);
+  }
+  $("flip").addEventListener("click", function(){
+    var back = $("back"), showBack = back.hidden;
+    back.hidden = !showBack; $("front").hidden = showBack;
+    this.setAttribute("aria-pressed", String(showBack)); this.textContent = showBack ? "Back to the stamps" : "Turn the card over";
+  });
+
+  /* ---------- 3. the help ladder ---------- */
+  var steps = [
+    { label: "0:00 picked up", sees: "The task line: Carry the tea to the reading balcony. Grand Hall, upstairs. The wool on the floor starts glowing toward the stairs.",
+      hears: "\"Carry the tea to the reading balcony. It is upstairs in the Grand Hall. Follow the wool.\" Then the joke about the rota." },
+    { label: "1:00 no progress", sees: "The task line pulses once. Nothing else moves.",
+      hears: "\"The reading balcony is upstairs in the Grand Hall. The wool goes there.\" Said once, never again." },
+    { label: "2:00 still lost", sees: "A lamp starts blinking on the balcony docket. The task line shows the distance and an arrow.",
+      hears: "A desk bell from the direction of the balcony. No words." },
+    { label: "Rings the desk bell", sees: "The trail card opens on the nearest box that is not stamped.",
+      hears: "\"Your nearest stamp is the Rematch green. Through the door on your left.\" Ring again and it says how to do it." }
+  ];
+  var step = 0;
+  function renderLadder(){
+    $("ladSees").textContent = steps[step].sees; $("ladHears").textContent = steps[step].hears;
+    Array.prototype.forEach.call($("ladderSeg").children, function(b, i){ b.setAttribute("aria-pressed", String(i === step)); });
+  }
+  steps.forEach(function(s, i){
+    var b = document.createElement("button"); b.type = "button"; b.id = "ladder-" + i; b.textContent = s.label;
+    b.addEventListener("click", function(){ step = i; renderLadder(); });
+    $("ladderSeg").appendChild(b);
+  });
+
+  /* ---------- 4. hoof captcha ---------- */
+  var pics = [
+    { e: "🦙", n: "llama", ok: true }, { e: "🐑", n: "sheep" }, { e: "🚦", n: "traffic light" },
+    { e: "🐫", n: "camel" }, { e: "🦙", n: "llama", ok: true }, { e: "🦙", n: "alpaca" },
+    { e: "🚲", n: "bicycle" }, { e: "🦙", n: "llama", ok: true }, { e: "🐐", n: "goat" }
+  ];
+  var order = [0, 1, 2, 3, 4, 5, 6, 7, 8], picked = {}, hooves = true, fails = 0, solved = false;
+  function shuffle(){
+    for (var i = order.length - 1; i > 0; i--){ var j = Math.floor(Math.random() * (i + 1)), t = order[i]; order[i] = order[j]; order[j] = t; }
+  }
+  function renderGrid(){
+    var grid = $("grid"); grid.textContent = "";
+    order.forEach(function(pi, pos){
+      var p = pics[pi], b = document.createElement("button");
+      b.type = "button"; b.className = "tile"; b.id = "tile-" + pos;
+      b.setAttribute("aria-pressed", String(!!picked[pos])); b.setAttribute("aria-label", p.n);
+      var pic = document.createElement("span"); pic.className = "pic"; pic.textContent = p.e; pic.setAttribute("aria-hidden", "true");
+      var lab = document.createElement("span"); lab.className = "lab"; lab.textContent = p.n;
+      b.appendChild(pic); b.appendChild(lab); grid.appendChild(b);
+    });
+    $("hoofOn").setAttribute("aria-pressed", String(hooves)); $("hoofOff").setAttribute("aria-pressed", String(!hooves));
+    if (!hooves || solved) $("hoofRing").hidden = true;
+  }
+  function pitch(){
+    var tiles = $("grid").children;
+    return tiles[1].getBoundingClientRect().left - tiles[0].getBoundingClientRect().left;
+  }
+  function footprint(x, y){
+    var tiles = $("grid").children, radius = pitch() * 1.2, hit = [];
+    for (var i = 0; i < tiles.length; i++){
+      var r = tiles[i].getBoundingClientRect(), dx = x - (r.left + r.width / 2), dy = y - (r.top + r.height / 2);
+      if (dx * dx + dy * dy <= radius * radius) hit.push(i);
+    }
+    return hit;
+  }
+  function applyHit(hit, focusPos){
+    hit.forEach(function(i){ if (picked[i]) delete picked[i]; else picked[i] = true; });
+    $("capMsg").textContent = !hooves ? "" : hit.length === 1 ? "Your hoof marked 1 square." : "Your hoof marked " + hit.length + " squares.";
+    renderGrid();
+    if (focusPos >= 0){ var again = $("tile-" + focusPos); if (again) again.focus({ preventScroll: true }); }
+  }
+  $("gridbox").addEventListener("click", function(ev){
+    if (solved) return;
+    var tile = ev.target.closest ? ev.target.closest(".tile") : null;
+    var pos = tile ? Number(tile.id.slice(5)) : -1;
+    if (!hooves){ if (pos >= 0) applyHit([pos], pos); return; }
+    var x = ev.clientX, y = ev.clientY;
+    if (!ev.detail && tile){ var r = tile.getBoundingClientRect(); x = r.left + r.width / 2; y = r.top + r.height / 2; }
+    var hit = footprint(x, y);
+    if (hit.length) applyHit(hit, pos);
+  });
+  $("gridbox").addEventListener("pointermove", function(ev){
+    var ring = $("hoofRing");
+    if (!hooves || solved || ev.pointerType === "touch"){ ring.hidden = true; return; }
+    var b = this.getBoundingClientRect(), d = pitch() * 2.4;
+    ring.style.width = d + "px"; ring.style.height = d + "px";
+    ring.style.left = (ev.clientX - b.left) + "px"; ring.style.top = (ev.clientY - b.top) + "px"; ring.hidden = false;
+  });
+  $("gridbox").addEventListener("pointerleave", function(){ $("hoofRing").hidden = true; });
+  function startLine(){ return hooves ? "Select every square with a llama. Take your time." : "There. Fingers. Try it now."; }
+  function verify(){
+    var right = true, alpaca = false;
+    order.forEach(function(pi, pos){
+      if (!!pics[pi].ok !== !!picked[pos]) right = false;
+      if (pics[pi].n === "alpaca" && picked[pos]) alpaca = true;
+    });
+    if (right){
+      solved = true; $("verify").textContent = "Again"; renderGrid();
+      $("capMsg").textContent = hooves ? "Verified: llama. Deviation noted." : "Verified: human. Stamp: HOOFED.";
+      $("hoofSayText").textContent = hooves ? "Off the edge of the board. The herd has made a note about the board." : "And that is what you are for. You are very good at it.";
+      return;
+    }
+    fails++; picked = {}; shuffle(); renderGrid();
+    $("capMsg").textContent = "Please try again. New pictures.";
+    $("hoofSayText").textContent = alpaca ? "That one is an alpaca. The exhibit asks you not to raise it."
+      : !hooves ? "Take your time. You have the right equipment."
+      : fails === 1 ? "Nearly. Not really. Again."
+      : fails === 2 ? "The circle is your hoof. It is wider than a square. Now you see the difficulty."
+      : "Take the hooves off. One finger. One square at a time.";
+  }
+  $("verify").addEventListener("click", function(){
+    if (!solved){ verify(); return; }
+    solved = false; fails = 0; picked = {}; shuffle(); this.textContent = "Verify";
+    $("capMsg").textContent = ""; $("hoofSayText").textContent = startLine(); renderGrid();
+  });
+  $("hoofOn").addEventListener("click", function(){ hooves = true; if (!solved) $("hoofSayText").textContent = startLine(); renderGrid(); });
+  $("hoofOff").addEventListener("click", function(){ hooves = false; if (!solved) $("hoofSayText").textContent = startLine(); $("capMsg").textContent = ""; renderGrid(); });
+
+  /* ---------- 5. first press ---------- */
+  var fpSteps = [
+    { sign: "Do not press", room: "The founding button, under glass with a hand hole. The register shows every press from your run.",
+      task: "First Press · there is a sign", say: "Please do not press the exhibit." },
+    { sign: "Do not press", room: "A stamp lands on screen: PRESSED, 1 of 12.",
+      task: "Stamped. The button is still there.", say: "Thank you for pressing the exhibit." },
+    { sign: "Please respect the rope", room: "A rope goes up around the plinth. One post is loose and can be carried off.",
+      task: "Jump the rope, or carry a post away", say: "There is now a rope around the notice. The notice itself remains quite accessible." },
+    { sign: "On loan", room: "You are held for two seconds while the plinth sinks into the floor in front of you. A loan card rises with four places on it. Somewhere, a button starts ticking.",
+      task: "Find the button · 0 of 4 · follow the ticking", say: "The exhibit has been moved for its safety. Please do not look for it." },
+    { sign: "On loan · 1 of 4", room: "Found on the east mezzanine, under a brass lamp. The card ticks off one place. It slips away when you look elsewhere.",
+      task: "Find the button · 1 of 4", say: "The mezzanine was intended to give you a different view of the button. This arrangement is more literal." },
+    { sign: "On loan · 2 of 4", room: "Found behind a banner in the hall.",
+      task: "Find the button · 2 of 4", say: "There it is. It has been enjoying the change of scene." },
+    { sign: "On loan · 3 of 4", room: "Found on a gift shop shelf, wearing a price tag.",
+      task: "Find the button · 3 of 4", say: "The switch has acquired a price tag. The tag is on loan from the shop." },
+    { sign: "Do press", room: "Found beside the dome door, 4 of 4. The label turns over: DO PRESS. Believed voluntary.",
+      task: "Do not press · stand by it for 10 seconds", say: "The notice now asks you to press. It has waited a long time to try this.", wait: true },
+    { sign: "I agree to stop", room: "A small switch appears on the button itself, right where you are standing.",
+      task: "Press the small switch to close the display", say: "You have left the button alone. The register has drawn its own conclusions.", pressLabel: "Press the small switch" },
+    { sign: "Sealed by the visitor", room: "Glass is fitted over the First Press, back on its plinth. The ledger gets a second line.",
+      task: "First Press: closed", say: "The glass has been fitted. Your last press is in there with the others.", end: true }
+  ];
+  var fpAt = 0, fpPress = 0, fpNote = "";
+  function renderFp(){
+    var s = fpSteps[fpAt];
+    $("fpSign").textContent = s.sign; $("fpRoom").textContent = s.room; $("fpTask").textContent = s.task; $("fpSay").textContent = fpNote || s.say;
+    $("fpReg").textContent = "REGISTER   " + (48211 + fpPress).toLocaleString("en-US");
+    $("fpCount").textContent = fpPress + (fpPress === 1 ? " press" : " presses") + " at the Expo";
+    $("fpPressBtn").textContent = s.end ? "Start again" : (s.pressLabel || "Press it");
+    $("fpKeepBtn").hidden = !!s.end;
+  }
+  $("fpPressBtn").addEventListener("click", function(){
+    var s = fpSteps[fpAt]; fpNote = "";
+    if (s.end){ fpAt = 0; fpPress = 0; renderFp(); return; }
+    if (s.wait){ fpNote = "DO PRESS. Register unchanged. (Pressing does nothing now. Keep your hands off.)"; renderFp(); return; }
+    fpPress++; fpAt++; renderFp();
+  });
+  $("fpKeepBtn").addEventListener("click", function(){
+    var s = fpSteps[fpAt];
+    if (s.wait){ fpNote = ""; fpAt++; renderFp(); return; }
+    fpNote = fpAt === 0 ? "Walk away now and the ledger books a Yes: Left the First Press untouched. It will still be here."
+      : "It waits. So does the register.";
+    renderFp();
+  });
+  function pressDots(el, total, events){
+    el.textContent = "";
+    for (var i = 1; i <= total; i++){ var d = document.createElement("i"); if (events.indexOf(i) >= 0) d.dataset.k = "event"; el.appendChild(d); }
+  }
+  pressDots($("fpToday"), 25, [1, 5, 10, 12, 25]); pressDots($("fpNext"), 8, [1, 2, 3, 4, 5, 6, 7, 8]);
+
+  renderScreen(); renderCard(); renderLadder(); renderGrid(); renderFp();
+})();
+</script>
