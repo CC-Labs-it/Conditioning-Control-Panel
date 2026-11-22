@@ -15,10 +15,11 @@ namespace ConditioningControlPanel.Services.Tc;
 /// a subscriber gets the full game, a free account the small one (<see cref="TcRules"/>), so the tile
 /// is never locked. Every page frame passes <see cref="TcFrameGate"/> first. Hard exits (panic, the
 /// title-bar X, a dead page, the watchdog) go through <see cref="Close"/>; the page's own exit ends on
-/// its <c>exit-done</c> or at 800 ms. Pictures, toys, the medal, save carry and the Expo are later slices:
-/// their caps go out off and their frames are only logged.
+/// its <c>exit-done</c> or at 800 ms. Scrolller pictures and the Sparkles medal live in
+/// <c>TcHostService.Media.cs</c>; toys, save carry and the Expo are later slices: their caps go out off
+/// and their frames are only logged.
 /// </summary>
-internal static class TcHostService
+internal static partial class TcHostService
 {
     /// <summary>Launcher id, panic registry id and shortcut icon name.</summary>
     public const string GameId = "tc";
@@ -166,6 +167,7 @@ internal static class TcHostService
                 // Panic wins: the page stops audio and fx on this frame if it gets it before the window goes.
                 try { h.Post(TcHostRules.Suspend(true, TcHostRules.ReasonPanic)); } catch (Exception ex) { Diag.Swallowed(ex); }
                 try { if (h.Window != null) h.Window.Activated -= OnWindowActivated; } catch (Exception ex) { Diag.Swallowed(ex); }
+                DisposePictures();
                 try { h.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
                 App.Logger?.Information("TcHostService: closed");
             }
@@ -193,7 +195,8 @@ internal static class TcHostService
             var s = App.Settings?.Current;
             var caps = TcRules.Caps(_edition, saveSlot: false);
             var init = TcHostRules.InitFrame(Localization.LocalizationManager.Instance.CurrentLanguage,
-                s?.MotionLevel ?? Models.MotionLevel.Full, Safety.GentleVisuals.On, App.Mods?.ActiveModId, caps);
+                s?.MotionLevel ?? Models.MotionLevel.Full, Safety.GentleVisuals.On, App.Mods?.ActiveModId, caps,
+                picturesOn: PicturesOnNow, sparkles: App.Sparkles != null && !string.IsNullOrEmpty(App.UnifiedUserId));
             _host?.Post(init);
         }
         catch (Exception ex) { App.Logger?.Warning("Tc: init post failed: {E}", ex.Message); }
@@ -234,6 +237,15 @@ internal static class TcHostService
                 case "nudge":
                     // Desktop: every nudge is the tier compare card (Contract v2).
                     RunOnUi(OpenTierCard);
+                    break;
+                case "set-setting":
+                    RunOnUi(() => OnPictureSetting(f));
+                    break;
+                case "scrolller-niches":
+                    RunOnUi(() => OnPictureNiches(f));
+                    break;
+                case "fuzz-ended":
+                    OnRunEnded(f);
                     break;
                 default:
                     App.Logger?.Debug("Tc: {Type} not handled by this build yet", f.Type);
