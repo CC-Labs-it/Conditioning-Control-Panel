@@ -55,52 +55,39 @@ test('the save-sleep rule: something asleep, once per save, small only', () => {
   assert.equal(saveSleepDue(owning, small), true);
 });
 
-/* A tiny DOM, enough for the note. */
-function fakeDoc() {
-  const byId = new Map();
-  const el = (tag) => {
-    const e = { tag, children: [], listeners: {}, attrs: {}, className: '', textContent: '', parent: null,
-      set id(v) { this._id = v; byId.set(v, this); }, get id() { return this._id; },
-      setAttribute(k, v) { this.attrs[k] = v; }, append(...xs) { for (const x of xs) this.appendChild(x); },
-      appendChild(x) { x.parent = this; this.children.push(x); return x; },
-      addEventListener(t, f) { (this.listeners[t] ||= []).push(f); },
-      remove() { if (this.parent) this.parent.children = this.parent.children.filter((c) => c !== this); if (this._id) byId.delete(this._id); },
-      click() { for (const f of this.listeners.click || []) f({}); } };
-    return e;
-  };
-  const doc = { createElement: el, getElementById: (id) => byId.get(id) || null, head: el('head'), body: el('body') };
-  return doc;
+/* The game's card queue, as far as the note uses it. */
+function fakeCards() {
+  const shown = [];
+  return { shown, open(spec) { const h = { closed: false, close() { h.closed = true; } }; shown.push({ spec, h }); return h; } };
 }
-const buttonsOf = (note) => note.children.find((c) => c.className === 'row').children;
+const press = (card, i) => { const b = card.spec.buttons[i]; if (!b.keepOpen) card.h.close(); b.onPress?.(); };
 
-test('the note: once, never a backdrop, its nudge only from a real press, still under Gentle', () => {
-  const doc = fakeDoc(), sent = [], saves = [];
+test('the note: once, on the card queue in the corner, its nudge only from a real press', () => {
+  const cards = fakeCards(), sent = [], saves = [];
   let active = false;
   const win = { navigator: { userActivation: { get isActive() { return active; } } } };
   const extras = {};
-  const close = mountSaveSleep({ doc, win, extras, ed: small, send: (t, f) => sent.push([t, f]), gentle: () => true, save: () => saves.push(1) });
-  const note = doc.getElementById('save-sleep');
-  assert.ok(note, 'mounted');
+  const close = mountSaveSleep({ cards, win, extras, ed: small, send: (t, f) => sent.push([t, f]), save: () => saves.push(1) });
+  assert.equal(cards.shown.length, 1, 'mounted');
+  const [note] = cards.shown;
   assert.equal(extras.sleepSeen, 1, 'remembered in the save extras');
   assert.equal(saves.length, 1, 'and saved');
-  assert.equal(note.className, '', 'no motion under Gentle');
-  assert.equal(note.attrs.role, 'status', 'a status note, not a modal dialog');
-  const [go] = buttonsOf(note);
-  assert.equal(go.textContent, SAVE_SLEEP_COPY.nudge);
+  assert.equal(note.spec.corner, true, 'a corner card: no backdrop, play goes on');
+  assert.equal(note.spec.title, SAVE_SLEEP_COPY.title);
+  assert.equal(note.spec.body, SAVE_SLEEP_COPY.body);
+  assert.deepEqual(note.spec.buttons.map((x) => x.label), [SAVE_SLEEP_COPY.nudge, SAVE_SLEEP_COPY.dismiss]);
   /* A script click carries no activation: no frame. */
-  go.click();
+  press(note, 0);
   assert.deepEqual(sent, []);
-  assert.equal(doc.getElementById('save-sleep'), null, 'the note closes either way');
+  assert.equal(note.h.closed, true, 'the note closes either way');
   close();
   /* Once per save: a second mount on the same extras does nothing. */
-  mountSaveSleep({ doc, win, extras, ed: small, send: () => sent.push(1) });
-  assert.equal(doc.getElementById('save-sleep'), null);
+  mountSaveSleep({ cards, win, extras, ed: small, send: () => sent.push(1) });
+  assert.equal(cards.shown.length, 1);
   /* A real press sends the fixed frame. */
-  const extras2 = {};
-  mountSaveSleep({ doc, win, extras: extras2, ed: small, send: (t, f) => sent.push([t, f]) });
-  assert.equal(doc.getElementById('save-sleep').className, 'fade', 'a plain fade with Gentle and reduced motion off');
+  mountSaveSleep({ cards, win, extras: {}, ed: small, send: (t, f) => sent.push([t, f]) });
   active = true;
-  buttonsOf(doc.getElementById('save-sleep'))[0].click();
+  press(cards.shown[1], 0);
   assert.deepEqual(sent, [['nudge', { where: 'save-sleep', want: 'account' }]]);
 });
 

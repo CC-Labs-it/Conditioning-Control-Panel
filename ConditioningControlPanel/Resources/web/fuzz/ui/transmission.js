@@ -13,6 +13,7 @@
  * Gentle and reduced motion: nothing here moves; the bar only changes width. Pure rules first, so tests need no page. */
 
 import { transmissionKind, sendNudge, editionState, expoAllowed, expoMb, isSmall } from './edition.js';
+import { TRANSMISSION_MIN_RUN_MS, LLAMA8_GAP_MS } from '../data/editions.js';
 
 /** APPROVED AND FROZEN (owner 2026-11-22, handoff-1122/TC-EDITIONS-PLAN.md, third dialog, point 5). Character for
  *  character: never edit one of these without the owner. `{mb}` is the host's number (ui/edition.js expoMb). */
@@ -31,6 +32,7 @@ export const TRANSMISSION_COPY = Object.freeze({
 export const TRANSMISSION_PLACEHOLDERS = Object.freeze({
   progress: '[PLACEHOLDER S6-progress] Receiving: {pct}%',
   arrived: '[PLACEHOLDER S6-arrived] Transmission received.',
+  arrivedClose: '[PLACEHOLDER S6-arrived-close] Close',
   offline: '[PLACEHOLDER S6-failed-offline] No connection. It can try again later.',
   disk: '[PLACEHOLDER S6-failed-disk] Not enough room on the disk.',
   refused: '[PLACEHOLDER S6-failed-refused] The transmission was refused. It can try again later.',
@@ -122,6 +124,17 @@ export const penSignDue = ({ llamas, extras, open = false, state = 'offer', ed =
 /** The llama-8 card: small only, once per save (extras.llama8Seen). */
 export const llama8Due = (llamas, extras, ed = editionState()) => isSmall(ed) && Number(llamas) >= LLAMA8_AT && !extras?.llama8Seen;
 
+/** Which card opens by itself now, if any: 'transmission', 'llama8' or null. clock: the run clock (ms played).
+ *  opened: this run's self-opened cards, { transmission, llama8 } = the clock each opened at, or null. Nothing before
+ *  TRANSMISSION_MIN_RUN_MS; the transmission card first; one per run, unless LLAMA8_GAP_MS more play has passed. */
+export function autoCardDue({ clock, llamas, extras, opened = {}, ed = editionState() }) {
+  if (!(Number(clock) >= TRANSMISSION_MIN_RUN_MS)) return null;
+  const t = opened.transmission ?? null, l = opened.llama8 ?? null;
+  if (t == null && l == null && autoOfferDue(llamas, extras, ed)) return 'transmission';
+  if (l != null || !llama8Due(llamas, extras, ed)) return null;
+  return t == null || clock >= t + LLAMA8_GAP_MS ? 'llama8' : null;
+}
+
 /** A real press: the browser's own transient activation, which a script-made click does not carry. */
 const realPress = (win) => () => !!win?.navigator?.userActivation?.isActive;
 
@@ -139,19 +152,31 @@ const CSS = `
 let host = null;   // the live page's transmission, for the wormhole
 
 /** Mounts the transmission for this run: the first offer, the pen sign, the llama-8 card and the host frames.
- *  cards: ui.cards. on/send: the bridge. pen: the llama pen's element (the sign sits beside it). Answers { open, close }. */
-export function mountTransmission({ doc = document, win = doc.defaultView, cards, on = () => () => {}, send = () => {}, llamas = 0, extras = {}, save = () => {}, pen = null }) {
+ *  cards: ui.cards. on/send: the bridge. pen: the llama pen's element (the sign sits beside it). llamas: the herd, a
+ *  number or a function (it may grow mid-run). clock: the run clock in ms (autoCardDue). Answers { open, close, tick }. */
+export function mountTransmission({ doc = document, win = doc.defaultView, cards, on = () => () => {}, send = () => {}, llamas = 0, clock = () => 0, extras = {}, save = () => {}, pen = null }) {
   host?.close();
   host = null;
   if (!doc.getElementById('tx-css')) { const st = doc.createElement('style'); st.id = 'tx-css'; st.textContent = CSS; doc.head.appendChild(st); }
-  const kind = transmissionKind(llamas);
+  const herd = typeof llamas === 'function' ? llamas : () => llamas;
   const inPress = realPress(win);
   const offs = [];
-  let tx = kind ? createTransmission({ kind, send, inPress }) : null;
-  let card = null, sign = null, waiters = [];
+  let kind = null, tx = null, card = null, sign = null, waiters = [];
+  const opened = { transmission: null, llama8: null };   // this run's self-opened cards, by run clock
+  /* The herd may reach the count mid-run: the transmission is made the first time it calls for a kind. */
+  const ensureTx = () => {
+    if (tx) return tx;
+    kind = transmissionKind(herd());
+    if (!kind) return null;
+    tx = createTransmission({ kind, send, inPress });
+    offs.push(on('expo-progress', (f) => tx.progress(f?.pct)));
+    offs.push(on('expo-ready', () => { if (expoAllowed()) { tx.ready(); drawSign(); } }));
+    offs.push(on('expo-failed', (f) => tx.failed(f?.reason)));
+    return tx;
+  };
 
   const drawSign = () => {
-    const due = tx && penSignDue({ llamas, extras, open: !!card, state: tx.view.state });
+    const due = tx && penSignDue({ llamas: herd(), extras, open: !!card, state: tx.view.state });
     if (due && !sign && pen?.isConnected) {
       sign = doc.createElement('button');
       sign.id = 'llama-sign'; sign.type = 'button'; sign.textContent = TRANSMISSION_PLACEHOLDERS.penSign;
@@ -174,7 +199,7 @@ export function mountTransmission({ doc = document, win = doc.defaultView, cards
     const bar = el('div', 'tx-bar'); const fill = doc.createElement('i'); bar.appendChild(fill);
     const stop = el('button', 'tx-stop', TRANSMISSION_PLACEHOLDERS.stop); stop.type = 'button';
     stop.addEventListener('click', () => tx.stop());
-    let yesBtn = null;
+    let yesBtn = null, shutBtn = null;
     const paint = (s = tx.view) => {
       status.textContent = statusLine(s);
       status.hidden = !status.textContent;
@@ -182,6 +207,7 @@ export function mountTransmission({ doc = document, win = doc.defaultView, cards
       fill.style.width = `${s.pct}%`;
       stop.hidden = s.state !== 'fetching';
       if (yesBtn) yesBtn.hidden = s.state === 'fetching' || s.state === 'arrived';
+      if (shutBtn) shutBtn.textContent = s.state === 'arrived' ? TRANSMISSION_PLACEHOLDERS.arrivedClose : w.notNow;
     };
     card = cards.open({
       className: 'tx-card', title: w.title, body: w.body, node, front,
@@ -189,7 +215,7 @@ export function mountTransmission({ doc = document, win = doc.defaultView, cards
         { label: w.yes, keepOpen: true, onPress: () => { if (tx.yes() && kind === 'nudge') card?.close(); } },
         { label: w.notNow },
       ],
-      onOpen: (dom) => { yesBtn = dom.querySelector('.card-buttons button'); paint(v); },
+      onOpen: (dom) => { const row = dom.querySelectorAll?.('.card-buttons button') || []; yesBtn = row[0] || dom.querySelector('.card-buttons button'); shutBtn = row[1] || null; paint(v); },
       onClose: () => { off(); card = null; drawSign(); const ws = waiters; waiters = []; for (const fn of ws) fn(expoAllowed()); },
     });
     const off = tx.onChange((s) => {
@@ -200,15 +226,7 @@ export function mountTransmission({ doc = document, win = doc.defaultView, cards
     return card;
   }
 
-  if (tx) {
-    offs.push(on('expo-progress', (f) => tx.progress(f?.pct)));
-    offs.push(on('expo-ready', () => { if (expoAllowed()) { tx.ready(); drawSign(); } }));
-    offs.push(on('expo-failed', (f) => tx.failed(f?.reason)));
-    if (autoOfferDue(llamas, extras)) { extras.transmissionSeen = 1; save(); open(); }
-    else drawSign();
-  }
-  if (llama8Due(llamas, extras)) {
-    extras.llama8Seen = 1; save();
+  function openLlama8() {
     const P = TRANSMISSION_PLACEHOLDERS;
     cards.open({
       title: P.llama8Title, body: P.llama8Body,
@@ -218,13 +236,27 @@ export function mountTransmission({ doc = document, win = doc.defaultView, cards
       ],
     });
   }
+  /* Once a second (and at once): a self-opening card when autoCardDue says so, the pen sign otherwise. */
+  const tick = () => {
+    ensureTx();
+    const now = Number(clock()) || 0;
+    const due = autoCardDue({ clock: now, llamas: herd(), extras, opened });
+    if (due === 'transmission') { extras.transmissionSeen = 1; opened.transmission = now; save(); open(); }
+    else if (due === 'llama8') { extras.llama8Seen = 1; opened.llama8 = now; save(); openLlama8(); }
+    drawSign();
+  };
+  tick();
+  const timer = setInterval(tick, 1000);
+  timer?.unref?.();
+  offs.push(() => clearInterval(timer));
 
   const me = {
     open,
+    tick,
     /** The wormhole, Expo absent: the card first. Answers whether the Expo is here when the card closes. */
     atWormhole() {
       if (expoAllowed()) return Promise.resolve(true);
-      if (!tx || kind !== 'fetch') return Promise.resolve(true);   // nothing to fetch here: the door keeps its own refusal
+      if (!ensureTx() || kind !== 'fetch') return Promise.resolve(true);   // nothing to fetch here: the door keeps its own refusal
       return new Promise((resolve) => { waiters.push(resolve); if (!card) open({ front: true }); });
     },
     close() { for (const off of offs) off?.(); card?.close(); sign?.remove(); sign = null; },
