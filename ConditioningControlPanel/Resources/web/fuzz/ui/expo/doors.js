@@ -393,6 +393,7 @@ export function createDoors(scene,walker,ctx,camera,play){
     return visible;
   }
   return {setHardware(asset){hardware=asset;sync();},mount,unmount,tick,pushOut,blocked,debug,registerLeaf,connectVisibleRooms,
+    opening(id){return (id==='crown-shutter'?crown:active.get(id))?.progress??0;},
     holds(id){
       if(crown?.progress>0&&(id==='catwalk'||id==='dome'))return true;
       for(const s of active.values())if(s.progress>0&&s.d.rooms.length===2&&s.d.rooms.includes(id))return true;

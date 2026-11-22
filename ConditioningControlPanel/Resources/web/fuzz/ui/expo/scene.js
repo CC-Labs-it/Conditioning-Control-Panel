@@ -121,7 +121,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     const nativeRatio=Math.min(win.devicePixelRatio || 1,LITE ? 1 : 1.5);
     let pixelRatio=nativeRatio,budgetTime=0,budgetFrames=0;
     renderer.setPixelRatio(pixelRatio);
-    const post = createPost(renderer, LITE); clean.push(() => post.dispose());
+    const post = createPost(renderer); clean.push(() => post.dispose());
     const scene = new THREE.Scene(); scene.background = new THREE.Color('#dbe4de');
     const camera = new THREE.PerspectiveCamera(LITE ? 65 : 58, 1, .08, 140);
     camera.rotation.order = 'YXZ';
@@ -276,7 +276,8 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       go, exit: onExit, farewell, register, assetURL, bindMedia, capturePhoto, finalPhoto, setColliderEnabled:walker.setColliderEnabled,
       lookPoint, holdPressView:()=>controls?.stopMoving(),
       buttonAssembly:buttons.assemblyFor,setButtonAvailable:buttons.setAvailable,registerDoorLeaf:(...args)=>zones?.registerDoorLeaf(...args) });
-    dome = createDomeEffects({ctx,camera,cue:narration.cue,play:sound.play,register,bindMedia,setSoundDepth:sound.setDepth,lite:LITE,visit:exhibits.state,finish:exhibits.endVisit});
+    dome = createDomeEffects({ctx,camera,cue:narration.cue,play:sound.play,register,bindMedia,setSoundDepth:sound.setDepth,lite:LITE,
+      visit:exhibits.state,finish:exhibits.endVisit,doorOpening:id=>zones?.doorOpening(id)??0});
     const guests=createGuestCollection(assetURL);
     const collection=createCollection({assetURL,walker,register,
       onLabel:(mesh,label)=>narration.registerPlaque(mesh,guestInscription(mesh,label)),
