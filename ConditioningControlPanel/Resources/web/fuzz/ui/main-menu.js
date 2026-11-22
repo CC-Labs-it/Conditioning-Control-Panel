@@ -11,6 +11,9 @@ import { menuKey } from './menu-model.js';
 import { BRAND } from '../data/brand.js';
 
 const CSS = `
+/* The game's own faces: ShopRound (styles.css, Fredoka) and RrMono (ui/recap/recap.css, Courier Prime), same files. */
+@font-face { font-family: RrMono; src: url("assets/fonts/courier-prime-700-latin.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+body.mm-on #game-controls { visibility: hidden; pointer-events: none; }   /* lock, Depth badge, audio, Wake Up: not on the menu */
 #main-menu { position: fixed; inset: 0; z-index: 88; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
   padding: 16px; overflow-x: hidden; overflow-y: auto; background: #f7f5ef; color: #1b1a17; user-select: none; -webkit-user-select: none; }
 #main-menu[hidden] { display: none; }
@@ -18,7 +21,7 @@ const CSS = `
 #main-menu .mm-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; justify-items: center; }
 #main-menu .mm-row { --tilt: -1.6deg; --dx: -24px; --fill: #1b1a17; --on: #fff; appearance: none; margin: 0; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
   position: relative; display: flex; align-items: center; gap: 10px; min-height: 43px; padding: 6px 21px; border: 0; border-radius: 999px; background: var(--fill); color: var(--on);
-  font: 600 20px/1.1 "Fredoka", "Arial Rounded MT Bold", "Trebuchet MS", sans-serif; box-shadow: 0 0 0 4px #fff, 2px 5px 0 4px rgba(0, 0, 0, .22); translate: var(--dx) 0; rotate: var(--tilt);
+  font: 600 20px/1.1 ShopRound, "Arial Rounded MT Bold", "Trebuchet MS", sans-serif; box-shadow: 0 0 0 4px #fff, 2px 5px 0 4px rgba(0, 0, 0, .22); translate: var(--dx) 0; rotate: var(--tilt);
   transition: translate .2s cubic-bezier(.2, 1.5, .4, 1), rotate .2s cubic-bezier(.2, 1.5, .4, 1), scale .2s cubic-bezier(.2, 1.5, .4, 1), box-shadow .2s; }
 #main-menu .mm-rows li:nth-child(even) .mm-row { --tilt: 1.4deg; --dx: 24px; }
 #main-menu .mm-rows li:nth-child(4n+2) .mm-row { --fill: #ff4fa8; --on: #2a0a1c; }
@@ -28,12 +31,12 @@ const CSS = `
 #main-menu .mm-row.sel { rotate: 0deg; scale: 1.09; translate: var(--dx) -3px; box-shadow: 0 0 0 4px #fff, 5px 11px 0 4px rgba(0, 0, 0, .18); z-index: 2; }
 #main-menu .mm-row:active { scale: .95; transition-duration: .06s; }
 #main-menu .mm-meta, #main-menu .mm-tag { white-space: nowrap; }
-#main-menu .mm-meta { padding: 1px 8px; border-radius: 99px; background: color-mix(in srgb, var(--on) 16%, transparent); font: 600 12px "Fredoka", "Trebuchet MS", sans-serif; font-variant-numeric: tabular-nums; }
-#main-menu .mm-tag { padding: 2px 7px; border-radius: 4px; background: #fff; color: #a3232b; font: 700 10.5px "Courier Prime", "Courier New", monospace; letter-spacing: .04em; rotate: -3deg; }
+#main-menu .mm-meta { padding: 1px 8px; border-radius: 99px; background: color-mix(in srgb, var(--on) 16%, transparent); font: 600 12px ShopRound, "Trebuchet MS", sans-serif; font-variant-numeric: tabular-nums; }
+#main-menu .mm-tag { padding: 2px 7px; border-radius: 4px; background: #fff; color: #a3232b; font: 700 10.5px RrMono, "Courier New", monospace; letter-spacing: .04em; rotate: -3deg; }
 #main-menu .k-wait .mm-tag { animation: mm-wait 1.3s linear infinite; }
 @keyframes mm-wait { 0%, 55% { opacity: 1; } 56%, 100% { opacity: .15; } }
 #main-menu .mm-rows li .mm-row.k-door { --fill: #b4b0a6; --on: #1b1a17; }
-#main-menu .k-door .mm-tag { color: #444; rotate: 0deg; font: 600 11px "Fredoka", "Trebuchet MS", sans-serif; }
+#main-menu .k-door .mm-tag { color: #444; rotate: 0deg; font: 600 11px ShopRound, "Trebuchet MS", sans-serif; }
 #main-menu .mm-rows li .mm-row.k-ready { --fill: #ffd23f; --on: #1b1a17; }
 #main-menu .mm-rows li .mm-row.k-sealed { min-width: 214px; justify-content: center; background: rgba(247, 245, 239, .78); color: #5c5a52; box-shadow: none; outline: 3px dashed #5c5a52; outline-offset: 1px; }
 #main-menu .mm-rows li .mm-row.k-sealed:focus-visible { outline-color: #d42f86; }
@@ -66,8 +69,9 @@ export function openMainMenu({ doc = document, rows, actions = {}, gentle = () =
   list.className = 'mm-rows';
   root.append(img, list);
   doc.body.appendChild(root);
+  doc.body.classList.add('mm-on');
 
-  let model = [], els = [], sel = 0, open = true;
+  let model = [], els = [], sel = 0, open = true, away = false;   // away: hidden while a visit (the Expo) is up
   let px = -1, py = -1, moved = false;
   const onMove = (e) => { moved = e.clientX !== px || e.clientY !== py; px = e.clientX; py = e.clientY; };
   doc.addEventListener('pointermove', onMove, true);
@@ -93,7 +97,7 @@ export function openMainMenu({ doc = document, rows, actions = {}, gentle = () =
     els[sel]?.classList.add('sel');
   }
   function press(i, ev) {
-    if (!open) return;
+    if (!open || away) return;
     const r = model[i];
     select(i);
     const fn = actions[r?.id];
@@ -108,7 +112,7 @@ export function openMainMenu({ doc = document, rows, actions = {}, gentle = () =
   /* Keys only while nothing sits above the menu (a card, the pause card, the Sticker Book): their own keys win. */
   const above = () => !!doc.querySelector('.backdrop:not([hidden]), #sticker-book:not([hidden]), #renewal-menu:not([hidden])');
   function onKey(e) {
-    if (!open || e.altKey || e.ctrlKey || e.metaKey || above()) return;
+    if (!open || away || e.altKey || e.ctrlKey || e.metaKey || above()) return;
     const n = menuKey(e.key, sel, els.length);
     if (n !== null) { e.preventDefault(); select(n); els[n].focus({ preventScroll: true }); return; }
     if ((e.key === 'Enter' || e.key === ' ') && !e.target?.closest?.('#main-menu button')) { e.preventDefault(); press(sel, e); }
@@ -124,11 +128,21 @@ export function openMainMenu({ doc = document, rows, actions = {}, gentle = () =
     get open() { return open; },
     refresh() { if (open) { draw(); els[sel]?.focus({ preventScroll: true }); } },
     rattle,
+    /** Out of the way for a visit: hidden, the game's controls back (the Expo uses Wake Up and the pause card). */
+    hide() { if (!open) return; away = true; root.hidden = true; doc.body.classList.remove('mm-on'); },
+    /** Back after the visit: the rows asked again, a fade in, the keyboard's place kept. */
+    show() {
+      if (!open) return;
+      away = false; root.hidden = false; doc.body.classList.add('mm-on'); draw();
+      root.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: calm() ? 200 : 260, easing: 'ease-out' });
+      els[sel]?.focus({ preventScroll: true });
+    },
     focus() { els[sel]?.focus({ preventScroll: true }); },
     /** Plain leave: a fade, then the menu is gone. */
     close() {
       if (!open) return Promise.resolve();
       open = false;
+      doc.body.classList.remove('mm-on');
       doc.removeEventListener('keydown', onKey);
       doc.removeEventListener('pointermove', onMove, true);
       const a = root.animate?.([{ opacity: 1 }, { opacity: 0 }], { duration: calm() ? 160 : 200, easing: 'ease-in', fill: 'forwards' });

@@ -81,3 +81,9 @@ test('keys: arrows wrap, Home and End jump, Escape does nothing', () => {
   assert.equal(menuKey('Escape', 2, 5), null);
   assert.equal(menuKey('ArrowDown', 0, 0), null);
 });
+
+test('the ready row reads "Play Llama Expo 2037" whatever the ending is called later', () => {
+  const ready = menuRows({ life: { contract: true, endings: { ll_end: 1 } }, ed: FULL_READY }).at(-1);
+  assert.equal(ready.label, 'Play Llama Expo 2037');
+  assert.equal(MENU_REUSED.playExpo, 'Play Llama Expo 2037');
+});
