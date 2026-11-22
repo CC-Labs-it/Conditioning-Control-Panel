@@ -3224,9 +3224,10 @@ namespace ConditioningControlPanel
 
                     // A takeover goes where the app's content goes ("Show content on", the screen
                     // the main video copy uses), not wherever the panel happens to sit (#1649).
-                    // One screen only: no display clone (#1565). A video the user maximized stays
-                    // on the panel's screen, where they are looking.
-                    var screen = (takeover ? App.GetPrimaryContentScreen() : null)
+                    // One screen only: no display clone (#1565). A video the user maximized goes
+                    // there too (owner 2026-11-22, ccp-bugs #1720): the effects follow the content
+                    // screen, so a hand fullscreen on the panel's screen left them drawing elsewhere.
+                    var screen = App.GetPrimaryContentScreen()
                         ?? System.Windows.Forms.Screen.FromHandle(
                             new System.Windows.Interop.WindowInteropHelper(this).Handle);
                     // Screen bounds are pixels, Left/Top are DIPs (same as the video windows).
