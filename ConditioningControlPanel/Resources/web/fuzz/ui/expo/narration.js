@@ -6,7 +6,7 @@ import { Ray, Vector3 } from 'three';
 import { centre, createProjector, createRestingAtlas } from './projectors.js';
 import { createSpeechSequence } from './speech-sequence.js';
 import { restingSlide, slideIndex } from './slide-program.js';
-import { createArchiveStory } from './archive-story.js';
+import { createArchiveStory, RAIL_RECORD } from './archive-story.js';
 import { archiveDisplays } from './archive-displays.js';
 import { createReadingCard } from './reading-card.js';
 import { captionPages, captionAt } from './caption-pages.js';
@@ -47,10 +47,11 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
   const load=fetch(assetURL('narration/manifest.json'),{signal:abort.signal}).then(async r=>{
     if(!r.ok)throw new Error('Expo narration manifest HTTP '+r.status);
     const rows=await r.json();for(const row of [...rows,...renewalLines,...trailLines])book.set(row.id,row);
-    story=createArchiveStory(rows,ctx.store.get('lastArchiveRecord'),(id,slots)=>{
+    story=createArchiveStory(rows,ctx.store.get('lastArchiveRecord'),(id,slots,first)=>{
       ctx.store.set('archiveScreens',slots);
       ctx.store.set('lastArchiveRecord',id);
-    },ctx.store.get('archiveScreens'));
+      if(first)ctx.store.set('railTalkScreened',true);
+    },ctx.store.get('archiveScreens'),undefined,!!ctx.store.get('railTalkScreened'));
     const index=await fetch(assetURL('narration/resting-index.json'),{signal:abort.signal});
     if(!index.ok)throw Error('Resting atlas index HTTP '+index.status);
     atlas.arrange(await index.json());
@@ -135,7 +136,12 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
   }
   function nearby(entry){
     return (entry.roaming||entry.zone===walker.zone) && (!entry.needed || entry.needed()) &&
-      (!entry.anchor||(entry.projector&&entry.lit&&!exemptRecord(entry.stationId))||camera.position.distanceToSquared(entry.anchor)<=36);
+      (!entry.anchor||(entry.projector&&entry.lit&&holds(entry))||camera.position.distanceToSquared(entry.anchor)<=36);
+  }
+  // The viewing rail holds the visitor for a record. In the Atrium it holds for the Rail talk only: the records the
+  // Atrium's screens play after it can be walked away from.
+  function holds(entry){
+    return !exemptRecord(entry.stationId)&&!(entry.zone==='atrium'&&entry.ticket&&entry.row.id!==RAIL_RECORD);
   }
   function began(entry){
     if(entry.began)return;
@@ -167,7 +173,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     function playing(){
       began(entry);showCaption();entry.lit=true;
       if(entry.projector){
-        if(!exemptRecord(entry.stationId))viewing(entry);
+        if(holds(entry))viewing(entry);
         entry.station?.project?.setActive(true,entry.row.slides[entry.index||0]);
         if(entry.row.slides.length)click(entry);
       }
@@ -192,7 +198,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     };
     entry.onPlaying=()=>{
       if(held||entry!==sequence.current)return;
-      if(entry.lit){if(entry.projector&&!exemptRecord(entry.stationId))viewing(entry);}else playing();
+      if(entry.lit){if(entry.projector&&holds(entry))viewing(entry);}else playing();
     };
     entry.onWait=()=>releaseView(entry);
     if(!h?.el){queueMicrotask(entry.onError);return;}
@@ -232,7 +238,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
   function resume(entry){
     if(!entry.projector||entry.began)caption(entry.channel,entry.kevin?'[Kevin is speaking]':entry.row.subtitle,entry.row.id);
     if(entry.projector){entry.station?.project?.setPaused(false);entry.station?.project?.setActive(!!entry.lit,entry.row.slides[entry.index||0]);}
-    if(entry.projector&&!entry.row.audio&&!exemptRecord(entry.stationId))viewing(entry);
+    if(entry.projector&&!entry.row.audio&&holds(entry))viewing(entry);
     if(!entry.awaitingSeek)entry.handle?.play();
   }
   function release(entry,ok){
@@ -383,7 +389,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
         const page=captionAt(chunks,spokenProgress);
         if(page!==p.dataset.phrase)p.dataset.phrase=page;
       }
-      const i=slideIndex(e.row,progress);
+      const i=slideIndex(e.row,progress,e.clock);
       const changed=i>=0&&i!==(e.index||0);
       if(changed){
         e.index=i;

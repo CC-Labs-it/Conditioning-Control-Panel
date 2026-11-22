@@ -98,6 +98,16 @@ test('failed playback releases the viewing pen and the caption finishes on its o
   }finally{narration.dispose();}
 });
 test('all eleven lines have a packaged MP3 and a finite caption clock',async()=>{
-  assert.equal(railLines.length,11);assert(railLines.find(r=>r.id==='rail_lore').subtitle.endsWith(railPlate));
-  for(const r of railLines){assert(r.seconds>0&&Number.isFinite(r.seconds));const b=await readFile(new URL('../assets/expo/narration/'+r.audio,import.meta.url));assert(b.length>4000);}
+  // Ten live with The Rail; the talk is archive record 1 in the narration manifest.
+  const manifest=JSON.parse(await readFile(new URL('../assets/expo/narration/manifest.json',import.meta.url),'utf8'));
+  const lore=manifest.find(r=>r.id==='rail_lore');
+  assert.equal(railLines.length,10);assert(!railLines.some(r=>r.id==='rail_lore'));
+  assert.equal(lore.set,'event');assert(lore.subtitle.startsWith('For fifty years, the people who made games'));
+  assert(lore.subtitle.endsWith(railPlate));
+  for(const r of [...railLines,lore]){assert(r.seconds>0&&Number.isFinite(r.seconds));const b=await readFile(new URL('../assets/expo/narration/'+r.audio,import.meta.url));assert(b.length>4000);}
+});
+test('the first game rail rises without a word of the Rail talk',async()=>{
+  const {rail,state,spoken}=rig();state.carry={key:'print-0'};
+  for(let i=0;i<4;i++){rail.tick(.4);await Promise.resolve();}
+  assert(rail.debug().some(r=>r.up));assert(!spoken.includes('rail_lore'));
 });

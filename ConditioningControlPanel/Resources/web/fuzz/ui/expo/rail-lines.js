@@ -1,3 +1,4 @@
+// The Rail talk (rail_lore) is archive record 1 in assets/expo/narration/manifest.json: it plays on the first screen.
 export const railPlate="This is The Rail™. It comes up when you have something to finish, and it goes away when you have finished it. It is orange so that you can see it. Also, Greg likes orange.";
 export const railLines=[
   {
@@ -6,14 +7,6 @@ export const railLines=[
     "subtitle": "Welcome to Llama Expo 2037. The llamas are glad you could make it. There is a great deal to see. You will see all of it. Mind The Rail.",
     "audio": "hall/rail_welcome.mp3",
     "seconds": 11.53,
-    "slides": []
-  },
-  {
-    "id": "rail_lore",
-    "set": "rail",
-    "subtitle": "For fifty years, the people who made games tried to get the people who played them to walk in the right direction. It did not go well. They painted the edge of every climbable ledge yellow. They hung a light over the correct door, and behind it they built a tower tall enough to be seen from anywhere, so that you would at least drift towards it. They drew arrows on the floor, then on the walls, then in the sky. They paid villagers to stand in the road and tell you that you were going the wrong way, and when that failed they gave you a small companion whose whole job was to say the answer out loud after ten seconds. In Skyrim they carved seven thousand steps up a mountain, and you rode a horse sideways up the cliff beside them. The llamas watched all of this. In 2031 they cured ADHD, which took an afternoon, and then they solved the rest with one piece of orange steel. This is The Rail™. It comes up when you have something to finish, and it goes away when you have finished it. It is orange so that you can see it. Also, Greg likes orange.",
-    "audio": "hall/rail_lore.mp3",
-    "seconds": 73.85,
     "slides": []
   },
   {

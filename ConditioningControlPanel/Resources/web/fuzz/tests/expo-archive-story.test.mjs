@@ -21,7 +21,8 @@ test('whichever screen is pressed plays the next record of the story, and a scre
     assert.equal(story.at(from),row);
     assert.equal(story.completed,i+1);
     assert.ok(row.archive.title && row.archive.date && row.archive.body);
-    assert.equal(row.slides.length,3);
+    // A record with cues has one more picture than it has cues; the others keep three.
+    assert.equal(row.slides.length,row.cues?row.cues.length+1:3);
   }
   // Every record has been seen: a screen replays its own last one, and a replay advances nothing.
   const replay=story.request('slot_01');
@@ -64,23 +65,67 @@ test('an older save keeps its place, and a record watched on a retired screen re
   for(let n=1;n<=40;n++)assert.ok(ARCHIVE_SCREENS.includes(screenHome('slot_'+String(n).padStart(2,'0'))),'slot '+n+' has a home');
   assert.equal(screenHome('unknown'),undefined);
   const sites=['slot_05','slot_22','unknown','slot_40'];
+  // These saves were written after the Rail talk became record 1 (they say so).
+  const ours=(record,history)=>createArchiveStory(manifest,record,null,history,undefined,true);
   for(const n of [0,1,12,39,records.length]){
     for(const history of [undefined,sites]){
-      const s=createArchiveStory(manifest,records[n-1]?.id,null,history);
+      const s=ours(records[n-1]?.id,history);
       assert.equal(s.completed,n);
       assert.equal(s.next,records[n]);
       if(n<records.length)assert.ok(ARCHIVE_SCREENS.every(id=>s.canStart(id)));
     }
   }
-  const old=createArchiveStory(manifest,records[3].id,null,sites);
+  const old=ours(records[3].id,sites);
   assert.equal(old.at('slot_05').archive.number,1);
   assert.equal(old.at('slot_01').archive.number,2);
   assert.equal(old.at('slot_14').archive.number,4);
   assert.equal(old.at('slot_22'),undefined);assert.equal(old.at('slot_40'),undefined);
   // With the story complete, only a screen that holds a record can still be pressed.
-  const done=createArchiveStory(manifest,records.at(-1).id,null,sites);
+  const done=ours(records.at(-1).id,sites);
   assert.deepEqual(ARCHIVE_SCREENS.filter(id=>done.canStart(id)).sort(),['slot_01','slot_05','slot_14']);
-  assert.equal(createArchiveStory(manifest,records.at(-1).id).request('slot_01'),null);
+  assert.equal(ours(records.at(-1).id).request('slot_01'),null);
+});
+test('the Rail talk is record 1, required viewing, with four pictures cued from the recording',()=>{
+  const story=createArchiveStory(manifest),rail=story.next;
+  assert.equal(rail.id,'rail_lore');assert.equal(rail.audio,'hall/rail_lore.mp3');assert.equal(rail.seconds,73.85);
+  assert.deepEqual(rail.archive,{number:1,chapter:null,section:'Required viewing',title:'The Rail™',date:'2031',body:rail.subtitle});
+  assert.deepEqual(rail.slides,['slides/rail_a.webp','slides/rail_b.webp','slides/rail_c.webp','slides/rail_d.webp']);
+  assert.deepEqual(rail.cues,[22.7,40.8,48.4]);
+  assert.equal(story.total,manifest.filter(row=>row.set==='event').length);
+  const first=story.request('slot_01');story.start(first);story.finish(first,true);
+  assert.equal(story.next.id,'ev_h0');assert.equal(story.next.archive.number,2);
+  assert.equal(story.at('slot_01'),rail);
+});
+test('an older save with progress on the forty is owed the Rail talk next, then carries on where it was',()=>{
+  const records=manifest.filter(r=>r.set==='event').sort((a,b)=>a.archive.number-b.archive.number);
+  // Written before the Rail talk existed: four records (now 2 to 5) watched on these screens.
+  const sites=['slot_05','slot_22','unknown','slot_14'];let saved;
+  const old=createArchiveStory(manifest,records[4].id,(...args)=>{saved=args;},sites);
+  assert.equal(old.completed,4);assert.equal(old.next.id,'rail_lore');
+  assert.equal(old.at('slot_05').archive.number,2);assert.equal(old.at('slot_01').archive.number,3);
+  assert.equal(old.at('slot_14').archive.number,5);
+  assert.ok(ARCHIVE_SCREENS.every(id=>old.canStart(id)));
+  // A cancelled screening owes it still and writes nothing.
+  old.finish(old.request('slot_17'),false);assert.equal(old.next.id,'rail_lore');assert.equal(saved,undefined);
+  const talk=old.request('slot_17');assert.equal(talk.row.id,'rail_lore');assert.equal(talk.review,false);
+  old.start(talk);assert.equal(old.at('slot_17').id,'rail_lore');old.finish(talk,true);
+  assert.equal(old.completed,5);assert.equal(old.next,records[5]);assert.equal(old.at('slot_17').id,'rail_lore');
+  // Nothing the save held is lost: the same last record, its screens shifted behind the talk, and the flag.
+  assert.deepEqual(saved,[records[4].id,['slot_17','slot_05','slot_01',null,'slot_14'],true]);
+  const again=createArchiveStory(manifest,saved[0],null,saved[1],undefined,saved[2]);
+  assert.equal(again.completed,5);assert.equal(again.next,records[5]);
+  assert.equal(again.at('slot_17').id,'rail_lore');assert.equal(again.at('slot_14').archive.number,5);
+  // A complete older save gets the talk too, and is complete after it.
+  const done=createArchiveStory(manifest,records.at(-1).id,null,[]);
+  assert.equal(done.completed,records.length-1);assert.equal(done.next.id,'rail_lore');
+  const last=done.request('slot_02');done.start(last);done.finish(last,true);
+  assert.equal(done.completed,records.length);assert.equal(done.next,undefined);
+  // A save that has only screened the talk, or an older pack's manifest without it, owes nothing.
+  assert.equal(createArchiveStory(manifest,'rail_lore').next.archive.number,2);
+  const older=manifest.filter(r=>r.id!=='rail_lore').map(r=>r.archive?{...r,archive:{...r.archive,number:r.archive.number-1}}:r);
+  const pack=createArchiveStory(older,records[2].id,null,['slot_01','slot_02']);
+  assert.equal(pack.completed,2);assert.equal(pack.at('slot_02').id,records[2].id);assert.equal(pack.next.id,records[3].id);
+  assert.equal(pack.total,records.length-1);
 });
 test('a screen shows nothing until a record has started on it, and a cancelled start leaves it blank',()=>{
   const story=createArchiveStory(manifest);
@@ -99,11 +144,11 @@ test('a screen shows nothing until a record has started on it, and a cancelled s
 
   // A save that only knows its last record: the earlier ones rest nowhere, later ones are remembered by screen.
   let history;
-  const old=createArchiveStory(manifest,manifest.find(r=>r.archive?.number===2).id,(_,slots)=>{history=slots;});
+  const old=createArchiveStory(manifest,manifest.find(r=>r.archive?.number===2).id,(_,slots)=>{history=slots;},[],undefined,true);
   assert.equal(old.at('slot_01'),undefined);
   const third=old.request('slot_09');old.start(third);old.finish(third,true);
   assert.deepEqual(history,[null,null,'slot_09']);
-  const resumed=createArchiveStory(manifest,third.row.id,null,history);
+  const resumed=createArchiveStory(manifest,third.row.id,null,history,undefined,true);
   assert.equal(resumed.at('slot_01'),undefined);
   assert.equal(resumed.at('slot_09').archive.number,3);
 });
