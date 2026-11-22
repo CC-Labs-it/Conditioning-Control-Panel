@@ -1,4 +1,4 @@
-/* Move the Grand Hall's end truss inside its shared wall with the atrium.
+/* Fit the Grand Hall's end truss and door surround inside the shared atrium wall.
  * Run with Node from any directory. The optional argument is the Expo authoring
  * workspace containing the original meshoptimizer 0.22 encoder and decoder.
  */
@@ -50,12 +50,12 @@ function components(positions, indices) {
   return parts.values();
 }
 
-function moveTruss(doc, binary) {
+function fitHallEnd(doc, binary) {
   const arch = doc.nodes.find(node => node.name === 'Architecture');
   const changes = new Map();
   for (const primitive of doc.meshes[arch.mesh].primitives) {
     const name = doc.materials[primitive.material].name;
-    if (!['alloy','graphite'].includes(name)) continue;
+    if (!['alloy','graphite','pale_shell','marble'].includes(name)) continue;
     const {accessor, ext, data} = readView(doc, binary, primitive.attributes.POSITION);
     if (accessor.componentType !== 5122 || !accessor.normalized || accessor.type !== 'VEC3') throw Error('Unexpected position format');
     const index = readView(doc, binary, primitive.indices);
@@ -65,27 +65,40 @@ function moveTruss(doc, binary) {
     const positions = Array.from({length:accessor.count}, (_,i) => [0,1,2].map(k =>
       data.readInt16LE(i * ext.byteStride + 2 * k)));
     const yUnit = arch.scale[1] / 32767, zUnit = arch.scale[2] / 32767;
-    const dz = Math.round(.25 / zUnit);
-    let count = 0;
+    const trussShift = Math.round(.25 / zUnit);
+    let trussCount = 0, surroundCount = 0;
     for (const part of components(positions, indices)) {
-      let bottom = Infinity, front = Infinity, back = -Infinity;
+      let bottom = Infinity, top = -Infinity, front = Infinity, back = -Infinity;
       for (const i of part) {
         const [,y,z] = positions[i];
         bottom = Math.min(bottom, y * yUnit);
+        top = Math.max(top, y * yUnit);
         front = Math.min(front, z * zUnit);
         back = Math.max(back, z * zUnit);
       }
       // The end truss is centred on Z=16. The two wall brackets start at
       // Y=4.784, and the deepest member is its 0.25 m springer.
-      if (bottom < 4.70 || front < 15.87 || back < 16.025 || Math.abs((front + back) / 2 - 16) > .002) continue;
+      const truss = ['alloy','graphite'].includes(name) && bottom >= 4.70 &&
+        front >= 15.87 && back >= 16.025 && Math.abs((front + back) / 2 - 16) <= .002;
+      // The two wall panels, infill, architrave, jambs and plinths overran the
+      // atrium plaster at Z=16.090. Keep their hall-facing surfaces and bevels
+      // fixed. The shortened backs finish 30 mm inside the atrium plaster.
+      const surround = bottom >= -.001 && top <= 3.40 && front > 15.74 &&
+        front < 15.90 && back > 16.10 && back < 16.25;
+      if (!truss && !surround) continue;
+      const shift = truss ? trussShift : Math.round((back - 16.06) / zUnit);
       for (const i of part) {
-        positions[i][2] -= dz;
+        if (surround && positions[i][2] * zUnit <= 16) continue;
+        positions[i][2] -= shift;
         data.writeInt16LE(positions[i][2], i * ext.byteStride + 4);
       }
-      count++;
+      if (truss) trussCount++;
+      else surroundCount++;
     }
-    const expected = name === 'alloy' ? 14 : 44;
-    if (count !== expected) throw Error('Unexpected end truss in ' + name + ': ' + count);
+    const expected = {alloy:[14,3], graphite:[44,0], pale_shell:[0,3], marble:[0,2]};
+    if (trussCount !== expected[name][0] || surroundCount !== expected[name][1]) {
+      throw Error('Unexpected Hall end components in ' + name + ': ' + [trussCount,surroundCount]);
+    }
     accessor.min = [Infinity, Infinity, Infinity];
     accessor.max = [-Infinity, -Infinity, -Infinity];
     for (const p of positions) for (let k = 0; k < 3; k++) {
@@ -94,7 +107,7 @@ function moveTruss(doc, binary) {
     }
     changes.set(accessor.bufferView, Buffer.from(encoder.encodeGltfBuffer(data, ext.count, ext.byteStride, ext.mode)));
   }
-  if (changes.size !== 2) throw Error('End truss assembly missing');
+  if (changes.size !== 4) throw Error('Hall end assembly missing');
   return changes;
 }
 
@@ -102,7 +115,7 @@ function repair(input) {
   const jsonSize = input.readUInt32LE(12);
   const doc = JSON.parse(input.toString('utf8', 20, 20 + jsonSize));
   const binary = input.subarray(28 + jsonSize);
-  const changes = moveTruss(doc, binary);
+  const changes = fitHallEnd(doc, binary);
   const chunks = [];
   let offset = 0;
   for (const [i,view] of doc.bufferViews.entries()) {
@@ -137,7 +150,7 @@ async function main() {
   for (const [suffix, field] of [['.glb','file'], ['-mobile.glb','mobileFile']]) {
     const result = repair(fs.readFileSync(path.join(zones, sourceStem + suffix)));
     const hash = crypto.createHash('sha256').update(result).digest('hex').slice(0,16);
-    const filename = 'hall-truss-' + hash + suffix;
+    const filename = 'hall-entry-' + hash + suffix;
     const prior = JSON.stringify(hall[field]);
     if (text.split(prior).length !== 2) throw Error('Ambiguous or missing hall visual filename');
     text = text.replace(prior, JSON.stringify(filename));
