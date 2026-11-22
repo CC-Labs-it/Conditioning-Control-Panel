@@ -36,6 +36,9 @@ import { endingNudge, mountPauseNudge } from './ui/nudges.js';
 import { mountLockedTile } from './ui/shop-locked.js';   // small: one greyed tile at the end of the shop   // small: the ending and pause doors to the full game   // the transmission card, the pen sign and the llama-8 card
 import { mountHomeTip } from './ui/phone.js';
 import { previewBarAllowed } from './ui/preview-bar-model.js';
+import { menuDue, menuRows, MENU_REUSED } from './ui/menu-model.js';   // the main menu, from the second launch on
+import { openMainMenu } from './ui/main-menu.js';
+import { BOOK_EVENT } from './ui/sticker-book.js';
 
 const qs = new URLSearchParams(location.search);
 /* Dev doors (jumps, granted items, cheat wallets, the age-gate skip they carry) open only on a local preview.
@@ -444,9 +447,60 @@ function start(init) {
     openSky({ doc: document, win: window, life, P, audio, gentle: ui.gentle, visit: { caught: 0 },
       frozen: () => engine.paused || engine.suspended, save: () => {}, start: () => location.reload() });
   }
-  else if (pictureDoor) beginIntro();
-  else {
+  else if (menuDue({ life, devDoor, newRunReload, skyVisit: !!skyVisit, skySleeps, skyDemo })) showMenu();
+  else proceed();
+
+  /* The boot as it always was: the pictures card, then the contract (the short window for a returning player). */
+  function proceed() {
+    if (pictureDoor) { beginIntro(); return; }
     ui.setWakeGate(() => pictureCard?.wake());
     askPictures({ onClose: () => { ui.setWakeGate(null); beginIntro(); } });
+  }
+
+  /* The main menu (ui/main-menu.js, rules in ui/menu-model.js): from the second launch on, before the boot goes on.
+     Nothing is saved while it shows (accepted is still false). Its doors are the game's own cards and sheets. */
+  function showMenu() {
+    const liveRun = !!saved?.run && !saved.run.ended;
+    let menu = null, tx = null, sure = 0;
+    const offReady = bridge.on('expo-ready', () => menu?.refresh());   // after expoArrived above: the row becomes the way in
+    const leave = () => { offReady?.(); return menu.close(); };
+    const rowEl = (id) => menu.el.querySelector(`[data-row="${id}"] .mm-lab`);
+    menu = openMainMenu({
+      doc: document,
+      gentle: ui.gentle,
+      rows: () => menuRows({ life, run: saved?.run || null, ed: editionState() }),
+      actions: {
+        continue: () => { leave().then(proceed); },
+        /* A live run: the pause card's own two taps. An ended run starts over at once; no run goes on into the contract. */
+        new: () => {
+          if (engine.suspended) return;
+          if (saved?.run?.ended) { newRun(); return; }
+          if (!liveRun) { leave().then(proceed); return; }
+          if (sure) { newRun(); return; }
+          const lab = rowEl('new');
+          if (lab) lab.textContent = MENU_REUSED.newRunSure;
+          sure = setTimeout(() => { sure = 0; if (lab) lab.textContent = MENU_REUSED.newRun; }, 4000);
+        },
+        stickers: () => document.dispatchEvent(new CustomEvent(BOOK_EVENT)),
+        endings: () => document.dispatchEvent(new CustomEvent(BOOK_EVENT, { detail: { page: 'endings' } })),
+        renewal: () => { ui.pause(); document.getElementById('renewal-door')?.click(); },
+        options: () => ui.pause(),
+        account: () => {
+          mountSaveCarry({ doc: document, win: window, cards: ui.cards, on: bridge.on, send: bridge.send, slot: saveSlotOn(ed), small: isSmall(ed), exportSave: () => serialize(run, life, extras), accept: acceptCarried, ed });
+          ui.pause();
+          document.getElementById('save-carry')?.scrollIntoView?.({ block: 'nearest' });
+        },
+        expo: (ev, el, row) => {
+          if (row.kind === 'wait') {
+            tx ||= mountTransmission({ doc: document, win: window, cards: ui.cards, on: bridge.on, send: bridge.send, llamas: () => run.herd, clock: () => run.clock, extras, save: persist });
+            if (!tx.open()) menu.rattle('expo');
+          } else if (row.kind === 'door') {
+            /* The small edition's existing door: the pause card's line "This is the small edition." / "The full game". */
+            mountPauseNudge({ doc: document, win: window, send: bridge.send, ed });
+            ui.pause();
+          } else menu.rattle('expo');   // sealed; ready waits on a way to open the Expo outside its ending (slice notes)
+        },
+      },
+    });
   }
 }
