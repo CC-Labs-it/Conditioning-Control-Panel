@@ -16,8 +16,8 @@ namespace ConditioningControlPanel.Services.Tc;
 /// is never locked. Every page frame passes <see cref="TcFrameGate"/> first. Hard exits (panic, the
 /// title-bar X, a dead page, the watchdog) go through <see cref="Close"/>; the page's own exit ends on
 /// its <c>exit-done</c> or at 800 ms. Scrolller pictures and the Sparkles medal live in
-/// <c>TcHostService.Media.cs</c>; toy pulses and live settings in <c>TcHostService.Feel.cs</c>; save carry in <c>TcHostService.Save.cs</c>; the Expo is a later slice: their caps go out off
-/// and their frames are only logged.
+/// <c>TcHostService.Media.cs</c>; toy pulses and live settings in <c>TcHostService.Feel.cs</c>; save carry in <c>TcHostService.Save.cs</c>; the Llama Expo download in
+/// <c>TcHostService.Expo.cs</c>.
 /// </summary>
 internal static partial class TcHostService
 {
@@ -100,6 +100,7 @@ internal static partial class TcHostService
         try
         {
             _edition = ReadEdition();
+            var expoFolder = ExpoOnLaunch();
             _closeAskedUtc = null;
             _focusHeld = false;
             _lastAnyUtc = _lastBeatUtc = DateTime.UtcNow;
@@ -114,6 +115,9 @@ internal static partial class TcHostService
                     // Local media copies, as every host.
                     ("ccp.assets", App.EffectiveAssetsPath, CoreWebView2HostResourceAccessKind.Allow),
                 },
+                // The ready Llama Expo, read-only like ccp.assets (this window only; a pack that lands
+                // while the window is open is mapped on this core by MapExpo).
+                OnCoreCreated = core => { _core = core; if (expoFolder != null) MapExpo(expoFolder, _expoServing ?? ""); },
                 // Own profile (the page's save is its localStorage); the argument string is a constant.
                 UserDataFolderName = "browser_data_tc",
                 InputEnabled = true,
@@ -161,7 +165,10 @@ internal static partial class TcHostService
             try { _closeClock?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _watch = _closeClock = null;
             StopPulse();      // at once, before anything else can fail
+            StopExpo();       // the partial stays for the next press
             WatchFeel(false);
+            _core = null;
+            _expoServing = null;
             _closeAskedUtc = null;
             var h = _host;
             _host = null;
@@ -196,7 +203,7 @@ internal static partial class TcHostService
         try
         {
             var s = App.Settings?.Current;
-            var caps = TcRules.Caps(_edition, saveSlot: SaveSlotOpen);
+            var caps = TcRules.Caps(_edition, saveSlot: SaveSlotOpen, ExpoCap());
             var init = TcHostRules.InitFrame(Localization.LocalizationManager.Instance.CurrentLanguage,
                 s?.MotionLevel ?? Models.MotionLevel.Full, Safety.GentleVisuals.On, App.Mods?.ActiveModId, caps,
                 picturesOn: PicturesOnNow, sparkles: App.Sparkles != null && !string.IsNullOrEmpty(App.UnifiedUserId),
@@ -262,6 +269,12 @@ internal static partial class TcHostService
                     break;
                 case "fuzz-ended":
                     OnRunEnded(f);
+                    break;
+                case "expo-fetch":
+                    OnExpoFetch();   // the page sends it only from a press
+                    break;
+                case "expo-cancel":
+                    StopExpo();
                     break;
                 default:
                     App.Logger?.Debug("Tc: {Type} not handled by this build yet", f.Type);

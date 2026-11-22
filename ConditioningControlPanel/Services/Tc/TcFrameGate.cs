@@ -19,7 +19,10 @@ internal sealed record TcPageFrame(string Type)
     public string? Tag { get; init; }
     public IReadOnlyList<string>? Niches { get; init; }
     public double Level { get; init; }
+    /// <summary><c>haptic</c>: pulse length in milliseconds.</summary>
     public int Ms { get; init; }
+    /// <summary><c>fuzz-ended</c>: run length in whole MINUTES (never milliseconds).</summary>
+    public int Minutes { get; init; }
     public bool Value { get; init; }
     /// <summary><c>set-setting</c>: the page says this came from the player's own press (<c>ask:true</c>).</summary>
     public bool Ask { get; init; }
@@ -176,7 +179,7 @@ internal static class TcFrameGate
                 var ending = Str(o, "ending");
                 if (ending == null || !Id.IsMatch(ending)) return TcGateResult.No(RefuseField);
                 if (!TryNumber(o["minutes"], out var minutes)) return TcGateResult.No(RefuseField);
-                return TcGateResult.Ok(new TcPageFrame(type) { Ending = ending, Ms = (int)Math.Clamp(minutes, 0, 24 * 60) });
+                return TcGateResult.Ok(new TcPageFrame(type) { Ending = ending, Minutes = (int)Math.Clamp(minutes, 0, 24 * 60) });
             }
             default:
                 return TcGateResult.No(RefuseType);
