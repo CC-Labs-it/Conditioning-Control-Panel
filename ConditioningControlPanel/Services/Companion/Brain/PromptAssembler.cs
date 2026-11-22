@@ -651,6 +651,22 @@ namespace ConditioningControlPanel.Services.Companion.Brain
         /// </summary>
         internal static Func<System.Windows.Threading.Dispatcher?>? NoticeDispatcherForTests;
 
+        /// <summary>Test seam for the chosen AI provider. Null in production, where it is read from
+        /// the companion settings (cloud when nothing is saved, as <c>AiServiceStrategy</c> does).</summary>
+        internal static Func<ConditioningControlPanel.Models.AiProviderType>? ProviderForTests;
+
+        private static bool CloudIsTheTransport()
+        {
+            try
+            {
+                var provider = ProviderForTests != null
+                    ? ProviderForTests()
+                    : App.Settings?.Current?.CompanionPrompt?.AiProvider ?? ConditioningControlPanel.Models.AiProviderType.Cloud;
+                return provider == ConditioningControlPanel.Models.AiProviderType.Cloud;
+            }
+            catch { return true; }
+        }
+
         private static string WarnIfOversize(string systemPrompt)
         {
             if (systemPrompt.Length > SystemMessageCharCeiling)
@@ -666,7 +682,10 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             // canned phrases. That is a visible change in her behaviour with no visible cause, so it
             // gets a visible reason: once per session, on the surface the app already uses for
             // this kind of thing, never a dialog and never per call.
-            if (systemPrompt.Length > ProxyHardRejectCap) RaiseOversizeNoticeOnce();
+            // Only the cloud proxy has that cap (ccp-bugs #1726): Ollama and a bring-your-own
+            // endpoint take the prompt whole, so the notice would name a limit they never hit. The
+            // latch stays unspent there, so a later switch to cloud still gets its one notice.
+            if (systemPrompt.Length > ProxyHardRejectCap && CloudIsTheTransport()) RaiseOversizeNoticeOnce();
 
             return systemPrompt;
         }
