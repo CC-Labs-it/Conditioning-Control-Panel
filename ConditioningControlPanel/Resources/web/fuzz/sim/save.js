@@ -6,7 +6,7 @@
 
 import { ITEMS, BY_ID, FORKS } from '../data/items.js';
 import { CONFIG } from '../data/config.js';
-import { createRun, recalc } from './economy.js';
+import { createRun, recalc, runEdition } from './economy.js';
 import { MOODS } from './moods.js';
 import { cleanOff } from './switches.js';
 import { setupJourney } from './journey-effects.js';
@@ -72,13 +72,27 @@ export function serialize(run, life, extras = {}) {
   return JSON.stringify({ v: SAVE_VERSION, run, life, extras });
 }
 
-function parseRun(src) {
+/* SLEEP (owner 2026-11-22, CONTRACT.md 6.4): small never deletes. A run saved with a Renewal stamp plays in small at
+ * Depth 0 (no stamp, pace without the stamp's pay), and writes the stamp and the saved pace back as they were. Cut rows
+ * stay in owned and order and sleep there (sim/economy.js has). The life's Renewal state is parsed as always and kept. */
+function sleepStamp(s, stamp, savedPace) {
+  const pay = stamp.pay > 0 ? stamp.pay : 1;
+  const playing = savedPace / pay;
+  s.pace = playing;
+  Object.defineProperty(s, 'toJSON', {
+    configurable: true, enumerable: false,
+    value() { return { ...this, pace: this.pace === playing ? savedPace : this.pace * pay, prestige: stamp }; },
+  });
+}
+
+function parseRun(src, ed) {
   if (!src || typeof src !== 'object') return null;
   const stamp = parseStamp(src.prestige);
-  const s = createRun({ seed: num(src.seed, 0, 2 ** 32), mood: MOODS[src.mood] ? src.mood : null });
+  const s = createRun({ seed: num(src.seed, 0, 2 ** 32), mood: MOODS[src.mood] ? src.mood : null, ed });
   /* pace already carries the run's prestige pay multiplier, so it is read back as saved, not multiplied again. */
   s.pace = num(src.pace, 1, CONFIG.MAX_PACE * (stamp?.pay || 1));
-  if (stamp) s.prestige = stamp;
+  if (stamp && runEdition(s)) sleepStamp(s, stamp, s.pace);
+  else if (stamp) s.prestige = stamp;
   s.clock = num(src.clock);
   s.fuzz = num(src.fuzz);
   s.total = Math.max(s.fuzz, num(src.total));
@@ -150,18 +164,19 @@ function parseLife(src) {
   return life;
 }
 
-/** Returns {run, life, extras} or null when the string is not a save we can read. run can be null on its own. */
-export function parse(raw) {
+/** Returns {run, life, extras} or null when the string is not a save we can read. run can be null on its own.
+ *  ed: the edition reading the run plays under (ui/edition.js); none = the whole game. */
+export function parse(raw, { ed = null } = {}) {
   if (typeof raw !== 'string' || raw.length > 400_000) return null;
   let data;
   try { data = JSON.parse(raw); } catch { return null; }
   if (!data || data.v !== SAVE_VERSION) return null;
-  return { run: parseRun(data.run), life: parseLife(data.life), extras: obj(data.extras) };
+  return { run: parseRun(data.run, ed), life: parseLife(data.life), extras: obj(data.extras) };
 }
 
 /** Browser storage helpers: every call swallows the quota and privacy errors. */
-export function load(storage) {
-  try { const raw = storage?.getItem(SAVE_KEY); return raw ? parse(raw) : null; } catch { return null; }
+export function load(storage, opts) {
+  try { const raw = storage?.getItem(SAVE_KEY); return raw ? parse(raw, opts) : null; } catch { return null; }
 }
 
 export function store(storage, run, life, extras) {

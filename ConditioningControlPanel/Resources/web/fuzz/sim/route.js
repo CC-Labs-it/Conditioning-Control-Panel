@@ -8,6 +8,7 @@ import { CONFIG } from '../data/config.js';
 import { FOLD, LEAD_OF } from '../data/folds.js';
 import * as E from './economy.js';
 import { routeFate } from '../data/fate.js';
+import { isCut, reqFor } from '../ui/edition.js';
 
 export function allRoutes() {
   let all = [{}];
@@ -22,10 +23,13 @@ export function allRoutes() {
 /* Fate cards (data/fate.js): a route also carries one ending set. `fate` picks it; by default each fork route samples
  * one set it is offered (routeFate), so the 192 routes cover every set without a full cross product. The set's seed is
  * the only seed the run buys, so it holds that set's ending. */
-export function playRoute(picks, { taps = 4, mood = null, mods = null, maxS = 7200, side = false, fate = routeFate(picks) } = {}) {
+/* ed: an edition reading (ui/edition.js readEdition). Small leaves the cut rows out and reads requirements through reqFor. */
+export function playRoute(picks, { taps = 4, mood = null, mods = null, maxS = 7200, side = false, fate = routeFate(picks), ed = null } = {}) {
   const dt = 0.25;
-  const s = E.createRun({ mood });
-  const inRoute = (it) => { const f = FORK_OF_LANE[it.lane]; return (!f || picks[f] === it.lane) && (!it.fate || it.fate === fate); };
+  const s = E.createRun({ mood, ed });
+  const small = !!E.runEdition(s);
+  const reqOf = small ? (it) => reqFor(it, ed).req : (it) => it.req;
+  const inRoute = (it) => { const f = FORK_OF_LANE[it.lane]; return (!f || picks[f] === it.lane) && (!it.fate || it.fate === fate) && !(small && isCut(it.id, ed)); };
   /* A rider is never pressed: its lead's purchase brings it (data/folds.js). */
   let pending = ITEMS.filter((r) => r.group === 'run' && r.id !== 'start' && r.kind !== 'end' && !r.grow && !LEAD_OF[r.id] && inRoute(r)).concat(ITEMS.filter((r) => r.id === 'drop'));
   pending = pending.map((r) => ({ r, cost: E.price(s, r.id, mods) })).sort((a, b) => a.cost - b.cost);
@@ -40,7 +44,7 @@ export function playRoute(picks, { taps = 4, mood = null, mods = null, maxS = 72
     E.earn(s, (rate.manualClick * taps + strays * rate.walls * rate.bounce) * dt, 'route');
     if (side) E.lump(s, Math.max(0, s.side.budget - s.side.paid), 'side'), s.side.paid = s.side.budget;
     t += dt;
-    if (firstAlt === null && ends.some((e) => e.req.every((q) => E.has(s, q)) && s.fuzz >= E.price(s, e.id, mods))) firstAlt = t;
+    if (firstAlt === null && ends.some((e) => reqOf(e).every((q) => E.has(s, q)) && s.fuzz >= E.price(s, e.id, mods))) firstAlt = t;
     if (E.has(s, 'stray') && strays < 12) {
       const c = E.price(s, 'stray', mods);
       if (s.fuzz >= c && c / Math.max(0.01, rate.walls * rate.bounce) < CONFIG.STRAY_PAYBACK_S) E.buy(s, 'stray', mods);
@@ -48,7 +52,7 @@ export function playRoute(picks, { taps = 4, mood = null, mods = null, maxS = 72
     for (let i = 0; i < pending.length; i++) {
       const { r, cost } = pending[i];
       if (cost > s.fuzz) break;
-      if (!r.req.every((q) => E.has(s, q))) continue;
+      if (!reqOf(r).every((q) => E.has(s, q))) continue;
       // One ending a run (sim/economy.js heldEnding): at Drop's place the run buys the ending it holds, Drop or another.
       const res = r.kind === 'fork' ? E.choose(s, r.id, picks[r.id], mods) : E.buy(s, r.id === 'drop' ? E.heldEnding(s) : r.id, mods);
       if (!res.ok) continue;
@@ -64,7 +68,7 @@ export function playRoute(picks, { taps = 4, mood = null, mods = null, maxS = 72
       dirty = false;
       const reach = new Set(['stray', ...Object.keys(s.owned)]);
       let grew = true;
-      while (grew) { grew = false; for (const { r } of pending) if (!reach.has(r.id) && r.req.every((q) => reach.has(q))) { reach.add(r.id); for (const x of FOLD[r.id] || []) reach.add(x); grew = true; } }
+      while (grew) { grew = false; for (const { r } of pending) if (!reach.has(r.id) && reqOf(r).every((q) => reach.has(q))) { reach.add(r.id); for (const x of FOLD[r.id] || []) reach.add(x); grew = true; } }
       pending = pending.filter(({ r }) => reach.has(r.id));
     }
   }

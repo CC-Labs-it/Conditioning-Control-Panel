@@ -11,12 +11,32 @@ import { accrueActivities, trunkBoost, RANK_BOUNCE, RANK_TAP, RANK_PASSIVE } fro
 import { ridersOf } from '../data/folds.js';
 import { FATE_BY_ID, SEEDS, setOf, herdOpens } from '../data/fate.js';
 import { EMI_LIFT } from './tap-rate.js';
+import { isCut, keptIds, reqFor } from '../ui/edition.js';
 
 export const WALL_BASE = 1;
 
+/* EDITIONS (owner 2026-11-22, CONTRACT.md section 6). A run carries the edition reading it plays under (ui/edition.js
+ * readEdition) under a Symbol key: JSON leaves it out, so the save is unchanged, and a spread copy keeps it. No reading
+ * = the whole game, exactly as before. In small a cut row is never offered, bought or granted, and a cut row the save
+ * already owns SLEEPS: it stays in owned, order, store, off and toys, but `has` and `count` answer no, so it neither
+ * pays nor counts. The sim never reads the page's edition itself: main.js hands it over. */
+const ED = Symbol('edition');
+/** The edition reading this run plays under, or null for the whole game. */
+export const runEdition = (s) => s?.[ED] || null;
+/** Sets (or clears, with null or a full reading) the run's edition. Call before the first recalc. */
+export function setRunEdition(s, ed) {
+  if (ed && ed.edition === 'small') s[ED] = ed; else delete s[ED];
+  return s;
+}
+/** True when this run plays small and the row is cut there: never offered, and asleep when owned. */
+export const asleep = (s, id) => !!s[ED] && isCut(id, s[ED]);
+const needs = (s, it) => (s[ED] ? reqFor(it, s[ED]) : it);
+
 /** prestige: a Renewal Sky run stamp (sim/prestige.js runStamp). Its pay multiplier rides on pace, which every income path
- *  already carries; its price scale and minutes are read by the Journey plan. null = a run that plays as Depth 0. */
-export function createRun({ pace = 1, mood = null, seed = 1, perk = null, prestige = null, herd = 0 } = {}) {
+ *  already carries; its price scale and minutes are read by the Journey plan. null = a run that plays as Depth 0.
+ *  ed: an edition reading (see above). A small run never takes a stamp: Renewal is full only. */
+export function createRun({ pace = 1, mood = null, seed = 1, perk = null, prestige = null, herd = 0, ed = null } = {}) {
+  if (ed?.edition === 'small') prestige = null;
   const s = {
     pace: Math.max(1, Math.min(CONFIG.MAX_PACE, pace)) * (prestige?.pay > 0 ? prestige.pay : 1),
     seed,
@@ -45,13 +65,14 @@ export function createRun({ pace = 1, mood = null, seed = 1, perk = null, presti
   /* The Panel (data/fate.js HERD_SETS): the llamas the contract shelters. main.js reads it live from the life save
    * instead (a getter, never saved with the run); harnesses pass it here. */
   if (herd > 0) s.herd = herd;
-  if (perk && BY_ID[perk] && BY_ID[perk].lane === 'look') { s.owned[perk] = 1; s.order.push(perk); }
+  setRunEdition(s, ed);
+  if (perk && BY_ID[perk] && BY_ID[perk].lane === 'look' && !asleep(s, perk)) { s.owned[perk] = 1; s.order.push(perk); }
   recalc(s);
   return s;
 }
 
-export const has = (s, id) => (s.owned[id] || 0) > 0;
-export const count = (s, id) => s.owned[id] || 0;
+export const has = (s, id) => (s.owned[id] || 0) > 0 && !(s[ED] && isCut(id, s[ED]));
+export const count = (s, id) => (s[ED] && isCut(id, s[ED]) ? 0 : s.owned[id] || 0);
 export const pick = (s, f) => s.picks[f] || null;
 
 /** Income from what is owned, after the mood. Cached in s.base, rebuilt on every buy. A stacking row pays once:
@@ -61,7 +82,7 @@ export function recalc(s) {
   const pay = moodOf(s)?.pay;
   for (const id of s.order) {
     const it = BY_ID[id];
-    if (!it) continue;
+    if (!it || (s[ED] && isCut(id, s[ED]))) continue;   // a sleeping row pays nothing
     if (it.fps) fps += pay ? pay(it.fps, it) : it.fps;
     if (it.click) click += pay ? pay(it.click, it) : it.click;
     if (it.wall) wall += pay ? pay(it.wall, it) : it.wall;
@@ -136,7 +157,7 @@ export function price(s, id, mods = null, now = s.clock) {
 }
 
 /** The riders a purchase of id would bring right now. */
-export const ridersFor = (s, id) => ridersOf(id).filter((r) => !has(s, r) && BY_ID[r]);
+export const ridersFor = (s, id) => (s[ED] ? keptIds(ridersOf(id), s[ED]) : ridersOf(id)).filter((r) => !has(s, r) && BY_ID[r]);
 
 /** The scale comes first, so a mood or an unlock that sets a price has the last word. */
 function unitPrice(s, it, mods, now) {
@@ -158,8 +179,10 @@ const canHaveMore = (s, it) => (it.grow ? count(s, it.id) < it.grow.max : !has(s
 /** Parents owned, right lane, not owned yet, and the run's fate allows it: the plain rule, before the one-ending rule below. */
 function reached(s, it) {
   if (it.group !== 'run' || it.id === 'start' || s.ended) return false;
+  if (s[ED] && isCut(it.id, s[ED])) return false;   // small: a cut row is never on offer
   if (!laneOpen(s, it) || !canHaveMore(s, it) || !fateAllows(s, it)) return false;
-  return it.req.every((q) => has(s, q)) && (!it.any || it.any.some((q) => has(s, q)));
+  const n = needs(s, it);
+  return n.req.every((q) => has(s, q)) && (!n.any || n.any.some((q) => has(s, q)));
 }
 
 /* FATE CARDS (owner 2026-11-10, handoff-1110/TC-FATE-CARDS-BRIEF.md). Six ending sets of 4 cards and an ending
@@ -186,7 +209,7 @@ function fateAllows(s, it) {
  * the shop (owner 2026-11-10; perks, cards and stickers stay for players who already have them): Endless Mode, Drop, and
  * the theme and Premium endings that lost their set (Count Up, The Debut, Lost Key, Redacted, Flatline, Lifetime Plan). */
 export const OFF_SHELF = new Set(['onemore', 'drop', 'tr_end', 'si_end', 'lo_end', 'ce_end', 'in_end', 'p_life']);
-export const mainPathDone = (s) => BY_ID.drop.req.every((q) => has(s, q));
+export const mainPathDone = (s) => needs(s, BY_ID.drop).req.every((q) => has(s, q));
 export function heldEnding(s) {
   const set = FATE_BY_ID[fateOf(s)];
   return set ? set.end : null;
@@ -211,9 +234,9 @@ export const openItems = (s, mods = null) => ITEMS.filter((it) => isOpen(s, it))
 export function goal(s) {
   if (s.ended) return null;
   for (const it of ITEMS) {
-    if (it.lane !== 'trunk' || it.group !== 'run' || has(s, it.id)) continue;
+    if (it.lane !== 'trunk' || it.group !== 'run' || has(s, it.id) || asleep(s, it.id)) continue;
     /* Spiral Overlay waits for a fate seed (its `any`): until one is bought there is no goal, the seeds are the shop. */
-    if (it.kind !== 'end') return !it.any || it.any.some((q) => has(s, q)) ? it : null;
+    if (it.kind !== 'end') { const any = needs(s, it).any; return !any || any.some((q) => has(s, q)) ? it : null; }
     const held = BY_ID[heldEnding(s)];   // one ending a run: the held ending takes the main path's last place
     return held && isOpen(s, held) ? held : null;
   }
@@ -282,7 +305,7 @@ function accrueToys(s, amount) {
   if (!(amount > 0)) return;
   const recent = recentIncome(s, amount);
   for (const [id, share] of TOY_SHARES) {
-    if (!(s.owned?.[id] > 0) || s.off?.[id]) continue;
+    if (!(s.owned?.[id] > 0) || s.off?.[id] || asleep(s, id)) continue;
     const fresh = !s.toys?.[id];
     const t = toyPot(s, id), cap = share * recent;
     /* A toy just bought starts with TOY_START_S of its share, so its first coin or spin is not a dud. */
@@ -424,7 +447,7 @@ function add(s, id, purchase = true) {
 /** Dev door: own an item and everything above it, free. Picks the lanes its parents need. Answers the ids it added. */
 export function grant(s, id, added = []) {
   const it = BY_ID[id];
-  if (!it || it.group !== 'run' || has(s, id)) return added;
+  if (!it || it.group !== 'run' || has(s, id) || asleep(s, id)) return added;
   const f = FORK_OF_LANE[it.lane];
   if (f) {
     if (s.picks[f] && s.picks[f] !== it.lane) return added;
@@ -441,11 +464,12 @@ export function grant(s, id, added = []) {
       grant(s, 'f5', added);
     }
   }
-  for (const q of it.req) grant(s, q, added);
+  const n = needs(s, it);
+  for (const q of n.req) grant(s, q, added);
   /* A row that needs one of several (Spiral Overlay needs a seed): the run's own set's seed, else the first one. */
-  if (it.any && !it.any.some((q) => has(s, q))) {
+  if (n.any?.length && !n.any.some((q) => has(s, q))) {
     const own = FATE_BY_ID[fateOf(s)]?.cards[0];
-    const pickAny = it.any.includes(own) ? own : it.any.find((q) => !BY_ID[q]?.fate || !FATE_BY_ID[BY_ID[q].fate].theme || FATE_BY_ID[BY_ID[q].fate].theme === s.picks.f5) || it.any[0];
+    const pickAny = n.any.includes(own) ? own : n.any.find((q) => !BY_ID[q]?.fate || !FATE_BY_ID[BY_ID[q].fate].theme || FATE_BY_ID[BY_ID[q].fate].theme === s.picks.f5) || n.any[0];
     grant(s, pickAny, added);
   }
   if (it.kind === 'fork' && !s.picks[id]) s.picks[id] = Object.keys(FORKS[id].opts)[0];
