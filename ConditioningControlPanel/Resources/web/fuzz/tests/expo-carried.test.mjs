@@ -50,11 +50,13 @@ test('picking up during emergency light applies the room tint once and restores 
 });
 
 test('a rope post left on the floor picks up its room lighting again on return',()=>{
-  const {scene,hands,kit}=fixture();
+  const {api,hands,kit}=fixture();
+  let post;
+  api.register=(node,label)=>{assert.equal(label,'Pick up Post');post=node;return ()=>{};};
   const first=new THREE.Texture(),returned=new THREE.Texture();
   hands.enter('service',first);hands.hold('rope-post',kit,'Post');
-  hands.place(new THREE.Vector3(2,0,5));
-  const post=scene.children[0],material=post.children[0].material;
+  assert.equal(hands.place(new THREE.Vector3(2,0,5)),true);
+  const material=post.children[0].material;
   hands.enter('hall',new THREE.Texture());first.dispose();
   assert.equal(post.visible,false);assert.equal(material.envMap,null);
   hands.enter('service',returned);
