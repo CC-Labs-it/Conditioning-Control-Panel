@@ -17,6 +17,8 @@ const LOCAL = new Set(['127.0.0.1', 'localhost']);
 export function sealedFor(init, nowMs, hostname = '', force = false) {
   if (!(nowMs < SEAL_OPEN_AT_MS)) return false;
   if (LOCAL.has(hostname)) return force === true;
+  /* The seal is the website's rule. The desktop app checks the account itself and picks the edition (ui/edition.js). */
+  if (init?.caps?.platform === 'desktop') return false;
   return init?.caps?.plan !== 'prime';
 }
 
