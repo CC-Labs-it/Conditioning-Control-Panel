@@ -1,6 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createTouchActions} from '../ui/expo/touch-actions.js';
+import {bindExpoWakeTap} from '../ui/expo/touch-taps.js';
+
+test('a stationary phone tap opens native Wake Up once and leaves its click listener intact on teardown',()=>{
+  const wake=new EventTarget();let pauses=0;
+  wake.click=()=>wake.dispatchEvent(new Event('click'));
+  wake.addEventListener('click',()=>pauses++);
+  const off=bindExpoWakeTap(wake);
+  function touch(type,x=4){
+    const e=new Event(type,{cancelable:true});
+    e.changedTouches=[{identifier:7,clientX:x,clientY:4}];
+    wake.dispatchEvent(e);
+    return e.defaultPrevented;
+  }
+  touch('touchstart');assert.ok(touch('touchend'));assert.equal(pauses,1);
+  touch('touchstart');touch('touchmove',21);touch('touchend');assert.equal(pauses,1);
+  touch('touchstart');touch('touchcancel');touch('touchend');assert.equal(pauses,1);
+  off();touch('touchstart');assert.equal(touch('touchend'),false);assert.equal(pauses,1);
+  wake.click();assert.equal(pauses,2);
+});
 
 function phone(){
   let paused=false,rapidUses=0,jumps=0,charges=0,releases=0;

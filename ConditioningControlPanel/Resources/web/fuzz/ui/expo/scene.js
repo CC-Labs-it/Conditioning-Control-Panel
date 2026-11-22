@@ -3,6 +3,8 @@ import { exhibitProps } from './exhibit-props.js';
 import * as THREE from 'three';
 import { LITE } from '../perf.js';
 import { createControls } from './controls.js';
+import { createCameraPreferences } from './camera-preferences.js';
+import { mountCameraOptions } from './camera-options.js';
 import { expoGuideText, expoInteractionText } from './controller-menu.js';
 import { createButtonTravel } from './button-travel.js';
 import { mountExpoRadio, RADIO_STYLE } from './music-controls.js';
@@ -33,6 +35,11 @@ const CSS = `
 .expo-prompt {top:calc(50% + 22px);padding:.28em .65em;background:#10272be8;border-radius:3px;font-size:14px}
 .expo-aim {position:absolute;top:50%;left:50%;width:4px;height:4px;background:#fafaf2;box-shadow:0 0 2px 1px #27292782;border-radius:50%;pointer-events:none}
 .expo-aim[data-action]{width:12px;height:12px;box-sizing:border-box;transform:translate(-50%,-50%) rotate(45deg);border:2px solid #172b2b;outline:1.5px solid #fff2d4;border-radius:2px;background:#f66b3c;box-shadow:none}
+.expo-root[data-free-look] .expo-aim{visibility:hidden}
+.expo-root[data-free-look] .expo-canvas{cursor:grab}
+.expo-root[data-free-look]:has(.expo-aim[data-action]) .expo-canvas{cursor:pointer}
+.expo-root[data-free-look] .expo-canvas:active{cursor:grabbing}
+.expo-root[data-free-look] .expo-prompt{top:auto;bottom:22%;max-width:80%}
 .expo-aim[data-pressed]{background:#fff0c4;border-color:#ad4328}
 .expo-aim[data-pressed=full]{width:15px;height:15px}
 .expo-guide {position:static;transform:none;color:#fff;background:#10272be0;padding:.38em .8em;border-radius:2px;font-size:13px;max-width:100%;width:fit-content}
@@ -87,13 +94,18 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     stepDown.textContent='Step down';
     caption.setAttribute('aria-live', 'polite'); aim.setAttribute('aria-hidden', 'true');
     let inputMode = initialInputMode || (win.matchMedia('(pointer:coarse)').matches ? 'touch' : 'keyboard');
-    let guideUntil = 7;
-    guide.textContent = expoGuideText(inputMode);
+    const cameraPrefs = createCameraPreferences(win);
+    let controls, cameraMenu, guideUntil = 7;
+    function refreshGuide() {
+      const text = expoGuideText(inputMode, cameraPrefs.options, controls?.freePointer);
+      if (guide.textContent !== text) { guide.textContent = text; guide.hidden = false; guideUntil = elapsed + 7; }
+    }
+    refreshGuide();
     function inputChanged(next) {
       inputMode = next;
       onInputMode?.(next);
-      const text = expoGuideText(next);
-      if (guide.textContent !== text) { guide.textContent = text; guide.hidden = false; guideUntil = elapsed + 7; }
+      cameraMenu?.setMode(next);
+      refreshGuide();
       updatePrompt();
     }
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -117,7 +129,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       () => ctx.store.claimLifetime('planterDetour')); clean.push(() => walker.dispose());
     const buttons=createButtonTravel(ctx);
     const targets = new Map(), pointer = new THREE.Vector2(), ray = new THREE.Raycaster(), hits = [];
-    let targetMeshes = [], maxReach = 0, zones, exhibits, dome, controls, narration, returnButton, targetTime = 0, loading = false;
+    let targetMeshes = [], maxReach = 0, zones, exhibits, dome, narration, returnButton, targetTime = 0, loading = false;
     function register(mesh, label, callback, reach = 2.3) {
       const {roots,activate}=buttons.bind(mesh,callback);
       const action={label,reach,owner:mesh,callback:activate};
@@ -160,7 +172,14 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       if(!target && ready && !dead && !loading && !returnButton && !ctx.paused && !doc.hidden){const floor=floorPlacement(point);if(floor)return exhibits.hands.place(floor);}
       return !!target;
     }
+    // Undefined aims at the reticle. Null means the free cursor is off the scene or dragging.
+    function lookPoint() { return controls?.freePointer ? controls.aimPoint : undefined; }
     function updatePrompt(){
+      const free = Boolean(controls?.freePointer);
+      if (root.hasAttribute('data-free-look') !== free) {
+        root.toggleAttribute('data-free-look', free);
+        refreshGuide();
+      }
       stepDown.hidden=!walker.planter.released;
       if (elapsed>=pressedUntil) aim.removeAttribute('data-pressed');
       if (!stepDown.hidden) {
@@ -169,10 +188,11 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
         prompt.textContent=inputMode==='gamepad'?expoInteractionText('Step down',inputMode):'E to step down';
         return;
       }
-      const action = targetAt()?.action;
+      const aimPoint = lookPoint();
+      const action = aimPoint === null ? null : targetAt(aimPoint)?.action;
       root.toggleAttribute('data-hoof-target',Boolean(action?.owner.userData.hoofPanel));
       prompt.toggleAttribute('data-loan-card',action?.owner.name==='First Press loan card');
-      const label = action ? (typeof action.label === 'function' ? action.label() : action.label) : floorPlacement()?'Set down '+exhibits.state.carry.label:'';
+      const label = action ? (typeof action.label === 'function' ? action.label() : action.label) : aimPoint !== null && floorPlacement(aimPoint)?'Set down '+exhibits.state.carry.label:'';
       controls?.setTouchAction(label,{
         spit:walker.zone==='commons',
         jump:walker.zone==='hall'&&exhibits?.state.firstPressCount===2&&Math.hypot(walker.feet.x,walker.feet.z+9)<4.4
@@ -247,7 +267,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     exhibits = createExhibits({ THREE, ctx, camera, scene, root, draw, say, walker, renderer, muffle:narration.muffle, setHeaterPower:sound.setHeaterPower, pauseMusic:on=>music.pause(on), signal:instruments.signal, props:kit.mount, annexProps:annex.mount, records:()=>narration.story?.completed||0,
       storeSouvenir:(obj,label)=>souvenirPrint({THREE,renderer,draw,ctx},obj,label), actionSerial:()=>actionSerial, cue:narration.cue, narrationAvailable:narration.available, closingLine:narration.closingLine, play: sound.play, setSoundDepth: sound.setDepth,
       go, exit: onExit, farewell, register, assetURL, bindMedia, capturePhoto, finalPhoto, setColliderEnabled:walker.setColliderEnabled,
-      holdPressView:()=>controls?.stopMoving(),
+      lookPoint, holdPressView:()=>controls?.stopMoving(),
       setButtonAvailable:buttons.setAvailable,registerDoorLeaf:(...args)=>zones?.registerDoorLeaf(...args) });
     dome = createDomeEffects({ctx,camera,cue:narration.cue,play:sound.play,register,bindMedia,setSoundDepth:sound.setDepth,lite:LITE,visit:exhibits.state,finish:exhibits.endVisit});
     const guests=createGuestCollection(assetURL);
@@ -263,12 +283,20 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     clean.push(() => ambience.dispose());
     clean.push(() => { collection.dispose(); guests.dispose(); });
     visitorGuide.watch(exhibits.state.ticket);
-    controls = createControls({ root, canvas, camera, trail:visitorGuide, initialInputMode:inputMode, onInputMode:inputChanged,
+    controls = createControls({ root, canvas, camera, trail:visitorGuide, initialInputMode:inputMode, onInputMode:inputChanged, cameraOptions:cameraPrefs.options,
       move: walker.move, spit:exhibits.spit, onInteract: interact, onJump: () => walker.jump?.(),
       holdingView:()=>exhibits.state.pressWatching,
       onPause: () => { if (!ctx.paused) doc.getElementById('wake')?.click(); },
       isPaused: () => !ready || dead || loading || !!returnButton || ctx.paused || doc.hidden });
     clean.push(() => controls.dispose());
+    cameraMenu = mountCameraOptions(doc, cameraPrefs.options, (key, value) => {
+      if (!cameraPrefs.set(key, value)) return;
+      controls.applyCameraOptions();
+      refreshGuide();
+      updatePrompt();
+    });
+    cameraMenu.setMode(inputMode);
+    clean.push(() => cameraMenu.dispose());
 
     const drawingSize = new THREE.Vector2();
     const resize = () => {
@@ -282,6 +310,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     function sync() {
       const hold = ctx.paused || doc.hidden;
       previous = ctx.activeMs; controls.reset(); media?.pause(hold); sound.pause(hold); narration.pause(hold || waitingForEntrance); exhibits.pause?.(hold);
+      if (!hold) cameraMenu.close();
       if (!hold && ready) (returnButton||root).focus({ preventScroll: true });
     }
     for (const key of ['pause','resume','suspend']) clean.push(ctx.on(key, sync));

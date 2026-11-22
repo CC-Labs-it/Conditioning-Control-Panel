@@ -137,7 +137,9 @@ export function mountHoofLab(api,group,state,worn){
     const practicePage=state.hoof==='practice',target=practicePage?button:face;
     if(!target?.visible)return;
     if(cap)cap.position.y=capRest-.012*Math.max(0,1-(clock-pressed)/.18);
-    rc.setFromCamera(centre,camera);strikes.length=0;rc.intersectObject(target,practicePage,strikes);
+    const pointer=api.lookPoint?.();
+    strikes.length=0;
+    if(pointer!==null){rc.setFromCamera(pointer??centre,camera);rc.intersectObject(target,practicePage,strikes);}
     const hit=strikes[0];
     if(hit?.uv&&!practicePage)lastAim=boardHit(hit.uv.x,hit.uv.y,state.hoofWorn);
     if(!state.hoofWorn)return;

@@ -1,9 +1,13 @@
+import {bindExpoWakeTap} from './touch-taps.js';
+
 import { createExpoGamepad } from './gamepad.js';
 
-export function expoGuideText(mode) {
+export function expoGuideText(mode, options = {}, free = false) {
   if (mode === 'gamepad') return 'Left stick to walk. Hold RB / R1 to sprint. Right stick to look. A / Cross to jump. X / Square to interact. Hold RT / R2 to spit. Menu / Options to pause.';
   if (mode === 'touch') return 'Drag to look. Use the stick to walk. Tap an exhibit to use it.';
-  return 'WASD or arrows to walk. Double-tap and hold a direction to sprint. Drag or click to look. Space to jump. E to interact. Hold Q to spit. Esc to pause.';
+  const look = options.dragLook || free ? 'Drag to look. Click an exhibit to use it.' : 'Click to start mouse look. Aim and click to use an exhibit.';
+  const walk = options.arrowMode === 'turn' ? 'WASD to walk. Arrows to look.' : 'WASD or arrows to walk.';
+  return look + ' ' + walk + ' Shift to sprint. E to interact. Space to jump. Esc for controls.';
 }
 
 export function expoInteractionText(label, mode) {
@@ -152,6 +156,7 @@ export function bindExpoMenus(ctx, parent) {
   const mixer = doc.getElementById('audio-mixer'), mixerToggle = doc.getElementById('audio-toggle');
   let suspended = false;
   const off = ctx.on('suspend', e => { suspended = !!e?.on; });
+  const offWakeTap = bindExpoWakeTap(doc.getElementById('wake'));
   const openPause = () => { if (!ctx.paused) doc.getElementById('wake')?.click(); };
   const menus = bindMenus(doc, {
     surface() {
@@ -185,5 +190,5 @@ export function bindExpoMenus(ctx, parent) {
     delete doc.documentElement.dataset.expoPadAdmission;
     menus.setMode('gamepad');
   }
-  return {get mode() { return menus.mode; }, setMode:menus.setMode, dispose() { off(); menus.dispose(); }};
+  return {get mode() { return menus.mode; }, setMode:menus.setMode, dispose() { off(); offWakeTap(); menus.dispose(); }};
 }
