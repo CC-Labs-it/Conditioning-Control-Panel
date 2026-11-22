@@ -96,11 +96,14 @@ export function createTwelvePieces(api,state){
           const doctor=group.getObjectByName('alpaca_button');
           bind(doctor,()=>progress.doctor>=3?'Read the seal':'Is he an alpaca?',()=>{
             if(progress.doctor>=3){api.say('The matter is under glass.');return;}
+            // The second press readmits the visitor through the Atrium. While The Rail holds them here it does nothing,
+            // so nothing is booked for a walk that did not happen.
+            if(progress.doctor===1&&api.canGo&&!api.canGo('atrium'))return false;
             progress.doctor++;api.play('chime',.4);
             if(progress.doctor===1)api.cue('pa_alpaca',{kind:'react',exhibit:'doctor'});
             else if(progress.doctor===2){
               state.visitorNumber=2;state.ticket.book('doctor','Readmitted by Dr. Alpaca',true);
-              void api.go('atrium',[.50,0,35.95],0).then(()=>api.say('Human visitor no. 2.'));
+              void api.go('atrium',[.50,0,35.95],0).then(moved=>{if(moved!==false)api.say('Human visitor no. 2.');});
             }else if(local.doctorGlass)local.doctorGlass.visible=true;
           },2.9);
           if(doctor){const box=new T.Box3().setFromObject(doctor,true);local.doctorAt=box.getCenter(new T.Vector3());}

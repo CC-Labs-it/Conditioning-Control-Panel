@@ -283,7 +283,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     const kit=exhibitProps(assetURL),annex=exhibitProps(assetURL,'visitor-services.glb');clean.push(()=>kit.dispose(),()=>annex.dispose());
     exhibits = createExhibits({ THREE, ctx, camera, scene, root, draw, say, walker, renderer, muffle:narration.muffle, setHeaterPower:sound.setHeaterPower, pauseMusic:on=>music.pause(on), signal:instruments.signal, props:kit.mount, annexProps:annex.mount, records:()=>narration.story?.completed||0, recordTotal:()=>narration.story?.total||0, voiceBusy:narration.busy,
       storeSouvenir:(obj,label)=>souvenirPrint({THREE,renderer,draw,ctx},obj,label), actionSerial:()=>actionSerial, cue:narration.cue, narrationAvailable:narration.available, closingLine:narration.closingLine, play: sound.play, setSoundDepth: sound.setDepth,
-      go:(id,...args)=>rail.allows(id)?go(id,...args):Promise.resolve(false), exit: onExit, farewell, register, assetURL, bindMedia, capturePhoto, finalPhoto, setColliderEnabled:walker.setColliderEnabled,
+      go:(id,...args)=>rail.allows(id)?go(id,...args):Promise.resolve(false), canGo:id=>rail.allows(id), exit: onExit, farewell, register, assetURL, bindMedia, capturePhoto, finalPhoto, setColliderEnabled:walker.setColliderEnabled,
       lookPoint, holdPressView:()=>controls?.stopMoving(),
       buttonAssembly:buttons.assemblyFor,setButtonAvailable:buttons.setAvailable,setButtonHeld:buttons.setHeld,setButtonLit:buttons.setLit,registerDoorLeaf:(...args)=>zones?.registerDoorLeaf(...args) });
     rail=createRail({ctx,scene,walker,state:exhibits.state,voice:()=>narration,play:sound.play});
