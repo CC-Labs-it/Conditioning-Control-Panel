@@ -10,18 +10,29 @@ using System.Windows.Shapes;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Friends;
+using ConditioningControlPanel.Services.Leash;
 
 namespace ConditioningControlPanel.Controls.Friends;
 
 /// <summary>
-/// The folds (owner 2026-11-22): a busy section sits under one header line that opens and folds
-/// it (<see cref="FriendsFold"/> holds the rules and the memory). "What happened" is the first.
+/// The folds (owner 2026-11-22): the leash, "what happened" and dares each sit under one header
+/// line that opens and folds them (<see cref="FriendsFold"/> holds the rules and the memory).
+/// Folded, the leash header says who you hold or who holds you and wears a pink bubble with how
+/// many things moved since you last looked; opening it shows the cards and reads the bubble.
 /// </summary>
 public sealed partial class FriendsDrawer
 {
     /// <summary>The header just pressed: its chevron turns instead of snapping.</summary>
     private string? _foldTurned;
 
+    private readonly StackPanel _leashFold = new() { Tag = "leash-fold", Visibility = Visibility.Collapsed };
+    private readonly Border _leashBody = new();
+    private bool _leashHooked;
+
+    /// <summary>The leash's bubble as drawn (0 = none). The suite reads it.</summary>
+    internal int LeashBadge { get; private set; }
+
+    internal FrameworkElement LeashFold => _leashFold;
 
     /// <summary>One header line: chevron, title, an optional summary and bubble, something on the
     /// right (a count), and an optional extra button beside it. The whole line toggles.</summary>
@@ -207,5 +218,68 @@ public sealed partial class FriendsDrawer
     {
         try { MotionFx.StaggerIn(rows.ToList()); }
         catch (Exception ex) { App.Logger?.Debug("[Friends] fold rise failed: {E}", ex.Message); }
+    }
+
+    // ---- the leash ------------------------------------------------------------------------
+
+    private void AddLeashFold()
+    {
+        if (!_leashHooked)
+        {
+            _leashHooked = true;
+            _leash.Changed += OnLeashChanged;
+            _leashBody.Child = _leash;
+        }
+        _list.Children.Add(_leashFold);
+        FillLeashFold();
+    }
+
+    private void OnLeashChanged()
+    {
+        if (!_list.Children.Contains(_leashFold)) return;
+        try { FillLeashFold(); }
+        catch (Exception ex) { App.Logger?.Debug("[Leash] fold repaint failed: {E}", ex.Message); }
+    }
+
+    private void FillLeashFold()
+    {
+        _leashFold.Children.Clear();
+        // The section hides itself when there is nothing on the leash; the fold goes with it.
+        if (_leash.Children.Count == 0)
+        {
+            _leashFold.Visibility = Visibility.Collapsed;
+            LeashBadge = 0;
+            _leashFold.Children.Add(_leashBody);   // the section stays in the tree, listening
+            return;
+        }
+        _leashFold.Visibility = Visibility.Visible;
+
+        var snap = _leash.Current;
+        var svc = _leash.Service;
+        var keys = FriendsFold.LeashKeys(snap, id => svc?.SentTo(id) ?? Array.Empty<LeashSentItem>());
+        var state = FriendsFold.State;
+        if (state.LeashSeen == null) FriendsFold.Update(s => s.LeashSeen = keys.Distinct().ToList());
+        bool open = state.LeashOpen;
+        if (open && _isOpen)
+        {
+            var seen = state.LeashSeen!;
+            var fresh = keys.Where(k => !seen.Contains(k)).Distinct().ToList();
+            if (fresh.Count > 0) FriendsFold.Update(s => s.LeashSeen!.AddRange(fresh));
+        }
+        LeashBadge = open ? 0 : FriendsFold.LeashUnseen(keys, state.LeashSeen);
+
+        var summary = string.Join("  ·  ", FriendsFold.LeashSummary(snap).Select(p => Loc.GetF(p.Key, p.Arg)));
+        _leashFold.Children.Add(FoldHead("leash", Loc.Get("friends_leash_section"), "friends-section", open, ToggleLeash,
+            open ? null : summary, LeashBadge));
+        _leashBody.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+        _leashFold.Children.Add(_leashBody);
+    }
+
+    /// <summary>Opens or folds the leash. Internal for the suite.</summary>
+    internal void ToggleLeash()
+    {
+        FriendsFold.Update(s => s.LeashOpen = !s.LeashOpen);
+        FillLeashFold();
+        if (FriendsFold.State.LeashOpen) RiseIn(new FrameworkElement[] { _leashBody });
     }
 }
