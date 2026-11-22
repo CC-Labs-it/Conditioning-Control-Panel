@@ -12,7 +12,9 @@ namespace ConditioningControlPanel.Features
     /// The Whirlpool's options in the gold box (owner, 2026-11-15): the spiral ("Always new" Loom
     /// spirals that melt into each other, or one saved Loom spiral to hold), how often a new one
     /// rolls in, the pool's largest size, and what it drags in. They show while the Whirlpool is
-    /// picked. Numbers and clamps live in CCP.Core/Super/WhirlpoolOptions. Kept in its own partial
+    /// picked. Owner 2026-11-22: Pool size, Smallest size, Stay centred and Restless pool stay on
+    /// show; the rest sit behind a "More options" fold (Features/MoreFold) in the same box.
+    /// Numbers and clamps live in CCP.Core/Super/WhirlpoolOptions. Kept in its own partial
     /// so the spiral page's own code-behind stays untouched.
     /// </summary>
     public partial class SpiralFeatureControl
@@ -74,6 +76,9 @@ namespace ConditioningControlPanel.Features
                 ChkPoolDragsBubbles.IsChecked = s.WhirlpoolDragsBubbles;
                 ChkPoolDragsWords.IsChecked = s.WhirlpoolDragsWords;
                 DimPoolEvery();
+                // The "More options" fold opens on its own when a row inside is off its default,
+                // so a setting someone changed is never hidden from them. It never closes itself.
+                if (PoolFoldedRowsChanged(s)) FoldPoolMore.IsOpen = true;
             }
             catch (Exception ex)
             {
@@ -81,6 +86,13 @@ namespace ConditioningControlPanel.Features
             }
             finally { _poolLoading = false; }
         }
+
+        /// <summary>The folded rows (spiral, new every, moving effects pop, drags) away from their defaults.</summary>
+        internal static bool PoolFoldedRowsChanged(Models.AppSettings s) =>
+            s.WhirlpoolSpiral.Length > 0
+            || s.WhirlpoolNewEvery != ConditioningControlPanel.SuperCore.WhirlpoolOptions.HoldDefault
+            || s.MovingEffectsPop
+            || !s.WhirlpoolDragsFog || !s.WhirlpoolDragsPictures || !s.WhirlpoolDragsBubbles || !s.WhirlpoolDragsWords;
 
         /// <summary>"New spiral every" only means something on "Always new": dimmed and locked while
         /// one spiral is held, the same look as SuperDim. The value is kept.</summary>
