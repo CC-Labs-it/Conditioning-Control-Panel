@@ -8,6 +8,7 @@ this file disagree, this file wins until it is amended here first. Shape and hyg
 
 - The page runs unhosted (plain browser, no `window.chrome.webview`) with every feature that needs no host:
   that is the free web build. Hosted, it gains pictures, Sparkles and panic.
+- One tree, two editions (section 6): a page with no host, or a host that does not say, is the small edition.
 - The page never sees UnifiedId or AuthToken. It reports how the run ended, never an amount.
 - Law VI: leaving is instant. Nothing waits on the network.
 - Every effect the page draws asks Gentle first (section 4). No synthetic speech anywhere.
@@ -50,6 +51,10 @@ caps: {
   words: { bank: 'circe' | 'host', urls?: { [slug]: url } },  // a mod may hand another recorded bank; never TTS
   toys: bool,
   toysConnected: bool,         // true only from the CCP desktop app with a toy connected at run start: offers Toy Link + Phone Buzz (ui/platform.js)
+  edition: 'small' | 'full',   // section 6.1; missing or unknown = small
+  platform: 'web' | 'desktop', // missing = web
+  saveSlot: bool,              // section 6.3; the host keeps one save string for this account
+  expo: { state: 'ready' | 'absent', base?: url, mb?: int },  // section 6.5; desktop and full only
 }
 mod: 'default' | 'bambi' | 'sissy' | 'locked' | 'drone'
 ```
@@ -96,7 +101,8 @@ sections 1 and 2; only the transport differs (`bridge.js`, transport `web`):
 
 One localStorage key `fuzz.save.v2` (`sim/save.js`): `{v, run, life, extras}`, written every 5 s, on each buy and on
 leaving. `life` outlives a run; New run writes `run: null`. A v1 save reads as no save. Hosted, the save is still local:
-it is not synced and never becomes SP. Export and import appear on the pause card after a first ending.
+it is not synced and never becomes SP. Export and import appear on the pause card after a first ending. The one way a
+save leaves the device is the player's own carry (section 6.3).
 
 Every play visit opens the picture chooser before gameplay. Active feeds may report an integer `usedPercent` for the account's daily meter in Wake Up, plus `upgrade:true` when a bigger daily share exists for the account and `upgradeX` (integer, floor of the live Prime share over the plan's normal share; omitted for Prime or without live figures; the Prime line names it when 2 or more); on the web host the reading also shows as a ring beside the account chip (`ui/usage-ring.js`, Prime line from 80%), and a spent share (100) arrives with `rows:[]`. Only a player's Scrolller selection asks the authenticated
 host for metered pictures. Hosts using per-visit consent advertise `sessionOptIn:true` and accept `scrolller-release` to
@@ -107,3 +113,81 @@ Opted-in hosts may advertise `playWarmup:true`. The page sends `scrolller-play` 
 Picture screens, theme art, arcade prizes and photo effects show the selected source and its credit. Of a theme's three
 starting screens one is a motion screen (a gif or a clip, still when the source has none). Revoking consent clears
 the media. The slideshow and Swipe Feed deal mostly animated GIFs and muted videos, with occasional stills. An expanding feed keeps current playback and active prizes. Each motion round deals previously unseen items first. Paper prints use standalone photos. GIFs, videos and their posters are excluded from the photo pool. Prize settlement is independent of availability.
+
+## 6. Editions (v2, owner 2026-11-22)
+
+One game tree, two editions, never a fork. `data/editions.js` holds the lists and the fixed ids; `ui/edition.js` is the
+ONE reader of the host's choice. Plan and lanes: `handoff-1122/TC-EDITIONS-PLAN.md`.
+
+| | small | full |
+|---|---|---|
+| Where | the website, phones, free accounts everywhere | the CCP desktop app and the standalone, for any subscriber |
+| Rows | 260 of 316 (`SMALL_CUT` is never offered) | all |
+| Renewal | none, for anyone: the ending leads to New run | Sky, Depth, Stardust |
+| Llama Expo | never; the pen and the hunt stay | opens once its files are on the PC (6.5) |
+| Phone | hard caps (`PHONE_CAPS`) | not a phone target |
+
+### 6.1 Who decides
+
+- `init.caps.edition`: `'small'` or `'full'`. Missing, unknown, or no host at all = small. The page is untrusted: a host
+  says full only for an account it has checked (any subscriber, Basic or Prime). The website always says small.
+- A page on 127.0.0.1 or localhost with no host is the whole game, so dev drives and the Expo preview keep working;
+  `?edition=small` or `?edition=full` wins over everything there and is ignored everywhere else.
+- `init.caps.platform`: `'web'` or `'desktop'` (missing = web). It picks the nudge, and a desktop host is never sealed
+  (`ui/seal.js` is the website's rule; the app checks the account itself).
+
+### 6.2 Nudges (page -> host)
+
+`nudge {where, want}`, only from the player's own press. Two fixed ids, no free text, no url.
+
+- `where`: `ending`, `llama8`, `transmission`, `locked-tile`, `pause`, `save-sleep`.
+- `want`: `upgrade` on the desktop (the plan card; the app never says "desktop only"), `account` on the web with no
+  `identity`, `download` on the web signed in. The host maps `want` to its own door.
+- With no host the page opens the fixed link for that `want` (`NUDGE_LINKS`, all on the `open-url` list).
+
+### 6.3 Save carry
+
+A host that can keep one save string for the signed-in account sends `caps.saveSlot: true`; without it the buttons do
+not show. Any signed-in account may use the slot. The server never reads meaning from the string and it never becomes
+Sparkles.
+
+| direction | type | fields | meaning |
+|---|---|---|---|
+| page -> host | `save-offer` | `save` | The whole save string, from the player's press. Never more than 512,000 bytes. |
+| page -> host | `save-ask` | | "Is there a save for me?", from the player's press. |
+| host -> page | `save-result` | `ok, reason?` | `reason`: `sign-in`, `too-big`, `offline`, `refused`, `none`. |
+| host -> page | `save-incoming` | `save, savedAt, from` | Only as the answer to `save-ask`. `savedAt` epoch ms; `from`: `web` or `desktop`. |
+
+`save-incoming` is never applied silently: the page shows a card with both dates, applies it only on accept, and first
+keeps the local save as `fuzz.save.v2.bak`.
+
+### 6.4 Sleep
+
+Small never deletes. A save that owns cut rows or Renewal state loads in small with those asleep: not drawn, not
+paying, not counted, not offered. The owned list and `life` are written back unchanged, so the same save opened in full
+has everything. The first time, one card says so and offers the carry (`nudge where:'save-sleep'`).
+
+In small a kept row never needs a cut one: a cut parent hands down its own parents (`reqFor` in `ui/edition.js`), and
+`SMALL_REQ` pins a row by hand where the balance pass wants it.
+
+### 6.5 The Expo and the transmission
+
+The Expo's files are not in the installer and not on the website. On the desktop, in full, the host sends
+`caps.expo: {state:'absent', mb}` until they are on disk, then `{state:'ready', base}`.
+
+- At 4 llamas with the Expo absent, a card in fiction: a message from the future is transmitting data, accept the
+  transmission? It states the size and where the files land in plain words. YES sends `expo-fetch`. NOT NOW is always
+  there, and the pen sign offers it again. At 8 llamas with the Expo still absent, the wormhole shows the same card first.
+- In small the same card is a nudge (`where:'transmission'`): the transmission does not fit here.
+
+| direction | type | fields | meaning |
+|---|---|---|---|
+| page -> host | `expo-fetch` | | Start or resume the download. Only from the player's press. |
+| page -> host | `expo-cancel` | | The player stopped it. The host keeps what it has. |
+| host -> page | `expo-progress` | `pct` | Integer 0 to 100, at most two a second. |
+| host -> page | `expo-ready` | `base` | On disk and checked. `base`: https, ends in `/`. |
+| host -> page | `expo-failed` | `reason` | `offline`, `disk`, `refused`. The card says it plainly and offers again later. |
+
+The Expo loads only when `expoAllowed()`: edition full and its files within reach (`expo.state:'ready'`, or a local
+preview with the files in the tree). Every Expo file loads from `expoBase()` (default `assets/expo/`); nothing outside
+`ui/expo/` imports or fetches an Expo file.
