@@ -30,6 +30,8 @@ export function phoneMap(file,def){
   return def.arrivalMobileMaps[file]||file.replace(/\.webp$/,'-mobile.webp');
 }
 export function roomAsset(def,suffix){
+  if(suffix==='-light.webp'&&def.lightFile)return def.lightFile;
+  if(suffix==='-light-mobile.webp'&&def.mobileLightFile)return def.mobileLightFile;
   return (def.assetStem||def.id)+suffix;
 }
 

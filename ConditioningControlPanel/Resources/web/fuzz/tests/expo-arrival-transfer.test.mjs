@@ -10,6 +10,10 @@ test('open visits retain lighting, collision and reflections from their own edit
     assert.equal(roomAsset(original,suffix),'atrium'+suffix);
     assert.equal(roomAsset(updated,suffix),'atrium-c043'+suffix);
   }
+  const relit={...updated,lightFile:'patched-light.webp',mobileLightFile:'patched-mobile.webp'};
+  assert.equal(roomAsset(relit,'-light.webp'),'patched-light.webp');
+  assert.equal(roomAsset(relit,'-light-mobile.webp'),'patched-mobile.webp');
+  assert.equal(roomAsset(relit,'-probe-px.webp'),'atrium-c043-probe-px.webp');
 });
 
 test('the entrance decodes a gzip asset once across ordinary file and HTTP-encoded hosts',async t=>{

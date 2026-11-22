@@ -235,6 +235,8 @@
       "lightIntensity": 34.94238358415457,
       "reflectionIntensity": 0.33,
       "assetStem": "hall-ded2f60ac02e9836",
+      "mobileLightFile": "hall-press-floor-68e86254e21916e1-light-mobile.webp",
+      "lightFile": "hall-press-floor-cfd0bf5de36af18a-light.webp",
       "collision": "hall-ded2f60ac02e9836-collision.glb"
     },
     {
