@@ -113,7 +113,7 @@ export function mountSettlement(api,state,room,bind,surface,clean){
     void api.go('shop',[23.1,0,-12.84],0).then(()=>api.say('Visitor Services. Your lanyard is behind the till.'));
   }
   clean.push(api.annexProps(room,place=>{
-    fireExit=place('annex_fire_exit',[24.78,0,-3.5],-Math.PI/2);
+    fireExit=place('annex_fire_exit',[12.22,0,-7.4],Math.PI/2);
     const badge=place('annex_lanyard',[23.12,1.18,-13.70]);badge.scale.setScalar(1.3);
     const off=api.register(fireExit,'Take Bob’s fire exit',takeFireExit,2.5);
     const wear=api.register(badge,'Wear the staff lanyard',()=>{
@@ -155,7 +155,8 @@ export function mountSettlement(api,state,room,bind,surface,clean){
     api.setColliderEnabled('shop_shelves_before',!state.loops);api.setColliderEnabled('shop_shelves_after',!!state.loops);
     if(beat.listening&&Math.hypot(camera.position.x-21.2,camera.position.z+11.42)>6)beat.leave();
     if(receipt){receiptClock+=dt;const lines=receipt.children;for(let i=1;i<lines.length&&i<=1+receiptClock*7;i++)lines[i].hidden=false;if(camera.position.z>-7){receipt.remove();receipt=null;}}
-    if(fireExit && !staffArea && !state.contract && camera.position.x>24.20 && Math.abs(camera.position.z+3.5)<.55)takeFireExit();
+    if(fireExit && !staffArea && !state.contract && Math.abs(camera.position.x-fireExit.position.x)<.58 &&
+      Math.abs(camera.position.z-fireExit.position.z)<.55)takeFireExit();
     const dx=Math.abs(camera.position.x-15.03),dz=camera.position.z+13.60;
     const approach=state.boughtExit&&dx<.86&&dz>-.6&&dz<2.35;
     swing=T.MathUtils.damp(swing,transit||approach?1:0,4.3,dt);
