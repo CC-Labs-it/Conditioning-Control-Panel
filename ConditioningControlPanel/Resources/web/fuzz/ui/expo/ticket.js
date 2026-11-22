@@ -30,7 +30,12 @@ export function visitTicket(store) {
     stamp(mark,{restore=false}={}){
       if(!impressions.has(mark)||stamps.has(mark))return false;
       discovered.add(mark);stamps.add(mark);save();
-      if(!restore)emit({kind:'stamp',mark,count:this.count});
+      if(!restore){
+        const box=COUNTERFOILS.find(marks=>marks.includes(mark));
+        const event={kind:'stamp',mark,count:this.count};
+        if(box.some(m=>!stamps.has(m)))event.remaining=box.filter(m=>!stamps.has(m));
+        emit(event);
+      }
       return true;
     },
     withdraw(mark){if(stamps.delete(mark))save();},

@@ -86,8 +86,13 @@ export function createVisitGuide(root,{onOpen=()=>{},canOpen=()=>true}={}){
     if(a.target)arrow.style.transform='rotate('+Math.round((Math.atan2(a.target[0]-p.x,p.z-a.target[1])+yaw)*180/Math.PI)+'deg)';
     if(elapsed>=stampEnd){
       const next=stamps.shift();moment.hidden=!next;
-      if(next){ink.textContent=next.mark;number.textContent='Stamp '+next.count+' of 12'+(STOPS.some(s=>s.staff&&s.marks.includes(next.mark))?' · staff only':'');
-        plain.textContent=stampSentence(next.mark,t);stampEnd=elapsed+3;moment.removeAttribute('data-new');void moment.offsetWidth;moment.dataset.new='';}
+      if(next){
+        ink.textContent=next.mark;
+        number.textContent=next.remaining?'The Habitat · '+next.count+' of 12 boxes complete':'Stamp '+next.count+' of 12'+(STOPS.some(s=>s.staff&&s.marks.includes(next.mark))?' · staff only':'');
+        const followUp=next.remaining?.includes('Kept')?' Sit in the keeper’s chair to fill this box.':next.remaining?.includes('Fed')?' Feed one Yes through the slot to fill this box.':'';
+        plain.textContent=stampSentence(next.mark,t)+followUp;
+        stampEnd=elapsed+3;moment.removeAttribute('data-new');void moment.offsetWidth;moment.dataset.new='';
+      }
     }
     if(elapsed>=slipEnd){
       const next=deviations.shift();slip.hidden=!next;
