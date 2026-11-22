@@ -1,3 +1,5 @@
+import {createExpoTaps} from './touch-taps.js';
+
 const glyphs={
   play:'M8 5v14l11-7z',
   pause:'M6 5h4v14H6z M14 5h4v14h-4z',
@@ -48,16 +50,21 @@ export function mountExpoRadio(doc,music,arm){
     skip.title=title?'Next lo-fi track · '+title:'Next lo-fi track';
     details.hidden=!title;details.textContent=title?'Lo-fi · '+title:'';
   });
-  play.onpointerdown=()=>{pressIntent=displayed;};
-  play.onpointercancel=()=>{pressIntent=null;};
-  play.onclick=event=>{
-    const pause=event.detail&&pressIntent!==null?pressIntent:displayed;pressIntent=null;
+  const taps=createExpoTaps({afterPointer:()=>{
+    const target=doc.querySelector('.expo-trail-card:not([hidden])')||doc.querySelector('.expo-root');
+    target?.focus({preventScroll:true});
+  }});
+  play.addEventListener('pointerdown',()=>{pressIntent=displayed;});
+  taps.bind(play,event=>{
+    if(play.disabled)return;
+    const pointer=event.type==='pointerup'||event.detail>0;
+    const pause=pointer&&pressIntent!==null?pressIntent:displayed;pressIntent=null;
     if(!pause&&event.isTrusted)arm?.(event);
     music.setUserPaused(pause);
-  };
-  skip.onclick=event=>{if(event.isTrusted)arm?.(event);music.skip();};
+  });
+  taps.bind(skip,event=>{if(!skip.disabled){if(event.isTrusted)arm?.(event);music.skip();}});
   return ()=>{
-    off();changes.disconnect();media.removeEventListener('change',layout);host.removeAttribute('data-expo-compact');
+    off();taps.cancel();changes.disconnect();media.removeEventListener('change',layout);host.removeAttribute('data-expo-compact');
     audio.insertBefore(mute,toggle);speaker.remove();group.remove();details.remove();
   };
 }
