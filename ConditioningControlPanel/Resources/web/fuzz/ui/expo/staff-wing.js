@@ -149,10 +149,10 @@ export function createStaffWing(api,state) {
     if(powerTime!==null){
       powerTime+=dt;
       lowRooms();dark.style.opacity=String(Math.min(.14,powerTime/14));
-      if(powerTime>=2.6&&!blackout){blackout=true;card.style.display='grid';}
+      if(powerTime>=2.6&&!blackout){blackout=true;card.style.display='grid';api.pauseMusic?.(true);}
       if(powerTime>=8.6){
         powerTime=null;blackout=false;card.style.display='none';dark.style.background='#125e39';dark.style.opacity='.07';lowRooms();
-        cue('heater','beat');
+        api.pauseMusic?.(false);cue('heater','beat');
       }
     }
     if(view.unplugged&&powerTime===null){

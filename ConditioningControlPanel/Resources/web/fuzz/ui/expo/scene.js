@@ -10,6 +10,7 @@ import { createWalker } from './collision.js';
 import { assetURL, createZones, loadPlan } from './zones.js';
 import { createPost } from './post.js';
 import { createSound } from './audio.js';
+import { createMuseumMusic } from '../../audio/museum-music.js';
 import { createExhibits } from './exhibits.js';
 import { needsFinger } from './hoof-lab.js';
 import { createExpoMedia } from './media-panes.js';
@@ -234,7 +235,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     const instruments=createInstruments({ctx,camera,register,play:sound.play,meter:narration.meter,lite:LITE});
     const ambience=createAmbience({ctx,renderer,lite:LITE,meter:narration.meter});
     const kit=exhibitProps(assetURL),annex=exhibitProps(assetURL,'visitor-services.glb');clean.push(()=>kit.dispose(),()=>annex.dispose());
-    exhibits = createExhibits({ THREE, ctx, camera, scene, root, draw, say, walker, renderer, muffle:narration.muffle, setHeaterPower:sound.setHeaterPower, signal:instruments.signal, props:kit.mount, annexProps:annex.mount, records:()=>narration.story?.completed||0,
+    exhibits = createExhibits({ THREE, ctx, camera, scene, root, draw, say, walker, renderer, muffle:narration.muffle, setHeaterPower:sound.setHeaterPower, pauseMusic:on=>music.pause(on), signal:instruments.signal, props:kit.mount, annexProps:annex.mount, records:()=>narration.story?.completed||0,
       storeSouvenir:(obj,label)=>souvenirPrint({THREE,renderer,draw,ctx},obj,label), actionSerial:()=>actionSerial, cue:narration.cue, closingLine:narration.closingLine, play: sound.play, setSoundDepth: sound.setDepth,
       go, exit: onExit, farewell, register, assetURL, bindMedia, capturePhoto, finalPhoto, setColliderEnabled:walker.setColliderEnabled,
       setButtonAvailable:buttons.setAvailable,registerDoorLeaf:(...args)=>zones?.registerDoorLeaf(...args) });
@@ -280,6 +281,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       if (!ready || dead || ctx.paused || doc.hidden) return;
       elapsed += dt; controls.step(dt); walker.step(dt); entered(); sound.setListener(walker.feet);
       zones.stream(dt); exhibits.tick?.(dt, walker.zone); dome.step(dt,walker.zone); narration.tick(dt);instruments.tick(dt,walker.zone);buttons.tick(dt);
+      music.setSpeaking(narration.speaking);
       ambience.tick(dt);collection.tick(dt,ctx.gentle||ctx.reduced);
       if(dt<.12 && dt>0){budgetTime+=dt;budgetFrames++;}
       if(budgetTime>=1.75){
@@ -310,6 +312,10 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       if (dead) return;
       const { id, at, yaw } = plan.start; walker.place(id, at, yaw); ready = true; entered(); resize(); sync();
     })();
+    const music = createMuseumMusic(ctx, {
+      document: doc, ready: firstFrame, source: 'expo-music', label: 'Expo music', level: .22, speechLevel: .06,
+    });
+    clean.push(() => music.dispose());
     const api = { ready: firstFrame, dispose, beginArrival() {
       if (arrival && !dead) { arrival = false; arrivalStart = ctx.activeMs; draw(); }
     },finishArrival() {
@@ -317,7 +323,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       if(!dead)narration.pause(ctx.paused || doc.hidden);
     } };
     if (['localhost','127.0.0.1','[::1]'].includes(win.location.hostname)) Object.assign(api, {
-      root, camera, scene, renderer, interact, draw, go, warp: go, exhibits, walker, narrationState:narration.debug,plantState:instruments.debug,ambience:ambience.debug,footfalls:sound.footfalls,buttons:buttons.debug,
+      root, camera, scene, renderer, interact, draw, go, warp: go, exhibits, walker, narrationState:narration.debug,musicState:music.debug,plantState:instruments.debug,ambience:ambience.debug,footfalls:sound.footfalls,buttons:buttons.debug,
       focusTarget:()=>{
         const target=targetAt();if(!target)return null;
         const lineage=[];for(let n=target.hit.object;n;n=n.parent)if(n.name)lineage.push(n.name);

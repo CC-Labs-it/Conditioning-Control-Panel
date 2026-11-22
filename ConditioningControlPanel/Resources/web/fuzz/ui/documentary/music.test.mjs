@@ -9,13 +9,13 @@ function bus() {
     emit(id, data) { for (const fn of [...(map.get(id) || [])]) fn(data); },
   };
 }
-function harness() {
+function harness(options = {}) {
   let clock = 0, serial = 0;
   const timers = new Map(), streams = [], host = bus(), events = bus(), doc = new EventTarget();
   doc.hidden = false;
   const ctx = { paused: false, on: host.on, cleanup() {} };
   const tunnel = { state: { docked: false }, captions: { ownerDocument: doc }, ready: Promise.resolve(), on: events.on };
-  const music = createDocumentaryMusic(ctx, tunnel, {
+  const music = createDocumentaryMusic(ctx, tunnel, { ...options,
     now: () => clock,
     setTimer(fn, ms) { const id = ++serial; timers.set(id, { at: clock + ms, fn }); return id; },
     clearTimer(id) { timers.delete(id); },
@@ -88,4 +88,26 @@ test('unavailable music stops after one attempt per track', async () => {
   for (let n=0;n<3;n++) h.streams.at(-1).error();
   assert.equal(h.streams.length, 3); assert.equal(h.music.debug().current, null);
   assert.equal(h.timers.size, 0); h.music.dispose();
+});
+
+test('a visit blackout stays silent through global pause and visibility changes', async () => {
+  const h = harness(); await h.music.ready;
+  const source = h.streams[0];
+  source.time(42); h.music.pause(true);
+  h.host.emit('pause'); h.host.emit('resume');
+  h.doc.dispatchEvent(new Event('visibilitychange'));
+  assert.equal(source.el.paused, true);
+  h.music.pause(false);
+  assert.equal(source.el.paused, false);
+  assert.equal(source.el.currentTime, 42);
+  h.music.dispose();
+});
+
+test('an Expo without its runtime music pack does not request tracks again on every interaction', async () => {
+  const h = harness({retryMissing:false}); await h.music.ready;
+  for (let n=0;n<3;n++) h.streams.at(-1).error();
+  for (const event of ['pointerdown','keydown','pointerdown']) h.doc.dispatchEvent(new Event(event));
+  assert.equal(h.streams.length, 3);
+  assert.equal(h.timers.size, 0);
+  h.music.dispose();
 });
