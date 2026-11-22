@@ -53,6 +53,29 @@ public class SuperBaseTests
         }
     }
 
+    // ccp-bugs #1718: the Brain Drain bubble only plays with the base off, so a base-only gate
+    // made every bubble drain V1. A timed drain rides the V2 pick on its own.
+    [Theory]
+    [InlineData(true, true, false, true)]    // own drain, V2 picked
+    [InlineData(false, true, true, true)]    // bubble drain, base off, V2 picked: lit
+    [InlineData(false, false, true, false)]  // bubble drain, V2 not picked
+    [InlineData(false, true, false, false)]  // nothing running on a timed hold, base off
+    [InlineData(true, false, false, false)]
+    public void Undertow_lights_a_timed_drain_on_the_V2_pick(bool baseOn, bool selected, bool timed, bool lit)
+        => Assert.Equal(lit, SuperBase.UndertowLit(baseOn, selected, timed));
+
+    [Fact]
+    public void A_bubble_drain_reads_the_switch_in_the_layer()
+    {
+        var root = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (root != null && !System.IO.Directory.Exists(System.IO.Path.Combine(root.FullName, "ConditioningControlPanel", "Resources"))) root = root.Parent;
+        Assert.NotNull(root);
+        var src = System.IO.File.ReadAllText(System.IO.Path.Combine(
+            root!.FullName, "ConditioningControlPanel", "Services", "Compositor", "BrainDrainLayer.cs"));
+        Assert.Contains("SuperBase.UndertowLit(", src);
+        Assert.Contains("TimedBrainDrainActive", src);
+    }
+
     [Fact]
     public void No_settings_means_no_base()
     {
