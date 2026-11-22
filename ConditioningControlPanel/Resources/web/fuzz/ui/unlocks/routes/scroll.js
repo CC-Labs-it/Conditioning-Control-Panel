@@ -1,0 +1,465 @@
+/* Swipe Feed: a thumb game. Every swipe up is a tap, and all the rows after the first change what a swipe is worth.
+ * The feed is a screen (ui/screens.js): it earns per second as well, and its bar drags it anywhere, since a drag on the feed
+ * itself is a swipe. On a phone it sits beside the button and opens full screen on a press. */
+
+import { FEED_LINES } from '../../../data/content/index.js';
+import { deck, burst, ring, railsRoom, fill } from './kit.js';
+import { ROUTE_COPY } from './copy.js';
+import { screen, mediaEl, dropMedia, holdMedia, watchMedia, testCard, themeLists, themeNiche } from '../../screens.js';
+import { mountAutoScroll } from './auto-scroll.js';
+
+/* The one feed. d_scroll builds it; the later rows hang off it. Module state is reset when d_scroll goes. */
+let feed = null;
+const hooks = { swipe: [], doubleTap: [], pull: [], tile: [] };
+
+const KINDS = ['pretty', 'close'];
+
+const isReady = tile => {
+  const media = tile?.media;
+  return media?.tagName === 'VIDEO' ? media.readyState >= 2 : !!(media?.complete && media.naturalWidth);
+};
+
+function makeFeed(ctx) {
+  const scr = screen(ctx, { handle: true, ratio: 1.75, hint: !ctx.store.get('spot') });
+  const shell = scr.body;
+  const root = ctx.el('div', 'position:absolute;inset:0;background:#111;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;pointer-events:auto;', null, shell);
+  const col = ctx.el('div', 'position:absolute;left:0;right:0;top:0;transition:transform .28s ease-out;will-change:transform;', null, root);
+  const hud = ctx.el('div', 'position:absolute;inset:0;pointer-events:none;z-index:5;', null, root);
+  const hint = ctx.el('div', 'position:absolute;left:0;right:0;bottom:12px;text-align:center;font:700 13px Arial,Helvetica,sans-serif;color:#fff;text-shadow:0 1px 3px #000;', ROUTE_COPY.feedSwipe, hud);
+  hint.className = 'routes-hint';
+  const footer = scr.inner.querySelector('.scr-tag');
+  const progress = ctx.el('small', '', null, footer);
+  progress.className = 'routes-load';
+  const showProgress = () => {
+    const ready = ctx.pictures.loadingCount;
+    progress.hidden = !ready;
+    progress.textContent = ready ? ROUTE_COPY.feedLoading.replace('{n}', String(ready)) : '';
+  };
+  for (const event of ['pictures', 'pictures-added', 'pictures-progress']) ctx.on(event, showProgress);
+  showProgress();
+  ctx.css('.scr-tag .routes-load{margin-left:6px;font:10px system-ui}.routes-full .routes-load{position:absolute;left:7px;bottom:7px;background:#15151bda;color:#fff;padding:2px 5px;border-radius:4px;font:11px system-ui}');
+
+  const f = { scr, root, shell, col, hud, footer, tiles: [], index: 0, h: 0, swipes: 0, fullscreen: false, sheetClose: null };
+  ctx.css('.routes-small .scr-card{justify-content:flex-start;padding-top:6px}.routes-small .scr-card b{display:none}.routes-small .routes-big{display:none !important}.routes-full .routes-fy{top:48px !important;right:8px}.routes-full .routes-endbox{bottom:72px !important}.routes-full .routes-hint{bottom:auto !important;top:58%}');
+  const sizeMode = () => { root.classList.toggle('routes-small', !railsRoom(ctx) && !f.fullscreen); hint.textContent = (!railsRoom(ctx) && !f.fullscreen) ? ROUTE_COPY.feedPress : ROUTE_COPY.feedSwipe; };
+  sizeMode();
+  f.sizeMode = sizeMode;
+
+  const visible = () => (f.fullscreen || scr.visible) && !ctx.paused && !ctx.state.ended && !root.ownerDocument.hidden;
+  let down = null, pendingManual = null;
+  const nextTile = () => f.tiles.find(t => t.n === f.index + 1);
+  function clearTile(t) {
+    t.request = null;
+    t.url = null;
+    dropMedia(t.media);
+    t.media = null;
+    t.reported = false;
+    t.card?.remove();
+    t.card = null;
+    t.credit.textContent = '';
+    t.deco.textContent = '';
+    t.bar = null;
+  }
+  async function fillTile(t, tries = 2) {
+    if (!visible() || t.n < f.index || t.n > f.index + 1 || t.request) return;
+    const ticket = {};
+    t.request = ticket;
+    const wanted = t.clip ? 'clip' : 'mixed';
+    const previousUrl = f.tiles.find(tile => tile.n === t.n - 1)?.url;
+    const options = { niche: themeNiche(themeLists(ctx), t.kind, ctx.rng), allowScrolller: true, previousUrl };
+    let pic = await ctx.pictures.next({ ...options, kind: wanted });
+    if (t.clip && !pic) pic = await ctx.pictures.next({ ...options, kind: 'mixed' });
+    if (t.request !== ticket || !t.el.isConnected) return;
+    t.request = null;
+    if (!visible() || t.n < f.index || t.n > f.index + 1) return;
+    if (pic) {
+      if (t.clip && pic.kind === 'picture') t.clip = false;
+      const media = mediaEl(ctx, t.el, pic);
+      t.url = pic.url;
+      t.media = media;
+      t.el.insertBefore(media, t.credit);
+      media.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;';
+      media.addEventListener(media.tagName === 'IMG' ? 'load' : 'loadeddata', syncClips, { once: true });
+      media.addEventListener('error', () => {
+        if (t.media !== media) return;
+        clearTile(t);
+        if (tries > 0) fillTile(t, tries - 1);
+        else t.card = testCard(ctx, t.el, wanted);
+      }, { once: true });
+      syncClips();
+    } else {
+      t.card = testCard(ctx, t.el, wanted);
+    }
+    t.real = !!pic;
+    t.credit.textContent = pic?.credit || '';
+    t.deco.textContent = '';
+    for (const fn of hooks.tile) fn(t);
+  }
+  /* One clip plays at a time, the one on show. Wake Up, a suspend and Gentle stop it. */
+  function syncClips() {
+    const on = visible();
+    const current = f.tiles.find(t => t.n === f.index);
+    if (!on) pendingManual = null;
+    if (on && current && !current.reported && isReady(current)) {
+      current.reported = true;
+      ctx.pictures.noteView?.();
+    }
+    for (const t of f.tiles) {
+      holdMedia(ctx, t.media, on && t === current);
+      // Keep one incoming tile ready for the swipe. Let its neighbour claim a source first.
+      if (on && !t.media && !t.card && (t === current || (t.n === f.index + 1 && (current?.url || current?.card)))) fillTile(t);
+    }
+    if (pendingManual && !down && isReady(nextTile())) {
+      const { at } = pendingManual;
+      pendingManual = null;
+      advance(at, true);
+    }
+  }
+  watchMedia(ctx, root.ownerDocument, syncClips);
+  ctx.on('pictures', () => { pendingManual = null; for (const t of f.tiles) clearTile(t); syncClips(); });
+  ctx.on('pictures-added', () => {
+    for (const t of f.tiles) if (t.card) clearTile(t);
+    syncClips();
+  });
+  function addTile() {
+    const el = ctx.el('div', `position:absolute;left:3px;right:3px;border-radius:9px;overflow:hidden;background:#222;`, null, col);
+    const credit = ctx.el('div', 'position:absolute;right:4px;bottom:2px;font:10px Arial,Helvetica,sans-serif;color:#fff;text-shadow:0 1px 2px #000;', '', el);
+    const deco = ctx.el('div', 'position:absolute;inset:0;pointer-events:none;', null, el);
+    const t = { el, credit, deco, n: f.tiles.length ? f.tiles[f.tiles.length - 1].n + 1 : 0,
+      kind: hooks.pick ? hooks.pick() : KINDS[0], clip: hooks.clip ? hooks.clip() : false, liked: false, seenAt: 0 };
+    f.tiles.push(t);
+    if (f.tiles.length > 5) { const gone = f.tiles.shift(); dropMedia(gone.media); gone.el.remove(); }
+    return t;
+  }
+  function place() {
+    f.h = root.clientHeight || 100;
+    for (const t of f.tiles) { t.el.style.top = `${t.n * (f.h + 4)}px`; t.el.style.height = `${f.h - 4}px`; }
+    col.style.transform = `translateY(${-f.index * (f.h + 4)}px)`;
+    syncClips();
+  }
+  f.place = place;
+  f.current = () => f.tiles.find((t) => t.n === f.index) || f.tiles[0];
+
+  ctx.cleanup(() => { for (const t of f.tiles) { dropMedia(t.media); t.media = null; } });
+  addTile(); addTile();
+  ctx.after(30, place);
+  ctx.every(900, () => {
+    if (root.clientHeight !== f.h) { place(); f.sizeMode?.(); }
+  });
+
+  function advance(at, manual) {
+    const was = f.current();
+    if (was) for (const fn of hooks.leave || []) fn(was);
+    col.style.transition = ctx.gentle || ctx.reduced ? 'none' : 'transform .28s ease-out';
+    f.index += 1;
+    f.current().autoReached = !manual;
+    if (!manual && f.current().bar) f.current().bar.hidden = true;
+    addTile();
+    place();
+    if (railsRoom(ctx) || f.fullscreen) hint.style.opacity = '0';
+    f.auto?.restart();
+    if (!manual) return;
+    f.swipes += 1;
+    if (ctx.state.store.journey?.banks?.d_scroll) ctx.pay(0, 'swipe', at);
+    const gain = ctx.button.press();
+    const r = root.getBoundingClientRect();
+    const p = at || { x: r.left + r.width / 2, y: r.top + r.height * 0.3 };
+    if (gain) ctx.float(p.x, p.y, `+${ctx.fmt(gain)}`, 'color:#ffd24d;font-weight:700;font-size:18px;');
+    ctx.audio.play('assets/audio/sfx/chip_pop.mp3', { bus: 'sfx', gain: 0.3 });
+    for (const fn of hooks.swipe) fn(p);
+  }
+  function swipe(at) {
+    if (!visible()) return;
+    f.auto?.restart();
+    const current = f.current();
+    // With a playable post on screen, keep it there until the prefetched
+    // neighbor has a decoded frame. Multiple wheel notches reserve one swipe.
+    const next = nextTile();
+    if (current?.media && !isReady(next)) {
+      pendingManual = { at };
+      if (next?.card) clearTile(next);
+      place();
+      return;
+    }
+    pendingManual = null;
+    advance(at, true);
+  }
+  f.swipe = swipe;
+  f.autoCanCount = () => visible() && !down && !pendingManual && isReady(f.current());
+  f.advanceAuto = () => {
+    if (f.autoCanCount() && isReady(nextTile())) advance(null, false);
+  };
+
+  /* gestures: drag up = swipe, drag down = pull, two quick presses = like, wheel = swipe. The bar above the feed moves it. */
+  let lastTapAt = 0;
+  root.addEventListener('pointerdown', (e) => {
+    if (ctx.paused) return;
+    f.auto?.restart();
+    /* A swipe may start on the test card's button; left still, the press stays the button's. */
+    const onButton = !!e.target.closest?.('button');
+    down = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId, onButton };
+    if (!onButton) { try { root.setPointerCapture(e.pointerId); } catch { /* fine */ } }
+    col.style.transition = 'none';
+  });
+  root.addEventListener('pointermove', (e) => {
+    if (!down) return;
+    const dy = e.clientY - down.y;
+    col.style.transform = `translateY(${-f.index * (f.h + 4) + Math.max(-90, Math.min(70, dy * (dy > 0 ? 0.5 : 1)))}px)`;
+    for (const fn of hooks.drag || []) fn(dy);
+  });
+  const up = (e) => {
+    if (!down) return;
+    const dy = e.clientY - down.y, dx = e.clientX - down.x, d = down;
+    down = null;
+    col.style.transition = ctx.gentle || ctx.reduced ? 'none' : 'transform .28s ease-out';
+    if (dy < -28) { swipe({ x: e.clientX, y: e.clientY }); return; }
+    place();
+    if (dy > 46) { for (const fn of hooks.pull) fn({ x: e.clientX, y: e.clientY }); return; }
+    for (const fn of hooks.drag || []) fn(0);
+    if (!d.onButton && Math.abs(dy) < 12 && Math.abs(dx) < 12 && performance.now() - d.t < 350) {
+      const now = performance.now();
+      if (now - lastTapAt < 340) { lastTapAt = 0; for (const fn of hooks.doubleTap) fn({ x: e.clientX, y: e.clientY }); return; }
+      lastTapAt = now;
+      if (!railsRoom(ctx) && !f.fullscreen) open();
+    }
+  };
+  root.addEventListener('pointerup', up);
+  root.addEventListener('pointercancel', () => { down = null; col.style.transition = ctx.gentle || ctx.reduced ? 'none' : 'transform .28s ease-out'; place(); });
+  let wheelAt = 0;
+  root.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const now = performance.now();
+    if (e.deltaY > 0 && now - wheelAt > 260) { wheelAt = now; swipe(); }
+  }, { passive: false });
+
+  /* Full screen on a phone: same feed, moved into the over layer, with its own way back. Wake Up stays above it. */
+  const back = ctx.el('button', 'position:absolute;left:50%;bottom:12px;transform:translateX(-50%);min-height:44px;padding:4px 18px;background:#fff;color:#000;border:0;border-radius:22px;font:700 15px Arial,Helvetica,sans-serif;pointer-events:auto;z-index:8;touch-action:manipulation;display:none;', ROUTE_COPY.feedBack, root);
+  back.type = 'button';
+  back.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); close(); });
+  const count = ctx.el('div', 'position:absolute;left:10px;top:10px;font:700 18px Arial,Helvetica,sans-serif;color:#fff;text-shadow:0 1px 3px #000;display:none;z-index:6;', '', hud);
+  function open() {
+    f.fullscreen = true;
+    root.style.cssText += ';position:fixed;inset:0;border-radius:0;border:0;';
+    ctx.layer('over').appendChild(root);
+    back.style.display = count.style.display = 'block';
+    hint.style.opacity = '1';
+    root.classList.add('routes-full');
+    hud.appendChild(progress);
+    if (f.auto) hud.appendChild(f.auto.button);
+    sizeMode();
+    ctx.after(40, place);
+  }
+  function close() {
+    f.fullscreen = false;
+    root.style.position = 'absolute'; root.style.borderRadius = '0'; root.style.border = '0';
+    shell.appendChild(root);
+    back.style.display = count.style.display = 'none';
+    root.classList.remove('routes-full');
+    footer.appendChild(progress);
+    if (f.auto) footer.appendChild(f.auto.button);
+    sizeMode();
+    ctx.after(40, place);
+  }
+  const visibility = event => {
+    if (event.detail?.root !== scr.el.closest('.dk')) return;
+    if (!scr.visible) {
+      down = null;
+      for (const fn of hooks.drag || []) fn(0);
+      if (f.fullscreen) close();
+    }
+    syncClips();
+  };
+  const doc = root.ownerDocument;
+  doc.addEventListener('fz-dock-move', visibility);
+  ctx.cleanup(() => doc.removeEventListener('fz-dock-move', visibility));
+  ctx.every(200, () => { if (f.fullscreen) count.textContent = ctx.fmt(ctx.state.fuzz); });
+  f.open = open;
+  return f;
+}
+
+const resetHooks = () => { hooks.swipe = []; hooks.doubleTap = []; hooks.pull = []; hooks.tile = []; hooks.pick = null; hooks.clip = null; hooks.leave = []; hooks.drag = []; };
+const listen = (ctx, name, fn) => { (hooks[name] ||= []).push(fn); void ctx; };
+
+export default {
+  /* Swipe Feed: drag up, or scroll a wheel, and the next picture comes. Each one is a tap. */
+  d_scroll: {
+    mount(ctx) {
+      resetHooks();
+      feed = makeFeed(ctx);
+      if (!ctx.gentle) ctx.anim(feed.shell, [{ transform: 'translateY(30px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 300, easing: 'ease-out' });
+      if (!railsRoom(ctx)) ctx.toast(ROUTE_COPY.feedOpen);
+      return { show: feed.scr.openDock, off() { feed = null; resetHooks(); } };
+    },
+  },
+
+  d_autoscroll: { mount(ctx) { return mountAutoScroll(ctx, feed); } },
+
+  /* Double-Tap Like: two quick presses on a picture, once a picture. A heart and a lump. */
+  d_like: {
+    mount(ctx) {
+      const line = deck(FEED_LINES.liked, ctx);
+      listen(ctx, 'doubleTap', (p) => {
+        const t = feed?.current();
+        if (!t || t.liked) return;
+        t.liked = true;
+        ctx.float(p.x, p.y - 20, '♥', 'color:#ff3b7a;font-size:54px;');
+        burst(ctx, p.x, p.y, '#ff3b7a', 10, 70);
+        const r = ctx.rates();
+        ctx.pay(Math.max(r.click * 5, r.fps * 2), 'like', p);
+        if (ctx.rng() < 0.35) ctx.toast(line());
+        ctx.audio.play('assets/audio/sfx/chain_pop.mp3', { bus: 'sfx', gain: 0.4 });
+      });
+      return {};
+    },
+  },
+
+  /* Video Clips adds a watch bonus to one tile in three, on top of the feed's ordinary media mix. */
+  d_clips: {
+    mount(ctx) {
+      hooks.clip = () => ctx.rng() < 0.34;
+      listen(ctx, 'tile', (t) => {
+        if (!t.clip) return;
+        ctx.el('div', 'position:absolute;right:6px;top:6px;font:700 11px Arial,Helvetica,sans-serif;color:#fff;text-shadow:0 1px 2px #000;', ROUTE_COPY.muted, t.deco);
+        t.bar = ctx.el('div', 'position:absolute;left:0;right:0;bottom:0;height:5px;background:var(--niche);transform-origin:0 50%;transform:scaleX(0);', null, t.deco);
+        t.watch = 0;
+      });
+      return {
+        tick(dt) {
+          const t = feed?.current();
+          if (!t?.clip || !t.bar || t.watched || t.autoReached || (!feed.fullscreen && !feed.scr.visible) || feed.root.ownerDocument.hidden) return;
+          t.watch += dt;
+          t.bar.style.transform = `scaleX(${Math.min(1, t.watch / 3)})`;
+          if (t.watch >= 3) {
+            t.watched = true;
+            const r = feed.root.getBoundingClientRect(), rate = ctx.rates();
+            ctx.pay(Math.max(rate.click * 3, rate.fps * 2), 'clip', { x: r.left + r.width / 2, y: r.top + r.height / 2 });
+          }
+        },
+      };
+    },
+  },
+
+  /* For You Feed: stay on a kind of picture and you get more of that kind, and a meter owns up to it. */
+  d_foryou: {
+    mount(ctx) {
+      const lines = deck(FEED_LINES.forYou, ctx);
+      const weights = { [KINDS[0]]: 1, [KINDS[1]]: 1 };
+      hooks.pick = () => (ctx.rng() < weights[KINDS[0]] / (weights[KINDS[0]] + weights[KINDS[1]]) ? KINDS[0] : KINDS[1]);
+      const box = ctx.el('div', 'position:absolute;left:8px;right:8px;top:8px;display:flex;flex-direction:column;gap:3px;', null, feed.hud);
+      box.className = 'routes-big routes-fy';
+      const label = ctx.el('div', 'font:11px Arial,Helvetica,sans-serif;color:#f0a8cc;text-shadow:0 1px 2px #000;', lines(), box);
+      const mk = (c) => { const o = ctx.el('div', 'height:6px;border-radius:3px;background:rgba(255,255,255,.2);overflow:hidden;', null, box); return ctx.el('div', `height:100%;background:${c};transform-origin:0 50%;transition:transform .4s;`, null, o); };
+      const a = mk('var(--niche)'), b = mk('var(--niche-2)');
+      const paint = () => { const s = weights[KINDS[0]] + weights[KINDS[1]]; a.style.transform = `scaleX(${weights[KINDS[0]] / s})`; b.style.transform = `scaleX(${weights[KINDS[1]] / s})`; };
+      paint();
+      let sat = 0;
+      return {
+        tick(dt) {
+          sat += dt;
+          const t = feed?.current();
+          if (!t || t.autoReached) return;
+          if (sat >= 1.4 && !t.lingered) {
+            t.lingered = true;
+            weights[t.kind] += 1;
+            paint();
+            label.textContent = lines();
+            const r = feed.root.getBoundingClientRect();
+            ring(ctx, r.left + r.width / 2, r.top + r.height / 2, 120, '#fff', 500, 'over');
+          }
+          if (t !== feed.lastSeen) { feed.lastSeen = t; sat = 0; }
+        },
+      };
+    },
+  },
+
+  /* Swipe Streak: keep going with under two seconds between swipes and each swipe pays more, up to x4. */
+  d_streak: {
+    mount(ctx) {
+      const words = deck(FEED_LINES.streak, ctx), lost = deck(FEED_LINES.streakLost, ctx);
+      const COL = ['#ffb36b', '#ff9a3c', '#ff6a2c', '#ff3b2c'];
+      const x = ctx.el('div', 'position:absolute;left:0;right:0;top:36%;text-align:center;font:800 26px/1 Arial,Helvetica,sans-serif;color:#ffb36b;text-shadow:0 2px 6px #000;transition:font-size .2s;opacity:0;', '', feed.hud);
+      let n = 0, last = 0, cancel = null;
+      listen(ctx, 'swipe', (p) => {
+        const t = ctx.state.clock;
+        n = t - last < 2000 ? n + 1 : 1;
+        last = t;
+        const mul = Math.min(4, 1 + Math.floor(n / 3));
+        if (mul > 1) {
+          const r = ctx.rates();
+          const got = ctx.pay(r.click * (mul - 1), 'streak', p);
+          x.textContent = `+${ctx.fmt(got)}`;
+          x.style.fontSize = `${20 + mul * 13}px`;
+          x.style.color = COL[mul - 1];
+          x.style.opacity = '1';
+          if (n === 12) { burst(ctx, p.x, p.y, '#ff6a2c', 14, 100); ctx.toast(fill(words(), { n })); ctx.audio.play('assets/audio/sfx/streak_milestone.mp3', { bus: 'sfx', gain: 0.5 }); }
+        }
+        cancel?.();
+        cancel = ctx.after(2000, () => {
+          if (n >= 6) ctx.toast(lost());
+          n = 0;
+          x.style.opacity = '0';
+        });
+      });
+      return {};
+    },
+  },
+
+  /* Pull to Refresh: pull the feed down. Usually nothing. One in five pays big, so you will keep pulling. */
+  d_refresh: {
+    mount(ctx) {
+      const miss = deck(FEED_LINES.refreshMiss, ctx), hit = deck(FEED_LINES.refreshHit, ctx);
+      const sp = ctx.el('div', 'position:absolute;left:50%;top:10px;margin-left:-11px;width:22px;height:22px;border:3px solid #fff;border-top-color:transparent;border-radius:50%;opacity:0;', null, feed.hud);
+      const tag = ctx.el('div', 'position:absolute;left:0;right:0;top:38px;text-align:center;font:11px Arial,Helvetica,sans-serif;color:#ddd;opacity:0;', FEED_LINES.pull, feed.hud);
+      let spin = null, busy = false;
+      if (!ctx.gentle) spin = ctx.anim(sp, [{ transform: 'rotate(0)' }, { transform: 'rotate(360deg)' }], { duration: 900, iterations: Infinity, easing: 'linear' });
+      void spin;
+      listen(ctx, 'drag', (dy) => { sp.style.opacity = String(Math.max(0, Math.min(1, dy / 46))); tag.style.opacity = sp.style.opacity; });
+      listen(ctx, 'pull', (p) => {
+        if (busy) return;
+        busy = true;
+        sp.style.opacity = '1';
+        tag.style.opacity = '0';
+        ctx.after(700, () => {
+          busy = false;
+          sp.style.opacity = '0';
+          if (ctx.rng() < 0.2) {
+            const r = ctx.rates();
+            ctx.pay(Math.max(r.click * 40, r.fps * 12), 'refresh', p);
+            burst(ctx, p.x, p.y, '#ffd24d', 16, 110);
+            ctx.toast(hit());
+            ctx.audio.play('assets/audio/sfx/golden_pop.mp3', { bus: 'sfx', gain: 0.6 });
+          } else {
+            ctx.float(p.x, p.y - 20, '+1', 'color:#aaa;font-size:12px;');
+            ctx.pay(1, 'refresh');
+            ctx.toast(miss());
+          }
+        });
+      });
+      return {};
+    },
+  },
+
+  /* Fake Progress Bar: every swipe halves what is left of the feed, so it is always nearly done, and it never is. */
+  d_end: {
+    mount(ctx) {
+      const near = deck(FEED_LINES.endNear, ctx);
+      const box = ctx.el('div', 'position:absolute;left:8px;right:8px;bottom:30px;text-align:center;font:800 22px/1 Arial,Helvetica,sans-serif;color:#fff;text-shadow:0 1px 3px #000;', '', feed.hud);
+      box.className = 'routes-big routes-endbox';
+      const pct = ctx.el('div', '', '0%', box);
+      const o = ctx.el('div', 'height:9px;margin-top:5px;border-radius:5px;background:rgba(255,255,255,.25);overflow:hidden;', null, box);
+      const fillEl = ctx.el('div', 'height:100%;background:#ffd24d;transform-origin:0 50%;transform:scaleX(0);transition:transform .3s;', null, o);
+      ctx.el('div', 'font:11px Arial,Helvetica,sans-serif;margin-top:3px;color:#ccc;', FEED_LINES.endTag, box);
+      let p = ctx.store.get('p') || 0, n = 0;
+      const paint = () => { pct.textContent = `${Math.min(99, Math.floor(p * 100))}%`; fillEl.style.transform = `scaleX(${Math.min(0.99, p)})`; };
+      paint();
+      listen(ctx, 'swipe', () => {
+        p += (1 - p) * 0.25;
+        if (p > 0.992) p = 0.992;
+        ctx.store.set('p', p);
+        paint();
+        if (++n % 5 === 0) ctx.toast(near());
+      });
+      return {};
+    },
+  },
+};
