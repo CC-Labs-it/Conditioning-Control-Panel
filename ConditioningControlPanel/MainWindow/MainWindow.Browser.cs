@@ -3227,9 +3227,14 @@ namespace ConditioningControlPanel
                     // One screen only: no display clone (#1565). A video the user maximized goes
                     // there too (owner 2026-11-22, ccp-bugs #1720): the effects follow the content
                     // screen, so a hand fullscreen on the panel's screen left them drawing elsewhere.
-                    var screen = App.GetPrimaryContentScreen()
-                        ?? System.Windows.Forms.Screen.FromHandle(
-                            new System.Windows.Interop.WindowInteropHelper(this).Handle);
+                    // When the panel's screen already shows content (e.g. "all monitors") it stays
+                    // there, where the player is looking.
+                    var panelScreen = System.Windows.Forms.Screen.FromHandle(
+                        new System.Windows.Interop.WindowInteropHelper(this).Handle);
+                    var screen = (!takeover && Services.Browser.BrowserFullscreenScreen.PanelShowsContent(
+                                        panelScreen.DeviceName, App.GetGlobalScreens().Select(s => s.DeviceName)))
+                        ? panelScreen
+                        : App.GetPrimaryContentScreen() ?? panelScreen;
                     // Screen bounds are pixels, Left/Top are DIPs (same as the video windows).
                     var hostDpi = BubbleCountWindow.GetDpiForScreen(screen);
                     if (!(hostDpi > 0)) hostDpi = 1.0;

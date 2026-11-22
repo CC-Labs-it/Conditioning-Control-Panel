@@ -2074,6 +2074,10 @@ namespace ConditioningControlPanel.Services
                         ? FlashMotion.Resolve(FlashMotionStyle.DriftBounce,
                             true, true, MotionFx.Level, _random)
                         : ResolveMotionStyle(settings, inheritMotion);
+                    // A Pendulum hangs tilted from its rope: the fly-out from the bubble cannot land on
+                    // that pose without a jump, so a delivered picture drifts instead (review of #1716).
+                    if (imageData.BubbleOriginPx != null && window.MotionStyle == FlashMotionStyle.Pendulum)
+                        window.MotionStyle = FlashMotionStyle.DriftBounce;
                     SpawnLayerVisual(window, imageData, monitor,
                         layerGlowColor, layerGlowRadius, layerGlowOpacity, luckyFx, window.MotionStyle,
                         roundedWpf && ownsFlashV2);

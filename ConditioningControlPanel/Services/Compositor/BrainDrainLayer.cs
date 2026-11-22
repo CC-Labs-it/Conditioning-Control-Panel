@@ -430,7 +430,7 @@ public sealed class BrainDrainLayer : BaseLayer
                 on = Super.SuperBase.UndertowLit(
                     Super.SuperAccess.IsOn(Super.SuperEffect.Undertow),
                     Super.SuperAccess.IsSelected(Super.SuperEffect.Undertow),
-                    App.Overlay?.TimedBrainDrainActive == true);
+                    App.Overlay?.LentBrainDrainActive == true);
             }
             catch { }
             if (on != _undertowOn)

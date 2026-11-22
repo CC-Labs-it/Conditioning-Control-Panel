@@ -73,7 +73,7 @@ public class SuperBaseTests
         var src = System.IO.File.ReadAllText(System.IO.Path.Combine(
             root!.FullName, "ConditioningControlPanel", "Services", "Compositor", "BrainDrainLayer.cs"));
         Assert.Contains("SuperBase.UndertowLit(", src);
-        Assert.Contains("TimedBrainDrainActive", src);
+        Assert.Contains("LentBrainDrainActive", src);
     }
 
     [Fact]
