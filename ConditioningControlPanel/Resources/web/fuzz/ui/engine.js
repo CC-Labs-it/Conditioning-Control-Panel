@@ -428,9 +428,12 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     return off;
   }
 
-  function wallHit({ x, y, corner = false } = {}, owner = 'stray') {
+  /** times: on a capped phone (ui/phone-caps.js) one drawn copy stands for several owned ones, so its hit pays them all,
+   *  exactly as that many hits would. */
+  function wallHit({ x, y, corner = false, times = 1 } = {}, owner = 'stray') {
     if (paused || suspended || stopped) return 0;
-    const gain = E.wallHit(run, mods, now, owner, corner);
+    let gain = E.wallHit(run, mods, now, owner, corner);
+    if (times > 1 && gain > 0) { gain += E.earn(run, gain * (times - 1), 'wall'); run.walls += times - 1; }
     emit('wall', { gain, x, y, corner });
     return gain;
   }
