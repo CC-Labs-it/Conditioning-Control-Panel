@@ -136,3 +136,13 @@ test('the small edition never shows a sticker its book does not show', () => {
 });
 import { shown as inBookShown } from '../sim/stickers.js';
 function inBookIds(ed) { return inBookShown({}, ed).map((s) => s.id); }
+
+import { sheetScale } from '../ui/menu-model.js';
+test('the sheet scales with the window from the mockup stage, within limits', () => {
+  assert.equal(sheetScale(1040, 620), 1);
+  assert.equal(sheetScale(390, 844), 1);          // a phone keeps today's layout
+  assert.equal(sheetScale(1280, 800), 1.23);
+  assert.equal(sheetScale(1920, 1080), 1.6);      // capped
+  assert.equal(sheetScale(3840, 2160), 1.6);
+  assert.equal(sheetScale(NaN, 600), 1);
+});

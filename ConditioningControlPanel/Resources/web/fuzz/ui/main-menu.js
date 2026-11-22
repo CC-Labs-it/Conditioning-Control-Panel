@@ -16,7 +16,8 @@
  *   A row that slides in under a resting mouse never selects itself: only a pointer that really moved does.
  *   Phone width: one column, no sideways scroll. */
 
-import { menuKey } from './menu-model.js';
+import { menuKey, sheetScale } from './menu-model.js';
+import { llamaSvg } from './llama-pen.js';   // the pen's own drawing; its .lp-ic / .lp-spit rules in styles.css reach the menu
 import { BRAND } from '../data/brand.js';
 
 const THUD = 'cubic-bezier(.2,1.5,.4,1)';
@@ -33,8 +34,20 @@ body.mm-on #game-controls { visibility: hidden; pointer-events: none; }   /* loc
 #main-menu .mm-bg { z-index: 0; }
 /* The collection either side: the Sticker Book's own cut-out look (ui/sticker-book.js .sb-stk), loose on the sheet. A place
    is clamped inside the screen; one that would sit under the logo or the rows is left out (fit()). */
+#main-menu { --mm-k: 1; }
+#main-menu .mm-flock { position: absolute; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+#main-menu .mm-fly { position: absolute; left: 0; top: 0; will-change: transform; }
+#main-menu .mm-fly > span, #main-menu .mm-fly .mm-turn, #main-menu .mm-fly .mm-face { display: block; }
+#main-menu .mm-fly .mm-face { animation: mm-hop .62s ease-in-out infinite alternate; }
+#main-menu .mm-fly .lp-ic { width: calc(46px * var(--mm-k)); height: calc(50px * var(--mm-k)); filter: drop-shadow(1.5px 0 0 #fff) drop-shadow(-1.5px 0 0 #fff) drop-shadow(0 1.5px 0 #fff) drop-shadow(0 -1.5px 0 #fff); }
+#main-menu .mm-fly.back .mm-turn { transform: scaleX(-1); }
+#main-menu .mm-spk { position: absolute; left: 0; top: 0; width: var(--s); height: var(--s); margin: calc(var(--s) / -2) 0 0 calc(var(--s) / -2); background: var(--c); clip-path: polygon(50% 0, 63% 37%, 100% 50%, 63% 63%, 50% 100%, 37% 63%, 0 50%, 37% 37%); }
+#main-menu .mm-spk.dot { clip-path: none; border-radius: 50%; }
+@keyframes mm-hop { to { translate: 0 -5px; } }
+@media (prefers-reduced-motion: reduce) { #main-menu .mm-flock { display: none; } }
+body.gentle #main-menu .mm-flock { display: none; }
 #main-menu .mm-sides { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
-#main-menu .sd { --k: 1; --w: calc(var(--s) * var(--k) * 1px); position: absolute; width: var(--w); aspect-ratio: 1; translate: -50% -50%; rotate: calc(var(--r) * 1deg); pointer-events: auto;
+#main-menu .sd { --k: 1; --w: calc(var(--s) * var(--k) * var(--mm-k) * 1px); position: absolute; width: var(--w); aspect-ratio: 1; translate: -50% -50%; rotate: calc(var(--r) * 1deg); pointer-events: auto;
   left: clamp(calc(var(--w) / 2), calc(var(--x) * 1%), calc(100% - var(--w) / 2)); top: clamp(calc(var(--w) / 2), calc(var(--y) * 1%), calc(100% - var(--w) / 2));
   transition: scale .2s ${THUD}, rotate .25s ${THUD}; }
 #main-menu .sd[hidden] { display: none; }
@@ -50,6 +63,7 @@ body.mm-on #game-controls { visibility: hidden; pointer-events: none; }   /* loc
 #main-menu .mm-fx { z-index: 5; }
 #main-menu .mm-spiral { display: block; position: absolute; left: 50%; top: 50%; width: max(140%, 900px); aspect-ratio: 1; translate: -50% -50%; opacity: .62; animation: mm-spin 140s linear infinite; }
 #main-menu .mm-sheet { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 16px; overflow-x: hidden; overflow-y: auto; }
+#main-menu .mm-logo, #main-menu .mm-rows { zoom: var(--mm-k); }   /* the whole column, gaps included, from one number */
 #main-menu .mm-logo { display: block; width: min(440px, 88%); height: auto; aspect-ratio: 15 / 4; margin: 0 auto; filter: drop-shadow(2px 4px 0 rgba(0, 0, 0, .22)); animation: mm-wig 4.6s ease-in-out infinite; }
 #main-menu .mm-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; justify-items: center; }
 #main-menu .mm-rows li { animation: mm-drift 5s ease-in-out infinite; animation-delay: calc(var(--i) * -.7s); }
@@ -87,6 +101,7 @@ body.mm-on #game-controls { visibility: hidden; pointer-events: none; }   /* loc
 @keyframes mm-wig { 0%, 100% { rotate: -1.4deg; } 50% { rotate: 1.2deg; } }
 @media (max-width: 900px) { #main-menu .sd { --k: .8; } }
 @media (max-width: 620px) {
+  #main-menu .mm-fly .lp-ic { width: 38px; height: 42px; }
   /* A phone: eight small ones, tucked half off the edges and behind the rows. */
   #main-menu .sd { --k: .62; left: calc(var(--mx) * 1%); top: calc(var(--my) * 1%); }
   #main-menu .sd:not(.ph) { display: none; }
@@ -124,10 +139,11 @@ function drawSpiral(c) {
 /**
  * Opens the menu. rows: () => the model's rows (asked again on every entrance). actions: { [rowId]: (ev, el, row) }.
  * gentle: () => bool. sound: (name) => void, names 'land' | 'tick' | 'press' | 'burst' | 'denied'.
+ * llamas: () => the herd's props (ui/llama-pen.js PROPS) once the llama ending is reached, else null: the flying llamas.
  * sides: () => [{ kind: 'got'|'slot'|'portrait', src, cls, spot, side }] (ui/menu-model.js sideStickers, art resolved).
  * Answers { el, open, refresh(), rattle(id), flash(id), leave(id, { back }), hide(), show(), focus(), close() }.
  */
-export function openMainMenu({ doc = document, rows, actions = {}, gentle = () => false, sound = () => {}, sides = () => [], logo = 'assets/adcard/logo.webp' }) {
+export function openMainMenu({ doc = document, rows, actions = {}, gentle = () => false, sound = () => {}, sides = () => [], llamas = () => null, logo = 'assets/adcard/logo.webp' }) {
   const win = doc.defaultView;
   if (!doc.getElementById('main-menu-css')) { const st = doc.createElement('style'); st.id = 'main-menu-css'; st.textContent = CSS; doc.head.appendChild(st); }
   const calm = () => !!gentle() || !!win?.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -142,6 +158,10 @@ export function openMainMenu({ doc = document, rows, actions = {}, gentle = () =
   const fx = mk('div', 'mm-fx', root); fx.setAttribute('aria-hidden', 'true');
   const sideLayer = mk('div', 'mm-sides'); sideLayer.setAttribute('aria-hidden', 'true');
   root.insertBefore(sideLayer, sheet);
+  const flock = mk('div', 'mm-flock'); flock.setAttribute('aria-hidden', 'true');
+  root.insertBefore(flock, sideLayer);
+  const setScale = () => root.style.setProperty('--mm-k', String(sheetScale(win.innerWidth, win.innerHeight)));
+  setScale();
   let sideEls = [];
   doc.body.appendChild(root);
   doc.body.classList.add('mm-on');
@@ -207,7 +227,7 @@ export function openMainMenu({ doc = document, rows, actions = {}, gentle = () =
     }
   }
   let fitTimer = 0;
-  const onResize = () => { win.clearTimeout(fitTimer); fitTimer = win.setTimeout(fit, 150); };
+  const onResize = () => { win.clearTimeout(fitTimer); fitTimer = win.setTimeout(() => { setScale(); fit(); }, 150); };
   win.addEventListener('resize', onResize);
 
   function draw() {
@@ -332,7 +352,62 @@ export function openMainMenu({ doc = document, rows, actions = {}, gentle = () =
 
   /* ---- cover and hidden: keys stand down, idle motion holds ---- */
   const covered = () => !!doc.querySelector('.backdrop:not([hidden]):not(.clear), #sticker-book:not([hidden]), #renewal-menu:not([hidden]), #ps-sky');
-  const still = () => root.classList.toggle('mm-still', !!doc.hidden || covered());
+  const still = () => {
+    const on = !!doc.hidden || covered();
+    root.classList.toggle('mm-still', on);
+    for (const f of flying) f.hold(on);
+  };
+
+  /* ---- the flying llamas (the approved mockup's sendLlama / flockLoop): only once the llama ending is reached, never in
+     Gentle or reduced motion. One every 7 to 12 s, now and then a second, each on its own lazy arc behind the collection
+     and the rows, spitting once (the pen's own .lp-spit; the pen has no spit sound, so this is silent) and leaving a
+     small sparkly trail. No layout is read: the trail follows the flight's own numbers. ---- */
+  const flying = new Set();
+  let flockTimer = 0;
+  const FLY_TINTS = ['#ff4fa8', '#7b5cff', '#ff69b4', '#1b1a17'];
+  const flockOn = () => !!llamas()?.length && !calm();
+  function sendLlama() {
+    const props = llamas();
+    if (!props?.length || calm() || flying.size >= 5 || doc.hidden || covered() || away || !open) return;
+    const W = root.clientWidth, H = root.clientHeight, back = Math.random() < .5, dur = 9000 + Math.random() * 4000;
+    const top = (.1 + Math.random() * .68) * H, sway = (34 + Math.random() * 50) * (Math.random() < .5 ? -1 : 1), spitAt = dur * (.3 + Math.random() * .32);
+    const f = mk('div', 'mm-fly' + (back ? ' back' : ''), flock);
+    f.style.top = top + 'px';
+    const arc = mk('span', '', f), turn = mk('span', 'mm-turn', arc), face = mk('span', 'mm-face', turn);
+    face.innerHTML = llamaSvg(props[Math.floor(Math.random() * props.length)]);
+    const x0 = back ? W + 70 : -70, x1 = back ? -70 : W + 70;
+    const a = f.animate([{ transform: `translateX(${x0}px)` }, { transform: `translateX(${x1}px)` }], { duration: dur, easing: 'linear' });
+    const b = arc.animate([{ transform: 'translateY(0) rotate(-5deg)' }, { transform: `translateY(${sway}px) rotate(4deg)`, offset: .5 }, { transform: 'translateY(0) rotate(-5deg)' }], { duration: dur, easing: 'ease-in-out' });
+    let spat = false, held = false;
+    const trail = win.setInterval(() => {
+      if (held) return;
+      const t = Number(a.currentTime) || 0, q = Math.min(1, t / dur);
+      if (!spat && t >= spitAt) { spat = true; face.classList.add('lp-spit'); win.setTimeout(() => face.classList.remove('lp-spit'), 1050); }
+      const x = x0 + (x1 - x0) * q, y = top + sway * Math.sin(Math.PI * q) + 28;
+      if (x < -40 || x > W + 40) return;
+      const dot = Math.random() < .3, sp = mk('i', 'mm-spk' + (dot ? ' dot' : ''));
+      sp.style.cssText = `--s:${dot ? 3 + Math.random() * 2 : 6 + Math.random() * 5}px;--c:${FLY_TINTS[Math.floor(Math.random() * 4)]}`;
+      flock.insertBefore(sp, flock.firstChild);
+      const ox = x + (back ? 20 : -20) + (Math.random() - .5) * 10, oy = y + (Math.random() - .5) * 18;
+      sp.animate([{ transform: `translate(${ox}px,${oy}px) scale(.3) rotate(0deg)`, opacity: 0 }, { transform: `translate(${ox}px,${oy}px) scale(1) rotate(40deg)`, opacity: 1, offset: .25 },
+        { transform: `translate(${ox + (back ? 1 : -1) * (6 + Math.random() * 10)}px,${oy + 4 + Math.random() * 10}px) scale(.2) rotate(120deg)`, opacity: 0 }],
+        { duration: 700 + Math.random() * 300, easing: 'ease-out' }).onfinish = () => sp.remove();
+    }, 100);
+    const me = {
+      hold(on) { held = on; if (on) { a.pause(); b.pause(); } else { a.play(); b.play(); } },
+      stop() { a.cancel(); },
+    };
+    const end = () => { win.clearInterval(trail); f.remove(); flying.delete(me); };
+    a.onfinish = end; a.oncancel = end;
+    flying.add(me);
+  }
+  function flockLoop(first) {
+    win.clearTimeout(flockTimer);
+    if (!open) return;
+    if (!flockOn()) { for (const f of [...flying]) f.stop(); flockTimer = win.setTimeout(() => flockLoop(true), 2000); return; }   // Gentle may be switched off
+    flockTimer = win.setTimeout(() => { sendLlama(); if (Math.random() < .25) win.setTimeout(sendLlama, 1500); flockLoop(); }, first ? 1800 : 7000 + Math.random() * 5000);
+  }
+  const grounded = () => { for (const f of [...flying]) f.stop(); flock.replaceChildren(); };
   const holdTimer = win.setInterval(still, 400);
   doc.addEventListener('visibilitychange', still);
 
@@ -346,6 +421,7 @@ export function openMainMenu({ doc = document, rows, actions = {}, gentle = () =
 
   draw();
   enter();
+  flockLoop(true);
   els[sel]?.focus({ preventScroll: true });
 
   return {
@@ -357,7 +433,7 @@ export function openMainMenu({ doc = document, rows, actions = {}, gentle = () =
     flash,
     leave,
     /** Out of the way for a visit: hidden, the game's controls back (the Expo uses Wake Up and the pause card). */
-    hide() { if (!open) return; ++token; clearFx(); away = true; busy = false; root.hidden = true; doc.body.classList.remove('mm-on'); },
+    hide() { if (!open) return; ++token; clearFx(); grounded(); away = true; busy = false; root.hidden = true; doc.body.classList.remove('mm-on'); },
     /** Back after the visit: the rows asked again and the entrance replayed, the keyboard's place kept. */
     show() {
       if (!open) return;
@@ -372,6 +448,8 @@ export function openMainMenu({ doc = document, rows, actions = {}, gentle = () =
       ++token;
       win.clearInterval(holdTimer);
       win.removeEventListener('resize', onResize);
+      win.clearTimeout(flockTimer);
+      grounded();
       doc.removeEventListener('visibilitychange', still);
       doc.body.classList.remove('mm-on');
       doc.removeEventListener('keydown', onKey);

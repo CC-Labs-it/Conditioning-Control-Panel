@@ -149,3 +149,11 @@ export function sideStickers({ life = {}, ed, herd = [] } = {}) {
   if (llamaReached(life)) herd.slice(0, PORTRAIT_SPOTS.length).forEach((id, i) => out.push({ kind: 'portrait', id, spot: PORTRAIT_SPOTS[i], side: side(PORTRAIT_SPOTS[i]) }));
   return out;
 }
+
+/** The sheet's scale (slice M4): the mockup's stage is 1040 x 620; a bigger window grows the logo, the rows and the
+ *  collection with it, never below today's size (1) and never past 1.6, where a row's text stops reading as a sticker. */
+export const SHEET_W = 1040, SHEET_H = 620, SHEET_MIN = 1, SHEET_MAX = 1.6;
+export function sheetScale(w, h) {
+  const k = Math.min(Number(w) / SHEET_W, Number(h) / SHEET_H);
+  return Number.isFinite(k) ? Math.round(Math.min(SHEET_MAX, Math.max(SHEET_MIN, k)) * 100) / 100 : SHEET_MIN;
+}

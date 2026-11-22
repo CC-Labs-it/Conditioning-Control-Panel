@@ -30,13 +30,13 @@ import { canKeepPlaying as keepPlayingOk, keepPlaying as keepPlayingRun } from '
 import { sealedFor, showSeal } from './ui/seal.js';
 import { setEdition, expoArrived, editionState, renewalAllowed, sendNudge, isSmall, saveSlotOn } from './ui/edition.js';
 import { mountSaveCarry } from './ui/save-carry.js';   // the pause card's carry to and from the account (CONTRACT.md 6.3)
-import { mountLlamaPen } from './ui/llama-pen.js';
+import { mountLlamaPen, herdOf } from './ui/llama-pen.js';
 import { mountTransmission } from './ui/transmission.js';
 import { endingNudge, mountPauseNudge } from './ui/nudges.js';
 import { mountLockedTile } from './ui/shop-locked.js';   // small: one greyed tile at the end of the shop   // small: the ending and pause doors to the full game   // the transmission card, the pen sign and the llama-8 card
 import { mountHomeTip } from './ui/phone.js';
 import { previewBarAllowed } from './ui/preview-bar-model.js';
-import { menuDue, menuRows, MENU_REUSED, sideStickers } from './ui/menu-model.js';   // the main menu, from the second launch on
+import { menuDue, menuRows, MENU_REUSED, sideStickers, llamaReached } from './ui/menu-model.js';   // the main menu, from the second launch on
 import { openMainMenu } from './ui/main-menu.js';
 import { BOOK_EVENT, stickerArt } from './ui/sticker-book.js';
 import { STICKER_BY_ID } from './data/content/stickers.js';
@@ -483,6 +483,8 @@ function start(init) {
       doc: document,
       gentle: ui.gentle,
       sound,
+      /* The flying llamas: the pen's own herd, once the llama ending is reached (every edition). */
+      llamas: () => (llamaReached(life) ? herdRoster(herdOf(life)).map((l) => l.prop) : null),
       /* The player's own collection either side (ui/menu-model.js sideStickers): the book's pictures, the herd's portraits. */
       sides: () => sideStickers({ life, ed: editionState(), herd: herdRoster(life.llamas).map((l) => l.id) }).map((it) => {
         if (it.kind === 'portrait') return { ...it, src: llamaPortrait(it.id), cls: 'round' };
