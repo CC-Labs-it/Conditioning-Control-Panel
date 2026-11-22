@@ -1,8 +1,8 @@
 import { herdRoster, llamaPortrait } from '../../../../data/content/llamas.js';
-import { warmEntrance,clearEntrance } from '../../../expo/entrance.js';
-import { createPortal } from '../../../expo/portal.js';
-import { bindExpoMenus } from '../../../expo/controller-menu.js';
-import { bindExpoSoundUnlock } from '../../../expo/sound-unlock.js';
+/* The Expo is reached ONLY through its public door (ui/expo/door.js): importing it is cold (no scene, no Three, no
+ * asset), and every door answers nothing unless edition.js says the Expo is allowed. A small page never takes this
+ * ending at all (ui/engine.js: a sleeping row never mounts, sim/economy.js sleepingEnd). */
+import { warmEntrance, clearEntrance, createPortal, bindExpoMenus, bindExpoSoundUnlock, prewarm, playSpit, openExpo } from '../../../expo/door.js';
 
 export const PORTAL_DARK = '#071819';
 const ENTRY_CSS = `
@@ -42,8 +42,7 @@ function wormhole(ctx, portal) {
   const oldNodes = [...button.childNodes], oldName = button.getAttribute('aria-label');
   root.append(button); button.replaceChildren(doc.createTextNode('YES')); button.setAttribute('aria-label', question.textContent + ' YES');
   button.focus({ preventScroll: true });
-  warmEntrance();
-  void import('../../../expo/scene.js').catch(()=>{});
+  prewarm();   // the wormhole only opens on an Expo that is here: warm its zones (the door never pre-imports the scene)
   return new Promise(resolve => {
     let gone = false, crossed = -1, elapsed = 0, previous = ctx.activeMs, offFrame, offHold;
     const previousOpacity = button.style.opacity;
@@ -60,7 +59,7 @@ function wormhole(ctx, portal) {
       crossed = elapsed;
       portal.begin();
       warmEntrance();
-      ctx.audio.play('assets/expo/audio/spit.ogg', { bus: 'sfx', gain: .55 });
+      playSpit(ctx);
     };
     const paint = () => {
       const now = ctx.activeMs, dt = Math.max(0, (now - previous)/1000); previous = now;
@@ -120,9 +119,11 @@ export async function expoEnding(ctx, releaseWorld) {
           if (dead || !cover.isConnected || !cover.hasAttribute('data-loading')) { updateStatus(); return; }
           cover.style.opacity = String(Math.min(1,Math.max(0,(ctx.activeMs-loadingAt-1450)/300)));
         });
-        const module = await Promise.race([import('../../../expo/scene.js'), done]);
-        if (!module || dead) break;
-        scene = module.createExpo(ctx, parent, { onExit: dispose, arrival: true, initialInputMode: menus.mode, onInputMode: menus.setMode });
+        const opening = openExpo(ctx, parent, { onExit: dispose, arrival: true, initialInputMode: menus.mode, onInputMode: menus.setMode });
+        const visit = await Promise.race([opening, done]);
+        /* Closed while the scene was still loading: the visit that arrives late goes at once. */
+        if (!visit || dead) { opening.then((v) => { v?.dispose(); }, () => {}); break; }
+        scene = visit;
         await Promise.race([scene.ready, done]);
         if (dead) break;
         if (['localhost','127.0.0.1','[::1]'].includes(win.location.hostname)) win.__expo = scene;
