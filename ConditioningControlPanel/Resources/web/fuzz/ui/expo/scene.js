@@ -18,6 +18,7 @@ import { createDomeEffects } from './dome-effects.js';
 import { groupPhotograph } from './group-photo.js';
 import { createNarration } from './narration.js';
 import { createVisitGuide } from './visit-guide.js';
+import { TRAIL_STYLE } from './trail-style.js';
 import { createInstruments } from './instruments.js';
 import { createAmbience } from './ambience.js';
 import { createCollection } from './collection.js';
@@ -45,14 +46,7 @@ const CSS = `
 .expo-return-recap{padding:.55em 1.15em;border:1px solid #afcdb7;border-radius:3px;background:#e4efdb;color:#153537;font:600 16px/1.25 system-ui;cursor:pointer}
 .expo-return-recap:focus-visible{outline:3px solid white;outline-offset:4px}
 .expo-leaving .expo-aim,.expo-leaving .expo-prompt,.expo-leaving .expo-guide,.expo-leaving .expo-touch{display:none!important}
-.expo-route-guide{position:absolute;top:max(12px,env(safe-area-inset-top));left:12px;max-width:min(40vw,340px);padding:9px 14px 10px;border-left:3px solid #dfbf84;border-radius:0 4px 4px 0;background:#112d31ef;box-shadow:0 2px 9px #09282b28;text-align:left;pointer-events:none}
-.expo-route-guide span,.expo-route-guide strong{display:block}.expo-route-guide span{font:650 11px/1.35 "Segoe UI",sans-serif;letter-spacing:.12em;color:#edd0a3;margin-bottom:2px}.expo-route-guide strong{font:550 clamp(14px,1.23vw,18px)/1.32 "Segoe UI",sans-serif;color:#fff8e8}
-.expo-counterfoil{border:1px solid #bcaa85;border-left:5px double #56705c;background:#f6eedb;color:#244535;box-shadow:2px 3px 8px #17291a38}
-.expo-counterfoil span,.expo-counterfoil strong{color:#284a3a}.expo-counterfoil strong{font-size:13px;font-weight:500}
-.expo-stamps{display:flex;gap:2px;margin:5px 0}.expo-stamps[hidden],.expo-counterfoil [hidden]{display:none}
-.expo-stamps i{width:clamp(11px,1.3vw,17px);height:17px;display:grid;place-items:center;border:1px dashed #938b71;color:#817d67;font:bold 11px Georgia}
-.expo-stamps i[data-filled=half]{background:linear-gradient(110deg,#c6d7a9 50%,transparent 50%)}
-.expo-stamps i[data-filled=true]{background:#36594b;color:#ffefbf;border:1px solid #36594b}
+
 .expo-shop-receipt{position:absolute;z-index:3;right:2%;top:12%;width:min(305px,76%);max-height:58%;overflow:auto;background:#fff6de;border-top:5px double #506450;color:#233a32;padding:12px 16px;font:13px/1.35 Consolas,monospace;touch-action:pan-y}.expo-shop-receipt h3{margin:0 0 8px;font:bold 20px Georgia}.expo-shop-receipt p{display:flex;justify-content:space-between;gap:10px;margin:4px 0}.expo-shop-receipt b{text-align:right}.expo-shop-receipt [hidden]{display:none}
 .expo-reading-card{position:absolute;z-index:4;top:max(12px,env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left));box-sizing:border-box;width:min(465px,calc(100% - 24px));max-height:62%;overflow:auto;padding:17px 22px 15px;border:1px solid #a29d86;border-top:4px solid #476e60;border-radius:3px;background:#f1ecda;color:#173135;box-shadow:0 4px 20px #12252955;touch-action:pan-y}
 .expo-reading-card[hidden],.expo-root:has(.expo-reading-card:not([hidden])) .expo-route-guide{display:none}
@@ -62,8 +56,7 @@ const CSS = `
 .expo-reading-card h2+p{margin:9px 0 10px;font:500 clamp(16px,1.3vw,19px)/1.43 "Segoe UI",sans-serif;white-space:pre-line}
 .expo-reading-card button{font:650 14px/1.2 "Segoe UI",sans-serif;padding:6px 13px;border:1px solid #a55a3b;border-radius:3px;background:#f28b60;color:#242d2c;cursor:pointer}
 @media(max-height:480px){.expo-reading-card{top:5px;left:5px;width:min(47%,450px);max-height:70%;padding:7px 12px}.expo-reading-card h2+p{font-size:15px;line-height:1.29}.expo-reading-card h2{padding:3px 0 4px}}
-.expo-leaving .expo-route-guide,.expo-root:has(.expo-caption:not(:empty)) .expo-route-guide{display:none}
-@media(max-width:660px){.expo-route-guide{top:calc(max(8px,env(safe-area-inset-top)) + 52px);max-width:min(76vw,305px);padding:4px 8px}}
+
 @media(pointer:coarse),(max-width:660px){.expo-narration{bottom:max(168px,calc(env(safe-area-inset-bottom) + 140px));width:94%}.expo-narration p{font-size:clamp(17px,4vw,22px)}}
 @media(max-height:480px){.expo-narration{bottom:5px;width:min(78%,880px)}.expo-narration p{font-size:16px}}
 @media(pointer:coarse) and (max-height:480px) and (min-width:640px){.expo-narration{left:calc(50% - 30px);width:calc(100% - 350px)}}
@@ -83,7 +76,8 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     for (const fn of clean.reverse()) try { fn(); } catch (e) { console.warn(e); }
   }
   try {
-    ctx.css(CSS);
+    ctx.css(CSS+TRAIL_STYLE);
+    root.toggleAttribute('data-calm',!!(ctx.gentle||ctx.reduced));
     const element = (tag, cls) => { const e = doc.createElement(tag); e.className = cls; root.append(e); return e; };
     const canvas = element('canvas', 'expo-canvas');
     const guide = element('div', 'expo-guide'), caption = element('p', 'expo-caption');
@@ -114,7 +108,9 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     const camera = new THREE.PerspectiveCamera(LITE ? 65 : 58, 1, .08, 140);
     camera.rotation.order = 'YXZ';
     const sound = createSound(ctx); clean.push(() => sound.dispose());
-    const visitorGuide=createVisitGuide(root);clean.push(()=>visitorGuide.dispose());
+    const visitorGuide=createVisitGuide(root,{
+      onOpen:()=>controls?.reset(),canOpen:()=>ready&&!dead&&!loading&&!returnButton&&!ctx.paused
+    });clean.push(()=>visitorGuide.dispose());
     let waitingForEntrance=arrival;
     const walker = createWalker(camera, sound.footstep, id=>narration?.planter?.(id),
       () => ctx.store.claimLifetime('planterDetour')); clean.push(() => walker.dispose());
@@ -129,7 +125,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       return ()=>{for(const target of roots)if(targets.get(target)===action)targets.delete(target);targetMeshes=[...targets.keys()];};
     }
     function targetAt(point) {
-      if (!ready || ctx.paused || dead || loading || returnButton || doc.hidden) return null;
+      if (!ready || ctx.paused || dead || loading || returnButton || visitorGuide.opened || doc.hidden) return null;
       camera.updateMatrixWorld();
       pointer.set(point?.x || 0, point?.y || 0); ray.setFromCamera(pointer, camera); ray.far = maxReach;
       hits.length = 0; ray.intersectObjects(targetMeshes, true, hits);
@@ -253,7 +249,8 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     clean.push(() => { instruments.dispose();narration.dispose(); dome.dispose(); media?.dispose(); exhibits.dispose?.(); targets.clear(); });
     clean.push(() => ambience.dispose());
     clean.push(() => { collection.dispose(); guests.dispose(); });
-    controls = createControls({ root, canvas, camera, initialInputMode:inputMode, onInputMode:inputChanged,
+    visitorGuide.watch(exhibits.state.ticket);
+    controls = createControls({ root, canvas, camera, trail:visitorGuide, initialInputMode:inputMode, onInputMode:inputChanged,
       move: walker.move, spit:exhibits.spit, onInteract: interact, onJump: () => walker.jump?.(),
       onPause: () => { if (!ctx.paused) doc.getElementById('wake')?.click(); },
       isPaused: () => !ready || dead || loading || !!returnButton || ctx.paused || doc.hidden });
@@ -296,7 +293,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       if (elapsed > guideUntil) guide.hidden = true;
       targetTime -= dt;
       if (targetTime <= 0) {
-        visitorGuide.update(narration.story,walker.zone,walker.feet,exhibits.state);
+        visitorGuide.update(narration.story,walker.zone,walker.feet,exhibits.state,elapsed,camera.rotation.y,inputMode);
         updatePrompt();
         targetTime = .09;
       }
@@ -306,7 +303,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     const firstFrame = (async () => {
       const plan = await loadPlan(abort.signal);
       if (dead) return;
-      visitorGuide.setRoute(plan.archiveRoute);
+      // Trail directions are independent of projector playback.
       zones = createZones({ scene, renderer, walker, exhibits:rooms, plan, lite: LITE,ctx,camera,play:sound.play, report: error => console.warn(error) });
       clean.push(() => zones.dispose());
       await zones.ensure(plan.start.id);

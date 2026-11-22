@@ -10,14 +10,14 @@ const PAD_PITCH_SPEED = 1.70;
 const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight']);
 const UI = 'button,a,input,textarea,select,[contenteditable=true],[role=button]';
 const EDITOR = 'input,textarea,select,[contenteditable=true],[role=slider],[role=menu],[role=listbox],[role=tablist]';
-const keyCodes={w:'KeyW',a:'KeyA',s:'KeyS',d:'KeyD',e:'KeyE',q:'KeyQ',' ':'Space',Spacebar:'Space',
+const keyCodes={w:'KeyW',a:'KeyA',s:'KeyS',d:'KeyD',e:'KeyE',q:'KeyQ',t:'KeyT',' ':'Space',Spacebar:'Space',
   Enter:'Enter',ArrowUp:'ArrowUp',ArrowDown:'ArrowDown',ArrowLeft:'ArrowLeft',ArrowRight:'ArrowRight'};
 function codeFor(event){
   return event.code&&event.code!=='Unidentified'?event.code:keyCodes[event.key]||keyCodes[event.key?.toLowerCase()];
 }
 
 /** All input methods share the same camera and collision-aware walk. */
-export function createControls({ root, canvas, camera, move, spit, onInteract, onJump, onPause, onInputMode, initialInputMode, isPaused = () => false }) {
+export function createControls({ root, canvas, camera, move, spit, trail, onInteract, onJump, onPause, onInputMode, initialInputMode, isPaused = () => false }) {
   const doc = root.ownerDocument, win = doc.defaultView, keys = new Set(), off = [];
   const pad = createExpoGamepad(() => win.navigator.getGamepads?.());
   const primaryMode = () => win.matchMedia?.('(pointer:coarse)').matches ? 'touch' : 'keyboard';
@@ -59,7 +59,8 @@ export function createControls({ root, canvas, camera, move, spit, onInteract, o
     target.addEventListener(event, fn, options);
     off.push(() => target.removeEventListener(event, fn, options));
   }
-  const active = () => !disposed && !isPaused() && !doc.hidden;
+  const available = () => !disposed && !isPaused() && !doc.hidden;
+  const active = () => available() && !trail?.opened;
   const spitting=spit&&spitControls(root,active,spit);
   function focusGame(){root.focus({preventScroll:true});}
   const capture = (el, id) => { try { el.setPointerCapture(id); } catch {} };
@@ -111,8 +112,14 @@ export function createControls({ root, canvas, camera, move, spit, onInteract, o
     }
   });
   function keyDown(event){
-    if (!active() || event.ctrlKey || event.altKey || event.metaKey || event.target?.closest?.(EDITOR)) return;
+    if (!available() || event.ctrlKey || event.altKey || event.metaKey || event.target?.closest?.(EDITOR)) return;
     const code=codeFor(event);
+    if(trail && (code==='KeyT'||(trail.opened&&event.key==='Escape'))){
+      event.preventDefault();event.stopImmediatePropagation();
+      if(!event.repeat){used('keyboard');trail.toggle();}
+      return;
+    }
+    if(trail?.opened)return;
     if(code==='KeyQ'&&!event.target?.closest?.(UI)){
       used('keyboard');event.preventDefault();event.stopPropagation();if(!event.repeat)spitting?.begin('key');return;
     }
@@ -231,16 +238,22 @@ export function createControls({ root, canvas, camera, move, spit, onInteract, o
   return {
     get inputMode() { return inputMode; },
     step(dt) {
-      if (!active()) { reset(); return; }
+      if (!available()) { reset(); return; }
       if (!Number.isFinite(dt) || dt <= 0) return;
       const seconds = Math.min(dt,.1);
       const focus = doc.activeElement;
-      const padFocus = doc.hasFocus() && (focus === root || focus === doc.body || focus === doc.documentElement ||
+      const padFocus = doc.hasFocus() && (trail?.opened || focus === root || focus === doc.body || focus === doc.documentElement ||
         (root.contains(focus) && !focus?.closest?.(UI+','+EDITOR)));
       if (!padFocus) pad.reset();
       const input = padFocus ? pad.poll() : null;
       if (padFocus && !input && inputMode === 'gamepad') used(primaryMode());
       if (input?.activity) used('gamepad');
+      if(trail?.opened){
+        if(input?.start)onPause?.();
+        else if(input)trail.handlePad(input);
+        return;
+      }
+      if(input?.trail&&trail){trail.toggle();return;}
       if (input?.back || input?.start) { onPause?.(); return; }
       if (input) {
         const sensitivity = Math.hypot(input.lookX,input.lookY);

@@ -1,6 +1,6 @@
 const DEADZONE = .18;
 const SPRINT_BUTTON = 5;
-const BUTTONS = Object.entries({jump:0, interact:2, sprint:SPRINT_BUTTON, spit:7, back:1, start:9, up:12, down:13, left:14, right:15});
+const BUTTONS = Object.entries({jump:0, interact:2, trail:3, sprint:SPRINT_BUTTON, spit:7, back:1, start:9, up:12, down:13, left:14, right:15});
 
 function stick(x, y) {
   x = Number.isFinite(x) ? x : 0;
