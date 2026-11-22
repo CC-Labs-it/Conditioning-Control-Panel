@@ -1,17 +1,17 @@
 {
   "planter_10": {
-    "subtitle": "Oh, you thought, “I am so clever. I am going to break the game and jump down.”",
-    "seconds": 6,
+    "subtitle": "Oh. You thought: I am so clever. I am going to break the game and jump down. You did not break the game. You are standing in a fern. There are stairs. They are very good stairs. Stay where you are and think about them.",
+    "seconds": 18,
     "audio": null
   },
-  "planter_60": {
-    "subtitle": "You have been in the planter for one minute. The fern would like its place back.",
-    "seconds": 6,
+  "planter_45": {
+    "subtitle": "Since we have the time. A small team built this place. They decided where the floor goes, where the stairs go, and where you go. Nobody decided the planter. Please use this moment to reflect on the importance of following the artistic direction and intended gameplay of independent games. You may stop pressing jump. Jump is how you got here.",
+    "seconds": 25,
     "audio": null
   },
-  "planter_120": {
-    "subtitle": "You may climb down and continue. We might not be so indulgent next time.",
-    "seconds": 6,
+  "planter_90": {
+    "subtitle": "That will do. The developer got stuck in this planter once. Nobody narrated it. He did not fix it. He recorded this instead. You may climb down now. The fern would like its place back.",
+    "seconds": 14,
     "audio": null
   }
 }

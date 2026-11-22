@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {createArchiveStory} from '../ui/expo/archive-story.js';
-import {createPlanterVisit} from '../ui/expo/planter.js';
+import {createPlanterVisit,planterLines} from '../ui/expo/planter.js';
 import {visitDirection} from '../ui/expo/visit-guide.js';
 import {serialize,parse,createLife} from '../sim/save.js';
 
@@ -98,6 +98,27 @@ test('the planter claims the lifetime on first landing, including a visit abando
   const imported=visit(parse(serialize(null,life)).life);
   imported.land({planter:true},{support:{planter:false}});
   assert.equal(imported.held,false);
+});
+
+test('the planter speaks at 10, 45 and 90 seconds and holds the visitor until the release words',async()=>{
+  const cues=[];
+  const visit=createPlanterVisit(id=>cues.push(id));
+  visit.land({planter:true},{support:{}});
+  visit.tick(9.9);assert.deepEqual(cues,[]);
+  visit.tick(.1);assert.deepEqual(cues,['planter_10']);
+  visit.tick(35);assert.deepEqual(cues,['planter_10','planter_45']);
+  visit.tick(45);assert.deepEqual(cues,['planter_10','planter_45','planter_90']);
+  assert.equal(visit.held,true);assert.equal(visit.released,false);
+  visit.tick(8.9);assert.equal(visit.held,true);
+  visit.tick(.1);assert.equal(visit.held,false);assert.equal(visit.released,true);
+  visit.tick(60);assert.deepEqual(visit.state(),{used:true,held:false,seconds:99,cues:3});
+  const voices=JSON.parse(await readFile(new URL('../assets/expo/audio/planter-voices.json',import.meta.url),'utf8'));
+  assert.deepEqual(Object.keys(voices),planterLines);
+  // House copy: no exclamation marks, no en or em dashes.
+  const banned=c=>c==='!'||c.codePointAt(0)===0x2013||c.codePointAt(0)===0x2014;
+  for(const line of Object.values(voices))assert.ok(line.subtitle&&line.seconds>0&&![...line.subtitle].some(banned));
+  // A line ends before the next one is due.
+  assert.ok(10+voices.planter_10.seconds<=45&&45+voices.planter_45.seconds<=90);
 });
 
 test('admission and local exhibit directions are independent of optional record progress',()=>{

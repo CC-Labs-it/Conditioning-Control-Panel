@@ -6,6 +6,7 @@ import { restingSlide, slideIndex } from './slide-program.js';
 import { createArchiveStory } from './archive-story.js';
 import { archiveDisplays } from './archive-displays.js';
 import { createReadingCard } from './reading-card.js';
+import { planterLines } from './planter.js';
 
 const family = id => id.startsWith('hab_') ? 'hab_1' : id.startsWith('hoof_') ? 'hoof_1' :
   id.startsWith('dome_') ? 'dome_0' : id;
@@ -278,7 +279,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     return enqueue(ticket.row.id,{station,zone:station.zone,replay:true,ticket,projector:true,kind:'beat'});
   }
   async function planter(id,options={}){
-    if(dead||!['planter_10','planter_60','planter_120'].includes(id))return;
+    if(dead||!planterLines.includes(id))return;
     if(!planterBook){
       planterBook=fetch(assetURL('audio/planter-voices.json'),{signal:abort.signal}).then(r=>{
         if(!r.ok)throw Error('Planter narration HTTP '+r.status);
