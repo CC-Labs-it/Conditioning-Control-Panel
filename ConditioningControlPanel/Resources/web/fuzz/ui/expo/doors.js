@@ -1,4 +1,4 @@
-import {Group,InstancedMesh,MathUtils,Matrix4,Vector3} from 'three';
+import {Box3,Group,InstancedMesh,MathUtils,Matrix4,Vector3} from 'three';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 import {MeshoptDecoder} from 'three/addons/libs/meshopt_decoder.module.js';
 
@@ -72,38 +72,45 @@ export function createDoors(scene,walker,ctx,camera,play){
     root.rotation.y=d.axis==='x'?0:-Math.PI/2;scene.add(root);
     const state={d,root,leaves:[],progress:0,side:1,hold:0,finishRoom:null};
     const shared=d.rooms.length===2,roughWidth=d.roughWidth??d.width,roughHeight=d.roughHeight??d.height;
+    // Offset swinging pins from the deep casing so the heel of each double-action leaf clears it.
+    const pinInset=d.lift?0:.075,undercut=shared&&!d.lift?.036:0;
     if(shared){
       state.backing=new Group();
-      state.backing.scale.set(roughWidth+.38,(roughHeight+.34)/2.18,1);
-      state.backing.position.y=-.014;
+      state.backing.scale.set(d.width,d.height/2.18,1);
       for(const part of hardware.parts.get('Backing')||[])state.backing.add(part.clone(false));
       root.add(state.backing);
     }
-    if(shared || d.roughWidth){
+    if(shared||d.roughWidth||pinInset){
       // The two rooms can have different rough openings. A fixed head and jamb liner fills the
       // rebate beyond the moving leaves. One instanced draw uses the authored gasket profile.
       const profile=hardware.parts.get('Backing')?.[0];
       if(profile){
-        const edge=(roughWidth-d.width)*.5+(shared?.19:0),top=roughHeight-d.height+(shared?.34:0),inner=d.width*.5;
-        const bands=[[-inner-edge*.5,0,edge,d.height],[inner+edge*.5,0,edge,d.height]];
-        if(top>0)bands.push([0,d.height,d.width+edge*2,top]);
+        const outerWidth=d.reveal?.width??(roughWidth+(shared?.38:0));
+        const outerHeight=d.reveal?.height??(roughHeight+(shared?.34:0));
+        const depth=d.reveal?.depth??.055,offset=d.reveal?.offset??0;
+        const edge=(outerWidth-d.width)*.5,top=outerHeight-d.height,inner=d.width*.5;
+        const bands=[];
+        if(edge>0)bands.push([-inner-edge*.5,0,edge,d.height,depth,offset],[inner+edge*.5,0,edge,d.height,depth,offset]);
+        if(top>0)bands.push([0,d.height,outerWidth,top,depth,offset]);
+        // Thin metal tongues bridge the casing to the fixed hinge plates, clear of the rotating heel.
+        if(pinInset)for(let i=0;i<d.leaves;i++)bands.push([(i===0?-1:1)*(inner-pinInset*.5),0,pinInset,d.height,.011]);
         const trim=new InstancedMesh(profile.geometry,profile.material,bands.length),m=new Matrix4();
         state.fixed=[];
-        for(const [i,[x,y,width,height]] of bands.entries()){
-          m.makeScale(width,height/2.18,5).setPosition(x,y,0).multiply(profile.matrix);
+        for(const [i,[x,y,width,height,bandDepth,z=0]] of bands.entries()){
+          m.makeScale(width,height/2.18,bandDepth/.011).setPosition(x,y,z).multiply(profile.matrix);
           trim.setMatrixAt(i,m);
-          const jamb=new Group();jamb.position.set(x-width/2,y,0);root.add(jamb);
-          state.fixed.push(registerLeaf(d.rooms[0],d.id+'-jamb-'+i,jamb,width,height,true));
+          const jamb=new Group();jamb.position.set(x-width/2,y,z);root.add(jamb);
+          state.fixed.push(registerLeaf(d.rooms[0],d.id+'-jamb-'+i,jamb,width,height,true,bandDepth*.5));
         }
         trim.name='threshold_liner_'+d.id;root.add(trim);state.trim=trim;state.trimSource=profile;
       }
     }
     for(let i=0;i<d.leaves;i++){
       const hand=i===0?1:-1;
-      const fixed=new Group(),rotor=new Group(),width=d.width/d.leaves;
-      fixed.position.x=rotor.position.x=(i===0?-.5:.5)*d.width;
-      fixed.scale.set(hand*width,d.height/2.18,1);root.add(fixed,rotor);
-      const panel=new Group();panel.scale.copy(fixed.scale);rotor.add(panel);
+      const fixed=new Group(),rotor=new Group(),width=d.width/d.leaves-pinInset;
+      fixed.position.x=rotor.position.x=-hand*(d.width*.5-pinInset);
+      fixed.position.y=undercut;fixed.scale.set(hand*width,(d.height-undercut)/2.18,1);root.add(fixed,rotor);
+      const panel=new Group();panel.position.y=undercut;panel.scale.copy(fixed.scale);rotor.add(panel);
       const handle=new Group(),handleSize=Math.min(1,d.height/2.1);
       handle.scale.set(hand*handleSize,handleSize,1);
       handle.position.set(hand*(width-.20*handleSize),Math.min(1.04,d.height*.49),0);rotor.add(handle);
@@ -118,6 +125,7 @@ export function createDoors(scene,walker,ctx,camera,play){
   }
   function pose(s){
     const ease=MathUtils.smootherstep(s.progress,0,1),angle=ease*Math.PI*(84/180);
+    if(s.backing)s.backing.visible=s.progress===0;
     for(const leaf of s.leaves){
       if(s.d.lift){
         // The little authored door is already open on its outside jamb. Its protective grille
@@ -132,13 +140,14 @@ export function createDoors(scene,walker,ctx,camera,play){
   function sync(){
     if(!hardware)return;
     syncCrown();
+    syncStairEnd();
     syncInspectionWall();
     for(const d of doorways){
       let s=active.get(d.id);
       const source=rooms.has(s?.finishRoom)?s.finishRoom:d.rooms.find(id=>rooms.has(id));
       if(!source){if(s){for(const remove of s.fixed||[])remove();s.root.removeFromParent();s.trim?.dispose();active.delete(d.id);}continue;}
       if(!s)s=build(d);
-      if(s.backing)s.backing.visible=!d.rooms.every(id=>rooms.has(id));
+      if(s.progress>0&&!d.rooms.every(id=>rooms.has(id))){s.progress=0;s.hold=0;pose(s);}
       if(s.finishRoom!==source){
         const zone=rooms.get(source);
         for(const leaf of s.leaves)for(const {geom,source:mesh}of leaf.surfaces)geom.material=appearance(zone,mesh);
@@ -149,12 +158,12 @@ export function createDoors(scene,walker,ctx,camera,play){
   }
   function syncInspectionWall(){
     const surface=rooms.get('catwalk')?.wallSurface;
-    if(!surface||rooms.has('atrium')){
+    if(!surface){
       inspectionWall?.();inspectionWall=null;return;
     }
     if(inspectionWall)return;
-    // The east side of this upper corridor ordinarily uses the atrium's wall. Fit the same
-    // two holes into local wall panels while that room is loading or has been released.
+    // The corridor has no east wall of its own. Its permanent plaster return keeps the same
+    // finish whether the atrium is resident or not, with both openings cut into it.
     const bands=[
       [19.80,22.22,8.98,9.62],[22.22,27.69,6.80,9.62],[27.69,28.31,6.80,7.74],
       [27.69,28.31,8.58,9.62],[28.31,29.55,6.80,9.62]
@@ -167,10 +176,10 @@ export function createDoors(scene,walker,ctx,camera,play){
     const release=[];
     for(const [index,[start,end,floor,head]] of bands.entries()){
       const sx=.18/size.x,sy=(head-floor)/size.y,sz=(end-start)/size.z;
-      offset.set(-12-center.x*sx,(floor+head)*.5-center.y*sy,(start+end)*.5-center.z*sz);
+      offset.set(-12.108-center.x*sx,(floor+head)*.5-center.y*sy,(start+end)*.5-center.z*sz);
       matrix.makeScale(sx,sy,sz).setPosition(offset);panels.setMatrixAt(index,matrix);
-      const plane=new Group();plane.position.set(-12,floor,start);plane.rotation.y=-Math.PI/2;
-      release.push(registerLeaf('catwalk','inspection-wall-'+index,plane,end-start,head-floor,true));
+      const plane=new Group();plane.position.set(-12.108,floor,start);plane.rotation.y=-Math.PI/2;
+      release.push(registerLeaf('catwalk','inspection-wall-'+index,plane,end-start,head-floor,true,.09));
     }
     scene.add(panels);
     inspectionWall=()=>{for(const remove of release)remove();panels.removeFromParent();panels.dispose();};
@@ -205,14 +214,24 @@ export function createDoors(scene,walker,ctx,camera,play){
     for(const {runner,hand} of crown.leaves)runner.position.x=hand*MathUtils.smootherstep(progress,0,1)*1.57;
     crown.root.visible=progress<1;
   }
+  function fitFloorInlay(node){
+    // Keep the printed face on its original baked footprint. The raised metal arrows need to clear
+    // the bottom rail when the leaf passes over this floor marker.
+    const bounds=new Box3().setFromObject(node),height=bounds.max.y-bounds.min.y;
+    if(height<=.019)return;
+    const scale=.018/height,printHeight=.027;
+    node.position.y=printHeight+(node.position.y-printHeight)*scale;
+    node.scale.y*=scale;node.updateMatrixWorld(true);
+  }
   function mount(id,zone){
     const materials=new Map();let endWall=false;
     zone.view.traverse(n=>{
+      if(n.userData.expoGuideZone)fitFloorInlay(n);
       if(n.userData.portal||/^door_([a-z]+)$/.test(n.name))n.visible=false;
       if(n.userData.solidStairEnd)endWall=true;
       if(n.isMesh)for(const m of [n.material].flat())if(m.isMeshStandardMaterial&&!materials.has(m.name))materials.set(m.name,m);
     });
-    const room={materials,finishes:new Map(),environment:zone.environment.texture};
+    const room={materials,finishes:new Map(),environment:zone.environment.texture,endWall};
     if(id==='catwalk'){
       // Share the real plaster mesh and its finish with the existing stair-end wall.
       zone.view.getObjectByName('catwalk_corridor_endcap')?.traverse(node=>{
@@ -220,17 +239,20 @@ export function createDoors(scene,walker,ctx,camera,play){
       });
     }
     rooms.set(id,room);sync();
-    if(id==='catwalk'&&!endWall&&hardware.parts.has('StairEnd')){
-      // The older immutable room ends one wall short beside the first maintenance tread.
-      const root=new Group(),surface=new Group();root.name='catwalk_corridor_endcap';
-      root.position.set(-23.04,6.8,19.755);root.rotation.y=-Math.PI/2;
-      surface.position.x=1.245;root.add(surface);scene.add(root);
-      for(const source of hardware.parts.get('StairEnd')){
-        const part=source.clone(false);part.material=appearance(room,source);surface.add(part);
-      }
-      const remove=registerLeaf(id,'catwalk-stair-end',root,2.49,3.07,true);
-      room.releaseEnd=()=>{remove();root.removeFromParent();};
+  }
+  function syncStairEnd(){
+    const room=rooms.get('catwalk'),parts=hardware.parts.get('StairEnd');
+    if(!room||room.endWall||room.releaseEnd||!parts)return;
+    // The older immutable room ends one wall short beside the first maintenance tread.
+    const root=new Group(),surface=new Group();root.name='catwalk_corridor_endcap';
+    root.position.set(-23.04,6.8,19.755);root.rotation.y=-Math.PI/2;
+    surface.position.x=1.245;root.add(surface);scene.add(root);
+    for(const source of parts){
+      const part=source.clone(false);part.material=appearance(room,source);surface.add(part);
+      if(source.userData.finish==='plaster')room.wallSurface=part;
     }
+    const remove=registerLeaf('catwalk','catwalk-stair-end',root,2.49,3.07,true);
+    room.releaseEnd=()=>{remove();root.removeFromParent();};
   }
   function unmount(id){
     const room=rooms.get(id);room?.releaseEnd?.();rooms.delete(id);sync();for(const m of room?.finishes.values()||[])m.dispose();
@@ -256,7 +278,7 @@ export function createDoors(scene,walker,ctx,camera,play){
       if(s.external){sampleExternal(s);continue;}
       const {d}=s,dx=p.x-d.x,dz=p.z-d.z;
       const normal=d.axis==='x'?dz:-dx,along=d.axis==='x'?dx:dz;
-      const level=Math.abs(p.y-d.y)<1.08,ready=d.rooms.every(id=>rooms.has(id));
+      const level=(!walker.zone||d.rooms.includes(walker.zone))&&Math.abs(p.y-d.y)<1.08,ready=d.rooms.every(id=>rooms.has(id));
       const towards=d.axis==='x'?heading.z:-heading.x,motion=(d.axis==='x'?mz:-mx)/Math.max(.0001,span);
       const approaching=-Math.sign(normal)*towards>.42||span>.0001&&-Math.sign(normal)*motion>.42;
       const near=level&&Math.abs(normal)<3.7&&Math.abs(along)<d.width*.5+.65&&
@@ -274,13 +296,32 @@ export function createDoors(scene,walker,ctx,camera,play){
       const wants=ready&&(near||s.hold>0||(s.progress>0&&inSweep));
       const velocity=wants ? 1/(calm ? .80 : .65) : -1/(calm ? 1.05 : .86);
       const next=MathUtils.clamp(s.progress+travel*velocity,0,1);
-      if(next!==s.progress){s.progress=next;pose(s);}
+      if(next!==s.progress){
+        if(inSweep&&!d.lift&&swingsIntoVisitor(s,next,along,normal))continue;
+        s.progress=next;pose(s);
+      }
     }
   }
-  const thickness=.046;
+  function swingsIntoVisitor(s,next,along,normal){
+    const angle=MathUtils.smootherstep(next,0,1)*Math.PI*(84/180),c=Math.cos(angle),sn=Math.sin(angle);
+    const n=-normal*s.side;
+    for(const leaf of s.leaves){
+      const u=(along-leaf.rotor.position.x)*leaf.hand;
+      const distance=(x,y)=>{
+        const at=MathUtils.clamp(u*x+n*y,0,leaf.width);
+        return Math.hypot(u-at*x,n-at*y);
+      };
+      const to=distance(c,sn);
+      if(to<.24+.075){
+        const old=Math.abs(leaf.rotor.rotation.y);
+        if(to<distance(Math.cos(old),Math.sin(old))-1e-8)return true;
+      }
+    }
+    return false;
+  }
   function pushOut(p,radius,height,prior){
     for(const s of active.values()){
-      const d=s.d;
+      const d=s.d,thickness=s.halfDepth??.046;
       if(p.y+height<=d.y+.014||p.y>=d.y+d.height+(d.lift||0)||Math.abs(p.x-d.x)>d.width+.55||Math.abs(p.z-d.z)>d.width+.55)continue;
       sampleExternal(s);
       for(const l of s.leaves){
@@ -288,10 +329,13 @@ export function createDoors(scene,walker,ctx,camera,play){
         const dx=p.x-l.hx,dz=p.z-l.hz,u=dx*l.tx+dz*l.tz,n=dx*(-l.tz)+dz*l.tx;
         const a=u-MathUtils.clamp(u,0,l.width),b=n-MathUtils.clamp(n,-thickness,thickness);
         const distance=Math.hypot(a,b);if(distance>=radius)continue;
-        if(distance>.00001){
+        const previousN=(prior.x-l.hx)*(-l.tz)+(prior.z-l.hz)*l.tx;
+        const previousU=(prior.x-l.hx)*l.tx+(prior.z-l.hz)*l.tz;
+        const crossed=u>=0&&u<=l.width&&previousU>=0&&previousU<=l.width&&previousN*n<0;
+        if(distance>.00001&&!crossed){
           const k=(radius-distance+.00005)/distance;p.x+=(a*l.tx-b*l.tz)*k;p.z+=(a*l.tz+b*l.tx)*k;
         }else{
-          const side=Math.sign((prior.x-l.hx)*(-l.tz)+(prior.z-l.hz)*l.tx)||1;
+          const side=Math.sign(previousN)||1;
           const v=side*(radius+thickness)-n;p.x-=l.tz*v;p.z+=l.tx*v;
         }
       }
@@ -300,6 +344,7 @@ export function createDoors(scene,walker,ctx,camera,play){
   function blocked(ray,limit){
     for(const s of active.values()){
      sampleExternal(s);
+     const thickness=s.halfDepth??.046;
      for(const l of s.leaves){
       const px=ray.origin.x-l.hx,pz=ray.origin.z-l.hz;
       if(Math.hypot(px,pz)>limit+l.width+.15)continue;
@@ -326,14 +371,27 @@ export function createDoors(scene,walker,ctx,camera,play){
       distance:distanceTo(walker.feet,-22,11.323,-5),rooms:['catwalk','dome'],leaves:[]});
     return rows;
   }
-  function registerLeaf(room,id,rotor,width,height,fixed=false){
+  function registerLeaf(room,id,rotor,width,height,fixed=false,halfDepth=.046){
     rotor.getWorldPosition(scratch);
     const d=door(id,[room],scratch.x,scratch.y,scratch.z,'x',width,height,'staff',1);
-    const state={d,external:true,fixed,progress:0,leaves:[{rotor,width,hx:d.x,hz:d.z,tx:1,tz:0}]};
+    const state={d,external:true,fixed,halfDepth,progress:0,leaves:[{rotor,width,hx:d.x,hz:d.z,tx:1,tz:0}]};
     sampleExternal(state);active.set(id,state);
     return ()=>active.delete(id);
   }
-  return {setHardware(asset){hardware=asset;sync();},mount,unmount,tick,pushOut,blocked,debug,registerLeaf,
+  function connectVisibleRooms(visible){
+    let previous;
+    do {
+      previous=visible.size;
+      for(const d of doorways){
+        if(d.rooms.length!==2||!active.get(d.id)?.progress)continue;
+        const [a,b]=d.rooms;
+        if(visible.has(a)||visible.has(b)){visible.add(a);visible.add(b);}
+      }
+      if(crown?.progress>0&&(visible.has('dome')||visible.has('catwalk'))){visible.add('dome');visible.add('catwalk');}
+    }while(visible.size!==previous);
+    return visible;
+  }
+  return {setHardware(asset){hardware=asset;sync();},mount,unmount,tick,pushOut,blocked,debug,registerLeaf,connectVisibleRooms,
     holds(id){
       if(crown?.progress>0&&(id==='catwalk'||id==='dome'))return true;
       for(const s of active.values())if(s.progress>0&&s.d.rooms.length===2&&s.d.rooms.includes(id))return true;

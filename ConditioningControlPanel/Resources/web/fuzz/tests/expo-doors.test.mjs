@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {registerHooks} from 'node:module';
+import {readFile} from 'node:fs/promises';
 import test from 'node:test';
 
 const library=new URL('../../vendor/three/',import.meta.url);
@@ -9,7 +10,9 @@ const hook=registerHooks({resolve(name,context,next){
   return next(name,context);
 }});
 const {createDoors,streamingPriority}=await import('../ui/expo/doors.js');
-const {BoxGeometry,Group,Mesh,MeshStandardMaterial,PerspectiveCamera,Ray,Vector3}=await import('three');
+const {Box3,BoxGeometry,Group,Mesh,MeshStandardMaterial,PerspectiveCamera,Ray,Raycaster,Vector3}=await import('three');
+const {GLTFLoader}=await import('three/addons/loaders/GLTFLoader.js');
+const {MeshoptDecoder}=await import('three/addons/libs/meshopt_decoder.module.js');
 hook.deregister();
 
 function room(){return {view:new Group(),environment:{texture:null}};}
@@ -75,7 +78,8 @@ test('all three gallery elbows have a doorway before the neighboring assets arri
     doors.mount(inside,room());const sealed=doors.debug().find(d=>d.id===id);
     assert(sealed);assert.equal(sealed.ready,false);assert.equal(sealed.progress,0);
     const a=new Vector3().fromArray(sealed.leaves[0].hinge),b=new Vector3().fromArray(sealed.leaves[1].hinge);
-    assert(Math.abs(a.distanceTo(b)-width)<1e-8);
+    // A 75 mm rebate on each side leaves the hinge barrel clear throughout its swing.
+    assert(Math.abs(a.distanceTo(b)-(width-.15))<1e-8);
     assert(scene.getObjectByName('threshold_liner_'+id));
     assert(doors.debug().some(d=>d.id===id+'-jamb-0'));
     doors.mount(outside,room());assert(doors.debug().find(d=>d.id===id).ready);
@@ -105,22 +109,98 @@ test('the aquarium return leaves the near-side right turn clear when arriving fr
   doors.dispose();
 });
 
-test('the upper inspection wall and its collision follow the lifetime of its shared atrium wall',()=>{
+test('the upper inspection return and its finish stay fixed as the atrium streams',()=>{
   const {doors,scene}=installation(),corridor=room();
   const material=new MeshStandardMaterial();material.name='pale_shell';
   const wall=new Mesh(new BoxGeometry(.15,3.07,2.49),material);
   wall.name='catwalk_corridor_endcap';wall.userData.solidStairEnd=true;corridor.view.add(wall);
   const lining=()=>scene.getObjectByName('catwalk_inspection_wall_return');
   const side=new Ray(new Vector3(-13.3,8.40,26.55),new Vector3(1,0,0));
-  doors.mount('catwalk',corridor);assert.equal(lining(),undefined);
+  doors.mount('catwalk',corridor);const installed=lining();assert(installed);
   for(let load=0;load<2;load++){
     doors.unmount('atrium');assert.equal(lining().count,5);assert.equal(lining().material,material);
     assert(doors.blocked(side,2));const visitor=new Vector3(-12,6.8,26.55);
     doors.pushOut(visitor,.24,1.6,new Vector3(-12.4,6.8,26.55));assert(visitor.x<-12.24);
-    doors.mount('atrium',room());assert.equal(lining(),undefined);assert(!doors.blocked(side,2));
+    doors.mount('atrium',room());assert.equal(lining(),installed);assert(doors.blocked(side,2));
   }
   doors.unmount('atrium');doors.unmount('catwalk');assert.equal(lining(),undefined);assert(!doors.blocked(side,2));
   doors.dispose();wall.geometry.dispose();material.dispose();
+});
+
+test('a catwalk mounted before hardware receives its endcap and lining together',()=>{
+  const scene=new Group(),doors=createDoors(scene,{feet:new Vector3()},{}),source=new Mesh(new BoxGeometry(2.49,3.07,.15),new MeshStandardMaterial());
+  source.userData.finish='plaster';doors.mount('catwalk',room());
+  assert(!scene.getObjectByName('catwalk_corridor_endcap'));doors.setHardware({parts:new Map([['StairEnd',[source]]]),dispose(){}});
+  assert(scene.getObjectByName('catwalk_corridor_endcap'));const lining=scene.getObjectByName('catwalk_inspection_wall_return');assert(lining);
+  doors.mount('atrium',room());assert.equal(scene.getObjectByName('catwalk_inspection_wall_return'),lining);
+  doors.unmount('catwalk');assert(!scene.getObjectByName('catwalk_inspection_wall_return'));doors.dispose();
+  source.geometry.dispose();source.material.dispose();
+});
+
+for(const field of ['file','mobileFile'])test('the shipped main hall frame and plaster keep their visible surfaces on both sides, '+field,async()=>{
+  const assets=new URL('../assets/expo/',import.meta.url),zones=new URL('zones/',assets);
+  const plan=JSON.parse(await readFile(new URL('zones.json',zones)));
+  const loader=new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+  loader.register(parser=>({name:'geometryOnly',beforeRoot(){
+    parser.json.materials=parser.json.materials.map(({name,doubleSided})=>({name,doubleSided}));
+  }}));
+  async function mesh(url){
+    const bytes=await readFile(url);
+    return (await loader.parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'')).scene;
+  }
+  const rooms={};
+  for(const id of ['hall','atrium'])rooms[id]=await mesh(new URL(plan.zones.find(z=>z.id===id)[field],zones));
+  const parts=new Map();(await mesh(new URL('door-hardware.glb',assets))).traverse(node=>{
+    const key=node.userData.assembly;if(!node.isMesh||!key)return;
+    if(!parts.has(key))parts.set(key,[]);parts.get(key).push(node);
+  });
+  for(const [home,away,side] of [['hall','atrium',-1],['atrium','hall',1]]){
+    const scene=new Group(),doors=createDoors(scene,{feet:new Vector3()},{});
+    doors.setHardware({parts,dispose(){}});
+    function mount(id){const view=rooms[id];scene.add(view);view.updateMatrixWorld(true);doors.mount(id,{view,environment:{texture:null}});}
+    const probes=[[1.60,1.51],[1.49,1.05],[0,2.353],[.15,2.41],[.19,3.41],[4.01,4.11],[-4.7,6.61]];
+    function surfaces(){
+      scene.updateMatrixWorld(true);
+      const meshes=[];
+      for(const group of [rooms[home].getObjectByName('Architecture'),scene.getObjectByName('swing_hall-entrance'),
+                         rooms[away].parent===scene&&rooms[away].getObjectByName('Architecture')]){
+        if(group)group.traverseVisible(n=>{if(n.isMesh)meshes.push(n);});
+      }
+      return probes.map(([x,y])=>new Raycaster(new Vector3(x,y,16+side*.65),new Vector3(0,0,-side),0,1.3).intersectObjects(meshes,false)[0]);
+    }
+    mount(home);const single=surfaces();mount(away);const both=surfaces();
+    for(let i=0;i<probes.length;i++){
+      assert(single[i]&&both[i],home+' uncovered frame '+probes[i]);
+      assert.equal(both[i].object.uuid,single[i].object.uuid,home+' foreign finish '+probes[i]);
+      assert.equal(both[i].distance,single[i].distance);
+    }
+    const guide=rooms[home].getObjectByName('Listening_route_to_'+away);
+    const b=new Box3().setFromObject(guide);
+    assert(b.max.y<.044,'raised floor lettering must clear the moving bottom rail');
+    assert(Math.abs((b.min.z+b.max.z)*.5-(16+side*1.01))<.02,'the printed floor marker must keep its baked footprint');
+    doors.dispose();scene.clear();
+  }
+});
+
+test('the door waits for a visitor on the opening side of a fixed swing',()=>{
+  const {doors,walker,camera,wait}=installation();doors.mount('aquarium',room());
+  walker.zone='aquarium';walker.feet.set(-8.45,0,41.55);camera.position.copy(walker.feet);camera.lookAt(-8.45,0,41.10);
+  wait(1.5);const swinging=()=>doors.debug().find(d=>d.id==='aquarium-return');
+  const partial=swinging().progress;assert(partial>0&&partial<1);
+  wait(.6);assert.equal(swinging().progress,partial);
+  walker.feet.z=43.7;wait(1.5);assert.equal(swinging().progress,1);doors.dispose();
+});
+
+test('the resident side, the opaque seal and transitive door sightlines follow the actual swing',()=>{
+  const {scene,doors,walker,camera,wait,approach}=installation();
+  const hallDoor=scene.getObjectByName('swing_hall-entrance'),seal=hallDoor.children[0];
+  assert(seal.visible);doors.mount('hall',room());doors.mount('service',room());assert(seal.visible);
+  const reach=id=>[...doors.connectVisibleRooms(new Set([id]))].sort();
+  walker.zone='service';walker.feet.set(0,0,17.9);camera.position.copy(walker.feet);camera.lookAt(0,0,16);
+  wait(.3);assert.deepEqual(reach('hall'),['hall']);assert(seal.visible);
+  walker.zone='atrium';wait(.12);assert.deepEqual(reach('hall'),['atrium','hall']);assert(!seal.visible);
+  approach(10);wait(.15);assert.deepEqual(reach('hall'),['atrium','hall','service']);
+  doors.unmount('atrium');assert(seal.visible);assert.deepEqual(reach('hall'),['hall']);doors.dispose();
 });
 
 test('the crown aperture retains its chamber until the moving shades have closed',()=>{
@@ -128,8 +208,10 @@ test('the crown aperture retains its chamber until the moving shades have closed
   walker.zone='catwalk';walker.feet.set(-22,11.95,-5);doors.mount('catwalk',room());wait(1);
   assert.equal(shade().progress,0);
   doors.mount('dome',room());wait(.2);
-  assert(shade().progress>0&&shade().progress<1);wait(1);assert.equal(shade().progress,1);
+  assert(shade().progress>0&&shade().progress<1);
+  assert(doors.connectVisibleRooms(new Set(['catwalk'])).has('dome'));wait(1);assert.equal(shade().progress,1);
   walker.feet.set(-13,6.8,21);wait(.15);assert(doors.holds('dome'));
   wait(1.2);assert.equal(shade().progress,0);assert(!doors.holds('dome'));
+  assert(!doors.connectVisibleRooms(new Set(['dome'])).has('catwalk'));
   doors.dispose();
 });

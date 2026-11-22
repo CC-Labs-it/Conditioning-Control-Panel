@@ -211,9 +211,9 @@
         12.56,
         41
       ],
-      "file": "atrium-08a61de17d70b835.glb",
-      "mobileFile": "atrium-08a61de17d70b835-mobile.glb",
-      "arrivalGzip": "atrium-08a61de17d70b835.glb.gz",
+      "file": "atrium-entry-fa7372ef3bdb3d98.glb",
+      "mobileFile": "atrium-entry-c92e211d863532fe-mobile.glb",
+      "arrivalGzip": "atrium-entry-fa7372ef3bdb3d98.glb.gz",
       "arrivalMobileMaps": {},
       "lightIntensity": 31.498770486612436,
       "reflectionIntensity": 0.33,
@@ -230,8 +230,8 @@
         10.8,
         16
       ],
-      "file": "hall-entry-a0967ab717ccbf37.glb",
-      "mobileFile": "hall-entry-c856e171f905ab62-mobile.glb",
+      "file": "hall-entry-a3e6b22b591cebf7.glb",
+      "mobileFile": "hall-entry-1b5ea881cd642aa4-mobile.glb",
       "lightIntensity": 34.94238358415457,
       "reflectionIntensity": 0.33,
       "assetStem": "hall-ded2f60ac02e9836",
