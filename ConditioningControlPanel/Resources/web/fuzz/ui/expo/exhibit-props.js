@@ -32,12 +32,12 @@ export function exhibitProps(assetURL, filename='renewal-collection.glb') {
     }).catch(err=>{onUnavailable?.();if(!removed)console.error('Expo prop assembly',err);});
     return ()=>{removed=true;cleanup?.();for(const n of made)n.removeFromParent();for(const m of surfaces.values())m.dispose();};
   }
-  function using(room,name,withProp){
+  function using(room,names,withProps){
     return new Promise(resolve=>{
       let undo;
       undo=mount(room,place=>{
-        const n=place(name,[0,0,0]);n.visible=false;
-        try{resolve(withProp(n));}finally{queueMicrotask(undo);}
+        const props=names.map(name=>{const n=place(name,[0,0,0]);n.visible=false;return n;});
+        try{resolve(withProps(...props));}finally{queueMicrotask(undo);}
       },()=>resolve(null));
     });
   }

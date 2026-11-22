@@ -4,7 +4,7 @@ const photographs=[
   ['flight','First flight'],['loch','The loch survey'],['summit','The summit'],['woods','The woodland census'],['moon','Lunar arrival']
 ];
 const ordinals=['Founding edition','First correction','Accepted revision','Revised original','Final original'];
-const X1=-10.85,X2=-6.75,Z1=7.45,PITCH=.79;
+const X1=-10.85,X2=-7.12,Z1=7.45,PITCH=.79;
 const route=[];
 for(let lane=4;lane>=0;lane--){
   const z=Z1+(lane+.5)*PITCH,reverse=lane%2===0;

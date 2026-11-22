@@ -1,11 +1,12 @@
 import * as THREE from 'three';
+import {printedPanel} from './display.js';
 
 const rows = [
   ['reginald','margaret','bob','lashes','kevin','gary'],
   ['spitz','greg','bartholomew','henry','doctor','nana']
 ];
 
-export function groupPhotograph({gallery,scene,renderer,doc,draw,visitor=null,name}) {
+export function groupPhotograph({gallery,scene,renderer,doc,draw,visitor=null,mark=null,name}) {
   const riser=gallery.getObjectByName('photo_terrace');
   const originals=rows.flat().map(id=>gallery.getObjectByName('statue_'+id));
   if(!riser || originals.some(model=>!model?.visible))return null;
@@ -19,7 +20,7 @@ export function groupPhotograph({gallery,scene,renderer,doc,draw,visitor=null,na
   const ratio=renderer.getPixelRatio();
   const yAxis=new THREE.Vector3(0,1,0);
   const party=new THREE.Group();
-  const visibility=new Map(),finishes=[];
+  const visibility=new Map(),finishes=[];let visitorsLabel;
   const setVisible=(object,visible)=>{
     if(object){visibility.set(object,object.visible);object.visible=visible;}
   };
@@ -35,8 +36,9 @@ export function groupPhotograph({gallery,scene,renderer,doc,draw,visitor=null,na
     }
     originals.forEach((original,i)=>{
       const back=i>=6,column=i%6;
-      const positionX=(column-2.5)*1.31+(back ? .21 : -.12);
-      const positionZ=back?-26.91:-24.98;
+      const nearer=visitor&&!back&&rows[0][column]==='gary';
+      const positionX=(column-2.5)*1.31+(back ? .21 : -.12)+(nearer?.19:0);
+      const positionZ=back?-26.91:-24.98+(nearer?.07:0);
       const bounds=new THREE.Box3().setFromObject(original,true);
       const centre=bounds.getCenter(new THREE.Vector3());
       const originalHeading=Math.atan2(centre.z+26.1,-centre.x);
@@ -49,6 +51,16 @@ export function groupPhotograph({gallery,scene,renderer,doc,draw,visitor=null,na
       copy.position.set(positionX-centre.x,(back?-.05:-.68)-bounds.min.y,positionZ-centre.z);
       setVisible(original,false);
     });
+    if(visitor&&mark){
+      const spot=mark.clone(true);spot.visible=true;spot.position.set(4.18,-.676,-24.98);spot.scale.setScalar(.83);party.add(spot);
+      spot.traverse(mesh=>{
+        if(!mesh.isMesh||mesh.material?.name!=='Print')return;
+        mesh.position.z+=.29;
+        visitorsLabel=printedPanel(THREE,mesh,{width:640,height:220,emission:.15});
+        visitorsLabel.draw((g,w,h)=>{g.fillStyle='#1c493d';g.fillRect(0,0,w,h);g.fillStyle='#f5e6bc';g.textAlign='center';
+          g.font='bold 102px Georgia';g.fillText('VISITOR',w/2,150);});
+      });
+    }
     if(visitor){
       const human=visitor.clone(true);human.visible=true;human.position.set(0,0,0);party.add(human);
       if(visitor.name==='hoof_staff')human.rotation.y-=Math.PI/2;
@@ -60,7 +72,7 @@ export function groupPhotograph({gallery,scene,renderer,doc,draw,visitor=null,na
       const bounds=new THREE.Box3().setFromObject(human,true);const height=bounds.max.y-bounds.min.y;
       if(height>.01)human.scale.multiplyScalar(1.62/height);
       bounds.setFromObject(human,true);const c=bounds.getCenter(new THREE.Vector3());
-      human.position.set(4.18-c.x,-.68-bounds.min.y,-24.98-c.z);
+      human.position.set(4.18-c.x,(mark?-.647:-.68)-bounds.min.y,-24.98-c.z);
     }
     renderer.setRenderTarget(null);
     renderer.setDrawingBufferSize(1080,606,1);
@@ -81,7 +93,7 @@ export function groupPhotograph({gallery,scene,renderer,doc,draw,visitor=null,na
     }
     return null;
   }finally{
-    party.removeFromParent();for(const m of finishes)m.dispose();
+    party.removeFromParent();visitorsLabel?.dispose();for(const m of finishes)m.dispose();
     for(const [object,visible] of visibility)object.visible=visible;
     renderer.setDrawingBufferSize(cameraSize.x,cameraSize.y,ratio);draw();
   }

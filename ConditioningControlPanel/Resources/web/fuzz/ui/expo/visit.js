@@ -24,12 +24,6 @@ export function createVisit(ctx) {
     file, ticket:visitTicket(ctx.store), presses:0, misses:0, hoof:'idle', hoofWorn:false, hoofMask:0, hoofAdmitted:false, taps:0, feeds:0, clause:0,
     contract:false, loops:0, boughtExit:false, turnstile:false, timer:0, photo:false,
     heard:new Set(), habitatTime:0,
-    press(stop=false) {
-      if (stop && this.presses < 50) return null;
-      this.presses++;
-      if (stop) return 'pa_hall1_stop';
-      return this.presses === 1 ? 'pa_hall1_press' : this.presses === 10 ? 'pa_hall1_ten' : null;
-    },
     pressRecord() {
       const extra = this.presses >= 10 ? '\nand '+this.presses.toLocaleString()+' times at the Expo. As predicted.' : '';
       return 'Pressed '+file.taps.toLocaleString()+' times by one human, 2026. Believed voluntary.'+extra;
@@ -38,7 +32,6 @@ export function createVisit(ctx) {
     nextClause() {
       if (!file.clauses.length) return 'No accepted clauses on file.';
       return file.clauses[this.clause++ % file.clauses.length];
-    },
-    shopReturn() { this.loops = Math.min(2,this.loops+1); return this.loops===1 ? 'pa_shop_2' : 'pa_shop_3'; }
+    }
   };
 }

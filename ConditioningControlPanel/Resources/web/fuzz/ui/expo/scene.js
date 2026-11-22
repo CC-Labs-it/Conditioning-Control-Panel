@@ -201,10 +201,10 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       if (sinceArrival >= 1.25) arrivalStart = null;
       media?.draw();
     }
-    function capturePhoto(visitor=null) {
+    function capturePhoto(visitor=null,mark=null) {
       const gallery=zones?.resident.get('twelve')?.view;
       if(!gallery || exhibits.state?.file?.herd.length!==12)return null;
-      const photo=groupPhotograph({gallery,scene,renderer,doc,draw,visitor,name:exhibits.state.file.name});
+      const photo=groupPhotograph({gallery,scene,renderer,doc,draw,visitor,mark,name:exhibits.state.file.name});
       if(photo)ctx.store.set('groupPhoto',photo);
       return photo;
     }
@@ -212,7 +212,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       if(dead)return;
       try{
         const portrait=await zones.ensure('twelve');
-        if(!dead&&portrait)await annex.using(portrait.view,'annex_photo_visitor',visitor=>capturePhoto(visitor));
+        if(!dead&&portrait)await annex.using(portrait.view,['annex_photo_visitor','annex_agenda'],capturePhoto);
       }catch(err){if(!dead)console.warn('Group photo',err);}
     }
     async function go(id, at, yaw = 0) {
