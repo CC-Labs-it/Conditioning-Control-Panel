@@ -114,5 +114,10 @@ export function createInstruments({ctx,camera,register,play,meter,lite}){
       watts:p.watts,roofWatts:p.roof,batteryWatts:p.batteryWatts,reserveWh:p.batteryWh,historySamples:p.samples,
       panels:[...displays.values()].map(d=>({kind:d.kind,at:d.centre.toArray(),detail:d.detail,uploads:d.updates,physicalControl:!!d.object,louvreCount:d.blades?.length||0}))};
   }
-  return {mount,unmount,enter,tick,debug,dispose(){for(const d of [...displays.values()])unmount(d.zone);}};
+  function signal(){
+    const p=plant.state;
+    p.signalUntil=p.time+8;plant.observe(inputs);
+    for(const d of displays.values())paint(d,true);
+  }
+  return {mount,unmount,enter,tick,debug,signal,dispose(){for(const d of [...displays.values()])unmount(d.zone);}};
 }

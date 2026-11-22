@@ -23,7 +23,7 @@ export function createBuildingPlant(){
     p.bed+=delivered-drainage;p.returnTank+=drainage-recovered;
     p.tank=TOTAL_WATER-p.bed-p.returnTank;
     const c=p.circuits;
-    c.lighting=720+(inhabitedLighting[p.zone]||180);
+    c.lighting=720+(inhabitedLighting[p.zone]||180)+(p.time<(p.signalUntil||0)?545:0);
     c.ventilation=Math.round(70+160*p.air);
     c.irrigation=p.delivery?Math.round(27+12*p.delivery):0;
     c.projectors=112*p.lamps;

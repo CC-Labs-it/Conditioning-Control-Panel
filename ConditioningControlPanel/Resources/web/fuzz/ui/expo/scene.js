@@ -227,7 +227,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     const instruments=createInstruments({ctx,camera,register,play:sound.play,meter:narration.meter,lite:LITE});
     const ambience=createAmbience({ctx,renderer,lite:LITE,meter:narration.meter});
     const kit=exhibitProps(assetURL),annex=exhibitProps(assetURL,'visitor-services.glb');clean.push(()=>kit.dispose(),()=>annex.dispose());
-    exhibits = createExhibits({ THREE, ctx, camera, scene, root, say, walker, props:kit.mount, annexProps:annex.mount, records:()=>narration.story?.completed||0,
+    exhibits = createExhibits({ THREE, ctx, camera, scene, root, say, walker, setHeaterPower:sound.setHeaterPower, signal:instruments.signal, props:kit.mount, annexProps:annex.mount, records:()=>narration.story?.completed||0,
       storeSouvenir:(obj,label)=>souvenirPrint({THREE,renderer,draw,ctx},obj,label), actionSerial:()=>actionSerial, cue:narration.cue, play: sound.play, setSoundDepth: sound.setDepth,
       go, exit: onExit, farewell, register, assetURL, bindMedia, capturePhoto, setColliderEnabled:walker.setColliderEnabled,
       setButtonAvailable:buttons.setAvailable,registerDoorLeaf:(...args)=>zones?.registerDoorLeaf(...args) });

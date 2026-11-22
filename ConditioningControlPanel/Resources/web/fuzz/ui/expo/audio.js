@@ -3,7 +3,7 @@ import { assetURL } from './zones.js';
 export function createSound(ctx) {
   const controller = new AbortController();
   const rotations = new Map(), layers = new Map(), streams = new Set();
-  let dead = false, held = false, bank = {}, room = '', depth = 0;
+  let dead = false, held = false, bank = {}, room = '', depth = 0, heaterPower = true;
   const meadowFootfall='assets/audio/sfx/thud.mp3';
   let footfallCount=0,lastFootfall=null;
   const resolve = file => assetURL('audio/' + file);
@@ -54,7 +54,7 @@ export function createSound(ctx) {
     if (room !== 'service') return;
     const distance = Math.hypot(feet.x - 25, feet.z - 27.19, feet.y + 1.6 - 1.04);
     const gain = Math.max(0, 1 - distance / 4.1);
-    layer('server', gain > 0 && bank.tones?.server, .47 * gain * gain);
+    layer('server', heaterPower && gain > 0 && bank.tones?.server, .47 * gain * gain);
   }
   function setDepth(n) {
     depth = Math.max(0, Math.min(1, n));
@@ -67,7 +67,9 @@ export function createSound(ctx) {
     held = on;
     for (const s of streams) { if (on) s.pause(); else s.play(); }
   }
-  return { play, footstep, setRoom, setDepth, setListener, pause,footfalls:()=>({count:footfallCount,last:lastFootfall}), dispose() {
+  return { play, footstep, setRoom, setDepth, setListener, pause,
+    setHeaterPower(on){heaterPower=on;if(!on)layer('server',null,0);},
+    footfalls:()=>({count:footfallCount,last:lastFootfall}), dispose() {
     dead = true; controller.abort(); for (const s of streams) s.stop(); streams.clear(); layers.clear();
   } };
 }

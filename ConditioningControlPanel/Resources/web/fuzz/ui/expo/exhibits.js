@@ -1,3 +1,4 @@
+import {createBackOfHouse} from './back-of-house.js';
 import { mountSettlement } from './settlement.js';
 import { visitorHands } from './carried.js';
 import { firstPress } from './first-press.js';
@@ -17,6 +18,7 @@ export function createExhibits(api) {
   let here = '', hudClock = 0, pending = [], stopShown = -20, returning = false, departureDone=false, disposed=false;
   const cue = api.cue, awareness=narratorAwareness(state,cue);
   const hands=visitorHands(api,state);api.hold=hands.hold;api.drop=hands.drop;
+  const staff=createBackOfHouse(api,state);
   const founding=firstPress(api,state),worn=createWornHooves(api,state);
   api.endVisit=async ending=>{
     if(returning||disposed)return;returning=true;state.ending=ending;
@@ -56,7 +58,7 @@ export function createExhibits(api) {
       const panel=livePanel(THREE,face,dimensions);
       clean.push(()=>panel.dispose()); return panel;
     }
-    founding.mount(id,group,bind,surface,clean);
+    staff.mount(id,group,bind,surface,clean);founding.mount(id,group,bind,surface,clean);
     if (id==='hoof') {
       ui.lab=mountHoofLab(api,group,state,worn);clean.push(ui.lab.dispose);
     }
@@ -153,7 +155,7 @@ export function createExhibits(api) {
     if(here==='hoof'&&state.hoofWorn&&state.ticket.book('hoof-out','Left wearing the hooves',true))cue('v4_hoof_out',{kind:'beat',zone:id,exhibit:'hooves'});
     worn.light(zones.get(id)?.group);
     zones.get(here)?.ui.shop?.leave();zones.get(id)?.ui.shop?.arrive();zones.get(id)?.ui.tally?.();
-    hands.enter(id);here=id;awareness.enter(id);
+    staff.enter(id,here);hands.enter(id);here=id;awareness.enter(id);
     if(hallCues[id])once(hallCues[id]);
     if(id==='twelve' && state.file.herd.length===12)later('pa_hall4_full',6);
     if(id==='atrium'&&!state.heard.has('pa_arrive_2'))later('pa_arrive_2',20);
@@ -162,7 +164,7 @@ export function createExhibits(api) {
     if(ctx.paused)return;
     worn.tick(dt);
     if(returning&&departureDone){leave();return;}
-    hands.tick();hudClock+=dt;awareness.tick(dt,id,camera,api.actionSerial());
+    staff.tick(dt,id);hands.tick();hudClock+=dt;awareness.tick(dt,id,camera,api.actionSerial());
     if(hudClock>=900)once('pa_closing');
     pending=pending.filter(event=>{
       if(event.zone!==here)return false;
@@ -212,7 +214,7 @@ export function createExhibits(api) {
       }
     }
   }
-  const dispose=()=>{hands.dispose();disposed=true;for(const id of [...zones.keys()])unmount(id);pending=[];};
+  const dispose=()=>{staff.dispose();hands.dispose();disposed=true;for(const id of [...zones.keys()])unmount(id);pending=[];};
   function setTurnstileAngle(degrees){
     const ui=zones.get('atrium')?.ui;if(!ui?.setAngle)return false;
     ui.inspectionAngle=Number.isFinite(degrees)?degrees:null;
