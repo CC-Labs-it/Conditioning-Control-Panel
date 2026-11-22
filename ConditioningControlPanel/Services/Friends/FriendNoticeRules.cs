@@ -44,7 +44,7 @@ public sealed class FriendNotice
 public static class FriendNoticeRules
 {
     /// <summary>At most this many notices are drawn; the rest collapse into "+N more".</summary>
-    public const int MaxVisible = 3;
+    public const int MaxVisible = 2;
 
     /// <summary>A repeat from the same friend and kind inside this window folds into one notice.</summary>
     public const double CoalesceSeconds = 30;
