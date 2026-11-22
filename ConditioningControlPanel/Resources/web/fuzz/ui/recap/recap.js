@@ -13,7 +13,7 @@
 
 import { ENDINGS } from '../../data/content/endings.js';
 import { FORKS } from '../../data/items.js';
-import { OFF_SHELF } from '../../sim/economy.js';
+import { galleryIds } from '../../sim/economy.js';
 import { HERD_ENDINGS } from '../../data/fate.js';
 import { THEME_PALETTES, mixHex } from '../palette.js';
 import { iconFor } from '../icons.js';
@@ -338,7 +338,7 @@ export function openRunRecap({ cards, doc, id, run, life, hooks, audio, name = '
         coll.hidden = false;
         // The endings on offer, plus any retired one this player already has (sim/economy.js OFF_SHELF). The Panel
         // (data/fate.js HERD_ENDINGS) stays secret until seen.
-        const ids = Object.keys(ENDINGS).filter((eid) => (!OFF_SHELF.has(eid) && !HERD_ENDINGS.includes(eid)) || got.has(eid));
+        const ids = galleryIds(Object.keys(ENDINGS), got, run);   // sim/economy.js: the same rule, small edition included
         coll.dataset.got = String(got.size);
         const big = h('div', 'rr-big rr-ends-big', null, endsBox);
         big.append(String(got.size)); h('span', '', '/' + ids.length, big);

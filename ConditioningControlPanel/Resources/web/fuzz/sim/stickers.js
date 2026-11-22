@@ -11,6 +11,7 @@
 import { LIFE_TALLIES, STICKER_BY_ID, STICKERS } from '../data/content/stickers.js';
 import { THEME_IDS } from '../data/content/themes.js';
 import { OFF_SHELF } from './economy.js';
+import { isCut } from '../ui/edition.js';
 import { HERD_ENDINGS } from '../data/fate.js';
 
 export const METER_CELLS = 10;
@@ -86,12 +87,25 @@ export function syncLife(life, run = currentRun(life)) {
   return got;
 }
 
-/** What the book shows: every sticker, except a retired one the player never earned. */
-export const shown = (life) => STICKERS.filter((s) => !s.legacy || life?.stickers?.[s.id]);
+/* EDITIONS (lane S3b): the stickers the small edition cannot give. A sticker named for an ending reads its row from
+ * `when`; these come from a cut game; the Renewal ones need the Sky, which small has for nobody. */
+const STICKER_ROW = Object.freeze({ n_toybox: 'toy_box', n_disp: 'dispenser', n_deep: 'mini_deep', n_brk: 'mini_breakout' });
+const RENEWAL_STICKERS = new Set(['p_renew', 'p_depth5', 'p_core']);
+/** True when this sticker cannot be earned in this edition reading (`ed` from ui/edition.js; none = the whole game). */
+export function stickerAsleep(s, ed = null) {
+  if (ed?.edition !== 'small') return false;
+  if (RENEWAL_STICKERS.has(s.id)) return true;
+  const row = STICKER_ROW[s.id] || (String(s.when).startsWith('ending:') ? String(s.when).slice(7) : null);
+  return !!row && isCut(row, ed);
+}
+
+/** What the book shows: every sticker, except a retired one the player never earned. In small a sticker it cannot give
+ *  is never shown as missing; one the save already holds still shows as earned (sleep never hides a record). */
+export const shown = (life, ed = null) => STICKERS.filter((s) => (!s.legacy && !stickerAsleep(s, ed)) || life?.stickers?.[s.id]);
 
 /** Book view for one page: [{sticker, run}] with run = 0 for not earned. */
-export function pageView(life, pageId) {
-  return shown(life).filter((s) => s.page === pageId).map((s) => ({ sticker: s, run: life?.stickers?.[s.id] || 0 }));
+export function pageView(life, pageId, ed = null) {
+  return shown(life, ed).filter((s) => s.page === pageId).map((s) => ({ sticker: s, run: life?.stickers?.[s.id] || 0 }));
 }
 
 /** Save hygiene: keeps only known sticker ids and known counters. */
