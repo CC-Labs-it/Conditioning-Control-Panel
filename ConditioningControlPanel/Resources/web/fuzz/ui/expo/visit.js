@@ -22,7 +22,7 @@ export function createVisit(ctx) {
   const file = admission(ctx);
   return {
     file, ticket:visitTicket(ctx.store), presses:0, misses:0, hoof:'idle', hoofWorn:false, hoofMask:0, hoofAdmitted:false, taps:0, feeds:0, clause:0,
-    contract:false, loops:0, boughtExit:false, turnstile:false, timer:0, photo:false,
+    contract:false, boughtExit:false, turnstile:false, timer:0, photo:false,
     heard:new Set(), habitatTime:0,
     pressRecord() {
       const extra = this.presses >= 10 ? '\nand '+this.presses.toLocaleString()+' times at the Expo. As predicted.' : '';

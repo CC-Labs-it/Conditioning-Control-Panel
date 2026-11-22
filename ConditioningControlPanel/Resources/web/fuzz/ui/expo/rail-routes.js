@@ -6,7 +6,7 @@ export const railRoutes=[
   {key:'tea',rooms:['service','atrium','hall'],back:'Return the tea to the canteen'},
   {key:'stapler',rooms:office,back:'Return Greg’s stapler'},
   {key:'signed-form',rooms:['twelve','hall','shop'],back:'Return the signed form to Lady Lashes'},
-  {key:'souvenir:',rooms:['shop'],back:'Return carried item to its bay'},
+  {key:'souvenir:',rooms:['shop'],back:'Return carried item to its bay',finishes:true},
   {key:'staff-sign-',rooms:office,back:'Return the notice to its stand'}
 ];
 const teaBranches=new Set(['staff-upper','staff-store','server-cupboard','maintenance-stairs','archive-passage']);
