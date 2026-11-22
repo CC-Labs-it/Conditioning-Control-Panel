@@ -28,8 +28,10 @@ import { loadPrestige, prestigeNow, openRenewal, openSky, SKY_CURRENCY } from '.
 import { applyLooks } from './sim/prestige-looks.js';
 import { canKeepPlaying as keepPlayingOk, keepPlaying as keepPlayingRun } from './sim/prestige-endings.js';   // Endless (onemore)
 import { sealedFor, showSeal } from './ui/seal.js';
-import { setEdition, expoArrived, editionState, renewalAllowed, sendNudge } from './ui/edition.js';
+import { setEdition, expoArrived, editionState, renewalAllowed, sendNudge, isSmall } from './ui/edition.js';
 import { mountLlamaPen } from './ui/llama-pen.js';
+import { mountTransmission } from './ui/transmission.js';
+import { endingNudge, mountPauseNudge } from './ui/nudges.js';   // small: the ending and pause doors to the full game   // the transmission card, the pen sign and the llama-8 card
 import { mountHomeTip } from './ui/phone.js';
 import { previewBarAllowed } from './ui/preview-bar-model.js';
 
@@ -238,6 +240,7 @@ function start(init) {
   const hooks = {
     newRun,
     renew: renewal ? renew : null,                          // small: no Renewal, the ending leads to New run
+    nudge: isSmall(ed) ? endingNudge({ win: window, send: bridge.send, ed }) : null,   // small: the ending's nudge (ui/nudges.js)
     keepPlaying: renewal ? keepPlaying : null,                                          // Endless (onemore): the credits card's Keep playing
     canKeepPlaying: () => renewal && keepPlayingOk(life, run),
     renewCurrency: SKY_CURRENCY,
@@ -360,12 +363,15 @@ function start(init) {
     bindPalette(engine, document);
     previewBar();
     /* Small: once per save, a quiet note that some of it sleeps here (sim/save.js saveSleepDue, extras.sleepSeen). */
-    if (saveSleepDue(saved, ed, extras)) mountSaveSleep({ doc: document, win: window, extras, send: bridge.send, ed, gentle: ui.gentle, reduced: ui.reduced, save: persist });
+    if (saveSleepDue(saved, ed, extras)) mountSaveSleep({ cards: ui.cards, win: window, extras, send: bridge.send, ed, save: persist });
     playing = true;
     if (run.ended) { engine.end(run.ended.id, { restored: true }); ui.start(); return; }
     syncMedia();
     engine.mountAll(!!saved?.run);
-    pen();   // the herd, top left, from the first second
+    if (isSmall(ed)) mountPauseNudge({ doc: document, win: window, send: bridge.send, ed });   // small: one quiet line on the pause card
+    const penView = pen();   // the herd, top left, from the first second
+    /* The transmission (CONTRACT.md 6.5): at 4 llamas the card, then the pen sign; in small the nudge and the llama-8 card. */
+    mountTransmission({ doc: document, win: window, cards: ui.cards, on: bridge.on, send: bridge.send, llamas: () => run.herd, clock: () => run.clock, extras, save: persist, pen: penView?.el });
     mountHomeTip({ doc: document, win: window, storage: fresh ? memoryStorage() : preferenceStorage });   // iPhone Safari, once
     engine.syncQuiet();
     ui.drawPhrase();
