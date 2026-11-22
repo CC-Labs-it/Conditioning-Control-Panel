@@ -1,5 +1,5 @@
 const DEADZONE = .18;
-const BUTTONS = Object.entries({jump:0, interact:2, back:1, start:9, up:12, down:13, left:14, right:15});
+const BUTTONS = Object.entries({jump:0, interact:2, spit:7, back:1, start:9, up:12, down:13, left:14, right:15});
 
 function stick(x, y) {
   x = Number.isFinite(x) ? x : 0;
@@ -57,6 +57,7 @@ export function createExpoGamepad(readPads = () => globalThis.navigator?.getGame
       const input = {index, moveX:moveReady ? mx : 0, moveY:moveReady ? my : 0,
         lookX:lookReady ? lx : 0, lookY:lookReady ? ly : 0};
       for (const [action,bit] of BUTTONS) input[action] = !!(edges & (1 << bit));
+      input.spitReleased=!!(known&&(old.mask&(1<<7))&&!(mask&(1<<7)));
       input.activity = !!(input.moveX || input.moveY || input.lookX || input.lookY || edges);
       if (edges || (known && ((moving && moveReady && !old.moving) || (looking && lookReady && !old.looking)))) {
         if (claimed === null || index === selected) claimed = index;

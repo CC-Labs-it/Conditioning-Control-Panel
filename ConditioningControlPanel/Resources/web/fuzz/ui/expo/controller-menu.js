@@ -1,9 +1,9 @@
 import { createExpoGamepad } from './gamepad.js';
 
 export function expoGuideText(mode) {
-  if (mode === 'gamepad') return 'Left stick to walk. Right stick to look. A / Cross to jump. X / Square to interact. Menu / Options to pause.';
-  if (mode === 'touch') return 'Drag to look. Use the stick to walk. Tap Jump to hop.';
-  return 'WASD or arrows to walk. Drag or click to look. Space to jump. E to interact. Esc to pause.';
+  if (mode === 'gamepad') return 'Left stick to walk. Right stick to look. A / Cross to jump. X / Square to interact. Hold RT / R2 to spit. Menu / Options to pause.';
+  if (mode === 'touch') return 'Drag to look. Use the stick to walk. Tap Jump. Hold Spit to aim, then release.';
+  return 'WASD or arrows to walk. Drag or click to look. Space to jump. E to interact. Hold Q to spit. Esc to pause.';
 }
 
 export function expoInteractionText(label, mode) {

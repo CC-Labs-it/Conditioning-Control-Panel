@@ -1,4 +1,5 @@
 import {createBackOfHouse} from './back-of-house.js';
+import {createSpit} from './spit.js';
 import { mountSettlement } from './settlement.js';
 import { visitorHands } from './carried.js';
 import { firstPress } from './first-press.js';
@@ -18,7 +19,7 @@ export function createExhibits(api) {
   let here = '', hudClock = 0, pending = [], stopShown = -20, returning = false, departureDone=false, disposed=false;
   const cue = api.cue, awareness=narratorAwareness(state,cue);
   const hands=visitorHands(api,state);api.hold=hands.hold;api.drop=hands.drop;
-  const staff=createBackOfHouse(api,state);
+  const staff=createBackOfHouse(api,state),spit=createSpit(api,state);
   const founding=firstPress(api,state),worn=createWornHooves(api,state);
   api.endVisit=async ending=>{
     if(returning||disposed)return;returning=true;state.ending=ending;
@@ -58,6 +59,7 @@ export function createExhibits(api) {
       const panel=livePanel(THREE,face,dimensions);
       clean.push(()=>panel.dispose()); return panel;
     }
+    clean.push(spit.mount(id,group));
     staff.mount(id,group,bind,surface,clean);founding.mount(id,group,bind,surface,clean);
     if (id==='hoof') {
       ui.lab=mountHoofLab(api,group,state,worn);clean.push(ui.lab.dispose);
@@ -158,7 +160,7 @@ export function createExhibits(api) {
   }
   function tick(dt,id) {
     if(ctx.paused)return;
-    worn.tick(dt);
+    worn.tick(dt);spit.tick(dt);
     if(returning&&departureDone){leave();return;}
     staff.tick(dt,id);hands.tick();hudClock+=dt;awareness.tick(dt,id,camera,api.actionSerial());
     if(hudClock>=900)once('pa_closing');
@@ -206,12 +208,12 @@ export function createExhibits(api) {
       }
     }
   }
-  const dispose=()=>{staff.dispose();hands.dispose();disposed=true;for(const id of [...zones.keys()])unmount(id);pending=[];};
+  const dispose=()=>{staff.dispose();hands.dispose();spit.dispose();worn.dispose();disposed=true;for(const id of [...zones.keys()])unmount(id);pending=[];};
   function setTurnstileAngle(degrees){
     const ui=zones.get('atrium')?.ui;if(!ui?.setAngle)return false;
     ui.inspectionAngle=Number.isFinite(degrees)?degrees:null;
     ui.setAngle(ui.inspectionAngle??ui.travel*ui.turn*ui.turn*(3-2*ui.turn));
     return true;
   }
-  return {mount,unmount,enter,tick,dispose,state,hands,setTurnstileAngle};
+  return {mount,unmount,enter,tick,dispose,state,hands,spit,endVisit:api.endVisit,setTurnstileAngle};
 }

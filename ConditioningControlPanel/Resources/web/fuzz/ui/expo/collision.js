@@ -184,6 +184,15 @@ export function createWalker(camera, onFootstep, onPlanterCue, claimPlanter) {
     }
     return false;
   }
+  function trace(path,limit,ignore){
+    let hit=null;
+    for(const meshes of sectors.values())for(const m of meshes){
+      if(inactive(m)||ignore?.(m.label)||!path.intersectsBox(m.box))continue;
+      const candidate=m.bvh.raycastFirst(path,DoubleSide,0,hit?.distance??limit);
+      if(candidate)hit={point:candidate.point,normal:candidate.face.normal,distance:candidate.distance};
+    }
+    return hit;
+  }
   function setColliderEnabled(label,on) { if(on)disabled.delete(label);else disabled.add(label); }
   function stepOffPlanter() {
     if (!planter.released || !planter.origin) return false;
@@ -194,7 +203,8 @@ export function createWalker(camera, onFootstep, onPlanterCue, claimPlanter) {
     place(id,at,camera.rotation.y); camera.rotation.x=pitch;
     return true;
   }
-  return { add, remove, place, move, jump, step, blocked, setColliderEnabled, feet, planter, stepOffPlanter,setDoors(value){doors=value;},
+  return { add, remove, place, move, jump, step, blocked, trace, setColliderEnabled, feet, planter, stepOffPlanter,setDoors(value){doors=value;},
+    get onPlanter(){return !airborne&&!!support?.planter;},
     get airborne(){return airborne;}, get zone() { return zone; }, get surface() { return surface; },
     dispose() { for (const id of sectors.keys()) remove(id); } };
 }

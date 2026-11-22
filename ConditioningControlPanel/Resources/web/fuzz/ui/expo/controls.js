@@ -1,4 +1,5 @@
 import { createExpoGamepad } from './gamepad.js';
+import { spitControls } from './spit-controls.js';
 
 const WALK_SPEED = 4;
 const LOOK_SPEED = 0.0025;
@@ -7,14 +8,14 @@ const PAD_PITCH_SPEED = 1.70;
 const MOVE_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight']);
 const UI = 'button,a,input,textarea,select,[contenteditable=true],[role=button]';
 const EDITOR = 'input,textarea,select,[contenteditable=true],[role=slider],[role=menu],[role=listbox],[role=tablist]';
-const keyCodes={w:'KeyW',a:'KeyA',s:'KeyS',d:'KeyD',e:'KeyE',' ':'Space',Spacebar:'Space',
+const keyCodes={w:'KeyW',a:'KeyA',s:'KeyS',d:'KeyD',e:'KeyE',q:'KeyQ',' ':'Space',Spacebar:'Space',
   Enter:'Enter',ArrowUp:'ArrowUp',ArrowDown:'ArrowDown',ArrowLeft:'ArrowLeft',ArrowRight:'ArrowRight'};
 function codeFor(event){
   return event.code&&event.code!=='Unidentified'?event.code:keyCodes[event.key]||keyCodes[event.key?.toLowerCase()];
 }
 
 /** All input methods share the same camera and collision-aware walk. */
-export function createControls({ root, canvas, camera, move, onInteract, onJump, onPause, onInputMode, initialInputMode, isPaused = () => false }) {
+export function createControls({ root, canvas, camera, move, spit, onInteract, onJump, onPause, onInputMode, initialInputMode, isPaused = () => false }) {
   const doc = root.ownerDocument, win = doc.defaultView, keys = new Set(), off = [];
   const pad = createExpoGamepad(() => win.navigator.getGamepads?.());
   const primaryMode = () => win.matchMedia?.('(pointer:coarse)').matches ? 'touch' : 'keyboard';
@@ -56,6 +57,7 @@ export function createControls({ root, canvas, camera, move, onInteract, onJump,
     off.push(() => target.removeEventListener(event, fn, options));
   }
   const active = () => !disposed && !isPaused() && !doc.hidden;
+  const spitting=spit&&spitControls(root,active,spit);
   function focusGame(){root.focus({preventScroll:true});}
   const capture = (el, id) => { try { el.setPointerCapture(id); } catch {} };
   const release = (el, id) => { try { if (id != null && el.hasPointerCapture(id)) el.releasePointerCapture(id); } catch {} };
@@ -66,7 +68,7 @@ export function createControls({ root, canvas, camera, move, onInteract, onJump,
     release(canvas, oldDrag?.id); release(stick, oldStick);
   }
   function reset() {
-    keys.clear(); clearPointers(); pad.reset();
+    keys.clear(); clearPointers(); pad.reset();spitting?.cancel();
     if (doc.pointerLockElement === canvas) {
       releasing = true;
       doc.exitPointerLock?.();
@@ -104,6 +106,9 @@ export function createControls({ root, canvas, camera, move, onInteract, onJump,
   function keyDown(event){
     if (!active() || event.ctrlKey || event.altKey || event.metaKey || event.target?.closest?.(EDITOR)) return;
     const code=codeFor(event);
+    if(code==='KeyQ'&&!event.target?.closest?.(UI)){
+      used('keyboard');event.preventDefault();event.stopPropagation();if(!event.repeat)spitting?.begin('key');return;
+    }
     if (MOVE_KEYS.has(code)) {
       used('keyboard');
       if(doc.activeElement!==root||!doc.hasFocus())focusGame();
@@ -114,7 +119,7 @@ export function createControls({ root, canvas, camera, move, onInteract, onJump,
     event.preventDefault();event.stopPropagation();
     if(!event.repeat){if(code==='Space')onJump?.();else onInteract();}
   }
-  const keyUp=event=>keys.delete(codeFor(event));
+  const keyUp=event=>{const code=codeFor(event);keys.delete(code);if(code==='KeyQ')spitting?.end('key');};
   listen(win,'keydown',keyDown,true);listen(win,'keyup',keyUp,true);
   // A launcher can retain focus on its document after its play button is removed.
   // Only accept its background keystrokes while the embedded visit is active.
@@ -128,7 +133,7 @@ export function createControls({ root, canvas, camera, move, onInteract, onJump,
     }
   }catch{}
   listen(win, 'blur', reset);
-  listen(win, 'gamepaddisconnected', event => pad.disconnect(event.gamepad?.index));
+  listen(win, 'gamepaddisconnected', event => {pad.disconnect(event.gamepad?.index);spitting?.cancel();});
   listen(doc, 'visibilitychange', () => { if (doc.hidden) reset(); });
   listen(canvas, 'pointerdown', event => {
     if (!active() || event.button !== 0 || drag) return;
@@ -218,6 +223,8 @@ export function createControls({ root, canvas, camera, move, onInteract, onJump,
         if (sensitivity) turn(input.lookX*sensitivity*PAD_YAW_SPEED*seconds,input.lookY*sensitivity*PAD_PITCH_SPEED*seconds);
         if (input.jump) onJump?.();
         if (input.interact) onInteract();
+        if(input.spit)spitting?.begin('pad');
+        if(input.spitReleased)spitting?.end('pad');
         if (!active()) return;
       }
       const pressed = (...codes) => codes.some(code => keys.has(code)) ? 1 : 0;
@@ -236,7 +243,7 @@ export function createControls({ root, canvas, camera, move, onInteract, onJump,
       if (disposed) return;
       disposed = true; reset();
       for (const remove of off) remove();
-      style.remove(); stick.remove(); interact.remove(); root.classList.remove('expo-has-touch');
+      spitting?.dispose();style.remove(); stick.remove(); interact.remove(); root.classList.remove('expo-has-touch');
       canvas.style.touchAction = oldTouchAction;
     },
   };

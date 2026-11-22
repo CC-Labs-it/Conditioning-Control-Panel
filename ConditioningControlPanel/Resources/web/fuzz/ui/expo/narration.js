@@ -16,6 +16,13 @@ const nearest = (nodes, point) => nodes.reduce((best,node)=>
 
 export function createNarration({ctx,camera,scene,root,register,walker,sound,assetURL,lite,owned}) {
   const book=new Map(), rooms=new Map(), heard=new Set(), finished=new Map(), unavailable=new Set(), abort=new AbortController();
+  const wetHorns=[];
+  let muffled=false;
+  function setMuffled(on){
+    if(on===muffled)return;
+    muffled=on;ctx.audio.muffle?.('expo-guide',on,{hz:675,cut:.76,fadeOutMs:180});
+  }
+  function muffle(zone,pos){wetHorns.push({zone,pos:pos.clone(),until:ctx.activeMs+25000});}
   const sequence=createSpeechSequence({start,suspend,resume,release,now:()=>ctx.activeMs,nearby});
   const atlas=createRestingAtlas(assetURL);
   const reader=createReadingCard(root,camera);
@@ -136,7 +143,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     caption(key,roomTone?'[Kevin is speaking]':entry.row.subtitle,entry.row.id);
     if(!entry.row.audio){entry.lit=true;began(entry);return;}
     const volume=gain*(roomTone?.32:1);
-    const h=entry.handle=(!roomTone&&entry.tail)||ctx.audio.stream(assetURL(file),{bus:'voice',spatial:true,pan,loop:roomTone,
+    const h=entry.handle=(!roomTone&&entry.tail)||ctx.audio.stream(assetURL(file),{bus:'voice',source:'expo-guide',sourceLabel:'Expo narrator',spatial:true,pan,loop:roomTone,
       gain:volume,autoplay:false,preload:'auto'});
     if(h && h===entry.tail){entry.tail=null;h.setGain(volume);h.setPan?.(pan);}
     entry.onEnd=()=>{if(!roomTone && entry.handle===h && h.el.ended)sequence.finish(entry);};
@@ -182,7 +189,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     }
     const kevin=entry.row.id==='log_kevin';
     if(kevin)entry.tail=ctx.audio.stream(assetURL('narration/'+entry.row.audio),
-      {bus:'voice',spatial:true,autoplay:false,preload:'metadata',gain:0});
+      {bus:'voice',source:'expo-guide',sourceLabel:'Expo narrator',spatial:true,autoplay:false,preload:'metadata',gain:0});
     playFile(key,entry,kevin);
   }
   function suspend(entry){
@@ -300,6 +307,9 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
   }
   function tick(dt){
     if(dead||held||!ready)return;
+    while(wetHorns.length&&wetHorns[0].until<=ctx.activeMs)wetHorns.shift();
+    const speaking=sequence.current;
+    setMuffled(!!speaking&&wetHorns.some(h=>h.zone===speaking.zone&&h.pos.distanceToSquared(speaking.pos)<1));
     sequence.cancel(entry=>!nearby(entry));
     if(reader.update()){dwellStation=null;dwellTime=0;}
     else {check-=dt;proximity(dt,check<=0);if(check<=0)check=.12;}
@@ -347,7 +357,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     sequence.pause(on);
   }
   function dispose(){
-    dead=true;abort.abort();
+    dead=true;abort.abort();setMuffled(false);
     sequence.dispose();
     for(const id of [...rooms.keys()])unmount(id);
     reader.dispose();subtitle.remove();atlas.dispose();
@@ -373,5 +383,5 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     const off=register(mesh,()=>reader.label(key),()=>reader.toggle(key,description),3.5);
     return ()=>{reader.release(key);off();};
   }
-  return {mount,unmount,cue,planter,registerPlaque,get story(){return story;},available:()=>ready&&sequence.available,tick,pause,dispose,debug,meter};
+  return {mount,unmount,cue,muffle,planter,registerPlaque,get story(){return story;},available:()=>ready&&sequence.available,tick,pause,dispose,debug,meter};
 }
