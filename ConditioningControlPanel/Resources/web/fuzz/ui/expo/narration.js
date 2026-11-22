@@ -7,6 +7,7 @@ import { restingSlide, slideIndex } from './slide-program.js';
 import { createArchiveStory } from './archive-story.js';
 import { archiveDisplays } from './archive-displays.js';
 import { createReadingCard } from './reading-card.js';
+import { captionPages, captionAt } from './caption-pages.js';
 import { planterLines } from './planter.js';
 
 const family = id => id.startsWith('hab_') ? 'hab_1' : id.startsWith('hoof_') ? 'hoof_1' :
@@ -32,7 +33,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
   const block=new Ray(), right=new Vector3(), delta=new Vector3();
   const subtitle=root.ownerDocument.createElement('div');
   subtitle.className='expo-narration';
-  const captions={};
+  const captions={},pages={};
   for(const key of ['voice','pa']){
     const p=root.ownerDocument.createElement('p');p.setAttribute('aria-live','polite');p.dataset.channel=key;
     subtitle.append(p);captions[key]=p;
@@ -119,7 +120,13 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     return {gain,pan};
   }
   function caption(key,text,id=''){
-    captions[key].textContent=text;captions[key].dataset.lineId=id;
+    const p=captions[key];
+    if(p.dataset.lineId===id&&p.textContent===text)return;
+    p.dataset.lineId=id;p.replaceChildren();
+    const chunks=pages[key]=captionPages(text);
+    if(!text){delete p.dataset.phrase;return;}
+    const full=root.ownerDocument.createElement('span');full.className='expo-full-line';full.textContent=text;p.append(full);
+    p.dataset.phrase=chunks[0]?.value||text;
   }
   function nearby(entry){
     return entry.zone===walker.zone && (!entry.needed || entry.needed()) && (!entry.anchor || camera.position.distanceToSquared(entry.anchor)<=36);
@@ -341,6 +348,12 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
       const actual=(e.kevin?e.tail?.el:e.handle?.el)?.duration;
       const duration=e.duration=(Number.isFinite(actual)&&actual>0?actual:e.row.seconds)+(e.row.id==='log_kevin'?15:0);
       const progress=e.progress=Math.min(1,e.clock/Math.max(.1,duration));
+      const p=captions[key],chunks=pages[key];
+      if(chunks?.length>1&&p.dataset.lineId===e.row.id&&root.hasAttribute('data-expo-touch')){
+        const spokenProgress=e.row.id==='log_kevin'?Math.max(0,(e.clock-15)/Math.max(.1,duration-15)):progress;
+        const page=captionAt(chunks,spokenProgress);
+        if(page!==p.dataset.phrase)p.dataset.phrase=page;
+      }
       const i=slideIndex(e.row,progress);
       const changed=i>=0&&i!==(e.index||0);
       if(changed){

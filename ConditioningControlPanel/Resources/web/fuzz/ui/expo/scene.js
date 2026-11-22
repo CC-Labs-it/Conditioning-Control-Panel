@@ -7,6 +7,7 @@ import { expoGuideText, expoInteractionText } from './controller-menu.js';
 import { createButtonTravel } from './button-travel.js';
 import { mountJumpButton } from './jump-button.js';
 import { mountExpoRadio, RADIO_STYLE } from './music-controls.js';
+import { MOBILE_OVERLAY_STYLE } from './mobile-overlay-style.js';
 import { createWalker } from './collision.js';
 import { assetURL, createZones, loadPlan } from './zones.js';
 import { createPost } from './post.js';
@@ -77,7 +78,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     for (const fn of clean.reverse()) try { fn(); } catch (e) { console.warn(e); }
   }
   try {
-    ctx.css(CSS+TRAIL_STYLE+RADIO_STYLE);
+    ctx.css(CSS+TRAIL_STYLE+MOBILE_OVERLAY_STYLE+RADIO_STYLE);
     root.toggleAttribute('data-calm',!!(ctx.gentle||ctx.reduced));
     const element = (tag, cls) => { const e = doc.createElement(tag); e.className = cls; root.append(e); return e; };
     const canvas = element('canvas', 'expo-canvas');
@@ -228,7 +229,8 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       return media;
     }
     narration=createNarration({ctx,camera,scene,root,register,walker,sound,assetURL,lite:LITE,owned:()=>exhibits.state.file.herd});
-    root.querySelector('.expo-narration').prepend(guide);
+    const voiceCaptions=root.querySelector('.expo-narration'),messages=element('div','expo-visitor-messages');
+    messages.append(caption,voiceCaptions);voiceCaptions.prepend(guide);
     narration.pause(waitingForEntrance || ctx.paused || doc.hidden);
     const instruments=createInstruments({ctx,camera,register,play:sound.play,meter:narration.meter,lite:LITE});
     const ambience=createAmbience({ctx,renderer,lite:LITE,meter:narration.meter});
