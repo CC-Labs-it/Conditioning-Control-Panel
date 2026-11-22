@@ -31,7 +31,14 @@ export const TRAIL_STYLE = `
 @keyframes expo-trail-ink{from{opacity:0;translate:0 -8px;scale:1.08}to{opacity:1;translate:0 0;scale:1}}
 @keyframes expo-trail-fade{from{opacity:0}to{opacity:1}}
 @media(prefers-reduced-motion:reduce){.expo-stamp-moment[data-new]{animation:expo-trail-fade .2s ease-out}}
-.expo-root .expo-route-guide[hidden],.expo-root .expo-trail-card [hidden],.expo-root .expo-trail-card[hidden],.expo-root .expo-stamp-moment[hidden],.expo-root .expo-deviation-slip[hidden],.expo-leaving .expo-route-guide,.expo-leaving .expo-trail-card,.expo-leaving .expo-stamp-moment,.expo-leaving .expo-deviation-slip{display:none}
+.expo-root[data-hoof-board] .expo-guide{display:none}
+@media(pointer:coarse) and (orientation:landscape){
+  .expo-root[data-hoof-board] .expo-narration{left:48%;bottom:max(6px,env(safe-area-inset-bottom));width:calc(100% - 310px)}
+  .expo-root[data-hoof-board] .expo-narration p{font-size:16px}
+  .expo-root[data-hoof-board] .expo-prompt{top:auto;bottom:15%;font-size:12px}
+  .expo-root[data-hoof-board] .expo-deviation-slip{top:auto;bottom:23%;left:auto;right:8px;transform:none;font-size:11px;max-width:24%}
+}
+.expo-root .expo-route-guide [hidden],.expo-root .expo-route-guide[hidden],.expo-root .expo-trail-card [hidden],.expo-root .expo-trail-card[hidden],.expo-root .expo-stamp-moment[hidden],.expo-root .expo-deviation-slip[hidden],.expo-leaving .expo-route-guide,.expo-leaving .expo-trail-card,.expo-leaving .expo-stamp-moment,.expo-leaving .expo-deviation-slip{display:none}
 .expo-root:has(.expo-trail-card:not([hidden])) :is(.expo-route-guide,.expo-touch,.expo-prompt,.expo-aim){visibility:hidden}
 @media(max-width:660px){.expo-route-guide{top:max(51px,calc(env(safe-area-inset-top) + 43px));left:8px;max-width:min(76vw,300px)}.expo-trail-card{padding:12px;max-height:calc(100% - 80px)}.expo-trail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.expo-root .expo-caption:not(:empty){top:auto;bottom:calc(38% + 12px);right:8px;max-width:79%}.expo-stamp-moment{top:33%}.expo-deviation-slip{bottom:30%}}
 @media(max-height:480px){.expo-route-guide{top:4px;max-width:32vw}.expo-trail-task{padding:3px 6px}.expo-trail-open{padding:3px 6px}.expo-trail-card{max-height:92%}}

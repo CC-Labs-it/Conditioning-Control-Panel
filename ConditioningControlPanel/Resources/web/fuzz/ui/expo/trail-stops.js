@@ -74,7 +74,12 @@ export function trailTask(room,p,v,yaw=0){
   }
   if(room==='forum'&&v.meetingSeconds>0)return v.meetingSeconds>=40?task('Walk through the open gate','Forum · attendance recorded','The Meeting'):task('Stand still on the green disc','Forum · '+Math.ceil(40-v.meetingSeconds)+' s remaining','The Meeting');
   if(room==='hall')return p.x<-6&&p.z>6.7&&p.y<1&&!marks?.has('Queued')?stopTask(3):stopTask(4);
-  if(room==='hoof'&&v.hoof==='pictures')return task('Select all squares with a llama. Then press Verify.','Hoof lab · picture grid','Hoof Sciences');
+  if(room==='hoof'){
+    if(v.hoof==='practice')return v.hoofWorn?task('Press the large button','Hoof lab · on the desk','Hoof Sciences'):task('Put the hooves on','Hoof lab · brass desk','Hoof Sciences');
+    if(v.hoof==='pictures'&&v.misses>=3&&v.hoofWorn)return task('Return the hooves to the desk','Then use one finger on the picture grid.','Hoof Sciences');
+    if(v.hoof==='pictures')return task('Select all squares with a llama. Then press Verify.','Hoof lab · picture grid','Hoof Sciences');
+    if(v.hoof==='complete')return task('Picture test complete',v.hoofWorn?'Return the hooves, or wear them out through the door.':'Choose another stop on your trail card.','Hoof Sciences');
+  }
   if(room==='habitat'&&marks?.has('Fed')&&!marks.has('Kept'))return task("Sit in the keeper’s chair",'Enquire at the staff door.','The Habitat');
   if(room==='shop'){
     if(v.boughtExit)return task('Walk through the Renewal door','Gift shop');

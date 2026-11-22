@@ -78,6 +78,7 @@ export function createVisitGuide(root,{onOpen=()=>{},canOpen=()=>true}={}){
   }
   function update(story,room,p,v,elapsed=0,yaw=0,input='keyboard'){
     if(t!==v.ticket)watch(v.ticket);
+    root.toggleAttribute('data-hoof-board',room==='hoof'&&(v.hoof==='practice'||v.hoof==='pictures'));
     renderTicket();
     if(mode!==input){mode=input;shortcut.textContent=input==='gamepad'?'Y · Card':input==='touch'?'Open card':'T · Card';}
     const a=trailTask(room,p,v,yaw),key=[a.title,a.where,a.kicker].join('|');
