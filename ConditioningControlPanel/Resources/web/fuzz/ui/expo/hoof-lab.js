@@ -236,4 +236,3 @@ export function createWornHooves(api,state,lighting){
     gloves.forEach(glove=>glove.removeFromParent());for(const resource of resources)resource.dispose();
   }};
 }
-

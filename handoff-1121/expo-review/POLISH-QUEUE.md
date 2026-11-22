@@ -119,3 +119,19 @@ The v4 branch passed all 79 Expo and documentary music tests. The full Fuzz suit
 - A fresh visit to the Habitat revealed that the desk pedestal and a window mullion hid most of the empty chair. The chair now sits 62 cm out from the desk under a warm reading light. A framed vacancy notice sits on the glass beside the feeder. On both profiles the visitor read it, fed one Yes, used the staff entrance, sat on the chair and operated the desk.
 - The end of the Queue now says “Now serving: you.” A touch visitor walked all 25 markers and earned Queued at the sign. Keyboard and touch visitors both passed through the Applied Hoof Sciences door and back.
 - The casting of Lady Lashes hid the photograph’s eyes when viewed straight on. Both the casting and the portrait now lower their own lids as the visitor stares. After reading the plinth’s warning, a six-second stare on each profile produced Blinked, the signed form and its direction to the gift shop till. The till accepted the form on both runs.
+
+### Round 5 handoff
+
+Each film starts on a fresh save at the turnstile. All three play at 720 by 1280 with game audio and passed a full video and audio decode.
+
+| Checkpoint | Local preview | Phone tour | Build |
+| --- | --- | --- | --- |
+| A. The visitor's trail | [Play A](http://127.0.0.1:8961/) | [56 seconds, 9.13 MB](round5/phase-a.mp4) | `02a1306858` |
+| B. Applied Hoof Sciences | [Play B](http://127.0.0.1:8962/) | [24 seconds, 3.61 MB](round5/phase-b.mp4) | `c372d5fb7c` |
+| C. First Press | [Play C](http://127.0.0.1:8963/) | [38 seconds, 4.85 MB](round5/phase-c.mp4) | `1921b7ef8c` |
+
+- [Play the complete round locally](http://127.0.0.1:8944/fuzz/dev/play-ending.html?end=ll_end&pictures=none). Returning to the atrium after stamping Corrections and First Press now points toward a remaining public stamp.
+- All 25 prerecorded takes matched the [owner's line list](ROUND-5-LINES.md) and decoded. The sixteen photographs matched their reviewed masters. All three planter recordings are still pending from the owner. Their captions, timing and hold are intact.
+- The 94 Expo and documentary tests passed. The full suite passed 1,082 of 1,083. The known race HUD test still lacks `assets/race/threshold-loop.mp4`.
+- Compared the starting build and the finished round on Intel Graphics 0x7D67 at the same viewpoints in the atrium, Grand Hall, Hoof Sciences, Habitat and Commons. All five matched on both profiles. Desktop median and 95th percentile frame times were 16.7 and 16.8 ms. Gentle measured 33.4 and 33.5 ms. The hall added three draw calls and the lab shed eighteen on each profile.
+- Keyboard, synthetic touch and a standard-mapped virtual gamepad exercised normal visitor actions. The filmed tours followed the physical routes. Focused checks also used review travel to position the visitor at individual exhibits.
