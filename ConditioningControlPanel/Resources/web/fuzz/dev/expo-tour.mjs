@@ -1,4 +1,4 @@
-import {reviewPack, packFile} from './expo-review-pack.mjs';
+import {reviewPack, packFile,isolateReviewInput} from './expo-review-pack.mjs';
 // node dev/expo-tour.mjs M5 ./dev-captures/tour
 import {createRequire} from 'node:module';
 import {mkdir,readFile,writeFile,unlink} from 'node:fs/promises';
@@ -24,6 +24,14 @@ const browser=await chromium.launch({headless:true,executablePath:process.env.CH
   args:['--autoplay-policy=no-user-gesture-required','--mute-audio']});
 try{
   const context=await browser.newContext({viewport:{width:Number(process.env.W||1600),height:Number(process.env.H||900)}});
+  await isolateReviewInput(context);
+  if(rehearse)await context.addInitScript(()=>{
+    const play=HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play=function(){
+      if(this.src.includes('/narration/'))this.playbackRate=4;
+      return play.call(this);
+    };
+  });
   await installGameAudio(context);
   let packRoot;
   const page=await context.newPage();page.on('pageerror',e=>audit.faults.push(e.message));
@@ -92,6 +100,7 @@ try{
     await purchase();const yes=frame.locator('.expo-worm #btn');
     await page.waitForTimeout(rehearse?30:1220);await yes.click();
     await frame.waitForFunction(()=>window.__expo?.state().ready,null,{timeout:120000});
+    await frame.waitForFunction(()=>!__expo.rails().some(r=>r.up&&r.id==='welcome'),null,{timeout:45000});
   }
   const objectNames={press:'press_main',hoof:'hoof_display',habitat:'habitat_glass',photo:'photo_release',till:'till_display',loop:'shop_door',sale:'exit_sale',home:'shop_wormhole'};
   const activeState=()=>frame.evaluate(()=>{
@@ -101,6 +110,14 @@ try{
   if(shots[0].admission)await purchase();
   else{await openGate();await frame.waitForFunction(()=>!__expo.state().textures.pendingDetailMaps);}
   for(const [i,shot] of shots.entries()){
+    if(shot.id==='shelf'&&shots.some(s=>s.id==='sale')){
+      // The edit cuts from the exhibits to a visitor who has earned the sale.
+      audit.checkoutFixture=await frame.evaluate(()=>{
+        const ticket=__expo.exhibits.state.ticket;
+        for(const mark of ['Corrected','Attended','Spat','Queued','Pressed','Hoofed','Blinked','Stayed'])ticket.stamp(mark,{restore:true});
+        return [...ticket.stamps];
+      });
+    }
     if(shot.zone){
       await frame.evaluate(async({zone,at})=>__expo.go(zone,at),shot);
       if(shot.visibleObject)await frame.waitForFunction(name=>{
@@ -134,10 +151,17 @@ try{
         },shot.archiveSlot,{timeout:90000});
       }
       if(shot.expectedStation){
-        if(shot.aimObject)await frame.evaluate(async id=>{
-          const T=await import('three'),face=__expo.scene.getObjectByName('expo_screen_'+id);
-          __expo.lookAt(...new T.Box3().setFromObject(face,true).getCenter(new T.Vector3()).toArray());
+        const press=await frame.evaluate(async id=>{
+          const e=__expo,s=e.narrationState();
+          if(s.voice.id===id||s.pa.id===id)return false;
+          const control=e.scene.getObjectByName('expo_replay_'+id);
+          if(!control)return false;
+          const T=await import('three');
+          e.lookAt(...new T.Box3().setFromObject(control,true).getCenter(new T.Vector3()).toArray());
+          return e.focusTarget()?.owner===control.name;
         },shot.expectedStation);
+        if(press)await page.keyboard.press('e');
+        await frame.evaluate(at=>__expo.lookAt(...at),aim);
         try{
           await frame.waitForFunction(id=>{
             const s=__expo.narrationState();return s[id.startsWith('pa_')?'pa':'voice'].id===id;
@@ -206,6 +230,14 @@ try{
       item.inputs.push({key:'E',at:sec(),prompt:await frame.locator('.expo-prompt').textContent()});
       await page.keyboard.press('e');
     }
+    if(shot.id==='till'&&shots.some(s=>s.id==='sale')){
+      for(const [i,answer] of ['YES','YES','NO'].entries()){
+        await frame.waitForFunction(a=>document.querySelector('.expo-prompt').textContent===a,answer,{timeout:75000});
+        await page.keyboard.press('e');
+        await frame.waitForFunction(n=>__expo.exhibits.state.tillPage===n,i+1,{timeout:75000});
+      }
+      await frame.waitForFunction(()=>__expo.exhibits.state.contract,null,{timeout:75000});
+    }
     const remaining=(rehearse?.2:shot.seconds+.68)-sec();
     if(remaining>0 && (shot.to||shot.afterAim||shot.path||shot.travel)){
       item.crossings=await frame.evaluate(async({to,aim,afterAim,path,pathLook,travel,remaining})=>{
@@ -242,6 +274,11 @@ try{
       await frame.waitForFunction(()=>__expo.doors().find(d=>d.id==='shop-exit')?.progress<.01,null,{timeout:8000});
     }
     if(shot.home){
+      await frame.waitForFunction(()=>__expo.exhibits.state.boughtExit,null,{timeout:10000});
+      await page.keyboard.down('w');
+      try{
+        await frame.waitForFunction(()=>!document.querySelector('.expo-root')||document.querySelector('.expo-farewell'),null,{timeout:12000});
+      }catch(error){audit.departure=await activeState();throw error;}finally{await page.keyboard.up('w');}
       await frame.locator('.expo-root').waitFor({state:'detached',timeout:160000});
       await frame.locator('.rr').waitFor({state:'attached',timeout:16000});
       if(shots.some(s=>s.id==='photo')){

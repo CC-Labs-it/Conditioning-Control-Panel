@@ -1,4 +1,4 @@
-import {reviewPack} from './expo-review-pack.mjs';
+import {reviewPack,isolateReviewInput} from './expo-review-pack.mjs';
 import assert from 'node:assert/strict';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {createRequire} from 'node:module';
@@ -18,6 +18,7 @@ const browser=await chromium.launch({executablePath:process.env.CHROME||'C:/Prog
 const report={mode,rate,errors:[],events:[]};
 try {
   const context=await browser.newContext({viewport:{width:1280,height:760}});
+  await isolateReviewInput(context);
   if(mode==='story' || mode==='sample')await context.addInitScript(rate=>{
     const writing=new WeakMap();
     window.expoTestPanel=canvas=>writing.get(canvas);
@@ -70,6 +71,7 @@ try {
   report.admission=await game.evaluate(()=>({feet:__expo.state().feet,yaw:__expo.camera.rotation.y,
     guide:document.querySelector('.expo-route-guide')?.innerText,visibleRooms:__expo.state().loaded}));
   await shot('admission');
+  await game.waitForFunction(()=>!__expo.rails().some(r=>r.up&&r.id==='welcome'),null,{timeout:45000});
   await page.keyboard.down('w');await page.waitForTimeout(600);await page.keyboard.up('w');
   report.walked=await game.evaluate(()=>__expo.walker.feet.toArray());
   assert(Math.hypot(report.walked[0]-report.admission.feet[0],report.walked[2]-report.admission.feet[2])>.4);
@@ -125,23 +127,18 @@ try {
         __expo.root.focus();return __expo.focusTarget()?.owner;
       },{slot,kind});
     }
-    // A visitor can choose the aquarium first, then leave it while its reel continues playing.
+    // Approaching the aquarium first starts its nearest projector.
     let slot=byId.get('slot_09');await aim(slot,'screen');
-    await page.waitForTimeout(1500);
-    assert.equal((await state()).displayed,undefined);
-    assert.equal(await aim(slot,'replay'),'expo_replay_'+slot.id);
-    await page.keyboard.press('e');
     await game.waitForFunction(()=>__expo.narrationState().archive.displayed==='ev_h0',null,{timeout:45000});
     const first=await state();assert.equal(first.displayed,records[0].id);
     await game.waitForFunction(()=>window.archiveObservations.frames.ev_h0?.length>0);
     const playhead=await game.evaluate(()=>__expo.narrationState().voice.seconds);
-    const elsewhere=byId.get('slot_12');assert.equal(await aim(elsewhere,'replay'),'expo_replay_'+elsewhere.id);
-    await page.keyboard.press('e');
+    await game.waitForFunction(()=>__expo.rails().some(r=>r.up&&r.id==='view'));
+    await game.evaluate(()=>{const p=__expo.walker.feet;__expo.move(0,-4);return p.toArray();});
     report.handoff=await state();
     assert.equal(report.handoff.playingAt,slot.id);
     assert.equal(report.handoff.displayed,records[0].id);
     assert.ok(await game.evaluate(()=>__expo.narrationState().voice.seconds)>=playhead);
-    await aim(slot,'screen');
     await shot('original-screen');
     const destinations=slots.filter(s=>s.id!==slot.id);
     const length=mode==='sample'?2:records.length;
