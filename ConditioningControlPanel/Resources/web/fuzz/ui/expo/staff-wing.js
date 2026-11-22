@@ -10,6 +10,29 @@ const locations=[[13.9,0,32.91],[16,0,30.99],[19.4,0,33.0],[21.7,0,30.99],[24.6,
 export function createStaffWing(api,state) {
   const {THREE:T,camera,root}=api,look=sight(api),rooms=new Map();
   const emergencyTint=new T.Color(.42,1,.54),emergencyEmission=new T.Color(.22,1,.38);
+  const finishes=new WeakMap();
+  // A visitor can pick up a room finish midway through a power cut.
+  function copyFinish(source){
+    const copy=source.clone();
+    finishes.set(copy,finishes.get(source)??{
+      color:source.color?.clone(),emissive:source.emissive?.clone(),emissiveIntensity:source.emissiveIntensity
+    });
+    return copy;
+  }
+  function powerLevel(step){return step===2 ? .37 : 1-.95*step;}
+  function shadeFinish(copy,step){
+    const original=finishes.get(copy),level=powerLevel(step);
+    if(original.color){
+      copy.color.copy(original.color).multiplyScalar(level);
+      if(step===2)copy.color.multiply(emergencyTint);
+    }
+    if(original.emissive){
+      copy.emissive.copy(original.emissive);
+      if(step===2)copy.emissive.multiply(emergencyEmission);
+      copy.emissiveIntensity=original.emissiveIntensity*level;
+    }
+  }
+  const lighting={copy:copyFinish,shade:shadeFinish,step:id=>rooms.get(id)?.relights?.last??0};
   const view=state.staffVisit={signs:1,hardHat:false,unplugged:false,delivered:false,staplerHome:false};
   let pivotYaw=null,signCount=1,powerTime=null,blackout=false,fromDesk=false,signedOut=false;
   const dark=root.ownerDocument.createElement('div'),card=root.ownerDocument.createElement('p');
@@ -34,7 +57,7 @@ export function createStaffWing(api,state) {
     if(!r.relights)return;
     for(const [mesh,old,fitted] of r.relights.meshes)if(mesh.material===fitted)mesh.material=old;
     for(const [light,intensity] of r.relights.lights)light.intensity=intensity;
-    for(const copy of r.relights.surfaces.values())copy.material.dispose();
+    for(const copy of r.relights.surfaces.values())copy.dispose();
     r.relights=null;
   }
   function lightRoom(id,r){
@@ -47,11 +70,8 @@ export function createStaffWing(api,state) {
     if(!r.relights){
       const surfaces=new Map(),lights=[],meshes=[];
       const use=original=>{
-        if(!surfaces.has(original)){
-          const material=original.clone();
-          surfaces.set(original,{material,tint:material.color?.clone(),emission:material.emissive?.clone(),strength:material.emissiveIntensity||0});
-        }
-        return surfaces.get(original).material;
+        if(!surfaces.has(original))surfaces.set(original,copyFinish(original));
+        return surfaces.get(original);
       };
       r.group.traverse(n=>{
         if(n.isLight&&n!==r.light)lights.push([n,n.intensity]);
@@ -66,13 +86,8 @@ export function createStaffWing(api,state) {
     const step=Math.round(fraction*18)/18;
     if(r.relights.last===step)return;
     r.relights.last=step;
-    const emergency=step===2,level=emergency ? .37 : 1-.95*step;
-    for(const item of r.relights.surfaces.values()){
-      const m=item.material;
-      if(item.tint){m.color.copy(item.tint).multiplyScalar(level);if(emergency)m.color.multiply(emergencyTint);}
-      if(item.emission){m.emissive.copy(item.emission);if(emergency)m.emissive.multiply(emergencyEmission);m.emissiveIntensity=item.strength*level;}
-    }
-    for(const [light,intensity] of r.relights.lights)light.intensity=intensity*level;
+    for(const material of r.relights.surfaces.values())shadeFinish(material,step);
+    for(const [light,intensity] of r.relights.lights)light.intensity=intensity*powerLevel(step);
   }
   function lowRooms(){
     for(const [id,r] of rooms){
@@ -120,7 +135,7 @@ export function createStaffWing(api,state) {
         const roster=place('annex_rota',[21.65,1.70,27.1],-Math.PI/2);
         write(dial(api,roster,'rota_face',off),'Staff rota','Tomorrow: '+state.file.name,'Reading balcony   /   Tea service');
         bind(roster,'Read tomorrow’s rota',()=>api.say('Tomorrow: '+state.file.name+'. Tea to the reading balcony.'));
-        r.tray=place('annex_tea',[16.63,.920,25.52]);r.tray.visible=!view.delivered&&state.carry?.key!=='tea';
+        r.tray=place('annex_tea',[16.63,.920,25.52]);r.tray.visible=!view.delivered&&!api.isCarrying('tea');
         bind(r.tray,'Carry the tea to the reading balcony',()=>{if(useCarry(api,state,'tea',r.tray,'Tea tray'))cue('tea');});
         const desk=place('annex_plinth',[19.32,.84,28.1]);
         const stapler=place('annex_stapler',[19.32,.912,28.1]);stapler.visible=view.staplerHome;
@@ -130,12 +145,17 @@ export function createStaffWing(api,state) {
         });
         lowRooms();
       }else if(id==='hall'){
-        const docket=place('annex_docket',[10.9,4.40,10.54],-Math.PI/2);
-        const tray=place('annex_tea',[10.96,4.30,10.18],-Math.PI/2);tray.visible=view.delivered;
-        bind(docket,()=>state.carry?.key==='tea'?'Set down the tea':'Read the tea docket',()=>{
+        const stand=place('annex_display_stand',[11,3.40,11.95],-Math.PI/2);
+        api.walker.add('balcony-tea-stand',stand,[],'hall');
+        off.push(()=>api.walker.remove('balcony-tea-stand'));
+        const docket=place('annex_docket',[10.775,4.00,11.95],-Math.PI/2);
+        const tray=place('annex_tea',[11,4.252,11.95],-Math.PI/2);tray.visible=view.delivered;
+        const label=()=>state.carry?.key==='tea'?'Set down the tea':'Read the tea docket';
+        function serve(){
           if(api.drop('tea')){view.delivered=true;tray.visible=true;state.ticket.stamp('Delivered');state.ticket.book('tea','Delivered the balcony tea');cue('tea_done','beat');}
           else api.say(view.delivered?'Tea delivered.':'Tea due from the staff canteen.');
-        },3);
+        }
+        for(const piece of [stand,docket,tray])bind(piece,label,serve,3);
       }
       return ()=>{for(const f of off.reverse())f();};
     }));
@@ -171,5 +191,5 @@ export function createStaffWing(api,state) {
     pivotYaw=yaw;next.visible=true;view.signs=++signCount;
     if(signCount===notes.length)cue('bob_sign');
   }
-  return {mount,tick,enter,dispose(){for(const r of rooms.values())restoreRoom(r);dark.remove();card.remove();api.setHeaterPower?.(true);}};
+  return {mount,tick,enter,lighting,dispose(){for(const r of rooms.values())restoreRoom(r);dark.remove();card.remove();api.setHeaterPower?.(true);}};
 }

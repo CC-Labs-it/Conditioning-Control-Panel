@@ -25,10 +25,11 @@ export function createExhibits(api) {
   let here = '', hudClock = 0, pending = [], returning = false, departureDone=false, disposed=false;
   const cue = api.cue, awareness=narratorAwareness(state,cue);
   const commentary=visitorCommentary(state,cue);
-  const hands=visitorHands(api,state);api.hold=hands.hold;api.exchange=hands.exchange;api.drop=hands.drop;
+  const staff=createBackOfHouse(api,state),hands=visitorHands(api,state,staff.lighting);
+  api.hold=hands.hold;api.exchange=hands.exchange;api.drop=hands.drop;api.isCarrying=hands.has;
   const gallery=galleryVisits(api,state);
-  const staff=createBackOfHouse(api,state),spit=createSpit(api,state);
-  const founding=firstPress(api,state),worn=createWornHooves(api,state);
+  const spit=createSpit(api,state);
+  const founding=firstPress(api,state),worn=createWornHooves(api,state,staff.lighting);
   const habitat=humanHabitat(api,state,founding.habitatPress);
   api.endVisit=async ending=>{
     if(returning||disposed)return;returning=true;ending=departureEnding(ending,state);state.ending=ending;
@@ -150,15 +151,15 @@ export function createExhibits(api) {
 
   function unmount(id) {const view=zones.get(id); if(view){for(const fn of view.clean.reverse())fn?.();zones.delete(id);}}
   function leave(){if(returning&&!disposed){returning=false;exit();}}
-  function enter(id) {
+  function enter(id,environment) {
     if(id===here)return;
     zones.get(here)?.ui.lab?.leave();
     if(here==='hoof'&&state.hoofWorn&&state.ticket.book('hoof-out','Left wearing the hooves',true))cue('v4_hoof_out',{kind:'beat',zone:id,exhibit:'hooves'});
-    worn.light(zones.get(id)?.group);
+    worn.light(id,environment);
     zones.get(here)?.ui.shop?.leave();zones.get(id)?.ui.shop?.arrive();zones.get(id)?.ui.tally?.();
     if(here==='dome' && state.domeSeconds>0 && state.domeSeconds<25)state.ticket.book('dome-kept','Moved along at the dome');
     if(here==='habitat' && state.habitatTime>2 && !state.taps)state.ticket.book('glass-kept','Left the glass untapped');
-    gallery.enter(id,here);staff.enter(id,here);hands.enter(id);here=id;awareness.enter(id);
+    gallery.enter(id,here);staff.enter(id,here);hands.enter(id,environment);here=id;awareness.enter(id);
     if(hallCues[id])once(hallCues[id]);
     if(id==='twelve' && state.file.herd.length===12)later('pa_hall4_full',6);
     if(id==='atrium'&&!state.heard.has('pa_arrive_2'))later('pa_arrive_2',20);

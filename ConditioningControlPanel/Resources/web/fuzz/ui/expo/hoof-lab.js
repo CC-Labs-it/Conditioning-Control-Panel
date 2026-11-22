@@ -1,4 +1,5 @@
 import { createExhibitBeat } from './speech-sequence.js';
+import { hoofSupport } from './carried.js';
 import { livePanel } from './display.js';
 
 const DISC_RADIUS=.24;
@@ -82,7 +83,7 @@ export function mountHoofLab(api,group,state,worn){
     if(state.hoofWorn){
       state.hoofWorn=false;assistant=false;refresh();play('press');cue('v4_hoof_return');return;
     }
-    worn.fit(hands);worn.light(group);
+    worn.fit(hands);
     state.hoofWorn=true;play('press');refresh();
     if(state.hoof==='idle')void run(['hoof_1','hoof_2'],()=>{state.hoof='checkbox';});
   }
@@ -206,10 +207,11 @@ export function mountHoofLab(api,group,state,worn){
 }
 
 // These are the fitted room gloves. Keep their own small maps when the lab streams out.
-export function createWornHooves({THREE:T,scene,camera,ctx},state){
+export function createWornHooves({THREE:T,scene,camera,ctx},state,lighting){
   const gloves=[],resources=new Set(),surfaces=new Set(),materials=new Map(),textures=new Map(),geometries=new Map();
   const grip=new T.Quaternion().setFromEuler(new T.Euler(2.46,Math.PI,0,'XYZ'));
   let stroke=-10,clock=0;
+  let room,probe=null,lastStep;
   function copyTexture(source){
     if(textures.has(source))return textures.get(source);
     const bitmap=source.image;
@@ -223,7 +225,7 @@ export function createWornHooves({THREE:T,scene,camera,ctx},state){
   }
   function copyMaterial(source){
     if(materials.has(source))return materials.get(source);
-    const copy=source.clone();
+    const copy=lighting.copy(source);
     for(const key of Object.keys(copy)){
       if(key==='lightMap'||key==='envMap')copy[key]=null;
       else if(copy[key]?.isTexture)copy[key]=copyTexture(copy[key]);
@@ -247,18 +249,18 @@ export function createWornHooves({THREE:T,scene,camera,ctx},state){
     }
     // Source assets belong to the room and may be discarded as soon as the player leaves.
     textures.clear();geometries.clear();materials.clear();
+    light(room,probe);
   }
-  function light(group){
-    if(!gloves.length||!group)return;
-    let probe=null;group.traverse(node=>{
-      if(!probe&&node.isMesh)probe=(Array.isArray(node.material)?node.material[0]:node.material)?.envMap;
-    });
+  function light(id,environment){
+    room=id;probe=environment;lastStep=lighting.step(id);
     for(const material of surfaces){
       if(material.envMap!==probe){material.envMap=probe;material.needsUpdate=true;}
+      lighting.shade(material,lastStep);
     }
   }
   function tick(dt){
     clock+=dt;
+    if(lastStep!==lighting.step(room))light(room,probe);
     const duration=ctx.gentle||ctx.reduced ? .72 : .46;
     const reach=Math.sin(Math.PI*Math.min(1,(clock-stroke)/duration));
     const spread=Math.min(.34,.24*camera.aspect);
@@ -266,8 +268,17 @@ export function createWornHooves({THREE:T,scene,camera,ctx},state){
       glove.visible=state.hoofWorn;
       if(!glove.visible)return;
       const extension=i===1?reach:0;
-      glove.position.set(i===0?-spread:spread*(1-.91*extension),-.245+.21*extension,-.57-.17*extension)
-        .applyQuaternion(camera.quaternion).add(camera.position);
+      let scale=1;
+      if(state.carry&&i===0){
+        scale=hoofSupport(camera.aspect,glove.position);
+        // The fitted glove's tip is 16.4 cm above its pivot at its normal size.
+        glove.position.y-=.164*scale;
+      }else{
+        if(state.carry)scale=Math.min(1,camera.aspect);
+        glove.position.set(i===0?-spread:spread*(1-.91*extension),-.245+.21*extension,-.57-.17*extension);
+      }
+      glove.scale.setScalar(.74*scale);
+      glove.position.applyQuaternion(camera.quaternion).add(camera.position);
       glove.quaternion.copy(camera.quaternion).multiply(grip);
     });
   }

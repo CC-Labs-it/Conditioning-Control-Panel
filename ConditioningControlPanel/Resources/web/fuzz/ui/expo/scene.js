@@ -190,7 +190,8 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     }
     function entered() {
       if (walker.zone === lastZone) return;
-      lastZone = walker.zone; sound.setRoom(lastZone); exhibits.enter?.(lastZone);instruments.enter(lastZone);
+      lastZone = walker.zone; sound.setRoom(lastZone);
+      exhibits.enter(lastZone,zones.resident.get(lastZone).environment.texture);instruments.enter(lastZone);
     }
     let arrivalStart = null;
     function draw() {
