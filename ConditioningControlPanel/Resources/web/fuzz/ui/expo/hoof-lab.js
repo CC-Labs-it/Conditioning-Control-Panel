@@ -15,6 +15,7 @@ export function mountHoofLab(api,group,state,worn){
   const {THREE:T,camera,register}=api,clean=[];
   const get=name=>group.getObjectByName(name),hands=['hoof_hand_left','hoof_hand_right'].map(get).filter(Boolean);
   const desk=get('hoof_console'),face=firstMesh(get('hoof_display')),instructions=firstMesh(get('Art_hoof_instructions'));
+  if(face)face.userData.hoofPanel=true;
   const panel=face&&livePanel(T,face,{width:board.width,height:board.height,emission:.48});
   if(panel)clean.push(()=>panel.dispose());
   for(const name of ['hoof_staff','hoof_mosaic']){const n=get(name);if(n)n.visible=false;}
@@ -73,6 +74,7 @@ export function mountHoofLab(api,group,state,worn){
       ink.draw((g,w,h)=>{g.fillStyle='#f6e8c9';g.fillRect(0,0,w,h);g.fillStyle='#234c3d';g.textAlign='center';
         g.font='bold 88px Georgia';g.fillText('PRESS',w/2,97,w-20);});
     }
+    button.userData.hoofPanel=true;
     off.push(register(button,'Press the large practice button',practice,3));refresh();
     return ()=>off.reverse().forEach(f=>f());
   }));

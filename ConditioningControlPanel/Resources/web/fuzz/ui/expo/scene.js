@@ -5,7 +5,6 @@ import { LITE } from '../perf.js';
 import { createControls } from './controls.js';
 import { expoGuideText, expoInteractionText } from './controller-menu.js';
 import { createButtonTravel } from './button-travel.js';
-import { mountJumpButton } from './jump-button.js';
 import { mountExpoRadio, RADIO_STYLE } from './music-controls.js';
 import { MOBILE_OVERLAY_STYLE } from './mobile-overlay-style.js';
 import { createWalker } from './collision.js';
@@ -164,10 +163,20 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     function updatePrompt(){
       stepDown.hidden=!walker.planter.released;
       if (elapsed>=pressedUntil) aim.removeAttribute('data-pressed');
-      if (!stepDown.hidden) { aim.setAttribute('data-action',''); prompt.textContent = inputMode === 'touch' ? 'Tap Step down' : inputMode === 'gamepad' ? expoInteractionText('Step down', inputMode) : 'E to step down'; return; }
+      if (!stepDown.hidden) {
+        aim.setAttribute('data-action','');root.removeAttribute('data-hoof-target');
+        controls?.setTouchAction('Step down');
+        prompt.textContent=inputMode==='gamepad'?expoInteractionText('Step down',inputMode):'E to step down';
+        return;
+      }
       const action = targetAt()?.action;
+      root.toggleAttribute('data-hoof-target',Boolean(action?.owner.userData.hoofPanel));
       prompt.toggleAttribute('data-loan-card',action?.owner.name==='First Press loan card');
       const label = action ? (typeof action.label === 'function' ? action.label() : action.label) : floorPlacement()?'Set down '+exhibits.state.carry.label:'';
+      controls?.setTouchAction(label,{
+        spit:walker.zone==='commons',
+        jump:walker.zone==='hall'&&exhibits?.state.firstPressCount===2&&Math.hypot(walker.feet.x,walker.feet.z+9)<4.4
+      });
       aim.toggleAttribute('data-action', !!label);
       prompt.textContent = expoInteractionText(label, inputMode);
     }
@@ -260,9 +269,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       onPause: () => { if (!ctx.paused) doc.getElementById('wake')?.click(); },
       isPaused: () => !ready || dead || loading || !!returnButton || ctx.paused || doc.hidden });
     clean.push(() => controls.dispose());
-    clean.push(mountJumpButton(root, () => {
-      if (ready && !ctx.paused && !dead && !loading && !returnButton && !doc.hidden && !exhibits.state.pressWatching) walker.jump();
-    }));
+
     const drawingSize = new THREE.Vector2();
     const resize = () => {
       const { width:w, height:h } = root.getBoundingClientRect();

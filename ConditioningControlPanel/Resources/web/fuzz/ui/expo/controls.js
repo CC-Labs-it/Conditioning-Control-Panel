@@ -1,5 +1,5 @@
 import { createExpoGamepad } from './gamepad.js';
-import { spitControls } from './spit-controls.js';
+import { createTouchActions } from './touch-actions.js';
 
 const WALK_SPEED = 4;
 const SPRINT_SPEED = 6;
@@ -26,6 +26,8 @@ export function createControls({ root, canvas, camera, move, spit, trail, onInte
   function used(mode) {
     if (inputMode === mode) return;
     inputMode = mode;
+    root.toggleAttribute?.('data-expo-touch',mode==='touch');
+    if(mode!=='touch')touch.close();
     onInputMode?.(mode);
   }
   let disposed = false, drag = null, stickId = null, stickX = 0, stickY = 0, locked = false;
@@ -34,34 +36,15 @@ export function createControls({ root, canvas, camera, move, spit, trail, onInte
   canvas.style.touchAction = 'none';
   camera.rotation.order = 'YXZ';
   camera.rotation.z = 0;
-  const style = doc.createElement('style');
-  style.textContent = `
-    .expo-touch { display:none; position:absolute; z-index:5; touch-action:none; user-select:none; -webkit-user-select:none; }
-    .expo-stick { left:max(18px,env(safe-area-inset-left)); bottom:max(24px,env(safe-area-inset-bottom)); width:112px; height:112px;
-      border:2px solid #fff9; border-radius:50%; background:#143d3470; box-shadow:0 2px 10px #0003; }
-    .expo-stick-knob { position:absolute; left:35px; top:35px; width:38px; height:38px; border:2px solid #fff;
-      border-radius:50%; background:#d7eadbd9; pointer-events:none; }
-    .expo-interact { right:max(18px,env(safe-area-inset-right)); bottom:max(38px,env(safe-area-inset-bottom)); min-width:92px;
-      min-height:60px; padding:12px; border:3px solid #f47b4f; border-radius:30px; background:#1b3233ef; color:white; font:700 16px system-ui; }
-    .expo-root:has(.expo-aim[data-action]) .expo-interact { background:#fa8254; color:#172b2b; border-color:#ffe8c5; }
-    .expo-interact:active { transform:translateY(2px); }
-    .expo-has-touch .expo-touch { display:block; }
-    @media(pointer:coarse) { .expo-touch { display:block; } }
-  `;
-  const stick = doc.createElement('div');
-  stick.className = 'expo-touch expo-stick';
-  stick.setAttribute('aria-label', 'Drag to walk');
-  const knob = doc.createElement('div'); knob.className = 'expo-stick-knob'; stick.append(knob);
-  const interact = doc.createElement('button');
-  interact.className = 'expo-touch expo-interact'; interact.type = 'button'; interact.textContent = 'Interact';
-  root.append(style, stick, interact);
+  root.toggleAttribute?.('data-expo-touch',inputMode==='touch');
   function listen(target, event, fn, options) {
     target.addEventListener(event, fn, options);
     off.push(() => target.removeEventListener(event, fn, options));
   }
   const available = () => !disposed && !isPaused() && !doc.hidden;
   const active = () => available() && !trail?.opened;
-  const spitting=spit&&spitControls(root,active,spit);
+  const touch=createTouchActions(root,{active,canMove:()=>active()&&!holdingView(),interact:onInteract,jump:onJump,spit});
+  const {stick,knob,spitting}=touch;
   function focusGame(){root.focus({preventScroll:true});}
   const capture = (el, id) => { try { el.setPointerCapture(id); } catch {} };
   const release = (el, id) => { try { if (id != null && el.hasPointerCapture(id)) el.releasePointerCapture(id); } catch {} };
@@ -76,7 +59,7 @@ export function createControls({ root, canvas, camera, move, spit, trail, onInte
     lastMoveKey = sprintKey = null;
   }
   function reset() {
-    clearKeys(); clearPointers(); pad.reset();spitting?.cancel();
+    clearKeys(); clearPointers(); pad.reset();spitting?.cancel();touch.close();
     if (doc.pointerLockElement === canvas) {
       releasing = true;
       doc.exitPointerLock?.();
@@ -172,7 +155,7 @@ export function createControls({ root, canvas, camera, move, spit, trail, onInte
     used(event.pointerType === 'touch' ? 'touch' : 'mouse');
     focusGame();
     event.preventDefault();
-    if (event.pointerType === 'touch') root.classList.add('expo-has-touch');
+    if (!spitting?.touchHeld) touch.close();
     if (locked) { onInteract(); return; }
     drag = { id: event.pointerId, x: event.clientX, y: event.clientY, distance: 0, type: event.pointerType };
     capture(canvas, event.pointerId);
@@ -196,8 +179,9 @@ export function createControls({ root, canvas, camera, move, spit, trail, onInte
   function moveStick(event) {
     if (stickId !== event.pointerId || !active()) return;
     const r = stick.getBoundingClientRect(), dx = event.clientX - r.left - r.width / 2, dy = event.clientY - r.top - r.height / 2;
-    const length = Math.hypot(dx, dy), scale = length > 38 ? 38 / length : 1;
-    stickX = dx * scale / 38; stickY = -dy * scale / 38;
+    const travel=r.width/2-knob.offsetWidth/2, length=Math.hypot(dx,dy);
+    const scale=length>travel?travel/length:1;
+    stickX=dx*scale/travel;stickY=-dy*scale/travel;
     knob.style.transform = `translate(${dx * scale}px,${dy * scale}px)`;
   }
   listen(stick, 'pointerdown', event => {
@@ -214,31 +198,11 @@ export function createControls({ root, canvas, camera, move, spit, trail, onInte
   listen(stick, 'pointerup', endStick);
   listen(stick, 'pointercancel', clearPointers);
   listen(stick, 'lostpointercapture', endStick);
-  let tap = null, handledTouch = -Infinity;
-  listen(interact, 'pointerdown', event => {
-    if (event.pointerType !== 'touch' || !active()) return;
-    used('touch');
-    tap = { id:event.pointerId,x:event.clientX,y:event.clientY };
-    capture(interact,event.pointerId);
-  });
-  listen(interact, 'pointerup', event => {
-    if (!tap || tap.id !== event.pointerId) return;
-    const valid = Math.hypot(event.clientX-tap.x,event.clientY-tap.y) < 14;
-    tap = null; release(interact,event.pointerId); handledTouch = win.performance.now();
-    event.preventDefault();
-    if (valid && active()) onInteract();
-    interact.blur();
-  });
-  listen(interact,'pointercancel',()=>{tap=null;});
-  listen(interact, 'click', event => {
-    event.preventDefault(); event.stopPropagation();
-    if (event.detail && win.performance.now()-handledTouch<700) return;
-    if (active()) onInteract();
-    interact.blur();
-  });
+
   return {
     get inputMode() { return inputMode; },
-    stopMoving(){clearKeys();clearPointers();spitting?.cancel();},
+    setTouchAction:touch.setAction,
+    stopMoving(){clearKeys();clearPointers();spitting?.cancel();touch.close();},
     step(dt) {
       if (!available()) { reset(); return; }
       if (!Number.isFinite(dt) || dt <= 0) return;
@@ -284,7 +248,7 @@ export function createControls({ root, canvas, camera, move, spit, trail, onInte
       if (disposed) return;
       disposed = true; reset();
       for (const remove of off) remove();
-      spitting?.dispose();style.remove(); stick.remove(); interact.remove(); root.classList.remove('expo-has-touch');
+      touch.dispose();root.removeAttribute?.('data-expo-touch');
       canvas.style.touchAction = oldTouchAction;
     },
   };
