@@ -87,3 +87,52 @@ test('the ready row reads "Play Llama Expo 2037" whatever the ending is called l
   assert.equal(ready.label, 'Play Llama Expo 2037');
   assert.equal(MENU_REUSED.playExpo, 'Play Llama Expo 2037');
 });
+
+/* ---- M3: the collection either side ---- */
+import { sideStickers, SPOTS, PORTRAIT_SPOTS, slotsFor } from '../ui/menu-model.js';
+import { STICKERS } from '../data/content/stickers.js';
+import { earnSticker } from '../sim/stickers.js';
+import { herdRoster } from '../data/content/llamas.js';
+
+const lifeWith = (ids, extra = {}) => { const life = { runs: 0, ...extra }; ids.forEach((id, i) => earnSticker(life, id, 1 + Math.floor(i / 3))); return life; };
+const plain = STICKERS.filter((s) => s.art.k !== 'gold' && !s.legacy && !s.hidden).map((s) => s.id);
+
+test('the sheet holds the mockup\'s 22 places, and every place stays on screen', () => {
+  assert.equal(SPOTS.length + PORTRAIT_SPOTS.length, 22);
+  for (const p of [...SPOTS, ...PORTRAIT_SPOTS]) { assert.ok(p.x >= 0 && p.x <= 100 && p.y >= 0 && p.y <= 100); assert.ok(p.s > 0); }
+  assert.equal([...SPOTS, ...PORTRAIT_SPOTS].filter((p) => p.m).length, 8);   // the phone's eight
+});
+
+test('a near-new player: the few earned stickers, then dashed slots for the next ones', () => {
+  const side = sideStickers({ life: lifeWith(plain.slice(0, 2)), ed: FULL_READY });
+  assert.deepEqual(side.filter((x) => x.kind === 'got').map((x) => x.id).sort(), plain.slice(0, 2).sort());
+  assert.equal(side.filter((x) => x.kind === 'slot').length, slotsFor(2));
+  assert.equal(side.filter((x) => x.kind === 'portrait').length, 0);
+  for (const x of side.filter((q) => q.kind === 'slot')) assert.ok(!STICKERS.find((s) => s.id === x.id).hidden, 'a slot never shows a secret');
+});
+
+test('a veteran with the llama ending: crowded, no slots, the Expo sticker first, the herd in the portrait places', () => {
+  const life = lifeWith([...plain.slice(0, 40), 'e_ll_end'], { endings: { ll_end: 1 } });
+  const side = sideStickers({ life, ed: FULL_READY, herd: herdRoster(6).map((l) => l.id) });
+  assert.equal(side.filter((x) => x.kind === 'got').length, SPOTS.length);
+  assert.equal(side.filter((x) => x.kind === 'slot').length, 0);
+  assert.equal(side[0].id, 'e_ll_end');
+  assert.deepEqual(side.filter((x) => x.kind === 'portrait').map((x) => x.spot), [...PORTRAIT_SPOTS]);
+  /* No herd before the llama ending. */
+  assert.equal(sideStickers({ life: lifeWith(plain.slice(0, 40)), ed: FULL_READY, herd: herdRoster(6).map((l) => l.id) }).filter((x) => x.kind === 'portrait').length, 0);
+});
+
+test('the sheet is stable: the same save gives the same sheet, newest first', () => {
+  const life = lifeWith(plain.slice(0, 30));
+  const a = sideStickers({ life, ed: FULL_READY }).map((x) => x.id), b = sideStickers({ life, ed: FULL_READY }).map((x) => x.id);
+  assert.deepEqual(a, b);
+  assert.ok(life.stickers[a[0]] >= life.stickers[a.at(-1)]);
+});
+
+test('the small edition never shows a sticker its book does not show', () => {
+  const side = sideStickers({ life: lifeWith(plain.slice(0, 60)), ed: SMALL });
+  const shown = new Set(inBookIds(SMALL));
+  for (const x of side) assert.ok(shown.has(x.id), x.id);
+});
+import { shown as inBookShown } from '../sim/stickers.js';
+function inBookIds(ed) { return inBookShown({}, ed).map((s) => s.id); }

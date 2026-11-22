@@ -104,3 +104,48 @@ export function menuKey(key, sel, n) {
   if (key === 'End') return n - 1;
   return null;
 }
+
+/* ---- the collection either side (slice M3, the owner's "waaay too much neg space") ----
+ * Places from the approved mockup (C:/wt-tce/notes/menu-mockup/src.html SIDE): x, y = centre in percent of the screen,
+ * s = size in px, r = tilt in degrees, m = [x, y] where it tucks at phone width (only those eight show there).
+ * SPOTS fill in order (the mockup's early places first); PORTRAIT_SPOTS take the herd once the llama ending is reached. */
+export const SPOTS = Object.freeze([
+  { x: 21, y: 13, s: 84, r: 6, m: [3, 38] }, { x: 79, y: 14, s: 86, r: -6, m: [97, 46] }, { x: 5, y: 55, s: 84, r: -12, m: [3, 56] },
+  { x: 8, y: 16, s: 100, r: -8, m: [3, 92] }, { x: 14, y: 36, s: 110, r: 4 }, { x: 13, y: 74, s: 106, r: -5, m: [3, 74] },
+  { x: 5, y: 90, s: 78, r: 7 }, { x: 87, y: 35, s: 104, r: -4, m: [97, 64] }, { x: 95, y: 56, s: 82, r: 11 },
+  { x: 77, y: 54, s: 90, r: -9 }, { x: 24, y: 54, s: 90, r: 9 }, { x: 92, y: 15, s: 96, r: 7 },
+  { x: 87, y: 75, s: 104, r: 5, m: [97, 82] }, { x: 74, y: 81, s: 78, r: -11 }, { x: 26, y: 80, s: 76, r: 12 },
+  { x: 18, y: 93, s: 70, r: -9 }, { x: 95, y: 91, s: 78, r: -6 }, { x: 82, y: 94, s: 70, r: 8 },
+].map(Object.freeze));
+export const PORTRAIT_SPOTS = Object.freeze([
+  { x: 27, y: 31, s: 72, r: -7 }, { x: 72, y: 33, s: 70, r: 6 }, { x: 4, y: 73, s: 64, r: -5 }, { x: 96, y: 74, s: 64, r: 8, m: [97, 97] },
+].map(Object.freeze));
+/** Dashed slots for the next stickers while there is room: the mockup's 7 at the start, 4 mid-way, none for a veteran. */
+export const slotsFor = (earned) => (earned < 6 ? 7 : earned < 14 ? 4 : 0);
+const LLAMA_STICKER = 'e_ll_end';
+/* Art the menu can draw at once: the Golden Button stars are drawn by code the book loads on first open, so they stay
+ * in the book. */
+const drawable = (s) => s.art?.k !== 'gold';
+
+/**
+ * Which stickers go on the sheet, where. Pure. `herd`: herd ids in pen order (data/content/llamas.js herdRoster).
+ * Earned stickers this edition's book shows, newest first (by the run that earned them, then the book's order, so the
+ * sheet only changes when something new is earned); the Llama Expo 2037 sticker first once reached. Then dashed slots
+ * for the next not-yet stickers (never a secret one). Answers [{ kind: 'got'|'slot'|'portrait', id, spot, side }].
+ */
+export function sideStickers({ life = {}, ed, herd = [] } = {}) {
+  const book = inBook(life, ed).filter(drawable);
+  const got = book.filter((s) => life?.stickers?.[s.id]);
+  const order = new Map(book.map((s, i) => [s.id, i]));
+  got.sort((a, b) => (a.id === LLAMA_STICKER ? -1 : b.id === LLAMA_STICKER ? 1 : 0)
+    || (life.stickers[b.id] - life.stickers[a.id]) || (order.get(a.id) - order.get(b.id)));
+  const out = [];
+  const side = (spot) => (spot.x < 50 ? 'lf' : 'rt');
+  const take = got.slice(0, SPOTS.length);
+  take.forEach((s, i) => out.push({ kind: 'got', id: s.id, spot: SPOTS[i], side: side(SPOTS[i]) }));
+  const room = SPOTS.length - take.length;
+  const next = book.filter((s) => !life?.stickers?.[s.id] && !s.hidden).slice(0, Math.min(room, slotsFor(got.length)));
+  next.forEach((s, i) => { const spot = SPOTS[take.length + i]; out.push({ kind: 'slot', id: s.id, spot, side: side(spot) }); });
+  if (llamaReached(life)) herd.slice(0, PORTRAIT_SPOTS.length).forEach((id, i) => out.push({ kind: 'portrait', id, spot: PORTRAIT_SPOTS[i], side: side(PORTRAIT_SPOTS[i]) }));
+  return out;
+}
