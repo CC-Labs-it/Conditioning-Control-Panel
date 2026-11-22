@@ -122,7 +122,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     captions[key].textContent=text;captions[key].dataset.lineId=id;
   }
   function nearby(entry){
-    return entry.zone===walker.zone && (!entry.anchor || camera.position.distanceToSquared(entry.anchor)<=36);
+    return entry.zone===walker.zone && (!entry.needed || entry.needed()) && (!entry.anchor || camera.position.distanceToSquared(entry.anchor)<=36);
   }
   function began(entry){
     if(entry.began)return;
@@ -225,7 +225,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     entry.resolve(ok);
   }
   let farewell=false;
-  function enqueue(id,{closing=false,station=null,replay=false,zone=walker.zone,position=null,kind='react',exhibit,ttl,ticket=null,projector=false,onStart,roomWide=false}={}){
+  function enqueue(id,{closing=false,station=null,replay=false,zone=walker.zone,position=null,kind='react',exhibit,ttl,ticket=null,projector=false,onStart,roomWide=false,needed}={}){
     const row=book.get(id);
     if(dead||!row||zone!==walker.zone||(farewell&&!closing))return Promise.resolve(false);
     if(row.set==='log'&&!owned().includes(id.slice(4)))return Promise.resolve(false);
@@ -240,7 +240,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     let resolve;const promise=new Promise(r=>{resolve=r;});
     const local=position || station || exhibit || kind!=='ambient';
     const anchor=local&&!roomWide?(position || station ? origin : camera.position).clone():null;
-    const entry={row,zone,station,channel:key,kind,exhibit:exhibit||station?.id||zone,anchor,ttl,ticket,projector,onStart,
+    const entry={row,zone,station,channel:key,kind,exhibit:exhibit||station?.id||zone,anchor,ttl,ticket,projector,onStart,needed,
       stationId:station?.id||family(id),pos:origin.clone(),handle:null,
       clock:0,lastMediaTime:0,kevin:false,progress:0,duck:1,resolve,promise};
     sequence.submit(entry);return promise;
@@ -321,6 +321,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     const speaking=sequence.current;
     setMuffled(!!speaking&&wetHorns.some(h=>h.zone===speaking.zone&&h.pos.distanceToSquared(speaking.pos)<1));
     sequence.cancel(entry=>!nearby(entry));
+    if(speaking?.needed&&!nearby(speaking))sequence.finish(speaking,false);
     if(!reader.update()){check-=dt;if(check<=0){proximity();check=.12;}}
     const e=sequence.current;
     if(e){

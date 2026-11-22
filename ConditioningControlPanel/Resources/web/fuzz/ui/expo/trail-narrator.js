@@ -2,10 +2,30 @@
 export function trailNarrator(api,state){
   const heard=new Set(),pending=new Set(),stamps=state.ticket.stamps;
   let next=0;
+  function needed(id){
+    switch(id){
+      case 'tea':return state.carry?.key==='tea';
+      case 'signed_form':return state.carry?.key==='signed-form';
+      case 'hoof':return state.hoof==='idle'&&!state.hoofWorn;
+      case 'first_press':return !stamps.has('Pressed');
+      case 'queue':return !stamps.has('Queued');
+      case 'meeting':return !stamps.has('Attended');
+      case 'corrections':return !stamps.has('Corrected');
+      case 'rematch':return !stamps.has('Spat');
+      case 'lashes':return !stamps.has('Blinked');
+      case 'dome':return !stamps.has('Stayed');
+      case 'habitat':return !stamps.has('Fed')||!stamps.has('Kept');
+      case 'corridor':return state.readClauses.size<8;
+      case 'wool_chair':return !stamps.has('Read');
+      case 'heater':return !state.staffVisit.unplugged;
+      case 'shop':return !state.souvenir&&!state.contract;
+      default:return true;
+    }
+  }
   function offer(id,zone){
-    if(heard.has(id)||pending.has(id))return;
+    if(heard.has(id)||pending.has(id)||!needed(id))return;
     pending.add(id);
-    void api.cue('r5_'+id,{zone,kind:'beat',exhibit:'trail '+id,roomWide:true,
+    void api.cue('r5_'+id,{zone,kind:'beat',exhibit:'trail '+id,roomWide:true,needed:()=>needed(id),
       onStart:()=>heard.add(id)}).then(ok=>{if(ok)heard.add(id);pending.delete(id);});
   }
   function tick(dt,zone,p){
