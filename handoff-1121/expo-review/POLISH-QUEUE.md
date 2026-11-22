@@ -89,3 +89,11 @@ All 71 targeted Expo and documentary music tests passed after these changes. The
 - The gift shop staff fire exit occupies its own bay between the Grand Hall doors and the paper press. The opposite wall shows the full framed-contract price. With emergency lighting and the archive display loaded, desktop and Gentle visitors used the door and collected the staff lanyard.
 
 The v4 branch passed all 79 Expo and documentary music tests. The full Fuzz suite passed 1,079 of 1,080. The racing preview video described above is still absent.
+
+## Round 5
+
+### A. The visitor's trail
+
+- The turnstile gives each visitor a Human Activity Trail. The twelve boxes separate public stops from staff discoveries. Both Habitat impressions share one box. The back carries the actual ledger. Open the card with T, the on-screen ticket, or Y on a standard controller.
+- Stamps land by name with the action and the current box count. Deviations get a separate slip. Both leave the visitor free to walk. Reopening an old ticket or restoring Nana's stitches keeps the collection without replaying the ceremony.
+- Fresh-save snag at the turnstile: walking straight ahead followed the central stairs. A fixed “door on the left” then contradicted the arrow when the visitor was facing away. The arrow now tracks the Chronology doorway, and the text uses its name when it is out of view. Keyboard play also exposed Tab leaving the open card. Tab and Shift+Tab now cycle between its two controls.

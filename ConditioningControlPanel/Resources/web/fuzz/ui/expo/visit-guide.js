@@ -26,7 +26,7 @@ export function createVisitGuide(root,{onOpen=()=>{},canOpen=()=>true}={}){
   const task=el('div',hud,'expo-trail-task'),kicker=el('small',task),title=el('strong',task),whereLine=el('span',task);
   const arrow=el('i',whereLine,'expo-task-arrow','↑'),where=el('span',whereLine);arrow.setAttribute('aria-hidden','true');
   const card=el('section',root,'expo-trail-card');card.hidden=true;card.tabIndex=-1;
-  card.setAttribute('role','dialog');card.setAttribute('aria-label','Human Activity Trail');
+  card.setAttribute('role','dialog');card.setAttribute('aria-modal','true');card.setAttribute('aria-label','Human Activity Trail');
   const head=el('header',card);el('small',head,'','Llama Expo 2037 · Visitor Services · Admit one human');
   el('h2',head,'','Human Activity Trail');el('p',head,'','Twelve stamps. Collect eight and the gift shop lets you go home.');
   const close=el('button',card,'expo-trail-close','Close'),front=el('div',card),list=el('ol',front,'expo-trail-grid');
@@ -53,6 +53,12 @@ export function createVisitGuide(root,{onOpen=()=>{},canOpen=()=>true}={}){
   function toggle(){showCard(card.hidden);}
   function turn(){back.hidden=!back.hidden;front.hidden=!back.hidden;flip.textContent=back.hidden?'Turn the card over':'Back to the stamps';flip.setAttribute('aria-pressed',String(!back.hidden));card.scrollTop=0;}
   open.addEventListener('click',toggle);close.addEventListener('click',()=>showCard(false));flip.addEventListener('click',turn);
+  card.addEventListener('keydown',event=>{
+    if(event.key!=='Tab')return;
+    event.preventDefault();
+    const next=d.activeElement===close?flip:d.activeElement===flip?close:event.shiftKey?flip:close;
+    next.focus();
+  });
   function collect(event){(event.kind==='stamp'?stamps:deviations).push(event);}
   function watch(ticket){release?.();t=ticket;release=t.subscribe(collect);signature='';}
   function renderTicket(){
@@ -74,7 +80,7 @@ export function createVisitGuide(root,{onOpen=()=>{},canOpen=()=>true}={}){
     if(t!==v.ticket)watch(v.ticket);
     renderTicket();
     if(mode!==input){mode=input;shortcut.textContent=input==='gamepad'?'Y · Card':input==='touch'?'Open card':'T · Card';}
-    const a=trailTask(room,p,v),key=[a.title,a.where,a.kicker].join('|');
+    const a=trailTask(room,p,v,yaw),key=[a.title,a.where,a.kicker].join('|');
     if(key!==taskKey){taskKey=key;kicker.textContent=a.kicker;title.textContent=a.title;where.textContent=a.where;}
     arrow.hidden=!a.target;
     if(a.target)arrow.style.transform='rotate('+Math.round((Math.atan2(a.target[0]-p.x,p.z-a.target[1])+yaw)*180/Math.PI)+'deg)';

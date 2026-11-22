@@ -37,7 +37,7 @@ export function trailMeter(count){
 }
 const stopTask=i=>({title:STOPS[i].todo,where:STOPS[i].place,kicker:STOPS[i].name});
 const task=(title,where,kicker='Human trail',target)=>({title,where,kicker,target});
-export function trailTask(room,p,v){
+export function trailTask(room,p,v,yaw=0){
   const key=v.carry?.key,t=v.ticket, marks=t?.stamps;
   if(key==='tea'){
     const distance=Math.round(Math.hypot(p.x-11,p.y-3.4,p.z-11.95));
@@ -61,7 +61,10 @@ export function trailTask(room,p,v){
     const corrections=[7.8,41.1],hall=[0,16];
     const nearCorrections=!marks?.has('Corrected')&&(marks?.has('Pressed')||
       Math.hypot(p.x-corrections[0],p.z-corrections[1])<=Math.hypot(p.x-hall[0],p.z-hall[1]));
-    return task('Collect 8 stamps to go home',nearCorrections?'Nearest stop: Corrections Desk, door on the left · Chronology':'Nearest stop: First Press, Grand Hall','Start anywhere',nearCorrections?corrections:hall);
+    const bearing=Math.atan2(corrections[0]-p.x,p.z-corrections[1])+yaw;
+    const onLeft=Math.sin(bearing)<-.30&&Math.cos(bearing)>0;
+    const directions=onLeft?'Nearest stop: Corrections Desk, door on the left · Chronology':'Nearest stop: Corrections Desk · through the Chronology doors';
+    return task('Collect 8 stamps to go home',nearCorrections?directions:'Nearest stop: First Press, Grand Hall','Start anywhere',nearCorrections?corrections:hall);
   }
   if(room==='service'){
     if(v.staffVisit?.unplugged)return task('Plug Greg back in','The socket is behind you','Optional',[25.93,26.92]);
