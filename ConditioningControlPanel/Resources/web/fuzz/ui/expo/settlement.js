@@ -39,6 +39,7 @@ export function mountSettlement(api,state,room,bind,surface,clean){
       state.souvenir?[stock[state.souvenir],stage?.[1]||'Print receipt']:['Carry one souvenir to the till.','Stock follows your ticket.'];
     terminal(till,{title,rows,foot:beat.listening?'Listening':'Visitor Services   /   Settlement',eyebrow:'GARY FROM ACCOUNTS'});
     if(sheet)sheet.visible=!!state.contract;
+    if(state.boughtExit)hinge?.releaseLatch();
     if(button)button.visible=!!state.boughtExit;
     if(worm)worm.visible=!!state.boughtExit&&swing>.65;
   }
@@ -117,7 +118,7 @@ export function mountSettlement(api,state,room,bind,surface,clean){
     if(beat.listening&&Math.hypot(camera.position.x-21.2,camera.position.z+11.42)>6)beat.leave();
     if(receipt){receiptClock+=dt;if(receiptClock>20||camera.position.z>-7){receipt.remove();receipt=null;}}
     const dx=Math.abs(camera.position.x-15.03),dz=camera.position.z+13.60;
-    const approach=state.boughtExit&&dx<.86&&dz>-.6&&dz<1.25;
+    const approach=state.boughtExit&&dx<.86&&dz>-.6&&dz<2.35;
     swing=T.MathUtils.damp(swing,transit||approach?1:0,4.3,dt);
     hinge?.set(swing);if(button){button.visible=state.boughtExit;button.position.z=-13.60-swing*.30;button.scale.x=Math.max(.01,1-swing);}
     if(worm)worm.visible=state.boughtExit&&swing>.45;

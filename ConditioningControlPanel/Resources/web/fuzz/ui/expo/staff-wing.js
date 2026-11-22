@@ -20,7 +20,7 @@ export function createStaffWing(api,state) {
     if(powerTime!==null)return;
     view.unplugged=!view.unplugged;
     const node=rooms.get('service')?.plug;
-    if(node)node.position.z=view.unplugged?.11:0;
+    if(node)node.position.z=view.unplugged ? .11 : 0;
     api.setHeaterPower?.(!view.unplugged);
     if(view.unplugged){
       powerTime=0;lowRooms();cue('unplug','beat');
@@ -29,10 +29,50 @@ export function createStaffWing(api,state) {
       dark.style.background='#071c15';dark.style.opacity='0';lowRooms();cue('heater_on');
     }
   }
+  function restoreRoom(r){
+    if(!r.relights)return;
+    for(const [mesh,old,fitted] of r.relights.meshes)if(mesh.material===fitted)mesh.material=old;
+    for(const [light,intensity] of r.relights.lights)light.intensity=intensity;
+    for(const copy of r.relights.surfaces.values())copy.material.dispose();
+    r.relights=null;
+  }
+  function lightRoom(id,r){
+    if(!view.unplugged){restoreRoom(r);return;}
+    if(!r.relights){
+      const surfaces=new Map(),lights=[],meshes=[];
+      const use=original=>{
+        if(!surfaces.has(original)){
+          const material=original.clone();
+          surfaces.set(original,{material,tint:material.color?.clone(),emission:material.emissive?.clone(),strength:material.emissiveIntensity||0});
+        }
+        return surfaces.get(original).material;
+      };
+      r.group.traverse(n=>{
+        if(n.isLight&&n!==r.light)lights.push([n,n.intensity]);
+        if(!n.isMesh||n.name==='Wool along the skirting')return;
+        const old=n.material,material=Array.isArray(old)?old.map(use):use(old);
+        meshes.push([n,old,material]);n.material=material;
+      });
+      r.relights={surfaces,lights,meshes,last:-1};
+    }
+    const order=['service','secret','atrium','hall','twelve','catwalk','hoof','habitat','chronology','forum','commons','aquarium','dome','shop'];
+    const fraction=powerTime===null?2:Math.max(0,Math.min(1,(powerTime-Math.max(0,order.indexOf(id))*.14)/.50));
+    const step=Math.round(fraction*18)/18;
+    if(r.relights.last===step)return;
+    r.relights.last=step;
+    const emergency=step===2,level=emergency?.37:1-.95*step;
+    for(const item of r.relights.surfaces.values()){
+      const m=item.material;
+      if(item.tint){m.color.copy(item.tint).multiplyScalar(level);if(emergency)m.color.multiply(new T.Color(.42,1,.54));}
+      if(item.emission){m.emissive.copy(item.emission);if(emergency)m.emissive.multiply(new T.Color(.22,1,.38));m.emissiveIntensity=item.strength*level;}
+    }
+    for(const [light,intensity] of r.relights.lights)light.intensity=intensity*level;
+  }
   function lowRooms(){
     for(const [id,r] of rooms){
+      lightRoom(id,r);
       for(const m of r.threads||[]){
-        m.emissive?.setHex(view.unplugged?0xecbb9c:0x000000);if(m.emissive)m.emissiveIntensity=view.unplugged?.55:0;
+        m.emissive?.setHex(view.unplugged?0xecbb9c:0x000000);if(m.emissive)m.emissiveIntensity=view.unplugged ? .55 : 0;
       }
       if(r.light)r.light.visible=view.unplugged&&id==='service';
     }
@@ -43,8 +83,9 @@ export function createStaffWing(api,state) {
       atrium:[[1.1,.025,16],[8.65,.025,18.5],[10.93,.025,31.08],[12,.025,31.08]],
       service:[[12,.025,31.08],[28.13,.025,31.08],[28.15,.025,39.95],[29.02,.025,40.14],[30.40,.025,40.14]],
     };
+    const r={group};rooms.set(id,r);clean.push(()=>{restoreRoom(r);rooms.delete(id);});
+    if(view.unplugged)lightRoom(id,r);
     if(!routes[id])return;
-    const r={};rooms.set(id,r);clean.push(()=>rooms.delete(id));
     clean.push(api.annexProps(group,place=>{
       const off=[];
       const bind=(node,label,fn,reach=2.3)=>off.push(api.register(node,label,fn,reach));
@@ -67,7 +108,7 @@ export function createStaffWing(api,state) {
         });
         place('annex_heater',[25.52,.836,27.17]);
         const socket=place('annex_socket',[25.93,.96,26.92]);r.plug=socket.getObjectByName('heater_plug');
-        r.plug.position.z=view.unplugged?.11:0;
+        r.plug.position.z=view.unplugged ? .11 : 0;
         place('annex_notice',[25.31,1.71,26.79]);
         bind(socket,()=>view.unplugged?'Plug the heater back in':'Unplug the heater',plug);
         r.light=new T.PointLight(0x83e6a6,2.8,6.5,2);r.light.position.set(25.48,2.18,28.0);group.add(r.light);
@@ -103,10 +144,10 @@ export function createStaffWing(api,state) {
   function tick(dt,id) {
     if(powerTime!==null){
       powerTime+=dt;
-      dark.style.opacity=String(Math.min(.97,powerTime/2.5));
+      lowRooms();dark.style.opacity=String(Math.min(.14,powerTime/14));
       if(powerTime>=2.6&&!blackout){blackout=true;card.style.display='grid';}
       if(powerTime>=8.6){
-        powerTime=null;blackout=false;card.style.display='none';dark.style.background='#125e39';dark.style.opacity='.24';
+        powerTime=null;blackout=false;card.style.display='none';dark.style.background='#125e39';dark.style.opacity='.07';lowRooms();
         cue('heater','beat');
       }
     }
@@ -123,5 +164,5 @@ export function createStaffWing(api,state) {
     pivotYaw=yaw;next.visible=true;view.signs=++signCount;
     if(signCount===notes.length)cue('bob_sign');
   }
-  return {mount,tick,enter,dispose(){dark.remove();card.remove();api.setHeaterPower?.(true);}};
+  return {mount,tick,enter,dispose(){for(const r of rooms.values())restoreRoom(r);dark.remove();card.remove();api.setHeaterPower?.(true);}};
 }

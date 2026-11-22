@@ -1,8 +1,9 @@
+import {createWoolRoom} from './wool-room.js';
 import {createTwelvePieces} from './twelve-pieces.js';
 import {createStaffWing} from './staff-wing.js';
 
 export function createBackOfHouse(api,state){
-  const pieces=[createStaffWing(api,state),createTwelvePieces(api,state)];
+  const pieces=[createStaffWing(api,state),createTwelvePieces(api,state),createWoolRoom(api,state)];
   return {
     mount(id,group,bind,surface,clean){for(const piece of pieces)piece.mount(id,group,clean);},
     tick(dt,id){for(const piece of pieces)piece.tick(dt,id);},

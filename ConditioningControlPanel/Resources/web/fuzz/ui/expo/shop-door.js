@@ -34,6 +34,6 @@ export function mountShopDoor(T,room,api){
   hinge.position.copy(room.worldToLocal(new T.Vector3(14.32,.006,-13.93)));
   room.updateMatrixWorld(true);hinge.attach(leaf);
   if(!leaf.userData.swingIncludesTrim)detachOlderTrim(T,room,hinge);
-  const free=api.registerDoorLeaf?.('shop','shop-exit',hinge,1.42,2.1);
-  return {set(progress){hinge.rotation.y=-1.49*T.MathUtils.smootherstep(progress,0,1);},dispose(){free?.();}};
+  let free=api.registerDoorLeaf?.('shop','shop-exit',hinge,1.42,2.1);
+  return {set(progress){hinge.rotation.y=-1.49*T.MathUtils.smootherstep(progress,0,1);},releaseLatch(){free?.();free=null;},dispose(){free?.();}};
 }
