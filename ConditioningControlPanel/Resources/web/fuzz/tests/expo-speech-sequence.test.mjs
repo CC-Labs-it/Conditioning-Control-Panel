@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSpeechSequence, createExhibitBeat } from '../ui/expo/speech-sequence.js';
-import { hoofAttempt } from '../ui/expo/hoof-lab.js';
+import {contactMask,markHoof} from '../ui/expo/hoof-board.js';
 
 function studio(){
   let clock=0, zone='hoof', voice=null;
@@ -51,21 +51,15 @@ test('pause, resume, Panic and duplicate native end events keep a single speaker
   assert.equal(await first,true);assert.equal(await next,false);
 });
 
-test('five fast hoof presses and elapsed time cannot get the display ahead of the recording',async()=>{
-  const {s,cue,started}=studio(),beat=createExhibitBeat(cue),visit={hoof:'idle',misses:0};
-  const press=()=>{
-    const step=visit.hoof==='idle'?{lines:['hoof_1','hoof_2'],page:'checkbox',misses:0}:hoofAttempt(4,visit.misses);
-    return beat.run(step.lines,{zone:'hoof'},()=>{visit.hoof=step.page;visit.misses=step.misses;});
-  };
-  const first=press();
-  for(let i=0;i<5;i++)assert.equal(await press(),false);
-  assert.deepEqual(started,['hoof_1']);assert.equal(visit.hoof,'idle');assert.equal(s.queue.length,0);
-  s.finish(s.current);await Promise.resolve();
-  assert.deepEqual(started,['hoof_1','hoof_2']);assert.equal(visit.hoof,'idle');
-  s.finish(s.current);assert.equal(await first,true);assert.equal(visit.hoof,'checkbox');
-  const miss=press();for(let i=0;i<5;i++)assert.equal(await press(),false);
-  assert.equal(visit.misses,0);assert.equal(visit.hoof,'checkbox');s.finish(s.current);
-  assert.equal(await miss,true);assert.equal(visit.misses,1);
+test('the picture board marks and unmarks immediately while the single speaker is explaining it',async()=>{
+  const {s,cue,started}=studio(),visit={hoofMask:0,hoofWorn:true};
+  const instruction=cue('r5_hoof_verify',{kind:'beat'});
+  const centre=contactMask(1.5,1.5,true),corner=contactMask(.5,.5,true);
+  assert.equal(markHoof(visit,centre),5);assert.equal(visit.hoofMask,centre);
+  assert.equal(markHoof(visit,corner),3);assert.equal(visit.hoofMask,centre^corner);
+  markHoof(visit,centre);assert.equal(visit.hoofMask,corner);
+  assert.deepEqual(started,['r5_hoof_verify']);assert.equal(s.current.id,'r5_hoof_verify');
+  s.finish(s.current);assert.equal(await instruction,true);assert.equal(visit.hoofMask,corner);
 });
 
 test('a visitor can return after abandoning a multi-part instruction without a stale continuation',async()=>{

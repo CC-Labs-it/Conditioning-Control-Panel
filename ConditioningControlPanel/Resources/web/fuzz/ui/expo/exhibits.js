@@ -220,5 +220,5 @@ export function createExhibits(api) {
     ui.setAngle(ui.inspectionAngle??ui.travel*ui.turn*ui.turn*(3-2*ui.turn));
     return true;
   }
-  return {mount,unmount,enter,tick,dispose,state,hands,spit,endVisit:api.endVisit,setTurnstileAngle};
+  return {mount,unmount,enter,tick,dispose,state,hands,spit,refuseHoof:worn.refuse,endVisit:api.endVisit,setTurnstileAngle};
 }

@@ -38,7 +38,7 @@ export function visitorCommentary(state,cue){
           offer('press_first_again',state.presses>0&&state.presses<5&&Math.abs(feet.z+9)<4)||
           offer('dome_exit',from==='dome'&&state.domeSeconds>90))return;break;
       case 'hoof':
-        if(offer('hoof_edge_again',ledger('hoof-edge'))||offer('hoof_tray',state.misses>=3)||
+        if(offer('hoof_edge_again',ledger('hoof-edge'))||
           offer('hoof_read',state.hoofWorn)||offer('hoof_wardrobe',has('Hoofed')&&!state.hoofWorn))return;break;
       case 'habitat':
         if(offer('desk_outside',has('Kept')&&state.presses>0)||offer('glass_kept',has('Kept'))||

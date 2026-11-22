@@ -65,7 +65,8 @@ test('a rope post left on the floor picks up its room lighting again on return',
 test('fitting or returning the hooves preserves the tray and frees the right hoof to press',()=>{
   for(const aspect of [16/9,393/852]){
     const {api,scene,state,hands,kit,lighting}=fixture();
-    api.ctx={};api.camera.aspect=aspect;
+    const clops=[];
+    api.ctx={audio:{play:file=>clops.push(file)}};api.assetURL=file=>file;api.camera.aspect=aspect;
     const worn=createWornHooves(api,state,lighting);
     const gloves=['left','right'].map(side=>{
       const model=kit.clone();model.name='hoof_hand_'+side;return model;
@@ -79,6 +80,7 @@ test('fitting or returning the hooves preserves the tray and frees the right hoo
     assert.ok(left.position.y<tray.position.y&&right.position.x>tray.position.x);
     const support=left.position.clone(),rest=right.position.clone();
     worn.press();worn.tick(.23);
+    assert.deepEqual(clops,['audio/step-wood-1.ogg']);
     assert.ok(right.position.y>rest.y&&right.position.z<rest.z);
     assert.ok(left.position.equals(support));
     state.hoofWorn=false;hands.tick();worn.tick(0);

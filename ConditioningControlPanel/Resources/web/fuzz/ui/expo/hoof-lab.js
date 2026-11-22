@@ -1,216 +1,162 @@
-import { createExhibitBeat } from './speech-sequence.js';
-import { hoofSupport } from './carried.js';
-import { livePanel } from './display.js';
+import {hoofSupport} from './carried.js';
+import {livePanel,placard,printedPanel} from './display.js';
+import {dial,write} from './staff-fixtures.js';
+import {board,boardHit,dealHoofPhotos,hoofRadius,markHoof,verifyHoof} from './hoof-board.js';
+import {hoofRefusals} from './hoof-refusals.js';
+import {loadHoofPhotos,paintHoofScreen} from './hoof-screen.js';
 
-const DISC_RADIUS=.24;
-const PANELS={checkbox:{columns:2,rows:2,left:-.15,top:.50,dx:.30,dy:.24},
-  pictures:{columns:3,rows:3,left:-.31,top:.56,dx:.20,dy:.19}};
-
-// A cap clicks when the padded contact disc covers its centre.
-export function hoofContacts(page,x,y){
-  const grid=PANELS[page];
-  const result=[];
-  if(grid)for(let row=0;row<grid.rows;row++)for(let col=0;col<grid.columns;col++){
-    const dx=x-grid.left-col*grid.dx,dy=y-grid.top+row*grid.dy;
-    if(dx*dx+dy*dy<=DISC_RADIUS**2+1e-8)result.push(row*grid.columns+col);
-  }
-  return result;
+const DESK=[-18.4,1.198,9.97];
+const threshold='Hooves may leave the lab. Your fingers stay at the desk. Llama doors will open.';
+function firstMesh(node){
+  let face;node?.traverse(n=>{if(!face&&n.isMesh)face=n;});return face;
 }
-
-export function hoofAttempt(count,misses){
-  if(!count)return null;
-  if(count===1)return {edge:true,misses,page:'pictures',lines:['v4_hoof_edge','hoof_5']};
-  const tries=misses+1;
-  if(tries>=3)return {misses:tries,page:'pictures',lines:['hoof_4','hoof_7','hoof_5']};
-  return {misses:tries,page:'checkbox',lines:tries===1?[count===4?'hoof_3':'hoof_4']:[]};
-}
-
-const DESK=[-18.4,1.20,9.97];
-const hoofButton=/^(?:press_main|press_stop|photo_release|alpaca_button|expo_(?:replay|review|control)_|exit_sale$)/;
-export function needsFinger(name){return hoofButton.test(name);}
 
 export function mountHoofLab(api,group,state,worn){
-  const {THREE:T,camera,cue,register,play,say}=api;
-  const undo=[],models={},switches={checkbox:[],pictures:[]};
-  const hands=['hoof_hand_left','hoof_hand_right'].map(name=>group.getObjectByName(name)).filter(Boolean);
-  const staff=group.getObjectByName('hoof_staff'),mosaic=group.getObjectByName('hoof_mosaic');
-  const desk=group.getObjectByName('hoof_console'),screen=group.getObjectByName('hoof_display');
-  const origin=new T.Vector3(...DESK),point=new T.Vector3(),normal=new T.Vector3(),plane=new T.Plane(),ray=new T.Ray();
-  let face=null,clock=0,selection=state.hoofMask||0,capMask=0,assistant=false,dead=false;
-  if(mosaic)mosaic.visible=false;
-  group.traverse(node=>{if(node.name.startsWith('expo_press_hoof_checkbox_'))node.visible=false;});
-  screen?.traverse(node=>{if(!face&&node.isMesh)face=node;});
-  const display=face&&livePanel(T,face,{width:1024,height:560,emission:.48});
-  const displayRows={
-    idle:['Applied Hoof Sciences','Fit a pair of hooves from the desk.'],
-    checkbox:['Tick one box','The circle shows where your hoof lands.'],
-    pictures:['Select every square without a llama','Press Submit when your selection is complete.'],
-    complete:['Application accepted','The hooves can be returned to this desk.']
-  };
-  const beat=createExhibitBeat((id,opts)=>cue(id,{...opts,onStart:()=>{
-    if(id==='hoof_7'){
-      assistant=true;capMask=1;refresh();
-    }
-  }}));
-  function refresh(){
-    const page=state.hoof;
-    if(staff)staff.visible=assistant;
-    for(const hand of hands)hand.visible=!state.hoofWorn;
-    for(const [key,model] of Object.entries(models))model.visible=(key==='pictures')===(page==='pictures'||page==='complete');
-    for(const [key,items] of Object.entries(switches)){
-      const mask=key==='pictures'?selection:capMask;
-      items.forEach(({parts},index)=>{
-        const on=(mask&(1<<index))!==0;
-        for(const mat of parts){mat.emissive.setHex(on?0x9bdc74:0x000000);mat.emissiveIntensity=on ? .48 : 0;}
-      });
-    }
-    const [title,hint]=displayRows[page]||displayRows.idle;
-    display?.draw((g,w,h)=>{
-      g.fillStyle='#123b36';g.fillRect(0,0,w,h);
-      g.fillStyle='#a7ccb9';g.font='600 26px system-ui';g.fillText('HUMAN INTERFACE PROGRAMME',35,46);
-      g.fillStyle='#fff1d2';g.font='bold 55px Georgia';g.fillText(title,35,110,w-70);
-      g.fillStyle='#b7cfa7';g.fillRect(35,129,w-70,2);
-      g.font='500 29px system-ui';g.fillText(hint,35,168,w-70);
-    });
+  const {THREE:T,camera,register}=api,clean=[];
+  const get=name=>group.getObjectByName(name),hands=['hoof_hand_left','hoof_hand_right'].map(get).filter(Boolean);
+  const desk=get('hoof_console'),face=firstMesh(get('hoof_display')),instructions=firstMesh(get('Art_hoof_instructions'));
+  const panel=face&&livePanel(T,face,{width:board.width,height:board.height,emission:.48});
+  if(panel)clean.push(()=>panel.dispose());
+  for(const name of ['hoof_staff','hoof_mosaic']){const n=get(name);if(n)n.visible=false;}
+  group.traverse(n=>{if(n.name.startsWith('expo_press_hoof_checkbox_'))n.visible=false;});
+  // The two action-ink finishes in the room shell are the four retired switch surrounds.
+  get('Architecture')?.traverse(n=>{if(n.isMesh&&['action_ink','action_cream'].includes(n.material?.name))n.visible=false;});
+  if(instructions){
+    const directions=livePanel(T,instructions,{width:1024,height:496,emission:.11});clean.push(()=>directions.dispose());
+    placard(directions,'Applied Hoof Sciences','Put the hooves on. Take the picture test.','Hooves and returns at the brass desk.');
   }
-  function run(lines,commit){
-    return beat.run(lines,{zone:'hoof',exhibit:'hoof',position:origin},()=>{
-      commit();refresh();
-    });
+  const pending=[],origin=new T.Vector3(...DESK);
+  let speaking='';
+  function voice(id){if(id!==speaking&&!pending.includes(id))pending.push(id);}
+  function speak(){
+    if(!pending.length||speaking||!api.narrationAvailable?.()||camera.position.distanceToSquared(origin)>16)return;
+    const id=pending.shift();speaking=id;
+    void api.cue(id,{zone:'hoof',kind:'beat',exhibit:'hoof',position:DESK,replay:true}).finally(()=>{speaking='';});
+  }
+  let clock=0,dead=false,button,cap,capRest=0,pressed=-10,contactUntil=-1,lastAim=null,photos;
+  let message=state.hoofMessage||null;
+  function feedback(value){state.hoofMessage=message=value;}
+  function refresh(){
+    if(dead)return;
+    if(state.hoof==='pictures'&&!photos)photos=loadHoofPhotos(api.assetURL,refresh);
+    for(const glove of hands)glove.visible=!state.hoofWorn;
+    if(button)button.visible=state.hoof==='idle'||state.hoof==='practice';
+    paintHoofScreen(panel,state,photos,message);
   }
   function wear(){
-    if(beat.listening)return;
     if(state.hoofWorn){
-      state.hoofWorn=false;assistant=false;refresh();play('press');cue('v4_hoof_return');return;
-    }
-    worn.fit(hands);
-    state.hoofWorn=true;play('press');refresh();
-    if(state.hoof==='idle')void run(['hoof_1','hoof_2'],()=>{state.hoof='checkbox';});
-  }
-  function useDesk(){
-    if(beat.listening)return;
-    if(state.hoof==='idle'&&state.hoofWorn){
-      void run(['hoof_1','hoof_2'],()=>{state.hoof='checkbox';});return;
-    }
-    wear();
-  }
-  const deskLabel=()=>beat.listening?'Listening':state.hoofWorn?
-    (state.hoof==='idle'?'Begin the test':'Return the hooves'):'Put on the hooves';
-  for(const mesh of [...hands,desk,screen].filter(Boolean))undo.push(register(mesh,deskLabel,useDesk,2.8));
-  function operate(key,hit){
-    if(beat.listening||dead)return;
-    if(!state.hoofWorn||state.hoof==='idle'){useDesk();return;}
-    if(state.hoof!==key)return;
-    const local=models[key].worldToLocal(point.copy(hit.point));
-    const caps=hoofContacts(key,local.x,local.y);
-    if(!caps.length){say('Aim the circle over a cap.');return;}
-    worn.press();play('press');
-    const mask=caps.reduce((bits,index)=>bits|(1<<index),0);
-    for(const index of caps)switches[key][index].at=clock;
-    if(key==='pictures'){
-      selection^=mask;state.hoofMask=selection;refresh();return;
-    }
-    capMask=mask;refresh();
-    const step=hoofAttempt(caps.length,state.misses);
-    void run(step.lines,()=>{
-      if(step.edge)state.ticket.book('hoof-edge','Off the edge',true);
-      state.misses=step.misses;state.hoof=step.page;
-      if(step.page==='pictures'){selection=0;state.hoofMask=0;}
-    });
-  }
-  function submit(){
-    if(beat.listening||state.hoof!=='pictures')return;
-    if(!state.hoofWorn){wear();return;}
-    worn.press();play('press');
-    if(selection){void run(['v4_hoof_again'],()=>{});return;}
-    void run(['v4_hoof_empty','hoof_8'],()=>{
-      state.hoof='complete';state.ticket.stamp('Hoofed');state.ticket.book('hoof-empty','None selected',false);
-    });
-  }
-  function attach(place){
-    const off=[],restore=[];
-    for(const [key,template] of [['checkbox','hoof_panel'],['pictures','hoof_pictures']]){
-      const model=models[key]=place(template,DESK,Math.PI);
-      if(!model)continue;
-      const count=key==='checkbox'?4:9,prefix=key==='checkbox'?'hoof_cap_':'hoof_tile_';
-      for(let i=0;i<count;i++){
-        const node=model.getObjectByName(prefix+i);
-        const parts=[];
-        node?.traverse(mesh=>{
-          if(!mesh.isMesh)return;
-          const original=mesh.material;
-          const copy=mat=>{
-            if(!mat.emissive)return mat;
-            const finish=mat.clone();parts.push(finish);return finish;
-          };
-          mesh.material=Array.isArray(original)?original.map(copy):copy(original);
-          restore.push(()=>{mesh.material=original;});
-        });
-        switches[key].push({node,parts,rest:node?.position.z||0,at:-10});
-      }
-      off.push(register(model,()=>beat.listening?'Listening':!state.hoofWorn||state.hoof==='idle'?deskLabel():
-        state.hoof==='complete'?'Test complete':key==='pictures'?'Mark squares under hoof':'Press caps under hoof',hit=>operate(key,hit),2.8));
-      if(key==='pictures'){
-        const button=model.getObjectByName('hoof_submit');
-        if(button)off.push(register(button,()=>beat.listening?'Listening':state.hoof==='complete'?'Test complete':'Submit selection',submit,2.8));
-      }
+      state.hoofWorn=false;pending.length=0;feedback(null);api.play('press');voice('v4_hoof_return');
+    }else{
+      worn.fit(hands);state.hoofWorn=true;feedback(null);worn.press();
+      if(state.hoof==='idle'){state.hoof='practice';voice('hoof_1');}
     }
     refresh();
-    return ()=>{
-      for(const f of off)f();
-      for(const f of restore)f();
-      for(const items of Object.values(switches))for(const item of items)for(const m of item.parts)m.dispose();
-    };
   }
-  undo.push(api.props(group,attach));
-  const ring=new T.Mesh(new T.RingGeometry(DISC_RADIUS-.010,DISC_RADIUS,48),
-    new T.MeshBasicMaterial({color:0xffe1a1,transparent:true,opacity:.89,side:T.DoubleSide,depthWrite:false}));
-  const tint=new T.Mesh(new T.CircleGeometry(DISC_RADIUS,48),
-    new T.MeshBasicMaterial({color:0xf1bd79,transparent:true,opacity:.12,side:T.DoubleSide,depthWrite:false}));
-  ring.raycast=tint.raycast=()=>{};
-  ring.name='hoof_contact_disc';ring.add(tint);ring.visible=false;
-  function leave(){
-    beat.leave();ring.visible=false;
-    assistant=false;
+  if(state.hoof==='checkbox')state.hoof='practice';
+  if(state.hoof==='pictures'&&state.hoofDeal?.length!==9){state.hoofDeal=dealHoofPhotos();state.hoofMask=0;}
+  const deskLabel=()=>state.hoofWorn?'Return the hooves':'Put on the hooves';
+  for(const n of [...hands,desk].filter(Boolean))clean.push(register(n,deskLabel,wear,3));
+  function practice(){
+    if(!state.hoofWorn){api.play('press',.42);api.say('Put the hooves on at the desk first.');return;}
+    if(state.hoof!=='practice')return;
+    pressed=clock;worn.press();state.hoof='pictures';state.hoofDeal=dealHoofPhotos();state.hoofMask=0;
+    feedback(null);refresh();voice('r5_hoof_verify');
   }
-  function tick(dt){
-    clock+=dt;
-    ring.visible=false;
-    if(camera.position.distanceToSquared(origin)>36){leave();return;}
-    const key=state.hoof;
-    const model=models[key];
-    if(!state.hoofWorn||!model)return;
-    model.updateWorldMatrix(true,false);
-    // Draw the footprint on the plane of the caps, including its overhang past the rim.
-    normal.set(0,0,1).transformDirection(model.matrixWorld);
-    plane.setFromNormalAndCoplanarPoint(normal,model.localToWorld(point.set(0,0,.14)));
-    ray.origin.copy(camera.position);camera.getWorldDirection(ray.direction);
-    if(ray.direction.dot(normal)<-.1 && ray.intersectPlane(plane,point)&&point.distanceToSquared(camera.position)<=2.8**2){
-      model.worldToLocal(point);
-      if(Math.abs(point.x)<=.66 && point.y>=-.03 && point.y<=.78){
-        if(ring.parent!==model)model.add(ring);
-        ring.position.set(point.x,point.y,.143);ring.visible=true;
-      }
+  clean.push(api.props(group,place=>{
+    const off=[];button=place('moved_button',DESK,Math.PI);button.name='hoof_practice_button';button.scale.setScalar(1.5);
+    const price=button.getObjectByName('moved_price');if(price)price.visible=false;
+    cap=button.getObjectByName('moved_cap');capRest=cap?.position.y||0;
+    let paper;cap?.traverse(n=>{if(n.isMesh&&n.material?.name==='Print')paper=n;});
+    if(paper){
+      const ink=printedPanel(T,paper,{width:384,height:128,emission:.16});off.push(()=>ink.dispose());
+      ink.draw((g,w,h)=>{g.fillStyle='#f6e8c9';g.fillRect(0,0,w,h);g.fillStyle='#234c3d';g.textAlign='center';
+        g.font='bold 88px Georgia';g.fillText('PRESS',w/2,97,w-20);});
     }
-    for(const item of switches[key])if(item.node){
-      const t=Math.min(1,(clock-item.at)/.22);
-      item.node.position.z=item.rest-.012*Math.sin(Math.PI*t);
-    }
+    off.push(register(button,'Press the large practice button',practice,3));refresh();
+    return ()=>off.reverse().forEach(f=>f());
+  }));
+  clean.push(api.annexProps(group,place=>{
+    const off=[],sign=place('annex_record',[-12.114,1.32,9.16],-Math.PI/2);sign.scale.set(2.15,.95,1);
+    write(dial(api,sign,'record_face',off,720,360),'Leaving Hoof Sciences',threshold);
+    off.push(register(sign,'Read the hoof notice',()=>api.say(threshold),2.6));
+    return ()=>off.reverse().forEach(f=>f());
+  }));
+  const radius=hoofRadius*board.pitch*2.33/board.width;
+  const ring=new T.Mesh(new T.RingGeometry(radius-.011,radius,64),
+    new T.MeshBasicMaterial({color:0xffe2a0,side:T.DoubleSide,transparent:true,opacity:.94,depthWrite:false}));
+  const fill=new T.Mesh(new T.CircleGeometry(radius,64),
+    new T.MeshBasicMaterial({color:0xffdf91,side:T.DoubleSide,transparent:true,opacity:.12,depthWrite:false}));
+  ring.name='hoof_contact_disc';ring.raycast=fill.raycast=()=>{};ring.add(fill);ring.visible=false;group.add(ring);
+  const rc=new T.Raycaster(),centre=new T.Vector2(),strikes=[],touchAt=new T.Vector3();
+  rc.far=3.1;
+  function drawRing(point,onDesk){
+    ring.position.copy(point);group.worldToLocal(ring.position);
+    if(onDesk){ring.rotation.set(-Math.PI/2,0,0);ring.position.y+=.003;ring.scale.setScalar(.77);}
+    else{ring.rotation.set(0,Math.PI,0);ring.position.z-=.009;ring.scale.setScalar(1);}
+    ring.visible=true;
   }
+  function submit(){
+    const attempt=verifyHoof(state);
+    if(!attempt)return;
+    if(attempt.correct){
+      pending.length=0;state.ticket.stamp('Hoofed');api.play('chime');feedback(null);
+      if(attempt.edge){state.ticket.book('hoof-edge','Off the edge',true);voice('v4_hoof_edge');}
+      else {state.ticket.book('hoof-human','Passed the picture test with a finger');voice('hoof_8');}
+      api.say('Test complete. Hoofed stamp issued.');
+    }else{
+      feedback({error:true});
+      api.say(state.misses>=3&&state.hoofWorn?'Please try again. Return the hooves to the desk. One finger marks one square.':'Please try again.');
+      voice(attempt.cue);
+    }
+    refresh();
+  }
+  function tap(hit){
+    if(state.hoofWorn)worn.press();else api.play('press',.42);
+    if(state.hoof!=='pictures'||!hit.uv){
+      api.say(state.hoof==='complete'?'Test complete. Hoofed stamp issued.':
+        state.hoof==='practice'?'Press the large practice button on the desk.':'Put the hooves on at the desk.');return;
+    }
+    const at=boardHit(hit.uv.x,hit.uv.y,state.hoofWorn);
+    if(!at){api.say('Aim at a picture or press Verify.');feedback({contact:0});refresh();return;}
+    if(at.verify){submit();return;}
+    const count=markHoof(state,at.mask);
+    touchAt.copy(hit.point);contactUntil=clock+.44;
+    feedback({contact:count});refresh();
+  }
+  if(face)clean.push(register(face,()=>state.hoof==='pictures'?(lastAim?.verify?'Verify':lastAim?'Mark picture squares':'Read the instructions'):
+    state.hoof==='complete'?'Read the test result':'Read the instructions',tap,3.1));
   refresh();
-  return {tick,leave,dispose(){
-    dead=true;leave();ring.removeFromParent();
-    for(const obj of [ring,tint]){obj.geometry.dispose();obj.material.dispose();}
-    for(const fn of undo.reverse())fn?.();
-    display?.dispose();
+  function tick(dt){
+    clock+=dt;ring.visible=false;lastAim=null;speak();
+
+    if(state.hoof!=='practice'&&state.hoof!=='pictures')return;
+    const practicePage=state.hoof==='practice',target=practicePage?button:face;
+    if(!target?.visible)return;
+    if(cap)cap.position.y=capRest-.012*Math.max(0,1-(clock-pressed)/.18);
+    rc.setFromCamera(centre,camera);strikes.length=0;rc.intersectObject(target,practicePage,strikes);
+    const hit=strikes[0];
+    if(hit?.uv&&!practicePage)lastAim=boardHit(hit.uv.x,hit.uv.y,state.hoofWorn);
+    if(!state.hoofWorn)return;
+    if(!practicePage&&clock<contactUntil){drawRing(touchAt,false);return;}
+    if(hit&&(practicePage||lastAim&&!lastAim.verify))drawRing(hit.point,practicePage);
+  }
+  return {tick,leave(){ring.visible=false;contactUntil=-1;pending.length=0;},dispose(){
+    dead=true;photos?.dispose();ring.removeFromParent();for(const n of [ring,fill]){n.geometry.dispose();n.material.dispose();}
+    for(const f of clean.reverse())f();
   }};
 }
-
 // These are the fitted room gloves. Keep their own small maps when the lab streams out.
-export function createWornHooves({THREE:T,scene,camera,ctx},state,lighting){
+export function createWornHooves(api,state,lighting){
+  const {THREE:T,scene,camera,ctx}=api;
   const gloves=[],resources=new Set(),surfaces=new Set(),materials=new Map(),textures=new Map(),geometries=new Map();
   const grip=new T.Quaternion().setFromEuler(new T.Euler(2.46,Math.PI,0,'XYZ'));
-  let stroke=-10,clock=0;
+  let stroke=-10,clock=0,slipping=false,clops=0;
+  const refusals=hoofRefusals(api,state,()=>strike(true));
+  function strike(slip){
+    stroke=clock;slipping=slip;
+    const take=1+clops++%3;
+    ctx.audio.play(api.assetURL('audio/step-wood-'+take+'.ogg'),{bus:'sfx',source:'expo-hooves',sourceLabel:'Hooves',gain:.72,rate:1.31});
+  }
   let room,probe=null,lastStep;
   function copyTexture(source){
     if(textures.has(source))return textures.get(source);
@@ -259,7 +205,7 @@ export function createWornHooves({THREE:T,scene,camera,ctx},state,lighting){
     }
   }
   function tick(dt){
-    clock+=dt;
+    clock+=dt;refusals.tick(dt);
     if(lastStep!==lighting.step(room))light(room,probe);
     const duration=ctx.gentle||ctx.reduced ? .72 : .46;
     const reach=Math.sin(Math.PI*Math.min(1,(clock-stroke)/duration));
@@ -278,11 +224,14 @@ export function createWornHooves({THREE:T,scene,camera,ctx},state,lighting){
         glove.position.set(i===0?-spread:spread*(1-.91*extension),-.245+.21*extension,-.57-.17*extension);
       }
       glove.scale.setScalar(.74*scale);
+      if(slipping&&i===1)glove.position.x+=((ctx.gentle||ctx.reduced) ? .035 : .125)*extension;
       glove.position.applyQuaternion(camera.quaternion).add(camera.position);
       glove.quaternion.copy(camera.quaternion).multiply(grip);
+      if(slipping&&i===1)glove.rotateZ(((ctx.gentle||ctx.reduced) ? .09 : .32)*extension);
     });
   }
-  return {fit,light,tick,press(){stroke=clock;},dispose(){
+  return {fit,light,tick,refuse:refusals.refuse,press(){strike(false);},dispose(){
     gloves.forEach(glove=>glove.removeFromParent());for(const resource of resources)resource.dispose();
   }};
 }
+
