@@ -14,6 +14,7 @@
 
 import { transmissionKind, sendNudge, editionState, expoAllowed, expoMb, isSmall } from './edition.js';
 import { TRANSMISSION_MIN_RUN_MS, LLAMA8_GAP_MS } from '../data/editions.js';
+import { realPress } from './nudges.js';   // the one press rule
 
 /** APPROVED AND FROZEN (owner 2026-11-22, handoff-1122/TC-EDITIONS-PLAN.md, third dialog, point 5). Character for
  *  character: never edit one of these without the owner. `{mb}` is the host's number (ui/edition.js expoMb). */
@@ -71,7 +72,7 @@ export function statusLine({ state, pct = 0, reason = null }) {
 }
 
 /** The card's state. kind: 'fetch' or 'nudge'. send: the host frame sender. inPress: is this the player's own press.
- *  YES and stop act only inside a press; host frames (progress, ready, failed) move the state. */
+ *  YES and stop act only inside a press (inPress(ev): ev is the press event); host frames move the state. */
 export function createTransmission({ kind, send = () => {}, inPress = () => false, ed = editionState, nudge = sendNudge }) {
   const s = { kind, state: 'offer', pct: 0, reason: null };
   const fns = new Set();
@@ -80,17 +81,17 @@ export function createTransmission({ kind, send = () => {}, inPress = () => fals
     get view() { return { ...s }; },
     onChange(fn) { fns.add(fn); return () => fns.delete(fn); },
     /** YES. fetch: one `expo-fetch` (again only after a failure or a stop). nudge: the `transmission` nudge. */
-    yes() {
-      if (!inPress()) return false;
-      if (kind === 'nudge') return nudge('transmission', { inPress, send, ed: ed() });
+    yes(ev) {
+      if (!inPress(ev)) return false;
+      if (kind === 'nudge') return nudge('transmission', { inPress: () => inPress(ev), send, ed: ed() });
       if (kind !== 'fetch' || s.state === 'fetching' || s.state === 'arrived') return false;
       send('expo-fetch');
       s.state = 'fetching'; s.pct = 0; s.reason = null;
       changed();
       return true;
     },
-    stop() {
-      if (kind !== 'fetch' || s.state !== 'fetching' || !inPress()) return false;
+    stop(ev) {
+      if (kind !== 'fetch' || s.state !== 'fetching' || !inPress(ev)) return false;
       send('expo-cancel');
       s.state = 'stopped';
       changed();
@@ -135,8 +136,6 @@ export function autoCardDue({ clock, llamas, extras, opened = {}, ed = editionSt
   return t == null || clock >= t + LLAMA8_GAP_MS ? 'llama8' : null;
 }
 
-/** A real press: the browser's own transient activation, which a script-made click does not carry. */
-const realPress = (win) => () => !!win?.navigator?.userActivation?.isActive;
 
 const CSS = `
 .tx-card .tx-size { margin: 0 0 8px; opacity: .8; font-size: .9em; }
@@ -159,7 +158,7 @@ export function mountTransmission({ doc = document, win = doc.defaultView, cards
   host = null;
   if (!doc.getElementById('tx-css')) { const st = doc.createElement('style'); st.id = 'tx-css'; st.textContent = CSS; doc.head.appendChild(st); }
   const herd = typeof llamas === 'function' ? llamas : () => llamas;
-  const inPress = realPress(win);
+  const inPress = (ev) => realPress(win, ev)();
   const offs = [];
   let kind = null, tx = null, card = null, sign = null, waiters = [];
   const opened = { transmission: null, llama8: null };   // this run's self-opened cards, by run clock
@@ -198,7 +197,7 @@ export function mountTransmission({ doc = document, win = doc.defaultView, cards
     status.setAttribute('role', 'status');
     const bar = el('div', 'tx-bar'); const fill = doc.createElement('i'); bar.appendChild(fill);
     const stop = el('button', 'tx-stop', TRANSMISSION_PLACEHOLDERS.stop); stop.type = 'button';
-    stop.addEventListener('click', () => tx.stop());
+    stop.addEventListener('click', (ev) => tx.stop(ev));
     let yesBtn = null, shutBtn = null;
     const paint = (s = tx.view) => {
       status.textContent = statusLine(s);
@@ -212,7 +211,7 @@ export function mountTransmission({ doc = document, win = doc.defaultView, cards
     card = cards.open({
       className: 'tx-card', title: w.title, body: w.body, node, front,
       buttons: [
-        { label: w.yes, keepOpen: true, onPress: () => { if (tx.yes() && kind === 'nudge') card?.close(); } },
+        { label: w.yes, keepOpen: true, onPress: (ev) => { if (tx.yes(ev) && kind === 'nudge') card?.close(); } },
         { label: w.notNow },
       ],
       onOpen: (dom) => { const row = dom.querySelectorAll?.('.card-buttons button') || []; yesBtn = row[0] || dom.querySelector('.card-buttons button'); shutBtn = row[1] || null; paint(v); },
@@ -231,7 +230,7 @@ export function mountTransmission({ doc = document, win = doc.defaultView, cards
     cards.open({
       title: P.llama8Title, body: P.llama8Body,
       buttons: [
-        { label: P.llama8Button, onPress: () => sendNudge('llama8', { inPress, send, win }) },
+        { label: P.llama8Button, onPress: (ev) => sendNudge('llama8', { inPress: realPress(win, ev), send, win }) },
         { label: TRANSMISSION_COPY.notNow },
       ],
     });

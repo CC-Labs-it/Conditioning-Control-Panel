@@ -205,7 +205,7 @@ export function openRunRecap({ cards, doc, id, run, life, hooks, audio, name = '
   if (hooks.nudge) {
     const nudgeBtn = button('rr-tool rr-nudge', side);
     nudgeBtn.textContent = NUDGE_COPY.endingButton;
-    nudgeBtn.addEventListener('click', () => hooks.nudge());
+    nudgeBtn.addEventListener('click', (ev) => hooks.nudge(ev));
   }
   const restart = h('div', 'rr-restart', null, side);
   const newRun = button('rr-newrun', restart);

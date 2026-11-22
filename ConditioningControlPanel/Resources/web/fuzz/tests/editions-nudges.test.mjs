@@ -55,7 +55,7 @@ test('wiring: small only, through ui/edition.js, never by itself', () => {
   assert.match(main, /if \(isSmall\(ed\)\) mountPauseNudge\(/);
   const recap = readFileSync(new URL('../ui/recap/recap.js', import.meta.url), 'utf8');
   assert.match(recap, /if \(hooks\.nudge\) \{/);
-  assert.match(recap, /addEventListener\('click', \(\) => hooks\.nudge\(\)\)/, 'the ending door acts only on a click');
+  assert.match(recap, /addEventListener\('click', \(ev\) => hooks\.nudge\(ev\)\)/, 'the ending door acts only on a click, with its event');
   const nudges = readFileSync(new URL('../ui/nudges.js', import.meta.url), 'utf8');
   assert.doesNotMatch(nudges, /caps\??\.edition|isSmall\(/, 'nothing here reads the edition');
 });
