@@ -16,13 +16,14 @@ export function createWalker(camera, onFootstep, onPlanterCue, claimPlanter) {
   const segment = new Line3(), bodyBox = new Box3(), face = new Vector3();
   const onBody = new Vector3(), onWall = new Vector3(), correction = new Vector3();
   const ray = new Ray(), ground = { y: 0, surface: '', id: '', collider:null };
+  const rayBox = new Box3(), rayEnd = new Vector3();
   const planter = createPlanterVisit(onPlanterCue,claimPlanter);
   let zone = '', surface = '', stride = 0, eyeY = 0;
   let supportY = 0, velocityY = 0, airborne = false;
   let support = null, takeoff = null;
 
   function add(id, group, gates = [], room = id) {
-    const meshes = [];
+    const meshes = [], bounds = new Box3();
     group.updateMatrixWorld(true);
     group.traverse(node => {
       if (!node.isMesh) return;
@@ -30,21 +31,34 @@ export function createWalker(camera, onFootstep, onPlanterCue, claimPlanter) {
       geometry.clearGroups();
       geometry.computeBoundingBox();
       const bvh = new MeshBVH(geometry);
+      bounds.union(geometry.boundingBox);
       meshes.push({ geometry, bvh, box: geometry.boundingBox, room, surface: node.userData.surface || 'stone',
         portal: node.userData.portal, label: node.userData.collider || node.name, planter:isPlanterCollider(node) });
     });
-    sectors.set(id, meshes); crossings.set(id,gates);
+    sectors.set(id, {meshes,bounds}); crossings.set(id,gates);
   }
   function remove(id) {
-    for (const item of sectors.get(id) || []) item.geometry.dispose();
+    for (const item of sectors.get(id)?.meshes || []) item.geometry.dispose();
     sectors.delete(id); crossings.delete(id);
+  }
+  function* overlapping(box) {
+    for (const sector of sectors.values()) {
+      if (!box || box.intersectsBox(sector.bounds)) yield sector.meshes;
+    }
+  }
+  // Test only loaded sectors touched by the actual reach, including adjacent rooms and stacked floors.
+  function rayBounds(path,limit) {
+    if (!Number.isFinite(limit)) return null;
+    path.at(Math.max(0,limit),rayEnd);
+    return rayBox.makeEmpty().expandByPoint(path.origin).expandByPoint(rayEnd).expandByScalar(.000001);
   }
   function floorAt(point, rise, drop, preferred) {
     ray.origin.copy(point); ray.origin.y += rise + .002;
     ray.direction.copy(down);
     let best = -Infinity;
-    for (const meshes of sectors.values()) for (const m of meshes) {
-      if (inactive(m) || !ray.intersectsBox(m.box)) continue;
+    const bounds=rayBounds(ray,rise+drop+.004);
+    for (const meshes of overlapping(bounds)) for (const m of meshes) {
+      if (inactive(m) || !bounds.intersectsBox(m.box)) continue;
       const hit = m.bvh.raycastFirst(ray, DoubleSide, 0, rise + drop + .004);
       if (!hit || Math.abs(hit.face.normal.y) < .66) continue;
       const y = hit.point.y;
@@ -58,7 +72,7 @@ export function createWalker(camera, onFootstep, onPlanterCue, claimPlanter) {
     segment.start.copy(point); segment.start.y += RADIUS + .004;
     segment.end.copy(point); segment.end.y += HEIGHT - RADIUS;
     bodyBox.makeEmpty().expandByPoint(segment.start).expandByPoint(segment.end).expandByScalar(RADIUS);
-    for (const meshes of sectors.values()) for (const m of meshes) {
+    for (const meshes of overlapping(bodyBox)) for (const m of meshes) {
       if (inactive(m) || !bodyBox.intersectsBox(m.box)) continue;
       m.bvh.shapecast({
         intersectsBounds: box => box.intersectsBox(bodyBox),
@@ -101,11 +115,7 @@ export function createWalker(camera, onFootstep, onPlanterCue, claimPlanter) {
       proposed.y = (airborne || !closeFloor) ? Math.max(feet.y,floorY) : floorY;
       // Low openings stay visible and physically too small for the player.
       ray.origin.copy(proposed); ray.origin.y += .04; ray.direction.copy(up);
-      let headroom = true;
-      for (const meshes of sectors.values()) for (const m of meshes) {
-        if (!inactive(m) && ray.intersectsBox(m.box) && m.bvh.raycastFirst(ray, DoubleSide, 0, HEIGHT - .045)) headroom = false;
-      }
-      if (!headroom) break;
+      if(solidAlong(ray,HEIGHT-.045))break;
       previous.copy(feet); feet.copy(proposed); zone = ground.id; surface = ground.surface; supportY = floorY;
       support = ground.collider;
       if (planter.released && support !== planter.support) planter.leave();
@@ -135,8 +145,9 @@ export function createWalker(camera, onFootstep, onPlanterCue, claimPlanter) {
       const cap = HEIGHT - (x || z ? .06 : 0);
       ray.origin.set(feet.x+x,feet.y+cap-.045,feet.z+z);
       ray.direction.copy(up);
-      for (const meshes of sectors.values()) for (const m of meshes) {
-        if (inactive(m) || !ray.intersectsBox(m.box)) continue;
+      const bounds=rayBounds(ray,free+.047);
+      for (const meshes of overlapping(bounds)) for (const m of meshes) {
+        if (inactive(m) || !bounds.intersectsBox(m.box)) continue;
         const hit=m.bvh.raycastFirst(ray,DoubleSide,0,free+.047);
         if (hit) free=Math.min(free,Math.max(0,hit.distance-.047));
       }
@@ -176,18 +187,23 @@ export function createWalker(camera, onFootstep, onPlanterCue, claimPlanter) {
     else eyeY += (feet.y + EYE - eyeY) * (1 - Math.exp(-18 * dt));
     camera.position.y = eyeY;
   }
-  function blocked(ray, distance, stockingShelf=false) {
-    if(doors?.blocked(ray,distance-.08))return true;
-    for (const meshes of sectors.values()) for (const m of meshes) {
-      if (stockingShelf && m.label.startsWith('shop_shelves_'))continue;
-      if (!inactive(m) && ray.intersectsBox(m.box) && m.bvh.raycastFirst(ray, DoubleSide, 0, distance - .08)) return true;
+  function solidAlong(ray,limit,stockingShelf=false) {
+    const bounds = rayBounds(ray,limit);
+    for (const meshes of overlapping(bounds)) for (const m of meshes) {
+      if (inactive(m) || (bounds && !bounds.intersectsBox(m.box))) continue;
+      if (stockingShelf && m.label.startsWith('shop_shelves_')) continue;
+      if (ray.intersectsBox(m.box) && m.bvh.raycastFirst(ray, DoubleSide, 0, limit)) return true;
     }
     return false;
   }
+  function blocked(ray, distance, stockingShelf=false) {
+    const reach = distance - .08;
+    return !!doors?.blocked(ray,reach) || solidAlong(ray,reach,stockingShelf);
+  }
   function trace(path,limit,ignore){
-    let hit=null;
-    for(const meshes of sectors.values())for(const m of meshes){
-      if(inactive(m)||ignore?.(m.label)||!path.intersectsBox(m.box))continue;
+    let hit=null;const bounds=rayBounds(path,limit);
+    for(const meshes of overlapping(bounds))for(const m of meshes){
+      if(inactive(m)||(bounds&&!bounds.intersectsBox(m.box))||ignore?.(m.label)||!path.intersectsBox(m.box))continue;
       const candidate=m.bvh.raycastFirst(path,DoubleSide,0,hit?.distance??limit);
       if(candidate)hit={point:candidate.point,normal:candidate.face.normal,distance:candidate.distance};
     }

@@ -60,14 +60,17 @@ export function createExpoMedia(ctx, root, camera, dome, { lite = false } = {}) 
     return result;
   }
   function hide(slot, release = false) {
-    slot.node.hidden = true;
+    if(!slot.node.hidden)slot.node.hidden=true;
     if (release) { slot.unmount?.(); slot.unmount = null; }
   }
   function draw() {
     if (disposed) return;
     const active = dome.inside && dome.depth > 0.75;
-    viewport.hidden = !active;
-    if (!active) { slots.forEach(slot => hide(slot, true)); pauseMedia(true); return; }
+    if (!active) {
+      if(!viewport.hidden){viewport.hidden=true;slots.forEach(slot=>hide(slot,true));}
+      pauseMedia(true);return;
+    }
+    if(viewport.hidden)viewport.hidden=false;
     camera.updateMatrixWorld(true); eye.setFromMatrixPosition(camera.matrixWorld);
     const focal = root.clientHeight * 0.5 * camera.projectionMatrix.elements[5];
     viewport.style.perspective = `${focal}px`;
@@ -98,7 +101,8 @@ export function createExpoMedia(ctx, root, camera, dome, { lite = false } = {}) 
       const occluded = blockers.some(({ owner, bounds: b }) => owner !== pane.object && b.near < bounds.far - 0.02 &&
         b.left < bounds.right && b.right > bounds.left && b.top < bounds.bottom && b.bottom > bounds.top);
       if (!inFront || occluded || bounds.right < -1 || bounds.left > 1 || bounds.bottom < -1 || bounds.top > 1) { hide(slot); continue; }
-      node.hidden = false; node.style.opacity = String(pane.opacity);
+      if(node.hidden)node.hidden=false;
+      node.style.opacity = String(pane.opacity);
       node.style.transform = `matrix3d(${cssMatrix(matrix)}) translate(-50%,-50%)`;
       if (!slot.unmount) slot.unmount = media.mount(node, { id: `expo-picture-${node.dataset.expoPicture}`, kind: 'run-picture' });
     }

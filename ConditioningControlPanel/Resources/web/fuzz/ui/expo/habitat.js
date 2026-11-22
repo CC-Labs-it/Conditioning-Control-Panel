@@ -19,6 +19,7 @@ export function habitatReel(run,file){
 
 export function humanHabitat(api,state,pressRegister){
   const {THREE:T,camera,renderer,walker,ctx,go,register}=api;
+  const projection=new T.Matrix4(),frustum=new T.Frustum();
   const reel=habitatReel(ctx.state||{},state.file),seat=new T.Vector3(20.28,1.19,11.60),standing=new T.Vector3(),monitor=new T.Vector3(18.3,1.4,11.05);
   let view=null,elapsed=0,speed=1,still=0,pending=0,frame=-1,caught=false,seated=false,insidePresses=0,tapAge=9,tokenAge=9,liveTime=0;
   function sit(){
@@ -62,9 +63,13 @@ export function humanHabitat(api,state,pressRegister){
       const band=new T.Mesh(new T.PlaneGeometry(9.18,.76),frostMat);band.position.set(18.9,1.26,9.57);
       band.renderOrder=3;group.add(band);
       undo.push(()=>{band.removeFromParent();band.geometry.dispose();frostMat.dispose();frostMap.dispose();});
+      let printedCount;
       const stateView=view={panel,face,target,feedCamera,eyeMat,frostMat,shadows:[],feed:null,overlay,eye,strip:()=>{
+        const count=state.file.taps+state.presses;
+        if(printedCount===count)return;
+        printedCount=count;
         ink.fillStyle='#16392e';ink.fillRect(0,0,512,54);ink.fillStyle='#f9f1d7';ink.font='bold 31px system-ui';
-        ink.fillText('LIVE   /   FIRST PRESS   '+(state.file.taps+state.presses).toLocaleString(),12,38,488);stripTexture.needsUpdate=true;
+        ink.fillText('LIVE   /   FIRST PRESS   '+count.toLocaleString(),12,38,488);stripTexture.needsUpdate=true;
       }};
       undo.push(()=>{stripTexture.dispose();surface.dispose();plate.geometry.dispose();});
       function clause(){placard(plaque,'Accepted clauses   /   Visitor record',state.nextClause());}
@@ -145,6 +150,9 @@ export function humanHabitat(api,state,pressRegister){
     if(!view.face)return;
     view.face.material=view.eyeMat;liveTime-=dt;
     if(liveTime>0||camera.position.distanceToSquared(monitor)>70)return;
+    camera.updateWorldMatrix(true,false);view.face.updateWorldMatrix(true,false);
+    frustum.setFromProjectionMatrix(projection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse));
+    if(!frustum.intersectsObject(view.face)){liveTime=.1;return;}
     liveTime=.34;
     const previous=renderer.getRenderTarget(),visible=view.face.visible,clear=renderer.autoClear;
     try{

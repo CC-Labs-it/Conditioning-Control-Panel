@@ -173,8 +173,13 @@ export function createProjector({group,id,scene,assetURL,lite,atlas}) {
       uniforms.newSlide.value=blank;uniforms.newDetail.value=0;uniforms.blend.value=0;
     }
     if(distance>15&&(key||nextPromise)){clearSlides();dropNext();}
+    if(!active && !level.value && uniforms.blend.value===1 && !previous){
+      uniforms.zoom.value=0;
+      return;
+    }
     const fade=1-Math.exp(-dt*(gentle?2.1:3.4));
     level.value+=((active?1:0)-level.value)*fade;
+    if(!active && level.value<.00001)level.value=0;
     uniforms.blend.value=Math.min(1,uniforms.blend.value+dt/(gentle?1.15:.68));
     if(uniforms.blend.value===1 && previous){previous.dispose();previous=null;uniforms.oldSlide.value=current||blank;uniforms.oldDetail.value=current?1:0;}
     uniforms.zoom.value=gentle||!active?0:Math.min(.04,Math.max(0,progress)*.04);

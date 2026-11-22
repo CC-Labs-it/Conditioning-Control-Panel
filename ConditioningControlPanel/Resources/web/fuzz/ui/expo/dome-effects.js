@@ -244,6 +244,7 @@ export function createDomeEffects({ctx,camera,cue,play,register,bindMedia,setSou
     for(let i=0;i<words.length;i++){
       const {node,inks,rest,scale,rotation,dir,halfWidth}=words[i];
       node.visible=inkReveal>0;
+      if(!node.visible)continue;
       for(const m of inks){
         const fade=inkReveal>0&&inkReveal<1;
         if(m.transparent!==fade){m.transparent=fade;m.needsUpdate=true;}
@@ -263,24 +264,27 @@ export function createDomeEffects({ctx,camera,cue,play,register,bindMedia,setSou
       node.rotation.copy(rotation);node.rotation.y+=loosen*.65*Math.sin(t*.45);
     }
     frames.forEach(({node,pane},i)=>{
+      if(dreams<=.008||(still&&i>=4)){node.visible=false;pane.opacity=0;return;}
       const phase=i*tau/6+motion*.025, r=4.5+(i%2)*1.25;
       node.position.set(centre.x+r*Math.cos(phase),2.16+.65*Math.sin(phase*2+i),centre.z+r*Math.sin(phase));
       // Slowly turning frames keep their picture faces within reach around either side of the orbit.
       node.rotation.y=Math.atan2(centre.x-node.position.x,centre.z-node.position.z)+.24*Math.sin(phase+i);
       const clearance=smooth(.72,1.82,node.position.distanceTo(camera.position));
-      pane.opacity=dreams*.94*clearance;node.visible=dreams>.008&&clearance>.008&&(!still||i<4);
+      pane.opacity=dreams*.94*clearance;node.visible=clearance>.008;
       node.scale.setScalar(Math.max(.001,dreams*clearance)*(1+pulse*.04));
     });
     for(const b of bubbles){
-      const {mesh,anchor,pane,i,radius,mat}=b, orbit=1.95+(i%5)*1.12, a=i*2.39996+motion*.028;
+      const {mesh,anchor,pane,i,radius,mat}=b;
+      const rise=smooth(1.8,2.8,lifetime-b.pop), grown=sky*rise;
+      mesh.visible=anchor.visible=grown>.01&&(!still||i<5);
+      if(!mesh.visible){pane.opacity=0;continue;}
+      const orbit=1.95+(i%5)*1.12,a=i*2.39996+motion*.028;
       const y=.4+((motion*(.10+i%3*.02)+i*.81)%5);
       mesh.position.set(centre.x+Math.cos(a)*orbit,y,centre.z+Math.sin(a)*orbit);
-      const rise=smooth(1.8,2.8,lifetime-b.pop), grown=sky*rise;
-      mesh.visible=grown>.01&&(!still||i<5);
       mesh.scale.setScalar(radius*(.83+.17*grown)*(1+dreams*breath*.045));
       mat.uniforms.opacity.value=grown;mat.uniforms.time.value=motion;
-      anchor.visible=mesh.visible;anchor.position.copy(mesh.position);anchor.quaternion.copy(camera.quaternion);pane.opacity=mesh.visible?dreams*.68:0;
-      if(mesh.visible&&inside&&mesh.position.distanceTo(camera.position)<radius+.22)pop(b);
+      anchor.position.copy(mesh.position);anchor.quaternion.copy(camera.quaternion);pane.opacity=dreams*.68;
+      if(inside&&mesh.position.distanceTo(camera.position)<radius+.22)pop(b);
     }
   }
   function step(dt, zone) {
@@ -306,7 +310,12 @@ export function createDomeEffects({ctx,camera,cue,play,register,bindMedia,setSou
       if(lastVisit>=60)cue('dome_leave');
     }
     if(inside||was)setSoundDepth(inside?state.depth:0);
-    if(inside||art){motion+=dt*(ctx.reduced ? .075 : ctx.gentle ? .23 : 1);update(dt);}
+    if(inside||art){
+      motion+=dt*(ctx.reduced ? .075 : ctx.gentle ? .23 : 1);
+      // Keep time continuous across the doorway. Once the empty dome has faded to
+      // its initial depth, its hidden exhibits keep their last pose until re-entry.
+      if(inside||was||before>0||art?.phrase!==behaviour.inscription)update(dt);
+    }
   }
   function hear(i){cue('dome_'+i,{kind:'ambient',zone:'dome',onStart:()=>heard.add(i)});}
   function unmount(id) {
