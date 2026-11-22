@@ -27,7 +27,7 @@ import { loadPrestige, prestigeNow, openRenewal, openSky, SKY_CURRENCY } from '.
 import { applyLooks } from './sim/prestige-looks.js';
 import { canKeepPlaying as keepPlayingOk, keepPlaying as keepPlayingRun } from './sim/prestige-endings.js';   // Endless (onemore)
 import { sealedFor, showSeal } from './ui/seal.js';
-import { setEdition } from './ui/edition.js';
+import { setEdition, expoArrived } from './ui/edition.js';
 import { mountLlamaPen } from './ui/llama-pen.js';
 import { mountHomeTip } from './ui/phone.js';
 import { previewBarAllowed } from './ui/preview-bar-model.js';
@@ -80,6 +80,9 @@ let preferenceStorage;
 try { preferenceStorage = window.localStorage; } catch { preferenceStorage = memoryStorage(); }
 
 /* Prime only until the anniversary (ui/seal.js): no Prime host, no game, just the notice. ?seal=1 shows it on a local preview. */
+/* The Expo download landed mid-run (CONTRACT.md 6.5): the edition switch learns it here, first. Cards that show the
+ * progress listen for the same frame on their own. A base the switch refuses changes nothing. */
+bridge.on('expo-ready', (frame) => { expoArrived(frame?.base); });
 bridge.boot({ onInit: (init) => {
   /* Small or full (ui/edition.js): read once here, before anything draws. */
   setEdition(init, { hostname: location.hostname, search: location.search, hosted: bridge.isHosted });

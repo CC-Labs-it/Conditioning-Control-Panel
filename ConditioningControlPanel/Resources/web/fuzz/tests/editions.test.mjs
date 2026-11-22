@@ -268,6 +268,14 @@ test('main.js reads the edition once at boot, in front of the seal and the game'
   assert.ok(at < main.indexOf('function start(init)'), 'before the game');
 });
 
+test('main.js hands the host\'s expo-ready to the switch, wired before boot so no frame is missed', () => {
+  const main = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
+  const at = main.indexOf("bridge.on('expo-ready', (frame) => { expoArrived(frame?.base); });");
+  assert.ok(at > 0, 'the frame reaches expoArrived');
+  assert.ok(at < main.indexOf('bridge.boot('), 'registered before the bridge boots');
+  assert.match(main, /import \{[^}]*\bexpoArrived\b[^}]*\} from '\.\/ui\/edition\.js';/);
+});
+
 test('ui/edition.js is the one reader: no other module looks at caps.edition, caps.expo or caps.saveSlot', () => {
   const root = new URL('../', import.meta.url);
   const skip = /^(tests|dev|vendor|node_modules)[\\/]/;
