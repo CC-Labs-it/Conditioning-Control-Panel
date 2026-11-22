@@ -14,6 +14,22 @@ try{
   const name=phone?'touch':'desktop',ctx=await browser.newContext({viewport:phone?{width:393,height:852}:{width:1440,height:900},
     hasTouch:phone,isMobile:phone,reducedMotion:phone?'reduce':'no-preference'});
   await installGameAudio(ctx);const page=await ctx.newPage();page.on('pageerror',e=>proof.errors.push(e.message));
+  await ctx.addInitScript(() => {
+    const media = new Set(), events = [], original = HTMLMediaElement.prototype.play;
+    window.expoVoiceAudit = {events, maximum:0, maxQueue:0};
+    HTMLMediaElement.prototype.play = function(...args) {
+      if (this.src.includes('/assets/expo/narration/') && !media.has(this)) {
+        media.add(this);
+        const id = this.src.split('/').pop().replace(/\.mp3$/, '');
+        for (const type of ['playing','ended']) this.addEventListener(type, () => {
+          const live = Array.from(media).filter(el => !el.paused && !el.ended).length;
+          window.expoVoiceAudit.maximum = Math.max(window.expoVoiceAudit.maximum,live);
+          events.push({type,id,seconds:this.currentTime,hoof:window.__expo?.exhibits.state.hoof});
+        });
+      }
+      return original.apply(this,args);
+    };
+  });
   await page.goto(base+'dev/play-ending.html?end=ll_end&pictures=none&herd=12');
   await page.getByRole('button',{name:'Play Llama Expo 2037'}).click();
   const f=page.frames().find(fr=>fr.url().includes('/fuzz/index.html'));await f.locator('.expo-worm #btn').click();
@@ -67,12 +83,23 @@ try{
     const end=await f.evaluate(zone=>{const e=__expo;return {state:e.exhibits.state.hoof,misses:e.exhibits.state.misses,
       taps:e.exhibits.state.taps,caps:e.buttons().filter(c=>c.zone===zone)};},zone);
     if(zone==='hoof'){
-      assert.equal(end.misses,5);assert.equal(end.state,'change');
-      await f.waitForFunction(()=>__expo.exhibits.state.hoof==='pictures',null,{timeout:6000});
+      assert.equal(end.misses,0);assert.equal(end.state,'idle');
+      await f.waitForFunction(()=>__expo.narrationState().voice.id==='hoof_1',null,{timeout:45000});
+      await page.screenshot({path:path.join(out,name+'-hoof-listening.jpg'),quality:89});
+      await f.waitForFunction(()=>__expo.exhibits.state.hoof==='checkbox',null,{timeout:25000});
+      for(let i=0;i<count;i++)await use();
+      assert.equal(await f.evaluate(()=>__expo.exhibits.state.misses),0);
+      await f.waitForFunction(()=>__expo.exhibits.state.misses===1,null,{timeout:15000});
+      const audio=await f.evaluate(()=>window.expoVoiceAudit);
+      const hoof=audio.events.filter(e=>['hoof_1','hoof_2','hoof_3'].includes(e.id));
+      assert.equal(audio.maximum,1);
+      assert.deepEqual(hoof.map(e=>e.type+' '+e.id),['playing hoof_1','ended hoof_1','playing hoof_2','ended hoof_2','playing hoof_3','ended hoof_3']);
+      assert.equal(hoof.find(e=>e.id==='hoof_2'&&e.type==='playing').hoof,'idle');
+      visit.hoofAudio=audio;
     }else assert.equal(end.taps-start.taps,count);
     (visit.rapid||=[]).push({zone,count,start,end});
   }
-  await rapid('hoof',[-18.42,0,8.93],[-18.4,1.77,10.468],6);
+  await rapid('hoof',[-18.42,0,8.93],[-18.4,1.77,10.468],5);
   await rapid('habitat',[19.4,0,8.13],[19.40,1.56,9.55],10);
   if(process.env.RAPID_ONLY==='1'){await ctx.close();continue;}
   await measure('hall','expo_replay_ex_press',[-2.409,0,-6.652]);

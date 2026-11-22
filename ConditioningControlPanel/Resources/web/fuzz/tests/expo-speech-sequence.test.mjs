@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSpeechSequence, createExhibitBeat } from '../ui/expo/speech-sequence.js';
-import { createVisit } from '../ui/expo/visit.js';
+import { hoofAttempt } from '../ui/expo/hoof-lab.js';
 
 function studio(){
   let clock=0, zone='hoof', voice=null;
@@ -52,8 +52,11 @@ test('pause, resume, Panic and duplicate native end events keep a single speaker
 });
 
 test('five fast hoof presses and elapsed time cannot get the display ahead of the recording',async()=>{
-  const {s,cue,started}=studio(),beat=createExhibitBeat(cue),visit=createVisit({state:{}});
-  const press=()=>{const step=visit.useHoof();return beat.run(step.lines,{zone:'hoof'},()=>visit.finishHoof(step));};
+  const {s,cue,started}=studio(),beat=createExhibitBeat(cue),visit={hoof:'idle',misses:0};
+  const press=()=>{
+    const step=visit.hoof==='idle'?{lines:['hoof_1','hoof_2'],page:'checkbox',misses:0}:hoofAttempt(4,visit.misses);
+    return beat.run(step.lines,{zone:'hoof'},()=>{visit.hoof=step.page;visit.misses=step.misses;});
+  };
   const first=press();
   for(let i=0;i<5;i++)assert.equal(await press(),false);
   assert.deepEqual(started,['hoof_1']);assert.equal(visit.hoof,'idle');assert.equal(s.queue.length,0);

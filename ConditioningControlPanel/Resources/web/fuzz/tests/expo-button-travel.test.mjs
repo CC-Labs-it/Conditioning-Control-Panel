@@ -67,12 +67,12 @@ test('both portrait stand caps use the existing replay with independent native t
   buttons.tick(.4);assert(buttons.debug().every(c=>c.travel===0));
   buttons.unmount('twelve');assert.equal(buttons.resolve(keys[1]).length,0);
 });
-test('every Hoof attempt and glass tap reaches the exhibit during a single mechanical excursion',()=>{
+test('each interaction reaches the exhibit during a single mechanical excursion',()=>{
   const {buttons,surface,caps}=desk(),visit=createVisit({state:{}});
-  const hit={object:caps[0]},hoof=buttons.bind(surface,()=>visit.useHoof());
+  let inputs=0;
+  const hit={object:caps[0]},hoof=buttons.bind(surface,()=>++inputs);
   for(let i=0;i<6;i++)hoof.activate(hit);
-  assert.equal(visit.misses,5);assert.equal(visit.hoof,'change');visit.tickHoof(2.7);
-  assert.equal(visit.hoof,'pictures');assert.equal(buttons.debug()[0].pressed,1);
+  assert.equal(inputs,6);assert.equal(buttons.debug()[0].pressed,1);
   buttons.tick(.4);
   const glass=buttons.bind(surface,()=>visit.glass()),cues=[];
   for(let i=0;i<10;i++)cues.push(glass.activate(hit));

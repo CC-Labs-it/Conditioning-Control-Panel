@@ -10,6 +10,7 @@ import { assetURL, createZones, loadPlan } from './zones.js';
 import { createPost } from './post.js';
 import { createSound } from './audio.js';
 import { createExhibits } from './exhibits.js';
+import { needsFinger } from './hoof-lab.js';
 import { createExpoMedia } from './media-panes.js';
 import { createDomeEffects } from './dome-effects.js';
 import { groupPhotograph } from './group-photo.js';
@@ -142,6 +143,9 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       if (!ctx.paused && !doc.hidden && walker.stepOffPlanter()) { updatePrompt(); return true; }
       const target = targetAt(point);
       if (target) {
+        if(exhibits.state.hoofWorn&&needsFinger(target.action.owner.name)){
+          say('This button needs a finger.');narration.cue('v4_press_hoof',{kind:'react',exhibit:'hooves'});return true;
+        }
         actionSerial++;pressedUntil=elapsed+.19; aim.dataset.pressed=ctx.gentle||ctx.reduced?'gentle':'full';
         target.action.callback(target.hit);
       }

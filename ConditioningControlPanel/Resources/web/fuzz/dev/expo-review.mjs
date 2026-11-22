@@ -125,15 +125,17 @@ try {
         await page.waitForTimeout(1100);
       }
       if(zone==='hoof'){
-        const consoleAt=[-18.42,0,8.93],consoleLook=[-18.4,1.77,10.468];
-        if(n===7)await useAt(consoleAt,consoleLook,'Try',1);
+        const consoleAt=[-18.4,0,8.4],centre=[-18.4,1.58,9.84];
+        if(n===7){
+          await useAt(consoleAt,centre,'hooves');
+          await frame.waitForFunction(()=>__expo.exhibits.state.hoof==='checkbox');
+        }
         if(n===9){
-          await useAt(consoleAt,consoleLook,'Try',5);
+          await useAt(consoleAt,[-18.13,1.84,9.84],'caps');
           await frame.waitForFunction(()=>__expo.exhibits.state.hoof==='pictures');
         }
         if(n===10){
-          await useAt(consoleAt,[-18.4,1.67,10.454],'picture',1);
-          await frame.waitForFunction(()=>__expo.exhibits.state.hoof==='assistant');
+          await useAt(consoleAt,[-18.79,1.57,9.84],'Submit');
         }
         if(n===11)await frame.waitForFunction(()=>__expo.exhibits.state.hoof==='complete');
       }

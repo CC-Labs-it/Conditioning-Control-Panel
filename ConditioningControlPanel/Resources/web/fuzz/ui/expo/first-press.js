@@ -61,13 +61,13 @@ export function firstPress(api,state){
       if(id==='hall'){
         v.posts=[-1,1].map(sign=>place('rope_post',[sign,0,-7.38]));
         v.span=place('rope_span',[0,0,-7.38]);v.span.scale.y=.46;
-        v.note=place('rope_notice',[2.12,0,-7.42]);off.push(api.register(v.note,'Read the notice',()=>api.say('Please respect the rope around the notice.')));
+        v.note=place('rope_notice',[2.12,0,-7.42]);off.push(api.register(v.note,()=>state.carry?.key==='rope-post'?'Return the rope post':'Read the notice',()=>{if(api.drop?.('rope-post'))carriedPost=false;else api.say('Please respect the rope around the notice.');}));
         v.glass=place('sealed_glass',[-1.55,.984,-8.96]);
         const box=new T.Mesh(new T.BoxGeometry(2,.29,.055));box.name='First Press cord';box.position.set(0,.145,-7.38);
         api.walker.add('first-press-cord',box,[],'hall');box.geometry.dispose();box.material.dispose();
         off.push(()=>api.walker.remove('first-press-cord'));
         off.push(api.register(v.posts[0],'Carry the rope post',()=>{
-          if(state.carry || carriedPost){api.say('The post has already made room.');return;}
+          if(state.carry){api.say('Your hand is occupied.');return;}
           carriedPost=true;state.ticket.book('rope-post','Removed a rope post',true);cue('v4_post_taken');api.hold?.('rope-post',v.posts[0],'Rope post');
         }));
       }

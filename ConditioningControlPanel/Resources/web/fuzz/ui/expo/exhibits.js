@@ -1,8 +1,9 @@
+import { visitorHands } from './carried.js';
 import { firstPress } from './first-press.js';
 import { narratorAwareness } from './awareness.js';
 import { livePanel, placard, runMonitor, terminal } from './display.js';
 import { createVisit } from './visit.js';
-import { createExhibitBeat } from './speech-sequence.js';
+import { createWornHooves, mountHoofLab } from './hoof-lab.js';
 import { createDoorGlass } from './door-glass.js';
 import {mountShopDoor} from './shop-door.js';
 import { mountAquariumLife } from './aquarium-life.js';
@@ -16,7 +17,8 @@ export function createExhibits(api) {
   const state = createVisit(ctx), zones = new Map();
   let here = '', hudClock = 0, pending = [], stopShown = -20, returning = false, departureDone=false, disposed=false;
   const cue = api.cue, awareness=narratorAwareness(state,cue);
-  const founding=firstPress(api,state);
+  const hands=visitorHands(api,state);api.hold=hands.hold;api.drop=hands.drop;
+  const founding=firstPress(api,state),worn=createWornHooves(api,state);
   function once(id) {
     if (!state.heard.has(id)) cue(id,{kind:'ambient',onStart:()=>state.heard.add(id)});
   }
@@ -48,50 +50,7 @@ export function createExhibits(api) {
     }
     founding.mount(id,group,bind,surface,clean);
     if (id==='hoof') {
-      const panel = surface('hoof_display',{emission:.48});
-      ui.hands=['hoof_hand_left','hoof_hand_right'].map(obj).filter(Boolean);
-      ui.human=obj('hoof_staff'); ui.photos=obj('hoof_mosaic');
-      ui.grip=new THREE.Quaternion().setFromEuler(new THREE.Euler(2.46,Math.PI,0,'XYZ'));
-      ui.worn=ui.hands.map(hand=>{
-        const glove=hand.clone(true);
-        glove.position.set(0,0,0);glove.scale.setScalar(.74);glove.visible=false;
-        api.scene.add(glove);clean.push(()=>glove.removeFromParent());return glove;
-      });
-      ui.refresh=()=>{
-        const page=state.hoof;
-        for(const hand of ui.hands)hand.visible=page==='idle'||page==='complete';
-        if(ui.human)ui.human.visible=page==='assistant'||page==='complete';
-        if(ui.photos)ui.photos.visible=page==='pictures'||page==='failed';
-        const rows = {
-          idle:['Fit the hooves to begin.'], checkbox:state.misses ? ['[X]   [X]','[X]   [X]'] : ['[ ]   [ ]','[ ]   [ ]'],
-          change:['[X]   [X]','[X]   [X]'], pictures:['Select every square without a llama.'],
-          failed:['Result: 0 eligible squares.'], assistant:['Human assistance requested.'], complete:['[✓]   [ ]','[ ]   [ ]']
-        };
-        terminal(panel,{title:'Tick one box',rows:rows[page],pictureGrid:!!ui.photos?.visible,
-          foot:page==='complete'?'This is why.':page==='idle'?'Applied Sciences  /  Hoof Simulator':'Human Interface Programme',good:page==='complete'});
-      };
-      if(ui.human)ui.human.userData.expoRest=ui.human.position.clone();
-      ui.beat=createExhibitBeat(cue);
-      clean.push(()=>ui.beat.leave());
-      ui.runStep=step=>{
-        if(!step||ui.beat.listening)return;
-        ui.origin=camera.position.clone();
-        void ui.beat.run(step.lines,{exhibit:'hoof',zone:id,position:ui.origin},()=>{
-          state.finishHoof(step);ui.refresh();
-        });
-      };
-      const use=()=>{
-        if(ui.beat.listening)return;
-        const step=state.useHoof();
-        if(!step)return;
-        if(state.hoof==='checkbox'||state.hoof==='pictures')ui.lastAttempt=hudClock;
-        play('press');ui.runStep(step);
-      };
-      const label=text=>()=>ui.beat.listening?'Listening':text;
-      for(const name of ['hoof_hand_left','hoof_hand_right'])bind(name,label('Put on the hooves'),use);
-      bind('hoof_console',label('Try the console'),use);bind('hoof_display',label('Try the test'),use);
-      bind('hoof_mosaic',label('Submit picture test'),use);
-      ui.refresh();
+      ui.lab=mountHoofLab(api,group,state,worn);clean.push(ui.lab.dispose);
     }
     if (id==='habitat') {
       const display=surface('habitat_display'), clauses=surface('habitat_plaque');
@@ -181,14 +140,20 @@ export function createExhibits(api) {
       const readout=surface('turnstile_counter',{width:672,height:672});
       const tally=()=>readout?.draw((g,w,h)=>{
         g.fillStyle='#153e35';g.fillRect(0,0,w,h);g.textAlign='center';
-        g.fillStyle='#f3edda';g.font='bold 60px Georgia,serif';g.fillText('Human visitor',w/2,125);
+        g.fillStyle='#f3edda';g.font='bold 60px Georgia,serif';g.fillText(state.hoofAdmitted?'Llama visitor':'Human visitor',w/2,125);
         g.font='40px Georgia,serif';g.fillText('no.',w/2,203);
         g.fillStyle='#113229';g.fillRect(62,233,w-124,225);
         g.fillStyle='#d6df9c';g.font='bold 180px Consolas,monospace';g.fillText(state.turnstile?'1':'0',w/2,417);
         g.fillStyle='#e4dbc1';g.font='48px Georgia,serif';g.fillText(ui.again?'(again)':'(today)',w/2,563);
       });
       ui.tally=tally;tally();
-      ui.count=()=>{if(state.turnstile)return;state.turnstile=true;state.ticket.issue();ui.turn=0;tally();play('turnstile');cue('v4_ticket',{kind:'beat',zone:id,exhibit:'turnstile'});};
+      ui.count=()=>{
+        if(state.turnstile && state.hoofAdmitted===state.hoofWorn)return;
+        state.turnstile=true;state.hoofAdmitted=state.hoofWorn;state.ticket.issue();
+        ui.turn=0;tally();play('turnstile');
+        if(state.hoofWorn)state.ticket.book('hoof-admitted','Admitted as a llama',true);
+        cue(state.hoofWorn?'v4_hoof_arrival':'v4_ticket',{kind:'beat',zone:id,exhibit:'turnstile'});
+      };
       ui.turnstile=bind('turnstile_arm','Pass the turnstile',ui.count);
       if(ui.turnstile){
         const arm=ui.turnstile,data=arm.userData;
@@ -217,9 +182,9 @@ export function createExhibits(api) {
   function leave(){if(returning&&!disposed){returning=false;exit();}}
   function enter(id) {
     if(id===here)return;
-    zones.get(here)?.ui.beat?.leave();
-    const worn=zones.get('hoof')?.ui.worn;
-    if(worn)for(const glove of worn)glove.visible=false;
+    zones.get(here)?.ui.lab?.leave();
+    if(here==='hoof'&&state.hoofWorn&&state.ticket.book('hoof-out','Left wearing the hooves',true))cue('v4_hoof_out',{kind:'beat',zone:id,exhibit:'hooves'});
+    worn.light(zones.get(id)?.group);
     here=id;awareness.enter(id);
     if(hallCues[id])once(hallCues[id]);
     if(id==='twelve' && state.file.herd.length===12)later('pa_hall4_full',6);
@@ -227,8 +192,9 @@ export function createExhibits(api) {
   }
   function tick(dt,id) {
     if(ctx.paused)return;
+    worn.tick(dt);
     if(returning&&departureDone){leave();return;}
-    hudClock+=dt;awareness.tick(dt,id,camera,api.actionSerial());
+    hands.tick();hudClock+=dt;awareness.tick(dt,id,camera,api.actionSerial());
     if(hudClock>=900)once('pa_closing');
     pending=pending.filter(event=>{
       if(event.zone!==here)return false;
@@ -251,20 +217,7 @@ export function createExhibits(api) {
       if(release)ui.keyHeld=false;
       if(release || Math.floor(state.habitatTime)!==old)ui.refresh();
     }
-    if(id==='hoof') {
-      if(ui.origin && camera.position.distanceToSquared(ui.origin)>36)ui.beat.leave();
-      else if(!ui.beat.listening)ui.runStep(state.tickHoof(dt));
-      ui.worn.forEach((glove,i)=>{
-        glove.visible=!['idle','complete'].includes(state.hoof);
-        const spread=Math.min(.34,.24*camera.aspect);
-        const duration=(ctx.gentle||ctx.reduced) ? .72 : .46;
-        const t=clamp((hudClock-(ui.lastAttempt??-10))/duration);
-        const reach=i===1?Math.sin(Math.PI*t):0;
-        glove.position.set(i===0?-spread:spread*(1-.91*reach),-.245+.21*reach,-.57-.17*reach)
-          .applyQuaternion(camera.quaternion).add(camera.position);
-        glove.quaternion.copy(camera.quaternion).multiply(ui.grip);
-      });
-      if(ui.human && state.hoof==='assistant')ui.human.position.x=ui.human.userData.expoRest.x-.94*(1-clamp(state.hoofTime/1.7));}
+    if(id==='hoof')ui.lab?.tick(dt);
     if(id==='twelve' && state.file.herd.length===12 && ui.photo){
       if(Math.hypot(camera.position.x,camera.position.z+25.15)<4||ui.aperture>0)
         ui.aperture=clamp(ui.aperture+dt/(ctx.gentle||ctx.reduced?2.8:1.5));
@@ -294,7 +247,8 @@ export function createExhibits(api) {
       const z=camera.position.z;
       if(Math.abs(camera.position.x)<1.05 && camera.position.y<2.1 && ui.lastZ>=35.33 && z<=35.33)ui.count();
       if(Math.abs(camera.position.x)<1.05 && camera.position.y<2.1 && state.turnstile && ui.lastZ<35.33 && z>=35.33){
-        state.ticket.book('unarrived','Un-arrived',true);cue('v4_wrong_way',{kind:'react',exhibit:'turnstile'});
+        if(state.hoofWorn)ui.count();
+        else{state.ticket.book('unarrived','Un-arrived',true);cue('v4_wrong_way',{kind:'react',exhibit:'turnstile'});}
         ui.again=true;ui.tally?.();
       }
       ui.lastZ=z;
@@ -304,7 +258,7 @@ export function createExhibits(api) {
       }
     }
   }
-  const dispose=()=>{disposed=true;for(const id of [...zones.keys()])unmount(id);pending=[];};
+  const dispose=()=>{hands.dispose();disposed=true;for(const id of [...zones.keys()])unmount(id);pending=[];};
   function setTurnstileAngle(degrees){
     const ui=zones.get('atrium')?.ui;if(!ui?.setAngle)return false;
     ui.inspectionAngle=Number.isFinite(degrees)?degrees:null;
