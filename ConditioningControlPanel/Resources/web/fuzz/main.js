@@ -13,7 +13,8 @@ import { createKit } from './audio/kit.js';
 import * as E from './sim/economy.js';
 import { CHAIN as EMI_UPGRADES } from './sim/takeover.js';  // featured after the pick only: go_tx is a fate seed and sits level with the others
 import { MOODS, rollMood } from './sim/moods.js';
-import { createLife, forget, load, parse, serialize, store, JOURNEY_PREVIEW, PLAYER_PREVIEW, SAVE_KEY } from './sim/save.js';
+import { createLife, forget, load, parse, serialize, store, JOURNEY_PREVIEW, PLAYER_PREVIEW, SAVE_KEY, sleepingSky, saveSleepDue } from './sim/save.js';
+import { mountSaveSleep, openSkyAsleep } from './ui/save-sleep.js';   // small: the save-sleep note and the asleep Sky card
 import { createUi } from './ui/app.js';
 import { isKineticWave } from './ui/kinetic-waves.js';
 import { createEngine } from './ui/engine.js';
@@ -148,6 +149,10 @@ function start(init) {
   /* Nothing is written until the window is accepted: a declined player leaves no save, and a returning one keeps theirs as it was. */
   let accepted = devDoor || newRunReload;
   if (skyVisit) leaving = true;   // the run under a reopened Sky is a stand-in: it is never saved
+  /* Small (sim/save.js sleepingSky): an open Sky visit sleeps. The run here is a stand-in, never saved, until the player's
+     own New run keeps it, with extras.sky written back untouched (owner 2026-11-22). */
+  const skySleeps = sleepingSky(saved, ed);
+  if (skySleeps) leaving = true;
   const persist = () => {
     if (leaving || !accepted) return;
     if (refillWallet && run.fuzz < previewFunds) E.lump(run, previewFunds-run.fuzz, 'dev');
@@ -354,6 +359,8 @@ function start(init) {
   const go = () => {
     bindPalette(engine, document);
     previewBar();
+    /* Small: once per save, a quiet note that some of it sleeps here (sim/save.js saveSleepDue, extras.sleepSeen). */
+    if (saveSleepDue(saved, ed, extras)) mountSaveSleep({ doc: document, win: window, extras, send: bridge.send, ed, gentle: ui.gentle, reduced: ui.reduced, save: persist });
     playing = true;
     if (run.ended) { engine.end(run.ended.id, { restored: true }); ui.start(); return; }
     syncMedia();
@@ -404,6 +411,8 @@ function start(init) {
     });
   }
   if (skyVisit) reopenSky();
+  else if (skySleeps) openSkyAsleep({ cards: ui.cards, win: window, send: bridge.send, ed,
+    newRun: () => { leaving = true; extras.again = 1; store(storage, run, life, extras); location.reload(); } });
   else if (skyDemo && renewal) {
     const P = prestigeNow();
     const p = P.createPrestige();

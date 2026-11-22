@@ -124,6 +124,7 @@ export function mountPreviewBar({ doc = document, win = doc.defaultView, engine,
   };
   const [herdL, herdIn] = num('Herd', HERD_MIN, HERD_MAX, Math.max(HERD_MIN, Number(life.llamas) || HERD_MIN), (n) => setHerd(n));
   const [depthL, depthIn] = num('Depth', 0, MAX_DEPTH, Number(life.prestige?.depth) || 0, (n) => setDepth(n));
+  if (E.runEdition(run())) depthL.hidden = true;   // small: no Depth to set
   const reset = b('Reset save');
   reset.addEventListener('click', () => {
     if (!reset.dataset.sure) { reset.dataset.sure = '1'; reset.textContent = 'Sure? Press again'; return; }
@@ -260,6 +261,7 @@ export function mountPreviewBar({ doc = document, win = doc.defaultView, engine,
     return k;
   }
   function setDepth(d) {
+    if (E.runEdition(run())) return;   // small: Renewal sleeps, the dev bar never writes it
     const P = prestigeNow();
     const p = depthSetup(d, P.createPrestige());
     life.prestige = p;
