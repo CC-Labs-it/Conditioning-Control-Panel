@@ -1,7 +1,7 @@
 import { COUNTERFOILS } from './ticket.js';
 
 const instructions = {
-  chronology:'Corrections Desk. Hang the photographs.', forum:'Stand on the Agenda plate.',
+  chronology:'Corrections Desk. Hang the photographs.',
   commons:'Take your place on the Rematch green.', aquarium:'The gallery has seating for a ray.',
   habitat:'Visitor feeding times are at your discretion.', twelve:'The individual exhibits are open.',
   secret:'Follow the wool. Read the clauses.', catwalk:'The dome is below the catwalk.',
@@ -10,6 +10,12 @@ const instructions = {
 export function visitDirection(route,story,room,position,visit) {
   if(!room)return '';
   if(!visit.ticket?.issued && room==='atrium')return 'Pass the turnstile for your ticket.';
+  if(room==='forum'){
+    const elapsed=Math.floor(visit.meetingSeconds||0);
+    if(elapsed>=40)return 'Attendance recorded. The meeting gate is open.';
+    if(elapsed>0)return 'Stand still. The meeting gate opens in '+(40-elapsed)+' s.';
+    return 'Stand still on the green floor disc for 40 seconds to open the gate.';
+  }
   if(room==='hall')return visit.presses>=25?'Wait beside DO PRESS. The original plinth can seal it.':'First Press. Please observe the sign.';
   if(room==='hoof')return visit.hoof==='pictures'?'Submit your choice on the picture grid.':'Applied Hoof Sciences. Fit or return your hooves.';
   if(room==='shop'){

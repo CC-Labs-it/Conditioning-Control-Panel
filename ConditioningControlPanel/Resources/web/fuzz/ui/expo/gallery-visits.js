@@ -1,4 +1,5 @@
 import {dial,write} from './staff-fixtures.js';
+import {printedPanel} from './display.js';
 
 const photographs=[
   ['flight','First flight'],['loch','The loch survey'],['summit','The summit'],['woods','The woodland census'],['moon','Lunar arrival']
@@ -31,22 +32,33 @@ export function galleryVisits(api,state){
   const voice=(key,zone,kind='react')=>api.cue('v4_'+key,{zone,kind,exhibit:zone});
   function mount(id,group,clean){
     if(id==='chronology')clean.push(api.annexProps(group,place=>{
-      const off=[],items=[],hooks=[],records=[],desk=place('annex_corrections_desk',[5.38,0,49.5],Math.PI/2);
-      const sign=place('annex_record',[5.39,.85,51.38],Math.PI/2);sign.scale.set(.75,.58,1);
+      // The two clear east-wall bays keep the desk and its hanging rail across the aisle from the signal racks.
+      const wallYaw=-Math.PI/2;
+      const off=[],items=[],hooks=[],records=[];
+      const desk=place('annex_corrections_desk',[10.61,0,46.85],wallYaw);
+      const printSpacing=.69;
+      desk.scale.x=printSpacing/.629; // Match the five brass rests to the framed prints.
+      const sign=place('annex_record',[11.077,1.52,desk.position.z],wallYaw);sign.scale.set(1.45,.62,1);
       write(dial(api,sign,'record_face',off),'Corrections Desk','Hang the photographs.','Archive accessions   /   Either face accepted');
       function update(){
         for(let i=0;i<5;i++){
           const key='print-'+i,slot=hung.findIndex(row=>row?.i===i),item=items[i];
           item.visible=state.carry?.key!==key;
-          if(slot>=0){const h=hooks[slot];item.position.set(h.position.x+.10,h.position.y-.307,h.position.z);
-            item.rotation.set(0,Math.PI/2+(hung[slot].back?Math.PI:0),0);}
-          else {item.position.set(5.4,.84,49.5+(i-2)*.65);item.rotation.set(-.04,Math.PI/2,0);}
+          if(slot>=0){
+            const hook=hooks[slot],faceIn=hung[slot].back;
+            const cordOffset=faceIn ? .041 : .129;
+            item.position.set(hook.position.x-cordOffset,hook.position.y-.311,hook.position.z);
+            item.rotation.set(0,wallYaw+(faceIn?Math.PI:0),0);
+          }else{
+            item.position.set(desk.position.x+.195,.845,desk.position.z+(i-2)*printSpacing);
+            item.rotation.set(-.12,wallYaw,0,'YXZ');
+          }
           const row=hung[i];write(records[i],row?ordinals[row.order]:'Corrections Desk',row?(row.back?'Withheld by the visitor.':photographs[row.i][1]+'. As filed.'):'Empty hook','ACCESSION   '+String(i+1).padStart(2,'0'));
         }
       }
       for(let i=0;i<5;i++){
-        const [kind,label]=photographs[i],z=53.05+i*.86,h=place('annex_hook',[4.65,1.8,z],Math.PI/2);
-        hooks.push(h);const plaque=place('annex_record',[4.80,1.035,z],Math.PI/2);plaque.scale.y=.54;
+        const [kind,label]=photographs[i],z=50.59+i*.86,h=place('annex_hook',[11.066,1.8,z],wallYaw);
+        hooks.push(h);const plaque=place('annex_record',[11.077,1.035,z],wallYaw);plaque.scale.y=.54;
         records.push(dial(api,plaque,'record_face',off,640,380));
         const item=place('annex_photo_'+kind,[0,0,0]);items.push(item);
         off.push(api.register(item,'Carry '+label,()=>{
@@ -68,15 +80,29 @@ export function galleryVisits(api,state){
       update();return ()=>off.reverse().forEach(f=>f());
     }));
     if(id==='forum')clean.push(api.annexProps(group,place=>{
-      const off=[],plate=place('annex_agenda',[-26,0,103]),notice=place('annex_record',[-26.9,.92,103.92]);
-      const panel=dial(api,notice,'record_face',off);const leaves=[];
+      const off=[],plate=place('annex_agenda',[-26,0,103],Math.PI/2);
+      const notice=place('annex_sign',[-26.85,0,103.91],1.96);
+      notice.scale.set(1.64,1.45,1.30);
+      const panel=dial(api,notice,'sign_face',off,960,420),leaves=[];
+      plate.traverse(mesh=>{
+        if(!mesh.isMesh||mesh.material?.name!=='Print')return;
+        const label=printedPanel(T,mesh,{width:640,height:240,emission:.16});
+        label.draw((g,w,h)=>{
+          g.fillStyle='#184638';g.fillRect(0,0,w,h);g.textAlign='center';
+          g.fillStyle='#f3ddb2';g.font='bold 44px Georgia';g.fillText('ATTENDANCE',w/2,69);
+          g.fillStyle='#fff4d9';g.font='bold 98px Georgia';g.fillText('Stand here',w/2,180,w-32);
+        });
+        off.push(()=>label.dispose());
+      });
       // A central meeting aisle keeps the route back to the entrance open.
       for(const [x,z,r] of [[-29.4,101.77,-Math.PI/2],[-29.4,104.23,Math.PI/2]]){
         const n=place('annex_forum_leaf',[x,0,z],r);leaves.push([n,r]);
       }
       const block=new T.Mesh(new T.BoxGeometry(.10,.99,2.46));block.name='Meeting gate';block.position.set(-29.4,.495,103);
       api.walker.add('agenda-gate',block,[],id);block.geometry.dispose();block.material.dispose();off.push(()=>api.walker.remove('agenda-gate'));
-      forumView={panel,leaves,second:-1,open:0};off.push(api.register(plate,'Read the agenda',()=>api.say('Stand on the brass plate. Movement adjourns the meeting.')));
+      forumView={panel,leaves,page:'',open:0};
+      const readNotice=()=>api.say(finished?'Attendance recorded. The gate is open.':'Stand still on the green floor disc for 40 seconds to open the gate. Moving restarts the clock.');
+      off.push(api.register(plate,'Read the attendance disc',readNotice),api.register(notice,'Read the meeting instructions',readNotice));
       return ()=>{forumView=null;off.reverse().forEach(f=>f());};
     }));
     if(id==='hall'){
@@ -117,8 +143,14 @@ export function galleryVisits(api,state){
         else meeting+=dt;
         if(meeting>=40){finished=true;t.stamp('Attended');t.book('agenda','Stood through the minutes');api.play('door');}
       }else if(!inside&&!finished&&meeting){meeting=0;voice('move_meeting',id);}
-      const second=Math.floor(meeting),v=forumView;
-      if(v.second!==second){v.second=second;write(v.panel,'Sir Reginald’s meeting',finished?'Carried. The far gate is open.':inside?'Minutes in session.':'Stand on Agenda.',finished?'Adjourned.':second+' / 40 s');}
+      const remaining=Math.max(0,40-Math.floor(meeting)),v=forumView;
+      const page=finished?'filed':inside?'countdown-'+remaining:'invitation';
+      if(v.page!==page){
+        v.page=page;
+        const body=finished?'Attendance recorded. The gate is open.':inside?
+          'Stand still.\nGate opens in '+remaining+' s.':'Stand still on the green disc for 40 seconds to open the gate.';
+        write(v.panel,'Sir Reginald’s meeting',body);
+      }
       v.open=T.MathUtils.damp(v.open,finished?1:0,3,dt);for(const [n,r] of v.leaves)n.rotation.y=r*(1-v.open);
       api.setColliderEnabled('Meeting gate',!finished);
     }
