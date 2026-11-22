@@ -17,13 +17,13 @@ export function createWoolRoom(api,state){
   let room,seated=null,candidate='',dwell=0,clock=0,scroll=0,reknit=0,blockedOnce=false,lastX,seenKey='',disposed=false;
   const unfinished=api.ctx.store?.get('woolReknit');
   if(Array.isArray(unfinished)&&unfinished.length){
-    for(const mark of unfinished)ticket.stamp(mark);
+    for(const mark of unfinished)ticket.stamp(mark,{restore:true});
     api.ctx.store.set('woolReknit',[]);
   }
   state.readClauses=read;
   function cue(key,kind='react'){return api.cue('v4_'+key,{kind,exhibit:'wool'});}
   function restore(){
-    for(const mark of withdrawn)ticket.stamp(mark);
+    for(const mark of withdrawn)ticket.stamp(mark,{restore:true});
     withdrawn.length=0;
     if(api.ctx.store?.get('woolReknit')?.length)api.ctx.store.set('woolReknit',[]);
   }
@@ -142,7 +142,7 @@ export function createWoolRoom(api,state){
     for(const mark of ticket.stamps)if(!impressions.has(mark))impressions.set(mark,clock);
     if(withdrawn.length){
       reknit+=dt;
-      if(reknit>=2.5){ticket.stamp(withdrawn.shift());api.ctx.store?.set('woolReknit',[...withdrawn]);reknit=0;refresh();}
+      if(reknit>=2.5){ticket.stamp(withdrawn.shift(),{restore:true});api.ctx.store?.set('woolReknit',[...withdrawn]);reknit=0;refresh();}
     }
     if(id!=='secret'||!room?.panels.length)return;
     const p=camera.position;

@@ -8,11 +8,17 @@ export function visitTicket(store) {
   const stamps = new Set((Array.isArray(saved.stamps) ? saved.stamps : []).filter(s=>impressions.has(s)));
   const ledger = new Map((Array.isArray(saved.ledger) ? saved.ledger : [])
     .filter(row=>row && typeof row.id==='string' && typeof row.label==='string').map(row=>[row.id,row]));
+  const discovered = new Set((Array.isArray(saved.discovered) ? saved.discovered : []).filter(s=>impressions.has(s)));
+  for(const mark of stamps)discovered.add(mark);
+  const listeners=new Set();
   let issued=!!saved.issued,deviations=[...ledger.values()].filter(row=>row.deviation).length;
   let settled=Math.max(0,Math.min(deviations,Number(saved.settled)||0));
-  function save() { store?.set('visitorTicket',{issued,settled,stamps:[...stamps],ledger:[...ledger.values()]}); }
+  function save() { store?.set('visitorTicket',{issued,settled,discovered:[...discovered],stamps:[...stamps],ledger:[...ledger.values()]}); }
+  function emit(event){for(const fn of listeners)fn(event);}
   return {
-    stamps,ledger,get issued(){return issued;},
+    stamps,ledger,discovered,get issued(){return issued;},
+    discover(mark){if(impressions.has(mark)&&!discovered.has(mark)){discovered.add(mark);save();}},
+    subscribe(fn){listeners.add(fn);return ()=>listeners.delete(fn);},
     issue(){if(!issued){issued=true;save();}},
     get count(){return COUNTERFOILS.filter(box=>box.every(mark=>stamps.has(mark))).length;},
     get balance(){return ledger.size-deviations+settled;},
@@ -21,8 +27,18 @@ export function visitTicket(store) {
     get complete(){return stamps.size===impressions.size;},
     get yes(){return ledger.size-deviations;},
     get deviations(){return deviations;},
-    stamp(mark){if(!impressions.has(mark)||stamps.has(mark))return false;stamps.add(mark);save();return true;},
+    stamp(mark,{restore=false}={}){
+      if(!impressions.has(mark)||stamps.has(mark))return false;
+      discovered.add(mark);stamps.add(mark);save();
+      if(!restore)emit({kind:'stamp',mark,count:this.count});
+      return true;
+    },
     withdraw(mark){if(stamps.delete(mark))save();},
-    book(id,label,deviation=false){if(ledger.has(id))return false;ledger.set(id,{id,label,deviation});if(deviation)deviations++;save();return true;}
+    book(id,label,deviation=false){
+      if(ledger.has(id))return false;
+      ledger.set(id,{id,label,deviation});if(deviation)deviations++;save();
+      if(deviation)emit({kind:'deviation',label});
+      return true;
+    }
   };
 }
