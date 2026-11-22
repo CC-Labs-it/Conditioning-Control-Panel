@@ -28,6 +28,7 @@ export function mountHoofLab(api,group,state,worn){
   const pending=[],origin=new T.Vector3(...DESK);
   let speaking='';
   function voice(id){if(id!==speaking&&!pending.includes(id))pending.push(id);}
+  function forget(id){const i=pending.indexOf(id);if(i>=0)pending.splice(i,1);}
   function speak(){
     if(!pending.length||speaking||!api.narrationAvailable?.()||camera.position.distanceToSquared(origin)>16)return;
     const id=pending.shift();speaking=id;
@@ -59,7 +60,7 @@ export function mountHoofLab(api,group,state,worn){
   function practice(){
     if(!state.hoofWorn){api.play('press',.42);api.say('Put the hooves on at the desk first.');return;}
     if(state.hoof!=='practice')return;
-    pressed=clock;worn.press();state.hoof='pictures';state.hoofDeal=dealHoofPhotos();state.hoofMask=0;
+    forget('hoof_1');pressed=clock;worn.press();state.hoof='pictures';state.hoofDeal=dealHoofPhotos();state.hoofMask=0;
     feedback(null);refresh();voice('r5_hoof_verify');
   }
   clean.push(api.props(group,place=>{
@@ -98,6 +99,7 @@ export function mountHoofLab(api,group,state,worn){
   function submit(){
     const attempt=verifyHoof(state);
     if(!attempt)return;
+    forget('r5_hoof_verify');
     if(attempt.correct){
       pending.length=0;state.ticket.stamp('Hoofed');api.play('chime');feedback(null);
       if(attempt.edge){state.ticket.book('hoof-edge','Off the edge',true);voice('v4_hoof_edge');}
