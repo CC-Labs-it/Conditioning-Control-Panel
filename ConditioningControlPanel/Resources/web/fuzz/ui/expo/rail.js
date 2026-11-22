@@ -5,7 +5,7 @@ import {routeFor,routeGates,threshold,penSegments,distanceToBar} from './rail-ro
 export function createRail({ctx,scene,walker,state,voice,play,models=railModels(scene)}){
   const rows=new Map(),cycles={lean:0,idle:0};
   let greeting=false,gates=[],activeRoute=null,bestMetres=Infinity,sample=0;
-  let welcome=false,record=null,task='',off=false,lore=false,contact=false,lean=0,idle=0,nudges=0,progress='';
+  let welcome=false,record=null,task='',off=false,contact=false,lean=0,idle=0,nudges=0,progress='';
   function row(id,parts,rooms,instant=false){
     if(parts.some(s=>Math.abs(walker.feet.y-s.y)<1.75&&distanceToBar(s,walker.feet)<.32))return;
     let r=rows.get(id);
@@ -55,14 +55,12 @@ export function createRail({ctx,scene,walker,state,voice,play,models=railModels(
     const key=state.carry?.key||'';
     if(key!==task){
       lower('gate:');task=key;activeRoute=routeFor(key);gates=activeRoute?routeGates(activeRoute):[];resetNudges();
-      if(activeRoute){play('rail',.42);void Promise.resolve(ctx.store.claimLifetime('railLore')).then(first=>{if(first)lore=true;});}
+      // The Rail talk is archive record 1 on the first screen now, so a game rail only rises.
+      if(activeRoute)play('rail',.42);
     }
     for(const gate of gates){
       const id='gate:'+gate.id;
       if(!rows.get(id)?.up)row(id,[threshold(gate)],gate.rooms);
-    }
-    if(lore&&voice().available()){
-      lore=false;void voice().cue('rail_lore',{kind:'beat',roomWide:true,replay:true,roaming:true});
     }
     return activeRoute;
   }
