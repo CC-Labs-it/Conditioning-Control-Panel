@@ -6,6 +6,7 @@ import { createControls } from './controls.js';
 import { expoGuideText, expoInteractionText } from './controller-menu.js';
 import { createButtonTravel } from './button-travel.js';
 import { mountJumpButton } from './jump-button.js';
+import { mountExpoRadio, RADIO_STYLE } from './music-controls.js';
 import { createWalker } from './collision.js';
 import { assetURL, createZones, loadPlan } from './zones.js';
 import { createPost } from './post.js';
@@ -76,7 +77,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     for (const fn of clean.reverse()) try { fn(); } catch (e) { console.warn(e); }
   }
   try {
-    ctx.css(CSS+TRAIL_STYLE);
+    ctx.css(CSS+TRAIL_STYLE+RADIO_STYLE);
     root.toggleAttribute('data-calm',!!(ctx.gentle||ctx.reduced));
     const element = (tag, cls) => { const e = doc.createElement(tag); e.className = cls; root.append(e); return e; };
     const canvas = element('canvas', 'expo-canvas');
@@ -315,7 +316,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     const music = createMuseumMusic(ctx, {
       document: doc, ready: firstFrame, source: 'expo-music', label: 'Expo music', level: .22, speechLevel: .06,
     });
-    clean.push(() => music.dispose());
+    clean.push(() => music.dispose(),mountExpoRadio(doc,music,event=>ctx.audio.armFromUserPress?.(event)));
     const api = { ready: firstFrame, dispose, beginArrival() {
       if (arrival && !dead) { arrival = false; arrivalStart = ctx.activeMs; draw(); }
     },finishArrival() {

@@ -59,6 +59,25 @@ test('three music tracks loop sequentially across arrival without parallel strea
   h.music.dispose(); assert.equal(h.timers.size, 0);
 });
 
+test('manual pause survives skip, blackout and wake, and play resumes the selected track', async () => {
+  const h=harness();await h.music.ready;
+  let state;const stop=h.music.subscribe(update=>{state=update;});
+  assert.equal(state.playing,true);
+  h.streams[0].time(21);h.music.setUserPaused(true);
+  assert.equal(state.playing,false);
+  h.doc.dispatchEvent(new Event('pointerdown'));
+  assert.equal(h.streams[0].el.currentTime,21);
+  h.music.skip();
+  assert.equal(h.music.debug().current,'idle-cycle');assert.equal(h.streams[1].el.paused,true);
+  h.music.pause(true);h.host.emit('pause');h.host.emit('resume');h.music.pause(false);
+  assert.equal(h.streams[1].el.paused,true);
+  h.music.setUserPaused(false);assert.equal(state.playing,true);
+  h.music.skip();h.music.skip();
+  assert.equal(h.music.debug().current,'breathe-in');
+  assert.equal(h.streams.filter(source=>!source.stopped).length,1);
+  stop();h.music.dispose();
+});
+
 test('music fades at track boundaries and ducks smoothly under narration', async () => {
   const h = harness(); await h.music.ready;
   const source = h.streams[0]; assert.equal(source.gain, 0);

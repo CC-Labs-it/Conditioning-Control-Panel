@@ -12,10 +12,19 @@ export function createMuseumMusic(ctx, options) {
   const now = options.now || (() => performance.now());
   const setTimer = options.setTimer || ((fn, ms) => setTimeout(fn, ms));
   const clearTimer = options.clearTimer || (id => clearTimeout(id));
-  const cleanups = [], failed = new Set();
+  const cleanups = [], failed = new Set(), listeners = new Set();
+  let userPaused = false;
   let current = null, index = 0, disposed = false, started = false, held = false, visitPaused = false, speaking = false;
   let gain = options.level, lastAt = now(), envelopeTimer = null, lastGain = 0;
-  const paused = () => held || visitPaused || ctx.paused || (doc?.hidden && !options.playWhenHidden?.());
+  const interrupted = () => Boolean(held || visitPaused || ctx.paused || (doc?.hidden && !options.playWhenHidden?.()));
+  const paused = () => userPaused || interrupted();
+  function playback() {
+    return { title: current?.track.title || '', playing: Boolean(current && !current.source.el.paused && !paused()),
+      available: Boolean(current && !disposed && !interrupted()), userPaused };
+  }
+  function notify() {
+    if (listeners.size) for (const listener of listeners) listener(playback());
+  }
   const target = () => speaking ? options.speechLevel : options.level;
   function cancelEnvelope() { clearTimer(envelopeTimer); envelopeTimer = null; }
   function updateGain() {
@@ -48,7 +57,7 @@ export function createMuseumMusic(ctx, options) {
   }
   function startTrack(next) {
     clearCurrent();
-    if (disposed || !tracks.length || failed.size >= tracks.length) return;
+    if (disposed || !tracks.length || failed.size >= tracks.length) { notify(); return; }
     index = ((next % tracks.length) + tracks.length) % tracks.length;
     if (failed.has(index)) { startTrack(index + 1); return; }
     const track = tracks[index];
@@ -61,18 +70,21 @@ export function createMuseumMusic(ctx, options) {
     current = { source, track, listeners: [] };
     const job = current;
     function listen(event, listener) { source.el.addEventListener(event, listener); job.listeners.push([event, listener]); }
-    listen('playing', () => { if (current !== job) return; if (paused()) source.pause(); else updateGain(); });
+    listen('playing', () => { if (current !== job) return; if (paused()) source.pause(); else updateGain(); notify(); });
+    listen('pause', notify);
     listen('timeupdate', updateGain);
     listen('ended', () => { if (current === job) { failed.clear(); startTrack(index + 1); } });
     listen('error', () => { if (current === job) { failed.add(index); startTrack(index + 1); } });
-    play();
+    play(); notify();
   }
   function sync() {
     if (disposed || !started) return;
     if (paused()) { cancelEnvelope(); current?.source.pause(); }
     else play();
+    notify();
   }
-  function retry() {
+  function retry(event) {
+    if (event?.target?.closest?.('[data-museum-transport]')) return;
     if (disposed || !started || paused()) return;
     if (!current && options.retryMissing) { failed.clear(); startTrack(index); }
     else if (current?.source.el.paused) play();
@@ -80,7 +92,7 @@ export function createMuseumMusic(ctx, options) {
   function pause(on) { visitPaused = Boolean(on); sync(); }
   function dispose() {
     if (disposed) return;
-    disposed = true; clearCurrent();
+    disposed = true; clearCurrent(); notify(); listeners.clear();
     for (const off of cleanups) off?.();
     doc?.removeEventListener('visibilitychange', sync);
     doc?.removeEventListener('pointerdown', retry, true);
@@ -104,8 +116,11 @@ export function createMuseumMusic(ctx, options) {
   ready.catch(dispose);
   return Object.freeze({
     ready, pause, dispose,
+    setUserPaused(on) { userPaused = Boolean(on); sync(); },
+    skip() { if (started && !disposed && !interrupted() && current) startTrack(index + 1); },
+    subscribe(listener) { listeners.add(listener); listener(playback()); return () => listeners.delete(listener); },
     setSpeaking(on) { if (speaking !== Boolean(on)) { speaking = Boolean(on); updateGain(); } },
-    debug: () => ({ started, disposed, current: current?.track.id || null, index, speaking, gain: lastGain,
+    debug: () => ({ started, disposed, current: current?.track.id || null, index, speaking, userPaused, gain: lastGain,
       playing: Boolean(current && !current.source.el.paused), timers: Number(envelopeTimer !== null), failed: failed.size }),
   });
 }
