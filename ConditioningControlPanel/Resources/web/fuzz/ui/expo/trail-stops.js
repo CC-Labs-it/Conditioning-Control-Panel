@@ -1,4 +1,5 @@
 import {teaDirections} from './tea-directions.js';
+import {doorways} from './doorways.js';
 
 // Desk order and wording match the printed Human Activity Trail.
 export const STOPS = [
@@ -39,6 +40,28 @@ export function trailMeter(count){
 }
 const stopTask=i=>({title:STOPS[i].todo,where:STOPS[i].place,kicker:STOPS[i].name});
 const task=(title,where,kicker='Human trail',target)=>({title,where,kicker,target});
+// Once both introductory stops are stamped, offer the shortest remaining public route.
+const onwards=[
+  [3,'hall-entrance',[-7.72,12.06],'through the Grand Hall'],
+  [5,'hall-entrance',[-18.4,7.97],'through the Grand Hall'],
+  [6,'hall-entrance',[19.4,8.13],'through the Grand Hall'],
+  [8,'hall-entrance',[-18.9,-4.2],'through the Grand Hall'],
+  [7,'hall-entrance',[0,-21.95],'through the Grand Hall'],
+  [1,'chronology-entrance',[3.4,103],'through Chronology'],
+  [2,'aquarium-return',[-61.8,45.5],'through the Aquarium']
+].map(([index,id,stop,via])=>{
+  const door=doorways.find(d=>d.id===id);
+  return {stop:STOPS[index],door,via,beyond:Math.hypot(stop[0]-door.x,stop[1]-door.z)};
+});
+function nextPublicStop(p,marks){
+  let best,shortest=Infinity;
+  for(const row of onwards){
+    if(row.stop.marks.every(mark=>marks.has(mark)))continue;
+    const distance=Math.hypot(p.x-row.door.x,p.z-row.door.z)+row.beyond;
+    if(distance<shortest){best=row;shortest=distance;}
+  }
+  return best&&task('Collect 8 stamps to go home','Nearest stop: '+best.stop.name+' · '+best.via,'Start anywhere',[best.door.x,best.door.z]);
+}
 export function trailTask(room,p,v,yaw=0){
   const key=v.carry?.key,t=v.ticket, marks=t?.stamps;
   if(key==='tea'){
@@ -68,6 +91,9 @@ export function trailTask(room,p,v,yaw=0){
   if(room==='atrium'){
     if(!t?.issued)return task('Pass the turnstile for your trail card','Visitor admission · straight ahead','Start here',[0,35.33]);
     if((t?.count||0)>=8)return task('Go to the gift shop','Eight stamps open the way home.','Home');
+    if(marks?.has('Corrected')&&marks.has('Pressed')){
+      const next=nextPublicStop(p,marks);if(next)return next;
+    }
     const corrections=[7.8,41.1],hall=[0,16];
     const nearCorrections=!marks?.has('Corrected')&&(marks?.has('Pressed')||
       Math.hypot(p.x-corrections[0],p.z-corrections[1])<=Math.hypot(p.x-hall[0],p.z-hall[1]));

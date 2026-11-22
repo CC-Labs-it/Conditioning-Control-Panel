@@ -45,6 +45,10 @@ test('hands take precedence over rooms, and directions follow the actual turnsti
   const p={x:.54,y:0,z:35.33},ticket=visitTicket();
   assert.match(trailTask('atrium',p,{ticket}).title,/turnstile/);
   ticket.issue();assert.deepEqual(trailTask('atrium',p,{ticket}).target,[7.8,41.1]);
+  ticket.stamp('Corrected');ticket.stamp('Pressed');
+  assert.match(trailTask('atrium',p,{ticket}).where,/The Queue/);
+  ticket.stamp('Queued');
+  assert.match(trailTask('atrium',p,{ticket}).where,/Hoof Sciences/);
   for(const id of ['service','hall','atrium','secret','shop']){
     const tea=trailTask(id,p,{carry:{key:'tea'},ticket});assert.match(tea.where,/Grand Hall, upstairs · \d+ m/);
     assert.match(trailTask(id,p,{carry:{key:'signed-form'},ticket}).where,/gift shop till/i);
