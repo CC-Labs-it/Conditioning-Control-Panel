@@ -213,7 +213,7 @@ export function createExhibits(api) {
       }
     }
   }
-  const dispose=()=>{staff.dispose();hands.dispose();spit.dispose();worn.dispose();disposed=true;for(const id of [...zones.keys()])unmount(id);pending=[];};
+  const dispose=()=>{staff.dispose();hands.dispose();spit.dispose();worn.dispose();disposed=true;for(const id of [...zones.keys()])unmount(id);habitat.dispose();pending=[];};
   function setTurnstileAngle(degrees){
     const ui=zones.get('atrium')?.ui;if(!ui?.setAngle)return false;
     ui.inspectionAngle=Number.isFinite(degrees)?degrees:null;

@@ -11,6 +11,10 @@ const locations=[[13.9,0,32.91],[16,0,30.99],[19.4,0,33.0],[21.7,0,30.99],[24.6,
 export function createStaffWing(api,state) {
   const {THREE:T,camera,root}=api,look=sight(api),rooms=new Map();
   const emergencyTint=new T.Color(.42,1,.54),emergencyEmission=new T.Color(.22,1,.38);
+  // While emergency power is on, leaving the service wing only changes the lamp's intensity.
+  const emergency=new T.PointLight(0x83e6a6,0,6.5,2);
+  emergency.name='Service emergency light';emergency.position.set(25.48,2.18,28.0);
+  emergency.visible=false;api.scene.add(emergency);
   const finishes=new WeakMap();
   // A visitor can pick up a room finish midway through a power cut.
   function copyFinish(source){
@@ -75,7 +79,7 @@ export function createStaffWing(api,state) {
         return surfaces.get(original);
       };
       r.group.traverse(n=>{
-        if(n.isLight&&n!==r.light)lights.push([n,n.intensity]);
+        if(n.isLight)lights.push([n,n.intensity]);
         if(!n.isMesh||n.name==='Wool along the skirting'||n.userData.expoGuideLight)return;
         const old=n.material,material=Array.isArray(old)?old.map(use):use(old);
         meshes.push([n,old,material]);n.material=material;
@@ -91,10 +95,8 @@ export function createStaffWing(api,state) {
     for(const [light,intensity] of r.relights.lights)light.intensity=intensity*powerLevel(step);
   }
   function lowRooms(){
-    for(const [id,r] of rooms){
-      lightRoom(id,r);
-      if(r.light)r.light.visible=view.unplugged&&id==='service';
-    }
+    emergency.visible=view.unplugged;
+    for(const [id,r] of rooms)lightRoom(id,r);
   }
   function mount(id,group,clean){
     const routes={
@@ -133,8 +135,7 @@ export function createStaffWing(api,state) {
         const notice=place('annex_notice',[25.31,1.71,26.79]);
         bind(notice,'Read the heater notice',()=>{state.ticket.discover('Unplugged');api.say('Do not unplug the heater.');});
         bind(socket,()=>view.unplugged?'Plug the heater back in':'Unplug the heater',plug);
-        r.light=new T.PointLight(0x83e6a6,2.8,6.5,2);r.light.position.set(25.48,2.18,28.0);group.add(r.light);
-        off.push(()=>{r.light.removeFromParent();r.light.dispose();});
+        emergency.intensity=2.8;off.push(()=>{emergency.intensity=0;});
         const roster=place('annex_rota',[21.65,1.70,27.1],-Math.PI/2);
         write(dial(api,roster,'rota_face',off),'Staff rota','Tomorrow: '+state.file.name,'Reading balcony   /   Tea service');
         bind(roster,'Read tomorrow’s rota',()=>api.say('Tomorrow: '+state.file.name+'. Tea to the reading balcony.'));
@@ -205,5 +206,5 @@ export function createStaffWing(api,state) {
     pivotYaw=yaw;next.visible=true;view.signs=++signCount;
     if(signCount===notes.length)cue('bob_sign');
   }
-  return {mount,tick,enter,lighting,dispose(){for(const r of rooms.values())restoreRoom(r);dark.remove();card.remove();api.setHeaterPower?.(true);}};
+  return {mount,tick,enter,lighting,dispose(){for(const r of rooms.values())restoreRoom(r);emergency.removeFromParent();emergency.dispose();dark.remove();card.remove();api.setHeaterPower?.(true);}};
 }

@@ -21,6 +21,10 @@ export function humanHabitat(api,state,pressRegister){
   const {THREE:T,camera,renderer,walker,ctx,go,register}=api;
   const projection=new T.Matrix4(),frustum=new T.Frustum();
   const reel=habitatReel(ctx.state||{},state.file),seat=new T.Vector3(20.28,1.19,11.60),standing=new T.Vector3(),monitor=new T.Vector3(18.3,1.4,11.05);
+  // Keep the lighting program stable as the Habitat streams across the Hall threshold.
+  const lamp=new T.SpotLight(0xffd298,0,4.5,.50,.75,2);
+  lamp.name='Keeper chair reading light';lamp.position.set(seat.x+.18,2.92,10.76);
+  lamp.target.position.set(seat.x,.50,seat.z);api.scene.add(lamp,lamp.target);
   let view=null,elapsed=0,speed=1,still=0,pending=0,frame=-1,caught=false,seated=false,insidePresses=0,tapAge=9,tokenAge=9,liveTime=0;
   function sit(){
     if(seated){seated=false;api.say('Back on your feet.');return;}
@@ -97,10 +101,8 @@ export function humanHabitat(api,state,pressRegister){
         wanted.scale.set(1.42,.63,1);
         write(dial(api,wanted,'record_face',off,690,315),'Human Habitat','Keeper wanted.\nEnquire at the staff door.');
         off.push(register(wanted,'Read the keeper notice',()=>api.say('Keeper wanted. Enquire at the staff door.')));
-        const lamp=new T.SpotLight(0xffd298,17,4.5,.50,.75,2);
-        lamp.name='Keeper chair reading light';lamp.position.set(seat.x+.18,2.92,10.76);
-        lamp.target.position.set(seat.x,.50,seat.z);group.add(lamp,lamp.target);
-        off.push(()=>{lamp.removeFromParent();lamp.target.removeFromParent();lamp.dispose();});
+        lamp.intensity=17;group.add(lamp,lamp.target);
+        off.push(()=>{lamp.intensity=0;api.scene.add(lamp,lamp.target);});
         const cap=place('annex_desk_cap',[18.78,.84,11.35]);
         off.push(register(cushion,()=>seated?'Stand up':'Sit at the habitat desk',sit,2.2));
         off.push(register(cap,'Press I AGREE',desk,2.1));
@@ -161,5 +163,5 @@ export function humanHabitat(api,state,pressRegister){
       view.strip();renderer.autoClear=false;renderer.render(view.overlay,view.eye);
     }finally{renderer.autoClear=clear;renderer.setRenderTarget(previous);view.face.visible=visible;}
   }
-  return {mount,tick};
+  return {mount,tick,dispose(){lamp.removeFromParent();lamp.target.removeFromParent();lamp.dispose();}};
 }
