@@ -13,6 +13,7 @@ import { burst, btnCenter, chip, docOf, fresh, play, pop, sfx, spawn, spiralCanv
 import { THEME_TASTES } from '../theme-skins.js';
 import { buttonImpulse, contactSparks } from './tap-feel.js';
 import { setIconSet } from '../../icons.js';
+import { capsFor, seatPool, STAND_IN_CSS } from '../../phone-caps.js';   // small on a phone: one ad strip drawn
 import { mediaSlot, themeLists, themeNiche } from '../../screens.js';
 import { createTunnelGL, cssRgb, mixRgb } from './warp-tunnel.js';
 import { BURST_HOLD_MS, burstTiers, createTapWindow } from '../../../sim/tap-rate.js';
@@ -149,7 +150,7 @@ export default {
           burst(ctx, r.left + r.width / 2, r.top, { n: 18, reach: 90 });
         }
       };
-      ctx.on('wall', ({ corner }) => { if (corner) note('corner'); });
+      ctx.on('wall', ({ corner, hits = 1 }) => { if (corner) note('corner', hits); });   // hits: a capped phone copy's whole hits
       ctx.on('golden', () => { note('golden'); ctx.stickers.note('golden'); });
       ctx.on('resume', () => { if (!tally.resume) ctx.stickers.note('wakeRuns'); note('resume'); });
       ctx.on('away', (d) => { if ((d?.ms || 0) >= 3600000) note('away1h'); });
@@ -199,10 +200,21 @@ export default {
 .fz-ad.ccp .c { background: var(--accent); color: var(--niche-ink); }
 .fz-ad.scam { background: #fff; color: #b00020; } .fz-ad.wellness { background: #e8f6ee; color: #114d33; } .fz-ad.pharma { background: #e7f1fb; color: #123a66; } .fz-ad.desperate { background: #ffe4dc; color: #6a1b00; } .fz-ad.corporate { background: #eceff3; color: #1d2733; } .fz-ad.local { background: #fff0f7; color: #7a0f4a; }
 `);
-      const slot = ctx.el('button', 'display:none;', null, ctx.layer('banner'));
-      slot.type = 'button';
+      /* Phone caps (ui/phone-caps.js seatPool 'adBanners'): a small run on a phone draws ONE ad strip, this one or Second
+       * Banner, whichever came first. The drawn one wears the count. Everywhere else it draws, exactly as before. */
+      const caps = capsFor(ctx.state);
+      if (caps) ctx.css(STAND_IN_CSS);
+      let slot = null;
+      const build = () => {
+        slot = ctx.el('button', caps ? 'display:none;position:relative;' : 'display:none;', null, ctx.layer('banner'));
+        slot.type = 'button';
+        slot.addEventListener('click', press);
+        show();
+        return slot;
+      };
       let ad = null, paid = false;
       const show = () => {
+        if (!slot) return;
         ad = ctx.ads.next({ kind: 'banner' });
         paid = false;
         const doc = docOf(ctx);
@@ -216,7 +228,7 @@ export default {
         slot.append(u, t, c);
         ctx.anim(slot, ctx.gentle ? [{ opacity: 0 }, { opacity: 1 }] : [{ transform: 'translateY(30px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 350, easing: 'ease-out' });
       };
-      slot.addEventListener('click', (e) => {
+      const press = (e) => {
         if (!ad) return;
         if (!paid) {
           paid = true;
@@ -226,8 +238,9 @@ export default {
         ctx.emit('ad', { ccp: !!ad.ccp, id: ad.id });
         if (ad.id === SELL_ALL_AD) sellAllJoke(ctx);   // display only: the wallet never changes
         if (ad.url) ctx.openAdLink(ad.url);
-      });
-      show();
+      };
+      if (caps) { const seat = seatPool('adBanners', caps.adBanners).join({ draw: build }); ctx.cleanup(seat.leave); }
+      else build();
       ctx.every(13000, show);
       ctx.on('ads', ({ jokesOff }) => { if (jokesOff && ad && !ad.ccp) show(); });
       return {};

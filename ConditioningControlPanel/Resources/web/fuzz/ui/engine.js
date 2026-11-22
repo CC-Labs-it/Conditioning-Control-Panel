@@ -428,13 +428,23 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     return off;
   }
 
+  let wallCarry = 0;   // phone caps: the part of a wall hit not counted yet (whole hits only reach run.walls)
   /** times: on a capped phone (ui/phone-caps.js) one drawn copy stands for several owned ones, so its hit pays them all,
-   *  exactly as that many hits would. */
+   *  exactly as that many hits would. Money takes the fractional share; counts stay whole: the remainder waits in
+   *  wallCarry (this page only, never saved) and the event says how many whole hits this one was (`hits`). */
   function wallHit({ x, y, corner = false, times = 1 } = {}, owner = 'stray') {
     if (paused || suspended || stopped) return 0;
     let gain = E.wallHit(run, mods, now, owner, corner);
-    if (times > 1 && gain > 0) { gain += E.earn(run, gain * (times - 1), 'wall'); run.walls += times - 1; }
-    emit('wall', { gain, x, y, corner });
+    let hits = 1;
+    if (times > 1) {
+      if (gain > 0) gain += E.earn(run, gain * (times - 1), 'wall');
+      wallCarry += times - 1;
+      const whole = Math.floor(wallCarry + 1e-9);
+      wallCarry = Math.max(0, wallCarry - whole);
+      run.walls += whole;
+      hits += whole;
+    }
+    emit('wall', { gain, x, y, corner, times, hits });
     return gain;
   }
 
