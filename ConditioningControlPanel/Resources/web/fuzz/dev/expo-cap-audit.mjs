@@ -184,7 +184,9 @@ try{
      }
      if(cap.node==='alpaca_button'){
       // The doctor asks once ("Is he an alpaca?"); the second press readmits the visitor at the Atrium.
+      // While The Rail holds the visitor for a herd log that press does nothing, so wait for the rail to lower.
       await f.waitForFunction(n=>__expo.buttons().some(c=>c.node===n&&c.amount===0),cap.node,{timeout:3000});
+      await f.waitForFunction(()=>!__expo.exhibits.state.railGuide,null,{timeout:120000});
       await f.evaluate(async({feet,centre})=>{await __expo.go('twelve',feet);__expo.lookAt(...centre);__expo.root.focus();},target);
       await use();
       const moved=await f.waitForFunction(()=>__expo.state().zone==='atrium',null,{timeout:15000}).then(()=>true,()=>false);
