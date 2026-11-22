@@ -13,6 +13,7 @@
 
 import { ENDINGS } from '../../data/content/endings.js';
 import { FORKS } from '../../data/items.js';
+import { NUDGE_COPY } from '../nudges.js';   // small: the ending's door to the full game
 import { galleryIds } from '../../sim/economy.js';
 import { HERD_ENDINGS } from '../../data/fate.js';
 import { THEME_PALETTES, mixHex } from '../palette.js';
@@ -68,7 +69,8 @@ let starCache = null;
 const starSvg = (i) => { starCache ||= STAR_SVGS.map((f) => { try { return f(); } catch { return ''; } }); return starCache[i % starCache.length]; };
 
 /**
- * Opens the card. hooks: { renew, renewDust, renewCurrency, keepPlaying, canKeepPlaying, newRun, routeNames }.
+ * Opens the card. hooks: { renew, renewDust, renewCurrency, keepPlaying, canKeepPlaying, newRun, routeNames, nudge }.
+ * nudge (small edition only, ui/nudges.js): one quiet door to the full game beside New run, from the player's press.
  * openLink(url) follows the game's link rule (real press only). Returns the root element (id l-credits).
  */
 export function openRunRecap({ cards, doc, id, run, life, hooks, audio, name = '', stats, openLink, gentle = () => false }) {
@@ -200,6 +202,11 @@ export function openRunRecap({ cards, doc, id, run, life, hooks, audio, name = '
   const side = h('div', 'rr-side', null, nextRow);
   const keepBtn = button('rr-tool', side); keepBtn.hidden = true;
   const dailyBtn = button('rr-tool rr-ticket', side); dailyBtn.hidden = true;
+  if (hooks.nudge) {
+    const nudgeBtn = button('rr-tool rr-nudge', side);
+    nudgeBtn.textContent = NUDGE_COPY.endingButton;
+    nudgeBtn.addEventListener('click', () => hooks.nudge());
+  }
   const restart = h('div', 'rr-restart', null, side);
   const newRun = button('rr-newrun', restart);
   newRun.append(clipBox('button'), R.newRun);

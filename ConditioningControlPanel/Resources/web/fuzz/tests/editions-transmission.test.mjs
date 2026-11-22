@@ -156,7 +156,7 @@ test('mounted: NOT NOW, the pen sign, YES from a real press, progress and arriva
   t.after(() => Ed.setEdition(null, { noPage: true }));
   Ed.setEdition({ caps: { edition: 'full', platform: 'desktop', expo: { state: 'absent', mb: 131 } } }, HOSTED);
   const page = fakePage(), sent = [], extras = {};
-  const tx = mountTransmission({ ...page, send: (type, f) => sent.push([type, f]), llamas: 4, extras });
+  const tx = mountTransmission({ ...page, send: (type, f) => sent.push([type, f]), llamas: 4, clock: () => 180000, extras });
   assert.equal(extras.transmissionSeen, 1);
   assert.equal(page.opened.length, 1, 'the card opens by itself once');
   const first = page.opened[0];
@@ -214,8 +214,11 @@ test('mounted in small: the nudge card, then the llama-8 card', (t) => {
   t.after(() => Ed.setEdition(null, { noPage: true }));
   Ed.setEdition({ caps: { edition: 'small', platform: 'web' } }, HOSTED);
   const page = fakePage(), sent = [], extras = {};
-  const tx = mountTransmission({ ...page, send: (type, f) => sent.push([type, f]), llamas: 8, extras });
-  assert.equal(page.opened.length, 2);
+  let now = 180000;
+  const tx = mountTransmission({ ...page, send: (type, f) => sent.push([type, f]), llamas: 8, clock: () => now, extras });
+  assert.equal(page.opened.length, 1, 'one card by itself per run: the transmission first');
+  now += 300000; tx.tick();
+  assert.equal(page.opened.length, 2, 'the llama-8 card after five more minutes of play');
   assert.equal(page.opened[0].spec.body, TRANSMISSION_COPY.smallBody);
   assert.ok(page.opened[0].spec.node.children.some((c) => c.textContent === TRANSMISSION_COPY.smallLine));
   assert.ok(!page.opened[0].spec.node.children.some((c) => /MB/.test(c.textContent)), 'no size line in small');

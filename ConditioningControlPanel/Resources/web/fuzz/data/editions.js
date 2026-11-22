@@ -60,6 +60,11 @@ export const SAVE_RESULT_REASONS = Object.freeze(['sign-in', 'too-big', 'offline
 
 /** The Expo arrives as a download the player accepts in fiction: the transmission card shows at this many llamas. */
 export const TRANSMISSION_AT_LLAMAS = 4;
+/** The self-opening cards (transmission, llama 8) wait until the run clock (ms played: pause and suspend do not count)
+ *  passes this; the owner asked for the card mid-run. The pen sign and the wormhole never wait. */
+export const TRANSMISSION_MIN_RUN_MS = 180000;
+/** At most one of the two opens by itself per run; the llama-8 card waits a later run or this much more play. */
+export const LLAMA8_GAP_MS = 300000;
 export const EXPO_FAIL_REASONS = Object.freeze(['offline', 'disk', 'refused']);
 /** Where the Expo's files load from when they sit in the tree (a local preview). A desktop host names its own base. */
 export const EXPO_DEFAULT_BASE = 'assets/expo/';

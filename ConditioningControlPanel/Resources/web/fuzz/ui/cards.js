@@ -12,7 +12,8 @@ export function createCards(doc, host) {
 
   function build(spec) {
     const back = doc.createElement('div');
-    back.className = spec.clear ? 'backdrop clear' : 'backdrop';
+    /* corner: a quiet note (ui/save-sleep.js) in the bottom corner, no backdrop; the page under it stays live. */
+    back.className = spec.corner ? 'backdrop clear corner' : spec.clear ? 'backdrop clear' : 'backdrop';
     const card = doc.createElement('div');
     card.className = `card ${spec.className || ''}`;
     card.setAttribute('role', 'dialog');
