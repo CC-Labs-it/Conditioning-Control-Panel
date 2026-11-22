@@ -7,10 +7,7 @@ import {setEdition} from '../ui/edition.js';
 const game = new URL('../', import.meta.url);
 const ending = 'ui/unlocks/fate/llama/ending.js';
 // Lane S empties this list when the legacy ending switches to the public door.
-const legacyEndingImports = new Set([
-  'ui/expo/entrance.js', 'ui/expo/portal.js', 'ui/expo/controller-menu.js',
-  'ui/expo/sound-unlock.js', 'ui/expo/scene.js',
-]);
+const legacyEndingImports = new Set([]);
 
 async function inspectDirectory(dir, violations) {
   for (const entry of await readdir(new URL(dir, game), {withFileTypes: true})) {
