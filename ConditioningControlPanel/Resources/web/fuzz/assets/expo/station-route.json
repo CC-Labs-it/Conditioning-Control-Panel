@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "start": {
     "id": "atrium",
     "at": [
@@ -688,6 +688,708 @@
           ]
         }
       ]
+    },
+    {
+      "id": "slot_15",
+      "zone": "atrium",
+      "zoneName": "Admission atrium",
+      "landmark": "West lobby",
+      "screen": [
+        -10.8,
+        1.6192,
+        35.25
+      ],
+      "front": [
+        1,
+        0,
+        0
+      ],
+      "standing": [
+        -8.934,
+        0,
+        35.25
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_01",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_16",
+      "zone": "atrium",
+      "zoneName": "Admission atrium",
+      "landmark": "Monument court",
+      "screen": [
+        8.8,
+        1.6192,
+        20.0
+      ],
+      "front": [
+        0,
+        0,
+        1
+      ],
+      "standing": [
+        8.8,
+        0,
+        21.866
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_01",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_17",
+      "zone": "atrium",
+      "zoneName": "Admission atrium",
+      "landmark": "West mezzanine",
+      "screen": [
+        -11.4,
+        5.0192,
+        37.75
+      ],
+      "front": [
+        1,
+        0,
+        0
+      ],
+      "standing": [
+        -9.534,
+        3.4,
+        37.75
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_01",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_18",
+      "zone": "atrium",
+      "zoneName": "Admission atrium",
+      "landmark": "East mezzanine",
+      "screen": [
+        11.4,
+        5.0192,
+        23.75
+      ],
+      "front": [
+        -1,
+        0,
+        0
+      ],
+      "standing": [
+        9.534,
+        3.4,
+        23.75
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_01",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_19",
+      "zone": "atrium",
+      "zoneName": "Admission atrium",
+      "landmark": "Clerestory overlook",
+      "screen": [
+        10.65,
+        8.4192,
+        37.05
+      ],
+      "front": [
+        0,
+        0,
+        -1
+      ],
+      "standing": [
+        10.65,
+        6.8,
+        35.184
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_01",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_20",
+      "zone": "atrium",
+      "zoneName": "Admission atrium",
+      "landmark": "West clerestory",
+      "screen": [
+        -10.95,
+        8.4192,
+        27.75
+      ],
+      "front": [
+        1,
+        0,
+        0
+      ],
+      "standing": [
+        -9.084,
+        6.8,
+        27.75
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_01",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_21",
+      "zone": "atrium",
+      "zoneName": "Admission atrium",
+      "landmark": "Upper bridge",
+      "screen": [
+        9.85,
+        8.4192,
+        19.25
+      ],
+      "front": [
+        0,
+        0,
+        1
+      ],
+      "standing": [
+        9.85,
+        6.8,
+        21.116
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_01",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_22",
+      "zone": "atrium",
+      "zoneName": "Admission atrium",
+      "landmark": "Conservatory court",
+      "screen": [
+        -8.7,
+        1.6192,
+        19.8
+      ],
+      "front": [
+        1,
+        0,
+        0
+      ],
+      "standing": [
+        -6.834,
+        0,
+        19.8
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_01",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_23",
+      "zone": "atrium",
+      "zoneName": "Admission atrium",
+      "landmark": "Mezzanine crossing",
+      "screen": [
+        10.8,
+        5.0192,
+        35.8
+      ],
+      "front": [
+        0,
+        0,
+        -1
+      ],
+      "standing": [
+        10.8,
+        3.4,
+        33.934
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_01",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_24",
+      "zone": "hall",
+      "zoneName": "Grand hall",
+      "landmark": "Entrance loggia",
+      "screen": [
+        6.8,
+        1.6016,
+        14.5
+      ],
+      "front": [
+        0,
+        0,
+        -1
+      ],
+      "standing": [
+        6.8,
+        0,
+        12.634
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_11",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_25",
+      "zone": "hall",
+      "zoneName": "Grand hall",
+      "landmark": "East arcade",
+      "screen": [
+        10.35,
+        1.6016,
+        -10.5
+      ],
+      "front": [
+        -1,
+        0,
+        0
+      ],
+      "standing": [
+        8.484,
+        0,
+        -10.5
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_11",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_26",
+      "zone": "hall",
+      "zoneName": "Grand hall",
+      "landmark": "Portrait approach",
+      "screen": [
+        -10.3,
+        1.6016,
+        -14.5
+      ],
+      "front": [
+        0,
+        0,
+        1
+      ],
+      "standing": [
+        -10.3,
+        0,
+        -12.634
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_11",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_27",
+      "zone": "hall",
+      "zoneName": "Grand hall",
+      "landmark": "East balcony",
+      "screen": [
+        9.55,
+        5.0016,
+        6.75
+      ],
+      "front": [
+        1,
+        0,
+        0
+      ],
+      "standing": [
+        11.416,
+        3.4,
+        6.75
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_11",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_28",
+      "zone": "hall",
+      "zoneName": "Grand hall",
+      "landmark": "Clerestory windows",
+      "screen": [
+        9.55,
+        5.0016,
+        -9.75
+      ],
+      "front": [
+        1,
+        0,
+        0
+      ],
+      "standing": [
+        11.416,
+        3.4,
+        -9.75
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_11",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_29",
+      "zone": "hall",
+      "zoneName": "Grand hall",
+      "landmark": "West loggia",
+      "screen": [
+        -5.6,
+        1.6016,
+        12.75
+      ],
+      "front": [
+        0,
+        0,
+        -1
+      ],
+      "standing": [
+        -5.6,
+        0,
+        10.884
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_11",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_30",
+      "zone": "hall",
+      "zoneName": "Grand hall",
+      "landmark": "Founders court",
+      "screen": [
+        5.65,
+        1.6016,
+        -14.55
+      ],
+      "front": [
+        0,
+        0,
+        1
+      ],
+      "standing": [
+        5.65,
+        0,
+        -12.684
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_11",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_31",
+      "zone": "service",
+      "zoneName": "Staff canteen",
+      "landmark": "Exhibit stores",
+      "screen": [
+        24.45,
+        1.4028,
+        37.85
+      ],
+      "front": [
+        0,
+        0,
+        -1
+      ],
+      "standing": [
+        24.45,
+        0,
+        36.069
+      ],
+      "width": 1.302,
+      "height": 0.9765,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_10",
+      "scale": 0.84
+    },
+    {
+      "id": "slot_32",
+      "zone": "service",
+      "zoneName": "Staff canteen",
+      "landmark": "Stair hall",
+      "screen": [
+        29.8,
+        1.4028,
+        19.35
+      ],
+      "front": [
+        0,
+        0,
+        1
+      ],
+      "standing": [
+        29.8,
+        0,
+        21.131
+      ],
+      "width": 1.302,
+      "height": 0.9765,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_10",
+      "scale": 0.84
+    },
+    {
+      "id": "slot_33",
+      "zone": "service",
+      "zoneName": "Staff canteen",
+      "landmark": "Upper stair landing",
+      "screen": [
+        30.0,
+        8.2028,
+        19.9
+      ],
+      "front": [
+        0,
+        0,
+        1
+      ],
+      "standing": [
+        30.0,
+        6.8,
+        21.681
+      ],
+      "width": 1.302,
+      "height": 0.9765,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_10",
+      "scale": 0.84
+    },
+    {
+      "id": "slot_34",
+      "zone": "hoof",
+      "zoneName": "Applied Hoof Sciences",
+      "landmark": "Teaching booth",
+      "screen": [
+        -14.1,
+        1.5288,
+        12.35
+      ],
+      "front": [
+        0,
+        0,
+        -1
+      ],
+      "standing": [
+        -14.1,
+        0,
+        10.569
+      ],
+      "width": 1.4616,
+      "height": 1.0962,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_12",
+      "scale": 0.84
+    },
+    {
+      "id": "slot_35",
+      "zone": "hoof",
+      "zoneName": "Applied Hoof Sciences",
+      "landmark": "Supply bay",
+      "screen": [
+        -21.15,
+        1.5288,
+        4.6
+      ],
+      "front": [
+        0,
+        0,
+        1
+      ],
+      "standing": [
+        -21.15,
+        0,
+        6.381
+      ],
+      "width": 1.4616,
+      "height": 1.0962,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_12",
+      "scale": 0.84
+    },
+    {
+      "id": "slot_36",
+      "zone": "habitat",
+      "zoneName": "Conservation habitat",
+      "landmark": "East observation wall",
+      "screen": [
+        22.1,
+        1.5288,
+        4.25
+      ],
+      "front": [
+        -1,
+        0,
+        0
+      ],
+      "standing": [
+        20.319,
+        0,
+        4.25
+      ],
+      "width": 1.428,
+      "height": 1.071,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_13",
+      "scale": 0.84
+    },
+    {
+      "id": "slot_37",
+      "zone": "habitat",
+      "zoneName": "Conservation habitat",
+      "landmark": "Research entrance",
+      "screen": [
+        13.9,
+        1.5288,
+        4.85
+      ],
+      "front": [
+        1,
+        0,
+        0
+      ],
+      "standing": [
+        15.681,
+        0,
+        4.85
+      ],
+      "width": 1.428,
+      "height": 1.071,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_13",
+      "scale": 0.84
+    },
+    {
+      "id": "slot_38",
+      "zone": "shop",
+      "zoneName": "Gift shop",
+      "landmark": "Souvenir editions",
+      "screen": [
+        14.15,
+        1.5288,
+        -1.4
+      ],
+      "front": [
+        1,
+        0,
+        0
+      ],
+      "standing": [
+        15.931,
+        0,
+        -1.4
+      ],
+      "width": 1.4112,
+      "height": 1.0584,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_14",
+      "scale": 0.84
+    },
+    {
+      "id": "slot_39",
+      "zone": "shop",
+      "zoneName": "Gift shop",
+      "landmark": "Shop window",
+      "screen": [
+        22.8,
+        1.5288,
+        -1.0
+      ],
+      "front": [
+        0,
+        0,
+        -1
+      ],
+      "standing": [
+        22.8,
+        0,
+        -2.781
+      ],
+      "width": 1.4112,
+      "height": 1.0584,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_14",
+      "scale": 0.84
+    },
+    {
+      "id": "slot_40",
+      "zone": "shop",
+      "zoneName": "Gift shop",
+      "landmark": "Postcard counter",
+      "screen": [
+        17.4,
+        1.5288,
+        -12.75
+      ],
+      "front": [
+        0,
+        0,
+        1
+      ],
+      "standing": [
+        17.4,
+        0,
+        -10.969
+      ],
+      "width": 1.4112,
+      "height": 1.0584,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_14",
+      "scale": 0.84
     }
   ],
   "route": [
@@ -1521,5 +2223,47 @@
         ]
       ]
     }
+  ],
+  "tour": [
+    "slot_01",
+    "slot_02",
+    "slot_03",
+    "slot_04",
+    "slot_05",
+    "slot_06",
+    "slot_07",
+    "slot_08",
+    "slot_09",
+    "slot_15",
+    "slot_17",
+    "slot_23",
+    "slot_18",
+    "slot_19",
+    "slot_21",
+    "slot_20",
+    "slot_22",
+    "slot_16",
+    "slot_10",
+    "slot_31",
+    "slot_32",
+    "slot_33",
+    "slot_24",
+    "slot_29",
+    "slot_11",
+    "slot_12",
+    "slot_34",
+    "slot_35",
+    "slot_26",
+    "slot_30",
+    "slot_27",
+    "slot_28",
+    "slot_25",
+    "slot_13",
+    "slot_37",
+    "slot_36",
+    "slot_14",
+    "slot_38",
+    "slot_39",
+    "slot_40"
   ]
 }

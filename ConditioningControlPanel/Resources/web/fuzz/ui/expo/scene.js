@@ -103,7 +103,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     const camera = new THREE.PerspectiveCamera(LITE ? 65 : 58, 1, .08, 140);
     camera.rotation.order = 'YXZ';
     const sound = createSound(ctx); clean.push(() => sound.dispose());
-    const visitorGuide=createVisitGuide(root,assetURL);clean.push(()=>visitorGuide.dispose());
+    const visitorGuide=createVisitGuide(root);clean.push(()=>visitorGuide.dispose());
     let waitingForEntrance=arrival;
     const walker = createWalker(camera, sound.footstep, id=>narration?.planter?.(id),
       () => ctx.store.claimLifetime('planterDetour')); clean.push(() => walker.dispose());
@@ -270,6 +270,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     const firstFrame = (async () => {
       const plan = await loadPlan(abort.signal);
       if (dead) return;
+      visitorGuide.setRoute(plan.archiveRoute);
       zones = createZones({ scene, renderer, walker, exhibits:rooms, plan, lite: LITE,ctx,camera,play:sound.play, report: error => console.warn(error) });
       clean.push(() => zones.dispose());
       await zones.ensure(plan.start.id);

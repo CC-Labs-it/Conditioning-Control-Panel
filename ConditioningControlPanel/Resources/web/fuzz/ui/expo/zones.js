@@ -3,13 +3,21 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { roomRequest as request, clearEntrance, firstSurfaceMap, viewFile, phoneMap, roomAsset, surfaceDetails } from './entrance.js';
 import {createDoors,loadDoorHardware,streamingPriority} from './doors.js';
+import {fitArchiveBays} from './archive-furniture.js';
 
 export const assetURL = path => new URL('../../assets/expo/' + path, import.meta.url).href;
 const url = name => assetURL('zones/' + name);
 const faces = ['px', 'nx', 'py', 'ny', 'pz', 'nz'];
 
 export async function loadPlan(signal) {
-  return (await request('zones.json', signal)).json();
+  const [plan,archiveRoute]=await Promise.all([
+    request('zones.json',signal).then(r=>r.json()),
+    fetch(assetURL('station-route.json'),{signal}).then(r=>{
+      if(!r.ok)throw Error('Expo tour route HTTP '+r.status);
+      return r.json();
+    })
+  ]);
+  return {...plan,archiveRoute};
 }
 
 function disposeGroup(group) {
@@ -235,6 +243,7 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
       zone.probe.colorSpace = THREE.SRGBColorSpace; zone.probe.needsUpdate = true;
       zone.view.userData.reflectionProbe = zone.probe;
       zone.environment = pmrem.fromCubemap(zone.probe);
+      fitArchiveBays(zone,plan.archiveRoute);
       zone.view.updateMatrixWorld(true);
       const baked = new Map();
       zone.view.traverse(mesh => {

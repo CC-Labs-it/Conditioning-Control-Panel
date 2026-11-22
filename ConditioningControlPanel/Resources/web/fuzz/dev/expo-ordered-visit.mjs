@@ -122,29 +122,38 @@ try {
         __expo.root.focus();return __expo.focusTarget()?.owner;
       },{slot,kind});
     }
-    // Deliberately choose the aquarium before the archive wing and cross to a non-neighbour mid-record.
+    // A visitor can choose the aquarium first, then leave it while its reel continues playing.
     let slot=byId.get('slot_09');await aim(slot,'screen');
     await game.waitForFunction(()=>__expo.narrationState().voice.id==='ev_h0',null,{timeout:45000});
     const first=await state();assert.equal(first.displayed,records[0].id);
     await game.waitForFunction(()=>window.archiveObservations.frames.ev_h0?.length>0);
     const playhead=await game.evaluate(()=>__expo.narrationState().voice.seconds);
-    slot=byId.get(mode==='sample'?'slot_02':'slot_12');assert.equal(await aim(slot,'replay'),'expo_replay_'+slot.id);
+    const elsewhere=byId.get('slot_12');assert.equal(await aim(elsewhere,'replay'),'expo_replay_'+elsewhere.id);
     await page.keyboard.press('e');
     report.handoff=await state();
     assert.equal(report.handoff.playingAt,slot.id);
     assert.equal(report.handoff.displayed,records[0].id);
     assert.ok(await game.evaluate(()=>__expo.narrationState().voice.seconds)>=playhead);
-    await shot('transfer');
-    const destinations=['slot_09','slot_03','slot_10','slot_04','slot_11','slot_02','slot_08','slot_07','slot_13','slot_06','slot_01','slot_05','slot_12','slot_14'];
+    await aim(slot,'screen');
+    await shot('original-screen');
+    const destinations=slots.filter(s=>s.id!==slot.id);
     const length=mode==='sample'?2:records.length;
     for(let i=0;i<length;i++){
       if(i>0){
-        slot=byId.get(destinations[(i-1)%destinations.length]);
+        slot=destinations[i-1];
         assert.equal(await aim(slot,'replay'),'expo_replay_'+slot.id,'main button at '+slot.id);
         await page.keyboard.press('e');
       }
       await game.waitForFunction(n=>__expo.narrationState().archive.completed>=n,i+1,{timeout:80000});
       const result=await state();assert.equal(result.completed,i+1);
+      if(i===0){
+        await page.waitForTimeout(3200);
+        const parked=await game.evaluate(id=>{
+          const s=__expo.narrationState();
+          return {count:s.archive.completed,playing:s.archive.playingAt,own:s.stations.find(p=>p.id===id).record};
+        },slot.id);
+        assert.deepEqual(parked,{count:1,playing:undefined,own:records[0].id});
+      }
       report.events.push({number:i+1,id:records[i].id,slot:slot.id,completed:result.completed});
       if(i===0||i===19||i===39)await shot('after-'+(i+1));
       await save();

@@ -89,7 +89,10 @@ test('quit resumes the Expo archive, while exit, panic and legacy recaps stay cl
     ui.credits = () => { state.credits++; };
     const registry = { ll_end: { ...REGISTRY.ll_end, take(ctx) {
       state.ctx = ctx;
-      state.story = createArchiveStory(catalogue, ctx.store.get('lastArchiveRecord'), id => ctx.store.set('lastArchiveRecord', id));
+      state.story = createArchiveStory(catalogue, ctx.store.get('lastArchiveRecord'), (id, slots) => {
+        ctx.store.set('archiveScreens', slots);
+        ctx.store.set('lastArchiveRecord', id);
+      }, ctx.store.get('archiveScreens'));
       return new Promise(resolve => {
         state.leave = resolve;
         ctx.on('suspend', event => { if (event.on && event.reason === 'panic') resolve(); });
@@ -115,13 +118,16 @@ test('quit resumes the Expo archive, while exit, panic and legacy recaps stay cl
   }
   const first = freshEnding(createLife());
   assert.equal(first.ctx.store.claimLifetime('planterDetour'), true);
-  first.story.finish(first.story.request('slot_01'), true);
+  first.story.finish(first.story.request('slot_22'), true);
   first.story.request('slot_02'); // Closing during record two should retry it.
   first.engine.setSuspended(true, 'focus');
   first.engine.save(); // Regular pagehide and native host close flush the same save.
   const resumed = restore();
   assert.equal(resumed.ctx.restored, true);
   assert.equal(resumed.story.next.archive.number, 2);
+  assert.equal(resumed.story.assigned('slot_22').archive.number, 1);
+  assert.equal(resumed.story.canAutoplay('slot_22'), false);
+  assert.equal(resumed.story.canAutoplay('slot_02'), true);
   assert.equal(resumed.ctx.store.claimLifetime('planterDetour'), false);
   assert.equal(load(storage).life.runs, 1);
   assert.deepEqual(notified, ['fuzz-ended']);

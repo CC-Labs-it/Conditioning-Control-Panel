@@ -36,50 +36,12 @@
         10.0,
         42.2
       ],
-      "file": "service-6ed5400ae5f2f674.glb",
-      "mobileFile": "service-6ed5400ae5f2f674-mobile.glb",
-      "lightIntensity": 61.04885806671427,
+      "file": "service-7b3a25db1d486179.glb",
+      "mobileFile": "service-7b3a25db1d486179-mobile.glb",
+      "lightIntensity": 50.097835135235655,
       "reflectionIntensity": 0.33,
-      "crossings": [
-        {
-          "axis": "z",
-          "direction": -1,
-          "at": 21.93,
-          "across": [
-            21.4,
-            23.44
-          ],
-          "height": [
-            1.37,
-            2.03
-          ],
-          "offset": [
-            0,
-            3.4,
-            0
-          ]
-        },
-        {
-          "axis": "z",
-          "direction": 1,
-          "at": 21.96,
-          "across": [
-            21.4,
-            23.44
-          ],
-          "height": [
-            4.77,
-            5.43
-          ],
-          "offset": [
-            0,
-            -3.4,
-            0
-          ]
-        }
-      ],
-      "assetStem": "service-6ed5400ae5f2f674",
-      "collision": "service-6ed5400ae5f2f674-collision.glb"
+      "assetStem": "service-7b3a25db1d486179",
+      "collision": "service-7b3a25db1d486179-collision.glb"
     },
     {
       "id": "secret",
@@ -91,9 +53,9 @@
         3.75,
         53.5
       ],
-      "file": "secret-297d8ebfb80254d9.glb",
-      "mobileFile": "secret-297d8ebfb80254d9-mobile.glb",
-      "lightIntensity": 11.086303858266504,
+      "file": "secret-6caa705e7ec17a2b.glb",
+      "mobileFile": "secret-6caa705e7ec17a2b-mobile.glb",
+      "lightIntensity": 11.541958320435237,
       "reflectionIntensity": 0.33,
       "crossings": [
         {
@@ -151,8 +113,8 @@
           ]
         }
       ],
-      "assetStem": "secret-297d8ebfb80254d9",
-      "collision": "secret-297d8ebfb80254d9-collision.glb"
+      "assetStem": "secret-6caa705e7ec17a2b",
+      "collision": "secret-6caa705e7ec17a2b-collision.glb"
     },
     {
       "id": "twelve",
@@ -268,12 +230,12 @@
         10.8,
         16
       ],
-      "file": "hall-01878d1412b58f6d.glb",
-      "mobileFile": "hall-01878d1412b58f6d-mobile.glb",
-      "lightIntensity": 34.55088592100261,
+      "file": "hall-ded2f60ac02e9836.glb",
+      "mobileFile": "hall-ded2f60ac02e9836-mobile.glb",
+      "lightIntensity": 34.94238358415457,
       "reflectionIntensity": 0.33,
-      "assetStem": "hall-01878d1412b58f6d",
-      "collision": "hall-01878d1412b58f6d-collision.glb"
+      "assetStem": "hall-ded2f60ac02e9836",
+      "collision": "hall-ded2f60ac02e9836-collision.glb"
     },
     {
       "id": "catwalk",

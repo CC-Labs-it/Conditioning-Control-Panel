@@ -4,29 +4,31 @@ import {MeshoptDecoder} from 'three/addons/libs/meshopt_decoder.module.js';
 
 // Thresholds are measured at the fixed jambs, in world metres. The tangent follows the closed leaves.
 const door=(id,rooms,x,y,z,axis,width,height,kind='civic',leaves=2,swingSide=0)=>({id,rooms,x,y,z,axis,width,height,kind,leaves,swingSide});
+// Keep the architectural opening for the fixed jambs and give the moving panels a separate clear span.
+const fit=(opening,width,height=opening.height)=>({...opening,roughWidth:opening.width,roughHeight:opening.height,width,height});
 export const doorways=[
-  door('hall-entrance',['hall','atrium'],0,0,16,'x',3.16,2.34),
-  door('portrait-rotunda',['hall','twelve'],0,0,-16,'x',3.16,2.32),
-  door('hoof-exhibit',['hall','hoof'],-12,0,7,'z',2.35,2.32),
-  door('dome-exhibit',['hall','dome'],-12,0,-5,'z',2.35,2.32),
-  door('habitat-exhibit',['hall','habitat'],12,0,7,'z',2.35,2.32),
-  door('shop-entrance',['hall','shop'],12,0,-5,'z',2.35,2.32),
-  door('staff-entrance',['atrium','service'],12,0,32,'z',2.25,2.12,'staff'),
-  door('staff-upper',['atrium','service'],12,6.8,23,'z',2.32,2.15,'staff'),
-  door('catwalk-access',['atrium','catwalk'],-12,6.8,21,'z',2.33,2.12,'staff'),
+  fit(door('hall-entrance',['hall','atrium'],0,0,16,'x',3.16,2.34),2.90),
+  fit(door('portrait-rotunda',['hall','twelve'],0,0,-16,'x',3.16,2.32),2.84),
+  fit(door('hoof-exhibit',['hall','hoof'],-12,0,7,'z',2.35,2.32),2.05),
+  fit(door('dome-exhibit',['hall','dome'],-12,0,-5,'z',2.35,2.32),2.05),
+  fit(door('habitat-exhibit',['hall','habitat'],12,0,7,'z',2.35,2.32),2.05),
+  fit(door('shop-entrance',['hall','shop'],12,0,-5,'z',2.35,2.32),2.05),
+  fit(door('staff-entrance',['atrium','service'],12,0,32,'z',2.25,2.12,'staff'),1.96,2.00),
+  fit(door('staff-upper',['atrium','service'],12,6.8,23,'z',2.32,2.15,'staff',2,1),1.82),
+  fit(door('catwalk-access',['atrium','catwalk'],-12,6.8,21,'z',2.33,2.12,'staff'),1.92),
   {...door('inspection-shutter',['atrium','catwalk'],-12.04,7.74,28,'z',.62,.84,'staff',1),lift:.94},
-  door('archive-entrance',['service','secret'],30.42,0,41,'z',2.24,2.15,'staff'),
+  fit(door('archive-entrance',['service','secret'],30.42,0,41,'z',2.24,2.15,'staff',2,1),1.78),
   door('chronology-entrance',['atrium','chronology'],7.8,0,41.1,'x',3.10,2.98,'civic',2,-1),
   door('aquarium-return',['atrium','aquarium'],-7.8,0,41.1,'x',3.10,2.98,'civic',2,-1),
-  door('archive-to-forum',['chronology','forum'],3.4,0,103,'z',6.60,4.62),
-  door('forum-to-commons',['forum','commons'],-66.2,0,98.6,'x',6.60,4.62),
-  door('aquarium-climate-doors',['commons','aquarium'],-61.8,0,45.5,'z',6.60,4.62),
+  fit(door('archive-to-forum',['chronology','forum'],3.4,0,103,'z',6.60,4.62,'civic',2,1),4.70,2.94),
+  fit(door('forum-to-commons',['forum','commons'],-66.2,0,98.6,'x',6.60,4.62),4.70,2.94),
+  fit(door('aquarium-climate-doors',['commons','aquarium'],-61.8,0,45.5,'z',6.60,4.62),4.25,2.90),
   // The five staff-room leaves open into the rooms and leave the narrow cross-corridor clear.
   door('staff-breakroom',['service'],18,0,30.8,'x',1.10,2.04,'staff',1,1),
   door('staff-store',['service'],23.65,0,33.2,'x',1.10,2.04,'staff',1,-1),
   door('server-cupboard',['service'],25,0,30.8,'x',1.10,2.04,'staff',1,1),
-  door('maintenance-stairs',['service'],30.3,0,30.8,'x',2.29,2.04,'staff',2,1),
-  door('archive-passage',['service'],29.2,0,33.2,'x',2.29,2.04,'staff',2,-1),
+  fit(door('maintenance-stairs',['service'],30.3,0,30.8,'x',2.29,2.04,'staff',2,1),1.88),
+  fit(door('archive-passage',['service'],29.2,0,33.2,'x',2.29,2.04,'staff',2,-1),1.88),
   door('reading-room',['secret'],80.4,0,41,'z',1.21,2.04,'civic',1),
   door('return-reading-room',['secret'],86.4,0,51,'z',1.21,2.04,'civic',1)
 ];
@@ -86,34 +88,40 @@ export async function loadDoorHardware(url,signal){
 export function createDoors(scene,walker,ctx,camera,play){
   const rooms=new Map(),active=new Map(),scratch=new Vector3(),heading=new Vector3(),last=new Vector3();
   let hardware=null,crown=null,inspectionWall=null;
-  function appearance(zone,source){
-    if(zone.finishes.has(source.material))return zone.finishes.get(source.material);
-    const existing=zone.materials.get(source.userData.finish),m=(existing||source.material).clone();
+  function appearance(zone,source,finish=source.userData.finish){
+    const existing=zone.materials.get(finish)||source.material;
+    if(zone.finishes.has(existing))return zone.finishes.get(existing);
+    const m=existing.clone();
     m.lightMap=null;m.envMap=zone.environment;m.envMapIntensity=1.45;
-    zone.finishes.set(source.material,m);return m;
+    zone.finishes.set(existing,m);return m;
   }
   function build(d){
     const root=new Group();root.name='swing_'+d.id;root.position.set(d.x,d.y,d.z);
     root.rotation.y=d.axis==='x'?0:-Math.PI/2;scene.add(root);
     const state={d,root,leaves:[],progress:0,side:1,hold:0,finishRoom:null};
-    if(d.rooms.length===2){
+    const shared=d.rooms.length===2,roughWidth=d.roughWidth??d.width,roughHeight=d.roughHeight??d.height;
+    if(shared){
       state.backing=new Group();
-      state.backing.scale.set(d.width+.38,(d.height+.34)/2.18,1);
+      state.backing.scale.set(roughWidth+.38,(roughHeight+.34)/2.18,1);
       state.backing.position.y=-.014;
       for(const part of hardware.parts.get('Backing')||[])state.backing.add(part.clone(false));
       root.add(state.backing);
+    }
+    if(shared || d.roughWidth){
       // The two rooms can have different rough openings. A fixed head and jamb liner fills the
       // rebate beyond the moving leaves. One instanced draw uses the authored gasket profile.
       const profile=hardware.parts.get('Backing')?.[0];
       if(profile){
-        const trim=new InstancedMesh(profile.geometry,profile.material,3),m=new Matrix4();
-        const edge=.19,top=.34,inner=d.width*.5;
-        for(const [i,x,y,width,height] of [
-          [0,-inner-edge*.5,0,edge,d.height],[1,inner+edge*.5,0,edge,d.height],
-          [2,0,d.height,d.width+edge*2,top]
-        ]){
+        const edge=(roughWidth-d.width)*.5+(shared?.19:0),top=roughHeight-d.height+(shared?.34:0),inner=d.width*.5;
+        const bands=[[-inner-edge*.5,0,edge,d.height],[inner+edge*.5,0,edge,d.height]];
+        if(top>0)bands.push([0,d.height,d.width+edge*2,top]);
+        const trim=new InstancedMesh(profile.geometry,profile.material,bands.length),m=new Matrix4();
+        state.fixed=[];
+        for(const [i,[x,y,width,height]] of bands.entries()){
           m.makeScale(width,height/2.18,5).setPosition(x,y,0).multiply(profile.matrix);
           trim.setMatrixAt(i,m);
+          const jamb=new Group();jamb.position.set(x-width/2,y,0);root.add(jamb);
+          state.fixed.push(registerLeaf(d.rooms[0],d.id+'-jamb-'+i,jamb,width,height,true));
         }
         trim.name='threshold_liner_'+d.id;root.add(trim);state.trim=trim;state.trimSource=profile;
       }
@@ -137,7 +145,7 @@ export function createDoors(scene,walker,ctx,camera,play){
     active.set(d.id,state);pose(state);return state;
   }
   function pose(s){
-    const ease=MathUtils.smootherstep(s.progress,0,1),angle=ease*Math.PI*.49;
+    const ease=MathUtils.smootherstep(s.progress,0,1),angle=ease*Math.PI*(84/180);
     for(const leaf of s.leaves){
       if(s.d.lift){
         // The little authored door is already open on its outside jamb. Its protective grille
@@ -156,13 +164,13 @@ export function createDoors(scene,walker,ctx,camera,play){
     for(const d of doorways){
       let s=active.get(d.id);
       const source=rooms.has(s?.finishRoom)?s.finishRoom:d.rooms.find(id=>rooms.has(id));
-      if(!source){if(s){s.root.removeFromParent();s.trim?.dispose();active.delete(d.id);}continue;}
+      if(!source){if(s){for(const remove of s.fixed||[])remove();s.root.removeFromParent();s.trim?.dispose();active.delete(d.id);}continue;}
       if(!s)s=build(d);
       if(s.backing)s.backing.visible=!d.rooms.every(id=>rooms.has(id));
       if(s.finishRoom!==source){
         const zone=rooms.get(source);
         for(const leaf of s.leaves)for(const {geom,source:mesh}of leaf.surfaces)geom.material=appearance(zone,mesh);
-        if(s.trim)s.trim.material=appearance(zone,s.trimSource);
+        if(s.trim)s.trim.material=appearance(zone,s.trimSource,d.roughWidth?'alloy':s.trimSource.userData.finish);
         s.finishRoom=source;
       }
     }

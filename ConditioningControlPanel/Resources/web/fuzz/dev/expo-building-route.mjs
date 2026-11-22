@@ -8,21 +8,26 @@ export function buildingRoute(serviceOnly=false) {
   const upperLanding=[[-4.56,6.8,18.5],[-10.3,6.8,18.5],[-10.3,6.8,21],[-12.2,6.8,21]];
   const tower=[[-13.2,6.8,21],[-18.7,6.8,21],[-20.13,6.8,20.4],[-21.95,6.8,20.90],[-22,11.90,12.5],[-22,11.95,11.7],[-22,11.95,-5.80]];
   const tiny=[[-13.2,6.8,21],[-13.2,6.8,28],[-12.55,6.8,28]];
-  const upperStaff=[[-10.3,6.8,21],[-10.3,6.8,18.5],[10.3,6.8,18.5],[10.3,6.8,23],[12.5,6.8,23]];
-  const high=[[12.5,6.8,23],[30.2,6.8,23],[30.2,6.8,20.71],[26.2,6.8,20.71],[23.4,5.1,20.71],[22.42,5.1,20.71]];
-  const low=[[22.42,1.7,23],[23.4,1.7,23],[26.2,0,23],[30.3,0,23],[30.3,0,32]];
+  const upperStaff=[[-10.3,6.8,21],[-10.3,6.8,18.5],[11.39,6.8,18.5],[11.39,6.8,23],[12.5,6.8,23]];
+  const serviceStair=[[30.3,0,32],[30.3,0,22.03],[26.2,0,22.03],
+    [23.4,1.7,22.03],[22.5,1.7,22.03],[22.5,1.7,20.06],[23.4,1.7,20.06],
+    [26.2,3.4,20.06],[27.45,3.4,20.06],[27.45,3.4,22.03],[26.2,3.4,22.03],
+    [23.4,5.1,22.03],[22.5,5.1,22.03],[22.5,5.1,20.06],[23.4,5.1,20.06],
+    [26.2,6.8,20.06],[28.45,6.8,20.06],[28.45,6.8,20.75],[30.15,6.8,20.75],
+    [30.15,6.8,23.56],[20.1,6.8,23.56],[12.5,6.8,23]];
   const jump=(goal,after)=>({goal,after});
   s('Arrival and grand curved stair',...entry,...grand);
   s('West mezzanine and spiral stair',...lowerGallery,...spiral,...upperLanding);
   s('Catwalk and dome oculus',...tower);
   s('Return from oculus and view through small door',...tower.toReversed().slice(1),...tiny);
   s('Across the upper atrium into staff access',...tiny.toReversed().slice(1),...upperStaff);
-  s('Descend service flight and hidden extra storey',...high,jump([22.42,5.1,22.14],[22.42,1.7,21.96]),...low);
-  s('Break room, store room and server cupboard',[25,0,32],[25,0,28.6],[25,0,32],[23.65,0,32],[23.65,0,37.9],[23.65,0,32],[18,0,32],[18,0,27.1],[18,0,32]);
+  s('Descend the four service flights',...serviceStair.toReversed());
+  s('Break room, store room and server cupboard',[25,0,32],[25,0,28.6],[25,0,32],[23.65,0,32],
+    [23.65,0,35.3],[24.45,0,36.069],[23.65,0,35.3],[23.65,0,32],[18,0,32],[18,0,27.1],[18,0,32]);
   s('Contract gallery and chair',[29.18,0,32],[29.18,0,41],[30.55,0,41],[84.7,0,41]);
   s('Longer return, then walk back in through original doorway',jump([79.8,0,41],[86,0,51]),jump([86.45,0,51],[80.42,0,41]),[81.15,0,41],jump([79.8,0,41],[86,0,51]),jump([33.3,0,51],[34.2,0,41]),[29.18,0,41],[29.18,0,32]);
   s('Return to atrium and approach service doorway again',[11.3,0,32],[10.65,0,32],[12.55,0,32],[30.3,0,32]);
-  s('Climb service stair in reverse through the extra storey',...low.toReversed(),jump([22.42,1.7,21.70],[22.42,5.1,21.93]),...high.toReversed(),...upperStaff.toReversed().slice(1));
+  s('Climb the four service flights to the upper atrium',...serviceStair,...upperStaff.toReversed().slice(1));
   s('Descend spiral and grand stairs to the turnstile',...upperLanding.toReversed().slice(1),...spiral.toReversed(),...lowerGallery.toReversed(),...grand.toReversed(),...entry.toReversed());
   s('Atrium to Expo hall and back',[0,0,37.2],[-2.4,0,37.2],[-2.4,0,33.6],[-3,0,28],[0,0,15.2],[0,0,16.6]);
   const views=[[1.6,2.2,26.2],[-9.1,7.25,21],[-22,5.4,-5],[-8.1,6.0,28],[27,7.9,23],
@@ -31,8 +36,8 @@ export function buildingRoute(serviceOnly=false) {
   if(serviceOnly){
     const keep=routes.slice(6,9);
     routes.length=0;
-    s('Staff entrance to blind stair',[12.55,0,32],[30.3,0,32],...low.toReversed(),jump([22.42,1.7,21.7],[22.42,5.1,21.93]),...high.toReversed());
-    s('Upper walkway return',...high,jump([22.42,5.1,22.14],[22.42,1.7,21.96]),...low);
+    s('Staff entrance to the upper service walkway',[12.55,0,32],...serviceStair);
+    s('Return down the four service flights',...serviceStair.toReversed());
     routes.push(...keep);
     s('Return to starting staff door',[12.55,0,32]);
   }

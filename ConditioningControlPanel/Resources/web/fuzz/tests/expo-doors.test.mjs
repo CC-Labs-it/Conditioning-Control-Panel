@@ -20,6 +20,7 @@ function installation(gentle=false){
     source.userData.finish='oak';parts.set(part+'_'+kind,[source]);
   }
   parts.set('CrownShutter',[new Mesh(undefined,new MeshStandardMaterial())]);
+  parts.set('Backing',[new Mesh(new BoxGeometry(1,2.18,.011),new MeshStandardMaterial())]);
   const sounds=[],scene=new Group(),doors=createDoors(scene,walker,{gentle},camera,(key)=>sounds.push(key));
   doors.setHardware({parts,dispose(){}});
   doors.mount('atrium',room());
@@ -68,13 +69,15 @@ test('streaming distinguishes stacked levels, view direction and the two annex d
 });
 
 test('all three gallery elbows have a doorway before the neighboring assets arrive',()=>{
-  const {doors}=installation();
-  const pairs=[['chronology','forum','archive-to-forum'],['forum','commons','forum-to-commons'],['commons','aquarium','aquarium-climate-doors']];
-  for(const [inside,outside,id] of pairs){
+  const {doors,scene}=installation();
+  const pairs=[['chronology','forum','archive-to-forum',4.70],['forum','commons','forum-to-commons',4.70],['commons','aquarium','aquarium-climate-doors',4.25]];
+  for(const [inside,outside,id,width] of pairs){
     doors.mount(inside,room());const sealed=doors.debug().find(d=>d.id===id);
     assert(sealed);assert.equal(sealed.ready,false);assert.equal(sealed.progress,0);
     const a=new Vector3().fromArray(sealed.leaves[0].hinge),b=new Vector3().fromArray(sealed.leaves[1].hinge);
-    assert(Math.abs(a.distanceTo(b)-6.60)<1e-8);
+    assert(Math.abs(a.distanceTo(b)-width)<1e-8);
+    assert(scene.getObjectByName('threshold_liner_'+id));
+    assert(doors.debug().some(d=>d.id===id+'-jamb-0'));
     doors.mount(outside,room());assert(doors.debug().find(d=>d.id===id).ready);
     doors.unmount(inside);doors.unmount(outside);
   }

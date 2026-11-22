@@ -64,7 +64,7 @@ try{
     const manifest=await (await fetch('assets/expo/narration/manifest.json')).json();
     const byId=new Map(manifest.map(row=>[row.id,row]));
     const firstId=manifest.find(row=>row.archive?.number===1).id;
-    const realTime=new Set(['pa_arrive_1','pa_timeline',firstId]);
+    const realTime=new Set(['pa_arrive_1','pa_timeline','pa_turnstile','dome_3',firstId]);
     const root=document.querySelector('main'),handles=new Set(),results=new Map(),problems=new Set(),marks=[];
     let peakSpeech=0,peakVoiceElements=0,peakCaptions=0,recordingSince=null,latestCaption=null,lowestWelcomeGain=1;
     const roomTone={frames:0,seconds:0};
@@ -186,7 +186,15 @@ try{
       begin(){void n.cue('pa_arrive_1',{zone:'atrium'});void press('slot_01');},
       cross(){walker.zone='hall';camera.position.set(30,1.62,1.75);camera.updateMatrixWorld(true);unmount('atrium');},
       listenHere(){void press('slot_02');},
-      async record(id){const row=byId.get(id);if(row.set==='event')await press('slot_02');else await n.cue(id,{replay:true,zone:walker.zone});return results.get(id);},
+      async record(id){
+        const row=byId.get(id);
+        if(row.set==='event'){
+          const slot='slot_'+String(row.archive.number).padStart(2,'0');
+          unmount('hall');mount('hall',slot,30);
+          await press(slot);
+        }else await n.cue(id,{replay:true,zone:walker.zone});
+        return results.get(id);
+      },
       pause(on){ctx.paused=on;kit.hold(on);n.pause(on);},
       stats:()=>({recordings:[...results.values()],peakSpeech,peakVoiceElements,peakCaptions,problems:[...problems],roomTone,lowestWelcomeGain,webglRequests:window.__expoGlRequests}),
       close(){clearInterval(timer);n.dispose();kit.stopStreams();masterTap.disconnect();analyser.disconnect();}
@@ -204,7 +212,7 @@ try{
   await page.waitForFunction(id=>completeAudio.n.debug().finished[id]===1,first,{timeout:45000});
   const marks=await page.evaluate(()=>completeAudio.stopSample());
   await finishGameAudio(page,path.join(dir,'opening.webm'));
-  report.opening={fullSpeed:true,contents:marks,originalRoomUnloaded:true,archiveMovedToSecondStation:true};
+  report.opening={fullSpeed:true,contents:marks,originalRoomUnloaded:true,secondStationPressedDuringPlayback:true};
   const captions=marks.map((m,i)=>(i+1)+'\n'+stamp(m.start)+' --> '+stamp(m.end)+'\n'+m.text+'\n').join('\n');
   await writeFile(path.join(dir,'opening.srt'),captions+'\n');
   const remaining=events.slice(1).concat(manifest.filter(row=>row.set!=='event'&&!['pa_arrive_1','pa_timeline'].includes(row.id)));
