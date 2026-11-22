@@ -11,6 +11,7 @@ import { pickExhibits } from './exhibit-picking.js';
 import { mountExpoRadio, RADIO_STYLE } from './music-controls.js';
 import { MOBILE_OVERLAY_STYLE } from './mobile-overlay-style.js';
 import { createWalker } from './collision.js';
+import {createRail} from './rail.js';
 import { expoAllowed } from '../edition.js';
 import { assetURL } from './asset-base.js';
 import { createZones, loadPlan } from './zones.js';
@@ -89,7 +90,8 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     for (const fn of clean.reverse()) try { fn(); } catch (e) { console.warn(e); }
   }
   try {
-    ctx.css(CSS+TRAIL_STYLE+MOBILE_OVERLAY_STYLE+RADIO_STYLE);
+    ctx.css(CSS+TRAIL_STYLE+MOBILE_OVERLAY_STYLE+RADIO_STYLE+
+      '.expo-paged-lore .expo-full-line{position:absolute;clip-path:inset(50%);width:1px;height:1px;overflow:hidden}.expo-paged-lore::after{content:attr(data-phrase)}');
     root.toggleAttribute('data-calm',!!(ctx.gentle||ctx.reduced));
     const element = (tag, cls) => { const e = doc.createElement(tag); e.className = cls; root.append(e); return e; };
     const canvas = element('canvas', 'expo-canvas');
@@ -134,7 +136,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       () => ctx.store.claimLifetime('planterDetour')); clean.push(() => walker.dispose());
     const buttons=createButtonTravel(ctx);
     const targets = new Map(), pointer = new THREE.Vector2(), ray = new THREE.Raycaster(), hits = [];
-    let maxReach = 0, zones, exhibits, dome, narration, returnButton, targetTime = 0, loading = false;
+    let maxReach = 0, zones, exhibits, dome, narration, rail, returnButton, targetTime = 0, loading = false;
     function register(mesh, label, callback, reach = 2.3) {
       const {roots,activate}=buttons.bind(mesh,callback);
       const action={label,reach,owner:mesh,callback:activate};
@@ -166,13 +168,14 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     }
     let pressedUntil = 0, actionSerial=0;
     function interact(point) {
+      if(rail?.welcome&&!ctx.paused&&!doc.hidden){say('Listen to the welcome');return true;}
       if(exhibits?.state.pressWatching&&!ctx.paused&&!doc.hidden){sound.play('press',.24);say('The exhibit is moving.');return true;}
       if (!ctx.paused && !doc.hidden && walker.stepOffPlanter()) { updatePrompt(); return true; }
       const target = targetAt(point);
       if (target) {
         if(exhibits.refuseHoof(target.action,target.hit))return true;
         actionSerial++;pressedUntil=elapsed+.19; aim.dataset.pressed=ctx.gentle||ctx.reduced?'gentle':'full';
-        target.action.callback(target.hit);
+        target.action.callback(target.hit);rail?.tick(0);
       }
       if(!target && ready && !dead && !loading && !returnButton && !ctx.paused && !doc.hidden){const floor=floorPlacement(point);if(floor)return exhibits.hands.place(floor);}
       return !!target;
@@ -213,7 +216,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     }
     function farewell(leave,label='Leaving Llama Expo 2037') {
       if (dead || returnButton) return;
-      controls.reset();
+      rail?.pause(true);controls.reset();
       const panel=element('section','expo-farewell'),title=doc.createElement('h2');
       title.textContent=label;panel.setAttribute('aria-label',title.textContent);
       returnButton=doc.createElement('button');returnButton.type='button';returnButton.className='expo-return-recap';
@@ -264,7 +267,8 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       media?.dispose(); media = dome ? createExpoMedia(ctx, root, camera, dome, { lite: LITE }) : null;
       return media;
     }
-    narration=createNarration({ctx,camera,scene,root,register,walker,sound,assetURL,lite:LITE,owned:()=>exhibits.state.file.herd});
+    narration=createNarration({ctx,camera,scene,root,register,walker,sound,assetURL,lite:LITE,owned:()=>exhibits.state.file.herd,
+      viewing:entry=>rail?.view(entry),releaseView:entry=>rail?.clearView(entry)});
     const voiceCaptions=root.querySelector('.expo-narration'),messages=element('div','expo-visitor-messages');
     messages.append(caption,voiceCaptions);voiceCaptions.prepend(guide);
     narration.pause(waitingForEntrance || ctx.paused || doc.hidden);
@@ -273,9 +277,11 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     const kit=exhibitProps(assetURL),annex=exhibitProps(assetURL,'visitor-services.glb');clean.push(()=>kit.dispose(),()=>annex.dispose());
     exhibits = createExhibits({ THREE, ctx, camera, scene, root, draw, say, walker, renderer, muffle:narration.muffle, setHeaterPower:sound.setHeaterPower, pauseMusic:on=>music.pause(on), signal:instruments.signal, props:kit.mount, annexProps:annex.mount, records:()=>narration.story?.completed||0,
       storeSouvenir:(obj,label)=>souvenirPrint({THREE,renderer,draw,ctx},obj,label), actionSerial:()=>actionSerial, cue:narration.cue, narrationAvailable:narration.available, closingLine:narration.closingLine, play: sound.play, setSoundDepth: sound.setDepth,
-      go, exit: onExit, farewell, register, assetURL, bindMedia, capturePhoto, finalPhoto, setColliderEnabled:walker.setColliderEnabled,
+      go:(id,...args)=>rail.allows(id)?go(id,...args):Promise.resolve(false), exit: onExit, farewell, register, assetURL, bindMedia, capturePhoto, finalPhoto, setColliderEnabled:walker.setColliderEnabled,
       lookPoint, holdPressView:()=>controls?.stopMoving(),
       buttonAssembly:buttons.assemblyFor,setButtonAvailable:buttons.setAvailable,registerDoorLeaf:(...args)=>zones?.registerDoorLeaf(...args) });
+    rail=createRail({ctx,scene,walker,state:exhibits.state,voice:()=>narration,play:sound.play});
+    walker.setRail(rail);clean.push(()=>{walker.setRail(null);rail.dispose();});
     dome = createDomeEffects({ctx,camera,cue:narration.cue,play:sound.play,register,bindMedia,setSoundDepth:sound.setDepth,lite:LITE,
       visit:exhibits.state,finish:exhibits.endVisit,doorOpening:id=>zones?.doorOpening(id)??0});
     const guests=createGuestCollection(assetURL);
@@ -320,6 +326,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     let previous = ctx.activeMs;
     function sync() {
       const hold = ctx.paused || doc.hidden;
+      rail.pause(hold||!!returnButton);
       previous = ctx.activeMs; controls.reset(); media?.pause(hold); sound.pause(hold); narration.pause(hold || waitingForEntrance); exhibits.pause?.(hold);
       if (!hold) cameraMenu.close();
       if (!hold && ready) (returnButton||root).focus({ preventScroll: true });
@@ -331,7 +338,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       if (!ready || dead || ctx.paused || doc.hidden) return;
       elapsed += dt; controls.step(dt); walker.step(dt); entered(); sound.setListener(walker.feet);
       zones.stream(dt); exhibits.tick?.(dt, walker.zone); dome.step(dt,walker.zone); narration.tick(dt);instruments.tick(dt,walker.zone);buttons.tick(dt);
-      music.setSpeaking(narration.speaking);
+      rail.tick(dt);music.setSpeaking(narration.speaking);
       ambience.tick(dt);collection.tick(dt,ctx.gentle||ctx.reduced);
       let resized=false;
       if(dt<.12 && dt>0){budgetTime+=dt;budgetFrames++;}
@@ -360,7 +367,11 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       clean.push(() => zones.dispose());
       await zones.ensure(plan.start.id);
       if (dead) return;
-      const { id, at, yaw } = plan.start; walker.place(id, at, yaw); ready = true; entered(); resize(); sync();
+      const {id,at,yaw}=plan.start,first=await rail.firstArrival();
+      if(dead)return;
+      walker.place(id,first?[at[0],at[1],at[2]+1.35]:at,first?0:yaw);
+      if(first)rail.greet();
+      ready=true;entered();resize();sync();
     })();
     const music = createMuseumMusic(ctx, {
       document: doc, ready: firstFrame, root:assetURL('audio/radio/'), source: 'expo-music', label: 'Expo music', level: .22, speechLevel: .06,
@@ -380,7 +391,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
         const lineage=[];for(let n=target.hit.object;n;n=n.parent)if(n.name)lineage.push(n.name);
         return {owner:target.action.owner.name,lineage,distance:target.hit.distance};
       },
-      doors:()=>zones.doors(),
+      doors:()=>zones.doors(),rails:rail.debug,
       deepen: seconds => { if (!ctx.paused && walker.zone === 'dome') { dome.step(Math.min(300,Math.max(0,seconds)),'dome'); draw(); } },
       state: () => ({ zone: walker.zone, feet: walker.feet.toArray(), surface: walker.surface, elapsed, ready,
         loaded: [...(zones?.resident.keys() || [])], textures:zones?.textureStats(), calls: renderer.info.render.calls, pixelRatio, depth:dome.state.depth, phase:dome.state.phase, seconds:dome.state.seconds, planter:walker.planter.state(), ...exhibits.debug?.() }),

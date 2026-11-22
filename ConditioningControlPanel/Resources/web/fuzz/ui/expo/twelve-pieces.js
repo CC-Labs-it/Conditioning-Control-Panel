@@ -65,6 +65,8 @@ export function createTwelvePieces(api,state){
         if(key==='greg'){
           local.stapler=place('annex_stapler',at(1.20,.18,-.89),yaw);
           local.stapler.scale.setScalar(1.45);local.stapler.visible=!state.staffVisit.staplerHome&&state.carry?.key!=='stapler';
+          const tray=place('annex_plinth',at(1.20,.15,-.89),yaw);tray.scale.set(.5,.35,.5);
+          bind(tray,'Return Greg’s stapler',()=>{if(api.drop('stapler'))local.stapler.visible=true;});
           bind(local.stapler,'Borrow Greg’s stapler',()=>{
             if(useCarry(api,state,'stapler',local.stapler,'Greg’s stapler')){away=0;api.say('Keep the stapler in sight. Greg likes it on the left of his staff desk.');}
           },2.9);
@@ -108,10 +110,13 @@ export function createTwelvePieces(api,state){
           layThread(api,group,place,route,off);
         }
         if(key==='lashes'){
-          local.lashes=gaze;local.form=place('annex_permit',at(.63,.06),yaw);local.form.visible=false;
+          local.lashes=gaze;local.form=place('annex_permit',at(.63,.06),yaw);local.form.visible=!!progress.formReturned;
+          bind(local.form,'Signed form',()=>{if(api.exchange('signed-form',local.form,'Signed visitor form')){local.form.visible=false;progress.formReturned=false;}});
           const notice=place('annex_sign',at(1.13,-.68,-.89),yaw);
           write(dial(api,notice,'sign_face',off),'Lady Lashes','Do not look too long.');
-          bind(notice,'Read the warning',()=>api.say('Do not look too long.'));
+          bind(notice,()=>state.carry?.key==='signed-form'?'Return the signed form to Lady Lashes':'Read the warning',()=>{
+            if(api.drop('signed-form')){local.form.visible=true;progress.formReturned=true;}else api.say('Do not look too long.');
+          });
           local.blinkPortrait=portraitBlink(T,group.getObjectByName('portrait_lashes'),figure,off);
         }
       }

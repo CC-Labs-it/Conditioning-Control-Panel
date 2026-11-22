@@ -9,7 +9,7 @@ export function narratorAwareness(state,cue) {
   return {
     enter(room){
       const from=visits.at(-1);
-      if(!from && state.ticket.issued)note('repeat',room);
+      if(!from && (state.ticket.issued||state.repeatArrival))note('repeat',room);
       if(room==='hall' && ![...seen].some(r=>galleries.has(r)) && !seen.has(room))note('skip',room);
       else if(galleries.has(room)&&seen.has(room))note('lap',room);
       else if(visits.at(-2)===room)note('backtrack',room);

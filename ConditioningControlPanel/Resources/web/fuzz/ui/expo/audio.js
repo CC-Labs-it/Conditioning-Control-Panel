@@ -23,6 +23,9 @@ export function createSound(ctx) {
     if(id==='loan_tick'){
       ctx.audio.play(resolve('sfx/tally_tick.mp3'),{bus:'sfx',source:'expo-loan',sourceLabel:'Loan locator',gain,pan,signal:controller.signal});return;
     }
+    if(id==='rail'){
+      ctx.audio.play(meadowFootfall,{bus:'sfx',gain,pan,rate:.8,signal:controller.signal});return;
+    }
     const path = bank.effects?.[id];
     if (path) ctx.audio.play(resolve(path), { bus: 'sfx', gain, pan, signal: controller.signal });
   }
