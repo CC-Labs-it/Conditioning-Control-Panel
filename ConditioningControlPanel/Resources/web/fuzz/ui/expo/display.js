@@ -23,6 +23,20 @@ export function livePanel(THREE, mesh, {width = 1280,height = 600, emission = 0}
   return {draw, dispose() { mesh.material = original; surface.dispose(); texture.dispose(); }};
 }
 
+// Atlas-backed paper occupies only a rectangle of the source print texture.
+export function printedPanel(THREE,mesh,options){
+  const original=mesh.geometry,geometry=original.clone(),uv=geometry.attributes.uv;
+  let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  for(let i=0;i<uv.count;i++){
+    const x=uv.getX(i),y=uv.getY(i);
+    x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y);
+  }
+  for(let i=0;i<uv.count;i++)uv.setXY(i,(uv.getX(i)-x0)/(x1-x0||1),(uv.getY(i)-y0)/(y1-y0||1));
+  mesh.geometry=geometry;
+  const panel=livePanel(THREE,mesh,options);
+  return {draw:panel.draw,dispose(){panel.dispose();mesh.geometry=original;geometry.dispose();}};
+}
+
 function linesOf(g, text, width) {
   const result = [];
   for (const paragraph of String(text).split('\n')) {
@@ -99,4 +113,3 @@ export function runMonitor(panel,{name,presses,yes,time,pressed}) {
     g.textAlign='left';g.fillStyle='#4b5c49';g.font='38px "Segoe UI",sans-serif';g.fillText('LIVE   /   Human Habitat',42,h-36);
   });
 }
-

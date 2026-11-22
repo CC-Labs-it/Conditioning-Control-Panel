@@ -235,7 +235,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     const ambience=createAmbience({ctx,renderer,lite:LITE,meter:narration.meter});
     const kit=exhibitProps(assetURL),annex=exhibitProps(assetURL,'visitor-services.glb');clean.push(()=>kit.dispose(),()=>annex.dispose());
     exhibits = createExhibits({ THREE, ctx, camera, scene, root, draw, say, walker, renderer, muffle:narration.muffle, setHeaterPower:sound.setHeaterPower, signal:instruments.signal, props:kit.mount, annexProps:annex.mount, records:()=>narration.story?.completed||0,
-      storeSouvenir:(obj,label)=>souvenirPrint({THREE,renderer,draw,ctx},obj,label), actionSerial:()=>actionSerial, cue:narration.cue, play: sound.play, setSoundDepth: sound.setDepth,
+      storeSouvenir:(obj,label)=>souvenirPrint({THREE,renderer,draw,ctx},obj,label), actionSerial:()=>actionSerial, cue:narration.cue, closingLine:narration.closingLine, play: sound.play, setSoundDepth: sound.setDepth,
       go, exit: onExit, farewell, register, assetURL, bindMedia, capturePhoto, finalPhoto, setColliderEnabled:walker.setColliderEnabled,
       setButtonAvailable:buttons.setAvailable,registerDoorLeaf:(...args)=>zones?.registerDoorLeaf(...args) });
     dome = createDomeEffects({ctx,camera,cue:narration.cue,play:sound.play,register,bindMedia,setSoundDepth:sound.setDepth,lite:LITE,visit:exhibits.state,finish:exhibits.endVisit});

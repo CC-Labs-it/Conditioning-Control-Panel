@@ -1,22 +1,26 @@
 import {modelVisitor} from './renewal-endings.js';
 import {COUNTERFOILS} from './ticket.js';
-import {terminal,livePanel,placard} from './display.js';
+import {terminal,livePanel,placard,printedPanel} from './display.js';
 import {createExhibitBeat} from './speech-sequence.js';
 import {mountShopDoor} from './shop-door.js';
 
 const stock={Corrected:'Framed correction',Attended:'Minute book',Spat:'Range rosette',Queued:'Pocket rope post',Pressed:'The moved button',Hoofed:'Pair of hooves',Fed:'Feeding token',Kept:'Desk miniature',Blinked:'Signed blink',Stayed:'Dome snow globe',Delivered:'Tea service',Unplugged:'Plush heater',Read:'Knitted scarf'};
 const questions=[['Add a bag?','YES','v4_shop_bag'],['Round up to full agreement?','YES','v4_shop_round'],['Stop being asked?','NO','v4_shop_no']];
-export function tillReceipt(state,records){
+function receiptSummary(state,records){
   const t=state.ticket;
-  return [...t.ledger.values()].map(row=>[row.label,row.deviation?'Deviation':'Yes'])
-    .concat([['Instructions followed',String(t.yes)],['Deviations converted to Yes',String(t.deviations)],
+  return [['Instructions followed',String(t.yes)],['Deviations converted to Yes',String(t.deviations)],
       ['Total agreements',String(t.yes+t.deviations)],['First Press register',String(state.file.taps+state.presses)],
-      ['History absorbed',records+' of 40'],['Ticket',t.count+' of 12'],['Item',stock[state.souvenir]||'Day ticket']]);
+      ['History absorbed',records+' of 40'],['Ticket',t.count+' of 12'],['Item',stock[state.souvenir]||'Day ticket']];
+}
+export function tillReceipt(state,records){
+  return [...state.ticket.ledger.values()].map(row=>[row.label,row.deviation?'Deviation':'Yes'])
+    .concat(receiptSummary(state,records));
 }
 export function mountSettlement(api,state,room,bind,surface,clean){
   const {THREE:T,camera,ctx}=api, ticket=state.ticket;
   const till=surface('till_display',{emission:.36}),beat=createExhibitBeat(api.cue);
   let page=state.tillPage||0,swing=0,transit='',walking=false,receiptClock=0,hold=0,lastKey='',bits=[],sheet,button,price,receipt;
+  let slip;
   const hinge=mountShopDoor(T,room,api);clean.push(()=>hinge?.dispose());
   const worm=room.getObjectByName('shop_wormhole');if(worm)worm.visible=false;
   const sign=room.getObjectByName('exit_sale'),contract=room.getObjectByName('framed_contract');
@@ -40,6 +44,21 @@ export function mountSettlement(api,state,room,bind,surface,clean){
       state.souvenir?[stock[state.souvenir],stage?.[1]||'Print receipt']:['Carry one souvenir to the till.','Stock follows your ticket.'];
     terminal(till,{title,rows,foot:beat.listening?'Listening':'Visitor Services   /   Settlement',eyebrow:'GARY FROM ACCOUNTS'});
     if(sheet)sheet.visible=!!state.contract;
+    if(slip && state.contract){
+      const summary=receiptSummary(state,api.records());
+      slip.draw((g,w,h)=>{
+        g.fillStyle='#f6efd9';g.fillRect(0,0,w,h);g.fillStyle='#234839';
+        g.font='bold 40px Georgia';g.fillText('Visitor Services',18,385);
+        g.font='26px Georgia';g.fillText(stock[state.souvenir]||'Day ticket',18,430,w-36);
+        summary.slice(2,5).forEach(([label,value],i)=>{
+          const y=478+i*79;
+          g.strokeStyle='#ad996a';g.beginPath();g.moveTo(18,y-18);g.lineTo(w-18,y-18);g.stroke();
+          g.font='bold 24px Georgia';g.textAlign='left';g.fillText(label,18,y+16,232);
+          g.textAlign='right';g.fillText(value,w-18,y+16,115);g.textAlign='left';
+        });
+        g.font='bold 23px Georgia';g.fillText('Settlement filed',18,704);
+      });
+    }
     if(state.boughtExit)hinge?.releaseLatch();
     if(button)button.visible=!!state.boughtExit;
     if(worm)worm.visible=!!state.boughtExit&&swing>.65;
@@ -125,6 +144,7 @@ export function mountSettlement(api,state,room,bind,surface,clean){
       const key=state.carry?.key;if(key?.startsWith('souvenir:')){api.drop(key);stockRefresh();}else api.say('The brass cards show what your ticket has earned.');
     }));
     const printer=place('shop_printer',[20.38,1.07,-11.55]);sheet=printer.getObjectByName('receipt_sheet');
+    if(sheet?.isMesh){slip=printedPanel(T,sheet,{width:420,height:720,emission:.12});off.push(()=>slip.dispose());}
     off.push(api.register(printer,'Read the printed receipt',()=>{if(state.contract){if(receipt){receipt.remove();receipt=null;}else print();}else api.say('Your receipt will print after the sale.');}));
     button=place('renewal_door',[15.03,0,-13.60]);
     lastKey='';stockRefresh();render();return ()=>off.reverse().forEach(f=>f());

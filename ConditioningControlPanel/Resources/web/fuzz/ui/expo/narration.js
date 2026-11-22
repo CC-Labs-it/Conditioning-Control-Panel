@@ -210,9 +210,10 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     }
     entry.resolve(ok);
   }
-  function enqueue(id,{station=null,replay=false,zone=walker.zone,position=null,kind='react',exhibit,ttl,ticket=null,onStart}={}){
+  let farewell=false;
+  function enqueue(id,{closing=false,station=null,replay=false,zone=walker.zone,position=null,kind='react',exhibit,ttl,ticket=null,onStart}={}){
     const row=book.get(id);
-    if(dead||!row||zone!==walker.zone)return Promise.resolve(false);
+    if(dead||!row||zone!==walker.zone||(farewell&&!closing))return Promise.resolve(false);
     if(row.set==='log'&&!owned().includes(id.slice(4)))return Promise.resolve(false);
     const key=row.set==='pa'?'pa':'voice';
     const queued=[sequence.current,...sequence.queue].find(e=>e?.row.id===id);
@@ -238,6 +239,11 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
       return ready?Promise.resolve(begin()):load.then(begin);
     }
     return ready?enqueue(canonical(id),options):load.then(()=>enqueue(canonical(id),options));
+  }
+  function closingLine(id){
+    // Preserve the current recording's tail and reserve the next slot for the departure.
+    farewell=true;sequence.cancel(()=>true);
+    return cue(id,{closing:true,kind:'beat',replay:true});
   }
   function archivePrompt(station){
     if(!story)return 'Opening archive';
@@ -305,8 +311,11 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
       }
     }
   }
+  const visits=new Map();
+  let previousZone=null;
   function tick(dt){
     if(dead||held||!ready)return;
+    if(previousZone!==walker.zone){previousZone=walker.zone;visits.set(previousZone,(visits.get(previousZone)||0)+1);}
     while(wetHorns.length&&wetHorns[0].until<=ctx.activeMs)wetHorns.shift();
     const speaking=sequence.current;
     setMuffled(!!speaking&&wetHorns.some(h=>h.zone===speaking.zone&&h.pos.distanceToSquared(speaking.pos)<1));
@@ -346,7 +355,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     }
     for(const room of rooms.values())for(const s of room.list)if(s.project){
       const row=s.archive?story.at(s.id):book.get(s.last);
-      s.panels?.show(row,story.total,!!story.assigned(s.id));
+      s.panels?.show(row,story.total,!!story.assigned(s.id),(visits.get(s.zone)||0)>1);
       s.project.step(dt,ctx.gentle||ctx.reduced,camera.position.distanceTo(s.pos),row?.slides[s.index],s.progress,
                      restingSlide(row),row?.slides[s.index+1]);
     }
@@ -383,5 +392,5 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     const off=register(mesh,()=>reader.label(key),()=>reader.toggle(key,description),3.5);
     return ()=>{reader.release(key);off();};
   }
-  return {mount,unmount,cue,muffle,planter,registerPlaque,get story(){return story;},available:()=>ready&&sequence.available,tick,pause,dispose,debug,meter};
+  return {mount,unmount,cue,closingLine,muffle,planter,registerPlaque,get story(){return story;},available:()=>ready&&sequence.available,tick,pause,dispose,debug,meter};
 }

@@ -1,4 +1,4 @@
-import {placard} from './display.js';
+import {placard,printedPanel} from './display.js';
 
 const original=[0,1.04,-9];
 const stops=[['hall',[9.95,3.4,-5.3]],['hall',[-5.7,0,.66]],['shop',[17.48,1.23,-3.7]],['hall',[-11.48,0,-3.35]]];
@@ -34,6 +34,10 @@ export function firstPress(api,state){
   function press(stop=false){
     if(state.hoofWorn){cue('v4_press_hoof',{kind:'react',exhibit:'press'});return;}
     if(sealed || (stop && state.presses<25))return;
+    if(!stop&&!carriedPost&&state.presses>=5&&state.presses<12){
+      if(camera.position.z>=-7.56){api.say('Jump the cord or carry a rope post.');return;}
+      state.ticket.book('past-rope','Crossed the accession rope',true);
+    }
     if(!stop && state.presses>=25){api.say('DO PRESS. Register unchanged.');still=0;return;}
     api.play('press');++state.presses;
     if(stop){sealed=true;cue('v4_press_seal');}
@@ -42,7 +46,7 @@ export function firstPress(api,state){
     else if(state.presses===10)cue('pa_hall1_ten');
     else if(state.presses===12){pending=true;cue('v4_press_moved');}
     else if(state.presses===25){pending=false;cue('v4_press_invert');}
-    else if(moved>=0)pending=true;
+    else if(moved>=0){pending=true;cue('v4_press_found');}
     draw();
   }
   function mount(id,room,bind,surface,clean){
@@ -52,7 +56,7 @@ export function firstPress(api,state){
       v.case=liftCase(T,room);clean.push(v.case.free);
       const readout=surface('press_readout');
       v.draw=()=>placard(readout,'Founding collection   /   First Press',text(),'REGISTER   '+(state.file.taps+state.presses).toLocaleString());
-      v.main=bind('press_main',()=>state.presses>=12?'Read the loan notice':'Press I AGREE',()=>state.presses>=12?api.say(text()):press());
+      v.main=bind('press_main',()=>sealed?'Read the sealed accession':state.presses>=12?'Read the loan notice':'Press I AGREE',()=>state.presses>=12?api.say(text()):press());
       v.stop=bind('press_stop','I AGREE TO STOP',()=>press(true));bind('press_readout','Read the register',()=>api.say(text()));
       v.draw();if(v.stop)v.stop.visible=false;
     }
@@ -62,7 +66,7 @@ export function firstPress(api,state){
         v.posts=[-1,1].map(sign=>{const n=place('rope_post',[sign,0,-7.38]);n.scale.y=.46;return n;});
         v.span=place('rope_span',[0,0,-7.38]);v.span.scale.y=.46;
         v.note=place('rope_notice',[2.12,0,-7.42]);off.push(api.register(v.note,()=>state.carry?.key==='rope-post'?'Return the rope post':'Read the notice',()=>{if(api.drop?.('rope-post'))carriedPost=false;else api.say('Please respect the rope around the notice.');}));
-        v.glass=place('sealed_glass',[-1.55,.984,-8.96]);
+        v.glass=place('sealed_glass',[0,.984,-9]);
         const box=new T.Mesh(new T.BoxGeometry(2,.29,.055));box.name='First Press cord';box.position.set(0,.145,-7.38);
         api.walker.add('first-press-cord',box,[],'hall');box.geometry.dispose();box.material.dispose();
         off.push(()=>api.walker.remove('first-press-cord'));
@@ -73,7 +77,15 @@ export function firstPress(api,state){
       }
       stops.forEach(([zone,at],i)=>{if(zone!==id)return;const obj=place('moved_button',at);obj.visible=false;obj.userData.stockBay=zone==='shop';
         const cap=obj.getObjectByName('moved_cap');off.push(api.register(obj,()=>state.presses>=25?'DO PRESS':'Press the moved button',()=>{press();v.spring=.15;},2.4));
-        v.copies.push({obj,cap,i});});
+        let paper;
+        cap?.traverse(n=>{if(n.isMesh&&n.material?.name==='Print')paper=n;});
+        v.copies.push({obj,cap,i,invert(){
+          if(!paper)return;
+          const label=printedPanel(T,paper,{width:384,height:128,emission:.12});off.push(()=>label.dispose());
+          label.draw((g,w,h)=>{g.fillStyle='#efe8d2';g.fillRect(0,0,w,h);g.fillStyle='#214c3e';g.textAlign='center';
+            g.font='bold 69px Georgia';g.fillText('DO PRESS',w/2,77,w-16);
+            g.font='29px Georgia';g.fillText('Believed voluntary.',w/2,111,w-16);});
+        }});});
       return ()=>off.reverse().forEach(f=>f());
     }));
   }
@@ -88,14 +100,16 @@ export function firstPress(api,state){
     }
     const hall=views.get('hall'),rope=state.presses>=5&&state.presses<12;
     if(hall){
-      if(hall.main)hall.main.visible=moved<0;
+      if(hall.main)hall.main.visible=sealed||moved<0;
       if(hall.stop)hall.stop.visible=state.presses>=25;
-      if(hall.case){const y=moved>=0?-1.85:0;hall.case.slide.position.y+=(y-hall.case.slide.position.y)*Math.min(1,dt*3);}
-      if(hall.posts){hall.posts.forEach((n,i)=>{n.visible=rope&&(i!==0||!carriedPost);});hall.span.visible=rope&&!carriedPost;hall.note.visible=rope;hall.glass.visible=sealed;}
-      api.setColliderEnabled('First Press cord',rope&&!carriedPost);api.setColliderEnabled('Accession plinth',moved<0);
+      if(hall.case){const y=moved>=0&&!sealed?-1.85:0;hall.case.slide.position.y+=(y-hall.case.slide.position.y)*Math.min(1,dt*3);}
+      if(hall.posts){hall.posts.forEach((n,i)=>{n.visible=rope&&(i!==0||!carriedPost);});hall.span.visible=rope&&!carriedPost;hall.note.visible=rope||state.carry?.key==='rope-post';hall.glass.position.y=.984+hall.case.slide.position.y;hall.glass.visible=sealed;}
+      api.setColliderEnabled('First Press cord',rope&&!carriedPost);api.setColliderEnabled('Accession plinth',sealed||moved<0);
     }
     for(const v of views.values()){
-      v.spring=Math.max(0,(v.spring||0)-dt);for(const {obj,i,cap} of v.copies){obj.visible=i===moved&&!sealed;if(cap)cap.position.y=-v.spring*.09;}
+      v.spring=Math.max(0,(v.spring||0)-dt);for(const copy of v.copies){const {obj,i,cap}=copy;obj.visible=i===moved&&!sealed;if(cap)cap.position.y=-v.spring*.09;
+        if(obj.visible&&state.presses>=25&&copy.invert){copy.invert();copy.invert=null;}
+      }
     }
     if(state.presses>=25&&!sealed&&moved>=0&&zone===pair[0]&&Math.hypot(camera.position.x-at[0],camera.position.z-at[2])<2.15&&Math.abs(camera.position.y-1.6-at[1])<1.55){
       still+=dt;if(still>=10){state.presses++;still-=10;state.ticket.book('did-not-press','Kept hands off DO PRESS');cue('v4_press_still');draw();}

@@ -4,7 +4,7 @@ export function visitorCommentary(state,cue){
   function note(id,condition,zone){
     if(!condition || spoken.has(id))return false;
     next=elapsed+3;
-    cue('v4_'+id,{kind:'ambient',ttl:1.2,exhibit:'visitor-guide',zone,onStart:()=>{
+    cue('v4_'+id,{kind:'ambient',ttl:1200,exhibit:'visitor-guide',zone,onStart:()=>{
       spoken.add(id);next=elapsed+20;
     }});
     return true;

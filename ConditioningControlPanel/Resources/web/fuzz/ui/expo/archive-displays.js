@@ -75,10 +75,12 @@ export function archiveDisplays(group,id,hasHistory=false) {
     g.fillStyle=surface;g.fillRect(0,0,w,h);
     g.textBaseline='top';g.textAlign='left';
   }
-  return { show(row,total,hasPrevious) {
+  return { show(row,total,hasPrevious,secondViewing=false) {
     replay.set(hasPrevious);
-    if (!row || painted===row.id) return;
-    painted=row.id;
+    if(!row)return;
+    const key=row.id+'-'+secondViewing;
+    if(painted===key)return;
+    painted=key;
     const a=row.archive;
     const accent=chapterInk[a.chapter-1] || chapterInk[0];
     title?.draw((g,w,h)=>{
@@ -91,7 +93,8 @@ export function archiveDisplays(group,id,hasHistory=false) {
     caption?.draw((g,w,h)=>{
       base(g,w,h,'#f1ecd9');
       g.fillStyle='#264b4a';g.font='bold 25px '+sans;
-      g.fillText((a.chapter?'CHAPTER '+a.chapter+'     ·     ':'')+a.section,27,8,w-170);
+      const heading=secondViewing?'Second viewing. Several things have been improved.':(a.chapter?'CHAPTER '+a.chapter+'     ·     ':'')+a.section;
+      g.fillText(heading,27,8,w-170);
       for(let i=0;i<chapterInk.length;i++){
         g.fillStyle=i<a.chapter?'#315d55':'#b4bfaf';g.fillRect(w-141+i*20,17,15,6);
       }

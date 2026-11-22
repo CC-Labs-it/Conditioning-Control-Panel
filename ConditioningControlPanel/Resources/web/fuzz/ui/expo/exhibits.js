@@ -33,13 +33,14 @@ export function createExhibits(api) {
   api.endVisit=async ending=>{
     if(returning||disposed)return;returning=true;ending=departureEnding(ending,state);state.ending=ending;
     ctx.store.set('expoEnding',endingTitles[ending]);
+    const closing=api.closingLine(endingLines[ending]);
     const print=departurePrint(api,state,endingTitles[ending]).catch(err=>console.warn('Expo print',err));
     const portrait=ending==='full'?api.finalPhoto():Promise.resolve();
     const souvenirs=Promise.all([print,portrait]);
     api.farewell(()=>{void souvenirs.then(()=>{if(!disposed)leave();});},endingTitles[ending]);
     await portrait;
-    await cue(endingLines[ending],{kind:'beat',replay:true});
-    if(ending==='conduct'&&!disposed)await cue(state.ticket.stamps.has('Read')?'v4_conduct_read':'v4_conduct_missed',{kind:'beat'});
+    await closing;
+    if(ending==='conduct'&&!disposed)await api.closingLine(state.ticket.stamps.has('Read')?'v4_conduct_read':'v4_conduct_missed');
     await print;departureDone=true;
   };
   function once(id) {
@@ -165,7 +166,7 @@ export function createExhibits(api) {
   function tick(dt,id) {
     if(ctx.paused)return;
     worn.tick(dt);spit.tick(dt);habitat.tick(dt,id);
-    if(returning&&departureDone){leave();return;}
+    if(returning){if(departureDone)leave();return;}
     commentary(dt,id,api.walker.feet);gallery.tick(dt,id);staff.tick(dt,id);hands.tick();hudClock+=dt;awareness.tick(dt,id,camera,api.actionSerial());
     if(hudClock>=900)once('pa_closing');
     pending=pending.filter(event=>{
