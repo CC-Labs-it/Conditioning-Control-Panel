@@ -35,6 +35,12 @@ test('the book: 79 stickers on 9 pages, every old achievement kept, every page a
   }
 });
 
+test('an EMI sticker shows her with her face: never a bare body picture, whose glass is blank', () => {
+  const emi = STICKERS.filter((s) => /assets\/img\/emi\//.test(s.art.src || ''));
+  assert.deepEqual(emi.map((s) => s.id).sort(), ['e_go_end', 'n_sweet']);
+  for (const s of emi) assert.match(s.art.src, /assets\/img\/emi\/sticker-(idle|smug)\.png$/, s.id);
+});
+
 test('retired endings: Drop and One More show only once earned, and Every Ending counts the endings on offer', () => {
   const life = createLife();
   assert.deepEqual(STICKERS.filter((s) => s.legacy).map((s) => s.id).sort(), [...OFF_SHELF].map((id) => `e_${id}`).sort());

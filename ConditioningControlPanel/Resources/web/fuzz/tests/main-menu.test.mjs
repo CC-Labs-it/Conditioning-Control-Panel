@@ -146,3 +146,19 @@ test('the sheet scales with the window from the mockup stage, within limits', ()
   assert.equal(sheetScale(3840, 2160), 1.6);
   assert.equal(sheetScale(NaN, 600), 1);
 });
+
+import { existsSync } from 'node:fs';
+import { MENU_SOUNDS, menuSoundFile } from '../ui/menu-model.js';
+test('a pressed row is the classic bubble pop: the three files the bubbles use, never the burst or the click', () => {
+  const pops = ['assets/audio/pop/Pop.mp3', 'assets/audio/pop/Pop2.mp3', 'assets/audio/pop/Pop3.mp3'];
+  for (const name of ['press', 'burst']) assert.deepEqual([...MENU_SOUNDS[name][0]], pops, name);
+  const all = Object.values(MENU_SOUNDS).flatMap((s) => [...s[0]]);
+  assert.ok(!all.some((f) => /Burst\.mp3|ui_click/.test(f)));
+  for (const f of all) assert.ok(existsSync(new URL('../' + f, import.meta.url)), f);
+  assert.equal(menuSoundFile('press', () => 0), pops[0]);
+  assert.equal(menuSoundFile('press', () => 0.5), pops[1]);
+  assert.equal(menuSoundFile('burst', () => 0.999), pops[2]);
+  assert.equal(menuSoundFile('burst', () => 1), pops[2]);
+  assert.equal(menuSoundFile('land', () => 0.7), 'assets/audio/pop/Pop.mp3');
+  assert.equal(menuSoundFile('nothing'), null);
+});

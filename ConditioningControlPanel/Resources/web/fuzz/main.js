@@ -36,7 +36,7 @@ import { endingNudge, mountPauseNudge } from './ui/nudges.js';
 import { mountLockedTile } from './ui/shop-locked.js';   // small: one greyed tile at the end of the shop   // small: the ending and pause doors to the full game   // the transmission card, the pen sign and the llama-8 card
 import { mountHomeTip } from './ui/phone.js';
 import { previewBarAllowed } from './ui/preview-bar-model.js';
-import { menuDue, menuRows, MENU_REUSED, sideStickers, llamaReached } from './ui/menu-model.js';   // the main menu, from the second launch on
+import { menuDue, menuRows, MENU_REUSED, MENU_SOUNDS, menuSoundFile, sideStickers, llamaReached } from './ui/menu-model.js';   // the main menu, from the second launch on
 import { openMainMenu } from './ui/main-menu.js';
 import { BOOK_EVENT, stickerArt } from './ui/sticker-book.js';
 import { STICKER_BY_ID } from './data/content/stickers.js';
@@ -473,10 +473,8 @@ function start(init) {
     const offReady = bridge.on('expo-ready', () => menu?.refresh());   // after expoArrived above: the row becomes the way in
     const leave = () => { offReady?.(); return menu.close(); };
     const rowEl = (id) => menu.el.querySelector(`[data-row="${id}"] .mm-lab`);
-    /* The menu's sounds: files the game already ships, on its sfx bus (the mixer's existing Effects row), so the game's mute and mixer hold. */
-    const SOUNDS = { land: ['assets/audio/pop/Pop.mp3', 0.35], tick: ['assets/audio/sfx/tally_tick.mp3', 0.4], press: ['assets/audio/sfx/ui_click.mp3', 0.6],
-      burst: ['assets/audio/pop/Burst.mp3', 0.55], denied: ['assets/audio/sfx/ui_denied.mp3', 0.5] };
-    const sound = (name) => { const s = SOUNDS[name]; if (s) audio.play(s[0], { bus: 'sfx', gain: s[1] }); };
+    /* The menu's sounds: files the game already ships (ui/menu-model.js MENU_SOUNDS), on its sfx bus (the mixer's existing Effects row), so the game's mute and mixer hold. */
+    const sound = (name) => { const file = menuSoundFile(name); if (file) audio.play(file, { bus: 'sfx', gain: MENU_SOUNDS[name][1] }); };
     /* A door that opens a sheet or card over the menu: the leave first, the entrance again when it goes. */
     const over = (id, fn) => menu.leave(id, { back: true }).then(fn);
     menu = openMainMenu({

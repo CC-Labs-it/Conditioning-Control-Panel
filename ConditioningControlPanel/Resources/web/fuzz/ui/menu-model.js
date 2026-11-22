@@ -48,6 +48,23 @@ export const MENU_REUSED = Object.freeze({
   moreInFull: LOCKED_TILE_COPY.label,
 });
 
+/** The menu's sounds, each [files, gain]: files the game already ships, and more than one file means one picked at
+ *  random each time. A pressed row is the classic bubble pop (owner 2026-11-22), the same three files the game's own
+ *  bubbles use (ui/unlocks/basics/look.js wallpop), whether the row opens a card (`press`) or leaves the menu (`burst`). */
+const BUBBLE_POPS = Object.freeze(['assets/audio/pop/Pop.mp3', 'assets/audio/pop/Pop2.mp3', 'assets/audio/pop/Pop3.mp3']);
+export const MENU_SOUNDS = Object.freeze({
+  land: [['assets/audio/pop/Pop.mp3'], 0.35],
+  tick: [['assets/audio/sfx/tally_tick.mp3'], 0.4],
+  press: [BUBBLE_POPS, 0.55],
+  burst: [BUBBLE_POPS, 0.55],
+  denied: [['assets/audio/sfx/ui_denied.mp3'], 0.5],
+});
+/** The file a sound plays this time, or null for a name the menu does not have. `rnd` is passed in by tests. */
+export function menuSoundFile(name, rnd = Math.random) {
+  const files = MENU_SOUNDS[name]?.[0];
+  return files ? files[Math.min(files.length - 1, Math.floor(rnd() * files.length))] : null;
+}
+
 const fill = (tpl, vals) => tpl.replace(/\{(\w+)\}/g, (m, k) => (k in vals ? String(vals[k]) : m));
 
 /** Whether this boot shows the menu. Pure. */
