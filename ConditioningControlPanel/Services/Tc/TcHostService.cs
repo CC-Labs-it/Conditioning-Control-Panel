@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Services.Tc;
 /// is never locked. Every page frame passes <see cref="TcFrameGate"/> first. Hard exits (panic, the
 /// title-bar X, a dead page, the watchdog) go through <see cref="Close"/>; the page's own exit ends on
 /// its <c>exit-done</c> or at 800 ms. Scrolller pictures and the Sparkles medal live in
-/// <c>TcHostService.Media.cs</c>; toys, save carry and the Expo are later slices: their caps go out off
+/// <c>TcHostService.Media.cs</c>; toy pulses and live settings in <c>TcHostService.Feel.cs</c>; save carry and the Expo are later slices: their caps go out off
 /// and their frames are only logged.
 /// </summary>
 internal static partial class TcHostService
@@ -138,6 +138,7 @@ internal static partial class TcHostService
                 _host.Window.Activated += OnWindowActivated;
             }
             StartWatch();
+            WatchFeel(true);
             _host.FocusWeb();
             App.Logger?.Information("TcHostService: launched ({Edition})", _edition);
         }
@@ -159,6 +160,8 @@ internal static partial class TcHostService
             try { _watch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             try { _closeClock?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _watch = _closeClock = null;
+            StopPulse();      // at once, before anything else can fail
+            WatchFeel(false);
             _closeAskedUtc = null;
             var h = _host;
             _host = null;
@@ -196,7 +199,8 @@ internal static partial class TcHostService
             var caps = TcRules.Caps(_edition, saveSlot: false);
             var init = TcHostRules.InitFrame(Localization.LocalizationManager.Instance.CurrentLanguage,
                 s?.MotionLevel ?? Models.MotionLevel.Full, Safety.GentleVisuals.On, App.Mods?.ActiveModId, caps,
-                picturesOn: PicturesOnNow, sparkles: App.Sparkles != null && !string.IsNullOrEmpty(App.UnifiedUserId));
+                picturesOn: PicturesOnNow, sparkles: App.Sparkles != null && !string.IsNullOrEmpty(App.UnifiedUserId),
+                toys: true, toysConnected: ToysReady);
             _host?.Post(init);
         }
         catch (Exception ex) { App.Logger?.Warning("Tc: init post failed: {E}", ex.Message); }
@@ -234,6 +238,9 @@ internal static partial class TcHostService
                     // Already on the contract's allow list (TcFrameGate.OpenUrl).
                     RunOnUi(() => Helpers.BrowserLauncher.TryOpenUrl(f.Url));
                     break;
+                case "haptic":
+                    OnHaptic(f);
+                    break;
                 case "nudge":
                     // Desktop: every nudge is the tier compare card (Contract v2).
                     RunOnUi(OpenTierCard);
@@ -264,6 +271,7 @@ internal static partial class TcHostService
         {
             _host.Post(TcHostRules.Suspend(true, TcHostRules.ReasonFocus));
             _focusHeld = true;
+            StopPulse();      // the run is held: the toy goes quiet with it
             if (TierGate.ReconnectIsTheAnswer()) App.MainWindowRef?.StartPatreonReconnectFromGate();
             else App.MainWindowRef?.ShowVaultGate(null, 1);
         }
