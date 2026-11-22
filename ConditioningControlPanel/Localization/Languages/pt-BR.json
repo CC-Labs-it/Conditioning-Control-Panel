@@ -2218,6 +2218,8 @@
   "btn_end_session": "Encerrar Sessão",
   "label_drop_to_import": "Solte para Importar",
   "label_images_videos_zips_folders": "Imagens, Vídeos, ZIPs, Pastas",
+  "notif_history_tip": "Notificações recentes",
+  "notif_history_title": "Últimas notificações, as mais novas primeiro",
   "drop_import_busy": "Descompactando...",
   "label_how_to_use_the_app": "📖 Como Usar o App",
   "label_hover_over_any_control_for_tooltips_click_a_g": "Passe o mouse em qualquer controle para ver o que ele faz. Escolha um guia abaixo para um passo a passo.",

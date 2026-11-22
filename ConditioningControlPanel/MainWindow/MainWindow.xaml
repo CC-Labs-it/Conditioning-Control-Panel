@@ -1436,6 +1436,29 @@
                     </Button>
                     <!-- Re-homed from the row-2 button grid Phase 1 deleted. BtnMainHelp is a
                          tutorial spotlight target (TutorialService.cs) - the name must survive. -->
+                    <!-- Notification history (ccp-bugs #1688): collapsed until a toast has shown,
+                         then opens the last 50. Painted by MainWindow.NotificationHistory.cs. -->
+                    <Button x:Name="BtnNotificationHistory" Click="BtnNotificationHistory_Click" Cursor="Hand"
+                            Margin="10,0,0,0" Width="26" Height="26" Visibility="Collapsed"
+                            ToolTip="{loc:Str notif_history_tip}">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Grid Background="Transparent" Width="26" Height="26">
+                                    <Border x:Name="HistoryChip" Background="#3D1A3D" CornerRadius="6"
+                                            BorderBrush="#3D3D60" BorderThickness="1"/>
+                                    <TextBlock Text="&#x1F514;" FontSize="12" FontFamily="Segoe UI Symbol, Segoe UI"
+                                               Foreground="{DynamicResource PinkBrush}"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Grid>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="HistoryChip" Property="Background" Value="#2D2D50"/>
+                                        <Setter TargetName="HistoryChip" Property="BorderBrush" Value="#5D5D80"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
                     <Button x:Name="BtnMainHelp" Content="?" Click="BtnMainHelp_Click"
                             Width="26" Height="26" ToolTip="{loc:Str tooltip_how_to_use}" Margin="10,0,0,0">
                         <Button.Template>

@@ -3116,6 +3116,8 @@
   "btn_end_session": "Termina sessione",
   "label_drop_to_import": "Rilascia per importare",
   "label_images_videos_zips_folders": "Immagini, video, ZIP, cartelle",
+  "notif_history_tip": "Notifiche recenti",
+  "notif_history_title": "Ultime notifiche, dalla più recente",
   "drop_import_busy": "Estrazione in corso...",
   "label_how_to_use_the_app": "📖 Come usare l'app",
   "label_hover_over_any_control_for_tooltips_click_a_g": "Passa il mouse su un comando per scoprire cosa fa. Scegli una guida qui sotto per un tour passo passo.",

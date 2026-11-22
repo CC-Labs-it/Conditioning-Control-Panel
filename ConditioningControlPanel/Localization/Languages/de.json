@@ -2218,6 +2218,8 @@
   "btn_end_session": "Sitzung beenden",
   "label_drop_to_import": "Zum Importieren ablegen",
   "label_images_videos_zips_folders": "Bilder, Videos, ZIPs, Ordner",
+  "notif_history_tip": "Letzte Benachrichtigungen",
+  "notif_history_title": "Letzte Benachrichtigungen, neueste zuerst",
   "drop_import_busy": "Wird entpackt...",
   "label_how_to_use_the_app": "📖 So verwendest du die App",
   "label_hover_over_any_control_for_tooltips_click_a_g": "Fahre über ein Steuerelement, um zu sehen, was es tut. Wähle unten eine Anleitung für eine Führung.",
