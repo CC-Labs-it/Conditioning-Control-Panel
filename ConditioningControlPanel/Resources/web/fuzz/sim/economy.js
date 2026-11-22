@@ -9,7 +9,7 @@ import { CONFIG } from '../data/config.js';
 import { moodOf } from './moods.js';
 import { accrueActivities, trunkBoost, RANK_BOUNCE, RANK_TAP, RANK_PASSIVE } from './journey-effects.js';
 import { ridersOf } from '../data/folds.js';
-import { FATE_BY_ID, SEEDS, setOf, herdOpens } from '../data/fate.js';
+import { FATE_BY_ID, SEEDS, setOf, herdOpens, HERD_ENDINGS } from '../data/fate.js';
 import { EMI_LIFT } from './tap-rate.js';
 import { isCut, keptIds, reqFor } from '../ui/edition.js';
 
@@ -214,6 +214,9 @@ function fateAllows(s, it) {
  * the shop (owner 2026-11-10; perks, cards and stickers stay for players who already have them): Endless Mode, Drop, and
  * the theme and Premium endings that lost their set (Count Up, The Debut, Lost Key, Redacted, Flatline, Lifetime Plan). */
 export const OFF_SHELF = new Set(['onemore', 'drop', 'tr_end', 'si_end', 'lo_end', 'ce_end', 'in_end', 'p_life']);
+/** The endings gallery (ui/recap/recap.js): every ending on offer, plus any the player already has. A herd ending (The
+ *  Panel) stays secret until seen, and in small a cut ending (the Expo) is never listed as a goal. */
+export const galleryIds = (ids, got, s) => ids.filter((eid) => (!OFF_SHELF.has(eid) && !HERD_ENDINGS.includes(eid) && !asleep(s, eid)) || got.has(eid));
 export const mainPathDone = (s) => needsOf(s, BY_ID.drop).req.every((q) => has(s, q));
 export function heldEnding(s) {
   const set = FATE_BY_ID[fateOf(s)];

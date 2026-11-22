@@ -21,6 +21,8 @@ import { MAX_DEPTH } from '../data/prestige.js';
 const OPEN_KEY = 'tc.previewBar.open';
 /** Endless Mode is a row that keeps the run going, not an ending to watch. */
 export const BAR_ENDINGS = Object.freeze(ITEMS.filter((it) => it.kind === 'end' && it.id !== 'onemore').map((it) => it.id));
+/** The endings the bar offers on this run: small never jumps to a cut ending (the Expo). */
+export const barEndings = (s) => BAR_ENDINGS.filter((id) => !E.asleep(s, id));
 export const JUMPS = Object.freeze([
   ['theme', TARGETS.theme.label],
   ['taste2', TARGETS.taste2.label],
@@ -110,7 +112,7 @@ export function mountPreviewBar({ doc = document, win = doc.defaultView, engine,
   /* Endings */
   const endRow = row('Endings');
   const ends = doc.createElement('div'); ends.className = 'pb-ends';
-  for (const id of BAR_ENDINGS) { const x = b(endName(id)); x.dataset.ending = id; x.title = id; x.addEventListener('click', () => playEnding(id)); ends.append(x); }
+  for (const id of barEndings(run())) { const x = b(endName(id)); x.dataset.ending = id; x.title = id; x.addEventListener('click', () => playEnding(id)); ends.append(x); }
   endRow.append(ends);
   /* Setup */
   const setup = row('Setup');
@@ -231,11 +233,11 @@ export function mountPreviewBar({ doc = document, win = doc.defaultView, engine,
   /* ---- Endings: the chain owned, then the ending begins as its tile's purchase begins it (fuzz.end) ---- */
   function playEnding(id) {
     const it = BY_ID[id];
-    if (!it || it.kind !== 'end') return false;
+    if (!it || it.kind !== 'end' || E.asleep(run(), id)) return false;   // small: a cut ending is never played
     if (engine.stopped || run().ended) { say('An ending already ran. Reset save first.'); return false; }
     if (id === 'll_end') setHerd(HERD_MAX);   // The Panel needs a full pen
     engine.audio?.arm?.();
-    for (const q of it.req) engine.grant(q);
+    for (const q of E.needsOf(run(), it).req) engine.grant(q);   // through the edition (reqFor in small)
     const s = run();
     E.grant(s, id);
     s.ended = { id, at: s.clock };

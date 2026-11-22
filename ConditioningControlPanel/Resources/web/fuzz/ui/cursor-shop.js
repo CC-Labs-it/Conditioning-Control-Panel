@@ -3,7 +3,7 @@ import {trailCollection,stagePrices} from '../data/trail-collection.js';
 import {BY_ID} from '../data/items.js';
 import {BRAND} from '../data/brand.js';
 import {whole} from '../sim/format.js';
-import {isOpen,ridersFor} from '../sim/economy.js';
+import {isOpen,ridersFor,asleep,needsOf} from '../sim/economy.js';
 import {gateLine,gateOf,gateOpen,markSeen,newMark,rowOpen,seenRecord,SHOP_GATES} from './shop-gates.js';
 
 const trails=['trail','starburst','word_comet'];
@@ -16,6 +16,8 @@ const skinUrls=Object.fromEntries(Object.entries(shapes).map(([id,shape])=>[id,
   'url("data:image/svg+xml,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30">'+shape+'</svg>')+'") 2 2, auto']));
 const cursors=['system',...Object.keys(shapes)];
 const modifiers=['ring','hijack'];
+/** The modifiers this run's edition offers: small never lists a cut row (Hijack). */
+export const cursorModifiers=run=>modifiers.filter(id=>!asleep(run,id));
 const skinPrices={cursor_prism:3600,cursor_nova:5400};
 const names={cursor_prism:'Prism Cursor',cursor_nova:'Nova Cursor',none:'No trail',system:'System pointer',ring:'Tap rings'};
 const hints={trail:'Fine dust and tiny stars',starburst:'Dense, bright sparkles',word_comet:'Bold words that follow and coast',system:'Your device pointer',cursor:'Rose pink with a white edge',cursor_prism:'Cyan and violet facets',cursor_nova:'Gold pointer with a star',ring:'A ripple where you press',hijack:'Fake cursor in pop-up questions'};
@@ -106,7 +108,7 @@ export function bindCursorShop(engine,ui){
           fillPrice(action,open?skinPrices[id]:0,engine.run.fuzz);
           continue;
         }
-        const item=BY_ID[id],missing=item.req.find(parent=>!has(parent));
+        const item=BY_ID[id],missing=needsOf(engine.run,item).req.find(parent=>!has(parent));
         const cost=engine.price(id);
         action.textContent=missing?'Needs '+BY_ID[missing].name:'Buy · '+whole(cost);
         action.disabled=!isOpen(engine.run,item)||engine.run.fuzz<cost;
@@ -270,7 +272,7 @@ export function bindCursorShop(engine,ui){
         cursors.forEach(id=>addCursor(gallery,id));
         const more=make('details','cursor-kit-extras'),summary=make('summary','','Cursor modifiers');
         const extras=make('div','cursor-kit-gallery cursor-kit-modifiers');
-        modifiers.forEach(id=>addCursor(extras,id));
+        cursorModifiers(engine.run).forEach(id=>addCursor(extras,id));
         more.append(summary,extras);list.append(more);
       }else{
         gallery.id=panelId;gallery.setAttribute('role','tabpanel');
