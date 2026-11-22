@@ -24,16 +24,20 @@ test('only newly earned marks or deviations make landing slips, including both p
   const t=visitTicket(),events=[],off=t.subscribe(e=>events.push(e));
   t.stamp('Fed');t.stamp('Kept');t.stamp('Kept');t.book('chair','Sat in the chair',true);t.book('chair','Sat in the chair',true);
   t.withdraw('Kept');t.stamp('Kept',{restore:true});off();t.stamp('Read');
-  assert.deepEqual(events,[{kind:'stamp',mark:'Fed',count:0},{kind:'stamp',mark:'Kept',count:1},{kind:'deviation',label:'Sat in the chair'}]);
+  assert.deepEqual(events,[{kind:'stamp',mark:'Fed',count:0,remaining:['Kept']},{kind:'stamp',mark:'Kept',count:1},{kind:'deviation',label:'Sat in the chair'}]);
 });
 test('hands take precedence over rooms, and directions follow the actual turnstile, balcony and reading progress',()=>{
   const p={x:.54,y:0,z:35.33},ticket=visitTicket();
   assert.match(trailTask('atrium',p,{ticket}).title,/turnstile/);
   ticket.issue();assert.deepEqual(trailTask('atrium',p,{ticket}).target,[7.8,41.1]);
   for(const id of ['service','hall','atrium','secret','shop']){
-    const tea=trailTask(id,p,{carry:{key:'tea'},ticket});assert.match(tea.where,/Grand Hall, upstairs · 26 m/);
+    const tea=trailTask(id,p,{carry:{key:'tea'},ticket});assert.match(tea.where,/Grand Hall, upstairs · \d+ m/);
     assert.match(trailTask(id,p,{carry:{key:'signed-form'},ticket}).where,/gift shop till/i);
   }
+  const holding={carry:{key:'tea'},ticket},start=trailTask('service',{x:16.65,y:0,z:26.10},holding);
+  assert.deepEqual(start.target,[16.74,28.90]);
+  const below=trailTask('hall',{x:11,y:0,z:11.89},holding);assert.ok(Number(below.where.match(/(\d+) m/)[1])>15);
+  const dock=trailTask('hall',{x:10.88,y:3.4,z:11.89},holding);assert.match(dock.where,/0 m/);
   assert.match(trailTask('secret',p,{readClauses:new Set(['1','2'])}).where,/2 of 8/);
   assert.match(trailTask('secret',p,{readClauses:new Set('12345678')}).title,/chair/);
 });

@@ -1,3 +1,5 @@
+import {teaDirections} from './tea-directions.js';
+
 // Desk order and wording match the printed Human Activity Trail.
 export const STOPS = [
   ['Corrections Desk','Chronology gallery','Hang the five photographs on the hooks.',['Corrected']],
@@ -40,8 +42,8 @@ const task=(title,where,kicker='Human trail',target)=>({title,where,kicker,targe
 export function trailTask(room,p,v,yaw=0){
   const key=v.carry?.key,t=v.ticket, marks=t?.stamps;
   if(key==='tea'){
-    const distance=Math.round(Math.hypot(p.x-11,p.y-3.4,p.z-11.95));
-    return task('Carry the tea to the reading balcony','Grand Hall, upstairs · '+distance+' m · follow the wool','Tea round · staff only',[11,11.95]);
+    const route=teaDirections(room,p);
+    return task('Carry the tea to the reading balcony','Grand Hall, upstairs · '+route.metres+' m · follow the wool','Tea round · staff only',route.target);
   }
   if(key==='signed-form')return task('Signed form','Hand it in at the gift shop till.','Lady Lashes');
   if(key==='stapler')return task("Return Greg’s stapler","Staff desk, service corridor",'Office supplies');
