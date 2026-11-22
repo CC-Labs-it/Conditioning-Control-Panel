@@ -7792,6 +7792,7 @@
   "deeper_import_failed_fmt": "{0} file(s) couldn't be imported:",
   "deeper_import_skipped_not_enh": "That JSON isn't a Deeper enhancement, so it was skipped.",
   "drop_not_recognised": "该文件不是预设、会话、增强、模组或媒体文件，因此未导入任何内容。",
+  "drop_import_refused": "拖入的包仍在导入。导入完成后再拖入一次。",
   "preset_drop_imported_fmt": "已导入预设：{0}",
   "preset_drop_invalid_fmt": "无法导入该预设：{0}",
   "deeper_import_already_in_library": "That enhancement is already in your library.",

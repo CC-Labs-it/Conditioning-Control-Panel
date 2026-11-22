@@ -24,6 +24,11 @@ public static class QuestVideoCopy
         return body + " " + hint;
     }
 
+    /// <summary>The localized quest text, or the hardcoded one when the lookup came back empty or as its own key
+    /// (server-rolled quests have no loc key).</summary>
+    public static string LocalizedOr(string? localized, string fallback) =>
+        string.IsNullOrWhiteSpace(localized) || localized.StartsWith("quest_", StringComparison.Ordinal) ? fallback : localized;
+
     /// <summary>The hover text naming every video that counts; null for other quests.</summary>
     public static string? Tooltip(QuestCategory category, Func<string, string> loc)
     {

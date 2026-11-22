@@ -7689,6 +7689,7 @@
   "deeper_import_failed_fmt": "Impossibile importare {0} file:",
   "deeper_import_skipped_not_enh": "Quel JSON non è un enhancement di Deeper: saltato.",
   "drop_not_recognised": "Il file non è un preset, una sessione, un enhancement, una mod o un media: non è stato importato niente.",
+  "drop_import_refused": "Un pacchetto rilasciato è ancora in importazione. Rilascia di nuovo quando ha finito.",
   "preset_drop_imported_fmt": "Preset importato: {0}",
   "preset_drop_invalid_fmt": "Impossibile importare quel preset: {0}",
   "deeper_import_already_in_library": "Quell'enhancement è già nella tua libreria.",

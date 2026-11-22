@@ -320,8 +320,11 @@ namespace ConditioningControlPanel
             {
                 QuestsTab.TxtWeeklyQuestIcon.Text = weeklyDef.Icon;
                 QuestsTab.SetWeeklyNavigable(QuestDestinations.For(weeklyDef.Category) != null && !weeklyProgress.IsCompleted);
-                QuestsTab.TxtWeeklyQuestName.Text = App.Mods?.MakeModAware(weeklyDef.Name) ?? weeklyDef.Name;
-                var weeklyDesc = Models.QuestVideoCopy.Describe(weeklyDef.Category, weeklyDef.Description, Loc.Get);
+                // Same localized-or-hardcoded pick as the daily cards, so the video hint never trails an English line.
+                var weeklyName = Models.QuestVideoCopy.LocalizedOr(weeklyDef.LocalizedName, weeklyDef.Name);
+                QuestsTab.TxtWeeklyQuestName.Text = App.Mods?.MakeModAware(weeklyName) ?? weeklyName;
+                var weeklyDesc = Models.QuestVideoCopy.Describe(weeklyDef.Category,
+                    Models.QuestVideoCopy.LocalizedOr(weeklyDef.LocalizedDescription, weeklyDef.Description), Loc.Get);
                 QuestsTab.TxtWeeklyQuestDesc.Text = App.Mods?.MakeModAware(weeklyDesc) ?? weeklyDesc;
                 QuestsTab.TxtWeeklyQuestDesc.ToolTip = Models.QuestVideoCopy.Tooltip(weeklyDef.Category, Loc.Get);
                 QuestsTab.TxtWeeklyProgress.Text = $"{weeklyProgress.CurrentProgress} / {weeklyDef.TargetValue}";

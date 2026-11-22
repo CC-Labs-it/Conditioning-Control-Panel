@@ -1163,14 +1163,16 @@ namespace ConditioningControlPanel
                 var files = (string[])e.Data.GetData(DataFormats.FileDrop);
                 var dropType = DetectDropType(files);
 
-                if (dropType == DropType.Unrecognised)
+                if (_dropImportBusy)
+                {
+                    // Refused while a dropped pack imports: a no-drop cursor and one line saying why.
+                    e.Effects = DragDropEffects.None;
+                    SayDropImportBusy();
+                }
+                else if (dropType == DropType.Unrecognised)
                 {
                     // Accept it (the drop explains itself in a toast), no overlay.
                     e.Effects = DragDropEffects.Copy;
-                }
-                else if (_dropImportBusy)
-                {
-                    e.Effects = DragDropEffects.None;
                 }
                 else if (dropType != DropType.None)
                 {
@@ -1524,7 +1526,11 @@ namespace ConditioningControlPanel
 
         private void Window_DragOver(object sender, DragEventArgs e)
         {
-            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            if (_dropImportBusy)
+            {
+                e.Effects = DragDropEffects.None;
+            }
+            else if (e.Data.GetDataPresent(DataFormats.FileDrop))
             {
                 var files = (string[])e.Data.GetData(DataFormats.FileDrop);
                 var dropType = DetectDropType(files);
@@ -1546,7 +1552,7 @@ namespace ConditioningControlPanel
 
         private async void Window_Drop(object sender, DragEventArgs e)
         {
-            if (_dropImportBusy) { e.Handled = true; return; }
+            if (_dropImportBusy) { e.Handled = true; SayDropImportBusy(); return; }
             GlobalDropOverlay.Visibility = Visibility.Collapsed;
             SettingsTab.BrowserContainer.Visibility = Visibility.Visible;
 
@@ -1563,6 +1569,7 @@ namespace ConditioningControlPanel
         internal async Task ImportDroppedFilesAsync(string[]? files)
         {
             if (files == null || files.Length == 0) return;
+            if (_dropImportBusy) { SayDropImportBusy(); return; }
 
             // Single-file media drop: prompt Play / Edit / Add-to-Library.
             // Multi-file, folder, and .zip drops fall through to the existing flow.
@@ -1797,12 +1804,18 @@ namespace ConditioningControlPanel
             }
         }
 
-        private bool _dropImportBusy;
+        private readonly Services.DropImportGate _dropImport = new();
+        private bool _dropImportBusy => _dropImport.Busy;
+
+        private void SayDropImportBusy()
+        {
+            if (_dropImport.ShouldSayBusy(DateTime.UtcNow))
+                App.Notifications?.Show(Loc.Get("drop_import_refused"), Services.NotificationType.Info);
+        }
 
         /// <summary>Keeps the drop overlay up as a progress card while a dropped pack unpacks (ccp-bugs #1706).</summary>
         private void ShowDropImportProgress(Services.ImportProgress? p)
         {
-            _dropImportBusy = true;
             DropOverlayPrompt.Visibility = Visibility.Collapsed;
             DropImportProgress.Visibility = Visibility.Visible;
             SettingsTab.BrowserContainer.Visibility = Visibility.Hidden;
@@ -1817,7 +1830,6 @@ namespace ConditioningControlPanel
 
         private void HideDropImportProgress()
         {
-            _dropImportBusy = false;
             DropImportProgress.Visibility = Visibility.Collapsed;
             DropOverlayPrompt.Visibility = Visibility.Visible;
             DropImportBar.IsIndeterminate = true;
@@ -1832,8 +1844,10 @@ namespace ConditioningControlPanel
             {
                 _assetImportService ??= new Services.AssetImportService();
 
+                var run = _dropImport.Begin();
                 ShowDropImportProgress(null);
-                var progress = new Progress<Services.ImportProgress>(ShowDropImportProgress);
+                // A report posted before the end can land after it: only this run's live reports draw.
+                var progress = new Progress<Services.ImportProgress>(p => { if (_dropImport.Accepts(run)) ShowDropImportProgress(p); });
 
                 Services.ImportResult result;
                 try
@@ -1842,6 +1856,7 @@ namespace ConditioningControlPanel
                 }
                 finally
                 {
+                    _dropImport.End(run);
                     HideDropImportProgress();
                 }
 

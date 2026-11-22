@@ -7282,6 +7282,7 @@
   "deeper_import_failed_fmt": "{0} file(s) couldn't be imported:",
   "deeper_import_skipped_not_enh": "That JSON isn't a Deeper enhancement, so it was skipped.",
   "drop_not_recognised": "Ce fichier n'est ni un préréglage, ni une session, ni une amélioration, ni un mod, ni un média, donc rien n'a été importé.",
+  "drop_import_refused": "Un pack déposé est encore en cours d'import. Dépose à nouveau quand il est terminé.",
   "preset_drop_imported_fmt": "Préréglage importé : {0}",
   "preset_drop_invalid_fmt": "Impossible d'importer ce préréglage : {0}",
   "deeper_import_already_in_library": "That enhancement is already in your library.",
