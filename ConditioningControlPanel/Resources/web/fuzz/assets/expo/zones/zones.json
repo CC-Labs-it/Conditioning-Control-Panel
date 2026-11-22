@@ -203,12 +203,12 @@
         12.56,
         41
       ],
-      "file": "atrium-entry-fa7372ef3bdb3d98.glb",
-      "arrivalGzip": "atrium-entry-fa7372ef3bdb3d98.glb.gz",
-      "lightIntensity": 31.498770486612436,
+      "file": "atrium-5b77607ba9d9e508.glb",
+      "arrivalGzip": "atrium-5b77607ba9d9e508.glb.gz",
+      "lightIntensity": 32.39015413901663,
       "reflectionIntensity": 0.33,
-      "assetStem": "atrium-08a61de17d70b835",
-      "collision": "atrium-08a61de17d70b835-collision.glb"
+      "assetStem": "atrium-31cce92b9c8a0d62",
+      "collision": "atrium-ddc846c5b2300e71-collision.glb"
     },
     {
       "id": "hall",
