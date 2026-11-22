@@ -379,6 +379,8 @@ export function worldStates(run, world = layoutWorld(), { canOffer = null } = {}
   const paid = lastPaid(run);
   const fuzz = run.fuzz || 0;
   for (const n of world.nodes) {
+    /* Small (sim/economy.js asleep): a cut row, or a shop good that comes with one, is gone from the map, owned or not. */
+    if (E.asleep(run, n.shop ? SHOP_BY_ID[n.id]?.item : n.id)) { states[n.id] = 'gone'; continue; }
     if (n.shop) {
       const g = SHOP_BY_ID[n.id];
       if (g.own(run)) states[n.id] = 'own';
@@ -400,6 +402,11 @@ export function worldStates(run, world = layoutWorld(), { canOffer = null } = {}
   here ||= 'start';
   const next = world.nodes.filter((n) => !n.shop && !n.fork && states[n.id] === 'offer').sort((a, b) => a.cost - b.cost)[0]?.id || null;
   const counts = {};
-  for (const n of world.nodes) if (!n.fork) counts[states[n.id]] = (counts[states[n.id]] || 0) + 1;
+  for (const n of world.nodes) if (!n.fork && states[n.id] !== 'gone') counts[states[n.id]] = (counts[states[n.id]] || 0) + 1;
   return { states, here, next, counts, device };
 }
+/** An island with nothing left on it here (small: every row of the lane is cut, the crossovers): not drawn. */
+export const islandGone = (view, world, isl) => {
+  const rows = world.nodes.filter((n) => n.lane === isl.id);
+  return rows.length > 0 && rows.every((n) => view?.states?.[n.id] === 'gone');
+};
