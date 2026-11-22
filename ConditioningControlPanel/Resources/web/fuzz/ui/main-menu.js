@@ -31,6 +31,22 @@ body.mm-on #game-controls { visibility: hidden; pointer-events: none; }   /* loc
 #main-menu[hidden] { display: none; }
 #main-menu .mm-bg, #main-menu .mm-fx { position: absolute; inset: 0; pointer-events: none; }
 #main-menu .mm-bg { z-index: 0; }
+/* The collection either side: the Sticker Book's own cut-out look (ui/sticker-book.js .sb-stk), loose on the sheet. A place
+   is clamped inside the screen; one that would sit under the logo or the rows is left out (fit()). */
+#main-menu .mm-sides { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+#main-menu .sd { --k: 1; --w: calc(var(--s) * var(--k) * 1px); position: absolute; width: var(--w); aspect-ratio: 1; translate: -50% -50%; rotate: calc(var(--r) * 1deg); pointer-events: auto;
+  left: clamp(calc(var(--w) / 2), calc(var(--x) * 1%), calc(100% - var(--w) / 2)); top: clamp(calc(var(--w) / 2), calc(var(--y) * 1%), calc(100% - var(--w) / 2));
+  transition: scale .2s ${THUD}, rotate .25s ${THUD}; }
+#main-menu .sd[hidden] { display: none; }
+#main-menu .sd:hover { scale: 1.1; rotate: calc(var(--r) * -.35deg); z-index: 1; }
+#main-menu .sd > span { display: grid; place-items: center; width: 100%; height: 100%; animation: mm-drift 6s ease-in-out infinite; animation-delay: calc(var(--i) * -.83s); }
+#main-menu .sd img { max-width: 92%; max-height: 92%; object-fit: contain; filter: drop-shadow(2.5px 0 0 #fff) drop-shadow(-2.5px 0 0 #fff) drop-shadow(0 2.5px 0 #fff) drop-shadow(0 -2.5px 0 #fff) drop-shadow(2px 4px 0 rgba(0, 0, 0, .15)); }
+#main-menu .sd.round img, #main-menu .sd.ticket img { width: 88%; height: 88%; max-width: none; max-height: none; object-fit: cover; border: 4px solid #fff; background: #fff; filter: drop-shadow(2px 4px 0 rgba(0, 0, 0, .2)); }
+#main-menu .sd.round img { border-radius: 50%; object-position: 50% 28%; }
+#main-menu .sd.ticket img { border-radius: 8px; }
+#main-menu .sd.slot > span { border: 2px dashed #b9ae9a; border-radius: 14px; background: rgba(247, 245, 239, .8); animation: none; }
+#main-menu .sd.slot img { max-width: 66%; max-height: 66%; width: auto; height: auto; border: 0; background: transparent; filter: brightness(0); opacity: .13; }
+#main-menu .sd.slot:hover { scale: 1.04; }
 #main-menu .mm-fx { z-index: 5; }
 #main-menu .mm-spiral { display: block; position: absolute; left: 50%; top: 50%; width: max(140%, 900px); aspect-ratio: 1; translate: -50% -50%; opacity: .62; animation: mm-spin 140s linear infinite; }
 #main-menu .mm-sheet { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 16px; overflow-x: hidden; overflow-y: auto; }
@@ -69,7 +85,11 @@ body.mm-on #game-controls { visibility: hidden; pointer-events: none; }   /* loc
 @keyframes mm-wait { 0%, 55% { opacity: 1; } 56%, 100% { opacity: .15; } }
 @keyframes mm-drift { 0%, 100% { rotate: -.6deg; translate: 0 0; } 50% { rotate: .6deg; translate: 0 -1.5px; } }
 @keyframes mm-wig { 0%, 100% { rotate: -1.4deg; } 50% { rotate: 1.2deg; } }
+@media (max-width: 900px) { #main-menu .sd { --k: .8; } }
 @media (max-width: 620px) {
+  /* A phone: eight small ones, tucked half off the edges and behind the rows. */
+  #main-menu .sd { --k: .62; left: calc(var(--mx) * 1%); top: calc(var(--my) * 1%); }
+  #main-menu .sd:not(.ph) { display: none; }
   #main-menu .mm-row { --dx: -9px; font-size: 17px; padding-inline: 16px; min-height: 42px; }
   #main-menu .mm-rows li:nth-child(even) .mm-row { --dx: 9px; }
 }
@@ -77,6 +97,8 @@ body.mm-on #game-controls { visibility: hidden; pointer-events: none; }   /* loc
   #main-menu .mm-logo, #main-menu .mm-spiral, #main-menu .mm-rows li, #main-menu .mm-tag { animation: none !important; }
   #main-menu .mm-row, #main-menu .mm-peel { transition: opacity .15s linear, background-color .15s linear !important; }
 }
+#main-menu.mm-calm .sd > span { animation: none !important; }
+#main-menu.mm-calm .sd { transition: none !important; }
 body.gentle #main-menu .mm-logo, body.gentle #main-menu .mm-spiral, body.gentle #main-menu .mm-rows li, body.gentle #main-menu .mm-tag { animation: none !important; }
 body.gentle #main-menu .mm-row, body.gentle #main-menu .mm-peel { transition: opacity .15s linear, background-color .15s linear !important; }
 `;
@@ -102,9 +124,10 @@ function drawSpiral(c) {
 /**
  * Opens the menu. rows: () => the model's rows (asked again on every entrance). actions: { [rowId]: (ev, el, row) }.
  * gentle: () => bool. sound: (name) => void, names 'land' | 'tick' | 'press' | 'burst' | 'denied'.
+ * sides: () => [{ kind: 'got'|'slot'|'portrait', src, cls, spot, side }] (ui/menu-model.js sideStickers, art resolved).
  * Answers { el, open, refresh(), rattle(id), flash(id), leave(id, { back }), hide(), show(), focus(), close() }.
  */
-export function openMainMenu({ doc = document, rows, actions = {}, gentle = () => false, sound = () => {}, logo = 'assets/adcard/logo.webp' }) {
+export function openMainMenu({ doc = document, rows, actions = {}, gentle = () => false, sound = () => {}, sides = () => [], logo = 'assets/adcard/logo.webp' }) {
   const win = doc.defaultView;
   if (!doc.getElementById('main-menu-css')) { const st = doc.createElement('style'); st.id = 'main-menu-css'; st.textContent = CSS; doc.head.appendChild(st); }
   const calm = () => !!gentle() || !!win?.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -117,6 +140,9 @@ export function openMainMenu({ doc = document, rows, actions = {}, gentle = () =
   const img = mk('img', 'mm-logo', sheet); img.src = logo; img.alt = BRAND.game; img.width = 904; img.height = 240;
   const list = mk('ul', 'mm-rows', sheet);
   const fx = mk('div', 'mm-fx', root); fx.setAttribute('aria-hidden', 'true');
+  const sideLayer = mk('div', 'mm-sides'); sideLayer.setAttribute('aria-hidden', 'true');
+  root.insertBefore(sideLayer, sheet);
+  let sideEls = [];
   doc.body.appendChild(root);
   doc.body.classList.add('mm-on');
   drawSpiral(spiral);
@@ -154,6 +180,36 @@ export function openMainMenu({ doc = document, rows, actions = {}, gentle = () =
     els[sel]?.classList.remove('sel'); sel = i; els[sel]?.classList.add('sel');
     if (!silent) quiet('tick');
   }
+  /* ---- the collection: not a door, not focusable; it wiggles and nothing else ---- */
+  function wiggle(d) { an(d.firstChild, [{ transform: 'rotate(0deg)' }, { transform: 'rotate(-8deg)' }, { transform: 'rotate(6deg)' }, { transform: 'rotate(-3deg)' }, { transform: 'rotate(0deg)' }], { duration: 340, easing: 'ease-out' }); }
+  function drawSides() {
+    sideLayer.replaceChildren(); sideEls = [];
+    sides().forEach((it, i) => {
+      const d = mk('div', `sd ${it.side}${it.kind === 'slot' ? ' slot' : ''}${it.cls ? ' ' + it.cls : ''}${it.spot.m ? ' ph' : ''}`, sideLayer);
+      const p = it.spot;
+      d.style.cssText = `--x:${p.x};--y:${p.y};--s:${p.s};--r:${p.r};--i:${i}` + (p.m ? `;--mx:${p.m[0]};--my:${p.m[1]}` : '');
+      const im = mk('img', '', mk('span', '', d));
+      im.alt = ''; im.decoding = 'async'; im.loading = 'lazy'; im.draggable = false; im.src = it.src;
+      d.addEventListener('pointerenter', () => { if (moved && !busy) wiggle(d); });
+      d.addEventListener('click', () => { if (!busy) { wiggle(d); sound('tick'); } });
+      sideEls.push(d);
+    });
+    fit();
+  }
+  /* Leave out any place that would sit under the logo or the rows (a narrow window). Read once per draw and resize. */
+  function fit() {
+    if (!sideEls.length || win.innerWidth <= 620) { for (const d of sideEls) d.hidden = false; return; }
+    const boxes = [img.getBoundingClientRect(), list.getBoundingClientRect()].map((r) => ({ l: r.left - 34, r: r.right + 34, t: r.top - 8, b: r.bottom + 8 }));
+    for (const d of sideEls) {
+      d.hidden = false;
+      const r = d.getBoundingClientRect();
+      d.hidden = boxes.some((q) => r.left < q.r && r.right > q.l && r.top < q.b && r.bottom > q.t);
+    }
+  }
+  let fitTimer = 0;
+  const onResize = () => { win.clearTimeout(fitTimer); fitTimer = win.setTimeout(fit, 150); };
+  win.addEventListener('resize', onResize);
+
   function draw() {
     model = rows();
     list.replaceChildren(); els = [];
@@ -174,6 +230,8 @@ export function openMainMenu({ doc = document, rows, actions = {}, gentle = () =
     });
     sel = Math.max(0, Math.min(sel, els.length - 1));
     els[sel]?.classList.add('sel');
+    root.classList.toggle('mm-calm', calm());
+    drawSides();
   }
   function press(i, ev) {
     if (!open || away || busy) return;
@@ -208,6 +266,14 @@ export function openMainMenu({ doc = document, rows, actions = {}, gentle = () =
         { duration: 300, delay: 300 + i * 70, easing: THUD, fill: 'backwards' }) || last;
       later(430 + i * 70, () => sound('land'));
     });
+    sideEls.forEach((d, i) => {
+      if (d.hidden) return;
+      const g = d.classList.contains('lf') ? -1 : 1;
+      const x = an(d, [{ transform: `translate(${-g * 60}px,-30px) scale(1.8) rotate(${g * 26}deg)`, opacity: 0 }, { transform: 'translate(0,0) scale(1) rotate(0deg)', opacity: 1 }],
+        { duration: 260, delay: 480 + i * 30, easing: THUD, fill: 'backwards' });
+      if (i % 3 === 0) later(600 + i * 30, () => sound('land'));
+      if (i > 12) last = x || last;
+    });
     await done(last);
     if (my === token) busy = false;
   }
@@ -240,6 +306,12 @@ export function openMainMenu({ doc = document, rows, actions = {}, gentle = () =
       const g = i % 2 ? 1 : -1;
       an(r, [{ transform: 'translate(0,0) rotate(0deg)', opacity: 1 }, { transform: `translate(${g * (180 + Math.random() * 140)}px,${(Math.random() - .5) * 240}px) rotate(${(Math.random() - .5) * 100}deg)`, opacity: 0 }],
         { duration: 300, delay: 60 + i * 28, easing: 'cubic-bezier(.5,0,.9,.5)', fill: 'forwards' });
+    });
+    sideEls.forEach((d, i) => {
+      if (d.hidden) return;
+      const g = d.classList.contains('lf') ? -1 : 1;
+      an(d, [{ transform: 'translate(0,0) rotate(0deg)', opacity: 1 }, { transform: `translate(${g * (240 + Math.random() * 160)}px,${(Math.random() - .5) * 180}px) rotate(${g * (20 + Math.random() * 40)}deg)`, opacity: 0 }],
+        { duration: 300, delay: i * 12, easing: 'cubic-bezier(.5,0,.9,.5)', fill: 'forwards' });
     });
     await done(an(el, [{ transform: 'scale(1)', opacity: 1 }, { transform: 'scale(1.28)', opacity: 1, offset: .45 }, { transform: 'scale(.2)', opacity: 0 }], { duration: 420, delay: 160, easing: 'ease-in-out', fill: 'forwards' }));
     if (my !== token) return;
@@ -299,6 +371,7 @@ export function openMainMenu({ doc = document, rows, actions = {}, gentle = () =
       open = false;
       ++token;
       win.clearInterval(holdTimer);
+      win.removeEventListener('resize', onResize);
       doc.removeEventListener('visibilitychange', still);
       doc.body.classList.remove('mm-on');
       doc.removeEventListener('keydown', onKey);
