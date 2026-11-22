@@ -115,6 +115,8 @@ export const phoneCaps = (win, ed = editionState()) => (ed.edition === 'small' &
 
 /** The Expo may load: full edition and its files are within reach. */
 export const expoAllowed = (ed = editionState()) => ed.edition === 'full' && ed.expo?.state === 'ready';
+/** The download size the host gave for the Expo (the transmission card's size line), or null. */
+export const expoMb = (ed = editionState()) => ed.expo?.mb ?? null;
 /** Where every Expo file loads from. */
 export const expoBase = (ed = editionState()) => (ed.expo?.state === 'ready' && ed.expo.base) || EXPO_DEFAULT_BASE;
 /** The host's `expo-ready`: the download landed. Answers whether the Expo is now open. */

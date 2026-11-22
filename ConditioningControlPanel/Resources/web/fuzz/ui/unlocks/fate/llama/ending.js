@@ -3,6 +3,7 @@ import { herdRoster, llamaPortrait } from '../../../../data/content/llamas.js';
  * asset), and every door answers nothing unless edition.js says the Expo is allowed. A small page never takes this
  * ending at all (ui/engine.js: a sleeping row never mounts, sim/economy.js sleepingEnd). */
 import { warmEntrance, clearEntrance, createPortal, bindExpoMenus, bindExpoSoundUnlock, prewarm, playSpit, openExpo } from '../../../expo/door.js';
+import { transmissionAtWormhole } from '../../../transmission.js';   // Expo absent: the transmission card comes first
 
 export const PORTAL_DARK = '#071819';
 const ENTRY_CSS = `
@@ -86,6 +87,8 @@ function wormhole(ctx, portal) {
 }
 
 export async function expoEnding(ctx, releaseWorld) {
+  /* Full, desktop, Expo still absent: the transmission card first (CONTRACT.md 6.5). Shut with nothing here: no visit. */
+  if (!await transmissionAtWormhole()) return;
   const parent = ctx.layer('ending'), doc = parent.ownerDocument, win = doc.defaultView;
   ctx.css(ENTRY_CSS);
   const menus = bindExpoMenus(ctx, parent);

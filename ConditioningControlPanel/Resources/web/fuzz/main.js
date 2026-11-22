@@ -30,6 +30,7 @@ import { canKeepPlaying as keepPlayingOk, keepPlaying as keepPlayingRun } from '
 import { sealedFor, showSeal } from './ui/seal.js';
 import { setEdition, expoArrived, editionState, renewalAllowed, sendNudge } from './ui/edition.js';
 import { mountLlamaPen } from './ui/llama-pen.js';
+import { mountTransmission } from './ui/transmission.js';   // the transmission card, the pen sign and the llama-8 card
 import { mountHomeTip } from './ui/phone.js';
 import { previewBarAllowed } from './ui/preview-bar-model.js';
 
@@ -365,7 +366,9 @@ function start(init) {
     if (run.ended) { engine.end(run.ended.id, { restored: true }); ui.start(); return; }
     syncMedia();
     engine.mountAll(!!saved?.run);
-    pen();   // the herd, top left, from the first second
+    const penView = pen();   // the herd, top left, from the first second
+    /* The transmission (CONTRACT.md 6.5): at 4 llamas the card, then the pen sign; in small the nudge and the llama-8 card. */
+    mountTransmission({ doc: document, win: window, cards: ui.cards, on: bridge.on, send: bridge.send, llamas: run.herd, extras, save: persist, pen: penView?.el });
     mountHomeTip({ doc: document, win: window, storage: fresh ? memoryStorage() : preferenceStorage });   // iPhone Safari, once
     engine.syncQuiet();
     ui.drawPhrase();
