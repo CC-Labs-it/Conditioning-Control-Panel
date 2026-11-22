@@ -1,6 +1,7 @@
 import {livePanel,terminal} from './display.js';
+import {atRematchStart,flagDistances,rangeOrigin} from './rematch.js';
 
-const G=9.81,rangeOrigin=[-66.28,0,94],flagDistances=[2.9,3.4,6.1];
+const G=9.81;
 export function spitVelocity(charge,pitch,hooves){
   const speed=2.3+1.98*Math.max(0,Math.min(1,charge));
   const angle=Math.max(-1.55,Math.min(1.16,pitch+.05+.24*charge));
@@ -58,7 +59,7 @@ export function createSpit(api,state){
     stain.rotateZ(nextStain*1.62);api.play('glass',.11);
     if(target?.type==='horn'){api.muffle?.(target.zone,target.position);cue('v4_spit_horn',{exhibit:'horn',position:target.position});}
     const far=target?.type==='plate';
-    if(shot.zone==='commons'&&(Math.hypot(start.x-rangeOrigin[0],start.z-rangeOrigin[2])<2.5||far||shot.planter)){
+    if(shot.zone==='commons'&&(atRematchStart(start)||far||shot.planter)){
       state.bestSpit=Math.max(state.bestSpit||0,Math.hypot(point.x-start.x,point.z-start.z));
       state.ticket.stamp('Spat');state.ticket.book('spit-range','Took part in the rematch');
       room?.score?.();rangeSpits++;

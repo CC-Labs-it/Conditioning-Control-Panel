@@ -14,6 +14,7 @@ export const TRAIL_STYLE = `
 .expo-trail-pips i[data-ink=full]{background:#38664f;border-color:#38664f}.expo-trail-pips i[data-ink=partial]{background:linear-gradient(90deg,#38664f 50%,#e4dfcd 50%)}
 .expo-trail-task{display:grid;gap:2px;padding:6px 10px;margin-top:3px;background:#173e36f2;border-color:#507364;color:#fff7e4;border-left:3px solid #c19b53}
 .expo-trail-task small{color:#ddc596}.expo-trail-task strong{font:600 15px/1.2 "Segoe UI",sans-serif}.expo-trail-task span{font:12px/1.3 "Segoe UI",sans-serif;color:#eee9d8}.expo-task-arrow{display:inline-block;margin-right:.5em;font-style:normal}
+.expo-trail-task .expo-range-hint{font-weight:650;color:#f1d99e}
 .expo-root .expo-caption:not(:empty){left:auto;right:12px;max-width:min(45%,430px)}
 .expo-trail-card{position:absolute;z-index:7;left:50%;top:50%;transform:translate(-50%,-50%);width:min(720px,calc(100% - 28px));max-height:calc(100% - 58px);overflow:auto;overscroll-behavior:contain;touch-action:pan-y;padding:18px 20px;background:#f5efdb;border:1px solid #aba17e;border-top:5px double #476752;box-shadow:0 10px 50px #081d1eb0;text-align:left}
 .expo-trail-card header{border-bottom:1px solid #a3a58c;padding-right:60px}.expo-trail-card h2{font:bold clamp(23px,4vw,34px)/1.12 Georgia,serif;margin:4px 0}.expo-trail-card p{font-size:14px;line-height:1.35;margin:6px 0}

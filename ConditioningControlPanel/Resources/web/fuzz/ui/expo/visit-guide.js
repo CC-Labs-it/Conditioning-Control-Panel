@@ -1,5 +1,6 @@
 import {STOPS,stampSentence,stopSealed,trailMeter,trailTask} from './trail-stops.js';
 import {createExpoTaps} from './touch-taps.js';
+import {rematchHint} from './rematch.js';
 
 export function visitDirection(route,story,room,position,visit){
   const task=trailTask(room,position,visit);
@@ -27,6 +28,7 @@ export function createVisitGuide(root,{onOpen=()=>{},canOpen=()=>true}={}){
   el('small',open,'','8 stamps open the way home');const shortcut=el('kbd',open);
   const task=el('div',hud,'expo-trail-task'),kicker=el('small',task),title=el('strong',task),whereLine=el('span',task);
   const arrow=el('i',whereLine,'expo-task-arrow','↑'),where=el('span',whereLine);arrow.setAttribute('aria-hidden','true');
+  const rangeHint=el('span',task,'expo-range-hint');rangeHint.hidden=true;rangeHint.setAttribute('role','status');
   const card=el('section',root,'expo-trail-card');card.hidden=true;card.tabIndex=-1;
   card.setAttribute('role','dialog');card.setAttribute('aria-modal','true');card.setAttribute('aria-label','Human Activity Trail');
   const head=el('header',card);el('small',head,'','Llama Expo 2037 · Visitor Services · Admit one human');
@@ -49,7 +51,7 @@ export function createVisitGuide(root,{onOpen=()=>{},canOpen=()=>true}={}){
   const slip=el('aside',root,'expo-deviation-slip');
   for(const node of [moment,slip]){node.hidden=true;node.setAttribute('role','status');}
   const stamps=[],deviations=[];
-  let t,release,mode,compact,signature='',taskKey='',stampEnd=0,slipEnd=0;
+  let t,release,mode,compact,spitButton,signature='',taskKey='',stampEnd=0,slipEnd=0;
   function cardHeading(){
     const ledgerShown=compact&&!back.hidden;
     heading.textContent=ledgerShown?'Visit ledger':'Human Activity Trail';
@@ -116,6 +118,12 @@ export function createVisitGuide(root,{onOpen=()=>{},canOpen=()=>true}={}){
     if(key!==taskKey){taskKey=key;kicker.textContent=a.kicker;title.textContent=a.title;where.textContent=a.where;}
     arrow.hidden=!a.target;
     if(a.target)arrow.style.transform='rotate('+Math.round((Math.atan2(a.target[0]-p.x,p.z-a.target[1])+yaw)*180/Math.PI)+'deg)';
+    if(room==='commons'&&input==='touch')spitButton||=root.querySelector('.expo-spit');
+    const hint=rematchHint(room,p,input,!!spitButton?.hidden);
+    if(rangeHint.textContent!==hint)rangeHint.textContent=hint;
+    rangeHint.hidden=!hint;
+    whereLine.hidden=!!hint&&a.kicker==='The Rematch'&&!v.carry?.key;
+    kicker.hidden=!!hint&&!!v.carry?.key;
     if(elapsed>=stampEnd){
       const next=compact&&elapsed<slipEnd?null:stamps.shift();moment.hidden=!next;
       if(next){
