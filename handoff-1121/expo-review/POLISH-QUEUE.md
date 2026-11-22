@@ -79,3 +79,13 @@ The targeted Expo tests passed 61 of 61. The full Fuzz run passed 1,061 of 1,062
 - The Grand Hall end truss sat in the shared atrium wall at the first-floor spiral stairs. Moving it 25 centimetres into the hall cleared the wall. On desktop and Gentle, the flicker disappeared at all six viewpoints along a 2.6-metre walk across the landing. Both braces remain visible from the hall.
 
 All 71 targeted Expo and documentary music tests passed after these changes. The full Fuzz run passed 1,071 of 1,072, with the same missing racing preview video described above.
+
+### Tea service and exhibit placement
+
+- The tea now uses the lighting in the visitor's current room. With hooves fitted, the left hoof supports the tray and the right hoof can press the test panel. Desktop and Gentle touch visits exercised both pickup orders, carried the tray beyond the unloaded canteen in normal and emergency lighting, and earned Delivered at a separate stand beside the balcony trolley.
+- The atrium plaster above the Convention Hall doors stays the same shade as the Hall loads. Before and after images showed identical wall pixels at a fixed viewpoint on both detail levels. Surface checks at five walking positions also hit the atrium plaster.
+- The Hoof queue sign faces the aisle beyond the last rope and clears the archive projector. Walking all 25 checkpoints earned Queued on desktop and Gentle touch. The shortcut and the nearby projector still worked.
+- The First Press glass descends with the plinth at press 12. The exposed terrazzo has continuous lighting, the register stands beyond the rope, and a single closed cover returns when the visitor seals the exhibit. Desktop and Gentle visits followed the button through all four loan locations and back to the original stand.
+- The gift shop staff fire exit occupies its own bay between the Grand Hall doors and the paper press. The opposite wall shows the full framed-contract price. With emergency lighting and the archive display loaded, desktop and Gentle visitors used the door and collected the staff lanyard.
+
+The v4 branch passed all 79 Expo and documentary music tests. The full Fuzz suite passed 1,079 of 1,080. The racing preview video described above is still absent.
