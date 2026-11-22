@@ -156,8 +156,8 @@ internal static partial class TcHostService
         if (string.IsNullOrEmpty(f.Ending)) return;
         var slipHost = _host;
         _ = Sparkles.SparklesSlip.Deliver(Sparkles.SparklesGameEnd.Claim(GameId, "solo",
-                Sparkles.SparklesResult.ForMedal(TcRules.EndingMedal), TimeSpan.FromMinutes(f.Ms),
-                TcMediaRules.ClaimDetail(f.Ending, f.Ms)),
+                Sparkles.SparklesResult.ForMedal(TcRules.EndingMedal), TimeSpan.FromMinutes(f.Minutes),
+                TcMediaRules.ClaimDetail(f.Ending, f.Minutes)),
             json => slipHost?.Post(new JRaw(json)));
     }
 }

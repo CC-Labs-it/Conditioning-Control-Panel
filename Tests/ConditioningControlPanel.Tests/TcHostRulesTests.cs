@@ -221,7 +221,8 @@ public class TcHostRulesTests
         var r = Gate("{\"type\":\"fuzz-ended\",\"total\":1e12,\"minutes\":71.5,\"items\":120,\"ending\":\"llama_expo\",\"route\":[\"a\"],\"dayUtc\":\"2026-11-22\"}");
         Assert.True(r.Accepted);
         Assert.Equal("llama_expo", r.Frame!.Ending);
-        Assert.Equal(71, r.Frame.Ms);
+        Assert.Equal(71, r.Frame.Minutes);
+        Assert.Equal(0, r.Frame.Ms);
         Assert.False(Gate("{\"type\":\"fuzz-ended\",\"minutes\":3,\"ending\":\"<script>\"}").Accepted);
         Assert.False(Gate("{\"type\":\"fuzz-ended\",\"ending\":\"good\"}").Accepted);
     }
