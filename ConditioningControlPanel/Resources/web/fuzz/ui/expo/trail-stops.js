@@ -121,8 +121,7 @@ export function trailTask(room,p,v,yaw=0){
   if(room==='habitat'&&marks?.has('Fed')&&!marks.has('Kept'))return task("Sit in the keeper’s chair",'Enquire at the staff door.','The Habitat');
   if(room==='shop'){
     if(v.boughtExit)return task('Walk through the Renewal door','Gift shop');
-    if(v.contract&&v.loops>=2)return task(t.count<8?'Collect a day ticket':'Buy Exit','Gift shop till');
-    if(v.contract)return task('Open the green exit door','Gift shop');
+    if(v.contract)return task(t.count<8?'Collect a day ticket':'Buy Exit','Gift shop till');
     if(v.souvenir)return task('Answer the question','Gift shop till');
     return task('Choose one souvenir','Gift shop · carry it to the till.');
   }

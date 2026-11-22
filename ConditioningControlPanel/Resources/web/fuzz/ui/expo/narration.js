@@ -18,7 +18,7 @@ const canonical = id => id?.replace(/^keep_/, 'hab_');
 const nearest = (nodes, point) => nodes.reduce((best,node)=>
   !best || node.pos.distanceToSquared(point)<best.pos.distanceToSquared(point) ? node : best,null);
 
-export function createNarration({ctx,camera,scene,root,register,walker,sound,assetURL,lite,owned,viewing=()=>{},releaseView=()=>{}}) {
+export function createNarration({ctx,camera,scene,root,register,walker,sound,assetURL,lite,owned,viewing=()=>{},releaseView=()=>{},caps={hold(){},light(){}},autoStart=()=>true}) {
   const book=new Map(), rooms=new Map(), heard=new Set(), finished=new Map(), unavailable=new Set(), abort=new AbortController();
   for(const row of railLines)book.set(row.id,row);
   const visitedScreens=new Set(),wetHorns=[];
@@ -73,16 +73,14 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
       const project=createProjector({group,id,scene,assetURL,lite,atlas});
       const station={id,zone,pos:centre(node),project,index:0,progress:0};
       station.archive=/^(?:slot_\d+|ev_)/.test(id);
-      if(station.archive)station.panels=archiveDisplays(group,id,!!story?.assigned(id));
+      if(station.archive)station.panels=archiveDisplays(group,id);
       list.push(station);
       const button=group.getObjectByName('expo_replay_'+id);
       if(station.archive){
         const plaque=group.getObjectByName('expo_caption_'+id);
         if(plaque)undo.push(register(plaque,()=>story?.at(id)?reader.label(id):'Start the projector to read the plaque',()=>reader.toggle(id,story?.at(id)?.archive),3.5));
+        // One button per stand. It plays the next record of the story, or this screen's last one once all are seen.
         if(button)undo.push(register(button,()=>archivePrompt(station),()=>playArchive(station),3.5));
-        const review=group.getObjectByName('expo_review_'+id);
-        if(review)undo.push(register(review,()=>story?.assigned(id)?archivePrompt(station):'Play this screen first',
-          ()=>playArchive(station,true),3.5));
       }else if(button){undo.push(register(button,()=>project&&!playedProjectors.has(id)?'Start projector':'Replay narration',
         ()=>cue(id,{station,replay:true,projector:!!project,kind:project?'beat':'react'}),3.5));}
     });
@@ -102,7 +100,10 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     sequence.cancel(entry=>entry.zone===zone&&!entry.roaming);
     const current=sequence.current;if(current?.projector&&current.zone===zone)sequence.finish(current,false);
     for(const f of room.undo)f();
-    for(const s of room.list){reader.release(s.id);s.panels?.dispose();s.project?.dispose();}
+    for(const s of room.list){
+      if(s.capHeld){s.capHeld=false;caps.hold('expo_replay_'+s.id,false);}
+      reader.release(s.id);s.panels?.dispose();s.project?.dispose();
+    }
     for(const entry of [sequence.current,...sequence.queue])
       if(entry?.station?.zone===zone)entry.station=null;
     rooms.delete(zone);
@@ -246,7 +247,9 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     entry.resolve(ok);
   }
   let farewell=false;
-  function enqueue(id,{closing=false,station=null,replay=false,zone=walker.zone,position=null,kind='react',exhibit,ttl,ticket=null,projector=false,onStart,roomWide=false,needed,roaming=false}={}){
+  // `urgent` is a line a button is waiting on: it starts at once, over a passing remark. It never cuts a recording
+  // that holds the voice (ask `busy()` first and do without the line).
+  function enqueue(id,{closing=false,station=null,replay=false,zone=walker.zone,position=null,kind='react',exhibit,ttl,ticket=null,projector=false,onStart,roomWide=false,needed,roaming=false,urgent=false}={}){
     const row=book.get(id);
     if(dead||!row||zone!==walker.zone||(farewell&&!closing))return Promise.resolve(false);
     if(row.set==='log'&&!owned().includes(id.slice(4)))return Promise.resolve(false);
@@ -264,7 +267,13 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     const entry={row,zone,station,channel:key,kind,exhibit:exhibit||station?.id||zone,anchor,ttl,ticket,projector,onStart,needed,roaming,
       stationId:station?.id||family(id),pos:origin.clone(),handle:null,
       clock:0,lastMediaTime:0,kevin:false,progress:0,duck:1,resolve,promise};
+    const speaking=sequence.current;
+    if(urgent&&speaking&&speaking.kind!=='beat')sequence.finish(speaking,false);
     sequence.submit(entry);return promise;
+  }
+  /** A recording holds the voice, or is next in line for it: a button's own line would have to wait. */
+  function busy(){
+    return sequence.current?.kind==='beat'||sequence.queue.some(entry=>entry.kind==='beat');
   }
   function cue(id,options){
     if(!id||dead)return Promise.resolve(false);
@@ -286,17 +295,17 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
       if(story.current.slot!==station.id)return 'Recording in progress';
       return story.current.started?'Playing '+story.current.row.archive.title:'Waiting for narration';
     }
-    const own=story.at(station.id);
-    if(own)return 'Replay '+own.archive.title;
-    if(story.assigned(station.id))return 'Replay archive record';
     if(unavailable.has(story.next?.id))return 'Retry projector';
-    return story.next?'Start projector':'Archive complete';
+    if(story.next)return 'Start projector';
+    const own=story.at(station.id);
+    return own?'Replay '+own.archive.title:'Archive complete';
   }
-  function playArchive(station,review=false,automatic=false){
-    if(dead||held||farewell||!station.project||station.zone!==walker.zone||!rooms.get(station.zone)?.list.includes(station))return;
-    if(!ready)return load.then(()=>ready&&playArchive(station,review));
-    const ticket=story.request(station.id,review);
-    if(!ticket)return;
+  // Answers false when nothing will start, so the stand's cap stays still.
+  function playArchive(station,automatic=false){
+    if(dead||held||farewell||!station.project||station.zone!==walker.zone||!rooms.get(station.zone)?.list.includes(station))return false;
+    if(!ready)return load.then(()=>ready&&playArchive(station,automatic));
+    const ticket=story.request(station.id);
+    if(!ticket)return false;
     if(!automatic&&!heard.has('pa_timeline'))cue('pa_timeline',{zone:station.zone});
     return enqueue(ticket.row.id,{station,zone:station.zone,replay:true,ticket,projector:true,kind:'beat'});
   }
@@ -321,9 +330,9 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
   }
   function proximity(){
     const zone=walker.zone,local=rooms.get(zone);
-    if(local&&!sequence.queue.length&&!sequence.current?.projector&&archiveGalleries.has(zone)&&!visitedScreens.has(zone)){
+    if(local&&!sequence.queue.length&&!sequence.current?.projector&&archiveGalleries.has(zone)&&!visitedScreens.has(zone)&&autoStart(zone)){
       const station=nearest(local.list.filter(s=>s.project&&!exemptRecord(s.id)&&!unavailable.has(s.id)&&s.pos.distanceToSquared(camera.position)<9&&clearRay(s.pos)),camera.position);
-      if(station){if(station.archive)playArchive(station,false,true);else cue(station.id,{station,replay:true,projector:true,kind:'beat'});return;}
+      if(station){if(station.archive)playArchive(station,true);else cue(station.id,{station,replay:true,projector:true,kind:'beat'});return;}
     }
     const immediate=[];
     for(const room of rooms.values())for(const s of room.list){
@@ -390,7 +399,14 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     for(const room of rooms.values())for(const s of room.list)if(s.project){
       if(!ready)continue;
       const row=s.archive?story.at(s.id):playedProjectors.has(s.id)?book.get(s.id):undefined;
-      s.panels?.show(row,story.total,!!story.assigned(s.id),(visits.get(s.zone)||0)>1);
+      if(s.archive){
+        // The stand that is playing keeps its cap down until the record ends. Every stand's lamp is out meanwhile.
+        const playing=story.current?.slot===s.id;
+        if(playing!==!!s.capHeld){s.capHeld=playing;caps.hold('expo_replay_'+s.id,playing);}
+        const live=story.canStart(s.id);
+        if(live!==s.capLit){s.capLit=live;caps.light('expo_replay_'+s.id,live);}
+        s.panels?.show(row,story.total,(visits.get(s.zone)||0)>1);
+      }
       s.project.step(dt,ctx.gentle||ctx.reduced,camera.position.distanceTo(s.pos),row?.slides[s.index],s.progress,
                      restingSlide(row),row?.slides[s.index+1]);
     }
@@ -428,5 +444,5 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
   }
   return {mount,unmount,cue,closingLine,muffle,planter,registerPlaque,get story(){return story;},
     get speaking(){const entry=sequence.current;return !held && !!entry?.lit && !entry.kevin && !!entry.handle?.playing;},
-    available:()=>ready&&sequence.available,tick,pause,dispose,debug,meter};
+    available:()=>ready&&sequence.available,busy,tick,pause,dispose,debug,meter};
 }

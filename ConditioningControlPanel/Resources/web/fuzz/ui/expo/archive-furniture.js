@@ -1,4 +1,5 @@
 import {Group, InstancedMesh, Matrix4} from 'three';
+import {isArchiveScreen} from './archive-screens.js';
 
 // Only the fixed case and the station body share a draw. Screens, lenses,
 // labels, replay keys and their original interaction targets stay independent.
@@ -42,8 +43,9 @@ export function batchArchiveHousings(room) {
 }
 
 // Additional bays use their room's freestanding projector, including its moving caps and collision.
-export function fitArchiveBays(zone, route) {
-  for(const site of route.slots.filter(row=>row.zone===zone.id && row.template)){
+// Only the archive's screens are built (archive-screens.js): the route file lists more bays than the building has.
+export function fitArchiveBays(zone, route, keep=isArchiveScreen) {
+  for(const site of route.slots.filter(row=>row.zone===zone.id && row.template && keep(row.id))){
     const source=route.slots.find(row=>row.id===site.template);
     const yaw=row=>Math.atan2(row.front[0],row.front[2]);
     const transform=new Matrix4().makeTranslation(...site.screen)

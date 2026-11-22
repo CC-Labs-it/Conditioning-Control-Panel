@@ -125,9 +125,9 @@ test('quit resumes the Expo archive, while exit, panic and legacy recaps stay cl
   const resumed = restore();
   assert.equal(resumed.ctx.restored, true);
   assert.equal(resumed.story.next.archive.number, 2);
-  assert.equal(resumed.story.assigned('slot_22').archive.number, 1);
-  assert.equal(resumed.story.canStartNew('slot_22'), false);
-  assert.equal(resumed.story.canStartNew('slot_02'), true);
+  assert.equal(resumed.story.assigned('slot_01').archive.number, 1); // slot_22 is retired: its record rests on the Atrium floor screen
+  assert.equal(resumed.story.canStart('slot_01'), true); // one screen holds many records
+  assert.equal(resumed.story.canStart('slot_02'), true);
   assert.equal(resumed.ctx.store.claimLifetime('planterDetour'), false);
   assert.equal(load(storage).life.runs, 1);
   assert.deepEqual(notified, ['fuzz-ended']);

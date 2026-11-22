@@ -174,8 +174,11 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       const target = targetAt(point);
       if (target) {
         if(exhibits.refuseHoof(target.action,target.hit))return true;
-        actionSerial++;pressedUntil=elapsed+.19; aim.dataset.pressed=ctx.gentle||ctx.reduced?'gentle':'full';
-        target.action.callback(target.hit);rail?.tick(0);
+        // A press that does nothing leaves the reticle and the cap alone: its action answers false.
+        if(target.action.callback(target.hit)!==false){
+          actionSerial++;pressedUntil=elapsed+.19; aim.dataset.pressed=ctx.gentle||ctx.reduced?'gentle':'full';
+        }
+        rail?.tick(0);
       }
       if(!target && ready && !dead && !loading && !returnButton && !ctx.paused && !doc.hidden){const floor=floorPlacement(point);if(floor)return exhibits.hands.place(floor);}
       return !!target;
@@ -268,18 +271,21 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       return media;
     }
     narration=createNarration({ctx,camera,scene,root,register,walker,sound,assetURL,lite:LITE,owned:()=>exhibits.state.file.herd,
-      viewing:entry=>rail?.view(entry),releaseView:entry=>rail?.clearView(entry)});
+      viewing:entry=>rail?.view(entry),releaseView:entry=>rail?.clearView(entry),caps:{hold:buttons.setHeld,light:buttons.setLit},
+      // The gift shop's screen stands beside the exit door. Once the sale is filed it waits for its button, so the
+      // viewing rail never closes on a visitor who is on the way out.
+      autoStart:zone=>!(zone==='shop'&&exhibits?.state.contract)});
     const voiceCaptions=root.querySelector('.expo-narration'),messages=element('div','expo-visitor-messages');
     messages.append(caption,voiceCaptions);voiceCaptions.prepend(guide);
     narration.pause(waitingForEntrance || ctx.paused || doc.hidden);
     const instruments=createInstruments({ctx,camera,register,play:sound.play,meter:narration.meter,lite:LITE});
     const ambience=createAmbience({ctx,renderer,lite:LITE,meter:narration.meter});
     const kit=exhibitProps(assetURL),annex=exhibitProps(assetURL,'visitor-services.glb');clean.push(()=>kit.dispose(),()=>annex.dispose());
-    exhibits = createExhibits({ THREE, ctx, camera, scene, root, draw, say, walker, renderer, muffle:narration.muffle, setHeaterPower:sound.setHeaterPower, pauseMusic:on=>music.pause(on), signal:instruments.signal, props:kit.mount, annexProps:annex.mount, records:()=>narration.story?.completed||0,
+    exhibits = createExhibits({ THREE, ctx, camera, scene, root, draw, say, walker, renderer, muffle:narration.muffle, setHeaterPower:sound.setHeaterPower, pauseMusic:on=>music.pause(on), signal:instruments.signal, props:kit.mount, annexProps:annex.mount, records:()=>narration.story?.completed||0, recordTotal:()=>narration.story?.total||0, voiceBusy:narration.busy,
       storeSouvenir:(obj,label)=>souvenirPrint({THREE,renderer,draw,ctx},obj,label), actionSerial:()=>actionSerial, cue:narration.cue, narrationAvailable:narration.available, closingLine:narration.closingLine, play: sound.play, setSoundDepth: sound.setDepth,
       go:(id,...args)=>rail.allows(id)?go(id,...args):Promise.resolve(false), exit: onExit, farewell, register, assetURL, bindMedia, capturePhoto, finalPhoto, setColliderEnabled:walker.setColliderEnabled,
       lookPoint, holdPressView:()=>controls?.stopMoving(),
-      buttonAssembly:buttons.assemblyFor,setButtonAvailable:buttons.setAvailable,registerDoorLeaf:(...args)=>zones?.registerDoorLeaf(...args) });
+      buttonAssembly:buttons.assemblyFor,setButtonAvailable:buttons.setAvailable,setButtonHeld:buttons.setHeld,setButtonLit:buttons.setLit,registerDoorLeaf:(...args)=>zones?.registerDoorLeaf(...args) });
     rail=createRail({ctx,scene,walker,state:exhibits.state,voice:()=>narration,play:sound.play});
     walker.setRail(rail);clean.push(()=>{walker.setRail(null);rail.dispose();});
     dome = createDomeEffects({ctx,camera,cue:narration.cue,play:sound.play,register,bindMedia,setSoundDepth:sound.setDepth,lite:LITE,

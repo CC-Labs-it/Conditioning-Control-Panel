@@ -116,7 +116,8 @@ export function createVisitGuide(root,{onOpen=()=>{},canOpen=()=>true}={}){
     renderTicket();
     if(mode!==input){mode=input;shortcut.textContent=input==='gamepad'?'Y · Card':input==='touch'?'Open card':'T · Card';}
     const a=v.railGuide?{title:v.railGuide,where:'The Rail™',kicker:'Visitor Services'}:trailTask(room,p,v,yaw);
-    const route=routeFor(v.carry?.key);if(route&&!v.railGuide)a.where+=' · '+route.back;
+    // A souvenir is on its way to the till, so its line does not also offer the way back. The bay's own prompt does.
+    const route=routeFor(v.carry?.key);if(route&&!route.finishes&&!v.railGuide)a.where+=' · '+route.back;
     const key=[a.title,a.where,a.kicker].join('|');
     if(key!==taskKey){taskKey=key;kicker.textContent=a.kicker;title.textContent=a.title;where.textContent=a.where;}
     arrow.hidden=!a.target;
