@@ -124,7 +124,11 @@ try {
     }
     // A visitor can choose the aquarium first, then leave it while its reel continues playing.
     let slot=byId.get('slot_09');await aim(slot,'screen');
-    await game.waitForFunction(()=>__expo.narrationState().voice.id==='ev_h0',null,{timeout:45000});
+    await page.waitForTimeout(1500);
+    assert.equal((await state()).displayed,undefined);
+    assert.equal(await aim(slot,'replay'),'expo_replay_'+slot.id);
+    await page.keyboard.press('e');
+    await game.waitForFunction(()=>__expo.narrationState().archive.displayed==='ev_h0',null,{timeout:45000});
     const first=await state();assert.equal(first.displayed,records[0].id);
     await game.waitForFunction(()=>window.archiveObservations.frames.ev_h0?.length>0);
     const playhead=await game.evaluate(()=>__expo.narrationState().voice.seconds);

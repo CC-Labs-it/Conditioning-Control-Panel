@@ -7,7 +7,6 @@ import { createArchiveStory } from './archive-story.js';
 import { archiveDisplays } from './archive-displays.js';
 import { createReadingCard } from './reading-card.js';
 
-const DWELL_SECONDS = 1;
 const family = id => id.startsWith('hab_') ? 'hab_1' : id.startsWith('hoof_') ? 'hoof_1' :
   id.startsWith('dome_') ? 'dome_0' : id;
 const canonical = id => id?.replace(/^keep_/, 'hab_');
@@ -17,6 +16,8 @@ const nearest = (nodes, point) => nodes.reduce((best,node)=>
 export function createNarration({ctx,camera,scene,root,register,walker,sound,assetURL,lite,owned}) {
   const book=new Map(), rooms=new Map(), heard=new Set(), finished=new Map(), unavailable=new Set(), abort=new AbortController();
   const wetHorns=[];
+  const restored=ctx.store.get('playedProjectors');
+  const playedProjectors=new Set(Array.isArray(restored)?restored.filter(id=>typeof id==='string'):[]);
   let muffled=false;
   function setMuffled(on){
     if(on===muffled)return;
@@ -26,7 +27,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
   const sequence=createSpeechSequence({start,suspend,resume,release,now:()=>ctx.activeMs,nearby});
   const atlas=createRestingAtlas(assetURL);
   const reader=createReadingCard(root,camera);
-  const block=new Ray(), right=new Vector3(), delta=new Vector3(), screenPoint=new Vector3();
+  const block=new Ray(), right=new Vector3(), delta=new Vector3();
   const subtitle=root.ownerDocument.createElement('div');
   subtitle.className='expo-narration';
   const captions={};
@@ -35,7 +36,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     subtitle.append(p);captions[key]=p;
   }
   root.append(subtitle);
-  let held=ctx.paused, dead=false, check=0, ready=false, dwellStation=null, dwellTime=0, planterBook, story;
+  let held=ctx.paused, dead=false, check=0, ready=false, planterBook, story;
   sequence.pause(held);
   const load=fetch(assetURL('narration/manifest.json'),{signal:abort.signal}).then(async r=>{
     if(!r.ok)throw new Error('Expo narration manifest HTTP '+r.status);
@@ -64,19 +65,20 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
       if(!node.name.startsWith('expo_station_')||!node.visible)return;
       const id=node.name.slice(13);
       const project=createProjector({group,id,scene,assetURL,lite,atlas});
-      const station={id,zone,pos:centre(node),project,index:0,progress:0,last:id};
+      const station={id,zone,pos:centre(node),project,index:0,progress:0};
       station.archive=/^(?:slot_\d+|ev_)/.test(id);
       if(station.archive)station.panels=archiveDisplays(group,id,!!story?.assigned(id));
       list.push(station);
       const button=group.getObjectByName('expo_replay_'+id);
       if(station.archive){
         const plaque=group.getObjectByName('expo_caption_'+id);
-        if(plaque)undo.push(register(plaque,()=>reader.label(id),()=>reader.toggle(id,story?.at(id)?.archive),3.5));
+        if(plaque)undo.push(register(plaque,()=>story?.at(id)?reader.label(id):'Start the projector to read the plaque',()=>reader.toggle(id,story?.at(id)?.archive),3.5));
         if(button)undo.push(register(button,()=>archivePrompt(station),()=>playArchive(station),3.5));
         const review=group.getObjectByName('expo_review_'+id);
         if(review)undo.push(register(review,()=>story?.assigned(id)?archivePrompt(station):'Play this screen first',
           ()=>playArchive(station,true),3.5));
-      }else if(button){undo.push(register(button,'Replay narration',()=>cue(station.last,{station,replay:true}),3.5));}
+      }else if(button){undo.push(register(button,()=>project&&!playedProjectors.has(id)?'Start projector':'Replay narration',
+        ()=>cue(id,{station,replay:true,projector:!!project,kind:project?'beat':'react'}),3.5));}
     });
     rooms.set(zone,{list,horns,undo});
     // A streamed projector can rejoin a narration that continued outside this room.
@@ -84,8 +86,8 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     if(entry){
       const station=list.find(s=>s.id===entry.stationId);
       if(station){
-        entry.station=station;station.last=entry.row.id;station.index=entry.index||0;station.progress=entry.progress||0;
-        station.project?.setActive(!!entry.lit,entry.row.slides[station.index]);station.project?.setPaused(held);
+        entry.station=station;station.index=entry.index||0;station.progress=entry.progress||0;
+        if(entry.projector){station.project?.setActive(!!entry.lit,entry.row.slides[station.index]);station.project?.setPaused(held);}
       }
     }
   }
@@ -96,7 +98,6 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     for(const s of room.list){reader.release(s.id);s.panels?.dispose();s.project?.dispose();}
     for(const entry of [sequence.current,...sequence.queue])
       if(entry?.station?.zone===zone)entry.station=null;
-    if(dwellStation?.zone===zone){dwellStation=null;dwellTime=0;}
     rooms.delete(zone);
   }
   function locate(id){
@@ -125,6 +126,10 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     if(entry.began)return;
     entry.began=true;
     heard.add(entry.row.id);
+    if(entry.ticket)story.start(entry.ticket);
+    else if(entry.projector&&!playedProjectors.has(entry.stationId)){
+      playedProjectors.add(entry.stationId);ctx.store.set('playedProjectors',[...playedProjectors]);
+    }
     entry.onStart?.();
   }
   function clearHandle(entry){
@@ -140,8 +145,16 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     entry.kevin=roomTone;entry.lastMediaTime=resumeAt;entry.waiting=0;entry.awaitingSeek=resumeAt>0;
     const {gain,pan}=acoustic(entry);
     const file=roomTone?'audio/twelve.ogg':(entry.row.set==='planter'?'audio/':'narration/')+entry.row.audio;
-    caption(key,roomTone?'[Kevin is speaking]':entry.row.subtitle,entry.row.id);
-    if(!entry.row.audio){entry.lit=true;began(entry);return;}
+    const showCaption=()=>caption(key,roomTone?'[Kevin is speaking]':entry.row.subtitle,entry.row.id);
+    if(!entry.projector||entry.began)showCaption();
+    function playing(){
+      began(entry);showCaption();entry.lit=true;
+      if(entry.projector){
+        entry.station?.project?.setActive(true,entry.row.slides[entry.index||0]);
+        if(entry.row.slides.length)click(entry);
+      }
+    }
+    if(!entry.row.audio){playing();return;}
     const volume=gain*(roomTone?.32:1);
     const h=entry.handle=(!roomTone&&entry.tail)||ctx.audio.stream(assetURL(file),{bus:'voice',source:'expo-guide',sourceLabel:'Expo narrator',spatial:true,pan,loop:roomTone,
       gain:volume,autoplay:false,preload:'auto'});
@@ -159,9 +172,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     };
     entry.onPlaying=()=>{
       if(entry.lit||held||entry!==sequence.current)return;
-      began(entry);
-      entry.lit=true;entry.station?.project?.setActive(true,entry.row.slides[entry.index||0]);
-      if(entry.station?.project&&entry.row.slides.length)click(entry);
+      playing();
     };
     if(!h?.el){queueMicrotask(entry.onError);return;}
     entry.onMetadata=()=>{
@@ -185,7 +196,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     unavailable.delete(entry.row.id);
     entry.station ||= locate(entry.stationId);
     if(entry.station){
-      entry.station.last=entry.row.id;entry.station.index=0;entry.station.progress=0;
+      entry.station.index=0;entry.station.progress=0;
     }
     const kevin=entry.row.id==='log_kevin';
     if(kevin)entry.tail=ctx.audio.stream(assetURL('narration/'+entry.row.audio),
@@ -193,25 +204,26 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     playFile(key,entry,kevin);
   }
   function suspend(entry){
-    entry.handle?.pause();entry.station?.project?.setPaused(true);
+    entry.handle?.pause();if(entry.projector)entry.station?.project?.setPaused(true);
     caption(entry.channel,'');
   }
   function resume(entry){
-    caption(entry.channel,entry.kevin?'[Kevin is speaking]':entry.row.subtitle,entry.row.id);
-    entry.station?.project?.setPaused(false);entry.station?.project?.setActive(!!entry.lit,entry.row.slides[entry.index||0]);
+    if(!entry.projector||entry.began)caption(entry.channel,entry.kevin?'[Kevin is speaking]':entry.row.subtitle,entry.row.id);
+    if(entry.projector){entry.station?.project?.setPaused(false);entry.station?.project?.setActive(!!entry.lit,entry.row.slides[entry.index||0]);}
     if(!entry.awaitingSeek)entry.handle?.play();
   }
   function release(entry,ok){
     if(entry.ticket)story.finish(entry.ticket,ok);
     if(ok)finished.set(entry.row.id,(finished.get(entry.row.id)||0)+1);
     if(entry.started){
-      clearHandle(entry);entry.tail?.stop();entry.station?.project?.setPaused(false);entry.station?.project?.setActive(false);
+      clearHandle(entry);entry.tail?.stop();
+      if(entry.projector){entry.station?.project?.setPaused(false);entry.station?.project?.setActive(false);}
       if(captions[entry.channel].dataset.lineId===entry.row.id)caption(entry.channel,'');
     }
     entry.resolve(ok);
   }
   let farewell=false;
-  function enqueue(id,{closing=false,station=null,replay=false,zone=walker.zone,position=null,kind='react',exhibit,ttl,ticket=null,onStart}={}){
+  function enqueue(id,{closing=false,station=null,replay=false,zone=walker.zone,position=null,kind='react',exhibit,ttl,ticket=null,projector=false,onStart}={}){
     const row=book.get(id);
     if(dead||!row||zone!==walker.zone||(farewell&&!closing))return Promise.resolve(false);
     if(row.set==='log'&&!owned().includes(id.slice(4)))return Promise.resolve(false);
@@ -226,7 +238,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     let resolve;const promise=new Promise(r=>{resolve=r;});
     const local=position || station || exhibit || kind!=='ambient';
     const anchor=local?(position || station ? origin : camera.position).clone():null;
-    const entry={row,zone,station,channel:key,kind,exhibit:exhibit||station?.id||zone,anchor,ttl,ticket,onStart,
+    const entry={row,zone,station,channel:key,kind,exhibit:exhibit||station?.id||zone,anchor,ttl,ticket,projector,onStart,
       stationId:station?.id||family(id),pos:origin.clone(),handle:null,
       clock:0,lastMediaTime:0,kevin:false,progress:0,duck:1,resolve,promise};
     sequence.submit(entry);return promise;
@@ -247,18 +259,23 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
   }
   function archivePrompt(station){
     if(!story)return 'Opening archive';
-    if(story.current)return story.current.slot===station.id?'Playing '+story.current.row.archive.title:'Recording in progress';
-    const own=story.assigned(station.id);
+    if(story.current){
+      if(story.current.slot!==station.id)return 'Recording in progress';
+      return story.current.started?'Playing '+story.current.row.archive.title:'Waiting for narration';
+    }
+    const own=story.at(station.id);
     if(own)return 'Replay '+own.archive.title;
-    if(unavailable.has(story.next?.id))return 'Retry record '+story.next.archive.number+' · '+story.next.archive.title;
-    return story.next?'Play record '+story.next.archive.number+' · '+story.next.archive.title:'Archive complete';
+    if(story.assigned(station.id))return 'Replay archive record';
+    if(unavailable.has(story.next?.id))return 'Retry projector';
+    return story.next?'Start projector':'Archive complete';
   }
   function playArchive(station,review=false){
-    if(!ready||dead||held||!station.project)return;
+    if(dead||held||farewell||!station.project||station.zone!==walker.zone||!rooms.get(station.zone)?.list.includes(station))return;
+    if(!ready)return load.then(()=>ready&&playArchive(station,review));
     const ticket=story.request(station.id,review);
     if(!ticket)return;
     if(!heard.has('pa_timeline'))cue('pa_timeline',{zone:station.zone});
-    return enqueue(ticket.row.id,{station,zone:station.zone,replay:true,ticket,kind:'beat'});
+    return enqueue(ticket.row.id,{station,zone:station.zone,replay:true,ticket,projector:true,kind:'beat'});
   }
   async function planter(id,options={}){
     if(dead||!['planter_10','planter_60','planter_120'].includes(id))return;
@@ -279,37 +296,19 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     block.direction.multiplyScalar(1/distance);
     return !walker.blocked(block,distance);
   }
-  function proximity(dt,checkOther){
-    let focused=null,best=Infinity;
+  function proximity(){
     const immediate=[];
     for(const room of rooms.values())for(const s of room.list){
-      if(s.archive || heard.has(s.id) || !book.has(s.id))continue;
+      if(s.archive || s.project || heard.has(s.id) || !book.has(s.id))continue;
       const row=book.get(s.id);
       if(unavailable.has(row.id))continue;
       const eligible=row.set==='event'||row.set==='log'||['ex_press','hab_1','pa_timeline','pa_photos','pa_hall4_missing'].includes(s.id);
       if(!eligible)continue;
       const distance=camera.position.distanceTo(s.pos);
       if(distance>3.5)continue;
-      if(!s.project){
-        if(checkOther&&clearRay(s.pos))immediate.push({s,distance});
-        continue;
-      }
-      const target=s.project.viewPoint;
-      if(delta.subVectors(camera.position,target).dot(s.project.viewNormal)<=0)continue;
-      screenPoint.copy(target).project(camera);
-      if(screenPoint.z< -1||screenPoint.z>1||Math.abs(screenPoint.x)>.65||Math.abs(screenPoint.y)>.72)continue;
-      const score=screenPoint.x**2+screenPoint.y**2+.002*distance;
-      if(score<best&&clearRay(target)){focused=s;best=score;}
+      if(clearRay(s.pos))immediate.push({s,distance});
     }
     for(const {s} of immediate.sort((a,b)=>a.distance-b.distance))cue(s.id,{station:s,zone:s.zone,kind:'ambient'});
-    if(focused!==dwellStation){dwellStation=focused;dwellTime=0;}
-    else if(focused){
-      dwellTime+=dt;
-      if(dwellTime>=DWELL_SECONDS){
-        cue(focused.id,{station:focused,zone:focused.zone,kind:'ambient'});
-        dwellStation=null;dwellTime=0;
-      }
-    }
   }
   const visits=new Map();
   let previousZone=null;
@@ -320,8 +319,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     const speaking=sequence.current;
     setMuffled(!!speaking&&wetHorns.some(h=>h.zone===speaking.zone&&h.pos.distanceToSquared(speaking.pos)<1));
     sequence.cancel(entry=>!nearby(entry));
-    if(reader.update()){dwellStation=null;dwellTime=0;}
-    else {check-=dt;proximity(dt,check<=0);if(check<=0)check=.12;}
+    if(!reader.update()){check-=dt;if(check<=0){proximity();check=.12;}}
     const e=sequence.current;
     if(e){
       const key=e.channel;
@@ -344,7 +342,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
       const changed=i>=0&&i!==(e.index||0);
       if(changed){
         e.index=i;
-        if(e.station?.project)click(e);
+        if(e.projector&&e.station?.project)click(e);
       }
       if(e.station){
         e.station.index=Math.max(0,i);e.station.progress=progress;
@@ -354,7 +352,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
       e.handle?.setGain(e.gain);e.handle?.setPan?.(pan);
     }
     for(const room of rooms.values())for(const s of room.list)if(s.project){
-      const row=s.archive?story.at(s.id):book.get(s.last);
+      const row=s.archive?story.at(s.id):playedProjectors.has(s.id)?book.get(s.id):undefined;
       s.panels?.show(row,story.total,!!story.assigned(s.id),(visits.get(s.zone)||0)>1);
       s.project.step(dt,ctx.gentle||ctx.reduced,camera.position.distanceTo(s.pos),row?.slides[s.index],s.progress,
                      restingSlide(row),row?.slides[s.index+1]);
@@ -362,7 +360,6 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
   }
   function pause(on){
     held=on;
-    if(on){dwellStation=null;dwellTime=0;}
     sequence.pause(on);
   }
   function dispose(){
@@ -374,17 +371,17 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
   function debug(){
     const data={heard:[...heard],finished:Object.fromEntries(finished),unavailable:[...unavailable],archive:story&&{
       completed:story.completed,total:story.total,next:story.next?.id,displayed:story.displayed?.id,playingAt:story.current?.slot,lastSlot:story.lastSlot},
-      stations:[...rooms.values()].flatMap(r=>r.list.map(s=>({id:s.id,zone:s.zone,pos:s.pos.toArray(),record:s.archive?story?.at(s.id)?.id:s.last,project:s.project?.stats})))};
+      stations:[...rooms.values()].flatMap(r=>r.list.map(s=>({id:s.id,zone:s.zone,pos:s.pos.toArray(),record:s.archive?story?.at(s.id)?.id:playedProjectors.has(s.id)?s.id:undefined,project:s.project?.stats})))};
     for(const key of ['voice','pa']){const e=sequence.current?.channel===key?sequence.current:null;
       data[key]={id:e?.row.id,seconds:e?.clock??0,duration:e?.duration,roomToneSeconds:e?.roomToneSeconds,gain:e?.gain,pan:e?.pan,duck:e?.duck,subtitle:captions[key].textContent,queue:sequence.queue.filter(q=>q.channel===key).map(q=>q.row.id)};}
-    data.speech={playing:sequence.current?.row.id,queue:sequence.queue.map(q=>q.row.id),focus:dwellStation?.id,dwellSeconds:dwellTime,paused:held};
+    data.speech={playing:sequence.current?.row.id,queue:sequence.queue.map(q=>q.row.id),paused:held};
     return data;
   }
   function meter(output){
     output.projectors=0;output.voices=0;
     if(sequence.current?.lit&&!held){
       if(sequence.current.handle?.playing)output.voices++;
-      if(sequence.current.station?.project)output.projectors++;
+      if(sequence.current.projector&&sequence.current.station?.project)output.projectors++;
     }
   }
   function registerPlaque(mesh,description){
@@ -392,5 +389,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     const off=register(mesh,()=>reader.label(key),()=>reader.toggle(key,description),3.5);
     return ()=>{reader.release(key);off();};
   }
-  return {mount,unmount,cue,closingLine,muffle,planter,registerPlaque,get story(){return story;},available:()=>ready&&sequence.available,tick,pause,dispose,debug,meter};
+  return {mount,unmount,cue,closingLine,muffle,planter,registerPlaque,get story(){return story;},
+    get speaking(){const entry=sequence.current;return !held && !!entry?.lit && !entry.kevin && !!entry.handle?.playing;},
+    available:()=>ready&&sequence.available,tick,pause,dispose,debug,meter};
 }

@@ -7,16 +7,17 @@ void main(){slideUV=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(positio
 const quadFragment = `
 uniform sampler2D oldSlide, newSlide, restingAtlas;
 uniform vec2 cell;
-uniform float blend, lamp, zoom, oldDetail, newDetail;
+uniform float blend, lamp, zoom, oldDetail, newDetail, hasRest, hasProgram;
 varying vec2 slideUV;
 void main(){
   vec2 p=(slideUV-.5)/(1.+zoom)+.5;
   float edge=1.-.17*dot((slideUV-.5)*2.,(slideUV-.5)*2.);
   vec2 atlasUV=(cell+clamp(p,vec2(.004,.006),vec2(.996,.994)))/vec2(8.,6.);
-  vec3 rest=texture2D(restingAtlas,atlasUV).rgb;
+  vec3 paper=vec3(.28,.27,.24)*edge;
+  vec3 rest=hasRest>.5?texture2D(restingAtlas,atlasUV).rgb:paper;
   vec3 print=mix(mix(rest,texture2D(oldSlide,p).rgb,oldDetail),mix(rest,texture2D(newSlide,p).rgb,newDetail),blend);
   vec3 light=vec3(.043,.037,.026)+print*vec3(1.,.925,.785)*edge*(.20+1.26*lamp);
-  gl_FragColor=vec4(light,1.);
+  gl_FragColor=vec4(hasProgram>.5?light:paper,1.);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
@@ -112,11 +113,11 @@ export function createProjector({group,id,scene,assetURL,lite,atlas}) {
     .applyNormalMatrix(new T.Matrix3().getNormalMatrix(face.matrixWorld));
   const level={value:0}, blank=atlas.texture;
   const uniforms={oldSlide:{value:blank},newSlide:{value:blank},restingAtlas:{value:blank},cell:{value:new T.Vector2(7,5)},
-    oldDetail:{value:0},newDetail:{value:0},blend:{value:1},lamp:level,zoom:{value:0}};
+    oldDetail:{value:0},newDetail:{value:0},hasRest:{value:0},hasProgram:{value:0},blend:{value:1},lamp:level,zoom:{value:0}};
   const print=new T.ShaderMaterial({uniforms,vertexShader:quadVertex,fragmentShader:quadFragment,side:T.DoubleSide});
   face.material=print;
   const light=lensOriginal?.isMaterial?lensOriginal.clone():null;
-  if(light?.emissive){light.emissive.set(0xffcb84);light.emissiveIntensity=.18;lens.material=light;}
+  if(light?.emissive){light.emissive.set(0xffcb84);light.emissiveIntensity=0;lens.material=light;}
   const pos=centre(lens), beam=lightThrow(pos,screenCorners(face),level,lite);
   scene.add(beam);beam.visible=false;
   let active=false, paused=false, dead=false, key='', shown='', restKey='', failed='', retryAt=0, request=0, previous=null, current=null, age=0;
@@ -157,10 +158,12 @@ export function createProjector({group,id,scene,assetURL,lite,atlas}) {
     age+=dt;
     shown=active?slide:rest;
     if(rest!==restKey){
-      // A new record changes the digital plaque and its idle picture on the same frame.
-      if(!active && key)clearSlides();
-      restKey=rest;const i=atlas.index.get(rest)??47;uniforms.cell.value.set(i%8,Math.floor(i/8));
+      if(!active){clearSlides();dropNext();}
+      restKey=rest;const i=atlas.index.get(rest);
+      uniforms.hasRest.value=i===undefined?0:1;
+      if(i!==undefined)uniforms.cell.value.set(i%8,Math.floor(i/8));
     }
+    uniforms.hasProgram.value=rest||slide?1:0;
     const closePrint=archive && !active && rest && distance<(key?7:5.5);
     if(slide&&active&&distance<13){image(slide);prime(following);}
     if(closePrint){image(rest);if(nextPromise)dropNext();}
@@ -175,8 +178,8 @@ export function createProjector({group,id,scene,assetURL,lite,atlas}) {
     uniforms.blend.value=Math.min(1,uniforms.blend.value+dt/(gentle?1.15:.68));
     if(uniforms.blend.value===1 && previous){previous.dispose();previous=null;uniforms.oldSlide.value=current||blank;uniforms.oldDetail.value=current?1:0;}
     uniforms.zoom.value=gentle||!active?0:Math.min(.04,Math.max(0,progress)*.04);
-    if(light?.emissive)light.emissiveIntensity=.18+2.4*level.value;
-    beam.visible=distance<13&&(level.value>.012||distance<5);
+    if(light?.emissive)light.emissiveIntensity=2.4*level.value;
+    beam.visible=uniforms.hasProgram.value===1&&distance<13&&level.value>.012;
     const dust=beam.userData.dust;
     if(dust){dust.visible=level.value>.03;
       dust.material.opacity=.23*level.value;

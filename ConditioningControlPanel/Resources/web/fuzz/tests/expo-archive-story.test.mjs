@@ -16,7 +16,7 @@ test('the archive follows the approved order in freely chosen rooms and repeats 
     assert.equal(ticket.row.id,row.id);
     assert.equal(story.request('another'),null);
     story.finish(ticket,true);
-    assert.equal(story.canAutoplay(from),false);
+    assert.equal(story.canStartNew(from),false);
     assert.equal(story.at(from),row);
     const review=story.request(from,true);
     assert.equal(review.row.id,row.id);
@@ -39,11 +39,11 @@ test('abandoned, stale and interrupted events cannot advance progress',()=>{
   story.finish(retry,true);
   assert.equal(createArchiveStory(manifest,saved).next.archive.number,2);
   const restored=createArchiveStory(manifest,saved,null,sites);
-  assert.equal(restored.canAutoplay('slot_22'),false);
+  assert.equal(restored.canStartNew('slot_22'),false);
   assert.equal(restored.at('slot_22').archive.number,1);
   for(let i=0;i<2;i++)story.finish(story.request('slot_22'),true);
-  assert.equal(story.canAutoplay('slot_22'),false);
-  assert.equal(story.canAutoplay('slot_11'),true);
+  assert.equal(story.canStartNew('slot_22'),false);
+  assert.equal(story.canStartNew('slot_11'),true);
   assert.equal(story.request('slot_01').row.archive.number,2);
 });
 test('older saves retain their place and every completed record has a replay screen',()=>{
@@ -53,9 +53,37 @@ test('older saves retain their place and every completed record has a replay scr
       const s=createArchiveStory(manifest,records[n-1]?.id,null,history);
       const slots=Array.from({length:40},(_,i)=>'slot_'+String(i+1).padStart(2,'0'));
       assert.deepEqual(slots.map(id=>s.assigned(id)?.archive.number).filter(Boolean).sort((a,b)=>a-b),records.slice(0,n).map(r=>r.archive.number));
-      assert.equal(slots.filter(id=>s.canAutoplay(id)).length,40-n);
+      assert.equal(slots.filter(id=>s.canStartNew(id)).length,40-n);
     }
   }
+});
+test('virgin, queued, canceled and legacy replay screens conceal unrevealed records',()=>{
+  const story=createArchiveStory(manifest);
+  const next=story.next,first=story.request('slot_08');
+  assert.equal(story.at('slot_08'),undefined);
+  assert.equal(story.displayed,undefined);
+  story.finish(first,false);story.start(first);
+  assert.equal(story.at('slot_08'),undefined);
+  const playing=story.request('slot_12');
+  story.start(playing);
+  assert.equal(story.at('slot_12'),next);
+  assert.equal(story.at('slot_08'),undefined);
+  story.finish(playing,true);
+  assert.equal(story.at('slot_12'),next);
+  assert.equal(story.at('slot_08'),undefined);
+
+  let history;
+  const old=createArchiveStory(manifest,manifest.find(r=>r.archive?.number===2).id,(_,slots)=>{history=slots;});
+  assert.equal(old.at('slot_01'),undefined);
+  const third=old.request('slot_09');old.start(third);old.finish(third,true);
+  assert.deepEqual(history,[null,null,'slot_09']);
+  const replay=old.request('slot_02',true);old.start(replay);
+  assert.equal(old.at('slot_02').archive.number,2);
+  assert.deepEqual(history,[null,'slot_02','slot_09']);
+  const resumed=createArchiveStory(manifest,third.row.id,null,history);
+  assert.equal(resumed.at('slot_01'),undefined);
+  assert.equal(resumed.at('slot_02').archive.number,2);
+  assert.equal(resumed.at('slot_09').archive.number,3);
 });
 test('the planter claims the lifetime on first landing, including a visit abandoned before the first cue',()=>{
   const life=createLife();

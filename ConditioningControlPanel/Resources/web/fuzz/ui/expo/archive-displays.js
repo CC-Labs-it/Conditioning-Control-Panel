@@ -70,14 +70,21 @@ export function archiveDisplays(group,id,hasHistory=false) {
   const caption=panel(group,'expo_caption_'+id);
   const replay=replayFinish(group.getObjectByName('expo_review_'+id));
   replay.set(hasHistory);
-  let painted=null;
+  let painted;
   function base(g,w,h,surface) {
     g.fillStyle=surface;g.fillRect(0,0,w,h);
     g.textBaseline='top';g.textAlign='left';
   }
-  return { show(row,total,hasPrevious,secondViewing=false) {
+  function show(row,total,hasPrevious,secondViewing=false) {
     replay.set(hasPrevious);
-    if(!row)return;
+    if(!row){
+      if(painted!==null){
+        painted=null;
+        title?.draw((g,w,h)=>base(g,w,h,'#123039'));
+        caption?.draw((g,w,h)=>base(g,w,h,'#f1ecd9'));
+      }
+      return;
+    }
     const key=row.id+'-'+secondViewing;
     if(painted===key)return;
     painted=key;
@@ -101,5 +108,7 @@ export function archiveDisplays(group,id,hasHistory=false) {
       g.fillStyle='#8e9f91';g.fillRect(28,40,w-56,2);
       g.fillStyle='#192f31';writeLines(g,a.body,27,49,w-54,h-57,39,sans,'500',1.17);
     });
-  },dispose(){replay.dispose();title?.dispose();caption?.dispose();}};
+  }
+  show(null,0,hasHistory);
+  return {show,dispose(){replay.dispose();title?.dispose();caption?.dispose();}};
 }
