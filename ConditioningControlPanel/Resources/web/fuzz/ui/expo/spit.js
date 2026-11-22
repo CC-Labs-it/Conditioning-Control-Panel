@@ -10,7 +10,7 @@ export function createSpit(api,state){
   const {THREE:T,camera,walker,scene,cue}=api;
   const rooms=new Map(),ray=new T.Ray(),cast=new T.Raycaster(),forward=new T.Vector3(),p=new T.Vector3(),q=new T.Vector3();
   const velocity=new T.Vector3(),start=new T.Vector3(),previous=new T.Vector3(),up=new T.Vector3(0,0,1);
-  let hold=-1,flight=null,clock=0,zone='';
+  let hold=-1,flight=null,clock=0,zone='',rangeSpits=0,nextRangeHint=0;
   const texCanvas=document.createElement('canvas');texCanvas.width=texCanvas.height=96;
   const g=texCanvas.getContext('2d'),wash=g.createRadialGradient(46,43,4,48,48,40);
   wash.addColorStop(0,'rgba(164,192,164,.51)');wash.addColorStop(.78,'rgba(183,212,186,.58)');wash.addColorStop(1,'rgba(238,247,217,.84)');
@@ -61,9 +61,9 @@ export function createSpit(api,state){
     if(shot.zone==='commons'&&(Math.hypot(start.x-rangeOrigin[0],start.z-rangeOrigin[2])<2.5||far||shot.planter)){
       state.bestSpit=Math.max(state.bestSpit||0,Math.hypot(point.x-start.x,point.z-start.z));
       state.ticket.stamp('Spat');state.ticket.book('spit-range','Took part in the rematch');
-      room?.score?.();
+      room?.score?.();rangeSpits++;
       if(shot.planter&&far){state.ticket.book('planter-spit','Entered from the planting',true);cue('v4_planter_spit');}
-      else cue('v4_spit',{exhibit:'rematch'});
+      else if(rangeSpits<3)cue('v4_spit',{exhibit:'rematch'});
     }
     if(far&&(shot.hooves||shot.planter))openShortcut(room);
     if(shot.zone==='catwalk'&&shot.through&&target?.type==='dome'){
@@ -98,6 +98,7 @@ export function createSpit(api,state){
   }
   function tick(dt){
     clock+=dt;
+    if(rangeSpits>=3&&walker.zone==='commons'&&clock>=nextRangeHint){api.trailTask('rematch_three','commons');nextRangeHint=clock+1;}
     if(hold>=0){if(zone!==walker.zone)cancel();else{
       hold=Math.min(.9,hold+dt);launchData(hold/.9);
       for(let i=0;i<18;i++){position(i*.06,q).toArray(samples,i*3);lengths[i]=i?lengths[i-1]+p.distanceTo(q):0;p.copy(q);}
@@ -126,12 +127,15 @@ export function createSpit(api,state){
           const flag=place('annex_range_flag',[rangeOrigin[0]-.46,0,rangeOrigin[2]-distance]);
           const n=flag.getObjectByName('flag_face'),face=n?.isMesh?n:n?.getObjectByProperty('isMesh',true);
           if(face){const sign=livePanel(T,face,{width:256,height:108});cleanup.push(sign.dispose);
-            sign.draw((g,w,h)=>{g.fillStyle='#f2e7c4';g.fillRect(0,0,w,h);g.fillStyle='#173f32';g.font='bold 62px Georgia';g.textAlign='center';g.fillText(distance.toFixed(1)+' m',w/2,78,w-16);});}
+            sign.draw((g,w,h)=>{g.fillStyle='#f2e7c4';g.fillRect(0,0,w,h);g.fillStyle='#173f32';g.textAlign='center';
+              if(distance===6.1){g.font='bold 30px system-ui';g.fillText('FAR PLATE',w/2,36,w-12);}
+              g.font='bold 62px Georgia';g.fillText(distance.toFixed(1)+' m',w/2,distance===6.1?94:78,w-16);});}
         });
         const judge=place('annex_judge',[-67.17,0,94.06]),n=judge.getObjectByName('judge_face'),face=n?.isMesh?n:n?.getObjectByProperty('isMesh',true);
         if(face){panel=livePanel(T,face,{width:1280,height:600});cleanup.push(panel.dispose);}
-        room.score=()=>terminal(panel,{title:'The Rematch',eyebrow:'COMMONS  /  JUDGE',rows:['Hold Spit, aim, then release.'],
-          foot:'Personal best   '+(state.bestSpit||0).toFixed(2)+' m'});room.score();
+        room.score=()=>terminal(panel,{title:'The Rematch',eyebrow:'COMMONS  /  JUDGE',
+          rows:['Your best   '+(state.bestSpit||0).toFixed(2)+' m','Llama line   6.1 m'],
+          foot:'Hold Spit, aim, then release.'});room.score();
       }
       const plate=place('annex_spit_plate',isRange?[rangeOrigin[0],.01,rangeOrigin[2]-6.1]:[-22,11.96,-2.25]);
       room.targets.push({type:'plate',node:plate});
