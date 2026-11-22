@@ -177,9 +177,18 @@ namespace ConditioningControlPanel.Services.Companion.Brain
         /// bring-your-own server must offer about 8k of context or it trims the prompt itself.</summary>
         public const int LocalContextFitTokenBudget = 7000;
 
-        /// <summary>The fit budget for a provider: the cloud keeps its 4k model's budget.</summary>
+        /// <summary>The fit budget for a provider: the cloud keeps its 4k model's budget, and so does a
+        /// bring-your-own endpoint that refused a request for context size this session
+        /// (<see cref="ConditioningControlPanel.Services.AIService.OwnEndpointContextFit"/>).</summary>
         internal static int ContextFitTokenBudgetFor(ConditioningControlPanel.Models.AiProviderType provider)
-            => provider == ConditioningControlPanel.Models.AiProviderType.Cloud ? ContextFitTokenBudget : LocalContextFitTokenBudget;
+            => provider switch
+            {
+                ConditioningControlPanel.Models.AiProviderType.Cloud => ContextFitTokenBudget,
+                ConditioningControlPanel.Models.AiProviderType.OpenAiCompatible =>
+                    ConditioningControlPanel.Services.AIService.OwnEndpointContextFit.BudgetFor(
+                        ConditioningControlPanel.Services.AIService.OpenAiCompatibleService.CurrentEndpointKey()),
+                _ => LocalContextFitTokenBudget,
+            };
 
         /// <summary>
         /// Deliberately pessimistic real-token estimate (chars/3). The brain's budgeting estimator
