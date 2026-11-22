@@ -1,7 +1,7 @@
 import {placard} from './display.js';
 
 const original=[0,1.04,-9];
-const stops=[['hall',[9.95,3.4,-5.3]],['hall',[-5.7,0,.66]],['shop',[16.25,1.235,-3.7]],['hall',[-11.48,0,-3.35]]];
+const stops=[['hall',[9.95,3.4,-5.3]],['hall',[-5.7,0,.66]],['shop',[17.48,1.23,-3.7]],['hall',[-11.48,0,-3.35]]];
 const clamp=n=>Math.min(1,Math.max(0,n));
 
 // Separate just the accession case from the baked architectural mesh so its plinth can descend.
@@ -59,7 +59,7 @@ export function firstPress(api,state){
     clean.push(api.props(room,place=>{
       const off=[];
       if(id==='hall'){
-        v.posts=[-1,1].map(sign=>place('rope_post',[sign,0,-7.38]));
+        v.posts=[-1,1].map(sign=>{const n=place('rope_post',[sign,0,-7.38]);n.scale.y=.46;return n;});
         v.span=place('rope_span',[0,0,-7.38]);v.span.scale.y=.46;
         v.note=place('rope_notice',[2.12,0,-7.42]);off.push(api.register(v.note,()=>state.carry?.key==='rope-post'?'Return the rope post':'Read the notice',()=>{if(api.drop?.('rope-post'))carriedPost=false;else api.say('Please respect the rope around the notice.');}));
         v.glass=place('sealed_glass',[-1.55,.984,-8.96]);

@@ -1,11 +1,10 @@
+import { mountSettlement } from './settlement.js';
 import { visitorHands } from './carried.js';
 import { firstPress } from './first-press.js';
 import { narratorAwareness } from './awareness.js';
 import { livePanel, placard, runMonitor, terminal } from './display.js';
 import { createVisit } from './visit.js';
 import { createWornHooves, mountHoofLab } from './hoof-lab.js';
-import { createDoorGlass } from './door-glass.js';
-import {mountShopDoor} from './shop-door.js';
 import { mountAquariumLife } from './aquarium-life.js';
 import { LLAMAS } from '../../data/content/llamas.js';
 
@@ -19,6 +18,15 @@ export function createExhibits(api) {
   const cue = api.cue, awareness=narratorAwareness(state,cue);
   const hands=visitorHands(api,state);api.hold=hands.hold;api.drop=hands.drop;
   const founding=firstPress(api,state),worn=createWornHooves(api,state);
+  api.endVisit=async ending=>{
+    if(returning||disposed)return;returning=true;state.ending=ending;
+    const titles={renewal:'Renewal',conduct:'Acceptance by Conduct',stayed:'Stayed',finger:'Finger',model:'Model Visitor',full:'The Thirteenth'};
+    const lines={renewal:'v4_renew',conduct:'v4_conduct',stayed:'v4_stayed_end',finger:'v4_finger_end',model:'v4_model_end',full:'v4_full_end'};
+    ctx.store.set('expoEnding',titles[ending]);api.farewell(leave,titles[ending]);
+    await cue(lines[ending],{kind:'beat',replay:true});
+    if(ending==='conduct'&&!disposed)await cue(state.ticket.stamps.has('Read')?'v4_conduct_read':'v4_conduct_missed',{kind:'beat'});
+    departureDone=true;
+  };
   function once(id) {
     if (!state.heard.has(id)) cue(id,{kind:'ambient',onStart:()=>state.heard.add(id)});
   }
@@ -94,48 +102,7 @@ export function createExhibits(api) {
       });
       bind('chewed_file','Read your file',()=>say(state.file.name+' · '+state.file.taps.toLocaleString()+' presses. The file has been chewed.'));
     }
-    if (id==='shop') {
-      const till=surface('till_display',{emission:.36});
-      ui.refresh=()=>{
-        const available=state.contract && state.loops>=2;
-        api.setColliderEnabled?.('shop_shelves_before',state.loops===0);
-        api.setColliderEnabled?.('shop_shelves_after',state.loops>0);
-        terminal(till,{title:available?'Exit (sold separately)':'Gift shop',rows:[
-          state.contract?'Your contract: collected':'Framed contract       1 Yes',
-          available?'Contract holder price   0 Yes':'Balance               '+(state.contract?'0':'1')+' Yes'
-        ],foot:'Visitor Services   /   Till 01',eyebrow:'VISITOR SERVICES   /   POINT OF SALE'});
-        if(ui.exitSale)ui.exitSale.visible=available;
-        api.setButtonAvailable?.('exit_sale',available);
-        if(ui.portal)ui.portal.visible=!!(state.boughtExit||ui.shopTransit)&&ui.swing>.05;
-      };
-      ui.shelves=['shelf_left','shelf_right'].map(obj);
-      for (const shelf of ui.shelves) if(shelf)shelf.userData.expoRest=shelf.position.clone();
-      ui.exitSale=obj('exit_sale');ui.portal=obj('shop_wormhole');
-      ui.swing=0;ui.exitDoor=mountShopDoor(THREE,group,api);clean.push(()=>ui.exitDoor?.dispose());
-      if(ui.portal)ui.portal.position.z-=.235;
-      ui.doorGlass=createDoorGlass(THREE,ui.portal);clean.push(()=>ui.doorGlass.dispose());
-      ui.home=()=>{
-        if(returning||!state.boughtExit)return;
-        ui.shopTransit='home';
-        returning=true;api.farewell(leave);play('spit');
-        cue('pa_leave').then(()=>{departureDone=true;});
-      };
-      function purchase(){
-        if(!state.contract){state.contract=true;play('register');say('Your contract, framed.');}
-        else if(state.loops>=2 && !state.boughtExit){state.boughtExit=true;play('door');cue('pa_shop_buy');}
-        else say('Please exit through the gift shop.');
-        ui.refresh();
-      }
-      bind('till_display','Use the till',purchase);
-      bind('framed_contract','Buy your framed contract',purchase);
-      bind('exit_sale','Buy Exit',purchase);
-      bind('shop_door',()=>state.boughtExit?'Go home':'Open the exit door',()=>{
-        if(ui.shopTransit)return;
-        play('door');if(state.boughtExit){ui.home();return;}
-        ui.shopTransit='loop';cue(state.shopReturn());ui.refresh();
-      },2.6);
-      bind('shop_wormhole',()=>state.boughtExit?'Go home':'Returning to the gift shop',ui.home,2.8);ui.refresh();
-    }
+    if(id==='shop')ui.shop=mountSettlement(api,state,group,bind,surface,clean);
     if(id==='atrium') {
       const readout=surface('turnstile_counter',{width:672,height:672});
       const tally=()=>readout?.draw((g,w,h)=>{
@@ -185,6 +152,7 @@ export function createExhibits(api) {
     zones.get(here)?.ui.lab?.leave();
     if(here==='hoof'&&state.hoofWorn&&state.ticket.book('hoof-out','Left wearing the hooves',true))cue('v4_hoof_out',{kind:'beat',zone:id,exhibit:'hooves'});
     worn.light(zones.get(id)?.group);
+    zones.get(here)?.ui.shop?.leave();zones.get(id)?.ui.shop?.arrive();
     here=id;awareness.enter(id);
     if(hallCues[id])once(hallCues[id]);
     if(id==='twelve' && state.file.herd.length===12)later('pa_hall4_full',6);
@@ -228,21 +196,7 @@ export function createExhibits(api) {
       }});
       ui.photo.visible=ui.aperture>.35;
     }
-    if(id==='shop'){
-      const swingTime=ctx.gentle||ctx.reduced ? .84 : .67;
-      const travel=Math.min(dt,1/18);
-      ui.swing=clamp(ui.swing+(ui.shopTransit?travel/swingTime:-travel/.92));
-      ui.exitDoor?.set(ui.swing);
-      if(ui.portal)ui.portal.visible=!!(state.boughtExit||ui.shopTransit)&&ui.swing>.05;
-      if(ui.shopTransit)ui.doorGlass.step(dt,ctx.gentle||ctx.reduced);
-      if(ui.shopTransit==='loop'&&ui.swing>=.98){
-        ui.shopTransit=null;void go('shop',[14.2,0,-5],-Math.PI/2);
-      }
-      ui.shelves.forEach((node,i)=>{if(node)node.position.z=node.userData.expoRest.z+(i?1:-1)*Math.min(1,state.loops)*1.1;});
-      if(state.boughtExit){
-        if(Math.abs(camera.position.x-15.03)<.62 && camera.position.z < -13.29)ui.home();
-      }
-    }
+    ui.shop?.tick(dt);
     if(id==='atrium' && ui.pivot){
       const z=camera.position.z;
       if(Math.abs(camera.position.x)<1.05 && camera.position.y<2.1 && ui.lastZ>=35.33 && z<=35.33)ui.count();

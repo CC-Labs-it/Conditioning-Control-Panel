@@ -32,3 +32,18 @@ The three planter captions are temporary until the owner's recordings arrive.
 | Additional planter | A 13.6 cm timber tread makes the 45.2 cm growing bed in the commons reachable with the ordinary jump. A visitor jumped onto the soil and received the first timed cue. |
 | Final performance | All fourteen rooms held a median of about 60 fps on the physical Intel integrated GPU at 1080p. The Gentle touch profile held about 30 fps on the same machine. Chronology showed occasional slower frames, with a 95th percentile of 41.9 ms. From purchase, the first atrium view appeared in 4.03 seconds on desktop and 3.34 seconds in the touch profile on a cold 20 Mbit/s connection. Physical phone performance remains unmeasured. |
 | Gamepad | The left stick walks at variable speed, the right stick looks, A / Cross jumps or confirms and X / Square operates the exhibit under the crosshair. Start / Options pauses. A simulated controller went from the preview purchase to the recap in Chrome. The Windows game host also passed walking, turning, jumping, interaction, pause and unplugging. A physical controller test is still open. |
+
+## Round 4 (v4)
+
+The v4 worktree started at dffbc43661. The owner review names thirteen impressions and twelve boxes. Fed and Kept occupy the two halves of one Habitat box. Both halves are required to fill it.
+
+| Slice | Change | Checked |
+| --- | --- | --- |
+| 0 | One recorded voice, a beat gate, expiring reactions, and cancellation on leaving the exhibit. | Chrome keyboard and Gentle touch, native playback events through both introductory lines. Five fast inputs advanced one step and produced one miss. |
+| 1 | The turnstile prints twelve boxes, a Yes balance and a Deviation balance. Records start on Play. | Walked through admission with keyboard, Gentle touch and virtual gamepad in WPF WebView2. Escape resumed, Panic disposed the Expo. |
+| 2 | The guide notices a shortcut, a return visit, waiting and conduct. The turnstile recognizes the wrong direction. | Route and ledger state feed recorded cues. |
+| 3 | Ropes rise, the display relocates while unobserved, DO PRESS counts abstention, and I AGREE TO STOP seals the accession. | Desktop walk reached the four locations. Holding a gaze kept the button in place. The stock shelf reserves space at its end. |
+| 4 | Wear the hooves, aim a disc over physical caps, submit the llama grid and carry the hooves into the Expo. | Geometry tests cover four, one and zero cap contacts, the assistance threshold and empty submission. |
+| 5 | The shop stocks earned souvenirs, accepts one at the till, folds deviations into a printed agreement and issues either a day ticket or the Renewal door. | A local purchase preview is available. Remaining walkthrough evidence follows below. |
+
+[New narrator lines](ROUND-4-LINES.md). The original 96 lines and the three planter captions retain their existing scripts.

@@ -10,13 +10,17 @@ const GIF_HOLD_MS = 2500;
 
 export function mountRunPoster({ doc, host, run, life, name, onBeat, autoplay = true, loop = false, unit = true }) {
   const model = unit ? cardModel({ run, life, name, adNumber: run.store?.dr_serial?.serial, serialLabel: ADCARD_COPY.unit }) : cardModel({ run, life, name });
-  if (model.groupPhoto) {
+  const visit=run?.ended?.id==='ll_end'?run.store?.ll_end:null;
+  const souvenir=visit?.souvenirPrint;
+  const hasPrint=typeof souvenir==='string' && /^data:image\/webp;base64,[A-Za-z0-9+/=]{1,240000}$/.test(souvenir);
+  const print=model.groupPhoto || (hasPrint?souvenir:null);
+  if (print) {
     const photograph = doc.createElement('img');
-    photograph.alt = 'Group photograph in the Hall of the Twelve';
-    photograph.width = 1100;
-    photograph.height = 756;
+    photograph.alt = model.groupPhoto?'Group photograph in the Hall of the Twelve':visit.souvenirLabel;
+    photograph.width = model.groupPhoto?1100:540;
+    photograph.height = model.groupPhoto?756:640;
     photograph.style.cssText = 'display:block;width:100%;height:auto';
-    photograph.src = model.groupPhoto;
+    photograph.src = print;
     host.append(photograph);
     const unmount = () => photograph.remove();
     unmount.start = () => {};

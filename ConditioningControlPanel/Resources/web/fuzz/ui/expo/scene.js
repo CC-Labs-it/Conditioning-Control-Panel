@@ -1,3 +1,4 @@
+import { souvenirPrint } from './souvenir-print.js';
 import { exhibitProps } from './exhibit-props.js';
 import * as THREE from 'three';
 import { LITE } from '../perf.js';
@@ -51,6 +52,7 @@ const CSS = `
 .expo-stamps i{width:clamp(11px,1.3vw,17px);height:17px;display:grid;place-items:center;border:1px dashed #938b71;color:#817d67;font:bold 11px Georgia}
 .expo-stamps i[data-filled=half]{background:linear-gradient(110deg,#c6d7a9 50%,transparent 50%)}
 .expo-stamps i[data-filled=true]{background:#36594b;color:#ffefbf;border:1px solid #36594b}
+.expo-shop-receipt{position:absolute;z-index:3;right:2%;top:12%;width:min(305px,76%);max-height:58%;overflow:auto;background:#fff6de;border-top:5px double #506450;color:#233a32;padding:12px 16px;font:13px/1.35 Consolas,monospace;touch-action:pan-y}.expo-shop-receipt h3{margin:0 0 8px;font:bold 20px Georgia}.expo-shop-receipt p{display:flex;justify-content:space-between;gap:10px;margin:4px 0}.expo-shop-receipt b{text-align:right}
 .expo-reading-card{position:absolute;z-index:4;top:max(12px,env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left));box-sizing:border-box;width:min(465px,calc(100% - 24px));max-height:62%;overflow:auto;padding:17px 22px 15px;border:1px solid #a29d86;border-top:4px solid #476e60;border-radius:3px;background:#f1ecda;color:#173135;box-shadow:0 4px 20px #12252955;touch-action:pan-y}
 .expo-reading-card[hidden],.expo-root:has(.expo-reading-card:not([hidden])) .expo-route-guide{display:none}
 .expo-reading-card p,.expo-reading-card h2{margin:0}.expo-reading-card .expo-reading-date{font:600 13px/1.3 "Segoe UI",sans-serif;letter-spacing:.015em;color:#3c5951}
@@ -166,11 +168,11 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       caption.textContent = text;
       captionUntil = elapsed + Math.max(4, text.length / 15);
     }
-    function farewell(leave) {
+    function farewell(leave,label='Leaving Llama Expo 2037') {
       if (dead || returnButton) return;
       controls.reset();
       const panel=element('section','expo-farewell'),title=doc.createElement('h2');
-      title.textContent='Leaving Llama Expo 2037';panel.setAttribute('aria-label',title.textContent);
+      title.textContent=label;panel.setAttribute('aria-label',title.textContent);
       returnButton=doc.createElement('button');returnButton.type='button';returnButton.className='expo-return-recap';
       returnButton.textContent='Return to recap';returnButton.addEventListener('click',()=>{if(!ctx.paused&&!doc.hidden)leave();});
       panel.append(title,returnButton);root.classList.add('expo-leaving');returnButton.focus({preventScroll:true});
@@ -214,8 +216,9 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     narration.pause(waitingForEntrance || ctx.paused || doc.hidden);
     const instruments=createInstruments({ctx,camera,register,play:sound.play,meter:narration.meter,lite:LITE});
     const ambience=createAmbience({ctx,renderer,lite:LITE,meter:narration.meter});
-    const kit=exhibitProps(assetURL);clean.push(()=>kit.dispose());
-    exhibits = createExhibits({ THREE, ctx, camera, scene, root, say, walker, props:kit.mount, actionSerial:()=>actionSerial, cue:narration.cue, play: sound.play, setSoundDepth: sound.setDepth,
+    const kit=exhibitProps(assetURL),annex=exhibitProps(assetURL,'visitor-services.glb');clean.push(()=>kit.dispose(),()=>annex.dispose());
+    exhibits = createExhibits({ THREE, ctx, camera, scene, root, say, walker, props:kit.mount, annexProps:annex.mount, records:()=>narration.story?.completed||0,
+      storeSouvenir:(obj,label)=>souvenirPrint({THREE,renderer,draw,ctx},obj,label), actionSerial:()=>actionSerial, cue:narration.cue, play: sound.play, setSoundDepth: sound.setDepth,
       go, exit: onExit, farewell, register, assetURL, bindMedia, capturePhoto, setColliderEnabled:walker.setColliderEnabled,
       setButtonAvailable:buttons.setAvailable,registerDoorLeaf:(...args)=>zones?.registerDoorLeaf(...args) });
     dome = createDomeEffects({ctx,camera,cue:narration.cue,play:sound.play,register,bindMedia,setSoundDepth:sound.setDepth,lite:LITE});

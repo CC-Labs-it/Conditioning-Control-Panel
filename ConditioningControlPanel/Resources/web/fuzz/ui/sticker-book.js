@@ -186,7 +186,11 @@ function buildBook(doc, engine, stars, gentle) {
 
   const runOf = (id) => engine.life.stickers?.[id] || 0;
   const thisRun = () => new Set(engine.run.store?.depth?.earned || []);
-  const artOf = (s) => stickerArt(s, engine.life, stars);
+  const artOf = s => {
+    const souvenir=engine.run.store?.ll_end?.souvenirSticker;
+    if(s.id==='e_ll_end' && typeof souvenir==='string' && /^data:image\/webp;base64,[A-Za-z0-9+/=]{1,150000}$/.test(souvenir))return {k:'img',src:souvenir};
+    return stickerArt(s,engine.life,stars);
+  };
   const slot = (s, now, big = false) => {
     const got = runOf(s.id);
     const b = mk('button', `sb-slot ${got ? (now.has(s.id) ? 'now' : 'past') : 'off'}${fresh.has(s.id) ? ' shine' : ''}`);
