@@ -176,9 +176,10 @@ export function createWalker(camera, onFootstep, onPlanterCue, claimPlanter) {
     else eyeY += (feet.y + EYE - eyeY) * (1 - Math.exp(-18 * dt));
     camera.position.y = eyeY;
   }
-  function blocked(ray, distance) {
+  function blocked(ray, distance, stockingShelf=false) {
     if(doors?.blocked(ray,distance-.08))return true;
     for (const meshes of sectors.values()) for (const m of meshes) {
+      if (stockingShelf && m.label.startsWith('shop_shelves_'))continue;
       if (!inactive(m) && ray.intersectsBox(m.box) && m.bvh.raycastFirst(ray, DoubleSide, 0, distance - .08)) return true;
     }
     return false;

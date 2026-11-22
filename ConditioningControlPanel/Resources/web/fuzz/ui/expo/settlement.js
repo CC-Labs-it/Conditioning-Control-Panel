@@ -44,6 +44,7 @@ export function mountSettlement(api,state,room,bind,surface,clean){
   }
   function purchase(){
     if(beat.listening)return;
+    if(state.carry?.key==='signed-form'){api.drop('signed-form');api.play('register');api.say('Signed form received. Please choose your souvenir.');return;}
     if(state.boughtExit){api.say('The register is in the doorway. Walk through to renew.');return;}
     if(state.contract){
       if(state.loops>=2&&ticket.count>=8){state.boughtExit=true;api.play('door');api.cue('v4_shop_door');}
@@ -92,7 +93,7 @@ export function mountSettlement(api,state,room,bind,surface,clean){
       const local=[x-(side===0&&slot===2?.18:0),slot>=6?.19:slot>=3?.69:1.23,slot>=6?.15:0];
       const add=name=>{const n=place(name,[0,0,0]);rack.add(n);n.position.fromArray(local);return n;};
       const item=add('shop_item_'+mark.toLowerCase()),empty=add('shop_empty'),yes=add('shop_yes');
-      yes.position.z+=.22;bits.push({mark,item,empty,yes});
+      item.userData.stockBay=empty.userData.stockBay=rack.userData.stockBay=true;yes.position.z+=.22;bits.push({mark,item,empty,yes});
       const dynamic=item.getObjectByName(mark==='Spat'?'range_record':'dome_record');
       if(dynamic?.isMesh){const panel=livePanel(T,dynamic,{width:384,height:128});placard(panel,mark,mark==='Spat'?(state.bestSpit||0).toFixed(1)+' m':Math.round(state.domeSeconds||0)+' s');off.push(()=>panel.dispose());}
       off.push(api.register(empty,'Out of stock: '+stock[mark],()=>{api.say('Out of stock. Perhaps more visiting would help.');api.cue('v4_shop_empty');}));

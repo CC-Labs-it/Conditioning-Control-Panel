@@ -25,7 +25,7 @@ export function createVisitGuide(root) {
   let signature='',route;
   return {setRoute(value){route=value;},update(story,room,position,visit){
     const t=visit.ticket;
-    const direction=visitDirection(route,story,room,position,visit);
+    const direction=visit.carry?'Carrying '+visit.carry.label+'. '+(visit.carry.key==='rope-post'?'Look at the floor to set it down.':visitDirection(route,story,room,position,visit)):visitDirection(route,story,room,position,visit);
     const key=[t.issued,...t.stamps,t.yes,t.deviations,direction].join('|');
     if(signature===key)return;signature=key;
     title.textContent=t.issued?'ADMIT ONE HUMAN, 2037':'VISITOR ADMISSION';

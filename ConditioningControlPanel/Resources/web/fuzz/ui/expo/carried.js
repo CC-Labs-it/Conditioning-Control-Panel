@@ -1,6 +1,7 @@
 export function visitorHands(api,state) {
   const {THREE:T,camera,scene}=api;
   let held;
+  const putDown=new Map();
   function drop(key){
     if(!held||state.carry?.key!==key)return false;
     scene.remove(held.root);held=state.carry=null;return true;
@@ -22,5 +23,20 @@ export function visitorHands(api,state) {
     held.root.quaternion.copy(camera.quaternion);held.root.rotateY(-.28);
   }
   function release(key){if(!held||state.carry.key!==key)return false;for(const m of held.copies.values())m.dispose();return drop(key);}
-  return {hold,drop:release,tick,dispose(){if(held)release(state.carry.key);}};
+  // Loose museum property can be left on a surface, then picked up again in another room.
+  function canPlace(){return state.carry?.key==='rope-post';}
+  function place(hit){
+    if(!canPlace()||!hit)return false;
+    const {root,copies}=held,{key,label}=state.carry;held=state.carry=null;
+    const child=root.children[0];child.rotation.set(0,0,0);root.rotation.set(0,0,0);root.scale.setScalar(1);
+    const box=new T.Box3().setFromObject(child,true);root.position.copy(hit);
+    root.updateMatrixWorld(true);box.setFromObject(root,true);root.position.y+=hit.y-box.min.y;
+    const off=api.register(root,'Pick up '+label,()=>{
+      if(!hold(key,root,label))return;off();root.removeFromParent();for(const m of copies.values())m.dispose();putDown.delete(root);
+    });putDown.set(root,{off,copies,zone:api.walker.zone});return true;
+  }
+  function enter(zone){for(const [node,row] of putDown)node.visible=row.zone===zone;}
+  return {hold,drop:release,tick,canPlace,place,enter,dispose(){if(held)release(state.carry.key);
+    for(const [node,row] of putDown){row.off();node.removeFromParent();for(const m of row.copies.values())m.dispose();}putDown.clear();}};
+
 }

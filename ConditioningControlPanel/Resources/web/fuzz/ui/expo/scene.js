@@ -136,9 +136,18 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
         let action = null, visible = true;
         for (let n = hit.object; n; n = n.parent) { visible &&= n.visible; action ||= targets.get(n); }
         for (let n = action?.owner; visible && n; n = n.parent) visible = n.visible;
-        if (visible && action && hit.distance <= action.reach && !walker.blocked(ray.ray, hit.distance)) return { action, hit };
+        if (visible && action && hit.distance <= action.reach && !walker.blocked(ray.ray, hit.distance,!!action.owner.userData.stockBay)) return { action, hit };
       }
       return null;
+    }
+    const placePoint=new THREE.Vector3();
+    function floorPlacement(point){
+      if(!exhibits?.hands.canPlace())return null;
+      camera.updateMatrixWorld();pointer.set(point?.x||0,point?.y||0);ray.setFromCamera(pointer,camera);
+      if(ray.ray.direction.y>=-.4)return null;
+      const distance=(walker.feet.y-ray.ray.origin.y)/ray.ray.direction.y;
+      if(distance<=0||distance>2.3||walker.blocked(ray.ray,distance))return null;
+      return ray.ray.at(distance,placePoint);
     }
     let pressedUntil = 0, actionSerial=0;
     function interact(point) {
@@ -151,6 +160,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
         actionSerial++;pressedUntil=elapsed+.19; aim.dataset.pressed=ctx.gentle||ctx.reduced?'gentle':'full';
         target.action.callback(target.hit);
       }
+      if(!target && ready && !dead && !loading && !returnButton && !ctx.paused && !doc.hidden){const floor=floorPlacement(point);if(floor)return exhibits.hands.place(floor);}
       return !!target;
     }
     function updatePrompt(){
@@ -158,7 +168,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       if (elapsed>=pressedUntil) aim.removeAttribute('data-pressed');
       if (!stepDown.hidden) { aim.setAttribute('data-action',''); prompt.textContent = inputMode === 'touch' ? 'Tap Step down' : inputMode === 'gamepad' ? expoInteractionText('Step down', inputMode) : 'E to step down'; return; }
       const action = targetAt()?.action;
-      const label = action ? (typeof action.label === 'function' ? action.label() : action.label) : '';
+      const label = action ? (typeof action.label === 'function' ? action.label() : action.label) : floorPlacement()?'Set down '+exhibits.state.carry.label:'';
       aim.toggleAttribute('data-action', !!label);
       prompt.textContent = expoInteractionText(label, inputMode);
     }

@@ -2,7 +2,7 @@ import { BoxGeometry, Group, Mesh } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 
-const rooms = new Set(['chronology', 'forum', 'commons', 'hall', 'hoof', 'habitat']);
+const rooms = new Set(['chronology', 'forum', 'commons', 'hall', 'hoof', 'habitat', 'shop', 'service']);
 
 function releaseTemplate(scene) {
   const resources = new Set(), images = new Set();
@@ -97,8 +97,10 @@ export function createCollection({ assetURL, walker, register, onAnchor, onAssem
     };
     state.cleanup.push(() => { for (const material of byMaterial.values()) material.dispose(); });
     for (const master of asset.scene.children) {
-      if (master.userData.collectionRoom !== state.id) continue;
+      const layout=asset.manifest.pieces.find(row=>row.id===master.userData.collectionPiece);
+      if ((layout?.zone||master.userData.collectionRoom) !== state.id) continue;
       const root = master.clone(true);
+      if(layout){root.position.fromArray(layout.center);root.rotation.y=layout.yaw*Math.PI/180;}
       root.traverse(node => {
         if (node.isMesh) node.material = Array.isArray(node.material) ? node.material.map(finish) : finish(node.material);
       });

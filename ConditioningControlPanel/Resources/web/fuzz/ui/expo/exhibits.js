@@ -110,7 +110,7 @@ export function createExhibits(api) {
         g.fillStyle='#f3edda';g.font='bold 60px Georgia,serif';g.fillText(state.hoofAdmitted?'Llama visitor':'Human visitor',w/2,125);
         g.font='40px Georgia,serif';g.fillText('no.',w/2,203);
         g.fillStyle='#113229';g.fillRect(62,233,w-124,225);
-        g.fillStyle='#d6df9c';g.font='bold 180px Consolas,monospace';g.fillText(state.turnstile?'1':'0',w/2,417);
+        g.fillStyle='#d6df9c';g.font='bold 180px Consolas,monospace';g.fillText(state.visitorNumber===2?'2':state.turnstile?'1':'0',w/2,417);
         g.fillStyle='#e4dbc1';g.font='48px Georgia,serif';g.fillText(ui.again?'(again)':'(today)',w/2,563);
       });
       ui.tally=tally;tally();
@@ -152,8 +152,8 @@ export function createExhibits(api) {
     zones.get(here)?.ui.lab?.leave();
     if(here==='hoof'&&state.hoofWorn&&state.ticket.book('hoof-out','Left wearing the hooves',true))cue('v4_hoof_out',{kind:'beat',zone:id,exhibit:'hooves'});
     worn.light(zones.get(id)?.group);
-    zones.get(here)?.ui.shop?.leave();zones.get(id)?.ui.shop?.arrive();
-    here=id;awareness.enter(id);
+    zones.get(here)?.ui.shop?.leave();zones.get(id)?.ui.shop?.arrive();zones.get(id)?.ui.tally?.();
+    hands.enter(id);here=id;awareness.enter(id);
     if(hallCues[id])once(hallCues[id]);
     if(id==='twelve' && state.file.herd.length===12)later('pa_hall4_full',6);
     if(id==='atrium'&&!state.heard.has('pa_arrive_2'))later('pa_arrive_2',20);
@@ -219,5 +219,5 @@ export function createExhibits(api) {
     ui.setAngle(ui.inspectionAngle??ui.travel*ui.turn*ui.turn*(3-2*ui.turn));
     return true;
   }
-  return {mount,unmount,enter,tick,dispose,state,setTurnstileAngle};
+  return {mount,unmount,enter,tick,dispose,state,hands,setTurnstileAngle};
 }

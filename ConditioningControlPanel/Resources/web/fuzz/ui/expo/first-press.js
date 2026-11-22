@@ -105,5 +105,5 @@ export function firstPress(api,state){
     near=byCase;
     if(last!==state.presses){last=state.presses;draw();}
   }
-  return {mount,tick,press,get sealed(){return sealed;}};
+  return {mount,tick,press,habitatPress(){state.presses++;draw();},get sealed(){return sealed;}};
 }
