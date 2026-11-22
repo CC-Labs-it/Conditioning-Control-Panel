@@ -1,3 +1,4 @@
+import { firstPress } from './first-press.js';
 import { narratorAwareness } from './awareness.js';
 import { livePanel, placard, runMonitor, terminal } from './display.js';
 import { createVisit } from './visit.js';
@@ -15,6 +16,7 @@ export function createExhibits(api) {
   const state = createVisit(ctx), zones = new Map();
   let here = '', hudClock = 0, pending = [], stopShown = -20, returning = false, departureDone=false, disposed=false;
   const cue = api.cue, awareness=narratorAwareness(state,cue);
+  const founding=firstPress(api,state);
   function once(id) {
     if (!state.heard.has(id)) cue(id,{kind:'ambient',onStart:()=>state.heard.add(id)});
   }
@@ -44,22 +46,7 @@ export function createExhibits(api) {
       const panel=livePanel(THREE,face,dimensions);
       clean.push(()=>panel.dispose()); return panel;
     }
-    if (id==='hall') {
-      const display = surface('press_readout');
-      const record = () => placard(display,'Founding collection   /   Accession 01',state.pressRecord(),
-        'REGISTER   '+String(state.file.taps+state.presses).padStart(8,'0'));
-      function press(stop) {
-        if(stop && state.presses<50) return;
-        const line = state.press(stop);
-        if(state.presses===50) stopShown=hudClock;
-        play('press'); record(); cue(line);
-      }
-      ui.primary=bind('press_main','Press I AGREE',()=>press(false));
-      ui.secondary=bind('press_stop','I AGREE TO STOP',()=>press(true));
-      bind('press_readout','Read accession record',()=>say(state.pressRecord()));
-      record();
-      if(ui.secondary) ui.secondary.visible=state.presses>=50;
-    }
+    founding.mount(id,group,bind,surface,clean);
     if (id==='hoof') {
       const panel = surface('hoof_display',{emission:.48});
       ui.hands=['hoof_hand_left','hoof_hand_right'].map(obj).filter(Boolean);
@@ -256,10 +243,8 @@ export function createExhibits(api) {
       void go('atrium',[0,0,36],0).then(()=>cue('pa_alpaca'));
     }
     ui.waterLife?.tick(dt,ctx.gentle||ctx.reduced);
-    if(id==='hall') {
-      if(Math.hypot(camera.position.x,camera.position.z+9)<5.2)once('pa_hall1');
-      if(ui.secondary) {ui.secondary.visible=state.presses>=50;ui.secondary.position.y=ui.secondary.userData.expoRest.y-.19*(1-clamp((hudClock-stopShown)/.9));}
-    }
+    founding.tick(dt,id);
+    if(id==='hall' && Math.hypot(camera.position.x,camera.position.z+9)<5.2)once('pa_hall1');
     if(id==='habitat') {
       const old=Math.floor(state.habitatTime);state.habitatTime+=dt;
       const release=ui.keyHeld && hudClock>=ui.releaseAt;

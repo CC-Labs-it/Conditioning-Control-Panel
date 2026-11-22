@@ -32,6 +32,6 @@ export function createVisitGuide(root) {
     stubs.hidden=balance.hidden=!t.issued;
     cells.forEach((cell,i)=>{const box=COUNTERFOILS[i],filled=box.filter(m=>t.stamps.has(m));cell.dataset.filled=filled.length===box.length?'true':filled.length?'half':'false';
       cell.textContent=filled.length?filled.map(mark=>mark[0]).join(''):'·';cell.setAttribute('aria-label',box.join(' and ')+': '+(filled.join(', ')||'empty'));});
-    balance.textContent=t.count+' / 12 stamps   ·   '+t.yes+' Yes   ·   '+t.deviations+' Deviations';hint.textContent=direction;
+    balance.textContent=t.count+' / 12 stamps   ·   '+t.yes+' Yes   ·   '+t.deviations+(t.deviations===1?' Deviation':' Deviations');hint.textContent=direction;
   },dispose(){box.remove();}};
 }

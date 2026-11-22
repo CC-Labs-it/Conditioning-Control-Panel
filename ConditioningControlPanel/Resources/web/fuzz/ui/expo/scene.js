@@ -1,3 +1,4 @@
+import { exhibitProps } from './exhibit-props.js';
 import * as THREE from 'three';
 import { LITE } from '../perf.js';
 import { createControls } from './controls.js';
@@ -29,7 +30,7 @@ const CSS = `
 .expo-aim[data-action]{width:12px;height:12px;box-sizing:border-box;transform:translate(-50%,-50%) rotate(45deg);border:2px solid #172b2b;outline:1.5px solid #fff2d4;border-radius:2px;background:#f66b3c;box-shadow:none}
 .expo-aim[data-pressed]{background:#fff0c4;border-color:#ad4328}
 .expo-aim[data-pressed=full]{width:15px;height:15px}
-.expo-guide {bottom:max(18px,env(safe-area-inset-bottom));color:#fff;background:#10272be0;padding:.38em .8em;border-radius:2px;font-size:13px;max-width:80%;width:max-content}
+.expo-guide {position:static;transform:none;color:#fff;background:#10272be0;padding:.38em .8em;border-radius:2px;font-size:13px;max-width:100%;width:fit-content}
 .expo-prompt:empty,.expo-caption:empty {display:none}
 .expo-step-down {position:absolute;left:50%;bottom:max(20%,95px);transform:translateX(-50%);color:white;background:#153f40;border:1px solid #bdd1b9;border-radius:4px;padding:.62em 1.15em;font:600 16px system-ui;pointer-events:auto}
 .expo-narration{position:absolute;z-index:2;bottom:max(30px,7%,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:min(88%,820px);display:grid;justify-items:center;gap:3px;pointer-events:none}
@@ -62,7 +63,7 @@ const CSS = `
 @media(pointer:coarse),(max-width:660px){.expo-narration{bottom:max(168px,calc(env(safe-area-inset-bottom) + 140px));width:94%}.expo-narration p{font-size:clamp(17px,4vw,22px)}}
 @media(max-height:480px){.expo-narration{bottom:5px;width:min(78%,880px)}.expo-narration p{font-size:16px}}
 @media(pointer:coarse) and (max-height:480px) and (min-width:640px){.expo-narration{left:calc(50% - 30px);width:calc(100% - 350px)}}
-@media(pointer:coarse),(max-width:660px){.expo-caption{top:max(52px,env(safe-area-inset-top));left:10px;max-width:min(85%,450px)}.expo-guide{bottom:154px}}
+@media(pointer:coarse),(max-width:660px){.expo-caption{top:calc(max(8px,env(safe-area-inset-top)) + 52px);left:10px;max-width:min(85%,450px)}}
 `;
 
 /** Construction is synchronous so panic can release the renderer while the first room is still downloading. */
@@ -205,10 +206,12 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       return media;
     }
     narration=createNarration({ctx,camera,scene,root,register,walker,sound,assetURL,lite:LITE,owned:()=>exhibits.state.file.herd});
+    root.querySelector('.expo-narration').prepend(guide);
     narration.pause(waitingForEntrance || ctx.paused || doc.hidden);
     const instruments=createInstruments({ctx,camera,register,play:sound.play,meter:narration.meter,lite:LITE});
     const ambience=createAmbience({ctx,renderer,lite:LITE,meter:narration.meter});
-    exhibits = createExhibits({ THREE, ctx, camera, scene, root, say, actionSerial:()=>actionSerial, cue:narration.cue, play: sound.play, setSoundDepth: sound.setDepth,
+    const kit=exhibitProps(assetURL);clean.push(()=>kit.dispose());
+    exhibits = createExhibits({ THREE, ctx, camera, scene, root, say, walker, props:kit.mount, actionSerial:()=>actionSerial, cue:narration.cue, play: sound.play, setSoundDepth: sound.setDepth,
       go, exit: onExit, farewell, register, assetURL, bindMedia, capturePhoto, setColliderEnabled:walker.setColliderEnabled,
       setButtonAvailable:buttons.setAvailable,registerDoorLeaf:(...args)=>zones?.registerDoorLeaf(...args) });
     dome = createDomeEffects({ctx,camera,cue:narration.cue,play:sound.play,register,bindMedia,setSoundDepth:sound.setDepth,lite:LITE});
