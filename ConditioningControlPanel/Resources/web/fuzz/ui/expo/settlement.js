@@ -36,12 +36,13 @@ export function tillScreen(state,page=0){
   if(state.souvenir){const q=questions[page];return {title:q?.[0]||'Receipt',rows:[stock[state.souvenir],q?.[1]||'Print receipt']};}
   return {title:'Gift shop',rows:['Carry one souvenir to the till.','Stock follows your ticket.',trailMeter(t.count)]};
 }
-// The counter's own mesh carries the base ring of the cap that stood under the framed contract. It goes with the cap.
-function liftCapBase(T,room,at){
+// The counter's own mesh carries the base ring of the cap that stood under the framed contract, and the Exit sign's
+// mesh the ring of the cap under it (it shows with the sign once the sale is filed). Each goes with its cap.
+function liftCapBase(T,room,at,owner='Architecture'){
   const point=new T.Vector3(),undo=[];
   room.updateMatrixWorld(true);
   room.traverse(mesh=>{
-    if(!mesh.isMesh||!(mesh.name==='Architecture'||mesh.parent?.name==='Architecture'))return;
+    if(!mesh.isMesh||!(mesh.name===owner||mesh.parent?.name===owner))return;
     if(!['action_ink','action_cream','action_coral'].includes(mesh.material?.name))return;
     const geom=mesh.geometry,position=geom.attributes.position,index=geom.index;
     if(!index)return;
@@ -70,7 +71,7 @@ export function mountSettlement(api,state,room,bind,surface,clean){
   const old=['shelf_left','shelf_right'].map(s=>room.getObjectByName(s));
   // The caps under the framed contract and under the Exit sign are not part of the counter any more.
   api.setButtonAvailable?.('framed_contract',false);api.setButtonAvailable?.('exit_sale',false);
-  clean.push(liftCapBase(T,room,[19.61,1.09,-11.23]));
+  clean.push(liftCapBase(T,room,[19.61,1.09,-11.23]),liftCapBase(T,room,[22.88,1.09,-11.23],'exit_sale'));
   api.setColliderEnabled('shop_shelves_before',true);api.setColliderEnabled('shop_shelves_after',false);
   const history=()=>[api.records(),api.recordTotal?.()];
   function print(rolling=false){
