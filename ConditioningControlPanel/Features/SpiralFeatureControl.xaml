@@ -284,6 +284,22 @@
                                    VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                    FontSize="13" FontWeight="Bold"/>
                     </Grid>
+                    <!-- Smallest size (ccp-bugs #1719): the pool never shrinks below this. 0 = as shipped, it can vanish. -->
+                    <Grid x:Name="PoolSmallestRow" Height="36" Background="Transparent"
+                          ToolTip="{loc:Str tooltip_super_pool_smallest}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MinWidth="120"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto" MinWidth="56"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{loc:Str super_pool_smallest}" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" x:Name="SliderPoolSmallest" feat:OptionSection.Setting="WhirlpoolSmallest" Minimum="0" Maximum="50" Value="0"
+                                VerticalAlignment="Center" Margin="14,0" ValueChanged="SliderPoolSmallest_Changed"/>
+                        <TextBlock Grid.Column="2" x:Name="TxtPoolSmallest" Text="0%" HorizontalAlignment="Right"
+                                   VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
+                                   FontSize="13" FontWeight="Bold"/>
+                    </Grid>
                     <!-- Stay centred: the pool keeps to the middle of the screen at full size. -->
                     <Grid x:Name="PoolCentredRow" Height="36" Background="Transparent"
                           ToolTip="{loc:Str tooltip_super_pool_centred}">
@@ -297,6 +313,20 @@
                         <CheckBox Grid.Column="1" x:Name="ChkPoolCentred" feat:OptionSection.Setting="WhirlpoolStayCentred"
                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                   Checked="ChkPoolCentred_Changed" Unchecked="ChkPoolCentred_Changed"/>
+                    </Grid>
+                    <!-- Restless pool (ccp-bugs #1707): grows while the mouse moves or clicks, calms at rest. -->
+                    <Grid x:Name="PoolRestlessRow" Height="36" Background="Transparent"
+                          ToolTip="{loc:Str tooltip_super_pool_restless}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{loc:Str super_pool_restless}" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis" Margin="0,0,12,0"/>
+                        <CheckBox Grid.Column="1" x:Name="ChkPoolRestless" feat:OptionSection.Setting="WhirlpoolRestless"
+                                  Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                  Checked="ChkPoolRestless_Changed" Unchecked="ChkPoolRestless_Changed"/>
                     </Grid>
                     <!-- Moving effects pop: one setting, also in the Scrawl box. Off = the pool pulls but never eats. -->
                     <Grid x:Name="PoolPopsRow" Height="36" Background="Transparent"

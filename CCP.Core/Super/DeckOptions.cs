@@ -27,6 +27,27 @@ public static class DeckOptions
         return (Math.Max(1, f - 1), f + 1);
     }
 
+    /// <summary>"Fewest flips" / "Most flips" (ccp-bugs #1636): the roll's own ends, 1 to 9.
+    /// <see cref="RollUnset"/> (the default) = follow the older single slider.</summary>
+    public const int RollMin = 1, RollMax = 9, RollUnset = 0;
+    public static int ClampRoll(int v) => Math.Clamp(v, RollMin, RollMax);
+    /// <summary>A stored end: 0 or below stays unset, anything else is clamped to 1..9.</summary>
+    public static int ClampEnd(int v) => v <= RollUnset ? RollUnset : ClampRoll(v);
+
+    /// <summary>
+    /// The BreakAt roll with the player's own ends. An unset end (0) follows the older single slider
+    /// (<paramref name="flips"/>, one either side), so a settings file or preset from before the two
+    /// ends existed rolls exactly as it did. Ends are clamped to 1..9 and never cross: a low end above
+    /// the high end lifts the high end to it.
+    /// </summary>
+    public static (int Min, int Max) BreakRange(int flips, int fewest, int most)
+    {
+        var (lo, hi) = BreakRange(flips);
+        if (fewest > RollUnset) lo = ClampRoll(fewest);
+        if (most > RollUnset) hi = ClampRoll(most);
+        return (lo, Math.Max(lo, hi));
+    }
+
     /// <summary>How far the ring travels, in sides of the card that broke.</summary>
     public static double ReachSides(int reachPercent) => StockReachSides * (ClampReach(reachPercent) / 100.0);
 }

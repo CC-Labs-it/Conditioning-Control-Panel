@@ -6,7 +6,7 @@ using ConditioningControlPanel.SuperCore;
 namespace ConditioningControlPanel.Features
 {
     /// <summary>
-    /// Deck's options on the flash page: flips to break, break reach. A new flips value applies to the cards dealt after it. The rows sit in the gold box and show only while
+    /// Deck's options on the flash page: fewest and most flips to break (ccp-bugs #1636), break reach. A new roll applies to the cards dealt after it. The rows sit in the gold box and show only while
     /// the V2 is the pick; every clamp and default lives in CCP.Core/Super/DeckOptions. The effect
     /// reads the settings each frame, so a slider moves it at once. Kept in its own partial so
     /// the page's own code-behind stays untouched.
@@ -38,8 +38,7 @@ namespace ConditioningControlPanel.Features
             try
             {
                 ConditioningControlPanel.Controls.SuperRows.Apply(DeckRows, SuperEffect.FlickerDeck);
-                SliderDeckFlips.Value = s.DeckFlips;
-                TxtDeckFlips.Text = s.DeckFlips.ToString();
+                ShowDeckRoll(s);
                 SliderDeckReach.Value = s.DeckBreakReach;
                 TxtDeckReach.Text = $"{s.DeckBreakReach}%";
                 _deckReady = true;
@@ -51,13 +50,40 @@ namespace ConditioningControlPanel.Features
             finally { _deckLoading = false; }
         }
 
-        private void SliderDeckFlips_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        /// <summary>Both ends as the deck rolls them: unset ends follow the older single "Flips to break".</summary>
+        private void ShowDeckRoll(Models.AppSettings s)
         {
-            if (_deckLoading || !_deckReady || TxtDeckFlips == null) return;
+            var (lo, hi) = DeckOptions.BreakRange(s.DeckFlips, s.DeckFlipsFewest, s.DeckFlipsMost);
+            bool was = _deckLoading;
+            _deckLoading = true;
+            try
+            {
+                SliderDeckFewest.Value = lo;
+                SliderDeckMost.Value = hi;
+                TxtDeckFewest.Text = lo.ToString();
+                TxtDeckMost.Text = hi.ToString();
+            }
+            finally { _deckLoading = was; }
+        }
+
+        // Moving one end past the other drags the other along, so the roll never runs backwards.
+        private void SliderDeckFewest_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+            => SetDeckRoll(fewest: (int)Math.Round(e.NewValue), most: null);
+
+        private void SliderDeckMost_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+            => SetDeckRoll(fewest: null, most: (int)Math.Round(e.NewValue));
+
+        private void SetDeckRoll(int? fewest, int? most)
+        {
+            if (_deckLoading || !_deckReady || TxtDeckFewest == null || TxtDeckMost == null) return;
             var s = App.Settings?.Current;
             if (s == null) return;
-            s.DeckFlips = DeckOptions.ClampFlips((int)Math.Round(e.NewValue));
-            TxtDeckFlips.Text = s.DeckFlips.ToString();
+            var (lo, hi) = DeckOptions.BreakRange(s.DeckFlips, s.DeckFlipsFewest, s.DeckFlipsMost);
+            if (fewest is int f) { lo = DeckOptions.ClampRoll(f); hi = Math.Max(lo, hi); }
+            if (most is int m) { hi = DeckOptions.ClampRoll(m); lo = Math.Min(lo, hi); }
+            s.DeckFlipsFewest = lo;
+            s.DeckFlipsMost = hi;
+            ShowDeckRoll(s);
             App.Settings?.Save();
         }
 

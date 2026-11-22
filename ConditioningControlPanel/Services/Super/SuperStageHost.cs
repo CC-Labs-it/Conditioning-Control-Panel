@@ -30,6 +30,7 @@ public static class SuperStageHost
     private static int _lastX, _lastY;
     private static bool _haveCursor;
     private static double _speedPx;
+    private static bool _mouseWasDown;
     private static readonly List<(System.Drawing.Rectangle Bounds, double Dip)> Screens = new();
 
     /// <summary>Cursor in virtual-desktop device pixels, as of the last step.</summary>
@@ -152,10 +153,18 @@ public static class SuperStageHost
         Stage.DragsWords = set?.WhirlpoolDragsWords != false;
         Stage.Pool.ReachScale = WhirlpoolOptions.ReachScale(set?.WhirlpoolSize ?? WhirlpoolOptions.SizeDefault);
         bool centred = set?.WhirlpoolStayCentred == true;
+        bool restless = set?.WhirlpoolRestless == true;
         Stage.Pool.Eats = !centred;   // a parked pool pulls but never pops on its own
+        Stage.Pool.Floor = WhirlpoolOptions.Floor(set?.WhirlpoolSmallest ?? WhirlpoolOptions.SmallestDefault);
+        Stage.Pool.Restless = restless;
+        // A restless pool feeds on clicks: one kick per press (left or right), read on the rising edge.
+        bool down = restless && ((GetAsyncKeyState(VK_LBUTTON) | GetAsyncKeyState(VK_RBUTTON)) & 0x8000) != 0;
+        bool pressed = down && !_mouseWasDown;
+        _mouseWasDown = down;
         if (Stage.PoolOn)
         {
-            var at = WhirlpoolOptions.Anchor(centred, _lastX, _lastY, _speedPx, centreX, centreY);
+            if (pressed) Stage.Pool.Kick();
+            var at = WhirlpoolOptions.Anchor(centred, restless, _lastX, _lastY, _speedPx, centreX, centreY);
             Stage.Pool.Step(dt, at.X, at.Y, at.SpeedPx, dip, shortSide, gentle);
         }
 
@@ -188,4 +197,7 @@ public static class SuperStageHost
     private struct POINT { public int X, Y; }
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT point);
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
+    private const int VK_LBUTTON = 0x01, VK_RBUTTON = 0x02;
 }

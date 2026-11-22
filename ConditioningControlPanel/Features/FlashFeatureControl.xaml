@@ -483,18 +483,34 @@
                     <StackPanel x:Name="DeckRows" Visibility="Collapsed"
                                 Loaded="DeckRows_Loaded" Unloaded="DeckRows_Unloaded">
                         <Border Height="1" Background="#33FFE08A" Margin="0,2,0,6"/>
-                        <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_super_deck_flips}">
+                        <!-- Fewest / Most flips (ccp-bugs #1636): each card rolls its break between the two. Stock 3 to 5. -->
+                        <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_super_deck_fewest}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" MinWidth="120"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto" MinWidth="56"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{loc:Str super_deck_flips}" FontSize="13" FontWeight="SemiBold"
+                            <TextBlock Grid.Column="0" Text="{loc:Str super_deck_fewest}" FontSize="13" FontWeight="SemiBold"
                                        Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                            <Slider Grid.Column="1" x:Name="SliderDeckFlips" feat:OptionSection.Setting="DeckFlips" Minimum="1" Maximum="7" Value="4" TickFrequency="1" IsSnapToTickEnabled="True"
+                            <Slider Grid.Column="1" x:Name="SliderDeckFewest" feat:OptionSection.Setting="DeckFlipsFewest" Minimum="1" Maximum="9" Value="3" TickFrequency="1" IsSnapToTickEnabled="True"
                                     feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
-                                    ValueChanged="SliderDeckFlips_Changed"/>
-                            <TextBlock Grid.Column="2" x:Name="TxtDeckFlips" Text="4" HorizontalAlignment="Right"
+                                    ValueChanged="SliderDeckFewest_Changed"/>
+                            <TextBlock Grid.Column="2" x:Name="TxtDeckFewest" Text="3" HorizontalAlignment="Right"
+                                       VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
+                                       FontSize="13" FontWeight="Bold"/>
+                        </Grid>
+                        <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_super_deck_most}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto" MinWidth="56"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="{loc:Str super_deck_most}" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                            <Slider Grid.Column="1" x:Name="SliderDeckMost" feat:OptionSection.Setting="DeckFlipsMost" Minimum="1" Maximum="9" Value="5" TickFrequency="1" IsSnapToTickEnabled="True"
+                                    feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
+                                    ValueChanged="SliderDeckMost_Changed"/>
+                            <TextBlock Grid.Column="2" x:Name="TxtDeckMost" Text="5" HorizontalAlignment="Right"
                                        VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                        FontSize="13" FontWeight="Bold"/>
                         </Grid>

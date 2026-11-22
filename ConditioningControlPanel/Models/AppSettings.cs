@@ -2903,6 +2903,22 @@ namespace ConditioningControlPanel.Models
             set { _deckFlips = SuperCore.DeckOptions.ClampFlips(value); OnPropertyChanged(); }
         }
 
+        private int _deckFlipsFewest, _deckFlipsMost;
+        /// <summary>Deck "Fewest flips" (ccp-bugs #1636): the low end of the break roll, 1..9. 0 (every
+        /// older settings file and preset) = follow <see cref="DeckFlips"/>, one either side.</summary>
+        public int DeckFlipsFewest
+        {
+            get => _deckFlipsFewest;
+            set { _deckFlipsFewest = SuperCore.DeckOptions.ClampEnd(value); OnPropertyChanged(); }
+        }
+
+        /// <summary>Deck "Most flips": the high end of the break roll, 1..9. 0 = follow <see cref="DeckFlips"/>.</summary>
+        public int DeckFlipsMost
+        {
+            get => _deckFlipsMost;
+            set { _deckFlipsMost = SuperCore.DeckOptions.ClampEnd(value); OnPropertyChanged(); }
+        }
+
         private int _deckBreakReach = SuperCore.DeckOptions.ReachDefault;
         /// <summary>Deck: how far a break knocks the cards and bubbles around it, percent of stock.</summary>
         public int DeckBreakReach
@@ -5686,6 +5702,22 @@ namespace ConditioningControlPanel.Models
         {
             get => _whirlpoolStayCentred;
             set { _whirlpoolStayCentred = value; OnPropertyChanged(); }
+        }
+
+        // Whirlpool: percent of full growth it never shrinks below (ccp-bugs #1719). 0 = as shipped.
+        private int _whirlpoolSmallest = SuperCore.WhirlpoolOptions.SmallestDefault;
+        public int WhirlpoolSmallest
+        {
+            get => _whirlpoolSmallest;
+            set { _whirlpoolSmallest = SuperCore.WhirlpoolOptions.ClampSmallest(value); OnPropertyChanged(); }
+        }
+
+        // Whirlpool: grows while the mouse moves or clicks, calms at rest (ccp-bugs #1707). Off = as shipped.
+        private bool _whirlpoolRestless;
+        public bool WhirlpoolRestless
+        {
+            get => _whirlpoolRestless;
+            set { _whirlpoolRestless = value; OnPropertyChanged(); }
         }
 
         // Whirlpool: seconds a Loom spiral holds before it melts into a new one ("Always new" only).

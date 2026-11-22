@@ -65,6 +65,9 @@ namespace ConditioningControlPanel.Features
                 SliderPoolSize.Value = s.WhirlpoolSize;
                 TxtPoolSize.Text = $"{s.WhirlpoolSize}%";
                 ChkPoolCentred.IsChecked = s.WhirlpoolStayCentred;
+                SliderPoolSmallest.Value = s.WhirlpoolSmallest;
+                TxtPoolSmallest.Text = $"{s.WhirlpoolSmallest}%";
+                ChkPoolRestless.IsChecked = s.WhirlpoolRestless;
                 ChkPoolPops.IsChecked = s.MovingEffectsPop;
                 ChkPoolDragsFog.IsChecked = s.WhirlpoolDragsFog;
                 ChkPoolDragsPictures.IsChecked = s.WhirlpoolDragsPictures;
@@ -128,6 +131,27 @@ namespace ConditioningControlPanel.Features
             var s = App.Settings?.Current;
             if (s == null) return;
             s.WhirlpoolStayCentred = ChkPoolCentred.IsChecked ?? false;
+            App.Settings?.Save();
+        }
+
+        // SuperStageHost hands the pool its floor each step (ccp-bugs #1719).
+        private void SliderPoolSmallest_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_poolLoading || TxtPoolSmallest == null) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.WhirlpoolSmallest = ConditioningControlPanel.SuperCore.WhirlpoolOptions.SnapSmallest(e.NewValue);
+            TxtPoolSmallest.Text = $"{s.WhirlpoolSmallest}%";
+            App.Settings?.Save();
+        }
+
+        // SuperStageHost reads it each step (ccp-bugs #1707).
+        private void ChkPoolRestless_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_poolLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.WhirlpoolRestless = ChkPoolRestless.IsChecked ?? false;
             App.Settings?.Save();
         }
 
