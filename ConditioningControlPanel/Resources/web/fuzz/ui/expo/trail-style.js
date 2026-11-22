@@ -3,6 +3,7 @@ export const TRAIL_STYLE = `
 .expo-route-guide{position:absolute;top:max(12px,env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left));width:max-content;max-width:min(33vw,310px);z-index:2;pointer-events:none;text-align:left}
 .expo-trail-open,.expo-trail-task{border:1px solid #afa88d;background:#f4efdd;box-shadow:1px 2px 6px #17291a46}
 .expo-trail-open{display:grid;grid-template-columns:1fr auto;align-items:baseline;column-gap:16px;padding:6px 10px;pointer-events:auto;text-align:left;font:inherit;color:inherit;cursor:pointer;width:100%;border-left:4px double #48634c}
+.expo-trail-mobile-label,.expo-trail-mobile-count{display:none}
 .expo-trail-open b,.expo-trail-task small,.expo-trail-card header small,.expo-trail-stop small{font-weight:700;font-size:10px;letter-spacing:.09em;text-transform:uppercase}
 .expo-trail-open strong{font:bold 16px Georgia,serif;text-align:right}.expo-trail-open small{font-size:11px}
 .expo-trail-open kbd{font:600 11px system-ui;color:#345442;text-align:right}
@@ -43,4 +44,51 @@ export const TRAIL_STYLE = `
 .expo-root:has(.expo-trail-card:not([hidden])) :is(.expo-route-guide,.expo-touch,.expo-prompt,.expo-aim){visibility:hidden}
 @media(max-width:660px){.expo-route-guide{top:max(51px,calc(env(safe-area-inset-top) + 43px));left:8px;max-width:min(76vw,300px)}.expo-trail-card{padding:12px;max-height:calc(100% - 80px)}.expo-trail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.expo-root .expo-caption:not(:empty){top:auto;bottom:calc(38% + 12px);right:8px;max-width:79%}.expo-stamp-moment{top:33%}.expo-deviation-slip{bottom:30%}}
 @media(max-height:480px){.expo-route-guide{top:4px;max-width:32vw}.expo-trail-task{padding:3px 6px}.expo-trail-open{padding:3px 6px}.expo-trail-card{max-height:92%}}
+
+/* The ticket takes the spare space opposite the Expo's sound and exit controls. */
+.expo-root .expo-route-guide[data-compact]:not([hidden]){
+  top:max(8px,env(safe-area-inset-top));left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));
+  width:auto;max-width:none;display:grid;justify-items:start;align-items:start;gap:4px}
+.expo-route-guide[data-compact] .expo-trail-open{
+  grid-area:1/1;display:flex;align-items:center;gap:4px;width:max-content;min-height:44px;margin:0;padding:0 6px;
+  border:1px solid #aaa78e;border-radius:6px;background:#f4efddf5;color:#213e32;box-shadow:0 1px 4px #10231d40}
+.expo-route-guide[data-compact] .expo-trail-open>:not(.expo-trail-mobile-label,.expo-trail-mobile-count){display:none}
+.expo-route-guide[data-compact] .expo-trail-mobile-label{display:block;font:650 13px/1 system-ui;letter-spacing:0;text-transform:none}
+.expo-route-guide[data-compact] .expo-trail-mobile-count{display:block;padding-left:4px;border-left:1px dashed #89977f;font:bold 15px/1.15 Georgia,serif}
+.expo-route-guide[data-compact] :is(.expo-trail-task,.expo-stamp-moment,.expo-deviation-slip){
+  grid-area:2/1;position:static;transform:none;box-sizing:border-box;width:fit-content;max-width:min(100%,345px);
+  margin:0;padding:5px 9px;box-shadow:0 1px 4px #10231d35;text-align:left;border-radius:4px}
+.expo-route-guide[data-compact] .expo-trail-task{gap:1px}
+.expo-route-guide[data-compact] .expo-trail-task small{display:none}
+.expo-route-guide[data-compact] .expo-trail-task strong{font-size:14px;line-height:1.22}
+.expo-route-guide[data-compact] .expo-trail-task span{font-size:12px;line-height:1.3}
+.expo-route-guide[data-compact] .expo-stamp-moment strong{font-size:16px;padding:0 4px}
+.expo-route-guide[data-compact] .expo-stamp-moment small{display:inline;margin-left:6px;font-size:12px}
+.expo-route-guide[data-compact] .expo-stamp-moment span{margin-top:2px;line-height:1.25}
+.expo-route-guide[data-compact]:has(:is(.expo-stamp-moment,.expo-deviation-slip):not([hidden])) .expo-trail-task,
+.expo-root[data-hoof-target] .expo-route-guide[data-compact] .expo-trail-task{display:none}
+@media(orientation:landscape) and (min-width:560px){
+  .expo-root .expo-route-guide[data-compact]:not([hidden]){right:auto;width:max-content;max-width:calc(100% - max(225px,calc(env(safe-area-inset-right) + 217px)) - max(8px,env(safe-area-inset-left)));grid-template-columns:max-content minmax(0,1fr);column-gap:6px}
+  .expo-route-guide[data-compact] :is(.expo-trail-task,.expo-stamp-moment,.expo-deviation-slip){grid-area:1/2;max-width:min(100%,345px)}
+}
+.expo-root .expo-trail-card[data-compact]:not([hidden]){
+  left:max(6px,env(safe-area-inset-left));right:max(6px,env(safe-area-inset-right));margin-inline:auto;
+  top:calc(max(8px,env(safe-area-inset-top)) + 50px);bottom:max(8px,env(safe-area-inset-bottom));transform:none;
+  width:auto;max-width:690px;height:auto;max-height:calc(100% - max(8px,env(safe-area-inset-top)) - 50px - max(8px,env(safe-area-inset-bottom)));
+  display:flex;flex-direction:column;padding:0;overflow:hidden;border-radius:5px}
+.expo-trail-card[data-compact] header{position:relative;box-sizing:border-box;min-height:57px;flex:none;padding:9px 66px 8px 12px}
+.expo-trail-card[data-compact] header small,.expo-trail-card[data-compact] footer p,.expo-trail-card[data-compact] .expo-trail-flip-label{display:none}
+.expo-trail-card[data-compact] h2{font-size:23px;margin:1px 0 3px}
+.expo-trail-card[data-compact] header p{font-size:13px;line-height:1.3;margin:0}
+.expo-trail-card[data-compact] button{min-height:44px;border-radius:4px}
+.expo-trail-card[data-compact] .expo-trail-close{right:8px;top:7px;padding:4px 9px}
+.expo-trail-card[data-compact] .expo-trail-pages{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;touch-action:pan-y;padding:8px 12px}
+.expo-trail-card[data-compact] .expo-trail-front:not([hidden]){display:flex;flex-direction:column}
+.expo-trail-card[data-compact] .expo-trail-front>.expo-trail-pips{order:-2}
+.expo-trail-card[data-compact] .expo-trail-meter{order:-1;margin:2px 0}
+.expo-trail-card[data-compact] .expo-trail-grid{margin:6px 0 2px}
+.expo-trail-card[data-compact] footer{flex:none;padding:5px 12px;justify-content:flex-end}
+.expo-trail-card[data-compact] .expo-trail-mobile-label{display:inline}
+.expo-root:is(.expo-leaving,:has(.expo-reading-card:not([hidden]))) .expo-route-guide[data-compact]{display:none}
+.expo-root:has(.expo-trail-card[data-compact]:not([hidden])) :is(.expo-guide,.expo-caption,.expo-narration){visibility:hidden}
 `;
