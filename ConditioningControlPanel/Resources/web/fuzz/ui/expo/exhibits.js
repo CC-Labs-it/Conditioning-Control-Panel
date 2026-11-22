@@ -10,13 +10,14 @@ import { mountSettlement } from './settlement.js';
 import { visitorHands } from './carried.js';
 import { firstPress } from './first-press.js';
 import { narratorAwareness } from './awareness.js';
+import { trailNarrator } from './trail-narrator.js';
 import { livePanel } from './display.js';
 import { createVisit } from './visit.js';
 import { createWornHooves, mountHoofLab } from './hoof-lab.js';
 import { mountAquariumLife } from './aquarium-life.js';
 import { LLAMAS } from '../../data/content/llamas.js';
 
-const hallCues = { hoof:'pa_hall2', habitat:'pa_hall3', twelve:'pa_hall4', shop:'pa_shop_1', atrium:'pa_arrive_1' };
+const hallCues = {twelve:'pa_hall4',atrium:'pa_arrive_1'};
 const clamp = n => Math.min(1,Math.max(0,n));
 
 export function createExhibits(api) {
@@ -24,6 +25,7 @@ export function createExhibits(api) {
   const state = createVisit(ctx), zones = new Map();
   let here = '', hudClock = 0, pending = [], returning = false, departureDone=false, disposed=false;
   const cue = api.cue, awareness=narratorAwareness(state,cue);
+  const trail=trailNarrator(api,state);api.trailTask=trail.offer;
   const commentary=visitorCommentary(state,cue);
   const staff=createBackOfHouse(api,state),hands=visitorHands(api,state,staff.lighting);
   api.hold=hands.hold;api.exchange=hands.exchange;api.drop=hands.drop;api.isCarrying=hands.has;
@@ -122,7 +124,8 @@ export function createExhibits(api) {
         state.turnstile=true;state.hoofAdmitted=state.hoofWorn;state.ticket.issue();
         ui.turn=0;tally();play('turnstile');
         if(state.hoofWorn)state.ticket.book('hoof-admitted','Admitted as a llama',true);
-        cue(state.hoofWorn?'v4_hoof_arrival':'v4_ticket',{kind:'beat',zone:id,exhibit:'turnstile'});
+        if(state.hoofWorn)cue('v4_hoof_arrival',{kind:'beat',zone:id,exhibit:'turnstile'});
+        else trail.offer('welcome',id);
       };
       admissionPrinter(api,state,group,clean,ui);
       ui.turnstile=bind('turnstile_arm','Pass the turnstile',ui.count);
@@ -168,6 +171,7 @@ export function createExhibits(api) {
     if(ctx.paused)return;
     worn.tick(dt);spit.tick(dt);habitat.tick(dt,id);
     if(returning){if(departureDone)leave();return;}
+    trail.tick(dt,id,api.walker.feet);
     commentary(dt,id,api.walker.feet);gallery.tick(dt,id);staff.tick(dt,id);hands.tick();hudClock+=dt;awareness.tick(dt,id,camera,api.actionSerial());
     if(hudClock>=900)once('pa_closing');
     pending=pending.filter(event=>{

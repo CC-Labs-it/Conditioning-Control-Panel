@@ -57,12 +57,19 @@ def main():
     args.add_argument("--catalog", action="store_true")
     args.add_argument("--treat-unplug", action="store_true", help="Rebuild only the unplug effect from its existing clean take")
     args.add_argument("--limit", type=int)
+    args.add_argument("--round", type=int, choices=(4, 5), default=4)
     args.add_argument("--pipeline-dir", type=Path, help="Workshop containing gen_expo_audio.py and its original script")
     options = args.parse_args()
     rows = []
-    for name, text in LINES.items():
-        key = "v4_" + name
-        rows.append(dict(id=key, set="exhibit", where="Renewal visit", subtitle=text,
+    if options.round == 5:
+        from expo_script_v5 import LINES as script
+    else:
+        script = {name: ("Renewal visit", line) for name, line in LINES.items()}
+    if options.treat_unplug and options.round != 4:
+        args.error("--treat-unplug belongs to round 4")
+    for name, (where, text) in script.items():
+        key = ("r5_" if options.round == 5 else "v4_") + name
+        rows.append(dict(id=key, set="exhibit", where=where, subtitle=text,
                          seconds=max(2.4, round(len(text.split()) / 2.5, 1)), audio=None, slides=[]))
     if options.dry:
         for row in [r for r in rows if not (AUDIO / (r["id"] + ".mp3")).is_file()][:options.limit]:
@@ -82,7 +89,7 @@ def main():
             if options.treat_unplug and not clean.is_file():
                 raise FileNotFoundError(clean)
             if not clean.exists() and not pipeline.render(name, row["subtitle"]):
-                break
+                raise SystemExit("No clean take for " + name)
             treated = pipeline.HALL / (name + ".mp3")
             treat_line(pipeline, name, clean, treated)
             shutil.copyfile(treated, AUDIO / treated.name)
@@ -92,9 +99,17 @@ def main():
             row["audio"] = "hall/" + row["id"] + ".mp3"
             duration = subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(AUDIO / (row["id"] + ".mp3"))], text=True)
             row["seconds"] = round(float(duration.strip()), 2)
-    (GAME / "ui/expo/renewal-lines.js").write_text(
-        "export const renewalLines = " + json.dumps(rows, indent=2, ensure_ascii=False) + ";\n",
+    name, binding = ("trail-lines.js", "trailLines") if options.round == 5 else ("renewal-lines.js", "renewalLines")
+    (GAME / "ui/expo" / name).write_text(
+        "export const " + binding + " = " + json.dumps(rows, indent=2, ensure_ascii=False) + ";\n",
         encoding="utf-8")
+    if options.round == 5:
+        review = ["# Round 5 narrator lines", "", "TC Narrator (Original A), museum speaker mix.", "",
+                  "| Cue | Where it plays | Spoken line | Duration |", "| --- | --- | --- | ---: |"]
+        for row in rows:
+            duration = f"{row['seconds']:.2f} s" if row['audio'] else "Caption only"
+            review.append(f"| `{row['id']}` | {row['where']} | {row['subtitle']} | {duration} |")
+        (HERE.parent / "expo-review/ROUND-5-LINES.md").write_text("\n".join(review) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

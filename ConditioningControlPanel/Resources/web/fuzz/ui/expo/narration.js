@@ -1,4 +1,5 @@
 import { renewalLines } from './renewal-lines.js';
+import { trailLines } from './trail-lines.js';
 import { Ray, Vector3 } from 'three';
 import { centre, createProjector, createRestingAtlas } from './projectors.js';
 import { createSpeechSequence } from './speech-sequence.js';
@@ -41,7 +42,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
   sequence.pause(held);
   const load=fetch(assetURL('narration/manifest.json'),{signal:abort.signal}).then(async r=>{
     if(!r.ok)throw new Error('Expo narration manifest HTTP '+r.status);
-    const rows=await r.json();for(const row of [...rows,...renewalLines])book.set(row.id,row);
+    const rows=await r.json();for(const row of [...rows,...renewalLines,...trailLines])book.set(row.id,row);
     story=createArchiveStory(rows,ctx.store.get('lastArchiveRecord'),(id,slots)=>{
       ctx.store.set('archiveScreens',slots);
       ctx.store.set('lastArchiveRecord',id);
@@ -224,7 +225,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     entry.resolve(ok);
   }
   let farewell=false;
-  function enqueue(id,{closing=false,station=null,replay=false,zone=walker.zone,position=null,kind='react',exhibit,ttl,ticket=null,projector=false,onStart}={}){
+  function enqueue(id,{closing=false,station=null,replay=false,zone=walker.zone,position=null,kind='react',exhibit,ttl,ticket=null,projector=false,onStart,roomWide=false}={}){
     const row=book.get(id);
     if(dead||!row||zone!==walker.zone||(farewell&&!closing))return Promise.resolve(false);
     if(row.set==='log'&&!owned().includes(id.slice(4)))return Promise.resolve(false);
@@ -238,7 +239,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
       (station&&!station.notice?station.pos:null)||horn?.pos||camera.position;
     let resolve;const promise=new Promise(r=>{resolve=r;});
     const local=position || station || exhibit || kind!=='ambient';
-    const anchor=local?(position || station ? origin : camera.position).clone():null;
+    const anchor=local&&!roomWide?(position || station ? origin : camera.position).clone():null;
     const entry={row,zone,station,channel:key,kind,exhibit:exhibit||station?.id||zone,anchor,ttl,ticket,projector,onStart,
       stationId:station?.id||family(id),pos:origin.clone(),handle:null,
       clock:0,lastMediaTime:0,kevin:false,progress:0,duck:1,resolve,promise};

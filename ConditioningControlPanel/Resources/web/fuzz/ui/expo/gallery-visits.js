@@ -64,7 +64,7 @@ export function galleryVisits(api,state){
         off.push(api.register(item,'Carry '+label,()=>{
           if(!api.hold('print-'+i,item,label)){api.say('The desk can take the print you are carrying.');return;}
           const slot=hung.findIndex(row=>row?.i===i);if(slot>=0)hung[slot]=null;
-          voice('correct',id);update();
+          api.trailTask('corrections',id);update();
         }));
         function hang(back){
           const key=state.carry?.key||'';
@@ -130,7 +130,7 @@ export function galleryVisits(api,state){
     const p=api.walker.feet;
     if(id==='hall'&&queue<route.length&&!t.stamps.has('Queued')&&p.y<.5){
       const [x,z]=route[queue];if(Math.hypot(x-p.x,z-p.z)<.53){
-        if(!queue)voice('queue',id);state.queueProgress=++queue;
+        if(!queue)api.trailTask('queue',id);state.queueProgress=++queue;
         if(queue===route.length){t.stamp('Queued');t.book('queued','Walked the entire empty queue');api.play('turnstile');}
       }else if(queue>0 && (p.x<X1-.7||p.x>X2+.7||p.z<Z1-.5||p.z>Z1+PITCH*5+.5))queue=0;
     }

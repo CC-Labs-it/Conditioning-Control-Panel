@@ -190,6 +190,7 @@ export function createTwelvePieces(api,state){
       }
     }
     if(room.lashes&&!state.ticket.stamps.has('Blinked')){
+      if(p.distanceToSquared(room.lashes)<22)api.trailTask('lashes',id);
       progress.stare=look.gaze(room.lashes,5,.16)?progress.stare+dt:0;
       if(progress.stare>=6){
         progress.blink=0;moved=false;state.signedForm=true;state.ticket.stamp('Blinked');

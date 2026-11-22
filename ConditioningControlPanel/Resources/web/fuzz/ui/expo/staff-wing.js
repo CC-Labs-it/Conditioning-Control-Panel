@@ -136,7 +136,7 @@ export function createStaffWing(api,state) {
         write(dial(api,roster,'rota_face',off),'Staff rota','Tomorrow: '+state.file.name,'Reading balcony   /   Tea service');
         bind(roster,'Read tomorrow’s rota',()=>api.say('Tomorrow: '+state.file.name+'. Tea to the reading balcony.'));
         r.tray=place('annex_tea',[16.63,.920,25.52]);r.tray.visible=!view.delivered&&!api.isCarrying('tea');
-        bind(r.tray,'Carry the tea to the reading balcony',()=>{if(useCarry(api,state,'tea',r.tray,'Tea tray'))cue('tea');});
+        bind(r.tray,'Carry the tea to the reading balcony',()=>{if(useCarry(api,state,'tea',r.tray,'Tea tray'))api.trailTask('tea','service');});
         const desk=place('annex_plinth',[19.32,.84,28.1]);
         const stapler=place('annex_stapler',[19.32,.912,28.1]);stapler.visible=view.staplerHome;
         bind(desk,()=>state.carry?.key==='stapler'?'Return Greg’s stapler':'Inspect desk tray',()=>{
