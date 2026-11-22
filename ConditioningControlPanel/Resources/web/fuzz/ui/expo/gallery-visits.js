@@ -118,7 +118,10 @@ export function galleryVisits(api,state){
         batch(T,group,parts,off);return ()=>off.reverse().forEach(f=>f());
       }));
       clean.push(api.annexProps(group,place=>{const off=[],sign=place('annex_sign',[X2-.60,0,Z1+5*PITCH+.66],Math.PI/6);
-        write(dial(api,sign,'sign_face',off),'Queue here','Current wait: 0 minutes.','Applied Hoof Sciences');return ()=>off.forEach(f=>f());}));
+        write(dial(api,sign,'sign_face',off),'Queue here','Current wait: 0 minutes.','Applied Hoof Sciences');
+        const end=place('annex_sign',[X1-.63,0,Z1+1.22],2.08);
+        write(dial(api,end,'sign_face',off),'Applied Hoof Sciences','Now serving: you.');
+        return ()=>off.forEach(f=>f());}));
     }
   }
   function enter(id,old){
