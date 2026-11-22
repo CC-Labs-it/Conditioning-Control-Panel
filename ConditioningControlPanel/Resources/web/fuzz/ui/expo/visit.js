@@ -34,20 +34,25 @@ export function createVisit(ctx) {
       return 'Pressed '+file.taps.toLocaleString()+' times by one human, 2026. Believed voluntary.'+extra;
     },
     useHoof() {
-      if (this.hoof === 'idle' || this.hoof === 'complete') { this.hoof='checkbox'; this.misses=0; return 'hoof_1'; }
+      if (this.hoof === 'idle' || this.hoof === 'complete') return {page:'checkbox',misses:0,lines:['hoof_1','hoof_2']};
       if (this.hoof === 'checkbox') {
-        this.misses++;
-        if(this.misses === 5) { this.hoof='change'; this.hoofTime=0; return 'hoof_4'; }
-        return this.misses === 1 ? 'hoof_3' : null;
+        const misses=this.misses+1;
+        if(misses===5)return {page:'change',misses,lines:['hoof_4']};
+        return {page:'checkbox',misses,lines:misses===1?['hoof_3']:[]};
       }
-      if (this.hoof === 'pictures') { this.hoof='failed'; this.hoofTime=0; return 'hoof_6'; }
+      if (this.hoof === 'pictures') return {page:'failed',lines:['hoof_6']};
       return null;
+    },
+    finishHoof(step) {
+      this.hoof=step.page;
+      if(step.misses!==undefined)this.misses=step.misses;
+      this.hoofTime=0;
     },
     tickHoof(dt) {
       this.hoofTime+=dt;
-      if (this.hoof==='change' && this.hoofTime>=2.6) { this.hoof='pictures'; return 'hoof_5'; }
-      if (this.hoof==='failed' && this.hoofTime>=2.7) { this.hoof='assistant'; this.hoofTime=0; return 'hoof_7'; }
-      if (this.hoof==='assistant' && this.hoofTime>=3.3) { this.hoof='complete'; return 'hoof_8'; }
+      if (this.hoof==='change' && this.hoofTime>=2.6)return {page:'pictures',lines:['hoof_5']};
+      if (this.hoof==='failed' && this.hoofTime>=2.7)return {page:'assistant',lines:['hoof_7']};
+      if (this.hoof==='assistant' && this.hoofTime>=3.3)return {page:'complete',lines:['hoof_8']};
       return null;
     },
     glass() { this.taps++; return ({1:'keep_2',3:'keep_3',10:'keep_4'})[this.taps]; },
@@ -58,4 +63,3 @@ export function createVisit(ctx) {
     shopReturn() { this.loops = Math.min(2,this.loops+1); return this.loops===1 ? 'pa_shop_2' : 'pa_shop_3'; }
   };
 }
-

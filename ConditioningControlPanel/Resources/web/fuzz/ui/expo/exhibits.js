@@ -1,5 +1,6 @@
 import { livePanel, placard, runMonitor, terminal } from './display.js';
 import { createVisit } from './visit.js';
+import { createExhibitBeat } from './speech-sequence.js';
 import { createDoorGlass } from './door-glass.js';
 import {mountShopDoor} from './shop-door.js';
 import { mountAquariumLife } from './aquarium-life.js';
@@ -13,7 +14,9 @@ export function createExhibits(api) {
   const state = createVisit(ctx), zones = new Map();
   let here = '', hudClock = 0, pending = [], stopShown = -20, returning = false, departureDone=false, disposed=false;
   const cue = api.cue;
-  function once(id) { if (!state.heard.has(id)) { state.heard.add(id); cue(id); } }
+  function once(id) {
+    if (!state.heard.has(id)) cue(id,{kind:'ambient',onStart:()=>state.heard.add(id)});
+  }
   function later(id, delay) { pending.push({id, at:hudClock+delay, zone:here}); }
 
   function mount(id, group) {
@@ -46,7 +49,6 @@ export function createExhibits(api) {
         'REGISTER   '+String(state.file.taps+state.presses).padStart(8,'0'));
       function press(stop) {
         if(stop && state.presses<50) return;
-        state.heard.add('pa_hall1');
         const line = state.press(stop);
         if(state.presses===50) stopShown=hudClock;
         play('press'); record(); cue(line);
@@ -81,13 +83,26 @@ export function createExhibits(api) {
           foot:page==='complete'?'This is why.':page==='idle'?'Applied Sciences  /  Hoof Simulator':'Human Interface Programme',good:page==='complete'});
       };
       if(ui.human)ui.human.userData.expoRest=ui.human.position.clone();
-      const use=()=>{const previous=state.hoof; const line=state.useHoof();
-        if(previous==='checkbox'||previous==='pictures')ui.lastAttempt=hudClock;
-        play('press');cue(line);ui.refresh();
-        if(previous==='idle'||previous==='complete')cue('hoof_2'); };
-      for(const name of ['hoof_hand_left','hoof_hand_right'])bind(name,'Put on the hooves',use);
-      bind('hoof_console','Try the console',use); bind('hoof_display','Try the test',use);
-      bind('hoof_mosaic','Submit picture test',use);
+      ui.beat=createExhibitBeat(cue);
+      clean.push(()=>ui.beat.leave());
+      ui.runStep=step=>{
+        if(!step||ui.beat.listening)return;
+        ui.origin=camera.position.clone();
+        void ui.beat.run(step.lines,{exhibit:'hoof',zone:id,position:ui.origin},()=>{
+          state.finishHoof(step);ui.refresh();
+        });
+      };
+      const use=()=>{
+        if(ui.beat.listening)return;
+        const step=state.useHoof();
+        if(!step)return;
+        if(state.hoof==='checkbox'||state.hoof==='pictures')ui.lastAttempt=hudClock;
+        play('press');ui.runStep(step);
+      };
+      const label=text=>()=>ui.beat.listening?'Listening':text;
+      for(const name of ['hoof_hand_left','hoof_hand_right'])bind(name,label('Put on the hooves'),use);
+      bind('hoof_console',label('Try the console'),use);bind('hoof_display',label('Try the test'),use);
+      bind('hoof_mosaic',label('Submit picture test'),use);
       ui.refresh();
     }
     if (id==='habitat') {
@@ -214,6 +229,7 @@ export function createExhibits(api) {
   function leave(){if(returning&&!disposed){returning=false;exit();}}
   function enter(id) {
     if(id===here)return;
+    zones.get(here)?.ui.beat?.leave();
     const worn=zones.get('hoof')?.ui.worn;
     if(worn)for(const glove of worn)glove.visible=false;
     here=id;
@@ -249,7 +265,9 @@ export function createExhibits(api) {
       if(release)ui.keyHeld=false;
       if(release || Math.floor(state.habitatTime)!==old)ui.refresh();
     }
-    if(id==='hoof') {const line=state.tickHoof(dt); if(line){cue(line);ui.refresh();}
+    if(id==='hoof') {
+      if(ui.origin && camera.position.distanceToSquared(ui.origin)>36)ui.beat.leave();
+      else if(!ui.beat.listening)ui.runStep(state.tickHoof(dt));
       ui.worn.forEach((glove,i)=>{
         glove.visible=!['idle','complete'].includes(state.hoof);
         const spread=Math.min(.34,.24*camera.aspect);
@@ -305,4 +323,3 @@ export function createExhibits(api) {
   }
   return {mount,unmount,enter,tick,dispose,state,setTurnstileAngle};
 }
-
