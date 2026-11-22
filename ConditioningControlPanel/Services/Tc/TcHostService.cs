@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 using Microsoft.Web.WebView2.Core;
@@ -200,6 +201,23 @@ internal static partial class TcHostService
     private static void OnPageReady()
     {
         _lastAnyUtc = _lastBeatUtc = DateTime.UtcNow;
+        // First launch with no cached Expo size: wait for the manifest read, at most 1.5 s from the
+        // window opening, never on the UI thread. Past that, init goes out without the size.
+        var hold = ExpoInitHold();
+        if (hold > TimeSpan.Zero && _expoSizeRead is { } read)
+        {
+            var host = _host;
+            _ = Task.WhenAny(read, Task.Delay(hold)).ContinueWith(_ => RunOnUi(() =>
+            {
+                if (host != null && ReferenceEquals(host, _host)) PostInit();
+            }), TaskScheduler.Default);
+            return;
+        }
+        PostInit();
+    }
+
+    private static void PostInit()
+    {
         try
         {
             var s = App.Settings?.Current;

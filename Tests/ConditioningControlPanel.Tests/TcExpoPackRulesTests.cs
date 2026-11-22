@@ -160,5 +160,57 @@ public class TcExpoPackRulesTests
         Assert.DoesNotContain("Process.Start", expo);
         // The sha check comes before the unpack.
         Assert.True(expo.IndexOf("Sha256Async(", StringComparison.Ordinal) < expo.IndexOf("UnpackExpo(m, partial)", StringComparison.Ordinal));
+        // The download takes the live manifest, never the cached one.
+        Assert.Contains("TcExpoPackRules.ForDownload(cached, live, liveFail)", expo);
+        Assert.Contains("var hold = ExpoInitHold();", host);
     }
+
+    [Fact]
+    public void The_size_cache_round_trips_through_the_same_checks()
+    {
+        var m = TcExpoPackRules.Parse(Good.Replace("}", ",\"unpacked\":160000000}"), "7.4.0", out _)!;
+        var back = TcExpoPackRules.Parse(TcExpoPackRules.CacheJson(m), "7.4.0", out var why);
+        Assert.Equal("", why);
+        Assert.Equal(m, back);
+        // A cache is still refused by a build below its minApp, and a damaged one reads as no size.
+        Assert.Null(TcExpoPackRules.Parse(TcExpoPackRules.CacheJson(m), "7.3.8", out _));
+        Assert.Null(TcExpoPackRules.Parse(TcExpoPackRules.CacheJson(m)[..20], "7.4.0", out _));
+        Assert.Equal(Path.Combine("root", "tc-expo", "manifest.json"), TcExpoPackRules.CachePath("root"));
+        // The cache file is never taken for a version folder or a stamp.
+        Assert.Null(TcExpoPackRules.ReadyVersion(Array.Empty<string>(), new[] { "manifest.json" }));
+        Assert.Empty(TcExpoPackRules.Stale(Array.Empty<string>(), new[] { "manifest.json" }, null, null).Stamps);
+    }
+
+    [Theory]
+    [InlineData(true, false, false, 0, 1500)]     // first launch, read running: wait the whole 1.5 s
+    [InlineData(true, false, false, 1000, 500)]   // page booted after 1 s: wait what is left
+    [InlineData(true, false, false, 2000, 0)]     // past 1.5 s: post at once, without the size
+    [InlineData(true, false, true, 100, 0)]       // the read finished (good or not): post
+    [InlineData(true, true, false, 0, 0)]         // cached size: post at once
+    [InlineData(false, false, false, 0, 0)]       // small edition or a ready Expo: no size needed
+    public void Init_waits_for_the_size_at_most_a_second_and_a_half(bool needSize, bool haveSize, bool readDone, int sinceMs, int holdMs)
+        => Assert.Equal(TimeSpan.FromMilliseconds(holdMs),
+            TcExpoPackRules.InitHold(needSize, haveSize, readDone, TimeSpan.FromMilliseconds(sinceMs)));
+
+    [Fact]
+    public void The_live_manifest_wins_for_the_download()
+    {
+        var cached = Manifest();
+        var live = TcExpoPackRules.Parse(Good.Replace("2037.5.1", "2037.6.0"), "7.4.0", out _)!;
+        Assert.Same(live, TcExpoPackRules.ForDownload(cached, live, null).Manifest);
+        var (m, fail) = TcExpoPackRules.ForDownload(cached, null, "offline");
+        Assert.Null(m);
+        Assert.Equal("offline", fail);
+        Assert.Equal("offline", TcExpoPackRules.ForDownload(cached, null, null).Fail);
+        Assert.Equal("refused", TcExpoPackRules.ForDownload(cached, null, "refused").Fail);
+    }
+
+    [Theory]
+    [InlineData(404, "refused")]
+    [InlineData(410, "refused")]
+    [InlineData(500, "offline")]
+    [InlineData(403, "offline")]
+    [InlineData(null, "offline")]
+    public void A_gone_pack_is_refused_and_a_bad_line_is_offline(int? status, string reason)
+        => Assert.Equal(reason, TcExpoPackRules.FailForStatus(status));
 }
