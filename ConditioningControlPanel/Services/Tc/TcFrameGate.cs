@@ -128,7 +128,7 @@ internal static class TcFrameGate
                 if (o["save"] is not JValue { Type: JTokenType.String } v) return TcGateResult.No(RefuseField);
                 var save = (string)v!;
                 if (save.Length == 0) return TcGateResult.No(RefuseField);
-                if (save.Length > TcRules.MaxSaveBytes || Encoding.UTF8.GetByteCount(save) > TcRules.MaxSaveBytes)
+                if (save.Length > TcRules.MaxSaveChars || Encoding.UTF8.GetByteCount(save) > TcRules.MaxSaveBytes)
                     return TcGateResult.No(RefuseTooBig);
                 return TcGateResult.Ok(new TcPageFrame(type) { Save = save });
             }

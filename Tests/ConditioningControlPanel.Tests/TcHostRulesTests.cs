@@ -119,16 +119,17 @@ public class TcHostRulesTests
     [Fact]
     public void Save_offer_passes_up_to_the_cap()
     {
-        var save = new string('a', TcRules.MaxSaveBytes);
+        var save = new string('a', TcRules.MaxSaveChars);
         var r = TcFrameGate.Check(new JObject { ["type"] = "save-offer", ["save"] = save });
         Assert.True(r.Accepted);
         Assert.Equal(save, r.Frame!.Save);
     }
 
     [Fact]
-    public void Save_offer_over_the_cap_is_too_big()
+    public void Save_offer_over_the_page_parser_cap_is_too_big()
     {
-        var r = TcFrameGate.Check(new JObject { ["type"] = "save-offer", ["save"] = new string('a', TcRules.MaxSaveBytes + 1) });
+        // 400,001 one-byte characters: under the byte cap, over what the page can read back.
+        var r = TcFrameGate.Check(new JObject { ["type"] = "save-offer", ["save"] = new string('a', TcRules.MaxSaveChars + 1) });
         Assert.False(r.Accepted);
         Assert.Equal(TcFrameGate.RefuseTooBig, r.Refusal);
     }

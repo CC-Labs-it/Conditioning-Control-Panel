@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Services.Tc;
 /// is never locked. Every page frame passes <see cref="TcFrameGate"/> first. Hard exits (panic, the
 /// title-bar X, a dead page, the watchdog) go through <see cref="Close"/>; the page's own exit ends on
 /// its <c>exit-done</c> or at 800 ms. Scrolller pictures and the Sparkles medal live in
-/// <c>TcHostService.Media.cs</c>; toy pulses and live settings in <c>TcHostService.Feel.cs</c>; save carry and the Expo are later slices: their caps go out off
+/// <c>TcHostService.Media.cs</c>; toy pulses and live settings in <c>TcHostService.Feel.cs</c>; save carry in <c>TcHostService.Save.cs</c>; the Expo is a later slice: their caps go out off
 /// and their frames are only logged.
 /// </summary>
 internal static partial class TcHostService
@@ -196,7 +196,7 @@ internal static partial class TcHostService
         try
         {
             var s = App.Settings?.Current;
-            var caps = TcRules.Caps(_edition, saveSlot: false);
+            var caps = TcRules.Caps(_edition, saveSlot: SaveSlotOpen);
             var init = TcHostRules.InitFrame(Localization.LocalizationManager.Instance.CurrentLanguage,
                 s?.MotionLevel ?? Models.MotionLevel.Full, Safety.GentleVisuals.On, App.Mods?.ActiveModId, caps,
                 picturesOn: PicturesOnNow, sparkles: App.Sparkles != null && !string.IsNullOrEmpty(App.UnifiedUserId),
@@ -214,6 +214,9 @@ internal static partial class TcHostService
         if (!gate.Accepted || gate.Frame is not { } f)
         {
             App.Logger?.Debug("Tc: page frame refused ({Type}: {Why})", (string?)o["type"], gate.Refusal);
+            // A save over the caps still gets its answer (the page shows the card's reason).
+            if ((string?)o["type"] == "save-offer")
+                PostSave(TcSaveRules.Result(false, gate.Refusal == TcFrameGate.RefuseTooBig ? TcSaveRules.ReasonTooBig : TcSaveRules.ReasonRefused));
             return;
         }
         try
@@ -222,6 +225,12 @@ internal static partial class TcHostService
             {
                 case "heartbeat":
                     _lastBeatUtc = _lastAnyUtc;
+                    break;
+                case "save-offer":
+                    OnSaveOffer(f);
+                    break;
+                case "save-ask":
+                    OnSaveAsk();
                     break;
                 case "boot-error":
                     App.Logger?.Warning("Tc: page boot-error: {Msg}", f.Save);
