@@ -137,7 +137,7 @@ test('a catwalk mounted before hardware receives its endcap and lining together'
   source.geometry.dispose();source.material.dispose();
 });
 
-for(const field of ['file','mobileFile'])test('the shipped main hall frame and plaster keep their visible surfaces on both sides, '+field,async()=>{
+test('the shipped main hall frame and plaster keep their visible surfaces on both sides',async()=>{
   const assets=new URL('../assets/expo/',import.meta.url),zones=new URL('zones/',assets);
   const plan=JSON.parse(await readFile(new URL('zones.json',zones)));
   const loader=new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
@@ -149,7 +149,7 @@ for(const field of ['file','mobileFile'])test('the shipped main hall frame and p
     return (await loader.parseAsync(bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),'')).scene;
   }
   const rooms={};
-  for(const id of ['hall','atrium'])rooms[id]=await mesh(new URL(plan.zones.find(z=>z.id===id)[field],zones));
+  for(const id of ['hall','atrium'])rooms[id]=await mesh(new URL(plan.zones.find(z=>z.id===id).file,zones));
   const parts=new Map();(await mesh(new URL('door-hardware.glb',assets))).traverse(node=>{
     const key=node.userData.assembly;if(!node.isMesh||!key)return;
     if(!parts.has(key))parts.set(key,[]);parts.get(key).push(node);

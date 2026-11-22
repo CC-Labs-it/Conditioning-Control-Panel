@@ -1,10 +1,10 @@
-import { LITE } from '../perf.js';
+import {assetURL} from './asset-base.js';
 
-const root=new URL('../../assets/expo/zones/',import.meta.url);
+const zoneURL=name=>assetURL('zones/'+name);
 let batch=null;
 async function get(name,signal){
   const packed=name.endsWith('.glb.gz');
-  const response=await fetch(new URL(name,root),{signal,cache:packed?'force-cache':'default'});
+  const response=await fetch(zoneURL(name),{signal,cache:packed?'force-cache':'default'});
   if(!response.ok)throw Error('Expo entrance HTTP '+response.status);
   if(!packed)return response;
   // Some hosts already apply Content-Encoding to packaged .gz files. Inspect the decoded response's signature.
@@ -19,44 +19,18 @@ async function get(name,signal){
   if(prefix[0]!==31||prefix[1]!==139)throw Error('Invalid compressed Expo geometry');
   return new Response(response.body.pipeThrough(new DecompressionStream('gzip')),{headers:{'Content-Type':'model/gltf-binary'}});
 }
-const textureFile=/^textures\/[a-f0-9]+(?:-mobile)?\.webp$/;
+const textureFile=/^textures\/[a-f0-9]+\.webp$/;
 
-export function viewFile(def,lite){
-  if(def.arrivalGzip&&typeof DecompressionStream==='function'&&(!lite||def.arrivalMobileMaps))return def.arrivalGzip;
-  return (lite&&def.mobileFile)||def.file||def.id+'.glb';
-}
-export function phoneMap(file,def){
-  if(!def.arrivalMobileMaps||file.endsWith('-mobile.webp'))return file;
-  return def.arrivalMobileMaps[file]||file.replace(/\.webp$/,'-mobile.webp');
+export function viewFile(def){
+  if(def.arrivalGzip&&typeof DecompressionStream==='function')return def.arrivalGzip;
+  return def.file||def.id+'.glb';
 }
 export function roomAsset(def,suffix){
   if(suffix==='-light.webp'&&def.lightFile)return def.lightFile;
-  if(suffix==='-light-mobile.webp'&&def.mobileLightFile)return def.mobileLightFile;
   return (def.assetStem||def.id)+suffix;
 }
 
-// Surface colour and fine normals can sharpen after the doorway is usable. Authored lettering,
-// display art and emissive photographs retain the original resolution from the first frame.
-export function surfaceDetails(gltf,details=new Set()){
-  const imageFor=slot=>{
-    const texture=gltf.textures?.[slot?.index];
-    return gltf.images?.[texture?.extensions?.EXT_texture_webp?.source ?? texture?.source]?.uri;
-  };
-  const printed=new Set();
-  for(const mat of gltf.materials||[]){
-    const pbr=mat.pbrMetallicRoughness||{},colour=imageFor(pbr.baseColorTexture);
-    if(/^(art_|.*readout)/i.test(mat.name||''))printed.add(colour);
-    else if(colour&&textureFile.test(colour))details.add(colour);
-    printed.add(imageFor(mat.emissiveTexture));
-    for(const slot of [mat.normalTexture,pbr.metallicRoughnessTexture]){
-      const name=imageFor(slot);if(name&&textureFile.test(name))details.add(name);
-    }
-  }
-  for(const name of printed)details.delete(name);
-  return details;
-}
-
-async function firstTextureNames(response,details){
+async function firstTextureNames(response){
   const reader=response.clone().body.getReader(),chunks=[];
   let bytes=0,end=20;
   try{
@@ -76,15 +50,17 @@ async function firstTextureNames(response,details){
     const data=new Uint8Array(end);let offset=0;
     for(const chunk of chunks){const count=Math.min(end-offset,chunk.length);data.set(chunk.subarray(0,count),offset);offset+=count;}
     const gltf=JSON.parse(new TextDecoder().decode(data.subarray(20)));
-    if(details)surfaceDetails(gltf,details);
     return (gltf.images||[]).map(image=>image.uri).filter(uri=>textureFile.test(uri));
   }finally{void reader.cancel().catch(()=>{});}
 }
 
-/** Buying the ending starts its first room's transfer while the visitor reads the wormhole prompt. */
-export function warmEntrance(){
+/** The accepted transmission can start its transfer while the arrival transition plays. */
+export function warmEntrance(accepted){
+  if(accepted!==true)return;
+  const base=zoneURL('');
+  if(batch&&batch.base!==base)clearEntrance();
   if(batch)return;
-  const controller=new AbortController(), files=new Map(),current={controller,files,claimed:new Set(),details:new Set(),timer:0};
+  const controller=new AbortController(), files=new Map(),current={base,controller,files,claimed:new Set(),timer:0};
   batch=current;
   function prepare(name){
     const pending=get(name,controller.signal);
@@ -94,27 +70,21 @@ export function warmEntrance(){
   }
   prepare('zones.json').then(async response=>{
     const plan=await response.clone().json();
-    if(batch!==current || controller.signal.aborted)return;
+    if(batch!==current||controller.signal.aborted||base!==zoneURL(''))return;
     const def=plan.zones.find(zone=>zone.id===plan.start.id);
     if(!def)return;
-    const view=viewFile(def,LITE);
-    prepare(view).then(file=>firstTextureNames(file,!LITE&&def.mobileFile?current.details:null)).then(names=>{
-      if(batch===current&&!controller.signal.aborted)for(const file of new Set(names)){
-        const name=LITE&&view===def.arrivalGzip?phoneMap(file,def):firstSurfaceMap(file);
+    const view=viewFile(def);
+    prepare(view).then(firstTextureNames).then(names=>{
+      if(batch===current&&!controller.signal.aborted&&base===zoneURL(''))for(const name of new Set(names)){
         if(!current.claimed.has(name))prepare(name);
       }
     }).catch(()=>{});
     for(const file of [def.collision||roomAsset(def,'-collision.glb'),
-      roomAsset(def,LITE||def.mobileFile?'-light-mobile.webp':'-light.webp'),...['px','nx','py','ny','pz','nz'].map(side=>roomAsset(def,'-probe-'+side+'.webp'))]){
+      roomAsset(def,'-light.webp'),...['px','nx','py','ny','pz','nz'].map(side=>roomAsset(def,'-probe-'+side+'.webp'))]){
       prepare(file);
     }
   }).catch(()=>{});
   current.timer=setTimeout(()=>{if(batch===current)clearEntrance();},45000);
-}
-
-// Printed lettering and projected pictures keep full detail during the first desktop frame.
-export function firstSurfaceMap(name){
-  return batch?.details.has(name)?name.replace(/\.webp$/,'-mobile.webp'):name;
 }
 
 export function clearEntrance(){
@@ -123,6 +93,7 @@ export function clearEntrance(){
 }
 
 export async function roomRequest(name,signal){
+  if(batch&&batch.base!==zoneURL(''))clearEntrance();
   batch?.claimed.add(name);
   if(name==='zones.json'&&batch)clearTimeout(batch.timer);
   const existing=batch?.files.get(name);
@@ -136,7 +107,7 @@ export async function roomRequest(name,signal){
       if(signal.aborted)throw error;
     }
   }
-  if(textureFile.test(name))return fetch(new URL(name,root),{signal,cache:'force-cache'}).then(response=>{
+  if(textureFile.test(name))return fetch(zoneURL(name),{signal,cache:'force-cache'}).then(response=>{
     if(!response.ok)throw Error('Expo material HTTP '+response.status);
     return response;
   });

@@ -1,18 +1,18 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {gzipSync} from 'node:zlib';
-import {roomRequest,phoneMap,viewFile,roomAsset} from '../ui/expo/entrance.js';
+import {roomRequest,viewFile,roomAsset,warmEntrance,clearEntrance} from '../ui/expo/entrance.js';
+import {setExpoAssetBase} from '../ui/expo/asset-base.js';
 
 test('open visits retain lighting, collision and reflections from their own edition',()=>{
   const original={id:'atrium'};
   const updated={id:'atrium',assetStem:'atrium-c043'};
-  for(const suffix of ['-collision.glb','-light.webp','-light-mobile.webp','-probe-px.webp']){
+  for(const suffix of ['-collision.glb','-light.webp','-probe-px.webp']){
     assert.equal(roomAsset(original,suffix),'atrium'+suffix);
     assert.equal(roomAsset(updated,suffix),'atrium-c043'+suffix);
   }
-  const relit={...updated,lightFile:'patched-light.webp',mobileLightFile:'patched-mobile.webp'};
+  const relit={...updated,lightFile:'patched-light.webp'};
   assert.equal(roomAsset(relit,'-light.webp'),'patched-light.webp');
-  assert.equal(roomAsset(relit,'-light-mobile.webp'),'patched-mobile.webp');
   assert.equal(roomAsset(relit,'-probe-px.webp'),'atrium-c043-probe-px.webp');
 });
 
@@ -26,12 +26,33 @@ test('the entrance decodes a gzip asset once across ordinary file and HTTP-encod
   }
 });
 
-test('the entrance shares geometry only when the mobile images have a verified mapping',()=>{
-  const def={id:'atrium',file:'atrium.glb',mobileFile:'atrium-mobile.glb',arrivalGzip:'atrium-abcd.glb.gz'};
-  assert.equal(viewFile(def,true),'atrium-mobile.glb');
-  def.arrivalMobileMaps={'textures/title.webp':'textures/new-title-mobile.webp'};
-  assert.equal(viewFile(def,true),viewFile(def,false));
-  assert.equal(phoneMap('textures/title.webp',def),'textures/new-title-mobile.webp');
-  assert.equal(phoneMap('textures/fern.webp',def),'textures/fern-mobile.webp');
-  assert.equal(phoneMap('textures/fern-mobile.webp',def),'textures/fern-mobile.webp');
+test('the entrance uses the desktop room in every profile and can fall back from gzip',t=>{
+  const def={id:'atrium',file:'atrium.glb',arrivalGzip:'atrium-abcd.glb.gz'};
+  assert.equal(viewFile(def),'atrium-abcd.glb.gz');
+  const native=globalThis.DecompressionStream;
+  t.after(()=>{globalThis.DecompressionStream=native;});
+  globalThis.DecompressionStream=undefined;
+  assert.equal(viewFile(def),'atrium.glb');
+  assert.equal(viewFile({id:'hall',file:'hall-abcd.glb'}),'hall-abcd.glb');
+});
+
+test('the legacy preflight starts no asset request before a visitor accepts',async t=>{
+  const calls=t.mock.method(globalThis,'fetch',()=>Promise.reject(new Error('unexpected request')));
+  warmEntrance();warmEntrance(false);
+  await Promise.resolve();
+  assert.equal(calls.mock.callCount(),0);
+});
+
+test('changing the transmission directory never reuses an earlier warmed manifest',async t=>{
+  t.after(()=>{clearEntrance();setExpoAssetBase(null);});
+  const requested=[];
+  t.mock.method(globalThis,'fetch',async url=>{
+    const host=new URL(url).host;requested.push(host);
+    return Response.json({host,zones:[],start:{id:'atrium'}});
+  });
+  setExpoAssetBase('https://first.example/edition/');warmEntrance(true);
+  setExpoAssetBase('https://next.example/updated/');
+  const data=await (await roomRequest('zones.json',new AbortController().signal)).json();
+  assert.equal(data.host,'next.example');
+  assert.deepEqual(requested,['first.example','next.example']);
 });

@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { roomRequest as request, clearEntrance, firstSurfaceMap, viewFile, phoneMap, roomAsset, surfaceDetails } from './entrance.js';
+import { roomRequest as request, clearEntrance, viewFile, roomAsset } from './entrance.js';
 import {createDoors,loadDoorHardware,streamingPriority} from './doors.js';
 import {batchArchiveHousings,fitArchiveBays} from './archive-furniture.js';
 import {createRoomVisibility} from './room-visibility.js';
 import {createRoomDecoder} from './room-decoder.js';
 
-export const assetURL = path => new URL('../../assets/expo/' + path, import.meta.url).href;
+import {assetURL} from './asset-base.js';
 const url = name => assetURL('zones/' + name);
 const faces = ['px', 'nx', 'py', 'ny', 'pz', 'nz'];
 
@@ -51,9 +51,7 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
   const known = new Map(plan.zones.map(z => [z.id, z]));
   const resident = new Map(), pending = new Map(), retries = new Map();
   const photoSources = new Map();
-  const earlySources=new WeakMap();
-  let sharedHits=0,fullDetailMaps=0,firstRoom=true,detailWorkers=0;
-  const promotionQueue=new Set();
+  let sharedHits=0,firstRoom=true;
   const anisotropy = Math.min(lite ? 4 : 8, renderer.capabilities.getMaxAnisotropy());
   let disposed = false, streamClock = 0;
   const direction=new THREE.Vector3(),doorController = new AbortController(), doors=createDoors(scene,walker,ctx,camera,play);
@@ -65,7 +63,6 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
   });
   hardware.catch(()=>{});
   function release(zone) {
-    zone.released=true;clearTimeout(zone.promotionTimer);zone.lightController?.abort();
     zone.releaseHousings?.();
     zone.originalMaterials?.forEach(m => m.dispose());
     disposeGroup(zone.view); disposeGroup(zone.collider);
@@ -77,7 +74,6 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
     for (const [uri,entry] of zone.sources) {
       if (--entry.references) continue;
       photoSources.delete(uri);
-      promotionQueue.delete(entry);
       entry.controller.abort(); entry.source?.data?.close?.();
     }
     zone.sources.clear();
@@ -86,82 +82,21 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
     const response=await request(name,signal);
     return createImageBitmap(await response.blob(),{colorSpaceConversion:'none',premultiplyAlpha:'none'});
   }
-  function useCurrentSource(texture){
-    const entry=earlySources.get(texture.source);
-    if(!entry)return;
-    if(texture.source!==entry.source){
-      // WebGL immutable storage keeps its initial dimensions until the old allocation is released.
-      texture.dispose();texture.source=entry.source;texture.needsUpdate=true;
-    }else if(entry.preview)entry.users.add(texture);
-  }
-  function sharpenSurfaces(entries){
-    for(const entry of entries)if(entry.preview&&!entry.upgrading)promotionQueue.add(entry);
-    async function worker(){
-      detailWorkers++;
-      while(promotionQueue.size&&!disposed){
-        if(pending.size){
-          await new Promise(resolve=>setTimeout(resolve,100));
-          continue;
-        }
-        const entry=promotionQueue.values().next().value,signal=entry.controller.signal;
-        promotionQueue.delete(entry);entry.upgrading=true;
-        if(signal.aborted)continue;
-        try{
-          const image=await pixels(entry.file,signal);
-          if(signal.aborted || disposed){image.close();continue;}
-          const old=entry.source;entry.source=new THREE.Source(image);entry.preview=false;
-          for(const texture of entry.users)useCurrentSource(texture);
-          entry.users.clear();old.data.close();fullDetailMaps++;
-        }catch(error){if(!signal.aborted&&!disposed)report(error);}
-        finally{entry.upgrading=false;}
-      }
-      detailWorkers--;
-    }
-    while(detailWorkers<2&&promotionQueue.size)void worker();
-  }
-  function promote(zone){
-    if(lite||!zone||zone.promoted)return;
-    zone.promoted=true;
-    zone.promotionTimer=setTimeout(()=>{
-      if(zone.released)return;
-      if(!zone.entrance&&walker.zone!==zone.id){zone.promoted=false;return;}
-      void sharpenLighting(zone);sharpenSurfaces(zone.sources.values());
-    },zone.entrance?250:650);
-  }
-  async function sharpenLighting(zone){
-    if(!zone.previewLight||zone.released)return;
-    const controller=zone.lightController=new AbortController();
-    try{
-      const full=await pixels(roomAsset(zone.definition,'-light.webp'),controller.signal);
-      if(disposed||controller.signal.aborted){full.close();return;}
-      const previous=zone.light.image;
-      zone.light.dispose();zone.light.image=full;zone.light.needsUpdate=true;
-      zone.images[zone.images.indexOf(previous)]=full;
-      previous.close();fullDetailMaps++;
-    }catch(error){if(!controller.signal.aborted&&!disposed)report(error);}
-    finally{zone.previewLight=false;}
-  }
   function zoneLoader(zone,signal) {
     const manager=new THREE.LoadingManager();
     // The exporter gives each shared PBR image its immutable content hash. Reuse its decoded pixels
     // and GPU Source across GLBs, while the glTF loader still owns UV channels and sampler settings.
-    manager.addHandler(/^textures\/[a-f0-9]+(?:-mobile)?\.webp$/,{
+    manager.addHandler(/^textures\/[a-f0-9]+\.webp$/,{
       load(uri,done,_progress,fail) {
         if(signal.aborted){fail(new DOMException('Visit ended','AbortError'));return;}
-        if(zone.mobileTransfer)uri=url(phoneMap(uri.slice(url('').length),zone.definition));
         let entry=photoSources.get(uri);
         if (!entry) {
           const relative=uri.slice(url('').length);
-          const file=zone.entrance?firstSurfaceMap(relative):zone.details?.has(relative)?relative.replace(/\.webp$/,'-mobile.webp'):relative;
-          entry={references:0,source:null,controller:new AbortController(),file:relative,preview:file!==relative};
+          entry={references:0,source:null,controller:new AbortController()};
           const item=entry;
-          item.promise=pixels(file,item.controller.signal).catch(error=>{
-            if(!item.preview||item.controller.signal.aborted)throw error;
-            item.preview=false;return pixels(relative,item.controller.signal);
-          }).then(bitmap=>{
+          item.promise=pixels(relative,item.controller.signal).then(bitmap=>{
             if(item.controller.signal.aborted){bitmap.close();throw new DOMException('Visit ended','AbortError');}
             item.source=new THREE.Source(bitmap);
-            if(item.preview){item.users=new Set();earlySources.set(item.source,item);}
           });
           photoSources.set(uri,item);
         } else sharedHits++;
@@ -185,22 +120,21 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
       }
     });
     const nextFrame=()=>new Promise(resolve=>document.hidden?setTimeout(resolve,20):requestAnimationFrame(resolve));
-    // Upload a few maps between frames while the closed doors still cover this room.
-    let started=performance.now(),count=0;
+    // One large full-resolution map can fill a frame's upload budget by itself.
+    let started=performance.now(),count=0,pixels=0;
     for(const texture of maps){
       if(signal.aborted||disposed)throw new DOMException('Visit ended','AbortError');
       renderer.initTexture(texture);
-      if(++count>=8||performance.now()-started>3){
-        await nextFrame();started=performance.now();count=0;
+      pixels+=(texture.image?.width||0)*(texture.image?.height||0);
+      if(++count>=8||pixels>=512*1024||performance.now()-started>2){
+        await nextFrame();started=performance.now();count=0;pixels=0;
       }
     }
     await compileRoom(zone.view,camera,scene);
   }
   async function load(def, controller) {
     const { id } = def, zone = { id, images: [], originalMaterials: new Set(),sources:new Map(),entrance:firstRoom&&id===plan.start.id };
-    const primary=viewFile(def,lite);
-    zone.definition=def;zone.mobileTransfer=lite&&primary===def.arrivalGzip;
-    zone.previewLight=!lite&&!!def.mobileFile;
+    const primary=viewFile(def);
     const { signal } = controller;
     const loader=zoneLoader(zone,signal);
     signal.addEventListener('abort',()=>releaseSources(zone),{once:true});
@@ -217,11 +151,7 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
       try{data=await bytes(primary);}
       catch(error){
         if(primary!==def.arrivalGzip||signal.aborted)throw error;
-        data=await bytes((lite&&def.mobileFile)||def.file||id+'.glb');
-      }
-      if(!lite&&!zone.entrance&&def.mobileFile){
-        const length=new DataView(data).getUint32(12,true);
-        zone.details=surfaceDetails(JSON.parse(new TextDecoder().decode(new Uint8Array(data,20,length))));
+        data=await bytes(def.file||id+'.glb');
       }
       return parse(data);
     }
@@ -229,7 +159,7 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
       hardware,
       view().then(group => { zone.view = group; }),
       bytes(def.collision||roomAsset(def,'-collision.glb')).then(parse).then(group=>{zone.collider=group;}),
-      image(roomAsset(def,lite||zone.previewLight ? '-light-mobile.webp' : '-light.webp')).then(img => {
+      image(roomAsset(def,'-light.webp')).then(img => {
         const light = zone.light = new THREE.Texture(img);
         light.channel = 1; light.flipY = false; light.colorSpace = THREE.SRGBColorSpace;
         light.generateMipmaps = true; light.minFilter = THREE.LinearMipmapLinearFilter; light.needsUpdate = true;
@@ -255,7 +185,7 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
         if (!mesh.isMesh) return;
         const apply = m => {
           for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap']) {
-            if (m[key]) {useCurrentSource(m[key]);m[key].anisotropy=anisotropy;}
+            if (m[key]) m[key].anisotropy=anisotropy;
           }
           if (!m.isMeshStandardMaterial) return m;
           if (m.alphaTest>0 && (m.name==='garden_fern' || m.name==='garden_calathea')) {
@@ -303,7 +233,7 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
       doors.mount(id,zone);
       exhibits.mount?.(id, zone.view);
       zone.releaseHousings=batchArchiveHousings(zone.view);
-      if(zone.entrance){firstRoom=false;promote(zone);}
+      if(zone.entrance)firstRoom=false;
       return zone;
     } catch (error) {
       if (resident.get(id) === zone) {
@@ -340,7 +270,6 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
     streamClock += dt;
     if (streamClock < .18) return;
     streamClock = 0;
-    promote(resident.get(walker.zone));
     camera?.getWorldDirection(direction);
     let next = null, score = Infinity;
     const now=performance.now();
@@ -369,10 +298,10 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
     });
   }
   return { ensure, stream, resident, visibility, doors:doors.debug,registerDoorLeaf:doors.registerLeaf,
-    textureStats:()=>({residentSources:photoSources.size,sharedHits,fullDetailMaps,pendingDetailMaps:[...(resident.get(walker.zone)?.sources.values()||[])].filter(e=>e.preview).length+Number(!!resident.get(walker.zone)?.previewLight),
+    textureStats:()=>({residentSources:photoSources.size,sharedHits,fullDetailMaps:[...photoSources.values()].filter(e=>e.source).length,pendingDetailMaps:0,
       decodedBytes:[...photoSources.values()].reduce((n,e)=>n+(e.source?e.source.data.width*e.source.data.height*4:0),0)}),
     dispose() {
-    promotionQueue.clear();clearEntrance();doorController.abort();geometryDecoder.dispose();
+    clearEntrance();doorController.abort();geometryDecoder.dispose();
     disposed = true;
     for (const { controller } of pending.values()) controller.abort();
     for (const id of resident.keys()) unload(id);

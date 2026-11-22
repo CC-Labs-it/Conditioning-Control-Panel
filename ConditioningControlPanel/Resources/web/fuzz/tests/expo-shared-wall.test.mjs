@@ -9,9 +9,9 @@ const plan = JSON.parse(await readFile(new URL('zones.json', assets)));
 await MeshoptDecoder.ready;
 
 // Inspect the shipped architecture with its actual normalized coordinates and indices.
-async function architecture(room, field, finish) {
+async function architecture(room, finish) {
   const def = plan.zones.find(zone => zone.id === room);
-  const file = await readFile(new URL(def[field], assets));
+  const file = await readFile(new URL(def.file, assets));
   const jsonSize = file.readUInt32LE(12);
   const model = JSON.parse(file.toString('utf8', 20, 20 + jsonSize));
   const binary = file.subarray(28 + jsonSize);
@@ -38,22 +38,20 @@ async function architecture(room, field, finish) {
   return new Mesh(geometry, new MeshBasicMaterial({side:DoubleSide}));
 }
 
-for (const field of ['file', 'mobileFile']) {
-  test('the atrium keeps its own plaster when the adjoining Hall loads in ' + field, async () => {
-    const [wall, backing, truss] = await Promise.all([
-      architecture('atrium', field, 'pale_shell'), architecture('hall', field, 'pale_shell'), architecture('hall', field, 'alloy')
-    ]);
-    const ray = new Raycaster();
-    function front(mesh, x, y) {
-      ray.set(new Vector3(x, y, 16.4), new Vector3(0, 0, -1));
-      const hit = ray.intersectObject(mesh)[0];
-      assert.ok(hit, 'Missing surface at ' + [x, y]);
-      return hit.point.z;
-    }
-    // Two wall panels, the infill above the main doors, and both mezzanine brackets.
-    for (const [x,y,behind] of [[-2.12,2.84,backing], [-1.42,3.13,backing], [0,3.35,backing],
-      [1.4,3.25,backing], [2.1,2.85,backing], [-11.06,5.63,truss], [11.06,5.63,truss]]) {
-      assert.ok(front(wall,x,y) - front(behind,x,y) > .02, 'Shared-wall interference at ' + [x,y]);
-    }
-  });
-}
+test('the atrium keeps its own plaster when the adjoining Hall loads', async () => {
+  const [wall, backing, truss] = await Promise.all([
+    architecture('atrium', 'pale_shell'), architecture('hall', 'pale_shell'), architecture('hall', 'alloy')
+  ]);
+  const ray = new Raycaster();
+  function front(mesh, x, y) {
+    ray.set(new Vector3(x, y, 16.4), new Vector3(0, 0, -1));
+    const hit = ray.intersectObject(mesh)[0];
+    assert.ok(hit, 'Missing surface at ' + [x, y]);
+    return hit.point.z;
+  }
+  // Two wall panels, the infill above the main doors, and both mezzanine brackets.
+  for (const [x,y,behind] of [[-2.12,2.84,backing], [-1.42,3.13,backing], [0,3.35,backing],
+    [1.4,3.25,backing], [2.1,2.85,backing], [-11.06,5.63,truss], [11.06,5.63,truss]]) {
+    assert.ok(front(wall,x,y) - front(behind,x,y) > .02, 'Shared-wall interference at ' + [x,y]);
+  }
+});
