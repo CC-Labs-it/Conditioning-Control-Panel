@@ -52,6 +52,9 @@ export const NUDGE_LINKS = Object.freeze({
 
 /** Save carry (CONTRACT.md 6.3): the page never offers more than this, and a host never sends more. */
 export const SAVE_CARRY_MAX_BYTES = 512000;
+/** The save parser reads at most this many characters (sim/save.js parse; the test pins the two together). A real
+ *  late-game save is about 27,000. */
+export const SAVE_CARRY_MAX_CHARS = 400000;
 export const SAVE_FROM = Object.freeze(['web', 'desktop']);
 export const SAVE_RESULT_REASONS = Object.freeze(['sign-in', 'too-big', 'offline', 'refused', 'none']);
 

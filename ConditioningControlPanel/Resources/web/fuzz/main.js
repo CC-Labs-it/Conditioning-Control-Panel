@@ -27,7 +27,7 @@ import { loadPrestige, prestigeNow, openRenewal, openSky, SKY_CURRENCY } from '.
 import { applyLooks } from './sim/prestige-looks.js';
 import { canKeepPlaying as keepPlayingOk, keepPlaying as keepPlayingRun } from './sim/prestige-endings.js';   // Endless (onemore)
 import { sealedFor, showSeal } from './ui/seal.js';
-import { setEdition, expoArrived, editionState, renewalAllowed } from './ui/edition.js';
+import { setEdition, expoArrived, editionState, renewalAllowed, sendNudge } from './ui/edition.js';
 import { mountLlamaPen } from './ui/llama-pen.js';
 import { mountHomeTip } from './ui/phone.js';
 import { previewBarAllowed } from './ui/preview-bar-model.js';
@@ -85,8 +85,15 @@ try { preferenceStorage = window.localStorage; } catch { preferenceStorage = mem
 bridge.on('expo-ready', (frame) => { expoArrived(frame?.base); });
 bridge.boot({ onInit: (init) => {
   /* Small or full (ui/edition.js): read once here, before anything draws. */
-  setEdition(init, { hostname: location.hostname, search: location.search, hosted: bridge.isHosted });
-  return sealedFor(init, Date.now(), location.hostname, qs.get('seal') === '1') ? showSeal(document) : start(init);
+  const ed = setEdition(init, { hostname: location.hostname, search: location.search, hosted: bridge.isHosted });
+  if (!sealedFor(init, Date.now(), location.hostname, qs.get('seal') === '1', ed)) return start(init);
+  /* Sealed: only the notice. In the app its one button asks the host for the plan card, and the window still closes
+   * cleanly (the game never started, so nothing else answers the host's close). */
+  bridge.on('close', () => bridge.send('exit-done'));
+  return showSeal(document, {
+    desktop: ed.platform === 'desktop',
+    onPlans: (ev) => sendNudge('locked-tile', { inPress: () => !!ev?.isTrusted, send: bridge.send, ed }),
+  });
 } });
 
 function start(init) {

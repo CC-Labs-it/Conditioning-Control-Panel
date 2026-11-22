@@ -133,8 +133,12 @@ ONE reader of the host's choice. Plan and lanes: `handoff-1122/TC-EDITIONS-PLAN.
   says full only for an account it has checked (any subscriber, Basic or Prime). The website always says small.
 - A page on 127.0.0.1 or localhost with no host is the whole game, so dev drives and the Expo preview keep working;
   `?edition=small` or `?edition=full` wins over everything there and is ignored everywhere else.
-- `init.caps.platform`: `'web'` or `'desktop'` (missing = web). It picks the nudge, and a desktop host is never sealed
-  (`ui/seal.js` is the website's rule; the app checks the account itself).
+- `init.caps.platform`: `'web'` or `'desktop'` (missing = web). It picks the nudge and the seal rule.
+- The seal until 22 December (`ui/seal.js`, owner 2026-11-22): on the website only Prime plays, as before. In the
+  desktop app the edition decides: full (any subscriber) plays now, small (a free account) sees the sealed notice
+  until the anniversary, worded for subscribers, with one button that sends `nudge {where:'locked-tile', want:'upgrade'}`.
+  The host needs no date check. A sealed page still answers the host's `close` with `exit-done`.
+- Signed in = the host sent an `identity` object at all; a fresh account with no display name is still signed in.
 
 ### 6.2 Nudges (page -> host)
 
@@ -153,7 +157,7 @@ Sparkles.
 
 | direction | type | fields | meaning |
 |---|---|---|---|
-| page -> host | `save-offer` | `save` | The whole save string, from the player's press. Never more than 512,000 bytes. |
+| page -> host | `save-offer` | `save` | The whole save string, from the player's press. Never more than 400,000 characters (the save parser's own limit, so a slot never keeps a save the page cannot read back) and never more than 512,000 bytes. A real late-game save is about 27,000. |
 | page -> host | `save-ask` | | "Is there a save for me?", from the player's press. |
 | host -> page | `save-result` | `ok, reason?` | `reason`: `sign-in`, `too-big`, `offline`, `refused`, `none`. |
 | host -> page | `save-incoming` | `save, savedAt, from` | Only as the answer to `save-ask`. `savedAt` epoch ms; `from`: `web` or `desktop`. |

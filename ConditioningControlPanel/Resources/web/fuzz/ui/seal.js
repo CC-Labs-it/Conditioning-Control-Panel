@@ -14,11 +14,13 @@ export const SEAL_PRIME_URL = 'https://app.cclabs.app/subscribe?plan=prime';
 const LOCAL = new Set(['127.0.0.1', 'localhost']);
 
 /** True when this page must show the notice instead of the game. `force` is the local preview's own switch. */
-export function sealedFor(init, nowMs, hostname = '', force = false) {
+export function sealedFor(init, nowMs, hostname = '', force = false, ed = null) {
   if (!(nowMs < SEAL_OPEN_AT_MS)) return false;
   if (LOCAL.has(hostname)) return force === true;
-  /* The seal is the website's rule. The desktop app checks the account itself and picks the edition (ui/edition.js). */
-  if (init?.caps?.platform === 'desktop') return false;
+  /* The desktop app checks the account itself and picks the edition (`ed`, the reading from ui/edition.js). There any
+   * subscriber plays the full game now; a free account gets the small edition, and that one opens with everyone else
+   * on the anniversary (owner 2026-11-22). No reading = sealed. */
+  if (init?.caps?.platform === 'desktop') return ed?.edition !== 'full';
   return init?.caps?.plan !== 'prime';
 }
 
@@ -30,8 +32,31 @@ export function sealCountdown(nowMs) {
 
 const two = (n) => String(n).padStart(2, '0');
 
-/** Put the notice on the page. Returns a function that takes it down. When the clock runs out the page reloads. */
-export function showSeal(doc, { now = () => Date.now(), reload = () => doc.defaultView?.location.reload() } = {}) {
+/** The notice as markup. On the website it names Prime and links to the site. Inside the desktop app any subscriber
+ *  already has the full game, so it says subscribers and has one button that asks the host for the plan card. */
+export function sealMarkup(desktop = false) {
+  const who = desktop ? 'subscribers' : 'Prime members';
+  const btns = desktop
+    ? '<a class="seal-go" href="#" role="button" data-seal="plans">See plans</a>'
+    : `<a class="seal-go" href="${SEAL_HOST_URL}" target="_top" rel="noopener">I have Prime</a>`
+      + `<a class="seal-link" href="${SEAL_PRIME_URL}" target="_top" rel="noopener">Get Prime</a>`;
+  return '<div class="win small" role="dialog" aria-modal="true" aria-labelledby="seal-h">'
+    + '<div class="tbar"><span>Terms &amp; Conditioning - Notice</span><button class="fakex" type="button" disabled aria-hidden="true">&#215;</button></div>'
+    + '<div class="body">'
+    + '<h1 id="seal-h">These terms are sealed.</h1>'
+    + `<p class="intro">They open to everyone on <b>22 December</b>. Until then the contents are <span class="bar">withheld from the public</span> and may be read by ${who} only.</p>`
+    + '<div class="seal-paper" aria-hidden="true"><i style="width:94%"></i><i style="width:81%"></i><i style="width:88%"></i><i style="width:47%"></i><span class="seal-stamp">SEALED</span></div>'
+    + '<div class="seal-clock" role="timer" aria-label="Time until 22 December">'
+    + '<div><b data-u="days">--</b><span>days</span></div><div><b data-u="hours">--</b><span>hours</span></div>'
+    + '<div><b data-u="minutes">--</b><span>min</span></div><div><b data-u="seconds">--</b><span>sec</span></div></div>'
+    + `<div class="foot"><div class="btns">${btns}`
+    + '</div><p class="seal-fine">Anything you already agreed to on this device is kept.</p></div>'
+    + '</div></div>';
+}
+
+/** Put the notice on the page. Returns a function that takes it down. When the clock runs out the page reloads.
+ *  `desktop`: the app's wording; `onPlans(ev)` runs on its one button (the caller sends the nudge from that press). */
+export function showSeal(doc, { now = () => Date.now(), reload = () => doc.defaultView?.location.reload(), desktop = false, onPlans = null } = {}) {
   const link = doc.createElement('link');
   link.rel = 'stylesheet';
   link.href = 'ui/seal.css';
@@ -42,21 +67,9 @@ export function showSeal(doc, { now = () => Date.now(), reload = () => doc.defau
 
   const root = doc.createElement('div');
   root.className = 'tc seal';
-  root.innerHTML = '<div class="win small" role="dialog" aria-modal="true" aria-labelledby="seal-h">'
-    + '<div class="tbar"><span>Terms &amp; Conditioning - Notice</span><button class="fakex" type="button" disabled aria-hidden="true">&#215;</button></div>'
-    + '<div class="body">'
-    + '<h1 id="seal-h">These terms are sealed.</h1>'
-    + '<p class="intro">They open to everyone on <b>22 December</b>. Until then the contents are <span class="bar">withheld from the public</span> and may be read by Prime members only.</p>'
-    + '<div class="seal-paper" aria-hidden="true"><i style="width:94%"></i><i style="width:81%"></i><i style="width:88%"></i><i style="width:47%"></i><span class="seal-stamp">SEALED</span></div>'
-    + '<div class="seal-clock" role="timer" aria-label="Time until 22 December">'
-    + '<div><b data-u="days">--</b><span>days</span></div><div><b data-u="hours">--</b><span>hours</span></div>'
-    + '<div><b data-u="minutes">--</b><span>min</span></div><div><b data-u="seconds">--</b><span>sec</span></div></div>'
-    + '<div class="foot"><div class="btns">'
-    + `<a class="seal-go" href="${SEAL_HOST_URL}" target="_top" rel="noopener">I have Prime</a>`
-    + `<a class="seal-link" href="${SEAL_PRIME_URL}" target="_top" rel="noopener">Get Prime</a>`
-    + '</div><p class="seal-fine">Anything you already agreed to on this device is kept.</p></div>'
-    + '</div></div>';
+  root.innerHTML = sealMarkup(desktop);
   doc.body.appendChild(root);
+  root.querySelector?.('[data-seal="plans"]')?.addEventListener('click', (ev) => { ev.preventDefault?.(); onPlans?.(ev); });
 
   const cells = {};
   for (const b of root.querySelectorAll('[data-u]')) cells[b.dataset.u] = b;

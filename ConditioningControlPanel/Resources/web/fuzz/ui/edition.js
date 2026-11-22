@@ -13,7 +13,7 @@
 
 import { BY_ID } from '../data/items.js';
 import {
-  SMALL_CUT_IDS, SMALL_REQ, PHONE_CAPS, NUDGE_WHERE, NUDGE_LINKS, SAVE_CARRY_MAX_BYTES, SAVE_FROM,
+  SMALL_CUT_IDS, SMALL_REQ, PHONE_CAPS, NUDGE_WHERE, NUDGE_LINKS, SAVE_CARRY_MAX_BYTES, SAVE_CARRY_MAX_CHARS, SAVE_FROM,
   TRANSMISSION_AT_LLAMAS, EXPO_DEFAULT_BASE,
 } from '../data/editions.js';
 import { allowedLink, openAllowedLink } from './links.js';
@@ -54,14 +54,15 @@ export function readEdition(init, { hostname = '', search = '', hosted = false, 
   }
   const edition = asked === 'full' ? 'full' : 'small';
   const platform = caps.platform === 'desktop' ? 'desktop' : 'web';
-  const name = init?.identity?.displayName;
+  /* Signed in = the host sent an identity at all. A fresh account has no display name yet and is still signed in. */
+  const identity = init?.identity;
   /* The files sit in the tree only where nobody staged them away: a local page or a tool. */
   const localWhole = (local || noPage) && !(hosted && platform === 'desktop');
   return Object.freeze({
     edition,
     platform,
     hosted: !!hosted,
-    signedIn: !!hosted && typeof name === 'string' && name.trim() !== '',
+    signedIn: !!hosted && !!identity && typeof identity === 'object',
     saveSlot: !!hosted && caps.saveSlot === true,
     expo: readExpo(caps, edition, platform, localWhole),
   });
@@ -148,9 +149,10 @@ export function sendNudge(where, { inPress = () => false, send = () => {}, win =
 }
 
 const bytes = (s) => new TextEncoder().encode(s).length;
-/** A save string fit to travel: a string, within the cap, JSON with a numeric v. */
+/** A save string fit to travel: a string, within both caps, JSON with a numeric v. The character cap is the save
+ *  parser's own limit (sim/save.js parse): a slot must never keep a save this page could not read back. */
 export function saveFits(save) {
-  if (typeof save !== 'string' || save === '' || bytes(save) > SAVE_CARRY_MAX_BYTES) return false;
+  if (typeof save !== 'string' || save === '' || save.length > SAVE_CARRY_MAX_CHARS || bytes(save) > SAVE_CARRY_MAX_BYTES) return false;
   try { return typeof JSON.parse(save)?.v === 'number'; } catch { return false; }
 }
 /** The `save-offer` fields for this save, or null when it may not travel. Only ever sent from a player's press. */

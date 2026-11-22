@@ -4,12 +4,13 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { ITEMS, BY_ID } from '../data/items.js';
 import {
   EDITIONS, SMALL_CUT, SMALL_CUT_IDS, SMALL_REQ, PHONE_CAPS, NUDGE_WHERE, NUDGE_WANT, NUDGE_LINKS,
-  SAVE_CARRY_MAX_BYTES, SAVE_FROM, SAVE_RESULT_REASONS, TRANSMISSION_AT_LLAMAS, EXPO_FAIL_REASONS, EXPO_DEFAULT_BASE,
+  SAVE_CARRY_MAX_BYTES, SAVE_CARRY_MAX_CHARS, SAVE_FROM, SAVE_RESULT_REASONS, TRANSMISSION_AT_LLAMAS, EXPO_FAIL_REASONS, EXPO_DEFAULT_BASE,
 } from '../data/editions.js';
+import * as Save from '../sim/save.js';
 import * as Ed from '../ui/edition.js';
 import { allowedLink, DESKTOP_URL } from '../ui/links.js';
 import { PHONE_QUERY } from '../ui/phone.js';
-import { sealedFor, SEAL_OPEN_AT_MS } from '../ui/seal.js';
+import { sealedFor, sealMarkup, SEAL_OPEN_AT_MS } from '../ui/seal.js';
 
 const PUBLIC = 'tc.cclabs.app';
 const hosted = (caps, extra = {}, hostname = PUBLIC, search = '') => Ed.readEdition({ protocol: 1, caps, ...extra }, { hostname, search, hosted: true });
@@ -116,7 +117,11 @@ test('platform, sign-in and the save slot come only from a host', () => {
   assert.equal(hosted({ platform: 'desktop' }).platform, 'desktop');
   assert.equal(hosted({ platform: 'phone' }).platform, 'web');
   assert.equal(hosted({}, { identity: { displayName: ' Sam ' } }).signedIn, true);
-  assert.equal(hosted({}, { identity: { displayName: '  ' } }).signedIn, false);
+  assert.equal(hosted({}, { identity: { displayName: '' } }).signedIn, true, 'a fresh account has no name yet and is still signed in');
+  assert.equal(hosted({}, { identity: {} }).signedIn, true);
+  assert.equal(hosted({}, { identity: null }).signedIn, false);
+  assert.equal(hosted({}, { identity: 'Sam' }).signedIn, false);
+  assert.equal(hosted({}).signedIn, false);
   assert.equal(hosted({ saveSlot: true }).saveSlot, true);
   assert.equal(hosted({ saveSlot: 'yes' }).saveSlot, false);
   const alone = Ed.readEdition({ caps: { saveSlot: true, platform: 'desktop' }, identity: { displayName: 'Sam' } }, { hostname: PUBLIC, hosted: false });
@@ -240,11 +245,20 @@ test('save carry: one string, capped, checked both ways', () => {
   const save = JSON.stringify({ v: 2, run: null, life: {}, extras: {} });
   assert.deepEqual(Ed.saveOfferFrame(save), { save });
   for (const bad of ['', 'not json', '{"run":1}', '{"v":"2"}', 'null', 7, null, undefined, { v: 2 }]) assert.equal(Ed.saveOfferFrame(bad), null, String(bad));
-  const pad = (n) => JSON.stringify({ v: 2, pad: 'x'.repeat(n) });
-  const overhead = pad(0).length;
-  assert.ok(Ed.saveFits(pad(SAVE_CARRY_MAX_BYTES - overhead)), 'exactly at the cap');
-  assert.equal(Ed.saveFits(pad(SAVE_CARRY_MAX_BYTES - overhead + 1)), false, 'one byte over');
-  assert.equal(Ed.saveFits(JSON.stringify({ v: 2, pad: '\u00e9'.repeat(SAVE_CARRY_MAX_BYTES / 2) })), false, 'the cap counts bytes, not characters');
+  /* The byte cap bites on a save full of wide characters (two bytes each), well under the character cap. */
+  const wide = (n) => JSON.stringify({ v: 2, pad: '\u00e9'.repeat(n) });
+  const overhead = wide(0).length;
+  assert.ok(Ed.saveFits(wide((SAVE_CARRY_MAX_BYTES - overhead) / 2)), 'exactly at the byte cap');
+  assert.equal(Ed.saveFits(wide((SAVE_CARRY_MAX_BYTES - overhead) / 2 + 1)), false, 'the cap counts bytes, not characters');
+  /* The slot never keeps a save the parser would refuse: the character cap IS the parser's limit. */
+  assert.equal(SAVE_CARRY_MAX_CHARS, 400000);
+  const real = (n) => { const base = JSON.stringify({ v: 2, run: null, life: {}, extras: { pad: '' } }); return JSON.stringify({ v: 2, run: null, life: {}, extras: { pad: 'x'.repeat(n - base.length) } }); };
+  const atLimit = real(SAVE_CARRY_MAX_CHARS), over = real(SAVE_CARRY_MAX_CHARS + 1);
+  assert.equal(atLimit.length, SAVE_CARRY_MAX_CHARS);
+  assert.ok(Save.parse(atLimit), 'the parser reads a save at the limit');
+  assert.equal(Save.parse(over), null, 'and refuses one character more');
+  assert.equal(Ed.saveFits(atLimit), true);
+  assert.equal(Ed.saveFits(over), false);
   const ok = { type: 'save-incoming', save, savedAt: 1795000000000, from: 'web' };
   assert.deepEqual(Ed.readSaveIncoming(ok), { save, savedAt: 1795000000000, from: 'web' });
   for (const bad of [null, {}, { ...ok, from: 'phone' }, { ...ok, savedAt: '1795000000000' }, { ...ok, savedAt: 0 }, { ...ok, save: 'x' }, { ...ok, save: undefined }]) {
@@ -252,12 +266,38 @@ test('save carry: one string, capped, checked both ways', () => {
   }
 });
 
-test('the seal is the website rule: a desktop host is never sealed, the web still is', () => {
+test('the seal in the app: a subscriber plays the full game now, a free account waits for the 22nd with everyone', () => {
   const before = SEAL_OPEN_AT_MS - 1;
-  assert.equal(sealedFor({ protocol: 1, caps: { platform: 'desktop', edition: 'small' } }, before, 'ccp.game'), false);
-  assert.equal(sealedFor({ protocol: 1, caps: { platform: 'desktop', edition: 'full' } }, before, 'ccp.game'), false);
-  assert.equal(sealedFor({ protocol: 1, caps: { platform: 'web', edition: 'small', plan: 'basic' } }, before, PUBLIC), true);
+  const deskInit = (edition) => ({ protocol: 1, caps: { platform: 'desktop', edition } });
+  const reading = (edition) => Ed.readEdition(deskInit(edition), { hostname: 'ccp.game', hosted: true });
+  assert.equal(sealedFor(deskInit('full'), before, 'ccp.game', false, reading('full')), false);
+  assert.equal(sealedFor(deskInit('small'), before, 'ccp.game', false, reading('small')), true);
+  assert.equal(sealedFor(deskInit('full'), before, 'ccp.game'), true, 'no reading handed over = sealed');
+  assert.equal(sealedFor(deskInit('small'), SEAL_OPEN_AT_MS, 'ccp.game', false, reading('small')), false, 'open from the anniversary');
+  assert.equal(sealedFor({ protocol: 1, caps: { platform: 'desktop', plan: 'prime' } }, before, 'ccp.game', false, reading(undefined)), true, 'the app goes by the edition, not by the plan field');
+  assert.equal(sealedFor({ protocol: 1, caps: { platform: 'web', plan: 'basic' } }, before, PUBLIC, false, small), true, 'the website still goes by Prime');
+  assert.equal(sealedFor({ protocol: 1, caps: { platform: 'web', plan: 'prime' } }, before, PUBLIC, false, small), false);
   assert.equal(sealedFor({ protocol: 1, hosted: false, caps: {} }, before, PUBLIC), true);
+});
+
+test('the sealed notice in the app says subscribers and has one button for the plan card; the website keeps its text', () => {
+  const web = sealMarkup(false), desk = sealMarkup(true);
+  assert.match(web, /may be read by Prime members only\./);
+  assert.match(web, /I have Prime/);
+  assert.match(web, /Get Prime/);
+  assert.equal(sealMarkup(), web);
+  assert.match(desk, /may be read by subscribers only\./);
+  assert.equal(/Prime/.test(desk), false, 'any subscriber has the full game in the app');
+  assert.match(desk, /data-seal="plans">See plans</);
+  assert.equal(/https?:/.test(desk), false, 'no link out of the app: the host opens the plan card');
+  for (const html of [web, desk]) assert.match(html, /They open to everyone on <b>22 December<\/b>\./);
+});
+
+test('main.js seals with the edition reading and sends the plan nudge from the notice button', () => {
+  const main = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
+  assert.ok(main.includes("sealedFor(init, Date.now(), location.hostname, qs.get('seal') === '1', ed)"));
+  assert.ok(main.includes("sendNudge('locked-tile', { inPress: () => !!ev?.isTrusted, send: bridge.send, ed })"));
+  assert.ok(main.includes("desktop: ed.platform === 'desktop'"));
 });
 
 test('main.js reads the edition once at boot, in front of the seal and the game', () => {
