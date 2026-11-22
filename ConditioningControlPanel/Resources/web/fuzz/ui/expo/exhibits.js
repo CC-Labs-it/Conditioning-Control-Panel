@@ -1,3 +1,4 @@
+import { narratorAwareness } from './awareness.js';
 import { livePanel, placard, runMonitor, terminal } from './display.js';
 import { createVisit } from './visit.js';
 import { createExhibitBeat } from './speech-sequence.js';
@@ -13,7 +14,7 @@ export function createExhibits(api) {
   const {THREE,ctx,camera,register,play,say,go,exit} = api;
   const state = createVisit(ctx), zones = new Map();
   let here = '', hudClock = 0, pending = [], stopShown = -20, returning = false, departureDone=false, disposed=false;
-  const cue = api.cue;
+  const cue = api.cue, awareness=narratorAwareness(state,cue);
   function once(id) {
     if (!state.heard.has(id)) cue(id,{kind:'ambient',onStart:()=>state.heard.add(id)});
   }
@@ -197,10 +198,10 @@ export function createExhibits(api) {
         g.font='40px Georgia,serif';g.fillText('no.',w/2,203);
         g.fillStyle='#113229';g.fillRect(62,233,w-124,225);
         g.fillStyle='#d6df9c';g.font='bold 180px Consolas,monospace';g.fillText(state.turnstile?'1':'0',w/2,417);
-        g.fillStyle='#e4dbc1';g.font='48px Georgia,serif';g.fillText('(today)',w/2,563);
+        g.fillStyle='#e4dbc1';g.font='48px Georgia,serif';g.fillText(ui.again?'(again)':'(today)',w/2,563);
       });
-      tally();
-      ui.count=()=>{if(state.turnstile)return;state.turnstile=true;state.ticket.issue();ui.turn=0;tally();play('turnstile');once('pa_turnstile');};
+      ui.tally=tally;tally();
+      ui.count=()=>{if(state.turnstile)return;state.turnstile=true;state.ticket.issue();ui.turn=0;tally();play('turnstile');cue('v4_ticket',{kind:'beat',zone:id,exhibit:'turnstile'});};
       ui.turnstile=bind('turnstile_arm','Pass the turnstile',ui.count);
       if(ui.turnstile){
         const arm=ui.turnstile,data=arm.userData;
@@ -232,7 +233,7 @@ export function createExhibits(api) {
     zones.get(here)?.ui.beat?.leave();
     const worn=zones.get('hoof')?.ui.worn;
     if(worn)for(const glove of worn)glove.visible=false;
-    here=id;
+    here=id;awareness.enter(id);
     if(hallCues[id])once(hallCues[id]);
     if(id==='twelve' && state.file.herd.length===12)later('pa_hall4_full',6);
     if(id==='atrium'&&!state.heard.has('pa_arrive_2'))later('pa_arrive_2',20);
@@ -240,7 +241,7 @@ export function createExhibits(api) {
   function tick(dt,id) {
     if(ctx.paused)return;
     if(returning&&departureDone){leave();return;}
-    hudClock+=dt;
+    hudClock+=dt;awareness.tick(dt,id,camera,api.actionSerial());
     if(hudClock>=900)once('pa_closing');
     pending=pending.filter(event=>{
       if(event.zone!==here)return false;
@@ -307,6 +308,10 @@ export function createExhibits(api) {
     if(id==='atrium' && ui.pivot){
       const z=camera.position.z;
       if(Math.abs(camera.position.x)<1.05 && camera.position.y<2.1 && ui.lastZ>=35.33 && z<=35.33)ui.count();
+      if(Math.abs(camera.position.x)<1.05 && camera.position.y<2.1 && state.turnstile && ui.lastZ<35.33 && z>=35.33){
+        state.ticket.book('unarrived','Un-arrived',true);cue('v4_wrong_way',{kind:'react',exhibit:'turnstile'});
+        ui.again=true;ui.tally?.();
+      }
       ui.lastZ=z;
       if(state.turnstile&&ui.turn<1){
         ui.turn=clamp(ui.turn+dt/.72);

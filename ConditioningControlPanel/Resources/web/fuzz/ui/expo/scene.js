@@ -136,12 +136,12 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       }
       return null;
     }
-    let pressedUntil = 0;
+    let pressedUntil = 0, actionSerial=0;
     function interact(point) {
       if (!ctx.paused && !doc.hidden && walker.stepOffPlanter()) { updatePrompt(); return true; }
       const target = targetAt(point);
       if (target) {
-        pressedUntil=elapsed+.19; aim.dataset.pressed=ctx.gentle||ctx.reduced?'gentle':'full';
+        actionSerial++;pressedUntil=elapsed+.19; aim.dataset.pressed=ctx.gentle||ctx.reduced?'gentle':'full';
         target.action.callback(target.hit);
       }
       return !!target;
@@ -208,7 +208,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
     narration.pause(waitingForEntrance || ctx.paused || doc.hidden);
     const instruments=createInstruments({ctx,camera,register,play:sound.play,meter:narration.meter,lite:LITE});
     const ambience=createAmbience({ctx,renderer,lite:LITE,meter:narration.meter});
-    exhibits = createExhibits({ THREE, ctx, camera, scene, root, say, cue:narration.cue, play: sound.play, setSoundDepth: sound.setDepth,
+    exhibits = createExhibits({ THREE, ctx, camera, scene, root, say, actionSerial:()=>actionSerial, cue:narration.cue, play: sound.play, setSoundDepth: sound.setDepth,
       go, exit: onExit, farewell, register, assetURL, bindMedia, capturePhoto, setColliderEnabled:walker.setColliderEnabled,
       setButtonAvailable:buttons.setAvailable,registerDoorLeaf:(...args)=>zones?.registerDoorLeaf(...args) });
     dome = createDomeEffects({ctx,camera,cue:narration.cue,play:sound.play,register,bindMedia,setSoundDepth:sound.setDepth,lite:LITE});

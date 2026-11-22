@@ -1,3 +1,4 @@
+import { renewalLines } from './renewal-lines.js';
 import { Ray, Vector3 } from 'three';
 import { centre, createProjector, createRestingAtlas } from './projectors.js';
 import { createSpeechSequence } from './speech-sequence.js';
@@ -31,7 +32,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
   sequence.pause(held);
   const load=fetch(assetURL('narration/manifest.json'),{signal:abort.signal}).then(async r=>{
     if(!r.ok)throw new Error('Expo narration manifest HTTP '+r.status);
-    const rows=await r.json();for(const row of rows)book.set(row.id,row);
+    const rows=await r.json();for(const row of [...rows,...renewalLines])book.set(row.id,row);
     story=createArchiveStory(rows,ctx.store.get('lastArchiveRecord'),(id,slots)=>{
       ctx.store.set('archiveScreens',slots);
       ctx.store.set('lastArchiveRecord',id);
