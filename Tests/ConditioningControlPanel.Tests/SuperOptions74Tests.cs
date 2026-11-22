@@ -56,10 +56,76 @@ public class SuperOptions74Tests
         p.Floor = WhirlpoolOptions.Floor(20);
         Move(p, 30);
         Assert.Equal(0.2, p.Size, 9);
-        Assert.True(p.Live);
-        // At rest it grows on to full as before.
+        // Held up by its floor it is drawn, but it does not act.
+        Assert.False(p.Live);
+        // At rest it grows on to full as before, and acts again once past its floor.
         Rest(p, 20);
         Assert.Equal(1, p.Size, 6);
+        Assert.True(p.Live);
+    }
+
+    /// <summary>Owner intent for #1719: "visible all the time", not "pulls all the time". A pool at
+    /// its floor pulls nothing, swirls no fog, eats nothing and takes no words.</summary>
+    [Theory]
+    [InlineData(6)]
+    [InlineData(20)]
+    [InlineData(35)]
+    [InlineData(50)]
+    public void A_pool_held_up_by_its_floor_draws_but_does_not_act(int smallest)
+    {
+        var stage = new SuperStage { PoolOn = true, MovingPops = true };
+        var p = stage.Pool;
+        p.Floor = WhirlpoolOptions.Floor(smallest);
+        Rest(p, 20);
+        Move(p, 30);
+        Assert.Equal(p.Floor, p.Size, 9);
+        Assert.True(p.Size > Whirlpool.LiveSize || smallest == 6);
+        Assert.False(p.Live);
+        Assert.False(stage.PoolLive);
+        Assert.False(stage.PoolTakesWords);
+        var pull = stage.Pull(p.X + 5, p.Y, 1, PullKind.Bubble);
+        Assert.False(pull.Inside);
+        Assert.False(pull.Eaten);
+        Assert.Equal(0, pull.Ax);
+        Assert.Equal(0, p.Pull(p.X, p.Y).Ax);
+        Assert.False(p.Pull(p.X, p.Y).Eaten);
+    }
+
+    [Fact]
+    public void With_no_floor_the_live_rule_is_the_shipped_one()
+    {
+        var p = new Whirlpool();
+        while (p.Size <= Whirlpool.LiveSize) p.Step(Dt, 500, 400, 0, 1, 1080);
+        Assert.True(p.Live);
+        Assert.True(p.Size < Whirlpool.LiveSize + 0.01);
+    }
+
+    [Fact]
+    public void A_pool_acts_once_it_grows_a_margin_past_its_floor()
+    {
+        var p = new Whirlpool { Floor = 0.3 };
+        Move(p, 30);
+        Assert.False(p.Live);
+        while (p.Size <= 0.3 + Whirlpool.FloorLiveMargin) p.Step(Dt, 500, 400, 0, 1, 1080);
+        Assert.True(p.Live);
+    }
+
+    /// <summary>Under a floor a restless pool that the mouse is feeding grows at its own (faster)
+    /// pace; the floor clamp only ever lifts the slow rest pace, never caps the faster growth.</summary>
+    [Fact]
+    public void Under_a_floor_a_restless_pool_keeps_its_faster_growth()
+    {
+        var floored = new Whirlpool { Restless = true, Floor = 0.4 };
+        var free = new Whirlpool { Restless = true };
+        Move(floored, 1);
+        Move(free, 1);
+        Assert.Equal(free.Size, floored.Size, 9);
+        Assert.True(floored.Size > 1.0 / Whirlpool.GrowSeconds * 2,
+            $"one second of movement grew it only to {floored.Size}, the rest pace");
+        // At rest under the floor it still climbs at the rest pace.
+        var resting = new Whirlpool { Restless = true, Floor = 0.4 };
+        Rest(resting, 1);
+        Assert.Equal(1.0 / Whirlpool.GrowSeconds, resting.Size, 2);
     }
 
     [Fact]
@@ -138,6 +204,22 @@ public class SuperOptions74Tests
         // Under the cursor both read the cursor.
         Assert.Equal((10.0, 20.0, 800.0), WhirlpoolOptions.Anchor(false, true, 10, 20, 800, 960, 540));
         Assert.Equal((10.0, 20.0, 800.0), WhirlpoolOptions.Anchor(false, false, 10, 20, 800, 960, 540));
+    }
+
+    // ---------------- Restless pool: clicks ----------------
+
+    [Fact]
+    public void A_click_is_one_kick_held_or_tapped_and_an_old_press_never_kicks()
+    {
+        // The first poll after a pause only clears the "pressed since" bit.
+        Assert.False(ConditioningControlPanel.Services.Super.SuperStageHost.ClickPressed(true, true, false, firstPoll: true));
+        // Rising edge of the held bit.
+        Assert.True(ConditioningControlPanel.Services.Super.SuperStageHost.ClickPressed(true, true, false, false));
+        // Still held: no second kick.
+        Assert.False(ConditioningControlPanel.Services.Super.SuperStageHost.ClickPressed(true, false, true, false));
+        // A tap shorter than one step: up again by the poll, but pressed since the last one.
+        Assert.True(ConditioningControlPanel.Services.Super.SuperStageHost.ClickPressed(false, true, false, false));
+        Assert.False(ConditioningControlPanel.Services.Super.SuperStageHost.ClickPressed(false, false, false, false));
     }
 
     // ---------------- Deck: fewest / most flips ----------------
