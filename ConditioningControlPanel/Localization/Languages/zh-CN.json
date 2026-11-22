@@ -3906,6 +3906,8 @@
   "quest_pink_immersion_w_desc": "使用粉色滤镜180分钟",
   "quest_marathon_trance_w_name": "马拉松恍惚",
   "quest_marathon_trance_w_desc": "观看90分钟视频",
+  "quest_video_counts_short": "仅限应用内视频，不含浏览器。",
+  "quest_video_counts_full": "计入应用播放的视频：强制视频（包括 Takeover 的）、悬浮视频和 Bubble Count 片段。浏览器中的视频不计入。",
   "quest_weekly_devotion_w_name": "每周忠诚",
   "quest_weekly_devotion_w_desc": "完成7个疗程",
   "quest_phrase_mastery_w_name": "短语精通",

@@ -3128,6 +3128,8 @@
   "quest_pink_immersion_w_desc": "Nutze den Rosa-Filter 180 Minuten",
   "quest_marathon_trance_w_name": "Marathon-Trance",
   "quest_marathon_trance_w_desc": "Schaue 90 Minuten Video",
+  "quest_video_counts_short": "Nur App-Videos, nicht der Browser.",
+  "quest_video_counts_full": "Zählt die Videos, die die App abspielt: Pflicht-Videos (auch die von Takeover), schwebende Videos und Bubble-Count-Clips. Videos im Browser zählen nicht.",
   "quest_weekly_devotion_w_name": "Wöchentliche Hingabe",
   "quest_weekly_devotion_w_desc": "Schließe 7 Sitzungen ab",
   "quest_phrase_mastery_w_name": "Phrasen-Meisterschaft",

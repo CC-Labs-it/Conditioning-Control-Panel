@@ -4331,6 +4331,8 @@
   "quest_pink_immersion_w_desc": "Use pink filter for 180 minutes",
   "quest_marathon_trance_w_name": "Marathon Trance",
   "quest_marathon_trance_w_desc": "Watch 90 minutes of video",
+  "quest_video_counts_short": "App videos only, not the browser.",
+  "quest_video_counts_full": "Counts the videos the app plays: mandatory videos (Takeover's too), floating videos and Bubble Count clips. Videos in the browser do not count.",
   "quest_weekly_devotion_w_name": "Weekly Devotion",
   "quest_weekly_devotion_w_desc": "Complete 7 sessions",
   "quest_phrase_mastery_w_name": "Phrase Mastery",

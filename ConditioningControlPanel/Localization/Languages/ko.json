@@ -3128,6 +3128,8 @@
   "quest_pink_immersion_w_desc": "핑크 필터 180분 사용",
   "quest_marathon_trance_w_name": "마라톤 트랜스",
   "quest_marathon_trance_w_desc": "영상 90분 시청",
+  "quest_video_counts_short": "앱 영상만, 브라우저는 제외.",
+  "quest_video_counts_full": "앱이 재생하는 영상이 집계돼요: 필수 영상(Takeover 포함), 플로팅 영상, Bubble Count 클립. 브라우저 영상은 집계되지 않아요.",
   "quest_weekly_devotion_w_name": "주간 헌신",
   "quest_weekly_devotion_w_desc": "세션 7회 완료",
   "quest_phrase_mastery_w_name": "문구 마스터리",

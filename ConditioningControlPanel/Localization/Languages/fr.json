@@ -3128,6 +3128,8 @@
   "quest_pink_immersion_w_desc": "Utilise le filtre rose pendant 180 minutes",
   "quest_marathon_trance_w_name": "Transe Marathon",
   "quest_marathon_trance_w_desc": "Regarde 90 minutes de vidéo",
+  "quest_video_counts_short": "Vidéos de l'app seulement, pas le navigateur.",
+  "quest_video_counts_full": "Compte les vidéos lues par l'app : Vidéos Obligatoires (celles de Takeover aussi), vidéos flottantes et clips de Bubble Count. Les vidéos du navigateur ne comptent pas.",
   "quest_weekly_devotion_w_name": "Dévotion Hebdomadaire",
   "quest_weekly_devotion_w_desc": "Termine 7 sessions",
   "quest_phrase_mastery_w_name": "Maîtrise des Phrases",

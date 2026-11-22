@@ -3128,6 +3128,8 @@
   "quest_pink_immersion_w_desc": "Используй розовый фильтр 180 минут",
   "quest_marathon_trance_w_name": "Марафон транса",
   "quest_marathon_trance_w_desc": "Посмотри 90 минут видео",
+  "quest_video_counts_short": "Только видео приложения, не браузера.",
+  "quest_video_counts_full": "Засчитываются видео, которые воспроизводит приложение: обязательные видео (и в Takeover), плавающие видео и клипы Bubble Count. Видео в браузере не засчитываются.",
   "quest_weekly_devotion_w_name": "Еженедельная преданность",
   "quest_weekly_devotion_w_desc": "Заверши 7 сессий",
   "quest_phrase_mastery_w_name": "Мастерство фраз",

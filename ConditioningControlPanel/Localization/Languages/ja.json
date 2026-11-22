@@ -3128,6 +3128,8 @@
   "quest_pink_immersion_w_desc": "ピンクフィルターを180分間使う",
   "quest_marathon_trance_w_name": "マラソントランス",
   "quest_marathon_trance_w_desc": "動画を90分間視聴する",
+  "quest_video_counts_short": "アプリの動画のみ。ブラウザは対象外。",
+  "quest_video_counts_full": "アプリが再生する動画がカウントされます: 強制動画 (Takeoverのものも)、フローティング動画、Bubble Countのクリップ。ブラウザの動画はカウントされません。",
   "quest_weekly_devotion_w_name": "ウィークリー献身",
   "quest_weekly_devotion_w_desc": "セッションを7回完了する",
   "quest_phrase_mastery_w_name": "フレーズマスタリー",
