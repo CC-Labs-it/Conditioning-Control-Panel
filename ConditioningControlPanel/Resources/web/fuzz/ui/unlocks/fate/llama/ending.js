@@ -129,7 +129,7 @@ export async function expoEnding(ctx, releaseWorld) {
         scene = visit;
         await Promise.race([scene.ready, done]);
         if (dead) break;
-        if (['localhost','127.0.0.1','[::1]'].includes(win.location.hostname)) win.__expo = scene;
+        if (['localhost','127.0.0.1','[::1]'].includes(win.location.hostname) || doc.documentElement.hasAttribute('data-dev-console')) win.__expo = scene;   // local previews, and a host's dev console (main.js armDevConsole)
         cover.remove();
         let off;
         const reveal = () => {
