@@ -27,6 +27,7 @@ this file disagree, this file wins until it is amended here first. Shape and hyg
 | `scrolller-niches` | `niches:[id]` | Ask for pictures for the feed panels (same wire as Glassroad CONTRACT 292-325). Ids are the eight theme niches `trance bimbo drone sissy goon chastity censored infection` (the Locked theme is sent as `chastity`): `[]` before Pick a Theme (the host's general hypno mix), `[theme]` after it, `[theme, second]` with a Second Theme. Sent again whenever that list changes (`fork`, `taste2`, a switch); a host serves only those niches' subs, an even mix for two, and treats an unknown id as the general mix. Sub index: handoff-1108/tc-scrolller-niches/index.json (cclabs-web `src/lib/tc-niches.ts`). |
 | `set-setting` | `key:'media.remoteConsent', value, ask:true` | Only from the player's own press on the consent card. |
 | `set-setting` | `key:'window.fullscreen', value: bool` | Section 3.3. The Options view's Full screen row, only to a host that sent `caps.window.fullscreen`. The host answers `setting` with what the window now is. |
+| `account` | | Section 3.3. The player pressed Account in Options: the host shows its own account page. Only to a host that sent `caps.account`. |
 | `own-media-list` | | Section 3.3. Once at start, only to a host that sent `caps.ownMedia.folder`: the files of the folder it remembers. Answered by `own-media`. |
 | `own-media-pick` | | Section 3.3. The player pressed the folder button: the host opens its own folder window. Answered by `own-media` with `asked:true`. |
 | `haptic` | `level, ms, tag?` | Optional toy pulse on crits and the Drop; hosts clamp. |
@@ -60,6 +61,7 @@ caps: {
   saveSlot: bool,              // section 6.3; the host keeps one save string for this account
   expo: { state: 'ready' | 'absent', base?: url, mb?: int },  // section 6.5; desktop and full only
   window: { fullscreen: bool },  // section 3.3; the host's window can go full screen, and is or is not right now
+  account: bool,               // section 3.3; the host has an account page of its own (sign in, sign out)
   ownMedia: { folder: bool, path?: string },  // section 3.3; the host keeps and serves the player's own folder
   dev: bool,                   // the hidden dev console (ui/preview-bar-model.js): only a host that prices nothing sends it (the standalone program); never the website, never the CCP app
 }
@@ -102,6 +104,8 @@ The pause card has an Options view (`ui/options.js`): Mute, Gentle visuals, Full
 row and the Expo's camera options. Two of its rows need the host. A host that sends neither capability gets neither
 row; the unframed page uses the browser's own full screen instead.
 
+- **Account.** A host with `caps.account` gets a row naming who is signed in (`identity.displayName`) and an Account
+  button; the press sends `account` and the host shows its own page. The game holds no token and signs nobody out.
 - **Full screen.** `caps.window.fullscreen` is the window's state at start. The row sends `set-setting` with key
   `window.fullscreen`; the host changes the window and answers `setting` with the same key and the state the window
   really has. A host whose window changes by another way (a key, a menu) sends the same `setting`.

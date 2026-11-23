@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { fullscreenRoute, folderHost, FULLSCREEN_KEY } from '../ui/options.js';
+import { fullscreenRoute, folderHost, accountHost, FULLSCREEN_KEY } from '../ui/options.js';
 import { createPictures, hostedFiles } from '../ui/pictures.js';
 import { pictureRow } from '../ui/picture-card.js';
 import { PICTURE_CARD } from '../data/content/terms.js';
@@ -27,6 +27,17 @@ test('the folder row belongs only to a host that keeps the folder', () => {
   assert.equal(folderHost({ ownMedia: { folder: true } }, false), false);
   assert.equal(folderHost({ ownMedia: {} }, true), false);
   assert.equal(folderHost({}, true), false);
+});
+
+test('the Account row belongs only to a host with an account page, and Main menu only to a build with a menu', () => {
+  assert.equal(accountHost({ account: true }, true), true);
+  assert.equal(accountHost({ account: true }, false), false);
+  assert.equal(accountHost({}, true), false);
+  const html = read('index.html');
+  assert.ok(html.includes('<button id="to-menu" type="button" hidden>Main menu</button>'), 'hidden until main.js hands a way back');
+  assert.ok(html.includes('id="account-row" hidden'));
+  const app = read('ui/app.js');
+  assert.ok(app.includes("$('to-menu').hidden = !toMenu || !!wakeGate;"));
 });
 
 test('a host row counts only on the page origin, and keeps the host reading of its kind', () => {

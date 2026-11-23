@@ -46,7 +46,7 @@
     <div class="card" role="dialog" aria-modal="true" aria-label="Paused">
       <h2>Paused</h2>
       <p class="card-sub">Everything is stopped and muted.</p>
-      <div class="card-buttons"><button id="resume" type="button" class="primary">Resume</button><button id="new-run" type="button">New run</button><button id="options-open" type="button">Options</button></div>
+      <div class="card-buttons"><button id="resume" type="button" class="primary">Resume</button><button id="new-run" type="button">New run</button><button id="options-open" type="button">Options</button><button id="to-menu" type="button" hidden>Main menu</button></div>
       <div class="card-buttons small">
         <button id="save-out" type="button" hidden>Export save</button>
         <button id="save-in" type="button" hidden>Import save</button>
@@ -68,6 +68,7 @@
         <label class="check" id="fullscreen-row" hidden><input id="fullscreen" type="checkbox"> Full screen</label>
         <div class="pics-row"><span id="pics-now"></span><button id="pics-change" type="button">Change</button></div>
         <div class="pics-row" id="folder-row" hidden><span id="folder-now"></span><button id="folder-pick" type="button"></button></div>
+        <div class="pics-row" id="account-row" hidden><span id="account-now"></span><button id="account-open" type="button">Account</button></div>
         <div id="options-camera"></div>
         <div class="card-buttons"><button id="options-back" type="button" class="primary"></button></div>
       </section>

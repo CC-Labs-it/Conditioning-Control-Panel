@@ -7,6 +7,8 @@
  *                   opens its own folder window, remembers the pick and serves the files; nothing is uploaded.
  *   Camera          the Expo's own look options (ui/expo/camera-options.js), offered wherever the Expo can be walked.
  *                   During a visit the Expo keeps its own copy on the pause card, so this one stands down.
+ *   Account         a host with an account page of its own (caps.account, CONTRACT.md 3.3): the row names who is signed
+ *                   in and the button asks the host for that page (`account`), where signing out lives.
  * Mute, Gentle visuals and the pictures row keep their ids and their wiring in ui/app.js. */
 import { PICTURE_CARD as C } from '../data/content/terms.js';
 import { createCameraPreferences, mountCameraOptions } from './expo/door.js';
@@ -22,10 +24,13 @@ export function fullscreenRoute({ hosted = false, caps = null, doc = null } = {}
 /** True for a host that keeps and serves the player's own folder. */
 export const folderHost = (caps, hosted) => hosted === true && caps?.ownMedia?.folder === true;
 
+/** True for a host that has an account page of its own to show. */
+export const accountHost = (caps, hosted) => hosted === true && caps?.account === true;
+
 const NONE = Object.freeze({ open() {}, close() { return false; }, refresh() {}, pickFolder() { return false; }, canPickFolder: false, get isOpen() { return false; } });
 
 export function mountOptions({ doc, win = doc?.defaultView, caps = {}, hosted = false, send = () => {}, on = () => () => {},
-  pictures = null, expo = false, onChange = () => {} } = {}) {
+  pictures = null, expo = false, identity = null, onChange = () => {} } = {}) {
   const $ = (id) => doc.getElementById(id);
   const card = $('pause')?.querySelector('[role=dialog]'), view = $('options');
   if (!card || !view) return NONE;
@@ -80,6 +85,14 @@ export function mountOptions({ doc, win = doc?.defaultView, caps = {}, hosted = 
     });
     paintFolder();
     send('own-media-list', {});   // a folder remembered from an earlier launch: its files, once the host has read them
+  }
+
+  /* ---- the host's account page ---- */
+  const accountRow = $('account-row');
+  accountRow.hidden = !accountHost(caps, hosted);
+  if (!accountRow.hidden) {
+    $('account-now').textContent = typeof identity?.displayName === 'string' ? identity.displayName : '';
+    $('account-open').addEventListener('click', (ev) => { if (ev.isTrusted) send('account', {}); });
   }
 
   /* ---- camera ---- */
