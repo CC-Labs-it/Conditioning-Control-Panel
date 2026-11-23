@@ -65,10 +65,13 @@ public sealed record RedeemOutcome(bool Ok, string? Reason, DateTime? GrantUntil
 /// </summary>
 public static class InviteRules
 {
-    public const int GrantDays = 7;
+    /// <summary>The longest grant a new code hands out. The server owns the real length (7 days on
+    /// codes minted before CCP-Server #597, 16 after); this only sizes the believability cap below,
+    /// so it must ship in a release BEFORE the server hands out the longer grant.</summary>
+    public const int GrantDays = 16;
 
-    /// <summary>A grant end further out than this is not believed and is ignored outright (a week
-    /// plus three days of slack for a PC clock that runs slow). Not
+    /// <summary>A grant end further out than this is not believed and is ignored outright (the
+    /// longest grant plus three days of slack for a PC clock that runs slow). Not
     /// clamped: a clamp measured from "now" would slide forward on every heartbeat and turn one
     /// bad server value into premium for as long as it persists.</summary>
     public static readonly TimeSpan MaxGrantAhead = TimeSpan.FromDays(GrantDays + 3);

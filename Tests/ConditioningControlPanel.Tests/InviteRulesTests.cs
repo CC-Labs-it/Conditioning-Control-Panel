@@ -74,6 +74,18 @@ public class InviteRulesTests
     }
 
     [Fact]
+    public void ApplyGrant_BelievesASixteenDayGrantFromTheFirstHeartbeat()
+    {
+        // A new code grants 16 days (CCP-Server #597). The 7.3.x cap (7 + 3 days) ignored such a
+        // grant until day 6, so the friend got nothing on the desktop for their first days.
+        var s = new AppSettings();
+        Assert.True(InviteRules.ApplyGrant(s, Now.AddDays(16), Now));
+        Assert.Equal(Now.AddDays(16), s.InviteGrantUntil);
+        Assert.True(InviteRules.IsBelievable(Now.AddDays(16), Now.AddDays(-2)));
+        Assert.False(InviteRules.IsBelievable(Now.AddDays(20), Now));
+    }
+
+    [Fact]
     public void ApplyGrant_ABadFarFutureValueNeverSlidesForwardOnHeartbeats()
     {
         var s = new AppSettings();
