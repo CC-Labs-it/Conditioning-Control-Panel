@@ -3,7 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using ConditioningControlPanel.Controls.Dares;
+using ConditioningControlPanel.Services.Dares;
 using ConditioningControlPanel.Services.Friends;
+using ConditioningControlPanel.Services.Leash;
 
 namespace ConditioningControlPanel.Controls.Friends;
 
@@ -106,10 +109,72 @@ internal static class FriendsFold
             .Take(FeedPreview)
             .ToList();
 
+    // ---- dares ----------------------------------------------------------------------------
+
+    /// <summary>A settled bet with nothing left to do can be dismissed; an open one cannot.</summary>
+    public static bool CanDismiss(DareBet b) => DareCardRules.RowState(b) is not (DareRowState.Offer or DareRowState.IOwe
+        or DareRowState.TheyOwe or DareRowState.Running or DareRowState.Writing or DareRowState.Waiting);
+
+    /// <summary>Folded: the one row on top of the strip (the most pressing open bet, else the newest settled one).</summary>
+    public static DareBet? DareFolded(DaresSnapshot s, ICollection<string> dismissed)
+        => DareCardRules.StripOrder(s).FirstOrDefault(b => !dismissed.Contains(b.Id));
+
+    /// <summary>Open: every bet not dismissed, newest activity first.</summary>
+    public static IReadOnlyList<DareBet> DaresChrono(DaresSnapshot s, ICollection<string> dismissed)
+        => !s.Available ? Array.Empty<DareBet>()
+            : s.Bets.Where(b => !dismissed.Contains(b.Id))
+                .OrderByDescending(b => b.SettledAt ?? b.AcceptedAt ?? b.At)
+                .ToList();
+
+    // ---- leash ----------------------------------------------------------------------------
+
+    /// <summary>Everything on the leash a player would want to know moved: an offer, a punishment
+    /// or task given to me, a task of someone I hold that got done or missed, and how far each
+    /// thing I sent got (seen, done, refused...). One key per item and step.</summary>
+    public static IReadOnlyList<string> LeashKeys(LeashSnapshot s, Func<string, IReadOnlyList<LeashSentItem>> sentTo)
+    {
+        var keys = new List<string>();
+        foreach (var o in s.Offers) keys.Add("o:" + (o.Id ?? o.From.Id + "@" + o.At.ToUnixTimeSeconds()));
+        if (s.Me is { } me)
+        {
+            foreach (var p in me.Pending) keys.Add("p:" + p.Pid);
+            if (me.Assignment is { } a) keys.Add("a:" + a.Aid);
+        }
+        foreach (var h in s.Holding)
+        {
+            if (h.Assignment is { Status: not AssignStatus.Open } ha) keys.Add("ha:" + ha.Aid + ":" + ha.Status);
+            IReadOnlyList<LeashSentItem> sent;
+            try { sent = sentTo(h.Who.Id) ?? Array.Empty<LeashSentItem>(); }
+            catch { sent = Array.Empty<LeashSentItem>(); }
+            foreach (var i in sent)
+                if (LeashSteps.Rank(i.Step) >= 2) keys.Add("r:" + i.Key + ":" + i.Step);
+        }
+        return keys;
+    }
+
+    /// <summary>The bubble on the folded leash: keys not seen yet. Zero before the first fill.</summary>
+    public static int LeashUnseen(IReadOnlyList<string> keys, ICollection<string>? seen)
+        => seen == null ? 0 : keys.Distinct().Count(k => !seen.Contains(k));
+
+    /// <summary>The folded line: who holds me, who I hold. Loc keys with one argument each.</summary>
+    public static IReadOnlyList<(string Key, string Arg)> LeashSummary(LeashSnapshot s)
+    {
+        var parts = new List<(string, string)>();
+        if (s.Me is { } me) parts.Add(("friends_leash_held_by", me.Holder.Name));
+        if (s.Holding.Count > 0)
+        {
+            var names = s.Holding.Select(h => h.Who.Name).ToList();
+            var shown = string.Join(", ", names.Take(2));
+            if (names.Count > 2) shown += " +" + (names.Count - 2);
+            parts.Add(("friends_leash_holding", shown));
+        }
+        return parts;
+    }
+
     /// <summary>Every loc key the folds draw, for the ten-languages check.</summary>
     public static IReadOnlyList<string> AllKeys { get; } = new[]
     {
-        "friends_fold_open", "friends_fold_close",
-        "friends_feed_clear",
+        "friends_leash_section", "friends_leash_held_by", "friends_leash_holding", "friends_fold_open", "friends_fold_close",
+        "friends_feed_clear", "dares_dismiss",
     };
 }
