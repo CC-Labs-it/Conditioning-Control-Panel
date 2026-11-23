@@ -231,6 +231,11 @@ body.gentle .dk-chip.dk-new .dk-i { animation: none; }
 #pause .made-by button:active { border-style: none; color: #000; }
 #pause .made-by.inspired-by { margin-top: 2px; }
 .check { display: flex; align-items: center; gap: 8px; min-height: 36px; }
+/* The Options view (ui/options.js): one view at a time, whatever else a feature has added to the card. */
+#pause .card.options-open > :not(#options) { display: none !important; }
+#options > h2 { margin-top: 0; }
+#folder-now { min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+#folder-row button { flex: none; }
 .check input { width: 20px; height: 20px; }
 .card textarea { width: 100%; margin-top: 10px; font: 12px/1.2 Consolas, "Courier New", monospace; }
 .card.guard button { pointer-events: none; }

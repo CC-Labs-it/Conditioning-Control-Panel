@@ -20,13 +20,14 @@ const STYLE=`
 #pause .expo-camera-body p{margin:4px 0 0;color:#3e5343;font:500 13px/1.4 "Segoe UI",system-ui,sans-serif}
 `;
 
-export function mountCameraOptions(doc,options,onChange){
+export function mountCameraOptions(doc,options,onChange,slot=null){
   const pause=doc.getElementById('pause'),card=pause?.querySelector('[role=dialog]');
   if(!card)return {setMode(){},refresh(){},close(){},dispose(){}};
   const style=doc.createElement('style');style.textContent=STYLE;doc.head.append(style);
   const root=doc.createElement('section');root.className='expo-camera-options';
   const row=doc.getElementById('resume')?.closest('.card-buttons');
-  if(row)row.after(root);else card.append(root);
+  if(slot)slot.append(root);   // the Options view's own copy (ui/options.js)
+  else if(row)row.after(root);else card.append(root);
   function element(tag,parent,text){
     const node=doc.createElement(tag);
     if(text)node.textContent=text;

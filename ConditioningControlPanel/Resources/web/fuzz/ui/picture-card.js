@@ -14,15 +14,17 @@ export function pictureRow(pictures) {
     return Number.isInteger(meter) ? `Pictures via Scrolller · ${meter}% of today's allowance used` : 'Pictures via Scrolller';
   }
   if (pictures.source === 'online') return C.rowOnline;
-  if (pictures.source === 'own') return pictures.ownCount ? C.rowOwn.replace('{n}', pictures.ownCount) : C.rowOwnEmpty;
+  if (pictures.source === 'own') return pictures.ownCount ? (pictures.ownFromFolder ? C.rowFolder : C.rowOwn).replace('{n}', pictures.ownCount) : C.rowOwnEmpty;
   return C.rowNone;
 }
 
-export function openPictureCard({ doc = document, pictures, above = false, gentle = () => false, onChoice = () => {}, onClose = () => {},
+/* pickFolder: a host that keeps the player's folder (ui/options.js). It opens the host's own folder window and answers
+ * done(kept) once the files are in; the browser's folder input is not used then. */
+export function openPictureCard({ doc = document, pictures, above = false, gentle = () => false, onChoice = () => {}, onClose = () => {}, pickFolder = null,
   navigate = (url) => doc.defaultView?.location.assign(url) }) {
   const legal = createLegal({ doc, gentle, above, xLines: X_LINES_PICTURES });
   /* Folders (owner 2026-11-08): desktop browsers only; a phone has no folder picker and no drop. */
-  const folders = folderPickerWorks(doc);
+  const folders = !!pickFolder || folderPickerWorks(doc);
   const choice = (kind, title, sub) => `<button type="button" data-pick="${kind}"><b>${esc(title)}</b><small>${esc(sub)}</small></button>`;
   const hosted = pictures.hasScrolllerHost;
   const first = hosted ? choice('signin', C.scrolller, C.signinSub) : choice('signin', C.signin, C.signinSiteSub);
@@ -85,7 +87,17 @@ export function openPictureCard({ doc = document, pictures, above = false, gentl
   input.addEventListener('change', () => { const files = [...input.files]; input.value = ''; useFiles(files); });
   if (folders) {
     const dir = win.querySelector('#pic-folder-input');
-    win.querySelector('#pic-folder').addEventListener('click', () => { cancelRequest?.(); cancelRequest = null; remote.disabled = false; status.textContent = ''; dir.click(); });
+    win.querySelector('#pic-folder').addEventListener('click', (ev) => {
+      cancelRequest?.(); cancelRequest = null; remote.disabled = false; status.textContent = '';
+      if (!pickFolder) { dir.click(); return; }
+      if (!ev.isTrusted) return;
+      status.textContent = C.reading;
+      pickFolder((kept, reason) => {
+        if (!open) return;
+        if (kept) { onChoice('own'); close(); }
+        else status.textContent = reason === 'cancelled' ? '' : C.notPictures;
+      });
+    });
     dir.addEventListener('change', () => { const files = [...dir.files]; dir.value = ''; useFiles(files); });
     /* A drop anywhere on the card: files and folders, any mix, read to the bottom. */
     const veil = win.closest('.tc') || win;

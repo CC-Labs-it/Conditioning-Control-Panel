@@ -221,6 +221,7 @@ export const PICTURE_CARD = Object.freeze({
   rowOnline: 'Pictures: placeholder art',
   rowOwn: 'Pictures: your files ({n} on this visit)',
   rowOwnEmpty: 'Pictures: your files, not loaded',
+  rowFolder: 'Pictures: your folder ({n} files)',   // a host that keeps the folder (CONTRACT.md 3.3)
   rowNone: 'Pictures: empty frames',
   rowChange: 'Change',
 });
