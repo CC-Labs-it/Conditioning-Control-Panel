@@ -63,6 +63,11 @@ function liftCase(T,room,buttonAssembly){
   }};
 }
 
+/* The rope stage (owner 2026-11-23): the rope stands for this many presses made from inside it. The first ones are
+   recorded and answered with one more notice beside the last; the final one lets the exhibit leave. */
+const ROPE_PRESSES=3;
+/* Once the visitor has left DO PRESS alone, the plinth comes back up with the second button on it. */
+const RETURN_SECONDS=1.6;
 const names=['East mezzanine','Behind the hall banner','Gift shop shelf','Beside the dome door'];
 const locationLines=['v4_press_mezz','v4_press_found','v4_press_price','v4_press_invert'];
 
@@ -108,7 +113,7 @@ export function firstPress(api,state){
   const views=new Map(),projected=new T.Vector3(),worldPoint=new T.Vector3(),right=new T.Vector3();
   let count=0,found=0,moved=-1,pending=false,hold=0,still=0,clock=0,tickDue=0;
   const waitingAt=new T.Vector3();let waiting=false;
-  let carriedPost=false,switchReady=false,sealed=false,near=false;
+  let carriedPost=false,switchReady=false,sealed=false,near=false,roped=0,back=0;
   const announcements=[];
   let speaking=false;
   function announce(id){
@@ -138,7 +143,7 @@ export function firstPress(api,state){
     else if(count===2)state.pressTask={...base,title:'Jump the rope, or carry a post away',where:'First Press · inside the rope'};
     else if(found<4)state.pressTask={...base,title:'Find the button',where:found+' of 4 · follow the ticking · '+names[found],atShop:found>=2};
     else if(!switchReady)state.pressTask={...base,title:'Do not press',where:'Stand by it for 10 seconds · beside the dome door'};
-    else if(!sealed)state.pressTask={...base,title:'Press the small switch to close the display',where:'Beside the dome door · on the button'};
+    else if(!sealed)state.pressTask={...base,title:'I AGREE TO STOP',where:'Grand Hall · First Press'};
     else state.pressTask={...base,title:'First Press: closed',where:'Sealed by the visitor · Grand Hall'};
   }
   function press(stop=false,index=moved){
@@ -153,8 +158,12 @@ export function firstPress(api,state){
     if(count===2&&!carriedPost&&camera.position.z>=-7.56){
       api.say?.('Jump the rope, or carry a post away.');return;
     }
-    if(count>=7){api.say?.(switchReady?'Press the small switch to close the display.':'DO PRESS. Register unchanged. Stand by it for 10 seconds.');still=0;return;}
+    if(count>=7){api.say?.(switchReady?'I AGREE TO STOP. Grand Hall · First Press.':'DO PRESS. Register unchanged. Stand by it for 10 seconds.');still=0;return;}
     if(count>=3&&(index!==moved||index!==found||pending)){api.say?.('Already recorded. Look away to let the loan travel.');return;}
+    if(count===2&&++roped<ROPE_PRESSES){
+      // Recorded, and the rope stays: one more notice goes up beside the last.
+      state.presses++;api.say?.('Please respect the rope.');draw();return;
+    }
     count++;state.presses++;
     if(count===1){state.ticket.stamp('Pressed');state.ticket.book('first-press','Pressed the founding exhibit',true);announce('pa_hall1_press');}
     else if(count===2)announce('v4_press_rope');
@@ -174,7 +183,8 @@ export function firstPress(api,state){
       const readout=surface('press_readout');
       v.draw=()=>placard(readout,'Founding collection   /   First Press',text(),'REGISTER   '+(state.file.taps+state.presses).toLocaleString());
       v.main=bind('press_main',()=>sealed?'Read the sealed accession':'Press I AGREE',()=>sealed?api.say(text()):press());
-      const old=room.getObjectByName('press_stop');if(old)old.visible=false;
+      // The second button waits on the plinth, out of sight, until the plinth returns for the last press.
+      v.stop=bind('press_stop','I AGREE TO STOP',()=>press(true));if(v.stop)v.stop.visible=false;
       bind('press_readout','Read the register',()=>api.say(text()));
       v.draw();
       if(api.annexProps)clean.push(api.annexProps(room,place=>{
@@ -190,6 +200,11 @@ export function firstPress(api,state){
         v.posts=[-1,1].map(sign=>{const n=place('rope_post',[sign,0,-7.38]);n.scale.y=.46;return n;});
         v.span=place('rope_span',[0,0,-7.38]);v.span.scale.y=.46;
         v.note=place('rope_notice',[2.12,0,-7.42]);off.push(api.register(v.note,()=>state.carry?.key==='rope-post'?'Return the rope post':'Read the notice',()=>{if(api.drop?.('rope-post'))carriedPost=false;else api.say('Please respect the rope around the notice.');}));
+        // One more notice for each press the rope has outlasted.
+        v.notes=Array.from({length:ROPE_PRESSES-1},(_,k)=>{
+          const n=place('rope_notice',[2.12+.66*(k+1),0,-7.42]);n.visible=false;
+          off.push(api.register(n,'Read the notice',()=>api.say('Please respect the rope around the notice.')));return n;
+        });
         v.glass=place('sealed_glass',[0,.965,-9]);v.glass.visible=sealed;v.case.slide.add(v.glass);
         const box=new T.Mesh(new T.BoxGeometry(2,.29,.055));box.name='First Press cord';box.position.set(0,.145,-7.38);
         api.walker.add('first-press-cord',box,[],'hall');box.geometry.dispose();box.material.dispose();
@@ -205,14 +220,6 @@ export function firstPress(api,state){
         const price=obj.getObjectByName('moved_price');if(price)price.visible=zone==='shop';
         const cap=obj.getObjectByName('moved_cap'),lamp=brassLocator(T,obj,i===2,off);
         const copy={obj,cap,i,at:[...at],lamp,spring:0};v.copies.push(copy);
-        if(i===3){
-          // Keep the final switch on the visitor's side of the cap, with its own struck target.
-          const small=place('moved_button',[0,0,0]);small.name='loan_stop_switch';obj.add(small);
-          small.position.set(0,.157,.037);small.scale.setScalar(.60);small.visible=false;
-          small.getObjectByName('moved_price').visible=false;
-          labelCap(T,small.getObjectByName('moved_cap'),'I AGREE TO STOP','',off);
-          off.push(api.register(small,'I AGREE TO STOP',()=>press(true),2.4));copy.small=small;
-        }
         off.push(api.register(obj,()=>count>=7?'DO PRESS':'Press the moved button',()=>{press(false,i);copy.spring=.16;},2.4));
         copy.invert=()=>labelCap(T,cap,'DO PRESS','Believed voluntary.',off);
       });
@@ -239,25 +246,27 @@ export function firstPress(api,state){
       moved=found;pending=false;tickDue=0;
     }
     const hall=views.get('hall'),rope=count===2;
+    if(switchReady&&!sealed)back=Math.min(1,back+dt/RETURN_SECONDS);
     if(hall){
       const down=count>=3&&!sealed;
-      const travel=hold?clamp((2-hold)/1.55):down?1:0;
+      const travel=hold?clamp((2-hold)/1.55):down?1-back:0;
       const ease=travel*travel*(3-2*travel);
       if(hall.main)hall.main.visible=count<3||hold>0||sealed;
       if(hall.case){hall.case.slide.position.y=-1.85*ease;hall.case.cover.visible=!sealed;}
       if(hall.card){
-        const rise=hold?clamp((1.23-hold)/.97):down?1:0;
+        const rise=hold?clamp((1.23-hold)/.97):down?1-back:0;
         hall.card.visible=down&&rise>0;hall.card.position.y=-1.85*(1-rise*rise*(3-2*rise));
         if(hold>0)hall.card.rotation.y=Math.atan2(camera.position.x,camera.position.z+9);
       }
       if(hall.posts){hall.posts.forEach((n,i)=>{n.visible=rope&&(i!==0||!carriedPost);});hall.span.visible=rope&&!carriedPost;hall.note.visible=rope||state.carry?.key==='rope-post';hall.glass.visible=sealed;}
-      api.setColliderEnabled('First Press cord',rope&&!carriedPost);api.setColliderEnabled('Accession plinth',!down||hold>0);
+      hall.notes?.forEach((n,k)=>{n.visible=rope&&roped>k;});
+      if(hall.stop)hall.stop.visible=switchReady&&(back>=1||sealed);
+      api.setColliderEnabled('First Press cord',rope&&!carriedPost);api.setColliderEnabled('Accession plinth',!down||hold>0||back>0);
     }
     for(const v of views.values())for(const copy of v.copies){
       const {obj,i,cap}=copy;copy.spring=Math.max(0,copy.spring-dt);
       obj.visible=i===moved&&!sealed&&(!obj.userData.stockBay||!!copy.rack);
       if(cap)cap.position.y=-copy.spring*.09;
-      if(copy.small)copy.small.visible=switchReady&&!sealed;
       if(obj.visible){
         copy.lamp.emissiveIntensity=api.ctx?.gentle||api.ctx?.reduced?1.1:.9+.75*(.5+.5*Math.cos(clock*5.4));
         if(found===4&&copy.invert){copy.invert();copy.invert=null;}

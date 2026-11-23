@@ -34,7 +34,7 @@ test('a busy narrator drops the rope instruction once the plinth is moving',()=>
   const spoken=[],state={presses:0,ticket:{stamp(){},book(){}}};
   const press=firstPress({THREE,camera,play(){},narrationAvailable:()=>available,
     cue(id,options){spoken.push({id,needed:options.needed});}},state);
-  press.press();press.press();press.press();available=true;press.tick(.1,'hall');
+  for(let i=0;i<5;i++)press.press();available=true;press.tick(.1,'hall');
   assert.deepEqual(spoken.map(item=>item.id),['v4_press_moved']);
   assert.ok(spoken[0].needed());
   press.tick(2,'hall');press.press(false,0);
@@ -90,21 +90,38 @@ test('the First Press moves its original cover and keeps the register clear',asy
   assert.ok(Math.abs(height(cover)-originalHeight)<.001);
   assert.ok(height(glass)<0,'no second dome remains in the architectural glass');
   assert.ok(register.getWorldPosition(new THREE.Vector3()).x>registerStart.x+1);
-  press.press();press.press();press.press();
+  const said=[];api.say=line=>said.push(line);
+  const stop=room.getObjectByName('press_stop');assert.equal(stop.visible,false,'the second button waits out of sight');
+  press.press();press.press();
+  // The rope stage: two presses from inside the rope are recorded and answered, the third lets the exhibit leave.
+  press.press();press.press();
+  assert.equal(state.pressWatching,undefined,'the plinth holds while the rope stands');
+  assert.equal(state.firstPressCount,2);assert.equal(state.presses,4);
+  assert.deepEqual(said,['Please respect the rope.','Please respect the rope.']);
+  camera.position.z=-7;press.press();assert.equal(state.presses,4,'a press from outside the rope is never recorded');
+  assert.equal(said.at(-1),'Jump the rope, or carry a post away.');camera.position.z=-12;
+  press.press();
   assert.equal(state.pressWatching,true);press.tick(.6,'hall');room.updateMatrixWorld(true);
   assert.ok(height(cover)<originalHeight && height(cover)>0,'the lift descends in sight');
   press.tick(1.4,'hall');room.updateMatrixWorld(true);assert.equal(state.pressWatching,false);
   assert.ok(height(cover)<0,'the glass descends below floor level with the plinth');
   for(let i=0;i<4;i++){
     press.press(false,i);
-    if(i<3){press.press(false,i);assert.equal(state.presses,i+4,'a loan is recorded only once per location');}
+    if(i<3){press.press(false,i);assert.equal(state.presses,i+6,'a loan is recorded only once per location');}
     press.tick(.2,'atrium');
   }
-  press.press();assert.equal(state.presses,7);
-  camera.position.set(-11.48,1.6,-2);press.tick(9.9,'hall');assert.equal(state.presses,7);
+  press.press();assert.equal(state.presses,9);
+  camera.position.set(-11.48,1.6,-2);press.tick(9.9,'hall');assert.equal(state.presses,9);
   press.press(true);assert.equal(press.sealed,false);
-  press.tick(.2,'hall');press.press(true);press.tick(.1,'hall');room.updateMatrixWorld(true);
-  assert.equal(state.presses,8);assert.ok(books.some(([id])=>id==='press-sealed'));
+  press.tick(.2,'hall');room.updateMatrixWorld(true);
+  assert.deepEqual([state.pressTask.title,state.pressTask.where],['I AGREE TO STOP','Grand Hall · First Press']);
+  assert.equal(stop.visible,false,'the second button shows only once the plinth is back');
+  assert.ok(height(cover)<originalHeight,'the plinth is on its way up');
+  press.tick(1.7,'hall');room.updateMatrixWorld(true);
+  assert.ok(Math.abs(height(cover)-originalHeight)<.001,'the plinth is back before the last press');
+  assert.equal(stop.visible,true,'I AGREE TO STOP is on the plinth');
+  press.press(true);press.tick(.1,'hall');room.updateMatrixWorld(true);
+  assert.equal(state.presses,10);assert.ok(books.some(([id])=>id==='press-sealed'));
   assert.deepEqual(lines,['pa_hall1_press','v4_press_rope','v4_press_moved','v4_press_mezz','v4_press_found','v4_press_price','v4_press_invert','v4_press_still','v4_press_seal']);
   assert.ok(press.sealed);assert.equal(cover.visible,false);
   assert.ok(Math.abs(height(cover)-originalHeight)<.001,'the lift returns for sealing');
