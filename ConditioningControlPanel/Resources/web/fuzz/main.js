@@ -171,7 +171,7 @@ function start(init) {
 
   engine = createEngine({
     run, life, ui, audio, registry: REGISTRY, save: persist,
-    host: { send: bridge.send, isHosted: bridge.isHosted },
+    host: { send: bridge.send, isHosted: bridge.isHosted, on: bridge.on },
     env: { journey: JOURNEY_PREVIEW, featuredShop: [...EMI_UPGRADES.slice(1), ...(feedPreview ? ['d_autoscroll'] : []), ...(trailPreview ? ['starburst', 'word_comet'] : [])], caps: init.caps || {}, identity: typeof init.identity?.displayName === 'string' && init.identity.displayName.trim() ? { displayName: init.identity.displayName.trim().slice(0, 40) } : null, mod: init.mod || 'default', hosted: bridge.isHosted, pictureSource: pictureDoor || 'none' },
   });
   engine.env.claimLifetime = claimLifetime;
@@ -195,6 +195,7 @@ function start(init) {
       gentle: ui.gentle,
       onChoice: persist,
       onClose,
+      pickFolder: ui.options?.canPickFolder ? ui.options.pickFolder : null,   // a host that keeps the folder (ui/options.js)
     });
   }
   engine.subscribe('choose-pictures', () => {

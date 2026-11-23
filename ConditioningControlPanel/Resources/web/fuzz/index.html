@@ -46,10 +46,7 @@
     <div class="card" role="dialog" aria-modal="true" aria-label="Paused">
       <h2>Paused</h2>
       <p class="card-sub">Everything is stopped and muted.</p>
-      <div class="card-buttons"><button id="resume" type="button" class="primary">Resume</button><button id="new-run" type="button">New run</button></div>
-      <label class="check"><input id="mute" type="checkbox"> Mute</label>
-      <label class="check"><input id="gentle" type="checkbox"> Gentle visuals</label>
-      <div class="pics-row"><span id="pics-now"></span><button id="pics-change" type="button">Change</button></div>
+      <div class="card-buttons"><button id="resume" type="button" class="primary">Resume</button><button id="new-run" type="button">New run</button><button id="options-open" type="button">Options</button></div>
       <div class="card-buttons small">
         <button id="save-out" type="button" hidden>Export save</button>
         <button id="save-in" type="button" hidden>Import save</button>
@@ -63,6 +60,17 @@
         <button type="button" data-credit="https://cclabs.app/ccp.html">Get the desktop app</button></p>
       <p class="made-by inspired-by">Inspired by <button type="button" data-credit="https://neal.fun/stimulation-clicker/">Stimulation Clicker</button>
         by <button type="button" data-credit="https://neal.fun/">neal.fun</button></p>
+      <!-- The Options view (ui/options.js): while it is open it is the only thing the card shows. -->
+      <section id="options" hidden>
+        <h2>Options</h2>
+        <label class="check"><input id="mute" type="checkbox"> Mute</label>
+        <label class="check"><input id="gentle" type="checkbox"> Gentle visuals</label>
+        <label class="check" id="fullscreen-row" hidden><input id="fullscreen" type="checkbox"> Full screen</label>
+        <div class="pics-row"><span id="pics-now"></span><button id="pics-change" type="button">Change</button></div>
+        <div class="pics-row" id="folder-row" hidden><span id="folder-now"></span><button id="folder-pick" type="button"></button></div>
+        <div id="options-camera"></div>
+        <div class="card-buttons"><button id="options-back" type="button" class="primary"></button></div>
+      </section>
     </div>
   </div>
 

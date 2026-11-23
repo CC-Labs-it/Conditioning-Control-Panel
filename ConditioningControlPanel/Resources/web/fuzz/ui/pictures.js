@@ -82,7 +82,26 @@ export function ownUsable(files, max = OWN_MAX, rand = Math.random) {
   return list.slice(0, max);
 }
 
-const emptyOwn = () => ({ picture: [], gif: [], clip: [], pending: 0, retired: false, ready: Promise.resolve() });
+const emptyOwn = () => ({ picture: [], gif: [], clip: [], pending: 0, retired: false, hosted: false, ready: Promise.resolve() });
+
+/** Rows a host serves from the player's own folder (CONTRACT.md 3.3), as the file-like things the own-file code takes.
+ * Only urls on the page's own origin count. `kind` is the host's own reading of the file's header, when it has one. */
+export function hostedFiles(rows, pageOrigin, fetchImpl = globalThis.fetch) {
+  const out = [];
+  for (const row of Array.isArray(rows) ? rows : []) {
+    let url;
+    try { url = new URL(String(row?.url || '')); } catch { continue; }
+    if (!pageOrigin || url.origin !== pageOrigin) continue;
+    const size = Number(row.size) > 0 ? Number(row.size) : 0, href = url.href;
+    out.push({
+      name: String(row.name || ''), type: String(row.type || ''), size, lastModified: Number(row.mtime) || 0, url: href,
+      kind: OWN_KINDS.includes(row.kind) ? row.kind : null,
+      /* A host with no reading of its own: the header is fetched by range, the way a File is sliced. */
+      slice: (start = 0, end = size) => ({ arrayBuffer: () => fetchImpl(href, { headers: { range: `bytes=${start}-${Math.max(start + 1, end) - 1}` } }).then((r) => r.arrayBuffer()) }),
+    });
+  }
+  return out;
+}
 
 export function createPictures({ source = null, onChange = () => {}, onAdded = () => {}, onProgress = () => {}, onMeter = () => {}, scrolller = null, send = () => {},
   pageOrigin = globalThis.location?.origin, niches = () => [] } = {}) {
@@ -201,8 +220,7 @@ export function createPictures({ source = null, onChange = () => {}, onAdded = (
   };
   const total = (bag) => OWN_KINDS.reduce((sum, k) => sum + bag[k].length, bag.pending);
   function includeFile(file, bag, kind, mime = file.type) {
-    const blob = mime === file.type ? file : file.slice(0, file.size, mime);
-    const url = URL.createObjectURL(blob);
+    const url = file.url || URL.createObjectURL(mime === file.type ? file : file.slice(0, file.size, mime));   // a host's file is already a url
     bag[kind].push(url);
     // Selecting the same file twice creates two distinct object URLs.
     if (file.name && Number.isFinite(file.lastModified)) ownKeys.set(url,JSON.stringify([file.name,file.size,file.lastModified,file.type]));
@@ -215,9 +233,9 @@ export function createPictures({ source = null, onChange = () => {}, onAdded = (
     let kept = 0;
     const checks = [];
     for (const file of ownUsable(files)) {
-      const kind = ownKind(file);
+      const kind = file.kind || ownKind(file);   // file.kind: a host that already read the header
       kept++;
-      if (kind === 'picture') checks.push(localImageInfo(file).then(info => ({file,...info})));
+      if (kind === 'picture' && !file.kind) checks.push(localImageInfo(file).then(info => ({file,...info})));
       else includeFile(file,bag,kind);
     }
     if (checks.length) {
@@ -341,6 +359,8 @@ export function createPictures({ source = null, onChange = () => {}, onAdded = (
     get meterUpgradeX() { return meterUpgradeX; },
     get loadingCount() { return current === 'scrolller' && building ? remote.length : 0; },
     get ownCount() { return total(own); },
+    /** The own files came from a folder the host keeps (they are there again on the next launch). */
+    get ownFromFolder() { return own.hosted && total(own) > 0; },
     get ownCounts() { return { picture: own.picture.length, gif: own.gif.length, clip: own.clip.length }; },
     /** Answers whether the source changed. Fires onChange so frames on screen can refill. */
     setSource, requestFeed, refreshNiches,
@@ -416,6 +436,12 @@ export function createPictures({ source = null, onChange = () => {}, onAdded = (
       seen = { picture: 0, gif: 0, clip: 0 };
       if (current === 'own') { mediaCache.clear(); warmLibrary(); resetDeck(); notifyPictures(); }
       revoke(old);
+      return kept;
+    },
+    /** The files of a folder the host keeps and serves (CONTRACT.md 3.3). Answers how many were kept. */
+    replaceOwnHosted(rows) {
+      const kept = this.replaceOwn(hostedFiles(rows, pageOrigin));
+      if (kept) own.hosted = true;
       return kept;
     },
     clearOwn() {
