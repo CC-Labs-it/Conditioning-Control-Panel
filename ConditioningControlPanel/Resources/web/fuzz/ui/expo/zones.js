@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { roomRequest as request, clearEntrance, viewFile, roomAsset } from './entrance.js';
 import {createDoors,loadDoorHardware,streamingPriority} from './doors.js';
-import {batchArchiveHousings,fitArchiveBays} from './archive-furniture.js';
+import {batchArchiveHousings,fitArchiveBays,retireArchiveBays} from './archive-furniture.js';
 import {createRoomVisibility} from './room-visibility.js';
 import {createRoomDecoder} from './room-decoder.js';
 
@@ -178,7 +178,7 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
       zone.probe.colorSpace = THREE.SRGBColorSpace; zone.probe.needsUpdate = true;
       zone.view.userData.reflectionProbe = zone.probe;
       zone.environment = pmrem.fromCubemap(zone.probe);
-      fitArchiveBays(zone,plan.archiveRoute);
+      fitArchiveBays(zone,plan.archiveRoute);retireArchiveBays(zone,plan.archiveRoute);
       zone.view.updateMatrixWorld(true);
       const baked = new Map();
       zone.view.traverse(mesh => {

@@ -15,6 +15,8 @@ import { planterLines } from './planter.js';
 const family = id => id.startsWith('hab_') ? 'hab_1' : id.startsWith('hoof_') ? 'hoof_1' :
   id.startsWith('dome_') ? 'dome_0' : id;
 const canonical = id => id?.replace(/^keep_/, 'hab_');
+// Exhibit lines with no replay cap: the Habitat has one button, the feeding slot's (owner, 2026-11-23).
+const spokenOnce = new Set(['hab_1']);
 const nearest = (nodes, point) => nodes.reduce((best,node)=>
   !best || node.pos.distanceToSquared(point)<best.pos.distanceToSquared(point) ? node : best,null);
 
@@ -82,6 +84,9 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
         if(plaque)undo.push(register(plaque,()=>story?.at(id)?reader.label(id):'Start the projector to read the plaque',()=>reader.toggle(id,story?.at(id)?.archive),3.5));
         // One button per stand. It plays the next record of the story, or this screen's last one once all are seen.
         if(button)undo.push(register(button,()=>archivePrompt(station),()=>playArchive(station),3.5));
+      }else if(button&&spokenOnce.has(id)){
+        // This line greets the visitor at the exhibit and is not offered again: its replay cap leaves the room.
+        button.visible=false;
       }else if(button){undo.push(register(button,()=>project&&!playedProjectors.has(id)?'Start projector':'Replay narration',
         ()=>cue(id,{station,replay:true,projector:!!project,kind:project?'beat':'react'}),3.5));}
     });
