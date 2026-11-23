@@ -1,6 +1,7 @@
 const cues = [[10,'planter_10'],[45,'planter_45'],[90,'planter_90']];
-// The last line reaches "You may climb down now" about nine seconds in; the visitor is held until then.
-const freeAt = 99;
+// The last line reaches "You may climb down now" ten seconds in (measured on the recorded clip); the visitor is held
+// until then.
+const freeAt = 100;
 export const planterLines = cues.map(([,id]) => id);
 
 // Earlier baked rooms carry just the authored collider names.

@@ -146,11 +146,17 @@ test('the planter speaks at 10, 45 and 90 seconds and holds the visitor until th
   visit.tick(35);assert.deepEqual(cues,['planter_10','planter_45']);
   visit.tick(45);assert.deepEqual(cues,['planter_10','planter_45','planter_90']);
   assert.equal(visit.held,true);assert.equal(visit.released,false);
-  visit.tick(8.9);assert.equal(visit.held,true);
+  visit.tick(9.9);assert.equal(visit.held,true);
   visit.tick(.1);assert.equal(visit.held,false);assert.equal(visit.released,true);
-  visit.tick(60);assert.deepEqual(visit.state(),{used:true,held:false,seconds:99,cues:3});
+  visit.tick(60);assert.deepEqual(visit.state(),{used:true,held:false,seconds:100,cues:3});
   const voices=JSON.parse(await readFile(new URL('../assets/expo/audio/planter-voices.json',import.meta.url),'utf8'));
   assert.deepEqual(Object.keys(voices),planterLines);
+  // Each line has its recorded clip beside the voice file, and it is a real recording.
+  for(const [id,line] of Object.entries(voices)){
+    assert.equal(line.audio,id+'.mp3');
+    const clip=await readFile(new URL('../assets/expo/audio/'+line.audio,import.meta.url));
+    assert.ok(clip.length>100000,id+' clip');
+  }
   // House copy: no exclamation marks, no en or em dashes.
   const banned=c=>c==='!'||c.codePointAt(0)===0x2013||c.codePointAt(0)===0x2014;
   for(const line of Object.values(voices))assert.ok(line.subtitle&&line.seconds>0&&![...line.subtitle].some(banned));
