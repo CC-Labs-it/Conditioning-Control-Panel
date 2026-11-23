@@ -196,6 +196,22 @@ namespace ConditioningControlPanel.Features
         {
             if (brush is SolidColorBrush solid) Controls.Rows.RowHue.SetHue(_body, solid.Color);
             else _body.ClearValue(Controls.Rows.RowHue.HueProperty);
+            ApplySliderFill();
+        }
+
+        static OptionSection()
+        {
+            Controls.Rows.RowHue.TintSlidersProperty.OverrideMetadata(typeof(OptionSection), new FrameworkPropertyMetadata(
+                false, FrameworkPropertyMetadataOptions.Inherits, (d, _) => ((OptionSection)d).ApplySliderFill()));
+        }
+
+        /// <summary>Readable Rows: on a page that opts in (<see cref="Controls.Rows.RowHue.TintSlidersProperty"/>) the sliders fill in the section hue.</summary>
+        private void ApplySliderFill()
+        {
+            if (_body == null) return;
+            if (Controls.Rows.RowHue.GetTintSliders(this) && GetValue(SectionHueBrushProperty) is Brush b)
+                Controls.Rows.RowHue.SetSliderFill(_body, b);
+            else _body.ClearValue(Controls.Rows.RowHue.SliderFillProperty);
         }
 
         private void OnTitleChanged()

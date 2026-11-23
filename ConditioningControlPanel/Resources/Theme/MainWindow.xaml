@@ -2,6 +2,7 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
                     xmlns:features="clr-namespace:ConditioningControlPanel.Features"
+                    xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
                     xmlns:loc="clr-namespace:ConditioningControlPanel.Localization">
         <!-- Note: BoolToVisibility and InverseBoolToVisibility converters are defined in
              Application.Resources (Converters.xaml) to ensure availability in all DataTemplates -->
@@ -287,10 +288,13 @@
                             <Border x:Name="TrackGroove" Height="3" Background="{DynamicResource PanelAccentBrush}" CornerRadius="1.5" VerticalAlignment="Center"/>
                             <Track x:Name="PART_Track">
                                 <Track.DecreaseRepeatButton>
-                                    <RepeatButton x:Name="TrackFill" Command="Slider.DecreaseLarge">
+                                    <!-- Readable Rows: the fill wears rows:RowHue.SliderFill (an opted-in
+                                         OptionSection's hue); unset = PinkBrush, see the trigger below. -->
+                                    <RepeatButton x:Name="TrackFill" Command="Slider.DecreaseLarge"
+                                                  Background="{Binding Path=(rows:RowHue.SliderFill), RelativeSource={RelativeSource TemplatedParent}}">
                                         <RepeatButton.Template>
                                             <ControlTemplate TargetType="RepeatButton">
-                                                <Border Height="3" Background="{DynamicResource PinkBrush}" CornerRadius="1.5"/>
+                                                <Border Height="3" Background="{TemplateBinding Background}" CornerRadius="1.5"/>
                                             </ControlTemplate>
                                         </RepeatButton.Template>
                                     </RepeatButton>
@@ -323,6 +327,9 @@
                              Dim the groove, the pink fill and the thumb; the thumb also drops
                              its hand cursor via IsEnabled on the Thumb itself. -->
                         <ControlTemplate.Triggers>
+                            <Trigger Property="rows:RowHue.SliderFill" Value="{x:Null}">
+                                <Setter TargetName="TrackFill" Property="Background" Value="{DynamicResource PinkBrush}"/>
+                            </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="TrackGroove" Property="Opacity" Value="0.35"/>
                                 <Setter TargetName="TrackFill" Property="Opacity" Value="0.28"/>

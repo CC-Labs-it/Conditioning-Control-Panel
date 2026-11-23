@@ -21,6 +21,28 @@ namespace ConditioningControlPanel.Controls.Rows
         public static void SetHue(DependencyObject d, Color value) => d.SetValue(HueProperty, value);
 
         /// <summary>
+        /// Opt-in for the pilot: a page that sets this (inherited) asks every <see cref="Features.OptionSection"/>
+        /// inside it to fill its sliders' tracks in the section hue. Pages without it keep the pink fill.
+        /// </summary>
+        public static readonly DependencyProperty TintSlidersProperty = DependencyProperty.RegisterAttached(
+            "TintSliders", typeof(bool), typeof(RowHue),
+            new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.Inherits));
+
+        public static bool GetTintSliders(DependencyObject d) => (bool)d.GetValue(TintSlidersProperty);
+        public static void SetTintSliders(DependencyObject d, bool value) => d.SetValue(TintSlidersProperty, value);
+
+        /// <summary>
+        /// The brush a PinkSlider fills its track with (inherited). Null = PinkBrush (the style's trigger).
+        /// Set by an OptionSection on its body while <see cref="TintSlidersProperty"/> is on.
+        /// </summary>
+        public static readonly DependencyProperty SliderFillProperty = DependencyProperty.RegisterAttached(
+            "SliderFill", typeof(Brush), typeof(RowHue),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.Inherits));
+
+        public static Brush? GetSliderFill(DependencyObject d) => (Brush?)d.GetValue(SliderFillProperty);
+        public static void SetSliderFill(DependencyObject d, Brush? value) => d.SetValue(SliderFillProperty, value);
+
+        /// <summary>
         /// The hue a row part draws in: its own <paramref name="own"/> when set, else the inherited
         /// <see cref="HueProperty"/>, else <paramref name="fallback"/> (PinkBrush), else the stock pink.
         /// </summary>
