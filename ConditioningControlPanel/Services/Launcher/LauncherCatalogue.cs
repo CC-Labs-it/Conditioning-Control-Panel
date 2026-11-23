@@ -257,8 +257,9 @@ public static class LauncherCatalogue
         // subscriber gets the full game and a free account the small one (Services/Tc/TcRules), so
         // the click always opens something. Shown only when the game tree is on disk. Signed out it
         // asks for an account like the other games (the edition is read off the account).
-        // Art owed: no 16:9 picture yet (glyph plate), and launcher-icons/tc.ico is a copy of the app icon.
-        G(Tc.TcHostService.GameId, null, "§", Tile(0xFF, 0x6F, 0xB5), () => Tc.TcHostService.TreePresent, Never,
+        // The art is real gameplay: a run at 20 minutes captured from the game, with the game's own logo
+        // on it; launcher-icons/tc.ico is the T&C sticker cut from that logo on the run's spiral.
+        G(Tc.TcHostService.GameId, "features/tc.png", "§", Tile(0xFF, 0x6F, 0xB5), () => Tc.TcHostService.TreePresent, Never,
             () => Tc.TcHostService.Launch(),
             () => Tc.TcHostService.IsActive, isNew: true);
 
