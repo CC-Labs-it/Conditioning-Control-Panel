@@ -35,7 +35,7 @@ import { mountTransmission } from './ui/transmission.js';
 import { endingNudge, mountPauseNudge } from './ui/nudges.js';
 import { mountLockedTile } from './ui/shop-locked.js';   // small: one greyed tile at the end of the shop   // small: the ending and pause doors to the full game   // the transmission card, the pen sign and the llama-8 card
 import { mountHomeTip } from './ui/phone.js';
-import { previewBarAllowed } from './ui/preview-bar-model.js';
+import { previewBarAllowed, devConsoleAllowed, devChord } from './ui/preview-bar-model.js';
 
 const qs = new URLSearchParams(location.search);
 /* Dev doors (jumps, granted items, cheat wallets, the age-gate skip they carry) open only on a local preview.
@@ -370,6 +370,24 @@ function start(init) {
       .then((m) => { window.fuzz.bar = m.mountPreviewBar({ doc: document, win: window, engine, ui, life, hooks, remountPen: pen }); })
       .catch((err) => console.error('preview bar:', err));
   };
+  /* The hidden dev console (owner 2026-11-23; rules in ui/preview-bar-model.js): the same bar, on a host that hands it
+     over with caps.dev (the standalone program; never the website, never the CCP app), behind Ctrl + Alt + Shift + T.
+     Armed from boot, so it also answers on the main menu and inside an Expo visit; nothing is fetched until the chord. */
+  const armDevConsole = () => {
+    if (!devConsoleAllowed(init.caps, { hosted: bridge.isHosted })) return;
+    document.documentElement.dataset.devConsole = '';   // the Expo hands its visit over as window.__expo (ending.js)
+    let bar = null, loading = false;
+    window.addEventListener('keydown', (ev) => {
+      if (!devChord(ev)) return;
+      ev.preventDefault(); ev.stopPropagation();
+      if (bar) { bar.toggle(); return; }
+      if (loading) return;
+      loading = true;
+      import('./ui/preview-bar.js')
+        .then((m) => { bar = window.fuzz.bar = m.mountPreviewBar({ doc: document, win: window, engine, ui, life, hooks, remountPen: pen, secret: true, live: () => playing }); bar.toggle(true); })
+        .catch((err) => { loading = false; console.error('dev console:', err); });
+    }, true);
+  };
   const go = () => {
     bindPalette(engine, document);
     previewBar();
@@ -429,6 +447,7 @@ function start(init) {
       go();
     });
   }
+  armDevConsole();
   if (skyVisit) reopenSky();
   else if (skySleeps) openSkyAsleep({ cards: ui.cards, win: window, send: bridge.send, ed,
     newRun: () => { leaving = true; extras.again = 1; store(storage, run, life, extras); location.reload(); } });

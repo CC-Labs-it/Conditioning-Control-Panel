@@ -55,6 +55,7 @@ caps: {
   platform: 'web' | 'desktop', // missing = web
   saveSlot: bool,              // section 6.3; the host keeps one save string for this account
   expo: { state: 'ready' | 'absent', base?: url, mb?: int },  // section 6.5; desktop and full only
+  dev: bool,                   // the hidden dev console (ui/preview-bar-model.js): only a host that prices nothing sends it (the standalone program); never the website, never the CCP app
 }
 mod: 'default' | 'bambi' | 'sissy' | 'locked' | 'drone'
 ```

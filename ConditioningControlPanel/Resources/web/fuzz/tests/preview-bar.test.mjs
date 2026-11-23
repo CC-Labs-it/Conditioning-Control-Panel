@@ -6,7 +6,8 @@ import { createJourney } from '../sim/journey.js';
 import { createPrestige } from '../sim/prestige.js';
 import { STAR_BY_ID } from '../data/prestige.js';
 import { measureJourney } from '../dev/journey-timing.mjs';
-import { previewBarAllowed, startsOpen, warpSlices, runClock, playAhead, journeyShop, plainShop, depthSetup, defaultPicks, STEP_MAX_MS, FRAME_MAX_MS } from '../ui/preview-bar-model.js';
+import { previewBarAllowed, startsOpen, warpSlices, runClock, playAhead, journeyShop, plainShop, depthSetup, defaultPicks, STEP_MAX_MS, FRAME_MAX_MS, devConsoleAllowed, devChord, devAmount, DEV_AMOUNT_MAX, EXPO_EXITS } from '../ui/preview-bar-model.js';
+import { endingTitles } from '../ui/expo/renewal-endings.js';
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 const at = (href) => new URL(href);
@@ -173,4 +174,55 @@ test('a Renewal Depth comes with stars no deeper than itself and some Stardust',
     assert.ok(!p.own.head_9, 'never Skip Ahead');
   }
   assert.equal(depthSetup(99, createPrestige()).depth, 10);
+});
+
+/* ---- the hidden dev console (owner 2026-11-23) ---- */
+test('the dev console opens only on a host that hands it over, never on the website or in the CCP app', () => {
+  assert.equal(devConsoleAllowed({ dev: true }, { hosted: true }), true, 'the standalone program');
+  assert.equal(devConsoleAllowed({ dev: true }, { hosted: false }), false, 'a page nobody hosts cannot grant it to itself');
+  assert.equal(devConsoleAllowed({ dev: true }), false);
+  for (const caps of [undefined, null, {}, { dev: false }, { dev: 1 }, { dev: 'true' }, { edition: 'full', platform: 'desktop' }]) {
+    assert.equal(devConsoleAllowed(caps, { hosted: true }), false, JSON.stringify(caps));
+  }
+});
+
+test('the chord is Ctrl + Alt + Shift + T, pressed once: no accident reaches it', () => {
+  const key = (over = {}) => ({ ctrlKey: true, altKey: true, shiftKey: true, metaKey: false, code: 'KeyT', repeat: false, ...over });
+  assert.equal(devChord(key()), true);
+  for (const miss of [{ ctrlKey: false }, { altKey: false }, { shiftKey: false }, { metaKey: true }, { code: 'KeyY' }, { code: 'F12' }, { repeat: true }]) {
+    assert.equal(devChord(key(miss)), false, JSON.stringify(miss));
+  }
+  assert.equal(devChord(null), false);
+});
+
+test('a typed amount reads plain, with a unit or as 1e15, and anything else is nothing', () => {
+  assert.equal(devAmount('5000'), 5000);
+  assert.equal(devAmount(' 1,500,000 '), 1500000);
+  assert.equal(devAmount('2.5m'), 2500000);
+  assert.equal(devAmount('3K'), 3000);
+  assert.equal(devAmount('1b'), 1e9);
+  assert.equal(devAmount('4t'), 4e12);
+  assert.equal(devAmount('1e15'), 1e15);
+  assert.equal(devAmount('9e99'), DEV_AMOUNT_MAX);
+  for (const bad of ['', '0', '-5', 'abc', '1x', '0.2', 'Infinity', 'NaN', '1e', '5 fuzz', null, undefined]) assert.equal(devAmount(bad), 0, String(bad));
+});
+
+test('the console lists the Expo\'s own six endings', () => {
+  assert.deepEqual(Object.fromEntries(EXPO_EXITS), endingTitles);
+});
+
+test('main.js arms the console behind the host cap, and nothing of the bar is fetched before the chord', () => {
+  const main = read('../main.js');
+  assert.match(main, /if \(!devConsoleAllowed\(init\.caps, \{ hosted: bridge\.isHosted \}\)\) return;/);
+  const arm = main.slice(main.indexOf('const armDevConsole'), main.indexOf('armDevConsole();'));
+  assert.ok(arm.indexOf('devConsoleAllowed') < arm.indexOf('addEventListener'), 'the gate comes before the key listener');
+  assert.ok(arm.indexOf('devChord(ev)') < arm.indexOf("import('./ui/preview-bar.js')"), 'the import waits for the chord');
+  assert.match(arm, /secret: true/);
+  const bar = read('../ui/preview-bar.js');
+  assert.match(bar, /if \(secret\) \{ root\.hidden = true;/, 'nothing shows until the chord');
+  assert.match(bar, /if \(E\.runEdition\(run\(\)\)\) return 0;/, 'small: the console never writes Stardust');
+  /* The chord itself is written nowhere a player reads: not in the page, not in a card, not in the bar's own words. */
+  for (const p of ['../index.html', '../ui/tips.js', '../ui/intro.js', '../ui/cards.js']) assert.doesNotMatch(read(p), /Ctrl \+ Alt/i, p);
+  const words = [...bar.matchAll(/(?:textContent = |b\(|say\()[`'"]([^`'"]*)/g)].map((m) => m[1]).join(' ');
+  assert.doesNotMatch(words, /Ctrl|Alt \+|Shift/i);
 });
