@@ -191,6 +191,8 @@ export function mountPreviewBar({ doc = document, win = doc.defaultView, engine,
   setOpen(secret ? false : wasOpen);
   /* The hidden console: the chord shows the whole bar, open, and frees the mouse from the Expo's pointer lock; the
    * chord again puts all of it away. */
+  /** An ending is about to play: the panel folds, and the hidden console goes away whole (no chip over the show). */
+  function putAway() { setOpen(false); if (secret) root.hidden = true; }
   function toggle(show = root.hidden) {
     root.hidden = !show;
     if (!show) return false;
@@ -298,7 +300,7 @@ export function mountPreviewBar({ doc = document, win = doc.defaultView, engine,
     E.grant(s, id);
     s.ended = { id, at: s.clock };
     engine.end(id);
-    setOpen(false);
+    putAway();
     paint();
     return true;
   }
@@ -370,7 +372,7 @@ export function mountPreviewBar({ doc = document, win = doc.defaultView, engine,
     const visit = expoVisit();
     if (!visit) { say('No Expo visit on the page.'); return false; }
     if (!EXPO_EXITS.some(([k]) => k === key)) return false;
-    setOpen(false);
+    putAway();
     try { void visit.exhibits.endVisit(key); } catch (e) { console.error(e); return false; }
     return true;
   }
