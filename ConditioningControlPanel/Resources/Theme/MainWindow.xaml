@@ -615,6 +615,13 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
 
+        <!-- Readable Rows (owner 2026-11-24): the height of an option row Grid that holds a
+             Controls/Rows RowLabel (34 px emblem, 16 px label, 19 px number with a unit under it).
+             MinHeight, never a fixed Height, so a long label or a two-line value can still grow. -->
+        <Style x:Key="OptionRow" TargetType="Grid">
+            <Setter Property="MinHeight" Value="46"/>
+        </Style>
+
         <!-- Value Label Style -->
         <Style x:Key="ValueLabel" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{DynamicResource PinkBrush}"/>

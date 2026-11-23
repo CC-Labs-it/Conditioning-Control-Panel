@@ -277,6 +277,11 @@
     <!-- Rounded display font (Fredoka, OFL) for the Chaos multiplier hero number. Embedded as a
          Resource so the pack:// font URI (/Fonts/#Fredoka) resolves in the single-file build. -->
     <Resource Include="Fonts\Fredoka.ttf" />
+    <!-- Readable Rows (owner 2026-11-24): Nunito static cuts (OFL, licence OFL-Nunito.txt beside them),
+         Google Fonts' own instances of the variable font. WPF picks weights only from static files:
+         family string /Fonts/#Nunito, Segoe UI, Bold = row labels, ExtraBold = row numbers. -->
+    <Resource Include="Fonts\Nunito-Bold.ttf" />
+    <Resource Include="Fonts\Nunito-ExtraBold.ttf" />
     <!-- Dares slip fonts (OFL, licences beside them): Barlow Condensed prints the slip, Caveat writes the fills. -->
     <Resource Include="Fonts\Dares\*.ttf" />
   </ItemGroup>
