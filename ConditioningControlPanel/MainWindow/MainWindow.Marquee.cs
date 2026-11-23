@@ -983,13 +983,20 @@ namespace ConditioningControlPanel
 
         /// <summary>
         /// Shows the paper promo card for a server announcement that carries a valid promo. False
-        /// means the caller shows the old AnnouncementPopup instead. The window itself lands in the
-        /// next PR of the stack; until then every promo falls back to the old popup.
+        /// means the caller shows the old AnnouncementPopup instead.
         /// </summary>
         private bool TryShowPromoCard(string id, string title, string message, Services.Announcements.PromoCard promo)
         {
-            App.Logger?.Debug("Announcement {Id}: promo card not built yet, old popup", id);
-            return false;
+            try
+            {
+                PromoCardWindow.ShowFor(id, title, message, promo);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Warning("Announcement {Id}: promo card failed, old popup: {Error}", id, ex.Message);
+                return false;
+            }
         }
 
         #endregion
