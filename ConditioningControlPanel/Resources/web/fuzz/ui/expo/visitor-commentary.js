@@ -32,7 +32,7 @@ export function visitorCommentary(state,cue){
       case 'commons':if(offer('green_record',state.bestSpit>0))return;break;
       case 'hall':
         if(offer('queue_stamp',has('Queued'))||offer('queue_corner',state.queueProgress>3&&state.queueProgress<23)||
-          offer('press_quiet',ledger('did-not-press'))||offer('press_last',state.pressSwitchReady)||
+          offer('press_quiet',ledger('did-not-press'))||   // press_last ("The small switch...") is no longer offered: the last press is the second button on the plinth again
           offer('press_barrier',state.firstPressCount===2)||
           offer('press_first_again',state.firstPressCount===1&&Math.abs(feet.z+9)<4)||
           offer('dome_exit',from==='dome'&&state.domeSeconds>90))return;break;

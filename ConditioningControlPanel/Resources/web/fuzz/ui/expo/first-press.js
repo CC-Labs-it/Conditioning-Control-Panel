@@ -143,7 +143,7 @@ export function firstPress(api,state){
     else if(count===2)state.pressTask={...base,title:'Jump the rope, or carry a post away',where:'First Press · inside the rope'};
     else if(found<4)state.pressTask={...base,title:'Find the button',where:found+' of 4 · follow the ticking · '+names[found],atShop:found>=2};
     else if(!switchReady)state.pressTask={...base,title:'Do not press',where:'Stand by it for 10 seconds · beside the dome door'};
-    else if(!sealed)state.pressTask={...base,title:'Press the small switch to close the display',where:'Grand Hall · First Press'};
+    else if(!sealed)state.pressTask={...base,title:'I AGREE TO STOP',where:'Grand Hall · First Press'};
     else state.pressTask={...base,title:'First Press: closed',where:'Sealed by the visitor · Grand Hall'};
   }
   function press(stop=false,index=moved){
@@ -158,7 +158,7 @@ export function firstPress(api,state){
     if(count===2&&!carriedPost&&camera.position.z>=-7.56){
       api.say?.('Jump the rope, or carry a post away.');return;
     }
-    if(count>=7){api.say?.(switchReady?'Press the small switch to close the display.':'DO PRESS. Register unchanged. Stand by it for 10 seconds.');still=0;return;}
+    if(count>=7){api.say?.(switchReady?'I AGREE TO STOP. Grand Hall · First Press.':'DO PRESS. Register unchanged. Stand by it for 10 seconds.');still=0;return;}
     if(count>=3&&(index!==moved||index!==found||pending)){api.say?.('Already recorded. Look away to let the loan travel.');return;}
     if(count===2&&++roped<ROPE_PRESSES){
       // Recorded, and the rope stays: one more notice goes up beside the last.

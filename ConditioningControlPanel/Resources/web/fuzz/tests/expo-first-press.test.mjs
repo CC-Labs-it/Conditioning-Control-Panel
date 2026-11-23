@@ -114,7 +114,7 @@ test('the First Press moves its original cover and keeps the register clear',asy
   camera.position.set(-11.48,1.6,-2);press.tick(9.9,'hall');assert.equal(state.presses,9);
   press.press(true);assert.equal(press.sealed,false);
   press.tick(.2,'hall');room.updateMatrixWorld(true);
-  assert.equal(state.pressTask.where,'Grand Hall · First Press');
+  assert.deepEqual([state.pressTask.title,state.pressTask.where],['I AGREE TO STOP','Grand Hall · First Press']);
   assert.equal(stop.visible,false,'the second button shows only once the plinth is back');
   assert.ok(height(cover)<originalHeight,'the plinth is on its way up');
   press.tick(1.7,'hall');room.updateMatrixWorld(true);
