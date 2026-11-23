@@ -885,6 +885,10 @@ namespace ConditioningControlPanel
             public string? image_url { get; set; }
             public string? link_url { get; set; }
             public string? theme { get; set; }
+            /// <summary>The paper promo card (7.4+). Absent or invalid keeps the old popup.</summary>
+            public System.Text.Json.JsonElement? promo { get; set; }
+            /// <summary>Epoch ms; the server keeps it to itself today, read in case it ever sends it.</summary>
+            public long? expires_at { get; set; }
         }
 
         /// <summary>
@@ -935,6 +939,11 @@ namespace ConditioningControlPanel
                             var imageUrl = result.image_url;
                             var linkUrl = result.link_url;
                             var theme = result.theme;
+                            // Read once here so a bad promo is logged once; re-checked at open,
+                            // because an Inbox row can be opened after the offer has ended.
+                            var promo = Services.Announcements.PromoCardRules.TryRead(result.promo, ServerClock.UtcNow, result.expires_at);
+                            if (result.promo is { ValueKind: System.Text.Json.JsonValueKind.Object } && promo == null)
+                                App.Logger?.Information("Announcement {Id}: promo dropped (failed a limit), old popup", id);
 
                             // Shown at once when nothing is quiet - which is every launch that is
                             // not a brand-new install - and otherwise a row in the Inbox. The
@@ -950,31 +959,17 @@ namespace ConditioningControlPanel
                                 Summary = Summarise(message),
                                 Open = () =>
                                 {
+                                    // A promo that still holds when the row opens gets the paper
+                                    // card; anything else is the old popup, exactly as before.
+                                    var live = promo != null && promo.EndsAt > ServerClock.UtcNow ? promo : null;
+                                    if (live != null && TryShowPromoCard(id, title, message, live)) return;
                                     var popup = new AnnouncementPopup(id, title, message, imageUrl, linkUrl, theme);
                                     popup.Show();
                                 },
-                                Dismiss = () =>
-                                {
-                                    try
-                                    {
-                                        var s = App.Settings?.Current;
-                                        if (s == null) return;
-                                        s.DismissedAnnouncementId = id;
-                                        App.Settings?.Save();
-
-                                        // The account half, exactly as AnnouncementPopup's own
-                                        // RecordServerDismissal does it (that method is private to
-                                        // the window and this row never opens one). Without it a
-                                        // dismissed row is a LOCAL answer only, and "The Spiral is
-                                        // open" greets the same person again on their next PC -
-                                        // which is the replay the per-account record was added to
-                                        // stop. Fire-and-forget; the call never throws and logs its
-                                        // own failures at Debug.
-                                        if (!string.IsNullOrEmpty(s.UnifiedId))
-                                            _ = App.ProfileSync?.DismissAnnouncementAsync(id);
-                                    }
-                                    catch (Exception ex) { App.Logger?.Debug("Announcement row dismiss: {E}", ex.Message); }
-                                },
+                                // Both halves (the local slot and the per-account record): without
+                                // the account half a dismissed row is a LOCAL answer only, and "The
+                                // Spiral is open" greets the same person again on their next PC.
+                                Dismiss = () => Services.Announcements.AnnouncementDismissal.Record(id),
                             });
                         });
                     }
@@ -984,6 +979,17 @@ namespace ConditioningControlPanel
             {
                 App.Logger?.Debug("Failed to check server announcement: {Error}", ex.Message);
             }
+        }
+
+        /// <summary>
+        /// Shows the paper promo card for a server announcement that carries a valid promo. False
+        /// means the caller shows the old AnnouncementPopup instead. The window itself lands in the
+        /// next PR of the stack; until then every promo falls back to the old popup.
+        /// </summary>
+        private bool TryShowPromoCard(string id, string title, string message, Services.Announcements.PromoCard promo)
+        {
+            App.Logger?.Debug("Announcement {Id}: promo card not built yet, old popup", id);
+            return false;
         }
 
         #endregion
