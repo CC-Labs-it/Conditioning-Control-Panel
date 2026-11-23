@@ -279,6 +279,9 @@
     <Resource Include="Fonts\Fredoka.ttf" />
     <!-- Dares slip fonts (OFL, licences beside them): Barlow Condensed prints the slip, Caveat writes the fills. -->
     <Resource Include="Fonts\Dares\*.ttf" />
+    <!-- Promo card fonts (OFL, licences beside them): static Fredoka 600/500 and Courier Prime Bold,
+         the Terms & Conditioning title screen's own faces. -->
+    <Resource Include="Fonts\Promo\*.ttf" />
   </ItemGroup>
 
   <ItemGroup>
