@@ -386,6 +386,8 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       waitingForEntrance=false;
       if(!dead)narration.pause(ctx.paused || doc.hidden);
     } };
+    /* A host's dev console (main.js armDevConsole) may end the visit by any of its endings: it gets the exhibits, nothing else. */
+    if (doc.documentElement.hasAttribute('data-dev-console')) Object.defineProperty(api, 'exhibits', { get: () => exhibits, set: () => {}, enumerable: true, configurable: true });
     if (['localhost','127.0.0.1','[::1]'].includes(win.location.hostname)) Object.assign(api, {
       root, camera, scene, renderer, interact, draw, go, warp: go, exhibits, walker, narrationState:narration.debug,musicState:music.debug,plantState:instruments.debug,ambience:ambience.debug,footfalls:sound.footfalls,buttons:buttons.debug,
       drawAllRoomDetails:()=>draw(true),
