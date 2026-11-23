@@ -13,8 +13,19 @@ public class PinkTintLayer : BaseLayer
     private double _opacity;
     private bool _dirty = true;   // #550: a steady tint is static - only repaint when it changes
     private readonly SKPaint _paint = new();
-    /// <summary>The colour and strength the pink filter was last told to show. Steam (its Super look) wears them.</summary>
-    internal static (byte R, byte G, byte B, double Opacity) LastLook { get; private set; } = (255, 105, 180, 0.2);
+    /// <summary>The colour and strength the pink filter was last told to show. Steam (its Super look) wears them.
+    /// The strength is the painted one: the Accessibility limit (<see cref="Safety.PinkComfortLimit"/>) already applied.</summary>
+    internal static (byte R, byte G, byte B, double Opacity) LastLook
+    {
+        get
+        {
+            var l = _lastLook;
+            return (l.R, l.G, l.B, Safety.PinkComfortLimit.Apply(l.Opacity));
+        }
+    }
+    private static (byte R, byte G, byte B, double Opacity) _lastLook = (255, 105, 180, 0.2);
+    // The limit's cap this layer last painted with: a change (switch, slider) repaints a steady tint.
+    private double _paintedCap = 1;
 
     private readonly CompositorEngine _engine;
     private int _sortedZ;
@@ -80,7 +91,7 @@ public class PinkTintLayer : BaseLayer
         var o = Math.Clamp(opacity, 0.0, 1.0);
         if (r == _r && g == _g && b == _b && o == _opacity) return;  // no visible change
         _r = r; _g = g; _b = b; _opacity = o;
-        LastLook = (r, g, b, o);
+        _lastLook = (r, g, b, o);
         _dirty = true;
     }
 
@@ -102,6 +113,9 @@ public class PinkTintLayer : BaseLayer
 
     public override void Update(TimeSpan delta)
     {
+        // Accessibility limit switched or moved: the steady tint is dirty-gated, so repaint it now.
+        double cap = Safety.PinkComfortLimit.Cap;
+        if (cap != _paintedCap) { _paintedCap = cap; _dirty = true; }
         if (WearsLooks)
         {
             // Two-tone switched or its second colour changed, or still cross-fading: repaint.
@@ -131,7 +145,9 @@ public class PinkTintLayer : BaseLayer
 
     public override void Render(SKCanvas canvas, SKRectI boundsPx, double dpiScale, TimeSpan elapsed)
     {
-        double o = _opacity * Super.SuperStepAside.Ease(_veil);
+        // THE one place the tint's strength is painted: the Accessibility limit clips here, so no
+        // slider, preset, session, mod, ramp, pulse or Deeper band upstream can paint past it.
+        double o = Safety.PinkComfortLimit.Apply(_opacity) * Super.SuperStepAside.Ease(_veil);
         if (o <= 0) return;
         var worn = WearsLooks ? Prizes.WornFog.Shown((_r, _g, _b)) : new Prizes.WornFog.FogShown((_r, _g, _b), (_r, _g, _b), false);
         if (worn.TwoTone && !SteamCarriesMix())

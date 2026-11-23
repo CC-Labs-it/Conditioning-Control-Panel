@@ -5936,6 +5936,26 @@ namespace ConditioningControlPanel.Models
             set { _gentleSpeed = Services.Safety.GentleVisuals.ClampSpeed(value); OnPropertyChanged(); }
         }
 
+        private bool _pinkComfortLimitOn;
+        /// <summary>
+        /// Accessibility, "Limit pink filter to" (2026-11-23): off by default. When on, the pink tint
+        /// and the V2 fog never paint stronger than <see cref="PinkComfortLimitPct"/>, whatever a
+        /// preset, session, mod or ramp asks for. A global preference like Gentle visuals: never in
+        /// SessionSettings, Preset or the remote generators. Read through Services/Safety/PinkComfortLimit.
+        /// </summary>
+        public bool PinkComfortLimitOn
+        {
+            get => _pinkComfortLimitOn;
+            set { _pinkComfortLimitOn = value; OnPropertyChanged(); }
+        }
+
+        private int _pinkComfortLimitPct = Looks.PinkComfort.DefaultPct;
+        public int PinkComfortLimitPct
+        {
+            get => _pinkComfortLimitPct;
+            set { _pinkComfortLimitPct = Looks.PinkComfort.ClampPct(value); OnPropertyChanged(); }
+        }
+
         private Services.BackRoom.BackRoomFxIntensity _backRoomFxIntensity = Services.BackRoom.BackRoomFxIntensity.Normal;
         /// <summary>
         /// THE BACK ROOM effects intensity (CONTRACT section 4): Calm, Normal or Full. The room is an

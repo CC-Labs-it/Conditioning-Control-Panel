@@ -691,7 +691,7 @@ public class OverlayService : IDisposable
             if (hasPink)
             {
                 var boosted = Math.Min(settings.PinkFilterOpacity * 2, 100);
-                var alpha = (byte)(boosted / 100.0 * 255);
+                var alpha = PinkAlpha(boosted / 100.0);
                 var (fr, fg, fb) = GetFilterRgb();
                 if (_pinkLayer?.IsActive == true)
                 {
@@ -1436,10 +1436,15 @@ public class OverlayService : IDisposable
         return Math.Max(current, requested);
     }
 
+    /// <summary>The alpha a legacy tint window paints for an asked opacity (0..1): the Accessibility
+    /// limit applied (Services/Safety/PinkComfortLimit). The compositor layer clips in its own Render.</summary>
+    private static byte PinkAlpha(double opacity)
+        => (byte)Math.Clamp(Safety.PinkComfortLimit.Apply(opacity) * 255, 0, 255);
+
     private void ApplyPinkOpacityDirect(double opacity)
     {
         var (fr, fg, fb) = GetFilterRgb();
-        byte a = (byte)Math.Clamp(opacity * 255, 0, 255);
+        byte a = PinkAlpha(opacity);
         if (_pinkLayer?.IsActive == true)
             _pinkLayer.Set(fr, fg, fb, opacity);
         foreach (var window in _pinkFilterWindows)
@@ -1590,7 +1595,7 @@ public class OverlayService : IDisposable
             var pinkOverlay = new Border
             {
                 Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(
-                                    (byte)(actualOpacity * 255), fr, fg, fb)),
+                                    PinkAlpha(actualOpacity), fr, fg, fb)),
                 Opacity = 1.0
             };
 
@@ -1685,7 +1690,7 @@ public class OverlayService : IDisposable
             {
                 if (border.Background is System.Windows.Media.SolidColorBrush brush)
                 {
-                    brush.Color = System.Windows.Media.Color.FromArgb((byte)(actualOpacity * 255), fr, fg, fb);
+                    brush.Color = System.Windows.Media.Color.FromArgb(PinkAlpha(actualOpacity), fr, fg, fb);
                 }
             }
         }
