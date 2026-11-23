@@ -136,7 +136,6 @@ public partial class FriendsDrawerTests
     {
         WpfRenderHarness.OnStaThread(() =>
         {
-            var service = Controls.Leash.LeashLocator.Service;
             try
             {
                 var leash = new Controls.Leash.FakeLeashService(LeashWith(Held("ada", "Ada")));
@@ -168,7 +167,7 @@ public partial class FriendsDrawerTests
                 Assert.Equal(0, d.LeashBadge);
                 Layout(d);
             }
-            finally { Controls.Leash.LeashLocator.Service = service; }
+            finally { Controls.Leash.LeashLocator.Service = () => null; }   // never the saved getter: it reads itself (stack overflow)
         });
     }
 
