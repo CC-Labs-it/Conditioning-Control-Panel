@@ -87,6 +87,9 @@ export function humanHabitat(api,state,pressRegister){
         ['feeding_slot','Feed one Yes',()=>{state.feeds++;state.ticket.stamp('Fed');state.ticket.book('hab-feed','Fed the exhibit');api.play('feed');api.cue('hab_5');}],
         ['habitat_plaque','Read next accepted clause',clause]
       ]){const mesh=obj(name);if(mesh)undo.push(register(mesh,label,fn,2.65));}
+      // One button in this room, the feeding slot's (owner, 2026-11-23). The glass and the plaque are pressed by
+      // aiming at the thing itself, so their caps leave.
+      for(const name of ['habitat_glass','habitat_plaque'])api.setButtonAvailable?.(name,false);
       undo.push(()=>{if(face)face.material=normalMat;panel?.dispose();plaque?.dispose();target.dispose();eyeMat.dispose();if(view===stateView)view=null;seated=false;});
     }
     undo.push(api.annexProps(group,place=>{

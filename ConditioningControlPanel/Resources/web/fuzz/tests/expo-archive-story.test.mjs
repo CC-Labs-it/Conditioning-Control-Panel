@@ -34,17 +34,17 @@ test('whichever screen is pressed plays the next record of the story, and a scre
 test('one screen can carry the whole story, and a screen that showed nothing has nothing to replay',()=>{
   const story=createArchiveStory(manifest);
   for(let i=0;i<story.total;i++){
-    const ticket=story.request('slot_14');assert.equal(ticket.row.archive.number,i+1);
+    const ticket=story.request('slot_11');assert.equal(ticket.row.archive.number,i+1);
     story.start(ticket);story.finish(ticket,true);
   }
-  assert.equal(story.at('slot_14').archive.number,story.total);
-  assert.equal(story.canStart('slot_14'),true);
+  assert.equal(story.at('slot_11').archive.number,story.total);
+  assert.equal(story.canStart('slot_11'),true);
   assert.equal(story.canStart('slot_02'),false);assert.equal(story.request('slot_02'),null);
 });
 test('abandoned, stale and interrupted events cannot advance progress',()=>{
   let saved,sites;
   const story=createArchiveStory(manifest,'bad-old-id',(id,places)=>{saved=id;sites=places;});
-  const lost=story.request('slot_13');
+  const lost=story.request('slot_09');
   story.finish(lost,false);
   const retry=story.request('slot_27');
   story.finish(lost,true);
@@ -53,7 +53,7 @@ test('abandoned, stale and interrupted events cannot advance progress',()=>{
   assert.equal(createArchiveStory(manifest,saved).next.archive.number,2);
   const restored=createArchiveStory(manifest,saved,null,sites);
   assert.equal(restored.at('slot_27').archive.number,1);
-  assert.equal(restored.at('slot_13'),undefined);
+  assert.equal(restored.at('slot_09'),undefined);
   // The same screen takes the next two records and rests on the later one.
   for(let i=0;i<2;i++)story.finish(story.request('slot_27'),true);
   assert.equal(story.at('slot_27').archive.number,3);
@@ -78,11 +78,11 @@ test('an older save keeps its place, and a record watched on a retired screen re
   const old=ours(records[3].id,sites);
   assert.equal(old.at('slot_05').archive.number,1);
   assert.equal(old.at('slot_01').archive.number,2);
-  assert.equal(old.at('slot_14').archive.number,4);
+  assert.equal(old.at('slot_11').archive.number,4);
   assert.equal(old.at('slot_22'),undefined);assert.equal(old.at('slot_40'),undefined);
   // With the story complete, only a screen that holds a record can still be pressed.
   const done=ours(records.at(-1).id,sites);
-  assert.deepEqual(ARCHIVE_SCREENS.filter(id=>done.canStart(id)).sort(),['slot_01','slot_05','slot_14']);
+  assert.deepEqual(ARCHIVE_SCREENS.filter(id=>done.canStart(id)).sort(),['slot_01','slot_05','slot_11']);
   assert.equal(ours(records.at(-1).id).request('slot_01'),null);
 });
 test('the Rail talk is record 1, required viewing, with four pictures cued from the recording',()=>{
@@ -99,11 +99,11 @@ test('the Rail talk is record 1, required viewing, with four pictures cued from 
 test('an older save with progress on the forty is owed the Rail talk next, then carries on where it was',()=>{
   const records=manifest.filter(r=>r.set==='event').sort((a,b)=>a.archive.number-b.archive.number);
   // Written before the Rail talk existed: four records (now 2 to 5) watched on these screens.
-  const sites=['slot_05','slot_22','unknown','slot_14'];let saved;
+  const sites=['slot_05','slot_22','unknown','slot_11'];let saved;
   const old=createArchiveStory(manifest,records[4].id,(...args)=>{saved=args;},sites);
   assert.equal(old.completed,4);assert.equal(old.next.id,'rail_lore');
   assert.equal(old.at('slot_05').archive.number,2);assert.equal(old.at('slot_01').archive.number,3);
-  assert.equal(old.at('slot_14').archive.number,5);
+  assert.equal(old.at('slot_11').archive.number,5);
   assert.ok(ARCHIVE_SCREENS.every(id=>old.canStart(id)));
   // A cancelled screening owes it still and writes nothing.
   old.finish(old.request('slot_17'),false);assert.equal(old.next.id,'rail_lore');assert.equal(saved,undefined);
@@ -111,10 +111,10 @@ test('an older save with progress on the forty is owed the Rail talk next, then 
   old.start(talk);assert.equal(old.at('slot_17').id,'rail_lore');old.finish(talk,true);
   assert.equal(old.completed,5);assert.equal(old.next,records[5]);assert.equal(old.at('slot_17').id,'rail_lore');
   // Nothing the save held is lost: the same last record, its screens shifted behind the talk, and the flag.
-  assert.deepEqual(saved,[records[4].id,['slot_17','slot_05','slot_01',null,'slot_14'],true]);
+  assert.deepEqual(saved,[records[4].id,['slot_17','slot_05','slot_01',null,'slot_11'],true]);
   const again=createArchiveStory(manifest,saved[0],null,saved[1],undefined,saved[2]);
   assert.equal(again.completed,5);assert.equal(again.next,records[5]);
-  assert.equal(again.at('slot_17').id,'rail_lore');assert.equal(again.at('slot_14').archive.number,5);
+  assert.equal(again.at('slot_17').id,'rail_lore');assert.equal(again.at('slot_11').archive.number,5);
   // A complete older save gets the talk too, and is complete after it.
   const done=createArchiveStory(manifest,records.at(-1).id,null,[]);
   assert.equal(done.completed,records.length-1);assert.equal(done.next.id,'rail_lore');
@@ -134,12 +134,12 @@ test('a screen shows nothing until a record has started on it, and a cancelled s
   assert.equal(story.displayed,undefined);
   story.finish(first,false);story.start(first);
   assert.equal(story.at('slot_08'),undefined);
-  const playing=story.request('slot_12');
+  const playing=story.request('slot_06');
   story.start(playing);
-  assert.equal(story.at('slot_12'),next);
+  assert.equal(story.at('slot_06'),next);
   assert.equal(story.at('slot_08'),undefined);
   story.finish(playing,true);
-  assert.equal(story.at('slot_12'),next);
+  assert.equal(story.at('slot_06'),next);
   assert.equal(story.at('slot_08'),undefined);
 
   // A save that only knows its last record: the earlier ones rest nowhere, later ones are remembered by screen.
@@ -152,20 +152,26 @@ test('a screen shows nothing until a record has started on it, and a cancelled s
   assert.equal(resumed.at('slot_01'),undefined);
   assert.equal(resumed.at('slot_09').archive.number,3);
 });
-test('seventeen screens, never more than one in a small room, and every one of them is in the route file',async()=>{
+test('thirteen screens, none in a room that has its own game, and every one of them is in the route file',async()=>{
   const route=JSON.parse(await readFile(new URL('../assets/expo/station-route.json',import.meta.url),'utf8'));
   const rooms={};
   for(const id of ARCHIVE_SCREENS){
     const slot=route.slots.find(row=>row.id===id);assert.ok(slot,id+' is in the route file');
     (rooms[slot.zone]||=[]).push(slot);
   }
-  assert.equal(ARCHIVE_SCREENS.length,17);assert.equal(new Set(ARCHIVE_SCREENS).size,17);
+  assert.equal(ARCHIVE_SCREENS.length,13);assert.equal(new Set(ARCHIVE_SCREENS).size,13);
   assert.deepEqual(Object.fromEntries(Object.entries(rooms).map(([zone,list])=>[zone,list.length])),
-    {atrium:3,chronology:2,forum:2,commons:2,aquarium:2,service:1,hall:2,hoof:1,habitat:1,shop:1});
+    {atrium:3,chronology:2,forum:2,commons:2,aquarium:2,hall:2});
   // The Atrium's three stand on three floors, the Grand Hall's two on two levels.
   for(const zone of ['atrium','hall'])assert.equal(new Set(rooms[zone].map(slot=>slot.standing[1])).size,rooms[zone].length);
-  // A retired screen rests its records in its own room.
-  for(const slot of route.slots)assert.equal(route.slots.find(row=>row.id===screenHome(slot.id)).zone,slot.zone,slot.id);
+  // A retired screen rests its records in its own room, or, where the room lost its projector, on the nearest one
+  // outside: the Atrium's for the staff wing, the Grand Hall's for the three rooms off the hall.
+  const outside={service:'slot_01',hoof:'slot_11',habitat:'slot_11',shop:'slot_11'};
+  for(const slot of route.slots){
+    const home=screenHome(slot.id);
+    if(outside[slot.zone])assert.equal(home,outside[slot.zone],slot.id);
+    else assert.equal(route.slots.find(row=>row.id===home).zone,slot.zone,slot.id);
+  }
 });
 test('the planter claims the lifetime on first landing, including a visit abandoned before the first cue',()=>{
   const life=createLife();
@@ -207,7 +213,7 @@ test('admission and local exhibit directions are independent of optional record 
   const story=createArchiveStory(manifest), at={x:0,y:0,z:0}, visitor={ticket:{issued:true}};
   assert.match(visitDirection(null,story,'atrium',at,{}),/turnstile/);
   const direction=visitDirection(null,story,'atrium',at,visitor);
-  story.finish(story.request('slot_14'),true);
+  story.finish(story.request('slot_11'),true);
   assert.equal(visitDirection(null,story,'atrium',at,visitor),direction);
   assert.match(visitDirection(null,story,'hoof',at,{hoof:'pictures'}),/picture grid/);
   assert.match(visitDirection(null,story,'shop',at,{boughtExit:true}),/Renewal door/);

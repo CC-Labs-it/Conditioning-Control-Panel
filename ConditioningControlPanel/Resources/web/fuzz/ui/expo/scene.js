@@ -271,10 +271,7 @@ export function createExpo(ctx, parent, { onExit, arrival = false, initialInputM
       return media;
     }
     narration=createNarration({ctx,camera,scene,root,register,walker,sound,assetURL,lite:LITE,owned:()=>exhibits.state.file.herd,
-      viewing:entry=>rail?.view(entry),releaseView:entry=>rail?.clearView(entry),caps:{hold:buttons.setHeld,light:buttons.setLit},
-      // The gift shop's screen stands beside the exit door. Once the sale is filed it waits for its button, so the
-      // viewing rail never closes on a visitor who is on the way out.
-      autoStart:zone=>!(zone==='shop'&&exhibits?.state.contract)});
+      viewing:entry=>rail?.view(entry),releaseView:entry=>rail?.clearView(entry),caps:{hold:buttons.setHeld,light:buttons.setLit}});
     const voiceCaptions=root.querySelector('.expo-narration'),messages=element('div','expo-visitor-messages');
     messages.append(caption,voiceCaptions);voiceCaptions.prepend(guide);
     narration.pause(waitingForEntrance || ctx.paused || doc.hidden);
