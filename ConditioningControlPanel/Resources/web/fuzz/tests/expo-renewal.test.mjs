@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {visitTicket,COUNTERFOILS} from '../ui/expo/ticket.js';
 import {modelVisitor,departureEnding} from '../ui/expo/renewal-endings.js';
-import {tillReceipt,tillPrompt,tillScreen} from '../ui/expo/settlement.js';
+import {tillReceipt,TILL_PROMPT,tillScreen} from '../ui/expo/settlement.js';
 import {trailTask} from '../ui/expo/trail-stops.js';
 import {routeFor} from '../ui/expo/rail-routes.js';
 test('Habitat has two impressions, twelve boxes fill, and a complete herd earns the photo',()=>{
@@ -31,40 +31,26 @@ test('settlement survives re-entry and converts each new deviation once',()=>{
   ticket.book('next','Removed the rope',true);assert.equal(ticket.outstanding,1);
   assert.equal(ticket.settle(),3);assert.equal(ticket.settle(),3);assert.equal(ticket.ledger.size,3);
 });
-test('the one till button reads what its next press does, from the door to the Renewal door',()=>{
+test('the shop is one press of the till: three steps on the screen, then the green door for everyone',()=>{
   const visitor=(stamps,extra={})=>{
     const ticket=visitTicket();ticket.issue();for(const mark of COUNTERFOILS.slice(0,stamps).flat())ticket.stamp(mark);
     return {ticket,file:{taps:100},presses:12,...extra};
   };
-  const short=visitor(3),home=visitor(9);
-  // At rest the screen says how far the ticket is from the way home, in the trail card's own words.
-  assert.deepEqual(tillScreen(short).rows,['Carry one souvenir to the till.','Stock follows your ticket.','3 of 12. 5 more and you may go home.']);
-  assert.equal(tillScreen(home).rows[2],'9 of 12. The exit is on sale at the gift shop.');
-  assert.equal(tillPrompt(short),'Use the till');
-  // A souvenir in the hand is what the button takes, at any step.
-  for(const step of [{},{souvenir:'Spat'},{souvenir:'Spat',contract:true},{souvenir:'Spat',contract:true,boughtExit:true}])
-    assert.equal(tillPrompt(visitor(9,{...step,carry:{key:'souvenir:Pressed'}}),0),'Set souvenir on the counter');
-  assert.equal(tillPrompt(visitor(9,{carry:{key:'tea'}})),'Use the till');
-  // Three questions, each with the one answer on offer.
-  const asked=visitor(9,{souvenir:'Pressed'});
-  assert.deepEqual([0,1,2].map(page=>[tillScreen(asked,page).title,tillPrompt(asked,page)]),
-    [['Add a bag?','YES'],['Round up to full agreement?','YES'],['Stop being asked?','NO']]);
-  assert.deepEqual(tillScreen(asked,0).rows,['The moved button','YES']);
-  assert.equal(tillPrompt(asked,1,true),'Listening');
-  // Settlement filed: the next press is the Exit with eight stamps, the day ticket under eight. No door loops between.
-  assert.equal(tillPrompt(visitor(9,{souvenir:'Pressed',contract:true}),3),'Buy Exit');
-  assert.equal(tillPrompt(visitor(8,{souvenir:'Pressed',contract:true}),3),'Buy Exit');
-  assert.equal(tillPrompt(visitor(7,{souvenir:'Pressed',contract:true}),3),'Collect day ticket');
-  assert.deepEqual(tillScreen(visitor(7,{souvenir:'Pressed',contract:true}),3),{title:'Settlement filed',rows:['7 of 12 stamps','Day ticket available','0 Yes, settled']});
-  assert.equal(tillScreen(visitor(9,{souvenir:'Pressed',contract:true}),3).rows[1],'Exit sold separately');
-  const bought=visitor(9,{souvenir:'Pressed',contract:true,boughtExit:true});
-  assert.equal(tillPrompt(bought,3),'Use the till');assert.equal(tillScreen(bought,3).title,'Renewal');
-  // The guide names the same steps and never the green door.
-  const at={x:0,y:0,z:0};
+  // At rest the screen is the whole shop in three steps, whatever the ticket holds.
+  const steps=['1  Pick a souvenir','2  Press the till','3  Leave by the green door'];
+  for(const stamps of [0,3,9])assert.deepEqual(tillScreen(visitor(stamps)),{title:'Gift shop',rows:steps});
+  assert.deepEqual(tillScreen(visitor(9,{carry:{key:'souvenir:Pressed'}})).rows,steps);
+  assert.equal(TILL_PROMPT,'Use the till');
+  // After the press: the item, and the door. Seven stamps leave by the same door as nine.
+  for(const stamps of [0,7,9]){
+    const sold=visitor(stamps,{souvenir:stamps?'Pressed':'',contract:true,boughtExit:true});
+    assert.deepEqual(tillScreen(sold),{title:'Settlement filed',rows:[stamps?'The moved button':'Day ticket','The green door is open.']});
+  }
+  // The guide names the same steps.
+  const at={x:0,y:0,z:0},bought=visitor(9,{souvenir:'Pressed',contract:true,boughtExit:true});
   assert.equal(trailTask('shop',at,visitor(3)).title,'Choose one souvenir');
-  assert.equal(trailTask('shop',at,asked).title,'Answer the question');
-  assert.equal(trailTask('shop',at,visitor(9,{souvenir:'Pressed',contract:true})).title,'Buy Exit');
-  assert.equal(trailTask('shop',at,visitor(7,{souvenir:'Pressed',contract:true})).title,'Collect a day ticket');
+  assert.equal(trailTask('shop',at,visitor(3,{carry:{key:'souvenir:Spat'}})).title,'Carry your souvenir to the till');
+  assert.equal(trailTask('shop',at,visitor(0)).title,'Use the till');
   assert.equal(trailTask('shop',at,bought).title,'Walk through the Renewal door');
   assert.equal(routeFor('souvenir:Pressed').finishes,true);
 });
