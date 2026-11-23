@@ -10,6 +10,9 @@ export function createReadingCard(root,camera) {
   let station=null;
   function hide(){station=null;card.hidden=true;}
   close.addEventListener('click',()=>{hide();root.focus({preventScroll:true});});
+  // While the view follows the mouse the pointer never rests on the card, so the wheel is handed to it here.
+  const wheel=e=>{if(!card.hidden&&card.scrollHeight>card.clientHeight+1)card.scrollTop+=e.deltaY;};
+  root.addEventListener('wheel',wheel,{passive:true});
   return {
     label(id){return station===id?'Close plaque':'Enlarge plaque';},
     toggle(id,record){
@@ -17,13 +20,17 @@ export function createReadingCard(root,camera) {
       if(!record)return;
       station=id;start.copy(camera.position);camera.getWorldDirection(direction);
       meta.textContent=[record.date,record.section].filter(Boolean).join('   ·   ');
-      title.textContent=record.title;body.textContent=record.body;card.hidden=false;
+      title.textContent=record.title;body.textContent=record.body;
+      // A long record (the Rail talk) gets a wide card, so it is read whole without scrolling.
+      card.toggleAttribute('data-long',isLongRecord(record));card.scrollTop=0;card.hidden=false;
     },
     update(){
       if(station&&(camera.position.distanceToSquared(start)>1.44 || camera.getWorldDirection(sight).dot(direction)<.68))hide();
       return station!==null;
     },
     release(id){if(station===id)hide();},
-    dispose(){card.remove();}
+    dispose(){root.removeEventListener('wheel',wheel);card.remove();}
   };
 }
+/** Longer than the usual four-sentence record: the narrow card would need scrolling. */
+export const isLongRecord=record=>(record?.body?.length||0)>560;
