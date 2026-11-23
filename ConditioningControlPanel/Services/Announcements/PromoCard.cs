@@ -16,17 +16,23 @@ namespace ConditioningControlPanel.Services.Announcements
     /// The <c>promo</c> object of <c>GET /config/announcement</c> once it has passed every limit
     /// in <see cref="PromoCardRules"/>. A build that reads one draws the paper promo window; any
     /// reply without one (or with one that fails a single limit) keeps the old AnnouncementPopup.
-    /// Wire contract: handoff-1123/BF-PROMO-BRIEF.md.
+    /// Only <c>layout</c> and <c>rows</c> are required: no <see cref="Code"/> hides the code row,
+    /// no <see cref="Cta"/> hides the button (Not now stays), no <see cref="EndsAt"/> hides the
+    /// countdown. Wire contract: handoff-1123/BF-PROMO-BRIEF.md.
     /// </summary>
     public sealed record PromoCard(
         string Layout,
         string? Tag,
         string? Hook,
-        string Code,
+        string? Code,
         IReadOnlyList<PromoRow> Rows,
         IReadOnlyList<Uri> Stickers,
-        DateTimeOffset EndsAt,
-        PromoCta Cta);
+        DateTimeOffset? EndsAt,
+        PromoCta? Cta)
+    {
+        /// <summary>True once the offer has an end and it has passed.</summary>
+        public bool HasEnded(DateTimeOffset now) => EndsAt is { } end && end <= now;
+    }
 
     /// <summary>
     /// Reads and re-checks the promo object the server sends. The server validates on POST too;
@@ -75,8 +81,12 @@ namespace ConditioningControlPanel.Services.Announcements
                 var hook = OptionalText(p, "hook", MaxHook, out ok);
                 if (!ok) return null;
 
-                var code = Str(p, "code");
-                if (code == null || code.Length < MinCode || code.Length > MaxCode || !CodePattern.IsMatch(code)) return null;
+                string? code = null;
+                if (Present(p, "code", out var codeEl))
+                {
+                    code = codeEl.ValueKind == JsonValueKind.String ? codeEl.GetString() : null;
+                    if (code == null || code.Length < MinCode || code.Length > MaxCode || !CodePattern.IsMatch(code)) return null;
+                }
 
                 if (!p.TryGetProperty("rows", out var rowsEl) || rowsEl.ValueKind != JsonValueKind.Array) return null;
                 var rows = new List<PromoRow>();
@@ -104,21 +114,28 @@ namespace ConditioningControlPanel.Services.Announcements
                     if (stickers.Count > MaxStickers) return null;
                 }
 
-                if (!p.TryGetProperty("ends_at", out var endsEl) || endsEl.ValueKind != JsonValueKind.Number
-                    || !endsEl.TryGetInt64(out var endsMs)) return null;
-                DateTimeOffset endsAt;
-                try { endsAt = DateTimeOffset.FromUnixTimeMilliseconds(endsMs); }
-                catch (ArgumentOutOfRangeException) { return null; }
-                if (endsAt <= now) return null;
-                if (expiresAt is long exp && endsMs > exp) return null;
+                DateTimeOffset? endsAt = null;
+                if (Present(p, "ends_at", out var endsEl))
+                {
+                    if (endsEl.ValueKind != JsonValueKind.Number || !endsEl.TryGetInt64(out var endsMs)) return null;
+                    try { endsAt = DateTimeOffset.FromUnixTimeMilliseconds(endsMs); }
+                    catch (ArgumentOutOfRangeException) { return null; }
+                    if (endsAt <= now) return null;
+                    if (expiresAt is long exp && endsMs > exp) return null;
+                }
 
-                if (!p.TryGetProperty("cta", out var ctaEl) || ctaEl.ValueKind != JsonValueKind.Object) return null;
-                var ctaLabel = Str(ctaEl, "label");
-                if (!IsShortText(ctaLabel, MaxCtaLabel)) return null;
-                var ctaUrl = SafeHttps(Str(ctaEl, "url"), CtaHosts);
-                if (ctaUrl == null) return null;
+                PromoCta? cta = null;
+                if (Present(p, "cta", out var ctaEl))
+                {
+                    if (ctaEl.ValueKind != JsonValueKind.Object) return null;
+                    var ctaLabel = Str(ctaEl, "label");
+                    if (!IsShortText(ctaLabel, MaxCtaLabel)) return null;
+                    var ctaUrl = SafeHttps(Str(ctaEl, "url"), CtaHosts);
+                    if (ctaUrl == null) return null;
+                    cta = new PromoCta(ctaLabel!.Trim(), ctaUrl);
+                }
 
-                return new PromoCard(Layout, tag, hook, code, rows, stickers, endsAt, new PromoCta(ctaLabel!.Trim(), ctaUrl));
+                return new PromoCard(Layout, tag, hook, code, rows, stickers, endsAt, cta);
             }
             catch (Exception)
             {
@@ -146,6 +163,10 @@ namespace ConditioningControlPanel.Services.Announcements
             if (!hosts.Contains(host)) return null;
             return uri;
         }
+
+        /// <summary>The field is on the object and not null: an optional field that is there must be right.</summary>
+        private static bool Present(JsonElement o, string name, out JsonElement value) =>
+            o.TryGetProperty(name, out value) && value.ValueKind != JsonValueKind.Null;
 
         private static string? Str(JsonElement o, string name) =>
             o.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;

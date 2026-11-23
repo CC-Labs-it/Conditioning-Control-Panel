@@ -961,7 +961,7 @@ namespace ConditioningControlPanel
                                 {
                                     // A promo that still holds when the row opens gets the paper
                                     // card; anything else is the old popup, exactly as before.
-                                    var live = promo != null && promo.EndsAt > ServerClock.UtcNow ? promo : null;
+                                    var live = promo != null && !promo.HasEnded(ServerClock.UtcNow) ? promo : null;
                                     if (live != null && TryShowPromoCard(id, title, message, live)) return;
                                     var popup = new AnnouncementPopup(id, title, message, imageUrl, linkUrl, theme);
                                     popup.Show();

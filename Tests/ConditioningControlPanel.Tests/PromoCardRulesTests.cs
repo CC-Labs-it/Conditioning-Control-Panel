@@ -54,8 +54,10 @@ public class PromoCardRulesTests
         Assert.Equal(2, p.Rows.Count);
         Assert.Equal("first month or year", p.Rows[1].Sub);
         Assert.Equal(2, p.Stickers.Count);
-        Assert.Equal(EndsMs, p.EndsAt.ToUnixTimeMilliseconds());
-        Assert.Equal("https://www.patreon.com/CodeBambi", p.Cta.Url.AbsoluteUri);
+        Assert.Equal(EndsMs, p.EndsAt!.Value.ToUnixTimeMilliseconds());
+        Assert.Equal("https://www.patreon.com/CodeBambi", p.Cta!.Url.AbsoluteUri);
+        Assert.False(p.HasEnded(Now));
+        Assert.True(p.HasEnded(DateTimeOffset.FromUnixTimeMilliseconds(EndsMs)));
     }
 
     [Fact]
@@ -84,11 +86,11 @@ public class PromoCardRulesTests
     public static TheoryData<string> Breaks() => new()
     {
         "layout other", "layout missing", "tag long", "hook long", "tag number",
-        "code short", "code long", "code lower", "code symbol", "code missing",
-        "rows none", "rows four", "row label long", "row sub long", "row label missing", "rows object",
+        "code short", "code long", "code lower", "code symbol", "code number",
+        "rows none", "rows missing", "rows four", "row label long", "row sub long", "row label missing", "rows object",
         "stickers four", "sticker http", "sticker host", "sticker lookalike host", "sticker long", "sticker quote", "sticker port", "sticker userinfo", "sticker not string",
-        "ends past", "ends now", "ends missing", "ends string",
-        "cta missing", "cta label long", "cta label missing", "cta http", "cta host", "cta javascript", "cta space",
+        "ends past", "ends now", "ends string",
+        "cta not object", "cta label long", "cta label missing", "cta http", "cta host", "cta javascript", "cta space",
     };
 
     [Theory]
@@ -110,8 +112,9 @@ public class PromoCardRulesTests
                 case "code long": o["code"] = new string('B', 17); break;
                 case "code lower": o["code"] = "bf50"; break;
                 case "code symbol": o["code"] = "BF-50"; break;
-                case "code missing": o.Remove("code"); break;
+                case "code number": o["code"] = 50; break;
                 case "rows none": o["rows"] = new JsonArray(); break;
+                case "rows missing": o.Remove("rows"); break;
                 case "rows four":
                     o["rows"] = new JsonArray(new JsonObject { ["label"] = "a" }, new JsonObject { ["label"] = "b" },
                         new JsonObject { ["label"] = "c" }, new JsonObject { ["label"] = "d" });
@@ -133,9 +136,8 @@ public class PromoCardRulesTests
                 case "sticker not string": o["stickers"] = new JsonArray(5); break;
                 case "ends past": o["ends_at"] = Now.AddMinutes(-1).ToUnixTimeMilliseconds(); break;
                 case "ends now": o["ends_at"] = Now.ToUnixTimeMilliseconds(); break;
-                case "ends missing": o.Remove("ends_at"); break;
                 case "ends string": o["ends_at"] = EndsMs.ToString(); break;
-                case "cta missing": o.Remove("cta"); break;
+                case "cta not object": o["cta"] = "https://www.patreon.com/CodeBambi"; break;
                 case "cta label long": Cta()["label"] = new string('c', 29); break;
                 case "cta label missing": Cta().Remove("label"); break;
                 case "cta http": Cta()["url"] = "http://www.patreon.com/CodeBambi"; break;
@@ -146,6 +148,35 @@ public class PromoCardRulesTests
             }
         });
         Assert.Null(p);
+    }
+
+    [Fact]
+    public void Only_layout_and_rows_are_required()
+    {
+        var p = Read(new JsonObject { ["layout"] = "tc-paper", ["rows"] = new JsonArray(new JsonObject { ["label"] = "50% off" }) });
+        Assert.NotNull(p);
+        Assert.Null(p!.Code);
+        Assert.Null(p.Cta);
+        Assert.Null(p.EndsAt);
+        Assert.False(p.HasEnded(Now.AddYears(5)));
+    }
+
+    [Theory]
+    [InlineData("code")]
+    [InlineData("cta")]
+    [InlineData("ends_at")]
+    public void A_missing_or_null_optional_field_hides_its_part_and_keeps_the_card(string field)
+    {
+        var missing = With(o => o.Remove(field));
+        var nulled = With(o => o[field] = null);
+        foreach (var p in new[] { missing, nulled })
+        {
+            Assert.NotNull(p);
+            Assert.Equal(2, p!.Rows.Count);
+            Assert.True(field != "code" || p.Code == null);
+            Assert.True(field != "cta" || p.Cta == null);
+            Assert.True(field != "ends_at" || p.EndsAt == null);
+        }
     }
 
     [Fact]
