@@ -8970,5 +8970,13 @@
   "dares_left_minutes": "осталось {0} мин",
   "dares_left_ending": "заканчивается",
   "dares_mark_me": "Я",
-  "dares_banned_until": "Без пари до {0}"
+  "dares_banned_until": "Без пари до {0}",
+  "promo_copy_code": "скопировать код",
+  "promo_copied": "скопировано",
+  "promo_opens_browser": "откроет браузер",
+  "promo_not_now": "Не сейчас",
+  "promo_ends_in": "До конца",
+  "promo_days": "дн.",
+  "promo_hours": "ч",
+  "promo_minutes": "мин"
 }

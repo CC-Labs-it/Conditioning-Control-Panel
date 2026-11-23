@@ -8970,5 +8970,13 @@
   "dares_left_minutes": "encore {0} min",
   "dares_left_ending": "se termine",
   "dares_mark_me": "Moi",
-  "dares_banned_until": "Pas de défis avant {0}"
+  "dares_banned_until": "Pas de défis avant {0}",
+  "promo_copy_code": "copier le code",
+  "promo_copied": "copié",
+  "promo_opens_browser": "ouvre le navigateur",
+  "promo_not_now": "Pas maintenant",
+  "promo_ends_in": "Fin dans",
+  "promo_days": "jours",
+  "promo_hours": "heures",
+  "promo_minutes": "min"
 }
