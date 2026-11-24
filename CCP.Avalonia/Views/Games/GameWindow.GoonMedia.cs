@@ -126,6 +126,12 @@ internal sealed partial class GameWindow
         return file?.TryGetLocalPath();
     };
 
+    internal static Func<GameWindow, byte[], Task> GoonCopyBitmap = async (w, png) =>
+    {
+        var clip = w.Clipboard ?? throw new InvalidOperationException("Clipboard unavailable");
+        await clip.SetBitmapAsync(new Bitmap(new MemoryStream(png)));
+    };
+
     private async Task ShareGoonCard(JObject o)
     {
         var id = o["id"]?.Type == JTokenType.String ? (string?)o["id"] ?? "" : "";
@@ -142,9 +148,20 @@ internal sealed partial class GameWindow
             { Reply(false, "bad-format"); return; }
             if (req.Action == "copy")
             {
-                if (Clipboard is not { } clip) { Reply(false, "clipboard-busy"); return; }
-                await clip.SetBitmapAsync(new Bitmap(new MemoryStream(req.Png)));
-                Reply(true, "");
+                // WPF GoonShareCardHandler.cs:66-83 retries a busy clipboard four times.
+                for (var attempt = 0; attempt < 4; attempt++)
+                {
+                    try { await GoonCopyBitmap(this, req.Png); }
+                    catch (Exception ex)
+                    {
+                        Serilog.Log.Debug("[Goon] clipboard attempt failed: {E}", ex.Message);
+                        if (attempt < 3) await Task.Delay(60);
+                        continue;
+                    }
+                    Reply(true, "");
+                    return;
+                }
+                Reply(false, "clipboard-busy");
                 return;
             }
             var path = await GoonSavePicker(this, req.FileName);

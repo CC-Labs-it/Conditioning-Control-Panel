@@ -90,4 +90,47 @@ public sealed partial class GameWindowTests
         finally { GameWindow.GoonSavePicker = old; Directory.Delete(dir, true); }
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GoonShareCard_RetriesBusyClipboardAndRepliesOnce(bool eventuallySucceeds) => Run((_, launcher) =>
+    {
+        const string png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+        var old = GameWindow.GoonCopyBitmap;
+        var oldMaterialize = GoonOnlineMedia.Materialize;
+        var oldRelease = GoonOnlineMedia.ReleaseTempFile;
+        GameWindow? w = null;
+        var attempts = 0;
+        try
+        {
+            GameWindow.GoonCopyBitmap = (_, _) =>
+            {
+                attempts++;
+                return !eventuallySucceeds || attempts < 3
+                    ? System.Threading.Tasks.Task.FromException(new InvalidOperationException("busy"))
+                    : System.Threading.Tasks.Task.CompletedTask;
+            };
+            launcher.Hide();
+            w = GameWindow.Launch("goon")!;
+            var frames = new List<JObject>();
+            w.Posted += json => frames.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"share-card\",\"id\":\"copy1\",\"action\":\"copy\",\"png\":\"" + png + "\"}");
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (!w.GoonSharePending.IsCompleted && DateTime.UtcNow < deadline) { Dispatcher.UIThread.RunJobs(); System.Threading.Thread.Sleep(1); }
+            Dispatcher.UIThread.RunJobs();
+            var reply = Assert.Single(frames, x => (string?)x["type"] == "share-card-result");
+            Assert.Equal(eventuallySucceeds ? 3 : 4, attempts);
+            Assert.Equal(eventuallySucceeds, (bool)reply["ok"]!);
+            Assert.Equal(eventuallySucceeds ? "" : "clipboard-busy", (string?)reply["error"]);
+            Assert.Equal("copy1", (string?)reply["id"]);
+        }
+        finally
+        {
+            w?.Close();
+            GameWindow.GoonCopyBitmap = old;
+            GoonOnlineMedia.Materialize = oldMaterialize;
+            GoonOnlineMedia.ReleaseTempFile = oldRelease;
+        }
+    });
+
 }
