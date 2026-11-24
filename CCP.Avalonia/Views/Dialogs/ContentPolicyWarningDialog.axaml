@@ -19,7 +19,7 @@
         Background="{DynamicResource DarkerBgBrush}">
 
     <Window.Resources>
-        <!-- ponytail: local copy of Dialogs/ContentPolicyWarningDialog.xaml:DlgHeader…DlgButton, hoist when a second view needs it -->
+        <!-- DlgHeader stays local: its gold foreground differs from the shared pink headers. -->
         <ControlTheme x:Key="DlgHeader" TargetType="TextBlock">
             <Setter Property="Foreground" Value="#E5C76B"/>
             <Setter Property="FontSize" Value="20"/>

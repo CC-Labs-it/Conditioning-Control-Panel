@@ -7,11 +7,13 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Input;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models.Deeper;
+using ConditioningControlPanel.Services.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
@@ -53,6 +55,40 @@ public sealed class DeeperPlayerAudioTests
         obj.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(obj, args);
     private static void Click(EnhancementPlayerWindow window, string name) =>
         window.FindControl<Button>(name)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+    [Fact]
+    public Task KeyboardSeekUpdatesAudioAndPanicKeepsItPaused() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var open = DeeperLocalAudio.Open;
+        var audio = new Audio();
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
+        var win = new EnhancementPlayerWindow(null, null) { LoadWaveformPeaks = NoPeaks };
+        try
+        {
+            win.Show();
+            win.OpenLocalMediaFile("seek.mp3");
+            Dispatcher.UIThread.RunJobs();
+            audio.PositionSeconds = 20;
+            Invoke(win, "UiTimer_Tick", null, EventArgs.Empty);
+            win.PlayerKey(Key.Right);
+            Assert.Equal(25, audio.PositionSeconds);
+            Invoke(win, "UiTimer_Tick", null, EventArgs.Empty);
+            Assert.Equal("0:25", win.FindControl<TextBlock>("TxtCurrent")!.Text);
+            win.PlayerKey(Key.Left, shift: true);
+            Assert.Equal(0, audio.PositionSeconds);
+            win.PlayerKey(Key.Right, shift: true);
+            Assert.Equal(30, audio.PositionSeconds);
+            PanicSurfaces.All.Single(s => s.Id == "deeper-player").Stop(null);
+            Assert.False(audio.Playing);
+            win.PlayerKey(Key.Right);
+            Invoke(win, "UiTimer_Tick", null, EventArgs.Empty);
+            Assert.False(audio.Playing);
+            Assert.Equal(35, audio.PositionSeconds);
+        }
+        finally { win.Close(); DeeperLocalAudio.Open = open; }
+        return Task.CompletedTask;
+    });
 
     [Theory]
     [InlineData(true)]
@@ -296,4 +332,42 @@ public sealed class DeeperPlayerAudioTests
         }
         finally { win.Close(); DeeperLocalAudio.Open = open; }
     });
+    [Fact]
+    public Task AudioEndPublishesTheLoadedPath() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("deeper-finished-").FullName;
+        var media = Path.Combine(dir, "audio.mp3");
+        var path = Path.Combine(dir, "audio.ccpenh.json");
+        File.WriteAllBytes(media, new byte[16]);
+        var enh = new Enhancement { MediaType = MediaTypes.Audio, MediaSource = media };
+        enh.Metadata.Name = "Audio";
+        File.WriteAllText(path, EnhancementSerializer.Save(enh));
+        var oldOpen = DeeperLocalAudio.Open;
+        var audio = new Audio();
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
+        var player = new EnhancementPlayerWindow(null, null) { LoadWaveformPeaks = NoPeaks };
+        string? finished = null;
+        void OnFinished(string? p) => finished = p;
+        EnhancementPlayerWindow.PlaybackFinished += OnFinished;
+        try
+        {
+            player.Show();
+            player.OpenLocalMediaFile(media);
+            Assert.Equal(path, player.LoadedFilePath);
+            Assert.True(audio.Playing);
+            audio.End();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(path, finished);
+        }
+        finally
+        {
+            EnhancementPlayerWindow.PlaybackFinished -= OnFinished;
+            player.Close();
+            DeeperLocalAudio.Open = oldOpen;
+            Directory.Delete(dir, true);
+        }
+        return Task.CompletedTask;
+    });
+
 }

@@ -153,7 +153,8 @@ public sealed class GlowRenderProofTests
         {
             // Frozen clocks: the two frames differ only by the glow, not by the Ken Burns drift or a sheen.
             FxAdorner.Time = new SteppedTime();
-            ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = new SteppedTime();
+            var beat = new SteppedTime();
+            ConditioningControlPanel.Avalonia.Helpers.BeatLoop.Time = beat;
             (s.MotionLevel, s.PerformanceMode) = (MotionLevel.Full, false);
             CoreEntitlement.HasPremiumProvider = null;
             CoreEntitlement.HasLabProvider = null;
@@ -166,8 +167,13 @@ public sealed class GlowRenderProofTests
             // pixels; on a loaded runner either one still covers the padlock when the frames are captured.
             w.CompleteTabTransition();
             Dispatcher.UIThread.RunJobs();
+            // Finish the shelf entrance, then freeze both frames at the same visible state.
+            beat.Advance(TimeSpan.FromSeconds(2));
+            ConditioningControlPanel.Avalonia.Helpers.BeatLoop.StepAll();
             var view = w.Named<ExclusivesTabView>("ExclusivesTab")!;
             var lockGlyph = view.GetVisualDescendants().OfType<IconGlyph>().First(t => t.Name == "VeilLock" && t.IsEffectivelyVisible);
+            var card = lockGlyph.GetVisualAncestors().OfType<Border>().First(b => b.Name == "ExCard");
+            Assert.Equal(1, card.Opacity, 6);
             // IsEffectivelyVisible does not account for ScrollViewer clipping. Include the halo
             // in the requested rectangle so the screen proof samples the actual card.
             lockGlyph.BringIntoView(new Rect(-24, -24, lockGlyph.Bounds.Width + 48, lockGlyph.Bounds.Height + 48));

@@ -32,7 +32,7 @@ public sealed class ScrolllerWebGateTests
     public void The_first_navigation_waits_for_the_gate()
     {
         var host = File.ReadAllText(Path.Combine(RepoRoot(), "CCP.Avalonia", "Views", "Controls", "WebHost.axaml.cs"));
-        Assert.Contains("Platform.ScrolllerWebHostGate.Attach(native, () => ReferenceEquals(_web, native) ? NewScrolllerEngine() : _ => { },", host);
+        Assert.Contains("Platform.ScrolllerWebHostGate.Attach(native, () => ReferenceEquals(_web, native) && !_startupFailed ? NewScrolllerEngine() : _ => { },", host);
         Assert.Contains("() => BlockAds, ShouldBlockAdRequest);", host);
         // Both roads into the engine (Source and Navigate) return while the gate has not reported. Navigate reports
         // the held request as accepted (#4397: it loads once the gate reports), so its return carries true.
