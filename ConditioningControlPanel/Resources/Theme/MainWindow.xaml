@@ -1457,6 +1457,10 @@
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="MinHeight" Value="28"/>
+            <!-- 7.4 review wave 6: the box grows to its longest value (any language, items from code too),
+                 at most 60% of its row; past that the value ends in an ellipsis with the whole value in
+                 the tool tip. Controls/Rows/RowComboFit.cs. -->
+            <Setter Property="rows:RowComboFit.Fit" Value="True"/>
         </Style>
 
         <!-- Exclusives Section Expander Style -->
