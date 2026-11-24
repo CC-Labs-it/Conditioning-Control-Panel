@@ -49,6 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         // WPF DtrhHostService.cs:386-396: the page's haptic-state feed and every bark (effect-fired included).
         internal static Action<JObject> DtrhHapticState = ConditioningControlPanel.Services.Haptics.DtrhHapticDirector.OnHapticState;
         internal static Action<JObject> DtrhHapticEvent = ConditioningControlPanel.Services.Haptics.DtrhHapticDirector.OnGameEvent;
+        internal static Action<bool> DtrhHapticRunEnded = farewell => ConditioningControlPanel.Services.Haptics.DtrhHapticDirector.OnRunEnded(farewell);
         private DateTime? _dtrhOpenedUtc;
         private MandatoryVideoScheduler? _dtrhVideo;   // the publisher hooked at open (WPF HookVideoEvents :845)
 
@@ -434,7 +435,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _dtrhRunActive = false;
             _dtrhLastProgress = null;
             _dtrhRunStartedUtc = DateTime.MinValue;
-            try { ConditioningControlPanel.Services.Haptics.DtrhHapticDirector.OnRunEnded(); }   // WPF :606
+            // WPF :606. No farewell wave while the window is going (panic, exit, teardown): OnClosed follows.
+            try { DtrhHapticRunEnded(!fromTeardown && !_dtrhExiting); }
             catch (Exception ex) { Log.Debug("DtrhHost haptics: {E}", ex.Message); }
             ApplyDtrhWorldFreeze(false);   // WPF :607
             if (!DtrhRunCloseRule.ShouldPayBooking(wasActive))

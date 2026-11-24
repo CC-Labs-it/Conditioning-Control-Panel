@@ -144,6 +144,7 @@ namespace ConditioningControlPanel.Services.Haptics
         private static DateTime _lastAmbientSendUtc = DateTime.MinValue;
 
         private static CancellationTokenSource? _accentCts;
+        private static CancellationTokenSource? _farewellCts;   // the run-end wave; OnClosed cancels it
         private static int _accentTierPlaying;              // 0 = idle
         private static DateTime _lastAccentEndUtc = DateTime.MinValue;
 
@@ -211,6 +212,7 @@ namespace ConditioningControlPanel.Services.Haptics
             StopAmbientTimer();
             CancelCoalesce();
             _accentCts?.Cancel();
+            _farewellCts?.Cancel();   // a panic close must not let the run-end wave outlive the mixer's mute
             if (wasActive) _ = SafeStopDevice();
         }
 
@@ -230,7 +232,8 @@ namespace ConditioningControlPanel.Services.Haptics
             _ = PlayAccent(new Accent(3, 0.50, VibrationMode.Wave, 800), "run-started");
         }
 
-        public static void OnRunEnded()
+        /// <param name="farewell">False when the window is going away (panic, teardown): stop without the wave.</param>
+        public static void OnRunEnded(bool farewell = true)
         {
             bool notify;
             lock (Gate)
@@ -243,18 +246,24 @@ namespace ConditioningControlPanel.Services.Haptics
             StopAmbientTimer();
             CancelCoalesce();
             _accentCts?.Cancel();
-            if (!notify || !Ready) { _ = SafeStopDevice(); return; }
+            if (!farewell || !notify || !Ready) { _ = SafeStopDevice(); return; }
             // One soft farewell wave, then silence — the recap should feel like surfacing.
-            _ = Task.Run(async () =>
+            var cts = new CancellationTokenSource();
+            Interlocked.Exchange(ref _farewellCts, cts)?.Cancel();
+            FarewellTask = Task.Run(async () =>
             {
                 try
                 {
-                    await PlayPattern(0.45, 600, VibrationMode.Wave, CancellationToken.None);
+                    if (!cts.IsCancellationRequested)
+                        await PlayPattern(0.45, 600, VibrationMode.Wave, cts.Token);
                     await SafeStopDevice();
                 }
                 catch { }
             });
         }
+
+        /// <summary>The last farewell wave (tests).</summary>
+        internal static Task? FarewellTask { get; private set; }
 
         public static void OnWorldFreeze(bool on)
         {

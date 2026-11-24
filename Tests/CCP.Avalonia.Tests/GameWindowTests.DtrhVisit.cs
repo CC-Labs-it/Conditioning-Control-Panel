@@ -122,4 +122,37 @@ public sealed partial class GameWindowTests
         }
         finally { ConditioningControlPanel.CoreSettings.Current.MandatoryVideoFloating = oldFloat; }
     });
+
+    // Review P1: a panic must not leave a run-end farewell wave to play after the mixer's 400 ms mute.
+    // Panic then the 1,200 ms watchdog (teardown), and panic then a page that settles, both end without it.
+    [Fact]
+    public void Dtrh_PanicEndsTheRunWithoutAFarewellWave() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var old = GameWindow.DtrhHapticRunEnded;
+        var farewells = new List<bool>();
+        try
+        {
+            GameWindow.DtrhHapticRunEnded = farewells.Add;
+            var w = GameWindow.Launch("dtrh")!;
+            w.HandleMessage("{type:'ready'}");
+            w.HandleMessage("{type:'run-started'}");
+            w.HandleMessage("{type:'run-ended',abandoned:true}");
+            Assert.Equal(new[] { true }, farewells);                              // an ordinary end keeps the wave
+
+            w.HandleMessage("{type:'run-started'}");
+            w.HandleMessage("{type:'run-progress',score:10,durationSec:180}");
+            Assert.True(GameWindow.HandleDtrhPanic());                            // end-run posted, watchdog armed
+            w.Close();                                                            // what the watchdog does
+            Assert.Equal(new[] { true, false }, farewells);                       // the teardown booking: no wave
+
+            w = GameWindow.Launch("dtrh")!;
+            w.HandleMessage("{type:'ready'}");
+            w.HandleMessage("{type:'run-started'}");
+            Assert.True(GameWindow.HandleDtrhPanic());
+            w.HandleMessage("{type:'run-ended',abandoned:true}");                 // the page settled in time
+            Assert.Equal(new[] { true, false, false }, farewells);
+            w.Close();
+        }
+        finally { GameWindow.DtrhHapticRunEnded = old; }
+    });
 }
