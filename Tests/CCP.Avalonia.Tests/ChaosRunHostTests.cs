@@ -383,6 +383,40 @@ public sealed class ChaosRunHostTests
     });
 
     [Fact]
+    public async Task Ripple_offer_waits_for_ready_and_repeats_only_until_first_cast()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            try
+            {
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                var state = ChaosRunHost.State!;
+                state.RippleCooldown = 20;
+                Ticks(25);
+                string line = LocalizationManager.Instance.Get("chaos_ripple_offer_event");
+                Assert.DoesNotContain(line, state.RecentEvents);
+                state.RippleCooldown = 0;
+                Ticks(1);
+                Assert.Single(state.RecentEvents.Where(x => x == line));
+                Ticks(2);
+                Assert.Single(state.RecentEvents.Where(x => x == line));
+                ChaosRunHost.ForceShutdown();
+                ChaosMeta.State.SeenRippleTeach = true;
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                Ticks(25);
+                Assert.DoesNotContain(line, ChaosRunHost.State!.RecentEvents);
+            }
+            finally { ChaosRunHost.ForceShutdown(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task Ripple_gathers_only_during_an_active_unpaused_run()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>

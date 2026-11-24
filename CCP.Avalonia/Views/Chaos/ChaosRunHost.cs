@@ -174,7 +174,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static double SpawnSlowFactor => _slowMoRemainingSec > 0 ? SlowMoFactor : 1.0;
         private static bool _active, _spawning, _manualPaused, _endingSoonFired, _lessonCardPaused, _draftPaused;
         private static int _pendingWave, _runsAtStart, _draftsThisRun;
-        private static bool _scriptThreat, _scriptSnapped, _scriptDraft, _sinRigged, _sinPending;
+        private static bool _scriptThreat, _scriptSnapped, _scriptDraft, _sinRigged, _sinPending, _rippleTeachOffered;
         private static bool _lessonCardsAfterDraft, _finalLoopAnnounced;
         private static readonly List<ChaosUnlockCardInfo> _pendingLessonCards = new();
 
@@ -251,7 +251,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _heavyUntilUtc = DateTime.MinValue;   // WPF ChaosModeService.cs:405
             HookRunVideo();   // WPF ChaosModeService.cs:504
             _runsAtStart = ChaosMeta.State.RunsCompleted; _draftsThisRun = 0;
-            _scriptThreat = _scriptSnapped = _scriptDraft = _sinRigged = _sinPending = false;
+            _scriptThreat = _scriptSnapped = _scriptDraft = _sinRigged = _sinPending = _rippleTeachOffered = false;
             _finalLoopAnnounced = false;
             // WPF BeginRun :417-420: the run-pick ribbon, rebuilt live on every drafted pick.
             var picks = _state.RunPickTiles;
@@ -1049,6 +1049,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 _state.RippleCooldown -= ChaosRunEngine.TICK_SEC;
                 if (_state.RippleReady) RippleCue("toy_ready", 0.3f);
+            }
+            // WPF ChaosModeService.cs:990-999: offer once per run until the first cast.
+            if (!ChaosMeta.State.SeenRippleTeach && !_rippleTeachOffered && elapsed > 6
+                && _state.RippleReady && !_state.Config.ScriptedFirstRun)
+            {
+                _rippleTeachOffered = true;
+                ChaosAnnouncerOverlay.Announce(Loc.Get("chaos_ripple_offer"), ChaosAnnounceKind.PowerUp,
+                    artKey: "ripple_teach", subText: Loc.Get("chaos_ripple_offer_sub"), holdMs: ChaosAnnounceTiming.TeachHoldMs);
+                _state.PushEvent(Loc.Get("chaos_ripple_offer_event"));
             }
             TickToys();
             // WPF :1068 T-10s, once per run (a Relapse extension does not re-arm it).
