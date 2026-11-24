@@ -38,11 +38,21 @@ namespace ConditioningControlPanel.Controls.Preview
             using var p = new SKPaint { IsAntialias = true };
             if (wallpaper) Wallpaper(c, p, w, h);
             float k = Math.Max(1f, h / DesignHeight);
-            Window(c, p, w * .34f, 70 * k, w * .92f, 230, false, new[] { .46f, .60f, .38f, .54f, .30f }, .08f);
-            Window(c, p, -w * .34f, 440 * k, w * .92f, 210, true, new[] { .44f, .30f, .48f }, .44f);
-            Window(c, p, w * .42f, 760 * k, w * .92f, 250, false, new[] { .40f, .52f, .34f }, .08f);
-            Icons(c, p);
+            // A short card (Mind Wipe, Wallpaper, Bubble Count) shows the top of the same desktop: a window
+            // or an icon that would run under the taskbar is shortened or left out, never drawn across it.
+            float floor = h - TaskbarHeight;
+            FittedWindow(c, p, floor, w * .34f, 70 * k, w * .92f, 230, false, new[] { .46f, .60f, .38f, .54f, .30f }, .08f);
+            FittedWindow(c, p, floor, -w * .34f, 440 * k, w * .92f, 210, true, new[] { .44f, .30f, .48f }, .44f);
+            FittedWindow(c, p, floor, w * .42f, 760 * k, w * .92f, 250, false, new[] { .40f, .52f, .34f }, .08f);
+            Icons(c, p, floor);
             Taskbar(c, p, w, h);
+        }
+
+        private static void FittedWindow(SKCanvas c, SKPaint p, float floor, float x, float y, float w, float h, bool dark, float[] lines, float lineLeft)
+        {
+            float room = floor - 16 - y;
+            if (room < 96) return;
+            Window(c, p, x, y, w, Math.Min(h, room), dark, lines, lineLeft);
         }
 
         private static void Wallpaper(SKCanvas c, SKPaint p, float w, float h)
@@ -91,18 +101,24 @@ namespace ConditioningControlPanel.Controls.Preview
             c.Restore();
         }
 
-        private static void Icons(SKCanvas c, SKPaint p)
+        private static void Icons(SKCanvas c, SKPaint p, float floor)
         {
-            // left 8, 66 wide, centred column; tops as the mockup (14, 88, 162, 240, 314).
+            // left 8, 66 wide, centred column; tops as the mockup (14, 88, 162, 240, 314). An icon whose
+            // label would not clear the taskbar is left out.
             const float cx = 8 + 33;
+            float room = floor - 14;
             Folder(c, p, cx, 14 + 6);
             Label(c, p, cx, 14 + 6 + 23 + 7, 44);
+            if (88 + 6 + 23 + 7 > room) return;
             Folder(c, p, cx, 88 + 6);
             Label(c, p, cx, 88 + 6 + 23 + 7, 36);
+            if (162 + 30 + 7 > room) return;
             File(c, p, cx, 162);
             Label(c, p, cx, 162 + 30 + 7, 46);
+            if (240 + 26 + 7 > room) return;
             Shot(c, p, cx, 240);
             Label(c, p, cx, 240 + 26 + 7, 48);
+            if (314 + 5 + 26 + 7 > room) return;
             Bin(c, p, cx, 314 + 5);
             Label(c, p, cx, 314 + 5 + 26 + 7, 54);
         }
