@@ -72,9 +72,9 @@ public class FlashBoxRowsRenderTests
             Assert.Equal(studio, perHour.EffectiveHue);
             Assert.Equal("an hour", page.TxtFrequency.Unit);
 
-            // Sliders inside a section fill in its hue on this page; the Deck box's stay pink.
+            // Sliders inside a section fill in its hue on this page; the gold Deck box's fill in its gold.
             Assert.Equal(studio, ((SolidColorBrush)RowHue.GetSliderFill(page.SliderFrequency)!).Color);
-            Assert.Null(RowHue.GetSliderFill(page.SliderDeckFlips));
+            Assert.Equal(Color.FromRgb(0xFF, 0xE0, 0x8A), ((SolidColorBrush)RowHue.GetSliderFill(page.SliderDeckFlips)!).Color);
 
             // The Deck rows still dim and lock as a block, RowLabels and all.
             Assert.True(page.DeckRows.Opacity is 1 or SuperRows.LockedOpacity);
