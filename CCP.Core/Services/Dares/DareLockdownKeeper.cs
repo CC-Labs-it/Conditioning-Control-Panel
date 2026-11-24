@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using Newtonsoft.Json;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Dares;
 
@@ -49,7 +50,7 @@ public sealed class DareLockdownKeeper
         // Crash recovery: a serve that never came back, with no Lockdown running now, was cut short.
         if (_serve is { Outcome: null } && !_host.LockdownActive)
         {
-            App.Logger?.Information("Dares: a Lockdown stake was interrupted (bet {Bet}); reporting it ended early", _serve.BetId);
+            Log.Information("Dares: a Lockdown stake was interrupted (bet {Bet}); reporting it ended early", _serve.BetId);
             Set(_serve with { Outcome = DareLockdownRule.EndedEarly });
         }
         _host.LockdownEnded += OnEnded;
@@ -87,7 +88,7 @@ public sealed class DareLockdownKeeper
             var done = s with { Outcome = DareLockdownRule.Outcome(TimeSpan.FromMinutes(s.Minutes), ran) };
             Set(done);
             try { Ended?.Invoke(done); }
-            catch (Exception ex) { App.Logger?.Debug("Dares serve handler failed: {E}", ex.Message); }
+            catch (Exception ex) { Log.Debug("Dares serve handler failed: {E}", ex.Message); }
         }
         // Anything else is one of the player's own Lockdowns: none of a dare's business.
     }
@@ -96,7 +97,7 @@ public sealed class DareLockdownKeeper
     {
         _serve = s;
         try { _store.Write(s); }
-        catch (Exception ex) { App.Logger?.Debug("Dares serve file failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("Dares serve file failed: {E}", ex.Message); }
     }
 
     public sealed class MemoryStore : IDareServeStore
