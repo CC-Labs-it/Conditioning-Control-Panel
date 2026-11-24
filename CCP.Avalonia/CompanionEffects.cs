@@ -146,6 +146,7 @@ namespace ConditioningControlPanel.Avalonia
                     if (host is not null) PinkFilterOverlay.Refresh(host);
                     return false;
                 }
+                if (host is not null) SpiralOverlay.Refresh(host); // WPF OverlayService.Start / RefreshOverlays
                 CoreSettings.Save();
                 return true;
             });

@@ -72,7 +72,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             VoiceOpacity = next;
             return changed;
         }
-        internal static void Stop() { AiStopGeneration++; AiHold = false; VoiceOpacity = null; CloseAll(); }
+        internal static void Stop()
+        {
+            AiStopGeneration++;
+            // Stop the shared AI overlay immediately, including a gentle-fading spiral.
+            if (AiHold) { SpiralOverlay.Stop(); SpiralOverlay.CloseAll(); }
+            AiHold = false; VoiceOpacity = null; CloseAll();
+        }
 
         private static bool _refused;
         internal static bool SkipPlatformChecksForTests;
