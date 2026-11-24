@@ -265,10 +265,17 @@
 #cards .rr .rr-wlock { position: absolute; left: 50%; top: 36%; translate: -50% -50%; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
   background: var(--gold); color: var(--rr-ink); border: 2.5px solid var(--rr-ink); rotate: -8deg; }
 #cards .rr .rr-wlock svg { width: 16px; height: 16px; display: block; }
-#cards .rr .rr-parts { position: relative; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-bottom: 16px; }
-#cards .rr .rr-part { display: inline-flex; align-items: center; gap: 6px; background: var(--rr-soft); border: 2.5px solid var(--rr-ink); border-radius: 99px; padding: 3px 12px 3px 4px; font: 700 13px/1.1 var(--body); }
-#cards .rr .rr-part .rr-ic { width: 28px; height: 28px; flex: none; }
+/* the comparison list: one row per perk, its side tag a quieter line beside it, wrapping under it when the card is narrow */
+#cards .rr .rr-parts { position: relative; list-style: none; margin: 0 auto 16px; padding: 4px 12px; max-width: 760px; background: #fff; border: 2.5px solid var(--rr-ink); border-radius: 10px 14px 9px 13px / 13px 9px 14px 10px; box-shadow: 4px 4px 0 var(--rr-deep); }
+#cards .rr .rr-part { display: flex; align-items: center; gap: 10px; padding: 7px 0; min-width: 0; }
+#cards .rr .rr-part + .rr-part { border-top: 1.5px dashed color-mix(in srgb, var(--rr-ink) 45%, transparent); }
+#cards .rr .rr-part .rr-ic { width: 30px; height: 30px; flex: none; }
 #cards .rr .rr-part .rr-pstar svg { width: 100%; height: 100%; display: block; }
+#cards .rr .rr-part .rr-plock { display: grid; place-items: center; border-radius: 50%; background: var(--gold); color: var(--rr-ink); border: 2.5px solid var(--rr-ink); rotate: -8deg; }
+#cards .rr .rr-part .rr-plock svg { width: 15px; height: 15px; display: block; }
+#cards .rr .rr-pwords { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1px 12px; min-width: 0; flex: 1 1 auto; }
+#cards .rr .rr-pperk { flex: 0 0 auto; max-width: 100%; font: 700 15px/1.2 var(--body); color: var(--rr-ink); overflow-wrap: break-word; }
+#cards .rr .rr-ptag { flex: 1 1 24ch; min-width: 0; font: italic 500 13px/1.3 var(--body); color: color-mix(in srgb, var(--rr-ink) 72%, transparent); overflow-wrap: break-word; }
 #cards .rr .rr-wbtns { position: relative; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px 18px; }
 #cards .rr .rr-wmain { background: var(--gold); color: var(--rr-ink); border: 3px solid var(--rr-ink); border-radius: 99px; padding: 10px 26px 9px; min-height: 52px;
   font: 400 20px/1 var(--display); letter-spacing: .02em; box-shadow: 4px 4px 0 var(--rr-ink); transition: transform .2s cubic-bezier(.2,1.5,.4,1), box-shadow .2s; }

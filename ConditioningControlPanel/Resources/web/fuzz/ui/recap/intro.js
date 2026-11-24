@@ -178,7 +178,11 @@ export function createIntro({ doc, root, scroller, fx, sfx, stars, poster, onSet
         say(SCALE[1 + (i % (SCALE.length - 1))], 800 + i * 60, .16);
       });
       const t0 = 820 + cards.length * 60;
-      qa('.rr-part', el).forEach((p, i) => popIn(p, t0 + i * 80, { from: 'translateY(12px) scale(.5)', dur: 300, sound: i % 2 ? null : ['chip', .14, 1 + i * .05] }));
+      qa('.rr-part', el).forEach((p, i) => {
+        fadeIn(p, t0 + i * 80, 120);
+        A(p, [{ transform: 'translateX(-22px) rotate(-1.5deg)' }, { transform: 'translateX(3px)', offset: .7 }, { transform: 'none' }], { delay: t0 + i * 80, duration: 300, easing: 'ease-out', composite: 'add' });
+        if (!(i % 2)) say('chip', t0 + i * 80 + 130, .14, 1 + i * .05);
+      });
       const t1 = t0 + qa('.rr-part', el).length * 80 + 120;
       const main = q('.rr-wmain', el);
       popIn(main, t1, { from: 'scale(.4) rotate(-6deg)', dur: 380, sound: ['gold', .26] });

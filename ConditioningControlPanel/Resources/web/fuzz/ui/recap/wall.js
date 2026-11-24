@@ -1,13 +1,13 @@
 /* ui/recap/wall.js - the small edition's one card at the end of the run (owner 2026-11-24,
  * handoff-1124/tc-small-funnel/BRIEF.md: "the wall is the end of the run"). One panel on the recap, in the recap's own
  * comic look: the plain offer (the full game is in CCP, for subscribers), the endings small never opens as a fanned hand of
- * locked cards with their names, a pill row of what the full game adds (counts from the data, ui/small-funnel.js), ONE
- * main button (nudge where 'ending', want 'upgrade') and one quiet second button (want 'download', web only).
+ * locked cards with their names, a comparison list of what the full game adds (one row per perk with its side tag,
+ * counts from the data, ui/small-funnel.js), ONE main button (nudge where 'ending', want 'upgrade') and one quiet second button (want 'download', web only).
  *
  * The recap mounts it only when main.js hands the small edition's hook (hooks.nudge); nothing here reads the edition.
  * Its in is the recap intro's 'wall' beat (ui/recap/intro.js); its out is the recap's own. Gentle visuals and reduced
- * motion get no fan motion and no hover tilt (recap.css, the intro skips under calm). COPY: drafts in
- * data/content/small-funnel.js, except the endings line, which is the approved NUDGE_COPY.endingButton. */
+ * motion get no fan motion and no hover tilt (recap.css, the intro skips under calm). COPY: approved and frozen in
+ * data/content/small-funnel.js (COPY-APPROVED.md), plus the endings line, the approved NUDGE_COPY.endingButton. */
 
 import { NUDGE_COPY } from '../nudges.js';
 import { SMALL_WALL_COPY as W } from '../../data/content/small-funnel.js';
@@ -55,17 +55,18 @@ export function mountWall({ doc, parent, go, icon, star = () => '', sfx = () => 
     h('span', 'rr-wname', e.name, c);
   });
 
-  /* what else the full game adds, one pill each */
-  const row = h('div', 'rr-parts', null, wall);
-  row.setAttribute('role', 'list');
-  for (const p of parts) {
-    const pill = h('span', 'rr-part', null, row);
-    pill.setAttribute('role', 'listitem');
-    pill.dataset.part = p.key;
-    if (p.icon) pill.append(icon(p.icon, 'rr-ic'));
-    else { const s = h('span', 'rr-ic rr-pstar', null, pill); s.innerHTML = star(); }
-    h('span', '', p.label, pill);
-  }
+  /* what else the full game adds: a comparison list, one row per perk, its side tag quieter beside it (under it on a
+   * phone). Their in is the recap intro's 'wall' beat (ui/recap/intro.js), which skips under calm. */
+  const list = h('ul', 'rr-parts', null, wall);
+  parts.forEach((p) => {
+    const li = h('li', 'rr-part', null, list);
+    li.dataset.part = p.key;
+    if (p.icon) li.append(icon(p.icon, 'rr-ic'));
+    else { const s = h('span', p.lock ? 'rr-ic rr-plock' : 'rr-ic rr-pstar', null, li); s.setAttribute('aria-hidden', 'true'); s.innerHTML = p.lock ? LOCK : star(); }
+    const words = h('span', 'rr-pwords', null, li);
+    h('span', 'rr-pperk', p.label, words);
+    h('span', 'rr-ptag', p.tag, words);
+  });
 
   /* one main button, one quiet one */
   const btns = h('div', 'rr-wbtns', null, wall);

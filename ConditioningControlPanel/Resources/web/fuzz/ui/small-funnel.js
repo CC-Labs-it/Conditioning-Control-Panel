@@ -23,19 +23,21 @@ export const endingName = (endId) => brandText(String(BY_ID[endId]?.name || endI
 const cutCount = (group) => (SMALL_CUT[group] || []).filter((id) => BY_ID[id]).length;
 
 /** The wall card's fan-out: the endings small never opens (every fate set but Go Outside, theme sets included), then the
- *  parts cut from small, each with its count. A part with nothing behind it stays out. */
+ *  comparison list, one row per perk with its count and side tag. The first row counts the fan itself, so the number
+ *  and the cards can never disagree. A row with nothing behind it stays out. */
 export function wallModel() {
   const endings = FATE_SETS.filter((set) => set.id !== SMALL_ENDING_SET)
     .map((set) => ({ id: set.end, set: set.id, name: endingName(set.end) }));
   const P = SMALL_WALL_COPY.parts;
   const stars = LANES.reduce((n, lane) => n + (lane.stars?.length || 0), 0);
   const parts = [
+    { key: 'endings', n: endings.length, icon: null, lock: true },
     { key: 'arcade', n: cutCount('arcade'), icon: 'toy_box' },
     { key: 'quiz', n: cutCount('quiz'), icon: 'swap' },
     { key: 'popups', n: cutCount('popups'), icon: 'inbox' },
     { key: 'combos', n: cutCount('combos'), icon: 'x_dream' },
     { key: 'renewal', n: stars, icon: null },
     { key: 'expo', n: cutCount('expo'), icon: 'll_end' },
-  ].filter((p) => p.n > 0).map((p) => ({ ...p, label: P[p.key].replace('{n}', String(p.n)) }));
+  ].filter((p) => p.n > 0).map((p) => ({ ...p, label: P[p.key].perk.replace('{n}', String(p.n)), tag: P[p.key].tag }));
   return { endings, parts };
 }
