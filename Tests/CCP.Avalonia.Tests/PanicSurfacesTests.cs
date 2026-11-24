@@ -180,6 +180,7 @@ public sealed class PanicSurfacesTests
         "intake",
         "leash-task",
         "personality-studio",
+        "deeper-editor-error",
         "deeper-tutorial",
         "workshop-trigger-editor",
         "awareness-companion",
