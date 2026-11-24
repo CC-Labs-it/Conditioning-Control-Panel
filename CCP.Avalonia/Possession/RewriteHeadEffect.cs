@@ -6,7 +6,7 @@ using ConditioningControlPanel.Services.Possession.Effects;
 
 namespace ConditioningControlPanel.Avalonia.Possession;
 
-// WPF Effects/RewriteEffect.cs:20-60, 63-132. The director attribution and bark remain unported.
+// WPF Effects/RewriteEffect.cs:20-60, 63-132.
 internal sealed class RewriteHeadEffect : HeadEffect
 {
     private static readonly PossessionRole[] TargetRoles =
@@ -18,6 +18,7 @@ internal sealed class RewriteHeadEffect : HeadEffect
 
     public override string Id => "rewrite";
     public override PossessionRung MinRung => PossessionRung.Drift;
+    public override bool IsBig(PossessionRung rung) => rung >= PossessionRung.Melt;
     public override double Weight => 4;
     public override TimeSpan HoldFor => TimeSpan.FromSeconds(3);
     public override IReadOnlyList<PossessionRole> Roles => TargetRoles;

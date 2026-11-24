@@ -212,6 +212,7 @@ public sealed class TubeChatParityTests
 
     private sealed class NoVideoHost : ConditioningControlPanel.Services.IMandatoryVideoHost
     {
+        public int FloatingLimit => 1; public int FloatingUp => 0;
         public void Show(string path, bool strict) { }
         public double CloseAll() => 0;
         public void ShowMessage(ConditioningControlPanel.Services.AttentionVerdict verdict, int ms, Action then) { }
