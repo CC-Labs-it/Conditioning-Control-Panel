@@ -17,7 +17,7 @@ import { Powerups } from './powerups.js';
 import { Sfx } from './audio.js';
 
 // ---- host bridge ----------------------------------------------------------
-const wv = (window.chrome && window.chrome.webview) ? window.chrome.webview : null;
+let wv = (window.chrome && window.chrome.webview) ? window.chrome.webview : null;
 function post(msg) { try { if (wv) wv.postMessage(msg); } catch (_) {} }
 const sfxBridge = new Sfx(post);
 const host = { post: (type, data) => post(Object.assign({ type }, data || {})), sfx: (n, s) => sfxBridge.play(n, s) };
@@ -38,6 +38,15 @@ function onMessage(e) {
   world.handle(d);
 }
 if (wv) wv.addEventListener('message', onMessage);
+// WPE may install the carrier after this module has started.
+window.addEventListener('ccp-tunnel-connect', () => {
+  if (wv || !window.chrome?.webview) return;
+  wv = window.chrome.webview;
+  wv.addEventListener('message', onMessage);
+  if (world) post({ type: 'ready' });
+});
+// Native WebView2 does not expose dispatchEvent on chrome.webview.
+window.addEventListener('ccp-tunnel-message', onMessage);
 
 // ---- world ----------------------------------------------------------------
 function build() {

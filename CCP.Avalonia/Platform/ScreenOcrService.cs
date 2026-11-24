@@ -10,7 +10,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 // Scan orchestration. KeywordTriggerHead.SyncOcr owns it and supplies the delivery to the consumer.
 internal sealed class ScreenOcrService : IDisposable
 {
-    internal readonly record struct Word(string Text, Rectangle Bounds);
+    internal readonly record struct Word(string Text, Rectangle Bounds, string? Screen = null);
     private readonly Func<CancellationToken, Task<IReadOnlyList<Word>>> _scan;
     private readonly Func<bool> _hasAccess;
     private readonly Func<IReadOnlyList<Word>, CancellationToken, Task<bool>> _deliver;
