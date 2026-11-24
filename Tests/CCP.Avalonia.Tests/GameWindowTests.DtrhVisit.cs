@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
+using ConditioningControlPanel.Services.Haptics;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -56,6 +57,43 @@ public sealed partial class GameWindowTests
             w.Close();
         }
         finally { GameWindow.DtrhHapticState = oldState; GameWindow.DtrhHapticEvent = oldEvent; }
+    });
+
+    // WPF DtrhHostService.cs:226,379,606,870,909,1071: the real director follows the window, the run and a covering video.
+    [Fact]
+    public void Dtrh_HapticDirectorFollowsOpenRunVideoAndClose() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var oldVideo = ConditioningControlPanel.CoreEngine.Video;
+        var video = new ConditioningControlPanel.Services.MandatoryVideoScheduler(null!);
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var started = typeof(ConditioningControlPanel.Services.MandatoryVideoScheduler).GetField("VideoStarted", flags)!;
+        var ended = typeof(ConditioningControlPanel.Services.MandatoryVideoScheduler).GetField("VideoEnded", flags)!;
+        try
+        {
+            ConditioningControlPanel.CoreEngine.Video = video;
+            var w = GameWindow.Launch("dtrh")!;
+            Assert.True(DtrhHapticDirector.Snapshot.Active);
+            Assert.False(DtrhHapticDirector.Snapshot.RunActive);
+            w.HandleMessage("{type:'ready'}");
+            w.HandleMessage("{type:'run-started'}");
+            Assert.True(DtrhHapticDirector.Snapshot.RunActive);
+            Assert.IsType<Action>(started.GetValue(video)).Invoke();
+            Assert.True(DtrhHapticDirector.Snapshot.VideoCovering);
+            Assert.IsType<Action>(ended.GetValue(video)).Invoke();
+            Assert.False(DtrhHapticDirector.Snapshot.VideoCovering);
+            w.HandleMessage("{type:'run-ended',abandoned:true}");
+            Assert.False(DtrhHapticDirector.Snapshot.RunActive);
+            Assert.True(DtrhHapticDirector.Snapshot.Active);
+            w.Close();
+            Assert.False(DtrhHapticDirector.Snapshot.Active);
+            Assert.Null(started.GetValue(video));
+            Assert.Null(ended.GetValue(video));
+        }
+        finally
+        {
+            if (DtrhHapticDirector.Snapshot.Active) DtrhHapticDirector.OnClosed();
+            ConditioningControlPanel.CoreEngine.Video = oldVideo;
+        }
     });
 
     [Fact]
