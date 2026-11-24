@@ -13,6 +13,8 @@ using ConditioningControlPanel.Avalonia.Platform.Deeper;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Services.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Controls;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
+using System.Linq;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -102,7 +104,7 @@ public class HomeBrowserEnhanceTests
             Assert.True(tab.BrowserEnhanceHost.IsRunning);
             var original = File.ReadAllText(path);
             var unsupported = new Enhancement { MediaSource = url, Metadata = new EnhancementMetadata { Name = "Unsupported", Creator = "test" } };
-            unsupported.Rules.Add(new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 1 }, Action = new TriggerEffectAction { EffectType = EffectTypes.Overlay, OverlayKind = OverlayKinds.PinkFilter } });
+            unsupported.Rules.Add(new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 1 }, Action = new TriggerEffectAction { EffectType = EffectTypes.Overlay, OverlayKind = OverlayKinds.BrainDrain } });
             File.WriteAllText(path, EnhancementSerializer.Save(unsupported));
             web.OnNavigationCompleted(new Uri(url));
             Assert.Null(tab.BrowserEnhanceHost.LoadedEnhancement);
@@ -265,6 +267,67 @@ public class HomeBrowserEnhanceTests
         public double Volume { set => Last = (float)value; }
         public void Dispose() => Disposed = true;
     }
+
+    // WPF RealActionDispatcher.cs:222-273: pink and spiral bands, ramps and one-shots; brain drain stays unbound.
+    [Fact]
+    public void OverlayEffectsHoldRampReleaseAndStopOnResetAndPanic() => AvaloniaTestDispatcher.Run(() =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var lifetimeField = typeof(global::Avalonia.Application).GetFields(System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            .Single(f => typeof(global::Avalonia.Controls.ApplicationLifetimes.IApplicationLifetime).IsAssignableFrom(f.FieldType));
+        var oldLifetime = global::Avalonia.Application.Current!.ApplicationLifetime;
+        using var lifetime = new global::Avalonia.Controls.ApplicationLifetimes.ClassicDesktopStyleApplicationLifetime { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        var (pinkChecks, spiralChecks) = (PinkFilterOverlay.SkipPlatformChecksForTests, SpiralOverlay.SkipPlatformChecksForTests);
+        var s = CoreSettings.Current;
+        var (pinkOn, spiralOn) = (s.PinkFilterEnabled, s.SpiralEnabled);
+        var host = new Window();
+        try
+        {
+            lifetimeField.SetValue(global::Avalonia.Application.Current, lifetime);
+            lifetime.MainWindow = host;
+            (PinkFilterOverlay.SkipPlatformChecksForTests, SpiralOverlay.SkipPlatformChecksForTests) = (true, true);
+            (s.PinkFilterEnabled, s.SpiralEnabled) = (false, false);
+            PinkFilterOverlay.Stop(); SpiralOverlay.Stop();
+            Enhancement With(string kind) { var e = new Enhancement(); e.Rules.Add(new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 1 }, Action = new TriggerEffectAction { EffectType = EffectTypes.Overlay, OverlayKind = kind } }); return e; }
+            Assert.True(BrowserEnhancementDispatcher.Supports(With(OverlayKinds.PinkFilter)));
+            Assert.True(BrowserEnhancementDispatcher.Supports(With(OverlayKinds.Spiral)));
+            Assert.False(BrowserEnhancementDispatcher.Supports(With(OverlayKinds.BrainDrainMelt)));
+            using var source = new WebHostVideoTimeSource(new WebHost());
+            var ctx = new EnhancementDispatchContext(new Enhancement(), source, 0, null);
+            var dispatcher = new BrowserEnhancementDispatcher();
+            void Send(string kind, EffectPhase phase, double opacity, string id = "band") => dispatcher.DispatchAsync(new TriggerEffectAction
+                { EffectType = EffectTypes.Overlay, OverlayKind = kind, Phase = phase, Opacity = opacity, EffectId = id, DurationMs = 60_000 }, ctx).GetAwaiter().GetResult();
+            Send(OverlayKinds.PinkFilter, EffectPhase.Start, 0.3);
+            Assert.Equal(0.3, PinkFilterOverlay.VoiceOpacity);
+            Send(OverlayKinds.PinkFilter, EffectPhase.Update, 0.6);
+            Assert.Equal(0.6, PinkFilterOverlay.VoiceOpacity);
+            Send(OverlayKinds.Spiral, EffectPhase.Stop, 0, "band"); // remembered kind wins (WPF :237-246)
+            Assert.Null(PinkFilterOverlay.VoiceOpacity);
+            Send(OverlayKinds.Spiral, EffectPhase.OneShot, 0.4, "shot");
+            Assert.True(SpiralOverlay.HasTimedPayload);
+            Assert.Null(SpiralOverlay.VoiceOpacity);
+            Send(OverlayKinds.Spiral, EffectPhase.Start, 0.5, "leak");
+            Assert.Equal(0.5, SpiralOverlay.VoiceOpacity);
+            dispatcher.ResetOverlayBands(); // engine Stop on unbind: a band whose Stop never came
+            Assert.Null(SpiralOverlay.VoiceOpacity);
+            Send(OverlayKinds.PinkFilter, EffectPhase.Start, 0.3, "late");
+            Assert.Null(PinkFilterOverlay.VoiceOpacity); // a retired run shows nothing
+            var live = new BrowserEnhancementDispatcher();
+            live.DispatchAsync(new TriggerEffectAction { EffectType = EffectTypes.Overlay, OverlayKind = OverlayKinds.PinkFilter, Phase = EffectPhase.Start, Opacity = 0.7, EffectId = "p" }, ctx).GetAwaiter().GetResult();
+            Assert.Equal(0.7, PinkFilterOverlay.VoiceOpacity);
+            foreach (var surface in PanicSurfaces.All.Where(x => x.Id is "bubble-host" or "voice-overlays")) surface.Stop(null);
+            Assert.Null(PinkFilterOverlay.VoiceOpacity);
+            Assert.False(SpiralOverlay.HasTimedPayload);
+        }
+        finally
+        {
+            PinkFilterOverlay.Stop(); SpiralOverlay.Stop(); PinkFilterOverlay.CloseAll(); SpiralOverlay.CloseAll();
+            (PinkFilterOverlay.SkipPlatformChecksForTests, SpiralOverlay.SkipPlatformChecksForTests) = (pinkChecks, spiralChecks);
+            (s.PinkFilterEnabled, s.SpiralEnabled) = (pinkOn, spiralOn);
+            lifetimeField.SetValue(global::Avalonia.Application.Current, oldLifetime);
+            host.Close();
+        }
+    });
 
     [Fact]
     public void WebcamAdapterForwardsUntilDisposed() => AvaloniaTestDispatcher.Run(() =>
