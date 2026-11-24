@@ -9,9 +9,9 @@ import { CONFIG } from '../data/config.js';
 import { moodOf } from './moods.js';
 import { accrueActivities, trunkBoost, RANK_BOUNCE, RANK_TAP, RANK_PASSIVE } from './journey-effects.js';
 import { ridersOf } from '../data/folds.js';
-import { FATE_BY_ID, SEEDS, setOf, herdOpens, HERD_ENDINGS } from '../data/fate.js';
+import { FATE_BY_ID, SEEDS, setOf, setsFor, herdOpens, HERD_ENDINGS } from '../data/fate.js';
 import { EMI_LIFT } from './tap-rate.js';
-import { isCut, keptIds, reqFor } from '../ui/edition.js';
+import { isCut, keptIds, reqFor, sleepsHere, endingSetOpen } from '../ui/edition.js';
 
 export const WALL_BASE = 1;
 
@@ -28,12 +28,17 @@ export function setRunEdition(s, ed) {
   if (ed && ed.edition === 'small') s[ED] = ed; else delete s[ED];
   return s;
 }
-/** True when this run plays small and the row is cut there: never offered, and asleep when owned. */
+/** True when this run plays small and the row is cut there: never offered, and asleep when owned. Lists use this one:
+ *  a cut row is gone from every list, while a locked fate row (below) is still shown, locked and by name. */
 export const asleep = (s, id) => !!s[ED] && isCut(id, s[ED]);
+/** True when this run plays small and the row does not PLAY there: a cut row, or a card or ending of a fate set small
+ *  keeps locked (ui/edition.js fateLocked: every set but Go Outside). Never offered, bought or granted; owned, it sleeps
+ *  (no pay, no count, no mount) and stays in the save. This is the rule for anything that runs; `asleep` for lists. */
+export const sleeps = (s, id) => !!s[ED] && sleepsHere(id, s[ED]);
 /** THE rule for a run that ended on a cut row (the Expo ending, an open visit included) and is loaded in small: it stays
  *  an ended run, shown plain (no take, no show, no resumed visit), and only the player's own New run leaves it. Small
  *  never starts a New run by itself: that would throw away the visit, and small never deletes. */
-export const sleepingEnd = (s) => !!s?.ended && asleep(s, s.ended.id);
+export const sleepingEnd = (s) => !!s?.ended && sleeps(s, s.ended.id);
 /** What a row needs on this run: { req, any } (ui/edition.js reqFor in small, the catalog row itself otherwise). */
 export const needsOf = (s, it) => (s[ED] ? reqFor(it, s[ED]) : it);
 
@@ -76,8 +81,8 @@ export function createRun({ pace = 1, mood = null, seed = 1, perk = null, presti
   return s;
 }
 
-export const has = (s, id) => (s.owned[id] || 0) > 0 && !(s[ED] && isCut(id, s[ED]));
-export const count = (s, id) => (s[ED] && isCut(id, s[ED]) ? 0 : s.owned[id] || 0);
+export const has = (s, id) => (s.owned[id] || 0) > 0 && !(s[ED] && sleepsHere(id, s[ED]));
+export const count = (s, id) => (s[ED] && sleepsHere(id, s[ED]) ? 0 : s.owned[id] || 0);
 export const pick = (s, f) => s.picks[f] || null;
 
 /** Income from what is owned, after the mood. Cached in s.base, rebuilt on every buy. A stacking row pays once:
@@ -87,7 +92,7 @@ export function recalc(s) {
   const pay = moodOf(s)?.pay;
   for (const id of s.order) {
     const it = BY_ID[id];
-    if (!it || (s[ED] && isCut(id, s[ED]))) continue;   // a sleeping row pays nothing
+    if (!it || (s[ED] && sleepsHere(id, s[ED]))) continue;   // a sleeping row pays nothing
     if (it.fps) fps += pay ? pay(it.fps, it) : it.fps;
     if (it.click) click += pay ? pay(it.click, it) : it.click;
     if (it.wall) wall += pay ? pay(it.wall, it) : it.wall;
@@ -184,7 +189,7 @@ const canHaveMore = (s, it) => (it.grow ? count(s, it.id) < it.grow.max : !has(s
 /** Parents owned, right lane, not owned yet, and the run's fate allows it: the plain rule, before the one-ending rule below. */
 function reached(s, it) {
   if (it.group !== 'run' || it.id === 'start' || s.ended) return false;
-  if (s[ED] && isCut(it.id, s[ED])) return false;   // small: a cut row is never on offer
+  if (s[ED] && sleepsHere(it.id, s[ED])) return false;   // small: a cut row or a locked fate row is never on offer
   if (!laneOpen(s, it) || !canHaveMore(s, it) || !fateAllows(s, it)) return false;
   const n = needsOf(s, it);
   return n.req.every((q) => has(s, q)) && (!n.any || n.any.some((q) => has(s, q)));
@@ -195,8 +200,19 @@ function reached(s, it) {
  * (f5). The first seed bought is the run's fate: from then on only that set's cards and its ending ever open. Derived
  * from the purchase order, so nothing new is saved. */
 export function fateOf(s) {
-  for (const id of s.order) if (SEEDS.includes(id)) return setOf(id);
+  /* Small: a seed of a locked set (a full save opened here) sleeps and picks nothing, so the run falls to Go Outside. */
+  for (const id of s.order) if (SEEDS.includes(id) && !sleeps(s, id)) return setOf(id);
   return null;
+}
+/** THE FUNNEL (owner 2026-11-24): the fate sets a FULL run with these picks would be offered (data/fate.js setsFor, the
+ *  theme set once Pick a Theme chose a theme that has one) that this edition keeps locked: [{ id, end, seed }] in
+ *  FATE_SETS order. Empty in the full edition, and for any set small cuts outright (the Llama Expo is a cut part, not a
+ *  locked ending). The page shows these by name, locked, and their press leads to the full game. Pure. */
+export function teasedSets(s, ed = runEdition(s)) {
+  if (ed?.edition !== 'small') return [];
+  return setsFor(s?.picks?.f5 || null)
+    .filter((set) => !endingSetOpen(set.id, ed) && !isCut(set.cards[0], ed) && !isCut(set.end, ed))
+    .map((set) => Object.freeze({ id: set.id, end: set.end, seed: set.cards[0] }));
 }
 function fateAllows(s, it) {
   if (!it.fate) return true;
@@ -242,7 +258,7 @@ export const openItems = (s, mods = null) => ITEMS.filter((it) => isOpen(s, it))
 export function goal(s) {
   if (s.ended) return null;
   for (const it of ITEMS) {
-    if (it.lane !== 'trunk' || it.group !== 'run' || has(s, it.id) || asleep(s, it.id)) continue;
+    if (it.lane !== 'trunk' || it.group !== 'run' || has(s, it.id) || sleeps(s, it.id)) continue;
     /* Spiral Overlay waits for a fate seed (its `any`): until one is bought there is no goal, the seeds are the shop. */
     if (it.kind !== 'end') { const any = needsOf(s, it).any; return !any || any.some((q) => has(s, q)) ? it : null; }
     const held = BY_ID[heldEnding(s)];   // one ending a run: the held ending takes the main path's last place
@@ -455,7 +471,7 @@ function add(s, id, purchase = true) {
 /** Dev door: own an item and everything above it, free. Picks the lanes its parents need. Answers the ids it added. */
 export function grant(s, id, added = []) {
   const it = BY_ID[id];
-  if (!it || it.group !== 'run' || has(s, id) || asleep(s, id)) return added;
+  if (!it || it.group !== 'run' || has(s, id) || sleeps(s, id)) return added;
   const f = FORK_OF_LANE[it.lane];
   if (f) {
     if (s.picks[f] && s.picks[f] !== it.lane) return added;

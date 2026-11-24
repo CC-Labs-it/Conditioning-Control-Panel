@@ -12,8 +12,9 @@
  * Pure rules take the reading as their last argument (`ed`), so tests need no page and the sim can be handed one. */
 
 import { BY_ID } from '../data/items.js';
+import { setOf } from '../data/fate.js';
 import {
-  SMALL_CUT_IDS, SMALL_REQ, SMALL_BALANCE, PHONE_CAPS, NUDGE_WHERE, NUDGE_LINKS, SAVE_CARRY_MAX_BYTES, SAVE_CARRY_MAX_CHARS, SAVE_FROM,
+  SMALL_CUT_IDS, SMALL_REQ, SMALL_BALANCE, SMALL_ENDING_SET, PHONE_CAPS, NUDGE_WHERE, NUDGE_LINKS, SAVE_CARRY_MAX_BYTES, SAVE_CARRY_MAX_CHARS, SAVE_FROM,
   TRANSMISSION_AT_LLAMAS, EXPO_DEFAULT_BASE,
 } from '../data/editions.js';
 import { allowedLink, openAllowedLink } from './links.js';
@@ -88,6 +89,18 @@ export const isCut = (id, ed = editionState()) => ed.edition === 'small' && CUT.
 /** A list of row ids without the ones cut here (fold riders, any-lists, shop shelves). */
 export const keptIds = (ids, ed = editionState()) => (ed.edition === 'small' ? ids.filter((id) => !CUT.has(id)) : ids);
 
+/* ONE ENDING (owner 2026-11-24, the funnel): small holds only the fate set SMALL_ENDING_SET (Go Outside). Every other
+ * set's cards and ending are LOCKED here: never offered, bought or granted, and asleep when a save already owns one (a
+ * full save opened in small: its set sleeps and the run falls to Go Outside). Unlike a cut row, a locked set is shown to
+ * the player, locked and by name (sim/economy.js teasedSets), so it is kept apart from SMALL_CUT and isCut. */
+const fateLockedIn = (id) => { const set = setOf(id); return !!set && set !== SMALL_ENDING_SET; };
+/** True when this row is a fate card or ending of a set the small edition keeps locked. */
+export const fateLocked = (id, ed = editionState()) => ed.edition === 'small' && fateLockedIn(id);
+/** True when this row never plays here, and sleeps when owned: cut (isCut) or of a locked fate set (fateLocked). */
+export const sleepsHere = (id, ed = editionState()) => ed.edition === 'small' && (CUT.has(id) || fateLockedIn(id));
+/** True when this fate set (a data/fate.js id) may be held as a run's ending here. */
+export const endingSetOpen = (setId, ed = editionState()) => ed.edition !== 'small' || setId === SMALL_ENDING_SET;
+
 function handDown(id, seen) {
   if (!CUT.has(id)) return [id];
   if (seen.has(id)) return [];
@@ -104,7 +117,7 @@ export function reqFor(item, ed = editionState()) {
   const pin = SMALL_REQ[it.id];
   if (pin) return { req: pin.req, any: pin.any };
   const req = [...new Set(it.req.flatMap((q) => handDown(q, new Set())))];
-  return { req, any: it.any ? it.any.filter((q) => !CUT.has(q)) : undefined };
+  return { req, any: it.any ? it.any.filter((q) => !CUT.has(q) && !fateLockedIn(q)) : undefined };
 }
 
 /** Renewal (Sky, Depth, Stardust, the Renewal menu and badge) is a full-edition thing, for everyone. */
