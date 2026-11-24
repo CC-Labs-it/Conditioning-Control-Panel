@@ -90,6 +90,47 @@ public sealed class LeashAskTests
     private static T Tagged<T>(Control root, string tag) where T : Control =>
         root.GetLogicalDescendants().OfType<T>().Single(c => c.Tag as string == tag);
 
+    [Fact] // WPF LeashDrawerSection.cs:175,183 and LeashLook.cs:55,64-100.
+    public void OfferRowShowsTheSendersLookAndGoldButton() =>
+        Run((_, page, _, _) =>
+        {
+            var avatarId = ConditioningControlPanel.Services.ShopCosmeticsRegistry.Avatars.First().Id;
+            var frameId = ConditioningControlPanel.Services.ShopCosmeticsRegistry.Frames.First().Id;
+            Assert.NotNull(ModArt.AvatarPreset(avatarId));
+            Assert.NotNull(ModArt.ShopFrame(frameId));
+            var at = DateTimeOffset.UtcNow;
+            var svc = Assert.IsType<LeashService>(LeashHead.Service);
+            var payload = new JObject
+            {
+                ["me"] = null, ["holding"] = new JArray(), ["events"] = new JArray(),
+                ["offers"] = new JArray { new JObject
+                {
+                    ["id"] = OfferId, ["from"] = new JObject { ["id"] = "u_juno", ["name"] = "Juno", ["avatar"] = null,
+                        ["cosmetics"] = new JObject { ["avatar_id"] = avatarId, ["frame_id"] = frameId } },
+                    ["at"] = at.ToString("o"), ["expires_at"] = at.AddDays(7).ToString("o"),
+                } },
+            };
+            svc.ApplyBlock(payload);
+            var row = Tagged<Border>(page, "leash-offer-row:u_juno");
+            Assert.Contains(row.GetLogicalDescendants().OfType<Image>(), image => image.Tag as string == "friends-frame");
+            Assert.Contains(row.GetLogicalDescendants().OfType<Border>(), disc => disc.Background is ImageBrush);
+            var button = Tagged<Button>(row, "leash-offer-look");
+            var brush = Assert.IsType<LinearGradientBrush>(button.Background);
+            Assert.Equal(Color.Parse("#FFE3A0"), brush.GradientStops[0].Color);
+            Assert.Equal(Color.Parse("#FFCF6B"), brush.GradientStops[1].Color);
+            Assert.Equal(Color.Parse("#33FFFFFF"), Assert.IsAssignableFrom<ISolidColorBrush>(button.BorderBrush).Color);
+            var glow = Assert.IsType<DropShadowEffect>(button.Effect);
+            Assert.Equal(Color.Parse("#FFCF6B"), glow.Color);
+            Assert.Equal(12, glow.BlurRadius);
+            Assert.Equal(0.35, glow.Opacity);
+            // WPF reserves the disc for a supplied photo, even if it has not loaded.
+            payload["offers"]![0]!["from"]!["avatar"] = "/picture.png";
+            svc.ApplyBlock(payload);
+            row = Tagged<Border>(page, "leash-offer-row:u_juno");
+            Assert.Contains(row.GetLogicalDescendants().OfType<Image>(), image => image.Tag as string == "friends-frame");
+            Assert.DoesNotContain(row.GetLogicalDescendants().OfType<Border>(), disc => disc.Background is ImageBrush);
+        });
+
     [Fact]
     public void OfferRowLookOpensTheAskWhichWaitsForTheReadClockThenPutsItOn() =>
         Run((shell, page, wire, seen) =>
