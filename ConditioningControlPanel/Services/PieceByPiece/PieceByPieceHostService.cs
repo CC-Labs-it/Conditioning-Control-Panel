@@ -323,6 +323,7 @@ internal static partial class PieceByPieceHostService
             // The wardrobe (PieceByPieceHostService.Wardrobe.cs): grants + saved look, then the synced copy.
             PostWardrobe();
             _ = PullEquipAsync();
+            _ = PullStockAsync();
         }
         catch (Exception ex) { App.Logger?.Warning("PieceByPieceHostService.OnPageReady: {E}", ex.Message); }
     }
