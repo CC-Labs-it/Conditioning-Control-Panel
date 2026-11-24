@@ -8996,5 +8996,13 @@
   "dares_left_minutes": "残り {0} 分",
   "dares_left_ending": "まもなく終了",
   "dares_mark_me": "私",
-  "dares_banned_until": "{0} まで賭けなし"
+  "dares_banned_until": "{0} まで賭けなし",
+  "promo_copy_code": "コードをコピー",
+  "promo_copied": "コピーしました",
+  "promo_opens_browser": "ブラウザが開きます",
+  "promo_not_now": "今はしない",
+  "promo_ends_in": "終了まで",
+  "promo_days": "日",
+  "promo_hours": "時間",
+  "promo_minutes": "分"
 }

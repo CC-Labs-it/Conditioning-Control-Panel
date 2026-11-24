@@ -8996,5 +8996,13 @@
   "dares_left_minutes": "noch {0} Min",
   "dares_left_ending": "endet",
   "dares_mark_me": "Ich",
-  "dares_banned_until": "Keine Wetten bis {0}"
+  "dares_banned_until": "Keine Wetten bis {0}",
+  "promo_copy_code": "Code kopieren",
+  "promo_copied": "kopiert",
+  "promo_opens_browser": "öffnet den Browser",
+  "promo_not_now": "Nicht jetzt",
+  "promo_ends_in": "Endet in",
+  "promo_days": "Tage",
+  "promo_hours": "Std.",
+  "promo_minutes": "Min."
 }

@@ -9771,5 +9771,13 @@
   "dares_left_minutes": "{0} min left",
   "dares_left_ending": "ending",
   "dares_mark_me": "Me",
-  "dares_banned_until": "No dares until {0}"
+  "dares_banned_until": "No dares until {0}",
+  "promo_copy_code": "copy code",
+  "promo_copied": "copied",
+  "promo_opens_browser": "opens browser",
+  "promo_not_now": "Not now",
+  "promo_ends_in": "Ends in",
+  "promo_days": "days",
+  "promo_hours": "hours",
+  "promo_minutes": "min"
 }

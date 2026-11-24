@@ -9506,5 +9506,13 @@
   "dares_left_minutes": "还剩 {0} 分钟",
   "dares_left_ending": "即将结束",
   "dares_mark_me": "我",
-  "dares_banned_until": "{0} 前不能打赌"
+  "dares_banned_until": "{0} 前不能打赌",
+  "promo_copy_code": "复制代码",
+  "promo_copied": "已复制",
+  "promo_opens_browser": "将打开浏览器",
+  "promo_not_now": "以后再说",
+  "promo_ends_in": "剩余",
+  "promo_days": "天",
+  "promo_hours": "小时",
+  "promo_minutes": "分钟"
 }

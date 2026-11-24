@@ -1661,6 +1661,8 @@ namespace ConditioningControlPanel
             // arm EMI's silence, the Chaster safety hold or the stop pass.
             if (TryRacePauseOnEscape()) return;
             Services.FirstShow.FirstShowService.Stop();
+            // A promo card goes at once on every rung (the stop pass closes it again; both are idempotent).
+            try { PromoCardWindow.CloseForPanic(); } catch (Exception ex) { Diag.Swallowed(ex); }
             // The Sparkles flight and its bells stop, the wallet snaps to its balance, nothing stays owed.
             try { Services.Prizes.SparkleFlightDirector.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             // The weekly free Super try ends with a cut, before any hand-off below can return early.
@@ -2148,6 +2150,7 @@ namespace ConditioningControlPanel
             Step("pop quiz windows", () => PopQuizWindow.ForceCloseAll());
             Step("bubble count windows", () => { BubbleCountWindow.ForceCloseAll(); BubbleCountResultWindow.ForceCloseAll(); });
             Step("help popover", () => Controls.HelpPopover.CloseActive());
+            Step("promo card", PromoCardWindow.CloseForPanic);
             // CloseIfOpen, NOT TryConsumeEscape: a press the palette claimed never reaches this
             // pass (it is its own rung and returns), so anything still open here is a palette that
             // did NOT claim the press - e.g. panic rebound to F8. Calling TryConsumeEscape here

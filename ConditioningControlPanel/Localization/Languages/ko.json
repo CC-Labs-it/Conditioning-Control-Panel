@@ -8996,5 +8996,13 @@
   "dares_left_minutes": "{0}분 남음",
   "dares_left_ending": "곧 끝남",
   "dares_mark_me": "나",
-  "dares_banned_until": "{0}까지 내기 금지"
+  "dares_banned_until": "{0}까지 내기 금지",
+  "promo_copy_code": "코드 복사",
+  "promo_copied": "복사됨",
+  "promo_opens_browser": "브라우저가 열립니다",
+  "promo_not_now": "나중에",
+  "promo_ends_in": "종료까지",
+  "promo_days": "일",
+  "promo_hours": "시간",
+  "promo_minutes": "분"
 }

@@ -9748,5 +9748,13 @@
   "dares_left_minutes": "{0} min rimasti",
   "dares_left_ending": "in chiusura",
   "dares_mark_me": "Io",
-  "dares_banned_until": "Niente sfide fino a {0}"
+  "dares_banned_until": "Niente sfide fino a {0}",
+  "promo_copy_code": "copia il codice",
+  "promo_copied": "codice copiato",
+  "promo_opens_browser": "apre il browser",
+  "promo_not_now": "Non ora",
+  "promo_ends_in": "Finisce tra",
+  "promo_days": "giorni",
+  "promo_hours": "ore",
+  "promo_minutes": "min"
 }
