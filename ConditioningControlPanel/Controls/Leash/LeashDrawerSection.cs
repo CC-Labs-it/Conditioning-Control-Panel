@@ -44,6 +44,9 @@ public sealed class LeashDrawerSection : StackPanel
     }
 
     internal ILeashService? Service => _svc;
+
+    /// <summary>The snapshot this section draws (the drawer's fold reads it for its header).</summary>
+    internal LeashSnapshot Current => Snap();
     internal IReadOnlyCollection<LeashHolderCard> HolderCards => _cards.Values;
     internal LeashSelfCard? SelfCard => _self;
 
@@ -82,6 +85,8 @@ public sealed class LeashDrawerSection : StackPanel
     {
         try { foreach (var c in _cards.Values) c.Render(); }
         catch (Exception ex) { App.Logger?.Debug("[Leash] receipts repaint failed: {E}", ex.Message); }
+        // A step moved: the drawer's folded header counts it.
+        Changed?.Invoke();
     }
 
     private void NoteShownIfVisible()
