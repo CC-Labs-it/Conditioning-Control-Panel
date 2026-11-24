@@ -101,32 +101,35 @@ public sealed class KeywordAudioRuntimeTests
         }
     });
 
-    [Fact]
-    public void OcrScopeReadsLinuxForegroundAndFeedsRecentApps() => Run((engine, s, played) =>
+    [Fact] // WPF KeywordTriggerService.cs:763: the scanner's delivery reads the foreground app for the app scope
+    public Task OcrScopeReadsLinuxForegroundAndFeedsRecentApps() => RunAsync(async (_, s, played) =>
     {
+        if (OperatingSystem.IsWindows()) Assert.Skip("Windows reads user32 GetForegroundWindow, not the X11 seam");
         var source = KeywordTriggerHead.LinuxForegroundSource;
-        var saved = (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.KeywordTriggerApps);
+        var saved = (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.KeywordTriggerApps, s.ScreenOcrIntervalMs, s.AwarenessIgnoreOwnUi);
+        var foreground = "gedit";
+        KeywordTriggerHead.LinuxForegroundSource = () => foreground;
+        KeywordTriggerHead.OcrSource = _ => Task.FromResult<IReadOnlyList<ScreenOcrService.Word>>([new("sit", new(20, 20, 20, 20))]);
         try
         {
-            s.ScreenOcrEnabled = true; s.OcrConfirmationScans = 1;
-            if (!OperatingSystem.IsWindows())   // Windows reads user32 GetForegroundWindow, not the X11 seam
-            {
-                KeywordTriggerHead.LinuxForegroundSource = () => "firefox";
-                Assert.Equal(("firefox", false), KeywordTriggerHead.OcrForeground());
-                KeywordTriggerHead.LinuxForegroundSource = () => "";
-                Assert.Equal((null, false), KeywordTriggerHead.OcrForeground());
-            }
+            s.ScreenOcrEnabled = true; s.OcrConfirmationScans = 1; s.ScreenOcrIntervalMs = 60000; s.AwarenessIgnoreOwnUi = false;
             s.KeywordTriggerAppScope = AwarenessAppScope.OnlyListed; s.KeywordTriggerApps = ["firefox"];
-            var fg = (Process: "firefox", Own: false);
-            var words = new[] { new ScreenOcrService.Word("sit", new(20, 20, 20, 20)) };
-            engine.CheckOcrWords(words, fg.Process, fg.Own);
+            KeywordTriggerHead.Sync();
+            await KeywordTriggerHead.TickOcrForTest();
+            Assert.Empty(played);   // blocked app
+            Assert.Equal("gedit", KeywordTriggerHead.Engine.GetRecentForegroundApps()[0]);
+            foreground = "";
+            await KeywordTriggerHead.TickOcrForTest();
+            Assert.Empty(played);   // no X11 foreground is not in the list
+            foreground = "firefox";
+            await KeywordTriggerHead.TickOcrForTest();
             Assert.Single(played);
-            Assert.Equal(["firefox"], engine.GetRecentForegroundApps());
+            Assert.Equal("firefox", KeywordTriggerHead.Engine.GetRecentForegroundApps()[0]);
         }
         finally
         {
-            KeywordTriggerHead.LinuxForegroundSource = source;
-            (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.KeywordTriggerApps) = saved;
+            KeywordTriggerHead.LinuxForegroundSource = source; KeywordTriggerHead.OcrSource = null;
+            (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.KeywordTriggerApps, s.ScreenOcrIntervalMs, s.AwarenessIgnoreOwnUi) = saved;
         }
     });
 
