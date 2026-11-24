@@ -40,6 +40,18 @@ public sealed class AfterglowLineDraw : IDisposable
         (-3, -3), (3, -3), (-3, 3), (3, 3), (0, -4), (0, 4), (-4, 0), (4, 0)
     };
 
+    /// <summary>Space between two words, in text heights (was 0.6: neighbours touched once the finale glow grew them, ccp-bugs #1684).</summary>
+    internal const float WordGap = 0.9f;
+
+    /// <summary>How much the finale grows each word: up to 10 % at the glow, back to 1 as the line sinks.</summary>
+    internal static float FinaleGrow(float glowIn, float sink) => 1 + 0.1f * glowIn * (1 - sink);
+
+    /// <summary>
+    /// A word's slot spread away from the line's middle by the same factor its word grows, so the
+    /// gaps grow with the words instead of each word swelling into its neighbour.
+    /// </summary>
+    internal static float SpreadSlot(float slotX, float midX, float grow) => midX + (slotX - midX) * grow;
+
     /// <summary>
     /// <paramref name="bounds"/> is the monitor on the canvas. (<paramref name="fromX"/>,
     /// <paramref name="fromY"/>) is where a word flashes: the middle of the monitor, or the eye of
@@ -55,13 +67,14 @@ public sealed class AfterglowLineDraw : IDisposable
         float size = Math.Clamp(bounds.Height * 0.034f, 14f, 64f), big = size * 2.3f;
         _text.Typeface = face; _glow.Typeface = face;
         _text.TextSize = size;
-        float gap = size * 0.6f, total = -gap;
+        float gap = size * WordGap, total = -gap;
         for (int i = 0; i < n; i++) { _widths[i] = _text.MeasureText(line.TextAt(i)); total += _widths[i] + gap; }
         float fit = total > bounds.Width * 0.84f ? bounds.Width * 0.84f / total : 1f;
         size *= fit; gap *= fit; total *= fit;
         float sink = (float)line.FinaleSinkOut, glowIn = (float)line.FinaleGlowIn;
         float baseY = bounds.Bottom - bounds.Height * 0.11f + sink * bounds.Height * 0.045f;
         float x = bounds.MidX - total / 2;
+        float grow = FinaleGrow(glowIn, sink);
 
         if (!line.InFinale)
         {
@@ -82,12 +95,12 @@ public sealed class AfterglowLineDraw : IDisposable
 
         for (int i = 0; i < n; i++)
         {
-            float w = _widths[i] * fit, slotX = x + w / 2;
+            float w = _widths[i] * fit, slotX = SpreadSlot(x + w / 2, bounds.MidX, grow);
             x += w + gap;
             float t = (float)line.Travel(i), a = (float)Math.Clamp(line.Alpha(i), 0, 1);
             if (a <= 0.004f) continue;
             float px = fromX + (slotX - fromX) * t, py = fromY + (baseY - fromY) * t;
-            float s = (big * fit + (size - big * fit) * t) * (1 + 0.1f * glowIn * (1 - sink));
+            float s = (big * fit + (size - big * fit) * t) * grow;
             string word = line.TextAt(i);
             if (line.InFinale)
             {
@@ -114,7 +127,7 @@ public sealed class AfterglowLineDraw : IDisposable
         var drawFace = WordStyleSkia.FaceFor(look, own);
         float size0 = Math.Clamp(bounds.Height * 0.034f, 14f, 64f);
         float laid = (float)(size0 * look.Size);
-        float gap = size0 * 0.6f, total = -gap;
+        float gap = size0 * WordGap, total = -gap;
         for (int i = 0; i < n; i++)
         {
             var sl = LineFor(i, line.TextAt(i), style, drawFace, look, laid);
@@ -127,6 +140,7 @@ public sealed class AfterglowLineDraw : IDisposable
         float sink = (float)line.FinaleSinkOut, glowIn = (float)line.FinaleGlowIn;
         float baseY = bounds.Bottom - bounds.Height * 0.11f + sink * bounds.Height * 0.045f;
         float x = bounds.MidX - total / 2;
+        float grow = FinaleGrow(glowIn, sink);
 
         if (!line.InFinale)
         {
@@ -150,13 +164,13 @@ public sealed class AfterglowLineDraw : IDisposable
         var offsets = look.Border != null ? Outline : Array.Empty<(float X, float Y)>();
         for (int i = 0; i < n; i++)
         {
-            float w = _widths[i] * fit, slotX = x + w / 2;
+            float w = _widths[i] * fit, slotX = SpreadSlot(x + w / 2, bounds.MidX, grow);
             x += w + gap;
             float t = (float)line.Travel(i), a = (float)Math.Clamp(line.Alpha(i), 0, 1);
             if (a <= 0.004f) continue;
             var sl = _cache[i].Line!;
             float px = fromX + (slotX - fromX) * t, py = fromY + (baseY - fromY) * t;
-            float s = (big * fit + (size - big * fit) * t) * (1 + 0.1f * glowIn * (1 - sink));
+            float s = (big * fit + (size - big * fit) * t) * grow;
             float k = s / size0;
             WordStyles.Fill(style, sl.Count, line.StyleClock(i), AfterglowLine.StyleLife, motion, _frame);
 

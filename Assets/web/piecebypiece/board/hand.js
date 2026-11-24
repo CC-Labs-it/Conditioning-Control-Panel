@@ -18,6 +18,11 @@
  * Points and rays are plain { x, y, z }; a THREE.Vector3 is one.
  * ==========================================================================*/
 
+/** Record the browser's input time, even if its handler ran late. */
+export function startPress(ev) {
+  return { x: ev.clientX, y: ev.clientY, t: ev.timeStamp, far: 0 };
+}
+
 /**
  * Was this press a click? `press` is { x, y, far }, where `far` is the
  * farthest the pointer got from the press point, in client pixels.

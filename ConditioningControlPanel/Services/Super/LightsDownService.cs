@@ -210,10 +210,24 @@ namespace ConditioningControlPanel.Services.Super
         private static void FloatingFrame(VideoService v, double dt, double now, LightsDownTuning tune, double gentle, LightsDownMotion motion)
         {
             var f = _float!;
-            f.Step(dt, tune, gentle);
+            v.CopyFloatingVideoRects(_floatRects);
+            // Follow on: the dim grows only while a floating video is watched, and pulls back when not.
+            bool watched = true;
+            if (App.Settings?.Current?.LightsDownFollow == true)
+            {
+                bool cursorOn = false, gazeOn = false;
+                bool gazeLive = GazeLive(now, out bool faceLost);
+                bool cursorKnown = GetCursorPos(out var cp);
+                foreach (var (_, r) in _floatRects)
+                {
+                    if (cursorKnown && Inside(r, cp.X, cp.Y)) cursorOn = true;
+                    if (gazeLive && Inside(r, _gazeX, _gazeY)) gazeOn = true;
+                }
+                watched = LightsDownRules.Watched(faceLost, gazeLive, gazeOn, cursorOn);
+            }
+            f.Step(dt, tune, gentle, watched);
             if (now >= _nextAccent) { _nextAccent = now + 1; _haloRgb = ModAccent(); }
 
-            v.CopyFloatingVideoRects(_floatRects);
             _floatHwnds.Clear();
             foreach (var (h, _) in _floatRects) _floatHwnds.Add(h);
             bool restack = now >= _nextZ;
@@ -236,12 +250,26 @@ namespace ConditioningControlPanel.Services.Super
         {
             var s = _full!;
             bool moved = false;
-            if (GetCursorPos(out var cp))
+            bool cursorKnown = GetCursorPos(out var cp);
+            if (cursorKnown)
             {
                 moved = LightsDownRules.Moved(_mouseX, _mouseY, cp.X, cp.Y);
                 _mouseX = cp.X; _mouseY = cp.Y;
             }
-            s.Step(dt, moved, LookedAway(now), tune, gentle);
+            if (App.Settings?.Current?.LightsDownFollow == true)
+            {
+                // Follow on: the edges dim while the video is watched (eyes when the camera already
+                // runs calibrated, else the mouse on a video screen); a moving mouse no longer matters.
+                bool gazeLive = GazeLive(now, out bool faceLost);
+                bool cursorOn = false, gazeOn = false;
+                foreach (var o in _overlays)
+                {
+                    if (cursorKnown && o.ContainsPx(cp.X, cp.Y)) cursorOn = true;
+                    if (gazeLive && o.ContainsPx(_gazeX, _gazeY)) gazeOn = true;
+                }
+                s.Step(dt, false, !LightsDownRules.Watched(faceLost, gazeLive, gazeOn, cursorOn), tune, gentle);
+            }
+            else s.Step(dt, moved, LookedAway(now), tune, gentle);
 
             // The live attention targets are cut out of the dim, so it never covers a check.
             bool cutNow = now >= _nextCut;
@@ -273,6 +301,19 @@ namespace ConditioningControlPanel.Services.Super
                     if (o.ContainsPx(_gazeX, _gazeY)) { onVideo = true; break; }
             return LightsDownRules.LookedAway(true, faceLost, gazeLive, onVideo);
         }
+
+        /// <summary>Is the calibrated gaze fresh; <paramref name="faceLost"/> only with the camera already running.</summary>
+        private static bool GazeLive(double now, out bool faceLost)
+        {
+            var cam = App.Webcam;
+            faceLost = false;
+            if (cam == null || !cam.IsRunning) return false;
+            faceLost = cam.State == WebcamTrackingState.FaceLost;
+            return cam.Calibration != null && now - _gazeAt < 0.5;
+        }
+
+        private static bool Inside(System.Drawing.Rectangle r, double x, double y)
+            => x >= r.Left && x < r.Right && y >= r.Top && y < r.Bottom;
 
         /// <summary>The active mod's accent (a live event may override it), as 0xRRGGBB.</summary>
         private static uint ModAccent()

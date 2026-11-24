@@ -193,6 +193,7 @@ internal sealed class CounterSheetView : Grid
         _cardWatch.Tick += (_, _) => { if (_down) HideCards(); else _cardWatch.Stop(); };
         door.IsVisibleChanged += OnDoorVisibleChanged;
         door.Closed += OnDoorClosed;
+        Services.MotionFx.AmbientChanged += OnAmbientChanged;
     }
 
     /// <summary>Lay a sheet over <paramref name="host"/> (the window's root grid) under <paramref name="bar"/>,
@@ -662,7 +663,7 @@ internal sealed class CounterSheetView : Grid
         ApplyProgress();   // an empty band: nothing of the HWND shows (the slot stays visible: the browser keeps painting)
         _down = false;
         _cardWatch.Stop();
-        if (_web == null) _slot.Visibility = Visibility.Collapsed;
+        if (_web == null || Services.MotionFx.PanelQuiet) _slot.Visibility = Visibility.Collapsed;
         _scrim.Visibility = Visibility.Collapsed;
         _shadow.Visibility = Visibility.Collapsed;
         try { _pressChip?.Invoke(false); } catch (Exception ex) { Diag.Swallowed(ex); }
@@ -828,10 +829,20 @@ internal sealed class CounterSheetView : Grid
         ask?.Invoke("door-hidden");
     }
 
+    /// <summary>While the engine or a session runs the closed sheet's page is hidden to the browser, which then
+    /// stops painting it (a kept-visible page is a live compositor beside the overlays). An open shows it
+    /// again (the waiting card covers the first paint), and it comes back warm when the show ends.</summary>
+    private void OnAmbientChanged()
+    {
+        if (_disposed || _down || _web == null) return;
+        _slot.Visibility = Services.MotionFx.PanelQuiet ? Visibility.Collapsed : Visibility.Visible;
+    }
+
     private void OnDoorClosed(object? sender, EventArgs e)
     {
         var ask = _wantsClose;
         _disposed = true;
+        Services.MotionFx.AmbientChanged -= OnAmbientChanged;
         _clock.Stop();
         _reveal.Stop();
         _cardWatch.Stop();

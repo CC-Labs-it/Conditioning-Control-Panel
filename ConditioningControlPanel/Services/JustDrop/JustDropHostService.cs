@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
+using ConditioningControlPanel.Services.Haptics;
 using Microsoft.Web.WebView2.Core;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -52,6 +55,9 @@ namespace ConditioningControlPanel.Services.JustDrop
         private static bool _disposing;
         private static bool _duckedMainWindow;
         private static WindowState _mainStateBeforeDuck = WindowState.Normal;
+        private static JustDropAssetHost? _assets;
+        private static EventHandler<bool>? _toyWatch;
+        private static CoreWebView2? _core;
 
         public static bool IsActive => _host != null;
 
@@ -102,6 +108,7 @@ namespace ConditioningControlPanel.Services.JustDrop
 
             try
             {
+                var assets = _assets = new JustDropAssetHost();
                 _host = new ChaosWebViewHost(new ChaosWebViewHost.Options
                 {
                     StartUrl = BuildStartUrl(nextPath),
@@ -133,13 +140,14 @@ namespace ConditioningControlPanel.Services.JustDrop
                         "--autoplay-policy=no-user-gesture-required "
                         + "--disable-background-timer-throttling "
                         + "--disable-backgrounding-occluded-windows",
-                    OnCoreCreated = core => AttachAuthHeader(core, nextPath),
-                    OnMessage = OnPageMessage,
+                    OnCoreCreated = core => { _core = core; AttachAuthHeader(core, nextPath); assets.Attach(core); },
+                    OnMessageFrom = OnPageMessage,
                     OnReady = () => App.Logger?.Information("JustDropHost: page ready"),
                     OnProcessFailed = OnProcessFailed,
                 });
                 _host.Show();
                 if (_host.Window != null) _host.Window.Closed += (_, _) => DisposeAll();
+                WatchToys();
                 if (duckMain) DuckMainWindow();
                 App.Logger?.Information("JustDropHost: launched -> {Next}", nextPath);
             }
@@ -243,13 +251,99 @@ namespace ConditioningControlPanel.Services.JustDrop
 
         /// <summary>
         /// Every page message except <c>ready</c>/<c>log</c>, which ChaosWebViewHost consumes.
-        /// Handed straight to <see cref="JustDropService"/> as the raw envelope so the source/version
-        /// checks stay in one place rather than being re-derived per host.
+        /// The capability asks (<c>caps-request</c>, <c>haptic</c>, <c>assets-request</c>) are answered
+        /// here, and only when the sender is the live site itself; the lifecycle goes straight to
+        /// <see cref="JustDropService"/> as the raw envelope, as before. A session that ends stops
+        /// the toy before anything else runs.
         /// </summary>
-        private static void OnPageMessage(JObject o)
+        private static void OnPageMessage(JObject o, string source)
         {
-            try { JustDropService.HandleWebMessage(o.ToString(Formatting.None)); }
+            try
+            {
+                var type = (string?)o["type"];
+                switch (type)
+                {
+                    case "caps-request":
+                    case "haptic":
+                    case "assets-request":
+                        if (!JustDropBridge.IsSiteSource(source) || !JustDropBridge.IsPageEnvelope(o))
+                        {
+                            App.Logger?.Debug("JustDropHost: '{Type}' refused (not the site's envelope)", type);
+                            return;
+                        }
+                        OnHostAsk(type, o["payload"] as JObject);
+                        return;
+                    case "session-exit":
+                    case "session-complete":
+                        JustDropHapticDirector.Stop();
+                        break;
+                }
+                JustDropService.HandleWebMessage(o.ToString(Formatting.None));
+            }
             catch (Exception ex) { App.Logger?.Warning(ex, "JustDropHost: message handling failed"); }
+        }
+
+        private static void OnHostAsk(string type, JObject? payload)
+        {
+            var host = _host;
+            var assets = _assets;
+            if (host == null || assets == null) return;
+            switch (type)
+            {
+                case "haptic":
+                    if (JustDropBridge.ParseHaptic(payload) is { } h) JustDropHapticDirector.OnHaptic(h);
+                    break;
+                case "caps-request":
+                    _ = Task.Run(JustDropAssetHost.Count).ContinueWith(t =>
+                    {
+                        if (_host != host) return;
+                        var (images, videos) = t.IsFaulted ? (0, 0) : t.Result;
+                        var s = App.Settings?.Current;
+                        // Ready = access open AND the master haptics switch on AND a toy connected:
+                        // a page told "haptics" with the switch off would drop its badge and buzz nothing.
+                        PostNow(JustDropBridge.Caps(JustDropHapticDirector.Ready, App.Haptics?.IsConnected == true,
+                            images, videos,
+                            JustDropBridge.EffectiveMediaSource(s?.MediaSource, s?.HasRemoteMediaConsent ?? false)));
+                    }, TaskScheduler.FromCurrentSynchronizationContext());
+                    break;
+                case "assets-request":
+                    if (JustDropBridge.ParseAssets(payload) is not { } ask) return;
+                    _ = Task.Run(() => assets.List(ask.Video, ask.Max)).ContinueWith(t =>
+                    {
+                        // Exactly one answer per ask, same kind, empty on a fault: the page takes the
+                        // next 'assets' of that kind as its reply (no request id on the wire).
+                        if (_host != host) return;
+                        var kind = ask.Video ? "video" : "image";
+                        var urls = t.IsFaulted ? new List<string>() : t.Result;
+                        PostNow(JustDropBridge.Envelope("assets",
+                            new { kind, items = urls.Select(url => new { url, kind }).ToArray() }));
+                    }, TaskScheduler.FromCurrentSynchronizationContext());
+                    break;
+            }
+        }
+
+        /// <summary><c>haptics-changed</c> while the window is up; a toy that leaves also stops ours.</summary>
+        private static void WatchToys()
+        {
+            var haptics = App.Haptics;
+            if (haptics == null || _toyWatch != null) return;
+            _toyWatch = (_, connected) =>
+            {
+                if (!connected) JustDropHapticDirector.Stop();
+                var disp = Application.Current?.Dispatcher;
+                if (disp == null || disp.HasShutdownStarted) return;
+                disp.BeginInvoke(new Action(() => PostNow(JustDropBridge.Envelope("haptics-changed",
+                    new { haptics = connected && JustDropHapticDirector.Ready }))));
+            };
+            haptics.ConnectionChanged += _toyWatch;
+        }
+
+        /// <summary>Straight to the page, never queued behind 'ready': the shop page asks for caps on
+        /// mount and never posts 'ready'. UI thread only.</summary>
+        private static void PostNow(JObject envelope)
+        {
+            try { _core?.PostWebMessageAsJson(envelope.ToString(Formatting.None)); }
+            catch (Exception ex) { App.Logger?.Debug("JustDropHost: post failed: {E}", ex.Message); }
         }
 
         private static void OnProcessFailed(CoreWebView2ProcessFailedKind kind)
@@ -259,6 +353,7 @@ namespace ConditioningControlPanel.Services.JustDrop
             // both of which are exactly where the user left them when they open it again. Coming
             // back on demand beats coming back uninvited.
             App.Logger?.Warning("JustDropHost: WebView2 process failed ({Kind}); closing", kind);
+            JustDropHapticDirector.Stop();   // at once, not after the dispatcher hop
             var disp = Application.Current?.Dispatcher;
             if (disp == null || disp.HasShutdownStarted) { DisposeAll(); return; }
             disp.BeginInvoke(new Action(DisposeAll));
@@ -318,8 +413,14 @@ namespace ConditioningControlPanel.Services.JustDrop
             _disposing = true;
             try
             {
+                JustDropHapticDirector.Stop();
+                try { if (_toyWatch != null && App.Haptics != null) App.Haptics.ConnectionChanged -= _toyWatch; } catch { }
+                _toyWatch = null;
                 try { _host?.Dispose(); } catch { }
                 _host = null;
+                _core = null;
+                try { _assets?.Clear(); } catch { }
+                _assets = null;
                 RestoreMainWindow();
 
                 // The drawer almost certainly changed while that window was open - an order was

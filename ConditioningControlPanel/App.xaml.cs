@@ -1211,6 +1211,14 @@ namespace ConditioningControlPanel
         public static Services.Leash.ILeashService? Leash { get; private set; }
         private static Services.Leash.LeashService? _leashService;
 
+        /// <summary>DARES (2026-11-18, Services/Dares/CONTRACT.md): bets between friends. Null until startup
+        /// builds it (after Lockdown) and after exit; every caller guards with <c>App.Dares?.</c>. Under DEBUG
+        /// <c>CCP_DARES_PREVIEW=1</c> it is the local preview (no network).</summary>
+        public static Services.Dares.IDaresService? Dares { get; private set; }
+        private static Services.Dares.DaresService? _daresService;
+        private static Services.Dares.PreviewDaresService? _daresPreview;
+        private static Services.Dares.DareMeterHooks? _dareHooks;
+
         /// <summary>Starts and tracks the leash gate's tasks (lock cards, sessions, bubbles, a watch).</summary>
         public static Services.Leash.LeashTaskRunner? LeashRunner { get; private set; }
         private static Services.Leash.AppLeashTaskHost? _leashTaskHost;
@@ -1397,13 +1405,22 @@ namespace ConditioningControlPanel
         /// <summary>
         /// Whether a conditioning session is currently running. Set by MainWindow.
         /// </summary>
-        public static bool IsSessionRunning { get; set; }
+        public static bool IsSessionRunning
+        {
+            get => _isSessionRunning;
+            set { _isSessionRunning = value; Services.MotionFx.SetShowRunning(_isSessionRunning || _isEngineRunning); }
+        }
+        private static bool _isSessionRunning, _isEngineRunning;
 
         /// <summary>
         /// Whether the main engine is running (toggle-driven services should start/stop live).
         /// True for both plain engine runs and AI sessions. Set by MainWindow.StartEngine/StopEngine.
         /// </summary>
-        public static bool IsEngineRunning { get; set; }
+        public static bool IsEngineRunning
+        {
+            get => _isEngineRunning;
+            set { _isEngineRunning = value; Services.MotionFx.SetShowRunning(_isSessionRunning || _isEngineRunning); }
+        }
 
         /// <summary>
         /// Direct reference to the MainWindow instance. Use this instead of
@@ -3267,6 +3284,10 @@ namespace ConditioningControlPanel
             {
                 _friendsService = Services.Friends.FriendsServiceApp.CreateForApp();
                 Friends = _friendsService;
+#if DEBUG
+                // CCP_DARES_PREVIEW=1: three fake friends stand in while the real list is empty or signed out.
+                if (Services.Dares.PreviewDaresService.Enabled) Friends = new Services.Dares.PreviewFriendsService(_friendsService);
+#endif
                 try { FriendsFeed = Services.Friends.FriendsFeed.CreateForApp(_friendsService, () => Services.BackRoom.BackRoomApi.AppIdentity()?.UnifiedId); } catch (Exception exFeed) { Logger?.Debug("Friends feed failed to start: {E}", exFeed.Message); }
                 ProfileSync.ProfileLoaded += (_, _) => _friendsService?.Kick();
                 _friendsService.Start(new Services.Friends.FriendsServiceApp.Timer());
@@ -3612,6 +3633,36 @@ namespace ConditioningControlPanel
             // Quest credit: each completed lockdown of 20+ minutes (Patreon-exclusive quest category).
             // LastActiveDuration is set in Deactivate before the event fires.
             Lockdown.LockdownDeactivated += () => { try { Quests?.TrackLockdownCompleted(Lockdown.LastActiveDuration); } catch (Exception ex) { Diag.Swallowed(ex); } };
+
+            // DARES: after Lockdown (a Lockdown debt runs the real one, and a serve cut short by a crash
+            // is reported from its own file here). Its own poll; the meter hooks wake only for a counting bet.
+            try
+            {
+                Services.Dares.DareMeter dareMeter;
+#if DEBUG
+                if (Services.Dares.PreviewDaresService.Enabled)
+                {
+                    _daresPreview = Services.Dares.PreviewDaresService.CreateForApp(out dareMeter);
+                    Dares = _daresPreview;
+                    _daresPreview.Changed += () => _dareHooks?.Wake();
+                    _daresPreview.CameraProbe = () => _dareHooks?.CameraState ?? Services.Dares.DareCameraState.Idle;
+                    _daresPreview.Start();
+                }
+                else
+#endif
+                {
+                    _daresService = Services.Dares.DaresService.CreateForApp(out dareMeter);
+                    Dares = _daresService;
+                    _daresService.BetsRead += () => _dareHooks?.Wake();
+                    _daresService.CameraProbe = () => _dareHooks?.CameraState ?? Services.Dares.DareCameraState.Idle;
+                    if (ProfileSync != null) ProfileSync.ProfileLoaded += (_, _) => _daresService?.Kick();
+                    _daresService.Start();
+                }
+                _dareHooks = new Services.Dares.DareMeterHooks(dareMeter);
+                _dareHooks.Attach();
+                _dareHooks.Wake();
+            }
+            catch (Exception ex) { Logger?.Warning("Dares failed to start: {E}", ex.Message); }
 
             // Initialize mantra lab service
             Mantra = new MantraService();
@@ -6672,6 +6723,11 @@ Application State:
             ProfileSync?.Dispose();
             try { LeashRunner?.Cancel(); _leashTaskHost?.Dispose(); } catch (Exception ex) { Logger?.Debug(ex, "Leash dispose failed"); }
             LeashRunner = null;
+            try { _dareHooks?.Dispose(); _daresService?.Dispose(); _daresPreview?.Dispose(); } catch (Exception ex) { Logger?.Debug(ex, "Dares dispose failed"); }
+            _dareHooks = null;
+            _daresService = null;
+            _daresPreview = null;
+            Dares = null;
             Leash = null;
             _leashService = null;
             _friendsService?.Dispose();

@@ -91,6 +91,8 @@ namespace ConditioningControlPanel
         {
             if (_chromeFxInitialized) return;
             _chromeFxInitialized = true;
+            MotionFx.AmbientChanged += RefreshAmbientMotion;
+            Services.Diagnostics.FrameProbe.StartIfAsked();
             try
             {
                 // The dashboard is on screen at startup without ever going through AnimateTabIn,

@@ -79,6 +79,46 @@ public class AwarenessReactionParseTests
     }
 
     [Fact]
+    public void ACallbackWrittenInsideTheLineIsCutOffAndNeverShown()
+    {
+        // ccp-bugs #1666: a 4B local model put the marker on the same line.
+        var parsed = AwarenessReactionService.Parse("back on the feed after two minutes~ CALLBACK: you went back after two minutes");
+
+        Assert.Equal("back on the feed after two minutes~", parsed.Line);
+        Assert.Equal("you went back after two minutes", parsed.Callback);
+        Assert.DoesNotContain("CALLBACK", parsed.Line, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("CALLBACK: 26~")]
+    [InlineData("135")]
+    [InlineData("135 ~ CALLBACK: 135")]
+    public void ABareNumberIsNeverSaid(string raw)
+    {
+        var parsed = AwarenessReactionService.Parse(raw);
+
+        Assert.False(parsed.HasLine);
+        Assert.Null(parsed.Callback);
+    }
+
+    [Fact]
+    public void TheModelReadsEachTrendWithItsUnit()
+    {
+        var trend = new TrendEvent(TrendKind.Backslide, "reddit", "site_doomscroll", 135, 3, 20, 60, TimeSpan.FromMinutes(2));
+
+        Assert.Equal("Backslide(135)", trend.Label);
+        Assert.Equal("Backslide(reopened after 135 seconds away)", trend.PromptLabel);
+        foreach (TrendKind kind in Enum.GetValues(typeof(TrendKind)))
+            Assert.NotEqual($"{kind}(7)", (trend with { Kind = kind, Magnitude = 7 }).PromptLabel);
+    }
+
+    [Fact]
+    public void TheRareTierNoLongerSaysTheMarkerWord()
+    {
+        Assert.DoesNotContain("callback", AwarenessPromptBuilder.TierInstruction(RarityTier.Rare), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void OnlyTheFirstOfEachIsKept()
     {
         var parsed = AwarenessReactionService.Parse("one\ntwo\nCALLBACK: a\nCALLBACK: b");

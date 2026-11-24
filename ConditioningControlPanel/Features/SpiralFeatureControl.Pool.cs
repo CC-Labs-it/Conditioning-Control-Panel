@@ -64,9 +64,12 @@ namespace ConditioningControlPanel.Features
                 TxtPoolEvery.Text = Loc.GetF("super_pool_every_value", s.WhirlpoolNewEvery);
                 SliderPoolSize.Value = s.WhirlpoolSize;
                 TxtPoolSize.Text = $"{s.WhirlpoolSize}%";
+                ChkPoolCentred.IsChecked = s.WhirlpoolStayCentred;
+                ChkPoolPops.IsChecked = s.MovingEffectsPop;
                 ChkPoolDragsFog.IsChecked = s.WhirlpoolDragsFog;
                 ChkPoolDragsPictures.IsChecked = s.WhirlpoolDragsPictures;
                 ChkPoolDragsBubbles.IsChecked = s.WhirlpoolDragsBubbles;
+                ChkPoolDragsWords.IsChecked = s.WhirlpoolDragsWords;
                 DimPoolEvery();
             }
             catch (Exception ex)
@@ -118,7 +121,27 @@ namespace ConditioningControlPanel.Features
             App.Settings?.Save();
         }
 
-        // SuperStageHost hands the stage the three switches each step.
+        // SuperStageHost reads it each step.
+        private void ChkPoolCentred_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_poolLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.WhirlpoolStayCentred = ChkPoolCentred.IsChecked ?? false;
+            App.Settings?.Save();
+        }
+
+        // SuperStageHost and the bouncing word hand it to the stage each frame. Same setting as the Scrawl box row.
+        private void ChkPoolPops_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_poolLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.MovingEffectsPop = ChkPoolPops.IsChecked ?? false;
+            App.Settings?.Save();
+        }
+
+        // SuperStageHost hands the stage the four switches each step.
         private void ChkPoolDrags_Changed(object sender, RoutedEventArgs e)
         {
             if (_poolLoading) return;
@@ -127,6 +150,7 @@ namespace ConditioningControlPanel.Features
             s.WhirlpoolDragsFog = ChkPoolDragsFog.IsChecked ?? true;
             s.WhirlpoolDragsPictures = ChkPoolDragsPictures.IsChecked ?? true;
             s.WhirlpoolDragsBubbles = ChkPoolDragsBubbles.IsChecked ?? true;
+            s.WhirlpoolDragsWords = ChkPoolDragsWords.IsChecked ?? true;
             App.Settings?.Save();
         }
     }

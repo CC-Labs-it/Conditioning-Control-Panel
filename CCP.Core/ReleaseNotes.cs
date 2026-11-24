@@ -4,9 +4,87 @@ namespace ConditioningControlPanel
     public static class ReleaseNotes
     {
         public const string Current =
-            "v7.3.2 - Back to the basics\n" +
+            "v7.3.8 - Back to the basics\n" +
             "\n" +
-            "NEW IN 7.3.2\n" +
+            "NEW IN 7.3.8\n" +
+            "\n" +
+            "FIXES\n" +
+            "- the update installs again on PCs with Smart App Control: every part of the installer and the uninstaller is signed now.\n" +
+            "- Mandatory videos: a preset made before 7.3.7, or a built-in one, no longer switches floating videos back to full screen.\n" +
+            "- presets made before 7.3.1, and the built-in ones, load with the V2 effects off, the way they were saved.\n" +
+            "- takeover and AI web videos go fullscreen on their own again when you are in another window.\n" +
+            "- lock cards you type into take the keyboard as they show, even while another app is in front. no click first.\n" +
+            "- your own AI (Ollama or another endpoint) gets longer replies, so they no longer get cut off.\n" +
+            "- during Lockdown the Games pill on Play says the launcher waits, instead of offering a pop out that opens nothing.\n" +
+            "- the BambiCloud menu keeps its top line in a smaller window.\n" +
+            "\n" +
+            "NEW\n" +
+            "- the dashboard browser has + and - zoom buttons. holding Ctrl and scrolling zooms too.\n" +
+            "- Just Drop in the app: Haptic Waves, Heartbeat and Breath Pacer move your toy, Flash Gallery flashes your own pictures, and with your media source on Local the feed plays your own videos.\n" +
+            "\n" +
+            "FROM 7.3.7\n" +
+            "\n" +
+            "HOTFIX\n" +
+            "- presets: a preset now keeps its Steam and filter colour, fog, floating video, flash motion and V2 effect options, so loading one no longer carries the last look over. presets saved before 7.3.7 put those back to their defaults: load yours, set them again, save.\n" +
+            "- Lockdown: 40 and 50 minute lengths.\n" +
+            "- quests: hovering a quest door shows where it goes, and it clicks when it opens.\n" +
+            "- fixed a freeze that could hit when the volume moved while a video played.\n" +
+            "\n" +
+            "FROM 7.3.6\n" +
+            "\n" +
+            "FIX DAY\n" +
+            "- Sparkles: the top bar matches the shop now. after a big run it can dip for a moment, then climbs back as your Sparkles are booked.\n" +
+            "- Afterglow: the words on the line keep their distance as they glow and sink.\n" +
+            "- Lights Down: a new Follow eyes or mouse switch. on, it dims only while you watch the video, by your eyes when the camera is on, else by the mouse on it. off, it stays as it is.\n" +
+            "- Steam: the clear spot around a resting cursor fades into the fog instead of ending at a hard edge.\n" +
+            "- notifications that pile up while CCP starts come one after another, not all at once.\n" +
+            "- leash stickers are bigger, and you can read them.\n" +
+            "- Dares: the (?) on the deadline says how a bet settles. on its own, early once the target is met, otherwise at the deadline. give it two minutes.\n" +
+            "\n" +
+            "FROM 7.3.5\n" +
+            "\n" +
+            "DARES, ROUND TWO\n" +
+            "- you can only stake Sparkles you have. amounts you can't cover are greyed out, and a friend who can't cover their side is told when they accept.\n" +
+            "- the camera check passes at 60% of the time now, not 80%. a camera bet shows how much of the time the camera saw you, and says so when it can't see you.\n" +
+            "- friends: the card under a friend has a new look, and hovering a friend says what a right-click holds.\n" +
+            "- in our Discord, /sparkles shows your Sparkles and the stars EMI gave you.\n" +
+            "\n" +
+            "DECK\n" +
+            "- cards no longer stall side-on mid-flip: each card gets its next picture ready while it rests.\n" +
+            "\n" +
+            "FROM 7.3.4\n" +
+            "\n" +
+            "DARES\n" +
+            "bet a friend on your own CCP use. right-click a friend and pick Dare, or type /bet make in our Discord.\n" +
+            "\n" +
+            "- the bet is one sentence you fill in one blank at a time: pictures seen, minutes, video time, a session by difficulty, bubbles popped, or a dare of your own. \"you can't do it\", or a duel where the bigger count wins.\n" +
+            "- stakes: Sparkles, a dare (you type its words in Discord with /bet write, the app shows it as a numbered sealed dare), lock minutes on your own Chaster tab, or a Lockdown. the Lockdown stake is for subscribers.\n" +
+            "- your own app counts what you do. a camera check is there if you both want it.\n" +
+            "- the loser gets one card: pay, renounce (no dares for 7 days, and your friend is told) or close CCP. nothing ever starts on its own. a debt left unpaid for 7 days counts as renounced.\n" +
+            "\n" +
+            "FROM YOUR 7.3.3 ROUND\n" +
+            "- a new switch, Moving effects pop bubbles and flash images, in the Scrawl and Whirlpool boxes. it is off: the bouncing word and the pool still push and pull things, they just stop popping and breaking them on their own. switch it on for the 7.3.3 behaviour.\n" +
+            "- Whirlpool with Stay centered pulls and swirls bubbles but never eats them. it was setting off Hydra cascades.\n" +
+            "- Whirlpool: Drags in has a Words switch. off, the pool leaves the bouncing word alone.\n" +
+            "- Steam: Reach scales the whole fog now, so 10% is a thin line at the edges. Strength under 10% really thins it.\n" +
+            "- the companion no longer slips a stray CALLBACK or a bare number into what it says.\n" +
+            "- the camera also stays off when you stop it from the title bar pill or Settings > Devices.\n" +
+            "- AI-started takeover videos on Hypnotube go fullscreen again.\n" +
+            "- chess: an Arrows on / off button top right of the board. off, a right drag turns the board instead of drawing.\n" +
+            "\n" +
+            "FROM 7.3.3\n" +
+            "\n" +
+            "a round for those who told us the panel slows the effects down, and for Scrawl with big text.\n" +
+            "\n" +
+            "- the panel goes still while the engine runs: its glows, sparkles and moving banners rest, so your effects get the frames. it wakes up when you stop. switch Auto performance off to keep it moving.\n" +
+            "- Motion (Full, Reduced, Off) is the first row of Settings > Performance now, and it reaches every animation in the panel the moment you change it.\n" +
+            "- Scrawl: with Corner flash off the gold CORNER word stays away, and big text no longer counts almost every bounce as a corner.\n" +
+            "- Scrawl: bigger text holds fewer stamps, fewer again with Second text on. a new Stamp size slider sets the stamps apart from the text.\n" +
+            "- Whirlpool: a new Stay centered switch. the pool sits in the middle of the screen at full size and stops following the mouse.\n" +
+            "- V2 subliminals use your Subliminal font, and \"Ignore CCP's own windows\" skips them.\n" +
+            "- the camera stays off after you stop it. it used to come back at every launch with Focus Gaze on.\n" +
+            "\n" +
+            "FROM 7.3.2\n" +
             "\n" +
             "a small round after your first night with 7.3.1.\n" +
             "\n" +
@@ -109,6 +187,6 @@ namespace ConditioningControlPanel
             "- Deeper: fixed a crash while a library file was being read.\n" +
             "- Piece by Piece: a press that does not move is a click, the lit square is the one a click plays, and an arrow no longer stays stuck after a lost right release.\n" +
             "\n" +
-            "this is a pre-release. it carries everything in 7.3.1, 7.3.0 and 7.2.4.";
+            "this is a pre-release. it carries everything in 7.3.7, 7.3.6, 7.3.5, 7.3.4, 7.3.3, 7.3.2, 7.3.1, 7.3.0 and 7.2.4.";
     }
 }

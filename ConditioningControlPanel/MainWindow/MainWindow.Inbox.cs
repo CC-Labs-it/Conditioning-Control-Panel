@@ -26,6 +26,14 @@ namespace ConditioningControlPanel
         /// </summary>
         private void InitializeInboxBadge()
         {
+            // Dares offers and debts reach the player through the same presenter (Controls/Dares/DaresLanding).
+            try
+            {
+                Controls.Dares.DaresLanding.Start();
+                Closed += (_, _) => Controls.Dares.DaresLanding.Stop();
+            }
+            catch (Exception ex) { App.Logger?.Debug("Dares landing init: {E}", ex.Message); }
+
             try
             {
                 var startup = App.StartupLadder;

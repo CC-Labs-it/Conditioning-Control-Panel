@@ -163,7 +163,7 @@ public class AwarenessPrivacyTests
         var trends = doc.RootElement.GetProperty("trends");
 
         Assert.Equal(JsonValueKind.Array, trends.ValueKind);
-        Assert.Equal("ReturnVisit(4)", trends[0].GetString());
+        Assert.Equal("ReturnVisit(visit 4 today)", trends[0].GetString());
     }
 
     // ===================== local projection =====================

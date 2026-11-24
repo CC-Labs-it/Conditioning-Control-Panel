@@ -2897,6 +2897,16 @@ namespace ConditioningControlPanel.Models
             set { _lightsDownReturnSpeed = SuperCore.LightsDownOptions.ClampReturnSpeed(value); OnPropertyChanged(); }
         }
 
+        private bool _lightsDownFollow = false;
+        /// <summary>Lights Down "Follow eyes or mouse" (owner, 2026-11-19, ccp-bugs #1672): on, the dim comes
+        /// in only while a video is watched (calibrated gaze when the camera already runs, else the mouse on a
+        /// video) and pulls back when not. Off (default, every older settings file): the reworked 7.3.1 effect.</summary>
+        public bool LightsDownFollow
+        {
+            get => _lightsDownFollow;
+            set { _lightsDownFollow = value; OnPropertyChanged(); }
+        }
+
         private int _deckFlips = SuperCore.DeckOptions.FlipsDefault;
         /// <summary>Deck: about how many flips a card takes before it breaks (each card rolls one either side).</summary>
         public int DeckFlips
@@ -3037,6 +3047,16 @@ namespace ConditioningControlPanel.Models
         // switch mirrored IsActive, so it dropped and popped back on its own and
         // never survived a restart (#1116). The switch now reads this flag and
         // the status line underneath says whether the engine is actually running.
+        // The player stopped the camera by hand (Stop tracker, Ctrl+Alt+K): the next launch leaves it
+        // off even with Focus Gaze on (tier-2 report, 7.3.2: it came back at every start). Cleared when
+        // they start the camera or switch Focus Gaze on themselves.
+        private bool _cameraHeldOff;
+        public bool CameraHeldOff
+        {
+            get => _cameraHeldOff;
+            set { _cameraHeldOff = value; OnPropertyChanged(); }
+        }
+
         private bool _focusGazeEnabled;
         public bool FocusGazeEnabled
         {
@@ -5647,12 +5667,37 @@ namespace ConditioningControlPanel.Models
             set { _whirlpoolDragsBubbles = value; OnPropertyChanged(); }
         }
 
+        // Whirlpool: it catches the bouncing word and Afterglow's line rises from its eye. On as shipped.
+        private bool _whirlpoolDragsWords = true;
+        public bool WhirlpoolDragsWords
+        {
+            get => _whirlpoolDragsWords;
+            set { _whirlpoolDragsWords = value; OnPropertyChanged(); }
+        }
+
         // Whirlpool: its largest size, percent of the stock reach.
         private int _whirlpoolSize = SuperCore.WhirlpoolOptions.SizeDefault;
         public int WhirlpoolSize
         {
             get => _whirlpoolSize;
             set { _whirlpoolSize = SuperCore.WhirlpoolOptions.ClampSize(value); OnPropertyChanged(); }
+        }
+
+        // V2 (Scrawl word, Whirlpool): moving effects pop bubbles and break flash images. Off by
+        // default (owner, 2026-11-18): off, they still pull and push but never pop or break anything.
+        private bool _movingEffectsPop;
+        public bool MovingEffectsPop
+        {
+            get => _movingEffectsPop;
+            set { _movingEffectsPop = value; OnPropertyChanged(); }
+        }
+
+        // Whirlpool: sits in the middle of the screen at full size instead of under the cursor.
+        private bool _whirlpoolStayCentred;
+        public bool WhirlpoolStayCentred
+        {
+            get => _whirlpoolStayCentred;
+            set { _whirlpoolStayCentred = value; OnPropertyChanged(); }
         }
 
         // Whirlpool: seconds a Loom spiral holds before it melts into a new one ("Always new" only).
@@ -10040,6 +10085,10 @@ namespace ConditioningControlPanel.Models
         /// presents it once, replay lives in Help).</summary>
         public int WhatMovedCardShown { get; set; }
 
+        /// <summary>True once the first-run "Start here" card has opened (the ladder offers it
+        /// once, after the first-run show; replay lives in Help and does not touch this).</summary>
+        public bool StartHereShown { get; set; }
+
         /// <summary>Old tab keys followed to their new home. The "Moved: Section > Page" toast
         /// shows for the first three hits, then retires itself.</summary>
         public int NavMovedToastHits { get; set; }
@@ -10687,6 +10736,14 @@ namespace ConditioningControlPanel.Models
         {
             get => _scrawlStampCap;
             set { _scrawlStampCap = SuperCore.ScrawlOptions.ClampStampCap(value); OnPropertyChanged(); }
+        }
+
+        // Scrawl: stamp size in percent of the bouncing text size.
+        private int _scrawlStampSize = SuperCore.ScrawlOptions.StampSizeDefault;
+        public int ScrawlStampSize
+        {
+            get => _scrawlStampSize;
+            set { _scrawlStampSize = SuperCore.ScrawlOptions.ClampStampSize(value); OnPropertyChanged(); }
         }
 
         // Scrawl: slam strength in percent; 0 = a click on a word is never taken.

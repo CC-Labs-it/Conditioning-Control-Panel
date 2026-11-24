@@ -116,7 +116,7 @@ public sealed class SteamLayer : BaseLayer
         }
         // The base filter's own colour and strength: thicker than the flat tint, never opaque.
         var look = PinkTintLayer.LastLook;
-        double strength = Math.Clamp(0.3 + look.Opacity * 1.6, 0.3, 0.82);
+        double strength = SteamOptions.Strength(look.Opacity);
         // The filter's own colour always (the shop sells no fog colours); Two-tone adds its second colour below.
         var worn = Prizes.WornFog.Shown((look.R, look.G, look.B));
         var (wr, wg, wb) = worn.Main;
@@ -141,7 +141,7 @@ public sealed class SteamLayer : BaseLayer
         screen.Words.Line = Line;
         screen.Words.Step(field, dt, Safety.GentleVisuals.On, WordsOn);
         // The worn word style (shop): its face, colour and way in; Still under Gentle visuals.
-        screen.WordsDraw.Draw(canvas, bounds, field, screen.Words, colour, Face, Looks.WornWordStyle.Current, Looks.WornWordStyle.Motion);
+        screen.WordsDraw.Draw(canvas, bounds, field, screen.Words, colour, AfterglowLineLayer.FaceNow(), Looks.WornWordStyle.Current, Looks.WornWordStyle.Motion);
         field.ClearDirty();
     }
 }

@@ -232,6 +232,28 @@ export function createScene({ canvas }) {
   window.addEventListener('resize', resize);
   resize();
 
+  // Use a full two seconds of frame intervals; one long pause is not a slow device.
+  let lowPower = false;
+  let samples = [];
+  let sampleTime = 0;
+  function measureFrame(elapsed, reduced) {
+    if (lowPower) return;
+    if (reduced) { enableLowPower(); return; }
+    if (!(elapsed > 0) || elapsed > 1) { samples = []; sampleTime = 0; return; }
+    samples.push(elapsed); sampleTime += elapsed;
+    if (sampleTime < 2) return;
+    samples.sort((a, b) => a - b);
+    if (samples[Math.floor(samples.length / 2)] > 0.05) enableLowPower();
+    samples = []; sampleTime = 0;
+  }
+  function enableLowPower() {
+    lowPower = true;
+    renderer.shadowMap.type = THREE.BasicShadowMap;
+    key.shadow.mapSize.set(512, 512);
+    if (key.shadow.map) { key.shadow.map.dispose(); key.shadow.map = null; }
+    renderer.setPixelRatio(1);
+    resize();
+  }
   function update(dt) {
     clock += dt;
     updateCamera(dt);
@@ -262,7 +284,8 @@ export function createScene({ canvas }) {
   return {
     renderer, scene, camera, boardGroup, pieceGroup, squares,
     lightRig, lights: { hemi, key, fill, rim },
-    update, render, resize, dispose,
+    update, render, resize, dispose, measureFrame,
+    isLowPower: () => lowPower,
     setSide, setHighlights, setHighlightSink, projectPoint, projectSquare,
     cameraRig: rig,
     setCameraSway(v) { sway = Math.max(0, Math.min(1, Number(v) || 0)); },

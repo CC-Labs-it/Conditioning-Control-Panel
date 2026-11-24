@@ -1668,6 +1668,10 @@ namespace ConditioningControlPanel.Services
                         ForceSkillsReset = settings.PendingSkillsResetAck ? (bool?)false : null
                     };
 
+                    // The balance this request carries, captured with its level and bubble count:
+                    // the reply handler compares it with the wallet then (V2WalletNet sentSp).
+                    int sentSkillPoints = v2SyncData.skill_points;
+
                     var v2Request = new HttpRequestMessage(HttpMethod.Post, $"{ProxyBaseUrl}/v2/user/sync");
                     AddAuthHeader(v2Request);
                     var v2Body = JsonConvert.SerializeObject(v2SyncData);
@@ -1828,8 +1832,12 @@ namespace ConditioningControlPanel.Services
                             // the balance (policy: it is permanent, and since the Descent so is the tree it
                             // buys); the raise-only side also shields it from an older server that still
                             // zeroes skill_points at rollover.
+                            // sentSp: the balance this request carried. Equal to the wallet now = no
+                            // credit since, so the reply is the booked balance (ccp-bugs #1680). A
+                            // season reset reply keeps raise-only.
                             if (ApplySyncWallet(App.Settings?.Current, unifiedId!, v2Result.SkillPoints.Value,
-                                    V2WalletNet.ParseNet(v2Result.WalletNet)))
+                                    V2WalletNet.ParseNet(v2Result.WalletNet),
+                                    v2Result.LevelReset == true ? null : sentSkillPoints))
                                 App.Settings?.Save();
                         }
 
@@ -3777,12 +3785,12 @@ namespace ConditioningControlPanel.Services
         /// request left. The setter's PropertyChanged is what repaints the wallet. Returns true when
         /// anything changed and needs saving.
         /// </summary>
-        internal static bool ApplySyncWallet(AppSettings? live, string syncAccount, int serverSp, int? replyNet)
+        internal static bool ApplySyncWallet(AppSettings? live, string syncAccount, int serverSp, int? replyNet, int? sentSp = null)
         {
             if (live == null) return false;
             var same = string.Equals(live.UnifiedId, syncAccount, StringComparison.Ordinal);
             int? seen = live.WalletNetSeen.TryGetValue(syncAccount, out var stored) ? stored : null;
-            var step = V2WalletNet.Decide(same, replyNet, seen, serverSp, live.SkillPoints);
+            var step = V2WalletNet.Decide(same, replyNet, seen, serverSp, live.SkillPoints, sentSp);
             var changed = false;
             if (step.NextSp != live.SkillPoints)
             {

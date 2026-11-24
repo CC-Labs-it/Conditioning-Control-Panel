@@ -554,4 +554,12 @@ body.pbp-replay-corner .game-settings:not(:has(.game-options-panel:not([hidden])
 /* nothing here is the viewer's to give up, leave or time */
 .pbp-cup-replay #game-surrender-box, .pbp-cup-replay #game-menu, .pbp-cup-replay #game-menu-note, .pbp-cup-replay .player-clock .time, .pbp-cup-replay [data-seat-only], .pbp-cup-replay #game-intensity, .pbp-cup-replay #iq-note { display: none !important; }
 .pbp-cup-reel .game-settings, .pbp-cup-reel #cam-views, .pbp-cup-reel #moves { display: none !important; }
+/* "Arrows on / off": top right, beside the moves tab (the tab, its edge and a gap). Lit like a camera
+   button while on. A touch screen draws no arrows, so it has no button. */
+.arrows-btn { position: absolute; top: 22px; right: 101px; white-space: nowrap; }
+.arrows-btn.on { color: var(--pbp-pink); border-color: rgba(255, 105, 180, 0.55); }
+@media (max-width: 1000px) { .arrows-btn { top: 12px; right: 95px; } }
+@media (max-width: 760px) { .arrows-btn { top: 104px; } }
+@media (pointer: coarse) { .arrows-btn { display: none; } }
+.pbp-cup-reel .arrows-btn { display: none !important; }
 /* --- end the replay -------------------------------------------------------- */

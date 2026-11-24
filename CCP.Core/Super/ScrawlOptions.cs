@@ -13,6 +13,31 @@ public static class ScrawlOptions
     /// <summary>Slam strength in percent. 0 = off: a click on a word goes through untouched.</summary>
     public const int SlamMin = 0, SlamMax = 200, SlamDefault = 100, SlamStep = 25;
 
+    /// <summary>Stamp size in percent of the bouncing text size (owner 2026-11-18: big faint text must not mean giant stamps).</summary>
+    public const int StampSizeMin = 25, StampSizeMax = 150, StampSizeDefault = 100, StampSizeStep = 5;
+    /// <summary>The fewest stamps a scaled-down cap ever leaves.</summary>
+    public const int EffectiveCapFloor = 4;
+
+    /// <summary>Clamped and snapped to 5 percent steps.</summary>
+    public static int ClampStampSize(int v)
+    {
+        v = Math.Clamp(v, StampSizeMin, StampSizeMax);
+        return (int)Math.Round(v / (double)StampSizeStep, MidpointRounding.AwayFromZero) * StampSizeStep;
+    }
+
+    /// <summary>
+    /// The cap the walls really hold. The slider counts stamps at 100 percent text; a bigger stamp
+    /// covers more wall, so the cap shrinks in step with it (300 percent holds a third), and a second
+    /// bouncing word halves it again: two words hit twice as often. Never grows past the slider.
+    /// </summary>
+    public static int EffectiveCap(int cap, double stampPercent, int words)
+    {
+        cap = ClampStampCap(cap);
+        double scaled = stampPercent > 100 ? cap * 100.0 / stampPercent : cap;
+        if (words > 1) scaled /= 2;
+        return Math.Clamp((int)Math.Round(scaled), Math.Min(EffectiveCapFloor, cap), cap);
+    }
+
     public static int ClampStampSeconds(int v) => Math.Clamp(v, StampSecondsMin, StampSecondsMax);
     public static int ClampStampCap(int v) => Math.Clamp(v, StampCapMin, StampCapMax);
 

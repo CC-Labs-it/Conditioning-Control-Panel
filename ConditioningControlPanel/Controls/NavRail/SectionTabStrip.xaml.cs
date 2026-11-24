@@ -956,7 +956,9 @@ namespace ConditioningControlPanel.Controls.NavRail
             if (tab.Kind is NavTabKind.Tab or NavTabKind.Zone) SetActive(tab.Key, animate: true);
             if (focus) PillFor(tab.Key)?.Focus();
             // A pill that opens its own window asks first (owner, 2026-10-07: Just Drop).
-            if (NavStripRules.AsksBeforeOpening(tab)) { AskBeforeOpening(tab); return; }
+            // A launcher door Lockdown refuses (ccp-bugs #1701) never asks: the click goes straight
+            // to ShowTab, which keeps the panel and says why on the strip.
+            if (NavStripRules.AsksBeforeOpening(tab) && !PanelDoorLink.RefusedNow(tab.Key)) { AskBeforeOpening(tab); return; }
             TabRequested?.Invoke(tab);
         }
 

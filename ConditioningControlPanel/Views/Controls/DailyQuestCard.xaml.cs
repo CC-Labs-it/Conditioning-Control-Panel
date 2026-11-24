@@ -269,6 +269,7 @@ namespace ConditioningControlPanel.Views.Controls
             {
                 if (!_canNavigate) return;
                 MotionFx.HoverLift(Root, true);
+                QuestGoHint.Set(GoHint, true);
 
                 if (!MotionFx.AllowTransitions) return;
                 _hoverGlow ??= new DropShadowEffect
@@ -292,6 +293,7 @@ namespace ConditioningControlPanel.Views.Controls
             try
             {
                 MotionFx.HoverLift(Root, false);
+                QuestGoHint.Set(GoHint, false);
 
                 if (_hoverGlow == null) { Root.Effect = null; return; }
 

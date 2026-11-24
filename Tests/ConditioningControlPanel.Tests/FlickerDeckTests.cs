@@ -84,8 +84,8 @@ public class FlickerDeckTests
     {
         var s = Card();
         FlickerDeck.Press(s, MotionLevel.Full);
-        var (_, swap, _) = RunFlip(s, MotionLevel.Full, t => t > 0.8);
-        Assert.InRange(swap, 0.8, 0.8 + 2 * Dt);
+        var (_, swap, _) = RunFlip(s, MotionLevel.Full, t => t > 0.55);   // inside the edge-on wait (MaxHoldSec)
+        Assert.InRange(swap, 0.55, 0.55 + 2 * Dt);
         Assert.Equal(1, s.Flips);
         Assert.False(s.Busy);
     }
@@ -102,6 +102,31 @@ public class FlickerDeckTests
         Assert.False(s.Busy);
         Assert.Equal(1, s.Flips);
     }
+
+    [Fact]
+    public void A_late_picture_never_holds_the_card_side_on_for_long()
+    {
+        // Tier-2 2026-11-18: a 1.5 s edge-on wait read as the deck pausing. The picture is got
+        // ready while the card rests now; a miss holds at most MaxHoldSec (well under half a second).
+        Assert.True(FlickerDeck.MaxHoldSec <= 0.5);
+        var s = Card();
+        FlickerDeck.Press(s, MotionLevel.Full);
+        double t = 0, gaveUp = -1;
+        for (int i = 0; i < 10000 && s.Busy; i++)
+        {
+            var ev = FlickerDeck.Step(s, Dt, false, MotionLevel.Full);
+            t += Dt;
+            if ((ev & FlickerEvents.GaveUp) != 0) gaveUp = t;
+        }
+        Assert.InRange(gaveUp, 0, FlickerDeck.LiftLeadSec + FlickerDeck.FlipSec / 2 + FlickerDeck.MaxHoldSec + 0.05);
+    }
+
+    [Theory]
+    [InlineData(1, false, true)]    // a still: kept decoded, a click finds it ready
+    [InlineData(40, false, false)]  // a GIF: path only, up to 30 MB of frames never wait in memory
+    [InlineData(1, true, false)]    // a clip: path only
+    public void Prefetch_keeps_only_stills_decoded(int frames, bool clip, bool decoded)
+        => Assert.Equal(decoded, ConditioningControlPanel.Services.DeckPrefetch.KeepDecoded(frames, clip));
 
     [Fact]
     public void ScaleX_squashes_through_the_flip_and_never_mirrors()
