@@ -56,6 +56,9 @@ namespace ConditioningControlPanel.Controls.Preview
         private static readonly Pen EdgeBand = Frozen(new Pen(Frozen(new SolidColorBrush(Color.FromRgb(0x10, 0x0e, 0x20))), 3.5));
 
         private readonly FxSurface _fx;
+        private readonly DeskOverlay _over = new() { IsHitTestVisible = false };
+        private WriteableBitmap? _furniture;
+        private (int W, int H) _furnitureSize;
         private readonly FrameClock _clock;
         private readonly SettingsHook _hook;
         private PreviewDriver? _driver;
@@ -75,6 +78,7 @@ namespace ConditioningControlPanel.Controls.Preview
             _fx = new FxSurface { ResolutionScale = 0.5 };
             _fx.PaintSurface += OnPaintSurface;
             AddVisualChild(_fx);
+            AddVisualChild(_over);
             _clock = new FrameClock { Interval = TimeSpan.FromMilliseconds(33) };
             _clock.Tick += (_, _) => OnFrame();
             _hook = new SettingsHook(OnSettingChanged);
@@ -113,6 +117,7 @@ namespace ConditioningControlPanel.Controls.Preview
             _scene = Create(Scene);
             _driver = _scene == null ? null : new PreviewDriver(_scene, () => Clock.Elapsed.TotalSeconds);
             InvalidateArrange();
+            InvalidateVisual();
         }
 
         /// <summary>Use this scene (tests and pages that build their own).</summary>
@@ -122,16 +127,18 @@ namespace ConditioningControlPanel.Controls.Preview
             _scene = scene;
             _driver = new PreviewDriver(scene, clock ?? (() => Clock.Elapsed.TotalSeconds));
             InvalidateArrange();
+            InvalidateVisual();
         }
 
         // ---------------------------------------------------------------- layout
 
-        protected override int VisualChildrenCount => 1;
-        protected override Visual GetVisualChild(int index) => _fx;
+        protected override int VisualChildrenCount => 2;
+        protected override Visual GetVisualChild(int index) => index == 0 ? _fx : _over;
 
         protected override Size MeasureOverride(Size availableSize)
         {
             _fx.Measure(new Size(0, 0));
+            _over.Measure(new Size(0, 0));
             return new Size(0, 0);   // the card's size comes from the options column, never from the preview
         }
 
@@ -142,6 +149,7 @@ namespace ConditioningControlPanel.Controls.Preview
             var band = Rect.Intersect(_screen, VisibleInSelf(finalSize));
             _fxRect = band.IsEmpty ? new Rect(_screen.X, _screen.Y, 0, 0) : band;
             _fx.Arrange(_fxRect);
+            _over.Arrange(new Rect(finalSize));
             _scene?.Layout(new SKRect(0, 0, (float)_screen.Width, (float)_screen.Height), VisibleInScreen());
             Evaluate();
             _fx.Redraw();
@@ -185,13 +193,23 @@ namespace ConditioningControlPanel.Controls.Preview
             dc.PushClip(new RectangleGeometry(_screen, PreviewDesktop.ScreenRadius, PreviewDesktop.ScreenRadius));
             dc.DrawImage(desk, _screen);
             dc.Pop();
+            // A scene that paints its own wallpaper gets the windows, icons and taskbar laid over it.
+            var over = _scene is IPreviewWallpaperScene ? Bake(false, ref _furniture, ref _furnitureSize) : null;
+            if (!ReferenceEquals(_over.Image, over) || _over.Screen != _screen)
+            {
+                _over.Image = over;
+                _over.Screen = _screen;
+                _over.InvalidateVisual();
+            }
         }
 
-        private WriteableBitmap? Desk()
+        private WriteableBitmap? Desk() => Bake(true, ref _desk, ref _deskSize);
+
+        private WriteableBitmap? Bake(bool wallpaper, ref WriteableBitmap? cache, ref (int W, int H) cacheSize)
         {
             double scale = DesktopScaleOverride ?? Dpi();
             int pw = Math.Max(1, (int)Math.Ceiling(_screen.Width * scale)), ph = Math.Max(1, (int)Math.Ceiling(_screen.Height * scale));
-            if (_desk != null && _deskSize == (pw, ph)) return _desk;
+            if (cache != null && cacheSize == (pw, ph)) return cache;
             try
             {
                 var bmp = new WriteableBitmap(pw, ph, 96, 96, PixelFormats.Pbgra32, null);
@@ -204,18 +222,33 @@ namespace ConditioningControlPanel.Controls.Preview
                     {
                         surface.Canvas.Clear(SKColors.Transparent);
                         surface.Canvas.Scale(pw / (float)_screen.Width, ph / (float)_screen.Height);
-                        PreviewDesktop.Paint(surface.Canvas, (float)_screen.Width, (float)_screen.Height);
+                        PreviewDesktop.Paint(surface.Canvas, (float)_screen.Width, (float)_screen.Height, wallpaper);
                         surface.Canvas.Flush();
                     }
                     bmp.AddDirtyRect(new Int32Rect(0, 0, pw, ph));
                 }
                 finally { bmp.Unlock(); }
                 bmp.Freeze();
-                _desk = bmp;
-                _deskSize = (pw, ph);
+                cache = bmp;
+                cacheSize = (pw, ph);
             }
             catch (Exception ex) { App.Logger?.Debug("EffectPreview desktop: {E}", ex.Message); }
-            return _desk;
+            return cache;
+        }
+
+        /// <summary>The desktop's windows, icons and taskbar over a wallpaper scene (never hit-tested).</summary>
+        private sealed class DeskOverlay : FrameworkElement
+        {
+            public ImageSource? Image;
+            public Rect Screen;
+
+            protected override void OnRender(DrawingContext dc)
+            {
+                if (Image == null || Screen.Width <= 0 || Screen.Height <= 0) return;
+                dc.PushClip(new RectangleGeometry(Screen, PreviewDesktop.ScreenRadius, PreviewDesktop.ScreenRadius));
+                dc.DrawImage(Image, Screen);
+                dc.Pop();
+            }
         }
 
         private double Dpi()

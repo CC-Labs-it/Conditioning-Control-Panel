@@ -7,6 +7,7 @@
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
              xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
              xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             xmlns:pv="clr-namespace:ConditioningControlPanel.Controls.Preview"
              rows:RowHue.TintSliders="True"
              mc:Ignorable="d" d:DesignWidth="760">
 
@@ -240,25 +241,16 @@
                 </Grid>
             </Border>
 
+            <!-- SIDE ART -> LIVE PREVIEW (owner 2026-11-24): a framed slice of a desktop whose own
+                 wallpaper changes (Controls/Preview/Scenes/WallpaperPreviewScene.cs). The mod art brush
+                 stays (ApplyFeatureArt writes it) but is parked in Tag. -->
             <Border Grid.Column="1" Margin="10,0,0,0" CornerRadius="14"
                     BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
-                    VerticalAlignment="Stretch" MinHeight="200">
-                <Border.Background>
-                    <ImageBrush x:Name="SideArtBrush" Stretch="UniformToFill">
-                        <ImageBrush.ImageSource>
-                            <BitmapImage UriSource="pack://application:,,,/Resources/features/wallpaper.png"
-                                         DecodePixelWidth="800"/>
-                        </ImageBrush.ImageSource>
-                    </ImageBrush>
-                </Border.Background>
-                <Border CornerRadius="12">
-                    <Border.Background>
-                        <LinearGradientBrush StartPoint="0,1" EndPoint="0,0">
-                            <GradientStop Color="#66000000" Offset="0"/>
-                            <GradientStop Color="#00000000" Offset="0.45"/>
-                        </LinearGradientBrush>
-                    </Border.Background>
-                </Border>
+                    Background="#06050D" VerticalAlignment="Stretch" MinHeight="200">
+                <Border.Tag>
+                    <ImageBrush x:Name="SideArtBrush" Stretch="UniformToFill"/>
+                </Border.Tag>
+                <pv:EffectPreview Scene="wallpaper"/>
             </Border>
         </Grid>
 
