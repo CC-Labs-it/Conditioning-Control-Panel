@@ -85,7 +85,10 @@ public sealed class EmiRainReviewTests
             {
                 Setup(); var oldPath = CorePaths.EffectiveAssetsProvider; bool oldOffers = CoreSettings.Current.EmiDeskOffers; bool oldGlass = CoreSettings.Current.EmiDeskGlass;
                 var oldBedtime = EmiState.Current.BedtimeUntil; EmiDeskWindow? w = null;
-                ChaosGifCascadeOverlay? rain = null;
+                // The accepted rain spawns its first clip at once and decodes a.gif on a worker (File.OpenRead
+                // via SKCodec). EmiGifRain.Stop closes the window immediately but not that read, and Windows
+                // refuses the folder delete below while it is open: every started decode is awaited first.
+                Task? decodes = null;
                 try
                 {
                     CorePaths.EffectiveAssetsProvider = () => root; CoreSettings.Current.EmiDeskOffers = true; CoreSettings.Current.EmiDeskGlass = true;
@@ -108,8 +111,8 @@ public sealed class EmiRainReviewTests
                     Assert.NotNull(EmiGifRain.LastPick);
                     await EmiGifRain.LastPick!; Dispatcher.UIThread.RunJobs();
                     Assert.True(ChaosGifCascadeOverlay.IsRaining);
-                    rain = ChaosGifCascadeOverlay.Active;
-                    await StopRainAndDrainAsync(rain);
+                    decodes = ChaosGifCascadeOverlay.Active!.PendingDecodes;
+                    EmiGifRain.Stop();
                     w.FireRainOffer(EmiLineEngine.FromJson(Lines), "m");
                     Assert.True(w.RainAskLive);
                     var lastPick = EmiGifRain.LastPick;
@@ -135,22 +138,25 @@ public sealed class EmiRainReviewTests
                 finally
                 {
                     ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
-                    rain ??= ChaosGifCascadeOverlay.Active;
-                    try
-                    {
-                        w?.ShutDown(); EmiGifRain.Stop(); ChaosGifCascadeOverlay.CloseActive();
-                        if (rain != null) await rain.PendingDecodes.WaitAsync(TimeSpan.FromSeconds(10));
-                        Dispatcher.UIThread.RunJobs();
-                    }
-                    finally
-                    {
-                        ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false; ChaosGifCascadeOverlay.ManualFramesForTests = false;
-                        CorePaths.EffectiveAssetsProvider = oldPath; CoreSettings.Current.EmiDeskOffers = oldOffers; CoreSettings.Current.EmiDeskGlass = oldGlass; EmiState.Current.BedtimeUntil = oldBedtime;
-                    }
+                    w?.ShutDown(); EmiGifRain.Stop();
+                    var stillOpen = ChaosGifCascadeOverlay.Active?.PendingDecodes;
+                    ChaosGifCascadeOverlay.CloseActive();
+                    foreach (var t in new[] { decodes, stillOpen, ChaosGifCascadeOverlay.LastDecode })
+                        if (t != null) await t.WaitAsync(TimeSpan.FromSeconds(10));
+                    Dispatcher.UIThread.RunJobs();   // the decodes' Attach posts land on the closed window
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false; ChaosGifCascadeOverlay.ManualFramesForTests = false;
+                    CorePaths.EffectiveAssetsProvider = oldPath; CoreSettings.Current.EmiDeskOffers = oldOffers; CoreSettings.Current.EmiDeskGlass = oldGlass; EmiState.Current.BedtimeUntil = oldBedtime;
                 }
             });
         }
         finally { Directory.Delete(root, true); }
+    }
+
+    private static void Setup()
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
     private static async Task StopRainAndDrainAsync(ChaosGifCascadeOverlay? rain)
@@ -226,10 +232,5 @@ public sealed class EmiRainReviewTests
         finally { Directory.Delete(root, true); }
     }
 
-    private static void Setup()
-    {
-        if (Application.Current is null)
-            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-    }
+
 }

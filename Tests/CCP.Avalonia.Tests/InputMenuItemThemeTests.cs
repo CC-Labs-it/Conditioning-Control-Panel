@@ -10,7 +10,9 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls.AppSettings;
+using IconKind = FluentIcons.Common.Symbol;
 using ConditioningControlPanel.Services;
 using Xunit;
 
@@ -22,6 +24,7 @@ public sealed class InputMenuItemThemeTests
     [InlineData("geometry")]
     [InlineData("disabled")]
     [InlineData("selected")]
+    [InlineData("check")]
     public Task DndPickerUsesContextRowChrome(string part) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         if (Application.Current is null)
@@ -57,6 +60,19 @@ public sealed class InputMenuItemThemeTests
                 Assert.False(rows[1].IsEnabled);
                 Assert.Equal(0.45, rows[1].Opacity);
                 Assert.Equal("Arrow", rows[1].Cursor!.ToString());
+            }
+            if (part == "check")
+            {
+                var checkedRow = rows[1];
+                checkedRow.Icon = new TextBlock { Text = "icon" };
+                Dispatcher.UIThread.RunJobs();
+                var check = checkedRow.GetVisualDescendants().OfType<IconGlyph>().Single();
+                Assert.Equal(IconKind.Checkmark, check.Kind);
+                Assert.Equal(10, check.Size);
+                Assert.True(check.IsVisible);
+                Assert.Equal(((ISolidColorBrush)window.FindResource("PinkBrush")!).Color, ((ISolidColorBrush)check.Foreground!).Color);
+                var icon = checkedRow.GetVisualDescendants().OfType<ContentControl>().First(x => x.Name == "PART_IconPresenter");
+                Assert.False(icon.IsVisible);
             }
             if (part == "selected")
             {

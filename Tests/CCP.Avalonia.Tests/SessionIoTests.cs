@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using System.Reflection;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -229,6 +231,9 @@ public sealed class SessionIoTests
             view.HandleSessionDrop(outside);
             Dispatcher.UIThread.RunJobs();
 
+            Assert.Equal("dropped", ((Session)typeof(PresetsTabView).GetField("_selectedSession", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(view)!).Id);
+            Assert.Contains("Dropped", view.FindControl<TextBlock>("TxtDetailTitle")!.Text);
+            Assert.Equal("Session loaded: Dropped", view.FindControl<TextBlock>("DropZoneStatus")!.Text);
             var imported = Assert.Single(Directory.GetFiles(custom));
             var rack = view.FindControl<StackPanel>("SessionRackPanel")!;
             var row = rack.Children.OfType<Border>().Single(b => (b.Tag as Session)?.Id == "dropped");
@@ -254,6 +259,93 @@ public sealed class SessionIoTests
         }
         return Task.CompletedTask;
     });
+    [Fact]
+    public Task AddedSessionIsSelectedAndRevealClearsFilters() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        BubbleMotionPickerTests.Setup();
+        var root = Path.Combine(Path.GetTempPath(), "ccp-rack-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var settings = ConditioningControlPanel.CoreSettings.Current;
+        var saved = settings.SessionRackSourceFilter;
+        Window? host = null;
+        try
+        {
+            var manager = new SessionManager(new SessionFileService(root, root));
+            manager.LoadAllSessions();
+            var view = new PresetsTabView();
+            host = new Window { Content = view, Width = 1100, Height = 760 };
+            host.Show();
+            view.UseSessionManager(manager);
+            var session = SessionDefinition.FromSession(Session.MorningDrift).ToSession();
+            session.Id = Guid.NewGuid().ToString();
+            session.Name = "New Rack Session";
+            view.RegisterExternallySavedSession(session, Path.Combine(root, "new.session.json"));
+            Assert.Same(session, typeof(PresetsTabView).GetField("_selectedSession", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(view));
+            Assert.Contains(session.Name, view.FindControl<TextBlock>("TxtDetailTitle")!.Text);
+            Assert.Equal("Session loaded: New Rack Session", view.FindControl<TextBlock>("DropZoneStatus")!.Text);
+            var chips = view.FindControl<StackPanel>("RackSourceChips")!.Children.OfType<ToggleButton>().ToArray();
+            chips.Single(c => (string?)c.Tag == "builtin").IsChecked = true;
+            var dots = view.FindControl<StackPanel>("RackDifficultyChips")!.Children.OfType<ToggleButton>().ToArray();
+            dots[0].IsChecked = false;
+            view.FindControl<TextBox>("TxtRackSearch")!.Text = "no match";
+            Dispatcher.UIThread.RunJobs();
+            view.RevealSession(session.Id);
+            Assert.True(chips.Single(c => (string?)c.Tag == "all").IsChecked);
+            Assert.All(dots, d => Assert.True(d.IsChecked));
+            Assert.Equal("", view.FindControl<TextBox>("TxtRackSearch")!.Text);
+            Assert.Equal("all", settings.SessionRackSourceFilter);
+            Assert.Contains(view.FindControl<StackPanel>("SessionRackPanel")!.Children.OfType<Border>(), b => (b.Tag as Session)?.Id == session.Id);
+        }
+        finally
+        {
+            settings.SessionRackSourceFilter = saved;
+            host?.Close();
+            try { Directory.Delete(root, true); } catch { }
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task EditorSaveWithExistingIdWritesAndSelectsANewSession() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        BubbleMotionPickerTests.Setup();
+        var root = Path.Combine(Path.GetTempPath(), "ccp-editor-collision-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        Window? host = null;
+        try
+        {
+            var files = new SessionFileService(root, root);
+            var manager = new SessionManager(files);
+            manager.LoadAllSessions();
+            var original = manager.AllSessions.First(s => s.Source == SessionSource.BuiltIn);
+            var session = SessionDefinition.FromSession(original).ToSession();
+            session.Name = "Editor Copy";
+            var originalId = session.Id;
+            var path = Path.Combine(root, "editor-copy.session.json");
+            var view = new PresetsTabView();
+            host = new Window { Content = view, Width = 1100, Height = 760 };
+            host.Show();
+            view.UseSessionManager(manager);
+
+            view.SaveEditorSession(session, path);
+
+            Assert.True(File.Exists(path));
+            Assert.NotEqual(originalId, session.Id);
+            Assert.Same(original, manager.GetSession(originalId));
+            Assert.Same(session, manager.GetSession(session.Id));
+            Assert.Equal(session.Id, files.ImportSession(path)!.Id);
+            Assert.Same(session, typeof(PresetsTabView).GetField("_selectedSession", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(view));
+            Assert.Contains("Editor Copy", view.FindControl<TextBlock>("TxtDetailTitle")!.Text);
+            Assert.Equal("Session loaded: Editor Copy", view.FindControl<TextBlock>("DropZoneStatus")!.Text);
+        }
+        finally
+        {
+            host?.Close();
+            try { Directory.Delete(root, true); } catch { }
+        }
+        return Task.CompletedTask;
+    });
+
     /// <summary>WPF HandleSessionDrop: an invalid file is refused with "Invalid: ..." and nothing
     /// is copied into CustomSessions or added to the rack.</summary>
     [Fact]

@@ -80,6 +80,7 @@ namespace ConditioningControlPanel.Services
 
         // Per-instance seam for deterministic lifecycle proofs; production keeps the 500ms default.
         internal int SaveDebounceDueTimeMilliseconds { get; set; } = 500;
+        internal Action<bool>? DebouncedSaveCompletedForTest { get; set; }
 
         public AppSettings Current { get; private set; }
 
@@ -875,7 +876,8 @@ namespace ConditioningControlPanel.Services
                             _savePending = false;
                             var suppress = _suppressCloudBackupPending;
                             _suppressCloudBackupPending = false;
-                            SaveImmediate(suppress);
+                            var saved = TrySaveImmediate(suppress);
+                            DebouncedSaveCompletedForTest?.Invoke(saved);
                         }
                     }
                     finally { Interlocked.Decrement(ref _debouncedSavesInFlight); }
