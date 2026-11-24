@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -116,6 +117,112 @@ public class FlashCuesTests
     });
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EmptyLibraryScenarioRestoresWarningFlag(bool initial)
+    {
+        var warning = typeof(FlashOverlay).GetField("_warnedEmpty", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var original = warning.GetValue(null);
+        try
+        {
+            warning.SetValue(null, initial);
+            await BurstAnnouncesAfterSelectionBeforeDecode("empty");
+            Assert.Equal(initial, (bool)warning.GetValue(null)!);
+        }
+        finally { warning.SetValue(null, original); }
+    }
+
+    [Theory]
+    [InlineData("corrupt")]
+    [InlineData("repair")]
+    [InlineData("retry")]
+    [InlineData("panic")]
+    [InlineData("empty")]
+    public Task BurstAnnouncesAfterSelectionBeforeDecode(string scenario) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        using var cache = new FlashLuminanceCacheIsolation();
+        var root = Directory.CreateTempSubdirectory("ccp-flash-pre-decode-").FullName;
+        var images = Directory.CreateDirectory(Path.Combine(root, "images")).FullName;
+        var path = Path.Combine(images, "picture.png");
+        if (scenario is "corrupt" or "repair") File.WriteAllText(path, "not an image");
+        if (scenario == "panic") using (var picture = Picture(255)) picture.Save(path);
+        if (scenario == "retry")
+        {
+            var other = Path.Combine(images, "other.png");
+            using (var picture = Picture(255)) { picture.Save(path); picture.Save(other); }
+            lock (FlashOverlay.DiskBag) FlashOverlay.DiskBag.Reset();
+            var dealt = FlashOverlay.NextPath(new[] { path, other });
+            Assert.NotNull(dealt);
+            File.WriteAllText(dealt == path ? other : path, "not an image");
+        }
+        var s = CoreSettings.Current;
+        var warning = typeof(FlashOverlay).GetField("_warnedEmpty", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var warnedEmpty = warning.GetValue(null);
+        var saved = (FlashOverlay.OverlaysAvailable, FlashOverlay.After, FlashOverlay.VoiceLead,
+            FlashOverlay.Present, CorePaths.EffectiveAssetsProvider, ScreenList.QueryOverride,
+            s.FlashAudioEnabled, s.MediaSource, ConditioningControlPanel.Avalonia.Platform.PopupSwitches.RemoteMediaOffer);
+        var lead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var scheduled = new List<Action>();
+        var host = new Window();
+        var announcements = 0;
+        void Announced() => announcements++;
+        FlashOverlay.AboutToDisplay += Announced;
+        try
+        {
+            FlashOverlay.OverlaysAvailable = () => true;
+            FlashOverlay.Present = (_, _, _) => true;
+            FlashOverlay.After = (action, _) => scheduled.Add(action);
+            FlashOverlay.VoiceLead = () => lead.Task;
+            CorePaths.EffectiveAssetsProvider = () => root;
+            ScreenList.QueryOverride = _ => host.Screens.All.ToArray();
+            s.FlashAudioEnabled = false;
+            s.MediaSource = "local";
+            ConditioningControlPanel.Avalonia.Platform.PopupSwitches.RemoteMediaOffer = false;
+            FlashOverlay.TriggerOnce(host, amount: 1);
+            for (var i = 0; i < 250 && announcements == 0 && FlashOverlay.IsBusy; i++) await Task.Delay(20);
+            if (scenario == "empty")
+            {
+                Assert.Equal(0, announcements);
+                Assert.False(FlashOverlay.IsBusy);
+                return;
+            }
+            Assert.Equal(1, announcements);
+            Assert.Empty(scheduled);
+            Assert.Empty(FlashOverlay.Active);
+            if (scenario == "repair") using (var picture = Picture(255)) picture.Save(path);
+            if (scenario == "panic")
+                ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(x => x.Id == "flash").Stop(null);
+            lead.TrySetResult();
+            for (var i = 0; i < 250 && scheduled.Count == 0 && FlashOverlay.IsBusy; i++) await Task.Delay(20);
+            if (scenario is "repair" or "retry")
+            {
+                Assert.Single(scheduled);
+                scheduled[0]();
+                Assert.Single(FlashOverlay.Active);
+            }
+            else
+            {
+                Assert.False(FlashOverlay.IsBusy);
+                Assert.Empty(scheduled);
+                Assert.Empty(FlashOverlay.Active);
+            }
+        }
+        finally
+        {
+            warning.SetValue(null, warnedEmpty);
+            lead.TrySetResult();
+            FlashOverlay.CloseAll(final: false);
+            FlashOverlay.AboutToDisplay -= Announced;
+            if (scenario == "retry") lock (FlashOverlay.DiskBag) FlashOverlay.DiskBag.Reset();
+            host.Close();
+            (FlashOverlay.OverlaysAvailable, FlashOverlay.After, FlashOverlay.VoiceLead,
+                FlashOverlay.Present, CorePaths.EffectiveAssetsProvider, ScreenList.QueryOverride,
+                s.FlashAudioEnabled, s.MediaSource, ConditioningControlPanel.Avalonia.Platform.PopupSwitches.RemoteMediaOffer) = saved;
+            Directory.Delete(root, recursive: true);
+        }
+    });
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public Task BurstSuppressionReachesScheduledFlashes(bool suppress) => AvaloniaTestDispatcher.RunAsync(async () =>
@@ -139,6 +246,9 @@ public class FlashCuesTests
             CorePaths.EffectiveAssetsProvider, ScreenList.QueryOverride, CoreSettings.Current.FlashAudioEnabled);
         var host = new Window();
         var scheduled = new List<Action>();
+        var announcements = 0;
+        void Announced() => announcements++;
+        FlashOverlay.AboutToDisplay += Announced;
         try
         {
             CoreHaptics.Service = service;
@@ -153,6 +263,7 @@ public class FlashCuesTests
             FlashOverlay.TriggerOnce(host, amount: 1, durationMs: 1600, suppressHaptic: suppress);
             for (int i = 0; i < 250 && scheduled.Count == 0; i++) await Task.Delay(20);
             Assert.Single(scheduled);
+            Assert.Equal(1, announcements);
             scheduled[0]();
             Assert.Single(FlashOverlay.Active);
             Assert.Equal(suppress ? 0 : 1, luminance.Count);
@@ -161,6 +272,7 @@ public class FlashCuesTests
         finally
         {
             FlashOverlay.CloseAll(final: false);
+            FlashOverlay.AboutToDisplay -= Announced;
             host.Close();
             (CoreHaptics.Service, FlashOverlay.SetLuminance, FlashOverlay.Present,
                 FlashOverlay.OverlaysAvailable, FlashOverlay.After, FlashOverlay.VoiceLead,

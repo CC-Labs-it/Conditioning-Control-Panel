@@ -64,6 +64,8 @@ internal static partial class FlashOverlay
         var (frames, delay) = await Task.Run(() => SpiralOverlay.Decode(path, maxFrames: 60));
         if (frames.Count == 0) { director.LoadFailed(path); return false; }
         director.Consumed(path);
+        // WPF FlashService.cs:1089: remix announces once before its lead.
+        if (!Announce(generation)) { frames.ForEach(f => f.Dispose()); return true; }
         await Task.Delay(1000);
         if (_closed || generation != _generation) { frames.ForEach(f => f.Dispose()); return true; }
         var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));

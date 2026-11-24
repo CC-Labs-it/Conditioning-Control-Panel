@@ -39,6 +39,9 @@ public class JackpotRemixFlowTests
         File.Copy(fixture, cached);
         var card = new FlashFeatureControl();
         var shell = new Window { Content = card };
+        var announcements = 0;
+        void Announced() => announcements++;
+        FlashOverlay.AboutToDisplay += Announced;
         try
         {
             PrizeOwnership.IsGranted = _ => true;
@@ -68,6 +71,7 @@ public class JackpotRemixFlowTests
             Assert.False(await FlashOverlay.TryShowRemix(s, new[] { screen }, null, false, FlashOverlay.Generation)); Assert.True(File.Exists(cached));
             Assert.True(await FlashOverlay.TryShowRemix(s, new[] { screen, screen }, null, true, FlashOverlay.Generation));
             Assert.False(File.Exists(cached));
+            Assert.Equal(1, announcements);
             var window = Assert.Single(FlashOverlay.Active).Window;
             Assert.True(window.IsRemix);
             Assert.Equal(1, payments);
@@ -93,6 +97,7 @@ public class JackpotRemixFlowTests
         finally
         {
             FlashOverlay.CloseAll(false); shell.Close();
+            FlashOverlay.AboutToDisplay -= Announced;
             PrizeOwnership.IsGranted = own; FlashOverlay.Present = present; FlashOverlay.Multiply = multiply;
             CoreProgression.AddXPProvider = xp;
             (s.FlashGlowEnabled, s.FlashMotionStyle, s.LighterEffects, s.PerformanceMode, s.AutoPerformanceMode) = look;

@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Safety;
@@ -47,6 +48,132 @@ public sealed class AwarenessTubeReactionTests
         finally
         {
             AvatarTubeWindow.TestLive = null;
+            tube.Close();
+            PanicAftermath.EndQuiet();
+            CoreSettings.ServiceProvider = null;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task FlashPreAnnouncesAndPanicCancels() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        PanicAftermath.EndQuiet();
+        CoreSettings.Current.AvatarEnabled = true;
+        CoreSettings.Current.FlashAudioEnabled = true;
+        CoreSettings.Current.CustomCompanionPhrases.Add(new CustomCompanionPhrase { Id = "test-pre", Category = "FlashPre", Text = "Incoming" });
+        var tube = new AvatarTubeWindow(null);
+        try
+        {
+            tube.Show();
+            AvatarTubeWindow.TestLive = tube;
+            var generation = FlashOverlay.Generation;
+            Assert.True(FlashOverlay.Announce(generation));
+            Assert.False(tube.HasBubbleUp);
+            Assert.Equal(1, tube._flashCounter);
+            CoreSettings.Current.FlashAudioEnabled = false;
+            for (var i = 0; i < 3; i++) Assert.True(FlashOverlay.Announce(generation));
+            Assert.False(tube.HasBubbleUp);
+            Assert.True(FlashOverlay.Announce(generation));
+            Assert.True(tube.HasBubbleUp);
+            Assert.Equal(5, tube._flashCounter);
+            ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.StopAll("test");
+            Assert.False(tube.HasBubbleUp);
+            Assert.False(FlashOverlay.Announce(generation));
+            Assert.Equal(5, tube._flashCounter);
+        }
+        finally
+        {
+            AvatarTubeWindow.TestLive = null;
+            tube.Close();
+            PanicAftermath.EndQuiet();
+            CoreSettings.ServiceProvider = null;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task FlashStopCutsAnActivePrePhrase() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        PanicAftermath.EndQuiet();
+        CoreSettings.Current.AvatarEnabled = true;
+        CoreSettings.Current.FlashAudioEnabled = false;
+        CoreSettings.Current.CustomCompanionPhrases.Add(new CustomCompanionPhrase { Id = "test-pre", Category = "FlashPre", Text = "Incoming" });
+        var tube = new AvatarTubeWindow(null);
+        try
+        {
+            tube.Show();
+            Assert.True(FlashOverlay.Announce(FlashOverlay.Generation));
+            Assert.True(tube.HasBubbleUp);
+            FlashOverlay.CloseAll(final: false);
+            Assert.False(tube.HasBubbleUp);
+        }
+        finally
+        {
+            tube.Close();
+            PanicAftermath.EndQuiet();
+            CoreSettings.ServiceProvider = null;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task FlashStopPreservesUnrelatedLineAfterPanic() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        PanicAftermath.EndQuiet();
+        CoreSettings.Current.AvatarEnabled = true;
+        CoreSettings.Current.FlashAudioEnabled = false;
+        CoreSettings.Current.CustomCompanionPhrases.Add(new CustomCompanionPhrase { Id = "test-pre", Category = "FlashPre", Text = "Incoming" });
+        var tube = new AvatarTubeWindow(null);
+        try
+        {
+            tube.Show();
+            Assert.True(FlashOverlay.Announce(FlashOverlay.Generation));
+            Assert.True(tube.HasBubbleUp);
+            tube.PanicSilence();
+            tube.Giggle("Other speech");
+            Assert.True(tube.IsSpeaking);
+            FlashOverlay.CloseAll(final: false);
+            Assert.True(tube.IsSpeaking);
+        }
+        finally
+        {
+            tube.Close();
+            PanicAftermath.EndQuiet();
+            CoreSettings.ServiceProvider = null;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task FlashStopRemovesQueuedPrePhraseWithoutStoppingOtherSpeech() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        PanicAftermath.EndQuiet();
+        CoreSettings.Current.AvatarEnabled = true;
+        CoreSettings.Current.FlashAudioEnabled = false;
+        CoreSettings.Current.CustomCompanionPhrases.Add(new CustomCompanionPhrase { Id = "test-pre", Category = "FlashPre", Text = "Incoming" });
+        var tube = new AvatarTubeWindow(null);
+        try
+        {
+            tube.Show();
+            tube.Giggle("Other speech");
+            Assert.True(tube.HasBubbleUp);
+            Assert.True(FlashOverlay.Announce(FlashOverlay.Generation));
+            Assert.Equal(1, tube.QueuedSpeechCount);
+            FlashOverlay.CloseAll(final: false);
+            Assert.True(tube.HasBubbleUp);
+            Assert.Equal(0, tube.QueuedSpeechCount);
+        }
+        finally
+        {
             tube.Close();
             PanicAftermath.EndQuiet();
             CoreSettings.ServiceProvider = null;

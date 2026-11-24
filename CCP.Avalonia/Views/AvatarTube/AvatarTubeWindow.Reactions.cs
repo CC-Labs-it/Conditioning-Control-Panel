@@ -45,6 +45,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // OnOpened runs on every Hide/Show, OnClosed once: a second += outlived the window.
             DetachAwareness();
             FlashOverlay.Clicked += OnFlashClicked;
+            FlashOverlay.AboutToDisplay += OnFlashAboutToDisplay;
+            FlashOverlay.Stopped += StopFlashPre;
             App.WindowAwareness.ActivityChanged += OnActivityChanged;
             App.WindowAwareness.StillOnActivity += OnStillOnActivity;
             App.WindowAwareness.Start();
@@ -53,8 +55,24 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private void DetachAwareness()
         {
             FlashOverlay.Clicked -= OnFlashClicked;
+            FlashOverlay.AboutToDisplay -= OnFlashAboutToDisplay;
+            FlashOverlay.Stopped -= StopFlashPre;
             App.WindowAwareness.ActivityChanged -= OnActivityChanged;
             App.WindowAwareness.StillOnActivity -= OnStillOnActivity;
+        }
+
+        // WPF Reactions.cs:422-435: count even when audio is enabled.
+        internal int _flashCounter;
+        private void OnFlashAboutToDisplay()
+        {
+            _flashCounter++;
+            if (ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()
+                || CoreSettings.Current.FlashAudioEnabled || _flashCounter % 4 != 1) return;
+            var phrases = CompanionPhraseEditorDialog.LoadPhrases()
+                .Where(p => p.Category == "FlashPre" && p.IsEnabled).ToArray();
+            if (phrases.Length == 0) return;
+            var phrase = phrases[_random.Next(phrases.Length)];
+            Giggle(phrase.Text, phraseAudioPath: phrase.AudioFilePath ?? CompanionEventAudio.Resolve(phrase.Text), flashPre: true);
         }
 
         // WPF AvatarTubeWindow.Reactions.cs:515-523: one in three clicks.

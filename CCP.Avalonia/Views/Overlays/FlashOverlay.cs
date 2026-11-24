@@ -35,7 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>ponytail: not here yet, each a later branch - the subliminal whisper source,
     /// the lucky glow pulse, Natasha's favourite,
-    /// gaze pop/linger, solid hosting and avatar pre-announce.</para>
+    /// gaze pop/linger and solid hosting.</para>
     /// </summary>
     internal static partial class FlashOverlay
     {
@@ -59,6 +59,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             new(ConditioningControlPanel.Services.ContentPackStore.ImageType);
         // WPF FlashService.cs:1674: notify at display, after loading and the pre-display wait.
         internal static event Action? Displayed;
+        internal static event Action? AboutToDisplay;
+        internal static event Action? Stopped;
+        internal static bool Announce(int generation)
+        {
+            if (_closed || generation != Volatile.Read(ref _generation)) return false;
+            AboutToDisplay?.Invoke();
+            return true;
+        }
         internal static event Action? Clicked;
         internal static Action<Action, TimeSpan> After = (then, delay) => DispatcherTimer.RunOnce(then, delay);
         // Test seam: headless has no click-through overlays, so the burst would stop before loading.
@@ -103,13 +111,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var targets = PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
                 var occupied = Active.Select(a => a.Rect).ToList();
                 RemoteFlashSource.EnsurePrefetch();
-                var flashes = await Task.Run(() => LoadPictures(BurstCount(amount, s, Rng), screens, targets, s, occupied, size));
-                if (generation != _generation || _closed)
-                {
-                    foreach (var f in flashes) Drop(f.Bitmap);
-                    return;
-                }
-                if (flashes.Count == 0)
+                var count = BurstCount(amount, s, Rng);
+                var selection = await Task.Run(() => SelectPictures(count, s));
+                if (generation != _generation || _closed) return;
+                if (selection.Picks.Count == 0 || targets.Length == 0)
                 {
                     if (!_warnedEmpty) Log.Warning("Flash: no images found in {Path}", ImagesPath());
                     _warnedEmpty = true;
@@ -118,13 +123,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     return;
                 }
 
-                // WPF's pre-announce has a one second lead before ShowImages starts the voice.
+                // WPF FlashService.cs:955,993-1019: select, announce, wait, then decode.
+                if (!Announce(generation)) return;
+                var flashes = new List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)>();
                 var timing = new BurstLifetime(s, ambient, durationMs);
                 await VoiceAfterLead(s, generation, durationChanged: seconds => Dispatcher.UIThread.Post(() =>
                 {
                     if (!_closed && generation == _generation) timing.Report(seconds);
-                }));
+                }), prepare: async () =>
+                {
+                    flashes = await Task.Run(() => LoadSelectedPictures(count, screens, targets, s, occupied, size,
+                        selection.Files, selection.Picks));
+                    return flashes.Count > 0;
+                });
                 if (_closed || generation != _generation) { foreach (var f in flashes) Drop(f.Bitmap); return; }
+                if (flashes.Count == 0) return;
                 var clickable = s.FlashClickable;
                 var lifetime = timing.Current;
                 var fade = TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent);
@@ -201,9 +214,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 foreach (var file in enabled.OrderBy(_ => Rng.Next())) VoiceQueue.Enqueue(file);
             return VoiceQueue.Count == 0 ? null : VoiceQueue.Dequeue();
         }
-        internal static async Task<double?> VoiceAfterLead(AppSettings s, int generation, string? path = null, Action<double>? durationChanged = null)
+        internal static async Task<double?> VoiceAfterLead(AppSettings s, int generation, string? path = null,
+            Action<double>? durationChanged = null, Func<Task<bool>>? prepare = null)
         {
             await VoiceLead();
+            if (generation != Volatile.Read(ref _generation) || _closed) return null;
+            if (prepare != null && !await prepare()) return null;
             return generation == Volatile.Read(ref _generation) && !_closed
                 ? await PlayFlashVoice(s, path, generation, durationChanged) : null;
         }
@@ -605,6 +621,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             lock (BurstGate) { Interlocked.Increment(ref _generation); _busy = false; Volatile.Write(ref _voiceAttempted, 0); }   // WPF FlashService.cs:5118
             Interlocked.Exchange(ref _stopFlashVoice, null)?.Invoke();
+            Stopped?.Invoke();
         }
 
         private static void CloseWindows(bool final)
@@ -774,33 +791,56 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static string ImagesPath() => Path.Combine(CorePaths.EffectiveAssets, "images");
 
-        /// <summary>
-        /// Up to <paramref name="count"/> placed pictures, dealt from <see cref="DiskBag"/> over the enabled
-        /// images (FlashService.GetNextImages / GetMediaFiles), re-drawing past unreadable files the
-        /// way LoadImagesUntilAsync does (at most max(count*5, 20) tries). Placement happens first,
-        /// from the header size alone, so each picture is decoded AT its display size like WPF's
-        /// decode-at-display-size - never a full-resolution source held per window.
-        /// </summary>
-        private static List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> LoadPictures(int count, IReadOnlyList<Screen> screens,
-            int[] targets, AppSettings s, List<PixelRect> occupied, int? size)
+        private static List<string> FlashFiles(AppSettings s)
         {
             var root = CorePaths.EffectiveAssets;
             var dir = Path.Combine(root, "images");
-            var result = new List<(Bitmap, PixelRect, string, Screen)>(count);
-            if (targets.Length == 0) return result;
-
-            var files = Directory.Exists(dir)
+            return Directory.Exists(dir)
                 ? AssetFolderExclusion.Enabled(Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
                     .Where(f => FlashPlacement.ImageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
                     .ToList(), root, s)
                 : new List<string>();
+        }
 
+        private static (string Path, RemoteFlashItem? Remote)? DrawPicture(IReadOnlyList<string> files, AppSettings s)
+        {
+            var remote = FlashSourceRules.ShouldDrawRemote(s, HasLocalImages(files.Count), Rng)
+                ? RemoteFlashSource.TryTake(Rng) : null;
+            var path = remote?.PosterPath ?? NextFlashPath(files);
+            return path == null ? null : (path, remote);
+        }
+
+        // WPF GetNextImages checks availability before the pre-announce, without decoding.
+        private static (List<string> Files, List<(string Path, RemoteFlashItem? Remote)> Picks) SelectPictures(int count, AppSettings s)
+        {
+            var files = FlashFiles(s);
+            var picks = new List<(string, RemoteFlashItem?)>(count);
+            for (var i = 0; i < count; i++)
+            {
+                if (DrawPicture(files, s) is not { } pick) break;
+                picks.Add(pick);
+            }
+            return (files, picks);
+        }
+
+        /// <summary>Hydra's immediate load uses the same bounded decode and replacement loop.</summary>
+        private static List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> LoadPictures(int count, IReadOnlyList<Screen> screens,
+            int[] targets, AppSettings s, List<PixelRect> occupied, int? size) =>
+            LoadSelectedPictures(count, screens, targets, s, occupied, size, FlashFiles(s), new());
+
+        /// <summary>Decode at display size, retrying unreadable selections as in WPF LoadImagesUntilAsync.</summary>
+        private static List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> LoadSelectedPictures(int count, IReadOnlyList<Screen> screens,
+            int[] targets, AppSettings s, List<PixelRect> occupied, int? size, IReadOnlyList<string> files,
+            List<(string Path, RemoteFlashItem? Remote)> picks)
+        {
+            var result = new List<(Bitmap, PixelRect, string, Screen)>(count);
+            if (targets.Length == 0) return result;
+            var pending = new Queue<(string Path, RemoteFlashItem? Remote)>(picks);
             for (var tries = Math.Max(count * 5, 20); result.Count < count && tries > 0; tries--)
             {
-                var remote = FlashSourceRules.ShouldDrawRemote(s, HasLocalImages(files.Count), Rng)
-                    ? RemoteFlashSource.TryTake(Rng) : null;
-                var path = remote?.PosterPath ?? NextFlashPath(files);
-                if (path == null) break;
+                var candidate = pending.Count > 0 ? pending.Dequeue() : DrawPicture(files, s);
+                if (candidate is not { } chosen) break;
+                var (path, remote) = chosen;
                 try
                 {
                     SkiaSharp.SKImageInfo info;
