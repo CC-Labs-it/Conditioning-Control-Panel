@@ -23,6 +23,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         public abstract PossessionRung MinRung { get; }
         public virtual PossessionIntensity MinIntensity => PossessionIntensity.Gentle;
         public virtual bool UsesFlicker => false;
+        public virtual bool IsBig(PossessionRung rung) => false;
         public abstract double Weight { get; }
         public abstract TimeSpan HoldFor { get; }
         public abstract IReadOnlyList<PossessionRole> Roles { get; }

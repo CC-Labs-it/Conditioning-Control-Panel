@@ -227,8 +227,8 @@ public sealed class LeashHolderCard : Border
             }
             _body.Children.Add(panel);
         }
-        if (LeashSentList.For(_service(), h.Who.Id) is { } receipts) _body.Children.Add(receipts);
         if (_result != null) _body.Children.Add(LeashCardUi.Text(_result, "leash-holder-result", _resultGood ? F.Mint : F.Gold));
+        if (LeashSentList.For(_service(), h.Who.Id) is { } receipts) _body.Children.Add(receipts);
     }
     // WPF LeashHolderCard.cs:339-397: three figures, with goal-relative minutes and unknowns kept unknown.
     private Control Figures()

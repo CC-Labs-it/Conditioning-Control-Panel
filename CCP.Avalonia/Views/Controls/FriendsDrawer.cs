@@ -27,6 +27,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Controls.Friends;
@@ -426,7 +427,12 @@ public sealed partial class FriendsDrawer : Border
         if (table != null && !open) DressHostingRow(row);
         AttachHover(row, open);
         // A click on the row (not inside the open card) opens or folds its card.
-        top.PointerReleased += (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) { Toggle(f.Id); e.Handled = true; } };
+        row.PointerReleased += (_, e) =>
+        {
+            if (e.InitialPressMouseButton != MouseButton.Left) return;
+            if (e.Source is Visual source && source.GetSelfAndVisualAncestors().OfType<Control>().Any(c => Equals(c.Tag, "friends-card"))) return;
+            Toggle(f.Id); e.Handled = true;
+        };
         return row;
     }
     private TextBlock ActivityLine(Friend f)
@@ -463,7 +469,7 @@ public sealed partial class FriendsDrawer : Border
     /// <summary>The open card: the menu one press away, or the Remove / Block question.</summary>
     private Control Card(Friend f)
     {
-        var card = new StackPanel { Margin = new Thickness(0, 8, 0, 2), Tag = "friends-card" };
+        var card = new StackPanel { Margin = new Thickness(0, 8, 0, 2), Background = Brushes.Transparent, Tag = "friends-card" };
         // WPF FriendsDrawer.cs:668-695 keeps actions, the leash chip and More above the question.
         card.Children.Add(CardActions(f));
         if (FriendLeashOffer.Create(f, Render) is { } offer) card.Children.Add(offer);

@@ -10,38 +10,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// (ConditioningControlPanel/Services/Quiz/PopQuizService.cs). Every member goes through
     /// Dispatcher.UIThread.Invoke, which runs inline on the UI thread, so it is safe from any caller.
     ///
-    /// <para>ponytail: this head has no InteractionQueueService. The queue is one pending replay,
-    /// run when the last lock card closes - the only defer the policy needs on a head where the
-    /// lock card is the only other interaction. Grow it when a second interaction type ports.</para>
     /// </summary>
     public sealed class PopQuizHost : IPopQuizHost
     {
         public static PopQuizHost Instance { get; } = new();
         public PopQuizScheduler Scheduler { get; }
-        private Action? _deferred;
         private readonly Random _random = new();
 
         private PopQuizHost()
         {
             Scheduler = new PopQuizScheduler(this);
-            LockCardWindow.AllClosed += () => { var r = _deferred; _deferred = null; r?.Invoke(); };
         }
 
         public bool IsQuizOpen => Dispatcher.UIThread.Invoke(PopQuizWindow.IsAnyOpen);
         public bool IsLockCardOpen => Dispatcher.UIThread.Invoke(LockCardWindow.IsAnyOpen);
-        public bool IsInteractionBusy => false;
+        public bool IsInteractionBusy => Dispatcher.UIThread.Invoke(() => LockCardWindow.InteractionBusy);
 
-        public bool Defer(Action replay)
-        {
-            _deferred = () => Dispatcher.UIThread.Post(replay);
-            return true;
-        }
+        public bool Defer(Action replay) => LockCardWindow.DeferQuiz(replay);
 
-        public void DropDeferred() => _deferred = null;
+        public void DropDeferred() => LockCardWindow.DropQuiz();
 
         public void Open(bool isTest) => Dispatcher.UIThread.Invoke(() =>
         {
-            _deferred = null;
             try
             {
                 var mods = App.Mods;
@@ -62,7 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         public void CloseAll() => Dispatcher.UIThread.Invoke(() =>
         {
-            _deferred = null;
+            LockCardWindow.DropQuiz();
             LockCardWindow.DropHeld();   // first: the last quiz closing would replay a held card
             PopQuizWindow.ForceCloseAll();
         });
