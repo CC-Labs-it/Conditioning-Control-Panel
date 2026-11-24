@@ -1049,8 +1049,7 @@ namespace ConditioningControlPanel.Avalonia
                 // No event skin on this head yet (nothing arms LiveEventService on either head).
                 CoreModArt.OverridePathProvider = p => CoreModArt.ResolveOverride(p, null, CoreMods.ActiveModPackage?.InstalledPath);
                 CoreModArt.AudioOverridePathProvider = p => CoreModArt.ModAudioFile(p, CoreMods.ActiveModPackage?.InstalledPath);
-                // WPF App.xaml.cs:333: TubeFitDialog's portrait mode asks whether the active mod's portraits are on disk.
-                CoreModArt.HasAvatarPortraitsProvider = () => Platform.AvatarPortraitLoader.Load() != null;
+                SeedPortraitProbe();
 
                 // The lock-card surface seam. The schedule and the no-repeat phrase rotation are in
                 // Core now (LockCardScheduler); this is the half that draws, and on this head that
@@ -1918,6 +1917,10 @@ namespace ConditioningControlPanel.Avalonia
             }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Settings migration failed (non-fatal, defaults apply)"); }
         }
+
+        /// <summary>WPF App.xaml.cs:333: TubeFitDialog's portrait mode asks whether the active mod's portraits are on disk.</summary>
+        internal static void SeedPortraitProbe() =>
+            CoreModArt.HasAvatarPortraitsProvider = () => Platform.AvatarPortraitLoader.Load() != null;
 
         /// <summary>WPF App.OnExit:6480 fires the wordless appClosing flinch, then :6515 EmiDesk.Dispose
         /// (EmiDeskService.cs:2121) writes emi-desk.json now so a pending debounced save is not lost.</summary>
