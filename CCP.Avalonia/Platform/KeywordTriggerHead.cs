@@ -159,7 +159,7 @@ internal static class KeywordTriggerHead
             if (token.IsCancellationRequested) return false;
             var s = CoreSettings.Current;
             if (s.AwarenessIgnoreOwnUi) words = WithoutOwnWindows(words, OwnWindowRects());
-            var foreground = engine.NeedsForeground(engine.Now()) ? OcrForeground() : (null, false);
+            var foreground = engine.NeedsForeground(DateTime.UtcNow) ? OcrForeground() : (null, false);
             return engine.CheckOcrWords(words, foreground.Process, foreground.Own);
         }).GetTask();
 

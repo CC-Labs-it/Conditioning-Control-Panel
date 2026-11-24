@@ -109,13 +109,15 @@ public sealed class KeywordAudioRuntimeTests
         try
         {
             s.ScreenOcrEnabled = true; s.OcrConfirmationScans = 1;
-            KeywordTriggerHead.LinuxForegroundSource = () => "firefox";
-            Assert.Equal(("firefox", false), KeywordTriggerHead.OcrForeground());
-            KeywordTriggerHead.LinuxForegroundSource = () => "";
-            Assert.Equal((null, false), KeywordTriggerHead.OcrForeground());
+            if (!OperatingSystem.IsWindows())   // Windows reads user32 GetForegroundWindow, not the X11 seam
+            {
+                KeywordTriggerHead.LinuxForegroundSource = () => "firefox";
+                Assert.Equal(("firefox", false), KeywordTriggerHead.OcrForeground());
+                KeywordTriggerHead.LinuxForegroundSource = () => "";
+                Assert.Equal((null, false), KeywordTriggerHead.OcrForeground());
+            }
             s.KeywordTriggerAppScope = AwarenessAppScope.OnlyListed; s.KeywordTriggerApps = ["firefox"];
-            KeywordTriggerHead.LinuxForegroundSource = () => "firefox";
-            var fg = KeywordTriggerHead.OcrForeground();
+            var fg = (Process: "firefox", Own: false);
             var words = new[] { new ScreenOcrService.Word("sit", new(20, 20, 20, 20)) };
             engine.CheckOcrWords(words, fg.Process, fg.Own);
             Assert.Single(played);
