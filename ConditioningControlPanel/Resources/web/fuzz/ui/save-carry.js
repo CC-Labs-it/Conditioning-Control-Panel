@@ -132,6 +132,8 @@ export function mountSaveCarry({ doc = document, win = doc.defaultView, cards, o
       front: true,
       overPause: true,   // asked from the pause card: shown over it and answerable at once (ui/cards.js)
       onOpen: (dom) => dom.querySelector?.('button')?.focus?.(),
+      /* Answered with the pause card still up: focus goes back to its first control (Resume), never to the page body. */
+      onClose: () => { if (doc.getElementById?.('pause')?.hidden === false) card.querySelector?.('button')?.focus?.(); },
       buttons: [
         { label: SAVE_CARRY_COPY.keep, onPress: () => answer(false) },
         { label: SAVE_CARRY_COPY.accept, onPress: () => answer(true) },
