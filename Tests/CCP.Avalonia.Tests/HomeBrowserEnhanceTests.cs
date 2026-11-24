@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Avalonia.Controls;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Localization;
@@ -171,6 +172,66 @@ public class HomeBrowserEnhanceTests
         }
         finally
         {
+            shell.Close();
+            if (path != null) File.Delete(path);
+            CoreSettings.Current.BrowserEnhanceIfPossible = previous;
+        }
+    });
+
+    [Fact]
+    public void PanicStopsBrowserSpeakAndDoesNotResumeHeldMedia() => AvaloniaTestDispatcher.Run(() =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var previous = CoreSettings.Current.BrowserEnhanceIfPossible;
+        CoreSettings.Current.BrowserEnhanceIfPossible = false;
+        var shell = new MainShellWindow();
+        string? path = null;
+        var heard = new TaskCompletionSource<ConditioningControlPanel.Services.Speech.PhraseResult>();
+        var scripts = new List<string>();
+        int shown = 0, stopped = 0, hidden = 0;
+        double time = 0;
+        try
+        {
+            shell.Show();
+            var tab = shell.FindControl<SettingsTabView>("SettingsTab")!;
+            var web = tab.FindControl<WebHost>("BrowserWebHost")!;
+            tab.BrowserAutomaticPolling = false;
+            web.ScriptInvoker = script =>
+            {
+                scripts.Add(script);
+                return Task.FromResult<string?>(FormattableString.Invariant($"{{\"t\":{time},\"d\":20,\"paused\":false,\"rx\":0,\"ry\":0,\"rw\":1,\"rh\":1}}"));
+            };
+            tab.BrowserSpeakSessionFactory = (effect, source) => new SpeakPromptSession(effect, source,
+                () => true, () => Task.FromResult(true), () => false, () => { }, (_, _) => heard.Task,
+                _ => shown++, () => hidden++, stopCapture: () => stopped++);
+            const string url = "https://hypnotube.com/watch/ccp-panic-speak";
+            path = Path.Combine(shell.BrowserEnhancementLibrary!.LibraryFolder, "home-browser-panic-speak.ccpenh.json");
+            var enhancement = new Enhancement { MediaType = MediaTypes.Video, MediaSource = url,
+                Metadata = new EnhancementMetadata { Name = "Panic speak", Creator = "test" } };
+            enhancement.Rules.Add(new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 1 },
+                Action = new TriggerEffectAction { EffectType = EffectTypes.Speak, SpeakTarget = "yes",
+                    SpeakCueMode = SpeakCueMode.Persistent, SpeakHoldMode = SpeakHoldMode.Pause } });
+            File.WriteAllText(path, EnhancementSerializer.Save(enhancement));
+            tab.FindControl<CheckBox>("ToggleEnhanceIfPossible")!.IsChecked = true;
+            web.OnNavigationCompleted(new Uri(url));
+            Assert.True(tab.BrowserEnhanceHost.IsRunning);
+            void Poll(double t) { time = t; tab.BrowserEnhanceSource!.PollAsync().GetAwaiter().GetResult(); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); }
+            Poll(0); Poll(1.2);
+            Assert.Equal(1, shown);
+            Assert.Contains(scripts, s => s.Contains("v.pause()"));
+            scripts.Clear();
+            PanicSurfaces.All.Single(s => s.Id == "browser-media").Stop(shell);
+            Assert.Equal(1, stopped);
+            Assert.False(tab.BrowserEnhanceHost.IsRunning);
+            Assert.Contains(WebHostMedia.PanicPauseScript, scripts);
+            heard.SetResult(ConditioningControlPanel.Services.Speech.PhraseResult.NotAvailable);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, hidden);
+            Assert.DoesNotContain(scripts, s => s.Contains("v.play()"));
+        }
+        finally
+        {
+            heard.TrySetResult(ConditioningControlPanel.Services.Speech.PhraseResult.NotAvailable);
             shell.Close();
             if (path != null) File.Delete(path);
             CoreSettings.Current.BrowserEnhanceIfPossible = previous;

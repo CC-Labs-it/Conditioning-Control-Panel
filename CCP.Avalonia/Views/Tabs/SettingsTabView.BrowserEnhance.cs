@@ -44,6 +44,12 @@ public partial class SettingsTabView
         UpdateBrowserEnhanceStatus(null);
     }
 
+    internal void StopBrowserEnhancementForPanic()
+    {
+        _browserEnhanceSource?.RetirePlayback();
+        StopBrowserEnhancement();
+    }
+
     private void EvaluateBrowserEnhancement(string? url)
     {
         StopBrowserEnhancement();

@@ -38,6 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void PanicPauseBrowserMedia()
         {
             StopBrowserAudioSync();
+            BrowserPage?.StopBrowserEnhancementForPanic();
             LockCardWindow.EndWebVideo();
             ExitBrowserPopoutFullscreen();
             // Invalidate a delayed autoplay before the page is asked to stop (WPF MainWindow.Browser.cs:973-990).
