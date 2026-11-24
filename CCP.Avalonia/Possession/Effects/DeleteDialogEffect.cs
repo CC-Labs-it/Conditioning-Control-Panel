@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 {
     public partial class DeleteDialogWindow : Window
     {
-        internal static readonly string[] Captions = { "tidying up after you", "removing what you do not need", "housekeeping, sweetheart" };
+        internal static readonly string[] CaptionKeys = { "possession_delete_caption_tidy", "possession_delete_caption_remove", "possession_delete_caption_housekeeping" };
         internal static readonly string[] FakeNames = { "Velvet Reverie", "Crimson Daydream", "Ember Waltz", "Midnight Bloom" };
         private readonly DispatcherTimer _timer = new();
         private readonly DispatcherTimer _failsafe = new();
@@ -34,7 +34,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             _timer.Interval = TimeSpan.FromMilliseconds(Math.Max(280, (holdFor.TotalMilliseconds - 900) / names.Length));
             _failsafe.Interval = holdFor + TimeSpan.FromSeconds(3);
             InitializeComponent();
-            this.FindControl<TextBlock>("Caption")!.Text = Captions[(rng ?? Random.Shared).Next(Captions.Length)];
+            this.FindControl<TextBlock>("Caption")!.Text = Loc.Get(CaptionKeys[(rng ?? Random.Shared).Next(CaptionKeys.Length)]);
             var list = this.FindControl<StackPanel>("Names")!;
             _rows = new TextBlock[_names.Length];
             for (int i = 0; i < _names.Length; i++)
@@ -110,7 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         public override PossessionRung MinRung => PossessionRung.ItKnows;
         public override PossessionIntensity MinIntensity => PossessionIntensity.FullDoki;
         public override bool IsBig => true;
-        protected override string? NameOverride => "your sessions";
+        protected override string? NameOverride => Loc.Get("possession_delete_target");
         public override double Weight => 2;
         public override TimeSpan HoldFor => TimeSpan.FromSeconds(8);
         protected override bool CanApplyCore(PossessionContext ctx, PossessionTarget? target) =>
@@ -120,7 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             var owner = (ctx.Host as IAvaloniaPossessionHost)?.PossessionWindow;
             if (owner == null) return;
             var dialog = _dialog = new Views.Dialogs.DeleteDialogWindow(_names(), HoldFor, ctx.Rng);
-            dialog.Closed += (_, _) => { if (ReferenceEquals(_dialog, dialog)) _dialog = null; try { ctx.Name("deletedialog_closed", "your sessions"); } catch { } };
+            dialog.Closed += (_, _) => { if (ReferenceEquals(_dialog, dialog)) _dialog = null; try { ctx.Name("deletedialog_closed", Loc.Get("possession_delete_target")); } catch { } };
             dialog.Show(owner);
             await dialog.Walk.WaitAsync(ct).ConfigureAwait(true);
         }

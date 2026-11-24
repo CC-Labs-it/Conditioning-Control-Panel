@@ -58,10 +58,11 @@ public class PossessionDeleteDialogTests
         try
         {
             loc.SetLanguage("fr");
-            for (int i = 0; i < DeleteDialogWindow.Captions.Length; i++)
+            var captions = new[] { "je range derrière toi", "je retire ce dont tu n’as pas besoin", "un peu de ménage, mon cœur" };
+            for (int i = 0; i < captions.Length; i++)
             {
                 var dialog = new DeleteDialogWindow(new[] { "Session" }, rng: new PickCaption(i));
-                Assert.Equal(DeleteDialogWindow.Captions[i], dialog.FindControl<TextBlock>("Caption")!.Text);
+                Assert.Equal(captions[i], dialog.FindControl<TextBlock>("Caption")!.Text);
                 dialog.Step();
                 Assert.Equal("rien n’a été supprimé. je voulais juste te voir le lire.", dialog.FindControl<TextBlock>("Status")!.Text);
             }
@@ -117,6 +118,68 @@ public class PossessionDeleteDialogTests
             await starting.WaitAsync(TimeSpan.FromSeconds(2));
         }
         finally { director.UndoAll(); ConditioningControlPanel.Avalonia.App.Possession = previous; host.PossessionWindow.Close(); }
+    });
+
+    [Theory]
+    [InlineData("en", "tidying up after you", "removing what you do not need", "housekeeping, sweetheart")]
+    [InlineData("de", "ich räume hinter dir auf", "ich entferne, was du nicht brauchst", "hausarbeit, schatz")]
+    [InlineData("es", "recogiendo lo que dejas", "quitando lo que no necesitas", "ordenando la casa, cariño")]
+    [InlineData("fr", "je range derrière toi", "je retire ce dont tu n’as pas besoin", "un peu de ménage, mon cœur")]
+    [InlineData("it", "riordino quello che lasci", "rimuovo ciò che non ti serve", "faccende di casa, tesoro")]
+    [InlineData("ja", "あなたの後片付け", "いらないものを片付けるね", "お掃除の時間だよ")]
+    [InlineData("ko", "네가 남긴 것을 정리하는 중", "필요 없는 것을 치우는 중", "집안일 시간이야")]
+    [InlineData("pt-BR", "arrumando o que você deixou", "removendo o que você não precisa", "cuidando da casa, meu bem")]
+    [InlineData("ru", "убираю за тобой", "убираю то, что тебе не нужно", "наводим порядок, дорогая")]
+    [InlineData("zh-CN", "替你收拾一下", "移除你不需要的东西", "打扫时间，亲爱的")]
+    public void CaptionsUseSelectedLanguage(string language, string first, string second, string third) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage(language);
+            var expected = new[] { first, second, third };
+            for (int i = 0; i < expected.Length; i++)
+            {
+                var dialog = new DeleteDialogWindow(new[] { "Session" }, rng: new PickCaption(i));
+                Assert.Equal(expected[i], dialog.FindControl<TextBlock>("Caption")!.Text);
+            }
+        }
+        finally { loc.SetLanguage(previous); }
+    });
+
+    [Theory]
+    [InlineData("en", "your sessions")]
+    [InlineData("de", "deine sessions")]
+    [InlineData("es", "tus sesiones")]
+    [InlineData("fr", "tes sessions")]
+    [InlineData("it", "le tue sessioni")]
+    [InlineData("ja", "あなたのセッション")]
+    [InlineData("ko", "너의 세션")]
+    [InlineData("pt-BR", "suas sessões")]
+    [InlineData("ru", "твои сессии")]
+    [InlineData("zh-CN", "你的会话")]
+    public Task BarkNamesUseSelectedLanguage(string language, string expected) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        var host = new Host();
+        var effect = new DeleteDialogEffect(() => new[] { "Session" });
+        var named = new List<(string, string?)>();
+        var ctx = new PossessionContext { Host = host, Attribution = new Attribution(), Rung = PossessionRung.ItKnows,
+            Intensity = PossessionIntensity.FullDoki, Photosafe = false, Rng = new Random(1), ElapsedFraction = 0,
+            Remaining = TimeSpan.Zero, Name = (id, name) => named.Add((id, name)) };
+        try
+        {
+            loc.SetLanguage(language);
+            host.PossessionWindow!.Show();
+            var applying = effect.ApplyAsync(ctx, null, CancellationToken.None);
+            await effect.UndoAsync(TimeSpan.Zero);
+            Assert.Contains(("deletedialog_closed", expected), named);
+            Assert.Contains(("deletedialog", expected), named);
+            await applying;
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); host.PossessionWindow!.Close(); loc.SetLanguage(previous); }
     });
 
     [Fact]
