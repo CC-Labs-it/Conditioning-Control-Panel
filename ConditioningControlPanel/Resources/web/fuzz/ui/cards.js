@@ -1,5 +1,6 @@
 /* ui/cards.js - one card at a time, queued. Every card closes: it has a button or closes itself. The pause card lives
- * in index.html and sits above this queue. */
+ * in index.html and sits above this queue. A card the pause card itself asked for (`overPause`, the save carry's
+ * incoming run) lifts the queue over it while it shows, so it can be answered at once. */
 
 import { brandText } from '../data/brand.js';
 import { setRich } from './rich-text.js';
@@ -8,6 +9,14 @@ const GUARD_MS = 350;
 
 export function createCards(doc, host) {
   const queue = [];
+  /* The pause card's hold (ui/app.js holdWorld): the queue is inert under it, unless the card showing is one the pause
+     card asked for (overPause), which then sits over it and takes presses and keys. */
+  let held = false;
+  const lift = () => {
+    const over = !!current?.overPause;
+    host.classList?.[over ? 'add' : 'remove']('over-pause');
+    host.inert = held && !over;
+  };
   let current = null;
 
   function build(spec) {
@@ -46,6 +55,7 @@ export function createCards(doc, host) {
     current = spec;
     spec.dom = build(spec);
     host.appendChild(spec.dom);
+    lift();
     spec.onOpen?.(spec.dom);
     if (spec.ms) spec.timer = setTimeout(() => spec.handle.close(), spec.ms);
   }
@@ -65,6 +75,7 @@ export function createCards(doc, host) {
         if (current === s) {
           s.dom.remove();
           current = null;
+          lift();
           s.onClose?.();
           pump();
         }
@@ -76,5 +87,5 @@ export function createCards(doc, host) {
     return s.handle;
   }
 
-  return { open, get busy() { return !!current; } };
+  return { open, hold(on) { held = !!on; lift(); }, get busy() { return !!current; } };
 }

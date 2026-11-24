@@ -149,6 +149,75 @@ test('mounted: hidden without a save slot; with one, two buttons that act on a t
   assert.equal(mountSaveCarry({ doc, win: {}, slot: true, cards: {}, exportSave: goodSave }), null, 'once per card');
 });
 
+/* Wave 4 lane E item 1 (desk run 2026-11-24, 02-tc-save-fetch*.png): the incoming card opened BEHIND the pause card
+ * (#cards z 90, #pause 95) and was seen only after Resume. Now the real card queue lifts itself over the pause card
+ * while that card shows, its first button takes the focus, and the queue drops back when it is answered. */
+function fakeDom() {
+  const make = (tag) => {
+    const el = { tag, children: [], listeners: {}, attrs: {}, textContent: '', hidden: false, className: '', style: {}, parent: null,
+      appendChild(c) { c.parent = this; this.children.push(c); return c; }, setAttribute(k, v) { this.attrs[k] = v; },
+      addEventListener(t, f) { (this.listeners[t] ||= []).push(f); }, click(ev = { isTrusted: true }) { for (const f of this.listeners.click || []) f(ev); },
+      remove() { if (this.parent) this.parent.children = this.parent.children.filter((c) => c !== this); this.parent = null; },
+      focus() { doc.activeElement = this; },
+      querySelector(q) { return q === 'button' ? find(this, (n) => n.tag === 'button') : null; } };
+    const set = new Set();
+    el.classList = { add: (c) => set.add(c), remove: (c) => set.delete(c), contains: (c) => set.has(c) };
+    return el;
+  };
+  const find = (n, ok) => { for (const c of n.children) { if (ok(c)) return c; const d = find(c, ok); if (d) return d; } return null; };
+  const doc = { activeElement: null, createElement: make };
+  return doc;
+}
+
+test('the incoming run card shows over the pause card and is answerable at once', async () => {
+  const { createCards } = await import('../ui/cards.js');
+  const doc = fakeDom(), host = doc.createElement('div'), pauseCard = doc.createElement('div'), handlers = {}, sent = [];
+  const byId = new Map();
+  doc.getElementById = (id) => byId.get(id) || null;
+  doc.querySelector = (q) => (q === '#pause .card' ? pauseCard : null);
+  const make = doc.createElement;
+  doc.createElement = (tag) => { const el = make(tag); Object.defineProperty(el, 'id', { set(v) { byId.set(v, el); }, get() { return null; } }); return el; };
+  const cards = createCards(doc, host);
+  const applied = [];
+  mountSaveCarry({ doc, win: { navigator: {} }, slot: true, cards, send: (t) => sent.push(t), on: (t, fn) => { handlers[t] = fn; },
+    exportSave: goodSave, accept: (s) => { applied.push(s); return true; } });
+  cards.hold(true);   // the pause card is open (ui/app.js holdWorld): the queue is inert under it
+  assert.equal(host.inert, true);
+  const askBtn = pauseCard.children[0].children[1];
+  askBtn.click({ isTrusted: true });
+  assert.deepEqual(sent, ['save-ask']);
+  assert.equal(host.classList.contains('over-pause'), false, 'nothing lifted before the run arrives');
+  handlers['save-incoming']({ save: goodSave(), savedAt: Date.UTC(2026, 10, 24, 12, 10), from: 'desktop' });
+  assert.equal(host.children.length, 1, 'the card shows at once');
+  assert.equal(host.classList.contains('over-pause'), true, 'the queue sits over the pause card while it shows');
+  assert.equal(host.inert, false, 'and takes presses and keys: the pause hold does not reach it');
+  const keep = doc.activeElement;
+  assert.equal(keep?.textContent, SAVE_CARRY_COPY.keep, 'its first button has the focus, not Resume under it');
+  keep.click({ isTrusted: true });
+  assert.equal(host.children.length, 0);
+  assert.equal(host.classList.contains('over-pause'), false, 'answered: the queue drops back under the pause card');
+  assert.equal(host.inert, true, 'still paused: the queue is inert again');
+  assert.deepEqual(applied, [], 'keep mine applies nothing');
+  /* An ordinary card never lifts the queue. */
+  cards.open({ title: 'Today', buttons: [{ label: 'Fine' }] });
+  assert.equal(host.classList.contains('over-pause'), false);
+  assert.equal(host.inert, true, 'an ordinary card stays inert under the pause card');
+  cards.hold(false);
+  assert.equal(host.inert, false, 'resumed: the queue takes presses again');
+});
+
+test('the lifted queue really is above the pause card in the stylesheet', () => {
+  const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+  const z = (sel) => Number(new RegExp(`^${sel.replace(/[.#]/g, '\\$&')} \\{ z-index: (\\d+); \\}`, 'm').exec(css)?.[1]);
+  assert.ok(z('#pause.backdrop') > 0);
+  assert.ok(z('#cards.over-pause') > z('#pause.backdrop'), 'over-pause above the pause card');
+  /* The pause hold goes through the queue, so a lifted card is never left inert (desk run: on top but unpressable). */
+  const app = readFileSync(new URL('../ui/app.js', import.meta.url), 'utf8');
+  assert.ok(app.includes('cards.hold(true);'), 'the pause hold reaches the queue');
+  assert.ok(app.includes('cards.hold(false);'));
+  assert.ok(!app.includes('el.cards.inert'), 'nothing sets the queue inert behind its back');
+});
+
 test('nothing here reads the edition itself', () => {
   for (const f of ['../ui/save-carry.js', '../ui/nudges.js']) {
     const src = readFileSync(new URL(f, import.meta.url), 'utf8');

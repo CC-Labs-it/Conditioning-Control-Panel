@@ -37,7 +37,10 @@ test('the Account row belongs only to a host with an account page, and Main menu
   assert.ok(html.includes('<button id="to-menu" type="button" hidden>Main menu</button>'), 'hidden until main.js hands a way back');
   assert.ok(html.includes('id="account-row" hidden'));
   const app = read('ui/app.js');
-  assert.ok(app.includes("$('to-menu').hidden = !toMenu || !!wakeGate;"));
+  /* Wave 4 lane E item 4: Escape on the main menu opens the pause card over it (by design: the menu has no Leave, and
+     Escape always pauses); its Main menu row only reloaded to the same menu, so it does not show while the menu is up. */
+  assert.ok(app.includes("$('to-menu').hidden = !toMenu || !!wakeGate || !!doc.body?.classList?.contains('mm-on');"));
+  assert.ok(read('ui/main-menu.js').includes("doc.body.classList.add('mm-on')"), 'the menu marks the page while it shows');
 });
 
 test('main.js hands the pause card its way back to the menu, and the menu Options row opens the Options view', () => {

@@ -18,6 +18,21 @@ export function allowedLink(url) {
   return u.href;
 }
 
+/** The pause card's credits on a desktop host (ui/edition.js platform): the game already runs in a desktop program, so
+ *  the desktop app link and the dot before it do not show. Nothing changes on the web. Answers how many links it hid. */
+export function trimCredits(root, platform) {
+  if (platform !== 'desktop') return 0;
+  let n = 0;
+  for (const b of root?.querySelectorAll?.('[data-credit]') || []) {
+    if (b.dataset?.credit !== DESKTOP_URL) continue;
+    b.hidden = true;
+    n++;
+    const dot = b.previousElementSibling;
+    if (dot?.getAttribute?.('aria-hidden') === 'true') dot.hidden = true;
+  }
+  return n;
+}
+
 /** The one way a link opens: allowed, inside a real press, hosted down the wire as `open-url`, unhosted a new tab. Answers whether it went. */
 export function openAllowedLink(url, { inPress = () => false, hosted = false, send = () => {}, win = globalThis.window } = {}) {
   const href = allowedLink(url);

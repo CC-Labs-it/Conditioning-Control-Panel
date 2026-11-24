@@ -130,6 +130,8 @@ export function mountSaveCarry({ doc = document, win = doc.defaultView, cards, o
       title: SAVE_CARRY_COPY.incomingTitle,
       body: incomingLine(run),
       front: true,
+      overPause: true,   // asked from the pause card: shown over it and answerable at once (ui/cards.js)
+      onOpen: (dom) => dom.querySelector?.('button')?.focus?.(),
       buttons: [
         { label: SAVE_CARRY_COPY.keep, onPress: () => answer(false) },
         { label: SAVE_CARRY_COPY.accept, onPress: () => answer(true) },
