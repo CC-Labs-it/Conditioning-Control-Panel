@@ -26,11 +26,11 @@ public sealed class PlayGameDoorTests
     public void UnregisteredDoorIsDisabled(string id, string name) => AvaloniaTestDispatcher.Run(() =>
     {
         Setup();
-        Assert.False(GameWindow.Games.ContainsKey(id));
+        Assert.Equal(id == "goon", GameWindow.Games.ContainsKey(id));
         var view = new PlayTabView();
         var button = view.FindControl<Button>(name)!;
-        Assert.False(button.IsEnabled);
-        Assert.Equal(Loc.Get("exclusives_not_on_this_build"), ToolTip.GetTip(button));
+        Assert.Equal(id == "goon", button.IsEnabled);
+        Assert.Equal(id == "goon" ? null : Loc.Get("exclusives_not_on_this_build"), ToolTip.GetTip(button));
     });
 
     [Theory]
@@ -42,6 +42,14 @@ public sealed class PlayGameDoorTests
         Dispatcher.UIThread.RunJobs();
         Assert.Single(shell.OwnedWindows.OfType<LoginDialog>());
         Assert.Empty(calls);
+    });
+
+    [Fact]
+    public void GoonLaunchesAfterSignIn() => WithDoor("goon", "BtnPlayGoon", (shell, button, calls) =>
+    {
+        CoreAccount.IsLoggedInProvider = () => true;
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal("goon", Assert.Single(calls));
     });
 
     [Fact]
@@ -91,7 +99,8 @@ public sealed class PlayGameDoorTests
             var oldLogin = CoreAccount.IsLoggedInProvider;
             var oldLaunch = PlayTabView.LaunchGame;
             CoreAccount.IsLoggedInProvider = () => false;
-            GameWindow.Games.Add(id, new(id, "launcher_game_" + id + "_title", ""));
+            GameWindow.Games.TryGetValue(id, out var oldGame);
+            GameWindow.Games[id] = new(id, "launcher_game_" + id + "_title", "");
             var calls = new System.Collections.Generic.List<string>();
             PlayTabView.LaunchGame = calls.Add;
             var shell = new MainShellWindow();
@@ -109,7 +118,8 @@ public sealed class PlayGameDoorTests
             {
                 foreach (var window in shell.OwnedWindows.ToArray()) window.Close();
                 shell.Close();
-                GameWindow.Games.Remove(id);
+                if (oldGame == null) GameWindow.Games.Remove(id);
+                else GameWindow.Games[id] = oldGame;
                 CoreAccount.IsLoggedInProvider = oldLogin;
                 PlayTabView.LaunchGame = oldLaunch;
             }

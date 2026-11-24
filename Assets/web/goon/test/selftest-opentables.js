@@ -365,17 +365,17 @@ function findAll(root, cls) {
 }
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
-async function mountHome({ you, tables = [], hosted = true, caps = { canHost: true, canJoin: true }, join = null }) {
+async function mountHome({ you, tables = [], hosted = true, caps = { canHost: true, canJoin: true }, join = null, practiceOnly = false }) {
   const container = makeNode('div');
   const calls = [];
   const primes = [];
   const toasts = [];
   const handle = title.mount(container, {
-    session: { hosted, caps, identity: { displayName: 'me' }, net: { serverBase: 'https://proxy.example' } },
+    session: { hosted, caps, practiceOnly, identity: { displayName: 'me' }, net: { serverBase: 'https://proxy.example' } },
     actions: {
       goHost: () => calls.push('host'), goJoin: () => calls.push('join'), goPractice: () => calls.push('practice'),
       goJoinCode: (c) => calls.push('code:' + c), goAssets() {}, goVoice() {}, quit() {},
-      openTables: async () => ({ ok: true, data: normalizeOpen({ you, tables, lastOpenedAgoSec: 720 }) }),
+      openTables: async () => { calls.push('open'); return { ok: true, data: normalizeOpen({ you, tables, lastOpenedAgoSec: 720 }) }; },
       joinStart: async (code) => { calls.push('joinStart:' + code); return join ? join(code) : { ok: true }; },
     },
     sheets: { showPrime: async () => { primes.push(1); return null; }, showSignalError: async () => null, openNode() {} },
@@ -385,6 +385,16 @@ async function mountHome({ you, tables = [], hosted = true, caps = { canHost: tr
   });
   await tick(); await tick();
   return { container, calls, primes, toasts, handle };
+}
+
+{
+  const practice = await mountHome({ practiceOnly: true });
+  ok(findAll(practice.container, "gg-ot-act--host").length === 0, "practice-only hides Host");
+  ok(findAll(practice.container, "gg-ot-code").length === 0, "practice-only hides Join");
+  ok(!practice.calls.includes("open"), "practice-only does not poll online tables");
+  findAll(practice.container, "gg-ot-act--prac")[0].click();
+  ok(practice.calls.includes("practice"), "practice-only starts Practice");
+  practice.handle.unmount();
 }
 
 {

@@ -287,14 +287,9 @@ public sealed class PlayWallTests
                 Assert.False(band.IsVisible);
                 Assert.False(line.IsVisible);
 
-                // GAMES: Goon has no host on this head, so its Play button
-                // refuses honestly; the Breakout demo and Piece by Piece open their game as the launcher does.
-                foreach (var n in new[] { "BtnPlayGoon" })
-                {
-                    var b = C<Button>(n);
-                    Assert.False(b.IsEnabled, n);
-                    Assert.Equal(Loc.Get("exclusives_not_on_this_build"), ToolTip.GetTip(b));
-                }
+                // Goon now opens its Practice host after the account door.
+                Assert.True(C<Button>("BtnPlayGoon").IsEnabled);
+                Assert.Null(ToolTip.GetTip(C<Button>("BtnPlayGoon")));
                 var launched = new System.Collections.Generic.List<string>();
                 var previousLaunch = PlayTabView.LaunchGame;
                 PlayTabView.LaunchGame = launched.Add;

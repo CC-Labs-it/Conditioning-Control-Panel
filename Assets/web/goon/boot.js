@@ -520,6 +520,7 @@ bridge.on('init', (m) => {
   session.lang = normalizeLang(m.lang);
   langReady = loadLang(session.lang).catch(() => 'en');   // started now, awaited in settle()
   session.solo = !!m.solo;
+  session.practiceOnly = m.practiceOnly === true;
   // Normalize identity ONCE, here: the host sends {unifiedId, displayName,
   // appVersion} (GoonHostService.OnPageReady) and a future mobile/web host may
   // send {id, name}. Screens read session.identity.displayName and nothing else.

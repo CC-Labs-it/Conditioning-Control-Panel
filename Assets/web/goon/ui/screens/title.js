@@ -107,7 +107,8 @@ export function mount(container, ctx) {
   ]);
   const listBox = el('div', { class: 'gg-ot-list', 'aria-live': 'polite' });
   const moreLine = el('p', { class: 'gg-ot-more', text: S.tables.refresh });
-  const col = el('section', { class: 'gg-ot-col', 'aria-label': S.tables.title }, [logo, head, listBox, moreLine]);
+  const col = el('section', { class: 'gg-ot-col', 'aria-label': S.tables.title },
+    session.practiceOnly ? [logo] : [logo, head, listBox, moreLine]);
 
   /* --- the rail ------------------------------------------------------------ */
   const rail = el('aside', { class: 'gg-ot-rail' });
@@ -196,7 +197,7 @@ export function mount(container, ctx) {
     }));
   }
 
-  rail.append(hostBtn, pracBtn, codeCard, menu, ribbon,
+  rail.append(...(session.practiceOnly ? [pracBtn] : [hostBtn, pracBtn, codeCard]), menu, ribbon,
     el('p', { class: 'gg-title-fineprint', text: S.title.fineprint }),
     /* THE BUILD STAMP (bridge.js GOON_BUILD): a diagnostic, never branding. */
     el('p', { class: 'gg-title-buildstamp', text: 'build ' + GOON_BUILD }));
@@ -378,12 +379,12 @@ export function mount(container, ctx) {
   const ticker = createTicker({ run: refresh, intervalMs: OPEN_POLL_MS, isActive: isVisible });
   ledger.add(() => ticker.stop());
   if (typeof document !== 'undefined') {
-    ledger.listen(document, 'visibilitychange', () => { if (isVisible()) ticker.bump(); });
+    ledger.listen(document, 'visibilitychange', () => { if (!session.practiceOnly && isVisible()) ticker.bump(); });
   }
 
   paintGate();
   paintList();
-  ticker.start();
+  if (!session.practiceOnly) ticker.start();
 
   function showHowItWorks() {
     prefs?.set?.('seenHowItWorks', true);

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.GoonGame;
 using ConditioningControlPanel.Services.Transfer;
@@ -8,6 +9,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games;
 
 internal sealed partial class GameWindow
 {
+    // WPF GoonHostService.cs:290: the Play door opens the hosted Goon page.
+    static partial void RegisterGoon(Dictionary<string, Game> games) =>
+        games["goon"] = new("goon", "launcher_game_goon_title", "goon/index.html");
+
     // WPF GoonHostService.cs:1667-1782: a live page must keep beating and painting.
     internal static Func<DateTime> GoonUtcNow = () => DateTime.UtcNow;
     private DispatcherTimer? _goonWatch;
@@ -37,10 +42,23 @@ internal sealed partial class GameWindow
                 handled = true;
                 break;
             case "ready":
+                if (_closing) { handled = true; return; }
+                IsReady = true;
+                var consent = new ConsentSheetMsg();
+                Post(new { type = "init", protocol = 1, lang = CoreSettings.Current.Language,
+                    identity = new { unifiedId = CoreAccount.UnifiedUserId ?? "",
+                        displayName = CoreAccount.DisplayName ?? "", appVersion = CoreReleaseContent.AppVersion },
+                    practiceOnly = true,
+                    net = new { viaHost = true },
+                    caps = new { haptics = false, brainDrain = false, spiral = true, camera = false,
+                        video = true, mediaTransfer = false, canHost = false, canJoin = false },
+                    consent = new { liveDurationSec = consent.LiveDurationSec, toyCap = consent.ToyCap,
+                        payloadMinGapMs = consent.PayloadMinGapMs }, fullscreen = WindowState == global::Avalonia.Controls.WindowState.FullScreen });
                 BootGoonInbox();
                 _goonBeat = _goonPaintMove = _goonTick = GoonUtcNow();
                 _goonPaint = null;
-                break; // the shared ready handler owns init until the Goon init slice lands
+                handled = true;
+                break;
             case "heartbeat":
             case "pong":
                 var now = GoonUtcNow();

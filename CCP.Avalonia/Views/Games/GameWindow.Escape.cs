@@ -4,8 +4,8 @@
 // plays it once through its own host-escape.js. Here one GameWindow hosts every game, so the same three
 // answers live on the window, keyed by the game it runs. A second Escape inside 2 s stays a full panic
 // (PanicPolicy.GameClaimsEscapeAsPause), which closes it through PanicSurfaces "games".
-// Not on this head (no host yet): the full Breakout, the Arcademy, the Back Room room and Goon. FYP and
-// Just Drop are not Escape-pause games on WPF either: a first Escape closes them.
+// The Goon Practice host does not yet keep Escape as pause, so its first Escape closes it.
+// Arcademy and the Back Room room are not hosted here; FYP and Just Drop are not Escape-pause games on WPF.
 using System;
 using System.Linq;
 using ConditioningControlPanel.Services.Safety;
