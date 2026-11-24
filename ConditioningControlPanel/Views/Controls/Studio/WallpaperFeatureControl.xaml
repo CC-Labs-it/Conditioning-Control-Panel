@@ -6,13 +6,16 @@
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
              xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.TintSliders="True"
              mc:Ignorable="d" d:DesignWidth="760">
 
     <!-- STUDIO RACK · WALLPAPER (moved from Settings, 7.2.1). Settings keys are the Collage* ones.
          Root MUST stay a Panel (the session-lock banner goes in it) and the master MUST stay named
-         ChkEnable (the lock painter finds it by name). Every control a session owns is marked. -->
+         ChkEnable (the lock painter finds it by name). Every control a session owns is marked.
+         Readable Rows: no OptionSection here, so the labels wear the default hue. -->
 
-    <StackPanel>
+    <StackPanel Grid.IsSharedSizeScope="True">
 
         <!-- HERO. The right margin on the text keeps a long translation off the pill. -->
         <Border Height="72" CornerRadius="16" Margin="0,0,0,10"
@@ -74,14 +77,12 @@
                             Background="{StaticResource SectionHueStudioBrush}"/>
                     <StackPanel Margin="16,8,16,8">
 
-                        <Grid MinHeight="36" ToolTip="{loc:Str tooltip_wallpaper_mode}">
+                        <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_wallpaper_mode}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{loc:Str setting_wallpaper_mode}" FontSize="13" FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"
-                                       Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                            <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_wallpaper_mode}" Emblem="Colour" Margin="0,0,14,0"/>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                 <Button x:Name="BtnWpStatic" x:FieldModifier="internal" Content="{loc:Str setting_wallpaper_static}"
                                         feat:SessionLock.Owned="True"
@@ -108,14 +109,13 @@
 
                         <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
 
-                        <Grid x:Name="RowWpOwnImage" MinHeight="34" Visibility="Collapsed" ToolTip="{loc:Str tooltip_wallpaper_own_image}">
+                        <Grid x:Name="RowWpOwnImage" Style="{StaticResource OptionRow}" Visibility="Collapsed" ToolTip="{loc:Str tooltip_wallpaper_own_image}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{loc:Str setting_wallpaper_own_image}" FontSize="13" FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                            <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_wallpaper_own_image}" Emblem="Folder" Margin="0,0,14,0"/>
                             <TextBlock Grid.Column="1" x:Name="TxtWpOwnImage" x:FieldModifier="internal"
                                        Foreground="{StaticResource TextLightBrush}" FontSize="12"
                                        HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
@@ -125,29 +125,34 @@
                                     Click="BtnWpOwnBrowse_Click"/>
                         </Grid>
 
-                        <Grid x:Name="RowWpRotate" MinHeight="34" ToolTip="{loc:Str tooltip_collage_rotate}">
+                        <Grid x:Name="RowWpRotate" Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_collage_rotate}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{loc:Str setting_collage_rotate}" FontSize="13" FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"
-                                       Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                            <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_collage_rotate}" Emblem="Loop" Margin="0,0,14,0"
+                                           IsOn="{Binding IsChecked, ElementName=ChkWpRotate}"/>
                             <CheckBox Grid.Column="1" x:Name="ChkWpRotate" x:FieldModifier="internal"
                                       feat:SessionLock.Owned="True"
                                       Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                       Checked="ChkWpRotate_Changed" Unchecked="ChkWpRotate_Changed"/>
                         </Grid>
 
-                        <Grid x:Name="RowWpInterval" MinHeight="36" Visibility="Collapsed" ToolTip="{loc:Str tooltip_collage_wallpaper_interval}">
+                        <Grid x:Name="RowWpInterval" Style="{StaticResource OptionRow}" Visibility="Collapsed" ToolTip="{loc:Str tooltip_collage_wallpaper_interval}">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{loc:Str setting_collage_wallpaper_interval}" FontSize="13" FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                            <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_collage_wallpaper_interval}" Emblem="Often">
+                                <rows:RowLabel.Value>
+                                    <MultiBinding Converter="{x:Static rows:RowFraction.Instance}">
+                                        <Binding Path="Value" ElementName="SliderWpInterval"/>
+                                        <Binding Path="Maximum" ElementName="SliderWpInterval"/>
+                                    </MultiBinding>
+                                </rows:RowLabel.Value>
+                            </rows:RowLabel>
                             <Slider Grid.Column="1" x:Name="SliderWpInterval" x:FieldModifier="internal"
                                     feat:SessionLock.Owned="True"
                                     Minimum="10" Maximum="300" VerticalAlignment="Center" Margin="10,0"
@@ -157,20 +162,17 @@
                                      Width="52" MaxLength="5" VerticalAlignment="Center" VerticalContentAlignment="Center"
                                      HorizontalContentAlignment="Center" Padding="4,2" Margin="0,0,6,0"
                                      LostFocus="TxtWpInterval_LostFocus" KeyDown="TxtWpInterval_KeyDown"/>
-                            <TextBlock Grid.Column="3" x:Name="TxtWpIntervalPretty" Text="60s" MinWidth="46" HorizontalAlignment="Left"
-                                       VerticalAlignment="Center" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource PinkBrush}"/>
+                            <rows:RowValue Grid.Column="3" x:Name="TxtWpIntervalPretty" Text="60s" MinWidth="46" HorizontalAlignment="Left"/>
                         </Grid>
 
                         <!-- Fit (#1544): Static and Own image only; Dynamic draws each monitor at its own size.
                              Item order = WallpaperFit order. -->
-                        <Grid x:Name="RowWpFit" MinHeight="34" ToolTip="{loc:Str tooltip_wallpaper_fit}">
+                        <Grid x:Name="RowWpFit" Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_wallpaper_fit}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{loc:Str setting_wallpaper_fit}" FontSize="13" FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"
-                                       Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                            <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_wallpaper_fit}" Emblem="Big" Margin="0,0,14,0"/>
                             <ComboBox Grid.Column="1" x:Name="CmbWpFit" x:FieldModifier="internal"
                                       feat:SessionLock.Owned="True"
                                       Style="{StaticResource DarkComboBoxStyle}" FontSize="11"
@@ -193,8 +195,8 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,14,0">
-                                <TextBlock Text="{loc:Str setting_wallpaper_run_with_ccp}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}"/>
+                                <rows:RowLabel Text="{loc:Str setting_wallpaper_run_with_ccp}" Emblem="Stay" HorizontalAlignment="Left"
+                                               IsOn="{Binding IsChecked, ElementName=ChkWpRunWithCcp}"/>
                                 <TextBlock Text="{loc:Str hint_wallpaper_run_with_ccp}"
                                            Foreground="{DynamicResource TextMutedBrush}" FontSize="11"
                                            TextWrapping="Wrap" Margin="0,2,0,0"/>
@@ -216,8 +218,7 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,14,0">
-                                <TextBlock Text="{loc:Str setting_wallpaper_save}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}"/>
+                                <rows:RowLabel Text="{loc:Str setting_wallpaper_save}" Emblem="Folder" HorizontalAlignment="Left"/>
                                 <TextBlock x:Name="TxtWpSaveHint" x:FieldModifier="internal" Text="{loc:Str hint_wallpaper_save}"
                                            Foreground="{DynamicResource TextMutedBrush}" FontSize="11"
                                            TextWrapping="Wrap" Margin="0,2,0,0"/>
