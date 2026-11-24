@@ -27,6 +27,57 @@ public sealed class MainWindowThemeParityTests
     }
 
     [Fact]
+    public Task CollapsibleCardChevronUsesExpandAndCollapseTransition() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var card = new Expander { Theme = (ControlTheme)Application.Current!.FindResource("CollapsibleCard")!, Header = "Header", Content = "Content", IsExpanded = false };
+        var host = new Window { Width = 300, Height = 200, Content = card };
+        host.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var chevron = card.GetVisualDescendants().OfType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>().Single(c => c.Name == "Chevron");
+            var transition = Assert.IsType<global::Avalonia.Animation.TransformOperationsTransition>(Assert.Single(chevron.Transitions!));
+            Assert.Equal(TimeSpan.FromMilliseconds(200), transition.Duration);
+            Assert.Equal(Visual.RenderTransformProperty, transition.Property);
+            Assert.Equal(1, chevron.GetBaseValue(Visual.RenderTransformProperty).Value!.Value.M11, 3);
+            card.IsExpanded = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, chevron.GetBaseValue(Visual.RenderTransformProperty).Value!.Value.M11, 3);
+            card.IsExpanded = false;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, chevron.GetBaseValue(Visual.RenderTransformProperty).Value!.Value.M11, 3);
+        }
+        finally { host.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task CollapsibleCardChevronTurnsWhiteOverHeaderAndRestoresAccent() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var card = new Expander { Theme = (ControlTheme)Application.Current!.FindResource("CollapsibleCard")!, Header = "Header", Content = "Content", IsExpanded = true };
+        var host = new Window { Width = 300, Height = 200, Content = card };
+        host.Resources["PinkBrush"] = Brushes.Cyan;
+        host.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var chevron = card.GetVisualDescendants().OfType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>().Single(c => c.Name == "Chevron");
+            var header = card.GetVisualDescendants().OfType<global::Avalonia.Controls.Primitives.ToggleButton>().Single(c => c.Name == "PART_toggle");
+            Assert.Same(Brushes.Cyan, chevron.Foreground);
+            host.MouseMove(header.TranslatePoint(new Point(10, 10), host)!.Value);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(Colors.White, ((ISolidColorBrush)chevron.Foreground!).Color);
+            host.MouseMove(new Point(299, 199));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(Brushes.Cyan, chevron.Foreground);
+        }
+        finally { host.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task SmallPinkButtonUsesPressAndReleaseMotion() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();

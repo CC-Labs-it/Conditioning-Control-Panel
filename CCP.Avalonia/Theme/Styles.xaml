@@ -1354,7 +1354,13 @@
                      glyph came out about twice the size; the filled caret is the same small triangle. -->
                 <fx:IconGlyph x:Name="Chevron" Grid.Column="3" Kind="CaretRight" Variant="Filled" Size="8"
                               Foreground="{DynamicResource PinkBrush}" VerticalAlignment="Center" Margin="8,0,4,0"
-                              RenderTransformOrigin="50%,50%"/>
+                              RenderTransformOrigin="50%,50%" RenderTransform="rotate(0deg)">
+                  <fx:IconGlyph.Transitions>
+                    <Transitions>
+                      <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.2"/>
+                    </Transitions>
+                  </fx:IconGlyph.Transitions>
+                </fx:IconGlyph>
               </Grid>
             </ToggleButton>
             <ContentPresenter x:Name="PART_ContentPresenter" Grid.Row="1" Margin="15,0,15,15"
@@ -1367,6 +1373,9 @@
     </Setter>
     <Style Selector="^:expanded /template/ fx|IconGlyph#Chevron">
       <Setter Property="RenderTransform" Value="rotate(90deg)"/>
+    </Style>
+    <Style Selector="^ /template/ ToggleButton#PART_toggle:pointerover fx|IconGlyph#Chevron">
+      <Setter Property="Foreground" Value="White"/>
     </Style>
   </ControlTheme>
 
