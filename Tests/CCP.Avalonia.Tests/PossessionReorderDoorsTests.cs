@@ -55,7 +55,7 @@ public sealed class PossessionReorderDoorsTests
             VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Top, Children = { a, b } };
         var layer = new Canvas { IsHitTestVisible = false };
         var window = new Window { Width = 250, Height = 200, Content = new Grid { Children = { rail, layer } } };
-        window.Show(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs();
+        window.Show(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); HeadlessInput.RenderLiveTree(window);
         var host = new Host(window, layer, frames);
         var targets = new[] { new PossessionTarget { Visual = a, Key = "a", Role = PossessionRole.TabHeader },
             new PossessionTarget { Visual = b, Key = "b", Role = PossessionRole.TabHeader } };
@@ -75,8 +75,11 @@ public sealed class PossessionReorderDoorsTests
             Assert.True(effect.CanApply(ctx, targets[0]));
             var homeA = host.BoundsOnGhostLayer(a)!.Value;
             var homeB = host.BoundsOnGhostLayer(b)!.Value;
-            await effect.ApplyAsync(ctx, targets[0], CancellationToken.None);
-            frames.Frame(TimeSpan.Zero); frames.Frame(TimeSpan.FromMilliseconds(520));
+            var applying = effect.ApplyAsync(ctx, targets[0], CancellationToken.None);
+            Assert.False(applying.IsCompleted);
+            frames.Frame(TimeSpan.Zero); frames.Frame(TimeSpan.FromMilliseconds(260));
+            Assert.False(applying.IsCompleted);
+            frames.Frame(TimeSpan.FromMilliseconds(520)); await applying;
             Assert.Equal(homeB.Y, host.BoundsOnGhostLayer(a)!.Value.Y, 1);
             Assert.Equal(homeA.Y, host.BoundsOnGhostLayer(b)!.Value.Y, 1);
             HeadlessInput.RenderLiveTree(window);
@@ -114,4 +117,141 @@ public sealed class PossessionReorderDoorsTests
         }
         finally { await effect.UndoAsync(TimeSpan.Zero); if (lockdown.IsActive) lockdown.Deactivate(); LockdownService.Current = previousLockdown; window.Close(); }
     });
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task CrossPanelDoorsRemainClickableAndPanicCancelsTheSwap(bool panic) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var frames = new FakeFrames();
+        var a = new Button { Content = "Home", Width = 80, Height = 40 };
+        var b = new Button { Content = "Settings", Width = 80, Height = 40 };
+        var wrapperA = new Border { Width = 80, Height = 40, Child = a, ClipToBounds = true };
+        var wrapperB = new Border { Width = 80, Height = 40, Child = b, ClipToBounds = true };
+        var panel = new Canvas { Background = Brushes.Transparent, Children = { wrapperA, wrapperB } };
+        Canvas.SetLeft(wrapperA, 20); Canvas.SetTop(wrapperA, 20);
+        Canvas.SetLeft(wrapperB, 20); Canvas.SetTop(wrapperB, 100);
+        var layer = new Canvas { IsHitTestVisible = false };
+        var window = new Window { Width = 250, Height = 200, Content = new Grid { Children = { panel, layer } } };
+        window.Show(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); HeadlessInput.RenderLiveTree(window);
+        var host = new Host(window, layer, frames);
+        var targets = new[] { new PossessionTarget { Visual = a, Key = "home", Role = PossessionRole.TabHeader, DisplayName = "home" },
+            new PossessionTarget { Visual = b, Key = "settings", Role = PossessionRole.TabHeader, DisplayName = "settings" } };
+        host.Targets = targets;
+        string? named = null;
+        var ctx = new PossessionContext { Host = host, Attribution = new Attribution(), Rung = PossessionRung.Collapse,
+            Intensity = PossessionIntensity.Eerie, Photosafe = false, Rng = new Random(1), ElapsedFraction = 0,
+            Remaining = TimeSpan.FromMinutes(1), Name = (_, name) => named = name };
+        var effect = new ReorderDoorsEffect();
+        var originalA = a.RenderTransform; var originalB = b.RenderTransform;
+        try
+        {
+            Assert.True(effect.CanApply(ctx, targets[0]));
+            var homeA = host.BoundsOnGhostLayer(a)!.Value;
+            var homeB = host.BoundsOnGhostLayer(b)!.Value;
+            var applying = effect.ApplyAsync(ctx, targets[0], CancellationToken.None);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("possession_reorder_doors"), named);
+            Assert.False(applying.IsCompleted);
+            frames.Frame(TimeSpan.Zero); frames.Frame(TimeSpan.FromMilliseconds(260));
+            Assert.False(applying.IsCompleted);
+            if (panic)
+                PanicSurfaces.All.Single(s => s.Id == "possession").Stop(null!);
+            else
+            {
+                frames.Frame(TimeSpan.FromMilliseconds(520));
+                await applying.WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.Equal(homeB.Y, host.BoundsOnGhostLayer(a)!.Value.Y, 1);
+                Assert.Equal(homeA.Y, host.BoundsOnGhostLayer(b)!.Value.Y, 1);
+                HeadlessInput.RenderLiveTree(window);
+                Assert.True(HeadlessInput.PressAt(a, window, homeB.Center).Pressed);
+                Assert.True(HeadlessInput.PressAt(b, window, homeA.Center).Pressed);
+                Assert.False(wrapperA.ClipToBounds); Assert.False(wrapperB.ClipToBounds);
+                await effect.UndoAsync(TimeSpan.Zero);
+            }
+            await applying.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(effect.IsLive);
+            Assert.Same(originalA, a.RenderTransform); Assert.Same(originalB, b.RenderTransform);
+            Assert.True(wrapperA.ClipToBounds); Assert.True(wrapperB.ClipToBounds);
+            Assert.Equal(0, frames.Count);
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); window.Close(); }
+    });
+
+    [Fact]
+    public Task RejectsAContainerThatWouldCoverTheLanding() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var frames = new FakeFrames();
+        var a = new Button { Content = "Home", Width = 80, Height = 40 };
+        var b = new Button { Content = "Settings", Width = 80, Height = 40 };
+        var wrapperA = new Border { Width = 80, Height = 40, Child = a, Background = Brushes.Transparent };
+        var wrapperB = new Border { Width = 80, Height = 40, Child = b, Background = Brushes.Transparent };
+        var panel = new Canvas { Background = Brushes.Transparent, Children = { wrapperA, wrapperB } };
+        Canvas.SetLeft(wrapperA, 20); Canvas.SetTop(wrapperA, 20);
+        Canvas.SetLeft(wrapperB, 20); Canvas.SetTop(wrapperB, 100);
+        var layer = new Canvas { IsHitTestVisible = false };
+        var window = new Window { Width = 250, Height = 200, Content = new Grid { Children = { panel, layer } } };
+        window.Show(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); HeadlessInput.RenderLiveTree(window);
+        var host = new Host(window, layer, frames);
+        var target = new PossessionTarget { Visual = a, Key = "home", Role = PossessionRole.TabHeader };
+        host.Targets = new[] { target, new PossessionTarget { Visual = b, Key = "settings", Role = PossessionRole.TabHeader } };
+        var ctx = new PossessionContext { Host = host, Attribution = new Attribution(), Rung = PossessionRung.Collapse,
+            Intensity = PossessionIntensity.Eerie, Photosafe = false, Rng = new Random(1), ElapsedFraction = 0,
+            Remaining = TimeSpan.FromMinutes(1), Name = (_, _) => { } };
+        var effect = new ReorderDoorsEffect();
+        try
+        {
+            await effect.ApplyAsync(ctx, target, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(effect.IsLive);
+            Assert.False(PossessionLease.IsLeased(a)); Assert.False(PossessionLease.IsLeased(b));
+            Assert.Equal(0, frames.Count);
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); window.Close(); }
+    });
+
+    [Fact]
+    public Task BarkNamesTheDoorGroup() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var frames = new FakeFrames();
+        var a = new Button { Content = "Home", Width = 80, Height = 40 };
+        var b = new Button { Content = "Settings", Width = 80, Height = 40 };
+        var rail = new StackPanel { Children = { a, b } };
+        var layer = new Canvas { IsHitTestVisible = false };
+        var window = new Window { Width = 250, Height = 200, Content = new Grid { Children = { rail, layer } } };
+        window.Show(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); HeadlessInput.RenderLiveTree(window);
+        var host = new Host(window, layer, frames);
+        var target = new PossessionTarget { Visual = a, Key = "home", Role = PossessionRole.TabHeader, DisplayName = "home" };
+        host.Targets = new[] { target, new PossessionTarget { Visual = b, Key = "settings", Role = PossessionRole.TabHeader } };
+        string? named = null;
+        var ctx = new PossessionContext { Host = host, Attribution = new Attribution(), Rung = PossessionRung.Collapse,
+            Intensity = PossessionIntensity.Eerie, Photosafe = false, Rng = new Random(1), ElapsedFraction = 0,
+            Remaining = TimeSpan.FromMinutes(1), Name = (_, name) => named = name };
+        var effect = new ReorderDoorsEffect();
+        try
+        {
+            var applying = effect.ApplyAsync(ctx, target, CancellationToken.None);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("possession_reorder_doors"), named);
+            await effect.UndoAsync(TimeSpan.Zero);
+            await applying.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); window.Close(); }
+    });
+
+    [Theory]
+    [InlineData("en", "the doors")]
+    [InlineData("de", "die Türen")]
+    [InlineData("es", "las puertas")]
+    [InlineData("fr", "les portes")]
+    [InlineData("it", "le porte")]
+    [InlineData("ja", "扉")]
+    [InlineData("ko", "문들")]
+    [InlineData("pt-BR", "as portas")]
+    [InlineData("ru", "двери")]
+    [InlineData("zh-CN", "门")]
+    public void DoorNameIsLocalized(string language, string expected) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try { loc.SetLanguage(language); Assert.Equal(expected, ConditioningControlPanel.Localization.Loc.Get("possession_reorder_doors")); }
+        finally { loc.SetLanguage(previous); }
+    });
+
 }

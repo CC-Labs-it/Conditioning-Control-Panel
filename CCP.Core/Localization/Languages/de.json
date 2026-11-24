@@ -6377,6 +6377,7 @@
   "lockdown_audio_tics_tip": "Ein kleines Glut-Ticken, wenn der Raum etwas Großes tut, und ein kurzes Absacken, wenn es schlimmer wird. Ausschalten für eine stille Heimsuchung.",
   "lockdown_poss_stay": "Bleib",
   "possession_swap_pair": "{0} und {1}",
+  "possession_reorder_doors": "die Türen",
   "possession_swap_two_buttons": "zwei Schaltflächen",
   "lockdown_poss_level_hers": "Stufe ihre",
   "lockdown_poss_suffix_mine": " (meins)",

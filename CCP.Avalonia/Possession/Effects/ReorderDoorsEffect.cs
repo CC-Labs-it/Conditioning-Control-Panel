@@ -10,6 +10,7 @@ using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Services.Possession;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Possession;
 
@@ -26,11 +27,14 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
     }
     private readonly List<Mover> _movers = new();
     private readonly List<IDisposable> _outlines = new();
+    private readonly List<IDisposable> _unclips = new();
     private IFrameSource? _frames;
     private LockdownService? _lockdown;
     private IDisposable? _timeout;
     private TimeSpan? _start;
-    private TaskCompletionSource? _returned;
+    private TaskCompletionSource? _returned, _swapped;
+    private CancellationTokenRegistration _cancellation;
+    private int _generation;
     private bool _returning;
     private double _returnMs;
 
@@ -42,27 +46,23 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
     public override TimeSpan HoldFor => TimeSpan.FromSeconds(10);
     public override IReadOnlyList<PossessionRole> Roles => DoorRoles;
     protected override bool ChargeOnApply => false;
+    protected override string? NameOverride => Loc.Get("possession_reorder_doors");
 
-    // Only pair doors in the same rail panel, so the translated controls still receive clicks.
-    private static List<(PossessionTarget Target, Control Door, double Top, double Scale)> Doors(
-        PossessionContext ctx, PossessionTarget? target)
+    // WPF CollectDoors walks the host, including visible headers in different panels.
+    private static List<(PossessionTarget Target, Control Door, Rect Bounds)> Doors(PossessionContext ctx, PossessionTarget? target)
     {
-        var result = new List<(PossessionTarget, Control, double, double)>();
-        if (ctx.Host is not IAvaloniaPossessionHost { GhostLayer: { } layer } host ||
-            target?.Visual is not Button selected || selected.GetVisualParent() is not StackPanel parent ||
-            parent.Name != "NavSectionRows") return result;
+        var result = new List<(PossessionTarget, Control, Rect)>();
+        if (ctx.Host is not IAvaloniaPossessionHost { GhostLayer: not null } host) return result;
         foreach (var candidate in host.Targets)
         {
-            if (candidate.Role != PossessionRole.TabHeader || candidate.Visual is not Button door ||
-                door.GetVisualParent() != parent || (candidate.IsLive && candidate != target) ||
-                !door.IsEffectivelyVisible || !door.IsEffectivelyEnabled || !door.IsHitTestVisible ||
-                PossessionTree.IsOffLimits(door) || PossessionLease.IsLeased(door) ||
-                host.BoundsOnGhostLayer(door) is not { } bounds || bounds.Height <= 0 ||
-                parent.TransformToVisual(layer) is not { } matrix || matrix.M22 <= 0.0001 ||
-                Math.Abs(matrix.M12) > 0.001 || Math.Abs(matrix.M21) > 0.001) continue;
-            result.Add((candidate, door, bounds.Y, matrix.M22));
+            if (candidate.Role != PossessionRole.TabHeader || candidate.Visual is not Control door ||
+                (candidate.IsLive && candidate != target) || !door.IsEffectivelyVisible ||
+                !door.IsEffectivelyEnabled || !door.IsHitTestVisible || PossessionTree.IsOffLimits(door) ||
+                PossessionLease.IsLeased(door) || host.BoundsOnGhostLayer(door) is not { } bounds ||
+                bounds.Width <= 0 || bounds.Height <= 0) continue;
+            result.Add((candidate, door, bounds));
         }
-        result.Sort((a, b) => a.Item3.CompareTo(b.Item3));
+        result.Sort((a, b) => a.Item3.Y.CompareTo(b.Item3.Y));
         return result;
     }
 
@@ -70,7 +70,7 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
 
     protected override async Task ApplyCoreAsync(PossessionContext ctx, PossessionTarget? target, CancellationToken ct)
     {
-        if (ctx.Host is not IAvaloniaPossessionHost host || target?.Visual is not Control selected || ct.IsCancellationRequested) return;
+        if (ctx.Host is not IAvaloniaPossessionHost { GhostLayer: { } layer } host || target?.Visual is not Control selected || ct.IsCancellationRequested) return;
         Live.Add(this);
         _lockdown = LockdownService.Current;
         if (_lockdown != null) _lockdown.LockdownDeactivated += StopForLockdown;
@@ -80,20 +80,37 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
         for (int i = 0; i + 1 < doors.Count && i < 6; i += 2)
         {
             var a = doors[i]; var b = doors[i + 1];
-            double gap = b.Top - a.Top;
+            double gap = b.Bounds.Y - a.Bounds.Y;
             if (gap < 2) continue;
+            var delta = new Vector(0, gap);
+            var landingA = new Rect(a.Bounds.X, b.Bounds.Y, a.Bounds.Width, a.Bounds.Height);
+            var landingB = new Rect(b.Bounds.X, a.Bounds.Y, b.Bounds.Width, b.Bounds.Height);
+            var unclip = new List<Visual>();
+            if (!SwapEffect.MoveFor(a.Door, layer, landingA, delta, out var moveA, unclip) ||
+                !SwapEffect.MoveFor(b.Door, layer, landingB, -delta, out var moveB, unclip) ||
+                !SwapEffect.OnTop(layer, a.Door, b.Door, landingA) ||
+                !SwapEffect.OnTop(layer, b.Door, a.Door, landingB)) continue;
             var la = PossessionLease.Take(a.Door);
             var lb = PossessionLease.Take(b.Door);
             if (la == null || lb == null) { la?.ReleaseImmediate(); lb?.ReleaseImmediate(); continue; }
-            _movers.Add(new Mover { Target = a.Target, Lease = la, Distance = gap / a.Scale });
-            _movers.Add(new Mover { Target = b.Target, Lease = lb, Distance = -gap / b.Scale });
+            _movers.Add(new Mover { Target = a.Target, Lease = la, Distance = moveA.Y });
+            _movers.Add(new Mover { Target = b.Target, Lease = lb, Distance = moveB.Y });
+            foreach (var node in unclip)
+                if (node.SetValue(Visual.ClipToBoundsProperty, false, global::Avalonia.Data.BindingPriority.Animation) is { } hold) _unclips.Add(hold);
             a.Target.IsLive = b.Target.IsLive = true;
             if (a.Target != target) _outlines.Add(ctx.Attribution.Possess(a.Door));
             if (b.Target != target) _outlines.Add(ctx.Attribution.Possess(b.Door));
         }
         if (_movers.Count == 0) { await UndoAsync(TimeSpan.Zero); return; }
         _frames = host.PossessionFrames;
+        var swapped = _swapped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        int generation = ++_generation;
+        _cancellation = ct.Register(() => Dispatcher.UIThread.Post(() =>
+        { if (generation == _generation && IsLive && !_returning) _ = UndoAsync(TimeSpan.Zero); }));
         _frames.Subscribe(Frame);
+        _timeout = DispatcherTimer.RunOnce(CompleteSwap, TimeSpan.FromMilliseconds(520 + (_movers.Count / 2 - 1) * 90 + 1000));
+        await swapped.Task.ConfigureAwait(true);
+
     }
 
     private void Frame(TimeSpan now)
@@ -109,13 +126,22 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
             mover.Lease.Translate.Y = _returning ? mover.From * (1 - k) : mover.Distance * k;
         }
         if (_returning && elapsed >= _returnMs) Finish();
-        else if (!_returning && elapsed >= 520 + (_movers.Count / 2 - 1) * 90) Park();
+        else if (!_returning && elapsed >= 520 + (_movers.Count / 2 - 1) * 90) CompleteSwap();
+    }
+
+    private void CompleteSwap()
+    {
+        foreach (var mover in _movers) mover.Lease.Translate.Y = mover.Distance;
+        Park(); _timeout?.Dispose(); _timeout = null; _start = null;
+        var done = _swapped; _swapped = null; done?.TrySetResult();
     }
 
     protected override async Task UndoCoreAsync(TimeSpan duration)
     {
+        _swapped?.TrySetResult(); _swapped = null;
         if (_movers.Count == 0 || duration <= TimeSpan.Zero) { Finish(); return; }
         _returning = true;
+        _timeout?.Dispose(); _timeout = null;
         _returnMs = Math.Clamp(duration.TotalMilliseconds, 260, 520);
         foreach (var mover in _movers) mover.From = mover.Lease.Translate.Y;
         _start = null;
@@ -134,12 +160,15 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
     private void Park() => _frames?.Unsubscribe(Frame);
     private void Finish()
     {
-        Park(); _timeout?.Dispose(); _timeout = null;
+        ++_generation;
+        Park(); _timeout?.Dispose(); _timeout = null; _cancellation.Dispose();
+        _swapped?.TrySetResult(); _swapped = null;
         if (_lockdown != null) _lockdown.LockdownDeactivated -= StopForLockdown;
         _lockdown = null;
         foreach (var mover in _movers) { try { mover.Lease.ReleaseImmediate(); } catch { } mover.Target.IsLive = false; }
         foreach (var outline in _outlines) try { outline.Dispose(); } catch { }
-        _movers.Clear(); _outlines.Clear(); Live.Remove(this);
+        foreach (var hold in _unclips) try { hold.Dispose(); } catch { }
+        _movers.Clear(); _outlines.Clear(); _unclips.Clear(); Live.Remove(this);
         _frames = null; _start = null; _returning = false;
         var done = _returned; _returned = null; done?.TrySetResult();
     }

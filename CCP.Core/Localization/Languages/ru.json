@@ -6377,6 +6377,7 @@
   "lockdown_audio_tics_tip": "Тихий тик углей, когда комната делает что-то большое, и короткий провал, когда становится хуже. Выключите для тихого наваждения.",
   "lockdown_poss_stay": "Останься",
   "possession_swap_pair": "{0} и {1}",
+  "possession_reorder_doors": "двери",
   "possession_swap_two_buttons": "две кнопки",
   "lockdown_poss_level_hers": "уровень её",
   "lockdown_poss_suffix_mine": " (моё)",
