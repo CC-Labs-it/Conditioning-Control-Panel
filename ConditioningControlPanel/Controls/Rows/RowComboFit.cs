@@ -274,10 +274,15 @@ namespace ConditioningControlPanel.Controls.Rows
             return ItemWidth(c, c.SelectedItem) > Room(c) + 0.5;
         }
 
-        /// <summary>A trimmed value puts the whole value in the box's tool tip, above the box's own tip.</summary>
+        /// <summary>A trimmed value puts the whole value in the box's tool tip, above the box's own tip.
+        /// While a session lock (or offline mode) has borrowed the tip through
+        /// <see cref="Features.SessionLock.ApplyLockToolTip"/>, the lock's reason wins and nothing here runs:
+        /// the lock saved the box's own tip, and <see cref="ReleaseTip"/> / <see cref="Refresh"/> hand it
+        /// back and forth, so there is one saved copy of it, never two.</summary>
         private static void Tip(FitState st)
         {
             var c = st.Box;
+            if (Features.SessionLock.HoldsToolTip(c)) return;
             bool cut = SelectionCut(c);
             if (!cut)
             {
@@ -307,6 +312,13 @@ namespace ConditioningControlPanel.Controls.Rows
                 && path.StartsWith("[", StringComparison.Ordinal) && path.EndsWith("]", StringComparison.Ordinal))
                 return lm[path.Substring(1, path.Length - 2)];
             return null;
+        }
+
+        /// <summary>Puts the box's own tip back before a lock saves it, so the lock never saves our
+        /// full-value tip (which would come back stale after the session).</summary>
+        internal static void ReleaseTip(ComboBox c)
+        {
+            if (c.GetValue(StateProperty) is FitState st && st.OwnTip) Restore(st);
         }
 
         private static void Restore(FitState st)
