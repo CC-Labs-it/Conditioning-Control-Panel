@@ -45,7 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private const long MaxFrameBytes = 24L * 1024 * 1024, MaxSourcePixels = 4096L * 4096;
         private static ChaosGifCascadeOverlay? _active;
         private static int _generation;
-        // NUL cannot occur in a file name: mark a cached remote poster without probing a URL.
+        // NUL cannot occur in a file name: mark a remote poster and optionally carry its cached clip.
         private const string RemotePoster = "\0";
         internal static Func<int, AppSettings, List<string>> PickForTests = PickFiles;
 
@@ -61,6 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF Show: draws a batch from the enabled flash pool off the UI thread, then rains it.</summary>
         public static void Show(double spawnRatePerSec, double durationSec, double gifSize, double fallSpeed, double opacity, double startScale = 1.0)
         {
+            RemoteFlashSource.ClipConsumer = true;
             RemoteFlashSource.EnsurePrefetch();
             int generation = _generation;
             int batch = GifCascade.BatchSize(spawnRatePerSec, durationSec);
@@ -107,7 +108,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     var item = takeRemote();
                     if (item is { } remote)
                     {
-                        if (chosenRemote.Add(remote.Url)) picked.Add(RemotePoster + remote.PosterPath);
+                        if (chosenRemote.Add(remote.Url)) picked.Add(RemotePoster + remote.PosterPath +
+                            (string.IsNullOrEmpty(remote.ClipPath) ? "" : RemotePoster + remote.ClipPath));
                         continue;
                     }
                     remoteReady = 0; // cold remote pool falls back to local
@@ -180,6 +182,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             public double FrameAcc;
             public int FrameIndex;
             public CancellationTokenSource? DecodeCancellation = new();
+            public FlashClipPlayer? Player;
         }
 
         private readonly GifCascade _cascade = new();
@@ -295,6 +298,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 c.Grow.ScaleX = s;
                 c.Grow.ScaleY = s;
                 c.Move.Y = f.Y;
+                if (c.Player != null && CoreSettings.Current.MotionLevel == MotionLevel.Off && c.Frames is { Count: > 0 })
+                    c.Image.Source = c.Frames[0];
                 if (c.Frames is { Count: > 1 } frames)   // WPF: a local GIF keeps animating at Motion Off; only remote clips freeze there
                 {
                     c.FrameAcc += dt;
@@ -311,12 +316,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             string path = _files[f.FileIndex];
             bool remote = path.StartsWith(RemotePoster, StringComparison.Ordinal);
-            if (remote) path = path.Substring(RemotePoster.Length);
+            string? clipPath = null;
+            if (remote)
+            {
+                int separator = path.IndexOf('\0', 1);
+                if (separator >= 0) { clipPath = path.Substring(separator + 1); path = path.Substring(1, separator - 1); }
+                else path = path.Substring(1);
+            }
             bool animatedFormat = !remote && (path.EndsWith(".gif", StringComparison.OrdinalIgnoreCase)
                                   || IsAnimatedWebp(path));
             long len = 0;
             if (animatedFormat) { try { len = new FileInfo(path).Length; } catch { } }
-            f.Animated = _cascade.CanAnimate(animatedFormat, len);
+            f.Animated = remote
+                ? _cascade.AnimatedAlive < GifCascade.MaxAnimated && CoreSettings.Current.MotionLevel != MotionLevel.Off
+                : _cascade.CanAnimate(animatedFormat, len);
 
             double size = _cascade.Size;
             var grow = new ScaleTransform(_cascade.ScaleAt(f.Y), _cascade.ScaleAt(f.Y));
@@ -332,22 +345,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Canvas.SetLeft(img, f.CenterX - size / 2);
             Canvas.SetTop(img, 0);
             // Do not show Scrolller media unless its independent credit window is available.
-            if ((remote || ScrolllerCreditRules.IsScrolllerMedia(path)) && !ScrolllerCreditChip.Hold(img, _bounds)) return;
+            if ((remote || ScrolllerCreditRules.IsScrolllerMedia(path)) && !ScrolllerCreditChip.Hold(img, _bounds))
+            { f.Animated = false; return; }
             _canvas.Children.Add(img);
             var clip = new Clip { Image = img, Grow = grow, Move = move };
             _clips[f] = clip;
 
             // Decoded at display size off the UI thread; the clip falls empty for the few frames it takes.
-            bool animate = f.Animated;
+            bool animate = f.Animated && !remote;
             int px = (int)Math.Round(size * _scale);
             var cancellation = clip.DecodeCancellation!.Token;
-            if (RenderProof.Rendering) { Attach(f, clip, Decode(path, px, animate, cancellation)); return; }
+            if (RenderProof.Rendering) { Attach(f, clip, Decode(path, px, animate, cancellation), remote, clipPath, px); return; }
             LastDecode = Task.Run(() =>
             {
                 BeforeDecodeForTests?.Invoke(path);
                 return Decode(path, px, animate, cancellation);
             }, cancellation).ContinueWith(t =>
-                Dispatcher.UIThread.Post(() => Attach(f, clip, t.IsCompletedSuccessfully ? t.Result : (new List<Bitmap>(), default))),
+                Dispatcher.UIThread.Post(() => Attach(f, clip, t.IsCompletedSuccessfully ? t.Result : (new List<Bitmap>(), default), remote, clipPath, px)),
                 TaskScheduler.Default);
             _pendingDecodes.RemoveAll(t => t.IsCompleted);
             _pendingDecodes.Add(LastDecode);
@@ -400,7 +414,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
         }
 
-        private void Attach(GifCascade.Faller f, Clip clip, (List<Bitmap> Frames, TimeSpan Delay) decoded)
+        private void Attach(GifCascade.Faller f, Clip clip, (List<Bitmap> Frames, TimeSpan Delay) decoded,
+            bool remote, string? clipPath, int px)
         {
             clip.DecodeCancellation?.Dispose();
             clip.DecodeCancellation = null;
@@ -410,10 +425,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 return;
             }
             // A local GIF keeps its reserved slot until despawn, even after a still or empty decode.
-            if (decoded.Frames.Count == 0) return;
-            clip.Frames = decoded.Frames;
-            clip.Delay = decoded.Delay;
-            clip.Image.Source = decoded.Frames[0];
+            if (decoded.Frames.Count > 0)
+            {
+                clip.Frames = decoded.Frames;
+                clip.Delay = decoded.Delay;
+                clip.Image.Source = decoded.Frames[0];
+            }
+            if (!remote || !f.Animated) return;
+            // WPF ChaosGifCascadeOverlay.cs:368-398: poster first; a failed start gives its slot back.
+            if (decoded.Frames.Count > 0 && CoreSettings.Current.MotionLevel != MotionLevel.Off)
+                clip.Player = FlashClipPlayer.TryStart(clipPath, px, 1,
+                    frame => { if (_clips.ContainsKey(f) && CoreSettings.Current.MotionLevel != MotionLevel.Off) clip.Image.Source = frame; },
+                    () => Dispatcher.UIThread.Post(() => ReleaseRemote(f, clip)), out _);
+            if (clip.Player == null) f.Animated = false;
+        }
+
+        private void ReleaseRemote(GifCascade.Faller f, Clip clip)
+        {
+            if (!_clips.TryGetValue(f, out var live) || !ReferenceEquals(live, clip)) return;
+            clip.Player = null;
+            f.Animated = false;
+            if (clip.Frames is { Count: > 0 }) clip.Image.Source = clip.Frames[0];
         }
 
         private void OnGone(GifCascade.Faller f)
@@ -423,6 +455,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             c.DecodeCancellation?.Cancel();
             ScrolllerCreditChip.Release(c.Image);
             c.Image.Source = null;
+            c.Player?.Dispose();
             _canvas.Children.Remove(c.Image);
             if (c.Frames != null) foreach (var b in c.Frames) b.Dispose();
         }

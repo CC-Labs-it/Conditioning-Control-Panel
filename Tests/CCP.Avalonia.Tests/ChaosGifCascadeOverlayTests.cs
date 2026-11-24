@@ -82,6 +82,7 @@ public sealed class ChaosGifCascadeOverlayTests
                         .SetupWithoutStarting();
                 var s = CoreSettings.Current;
                 var oldSource = s.MediaSource; var oldConsent = s.RemoteMediaConsented;
+                var oldMotion = s.MotionLevel;
                 var oldRoot = CorePaths.EffectiveAssetsProvider;
                 var oldSettings = RemoteFlashSource.Settings; var oldFetch = RemoteFlashSource.Fetch;
                 var oldDownload = RemoteFlashSource.Download; var oldConsumer = RemoteFlashSource.ClipConsumer;
@@ -89,24 +90,28 @@ public sealed class ChaosGifCascadeOverlayTests
                 var oldFlashSkip = ChaosFlashOverlay.SkipPlatformChecksForTests;
                 var oldManual = ChaosGifCascadeOverlay.ManualFramesForTests;
                 var oldBefore = ChaosGifCascadeOverlay.BeforeDecodeForTests;
+                var oldFactory = FlashClipPlayer.Create;
                 var fetchGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 var entry = new FypAssetManifest.Entry { Id = "rain", Url = "https://example.invalid/rain.mp4",
                     PosterUrl = "https://example.invalid/poster.gif", Origin = "online", Type = "video" };
                 int decodeThread = 0; int uiThread = Environment.CurrentManagedThreadId;
+                int starts = 0; string? startedPath = null;
                 try
                 {
                     ChaosGifCascadeOverlay.CloseActive(); RemoteFlashSource.CleanupCache();
-                    s.MediaSource = "online"; s.RemoteMediaConsented = true;
+                    s.MediaSource = "online"; s.RemoteMediaConsented = true; s.MotionLevel = MotionLevel.Off;
                     CorePaths.EffectiveAssetsProvider = () => dir;
                     RemoteFlashSource.Settings = () => s; RemoteFlashSource.ClipConsumer = false;
                     RemoteFlashSource.Fetch = async _ => { await fetchGate.Task; return (new List<FypAssetManifest.Entry> { entry }, (string?)null); };
                     RemoteFlashSource.Download = (_, _, _) => Task.FromResult<string?>(poster);
+                    FlashClipPlayer.Create = (path, _, _, _) => { starts++; startedPath = path; return new PlayerProbe(() => { }); };
                     ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true;
                     ChaosFlashOverlay.SkipPlatformChecksForTests = true;
                     ChaosGifCascadeOverlay.ManualFramesForTests = true;
                     ChaosGifCascadeOverlay.BeforeDecodeForTests = _ => decodeThread = Environment.CurrentManagedThreadId;
                     int credits = ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditChip.HolderCount;
                     ChaosGifCascadeOverlay.Show(1, 2, 100, 3, 1);
+                    Assert.True(RemoteFlashSource.ClipConsumer);
                     await ChaosGifCascadeOverlay.LastPick!;
                     fetchGate.SetResult(); await RemoteFlashSource.Prefetching;
                     Dispatcher.UIThread.RunJobs();
@@ -120,6 +125,14 @@ public sealed class ChaosGifCascadeOverlayTests
                     await Decoded();
                     Assert.NotNull(image.Source);
                     Assert.NotEqual(uiThread, decodeThread);
+                    Assert.Equal(0, starts); // Motion Off keeps the remote poster
+                    s.MotionLevel = MotionLevel.Full;
+                    ChaosGifCascadeOverlay.Show(1, 2, 100, 3, 1);
+                    await ChaosGifCascadeOverlay.LastPick!;
+                    Dispatcher.UIThread.RunJobs();
+                    await Decoded();
+                    Assert.Equal(1, starts);
+                    Assert.Equal(RemoteFlashSource.ClipPath(entry.Url), startedPath);
                     PanicSurfaces.All.Single(x => x.Id == "gif-cascade").Stop(null);
                     Assert.Null(ChaosGifCascadeOverlay.Active);
                     Assert.Equal(credits, ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditChip.HolderCount);
@@ -136,16 +149,170 @@ public sealed class ChaosGifCascadeOverlayTests
                     RemoteFlashSource.CleanupCache();
                     (RemoteFlashSource.Settings, RemoteFlashSource.Fetch, RemoteFlashSource.Download, RemoteFlashSource.ClipConsumer) =
                         (oldSettings, oldFetch, oldDownload, oldConsumer);
-                    (s.MediaSource, s.RemoteMediaConsented) = (oldSource, oldConsent);
+                    (s.MediaSource, s.RemoteMediaConsented, s.MotionLevel) = (oldSource, oldConsent, oldMotion);
                     CorePaths.EffectiveAssetsProvider = oldRoot;
                     ChaosGifCascadeOverlay.SkipPlatformChecksForTests = oldSkip;
                     ChaosFlashOverlay.SkipPlatformChecksForTests = oldFlashSkip;
                     ChaosGifCascadeOverlay.ManualFramesForTests = oldManual;
                     ChaosGifCascadeOverlay.BeforeDecodeForTests = oldBefore;
+                    FlashClipPlayer.Create = oldFactory;
                 }
             });
         }
         finally { Directory.Delete(dir, true); }
+    }
+
+    private sealed class PlayerProbe : IDisposable
+    {
+        private readonly Action _disposed;
+        public PlayerProbe(Action disposed) => _disposed = disposed;
+        public void Dispose() => _disposed();
+    }
+
+    private static List<string> RemotePick(string root, string poster, string clip)
+    {
+        var settings = new AppSettings { MediaSource = "online", RemoteMediaConsented = true };
+        var store = new ContentPackStore(() => root, () => settings, () => { }, tempDir: () => root);
+        var packs = new PackMediaPool(ContentPackStore.ImageType, new Random(1), () => store);
+        return ChaosGifCascadeOverlay.PickFiles(1, Array.Empty<string>(), packs, settings, 1,
+            () => new RemoteFlashItem("https://example.invalid/clip.mp4", poster, clip));
+    }
+
+    [Theory]
+    [InlineData("panic")]
+    [InlineData("restart")]
+    [InlineData("fall")]
+    public async Task RemoteClipsRespectBudgetMotionAndTeardown(string ending)
+    {
+        var root = Directory.CreateTempSubdirectory("ccp-rain-clips-").FullName;
+        var poster = Path.Combine(root, "poster.gif"); var path = Path.Combine(root, "clip.mp4");
+        File.WriteAllBytes(poster, Convert.FromBase64String(TinyGif)); File.WriteAllBytes(path, new byte[] { 1 });
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (Application.Current is null)
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                var oldFactory = FlashClipPlayer.Create; var oldMotion = CoreSettings.Current.MotionLevel;
+                var oldSkip = ChaosGifCascadeOverlay.SkipPlatformChecksForTests;
+                var oldFlashSkip = ChaosFlashOverlay.SkipPlatformChecksForTests;
+                var oldManual = ChaosGifCascadeOverlay.ManualFramesForTests;
+                var callbacks = new List<Action<global::Avalonia.Media.Imaging.Bitmap>>();
+                int disposed = 0; int posterFirst = 0;
+                using var frame = new global::Avalonia.Media.Imaging.Bitmap(poster);
+                try
+                {
+                    ChaosGifCascadeOverlay.CloseActive();
+                    CoreSettings.Current.MotionLevel = MotionLevel.Full;
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true;
+                    ChaosFlashOverlay.SkipPlatformChecksForTests = true;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = true;
+                    FlashClipPlayer.Create = (clip, _, _, show) =>
+                    {
+                        if (clip == path && ChaosGifCascadeOverlay.Active!.Surface.Children.OfType<Image>().Last().Source != null) posterFirst++;
+                        callbacks.Add(show);
+                        return new PlayerProbe(() => Interlocked.Increment(ref disposed));
+                    };
+                    var picks = RemotePick(root, poster, path);
+                    void ShowRain() => ChaosGifCascadeOverlay.ShowWithFiles(picks, 2, 10, 100, 1, 1, 1);
+                    ShowRain();
+                    var rain = Assert.IsType<ChaosGifCascadeOverlay>(ChaosGifCascadeOverlay.Active);
+                    await Decoded();
+                    for (int i = 0; i < 3; i++) { rain.Cascade.Step(.51); await Decoded(); }
+                    Assert.Equal(4, rain.Cascade.Fallers.Count);
+                    Assert.Equal(3, rain.Cascade.AnimatedAlive);
+                    Assert.Equal(3, callbacks.Count);
+                    Assert.Equal(3, posterFirst);
+                    var first = Assert.IsType<Image>(rain.Surface.Children[0]);
+                    var still = first.Source;
+                    Assert.NotNull(still);
+                    callbacks[0](frame);
+                    Assert.Same(frame, first.Source);
+                    CoreSettings.Current.MotionLevel = MotionLevel.Off;
+                    rain.Frame();
+                    Assert.Same(still, first.Source);
+                    callbacks[0](frame);
+                    Assert.Same(still, first.Source);
+                    CoreSettings.Current.MotionLevel = MotionLevel.Full;
+                    callbacks[0](frame);
+                    Assert.Same(frame, first.Source);
+                    if (ending == "panic") PanicSurfaces.All.Single(x => x.Id == "gif-cascade").Stop(null);
+                    else if (ending == "restart") ShowRain();
+                    else rain.Cascade.Clear();
+                    Assert.Null(first.Source);
+                    Assert.Equal(ending == "restart" ? 1 : 0, rain.Cascade.AnimatedAlive);
+                    callbacks[0](frame); // a late player frame must not restore the old image
+                    Assert.Null(first.Source);
+                    for (int i = 0; i < 200 && Volatile.Read(ref disposed) < 3; i++) await Task.Delay(10);
+                    Assert.Equal(3, Volatile.Read(ref disposed));
+                }
+                finally
+                {
+                    ChaosGifCascadeOverlay.CloseActive();
+                    if (ChaosGifCascadeOverlay.LastDecode is { } pending) await pending;
+                    Dispatcher.UIThread.RunJobs();
+                    for (int i = 0; i < 200 && FlashClipPlayer.TearingDown != 0; i++) await Task.Delay(10);
+                    FlashClipPlayer.Create = oldFactory; CoreSettings.Current.MotionLevel = oldMotion;
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = oldSkip;
+                    ChaosFlashOverlay.SkipPlatformChecksForTests = oldFlashSkip;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = oldManual;
+                }
+            });
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RemoteStillReturnsAnimationSlotWhenClipCannotStart(bool refused)
+    {
+        var root = Directory.CreateTempSubdirectory("ccp-rain-no-clip-").FullName;
+        var poster = Path.Combine(root, "poster.gif"); var path = Path.Combine(root, "clip.mp4");
+        File.WriteAllBytes(poster, Convert.FromBase64String(TinyGif));
+        if (refused) File.WriteAllBytes(path, new byte[] { 1 });
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (Application.Current is null)
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                var oldFactory = FlashClipPlayer.Create; var oldMotion = CoreSettings.Current.MotionLevel;
+                var oldSkip = ChaosGifCascadeOverlay.SkipPlatformChecksForTests;
+                var oldFlashSkip = ChaosFlashOverlay.SkipPlatformChecksForTests;
+                var oldManual = ChaosGifCascadeOverlay.ManualFramesForTests;
+                try
+                {
+                    ChaosGifCascadeOverlay.CloseActive(); CoreSettings.Current.MotionLevel = MotionLevel.Full;
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true; ChaosFlashOverlay.SkipPlatformChecksForTests = true;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = true;
+                    FlashClipPlayer.Create = (_, _, _, _) => throw new InvalidOperationException("refused");
+                    ChaosGifCascadeOverlay.ShowWithFiles(RemotePick(root, poster, path), 2, 10, 100, 1, 1, 1);
+                    var rain = Assert.IsType<ChaosGifCascadeOverlay>(ChaosGifCascadeOverlay.Active);
+                    Assert.Equal(1, rain.Cascade.AnimatedAlive);
+                    await Decoded();
+                    Assert.Equal(0, rain.Cascade.AnimatedAlive);
+                    Assert.NotNull(Assert.IsType<Image>(Assert.Single(rain.Surface.Children)).Source);
+                    rain.Cascade.Step(.51);
+                    Assert.Equal(1, rain.Cascade.AnimatedAlive); // the returned slot can be reused
+                    await Decoded();
+                    Assert.Equal(0, rain.Cascade.AnimatedAlive);
+                }
+                finally
+                {
+                    ChaosGifCascadeOverlay.CloseActive();
+                    FlashClipPlayer.Create = oldFactory; CoreSettings.Current.MotionLevel = oldMotion;
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = oldSkip;
+                    ChaosFlashOverlay.SkipPlatformChecksForTests = oldFlashSkip;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = oldManual;
+                }
+            });
+        }
+        finally { Directory.Delete(root, true); }
     }
 
     [Theory]
