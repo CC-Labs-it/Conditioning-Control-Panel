@@ -8,6 +8,8 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Safety;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -16,6 +18,42 @@ namespace CCP.Avalonia.Tests;
 /// (WPF AvatarTubeWindow.Reactions.cs OnActivityChanged, AI off), and the cooldown holds the next.</summary>
 public sealed class AwarenessTubeReactionTests
 {
+    [Fact]
+    public Task FlashClickSpeaksAndPanicClearsTheBubble() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        PanicAftermath.EndQuiet();
+        CoreSettings.Current.AvatarEnabled = true;
+        CoreSettings.Current.CustomCompanionPhrases.Add(new CustomCompanionPhrase { Id = "test-click", Category = "FlashClicked", Text = "Click" });
+        var tube = new AvatarTubeWindow(null);
+        try
+        {
+            tube.Show();
+            AvatarTubeWindow.TestLive = tube;
+            tube.ReactToFlashClick(1);
+            Assert.False(tube.HasBubbleUp);
+            tube.ReactToFlashClick(0);
+            Assert.True(tube.HasBubbleUp);
+            ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.StopAll("test");
+            Assert.False(tube.HasBubbleUp);
+            tube.ReactToFlashClick(0);
+            Assert.False(tube.HasBubbleUp);
+        }
+        finally
+        {
+            AvatarTubeWindow.TestLive = null;
+            tube.Close();
+            PanicAftermath.EndQuiet();
+            CoreSettings.ServiceProvider = null;
+        }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task AWindowChangeSpeaksOnceThenTheCooldownHolds() => AvaloniaTestDispatcher.RunAsync(() =>
     {

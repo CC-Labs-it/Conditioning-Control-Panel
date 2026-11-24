@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.IO;
 using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
@@ -73,7 +74,10 @@ public sealed class DeeperEditorTimelineTests
     {
         Setup();
         var oldProvider = CoreSettings.ServiceProvider;
-        var service = new ConditioningControlPanel.Services.SettingsService();
+        var path = System.IO.Path.Combine(TestUserDataProfile.Root, Guid.NewGuid().ToString("N"), "settings.json");
+        var service = new ConditioningControlPanel.Services.SettingsService(path);
+        var savedToDisk = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        service.DebouncedSaveCompletedForTest = success => savedToDisk.TrySetResult(success);
         CoreSettings.ServiceProvider = () => service;
         service.Current.DeeperEditorTimelineHeight = 160;
         service.SaveImmediate();
@@ -91,12 +95,8 @@ public sealed class DeeperEditorTimelineTests
             var saved = CoreSettings.Current.DeeperEditorTimelineHeight;
             Assert.InRange(saved, 220, 230);
             Assert.True(service.HasPendingSave);
-            var deadline = System.Diagnostics.Stopwatch.StartNew();
-            while (new ConditioningControlPanel.Services.SettingsService().Current.DeeperEditorTimelineHeight != saved)
-            {
-                Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(5), "timeline height was not saved");
-                await Task.Delay(50);
-            }
+            Assert.True(await savedToDisk.Task.WaitAsync(TimeSpan.FromSeconds(5)), "timeline height was not saved");
+            Assert.Equal(saved, new ConditioningControlPanel.Services.SettingsService(path).Current.DeeperEditorTimelineHeight);
             editor.ForceClose();
             next = new DeeperEditorWindow(new Enhancement(), null);
             next.Show(); Dispatcher.UIThread.RunJobs();
@@ -106,6 +106,7 @@ public sealed class DeeperEditorTimelineTests
         {
             editor.ForceClose(); next?.ForceClose();
             service.SealForReset(); CoreSettings.ServiceProvider = oldProvider;
+            Directory.Delete(System.IO.Path.GetDirectoryName(path)!, recursive: true);
         }
     });
 

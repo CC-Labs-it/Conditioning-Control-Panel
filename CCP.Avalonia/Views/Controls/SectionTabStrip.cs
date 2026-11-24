@@ -312,6 +312,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             // the same header height as every other section.
             _trayHost.Opacity = _pills.Count > 0 ? 1 : 0;
             _trayHost.IsHitTestVisible = _pills.Count > 0;
+            _trayFloor.IsVisible = _trayWellTop.IsVisible = _trayWellLeft.IsVisible = _trayWellFoot.IsVisible = _pills.Count > 0;
 
             var sectionLabel = SafeLoc(NavSections.Find(section)?.LabelKey, section ?? string.Empty);
             var page = pageLabel ?? SafeLoc(NavStripTable.PageLabelKey(tab), string.Empty);
@@ -408,9 +409,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     Text = labelText, FontSize = NavStripRules.PillFontSize, FontWeight = FontWeight.SemiBold,
                     VerticalAlignment = VerticalAlignment.Center, Foreground = parts.RestText,
                 };
+                var typeface = new Typeface(label.FontFamily, label.FontStyle, FontWeight.ExtraBold, label.FontStretch);
                 label.MinWidth = Math.Ceiling(new FormattedText(labelText, System.Globalization.CultureInfo.CurrentUICulture,
-                    FlowDirection.LeftToRight, new Typeface(label.FontFamily, label.FontStyle, FontWeight.ExtraBold, label.FontStretch),
-                    label.FontSize, Brushes.White).WidthIncludingTrailingWhitespace) + 1;
+                    FlowDirection.LeftToRight, typeface, label.FontSize, Brushes.White).WidthIncludingTrailingWhitespace) + 1;
                 label.TextAlignment = TextAlignment.Center;
                 var content = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
                 // The leading glyph (wave 3, WPF :626): the tab's Fluent icon in its own tint; a

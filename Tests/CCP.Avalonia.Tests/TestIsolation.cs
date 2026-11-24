@@ -70,6 +70,9 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
                     .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
+            // The line engine probes belong to this singleton. Initialize it before capturing them,
+            // or restoring an initial null after its first use permanently disables later offers.
+            _ = ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskService.Instance;
             Current = ProcessStateSnapshot.Take();
             // A get-only singleton retained queued toasts, old hosts and live sticky keys across tests.
             // The snapshot restores the original service after each test; each body gets fresh state.
@@ -161,11 +164,16 @@ internal static class OpenWindows
     internal static void CloseLeftovers()
     {
         var head = typeof(ConditioningControlPanel.Avalonia.App).Assembly;
-        foreach (var w in Open.Where(w => !_before.Contains(w)).ToArray())
+        // Close shells first so their static event subscriptions cannot reopen child windows during cleanup.
+        foreach (var w in Open.Where(w => !_before.Contains(w))
+                     .OrderByDescending(w => w is ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow).ToArray())
         {
             if (w.GetType().Assembly != head) { Open.Remove(w); continue; }   // the test's own; don't pin it
             // Logged so a product window leak stays visible even though the hook cleans it up.
             Serilog.Log.Warning("[TestIsolation] closing leftover {Window}", w.GetType().Name);
+            // A user close can be refused by Lockdown or hide a shell to the tray. Teardown must really
+            // close it so its timers and process-wide event handlers do not survive into the next test.
+            if (w is ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow shell) shell.MarkExitRequestedForTest();
             try { w.Close(); } catch (Exception) { /* a window that refuses to close must not fail the next test */ }
         }
     }
@@ -174,7 +182,21 @@ internal static class OpenWindows
 internal sealed class ProcessStateSnapshot
 {
     private readonly List<(MemberInfo Member, object? Value)> _statics = new();
+    private readonly List<(MemberInfo Member, object? Value)> _overlay = new();
     private readonly List<(AppSettings Settings, string Json)> _settings = new();
+
+    // MandatoryVideoOverlay.Instance is a process-wide singleton, so its instance state is process
+    // state the static scan cannot see. The grace-pause dedup stamp outlives every clip: a test that
+    // grace-pauses on the real clock (VoiceRemainingCommandsTests, 2026-11) left a stamp that a later
+    // test's stepped clock (2026-01-01) read as a press "-10 months ago", inside the 200 ms dedup, so
+    // its first Esc was swallowed (MandatoryVideoOverlayTests, red only when the class order put it
+    // second). The grace clock seam rides along so a test that dies before its finally cannot leak it.
+    private const BindingFlags AnyInstance = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+    private static readonly MemberInfo[] OverlayMembers =
+    {
+        typeof(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay).GetField("_lastGraceUtc", AnyInstance)!,
+        typeof(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay).GetProperty("Time", AnyInstance)!,
+    };
     private readonly Dictionary<string, byte[]> _files = new();
 
     private static readonly JsonSerializerSettings Json = new()
@@ -224,6 +246,8 @@ internal sealed class ProcessStateSnapshot
     {
         var s = new ProcessStateSnapshot();
         foreach (var m in Members.Value) s._statics.Add((m, Get(m)));
+        var overlay = ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance;
+        foreach (var m in OverlayMembers) s._overlay.Add((m, Get(m, overlay)));
         foreach (var settings in new[] { CoreSettings.Current, FallbackSettings() }.Distinct())
             s._settings.Add((settings, JsonConvert.SerializeObject(settings, Json)));
         // Nested scopes capture the current test, not the previous test baseline.
@@ -239,6 +263,12 @@ internal sealed class ProcessStateSnapshot
         {
             var now = Get(m);
             if (!ReferenceEquals(now, value) && !Equals(now, value)) Set(m, value);
+        }
+        var overlay = ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance;
+        foreach (var (m, value) in _overlay)
+        {
+            var now = Get(m, overlay);
+            if (!ReferenceEquals(now, value) && !Equals(now, value)) Set(m, value, overlay);
         }
         foreach (var (settings, json) in _settings)
             if (JsonConvert.SerializeObject(settings, Json) != json) JsonConvert.PopulateObject(json, settings, Json);
@@ -280,10 +310,10 @@ internal sealed class ProcessStateSnapshot
         ((Lazy<AppSettings>)typeof(CoreSettings).GetField("Fallback", BindingFlags.Static | BindingFlags.NonPublic)!
             .GetValue(null)!).Value;
 
-    private static object? Get(MemberInfo m) => m is FieldInfo f ? f.GetValue(null) : ((PropertyInfo)m).GetValue(null);
-    private static void Set(MemberInfo m, object? v)
+    private static object? Get(MemberInfo m, object? target = null) => m is FieldInfo f ? f.GetValue(target) : ((PropertyInfo)m).GetValue(target);
+    private static void Set(MemberInfo m, object? v, object? target = null)
     {
-        if (m is FieldInfo f) f.SetValue(null, v); else ((PropertyInfo)m).SetValue(null, v);
+        if (m is FieldInfo f) f.SetValue(target, v); else ((PropertyInfo)m).SetValue(target, v);
     }
 
     private const BindingFlags AnyStatic = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
@@ -308,6 +338,10 @@ internal sealed class ProcessStateSnapshot
         var found = new HashSet<MemberInfo>();
         foreach (var field in typeof(ConditioningControlPanel.Services.Safety.PanicAftermath).GetFields(AnyStatic).Where(f => !f.IsInitOnly && !f.IsLiteral))
             found.Add(field);
+        // Toast lines are selected by the effect, not by an assignment in the tests.
+        found.Add(typeof(ConditioningControlPanel.Avalonia.Possession.ToastEffect).GetField("_lastLine", AnyStatic)!);
+        foreach (var field in typeof(ConditioningControlPanel.Avalonia.Views.Windows.LockCardWindow).GetFields(AnyStatic)
+                     .Where(f => f.Name.StartsWith("_web", StringComparison.Ordinal))) found.Add(field);
         // Native refusal is cached internally, without a Type.Member assignment for the scanner.
         // DWM is available on Windows headless CI, but its windows have no native input shape.
         found.Add(typeof(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosSkiaFxOverlay)
@@ -323,6 +357,10 @@ internal sealed class ProcessStateSnapshot
                      || (t.Assembly == core && t.IsAbstract && t.IsSealed && t.Name.StartsWith("Core", StringComparison.Ordinal))))
             foreach (var m in t.GetMembers(AnyStatic).Where(Settable)) found.Add(m);
 
+        // Video teardown uses a wall-clock quarantine that must not leak across stepped-clock tests.
+        found.Add(typeof(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost)
+            .GetField("_videoQuarantineUntilUtc", AnyStatic)!);
+
         // The cached motion value and its timestamp are one state. Restoring only the public
         // test seam leaves a fresh timestamp paired with another test's cached result.
         found.Add(typeof(UiMotionPreference).GetField("_cached", AnyStatic)!);
@@ -335,9 +373,11 @@ internal sealed class ProcessStateSnapshot
         // Every `Type.Member =` a test writes, through `using Alias = ...;` too.
         var alias = new Regex(@"^using\s+(\w+)\s*=\s*(?:global::)?([\w.]+)\s*;", RegexOptions.Multiline);
         var assign = new Regex(@"(?<![\w.])(?:global::)?((?:\w+\.)*\w+)\.(\w+)\s*=(?![=>])");
+        // Plus every seam BarkHead.Seed writes: tests seed it and must not each restore the real desk and tube.
         foreach (var file in Directory.EnumerateFiles(SourceDir(), "*.cs", SearchOption.AllDirectories)
                      .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
-                              && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")))
+                              && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
+                     .Append(Path.Combine(SourceDir(), "..", "..", "CCP.Avalonia", "Platform", "BarkHead.cs")))
         {
             var text = File.ReadAllText(file);
             var aliases = alias.Matches(text).ToDictionary(m => m.Groups[1].Value, m => m.Groups[2].Value);

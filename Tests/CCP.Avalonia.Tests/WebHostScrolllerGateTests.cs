@@ -39,6 +39,45 @@ public sealed class WebHostScrolllerGateTests
     });
 
     [Fact]
+    public Task BrowserInstallsFrameReporterBeforeNavigation() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var page = new ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView();
+        var web = page.FindControl<WebHost>("BrowserWebHost")!;
+        string? installed = null;
+        web.AllFramesDocumentStartInstaller = script => { installed = script; return Task.FromResult(true); };
+        web.NewScrolllerEngine();
+        await web.PrepareScrolllerGate(1, true);
+        Assert.Equal(ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView.FrameMediaScript, installed);
+        Assert.Contains("window.top.postMessage", installed);
+        Assert.True(web.ScrolllerGate);
+    });
+
+    [Fact]
+    public Task AllFrameScriptInstallsBeforeNavigationOncePerEngine() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var pending = new TaskCompletionSource<bool>();
+        var installs = 0;
+        var web = new WebHost { AllFramesDocumentStartScript = "wheel", AllFramesDocumentStartInstaller = script =>
+        {
+            Assert.Equal("wheel", script);
+            installs++;
+            return pending.Task;
+        }};
+        web.NewScrolllerEngine();
+        var gate = web.PrepareScrolllerGate(1, true);
+        Assert.Null(web.ScrolllerGate);
+        Assert.Equal(1, installs);
+        pending.SetResult(true);
+        await gate;
+        Assert.True(web.ScrolllerGate);
+        await web.PrepareScrolllerGate(1, true);
+        Assert.Equal(1, installs);
+        web.NewScrolllerEngine();
+        await web.PrepareScrolllerGate(2, true);
+        Assert.Equal(2, installs);
+    });
+
+    [Fact]
     public Task FailedDocumentStartDoesNotLeaveNavigationHeld() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var web = new WebHost { WindowsDocumentStartScript = "test", DocumentStartInstaller = _ => Task.FromException(new InvalidOperationException()) };

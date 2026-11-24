@@ -67,6 +67,55 @@ public sealed class StartupModalLadderTests
     });
 
     [Fact]
+    public Task CancelSelectedModalLeavesReplacementAndOtherOffersIntact() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        try
+        {
+            var order = new List<string>();
+            var abandoned = false;
+            StartupLadder.EnqueueModal("whats-new", 30, () => { order.Add("cancelled"); return Task.CompletedTask; }, () => abandoned = true);
+            Dispatcher.UIThread.RunJobs(); // selected, but still settling
+            StartupLadder.CancelModal("WHATS-NEW");
+            StartupLadder.EnqueueModal("whats-new", 30, () => { order.Add("replacement"); return Task.CompletedTask; });
+            StartupLadder.EnqueueModal("other", 80, () => { order.Add("other"); return Task.CompletedTask; });
+            await Step();
+            Assert.Empty(order);
+            await Step();
+            Assert.Equal(new[] { "replacement" }, order);
+            await Step();
+            Assert.Equal(new[] { "replacement", "other" }, order);
+            Assert.False(abandoned);
+        }
+        finally { StartupLadder.ResetForTests(); }
+    });
+
+    [Fact]
+    public Task CancelParkedModalDoesNotOpenItAndDrainsHeldOffers() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        try
+        {
+            var shown = false;
+            var opened = false;
+            StartupLadder.Hold();
+            StartupLadder.EnqueueModal("whats-new", 30, () => { shown = true; return Task.CompletedTask; });
+            StartupLadder.PresentOrInbox(new InboxItem { Key = "card", Open = () => opened = true });
+            await Step();
+            StartupLadder.CancelModal("whats-new");
+            StartupLadder.Release();
+            ((StartupLadder.TestClock)StartupLadder.Time).Advance(StartupLadder.ModalPoll);
+            for (var i = 0; i < 5; i++) await Task.Yield();
+            Assert.False(shown);
+            // A launcher-held offer is filed in the Inbox, never auto-opened.
+            Assert.False(opened);
+            Assert.True(StartupLadder.Inbox.Contains("card"));
+            Assert.False(StartupLadder.World(StartupLadder.Time.GetUtcNow().UtcDateTime).LadderBusy);
+        }
+        finally { StartupLadder.ResetForTests(); }
+    });
+
+    [Fact]
     public Task DeferredAndInboxOffersDoNotDuplicateEachOther() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Setup();

@@ -42,18 +42,19 @@ public sealed class WebHostProbeTests
     [InlineData(false)]
     public void AvailabilityCacheFollowsTheCurrentLifetime(bool desktopFirst)
     {
-        var desktopCalls = 0;
-        var headlessCalls = 0;
-        var desktop = new Lazy<string?>(() => { desktopCalls++; return null; }); // installed WebView2
-        var headless = new Lazy<string?>(() => { headlessCalls++; return WebHost.NoEngineReason; });
-        string? Read(bool isHeadless) => WebHost.ReasonForLifetime(isHeadless, headless, desktop);
+        var scans = 0;
+        var adapters = new Lazy<System.Collections.Generic.IReadOnlyList<DetailedWebViewAdapterInfo>>(() =>
+        {
+            scans++;
+            return new[] { Info(WebViewAdapterType.WebView2, true, WebViewEmbeddingScenario.NativeControlHost), HeadlessAdapter };
+        });
+        string? Read(bool isHeadless) => WebHost.ReasonForLifetime(isHeadless, adapters, linux: false, choice: "gtk", sink: true);
 
         Assert.Equal(desktopFirst ? null : WebHost.NoEngineReason, Read(!desktopFirst));
         Assert.Equal(desktopFirst ? WebHost.NoEngineReason : null, Read(desktopFirst));
         Assert.Null(Read(false));
         Assert.Equal(WebHost.NoEngineReason, Read(true));
-        Assert.Equal(1, desktopCalls);
-        Assert.Equal(1, headlessCalls);
+        Assert.Equal(1, scans);
     }
 
     [Fact]

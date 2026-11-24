@@ -230,6 +230,43 @@ public class HomeBrowserEnhanceTests
     }
 
     [Fact]
+    public void PlayingClipFollowsMasterVolumeUntilStopped()
+    {
+        var (live, stoppable, master) = (BrowserEnhancementDispatcher.LiveClipPlayer, CoreAudio.PlayStoppableProvider, CoreSettings.Current.MasterVolume);
+        var path = Path.GetTempFileName();
+        var voice = new FakeVoice();
+        try
+        {
+            CoreSettings.Current.MasterVolume = 40;
+            CoreAudio.PlayStoppableProvider = (_, _, _, _, _) => throw new InvalidOperationException("live path expected");
+            BrowserEnhancementDispatcher.LiveClipPlayer = () => (_, gain, _) => { voice.Volume = gain; return voice; };
+            using var source = new WebHostVideoTimeSource(new WebHost());
+            var dispatcher = new BrowserEnhancementDispatcher();
+            dispatcher.DispatchAsync(new PlayAudioAction { Path = path, Volume = 50 }, new EnhancementDispatchContext(new Enhancement(), source, 0, null)).GetAwaiter().GetResult();
+            Assert.Equal(CoreAudio.SoundGain(50, 40), voice.Last);
+            CoreSettings.Current.MasterVolume = 90;   // WPF AudioService.cs:897
+            Assert.Equal(CoreAudio.SoundGain(50, 90), voice.Last);
+            dispatcher.ResetOverlayBands();
+            Assert.True(voice.Disposed);
+            CoreSettings.Current.MasterVolume = 10;
+            Assert.Equal(CoreAudio.SoundGain(50, 90), voice.Last);
+        }
+        finally
+        {
+            (BrowserEnhancementDispatcher.LiveClipPlayer, CoreAudio.PlayStoppableProvider, CoreSettings.Current.MasterVolume) = (live, stoppable, master);
+            File.Delete(path);
+        }
+    }
+
+    private sealed class FakeVoice : MindWipePlayer.IVoice
+    {
+        public float Last;
+        public bool Disposed;
+        public double Volume { set => Last = (float)value; }
+        public void Dispose() => Disposed = true;
+    }
+
+    [Fact]
     public void WebcamAdapterForwardsUntilDisposed() => AvaloniaTestDispatcher.Run(() =>
     {
         var camera = new BrowserEnhancementWebcam();
