@@ -972,6 +972,9 @@
                                        HorizontalAlignment="Stretch" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
                                        Opacity="1">
+                                <TextBlock.Effect>
+                                    <DropShadowEffect Color="{DynamicResource PinkColor}" BlurRadius="8" OffsetX="0" OffsetY="0" Opacity="0.6"/>
+                                </TextBlock.Effect>
                                 <InlineUIContainer BaselineAlignment="Center">
                                     <DockPanel>
                                         <TextBlock DockPanel.Dock="Left" FontSize="14" FontStyle="Italic"
@@ -994,7 +997,11 @@
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
                                        Opacity="0" IsHitTestVisible="False"
-                                       Text="{loc:Str login_welcome_back}"/>
+                                       Text="{loc:Str login_welcome_back}">
+                                <TextBlock.Effect>
+                                    <DropShadowEffect Color="{DynamicResource PinkColor}" BlurRadius="8" OffsetX="0" OffsetY="0" Opacity="0.6"/>
+                                </TextBlock.Effect>
+                            </TextBlock>
                             <!-- v6.8.0 One Account beat. In the rotation ONLY until acted on:
                                  InitializeBannerRotation includes it while SeenFeatureIntros lacks
                                  "banner-web", and RetireWebBannerBeat spends that key from the
@@ -1010,6 +1017,9 @@
                                        HorizontalAlignment="Stretch" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
                                        Opacity="0" IsHitTestVisible="False">
+                                <TextBlock.Effect>
+                                    <DropShadowEffect Color="{DynamicResource PinkColor}" BlurRadius="8" OffsetX="0" OffsetY="0" Opacity="0.6"/>
+                                </TextBlock.Effect>
                                 <!-- WPF Hyperlink + RequestNavigate (MainWindow.xaml:1174) -> an inline
                                      SafeHyperlinkButton (ExternalOpener); Click retires the beat.
                                      WPF's CharacterEllipsis trims the whole line, Hyperlink included,
@@ -1042,7 +1052,11 @@
                                        FontSize="14" FontStyle="Italic"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
-                                       Opacity="0" IsHitTestVisible="False"/>
+                                       Opacity="0" IsHitTestVisible="False">
+                                <TextBlock.Effect>
+                                    <DropShadowEffect Color="{DynamicResource PinkColor}" BlurRadius="8" OffsetX="0" OffsetY="0" Opacity="0.6"/>
+                                </TextBlock.Effect>
+                            </TextBlock>
                             </Grid>
                             </Grid>
                             <!-- Chrome FX (PR-1): one-shot sheen pass over the banner when the
