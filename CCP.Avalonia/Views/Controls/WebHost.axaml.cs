@@ -136,9 +136,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         // The native completion has a URL but no navigation ID. Keep replaced starts so their late
         // failures cannot end a newer load, including a reload of the same URL.
         private readonly List<Uri> _replacedNavigations = new();
+        private bool _awaitingReplacementStart;
+
+        private void RememberReplacedNavigation(Uri replaced)
+        {
+            if (_replacedNavigations.Count == 64) _replacedNavigations.RemoveAt(0);
+            _replacedNavigations.Add(replaced);
+        }
+
+        private void PrepareProgrammaticNavigation()
+        {
+            if (ActiveNavigation is { } replaced)
+            {
+                RememberReplacedNavigation(replaced);
+                ActiveNavigation = null;
+                _awaitingReplacementStart = true;
+            }
+            else if (!_awaitingReplacementStart) _replacedNavigations.Clear();
+        }
+
         private void ClearActiveNavigation()
         {
             ActiveNavigation = null;
+            _awaitingReplacementStart = false;
             _replacedNavigations.Clear();
         }
 
@@ -162,7 +182,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         internal void OnNavigationCompleted(Uri? url, bool success = true)
         {
-            if (!success && ActiveNavigation != null && url != null && _replacedNavigations.Remove(url))
+            if (!success && (ActiveNavigation != null || _awaitingReplacementStart)
+                && url != null && _replacedNavigations.Remove(url))
                 return; // the replacement is still loading; do not publish the old failure
             ClearActiveNavigation();
             if (url is null || _panicBlank) return;
@@ -734,12 +755,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             NavigationStarting?.Invoke();
             var target = e.Request;
-            if (ActiveNavigation is { } replaced)
-            {
-                if (_replacedNavigations.Count == 64) _replacedNavigations.RemoveAt(0);
-                _replacedNavigations.Add(replaced);
-            }
-            else _replacedNavigations.Clear();
+            if (ActiveNavigation is { } replaced) RememberReplacedNavigation(replaced);
+            else if (!_awaitingReplacementStart) _replacedNavigations.Clear();
+            _awaitingReplacementStart = false;
             ActiveNavigation = null;
             if (e.Cancel) return;
             // Panic teardown must pass a caller's page allowlist, including on reattachment.
@@ -780,30 +798,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public bool Navigate(Uri url)
         {
-            ClearActiveNavigation();
+            PrepareProgrammaticNavigation();
             _panicBlank = false;
             CancelPendingNavigation();
             NavigationRequests++;
             // Do not retain a request the reported gate refuses: a later gate report must not load it after fallback.
-            if (_scrolllerGate is not null && !ScrolllerGateAllows(_scrolllerGate, url)) return false;
+            if (_scrolllerGate is not null && !ScrolllerGateAllows(_scrolllerGate, url)) { ClearActiveNavigation(); return false; }
             var previous = Source;
             _explicitNavigate = true;
             try { Source = url; } finally { _explicitNavigate = false; }
             // Refused or engine-less requests stay named on the fallback panel; the caller learns nothing loaded.
-            if (RefusesScrolller(url)) { RefusedNavigations++; return false; }
+            if (RefusesScrolller(url)) { RefusedNavigations++; ClearActiveNavigation(); return false; }
             // A sandbox never loads a real site (as ApplySource): the panel may name it, the engine never gets it.
-            if (!ConditioningControlPanel.Services.SandboxNet.Allows(url)) { RefusedNavigations++; return false; }
+            if (!ConditioningControlPanel.Services.SandboxNet.Allows(url)) { RefusedNavigations++; ClearActiveNavigation(); return false; }
             // WPF MainWindow.Browser.cs:48, :297: a failed adapter construction is retried on the next navigation.
             if (RetryFailedConstruction && _web is null && NavigationInvoker is null && (IsAvailable || NativeViewFactory != null))
                 CreateNativeView();
-            if (_web is null && NavigationInvoker is null) return false;
+            if (_web is null && NavigationInvoker is null) { ClearActiveNavigation(); return false; }
             if (_web is { } startupView) WatchStartup(startupView);
             if (_scrolllerGate is null) return true; // held until the gate reports
             try
             {
                 if (NavigationInvoker is { } navigate)
                 {
-                    if (!navigate(url)) { RestoreSource(previous); return false; }
+                    if (!navigate(url)) { RestoreSource(previous); ClearActiveNavigation(); return false; }
                 }
                 else _web!.Navigate(url);
                 return true;
@@ -811,6 +829,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             catch (Exception ex)
             {
                 RestoreSource(previous);
+                ClearActiveNavigation();
                 Log.Debug("WebHost: Navigate failed: {Error}", ex.Message);
                 return false;
             }
@@ -1059,7 +1078,7 @@ document.addEventListener('DOMContentLoaded',scan);})();";
             base.OnPropertyChanged(change);
             if (change.Property == SourceProperty)
             {
-                ClearActiveNavigation();
+                if (!_explicitNavigate) ClearActiveNavigation();
                 if (Source != null) _panicBlank = false; // a new explicit request may load normally
                 if (!_explicitNavigate) CancelPendingNavigation();
                 ApplySource();

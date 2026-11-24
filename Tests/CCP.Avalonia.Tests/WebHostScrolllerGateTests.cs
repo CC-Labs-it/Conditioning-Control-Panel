@@ -127,6 +127,63 @@ public sealed class WebHostScrolllerGateTests
         return Task.CompletedTask;
     });
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public Task ProgrammaticNavigation_PreservesReplacedLoad(bool sameUrl, bool failureBeforeStart) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var web = new WebHost();
+        var first = new Uri("http://127.0.0.1:5555/first");
+        var second = sameUrl ? first : new Uri(first, "/second");
+        web.NewScrolllerEngine()(true);
+        web.AllowNavigation = _ => true;
+        web.NavigationInvoker = _ => true;
+        web.Source = first;
+        void Start(Uri url)
+        {
+            var e = new WebViewNavigationStartingEventArgs { Request = url };
+            web.OnNavigationStarted(null, e);
+            Assert.False(e.Cancel);
+        }
+        var finished = new List<(Uri, bool)>();
+        web.NavigationFinished += (url, ok) => finished.Add((url, ok));
+        Start(first);
+        Assert.True(web.Navigate(second));
+        if (failureBeforeStart) web.OnNavigationCompleted(first, success: false);
+        Start(second);
+        if (!failureBeforeStart) web.OnNavigationCompleted(first, success: false);
+        Assert.Equal(second, web.ActiveNavigation);
+        Assert.Null(web.CurrentUrl);
+        Assert.Empty(finished);
+        web.OnNavigationCompleted(second);
+        Assert.Null(web.ActiveNavigation);
+        Assert.Equal(second, web.CurrentUrl);
+        Assert.Equal((second, true), Assert.Single(finished));
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task FailedProgrammaticNavigation_DoesNotMaskLaterFailure() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var web = new WebHost();
+        var page = new Uri("http://127.0.0.1:5555/page");
+        web.NewScrolllerEngine()(true);
+        web.AllowNavigation = _ => true;
+        web.NavigationInvoker = _ => false;
+        web.OnNavigationStarted(null, new WebViewNavigationStartingEventArgs { Request = page });
+        Assert.False(web.Navigate(page));
+        web.OnNavigationStarted(null, new WebViewNavigationStartingEventArgs { Request = page });
+        var finished = new List<bool>();
+        web.NavigationFinished += (_, ok) => finished.Add(ok);
+        web.OnNavigationCompleted(page, success: false);
+        Assert.Null(web.ActiveNavigation);
+        Assert.Equal(page, web.CurrentUrl);
+        Assert.False(Assert.Single(finished));
+        return Task.CompletedTask;
+    });
+
     private static readonly Uri Page = new("https://scrolller.com/r/x");
     private static readonly Uri Media = new("https://images.scrolller.com/a/b.jpg");
 

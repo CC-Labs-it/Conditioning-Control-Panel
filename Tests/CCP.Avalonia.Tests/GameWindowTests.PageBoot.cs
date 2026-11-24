@@ -134,6 +134,43 @@ public sealed partial class GameWindowTests
         finally { w.Close(); }
     });
 
+    [Fact]
+    public void PrizeCounter_ReopenDuringLoad_KeepsTheNewReadyAfterOldFailure() => RunPageBoot(() =>
+    {
+        // WPF PrizeCounterHostService.cs:320,376,358 reloads the page and answers ready with init.
+        var w = GameWindow.LaunchPrizeCounter("launcher", "kart")!;
+        try
+        {
+            w.Web.NewScrolllerEngine()(true);
+            w.Web.NavigationInvoker = _ => true;
+            var page = w.PageUrl!;
+            var sent = new List<string>();
+            w.Posted += sent.Add;
+            void Start()
+            {
+                var e = new WebViewNavigationStartingEventArgs { Request = page };
+                w.Web.OnNavigationStarted(null, e);
+                Assert.False(e.Cancel);
+            }
+            Start(); // the first tab is still loading
+            var requests = w.Web.NavigationRequests;
+            Assert.Same(w, GameWindow.LaunchPrizeCounter("launcher", "chess"));
+            Assert.Equal(requests + 1, w.Web.NavigationRequests);
+            Start(); // Navigate has started the replacement
+            w.Web.OnWebMessage("{\"type\":\"ready\"}");
+            w.Web.OnNavigationCompleted(page, success: false); // old load fails after new ready
+            Assert.Empty(sent);
+            Assert.Equal(page, w.Web.ActiveNavigation);
+            Assert.Null(w.Web.CurrentUrl);
+            w.Web.OnNavigationCompleted(page);
+            Assert.True(w.IsReady);
+            var init = JObject.Parse(Assert.Single(sent));
+            Assert.Equal("init", (string?)init["type"]);
+            Assert.Equal("chess", (string?)init["tab"]);
+        }
+        finally { w.Close(); }
+    });
+
     // Comments and strings may name chrome.webview without using it; only code counts.
     private static readonly System.Text.RegularExpressions.Regex Comments =
         new(@"/\*[\s\S]*?\*/|(?<![:'""\\])//[^\n]*");
