@@ -47,6 +47,10 @@ public sealed partial class GameWindowTests
     [InlineData("glassroad", 1)]
     [InlineData("glassroad", 2)]
     [InlineData("glassroad", 3)]
+    [InlineData("goon", 0)]
+    [InlineData("goon", 1)]
+    [InlineData("goon", 2)]
+    [InlineData("goon", 3)]
     public void SlipReachesOnlyItsOpenHostAndSandboxCannotClaim(string id, int scenario)
     {
         var previous = SparklesHead.Service;
@@ -74,6 +78,7 @@ public sealed partial class GameWindowTests
                 {
                     "glassroad" => "{type:'race-result',finished:true,laps:3,fullLaps:3,place:1,of:8,timeS:600}",
                     "breakoutdemo" => "{type:'breakout-wall',ballsLost:0,wallMs:600000}",
+                    "goon" => "{type:'match-result',practice:true,result:{endReason:1,winnerIsHost:true,localIsHost:true,survivedMs:600000}}",
                     _ => "{type:'pbp:game-over',mode:'solo',outcome:'win',plies:44,durationMs:600000}",
                 });
                 if (scenario == 2) host.Close();

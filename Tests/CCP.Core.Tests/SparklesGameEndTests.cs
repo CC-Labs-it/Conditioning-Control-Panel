@@ -54,6 +54,20 @@ public class SparklesGameEndTests
     }
 
     [Fact]
+    public void GoonClaimsDuelsWithTheRoomCodeAndPracticeWithout()
+    {
+        static JObject M(string r, bool practice = false, string code = "ABCD12") =>
+            JObject.Parse("{type:'match-result',practice:" + (practice ? "true" : "false") + ",code:'" + code + "',result:" + r + "}");
+        var c = SparklesPageResults.Goon(M("{endReason:1,winnerIsHost:false,localIsHost:false,survivedMs:240000}"))!;
+        Assert.Equal(("goon", "online", "win", "ABCD12"), (c.Game, c.Mode, c.Result.Outcome, (string?)c.Proof!["goonMatchId"]));
+        Assert.Equal("draw", SparklesPageResults.Goon(M("{endReason:3,localIsHost:true}"))!.Result.Outcome);
+        Assert.Null(SparklesPageResults.Goon(M("{endReason:1,winnerIsHost:true,localIsHost:true}", practice: true, code: ""))!.Proof);
+        Assert.Null(SparklesPageResults.Goon(M("{endReason:0,winnerIsHost:true,localIsHost:true}")));
+        Assert.Null(SparklesPageResults.Goon(M("{endReason:1,winnerIsHost:true,localIsHost:true,disputed:true}", practice: true)));
+        Assert.Null(SparklesPageResults.Goon(M("{endReason:3,localIsHost:true}", code: "abcd")));
+    }
+
+    [Fact]
     public void ChessCarriesServerProofAndRejectsAbandonedGames()
     {
         var chess = JObject.Parse("{mode:'online',outcome:'draw',plies:60,durationMs:300000,matchId:'match-1'}");

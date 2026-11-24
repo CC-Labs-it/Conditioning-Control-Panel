@@ -11,6 +11,7 @@ using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Transfer;
 using ConditioningControlPanel.Services.Stakes;
+using ConditioningControlPanel.Services.Sparkles.Claims;
 using Newtonsoft.Json.Linq;
 
 namespace ConditioningControlPanel.Avalonia.Views.Games;
@@ -48,6 +49,7 @@ internal sealed partial class GameWindow
         set { _goonStakeBridge = value; _goonStakes = null; }
     }
     internal static Task GoonStakePending { get; private set; } = Task.CompletedTask;
+    internal Task GoonSharePending { get; private set; } = Task.CompletedTask;
     private static void PostGoonStake(JObject frame) => Dispatcher.UIThread.Post(() =>
     {
         GameWindow? game;
@@ -74,7 +76,7 @@ internal sealed partial class GameWindow
 
     partial void HandleGoonMessage(JObject message, ref bool handled)
     {
-        if (HandleGoonInbox(message)) { handled = true; return; }
+        if (HandleGoonInbox(message) || HandleGoonMedia(message)) { handled = true; return; }
         if (StakeBridge.Handles((string?)message["type"]))
         {
             if (!_closing) { _goonStakes ??= GoonStakeBridge("goon", PostGoonStake); GoonStakePending = _goonStakes.Handle(message); }
@@ -100,7 +102,8 @@ internal sealed partial class GameWindow
                     caps = new { haptics = GoonToyDirector.ReadyNow, brainDrain = true, spiral = true, camera = false,
                         video = true, mediaTransfer = GoonHostRules.TransferAllowed(), canHost = GoonHostRules.HostingAllowed(), canJoin = GoonHostRules.JoiningAllowed() },
                     consent = new { liveDurationSec = consent.LiveDurationSec, toyCap = consent.ToyCap,
-                        payloadMinGapMs = consent.PayloadMinGapMs }, fullscreen = WindowState == global::Avalonia.Controls.WindowState.FullScreen });
+                        payloadMinGapMs = consent.PayloadMinGapMs }, fullscreen = WindowState == global::Avalonia.Controls.WindowState.FullScreen,
+                    media = GoonMediaBlock() });
                 BootGoonInbox();
                 _goonBeat = _goonPaintMove = _goonTick = GoonUtcNow();
                 _goonPaint = null;
@@ -127,6 +130,18 @@ internal sealed partial class GameWindow
                 break;
             case "net-post":
                 if (!_closing) RelayGoonPost(message);
+                handled = true;
+                break;
+            case "match-result": // WPF GoonHostService.cs:757-772
+                DeliverSparkles(SparklesPageResults.Send(SparklesPageResults.Goon(message), Platform.SparklesHead.Service));
+                handled = true;
+                break;
+            case "open-prime": // WPF GoonHostService.cs:813
+                if (!_closing) TierGate.DemandPremium("Goon Game");
+                handled = true;
+                break;
+            case "share-card": // WPF GoonHostService.cs:835-842
+                if (!_closing) GoonSharePending = ShareGoonCard(message);
                 handled = true;
                 break;
             case "heartbeat":
@@ -232,6 +247,7 @@ internal sealed partial class GameWindow
     {
         // WPF GoonHostService.cs:2113-2118: a closed match must not strand the queue.
         GoonToyDirector.Close();
+        StopGoonMedia();
         if (_goonHaptics != null) _goonHaptics.ConnectionChanged -= GoonToyConnectionChanged;
         _goonHaptics = null;
         try { GoonCacheBridge.Detach(); } catch (Exception ex) { Diag.Swallowed(ex); }
