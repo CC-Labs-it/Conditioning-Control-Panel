@@ -79,10 +79,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _leashGate.CutRequested += () => _ = CutLeashAsync();
                 _leashGate.LaterRequested += () => { _leashUnplayablePid = null; HideLeashGate(); };
 
-                InitializeLeashAsks();
                 var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
                 timer.Tick += (_, _) => { RebindLeashAsks(); CheckLeashGate(); };
-                timer.Start();
+                var started = false;
+                Opened += (_, _) =>
+                {
+                    if (started) return;
+                    started = true;
+                    InitializeLeashAsks();
+                    timer.Start();
+                };
                 Closed += (_, _) => timer.Stop();
             }
             catch (Exception ex) { Serilog.Log.Debug("Leash gate init failed: {E}", ex.Message); }

@@ -56,6 +56,11 @@ namespace ConditioningControlPanel.Avalonia
             return shown ?? true;
         });
 
+        /// <summary>The AI's video surface. WPF App.AiEffects.cs:69-74: refused while a video plays, checked when the
+        /// start runs, so a start held behind the Wayland portal bind is covered too.</summary>
+        internal static bool PlayVideo(string? path) => Start(() => CoreEngine.Video?.IsPlaying != true
+            && CoreEngine.Video?.Trigger(path == null ? null : false, path) == true);
+
         /// <summary>An overlay surface: refused without a host or click-through support.</summary>
         private static bool Overlay(Action<Window> show) => OnUi(() =>
             X11Overlay.IsAvailable && Host is not null && Start(() =>
@@ -119,8 +124,8 @@ namespace ConditioningControlPanel.Avalonia
                 CoreSettings.Save();
                 return true;
             });
-            MediaCommand.VideoSurface = path => Start(() =>
-                CoreEngine.Video?.Trigger(path == null ? null : false, path) == true);
+            // WPF App.AiEffects.cs:69-74: a video already playing refuses (a floating run would otherwise add a random window).
+            MediaCommand.VideoSurface = PlayVideo;
             MediaCommand.AudioSurface = PlayAudio;
             CoreAudio.StopSoundProvider = StopAudio;
             MediaCommand.ModVoiceLinesProvider = () => Dispatcher.UIThread.CheckAccess()
@@ -194,7 +199,7 @@ namespace ConditioningControlPanel.Avalonia
                     try
                     {
                         var playing = PlayAudioClip(path, CoreAudio.SoundGain(100, settings?.MasterVolume ?? 100),
-                            _ => { ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("sound", path, CoreEngine.IsRunning, false, DateTime.Now); started.TrySetResult(true); }, Finished);   // WPF AudioService.cs:863
+                            _ => { ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("sound", path, CoreEngine.IsRunning || ConditioningControlPanel.CoreSession.IsSessionRunning, false, DateTime.Now); started.TrySetResult(true); }, Finished);   // WPF AudioService.cs:863
                         if (done) playing?.Dispose(); else clip = playing;
                         if (clip == null) Finished(); else ApplyGain();
                     }

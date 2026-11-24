@@ -10,6 +10,46 @@ namespace CCP.Avalonia.Tests;
 public class EmiOffersTests
 {
     [Fact]
+    public void OfferFeasibilityChecksTargetsAndBedtime()
+    {
+        var state = EmiState.Current;
+        var pins = state.Pins.ToList();
+        var bedtime = state.BedtimeUntil;
+        try
+        {
+            state.Pins.Clear();
+            state.BedtimeUntil = System.DateTime.MinValue;
+            Assert.False(EmiOffers.EffectFeasible("open:not-a-door"));
+            Assert.True(EmiOffers.EffectFeasible("open:settings"));
+            Assert.True(EmiOffers.EffectFeasible("pinTop:settings"));
+            state.Pins.Add("settings");
+            Assert.False(EmiOffers.EffectFeasible("pinTop:settings"));
+            Assert.True(EmiOffers.EffectFeasible("bedtime"));
+            state.BedtimeUntil = System.DateTime.UtcNow.AddHours(1);
+            Assert.False(EmiOffers.EffectFeasible("bedtime"));
+            Assert.True(EmiOffers.EffectFeasible("none"));
+            Assert.False(EmiOffers.EffectFeasible("unknown"));
+        }
+        finally { state.Pins.Clear(); state.Pins.AddRange(pins); state.BedtimeUntil = bedtime; }
+    }
+
+    [Fact]
+    public void BedtimeEffectSetsNextSix() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var state = EmiState.Current;
+        var previous = state.BedtimeUntil;
+        try
+        {
+            var now = System.DateTime.Now;
+            var six = now.Date.AddHours(6);
+            if (now >= six) six = six.AddDays(1);
+            EmiOffers.Run("bedtime", true);
+            Assert.Equal(six.ToUniversalTime(), state.BedtimeUntil);
+        }
+        finally { state.BedtimeUntil = previous; EmiState.SaveSoon(); }
+    });
+
+    [Fact]
     public void AvailabilityRefusesUnknownAndUnavailableDoors()
     {
         var desk = EmiDeskService.Instance;

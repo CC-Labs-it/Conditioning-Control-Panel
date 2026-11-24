@@ -307,9 +307,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         private void ChkAwarenessHighlightVisibleInCapture_Changed(object? sender, RoutedEventArgs e)
         {
-            // ponytail: WPF then flips display affinity on the live overlay windows
-            // (App.KeywordHighlight.RefreshCaptureVisibility) - WDA_EXCLUDEFROMCAPTURE, Win32,
-            // head-side. The setting is stored either way, so a later head reads the right value.
+            // The overlay watches this setting and refreshes the live window affinities (WPF :755).
             WriteFlag(v => CoreSettings.Current.OcrHighlightVisibleInCapture = v,
                       ChkAwarenessHighlightVisibleInCapture, "OcrHighlightVisibleInCapture");
         }
