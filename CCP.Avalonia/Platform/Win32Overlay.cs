@@ -64,13 +64,13 @@ internal static class Win32Overlay
         return Apply(hwnd, clickThrough, IsPassive(window), AllowsFocus(window));
     }
 
-    /// <summary>Tool/no-activate/layered + HWND_TOPMOST: the Windows form of an override-redirect overlay.</summary>
-    internal static bool SetOverrideRedirect(TopLevel window, IntPtr hwnd, bool passive = false)
+    /// <summary>Tool/no-activate/layered and the requested z-order band.</summary>
+    internal static bool SetOverrideRedirect(TopLevel window, IntPtr hwnd, bool passive = false, bool topmost = true)
     {
         if (!OperatingSystem.IsWindows()) return false;
         if (passive) Passive.AddOrUpdate(window, Passive);
         return Apply(hwnd, Track(window).Value, IsPassive(window), AllowsFocus(window))
-            && SetWindowPos(hwnd, new IntPtr(-1), 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+            && SetWindowPos(hwnd, new IntPtr(topmost ? -1 : -2), 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
     }
 
     // WPF ChaosUnlockCardOverlay.cs:388-396: take clicks without activating or changing z-order.
