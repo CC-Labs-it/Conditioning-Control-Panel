@@ -44,7 +44,7 @@ public sealed class SettingsPublicationConcurrencyTests
     }
 
     [Fact]
-    public void OpenSettingsReaderAllowsAtomicReplacement()
+    public void AnOpenSettingsReaderDoesNotFailAPublish()
     {
         var dir = Directory.CreateTempSubdirectory("ccp-settings-reader-").FullName;
         var path = Path.Combine(dir, "settings.json");
@@ -53,8 +53,11 @@ public sealed class SettingsPublicationConcurrencyTests
         {
             writer.Current.DeeperEditorTimelineHeight = 160;
             Assert.True(writer.TrySaveImmediate(suppressCloudBackup: true));
+            // Windows cannot rename over an open file even with FileShare.Delete (CI windows-latest):
+            // the publish retries until a short-lived load closes it, so release inside that window.
             using (var reader = SettingsService.OpenSettingsRead(path))
             {
+                writer.BeforeAtomicPublishForTests = _ => Task.Delay(20).ContinueWith(_ => reader.Dispose());
                 writer.Current.DeeperEditorTimelineHeight = 225;
                 Assert.True(writer.TrySaveImmediate(suppressCloudBackup: true));
             }

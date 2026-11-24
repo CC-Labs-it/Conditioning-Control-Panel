@@ -191,6 +191,9 @@ public sealed class MandatoryVideoBrowserTests
     public Task AttentionChecksKeepTheClipOnLibVlc() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         using var rig = new Rig();
+        // TestIsolation restores LibVlcAudio.Shared per test: seed the engine this LibVLC clip needs.
+        try { _ = new LibVlcAudio("--aout=dummy"); }
+        catch (Exception e) { Assert.Skip("libvlc not available: " + e.Message); }
         rig.Settings.Current.AttentionChecksEnabled = true;            // in-window targets: the web view would cover them
         await rig.Open(strict: false);
         Assert.Null(MandatoryVideoOverlay.Instance.Browser);

@@ -1507,6 +1507,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _playingEngine = null;
                 _media = null;
                 _sink = null;
+                if (playback is BrowserPlayback page)
+                {
+                    // No native decoder to wedge: its views are UI controls, and the one browser session
+                    // must be free before a LibVLC replay (WPF FallbackToLibVlc, VideoService.Browser.cs:361).
+                    try { page.Stop(); } catch { }
+                    try { page.Dispose(); } catch { }
+                    playback = null;
+                }
                 if (playback != null)
                 {
                     var graph = (playback, player, owner, media, sink);
