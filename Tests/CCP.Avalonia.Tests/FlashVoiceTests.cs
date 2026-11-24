@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -189,6 +190,39 @@ public class FlashVoiceTests
             File.Delete(file);
         }
     });
+    [Theory]
+    [InlineData(0)] // decode fails
+    [InlineData(1)] // panic while decoding
+    [InlineData(2)] // decode succeeds
+    public Task DecodeFinishesBeforeVoiceAndPanicStopsIt(int phase) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var file = Path.GetTempFileName();
+        var (oldLead, oldPlay) = (FlashOverlay.VoiceLead, CoreAudio.PlayStoppableProvider);
+        var decode = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            var plays = 0;
+            FlashOverlay.VoiceLead = () => Task.CompletedTask;
+            CoreAudio.PlayStoppableProvider = (_, _, _, start, _) => { plays++; start!(TimeSpan.FromSeconds(2)); return () => { }; };
+            var s = new AppSettings { FlashAudioEnabled = true, MasterVolume = 100, AudioDuckingEnabled = false };
+            var generation = FlashOverlay.BeginBurst();
+            var pending = FlashOverlay.VoiceAfterLead(s, generation, file, prepare: () => decode.Task);
+            Assert.False(pending.IsCompleted);
+            if (phase == 1)
+                ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(x => x.Id == "flash").Stop(null);
+            decode.TrySetResult(phase != 0);
+            if (phase == 2) { Assert.Equal(2, await pending); Assert.Equal(1, plays); }
+            else { Assert.Null(await pending); Assert.Equal(0, plays); }
+        }
+        finally
+        {
+            decode.TrySetResult(false);
+            FlashOverlay.CloseAll(false);
+            (FlashOverlay.VoiceLead, CoreAudio.PlayStoppableProvider) = (oldLead, oldPlay);
+            File.Delete(file);
+        }
+    });
+
     [Fact]
     public async Task Playback_starts_without_probe_and_zero_length_does_not_block_presentation_or_stop()
     {
