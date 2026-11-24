@@ -116,3 +116,6 @@ public sealed record DareCreateOutcome(DareCreateStatus Status, string? Id = nul
 public enum DareOp { Accept, Pass, Cancel, Pay, StartLockdown, DidIt, Tick, Renounce }
 
 public enum DareActResult { Done, Gone, Banned, Limit, LockdownBusy, NeedsChaster, Refused, Off, TryLater, LockdownNeedsSub, Short }
+
+/// <summary>Where the check stands, for a line on a camera bet.</summary>
+public enum DareCameraState { Idle, Watching, HeldOff, Unavailable }
