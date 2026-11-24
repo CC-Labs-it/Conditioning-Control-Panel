@@ -203,6 +203,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             }
         }
 
+        // WPF BrowserService.cs:1463 applies the fit after a successful navigation.
+        internal void OnBrowserHeaderFitNavigation(WebHost host, Uri url, bool success)
+        {
+            if (success && ConditioningControlPanel.Services.Browser.BambiCloudHeaderFit.AppliesTo(url.AbsoluteUri))
+                _ = host.InvokeScriptAsync(ConditioningControlPanel.Services.Browser.BambiCloudHeaderFit.Script);
+        }
+
         /// <summary>WPF's <c>_browser.NavigationCompleted</c> handler (MainWindow.Browser.cs:132-160),
         /// minus the unported audio-sync service injection. Forwarded by
         /// SettingsTabView from its WebHost with the LIVE url, so a link clicked inside the page

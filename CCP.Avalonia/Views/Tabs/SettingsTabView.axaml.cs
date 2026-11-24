@@ -218,6 +218,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             RbHypnoTube.Click += BrowserSiteToggle_Click;
             BtnReloadBrowser.Click += BtnReloadBrowser_Click;
             BrowserWebHost.NavigationCompleted += url => Shell?.OnBrowserNavigationCompleted(url);
+            BrowserWebHost.NavigationFinished += (url, success) => Shell?.OnBrowserHeaderFitNavigation(BrowserWebHost, url, success);
             InitializeDashboardDecoration();
             BtnWebcamTracking.Click += BtnWebcamTracking_Click;
             BtnMuteBrowser.Click += BtnMuteBrowser_Click;
