@@ -14,3 +14,11 @@ test('the habitat replays real acquisitions and fate cards in run order, then th
   assert.deepEqual(rows.at(-2),['The last return','341 presses','832 Yes']);
   assert.deepEqual(rows.at(-1),['Spit in the Llama wormhole?','YES']);
 });
+
+test('the habitat board fills the brand tokens of item names (no raw {cur} on the Acquisitions board)',()=>{
+  const file={name:'Registry visitor',taps:3,total:9,herd:[]};
+  const rows=habitatReel({order:['start','fpsv']},file);
+  assert.equal(rows[1][0],'Acquisitions');
+  assert.equal(rows[1][1],'Fuzz per Second');
+  for(const row of rows)for(const cell of row)assert.doesNotMatch(String(cell),/[{}]/);
+});

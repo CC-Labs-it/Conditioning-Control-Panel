@@ -1,4 +1,5 @@
 import {Box3,Group,Matrix3,Vector3} from 'three';
+import {capFinish} from './cap-finish.js';
 
 const down=new Vector3(0,-1,0);
 const floorCaps=new Set(['press_main','press_stop','photo_release']);
@@ -74,7 +75,7 @@ export function createButtonTravel(ctx){
   }
   function press(caps,hit){
     const c=struckCap(caps,hit);
-    if(!c)return false;
+    if(!c||c.held)return false;
     if(time-c.start<.085){++c.merged;return false;}
     if(c.worldAxis.lengthSq()===0){
       const direction=hit?.face?.normal?.clone().applyNormalMatrix(new Matrix3().getNormalMatrix(hit.object.matrixWorld)).negate();
@@ -96,9 +97,27 @@ export function createButtonTravel(ctx){
       c.group.position.copy(c.axis).multiplyScalar(c.amount);
     }
   }
+  function lamp(c){c.finish||=capFinish(c.node);c.finish.set(c.lit!==false&&!c.held);}
+  // A cap whose press would do nothing right now has its lamp out.
+  function setLit(target,on){
+    on=!!on;
+    for(const c of shared.get(target)||[]){if((c.lit!==false)!==on){c.lit=on;lamp(c);}}
+  }
+  // A cap waiting on its own recorded line stays at the bottom of its stroke with its lamp out, then springs back.
+  function setHeld(target,on){
+    on=!!on;
+    for(const c of shared.get(target)||[]){
+      if(!!c.held===on)continue;
+      c.held=on;lamp(c);
+      if(c.worldAxis.lengthSq()===0)c.worldAxis.copy(down);
+      c.axis.copy(displacement(c,c.worldAxis));
+      if(on){moving.delete(c);c.amount=1;c.group.position.copy(c.axis);}
+      else{c.from=1;c.start=time-.13;moving.add(c);}
+    }
+  }
   function unmount(zone){
     for(const c of zones.get(zone)||[]){
-      moving.delete(c);all.delete(c.node);
+      moving.delete(c);all.delete(c.node);c.finish?.dispose();
       for(const name of [c.target].flat()){
         const list=shared.get(name)?.filter(other=>other!==c)||[];
         if(list.length)shared.set(name,list);else shared.delete(name);
@@ -108,7 +127,7 @@ export function createButtonTravel(ctx){
     zones.delete(zone);
   }
   function debug(){
-    return [...all.values()].map(c=>({node:c.node.name,zone:c.zone,target:c.target,depth:c.depth,amount:c.amount,
+    return [...all.values()].map(c=>({node:c.node.name,zone:c.zone,target:c.target,depth:c.depth,amount:c.amount,held:!!c.held,lit:c.lit!==false&&!c.held,shown:c.group.visible&&c.node.visible,
       travel:c.group.position.length(),pressed:c.presses,coalesced:c.merged,authored:c.explicit}));
   }
   function setAvailable(target,on){
@@ -118,8 +137,10 @@ export function createButtonTravel(ctx){
     const caps=resolve(mesh);
     return {
       roots:[...new Set([mesh,...caps.map(c=>c.node)])],
-      activate(hit){press(caps,hit);return action(hit);}
+      // An action that answers false did nothing, so its cap does not move: a dead press must not look like a press.
+      activate(hit){const result=action(hit);if(result!==false)press(caps,hit);return result;}
     };
   }
-  return {mount,unmount,resolve,press,bind,tick,debug,setAvailable};
+  function assemblyFor(node){return all.get(node)?.group??node;}
+  return {mount,unmount,resolve,press,bind,tick,debug,setAvailable,setHeld,setLit,assemblyFor};
 }

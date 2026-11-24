@@ -164,7 +164,8 @@ export function createProjector({group,id,scene,assetURL,lite,atlas}) {
       if(i!==undefined)uniforms.cell.value.set(i%8,Math.floor(i/8));
     }
     uniforms.hasProgram.value=rest||slide?1:0;
-    const closePrint=archive && !active && rest && distance<(key?7:5.5);
+    // A resting picture the atlas does not carry is drawn from its own slide file at any distance the slides load at.
+    const closePrint=archive && !active && rest && distance<(!uniforms.hasRest.value?13:key?7:5.5);
     if(slide&&active&&distance<13){image(slide);prime(following);}
     if(closePrint){image(rest);if(nextPromise)dropNext();}
     if(!active && !closePrint && key){

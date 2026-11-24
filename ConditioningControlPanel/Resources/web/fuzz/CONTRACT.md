@@ -26,6 +26,10 @@ this file disagree, this file wins until it is amended here first. Shape and hyg
 | `fuzz-ended` | `total, minutes, items, ending, route, dayUtc` | An ending happened (`ending` is its id, `route` the lanes picked). The host prices it (`SparklesClaim result.kind:'medal'`, one a day) and answers `sparkles-receipt`. |
 | `scrolller-niches` | `niches:[id]` | Ask for pictures for the feed panels (same wire as Glassroad CONTRACT 292-325). Ids are the eight theme niches `trance bimbo drone sissy goon chastity censored infection` (the Locked theme is sent as `chastity`): `[]` before Pick a Theme (the host's general hypno mix), `[theme]` after it, `[theme, second]` with a Second Theme. Sent again whenever that list changes (`fork`, `taste2`, a switch); a host serves only those niches' subs, an even mix for two, and treats an unknown id as the general mix. Sub index: handoff-1108/tc-scrolller-niches/index.json (cclabs-web `src/lib/tc-niches.ts`). |
 | `set-setting` | `key:'media.remoteConsent', value, ask:true` | Only from the player's own press on the consent card. |
+| `set-setting` | `key:'window.fullscreen', value: bool` | Section 3.3. The Options view's Full screen row, only to a host that sent `caps.window.fullscreen`. The host answers `setting` with what the window now is. |
+| `account` | | Section 3.3. The player pressed Account in Options: the host shows its own account page. Only to a host that sent `caps.account`. |
+| `own-media-list` | | Section 3.3. Once at start, only to a host that sent `caps.ownMedia.folder`: the files of the folder it remembers. Answered by `own-media`. |
+| `own-media-pick` | | Section 3.3. The player pressed the folder button: the host opens its own folder window. Answered by `own-media` with `asked:true`. |
 | `haptic` | `level, ms, tag?` | Optional toy pulse on crits and the Drop; hosts clamp. |
 | `open-url` | `url` | The player pressed a real link. The page only ever sends https on `cclabs.app`, `www.cclabs.app` or `app.cclabs.app` (any path) or exactly `https://discord.gg/YxVAMt4qaZ`, `https://neal.fun/` or `https://neal.fun/stimulation-clicker/` (the credit, `ui/links.js`), from inside a press; the page is untrusted, so the host checks the same rule and opens it in the system browser (the website: a new tab, `noopener`). Unhosted the page opens a new tab itself. |
 | `tab` | `title: string or null, icon?: 'sheet' or null` | A framed page cannot rename the browser tab: the Disguised Tab and the away titles ask the host to. `title` null = the host's own title; `icon` omitted = unchanged, null = the host's own icon, else a NAME from the host's fixed set (only `sheet`), never a URL. The host trims the title to 80 plain characters. The desktop host may ignore it (its window title is its own). |
@@ -40,7 +44,8 @@ this file disagree, this file wins until it is amended here first. Shape and hyg
 | `suspend` | `on, reason:'panic'\|'focus'\|'arcade'` | Level. On: stop audio and fx now, keep state. A `focus` suspend still pays per-second income as away time (ui/away.js); `panic` and `arcade` pay nothing, and panic wins over focus. |
 | `close` | `reason` | Answer `exit-done` within 300 ms; the host force-closes at 800 ms. |
 | `kept-escape` | | Escape the host kept: `host-escape.js` replays it as one keydown (pause card, never close). |
-| `setting` | `key, value` | A setting changed while open (`gentle`, `motion`, `media.remoteConsent`). |
+| `setting` | `key, value` | A setting changed while open (`gentle`, `motion`, `media.remoteConsent`, `window.fullscreen`). |
+| `own-media` | `v:1, path, rows:[{url, name, type, size, mtime, kind?}], asked?: bool, reason?` | Section 3.3. The player's own folder, served by the host. |
 
 ### 3.1 `init.caps`
 
@@ -55,6 +60,10 @@ caps: {
   platform: 'web' | 'desktop', // missing = web
   saveSlot: bool,              // section 6.3; the host keeps one save string for this account
   expo: { state: 'ready' | 'absent', base?: url, mb?: int },  // section 6.5; desktop and full only
+  window: { fullscreen: bool },  // section 3.3; the host's window can go full screen, and is or is not right now
+  account: bool,               // section 3.3; the host has an account page of its own (sign in, sign out)
+  ownMedia: { folder: bool, path?: string },  // section 3.3; the host keeps and serves the player's own folder
+  dev: bool,                   // the hidden dev console (ui/preview-bar-model.js): only a host that prices nothing sends it (the standalone program); never the website, never the CCP app
 }
 mod: 'default' | 'bambi' | 'sissy' | 'locked' | 'drone'
 ```
@@ -77,7 +86,9 @@ sections 1 and 2; only the transport differs (`bridge.js`, transport `web`):
   `event.origin === parentOrigin && event.source === parent`; objects or JSON strings. The host posts to the game's origin.
 - `caps.plan` (web host, the account's effective plan): `basic` and `prime` get no CCP ads (owner 2026-11-08); missing = free.
 - No `init` within 4 s = standalone (`hosted:false`, empty caps), so a broken embed never hangs the game.
-- `init`: `{protocol:1, lang, reduced, motion, gentle, mod, caps:{platform:'web', scrolller:{consent, clips:true}, plan?:'free'|'basic'|'prime'}, identity:{displayName}}`.
+- `init`: `{protocol:1, lang, reduced, motion, gentle, mod, caps:{platform:'web', edition:'small'|'full', scrolller:{consent, clips:true}, plan?:'free'|'basic'|'prime'}, identity?:{displayName}}`.
+  `edition` is `small` for a visitor without an account and for a free account, `full` for a signed-in subscriber
+  (Basic or Prime). `identity` is absent for a visitor without an account. The website sends no `caps.expo`.
   No `mediaOrigin`, no `origin:'device'`: `scrolller-feed` rows are remote Scrolller CDN urls (`https://*.scrolller.com/...`),
   shown as plain `<img>`/`<video>` with "via Scrolller", never fetched, cached or saved by the page. About one row in three is
   a clip, `{url, kind:'video', mime:'video/mp4'}` (one mp4 rendition, short side at most 720, served from Scrolller's rotating
@@ -88,6 +99,27 @@ sections 1 and 2; only the transport differs (`bridge.js`, transport `web`):
   localStorage, so a standalone player who signs in on the site keeps their run.
 - Standalone, the picture card's first choice is "Sign in with your CC Labs account": a real press sends the same tab to
   `https://app.cclabs.app/tc`.
+
+### 3.3 The window and the player's own folder (Options, owner 2026-11-23)
+
+The pause card has an Options view (`ui/options.js`): Mute, Gentle visuals, Full screen, the pictures row, the folder
+row and the Expo's camera options. Two of its rows need the host. A host that sends neither capability gets neither
+row; the unframed page uses the browser's own full screen instead.
+
+- **Account.** A host with `caps.account` gets a row naming who is signed in (`identity.displayName`) and an Account
+  button; the press sends `account` and the host shows its own page. The game holds no token and signs nobody out.
+- **Full screen.** `caps.window.fullscreen` is the window's state at start. The row sends `set-setting` with key
+  `window.fullscreen`; the host changes the window and answers `setting` with the same key and the state the window
+  really has. A host whose window changes by another way (a key, a menu) sends the same `setting`.
+- **The folder.** A browser forgets the player's own files on reload. A host with `caps.ownMedia.folder` keeps a
+  folder instead: it opens its own folder window on `own-media-pick`, remembers the pick, and serves the files from the
+  page's own origin. `own-media` carries `path` (shown to the player as it is) and up to 3000 `rows`:
+  `url` (same origin as the page, anything else is dropped), `name`, `type` (a MIME type), `size`, `mtime`, and
+  `kind` (`picture`, `gif` or `clip`) when the host has read the file's header itself (the rule of
+  `ui/local-image-motion.js`); without `kind` the page reads the header by range. `asked:true` marks the answer to
+  a pick: only that one switches the source to the player's files. A pick the player closed answers `rows:[]`,
+  `reason:'cancelled'`. The page asks `own-media-list` once at start for the remembered folder. Nothing is uploaded:
+  the files never leave the device.
 
 ## 4. Safety
 
@@ -121,7 +153,7 @@ ONE reader of the host's choice. Plan and lanes: `handoff-1122/TC-EDITIONS-PLAN.
 
 | | small | full |
 |---|---|---|
-| Where | the website, phones, free accounts everywhere | the CCP desktop app and the standalone, for any subscriber |
+| Where | the website without an account, phones, free accounts everywhere | the CCP desktop app, the standalone and the website, for any subscriber |
 | Rows | 260 of 316 (`SMALL_CUT` is never offered) | all |
 | Renewal | none, for anyone: the ending leads to New run | Sky, Depth, Stardust |
 | Llama Expo | never; the pen and the hunt stay | opens once its files are on the PC (6.5) |
@@ -130,11 +162,13 @@ ONE reader of the host's choice. Plan and lanes: `handoff-1122/TC-EDITIONS-PLAN.
 ### 6.1 Who decides
 
 - `init.caps.edition`: `'small'` or `'full'`. Missing, unknown, or no host at all = small. The page is untrusted: a host
-  says full only for an account it has checked (any subscriber, Basic or Prime). The website always says small.
+  says full only for an account it has checked (any subscriber, Basic or Prime). The website says small for a visitor
+  without an account and for a free account, full for a signed-in subscriber; it sends no `caps.expo`, and no
+  `identity` for a visitor without an account.
 - A page on 127.0.0.1 or localhost with no host is the whole game, so dev drives and the Expo preview keep working;
   `?edition=small` or `?edition=full` wins over everything there and is ignored everywhere else.
 - `init.caps.platform`: `'web'` or `'desktop'` (missing = web). It picks the nudge and the seal rule.
-- The seal until 22 December (`ui/seal.js`, owner 2026-11-22): on the website only Prime plays, as before. In the
+- The seal until 22 December (`ui/seal.js`, owner 2026-11-22): the website is never sealed (owner 2026-11-24). In the
   desktop app the edition decides: full (any subscriber) plays now, small (a free account) sees the sealed notice
   until the anniversary, worded for subscribers, with one button that sends `nudge {where:'locked-tile', want:'upgrade'}`.
   The host needs no date check. A sealed page still answers the host's `close` with `exit-done`.

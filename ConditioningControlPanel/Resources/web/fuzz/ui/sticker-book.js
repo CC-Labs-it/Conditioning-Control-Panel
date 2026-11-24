@@ -128,13 +128,13 @@ export function mountStickerBook({ doc, engine, gentle = () => false }) {
     door.hidden = !(engine.run.owned.depth || Object.keys(engine.life.stickers || {}).length);
   };
   engine.subscribe('pause', () => { showDoor(); if (book && book.mode !== 'pause') book.hide(); });
-  doc.addEventListener(BOOK_EVENT, () => { if (!engine.suspended) open('recap'); });
+  doc.addEventListener(BOOK_EVENT, (e) => { if (!engine.suspended) open('recap', e?.detail?.page); });   // detail.page: the main menu's Endings row
   engine.subscribe('resume', () => { if (book?.mode === 'pause') book.hide(); });
   engine.subscribe('suspend', ({ on }) => { if (on) book?.hide(); });
   engine.subscribe('ending', () => book?.hide());
   engine.subscribe('sticker-book', () => { if (!engine.paused && !engine.suspended && !engine.run.ended) open('play'); });
 
-  async function open(mode) {
+  async function open(mode, page = null) {
     if (!book) {
       let stars = [];
       try {
@@ -143,7 +143,7 @@ export function mountStickerBook({ doc, engine, gentle = () => false }) {
       } catch { /* a missing star is an empty slot, never an error */ }
       book = buildBook(doc, engine, stars, gentle);
     }
-    book.show(mode);
+    book.show(mode, page);
   }
   return { open, close: () => book?.hide(), get shown() { return !!book?.shown; } };
 }
@@ -301,7 +301,7 @@ function buildBook(doc, engine, stars, gentle) {
 
   /* Shine once on stickers that arrived since the book was last open. */
   let lastSeen = null;
-  function show(m) {
+  function show(m, page = null) {
     mode = m;
     const now = thisRun();
     const ids = Object.keys(engine.life.stickers || {});
@@ -311,6 +311,7 @@ function buildBook(doc, engine, stars, gentle) {
       const first = STICKERS.find((s) => fresh.has(s.id));
       if (first) { pageId = first.page; sel = first.id; }
     }
+    if (page && STICKER_PAGES.some((p) => p.id === page)) { pageId = page; sel = null; }
     shown = true;
     back.hidden = false;
     card.hidden = doc.defaultView?.innerWidth <= 760;

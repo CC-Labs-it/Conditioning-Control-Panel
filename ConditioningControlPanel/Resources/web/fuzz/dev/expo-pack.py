@@ -26,6 +26,11 @@ def collect(radio):
     files = {path.relative_to(ASSETS).as_posix(): path for path in ASSETS.rglob("*")
              if path.is_file() and path.name != ".gitignore"}
     files.update(tracks)
+    for name, path in files.items():
+        if path.stat().st_size < 1024:
+            with path.open("rb") as source:
+                if source.readline().rstrip() == b"version https://git-lfs.github.com/spec/v1":
+                    raise ValueError(f"Missing Git LFS content for {name}. Restore it before packing.")
     return sorted(files.items())
 
 

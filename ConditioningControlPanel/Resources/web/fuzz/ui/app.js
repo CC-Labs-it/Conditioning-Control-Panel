@@ -41,6 +41,8 @@ import { mountStickerBook } from './sticker-book.js';
 import { mountRenewalMenu } from './renewal-menu.js';
 import { createStage } from './stage.js';
 import { isPhone, tickerMs } from './phone.js';
+import { mountOptions } from './options.js';
+import { expoAllowed } from './edition.js';
 
 export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   const $ = (id) => doc.getElementById(id);
@@ -378,10 +380,15 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   /* ---- pause card ---- */
   let wakeGate = null;   // the intro: Wake Up and Escape have nothing to stop yet, and say so
   let audioControls;
+  let options = null;   // the Options view (ui/options.js)
+  let toMenu = null;    // hooks.mainMenu: the way back to the main menu, where the build has one
+  /* `host`: true for the host's own pause, 'key' for Escape. Both open the card during the intro too (owner
+     2026-11-23: Options are there from the first screen); the Wake Up button keeps its line there. */
   function pause(host) {
     audioControls.close();
-    if (wakeGate && host !== true) { wakeGate(); return; }
+    if (wakeGate && host !== true && host !== 'key') { wakeGate(); return; }
     if (engine.paused) { el.resume.focus(); return; }
+    options?.close();
     shop?.closeTip();
     engine.setPaused(true);
     el.pause.hidden = false;
@@ -394,11 +401,13 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   }
   function drawPictureRow() {
     $('pics-now').textContent = pictureRow(engine.pictures);
-    $('pics-change').hidden = !!wakeGate;
     $('new-run').hidden = !!wakeGate;   // the intro: no run to start over yet
+    $('to-menu').hidden = !toMenu || !!wakeGate;
+    options?.refresh();
   }
   function resume() {
     if (engine.suspended) return;
+    options?.close();
     el.pause.hidden = true;
     engine.setPaused(false);
   }
@@ -411,6 +420,8 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     el.resume.addEventListener('click', resume);
     $('pics-change').addEventListener('click', () => { if (!engine.suspended) hooks.changePictures?.(drawPictureRow); });
     audioControls = bindAudioControls(doc, audio, extras, () => engine.save());
+    options = mountOptions({ doc, win, caps: init?.caps || {}, hosted: !!engine.host?.isHosted, send: (t, f) => engine.host?.send?.(t, f),
+      on: (t, fn) => engine.host?.on?.(t, fn), pictures: engine.pictures, expo: expoAllowed(), identity: init?.identity || null, onChange: () => { if (!el.pause.hidden) drawPictureRow(); } });
     if (audio?.mixer) bindDockVolume({ doc, strip: $('dock-strip'), mixer: audio.mixer, avoid: () => $('game-controls')?.getBoundingClientRect?.() || null });
     el.gentle.checked = gentleOn;
     el.gentle.addEventListener('change', () => { gentleOn = el.gentle.checked; extras.gentle = gentleOn; applyGentle(); engine.save(); });
@@ -419,7 +430,8 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       e.preventDefault();
       if (engine.paused && audioControls.close()) return;
       if (hooks.escapeTaken?.()) return;
-      if (engine.paused) resume(); else pause();
+      if (engine.paused && options?.close()) return;   // Escape in Options: back to the card
+      if (engine.paused) resume(); else pause('key');
     });
     const forget = $('forget');
     forget.addEventListener('click', () => {
@@ -444,6 +456,9 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       el.saveBox.hidden = false; el.saveBox.readOnly = false; el.saveBox.value = ''; el.saveBox.focus();
       inBtn.textContent = 'Load it';
     });
+    /* Main menu: the run is saved and the page starts over, which is where the menu lives. */
+    toMenu = hooks.mainMenu || null;
+    $('to-menu').addEventListener('click', () => { if (!engine.suspended) toMenu?.(); });
     if (hooks.leave) { const l = $('leave'); l.hidden = false; l.addEventListener('click', hooks.leave); }
     /* Credits: the same link rule as ctx.openLink (real press, hosted = open-url frame, unhosted = new tab). */
     for (const b of el.pause.querySelectorAll('[data-credit]')) {
@@ -592,6 +607,9 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
     credits: null,
     stage: null,
     pause, resume,
+    /** The Options view: its folder pick for the pictures card, and a way straight in for a menu. */
+    get options() { return options; },
+    openOptions() { pause('key'); if (engine.paused && !el.pause.hidden) options?.open(); },
     setInit(f) { if (f.gentle !== undefined) initGentle = !!f.gentle; if (f.reduced !== undefined) initReduced = !!f.reduced; applyGentle(); },
 
     attach(eng, hooks) {

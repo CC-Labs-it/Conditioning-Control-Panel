@@ -34,6 +34,21 @@ function installation(gentle=false){
   return {doors,state,approach,wait,ray,sounds,walker,camera,scene};
 }
 
+test('the staff door jamb has one visible face on each hinge strip',()=>{
+  const {doors,scene}=installation();
+  scene.updateMatrixWorld(true);
+  const root=scene.getObjectByName('swing_staff-entrance');
+  const backing=root.children[0], liner=scene.getObjectByName('threshold_liner_staff-entrance');
+  for(const side of [-1,1])for(const along of [-.94,.94]){
+    const origin=root.localToWorld(new Vector3(along,.63,side*.85));
+    const direction=new Vector3(0,0,-side).transformDirection(root.matrixWorld);
+    const hits=new Raycaster(origin,direction).intersectObjects([liner,backing],true);
+    assert.equal(hits.length,1);
+    assert.equal(hits[0].object,liner);
+  }
+  doors.dispose();
+});
+
 test('the unloaded staff passage stays physically shut until its counterpart arrives',()=>{
   const {doors,state,approach,wait,ray,walker}=installation();
   approach(10);wait(2);

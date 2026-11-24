@@ -272,6 +272,7 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     /* The whole offer feeds the shelf, so a small window never splits the seeds (classic shop: equal prices sort by ITEMS). */
     const win = fateShelf(raw, picked, picked ? raw : offered(99), SEEDS);
     drawShelf(win.seeds, picked);
+    drawLocked(win.seeds);
 
     if (goalRow?.item !== win.goal) { goalRow?.el.remove(); goalRow = null; }
     if (win.goal && !goalRow) { goalRow = makeRow(win.goal, true); goalEl.appendChild(goalRow.el); }
@@ -354,6 +355,47 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     syncShelf(seeds.length);
   }
 
+  /* ---- locked seeds (small edition, ui/shop-locked.js): cards another module makes, kept after the open seeds while the
+   * shelf shows seeds, gone with them when a seed is picked. Never engine rows: no id in dataset, no price, no tip. ---- */
+  let lockedFor = null;
+  const lockedEls = new Map();
+  function lockedIn(el, i) {
+    if (!el.animate) return;
+    const delay = 120 + i * STAMP_STAGGER_MS;
+    if (moving()) el.animate([{ opacity: 0, translate: '0 12px', rotate: '4deg' }, { opacity: 1, translate: '0 -2px', rotate: '-1deg', offset: .7 }, { opacity: 1, translate: '0 0', rotate: '0deg' }],
+      { duration: 320, delay, easing: 'ease-out', fill: 'backwards' });
+    else el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300, delay, easing: 'linear', fill: 'backwards' });   // Gentle and reduced motion: a plain fade
+  }
+  function lockedOut(el, k) {
+    const win = doc.defaultView;
+    leaving += 1;
+    el.style.pointerEvents = 'none';
+    el.tabIndex = -1;
+    el.setAttribute('aria-hidden', 'true');
+    let gone = false;
+    const done = () => { if (gone) return; gone = true; el.remove(); leaving = Math.max(0, leaving - 1); syncShelf(); };
+    const delay = k * STAMP_STAGGER_MS, dur = STAMP_MS * .6;
+    if (el.animate) {
+      const kf = moving() ? [{ opacity: 1, translate: '0 0', rotate: '0deg' }, { opacity: 0, translate: '0 10px', rotate: '5deg' }] : [{ opacity: 1 }, { opacity: 0 }];
+      el.animate(kf, { duration: dur, delay, easing: 'ease-in', fill: 'forwards' }).onfinish = done;
+    }
+    win.setTimeout(done, delay + dur + 300);
+  }
+  function drawLocked(seeds) {
+    const open = new Set(seeds.map((it) => it.id)), openSeeds = seeds.length;
+    /* a set whose seed the sim still offers is never shown twice: the open card wins */
+    const list = openSeeds && lockedFor ? (lockedFor(engine.run) || []).filter((x) => !open.has(x.seed)) : [];
+    const want = new Set(list.map((x) => x.id));
+    let k = 0;
+    for (const [id, el] of lockedEls) if (!want.has(id)) { lockedEls.delete(id); lockedOut(el, k++); }
+    list.forEach((x, i) => {
+      let el = lockedEls.get(x.id);
+      if (!el) { el = x.make(); lockedEls.set(x.id, el); lockedIn(el, i); }
+      const at = shelfCards.children[openSeeds + i];
+      if (at !== el) shelfCards.insertBefore(el, at || null);
+    });
+  }
+
   /** Buyable tiles that stay unbought hop again every 6 to 8 seconds, at most one tile per NUDGE_GAP_MS. */
   function nudge() {
     const colour = (engine.run.owned.colour && engine.switches.isOn('colour')) || engine.run.picks?.f5;
@@ -390,7 +432,7 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     r.el.classList.add('no');
   }
 
-  function flush() { tip.hide(); nextKey = ''; nextEl.replaceChildren(nextLabel); nextEl.hidden = true; goalRow?.el.remove(); goalRow = null; for (const r of rows.values()) r.el.remove(); rows.clear(); seedRows.clear(); shelfCards.replaceChildren(); leaving = 0; shelfEl.hidden = true; }
+  function flush() { tip.hide(); nextKey = ''; nextEl.replaceChildren(nextLabel); nextEl.hidden = true; goalRow?.el.remove(); goalRow = null; for (const r of rows.values()) r.el.remove(); rows.clear(); seedRows.clear(); lockedEls.clear(); shelfCards.replaceChildren(); leaving = 0; shelfEl.hidden = true; }
 
   shopDoor = {
     /** True when the shop would sell this row right now: open, on a tile or waiting behind them, and usable here. */
@@ -410,6 +452,8 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
       keepEnds();
     },
     /** The small edition's locked tile: kept last in the grid, never an engine row. null takes it away. */
+    /** The small edition's locked seeds: fn(run) -> [{ id, make() -> element }], drawn after the open seeds. null: none. */
+    lockedSeeds(fn) { lockedFor = typeof fn === 'function' ? fn : null; },
     tail(el) {
       if (tailEl !== el) { tailEl?.remove(); tailEl = el || null; }
       keepEnds();

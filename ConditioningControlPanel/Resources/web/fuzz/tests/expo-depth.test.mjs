@@ -46,6 +46,14 @@ test('leaving records the actual visit and reentry starts a new visit without tr
   assert.equal(dome.phase, 0);
 });
 
+test('closing the door restores the white room for the next visitor and preserves the last visit time', () => {
+  const dome=createDepth();
+  dome.step(210,true);dome.closeDoor();assert.equal(dome.depth,1);
+  dome.step(.1,false);assert.ok(dome.depth>.99);
+  dome.closeDoor();assert.equal(dome.depth,0);assert.equal(dome.lastVisitSeconds,210);
+  dome.step(.1,true);assert.equal(dome.phase,0);
+});
+
 test('invalid or negative frame durations never advance or poison dome depth', () => {
   const dome = createDepth();
   dome.step(50, true);
