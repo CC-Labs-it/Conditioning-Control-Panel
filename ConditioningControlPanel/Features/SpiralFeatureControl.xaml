@@ -234,43 +234,9 @@
                      (Features/SpiralFeatureControl.Pool.cs). Opacity and monitor above still drive
                      the pool, so neither is repeated. -->
                 <ctl:SuperBox x:Name="SuperBoxMain" Effect="Vortex">
-                  <StackPanel x:Name="PoolRows" Visibility="Collapsed" rows:RowHue.Hue="#FFE08A">
+                  <StackPanel x:Name="PoolRows" Visibility="Collapsed" rows:RowHue.Hue="#FFE08A"
+                              Loaded="PoolSpiralRow_Loaded" Unloaded="PoolSpiralRow_Unloaded">
                     <Border Height="1" Background="#33FFE08A" Margin="0,2,0,6"/>
-                    <!-- Always new Loom spirals, or one saved Loom spiral to hold. -->
-                    <Grid x:Name="PoolSpiralRow" Style="{StaticResource OptionRow}" Background="Transparent"
-                          Loaded="PoolSpiralRow_Loaded" Unloaded="PoolSpiralRow_Unloaded"
-                          ToolTip="{loc:Str tooltip_super_pool_spiral}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <rows:RowLabel Grid.Column="0" Text="{loc:Str super_pool_spiral}" Emblem="Spiral"/>
-                        <ComboBox Grid.Column="1" x:Name="CmbPoolSpiral" feat:OptionSection.Setting="WhirlpoolSpiral" Width="180" VerticalAlignment="Center"
-                                  Style="{DynamicResource DarkComboBoxStyle}"
-                                  SelectionChanged="CmbPoolSpiral_Changed"/>
-                    </Grid>
-                    <!-- How long each spiral holds before it melts into the next. Dims while one is held. -->
-                    <Grid x:Name="PoolEveryRow" Style="{StaticResource OptionRow}" Background="Transparent"
-                          ToolTip="{loc:Str tooltip_super_pool_every}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto" MinWidth="56"/>
-                        </Grid.ColumnDefinitions>
-                        <rows:RowLabel Grid.Column="0" Text="{loc:Str super_pool_every}" Emblem="Often">
-                            <rows:RowLabel.Value>
-                                <!-- A bigger number is LESS often: the period form of the fraction. -->
-                                <MultiBinding Converter="{x:Static rows:RowFraction.Inverse}">
-                                    <Binding Path="Value" ElementName="SliderPoolEvery"/>
-                                    <Binding Path="Maximum" ElementName="SliderPoolEvery"/>
-                                    <Binding Path="Minimum" ElementName="SliderPoolEvery"/>
-                                </MultiBinding>
-                            </rows:RowLabel.Value>
-                        </rows:RowLabel>
-                        <Slider Grid.Column="1" x:Name="SliderPoolEvery" feat:OptionSection.Setting="WhirlpoolNewEvery" Minimum="8" Maximum="60" Value="18"
-                                VerticalAlignment="Center" Margin="14,0" ValueChanged="SliderPoolEvery_Changed"/>
-                        <rows:RowValue Grid.Column="2" x:Name="TxtPoolEvery" Text="18 s"/>
-                    </Grid>
                     <!-- The pool's largest size, percent of the stock reach. -->
                     <Grid x:Name="PoolSizeRow" Style="{StaticResource OptionRow}" Background="Transparent"
                           ToolTip="{loc:Str tooltip_super_pool_size}">
@@ -283,6 +249,19 @@
                         <Slider Grid.Column="1" x:Name="SliderPoolSize" feat:OptionSection.Setting="WhirlpoolSize" Minimum="50" Maximum="150" Value="100"
                                 VerticalAlignment="Center" Margin="14,0" ValueChanged="SliderPoolSize_Changed"/>
                         <rows:RowValue Grid.Column="2" x:Name="TxtPoolSize" Text="100%"/>
+                    </Grid>
+                    <!-- Smallest size (ccp-bugs #1719): the pool never shrinks below this. 0 = as shipped, it can vanish. -->
+                    <Grid x:Name="PoolSmallestRow" Style="{StaticResource OptionRow}" Background="Transparent"
+                          ToolTip="{loc:Str tooltip_super_pool_smallest}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto" MinWidth="56"/>
+                        </Grid.ColumnDefinitions>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str super_pool_smallest}" Emblem="Big"/>
+                        <Slider Grid.Column="1" x:Name="SliderPoolSmallest" feat:OptionSection.Setting="WhirlpoolSmallest" Minimum="0" Maximum="50" Value="0"
+                                VerticalAlignment="Center" Margin="14,0" ValueChanged="SliderPoolSmallest_Changed"/>
+                        <rows:RowValue Grid.Column="2" x:Name="TxtPoolSmallest" Text="0%"/>
                     </Grid>
                     <!-- Stay centred: the pool keeps to the middle of the screen at full size. -->
                     <Grid x:Name="PoolCentredRow" Style="{StaticResource OptionRow}" Background="Transparent"
@@ -297,54 +276,108 @@
                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                   Checked="ChkPoolCentred_Changed" Unchecked="ChkPoolCentred_Changed"/>
                     </Grid>
-                    <!-- Moving effects pop: one setting, also in the Scrawl box. Off = the pool pulls but never eats. -->
-                    <Grid x:Name="PoolPopsRow" Style="{StaticResource OptionRow}" Background="Transparent"
-                          ToolTip="{loc:Str tooltip_super_moving_pops}">
+                    <!-- Restless pool (ccp-bugs #1707): grows while the mouse moves or clicks, calms at rest. -->
+                    <Grid x:Name="PoolRestlessRow" Style="{StaticResource OptionRow}" Background="Transparent"
+                          ToolTip="{loc:Str tooltip_super_pool_restless}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <rows:RowLabel Grid.Column="0" Text="{loc:Str super_moving_pops}" Emblem="Reacts"
-                                       IsOn="{Binding IsChecked, ElementName=ChkPoolPops}" Margin="0,0,12,0"/>
-                        <CheckBox Grid.Column="1" x:Name="ChkPoolPops" feat:OptionSection.Setting="MovingEffectsPop"
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str super_pool_restless}" Emblem="Reacts"
+                                       IsOn="{Binding IsChecked, ElementName=ChkPoolRestless}" Margin="0,0,12,0"/>
+                        <CheckBox Grid.Column="1" x:Name="ChkPoolRestless" feat:OptionSection.Setting="WhirlpoolRestless"
                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
-                                  Checked="ChkPoolPops_Changed" Unchecked="ChkPoolPops_Changed"/>
+                                  Checked="ChkPoolRestless_Changed" Unchecked="ChkPoolRestless_Changed"/>
                     </Grid>
-                    <!-- What the pool drags in: four switches, all on by default (words: owner 2026-11-18).
-                         Readable Rows: each switch wears its effect's picture, so the four no longer fit on
-                         the title's line; they wrap under it. -->
-                    <StackPanel x:Name="PoolDragsRow" Background="Transparent"
-                                ToolTip="{loc:Str tooltip_super_pool_drags}">
-                        <Grid Style="{StaticResource OptionRow}">
-                            <rows:RowLabel Text="{loc:Str super_pool_drags}" Emblem="Reacts"/>
+                    <!-- Owner 2026-11-22 (gold box rule, 2 to 5 rows): the four rows players tune most stay on show,
+                         the rest fold behind "More options". The fold opens on its own when a row inside is off its
+                         default (SpiralFeatureControl.Pool.cs). -->
+                    <feat:MoreFold x:Name="FoldPoolMore">
+                      <StackPanel>
+                        <!-- Always new Loom spirals, or one saved Loom spiral to hold. -->
+                        <Grid x:Name="PoolSpiralRow" Style="{StaticResource OptionRow}" Background="Transparent"
+                              ToolTip="{loc:Str tooltip_super_pool_spiral}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <rows:RowLabel Grid.Column="0" Text="{loc:Str super_pool_spiral}" Emblem="Spiral"/>
+                            <ComboBox Grid.Column="1" x:Name="CmbPoolSpiral" feat:OptionSection.Setting="WhirlpoolSpiral" Width="180" VerticalAlignment="Center"
+                                      Style="{DynamicResource DarkComboBoxStyle}"
+                                      SelectionChanged="CmbPoolSpiral_Changed"/>
                         </Grid>
-                        <WrapPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <StackPanel Orientation="Horizontal" Margin="0,4,22,4">
-                                <rows:RowLabel Text="{loc:Str super_pool_drags_fog}" Emblem="Fog" Margin="0,0,8,0"
-                                               IsOn="{Binding IsChecked, ElementName=ChkPoolDragsFog}"/>
-                                <CheckBox x:Name="ChkPoolDragsFog" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
-                                          Checked="ChkPoolDrags_Changed" Unchecked="ChkPoolDrags_Changed"/>
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,4,22,4">
-                                <rows:RowLabel Text="{loc:Str super_pool_drags_pictures}" Emblem="Many" Subject="Image" Margin="0,0,8,0"
-                                               IsOn="{Binding IsChecked, ElementName=ChkPoolDragsPictures}"/>
-                                <CheckBox x:Name="ChkPoolDragsPictures" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
-                                          Checked="ChkPoolDrags_Changed" Unchecked="ChkPoolDrags_Changed"/>
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,4,22,4">
-                                <rows:RowLabel Text="{loc:Str super_pool_drags_bubbles}" Emblem="Many" Subject="Bubble" Margin="0,0,8,0"
-                                               IsOn="{Binding IsChecked, ElementName=ChkPoolDragsBubbles}"/>
-                                <CheckBox x:Name="ChkPoolDragsBubbles" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
-                                          Checked="ChkPoolDrags_Changed" Unchecked="ChkPoolDrags_Changed"/>
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,4,22,4">
-                                <rows:RowLabel Text="{loc:Str super_pool_drags_words}" Emblem="Words" Margin="0,0,8,0"
-                                               IsOn="{Binding IsChecked, ElementName=ChkPoolDragsWords}"/>
-                                <CheckBox x:Name="ChkPoolDragsWords" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
-                                          Checked="ChkPoolDrags_Changed" Unchecked="ChkPoolDrags_Changed"/>
-                            </StackPanel>
-                        </WrapPanel>
-                    </StackPanel>
+                        <!-- How long each spiral holds before it melts into the next. Dims while one is held. -->
+                        <Grid x:Name="PoolEveryRow" Style="{StaticResource OptionRow}" Background="Transparent"
+                              ToolTip="{loc:Str tooltip_super_pool_every}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto" MinWidth="56"/>
+                            </Grid.ColumnDefinitions>
+                            <rows:RowLabel Grid.Column="0" Text="{loc:Str super_pool_every}" Emblem="Often">
+                                <rows:RowLabel.Value>
+                                    <!-- A bigger number is LESS often: the period form of the fraction. -->
+                                    <MultiBinding Converter="{x:Static rows:RowFraction.Inverse}">
+                                        <Binding Path="Value" ElementName="SliderPoolEvery"/>
+                                        <Binding Path="Maximum" ElementName="SliderPoolEvery"/>
+                                        <Binding Path="Minimum" ElementName="SliderPoolEvery"/>
+                                    </MultiBinding>
+                                </rows:RowLabel.Value>
+                            </rows:RowLabel>
+                            <Slider Grid.Column="1" x:Name="SliderPoolEvery" feat:OptionSection.Setting="WhirlpoolNewEvery" Minimum="8" Maximum="60" Value="18"
+                                    VerticalAlignment="Center" Margin="14,0" ValueChanged="SliderPoolEvery_Changed"/>
+                            <rows:RowValue Grid.Column="2" x:Name="TxtPoolEvery" Text="18 s"/>
+                        </Grid>
+                        <!-- Moving effects pop: one setting, also in the Scrawl box. Off = the pool pulls but never eats. -->
+                        <Grid x:Name="PoolPopsRow" Style="{StaticResource OptionRow}" Background="Transparent"
+                              ToolTip="{loc:Str tooltip_super_moving_pops}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <rows:RowLabel Grid.Column="0" Text="{loc:Str super_moving_pops}" Emblem="Reacts"
+                                           IsOn="{Binding IsChecked, ElementName=ChkPoolPops}" Margin="0,0,12,0"/>
+                            <CheckBox Grid.Column="1" x:Name="ChkPoolPops" feat:OptionSection.Setting="MovingEffectsPop"
+                                      Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                      Checked="ChkPoolPops_Changed" Unchecked="ChkPoolPops_Changed"/>
+                        </Grid>
+                        <!-- What the pool drags in: four switches, all on by default (words: owner 2026-11-18).
+                             Readable Rows: each switch wears its effect's picture, so the four no longer fit on
+                             the title's line; they wrap under it. -->
+                        <StackPanel x:Name="PoolDragsRow" Background="Transparent"
+                                    ToolTip="{loc:Str tooltip_super_pool_drags}">
+                            <Grid Style="{StaticResource OptionRow}">
+                                <rows:RowLabel Text="{loc:Str super_pool_drags}" Emblem="Reacts"/>
+                            </Grid>
+                            <WrapPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <StackPanel Orientation="Horizontal" Margin="0,4,22,4">
+                                    <rows:RowLabel Text="{loc:Str super_pool_drags_fog}" Emblem="Fog" Margin="0,0,8,0"
+                                                   IsOn="{Binding IsChecked, ElementName=ChkPoolDragsFog}"/>
+                                    <CheckBox x:Name="ChkPoolDragsFog" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                              Checked="ChkPoolDrags_Changed" Unchecked="ChkPoolDrags_Changed"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,4,22,4">
+                                    <rows:RowLabel Text="{loc:Str super_pool_drags_pictures}" Emblem="Many" Subject="Image" Margin="0,0,8,0"
+                                                   IsOn="{Binding IsChecked, ElementName=ChkPoolDragsPictures}"/>
+                                    <CheckBox x:Name="ChkPoolDragsPictures" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                              Checked="ChkPoolDrags_Changed" Unchecked="ChkPoolDrags_Changed"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,4,22,4">
+                                    <rows:RowLabel Text="{loc:Str super_pool_drags_bubbles}" Emblem="Many" Subject="Bubble" Margin="0,0,8,0"
+                                                   IsOn="{Binding IsChecked, ElementName=ChkPoolDragsBubbles}"/>
+                                    <CheckBox x:Name="ChkPoolDragsBubbles" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                              Checked="ChkPoolDrags_Changed" Unchecked="ChkPoolDrags_Changed"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,4,22,4">
+                                    <rows:RowLabel Text="{loc:Str super_pool_drags_words}" Emblem="Words" Margin="0,0,8,0"
+                                                   IsOn="{Binding IsChecked, ElementName=ChkPoolDragsWords}"/>
+                                    <CheckBox x:Name="ChkPoolDragsWords" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                              Checked="ChkPoolDrags_Changed" Unchecked="ChkPoolDrags_Changed"/>
+                                </StackPanel>
+                            </WrapPanel>
+                        </StackPanel>
+                      </StackPanel>
+                    </feat:MoreFold>
                   </StackPanel>
                 </ctl:SuperBox>
             </StackPanel>

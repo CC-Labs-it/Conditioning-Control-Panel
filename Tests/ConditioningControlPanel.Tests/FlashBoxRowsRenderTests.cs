@@ -74,7 +74,14 @@ public class FlashBoxRowsRenderTests
 
             // Sliders inside a section fill in its hue on this page; the gold Deck box's fill in its gold.
             Assert.Equal(studio, ((SolidColorBrush)RowHue.GetSliderFill(page.SliderFrequency)!).Color);
-            Assert.Equal(Color.FromRgb(0xFF, 0xE0, 0x8A), ((SolidColorBrush)RowHue.GetSliderFill(page.SliderDeckFlips)!).Color);
+            // 7.4 round (#5581): Deck flips are two sliders, Fewest and Most; both wear the rows look.
+            var gold = Color.FromRgb(0xFF, 0xE0, 0x8A);
+            Assert.Equal(gold, ((SolidColorBrush)RowHue.GetSliderFill(page.SliderDeckFewest)!).Color);
+            Assert.Equal(gold, ((SolidColorBrush)RowHue.GetSliderFill(page.SliderDeckMost)!).Color);
+            Assert.Equal(2, labels.Count(l => l.Emblem == EmblemKind.Flip));
+            Assert.All(labels.Where(l => l.Emblem == EmblemKind.Flip), l => Assert.Equal(gold, l.EffectiveHue));
+            Assert.IsType<RowValue>(page.TxtDeckFewest);
+            Assert.IsType<RowValue>(page.TxtDeckMost);
 
             // The Deck rows still dim and lock as a block, RowLabels and all.
             Assert.True(page.DeckRows.Opacity is 1 or SuperRows.LockedOpacity);

@@ -155,6 +155,7 @@ namespace ConditioningControlPanel
                 ToolTip = "Save every original text as a .txt file for modders",
             };
             if (buttonStyle != null) export.Style = buttonStyle;
+            Services.ModCreatorEditSignal.MarkPassive(export);
             export.Click += (_, _) => onExport();
             Grid.SetColumn(export, 1);
             bar.Children.Add(export);

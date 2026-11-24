@@ -49,7 +49,7 @@ public sealed partial class FriendsDrawer : Border
     private readonly Border _foot = new();
     private readonly Canvas _fx = new() { IsHitTestVisible = false };
 
-    /// <summary>The leash, pinned above the list (Controls/Leash). Kept between repaints.</summary>
+    /// <summary>The leash, pinned above the list inside its fold (Controls/Leash). Kept between repaints.</summary>
     private readonly Leash.LeashDrawerSection _leash = new();
 
     private TextBox? _codeBox;
@@ -392,8 +392,9 @@ public sealed partial class FriendsDrawer : Border
             return;
         }
 
-        // The page leaves the leash to Social > Leash; the popup keeps it pinned on top.
-        if (!AsPage) _list.Children.Add(_leash);
+        // The page leaves the leash to Social > Leash; the popup keeps it pinned on top, folded
+        // under its header (FriendsDrawer.Folds.cs).
+        if (!AsPage) AddLeashFold();
         AddFeed();
         AddDares(snap);
         var (online, offline) = FriendsDrawerRules.Split(snap);

@@ -1,0 +1,295 @@
+{
+  "start": {
+    "id": "atrium",
+    "at": [
+      0.54,
+      0,
+      35.96
+    ],
+    "yaw": -0.922942
+  },
+  "zones": [
+    {
+      "id": "aquarium",
+      "bounds": [
+        -61.8,
+        -1.52,
+        35.6,
+        -4.4,
+        8.7,
+        55.4
+      ],
+      "file": "aquarium-eda56523e4349034.glb",
+      "lightIntensity": 9.252020864674325,
+      "reflectionIntensity": 0.33,
+      "assetStem": "aquarium-eda56523e4349034",
+      "collision": "aquarium-eda56523e4349034-collision.glb"
+    },
+    {
+      "id": "service",
+      "bounds": [
+        12,
+        -0.16,
+        18.3,
+        35.5,
+        10.0,
+        42.2
+      ],
+      "file": "service-7b3a25db1d486179.glb",
+      "lightIntensity": 50.097835135235655,
+      "reflectionIntensity": 0.33,
+      "assetStem": "service-7b3a25db1d486179",
+      "collision": "service-7b3a25db1d486179-collision.glb"
+    },
+    {
+      "id": "secret",
+      "bounds": [
+        30.4,
+        -0.16,
+        37.55,
+        89.4,
+        3.75,
+        53.5
+      ],
+      "file": "secret-6caa705e7ec17a2b.glb",
+      "lightIntensity": 11.541958320435237,
+      "reflectionIntensity": 0.33,
+      "crossings": [
+        {
+          "axis": "x",
+          "direction": -1,
+          "at": 80.0,
+          "across": [
+            39.87,
+            42.13
+          ],
+          "height": [
+            -0.25,
+            1.0
+          ],
+          "offset": [
+            6,
+            0,
+            10
+          ]
+        },
+        {
+          "axis": "x",
+          "direction": 1,
+          "at": 86.2,
+          "across": [
+            49.87,
+            52.13
+          ],
+          "height": [
+            -0.25,
+            1.0
+          ],
+          "offset": [
+            -5.78,
+            0,
+            -10
+          ]
+        },
+        {
+          "axis": "x",
+          "direction": -1,
+          "at": 33.5,
+          "across": [
+            49.87,
+            52.13
+          ],
+          "height": [
+            -0.25,
+            1.0
+          ],
+          "offset": [
+            0.7,
+            0,
+            -10
+          ]
+        }
+      ],
+      "assetStem": "secret-6caa705e7ec17a2b",
+      "collision": "secret-6caa705e7ec17a2b-collision.glb"
+    },
+    {
+      "id": "twelve",
+      "bounds": [
+        -9.1,
+        -0.7,
+        -35.5,
+        9.1,
+        7.2,
+        -16
+      ],
+      "file": "twelve-d569b4e279d71e48.glb",
+      "lightIntensity": 8.896262407232305,
+      "reflectionIntensity": 0.33,
+      "assetStem": "twelve-d569b4e279d71e48",
+      "collision": "twelve-d569b4e279d71e48-collision.glb"
+    },
+    {
+      "id": "dome",
+      "bounds": [
+        -31,
+        -0.1,
+        -13.8,
+        -12,
+        11.52,
+        3.8
+      ],
+      "file": "dome-a324bf093ead639d.glb",
+      "lightIntensity": 9.222985334770815,
+      "reflectionIntensity": 0.33,
+      "assetStem": "dome-a324bf093ead639d",
+      "collision": "dome-a324bf093ead639d-collision.glb"
+    },
+    {
+      "id": "chronology",
+      "bounds": [
+        0.05,
+        -0.15,
+        41.0,
+        11.2,
+        5.2,
+        106.4
+      ],
+      "file": "chronology-5d57b523d603219f.glb",
+      "lightIntensity": 11.923239431855382,
+      "reflectionIntensity": 0.33,
+      "assetStem": "chronology-5d57b523d603219f",
+      "collision": "chronology-5d57b523d603219f-collision.glb"
+    },
+    {
+      "id": "commons",
+      "bounds": [
+        -69.6,
+        -0.15,
+        42.1,
+        -58.45,
+        6.3,
+        98.6
+      ],
+      "file": "commons-ee325f2b7e9dcde5.glb",
+      "lightIntensity": 15.24804167269987,
+      "reflectionIntensity": 0.33,
+      "assetStem": "commons-ee325f2b7e9dcde5",
+      "collision": "commons-ee325f2b7e9dcde5-collision.glb"
+    },
+    {
+      "id": "forum",
+      "bounds": [
+        -69.6,
+        -0.15,
+        95.25,
+        3.4,
+        5.2,
+        106.4
+      ],
+      "file": "forum-3486233e3a3b4b2d.glb",
+      "lightIntensity": 8.850571051752521,
+      "reflectionIntensity": 0.33,
+      "assetStem": "forum-3486233e3a3b4b2d",
+      "collision": "forum-3486233e3a3b4b2d-collision.glb"
+    },
+    {
+      "id": "atrium",
+      "bounds": [
+        -12,
+        -0.17,
+        16,
+        12,
+        12.56,
+        41
+      ],
+      "file": "atrium-entry-fa7372ef3bdb3d98.glb",
+      "arrivalGzip": "atrium-entry-fa7372ef3bdb3d98.glb.gz",
+      "lightIntensity": 31.498770486612436,
+      "reflectionIntensity": 0.33,
+      "assetStem": "atrium-08a61de17d70b835",
+      "collision": "atrium-08a61de17d70b835-collision.glb"
+    },
+    {
+      "id": "hall",
+      "bounds": [
+        -12,
+        0,
+        -16,
+        12,
+        10.8,
+        16
+      ],
+      "file": "hall-entry-a3e6b22b591cebf7.glb",
+      "lightIntensity": 34.94238358415457,
+      "reflectionIntensity": 0.33,
+      "assetStem": "hall-ded2f60ac02e9836",
+      "lightFile": "hall-press-floor-cfd0bf5de36af18a-light.webp",
+      "collision": "hall-ded2f60ac02e9836-collision.glb"
+    },
+    {
+      "id": "catwalk",
+      "bounds": [
+        -31,
+        6.58,
+        -13.4,
+        -12,
+        16.1,
+        29.55
+      ],
+      "file": "catwalk-c34fe0dbd0386ebd.glb",
+      "lightIntensity": 20.362771043719643,
+      "reflectionIntensity": 0.33,
+      "assetStem": "catwalk-c34fe0dbd0386ebd",
+      "collision": "catwalk-c34fe0dbd0386ebd-collision.glb"
+    },
+    {
+      "id": "shop",
+      "bounds": [
+        12,
+        0,
+        -14.1,
+        25,
+        4.7,
+        1.55
+      ],
+      "file": "shop-8746baacd50a80aa.glb",
+      "lightIntensity": 11.145052026780675,
+      "reflectionIntensity": 0.33,
+      "assetStem": "shop-8746baacd50a80aa",
+      "collision": "shop-8746baacd50a80aa-collision.glb"
+    },
+    {
+      "id": "hoof",
+      "bounds": [
+        -25,
+        0,
+        3.97,
+        -12,
+        4.7,
+        13.7
+      ],
+      "file": "hoof-b6990a9ac15946bc.glb",
+      "lightIntensity": 10.612763689440584,
+      "reflectionIntensity": 0.33,
+      "assetStem": "hoof-b6990a9ac15946bc",
+      "collision": "hoof-b6990a9ac15946bc-collision.glb"
+    },
+    {
+      "id": "habitat",
+      "bounds": [
+        12,
+        0,
+        2.1,
+        24,
+        4.6,
+        13.8
+      ],
+      "file": "habitat-keeper-223565b2e78887b2.glb",
+      "lightIntensity": 15.167212569797579,
+      "reflectionIntensity": 0.33,
+      "assetStem": "habitat-f7dc893cfcac2ed0",
+      "collision": "habitat-keeper-b6d928d4603a37dd-collision.glb"
+    }
+  ]
+}

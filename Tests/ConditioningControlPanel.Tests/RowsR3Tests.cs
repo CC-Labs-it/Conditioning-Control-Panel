@@ -23,7 +23,9 @@ public class RowsR3Tests
     [Fact]
     public void Spiral_rows_and_the_whirlpool_box_read() => WpfRenderHarness.OnStaThread(() =>
     {
-        var labels = RowsRender.Check(new SpiralFeatureControl(), "r3-spiral", minLabels: 14, show: new[] { "PoolRows" });
+        // 7.4 round (#5586): four Whirlpool rows sit behind the box's "More options" fold; open it.
+        var labels = RowsRender.Check(new SpiralFeatureControl(), "r3-spiral", minLabels: 16, show: new[] { "PoolRows" },
+            before: p => Open(p, "FoldPoolMore"));
         // The four Drags switches wear their effect's own picture and follow their switch.
         Assert.Equal(4, labels.Count(l => l.Parent is StackPanel { Orientation: Orientation.Horizontal }));
     });

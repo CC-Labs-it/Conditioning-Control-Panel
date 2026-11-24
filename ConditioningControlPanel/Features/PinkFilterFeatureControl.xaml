@@ -88,6 +88,9 @@
                                         ValueChanged="SliderOpacity_Changed"/>
                                 <rows:RowValue Grid.Column="2" x:Name="TxtOpacity" Text="10%"/>
                             </Grid>
+                            <!-- Accessibility limit (Settings > Performance) holds this value back: say so. -->
+                            <TextBlock x:Name="TxtComfortClip" Visibility="Collapsed" TextWrapping="Wrap"
+                                       FontSize="11" Margin="0,0,0,4" Foreground="{DynamicResource TextMutedBrush}"/>
                             </feat:OptionSection>
 
                             <feat:OptionSection Key="pinkfilter.look" Title="{loc:Str studio_section_look}" Theme="Look">
