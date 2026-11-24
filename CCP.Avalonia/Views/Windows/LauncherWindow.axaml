@@ -416,7 +416,10 @@
                 <StackPanel x:Name="DoorPageHeader" Orientation="Horizontal" IsVisible="False" Margin="0,0,0,6">
                     <Button x:Name="DoorBack" Theme="{StaticResource LauncherLink}" VerticalAlignment="Center"
                             Margin="3,0,6,0" Click="DoorBack_Click">
-                        <TextBlock x:Name="DoorBackText" FontFamily="Fredoka, Segoe UI" FontSize="15"/>
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <fx:IconGlyph Kind="ChevronLeft" Size="15"/>
+                            <TextBlock x:Name="DoorBackText" FontFamily="Fredoka, Segoe UI" FontSize="15"/>
+                        </StackPanel>
                     </Button>
                     <TextBlock x:Name="GamesEyebrow" Text="{loc:Str launcher_section_games}" VerticalAlignment="Center"
                                FontFamily="Fredoka, Segoe UI" FontSize="22" FontWeight="SemiBold" Margin="6,0,0,0"/>
