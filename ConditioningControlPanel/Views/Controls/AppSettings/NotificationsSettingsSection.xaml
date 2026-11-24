@@ -4,6 +4,8 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.TintSliders="True"
              mc:Ignorable="d" d:DesignWidth="760">
 
     <!-- ================================================================
@@ -44,21 +46,18 @@
         <TextBlock Text="{loc:Str set2_section_notifications}" Style="{StaticResource SectionHeader}"/>
 
         <Border Style="{StaticResource SectionPanel}" Padding="0" Margin="0,0,0,12"
-                BorderBrush="{StaticResource SectionHueNotificationsBorderBrush}">
+                BorderBrush="{StaticResource SectionHueNotificationsBorderBrush}" rows:RowHue.Hue="{StaticResource SectionHueNotifications}">
             <Grid>
                 <Border CornerRadius="11" Background="{StaticResource SectionHueNotificationsWashBrush}"/>
                 <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
                         Background="{StaticResource SectionHueNotificationsBrush}"/>
                 <StackPanel Margin="15,12,15,12">
-                    <Grid MinHeight="34" ToolTip="{loc:Str tooltip_intake_nudge_enabled}">
+                    <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_intake_nudge_enabled}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}"
-                                   Foreground="{StaticResource SectionHueNotificationsBrush}"
-                                   Text="{loc:Str label_intake_nudge_enabled}"
-                                   Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str label_intake_nudge_enabled}" Emblem="Bell" IsOn="{Binding IsChecked, ElementName=ChkIntakeNudge}" Margin="0,0,14,0"/>
                         <CheckBox Grid.Column="1" x:Name="ChkIntakeNudge" x:FieldModifier="internal"
                                   Style="{StaticResource ToggleStyle}" IsChecked="True"
                                   VerticalAlignment="Center"/>
@@ -67,16 +66,13 @@
                                Foreground="{DynamicResource TextMutedBrush}" FontSize="11"
                                TextWrapping="Wrap" Margin="0,2,0,0"/>
 
-                    <Grid MinHeight="34" Margin="0,10,0,0"
+                    <Grid Style="{StaticResource OptionRow}" Margin="0,10,0,0"
                           ToolTip="{loc:Str tooltip_suppress_perk_notifications}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}"
-                                   Foreground="{StaticResource SectionHueNotificationsBrush}"
-                                   Text="{loc:Str label_suppress_perk_notifications}"
-                                   Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str label_suppress_perk_notifications}" Emblem="Bell" Margin="0,0,14,0"/>
                         <ComboBox Grid.Column="1" x:Name="CmbPerkEffects" x:FieldModifier="internal" Width="130"
                                   Style="{StaticResource DarkComboBoxStyle}" FontSize="11"
                                   VerticalAlignment="Center"
@@ -96,16 +92,13 @@
                          because it is copy, not motion. It does NOT touch the Settings-tab
                          scrolling marquee or the server announcement, which keep their own
                          beat. -->
-                    <Grid MinHeight="34" Margin="0,10,0,0"
+                    <Grid Style="{StaticResource OptionRow}" Margin="0,10,0,0"
                           ToolTip="{loc:Str tooltip_banner_pool_enabled}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}"
-                                   Foreground="{StaticResource SectionHueNotificationsBrush}"
-                                   Text="{loc:Str banner_pool_enabled}"
-                                   Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str banner_pool_enabled}" Emblem="Words" IsOn="{Binding IsChecked, ElementName=ChkBannerPool}" Margin="0,0,14,0"/>
                         <CheckBox Grid.Column="1" x:Name="ChkBannerPool" x:FieldModifier="internal"
                                   Style="{StaticResource ToggleStyle}" IsChecked="True"
                                   VerticalAlignment="Center"

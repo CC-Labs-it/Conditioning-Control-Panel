@@ -4,6 +4,8 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.TintSliders="True"
              xmlns:ctl="clr-namespace:ConditioningControlPanel.Views.Controls"
              mc:Ignorable="d" d:DesignWidth="760">
 
@@ -34,7 +36,7 @@
         <TextBlock Text="{loc:Str set2_section_emidesk}" Style="{StaticResource SectionHeader}"/>
 
         <Border Style="{StaticResource SectionPanel}" Padding="0" Margin="0,0,0,12"
-                BorderBrush="{StaticResource SectionHueEmiDeskBorderBrush}">
+                BorderBrush="{StaticResource SectionHueEmiDeskBorderBrush}" rows:RowHue.Hue="#FFFF69B4">
             <Grid>
                 <Border CornerRadius="11" Background="{StaticResource SectionHueEmiDeskWashBrush}"/>
                 <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
@@ -60,15 +62,12 @@
                                TextWrapping="Wrap" Margin="0,2,0,0"/>
 
                     <!-- 2. the summon chord -->
-                    <Grid MinHeight="34" Margin="0,10,0,0" ToolTip="{loc:Str tooltip_emi_desk_hotkey}">
+                    <Grid Style="{StaticResource OptionRow}" Margin="0,10,0,0" ToolTip="{loc:Str tooltip_emi_desk_hotkey}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}"
-                                   Foreground="{StaticResource SectionHueEmiDeskBrush}"
-                                   Text="{loc:Str label_emi_desk_hotkey}"
-                                   Margin="0,0,12,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str label_emi_desk_hotkey}" Emblem="Click" Margin="0,0,12,0"/>
                         <Button Grid.Column="1" x:Name="BtnHotkey"
                                 Content="Ctrl+Alt+E" Style="{StaticResource OutlineButton}"
                                 Padding="12,6" VerticalAlignment="Center" MinWidth="130"
@@ -80,15 +79,12 @@
                                TextWrapping="Wrap" Margin="0,2,0,0"/>
 
                     <!-- 3. the mute offer -->
-                    <Grid MinHeight="34" Margin="0,10,0,0" ToolTip="{loc:Str tooltip_emi_desk_mute}">
+                    <Grid Style="{StaticResource OptionRow}" Margin="0,10,0,0" ToolTip="{loc:Str tooltip_emi_desk_mute}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}"
-                                   Foreground="{StaticResource SectionHueEmiDeskBrush}"
-                                   Text="{loc:Str label_emi_desk_mute}"
-                                   Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str label_emi_desk_mute}" Emblem="Loud" IsOn="{Binding IsChecked, ElementName=ChkMuteAvatar}" Margin="0,0,14,0"/>
                         <CheckBox Grid.Column="1" x:Name="ChkMuteAvatar"
                                   Style="{StaticResource ToggleStyle}" IsChecked="True"
                                   VerticalAlignment="Center"/>
@@ -98,15 +94,12 @@
                                TextWrapping="Wrap" Margin="0,2,0,0"/>
 
                     <!-- 4. spice -->
-                    <Grid MinHeight="34" Margin="0,10,0,0" ToolTip="{loc:Str tooltip_emi_desk_spice}">
+                    <Grid Style="{StaticResource OptionRow}" Margin="0,10,0,0" ToolTip="{loc:Str tooltip_emi_desk_spice}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}"
-                                   Foreground="{StaticResource SectionHueEmiDeskBrush}"
-                                   Text="{loc:Str label_emi_desk_spice}"
-                                   Margin="0,0,12,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str label_emi_desk_spice}" Emblem="Much" Margin="0,0,12,0"/>
                         <ComboBox Grid.Column="1" x:Name="CmbSpice" Width="170"
                                   Style="{StaticResource DarkComboBoxStyle}" FontSize="11"
                                   VerticalAlignment="Center"
@@ -117,15 +110,12 @@
                                TextWrapping="Wrap" Margin="0,2,0,0"/>
 
                     <!-- 5. offers -->
-                    <Grid MinHeight="34" Margin="0,10,0,0" ToolTip="{loc:Str tooltip_emi_desk_offers}">
+                    <Grid Style="{StaticResource OptionRow}" Margin="0,10,0,0" ToolTip="{loc:Str tooltip_emi_desk_offers}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}"
-                                   Foreground="{StaticResource SectionHueEmiDeskBrush}"
-                                   Text="{loc:Str label_emi_desk_offers}"
-                                   Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str label_emi_desk_offers}" Emblem="Persona" IsOn="{Binding IsChecked, ElementName=ChkOffers}" Margin="0,0,14,0"/>
                         <CheckBox Grid.Column="1" x:Name="ChkOffers"
                                   Style="{StaticResource ToggleStyle}" IsChecked="True"
                                   VerticalAlignment="Center"/>
@@ -135,15 +125,12 @@
                                TextWrapping="Wrap" Margin="0,2,0,0"/>
 
                     <!-- 6. the glass -->
-                    <Grid MinHeight="34" Margin="0,10,0,0" ToolTip="{loc:Str tooltip_emi_desk_glass}">
+                    <Grid Style="{StaticResource OptionRow}" Margin="0,10,0,0" ToolTip="{loc:Str tooltip_emi_desk_glass}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}"
-                                   Foreground="{StaticResource SectionHueEmiDeskBrush}"
-                                   Text="{loc:Str label_emi_desk_glass}"
-                                   Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str label_emi_desk_glass}" Emblem="Persona" IsOn="{Binding IsChecked, ElementName=ChkGlass}" Margin="0,0,14,0"/>
                         <CheckBox Grid.Column="1" x:Name="ChkGlass"
                                   Style="{StaticResource ToggleStyle}" IsChecked="True"
                                   VerticalAlignment="Center"/>
@@ -163,15 +150,12 @@
                          Built in code rather than bound: the catalogue is a static record list with
                          availability and lock DELEGATES on it, not an observable collection, and
                          both answers can change between two openings of the settings tab. -->
-                    <Grid MinHeight="34" Margin="0,14,0,0" ToolTip="{loc:Str tooltip_emi_desk_ring}">
+                    <Grid Style="{StaticResource OptionRow}" Margin="0,14,0,0" ToolTip="{loc:Str tooltip_emi_desk_ring}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}"
-                                   Foreground="{StaticResource SectionHueEmiDeskBrush}"
-                                   Text="{loc:Str label_emi_desk_ring}"
-                                   Margin="0,0,12,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str label_emi_desk_ring}" Emblem="Persona" Margin="0,0,12,0"/>
                         <Button Grid.Column="1" x:Name="BtnRingReset"
                                 Content="{loc:Str emi_desk_ring_reset}"
                                 Style="{StaticResource OutlineButton}"
