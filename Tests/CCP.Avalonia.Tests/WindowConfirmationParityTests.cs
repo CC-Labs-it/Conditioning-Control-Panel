@@ -26,10 +26,11 @@ public sealed class WindowConfirmationParityTests
     private static Window Host(SectionTabStrip strip)
     {
         AmbientBeatLoopsTests.Setup();
-        LocalizationManager.Instance.SetLanguage("en");
         var host = new Window { Content = strip, Width = 1400, Height = 180 };
         host.Show();
-        strip.Show(NavSections.Studio, "presets");
+        // WPF SectionTabStrip.xaml.cs:98, 961 uses the shared visible pills and confirms window pills.
+        // Just Drop is hidden; Games on Play is the visible window pill (NavSections.cs:70-72, 90-95).
+        strip.Show(NavSections.Play, "playeyes");
         host.UpdateLayout();
         return host;
     }
@@ -47,8 +48,8 @@ public sealed class WindowConfirmationParityTests
 
     private static Border Open(SectionTabStrip strip)
     {
-        Click(strip.PillFor("justdrop")!);
-        Assert.Equal("justdrop", strip.ConfirmingKey);
+        Click(strip.PillFor("play")!);
+        Assert.Equal("play", strip.ConfirmingKey);
         var card = Assert.IsType<Border>(strip.ConfirmationPopup!.Child);
         TopLevel.GetTopLevel(card)!.UpdateLayout();
         return card;
@@ -72,13 +73,13 @@ public sealed class WindowConfirmationParityTests
     {
         AmbientBeatLoopsTests.Setup();
         var strip = new SectionTabStrip { MotionOverride = MotionLevel.Off };
-        using var host = new ClosingWindow(Host(strip));
+        using var host = new ClosingWindow(strip);
         int requests = 0;
         strip.TabRequested += _ => requests++;
         var card = Open(strip);
         var buttons = Buttons(card);
         Assert.Equal(2, buttons.Length);
-        var hue = NavStripRules.Accent(NavSections.Studio);
+        var hue = NavStripRules.Accent(NavSections.Play);
         using (var frame = new RenderTargetBitmap(PixelSize.FromSize(card.Bounds.Size, 1), new Vector(96, 96)))
         {
             frame.Render(card);
@@ -117,7 +118,7 @@ public sealed class WindowConfirmationParityTests
         Click(Buttons(card)[0]);
         Assert.Null(strip.ConfirmationPopup);
         Assert.Equal(1, requests);
-        Assert.Equal("presets", strip.ActivePillKey);
+        Assert.Equal("playeyes", strip.ActivePillKey);
         return Task.CompletedTask;
     });
 
@@ -129,7 +130,7 @@ public sealed class WindowConfirmationParityTests
     {
         AmbientBeatLoopsTests.Setup();
         var strip = new SectionTabStrip { MotionOverride = level };
-        using var host = new ClosingWindow(Host(strip));
+        using var host = new ClosingWindow(strip);
         var old = BeatLoop.Time;
         var time = new SteppedTime();
         BeatLoop.Time = time;
@@ -164,7 +165,7 @@ public sealed class WindowConfirmationParityTests
     {
         AmbientBeatLoopsTests.Setup();
         var strip = new SectionTabStrip { MotionOverride = MotionLevel.Off };
-        using var host = new ClosingWindow(Host(strip));
+        using var host = new ClosingWindow(strip);
         var inheritance = typeof(AvaloniaObject).GetProperty("InheritanceParent", BindingFlags.Instance | BindingFlags.NonPublic)!;
         for (int i = 0; i < 3; i++)
         {
@@ -200,7 +201,7 @@ public sealed class WindowConfirmationParityTests
     {
         AmbientBeatLoopsTests.Setup();
         var strip = new SectionTabStrip { MotionOverride = MotionLevel.Full };
-        using var host = new ClosingWindow(Host(strip));
+        using var host = new ClosingWindow(strip);
         var old = BeatLoop.Time;
         var time = new SteppedTime();
         BeatLoop.Time = time;
@@ -240,9 +241,21 @@ public sealed class WindowConfirmationParityTests
         return Task.CompletedTask;
     });
 
-    private sealed class ClosingWindow(Window window) : IDisposable
+    private sealed class ClosingWindow : IDisposable
     {
-        public Window Window => window;
-        public void Dispose() => window.Close();
+        private readonly string _language = LocalizationManager.Instance.CurrentLanguage;
+        public Window Window { get; }
+
+        public ClosingWindow(SectionTabStrip strip)
+        {
+            LocalizationManager.Instance.SetLanguage("en");
+            Window = Host(strip);
+        }
+
+        public void Dispose()
+        {
+            Window.Close();
+            LocalizationManager.Instance.SetLanguage(_language);
+        }
     }
 }
