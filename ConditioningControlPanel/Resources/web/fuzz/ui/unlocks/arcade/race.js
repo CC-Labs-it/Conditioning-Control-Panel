@@ -1,6 +1,6 @@
-/* Five local Racing Thoughts captures with a separate bonus button. The video never
+/* Local Racing Thoughts captures (several stretches of each of the five courses) with a separate bonus button. The video never
  * owns money or a game clock, and no remote media or account is involved. */
-import { restoreRace, advanceRace, takeRaceBonus, raceCanPlay, raceTimerRate, raceSecondsLeft, nextCourse, RACE_BONUS_MS } from './race-model.js';
+import { restoreRace, advanceRace, takeRaceBonus, raceCanPlay, raceTimerRate, raceSecondsLeft, nextClip, firstClip, RACE_CLIPS, RACE_BONUS_MS } from './race-model.js';
 import { gameRank } from './game-rank.js';
 import { sfx } from '../basics/fx.js';
 import { autopilot } from './autopilot.js';  // prestige hook: Autopilot (idle_6)
@@ -82,14 +82,15 @@ export function mountRace(ctx) {
   const model = restoreRace(ctx.store.get('race'));
   const persist = () => ctx.store.set('race', { ...model });
   const retryAfter = new Map();
-  let courseIndex = Math.max(0,RACE_COURSES.indexOf(ctx.store.get('course')));
+  // A fresh run opens on a random stretch, then rotates stretch-major: never the same course twice in a row.
+  let clipIndex = Math.max(0, firstClip(ctx.store.get('clip'), ctx.rng || Math.random));
   // Journey upgrades, read live: rank 1 Pick the Course, rank 2 Nitro.
   const rank = () => gameRank(ctx.state, 'mini_race');
   const rate = () => raceTimerRate(rank());
   const picked = () => {
     if (rank() < 1) return null;
-    const i = RACE_COURSES.indexOf(ctx.store.get('pick'));
-    return i >= 0 ? i : null;
+    const id = ctx.store.get('pick');
+    return RACE_COURSES.includes(id) ? id : null;
   };
   pickSelect.value = RACE_COURSES.includes(ctx.store.get('pick')) ? ctx.store.get('pick') : '';
   pickSelect.addEventListener('change', () => { ctx.store.set('pick', pickSelect.value || null); });
@@ -106,7 +107,8 @@ export function mountRace(ctx) {
 
   // With no footage at all the drawn road takes a new course name every SKETCH_LAP_MS of play.
   const SKETCH_LAP_MS = 14000;
-  let sketchMode = false, showIndex = courseIndex, showSince = ctx.state.clock;
+  const courseOf = (i) => Math.max(0, RACE_COURSES.indexOf(RACE_CLIPS[i]?.course));
+  let sketchMode = false, showIndex = courseOf(clipIndex), showSince = ctx.state.clock;
   function paintSketch() {
     const id = RACE_COURSES[showIndex];
     sketch.dataset.course = id;
@@ -131,16 +133,16 @@ export function mountRace(ctx) {
     previous.load();
     previous.remove();
   }
-  function loadCourse(index) {
+  function loadClip(index) {
     releaseVideo();
-    courseIndex = index;
-    const id = RACE_COURSES[index], name = courseTitles[id];
-    const path = 'assets/race/'+id;
-    ctx.store.set('course', id);
-    poster.src = path+'-poster.jpg';
+    clipIndex = index;
+    const clip = RACE_CLIPS[index], id = clip.course, name = courseTitles[id];
+    const path = 'assets/race/'+clip.id;
+    ctx.store.set('clip', clip.id);
+    poster.src = path+'.jpg';
     poster.alt = 'Racing Thoughts on the '+name+' course';
     caption.textContent = name;
-    if (!sketchMode) { showIndex = index; showSince = ctx.state.clock; paintSketch(); }
+    if (!sketchMode) { showIndex = courseOf(index); showSince = ctx.state.clock; paintSketch(); }
     pendingPlay = hasFrame = needsNext = false;
     lastTime = furthestTime = recoveries = 0;
     stalledAt = ctx.state.clock;
@@ -171,11 +173,11 @@ export function mountRace(ctx) {
     on('ended',()=>{ if (player.ended) { needsNext=true; sync(); } });
     on('error',skipBroken);
     film.insertBefore(player,poster);
-    player.src = path+'-loop.mp4';
+    player.src = path+'.mp4';
     paintMedia();
   }
   function skipBroken() {
-    retryAfter.set(courseIndex,ctx.state.clock+60000);
+    retryAfter.set(clipIndex,ctx.state.clock+60000);
     hasFrame=false;needsNext=true;sync();
   }
   function sync() {
@@ -187,17 +189,17 @@ export function mountRace(ctx) {
       return;
     }
     if (needsNext || video.ended) {
-      const next = nextCourse(courseIndex, picked(), RACE_COURSES.length, (i) => (retryAfter.get(i)||0) > ctx.state.clock);
+      const next = nextClip(clipIndex, picked(), RACE_CLIPS, (i) => (retryAfter.get(i)||0) > ctx.state.clock);
       if (next<0) {
         // Every clip failed (the web build ships none): the drawn road keeps racing instead.
         video.pause();
         if (!sketchMode) { sketchMode = true; showSince = ctx.state.clock; }
         else if (ctx.state.clock-showSince >= SKETCH_LAP_MS) {
-          showIndex = picked() ?? (showIndex+1)%RACE_COURSES.length; showSince = ctx.state.clock; paintSketch();
+          const p = picked(); showIndex = p ? RACE_COURSES.indexOf(p) : (showIndex+1)%RACE_COURSES.length; showSince = ctx.state.clock; paintSketch();
         }
         return;
       }
-      loadCourse(next);
+      loadClip(next);
     }
     if (!video.paused || pendingPlay) return;
     const player = video;
@@ -222,7 +224,7 @@ export function mountRace(ctx) {
     if (recoveries<2) { recoveries++;video.load(); }
     else skipBroken();
   }
-  loadCourse(courseIndex);
+  loadClip(clipIndex);
 
   const observer = doc.defaultView.IntersectionObserver ? new doc.defaultView.IntersectionObserver((entries) => {
     visible = entries.some((e) => e.isIntersecting && e.intersectionRect.width > 0 && e.intersectionRect.height > 0);
