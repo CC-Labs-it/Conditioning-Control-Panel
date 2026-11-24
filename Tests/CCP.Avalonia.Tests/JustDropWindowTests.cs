@@ -471,6 +471,32 @@ public sealed class JustDropWindowTests
         Assert.True(w.IsVisible);                         // and no game frame closes it
     });
 
+    /// <summary>WPF JustDropHostService.cs:268-321,422: an enveloped assets-request gets exactly one 'assets' answer of its
+    /// kind (empty where this engine cannot serve the urls); a bare frame gets none; the map goes with the window.</summary>
+    [Fact]
+    public void AssetsRequestIsAnsweredOncePerAsk_AndTheMapGoesOnClose() => Run(shell =>
+    {
+        JustDropService.SetServerEnabledForTests(true);
+        shell.ShowTab("justdrop");
+        Dispatcher.UIThread.RunJobs();
+        var w = Open()!;
+        Assert.NotNull(w.JustDropAssets);
+        var posted = new System.Collections.Generic.List<string>();
+        w.Posted += posted.Add;
+        w.HandleMessage("{\"type\":\"assets-request\",\"payload\":{\"kind\":\"image\",\"max\":5}}");
+        w.HandleMessage("{\"source\":\"justdrop\",\"v\":1,\"type\":\"assets-request\",\"payload\":{\"kind\":\"video\",\"max\":5}}");
+        for (var i = 0; i < 200 && posted.Count == 0; i++) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(10); }
+        Dispatcher.UIThread.RunJobs();
+        var answer = Assert.Single(posted);
+        var o = Newtonsoft.Json.Linq.JObject.Parse(answer);
+        Assert.Equal(("ccp-host", "assets", "video"), ((string?)o["source"], (string?)o["type"], (string?)o["payload"]!["kind"]));
+        Assert.IsType<Newtonsoft.Json.Linq.JArray>(o["payload"]!["items"]);
+        if (!JustDropAssetWebView2.Supported) Assert.Empty((Newtonsoft.Json.Linq.JArray)o["payload"]!["items"]!);
+        w.Close();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Null(w.JustDropAssets);
+    });
+
     /// <summary>WPF JustDropHostService.cs:105-108,249-253 keeps the site bridge after auth redirects;
     /// ChaosWebViewHost.cs:238,1704 applies its document fence only to NavigatePage transfers.</summary>
     [Theory]
