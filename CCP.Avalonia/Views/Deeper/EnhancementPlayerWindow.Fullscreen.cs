@@ -108,9 +108,11 @@ public partial class EnhancementPlayerWindow {
         e.Handled = PlayerKey(e.Key, e.KeyModifiers.HasFlag(KeyModifiers.Shift), !_pressed.Add(e.Key));
     }
     private void OnPlayerKeyUp(object? sender, KeyEventArgs e) { if ((sender as Window)?.FocusManager?.GetFocusedElement() is TextBox) return; _pressed.Remove(e.Key); if (e.Key == Key.Escape) { EscapeUp(); e.Handled = true; } }
+    // WPF EnhancementPlayerWindow.xaml.cs:2964-2968: paused audio and a running engine remain active sessions.
+    private bool IsSessionActive => _videoNavigated || _isPlaying || _localAudio != null || _deeperEngine?.IsRunning == true;
     private void EscapeUp() {
         CancelEscHold(); _pressed.Remove(Key.Escape);
-        if (!_escapeConsumed && !StrictInput && !_videoNavigated && !_isPlaying) Close();
+        if (!_escapeConsumed && !StrictInput && !IsSessionActive) Close();
         _escapeConsumed = false;
     }
     internal bool PlayerKey(Key key, bool shift = false, bool repeat = false) {
@@ -119,7 +121,7 @@ public partial class EnhancementPlayerWindow {
                 _lastEscape = InputNow();
                 if (!repeat && _changePopup.IsOpen) { _changePopup.IsOpen = false; _escapeConsumed = true; return true; }
                 if (!repeat) { _escapeConsumed = _videoFullscreenWindow != null; ExitVideoFullscreen();
-                    if (!StrictInput && (_videoNavigated || _isPlaying)) { _escapeStart = InputNow(); ShowHoldEscHint(0); } }
+                    if (!StrictInput && IsSessionActive) { _escapeStart = InputNow(); ShowHoldEscHint(0); } }
                 return true;
             case Key.F11: ExitVideoFullscreen(); return true;
             case Key.F: if (!repeat) { if (_videoFullscreenWindow != null) ExitVideoFullscreen(); else if (_isVideoMode && _videoNavigated) EnterVideoFullscreen(); } return true;
