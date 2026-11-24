@@ -15,6 +15,7 @@ namespace ConditioningControlPanel.Avalonia.Platform.Deeper;
 internal sealed class WebHostVideoTimeSource : IPlaybackTimeSource, IDisposable
 {
     private readonly WebHost _host;
+    private readonly bool _automaticPolling;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private bool _attached, _polling;
     private int _generation;
@@ -23,14 +24,15 @@ internal sealed class WebHostVideoTimeSource : IPlaybackTimeSource, IDisposable
     private bool _playing;
     private const string PollScript = "(function(){var v=document.querySelector('video');if(!v)return null;var r=v.getBoundingClientRect(),w=window.innerWidth||1,h=window.innerHeight||1;return JSON.stringify({t:v.currentTime||0,d:isFinite(v.duration)?v.duration:0,paused:!!v.paused,rx:r.left/w,ry:r.top/h,rw:r.width/w,rh:r.height/h});})();";
 
-    public WebHostVideoTimeSource(WebHost host)
+    public WebHostVideoTimeSource(WebHost host, bool automaticPolling = true)
     {
         _host = host;
+        _automaticPolling = automaticPolling;
         _timer.Tick += async (_, _) => await PollAsync();
     }
 
     public event Action<double>? PlaybackTimeChanged;
-    public void Attach() { if (_attached) return; _attached = true; _generation++; _timer.Start(); }
+    public void Attach() { if (_attached) return; _attached = true; _generation++; if (_automaticPolling) _timer.Start(); }
     public void Detach() { _attached = false; _generation++; _timer.Stop(); }
     public void Dispose() => Detach();
 

@@ -12,6 +12,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs;
 public partial class SettingsTabView
 {
     private readonly EnhancementHostService _browserEnhanceHost = new();
+    private static readonly SpeakPromptRuntime BrowserSpeakRuntime = SpeakPromptRuntime.CreateProduction(() => Views.Windows.MainShellWindow.Current);
+    internal Func<TriggerEffectAction, IPlaybackTimeSource, SpeakPromptSession>? BrowserSpeakSessionFactory;
+    internal WebHostVideoTimeSource? BrowserEnhanceSource => _browserEnhanceSource;
+    internal bool BrowserAutomaticPolling = true;
     private WebHostVideoTimeSource? _browserEnhanceSource;
     internal EnhancementHostService BrowserEnhanceHost => _browserEnhanceHost;
 
@@ -54,9 +58,9 @@ public partial class SettingsTabView
                 TxtEnhanceMatchStatus.Text = Loc.Get("browser_enhance_unsupported");
                 return;
             }
-            var source = _browserEnhanceSource = new WebHostVideoTimeSource(BrowserWebHost);
+            var source = _browserEnhanceSource = new WebHostVideoTimeSource(BrowserWebHost, BrowserAutomaticPolling);
             var webcam = new BrowserEnhancementWebcam();
-            if (!_browserEnhanceHost.Bind(source, source.Attach, source.Detach, new BrowserEnhancementDispatcher(), webcam))
+            if (!_browserEnhanceHost.Bind(source, source.Attach, source.Detach, new SpeakActionDispatcher(BrowserSpeakSessionFactory ?? BrowserSpeakRuntime.CreateSession, new BrowserEnhancementDispatcher()), webcam))
             {
                 webcam.Dispose();
                 StopBrowserEnhancement();

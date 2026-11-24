@@ -121,6 +121,63 @@ public class HomeBrowserEnhanceTests
         }
     });
     [Fact]
+    public void HomeSpeakBandStopsOnExitAndUnbind() => AvaloniaTestDispatcher.Run(() =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var previous = CoreSettings.Current.BrowserEnhanceIfPossible;
+        CoreSettings.Current.BrowserEnhanceIfPossible = false;
+        var shell = new MainShellWindow();
+        string? path = null;
+        double time = 0;
+        int shown = 0, stopped = 0, created = 0;
+        try
+        {
+            shell.Show();
+            var tab = shell.FindControl<SettingsTabView>("SettingsTab")!;
+            var web = tab.FindControl<WebHost>("BrowserWebHost")!;
+            tab.BrowserAutomaticPolling = false;
+            web.ScriptInvoker = _ => Task.FromResult<string?>($"{{\"t\":{time},\"d\":20,\"paused\":false,\"rx\":0,\"ry\":0,\"rw\":1,\"rh\":1}}");
+            tab.BrowserSpeakSessionFactory = (effect, source) =>
+            {
+                Assert.Same(tab.BrowserEnhanceSource, source);
+                created++;
+                var pending = new TaskCompletionSource<ConditioningControlPanel.Services.Speech.PhraseResult>();
+                return new SpeakPromptSession(effect, source, () => true, () => Task.FromResult(true), () => false, () => { },
+                    (_, ct) => { ct.Register(() => pending.TrySetCanceled(ct)); return pending.Task; },
+                    _ => shown++, () => { }, stopCapture: () => stopped++);
+            };
+            const string url = "https://hypnotube.com/watch/ccp-speak-unique";
+            path = Path.Combine(shell.BrowserEnhancementLibrary!.LibraryFolder, "home-browser-speak-unique.ccpenh.json");
+            var enhancement = new Enhancement { MediaType = MediaTypes.Video, MediaSource = url,
+                Metadata = new EnhancementMetadata { Name = "Speak test", Creator = "test" }, TimelineItems = {
+                    new TimelineItem { Kind = TimelineItemKind.Effect, Start = 1, Duration = 3,
+                        EffectType = EffectTypes.Speak, EffectActivation = EffectActivation.Region,
+                        EffectSpeakTarget = "yes", EffectSpeakCueMode = SpeakCueMode.Persistent } } };
+            File.WriteAllText(path, EnhancementSerializer.Save(enhancement));
+            tab.FindControl<CheckBox>("ToggleEnhanceIfPossible")!.IsChecked = true;
+            web.OnNavigationCompleted(new Uri(url));
+            Assert.True(tab.BrowserEnhanceHost.IsRunning);
+            void Poll(double t) { time = t; tab.BrowserEnhanceSource!.PollAsync().GetAwaiter().GetResult(); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs(); }
+            Poll(0); Poll(1.2);
+            Assert.Equal(1, shown);
+            Poll(5);
+            Assert.Equal(1, stopped);
+            Poll(0); Poll(1.2);
+            Assert.Equal(2, shown);
+            tab.StopBrowserEnhancement();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, stopped);
+            Assert.Equal(2, created);
+        }
+        finally
+        {
+            shell.Close();
+            if (path != null) File.Delete(path);
+            CoreSettings.Current.BrowserEnhanceIfPossible = previous;
+        }
+    });
+
+    [Fact]
     public void RuntimeDispatchesPause() => AvaloniaTestDispatcher.Run(() =>
     {
         var scripts = new List<string>();
