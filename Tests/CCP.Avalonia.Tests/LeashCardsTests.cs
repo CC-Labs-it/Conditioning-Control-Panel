@@ -312,6 +312,18 @@ public sealed class LeashCardsTests
         svc.Push(null); Assert.False(page.ShowingEmpty);
         page.IsVisible = true; page.OnShown(); Assert.True(page.ShowingEmpty);
     });
+    [Fact] // WPF LeashHolderCard.cs:119-128: feedback precedes the sent receipts.
+    public void HolderShowsResultBeforeReceipts() => Run(() =>
+    {
+        var svc = new Service { ReceiptsSupported = true };
+        var card = new LeashHolderCard(Held(), () => svc);
+        Click(card, "leash-btn:reward"); Click(card, "leash-reward:pardon");
+        var result = Find<TextBlock>(card, "leash-holder-result");
+        var receipts = Find<LeashSentList>(card, "leash-sent");
+        var body = Assert.IsType<StackPanel>(result.Parent);
+        Assert.Same(body, receipts.Parent);
+        Assert.True(body.Children.IndexOf(result) < body.Children.IndexOf(receipts));
+    });
     [Fact]
     public void TugThrottleIsPerFriend_AndReceiptsUseHonestSentWording() => Run(() =>
     {
