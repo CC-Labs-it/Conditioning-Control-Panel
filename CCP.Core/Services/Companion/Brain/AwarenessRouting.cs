@@ -1,10 +1,9 @@
 using System;
-using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
+using ConditioningControlPanel.Services.AIService;
 using ConditioningControlPanel.Services.Companion.Brain;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Awareness
 {
@@ -50,7 +49,7 @@ namespace ConditioningControlPanel.Services.Awareness
         public static void Attach(IReactionArbiter? arbiter)
         {
             Volatile.Write(ref _arbiter, arbiter);
-            App.Logger?.Information("AwarenessV2Routing: arbiter {State}", arbiter == null ? "detached" : "attached");
+            Log.Information("AwarenessV2Routing: arbiter {State}", arbiter == null ? "detached" : "attached");
         }
 
         /// <summary>Hands ambient speech back to the legacy paths. Used on shutdown and by tests.</summary>
@@ -67,6 +66,20 @@ namespace ConditioningControlPanel.Services.Awareness
     public sealed class AvatarAwarenessSpeaker : IAwarenessSpeaker
     {
         private readonly Func<string?>? _currentAppId;
+
+        // Head seams (WPF App.xaml.cs seeds them from App.*); unseeded reads as WPF's missing service.
+        /// <summary>App.Bark.RaiseAwarenessBark.</summary>
+        public static volatile Func<ContextFrame, bool>? RaiseBark;
+        /// <summary>App.AvatarWindow.SpeakAwarenessLine(line, doubleBounce); false when there is no avatar.</summary>
+        public static volatile Func<string, bool, bool>? DeliverLine;
+        /// <summary>App.AvatarWindow.IsCompanionBusy(windowMs).</summary>
+        public static volatile Func<int, bool>? CompanionBusy;
+        /// <summary>App.Bark.NotifyExternalLineSpoken.</summary>
+        public static volatile Action? LineSpoken;
+        /// <summary>App.KeywordTriggers.MuteKeywordEcho(text, ms).</summary>
+        public static volatile Action<string, int>? MuteKeywordEcho;
+        /// <summary>The raw foreground window title (WPF: user32 GetWindowText); null or empty is unknown.</summary>
+        public static volatile Func<string?>? ForegroundTitle;
 
         /// <param name="currentAppId">
         /// Optional override for the live foreground app id. The observer package resolves the
@@ -93,10 +106,10 @@ namespace ConditioningControlPanel.Services.Awareness
         {
             if (!StillWatching()) return false;
 
-            try { return App.Bark?.RaiseAwarenessBark(frame) ?? false; }
+            try { return RaiseBark?.Invoke(frame) ?? false; }
             catch (Exception ex)
             {
-                App.Logger?.Debug("AvatarAwarenessSpeaker: bark failed: {Error}", ex.Message);
+                Log.Debug("AvatarAwarenessSpeaker: bark failed: {Error}", ex.Message);
                 return false;
             }
         }
@@ -109,11 +122,8 @@ namespace ConditioningControlPanel.Services.Awareness
 
             try
             {
-                var dispatcher = Application.Current?.Dispatcher;
-                if (dispatcher == null || dispatcher.HasShutdownStarted) return false;
-
-                var avatar = App.AvatarWindow;
-                if (avatar == null) return false;
+                var deliver = DeliverLine;
+                if (deliver == null) return false;
 
                 // Chat-suppression, the same question BarkService asks before every bark: an ambient
                 // quip must not land on top of a conversation the user is actually having. Awareness
@@ -121,22 +131,23 @@ namespace ConditioningControlPanel.Services.Awareness
                 if (IsCompanionBusy()) return false;
 
                 // Rare and above get the double bounce; Uncommon is a quip, not an event (doc 02 §3.2).
-                avatar.SpeakAwarenessLine(line, doubleBounce: tier >= RarityTier.Rare);
+                // The head answers false when the avatar is gone or its dispatcher is shutting down.
+                if (!deliver(line, tier >= RarityTier.Rare)) return false;
 
                 // The 60s outer floor is shared in BOTH directions or it is not a floor: BarkService
                 // reports its barks to the arbiter's ledger, and an LLM line pushes BarkService's own
                 // global gap forward. Without this the next bark trigger after the bubble closes fires
                 // against a stale gap and speaks seconds after she just spoke.
-                App.Bark?.NotifyExternalLineSpoken();
+                LineSpoken?.Invoke();
 
                 // Self-echo guard: the same call BarkService makes after every spoken line, so she can
                 // never trip an OCR/keyword trigger off her own bubble.
-                App.KeywordTriggers?.MuteKeywordEcho(line, SelfEchoMuteMs);
+                MuteKeywordEcho?.Invoke(line, SelfEchoMuteMs);
                 return true;
             }
             catch (Exception ex)
             {
-                App.Logger?.Warning(ex, "AvatarAwarenessSpeaker: line delivery failed");
+                Log.Warning(ex, "AvatarAwarenessSpeaker: line delivery failed");
                 return false;
             }
         }
@@ -158,8 +169,8 @@ namespace ConditioningControlPanel.Services.Awareness
         {
             try
             {
-                int window = App.Settings?.Current?.BarkChatSuppressionMs ?? 10000;
-                return App.AvatarWindow?.IsCompanionBusy(window) ?? false;
+                int window = CoreSettings.Service?.Current?.BarkChatSuppressionMs ?? 10000;
+                return CompanionBusy?.Invoke(window) ?? false;
             }
             catch { return false; }
         }
@@ -176,21 +187,12 @@ namespace ConditioningControlPanel.Services.Awareness
         /// </summary>
         private static string? ResolveForegroundAppId()
         {
-            var handle = GetForegroundWindow();
-            if (handle == IntPtr.Zero) return null;
+            var title = ForegroundTitle?.Invoke();
+            if (string.IsNullOrEmpty(title)) return null;
 
-            var sb = new StringBuilder(512);
-            if (GetWindowText(handle, sb, sb.Capacity) <= 0) return null;
-
-            var (_, app) = AppClusterMap.Classify(sb.ToString());
+            var (_, app) = AppClusterMap.Classify(title);
             return string.IsNullOrWhiteSpace(app) ? null : app;
         }
-
-        [DllImport("user32.dll")]
-        private static extern IntPtr GetForegroundWindow();
-
-        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-        private static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
     }
 
     /// <summary>
@@ -228,6 +230,10 @@ namespace ConditioningControlPanel.Services.Awareness
     public sealed class BrainAwarenessLineSource : IAwarenessLineSource
     {
         private readonly Func<CompanionBrain?> _brain;
+
+        /// <summary>Head seams: App.Brain and App.Ai. Unseeded = no brain, no transport.</summary>
+        public static volatile Func<CompanionBrain?>? BrainProvider;
+        public static volatile Func<IAiService?>? AiProvider;
         private readonly AwarenessReactionService _reactions;
 
         public BrainAwarenessLineSource(
@@ -235,11 +241,11 @@ namespace ConditioningControlPanel.Services.Awareness
             Func<bool>? isLocalTransport = null,
             AwarenessReactionService? reactions = null)
         {
-            _brain = brain ?? (() => App.Brain);
+            _brain = brain ?? (() => BrainProvider?.Invoke());
             // isLocalTransport stays in the signature because the projection choice remains the
             // caller's to override; it is answered inside the reaction service now, which is the one
             // place that assembles the prompt. Passing null keeps that service's own default.
-            _reactions = reactions ?? new AwarenessReactionService(() => App.Ai, () => AwarenessObserver.IsEnabled, isMachineLocal: isLocalTransport);
+            _reactions = reactions ?? new AwarenessReactionService(() => AiProvider?.Invoke(), () => AwarenessObserver.IsEnabled, isMachineLocal: isLocalTransport);
         }
 
         /// <inheritdoc />
@@ -260,7 +266,7 @@ namespace ConditioningControlPanel.Services.Awareness
                     // queue and cancels the thinking animation.
                     if (brain != null && brain.IsBusy) return false;
 
-                    return App.Settings?.Current?.AiChatEnabled == true && App.Ai?.IsAvailable == true;
+                    return CoreSettings.Service?.Current?.AiChatEnabled == true && AiProvider?.Invoke()?.IsAvailable == true;
                 }
                 catch { return false; }
             }

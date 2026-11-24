@@ -482,6 +482,46 @@ public sealed class AssetsTabTests
     });
 
     [Fact]
+    public Task LibraryMediaLogMarksHistorySeenAndStopsPulse() => Run(async (shell, tab, s) =>
+    {
+        var old = global::ConditioningControlPanel.Avalonia.App.MediaHistory;
+        var dir = Directory.CreateTempSubdirectory("ccp-assets-log-").FullName;
+        var history = new MediaHistoryService(Path.Combine(dir, "media_history.json"));
+        global::ConditioningControlPanel.Avalonia.App.MediaHistory = history;
+        try
+        {
+            history.RecordImages(new[] { "/x/a.png" });
+            shell.ShowTab("settings");
+            global::Avalonia.Headless.AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            shell.ShowTab("assets");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(tab.MediaLogPulsing);
+            shell.OpenNavSection("library");
+            shell.PageStrip!.PillFor("medialog")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(shell.OwnedWindows, w => w is MediaHistoryWindow);
+            Assert.False(tab.MediaLogPulsing);
+            Assert.Equal(1.0, tab.BtnMediaLog.Opacity);
+            shell.ShowTab("settings");
+            shell.ShowTab("assets");
+            Assert.False(tab.MediaLogPulsing);
+            history.RecordImages(new[] { "/x/b.png" });
+            shell.ShowTab("settings");
+            global::Avalonia.Headless.AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            shell.ShowTab("assets");
+            Assert.True(tab.MediaLogPulsing);
+        }
+        finally
+        {
+            foreach (var w in shell.OwnedWindows.ToArray()) w.Close();
+            global::ConditioningControlPanel.Avalonia.App.MediaHistory = old;
+            history.Dispose();
+            try { Directory.Delete(dir, true); } catch { }
+        }
+        await Task.CompletedTask;
+    });
+
+    [Fact]
     public Task UntickingVideosDropsTheDealtVideoAndBubbleQueues() => Run(async (shell, tab, s) =>
     {
         var overlay = global::ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance;
@@ -747,6 +787,29 @@ public sealed class AssetsTabTests
             }
         }
         finally { AssetsTabView.AppInFront = oldInFront; }
+    });
+
+    [Fact]
+    public Task ContextMenuRevealsSelectedFile() => Run(async (shell, tab, s) =>
+    {
+        tab.AssetTreeView.SelectedItem = tab.AssetTree.Single(n => n.Name == "images").Children.Single();
+        await tab.ThumbnailLoads;
+        var tile = await Thumbnail(shell, tab);
+        var old = ConditioningControlPanel.Avalonia.Platform.ExternalOpener.SelectInFileManager;
+        string? selected = null;
+        try
+        {
+            ConditioningControlPanel.Avalonia.Platform.ExternalOpener.SelectInFileManager = path => { selected = path; return true; };
+            tile.ContextMenu!.Open(tile);
+            Dispatcher.UIThread.RunJobs();
+            tile.ContextMenu.Items.OfType<MenuItem>().Last().RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.Equal(Path.GetFullPath(tab.CurrentFolderFiles[0].FullPath), selected);
+        }
+        finally
+        {
+            tile.ContextMenu?.Close();
+            ConditioningControlPanel.Avalonia.Platform.ExternalOpener.SelectInFileManager = old;
+        }
     });
 
     // ---- harness ----------------------------------------------------------------------

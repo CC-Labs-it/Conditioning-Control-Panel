@@ -22,6 +22,77 @@ namespace CCP.Avalonia.Tests;
 public sealed class CompanionBarkHeadTests
 {
     [Fact]
+    public void LevelUpReachesEmiAndStopUnseedsBridge() => WithSeamsRestored(_ =>
+    {
+        BarkHead.Stop();
+        var oldFire = ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire;
+        var oldVideo = ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe;
+        try
+        {
+            BarkHead.Start();
+            Assert.NotNull(ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe);
+            var fire = ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire!()!;
+            Assert.Same(ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskService.Instance, fire.Target);
+            Assert.Equal("Fire", fire.Method.Name);
+            string? moment = null;
+            ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire = () => (name, ctx) => { moment = name; fire(name, ctx); };
+            var field = typeof(ProgressionBank).GetField("LevelUp", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+            ((System.Action<int>)field.GetValue(null)!)(7);
+            Assert.Equal("levelUp", moment);
+            BarkHead.Stop();
+            Assert.Null(ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire);
+            Assert.Null(ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe);
+        }
+        finally
+        {
+            BarkHead.Stop();
+            ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire = oldFire;
+            ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe = oldVideo;
+        }
+    });
+
+    [Fact]
+    public void AwarenessBarkArmsEmiVoiceHold() => WithSeamsRestored(_ =>
+    {
+        var desk = ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk.EmiDeskService.Instance;
+        var lines = ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance;
+        var oldFire = ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire;
+        var oldVideo = ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe;
+        try
+        {
+            lines.ResetForTests();
+            var e = new BarkEngine(() => BarkRuleSet.Empty);
+            BarkHead.Seed(e);
+            e.Start();
+            e.RaiseAwarenessBark(new ConditioningControlPanel.Services.Awareness.ContextFrame());
+            Assert.Equal("awarenessReaction", lines.HeldBy);
+        }
+        finally
+        {
+            desk.CheckAvatarVoiceHold();
+            lines.ResetForTests();
+            ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire = oldFire;
+            ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe = oldVideo;
+        }
+    });
+
+    [Fact] // A seeded test must not leave the real desk wired or its lockdown hold armed on the shared engine.
+    public void SeededTestsLeaveNoEmiStateBehind()
+    {
+        var oldFire = ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire;
+        var lines = ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance;
+        var heldBefore = lines.HeldBy;
+        WithSeamsRestored(_ =>
+        {
+            var e = Seeded(Rule("LockdownCountdownTick", "tick"), out var spoken);
+            e.Raise("LockdownCountdownTick");
+            Assert.Equal("lockdownCountdown", lines.HeldBy);
+        });
+        Assert.Same(oldFire, ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire);
+        Assert.Equal(heldBefore, lines.HeldBy);
+    }
+
+    [Fact]
     public void AppStartupStartsBothHeadsOnceQuestsExist()
     {
         var src = Regex.Replace(File.ReadAllText(Path.Combine(Root(), "CCP.Avalonia", "App.axaml.cs")),
@@ -55,6 +126,20 @@ public sealed class CompanionBarkHeadTests
             if (ownCompanion) CompanionHead.Stop();
             if (ownBark) BarkHead.Stop();
         }
+    });
+
+    [Fact]
+    public void PickingAssetsRaisesTheCompanionAction() => WithSeamsRestored(_ =>
+    {
+        var old = BarkHead.Engine;
+        var owner = new Window();
+        try
+        {
+            BarkHead.Engine = Seeded(Rule("UiAction", "assets", ("action", "pick_assets")), out var spoken);
+            var picker = MainShellWindow.PickAssetsFolder(owner);
+            Assert.Equal("assets", spoken());
+        }
+        finally { owner.Close(); BarkHead.Engine = old; }
     });
 
     [Fact]   // WPF MainWindow.xaml.cs:1755: a ladder-mode panic press raises her safety line before the stop pass
@@ -179,6 +264,94 @@ public sealed class CompanionBarkHeadTests
             Assert.Equal(1, count);
         }
         finally { BarkHead.Stop(); }
+    });
+
+    // WPF BarkService.cs:956-1003: the session runner's events raise the session barks, with the WPF context and
+    // live reads, and Stop detaches them.
+    [Theory]
+    [InlineData("Started", "SessionStarted", null, null)]
+    [InlineData("Stopped", "SessionStopped", null, null)]
+    [InlineData("Completed", "SessionCompleted", null, null)]
+    [InlineData("PhaseChanged", "SessionPhaseChanged", "phase_is_deepener", true)]
+    [InlineData("Progressed", "SessionProgress", "session_elapsed_sec_lt", 1)]
+    [InlineData("Paused", "SessionPaused", "pause_n_eq", 2)]
+    [InlineData("Resumed", "SessionResumed", "paused_sec_gte", 30)]
+    public void SessionEventsRaiseTheirBarksAndStopDetaches(string source, string trigger, string? key, object? value) => WithSeamsRestored(_ =>
+    {
+        BarkHead.Stop();
+        var old = (App.Sessions, CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider);
+        var phaseField = typeof(BarkHead).GetField("_phaseName", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var oldPhase = phaseField.GetValue(null);
+        var runner = App.Sessions = new ConditioningControlPanel.Services.SessionRunner(new ConditioningControlPanel.Services.SessionLogService());
+        typeof(ConditioningControlPanel.Services.SessionRunner).GetProperty("CurrentSession")!.SetValue(runner, new ConditioningControlPanel.Models.Session
+            { Phases = { new() { Name = "Intro" }, new() { Name = "Deepener" } } });
+        var rule = Rule(trigger, "reacted", key is null ? null : (key, value!));
+        rule.ClassRaw = "safety";
+        var e = Seeded(rule, out var spoken);
+        int count = 0;
+        e.BarkSpoken += (_, _) => count++;
+        var name = source == "Completed" ? "Stopped" : source;
+        var field = typeof(ConditioningControlPanel.Services.SessionRunner).GetField(name, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+        object?[] args = source switch
+        {
+            "Stopped" or "Completed" => new object?[] { new ConditioningControlPanel.Models.Session(), source == "Completed" },
+            "PhaseChanged" => new object?[] { 1 },
+            "Paused" => new object?[] { 2 },
+            "Resumed" => new object?[] { System.TimeSpan.FromSeconds(45) },
+            _ => System.Array.Empty<object?>(),
+        };
+        try
+        {
+            BarkHead.WireSources(e);
+            ((System.Delegate?)field.GetValue(runner))?.DynamicInvoke(args);
+            Assert.Equal("reacted", spoken());
+            Assert.Equal(1, count);
+            BarkHead.Stop();
+            e.ReloadRules();
+            ((System.Delegate?)field.GetValue(runner))?.DynamicInvoke(args);
+            Assert.Equal(1, count);
+        }
+        finally
+        {
+            BarkHead.Stop();
+            phaseField.SetValue(null, oldPhase);
+            (App.Sessions, CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider) = old;
+        }
+    });
+
+    [Fact]   // WPF ResolveField :1428-1482 over BarkState.cs:26-28, :139-147: live reads, zeroed once the session is not running
+    public void SessionConditionsReadTheRunnerLive() => WithSeamsRestored(_ =>
+    {
+        BarkHead.Stop();
+        var old = (App.Sessions, CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider);
+        var phaseField = typeof(BarkHead).GetField("_phaseName", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+        var oldPhase = phaseField.GetValue(null);
+        var type = typeof(ConditioningControlPanel.Services.SessionRunner);
+        var runner = App.Sessions = new ConditioningControlPanel.Services.SessionRunner(new ConditioningControlPanel.Services.SessionLogService());
+        type.GetProperty("CurrentSession")!.SetValue(runner, new ConditioningControlPanel.Models.Session
+            { DurationMinutes = 20, Phases = { new() { Name = "Intro" }, new() { Name = "Deepener" } } });
+        var e = Seeded(Rule("Idle", "unused"), out var unused);
+        BarkRule Live(params (string, object)[] c) => new() { Conditions = c.ToDictionary(x => x.Item1, x => x.Item2) };
+        try
+        {
+            BarkHead.WireSources(e);
+            foreach (var (p, v) in new (string, object)[] { ("IsRunning", true), ("CurrentPhaseIndex", 1), ("PauseCount", 3) })
+                type.GetProperty(p)!.SetValue(runner, v);
+            ((System.Delegate?)type.GetField("PhaseChanged", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(runner))!.DynamicInvoke(1);
+            var running = Live(("phase_name", "Deepener"), ("phase_is_deepener", true), ("session_phase_index", 1),
+                ("pauses_this_session", 3), ("session_planned_min", 20), ("session_elapsed_sec_gte", 0));
+            Assert.True(e.ConditionsPass(running, new BarkContext("Idle")));
+            type.GetProperty("IsRunning")!.SetValue(runner, false);
+            Assert.False(e.ConditionsPass(running, new BarkContext("Idle")));
+            Assert.True(e.ConditionsPass(Live(("pauses_this_session", 0), ("session_phase_index", -1), ("phase_is_deepener", true)),
+                new BarkContext("Idle")));
+        }
+        finally
+        {
+            BarkHead.Stop();
+            phaseField.SetValue(null, oldPhase);
+            (App.Sessions, CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider) = old;
+        }
     });
 
     [Theory]
@@ -432,6 +605,106 @@ public sealed class CompanionBarkHeadTests
         Assert.Equal("first play", spoken());
     });
 
+    private sealed class WebcamBarkClock : System.TimeProvider
+    {
+        private global::System.DateTimeOffset _now = global::System.DateTimeOffset.UtcNow;
+        public override System.DateTimeOffset GetUtcNow() => _now;
+        public void Advance(System.TimeSpan by) => _now += by;
+    }
+
+    [Theory]
+    [InlineData("Blink")]
+    [InlineData("MouthOpen")]
+    [InlineData("TongueOut")]
+    [InlineData("LongStare")]
+    [InlineData("FaceLost")]
+    [InlineData("FaceFound")]
+    [InlineData("TrackingStateChanged")]
+    public void WebcamEventsReachBarksAndDetach(string trigger) => WithSeamsRestored(settings =>
+    {
+        BarkHead.Stop();
+        var rule = Rule(trigger, "camera");
+        rule.ClassRaw = "safety";
+        rule.Conditions = trigger switch
+        {
+            "Blink" => new() { ["blink_count_gte"] = 2 },
+            "FaceFound" => new() { ["face_lost_sec_gt"] = 0 },
+            "TrackingStateChanged" => new() { ["state"] = WebcamTracker.Instance.State.ToString() },
+            _ => null,
+        };
+        var e = Seeded(rule, out _);
+        var clock = new WebcamBarkClock();
+        e.Clock = clock;
+        int count = 0;
+        e.BarkSpoken += (_, _) => count++;
+        var camera = WebcamTracker.Instance;
+        System.Action fire = trigger switch
+        {
+            "Blink" => camera.RaiseBlinkForTest,
+            "MouthOpen" => camera.RaiseMouthForTest,
+            "TongueOut" => camera.RaiseTongueForTest,
+            "LongStare" => camera.RaiseLongStareForTest,
+            "FaceLost" => camera.RaiseFaceLostForTest,
+            "FaceFound" => camera.RaiseFaceFoundForTest,
+            _ => camera.RaiseStateForTest,
+        };
+        try
+        {
+            BarkHead.WireSources(e);
+            if (trigger == "Blink") { fire(); Assert.Equal(0, count); }
+            if (trigger == "FaceFound") { camera.RaiseFaceLostForTest(); clock.Advance(System.TimeSpan.FromSeconds(2)); }
+            fire();
+            Assert.Equal(1, count);
+            if (trigger == "FaceFound") Assert.Equal(0, e.FaceLostSeconds);
+            BarkHead.Stop();
+            if (trigger == "FaceFound") { e.FaceLost(); clock.Advance(System.TimeSpan.FromSeconds(2)); }
+            fire();
+            Assert.Equal(1, count);
+        }
+        finally { BarkHead.Stop(); }
+    });
+
+    [Fact]
+    public void WebcamStateBarksCaptureTransitionsAndIgnoreCalibration() => WithSeamsRestored(settings =>
+    {
+        BarkHead.Stop();
+        var camera = WebcamTracker.Instance;
+        var original = camera.State;
+        var calibration = camera.Calibration;
+        var denied = Rule("TrackingStateChanged", "denied", ("state", "CameraDenied"));
+        var inUse = Rule("TrackingStateChanged", "in use", ("state", "CameraInUse"));
+        denied.ClassRaw = inUse.ClassRaw = "safety";
+        var e = new BarkEngine(() => new BarkRuleSet(new[] { denied, inUse }));
+        BarkHead.Seed(e);
+        e.Start();
+        var spoken = new List<string>();
+        e.BarkSpoken += (_, line) => spoken.Add(line);
+        try
+        {
+            camera.SetTrackingState(ConditioningControlPanel.Services.WebcamTrackingState.Stopped);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            BarkHead.WireSources(e);
+            camera.SetTrackingState(ConditioningControlPanel.Services.WebcamTrackingState.CameraDenied);
+            camera.SetTrackingState(ConditioningControlPanel.Services.WebcamTrackingState.CameraInUse);
+            camera.SetTrackingState(ConditioningControlPanel.Services.WebcamTrackingState.CameraInUse);
+            camera.SetCalibrationLive(calibration);
+            Assert.Empty(spoken);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { "denied", "in use" }, spoken);
+            BarkHead.Stop();
+            camera.SetTrackingState(ConditioningControlPanel.Services.WebcamTrackingState.CameraDenied);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, spoken.Count);
+        }
+        finally
+        {
+            BarkHead.Stop();
+            camera.SetTrackingState(original);
+            camera.SetCalibrationLive(calibration);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        }
+    });
+
     private static BarkRule Rule(string trigger, string line, (string Key, object Value)? condition = null) => new()
     {
         Id = "t_" + trigger, Trigger = trigger, VariantPool = new() { new BarkVariant(line) },
@@ -462,6 +735,9 @@ public sealed class CompanionBarkHeadTests
             CoreSettingsHooks.SettingChangedSink, CoreBark.UiAction, CoreBark.TabNavigated, CoreBark.FeatureOpened, CoreBark.AvatarClicked);
         var chaos = (CoreBark.ChaosDraftAutopick, CoreBark.ChaosRankUp, CoreBark.ChaosResultsShown, CoreBark.AllLinesProvider);
         var firstTimeBark = ConditioningControlPanel.Services.Chaos.ChaosLessons.FirstTimeBark;
+        var emi = (ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire, ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe);
+        // Seed points the bridge at the real desk, whose holds land on the shared line engine.
+        using var emiScope = new EmiTestScope();
         var state = (s.AvatarEnabled, s.BarkChatSuppressionMs, new Dictionary<string, List<string>>(s.BarkVariantRotation));
         try
         {
@@ -474,6 +750,7 @@ public sealed class CompanionBarkHeadTests
                 CoreSettingsHooks.SettingChangedSink, CoreBark.UiAction, CoreBark.TabNavigated, CoreBark.FeatureOpened, CoreBark.AvatarClicked) = hooks;
             (CoreBark.ChaosDraftAutopick, CoreBark.ChaosRankUp, CoreBark.ChaosResultsShown, CoreBark.AllLinesProvider) = chaos;
             ConditioningControlPanel.Services.Chaos.ChaosLessons.FirstTimeBark = firstTimeBark;
+            (ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.DeskFire, ConditioningControlPanel.Services.EmiDesk.EmiBarkBridge.VideoTitleProbe) = emi;
             (s.AvatarEnabled, s.BarkChatSuppressionMs) = (state.AvatarEnabled, state.BarkChatSuppressionMs);
             s.BarkVariantRotation.Clear();
             foreach (var kv in state.Item3) s.BarkVariantRotation[kv.Key] = kv.Value;

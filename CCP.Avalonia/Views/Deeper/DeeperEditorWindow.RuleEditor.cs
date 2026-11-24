@@ -718,6 +718,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 _selectedRule.RegionConstraint = _enhancement.Regions[idx - 1].Id;
             }
             MarkDirty();
+            RebuildRuleVisuals();
             ScheduleValidation();
         }
 
