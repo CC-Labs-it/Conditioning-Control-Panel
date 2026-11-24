@@ -68,6 +68,29 @@ public class RowsR4Tests
         });
     }
 
+    /// <summary>
+    /// The Dollhouse setup rows, read as TEXT only: building ChaosHubWindow starts its menu music,
+    /// so it is never constructed in a test. Every RowLabel there names a picture and every switch
+    /// label follows its own switch.
+    /// </summary>
+    [Fact]
+    public void Dollhouse_setup_rows_wear_emblems_read_as_text_only()
+    {
+        var dir = new System.IO.DirectoryInfo(System.AppContext.BaseDirectory);
+        while (dir != null && !System.IO.Directory.Exists(System.IO.Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources")))
+            dir = dir.Parent;
+        Assert.NotNull(dir);
+        var xaml = System.IO.File.ReadAllText(System.IO.Path.Combine(dir!.FullName, "ConditioningControlPanel", "Chaos", "ChaosHubWindow.xaml"));
+        var labels = System.Text.RegularExpressions.Regex.Matches(xaml, "<rows:RowLabel [^>]*/>")
+            .Select(m => m.Value).ToList();
+        Assert.True(labels.Count >= 20, $"only {labels.Count} RowLabels in the Dollhouse");
+        Assert.All(labels, l => Assert.Contains("Emblem=\"", l));
+        foreach (var chk in new[] { "ChkShake", "ChkFlashes", "ChkSkiaFx", "ChkPinTop", "ChkSharedHost", "ChkAnnouncer",
+                     "ChkNarrative", "ChkBackdrop", "ChkTunnel", "ChkDarters", "ChkBoonDraft", "ChkCurses" })
+            Assert.Contains(labels, l => l.Contains("ElementName=" + chk + "}"));
+        Assert.Contains("rows:RowHue.Hue=\"#FFE84393\"", xaml);
+    }
+
     [Theory]
     [InlineData(900.0)]
     [InlineData(520.0)]
