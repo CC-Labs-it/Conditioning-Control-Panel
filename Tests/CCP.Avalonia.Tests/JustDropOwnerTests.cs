@@ -96,6 +96,38 @@ public sealed class JustDropOwnerTests
         Assert.Equal(1, resyncs);
     });
 
+    [Theory]
+    [InlineData("dtrh", true)]
+    [InlineData("piecebypiece", true)]
+    [InlineData("breakoutdemo", false)]
+    public Task EligibleGameAttachesAndTracksOwner(string id, bool eligible) =>
+        AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var getHandle = NativeWindowOwner.HandleForTests;
+            var set = NativeWindowOwner.SetForTests;
+            NativeWindowOwner.HandleForTests = _ => new PlatformHandle(new IntPtr(42), "HWND");
+            NativeWindowOwner.SetForTests = (_, _) => true;
+            var owner = new Window();
+            var player = new GameWindow(GameWindow.Games[id]);
+            try
+            {
+                owner.Show(); player.Show();
+                player.AttachEligibleGameOwner(owner);
+                Assert.Equal(eligible, player.JustDropOwnerLinked);
+                owner.WindowState = WindowState.Minimized;
+                Assert.False(player.JustDropOwnerLinked);
+                owner.WindowState = WindowState.Normal;
+                Assert.Equal(eligible, player.JustDropOwnerLinked);
+            }
+            finally
+            {
+                player.Close(); owner.Close(); Dispatcher.UIThread.RunJobs();
+                NativeWindowOwner.HandleForTests = getHandle;
+                NativeWindowOwner.SetForTests = set;
+            }
+            return Task.CompletedTask;
+        });
+
     private static Task WithWindows(Action<GameWindow, Window, System.Collections.Generic.List<Window>> body) =>
         AvaloniaTestDispatcher.RunAsync(() =>
         {

@@ -171,8 +171,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 if (spec.Id == JustDropId) window.CenterJustDrop(panel ?? Windows.MainShellWindow.Current ?? (global::Avalonia.Visual)window);
                 window.Show();
                 // WPF ChaosWebViewHost.cs:904-1013 AttachMainWindowGlue: the shop window is owned by the panel.
-                if (spec.Id == JustDropId && (panel ?? Windows.MainShellWindow.Current) is { } shell)
-                    window.AttachJustDropOwner(shell);
+                if ((panel ?? Windows.MainShellWindow.Current) is { } shell)
+                    window.AttachEligibleGameOwner(shell);
                 return window;
             }
             catch

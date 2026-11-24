@@ -31,6 +31,13 @@ internal sealed partial class GameWindow
         return IntPtr.Zero;
     }
 
+    // WPF DtrhHostService:210 and PieceByPieceHostService:211.
+    internal void AttachEligibleGameOwner(Window shell)
+    {
+        if (Spec.Id is JustDropId or DtrhId or PbpId)
+            AttachJustDropOwner(shell);
+    }
+
     // WPF ChaosWebViewHost.AttachMainWindowGlue: ownership is useful only while main is up.
     // Keep it native: Show(owner) would also couple Avalonia's managed visibility/lifetime.
     internal void AttachJustDropOwner(Window shell)
