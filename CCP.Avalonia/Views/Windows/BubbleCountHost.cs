@@ -65,6 +65,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public void Show(string path, int difficulty, bool strict, Action<bool> onComplete, Action onSkipped) => Dispatcher.UIThread.Invoke(() =>
             BubbleCountWindow.ShowOnAllMonitors(path, (BubbleCountScheduler.Difficulty)difficulty, strict, onComplete, onSkipped));
 
+        public void Show(string path, int difficulty, bool strict, Action<bool> onComplete, Action onSkipped, Action<double> onDuration) => Dispatcher.UIThread.Invoke(() =>
+            BubbleCountWindow.ShowOnAllMonitors(path, (BubbleCountScheduler.Difficulty)difficulty, strict, onComplete, onSkipped, onDuration));
+
         /// <summary>WPF: magenta 64 pt bold text on black, maximised on every screen, then <paramref name="then"/>.</summary>
         public void ShowMessage(string text, int ms, Action then) => Dispatcher.UIThread.Invoke(() =>
         {

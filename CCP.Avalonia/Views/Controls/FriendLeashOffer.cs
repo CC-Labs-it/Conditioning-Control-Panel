@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Controls.Leash;
@@ -24,6 +25,35 @@ internal sealed class FriendLeashOffer : StackPanel
     private readonly HashSet<string> _pending;
     private readonly Action? _refresh;
     private bool _sending;
+    private BeatLoop? _pop;
+    private ScaleTransform? _popScale;
+    internal ScaleTransform? PopScale => _popScale;
+    private double _popAmount;
+    private void StopPop()
+    {
+        _pop?.Stop(); _pop = null;
+        if (_popScale != null) _popScale.ScaleX = _popScale.ScaleY = 1;
+    }
+    internal void Pop(Button chip)
+    {
+        StopPop();
+        _popAmount = FriendsDrawer.FeedMotionAmount;
+        if (_popAmount <= 0) return;
+        chip.RenderTransformOrigin = RelativePoint.Center;
+        chip.RenderTransform = _popScale = new ScaleTransform(1, 1);
+        _pop = new BeatLoop(chip, seconds => AdvancePop(seconds * 1000));
+        _pop.OnParked = StopPop;
+        _pop.Start();
+    }
+    internal void AdvancePop(double ms)
+    {
+        if (_popScale == null) return;
+        double p = Math.Clamp(ms / 100, 0, 1);
+        double v = ms <= 100 ? 1 - (1 - p) * (1 - p) :
+            Math.Exp(-4 * Math.Clamp((ms - 100) / 260, 0, 1)) * Math.Cos(2 * Math.PI * Math.Clamp((ms - 100) / 260, 0, 1));
+        _popScale.ScaleX = _popScale.ScaleY = ms >= 360 ? 1 : 1 + 0.18 * _popAmount * v;
+        if (ms >= 360) StopPop();
+    }
     internal Action<LeashCue> PlayCue = cue => { if (cue == LeashCue.Sent) LeashSound.Sent(DateTime.UtcNow); else LeashSound.Denied(DateTime.UtcNow); };
     internal LeashHolderIntro? Intro { get; private set; }
     private bool _shared;
@@ -60,7 +90,7 @@ internal sealed class FriendLeashOffer : StackPanel
         _friend = friend; _service = service; _sent = sent; _pending = pending ?? new(); _refresh = refresh;
         Margin = new Thickness(0, 0, 0, 6);
         AttachedToVisualTree += (_, _) => { _service.SnapshotChanged += Changed; _service.ReceiptsChanged += Changed; if (_shared) LeashHead.OffersChanged += Changed; Draw(); };
-        DetachedFromVisualTree += (_, _) => { _service.SnapshotChanged -= Changed; _service.ReceiptsChanged -= Changed; if (_shared) LeashHead.OffersChanged -= Changed; };
+        DetachedFromVisualTree += (_, _) => { StopPop(); _service.SnapshotChanged -= Changed; _service.ReceiptsChanged -= Changed; if (_shared) LeashHead.OffersChanged -= Changed; };
         Draw();
     }
     private void Changed(LeashSnapshot _) => Draw();
@@ -81,6 +111,8 @@ internal sealed class FriendLeashOffer : StackPanel
     }
     private void Draw()
     {
+        bool popping = _pop != null;
+        StopPop();
         Children.Clear();
         var state = State();
         if (state == LeashUiRules.OfferChip.Hidden) return;
@@ -90,24 +122,46 @@ internal sealed class FriendLeashOffer : StackPanel
             LeashUiRules.OfferChip.Holding => "leash_offer_holding",
             _ => "leash_offer",
         });
+        var accent = state switch
+        {
+            LeashUiRules.OfferChip.Sent => FriendsDrawer.Mint,
+            LeashUiRules.OfferChip.Greyed => FriendsDrawer.Dim,
+            _ => FriendsDrawer.Gold,
+        };
+        var content = FriendsDrawer.GlyphContent(IconKind.Link, _error ?? word, center: true, glyphFg: accent);
+        ((TextBlock)content.Children[1]).Foreground = accent;
         if (state == LeashUiRules.OfferChip.Sent)
         {
-            try { if (LeashUiRules.OfferStep(_service.ReceiptsSupported, _service.SentTo(_friend.Id)) is { } step) word += " · " + Loc.Get(LeashUiRules.StepKey(step)); }
+            try
+            {
+                if (LeashUiRules.OfferStep(_service.ReceiptsSupported, _service.SentTo(_friend.Id)) is { } step)
+                    content.Children.Add(new TextBlock { Text = "  ·  " + Loc.Get(LeashUiRules.StepKey(step)),
+                        Tag = "leash-offer-step:" + step.ToString().ToLowerInvariant(), FontFamily = FriendsDrawer.Mono,
+                        FontSize = 11, Foreground = FriendsDrawer.Lilac, VerticalAlignment = VerticalAlignment.Center });
+            }
             catch { }
         }
-        var chip = FriendsDrawer.Pill(FriendsDrawer.GlyphContent(IconKind.Link, _error ?? word, center: true), FriendsDrawer.Raised, FriendsDrawer.Gold, "leash-offer");
+        var chip = FriendsDrawer.Pill(content, new SolidColorBrush(Color.FromArgb(0x22, 0xff, 0xcf, 0x6b)), accent,
+            "leash-offer", new SolidColorBrush(state == LeashUiRules.OfferChip.Sent
+                ? Color.FromRgb(0x28, 0x5d, 0x4f) : Color.FromRgb(0x6b, 0x53, 0x20)));
+        chip.CornerRadius = new CornerRadius(999); chip.Padding = new Thickness(10, 6, 10, 6);
         chip.IsEnabled = !_sending && !_pending.Contains(_friend.Id) && _error == null && state == LeashUiRules.OfferChip.Offer;
         if (state == LeashUiRules.OfferChip.Greyed) ToolTip.SetTip(chip, Loc.Get("leash_offer_greyed"));
         chip.Click += async (_, _) =>
         {
+            Pop(chip);
             if (LeashIntroRule.ShouldExplain(CoreSettings.Current, LeashIntroSide.Holder)) ShowIntro(true);
             else await Send();
         };
-        var help = FriendsDrawer.Pill("?", FriendsDrawer.Raised, FriendsDrawer.Lilac, "leash-offer-help");
-        help.Width = 26; help.Padding = new Thickness(0); help.Margin = new Thickness(6, 0, 0, 0);
+        var help = FriendsDrawer.Pill("?", new SolidColorBrush(Color.FromArgb(0x22, 0xb9, 0x9c, 0xff)), FriendsDrawer.Lilac,
+            "leash-offer-help", new SolidColorBrush(Color.FromArgb(0x66, 0xb9, 0x9c, 0xff)));
+        help.Width = 22; help.Height = 22; help.CornerRadius = new CornerRadius(11); help.Padding = new Thickness(0); help.Margin = new Thickness(6, 0, 0, 0);
+        ((TextBlock)help.Content!).FontWeight = FontWeight.Bold;
+        ToolTip.SetTip(help, Loc.Get("leash_help"));
         help.Click += (_, _) => ShowIntro(false);
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Tag = "leash-offer-chip:" + state.ToString().ToLowerInvariant() };
         row.Children.Add(chip); Grid.SetColumn(help, 1); row.Children.Add(help); Children.Add(row);
+        if (popping) Pop(chip);
     }
     private void ShowIntro(bool offer)
     {

@@ -128,8 +128,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 return false;
             }
             w.Show();
+            RaiseAboveVideo(w);
             _window = w;
             return true;
+        }
+
+        // WPF ChaosWindowZ.cs:62-66: reassert the shown window while video is playing.
+        private static void RaiseAboveVideo(Window w)
+        {
+            if (ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop && CoreEngine.Video?.IsPlaying == true)
+                ChaosRunHost.RaiseOverlayWindow(w);
         }
 
         private static Window NewWindow(Control content, double width, double height) => new Window
@@ -205,6 +213,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     throw new InvalidOperationException("DVD click-through window refused");
                 }
                 w.Show();
+                RaiseAboveVideo(w);
                 LogoWindows[l] = w;
             }
             Labels[l] = t;

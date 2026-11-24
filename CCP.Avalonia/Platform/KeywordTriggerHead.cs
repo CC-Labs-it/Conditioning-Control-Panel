@@ -19,14 +19,17 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 
 /// <summary>Keyboard slice of WPF KeywordTriggerService: audio, visual effect, haptic, XP, Chaster and avatar
 /// comment actions, plus the OCR consumer and scan lifecycle (restack b220, #4299). The OCR engine itself
-/// (<see cref="OcrSource"/>) and the Brain Drain visual remain a follow-up.</summary>
+/// uses the Windows OCR helper; the Brain Drain visual remains a follow-up.</summary>
 internal static class KeywordTriggerHead
 {
     internal static KeywordAudioRuntime Engine { get; } = new();
     // OS input seams: tests can drive Win32PanicKey.OnDown without installing a native hook.
     internal static bool? KeyboardSupportedForTests;
     internal static Func<int, char?>? TranslateForTests;
-    internal static bool HasKeyboardInput => KeyboardSupportedForTests ?? (OperatingSystem.IsWindows() &&
+    internal static bool UseX11ForTests;
+    internal static Func<IntPtr, int, ulong>? ResolveX11ForTests;
+    internal static Func<uint>? X11ForegroundForTests;
+    internal static bool HasKeyboardInput => KeyboardSupportedForTests ?? ((OperatingSystem.IsWindows() || OperatingSystem.IsLinux() && X11PanicKey.IsListening) &&
         string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR")));
     private static bool _subscribed;
     private static int _generation;
@@ -44,10 +47,15 @@ internal static class KeywordTriggerHead
     // WPF MainWindow.Awareness.cs:480-499: the keyboard toggle does not start the service.
     internal static void AttachKeyboard()
     {
-        if (!CoreSettings.Current.KeywordTriggersEnabled || _subscribed || !HasKeyboardInput) return;
-        Win32PanicKey.KeyDown += OnKey;
+        if (!CoreSettings.Current.KeywordTriggersEnabled || !KeywordAudioRuntime.HasAccess || _subscribed || !HasKeyboardInput) return;
+        if (UseX11ForTests || KeyboardSupportedForTests != true && OperatingSystem.IsLinux())
+        {
+            var generation = Volatile.Read(ref _generation);
+            X11PanicKey.KeywordPress = (display, code) => OnX11Key(display, code, generation);
+        }
+        else Win32PanicKey.KeyDown += OnKey;
         _subscribed = true;
-        if (KeyboardSupportedForTests != true) Win32PanicKey.EnsureListening(); // shared panic hook
+        if (KeyboardSupportedForTests != true && OperatingSystem.IsWindows()) Win32PanicKey.EnsureListening(); // shared panic hook
     }
 
     // WPF KeywordTriggerService.cs:176-185: start is idempotent and requires awareness access.
@@ -58,13 +66,13 @@ internal static class KeywordTriggerHead
         Engine.Start();
     }
     /// <summary>Confirm the shared hook before program rollover or enrollment can rely on it.
-    /// Sync subscribes only on Windows outside the isolated user-data profile.</summary>
-    internal static bool KeyboardSourceAvailable() => KeyboardSourceAvailable(OperatingSystem.IsWindows(),
+    /// Sync subscribes outside the isolated user-data profile when the platform listener is available.</summary>
+    internal static bool KeyboardSourceAvailable() => KeyboardSourceAvailable(OperatingSystem.IsWindows() || OperatingSystem.IsLinux(),
         Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"),
-        () => Win32PanicKey.EnsureListening() && Win32PanicKey.IsListening);
+        () => OperatingSystem.IsLinux() ? X11PanicKey.IsListening : Win32PanicKey.EnsureListening() && Win32PanicKey.IsListening);
 
-    internal static bool KeyboardSourceAvailable(bool windows, string? sandboxDir, Func<bool> ensureListening) =>
-        windows && string.IsNullOrEmpty(sandboxDir) && ensureListening();
+    internal static bool KeyboardSourceAvailable(bool supported, string? sandboxDir, Func<bool> ensureListening) =>
+        supported && string.IsNullOrEmpty(sandboxDir) && ensureListening();
 
     // The hook itself stays: on this head the panic key (Win32Input.Start at boot) owns it, the case WPF :426 keeps it for.
     internal static void Stop() { DetachKeyboard(); lock (_ocrGate) _ocr?.Stop(); Engine.Stop(); KeywordAvatarComment.CancelPending(); }
@@ -77,6 +85,7 @@ internal static class KeywordTriggerHead
     /// Nothing turns them back on. UI thread, idempotent, never throws; true when a switch changed.</summary>
     internal static bool SwitchOffForPanic()
     {
+        KeywordHighlightOverlay.CloseAll();
         var changed = false;
         try
         {
@@ -91,9 +100,7 @@ internal static class KeywordTriggerHead
         return changed;
     }
 
-    /// <summary>Screen capture plus recognition. Null on this head (docs/avalonia-decisions.html 2026-11-04):
-    /// plain net10.0 (no Windows TFM) cannot reach WinRT's OcrEngine, Linux ships no OCR engine, and Wayland
-    /// capture is interactive only. While null the scanner never starts; everything after the source is live.</summary>
+    /// <summary>Optional test source. Production uses the Windows capture and WinRT OCR helper.</summary>
     internal static Func<CancellationToken, Task<IReadOnlyList<ScreenOcrService.Word>>>? OcrSource;
     private static ScreenOcrService? _ocr;
     private static readonly object _ocrGate = new();
@@ -106,9 +113,8 @@ internal static class KeywordTriggerHead
         lock (_ocrGate)
         {
             var s = CoreSettings.Current;
-            if (_ocrSuspended || OcrSource == null) { _ocr?.Stop(); return; }
-            _ocr ??= new ScreenOcrService(t => OcrSource?.Invoke(t) ?? Task.FromResult<IReadOnlyList<ScreenOcrService.Word>>([]),
-                () => KeywordAudioRuntime.HasAccess, DeliverOcr);
+            if (_ocrSuspended || (OcrSource == null && !WindowsOcrSource.Available)) { _ocr?.Stop(); return; }
+            _ocr ??= CreateOcrScanner(Engine);
             _ocr.Sync(s.KeywordTriggersEnabled && Engine.IsActive, s.ScreenOcrEnabled, s.ScreenOcrIntervalMs);
         }
     }
@@ -140,9 +146,14 @@ internal static class KeywordTriggerHead
 
     internal static Task TickOcrForTest() => _ocr?.TickAsync() ?? Task.CompletedTask;
 
+    // Share the production source and delivery path with an isolated runtime in headless tests.
+    internal static ScreenOcrService CreateOcrScanner(KeywordAudioRuntime engine) =>
+        new(t => OcrSource?.Invoke(t) ?? WindowsOcrSource.Scan(t),
+            () => KeywordAudioRuntime.HasAccess, (words, token) => DeliverOcr(engine, words, token));
+
     // WPF ScreenOcrService.cs:143-198: own-UI filter, then the consumer on the UI thread. Stop runs on the
     // UI thread too, so a scan that finished after it is dropped here.
-    private static Task<bool> DeliverOcr(IReadOnlyList<ScreenOcrService.Word> words, CancellationToken token) =>
+    private static Task<bool> DeliverOcr(KeywordAudioRuntime engine, IReadOnlyList<ScreenOcrService.Word> words, CancellationToken token) =>
         Dispatcher.UIThread.InvokeAsync(() =>
         {
             if (token.IsCancellationRequested) return false;
@@ -154,7 +165,7 @@ internal static class KeywordTriggerHead
                 GetWindowThreadProcessId(GetForegroundWindow(), out var id);
                 foreground = Foreground(id);
             }
-            return Engine.CheckOcrWords(words, foreground.Process, foreground.Own);
+            return engine.CheckOcrWords(words, foreground.Process, foreground.Own);
         }).GetTask();
 
     internal static IReadOnlyList<ScreenOcrService.Word> WithoutOwnWindows(
@@ -173,6 +184,7 @@ internal static class KeywordTriggerHead
             global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop) return rects;
         foreach (var w in desktop.Windows)
         {
+            if (KeywordHighlightOverlay.IsHighlightWindow(w)) continue;
             if (!w.IsVisible || w.WindowState == global::Avalonia.Controls.WindowState.Minimized) continue;
             var size = global::Avalonia.PixelSize.FromSize(w.FrameSize ?? w.ClientSize, w.RenderScaling);
             if (size.Width <= 0 || size.Height <= 0 || w.Screens.All.Any(m =>
@@ -187,12 +199,33 @@ internal static class KeywordTriggerHead
     {
         Interlocked.Increment(ref _generation);
         Engine.ClearInput();
-        if (_subscribed) Win32PanicKey.KeyDown -= OnKey;
+        if (_subscribed) { Win32PanicKey.KeyDown -= OnKey; X11PanicKey.KeywordPress = null; }
         _subscribed = false;
     }
 
     /// <summary>Cuts the clip only; the panic pass uses <see cref="SwitchOffForPanic"/>.</summary>
     internal static void StopAudio() => Engine.StopAudio();
+
+    // XKB resolution belongs to the listener thread. Delivery and foreground reads stay on the UI thread.
+    private static void OnX11Key(IntPtr display, int keycode, int generation)
+    {
+        try
+        {
+            var symbol = ResolveX11ForTests?.Invoke(display, keycode) ?? X11KeywordInput.Resolve(display, keycode);
+            var special = X11KeywordInput.Special(symbol);
+            var ch = special == null ? X11KeywordInput.Character(symbol) : null;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (generation != Volatile.Read(ref _generation)) return;
+                var id = Engine.NeedsForeground(DateTime.UtcNow) ? (X11ForegroundForTests?.Invoke() ?? X11ActiveWindow.ReadForegroundPid()) : 0;
+                var foreground = Foreground(id);
+                if (special is { } key) Engine.Key(key, foreground.Process, foreground.Own);
+                else if (ch is { } c) Engine.Character(c, foreground.Process, foreground.Own);
+                else Engine.Key(KeywordInputKey.None, foreground.Process, foreground.Own);
+            });
+        }
+        catch (Exception ex) { Log.Debug(ex, "X11 keyword input failed"); }
+    }
 
     private static void OnKey(int vk, string? name)
     {
@@ -341,7 +374,7 @@ internal sealed class KeywordAudioRuntime
     }
 
     // One fire path for both sources (WPF KeywordTriggerService.cs:126-140 keyboard, :933-943 OCR).
-    private void Fire(List<KeywordTrigger> fired, string source, DateTime now)
+    private void Fire(List<KeywordTrigger> fired, string source, DateTime now, IReadOnlyList<ScreenOcrService.Word>? words = null)
     {
         var s = CoreSettings.Current;
         _cooldowns.LastGlobal = now;
@@ -359,7 +392,7 @@ internal sealed class KeywordAudioRuntime
             Log.Information("KeywordTriggers: held - a panic is still quiet");
             return;
         }
-        LastDispatch = DispatchAsync(fired);
+        LastDispatch = DispatchAsync(fired, words);
         // WPF KeywordTriggerService.cs:1272,1345,1363: all enabled actions for one trigger;
         // :1283-1293: only the first enabled comment when multiple triggers merge.
         var comments = fired.SelectMany(t => t.Actions ?? new()).OfType<AvatarCommentAction>().Where(a => a.Enabled);
@@ -428,11 +461,11 @@ internal sealed class KeywordAudioRuntime
         }
         _ocrFired.UnionWith(confirmed);
         // Fire holds the response during a panic's quiet, the same as a keyboard match (WPF DispatchMergedAsync).
-        Fire(fired, "OCR", now);
+        Fire(fired, "OCR", now, confirmed.Select(key => matched.First(w => $"{w.Text.ToLowerInvariant()}_{w.Bounds.X / 120}_{w.Bounds.Y / 120}" == key)).ToArray());
         return NeedsOcrConfirmation;
     }
 
-    private static List<ScreenOcrService.Word> FindOcrMatches(KeywordTrigger trigger, IReadOnlyList<ScreenOcrService.Word> words)
+    internal static List<ScreenOcrService.Word> FindOcrMatches(KeywordTrigger trigger, IReadOnlyList<ScreenOcrService.Word> words)
     {
         var results = new List<ScreenOcrService.Word>();
         if (trigger.MatchType != KeywordMatchType.Regex)
@@ -454,7 +487,7 @@ internal sealed class KeywordAudioRuntime
                 if (!matches) continue;
                 var bounds = words[i].Bounds;
                 for (var j = 1; j < parts.Length; j++) bounds = System.Drawing.Rectangle.Union(bounds, words[i + j].Bounds);
-                results.Add(parts.Length == 1 ? words[i] : new ScreenOcrService.Word(trigger.Keyword, bounds));
+                results.Add(parts.Length == 1 ? words[i] : new ScreenOcrService.Word(trigger.Keyword, bounds, words[i].Screen));
             }
             return results;
         }
@@ -472,12 +505,15 @@ internal sealed class KeywordAudioRuntime
             {
                 if (match.Length == 0) continue;
                 System.Drawing.Rectangle? bounds = null;
+                string? screen = null;
                 for (var i = 0; i < words.Count; i++)
                 {
                     if (starts[i] + words[i].Text.Length <= match.Index || starts[i] >= match.Index + match.Length) continue;
-                    bounds = bounds is { } r ? System.Drawing.Rectangle.Union(r, words[i].Bounds) : words[i].Bounds;
+                    // WPF KeywordTriggerService.cs:1126-1137: union only the words on the first word's screen.
+                    if (bounds is { } r) { if (words[i].Screen == screen) bounds = System.Drawing.Rectangle.Union(r, words[i].Bounds); }
+                    else { bounds = words[i].Bounds; screen = words[i].Screen; }
                 }
-                if (bounds is { } rect) results.Add(new ScreenOcrService.Word(match.Value, rect));
+                if (bounds is { } rect) results.Add(new ScreenOcrService.Word(match.Value, rect, screen));
             }
         }
         catch (ArgumentException) { return new(); }
@@ -505,7 +541,7 @@ internal sealed class KeywordAudioRuntime
     // WPF GetRecentFires: the Awareness pulse feed reads the shared Core ring (KeywordFireLog).
     internal IReadOnlyList<TriggerFireRecord> GetRecentFires() => Fires.Recent();
     internal Task LastDispatch { get; private set; } = Task.CompletedTask;
-    private async Task DispatchAsync(List<KeywordTrigger> fired)
+    private async Task DispatchAsync(List<KeywordTrigger> fired, IReadOnlyList<ScreenOcrService.Word>? words)
     {
         if (ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
         foreach (var _ in fired)
@@ -516,7 +552,7 @@ internal sealed class KeywordAudioRuntime
         if (legacy)
         {
             actions = new();
-            if (first.VisualEffect == KeywordVisualEffect.HighlightOnly) return;
+            if (first.VisualEffect == KeywordVisualEffect.HighlightOnly) { KeywordHighlightOverlay.Show(words); return; }
             actions.Add(new PlayAudioAction { FilePath = first.AudioFilePath, Volume = first.AudioVolume,
                 PlayCount = first.AudioPlayCount, DelayBetweenMs = first.AudioDelayBetweenMs, DuckSystemAudio = first.DuckAudio });
             // WPF DispatchLegacyFlatFieldsAsync: the flat visual fires after the audio, before haptic and XP.
@@ -553,7 +589,11 @@ internal sealed class KeywordAudioRuntime
                         if (result == ClipResult.Stopped) return;
                         played |= result == ClipResult.Played;
                         break;
-                    case VisualEffectAction visual: (Visual ?? FireVisual)(visual.Effect, first.Keyword); break;
+                    case HighlightAction: KeywordHighlightOverlay.Show(words); break;
+                    case VisualEffectAction visual:
+                        (Visual ?? FireVisual)(visual.Effect, first.Keyword);
+                        if (legacy) KeywordHighlightOverlay.Show(words);
+                        break;
                     case HapticAction haptic: Haptic(first.Keyword, haptic.Intensity); break;
                     case AddXpAction xp when xp.Amount > 0:
                         AddXp(xp.Amount * (CoreSession.IsSessionRunning ? CoreSettings.Current.KeywordSessionMultiplier : 1));

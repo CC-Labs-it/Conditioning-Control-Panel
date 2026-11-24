@@ -52,7 +52,7 @@ public sealed class ModPersistenceShapeTests
         }
         finally
         {
-            foreach (var f in Directory.GetFiles(CorePaths.UserData, "settings*")) File.Delete(f);
+            foreach (var f in RoadmapTestProfile.SettingsFiles(CorePaths.UserData)) File.Delete(f);
         }
     }
 

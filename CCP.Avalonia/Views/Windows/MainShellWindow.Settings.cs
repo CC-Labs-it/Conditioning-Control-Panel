@@ -64,6 +64,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// </summary>
         internal static async Task<string?> PickAssetsFolder(global::Avalonia.Controls.Window owner)
         {
+            try { CoreBark.NotifyUiAction("pick_assets"); } catch { }
             try
             {
                 var storage = owner.StorageProvider;
