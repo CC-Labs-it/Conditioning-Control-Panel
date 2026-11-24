@@ -30,7 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 var webcam = Platform.WebcamTracker.Instance;
-                if (webcam.IsRunning) return;
+                if (webcam.IsRunning || CoreSettings.Current.CameraHeldOff) return;
                 if (!Services.TierGate.RequiresLab(global::ConditioningControlPanel.Localization.Loc.Get("label_focus_gaze")).Allowed) return;
                 if (!Services.Webcam.WebcamConsent.IsCurrent(CoreSettings.Current)) return;
                 if (!CoreSettings.Current.WebcamCalibrated) return;

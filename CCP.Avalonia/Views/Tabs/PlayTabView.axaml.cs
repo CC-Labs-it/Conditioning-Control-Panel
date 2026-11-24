@@ -390,6 +390,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 SyncFocusGazeToggle(false);
                 return;
             }
+            Platform.WebcamTracker.HoldCameraOff(false);
             try
             {
                 // Revert first, then tell (WPF order): the switch never sits ON behind a refusal.

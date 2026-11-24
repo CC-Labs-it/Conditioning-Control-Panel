@@ -783,7 +783,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             try
             {
                 var tracker = Platform.WebcamTracker.Instance;
-                if (tracker.IsRunning) { await tracker.StopAsync(); RefreshTrackerButton(); return; }
+                if (tracker.IsRunning) { await tracker.StopAsync(); Platform.WebcamTracker.HoldCameraOff(true); RefreshTrackerButton(); return; }
                 if (TopLevel.GetTopLevel(this) is not Window owner) return;
                 if (!WebcamConsent.IsCurrent(CoreSettings.Current))
                 {
@@ -794,6 +794,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 }
                 BtnBlinkTrainerStartStopTracker.IsEnabled = false;
                 bool started = await tracker.StartAsync();
+                if (started) Platform.WebcamTracker.HoldCameraOff(false);
                 BtnBlinkTrainerStartStopTracker.IsEnabled = true;
                 RefreshTrackerButton();
                 if (!started && tracker.LastError != null)

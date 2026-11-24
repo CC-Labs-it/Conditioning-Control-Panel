@@ -133,6 +133,24 @@ public sealed class BlinkStopTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task CameraPillRemembersManualStop() => WithShell(async (shell, _) =>
+    {
+        var settings = CoreSettings.Current;
+        var oldHeld = settings.CameraHeldOff;
+        try
+        {
+            settings.CameraHeldOff = false;
+            await shell.StopWebcamFromPillAsync();
+            Assert.True(settings.CameraHeldOff);
+        }
+        finally
+        {
+            settings.CameraHeldOff = oldHeld;
+            CoreSettings.Save();
+        }
+    });
+
     /// <summary>WPF :134/:477: the pill lights while the camera runs; Enter on it (P17) stops the camera.</summary>
     [Fact]
     public Task TheCameraPillShowsAndStopsTheCamera() => WithShell(async (shell, _) =>
