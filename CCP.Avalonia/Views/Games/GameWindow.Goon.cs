@@ -8,8 +8,7 @@
 // WPF GameSurfaces.cs:64).
 // Part B: the net-post proxy (:1008) is answered as unreachable (status 0, the page's offline path) until a
 // trusted sender-origin seam exists, so hosted and joined duels do not connect yet (and so no last-opponent
-// record, :767); cache and inbox verbs (:776-785), Discord verbs (:789-804), online media (:807-819),
-// share card (:835), main-window duck (:385) and the boot-error dialog (:1801).
+// record, :767); cache and inbox verbs (:776-785), Discord verbs (:789-804), main-window duck (:385) and the boot-error dialog (:1801).
 using System;
 using System.Collections.Generic;
 using Avalonia.Controls;
@@ -86,6 +85,7 @@ internal sealed partial class GameWindow
 
     partial void HandleGoonMessage(JObject message, ref bool handled)
     {
+        if (HandleGoonMedia(message)) { handled = true; return; }
         switch ((string?)message["type"])
         {
             case "ready":
@@ -130,6 +130,10 @@ internal sealed partial class GameWindow
                 // Part B (WPF :1008). Status 0 is the page's "never got an answer" path, so it shows
                 // offline at once instead of waiting out its 45 s timeout. No request leaves the app.
                 Post(new { type = "net-post-result", id = (string?)message["id"] ?? "", status = 0, body = "" });
+                handled = true;
+                break;
+            case "share-card":
+                if (!_closing) GoonSharePending = ShareGoonCard(message);
                 handled = true;
                 break;
             case "heartbeat":
@@ -181,6 +185,7 @@ internal sealed partial class GameWindow
 
     private void StopGoonWatch()
     {
+        StopGoonMedia();
         _goonWatch?.Stop();
         _goonWatch = null;
     }
@@ -197,7 +202,7 @@ internal sealed partial class GameWindow
         CoreSettings.Service?.Save();
     }
 
-    /// <summary>WPF OnPageReady (:443-504) with the fields this head can honour: no Discord or online-media block (the page reads null as none).</summary>
+    /// <summary>WPF OnPageReady (:443-504) with the fields this head can honour: no Discord block.</summary>
     internal object GoonInitMessage()
     {
         var settings = CoreSettings.Current;
@@ -231,6 +236,7 @@ internal sealed partial class GameWindow
             autoHost = false,
             consent = new { liveDurationSec = consent.LiveDurationSec, toyCap = consent.ToyCap, payloadMinGapMs = consent.PayloadMinGapMs },
             fullscreen = WindowState == WindowState.FullScreen,
+            media = GoonMediaBlock(),
             plans = ConditioningControlPanel.Services.Vault.PlanCatalog.ToWire(ConditioningControlPanel.Services.Vault.PlanCatalog.Current),
         };
     }
