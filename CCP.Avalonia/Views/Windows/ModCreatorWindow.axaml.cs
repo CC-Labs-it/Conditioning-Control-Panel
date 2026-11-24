@@ -259,6 +259,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _contentScroll = this.FindControl<ScrollViewer>("ContentScroll")!;
             _txtStatus = this.FindControl<TextBlock>("TxtStatus")!;
 
+            HookResizeEdges();
             this.FindControl<Border>("TitleBar")!.PointerPressed += TitleBar_PointerPressed;
             this.FindControl<Button>("BtnHelp")!.Click += (_, _) => BtnHelp_Click();
             this.FindControl<Button>("BtnMinimize")!.Click += (_, _) => WindowState = WindowState.Minimized;
@@ -278,6 +279,47 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 Opened += (_, _) => LaunchTutorial();
             }
+        }
+
+        // WPF WindowChrome uses a six-pixel resize border.
+        internal static WindowEdge? ResizeEdgeAt(Point p, Size size)
+        {
+            const double border = 6;
+            bool left = p.X < border, right = p.X >= size.Width - border;
+            bool top = p.Y < border, bottom = p.Y >= size.Height - border;
+            if (left && top) return WindowEdge.NorthWest;
+            if (right && top) return WindowEdge.NorthEast;
+            if (left && bottom) return WindowEdge.SouthWest;
+            if (right && bottom) return WindowEdge.SouthEast;
+            if (left) return WindowEdge.West;
+            if (right) return WindowEdge.East;
+            if (top) return WindowEdge.North;
+            if (bottom) return WindowEdge.South;
+            return null;
+        }
+
+        internal WindowEdge? LastResizeEdge { get; private set; }
+        private WindowEdge? _resizeCursorEdge;
+
+        private WindowEdge? ResizeEdgeFor(PointerEventArgs e) =>
+            WindowState == WindowState.Normal && CanResize ? ResizeEdgeAt(e.GetPosition(this), Bounds.Size) : null;
+
+        private void HookResizeEdges()
+        {
+            AddHandler(PointerMovedEvent, (_, e) =>
+            {
+                var edge = ResizeEdgeFor(e);
+                if (edge == _resizeCursorEdge) return;
+                _resizeCursorEdge = edge;
+                Cursor = edge is { } value ? new Cursor(MainShellWindow.CursorFor(value)) : null;
+            }, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            AddHandler(PointerPressedEvent, (_, e) =>
+            {
+                if (ResizeEdgeFor(e) is not { } edge || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+                LastResizeEdge = edge;
+                e.Handled = true;
+                BeginResizeDrag(edge, e);
+            }, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
         }
 
         // ─── Title Bar ──────────────────────────────────────────
