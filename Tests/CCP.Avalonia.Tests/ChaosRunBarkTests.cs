@@ -129,6 +129,20 @@ public sealed class ChaosRunBarkTests
         Assert.DoesNotContain(heard, x => x.Trigger == "ChaosBubbleDetonated");
     });
 
+    [Fact]
+    public Task Collar_unleashed_barks_absorbed_after_the_defuses() => WithRun(false, heard =>
+    {
+        var state = ChaosRunHost.State!;
+        state.Shields = 0; state.CollarSaves = 1; state.UnleashedEnabled = true;
+        BubbleOverlay.SpawnChaos(new EffectBubbleSpec { VariantId = "pink", IsLive = true, FuseMs = 600000, SizePx = 200, Payload = new FlashPayload() });
+        ChaosRunHost.OnDetonated(new AmbientBubble { Spec = new EffectBubbleSpec { VariantId = "pink", IsLive = true, Payload = new FlashPayload() } });
+        // WPF ChaosModeService.cs:2113 then :2118: Unleashed defuses first, the absorbed bark reads the combo after.
+        int defused = heard.FindIndex(x => x.Trigger == "ChaosBubbleDefused");
+        var c = One(heard, "ChaosBubbleDetonatedAbsorbed");
+        Assert.InRange(defused, 0, heard.IndexOf(c) - 1);
+        Assert.Equal((double)state.Combo, c.Values["combo"]);
+    });
+
     [Theory]
     [InlineData(0), InlineData(1), InlineData(2)]
     public Task Draft_barks_clear_then_skip_boon_or_curse(int pick) => WithRun(true, heard =>
@@ -166,5 +180,19 @@ public sealed class ChaosRunBarkTests
         Assert.DoesNotContain(heard, x => x.Trigger == "ChaosFocusLow");
         for (int i = 0; i < ticks; i++) { ChaosRunHost.State!.Focus = 0; ChaosRunHost.Tick(); }
         One(heard, "ChaosFocusLow");
+    });
+
+    [Fact]
+    public Task Focus_low_due_with_ending_soon_barks_first() => WithRun(false, heard =>
+    {
+        BubbleOverlay.SpawnChaos(new EffectBubbleSpec { VariantId = "pink", IsLive = true, FuseMs = 600000, SizePx = 200, Payload = new FlashPayload() });
+        var state = ChaosRunHost.State!;
+        int ticks = (int)(ChaosTuning.FOCUS_LOW_BARK_SEC / ChaosRunEngine.TICK_SEC);
+        for (int i = 0; i < ticks - 1; i++) { state.Focus = 0; ChaosRunHost.Tick(); }
+        Assert.DoesNotContain(heard, x => x.Trigger == "ChaosFocusLow");
+        state.ElapsedSec = state.RunDurationSec - ChaosRunEngine.ENDING_SOON_SEC - ChaosRunEngine.TICK_SEC;
+        state.Focus = 0; ChaosRunHost.Tick();
+        // WPF ChaosModeService.cs:1029 runs before :1068, so focus-low takes the shared bark gap.
+        Assert.True(heard.IndexOf(One(heard, "ChaosFocusLow")) < heard.IndexOf(One(heard, "ChaosEndingSoon")));
     });
 }

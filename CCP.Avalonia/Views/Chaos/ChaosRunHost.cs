@@ -705,13 +705,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var outcome = ChaosFieldMath.ApplyDetonation(_state, BubbleOverlay.Field.Clock() < _invulnUntilUtc);
             string diff = _state.Config.Difficulty.ToString();
             bool bare = outcome is not (ChaosFieldMath.Detonation.SnapChainHeld or ChaosFieldMath.Detonation.ShieldAbsorbed or ChaosFieldMath.Detonation.CollarHeld);
-            // WPF :2083, :2098, :2118 (absorbed) and :2132 (bare, combo captured before the break).
-            RunBark(bare ? "ChaosBubbleDetonated" : "ChaosBubbleDetonatedAbsorbed", c =>
-            {
-                c.Set("payload", spec.VariantId).Set("strength", spec.Strength).Set("shield_absorbed", !bare)
-                 .Set("run_detonations", (double)_runDetonations).Set("combo", (double)(bare ? comboBeforeBreak : _state.Combo)).Set("difficulty", diff);
-                if (!bare) c.Set("shields_left", (double)_state.Shields);
-            });
             switch (outcome)
             {
                 case ChaosFieldMath.Detonation.SnapChainHeld:   // WPF :2081
@@ -746,6 +739,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     Shake(0.4 + s * 0.5, 380);
                     break;
             }
+            // WPF :2083, :2098, :2118 (absorbed) and :2132 (bare, combo captured before the break):
+            // each WPF branch barks last, so Unleashed defuse barks speak first and the combo includes them.
+            RunBark(bare ? "ChaosBubbleDetonated" : "ChaosBubbleDetonatedAbsorbed", c =>
+            {
+                c.Set("payload", spec.VariantId).Set("strength", spec.Strength).Set("shield_absorbed", !bare)
+                 .Set("run_detonations", (double)_runDetonations).Set("combo", (double)(bare ? comboBeforeBreak : _state.Combo)).Set("difficulty", diff);
+                if (!bare) c.Set("shields_left", (double)_state.Shields);
+            });
             // ponytail: the first-bare-detonation narrative -> chaos-payout-fallin-d.
         }
 
@@ -1088,16 +1089,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (_state.RippleReady) RippleCue("toy_ready", 0.3f);
             }
             TickToys();
-            // WPF :1068 T-10s, once per run (a Relapse extension does not re-arm it).
-            if (!_endingSoonFired && ChaosRunEngine.IsEndingSoon(_state, elapsed))
-            {
-                _endingSoonFired = true;
-                ChaosAnnouncerOverlay.Announce("the hole is closing…", ChaosAnnounceKind.Depth,
-                    artKey: "ending_soon", subText: "ten seconds");
-                _state.PushEvent("⏳ ten seconds. make them count.");
-                RunBark("ChaosEndingSoon", null);   // WPF :1074
-            }
-            // WPF :1029-1040: focus below a defuse's price for 8 s while a live hangs on screen, once per run.
+            // WPF :1029-1040: focus below a defuse's price for 8 s while a live hangs on screen, once per run; checked before the
+            // T-10s warning as WPF does, so it can take the shared bark gap.
             if (!_focusLowBarkFired)
             {
                 if (_state.FocusLow && BubbleOverlay.Field.Bubbles.Any(x => x.IsLiveThreat && !x.Popping))
@@ -1106,6 +1099,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     if (_focusLowAccumSec >= ChaosTuning.FOCUS_LOW_BARK_SEC) { _focusLowBarkFired = true; RunBark("ChaosFocusLow", null); }
                 }
                 else _focusLowAccumSec = 0;
+            }
+            // WPF :1068 T-10s, once per run (a Relapse extension does not re-arm it).
+            if (!_endingSoonFired && ChaosRunEngine.IsEndingSoon(_state, elapsed))
+            {
+                _endingSoonFired = true;
+                ChaosAnnouncerOverlay.Announce("the hole is closing…", ChaosAnnounceKind.Depth,
+                    artKey: "ending_soon", subText: "ten seconds");
+                _state.PushEvent("⏳ ten seconds. make them count.");
+                RunBark("ChaosEndingSoon", null);   // WPF :1074
             }
             var end = ChaosRunEngine.CheckEnd(_state, elapsed);
             if (end == ChaosRunEngine.EndCheck.RunOver) { EndRun(); return; }
