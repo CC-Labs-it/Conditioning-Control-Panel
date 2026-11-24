@@ -151,9 +151,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // leaves the tab on screen alone, like the window keys below.
             if (Services.UI.NavSections.LauncherDoorFor(tab) is { } launcherDoor)
             {
-                // Refused during Lockdown: the panel stays, so the strip says where the games went.
-                if (!Services.UI.PanelDoorLink.Open(launcherDoor) && launcherDoor == Services.UI.PanelDoorLink.Games)
-                    global::Avalonia.Threading.Dispatcher.UIThread.Post(ShowGamesMovedNote);
+                // A refused door keeps the panel and shows the launcher veil line on every click.
+                if (!Services.UI.PanelDoorLink.Open(launcherDoor))
+                {
+                    try { PageStrip?.ShowMovedNote(Loc.Get(PanelDoorLink.LockdownLineKey)); }
+                    catch (Exception ex) { Serilog.Log.Debug("Door locked note failed: {E}", ex.Message); }
+                }
                 return;
             }
             // "lab" (bark rules, tutorial steps, deep links) was the Lab page: gaze, blink,

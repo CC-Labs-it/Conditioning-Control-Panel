@@ -240,6 +240,37 @@ public sealed class WindowConfirmationParityTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task GamesAsksNormallyButRequestsImmediatelyWhenLockdownRefuses() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var oldLock = PanelDoorLink.IsLockedDown;
+        var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
+        var strip = new SectionTabStrip { MotionOverride = MotionLevel.Off };
+        using var host = new ClosingWindow(Host(strip));
+        try
+        {
+            strip.Show(NavSections.Play, "playeyes");
+            host.Window.UpdateLayout();
+            var requests = 0;
+            strip.TabRequested += tab => { Assert.Equal("play", tab.Key); requests++; };
+            PanelDoorLink.IsLockedDown = () => false;
+            Click(strip.PillFor("play")!);
+            Assert.Equal("play", strip.ConfirmingKey);
+            Assert.Equal(0, requests);
+            strip.CloseConfirm();
+            PanelDoorLink.IsLockedDown = () => true;
+            Click(strip.PillFor("play")!);
+            Assert.Null(strip.ConfirmationPopup);
+            Assert.Equal(1, requests);
+        }
+        finally
+        {
+            PanelDoorLink.IsLockedDown = oldLock;
+            LocalizationManager.Instance.SetLanguage(oldLanguage);
+        }
+        return Task.CompletedTask;
+    });
+
     private sealed class ClosingWindow(Window window) : IDisposable
     {
         public Window Window => window;
