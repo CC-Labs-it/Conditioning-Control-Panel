@@ -1,4 +1,6 @@
 import { renewalLines } from './renewal-lines.js';
+import {railLines} from './rail-lines.js';
+import {archiveGalleries,exemptRecord} from './rail-routes.js';
 import { trailLines } from './trail-lines.js';
 import { Ray, Vector3 } from 'three';
 import { centre, createProjector, createRestingAtlas } from './projectors.js';
@@ -16,9 +18,10 @@ const canonical = id => id?.replace(/^keep_/, 'hab_');
 const nearest = (nodes, point) => nodes.reduce((best,node)=>
   !best || node.pos.distanceToSquared(point)<best.pos.distanceToSquared(point) ? node : best,null);
 
-export function createNarration({ctx,camera,scene,root,register,walker,sound,assetURL,lite,owned}) {
+export function createNarration({ctx,camera,scene,root,register,walker,sound,assetURL,lite,owned,viewing=()=>{},releaseView=()=>{}}) {
   const book=new Map(), rooms=new Map(), heard=new Set(), finished=new Map(), unavailable=new Set(), abort=new AbortController();
-  const wetHorns=[];
+  for(const row of railLines)book.set(row.id,row);
+  const visitedScreens=new Set(),wetHorns=[];
   const restored=ctx.store.get('playedProjectors');
   const playedProjectors=new Set(Array.isArray(restored)?restored.filter(id=>typeof id==='string'):[]);
   let muffled=false;
@@ -96,7 +99,8 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
   }
   function unmount(zone){
     const room=rooms.get(zone);if(!room)return;
-    sequence.cancel(entry=>entry.zone===zone);
+    sequence.cancel(entry=>entry.zone===zone&&!entry.roaming);
+    const current=sequence.current;if(current?.projector&&current.zone===zone)sequence.finish(current,false);
     for(const f of room.undo)f();
     for(const s of room.list){reader.release(s.id);s.panels?.dispose();s.project?.dispose();}
     for(const entry of [sequence.current,...sequence.queue])
@@ -122,18 +126,20 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
   function caption(key,text,id=''){
     const p=captions[key];
     if(p.dataset.lineId===id&&p.textContent===text)return;
-    p.dataset.lineId=id;p.replaceChildren();
+    p.dataset.lineId=id;p.classList.toggle('expo-paged-lore',id==='rail_lore');p.replaceChildren();
     const chunks=pages[key]=captionPages(text);
     if(!text){delete p.dataset.phrase;return;}
     const full=root.ownerDocument.createElement('span');full.className='expo-full-line';full.textContent=text;p.append(full);
     p.dataset.phrase=chunks[0]?.value||text;
   }
   function nearby(entry){
-    return entry.zone===walker.zone && (!entry.needed || entry.needed()) && (!entry.anchor || camera.position.distanceToSquared(entry.anchor)<=36);
+    return (entry.roaming||entry.zone===walker.zone) && (!entry.needed || entry.needed()) &&
+      (!entry.anchor||(entry.projector&&entry.lit&&!exemptRecord(entry.stationId))||camera.position.distanceToSquared(entry.anchor)<=36);
   }
   function began(entry){
     if(entry.began)return;
     entry.began=true;
+    if(entry.projector&&!exemptRecord(entry.stationId))visitedScreens.add(entry.zone);
     heard.add(entry.row.id);
     if(entry.ticket)story.start(entry.ticket);
     else if(entry.projector&&!playedProjectors.has(entry.stationId)){
@@ -147,6 +153,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     entry.handle.el?.removeEventListener('error',entry.onError);
     entry.handle.el?.removeEventListener('playing',entry.onPlaying);
     entry.handle.el?.removeEventListener('loadedmetadata',entry.onMetadata);
+    for(const key of ['waiting','stalled','pause'])entry.handle.el?.removeEventListener(key,entry.onWait);
     entry.handle.stop();entry.handle=null;
   }
   function playFile(key,entry,roomTone,resumeAt=0){
@@ -159,6 +166,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     function playing(){
       began(entry);showCaption();entry.lit=true;
       if(entry.projector){
+        if(!exemptRecord(entry.stationId))viewing(entry);
         entry.station?.project?.setActive(true,entry.row.slides[entry.index||0]);
         if(entry.row.slides.length)click(entry);
       }
@@ -171,19 +179,23 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     entry.onEnd=()=>{if(!roomTone && entry.handle===h && h.el.ended)sequence.finish(entry);};
     entry.onError=()=>{
       if(dead || entry.handle!==h || sequence.current!==entry)return;
-      if(!entry.retryUsed && h?.el){
+      releaseView(entry);
+      if(!entry.retryUsed && h?.el && entry.row.set!=='rail'){
         entry.retryUsed=true;
         playFile(key,entry,roomTone,Math.max(entry.lastMediaTime,h.el.currentTime||0));
         return;
       }
       console.warn('Expo recording unavailable',file);
-      unavailable.add(entry.row.id);sequence.finish(entry,false);
+      unavailable.add(entry.row.id);clearHandle(entry);entry.timed=true;entry.kevin=false;
+      began(entry);showCaption();
     };
     entry.onPlaying=()=>{
-      if(entry.lit||held||entry!==sequence.current)return;
-      playing();
+      if(held||entry!==sequence.current)return;
+      if(entry.lit){if(entry.projector&&!exemptRecord(entry.stationId))viewing(entry);}else playing();
     };
+    entry.onWait=()=>releaseView(entry);
     if(!h?.el){queueMicrotask(entry.onError);return;}
+    for(const event of ['waiting','stalled','pause'])h.el.addEventListener(event,entry.onWait);
     entry.onMetadata=()=>{
       if(entry.handle!==h)return;
       if(resumeAt>0)h.el.currentTime=resumeAt;
@@ -213,15 +225,17 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     playFile(key,entry,kevin);
   }
   function suspend(entry){
-    entry.handle?.pause();if(entry.projector)entry.station?.project?.setPaused(true);
+    releaseView(entry);entry.handle?.pause();if(entry.projector)entry.station?.project?.setPaused(true);
     caption(entry.channel,'');
   }
   function resume(entry){
     if(!entry.projector||entry.began)caption(entry.channel,entry.kevin?'[Kevin is speaking]':entry.row.subtitle,entry.row.id);
     if(entry.projector){entry.station?.project?.setPaused(false);entry.station?.project?.setActive(!!entry.lit,entry.row.slides[entry.index||0]);}
+    if(entry.projector&&!entry.row.audio&&!exemptRecord(entry.stationId))viewing(entry);
     if(!entry.awaitingSeek)entry.handle?.play();
   }
   function release(entry,ok){
+    releaseView(entry);
     if(entry.ticket)story.finish(entry.ticket,ok);
     if(ok)finished.set(entry.row.id,(finished.get(entry.row.id)||0)+1);
     if(entry.started){
@@ -232,7 +246,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     entry.resolve(ok);
   }
   let farewell=false;
-  function enqueue(id,{closing=false,station=null,replay=false,zone=walker.zone,position=null,kind='react',exhibit,ttl,ticket=null,projector=false,onStart,roomWide=false,needed}={}){
+  function enqueue(id,{closing=false,station=null,replay=false,zone=walker.zone,position=null,kind='react',exhibit,ttl,ticket=null,projector=false,onStart,roomWide=false,needed,roaming=false}={}){
     const row=book.get(id);
     if(dead||!row||zone!==walker.zone||(farewell&&!closing))return Promise.resolve(false);
     if(row.set==='log'&&!owned().includes(id.slice(4)))return Promise.resolve(false);
@@ -247,7 +261,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     let resolve;const promise=new Promise(r=>{resolve=r;});
     const local=position || station || exhibit || kind!=='ambient';
     const anchor=local&&!roomWide?(position || station ? origin : camera.position).clone():null;
-    const entry={row,zone,station,channel:key,kind,exhibit:exhibit||station?.id||zone,anchor,ttl,ticket,projector,onStart,needed,
+    const entry={row,zone,station,channel:key,kind,exhibit:exhibit||station?.id||zone,anchor,ttl,ticket,projector,onStart,needed,roaming,
       stationId:station?.id||family(id),pos:origin.clone(),handle:null,
       clock:0,lastMediaTime:0,kevin:false,progress:0,duck:1,resolve,promise};
     sequence.submit(entry);return promise;
@@ -259,7 +273,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
       const begin=()=>{const station=options?.station||locate(id);return station?.archive&&playArchive(station);};
       return ready?Promise.resolve(begin()):load.then(begin);
     }
-    return ready?enqueue(canonical(id),options):load.then(()=>enqueue(canonical(id),options));
+    return ready||book.has(id)?enqueue(canonical(id),options):load.then(()=>enqueue(canonical(id),options));
   }
   function closingLine(id){
     // Preserve the current recording's tail and reserve the next slot for the departure.
@@ -278,12 +292,12 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     if(unavailable.has(story.next?.id))return 'Retry projector';
     return story.next?'Start projector':'Archive complete';
   }
-  function playArchive(station,review=false){
+  function playArchive(station,review=false,automatic=false){
     if(dead||held||farewell||!station.project||station.zone!==walker.zone||!rooms.get(station.zone)?.list.includes(station))return;
     if(!ready)return load.then(()=>ready&&playArchive(station,review));
     const ticket=story.request(station.id,review);
     if(!ticket)return;
-    if(!heard.has('pa_timeline'))cue('pa_timeline',{zone:station.zone});
+    if(!automatic&&!heard.has('pa_timeline'))cue('pa_timeline',{zone:station.zone});
     return enqueue(ticket.row.id,{station,zone:station.zone,replay:true,ticket,projector:true,kind:'beat'});
   }
   async function planter(id,options={}){
@@ -306,6 +320,11 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
     return !walker.blocked(block,distance);
   }
   function proximity(){
+    const zone=walker.zone,local=rooms.get(zone);
+    if(local&&!sequence.queue.length&&!sequence.current?.projector&&archiveGalleries.has(zone)&&!visitedScreens.has(zone)){
+      const station=nearest(local.list.filter(s=>s.project&&!exemptRecord(s.id)&&!unavailable.has(s.id)&&s.pos.distanceToSquared(camera.position)<9&&clearRay(s.pos)),camera.position);
+      if(station){if(station.archive)playArchive(station,false,true);else cue(station.id,{station,replay:true,projector:true,kind:'beat'});return;}
+    }
     const immediate=[];
     for(const room of rooms.values())for(const s of room.list){
       if(s.archive || s.project || heard.has(s.id) || !book.has(s.id))continue;
@@ -322,14 +341,14 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
   const visits=new Map();
   let previousZone=null;
   function tick(dt){
-    if(dead||held||!ready)return;
+    if(dead||held||(!ready&&!sequence.current))return;
     if(previousZone!==walker.zone){previousZone=walker.zone;visits.set(previousZone,(visits.get(previousZone)||0)+1);}
     while(wetHorns.length&&wetHorns[0].until<=ctx.activeMs)wetHorns.shift();
     const speaking=sequence.current;
     setMuffled(!!speaking&&wetHorns.some(h=>h.zone===speaking.zone&&h.pos.distanceToSquared(speaking.pos)<1));
     sequence.cancel(entry=>!nearby(entry));
-    if(speaking?.needed&&!nearby(speaking))sequence.finish(speaking,false);
-    if(!reader.update()){check-=dt;if(check<=0){proximity();check=.12;}}
+    if((speaking?.needed||speaking?.projector)&&!nearby(speaking))sequence.finish(speaking,false);
+    if(ready&&!reader.update()){check-=dt;if(check<=0){proximity();check=.12;}}
     const e=sequence.current;
     if(e){
       const key=e.channel;
@@ -339,17 +358,18 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
         if(e.kevin&&advance<0&&Number.isFinite(el.duration))advance+=el.duration;
         e.clock+=Math.max(0,advance);e.lastMediaTime=at;
         e.waiting=advance>.0001?0:e.waiting+dt;
-        if(e.waiting>2&&el.paused&&!el.ended){e.waiting=0;e.handle.play();}
-      }else if(!e.row.audio){e.clock+=dt;}
+        if(e.waiting>4&&!el.ended){e.onError();return;}
+      }else if(!e.row.audio||e.timed){e.clock+=dt;}
+      else if(e.awaitingSeek&&(e.waiting+=dt)>4){e.onError();return;}
       if(e.kevin&&e.clock>=15){e.roomToneSeconds=e.clock;e.clock=15;playFile(key,e,false);}
-      else if(!el&&!e.row.audio&&e.clock>=e.row.seconds){
+      else if(!el&&(!e.row.audio||e.timed)&&e.clock>=e.row.seconds){
         sequence.finish(e);
       }
       const actual=(e.kevin?e.tail?.el:e.handle?.el)?.duration;
       const duration=e.duration=(Number.isFinite(actual)&&actual>0?actual:e.row.seconds)+(e.row.id==='log_kevin'?15:0);
       const progress=e.progress=Math.min(1,e.clock/Math.max(.1,duration));
       const p=captions[key],chunks=pages[key];
-      if(chunks?.length>1&&p.dataset.lineId===e.row.id&&root.hasAttribute('data-expo-touch')){
+      if(chunks?.length>1&&p.dataset.lineId===e.row.id&&(e.row.id==='rail_lore'||root.hasAttribute('data-expo-touch'))){
         const spokenProgress=e.row.id==='log_kevin'?Math.max(0,(e.clock-15)/Math.max(.1,duration-15)):progress;
         const page=captionAt(chunks,spokenProgress);
         if(page!==p.dataset.phrase)p.dataset.phrase=page;
@@ -368,6 +388,7 @@ export function createNarration({ctx,camera,scene,root,register,walker,sound,ass
       e.handle?.setGain(e.gain);e.handle?.setPan?.(pan);
     }
     for(const room of rooms.values())for(const s of room.list)if(s.project){
+      if(!ready)continue;
       const row=s.archive?story.at(s.id):playedProjectors.has(s.id)?book.get(s.id):undefined;
       s.panels?.show(row,story.total,!!story.assigned(s.id),(visits.get(s.zone)||0)>1);
       s.project.step(dt,ctx.gentle||ctx.reduced,camera.position.distanceTo(s.pos),row?.slides[s.index],s.progress,

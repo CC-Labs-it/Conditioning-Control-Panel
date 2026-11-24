@@ -26,6 +26,7 @@ export function createDepth() {
       else seconds = Math.max(0, seconds - elapsed * 0.25);
       return { entered, left, previousPhase };
     },
+    closeDoor() { if (!inside) seconds = 0; },
     get seconds() { return seconds; },
     get depth() { return depthAt(seconds); },
     get phase() { return phaseAt(seconds); },

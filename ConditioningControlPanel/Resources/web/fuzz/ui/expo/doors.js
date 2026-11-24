@@ -76,7 +76,8 @@ export function createDoors(scene,walker,ctx,camera,play){
     const pinInset=d.lift?0:.075,undercut=shared&&!d.lift?.036:0;
     if(shared){
       state.backing=new Group();
-      state.backing.scale.set(d.width,d.height/2.18,1);
+      // The fixed hinge tongues already close the outer strips of the opening.
+      state.backing.scale.set(d.width - 2 * pinInset,d.height/2.18,1);
       for(const part of hardware.parts.get('Backing')||[])state.backing.add(part.clone(false));
       root.add(state.backing);
     }
@@ -392,6 +393,7 @@ export function createDoors(scene,walker,ctx,camera,play){
     return visible;
   }
   return {setHardware(asset){hardware=asset;sync();},mount,unmount,tick,pushOut,blocked,debug,registerLeaf,connectVisibleRooms,
+    opening(id){return (id==='crown-shutter'?crown:active.get(id))?.progress??0;},
     holds(id){
       if(crown?.progress>0&&(id==='catwalk'||id==='dome'))return true;
       for(const s of active.values())if(s.progress>0&&s.d.rooms.length===2&&s.d.rooms.includes(id))return true;

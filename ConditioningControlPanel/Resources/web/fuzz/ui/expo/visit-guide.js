@@ -1,6 +1,7 @@
 import {STOPS,stampSentence,stopSealed,trailMeter,trailTask} from './trail-stops.js';
 import {createExpoTaps} from './touch-taps.js';
 import {rematchHint} from './rematch.js';
+import {routeFor} from './rail-routes.js';
 
 export function visitDirection(route,story,room,position,visit){
   const task=trailTask(room,position,visit);
@@ -114,7 +115,9 @@ export function createVisitGuide(root,{onOpen=()=>{},canOpen=()=>true}={}){
     root.toggleAttribute('data-hoof-board',room==='hoof'&&(v.hoof==='practice'||v.hoof==='pictures'));
     renderTicket();
     if(mode!==input){mode=input;shortcut.textContent=input==='gamepad'?'Y · Card':input==='touch'?'Open card':'T · Card';}
-    const a=trailTask(room,p,v,yaw),key=[a.title,a.where,a.kicker].join('|');
+    const a=v.railGuide?{title:v.railGuide,where:'The Rail™',kicker:'Visitor Services'}:trailTask(room,p,v,yaw);
+    const route=routeFor(v.carry?.key);if(route&&!v.railGuide)a.where+=' · '+route.back;
+    const key=[a.title,a.where,a.kicker].join('|');
     if(key!==taskKey){taskKey=key;kicker.textContent=a.kicker;title.textContent=a.title;where.textContent=a.where;}
     arrow.hidden=!a.target;
     if(a.target)arrow.style.transform='rotate('+Math.round((Math.atan2(a.target[0]-p.x,p.z-a.target[1])+yaw)*180/Math.PI)+'deg)';

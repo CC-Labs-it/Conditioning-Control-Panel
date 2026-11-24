@@ -1,4 +1,5 @@
 import {trailLines} from './trail-lines.js';
+import {routeFor} from './rail-routes.js';
 
 const refusals=trailLines.filter(row=>row.id.startsWith('r5_hoof_refusal_'));
 const controls=new Set(['press_main','press_stop','moved_button','loan_stop_switch','photo_release','alpaca_button',
@@ -17,7 +18,7 @@ export function hoofRefusals(api,state,slip){
     const room=api.walker.zone;
     if(!state.hoofWorn||room==='hoof')return false;
     const label=typeof action.label==='function'?action.label():action.label;
-    if(!needsFinger(action.owner.name,label))return false;
+    if((label&&label===routeFor(state.carry?.key)?.back)||!needsFinger(action.owner.name,label))return false;
     const row=refusals[index++%refusals.length];
     slip();api.say(row.subtitle);
     if(!request&&!pending&&clock-lastVoice>=20)pending={room,id:row.id};

@@ -297,7 +297,7 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
       report(error);
     });
   }
-  return { ensure, stream, resident, visibility, doors:doors.debug,registerDoorLeaf:doors.registerLeaf,
+  return { ensure, stream, resident, visibility, doors:doors.debug,doorOpening:doors.opening,registerDoorLeaf:doors.registerLeaf,
     textureStats:()=>({residentSources:photoSources.size,sharedHits,fullDetailMaps:[...photoSources.values()].filter(e=>e.source).length,pendingDetailMaps:0,
       decodedBytes:[...photoSources.values()].reduce((n,e)=>n+(e.source?e.source.data.width*e.source.data.height*4:0),0)}),
     dispose() {

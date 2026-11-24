@@ -25,20 +25,20 @@ const shots = {
   corrected:{zone:'hall',at:[-10.05,3.4,.44],aim:[-11.65,4.98,.88],expectedStation:'pa_photos',
     afterAim:[-11.70,4.90,-2.10],to:[-9.82,-.18]},
   press:{zone:'hall',at:[.04,0,-7.48],aim:[0,1.077,-9],aimObject:'press_main',action:'Press I AGREE'},
-  hoof:{zone:'hoof',at:[-18.46,0,8.92],aim:[-18.4,1.75,10.45],waitForCue:'pa_hall2',action:'Try',repeat:[.65,1.38,1.95,2.5,3.05,3.62,6.80],
+  hoof:{zone:'hoof',at:[-18.46,0,8.92],aimObject:'hoof_display',waitForCue:'r5_hoof',action:'Read the instructions',
     to:[-18.66,7.46],afterAim:[-19.05,1.46,9.99]},
-  habitat:{zone:'habitat',at:[19.4,0,8.13],aim:[19.40,1.56,9.55],waitForCue:'pa_hall3',action:'Tap the glass'},
+  habitat:{zone:'habitat',at:[19.4,0,8.13],aim:[19.40,1.56,9.55],waitForCue:'r5_habitat',action:'Tap the glass'},
   twelve:{zone:'twelve',at:[-1.69,-.68,-30.27],aim:[-1.25,1.31,-33],to:[-1.40,-30.14],
     expectedStation:'log_reginald',aimObject:'statue_reginald',visibleRooms:['hall']},
   photo:{zone:'twelve',at:[.48,-.68,-24.04],aim:[0,-.613,-25.15],action:'Take the group photograph',afterAim:[-.45,1.18,-30.12]},
   dome0:{zone:'dome',at:[-14.86,0,-5],aim:[-22,1.41,-5],to:[-18.0,-5.21]},
   dome3:{zone:'dome',at:[-17.5,0,-6.3],aim:[-23.1,3.85,-5.03],to:[-18.7,-6.61],dwell:108},
   dome5:{zone:'dome',at:[-18.9,0,-4.2],aim:[-24.4,3.3,-4.86],to:[-19.8,-4.28],dwell:210},
-  shelf:{zone:'shop',at:[15.61,0,-1.85],aim:[16.20,.98,-3.7],to:[16.72,-1.81],waitForCue:'pa_shop_1'},
+  shelf:{zone:'shop',at:[16.25,0,-1.85],aimObject:'shop_item_pressed',action:'Carry The moved button',waitForCue:'r5_shop'},
   till:{zone:'shop',at:[20.84,0,-9.75],aim:[21.2,1.32,-11.42],action:'Use the till'},
   loop:{zone:'shop',at:[15.08,0,-11.93],aim:[15.03,1.42,-13.74],action:'Open the exit door'},
   sale:{zone:'shop',at:[22.76,0,-9.89],aim:[22.77,1.37,-11.43],action:'Buy Exit'},
-  home:{zone:'shop',at:[15.13,0,-11.94],aim:[15.03,1.30,-13.73],action:['Go home','Open the exit door'],home:true}
+  home:{zone:'shop',at:[15.03,0,-12.10],aim:[15.03,1.30,-13.73],home:true}
 };
 const profiles={
   M2:[['hoof',13],['habitat',8],['twelve',7],['photo',5],['shelf',5],['till',4],['loop',4],['loop',3],['sale',4],['home',7]],

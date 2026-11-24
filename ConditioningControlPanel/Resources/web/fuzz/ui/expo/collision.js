@@ -11,7 +11,7 @@ const HEAD_SAMPLES = [[0,0], [.16,0], [-.16,0], [0,.16], [0,-.16]];
 export function createWalker(camera, onFootstep, onPlanterCue, claimPlanter) {
   const sectors = new Map(), feet = new Vector3(), proposed = new Vector3(), previous = new Vector3();
   const disabled = new Set(), crossings = new Map();
-  let doors=null;
+  let doors=null,rail=null;
   const inactive = m => (m.portal&&(doors||sectors.has(m.portal))) || disabled.has(m.label);
   const segment = new Line3(), bodyBox = new Box3(), face = new Vector3();
   const onBody = new Vector3(), onWall = new Vector3(), correction = new Vector3();
@@ -106,11 +106,13 @@ export function createWalker(camera, onFootstep, onPlanterCue, claimPlanter) {
     for (let i = 0; i < steps; i++) {
       proposed.copy(feet); proposed.x += dx / steps; proposed.z += dz / steps;
       resolveWalls(proposed); resolveWalls(proposed);
+      rail?.constrain(proposed,feet);
       const clearance = Math.max(0, feet.y-supportY);
       const rise = airborne ? .012 : MAX_RISE;
       const closeFloor = floorAt(proposed,rise,MAX_DROP+clearance,zone);
       if (!closeFloor && !floorAt(proposed,rise,1.05+clearance,zone)) break;
       if (planter.held && ground.collider !== planter.support) break;
+      if(ground.id!==zone&&rail&&!rail.allows(ground.id))break;
       const floorY = ground.y;
       proposed.y = (airborne || !closeFloor) ? Math.max(feet.y,floorY) : floorY;
       // Low openings stay visible and physically too small for the player.
@@ -219,7 +221,7 @@ export function createWalker(camera, onFootstep, onPlanterCue, claimPlanter) {
     place(id,at,camera.rotation.y); camera.rotation.x=pitch;
     return true;
   }
-  return { add, remove, place, move, jump, step, blocked, trace, setColliderEnabled, feet, planter, stepOffPlanter,setDoors(value){doors=value;},
+  return { add, remove, place, move, jump, step, blocked, trace, setColliderEnabled, feet, planter, stepOffPlanter,setDoors(value){doors=value;},setRail(value){rail=value;},
     get onPlanter(){return !airborne&&!!support?.planter;},
     get airborne(){return airborne;}, get zone() { return zone; }, get surface() { return surface; },
     dispose() { for (const id of sectors.keys()) remove(id); } };
