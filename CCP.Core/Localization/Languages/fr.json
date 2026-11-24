@@ -6385,6 +6385,7 @@
   "possession_level_zero": "NIV 0",
   "possession_delete_heading": "suppression de tes sessions.",
   "possession_delete_removing": "suppression de {0}...",
+  "possession_delete_closing": "rien n’a été supprimé. je voulais juste te voir le lire.",
   "possession_delete_cancel": "annuler",
   "ee_window_title": "Sortie de secours",
   "lockdown_ee_button": "SORTIE DE SECOURS",

@@ -6385,6 +6385,7 @@
   "possession_level_zero": "NVL 0",
   "possession_delete_heading": "borrando tus sesiones.",
   "possession_delete_removing": "eliminando {0}...",
+  "possession_delete_closing": "no se borró nada. solo quería verte leerlo.",
   "possession_delete_cancel": "cancelar",
   "ee_window_title": "Salida de emergencia",
   "lockdown_ee_button": "SALIDA DE EMERGENCIA",

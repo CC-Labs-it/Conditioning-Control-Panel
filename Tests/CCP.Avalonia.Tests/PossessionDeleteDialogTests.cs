@@ -43,6 +43,82 @@ public class PossessionDeleteDialogTests
         public void ReleaseAll() { }
     }
 
+    private sealed class PickCaption : Random
+    {
+        private readonly int _choice;
+        public PickCaption(int choice) => _choice = choice;
+        public override int Next(int maxValue) => _choice;
+    }
+
+    [Fact]
+    public void CaptionsVaryAndClosingLineUsesSelectedLanguage() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage("fr");
+            for (int i = 0; i < DeleteDialogWindow.Captions.Length; i++)
+            {
+                var dialog = new DeleteDialogWindow(new[] { "Session" }, rng: new PickCaption(i));
+                Assert.Equal(DeleteDialogWindow.Captions[i], dialog.FindControl<TextBlock>("Caption")!.Text);
+                dialog.Step();
+                Assert.Equal("rien n’a été supprimé. je voulais juste te voir le lire.", dialog.FindControl<TextBlock>("Status")!.Text);
+            }
+        }
+        finally { loc.SetLanguage(previous); }
+    });
+
+    [Fact]
+    public Task OpeningNamesSessionsAndUndoClosesDialog() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var host = new Host();
+        var effect = new DeleteDialogEffect(() => new[] { "Session" });
+        var named = new List<(string, string?)>();
+        var ctx = new PossessionContext { Host = host, Attribution = new Attribution(), Rung = PossessionRung.ItKnows,
+            Intensity = PossessionIntensity.FullDoki, Photosafe = false, Rng = new Random(1), ElapsedFraction = 0,
+            Remaining = TimeSpan.Zero, Name = (id, name) => named.Add((id, name)) };
+        host.PossessionWindow!.Show();
+        try
+        {
+            var applying = effect.ApplyAsync(ctx, null, CancellationToken.None);
+            Assert.Contains(("deletedialog", "your sessions"), named);
+            var dialog = (DeleteDialogWindow)typeof(DeleteDialogEffect).GetField("_dialog", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(effect)!;
+            Assert.True(dialog.IsVisible);
+            await effect.UndoAsync(TimeSpan.Zero);
+            Assert.False(dialog.IsVisible);
+            await applying;
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); host.PossessionWindow.Close(); }
+    });
+
+    [Fact]
+    public Task PanicClosesLiveDeleteDialog() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var host = new Host();
+        var effect = new DeleteDialogEffect(() => new[] { "Session" });
+        using var lockdown = new LockdownService();
+        using var director = new PossessionDirector(lockdown, new[] { effect }, new PossessionDirectorHead { Attribution = _ => new Attribution() });
+        var previous = ConditioningControlPanel.Avalonia.App.Possession;
+        ConditioningControlPanel.Avalonia.App.Possession = director;
+        host.PossessionWindow!.Show();
+        try
+        {
+            director.AttachHost(host);
+            typeof(PossessionDirector).GetField("_intensity", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(director, PossessionIntensity.FullDoki);
+            var hosts = (IList)typeof(PossessionDirector).GetField("_hosts", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(director)!;
+            var start = typeof(PossessionDirector).GetMethod("StartOneAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var starting = (Task)start.Invoke(director, new object[] { hosts[0]!, PossessionRung.ItKnows, TimeSpan.FromMinutes(1), 0.9 })!;
+            var dialog = (DeleteDialogWindow)typeof(DeleteDialogEffect).GetField("_dialog", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(effect)!;
+            Assert.True(dialog.IsVisible);
+            ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(s => s.Id == "possession").Stop(null);
+            Assert.False(dialog.IsVisible);
+            Assert.False(effect.IsLive);
+            await starting.WaitAsync(TimeSpan.FromSeconds(2));
+        }
+        finally { director.UndoAll(); ConditioningControlPanel.Avalonia.App.Possession = previous; host.PossessionWindow.Close(); }
+    });
+
     [Fact]
     public void InventedNamesProgressAndCancelWithoutTouchingSessions() => AvaloniaTestDispatcher.Run(() =>
     {

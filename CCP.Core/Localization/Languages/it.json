@@ -6638,6 +6638,7 @@
   "possession_level_zero": "LVL 0",
   "possession_delete_heading": "cancello le tue sessioni.",
   "possession_delete_removing": "rimuovo {0}...",
+  "possession_delete_closing": "non è stato eliminato nulla. volevo solo guardarti leggere.",
   "possession_delete_cancel": "annulla",
   "ee_window_title": "Uscita di emergenza",
   "lockdown_ee_button": "USCITA DI EMERGENZA",

@@ -6385,6 +6385,7 @@
   "possession_level_zero": "LVL 0",
   "possession_delete_heading": "deine Sessions werden gelöscht.",
   "possession_delete_removing": "{0} wird entfernt...",
+  "possession_delete_closing": "nichts wurde gelöscht. ich wollte nur sehen, wie du es liest.",
   "possession_delete_cancel": "abbrechen",
   "ee_window_title": "Notausgang",
   "lockdown_ee_button": "NOTAUSGANG",

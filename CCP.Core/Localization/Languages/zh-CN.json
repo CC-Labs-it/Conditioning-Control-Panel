@@ -6889,6 +6889,7 @@
   "possession_level_zero": "等级 0",
   "possession_delete_heading": "正在删除你的会话。",
   "possession_delete_removing": "正在移除 {0}...",
+  "possession_delete_closing": "什么都没有删除。我只是想看你读完。",
   "possession_delete_cancel": "取消",
   "ee_window_title": "紧急出口",
   "lockdown_ee_button": "紧急出口",

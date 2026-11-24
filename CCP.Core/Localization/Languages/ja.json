@@ -6385,6 +6385,7 @@
   "possession_level_zero": "LVL 0",
   "possession_delete_heading": "セッションを削除しています。",
   "possession_delete_removing": "{0} を削除中...",
+  "possession_delete_closing": "何も削除していないよ。ただ、読んでいるところを見たかっただけ。",
   "possession_delete_cancel": "取消",
   "ee_window_title": "非常口",
   "lockdown_ee_button": "非常口",

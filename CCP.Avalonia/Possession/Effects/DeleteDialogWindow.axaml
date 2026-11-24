@@ -5,7 +5,7 @@
         ShowInTaskbar="False" ShowActivated="False" WindowStartupLocation="CenterOwner" Background="#1A0A0A">
   <Border BorderBrush="#DC143C" BorderThickness="2">
     <Grid RowDefinitions="Auto,*">
-      <Border Background="#DC143C" Padding="10,5"><TextBlock Text="housekeeping, sweetheart" Foreground="White" FontWeight="SemiBold"/></Border>
+      <Border Background="#DC143C" Padding="10,5"><TextBlock x:Name="Caption" Text="housekeeping, sweetheart" Foreground="White" FontWeight="SemiBold"/></Border>
       <StackPanel Grid.Row="1" Margin="24,12">
         <TextBlock Text="{loc:Str possession_delete_heading}" Foreground="#FFE3DA" FontSize="14" FontWeight="SemiBold"/>
         <StackPanel x:Name="Names" Margin="0,6,0,8"/>
