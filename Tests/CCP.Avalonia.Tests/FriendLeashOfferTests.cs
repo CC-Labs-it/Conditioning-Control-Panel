@@ -113,7 +113,9 @@ public sealed class FriendLeashOfferTests
         service.OfferAsync("friend").GetAwaiter().GetResult();
         service.ApplyReceipts(new[] { new LeashReceipt("0123456789abcdef", LeashItemKind.Offer, "friend", "Mia", LeashStep.Seen, DateTimeOffset.UtcNow) });
         var offered = new FriendLeashOffer(Friend(), service, sent);
-        Assert.Contains(Loc.Get("leash_step_seen"), ((StackPanel)Button(offered, "leash-offer").Content!).Children.OfType<TextBlock>().Single().Text);
+        var step = ((StackPanel)Button(offered, "leash-offer").Content!).Children.OfType<TextBlock>().Single(t => (string?)t.Tag == "leash-offer-step:seen");
+        Assert.Equal("  ·  " + Loc.Get("leash_step_seen"), step.Text);
+        Assert.Equal(FriendsDrawer.Lilac, step.Foreground);
         Assert.False(Button(offered, "leash-offer").IsEnabled);
         var held = new JObject
         {
@@ -125,6 +127,73 @@ public sealed class FriendLeashOfferTests
         var holding = new FriendLeashOffer(Friend(), service, sent);
         Assert.Equal(Loc.Get("leash_offer_holding"), ((StackPanel)Button(holding, "leash-offer").Content!).Children.OfType<TextBlock>().Single().Text);
         Assert.False(Button(holding, "leash-offer").IsEnabled);
+    });
+
+    [Fact]
+    public void OfferPopSettlesAndMotionOffStaysStill() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup(); var settings = CoreSettings.Current; var old = settings.MotionLevel;
+        try
+        {
+            settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+            var card = new FriendLeashOffer(Friend(), new LeashService(new Wire(), () => "me"), new HashSet<string>());
+            var chip = Button(card, "leash-offer"); Click(card, "leash-offer");
+            card.AdvancePop(100); Assert.True(((ScaleTransform)chip.RenderTransform!).ScaleX > 1);
+            card.AdvancePop(360); Assert.Equal(1, ((ScaleTransform)chip.RenderTransform!).ScaleX); card.Intro!.Close();
+            settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
+            var still = new FriendLeashOffer(Friend(), new LeashService(new Wire(), () => "me"), new HashSet<string>());
+            var stillChip = Button(still, "leash-offer"); Click(still, "leash-offer"); still.AdvancePop(100);
+            Assert.True(stillChip.RenderTransform is not ScaleTransform scale || scale.ScaleX == 1); still.Intro!.Close();
+        }
+        finally { settings.MotionLevel = old; }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ParkedOfferPopResetsScale(bool minimize) => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup(); var settings = CoreSettings.Current; var old = settings.MotionLevel;
+        settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+        var card = new FriendLeashOffer(Friend(), new LeashService(new Wire(), () => "me"), new HashSet<string>());
+        var window = new Window { Content = card };
+        try
+        {
+            window.Show(); global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var chip = Button(card, "leash-offer"); card.Pop(chip);
+            card.AdvancePop(100);
+            var scale = Assert.IsType<ScaleTransform>(card.PopScale);
+            Assert.True(scale.ScaleX > 1); Assert.True(scale.ScaleY > 1);
+            if (minimize) window.WindowState = WindowState.Minimized; else chip.IsVisible = false;
+            Assert.Equal(1, scale.ScaleX); Assert.Equal(1, scale.ScaleY);
+            if (minimize) window.WindowState = WindowState.Normal; else chip.IsVisible = true;
+            Assert.Equal(1, scale.ScaleX); Assert.Equal(1, scale.ScaleY);
+        }
+        finally { card.Intro?.Close(); window.Close(); settings.MotionLevel = old; }
+    });
+
+    [Fact]
+    public void OfferAppearanceAndHelpFollowState() => AvaloniaTestDispatcher.Run(() =>
+    {
+        Setup();
+        var wire = new Wire(); var service = new LeashService(wire, () => "me");
+        foreach (var (friend, sent, state, ink, border) in new[]
+        {
+            (Friend(), false, "offer", FriendsDrawer.Gold, Color.FromRgb(0x6b, 0x53, 0x20)),
+            (Friend(), true, "sent", FriendsDrawer.Mint, Color.FromRgb(0x28, 0x5d, 0x4f)),
+            (Friend(false), false, "greyed", FriendsDrawer.Dim, Color.FromRgb(0x6b, 0x53, 0x20)),
+        })
+        {
+            var card = new FriendLeashOffer(friend, service, sent ? new HashSet<string> { "friend" } : new HashSet<string>());
+            var chip = Button(card, "leash-offer");
+            Assert.Equal(ink, chip.Foreground);
+            Assert.Equal(border, ((SolidColorBrush)chip.BorderBrush!).Color);
+            Assert.Equal(Color.FromArgb(0x22, 0xff, 0xcf, 0x6b), ((SolidColorBrush)chip.Background!).Color);
+            Assert.Contains(card.GetLogicalDescendants().OfType<Grid>(), g => (string?)g.Tag == "leash-offer-chip:" + state);
+            var help = Button(card, "leash-offer-help");
+            Assert.Equal(22, help.Width); Assert.Equal(22, help.Height); Assert.Equal(FriendsDrawer.Lilac, help.Foreground);
+            Click(card, "leash-offer-help"); Assert.NotNull(card.Intro); Assert.Equal(0, wire.Calls); card.Intro!.Close();
+        }
     });
 
     [Fact]

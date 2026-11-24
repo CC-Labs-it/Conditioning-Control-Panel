@@ -18,6 +18,27 @@ namespace CCP.Core.Tests;
 [Collection(SessionStatics.Name)]
 public sealed class RemoteRelayTests
 {
+    [Fact]
+    public async Task Status_advertises_only_available_signal_and_brain_drain_capabilities()
+    {
+        var saved = CoreEngine.StartBrainDrain;
+        try
+        {
+            var f = new FakeRelay();
+            using var r = Relay(f);
+            await r.StartAsync("full");
+            foreach (var available in new[] { false, true })
+            {
+                CoreEngine.StartBrainDrain = available ? () => { } : null;
+                await r.PushStatusNowAsync();
+                var caps = f.Seen.Last(x => x.Path == "/v2/remote/status").Body["caps"]!.ToObject<string[]>()!;
+                Assert.Equal(available ? new[] { "haptic_pattern", "haptic_level", "signal", "screen", "brain_drain" }
+                                       : new[] { "haptic_pattern", "haptic_level", "signal", "screen" }, caps);
+            }
+        }
+        finally { CoreEngine.StartBrainDrain = saved; }
+    }
+
     // WPF RemoteControlService.cs:1476/:1488 dispatch; :980 panic/session end stop and re-arm on the saved
     // switch; :1159 a leave only cancels pulses; :1020/:1179 every card closes; :964/:1154 over the wearer's own
     // run neither touches autonomy nor the cards; :921 the status lists a running autonomy.
@@ -617,7 +638,91 @@ public sealed class RemoteRelayTests
         Poll(f, "{\"controller_connected\":true}");
         await r.PollOnceAsync();
         var caps = f.Seen.Last(s => s.Path == "/v2/remote/status").Body["caps"];
-        Assert.Equal(new[] { "haptic_pattern", "haptic_level" }, caps!.Values<string>().ToArray());
+        Assert.Equal(CoreEngine.StartBrainDrain != null
+            ? new[] { "haptic_pattern", "haptic_level", "signal", "screen", "brain_drain" }
+            : new[] { "haptic_pattern", "haptic_level", "signal", "screen" }, caps!.Values<string>().ToArray());
+    }
+
+    // WPF RemoteControlService.Screen.cs:71-317 and RemoteControlService.cs:671,728-742: the status carries the
+    // live preview (media counts, Easy, the event feed with the controller's own word) and goes again within a
+    // second when the preview moved, not only on the 5 s heartbeat. A note after the session ended is dropped.
+    [Fact]
+    public async Task Status_carries_the_live_preview_and_pushes_again_when_it_moves()
+    {
+        var assets = Directory.CreateTempSubdirectory("remote-screen-").FullName;
+        var saved = (CorePaths.EffectiveAssetsProvider, CoreSubliminal.CustomShowProvider, CoreSettings.ServiceProvider);
+        var settings = new SettingsService();
+        try
+        {
+            CoreSettings.ServiceProvider = () => settings;
+            Directory.CreateDirectory(Path.Combine(assets, "images", "sub"));
+            Directory.CreateDirectory(Path.Combine(assets, "videos"));
+            foreach (var name in new[] { "images/a.png", "images/sub/b.jpg", "images/notes.txt", "videos/c.mp4" })
+                File.WriteAllText(Path.Combine(assets, name), "x");
+            CorePaths.EffectiveAssetsProvider = () => assets;
+            ConditioningControlPanel.Services.Remote.RemoteScreenFeed.ResetCounts();
+            CoreSubliminal.CustomShowProvider = _ => ConditioningControlPanel.Services.Remote.RemoteScreenFeed.Word();   // the head draws it
+            var f = new FakeRelay();
+            using var r = Relay(f);
+            var now = DateTime.UtcNow;
+            r.Now = () => now;
+            await r.StartAsync("full");
+            Poll(f, "{\"controller_connected\":true}");
+            await r.PollOnceAsync();   // the join pushes
+            await ConditioningControlPanel.Services.Remote.RemoteScreenFeed.LastCount;
+            int Pushes() => f.Seen.Count(x => x.Path == "/v2/remote/status");
+            var pushes = Pushes();
+
+            Assert.Null(RemoteCommands.Execute("trigger_custom_subliminal", JObject.Parse("{\"text\":\" good girl \"}")));
+            ConditioningControlPanel.Services.Remote.RemoteScreenFeed.Word();   // a pool word later never carries text
+            ConditioningControlPanel.Services.Remote.RemoteScreenFeed.Flash(online: true);
+            ConditioningControlPanel.Services.Remote.RemoteScreenFeed.Note("pop");
+            ConditioningControlPanel.Services.Remote.RemoteScreenFeed.CountEnded(right: false);   // BubbleCountScheduler.OnComplete
+            await r.PollOnceAsync();
+            Assert.Equal(pushes, Pushes());   // under the 1 s gap
+            now = now.AddSeconds(1.5);
+            await r.PollOnceAsync();
+            Assert.Equal(pushes + 1, Pushes());   // the preview moved; the 5 s heartbeat is not due
+            var screen = (JObject)f.Seen.Last(x => x.Path == "/v2/remote/status").Body["screen"]!;
+            Assert.Equal(2, (int)screen["media"]!["pictures"]!);
+            Assert.Equal(1, (int)screen["media"]!["videos"]!);
+            Assert.Equal(1.0, (double)screen["easy"]!);
+            var ev = screen["ev"]!.Select(e => e["k"] + ":" + (e["text"] ?? e["src"])).ToArray();
+            Assert.Equal(new[] { "word:good girl", "word:", "flash:online", "pop:", "count:" }, ev);
+            Assert.False((bool)screen["count"]!["right"]!);
+
+            now = now.AddSeconds(1.5);
+            await r.PollOnceAsync();
+            Assert.Equal(pushes + 1, Pushes());   // nothing moved
+
+            await r.StopAsync();
+            ConditioningControlPanel.Services.Remote.RemoteScreenFeed.Note("pop");
+            Assert.DoesNotContain(ConditioningControlPanel.Services.Remote.RemoteScreenFeed.Read().Events, e => e.Kind == "pop");
+        }
+        finally
+        {
+            (CorePaths.EffectiveAssetsProvider, CoreSubliminal.CustomShowProvider, CoreSettings.ServiceProvider) = saved;
+            ConditioningControlPanel.Services.Remote.RemoteScreenFeed.ResetCounts();
+            Directory.Delete(assets, true);
+        }
+    }
+
+    // WPF RemoteControlService.cs:928-929: a running bouncing text shows as the bounce_text indicator.
+    [Fact]
+    public async Task Status_lists_bounce_text_while_it_runs()
+    {
+        var saved = CoreBouncingText.IsRunningProvider;
+        try
+        {
+            CoreBouncingText.IsRunningProvider = () => true;
+            var f = new FakeRelay();
+            using var r = Relay(f);
+            await r.StartAsync("full");
+            await r.PushStatusNowAsync();
+            var active = f.Seen.Last(x => x.Path == "/v2/remote/status").Body["active_services"]!.Values<string>().ToArray();
+            Assert.Contains("bounce_text", active);
+        }
+        finally { CoreBouncingText.IsRunningProvider = saved; }
     }
 
     [Fact]

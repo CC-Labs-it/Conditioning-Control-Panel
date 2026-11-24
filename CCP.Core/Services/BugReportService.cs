@@ -93,6 +93,9 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         public static volatile Func<int, string>? DiagnosticTailProvider;
 
+        /// <summary>Head-supplied persistent engine-off audio trace.</summary>
+        public static volatile Func<int, string>? AudioDiagnosticTailProvider;
+
         /// <summary>
         /// main's freeze-report work (the flight-recorder ring dump, the newest dump on disk, and
         /// THIS session's log file) all live in WPF-only sinks: FlightRecorderSink reads
@@ -248,6 +251,14 @@ namespace ConditioningControlPanel.Services
                 var hangReport = BuildHangReportSection(TryReadNewestHangReport(out var hangAt), hangAt);
                 if (!string.IsNullOrWhiteSpace(hangReport))
                     combined = combined + Environment.NewLine + Environment.NewLine + hangReport;
+
+                // Keep the independent audio trace near the end, beyond normal log chatter.
+                string audioTrace;
+                try { audioTrace = AudioDiagnosticTailProvider?.Invoke(MaxVideoDiagLines) ?? string.Empty; }
+                catch { audioTrace = string.Empty; }
+                if (!string.IsNullOrWhiteSpace(audioTrace))
+                    combined += Environment.NewLine + Environment.NewLine +
+                        "===== engine-off audio trace =====" + Environment.NewLine + audioTrace;
 
                 // The recent sounds go LAST on purpose. The tracker keeps only the tail of this
                 // field (about 60 KB of a field that can reach 190), so anything earlier can be cut:

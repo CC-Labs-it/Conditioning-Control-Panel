@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -37,8 +38,9 @@ public sealed class PopQuizHostTests
             LockCardWindow.ShowOnAllMonitors("good girl", 1, strictMode: false, isTest: true);
             scheduler.Show(isTest: true);
             Assert.False(PopQuizWindow.IsAnyOpen());   // deferred, not stacked on the card
-            LockCardWindow.ForceCloseAll();
+            LockCardWindow.Primary!.Close();
             Dispatcher.UIThread.RunJobs();
+            LockCardWindow.RetryPendingCard();
             Assert.True(PopQuizWindow.IsAnyOpen());    // replayed once the card left
 
             // #763 the other way: a card waits behind an open quiz and replays when it closes.
@@ -65,6 +67,96 @@ public sealed class PopQuizHostTests
             LockCardWindow.ForceCloseAll();
             CoreEngine.PopQuiz = null;
             CoreSettings.Current.PopQuizEnabled = wasEnabled;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public Task QuizWaitsOnceAndPanicDropsIt(bool videoBusy, bool drop) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var bubble = new BubbleCountScheduler(BubbleCountHost.Instance, TimeProvider.System, () => System.Array.Empty<string>());
+        var video = new MandatoryVideoScheduler(
+            global::ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance,
+            TimeProvider.System, () => new[] { "/none/clip.mp4" });
+        var (oldBubble, oldVideo, oldFreeze) = (CoreEngine.BubbleCount, CoreEngine.Video, CoreSubliminal.BambiFreezeProvider);
+        CoreEngine.BubbleCount = bubble;
+        CoreEngine.Video = video;
+        CoreSubliminal.BambiFreezeProvider = () => { };
+        try
+        {
+            if (videoBusy)
+                typeof(MandatoryVideoScheduler).GetField("_playing", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(video, true);
+            else
+                bubble.Trigger(forceTest: true);
+            Assert.True(PopQuizHost.Instance.IsInteractionBusy);
+            var scheduler = PopQuizHost.Instance.Scheduler;
+            scheduler.Show(isTest: true);
+            scheduler.Show(isTest: true);
+            Assert.False(PopQuizWindow.IsAnyOpen());
+            if (drop) PopQuizHost.Instance.CloseAll();
+            if (videoBusy)
+                typeof(MandatoryVideoScheduler).GetField("_playing", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(video, false);
+            else bubble.ForceCleanup();
+            LockCardWindow.RetryPendingCard();
+            Assert.Equal(!drop, PopQuizWindow.IsAnyOpen());
+            PopQuizWindow.ForceCloseAll();
+            LockCardWindow.RetryPendingCard();
+            Assert.False(PopQuizWindow.IsAnyOpen());
+        }
+        finally
+        {
+            PopQuizHost.Instance.CloseAll();
+            LockCardWindow.ForceCloseAll();
+            bubble.ForceCleanup();
+            (CoreEngine.BubbleCount, CoreEngine.Video, CoreSubliminal.BambiFreezeProvider) = (oldBubble, oldVideo, oldFreeze);
+        }
+        return Task.CompletedTask;
+    });
+
+    private sealed class ResultHost : IBubbleCountHost
+    {
+        public void Show(string path, int difficulty, bool strict, Action<bool> complete) { }
+        public void ShowMessage(string text, int ms, Action then) { }
+        public void CloseAll() { }
+        public double LastVideoDurationSeconds => 0;
+    }
+
+    [Fact]
+    public Task AutonomyWaitsDuringBubbleResult() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var bubble = new BubbleCountScheduler(new ResultHost(), TimeProvider.System, () => System.Array.Empty<string>());
+        var (oldBubble, oldFreeze, oldStrict) = (CoreEngine.BubbleCount, CoreSubliminal.BambiFreezeProvider, CoreSettings.Current.BubbleCountStrictLock);
+        CoreEngine.BubbleCount = bubble;
+        CoreSubliminal.BambiFreezeProvider = () => { };
+        CoreSettings.Current.BubbleCountStrictLock = true;
+        var shell = new MainShellWindow();
+        try
+        {
+            bubble.Trigger(forceTest: true);
+            bubble.OnComplete(false);
+            Assert.False(BubbleCountWindow.IsAnyOpen());
+            Assert.True(bubble.IsBusy);
+            Assert.True(shell.Autonomy.IsBusy());
+            bubble.ForceCleanup();
+            Assert.False(shell.Autonomy.IsBusy());
+        }
+        finally
+        {
+            shell.Close();
+            bubble.ForceCleanup();
+            (CoreEngine.BubbleCount, CoreSubliminal.BambiFreezeProvider, CoreSettings.Current.BubbleCountStrictLock) = (oldBubble, oldFreeze, oldStrict);
         }
         return Task.CompletedTask;
     });

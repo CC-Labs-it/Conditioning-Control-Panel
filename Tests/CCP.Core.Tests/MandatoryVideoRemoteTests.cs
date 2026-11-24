@@ -18,6 +18,7 @@ public sealed class MandatoryVideoRemoteTests
     private static FypAssetManifest.Entry Clip(string url = Url) => new() { Id = "scrolller/test/1", Url = url, Type = "video" };
     private sealed class Host : IMandatoryVideoHost
     {
+        public int FloatingLimit => 1; public int FloatingUp => 0;
         public string? Path;
         public void Show(string path, bool strict) => Path = path;
         public double CloseAll() => 0;
