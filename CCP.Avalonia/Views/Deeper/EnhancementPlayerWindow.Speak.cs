@@ -14,9 +14,9 @@ public partial class EnhancementPlayerWindow
     private EnhancementEngine? _deeperEngine;
     private PlayerTimeSource? _deeperSource;
 
-    private void TickDeeper()
+    private void TickDeeper(bool bindVideo = false)
     {
-        if (_closing || _loadedEnhancement == null || (_deeperEngine == null && !_isPlaying)) return;
+        if (_closing || _loadedEnhancement == null || (_deeperEngine == null && !_isPlaying && !bindVideo)) return;
         if (_deeperEngine == null)
         {
             _deeperSource = new PlayerTimeSource(this);
@@ -37,7 +37,7 @@ public partial class EnhancementPlayerWindow
             _deeperEngine = new EnhancementEngine(speakOnly, _deeperSource, dispatcher);
             _deeperEngine.Start();
         }
-        _deeperSource?.Tick(_currentSec);
+        if (!bindVideo) _deeperSource?.Tick(_currentSec);
     }
 
     private void StopDeeper()

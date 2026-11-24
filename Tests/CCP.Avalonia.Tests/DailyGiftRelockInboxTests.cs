@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
 using CCP.Avalonia.Testing;
@@ -130,4 +131,48 @@ public class DailyGiftRelockInboxTests
             shell.Close();
         }
     });
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MemberHelloFollowsLapseAndReadingWithoutActivation(bool reading) => AvaloniaTestDispatcher.Run(() =>
+    {
+        var evt = typeof(AccountSeed).GetField("TierReadingApplied", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var listeners = evt.GetValue(null);
+        evt.SetValue(null, null);
+        var old = (CoreAccount.HasPremiumAccessProvider, CoreEntitlement.HasPremiumProvider, CoreSettings.ServiceProvider);
+        var service = new ConditioningControlPanel.Services.SettingsService();
+        MainShellWindow? shell = null;
+        try
+        {
+            CoreSettings.ServiceProvider = () => service;
+            var premium = true;
+            CoreAccount.HasPremiumAccessProvider = () => premium;
+            CoreEntitlement.HasPremiumProvider = () => premium;
+            service.Current.PatreonMember = true;
+            StartupLadder.ResetForTests();
+            StartupLadder.BeginFirstLaunchQuiet(TimeSpan.FromDays(2));
+            shell = new MainShellWindow();
+            void Trigger()
+            {
+                if (reading) ((Action?)evt.GetValue(null))?.Invoke();
+                else shell.RefreshEntitlementVeils(persist: true);
+            }
+            Trigger();
+            Assert.DoesNotContain(StartupLadder.Inbox.Items, i => i.Key == "conv:free_member_hello");
+            premium = false;
+            Trigger();
+            Assert.Single(StartupLadder.Inbox.Items.Where(i => i.Key == "conv:free_member_hello"));
+            shell.DailyGiftFocus();
+            ((Action?)evt.GetValue(null))?.Invoke();
+            Assert.Single(StartupLadder.Inbox.Items.Where(i => i.Key == "conv:free_member_hello"));
+        }
+        finally
+        {
+            shell?.Close();
+            evt.SetValue(null, listeners);
+            (CoreAccount.HasPremiumAccessProvider, CoreEntitlement.HasPremiumProvider, CoreSettings.ServiceProvider) = old;
+            StartupLadder.ResetForTests();
+        }
+    });
+
 }
