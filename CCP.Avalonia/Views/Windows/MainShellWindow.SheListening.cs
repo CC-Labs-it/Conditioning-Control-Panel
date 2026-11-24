@@ -34,6 +34,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Seeding guard for this page. See the header for why it is not _isLoading.</summary>
         private bool _slLoading;
 
+        // A test can use a temporary model directory without touching installed assets.
+        internal string WakeModelRoot { get; set; } = SherpaWakeService.ModelRoot;
+
         /// <summary>
         /// True when the offline mic is actually armed: consent given AND at least one input mode
         /// (wake word or push-to-talk) is on. The "She's Listening" master on/off state, fully
@@ -105,7 +108,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             tab.SL_PrivacyCard.IsVisible = s.MicConsentGiven;
 
             RefreshSheListeningDeviceChips();
+            RefreshWakeEngineStatus();
             RefreshSheListeningStatus();
+        }
+
+        // WPF MainWindow.SheListening.cs:151: check on every tab refresh, including after a model is added or removed.
+        // This head cannot run sherpa yet; finding a model must not imply that the engine is active.
+        private void RefreshWakeEngineStatus()
+        {
+            var tab = SheListeningPage;
+            if (tab == null) return;
+            tab.TxtSL_WakeEngineStatus.Text = Loc.Get(SherpaWakeService.FindModel(WakeModelRoot) != null
+                ? "she_wake_model_found_unavailable"
+                : "she_wake_unavailable_status");
         }
 
         /// <summary>

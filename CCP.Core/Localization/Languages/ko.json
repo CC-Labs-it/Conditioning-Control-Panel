@@ -8505,6 +8505,7 @@
   "account_merged_signin_summary": "계속하려면 다시 로그인하세요.",
   "account_merged_signin_body": "두 계정이 하나로 통합되었습니다. 계속하려면 다시 로그인하세요.\n\n로컬 진행 상황은 유지됩니다.",
   "she_wake_unavailable_tooltip": "선택 사항인 sherpa-onnx 호출 엔진은 이 버전에서 사용할 수 없습니다. 내장 인식기를 사용합니다.",
+  "she_wake_model_found_unavailable": "호출 모델을 찾았습니다. 이 버전에서는 안정적인 호출 기능을 사용할 수 없습니다.",
   "she_wake_unavailable_status": "선택 사항인 호출 엔진은 이 버전에서 사용할 수 없습니다. 내장 인식기를 사용합니다.",
   "she_wake_calibration_unavailable": "호출어 보정은 이 버전에서 사용할 수 없습니다.",
   "chaos_expiry_label": "사라짐",
