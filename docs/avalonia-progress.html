@@ -1376,7 +1376,7 @@ still re-localize).</li>
 <h2 data-branch="avalonia-port/webcam-capture">avalonia-port/webcam-capture + webcam-capture-safety: +921 / +168</h2>
 <ul>
 <li>Detectors (BlazeFace/FaceMesh/Iris) moved to Core FaceModels.cs (WPF delegates). Avalonia WebcamTracker: IFrameSource seam, OpenCV V4L2
-source (OpenCvSharp4 4.13 + OnnxRuntime 1.20.1; Linux natives only on Linux), frames only in memory, consent at start and every frame,
+source (OpenCvSharp4 4.13 + OnnxRuntime 1.32.0; Linux natives only on Linux), frames only in memory, consent at start and every frame,
 each session owns and always releases its camera, an abandoned loop blocks a new Start until it exits. Blink Trainer tracker toggle.</li>
 <li>Evidence: WebcamTrackerTests (fake source), fail-proven; ldd clean; tarball +54.1 MB; live with the device unavailable. Never a real camera.</li>
 </ul>
