@@ -104,7 +104,7 @@ public sealed class ExclusivesVaultClickTests
             Assert.Equal(TimeSpan.FromMilliseconds(140), delay);
             Assert.NotNull(complete);
             Assert.Equal("premium", shell.CurrentTab);
-            var scale = Assert.IsType<ScaleTransform>(card.RenderTransform);
+            var scale = Assert.IsType<TransformGroup>(card.RenderTransform).Children.OfType<ScaleTransform>().Single();
             Assert.Equal(0.97, scale.GetBaseValue(ScaleTransform.ScaleXProperty).Value, 3);
             Assert.Equal(0.97, scale.GetBaseValue(ScaleTransform.ScaleYProperty).Value, 3);
             Assert.Equal(2, scale.Transitions!.Count);
