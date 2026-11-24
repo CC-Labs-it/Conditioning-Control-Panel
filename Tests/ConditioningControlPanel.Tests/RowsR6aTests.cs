@@ -30,4 +30,9 @@ public class RowsR6aTests
     [Fact]
     public void Takeover_rows_read() => WpfRenderHarness.OnStaThread(() =>
         RowsRender.Check(new BambiTakeoverTabView(), "r6a-takeover", minLabels: 27, before: ExpandAll));
+
+    [Fact]
+    public void Remote_rows_read() => WpfRenderHarness.OnStaThread(() =>
+        RowsRender.Check(new RemoteControlTabView(), "r6a-remote", minLabels: 5,
+            show: new[] { "OptInFormPanel" }, before: ExpandAll));
 }
