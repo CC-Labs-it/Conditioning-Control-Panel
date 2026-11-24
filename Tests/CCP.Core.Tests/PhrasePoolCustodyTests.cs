@@ -38,7 +38,7 @@ public sealed class PhrasePoolCustodyTests : IDisposable
         if (_svc != null) { _svc.SaveImmediate(); _svc.SealForReset(); }
         CoreSettings.ServiceProvider = _oldSettings;
         if (_svc != null)
-            foreach (var f in Directory.GetFiles(CorePaths.UserData, "settings*"))
+            foreach (var f in RoadmapTestProfile.SettingsFiles(CorePaths.UserData))
             {
                 // Another test's service in this shared sandbox may still be writing its own .tmp; the next Load reads settings.json only.
                 try { File.Delete(f); } catch (IOException) when (f.EndsWith(".tmp", StringComparison.Ordinal)) { }

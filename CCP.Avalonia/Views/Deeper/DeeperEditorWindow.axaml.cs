@@ -389,6 +389,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             // -- Timeline canvas + scroller
             TimelineCanvas.PointerPressed += TimelineCanvas_PointerPressed;
             TimelineCanvas.PointerMoved += TimelineCanvas_PointerMoved;
+            TimelineCanvas.PointerExited += (_, _) => HoverTimeTip.IsVisible = false;
             TimelineCanvas.PointerReleased += TimelineCanvas_PointerReleased;
             TimelineCanvas.PointerCaptureLost += TimelineCanvas_PointerCaptureLost;
             TimelineCanvas.SizeChanged += TimelineCanvas_SizeChanged;
@@ -1156,6 +1157,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             foreach (var ed in s_open.ToArray())
             {
+                ed.HoverTimeTip.IsVisible = false;
                 var localVideo = ed._browserNavigated && ed.BrowserPreview.Source?.IsFile == true;
                 if (localVideo)
                 {
@@ -1419,17 +1421,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void BtnPreviewZoomIn_Click(object? sender, RoutedEventArgs e) => AdjustPreviewZoom(+0.10);
         private void BtnPreviewZoomOut_Click(object? sender, RoutedEventArgs e) => AdjustPreviewZoom(-0.10);
 
-        /// <summary>
-        /// ponytail: NativeWebView genuinely has no zoom factor - one of the three CoreWebView2
-        /// members with no counterpart at all, and NOT a missing script channel, since
-        /// InvokeScriptAsync works and everything else in this region uses it. CSS <c>zoom</c>
-        /// through that channel is the obvious substitute and is not one: it is per-document, so it
-        /// is lost on the next navigation, and it does not scale a fullscreened video. So WPF's
-        /// +/-10% clamped to [0.25, 5.0] stays lost, and these two buttons only log.
-        /// </summary>
         private void AdjustPreviewZoom(double delta)
         {
-            Log.Debug("DeeperEditor: preview zoom {Delta:+0.00;-0.00} ignored; NativeWebView has no zoom", delta);
+            BrowserPreview.SetBrowserZoom(Math.Clamp((BrowserPreview.BrowserZoom ?? 1.0) + delta, 0.25, 5.0));
         }
 
         private void TimelineScroll_PointerWheelChanged(object? sender, PointerWheelEventArgs e)
@@ -1507,6 +1501,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void TimelineCanvas_PointerMoved(object? sender, PointerEventArgs e)
         {
+            UpdateHoverTimeTip(e);
             if (_dragMode == DragMode.RubberBand)
             {
                 UpdateRubberBand(e.GetPosition(TimelineCanvas));
@@ -1737,6 +1732,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 TxtRuleBandEnd.Text = _draggedRegion.End.ToString("0.##", CultureInfo.InvariantCulture);
             }
             finally { ClearWhenEventsDrained(() => _suppressRuleSync = false); }
+        }
+
+        // WPF DeeperEditorWindow.xaml.cs:1794: show cursor time above the lanes.
+        private void UpdateHoverTimeTip(PointerEventArgs e)
+        {
+            var width = TimelineCanvas.Bounds.Width;
+            if (_totalSeconds <= 0 || width <= 0) { HoverTimeTip.IsVisible = false; return; }
+            var x = e.GetPosition(TimelineCanvas).X;
+            TxtHoverTime.Text = FormatHoverTime(Math.Clamp(x / width, 0, 1) * _totalSeconds);
+            HoverTimeTip.IsVisible = true;
+            var tipWidth = HoverTimeTip.Bounds.Width;
+            var left = x + 12;
+            if (tipWidth > 0 && left + tipWidth > width) left = x - tipWidth - 4;
+            Canvas.SetLeft(HoverTimeTip, Math.Clamp(left, 0, Math.Max(0, width - tipWidth)));
+            Canvas.SetTop(HoverTimeTip, RulerStripHeight + 2);
         }
 
         private void ApplyScrubFromMouse(PointerEventArgs e)
@@ -2091,7 +2101,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             if (_selectedRegion == null) return;
             PushUndoSnapshot();
-            _enhancement.Regions.Remove(_selectedRegion);
+            RemoveRegionFromModel(_selectedRegion);
             SelectNothing();
             MarkDirty();
             RebuildRegionVisuals();
@@ -3157,6 +3167,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _enhancement!.MediaSource = "";
             MarkDirty();
             RefreshLinkedFilesUi();
+            ++_previewGeneration;
+            TeardownPreview();
+            DisposeLocalAudio();
+            _waveformPeaks = null;
+            _hasWaveformDuration = false;
+            UpdateWaveformPath();
             ShowPlaceholder();
             ScheduleValidation();
         }
