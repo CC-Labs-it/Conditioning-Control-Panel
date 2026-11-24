@@ -425,6 +425,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     PostArcademyAssetsUnavailable(message);
                     handled = true;
                     break;
+                case "local-sample-request":
+                    ArcademyLocalSample(message);
+                    handled = true;
+                    break;
+                case "probe-sub":
+                    ArcademyProbeSub(message);
+                    handled = true;
+                    break;
+                case "share-image":
+                    ArcademyShareImage((string?)message["png"]);
+                    handled = true;
+                    break;
                 case "library-remove":
                     FypRules.RemoveLibrarySub(CoreSettings.Current, (string?)message["name"] ?? (string?)message["sub"]);
                     Post(new { type = "library", subLibrary = FypRules.BuildLibraryPayload(CoreSettings.Current) });
