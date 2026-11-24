@@ -180,6 +180,32 @@ public class PinkComfortLimitTests
         Assert.Equal(2, Regex.Matches(src, @"PinkAlpha\(actualOpacity\)").Count);
     }
 
+    [Fact]
+    public void Every_limit_string_is_in_the_ten_languages()
+    {
+        var dir = Path.Combine(AppRoot(), "Localization", "Languages");
+        var files = Directory.GetFiles(dir, "*.json");
+        Assert.Equal(10, files.Length);
+        var keys = new[] { "set2_accessibility_header", "setting_pink_comfort_limit", "setting_pink_comfort_max",
+            "tooltip_pink_comfort_limit", "hint_pink_comfort_clip" };
+        foreach (var f in files)
+        {
+            var bytes = File.ReadAllBytes(f);
+            Assert.False(bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF, $"{f} has a BOM");
+            var json = Newtonsoft.Json.Linq.JObject.Parse(System.Text.Encoding.UTF8.GetString(bytes));
+            foreach (var k in keys)
+            {
+                var v = (string?)json[k];
+                Assert.False(string.IsNullOrWhiteSpace(v), $"{Path.GetFileName(f)} lacks {k}");
+                Assert.DoesNotContain("—", v);
+                Assert.DoesNotContain("–", v);
+                Assert.DoesNotContain("!", v);
+            }
+            // The clip hint is a format string: the percent slot must survive translation.
+            Assert.Contains("{0}", (string?)json["hint_pink_comfort_clip"]);
+        }
+    }
+
     private static string AppRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
