@@ -339,7 +339,9 @@ namespace ConditioningControlPanel.Avalonia
             // Real probes, not the fail-open default (which reads present + resolved). A throw
             // reaches the gate's CachedProbe and still fails open, as WPF's strict pair does; no pactl at all
             // fails open without spawning it (distro-check F6).
-            CoreQuests.CameraProbe = () => System.IO.Directory.EnumerateFiles("/dev", "video*").Any();
+            CoreQuests.CameraProbe = () => Platform.WindowsCameras.CameraPresent(OperatingSystem.IsWindows(),
+                Platform.WindowsCameras.EnumerateStrict, Platform.WindowsCameras.EnumerateMediaFoundationStrict,
+                () => System.IO.Directory.EnumerateFiles("/dev", "video*").Any());
             CoreQuests.MicrophoneProbe = () => Platform.PulseMicSource.MicrophonePresent(
                 Platform.LibVlcAudio.PactlInstalled, () => Platform.LibVlcAudio.Pactl("list short sources"));
 
@@ -451,8 +453,13 @@ namespace ConditioningControlPanel.Avalonia
             var mods = Mods;
             mods.ModChanged += (_, _) =>
             {
-                if (Dispatcher.UIThread.CheckAccess()) Controls.AmbientFxCanvas.Env.ApplyPalette(mods);
-                else Dispatcher.UIThread.Post(() => Controls.AmbientFxCanvas.Env.ApplyPalette(mods));
+                void RefreshModAppearance()
+                {
+                    Controls.AmbientFxCanvas.Env.ApplyPalette(mods);
+                    LocalizationManager.Instance.NotifyVocabChanged();
+                }
+                if (Dispatcher.UIThread.CheckAccess()) RefreshModAppearance();
+                else Dispatcher.UIThread.Post(RefreshModAppearance);
             };
             CoreMods.Attach(Mods);
             Mods.Initialize(CoreSettings.Current.ActiveModId);
@@ -479,10 +486,24 @@ namespace ConditioningControlPanel.Avalonia
 
         // WPF Services/Chaos/EffectPayloadFiring.cs:225-237. Only the global multiplier
         // applies to rain, including on a prism pop (DurationMult is deliberately ignored).
-        internal static Action<Visual, int?, int?, int?, bool> FireChaosFlash = Views.Overlays.FlashOverlay.TriggerOnce;
+        internal static Action<Visual, int?, int?, int?, bool> FireChaosFlash =
+            (host, amount, duration, size, ambient) => Views.Overlays.FlashOverlay.TriggerOnce(host, amount, duration, size, ambient);
         internal static void FireChaosPayload(Services.Chaos.EffectPayload payload)
         {
             var host = Views.Chaos.ChaosRunHost.Overlay;
+            if (payload is Services.Chaos.VideoPayload video)
+            {
+                var scheduler = video.ChaosToken != 0 ? Views.Chaos.ChaosRunHost.RunVideo : CoreEngine.Video;
+                if (scheduler == null) return;
+                try
+                {
+                    if (video.ChaosToken != 0)
+                        scheduler.ArmRandomSegment(video.ChaosToken, (int)Services.Chaos.VideoPayload.SEGMENT_SEC);
+                    scheduler.Trigger(userEarned: true, silentIfEmpty: true, chaosToken: video.ChaosToken);
+                }
+                catch (Exception ex) { Serilog.Log.Information(ex, "Chaos video payload failed"); scheduler.CancelChaosVideo(video.ChaosToken); }
+                return;
+            }
             if (payload is Services.Chaos.FlashPayload flash)
             {
                 if (host != null)
@@ -566,7 +587,9 @@ namespace ConditioningControlPanel.Avalonia
                 || Sessions?.IsRunning == true || Platform.StartupLadder.IsQuiet || Mantra.IsActive
                 || (Views.Tabs.RemoteControlTabView.Relay.IsValueCreated && Views.Tabs.RemoteControlTabView.Relay.Value.ControllerConnected)
                 || Views.Overlays.MandatoryVideoOverlay.Instance.GracePaused
-                || CoreEngine.Video?.IsPlaying == true || Views.Windows.LockCardWindow.IsAnyOpen()
+                || CoreEngine.Video?.IsPlaying == true || Views.Deeper.EnhancementPlayerWindow.IsAnyEnhancementRunning
+                || Views.Windows.MainShellWindow.Current?.SettingsPage?.BrowserEnhanceHost.IsRunning == true
+                || Views.Windows.LockCardWindow.IsAnyOpen()
                 || Views.Windows.BubbleCountWindow.IsAnyOpen() || Views.Windows.PopQuizWindow.IsAnyOpen()
                 || ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true;   // WPF App.xaml.cs:779-788
             // The window and startup probes touch Avalonia state, and a chat reply can ask from a worker (#4227):
@@ -922,6 +945,13 @@ namespace ConditioningControlPanel.Avalonia
             settings.PendingPresetReinstalls.Clear();
         }
 
+        internal static void InitializeChaos()
+        {
+            // WPF App.xaml.cs:2427,2827. Settings must be loaded before selecting the save slot.
+            Services.Chaos.ChaosCrashSentinel.ConsumeAndReport(Serilog.Log.Logger);
+            Services.Chaos.ChaosMeta.Init();
+        }
+
         private async Task StartDesktop(Func<double, string, Task> step)
         {
             await step(0.0, "Starting...");
@@ -959,6 +989,7 @@ namespace ConditioningControlPanel.Avalonia
                 Platform.BrowserVideoSurface.Seed();
                 Settings = new SettingsService();
                 CoreSettings.ServiceProvider = () => Settings;
+                InitializeChaos();
                 Platform.WallpaperHead.Initialize();
                 // WPF App.xaml.cs:2928: launch only sweeps retention on disk (creates nothing, arms no timer);
                 // the ledger starts when awareness turns on. No observer feeds it on this head yet.
@@ -1050,17 +1081,14 @@ namespace ConditioningControlPanel.Avalonia
                 SeedSubliminalFeatureUse();
                 CoreSubliminal.CustomShowProvider = text => Views.Overlays.SubliminalWhisperShow.Custom(text);
                 CoreSubliminal.BambiFreezeProvider = Views.Overlays.SubliminalWhisperShow.Freeze;
-                CoreSubliminal.RunStateChanged = running =>
-                {
-                    if (running) return;
-                    Views.Overlays.SubliminalWhisperShow.StopAll();
-                    global::Avalonia.Threading.Dispatcher.UIThread.Post(Views.Overlays.SubliminalOverlay.CloseAll);
-                };
+                CoreSubliminal.RunStateChanged = Views.Overlays.SubliminalWhisperShow.RunStateChanged;
                 CoreBouncingText.StartAction = () =>
                 {
                     if (desktop.MainWindow is { } host) Views.Overlays.BouncingTextOverlay.Start(host);
                 };
                 CoreBouncingText.StopAction = Views.Overlays.BouncingTextOverlay.Stop;
+                CoreBouncingText.IsRunningProvider = () => Views.Overlays.BouncingTextOverlay.IsRunning;
+                CoreBubbles.IsRunningProvider = () => Views.Overlays.BubbleOverlay.IsRunning;
                 Views.Overlays.CornerGifOverlay.Seed(() => desktop.MainWindow);   // the corner-GIF surface seam
                 CoreBouncingText.RefreshAction = Views.Overlays.BouncingTextOverlay.Refresh;
                 CoreBouncingText.RestartAction = Views.Overlays.BouncingTextOverlay.Restart;
@@ -1476,9 +1504,7 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF decides with `Welcomed && !FirstRunClaimedThisLaunch`: the shell's constructor
                 // claims Welcomed on a fresh install, so read it before the shell exists.
                 bool welcomed = Settings.Current.Welcomed;
-                desktop.MainWindow = sessions is null
-                    ? new Views.Windows.MainShellWindow()
-                    : new Views.Windows.MainShellWindow(sessions);
+                desktop.MainWindow = Views.Windows.MainShellWindow.CreateForLaunch(sessions);
                 // WPF CenterOnPrimaryScreen, with the Linux default size (Views/Windows/MainShellWindow.WorkAreaFit.cs).
                 (desktop.MainWindow as Views.Windows.MainShellWindow)?.PlaceForFirstShow();
                 if (global::Avalonia.Controls.ControlExtensions.FindControl<global::Avalonia.Controls.Panel>(desktop.MainWindow, "NotificationHost") is { } toastHost)
@@ -1934,9 +1960,11 @@ namespace ConditioningControlPanel.Avalonia
             catch (Exception ex) { Serilog.Log.Warning(ex, "Failed to stop spawned Ollama server"); }
             // WPF App.OnExit:6013/6173: zero the toys first (a Lovense level has no timeout), then dispose.
             try { CoreHaptics.Service?.Dispose(); } catch { }
+            try { Views.Overlays.KeywordHighlightOverlay.CloseAll(); } catch { }
             try { Views.Overlays.BlinkTrainerSession.Stop(); } catch { /* WPF Application.Exit += Stop */ }
             try { Views.Chaos.ChaosRunHost.ForceShutdown(); } catch { /* WPF App.OnExit:6241 Chaos.ForceShutdown */ }
             try { Views.Games.GameWindow.CloseCounterForExit(); } catch { /* WPF App.OnExit:6433 CloseFor(CloseAppExit) */ }
+            try { Views.Games.GameWindow.DrainGoonInboxForExit(TimeSpan.FromSeconds(3)); } catch { /* partner media never outlives the app */ }
             try { Possession?.Dispose(); } catch { /* WPF App.OnExit:6527: every haunted control back, ember stripped */ }
             // WPF CleanupTempPackFiles (FlashService.cs:4322, VideoService.cs:8508, BubbleCountService.cs:83):
             // a clean exit leaves no decrypted pack file (a crash's leftovers go at the next startup sweep).

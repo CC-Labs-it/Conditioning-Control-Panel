@@ -210,6 +210,18 @@ public sealed class BrowserPopoutTests
         }
     });
 
+    [Fact]
+    public Task TakeoverStopExitsFullscreenWithoutPageExit() => WithShell((shell, page, host) =>
+    {
+        Click(page, "BtnPopOutBrowser");
+        var popout = shell.BrowserPopoutWindow!;
+        host.OnNativeFullscreenEntered();
+        Assert.Equal(WindowState.FullScreen, popout.WindowState);
+        shell.EndWebVideoTakeover();
+        Assert.Equal(WindowState.Normal, popout.WindowState);
+        Assert.Same(host, popout.Content);
+    });
+
     // WPF MainWindow.StartStop.cs:577-580 (#952): any engine stop drops a fullscreen browser (#4423).
     [Fact]
     public Task EngineStopExitsPopoutFullscreen() => WithShell((shell, page, host) =>

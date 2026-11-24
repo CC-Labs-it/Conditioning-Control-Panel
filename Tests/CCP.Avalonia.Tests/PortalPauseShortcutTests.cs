@@ -316,6 +316,7 @@ public class PortalPauseShortcutTests
     private sealed class VideoHost : IMandatoryVideoHost
     {
         internal int Shows, Freezes;
+        public int FloatingLimit => 1; public int FloatingUp => 0;
         internal Action? OnShow;
         public void Show(string path, bool strict) { Shows++; OnShow?.Invoke(); }
         public void Freeze() => Freezes++;
