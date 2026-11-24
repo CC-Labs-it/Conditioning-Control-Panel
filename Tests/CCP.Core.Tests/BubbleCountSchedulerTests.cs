@@ -24,12 +24,16 @@ public sealed class BubbleCountSchedulerTests
         public void SetEffectsHold(bool hold) => EffectsHolds.Add(hold);
         public double LastVideoDurationSeconds { get; set; } = 60;
         public void Show(string path, int difficulty, bool strict, Action<bool> onComplete) => Shown.Add((path, difficulty, strict, onComplete));
+        public bool CanPlay { get; set; } = true;
+        public bool ThrowOnShow, SkipInShow;
         public Action? Skipped;
         public Action<double>? Duration;
         public void Show(string path, int difficulty, bool strict, Action<bool> onComplete, Action onSkipped)
         {
             Skipped = onSkipped;
-            Show(path, difficulty, strict, onComplete);
+            if (SkipInShow) onSkipped();
+            if (ThrowOnShow) throw new InvalidOperationException("start failed");
+            if (!SkipInShow) Show(path, difficulty, strict, onComplete);
         }
         public void Show(string path, int difficulty, bool strict, Action<bool> onComplete, Action onSkipped, Action<double> onDuration)
         {
@@ -289,6 +293,85 @@ public sealed class BubbleCountSchedulerTests
             Assert.Equal(1, losses);
         }
         finally { CoreSettings.Current.MercyAfterFails = old; }
+    });
+
+    [Theory]
+    [InlineData("blocked")]
+    [InlineData("skipped")]
+    [InlineData("throw")]
+    [InlineData("skip-then-throw")]
+    [InlineData("library-throw")]
+    public void RetryStartupFailureRaisesOneFinalLoss(string failure) => With(true, true, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); var picks = 0;
+        using var game = new BubbleCountScheduler(host, clock, () =>
+            failure == "library-throw" && picks++ > 0 ? throw new InvalidOperationException("library failed") : new[] { Clips[0] });
+        int losses = 0; game.GameFailed += () => losses++;
+        game.Trigger(true); clock.Advance(BubbleCountScheduler.LeadIn);
+        var first = host.Shown[0].Done; first(false);
+        Assert.Equal(0, losses);
+        host.CanPlay = failure != "blocked";
+        host.ThrowOnShow = failure is "throw" or "skip-then-throw";
+        host.SkipInShow = failure == "skip-then-throw";
+        host.Messages[0].Then();
+        if (failure == "skipped") host.Skipped!();
+        Assert.False(game.IsBusy); Assert.Equal(1, losses);
+        host.Messages[0].Then(); host.Skipped?.Invoke(); first(false);
+        Assert.Equal(1, losses);
+    });
+
+    [Theory]
+    [InlineData("blocked")]
+    [InlineData("skipped")]
+    [InlineData("throw")]
+    [InlineData("skip-then-throw")]
+    [InlineData("library-throw")]
+    public void InitialStartupFailureIsSilent(string failure) => With(true, true, false, () =>
+    {
+        var clock = new FakeClock();
+        var host = new Host { CanPlay = failure != "blocked", ThrowOnShow = failure is "throw" or "skip-then-throw", SkipInShow = failure == "skip-then-throw" };
+        using var game = new BubbleCountScheduler(host, clock, () =>
+            failure == "library-throw" ? throw new InvalidOperationException("library failed") : Clips);
+        int losses = 0; game.GameFailed += () => losses++;
+        game.Trigger(true); clock.Advance(BubbleCountScheduler.LeadIn);
+        if (failure == "skipped") host.Skipped!();
+        Assert.False(game.IsBusy); Assert.Equal(0, losses);
+        host.Skipped?.Invoke(); Assert.Equal(0, losses);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PanicDuringRetrySelectionStopsTheRound(bool empty) => With(true, true, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); int picks = 0;
+        BubbleCountScheduler? game = null;
+        game = new BubbleCountScheduler(host, clock, () =>
+        {
+            if (picks++ == 0) return new[] { Clips[0] };
+            game!.ForceCleanup();
+            return empty ? Array.Empty<string>() : new[] { Clips[0] };
+        });
+        using (game)
+        {
+            int losses = 0; game.GameFailed += () => losses++;
+            game.Trigger(true); clock.Advance(BubbleCountScheduler.LeadIn);
+            host.Shown[0].Done(false); host.Messages[0].Then();
+            Assert.False(game.IsBusy); Assert.Equal(0, losses); Assert.Single(host.Shown);
+        }
+    });
+
+    [Fact]
+    public void PanicSuppressesLateRetrySkip() => With(true, true, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        using var game = new BubbleCountScheduler(host, clock, () => Clips);
+        int losses = 0; game.GameFailed += () => losses++;
+        game.Trigger(true); clock.Advance(BubbleCountScheduler.LeadIn);
+        host.Shown[0].Done(false); host.Messages[0].Then();
+        var skipped = host.Skipped!;
+        game.ForceCleanup(); skipped();
+        Assert.False(game.IsBusy); Assert.Equal(0, losses);
     });
 
     [Fact]
