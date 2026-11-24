@@ -122,6 +122,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             void OnFirstOpened(object? _, EventArgs __)
             {
                 Opened -= OnFirstOpened;
+                StartLaunchEngine();
                 StartupPillFetch = StartupPillFetchAsync();
                 StartupVideo = PlayStartupVideoAsync();
             }

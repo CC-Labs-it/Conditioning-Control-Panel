@@ -37,6 +37,10 @@ namespace ConditioningControlPanel
         /// style, the second logo). Also a no-op when nothing is running.</summary>
         public static volatile Action? RestartAction;
 
+        /// <summary>The head's bouncing text runs (WPF App.BouncingText.IsRunning, for the remote status).</summary>
+        public static volatile Func<bool>? IsRunningProvider;
+        public static bool IsRunning { get { try { return IsRunningProvider?.Invoke() ?? false; } catch { return false; } } }
+
         public static void Start()   { try { StartAction?.Invoke(); }   catch { } }
         public static void Stop()    { try { StopAction?.Invoke(); }    catch { } }
         public static void Refresh() { try { RefreshAction?.Invoke(); } catch { } }

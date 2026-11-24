@@ -45,7 +45,9 @@ public class LockdownDoseEngineTests
                 Assert.Contains("starts or restarts the engine", LockdownTabView.LockdownWarning(20, s, false));
                 ld.Activate(TimeSpan.FromMinutes(20));
                 Assert.False(CoreEngine.IsRunning);
-                await Task.Delay(TimeSpan.FromSeconds(3)); // the real 2 second kickoff
+                var elapsed = System.Diagnostics.Stopwatch.StartNew();
+                while (!CoreEngine.IsRunning && elapsed.Elapsed < TimeSpan.FromSeconds(15))
+                    await Task.Delay(50); // Wait for the real 2 second dispatcher kickoff under load.
                 Assert.True(CoreEngine.IsRunning);
                 Assert.Equal(count, s.TotalSessions); // system starts are not user sessions
                 ld.Deactivate();

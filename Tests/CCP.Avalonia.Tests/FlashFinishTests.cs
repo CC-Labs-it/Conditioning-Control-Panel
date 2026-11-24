@@ -36,6 +36,34 @@ public sealed class FlashFinishTests
     });
 
     [Fact]
+    public Task Click_event_fires_once_and_panic_closes_the_flash() => OnUi(() =>
+    {
+        var saved = FlashOverlay.Present;
+        var clicks = 0;
+        void Clicked() => clicks++;
+        try
+        {
+            FlashOverlay.Present = (_, _, _) => true;
+            FlashOverlay.Clicked += Clicked;
+            var flash = ShowOne();
+            FlashOverlay.Pop(flash);
+            FlashOverlay.Pop(flash);
+            Assert.Equal(1, clicks);
+            flash = ShowOne();
+            PanicSurfaces.StopAll("test");
+            FlashOverlay.Pop(flash);
+            Assert.Equal(1, clicks);
+        }
+        finally
+        {
+            FlashOverlay.Clicked -= Clicked;
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            FlashOverlay.CloseAll(false);
+            FlashOverlay.Present = saved;
+        }
+    });
+
+    [Fact]
     public void Owned_pendulum_plays_and_unowned_or_motion_off_stays_still()
     {
         var was = PrizeOwnership.IsGranted;
