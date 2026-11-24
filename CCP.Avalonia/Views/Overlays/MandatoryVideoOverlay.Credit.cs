@@ -49,7 +49,7 @@ internal sealed partial class MandatoryVideoOverlay
 
     private static string? CreditLink(string path) => ScrolllerCreditRules.LinkFor(ScrolllerItemIndex.MetaFor(path)?.Sub);
 
-    internal Button CreditButton(string path)
+    internal Button CreditButton(string path, FloatingInstance? instance = null)
     {
         var mark = CreditFor(path);
         // WPF player.css:165-166,169-171 fades the badge and its hover over 600 ms.
@@ -83,21 +83,22 @@ internal sealed partial class MandatoryVideoOverlay
             button.PointerEntered += (_, _) => mark.Opacity = 1;
             button.PointerExited += (_, _) => mark.Opacity = ScrolllerCreditBadge.ShownOpacity;
         }
-        button.Click += (_, _) => CreditPressed(path);
+        button.Click += (_, _) => CreditPressed(path, instance);
         return button;
     }
 
-    internal void CreditPressed(string path)
+    internal void CreditPressed(string path, FloatingInstance? instance = null)
     {
         var link = CreditLink(path);
-        if (!Scheduler.IsPlaying || path != _source || link == null || !CreditLinkAllowed()) return;
-        if (!Floating)
+        if (!Scheduler.IsPlaying || link == null || !CreditLinkAllowed()) return;
+        if (instance == null ? path != _source : instance.Closed || !_floaters.Contains(instance) || instance.Clip != path) return;
+        if (!Floating && instance == null)
         {
             _queuedCreditPath = path;
             foreach (var badge in _creditBadges) SetCreditQueued(badge, true);
             return;
         }
-        PostCreditLink(link);
+        PostCreditLink(link, instance);
     }
 
     private static void SetCreditQueued(ScrolllerCreditBadge badge, bool queued)
@@ -121,8 +122,9 @@ internal sealed partial class MandatoryVideoOverlay
         if (CreditLink(path) is { } link) PostCreditLink(link);
     }
 
-    private void PostCreditLink(string link) => Dispatcher.UIThread.Post(() =>
+    private void PostCreditLink(string link, FloatingInstance? instance = null) => Dispatcher.UIThread.Post(() =>
     {
+        if (instance != null && (instance.Closed || !_floaters.Contains(instance) || !Scheduler.IsPlaying)) return;
         if (CreditLinkAllowed()) CreditOpener(link);
     });
 }
