@@ -113,8 +113,10 @@ internal sealed partial class MandatoryVideoOverlay
         public double GetDurationSeconds() => Math.Max(0, _player.Length) / 1000.0;
         public bool IsPlaying => _player.IsPlaying;
         public void Seek(double seconds) { if (_attached && _player.IsSeekable) _player.Time = (long)Math.Max(0, seconds * 1000); }
-        public void Pause() { if (_attached) { if (_owner._player != null) _owner.PausePrimary(); else _player.SetPause(true); } }
-        public void Play() { if (_attached) { if (_owner._player != null) _owner.PlayPrimary(); else _player.SetPause(false); } }
+        // WPF VideoService.cs:637-664 (#735): every real player goes through PausePrimary/PlayPrimary, so a
+        // Deeper hold released under the grace card stays paused; only the injected test decoder is driven directly.
+        public void Pause() { if (_attached) { if (_owner._playbackFactory == null) _owner.PausePrimary(); else _player.SetPause(true); } }
+        public void Play() { if (_attached) { if (_owner._playbackFactory == null) _owner.PlayPrimary(); else _player.SetPause(false); } }
         public PlaybackRect GetVideoRect() => _attached ? _owner.VideoScreenRect() : PlaybackRect.Empty;
         public void Dispose()
         {

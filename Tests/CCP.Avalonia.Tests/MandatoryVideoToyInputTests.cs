@@ -115,6 +115,7 @@ public sealed class MandatoryVideoToyInputTests
 
     private sealed class VideoHost : IMandatoryVideoHost
     {
+        public int FloatingLimit => 1; public int FloatingUp => 0;
         public int Closed;
         public void Show(string path, bool strict) { }
         public double CloseAll() { Closed++; return 0; }
