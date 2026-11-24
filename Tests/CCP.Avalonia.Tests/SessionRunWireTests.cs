@@ -185,6 +185,7 @@ public sealed class SessionRunWireTests
                 Assert.Equal(IconVariant.Filled, startGlyph.Variant);
                 Assert.False(startGlyph.IsFallback);
                 Assert.Equal("Not yet", Assert.IsType<TextBlock>(start.FindControl<Button>("BtnCancel")!.Content).Text);
+                Assert.True(Grid.GetColumn(start.FindControl<Button>("BtnOk")!) < Grid.GetColumn(start.FindControl<Button>("BtnCancel")!));
                 // WPF ShowStyledDialog has no default button or initial button focus.
                 foreach (var key in new[] { Key.Enter, Key.Space })
                 {
@@ -209,6 +210,7 @@ public sealed class SessionRunWireTests
                 {
                     pause.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
                     var dialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
+                    Assert.True(Grid.GetColumn(dialog.FindControl<Button>("BtnOk")!) < Grid.GetColumn(dialog.FindControl<Button>("BtnCancel")!));
                     Assert.Equal(Loc.Get("btn_yes_pause"), Assert.IsType<TextBlock>(dialog.FindControl<Button>("BtnOk")!.Content).Text);
                     Assert.Equal(Loc.Get("btn_keep_going"), Assert.IsType<TextBlock>(dialog.FindControl<Button>("BtnCancel")!.Content).Text);
                     var box = dialog.FindControl<CheckBox>("DontAskAgain")!;
