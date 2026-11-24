@@ -102,6 +102,33 @@ public sealed class KeywordAudioRuntimeTests
     });
 
     [Fact]
+    public void OcrScopeReadsLinuxForegroundAndFeedsRecentApps() => Run((engine, s, played) =>
+    {
+        var source = KeywordTriggerHead.LinuxForegroundSource;
+        var saved = (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.KeywordTriggerApps);
+        try
+        {
+            s.ScreenOcrEnabled = true; s.OcrConfirmationScans = 1;
+            KeywordTriggerHead.LinuxForegroundSource = () => "firefox";
+            Assert.Equal(("firefox", false), KeywordTriggerHead.OcrForeground());
+            KeywordTriggerHead.LinuxForegroundSource = () => "";
+            Assert.Equal((null, false), KeywordTriggerHead.OcrForeground());
+            s.KeywordTriggerAppScope = AwarenessAppScope.OnlyListed; s.KeywordTriggerApps = ["firefox"];
+            KeywordTriggerHead.LinuxForegroundSource = () => "firefox";
+            var fg = KeywordTriggerHead.OcrForeground();
+            var words = new[] { new ScreenOcrService.Word("sit", new(20, 20, 20, 20)) };
+            engine.CheckOcrWords(words, fg.Process, fg.Own);
+            Assert.Single(played);
+            Assert.Equal(["firefox"], engine.GetRecentForegroundApps());
+        }
+        finally
+        {
+            KeywordTriggerHead.LinuxForegroundSource = source;
+            (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.KeywordTriggerApps) = saved;
+        }
+    });
+
+    [Fact]
     public void X11SourceDeliversKeywordsAndPanicDropsQueuedKeys() => Run((_, s, played) =>
     {
         var fired = 0;

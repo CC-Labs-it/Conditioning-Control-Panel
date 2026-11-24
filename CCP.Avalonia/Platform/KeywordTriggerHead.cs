@@ -159,14 +159,21 @@ internal static class KeywordTriggerHead
             if (token.IsCancellationRequested) return false;
             var s = CoreSettings.Current;
             if (s.AwarenessIgnoreOwnUi) words = WithoutOwnWindows(words, OwnWindowRects());
-            var foreground = (Process: (string?)null, Own: false);
-            if (OperatingSystem.IsWindows() && KeywordMatchRules.NeedsForeground(s))
-            {
-                GetWindowThreadProcessId(GetForegroundWindow(), out var id);
-                foreground = Foreground(id);
-            }
+            var foreground = engine.NeedsForeground(engine.Now()) ? OcrForeground() : (null, false);
             return engine.CheckOcrWords(words, foreground.Process, foreground.Own);
         }).GetTask();
+
+    // WPF KeywordTriggerService.cs:763,679-700: the OCR app scope reads the foreground app; X11 off Windows.
+    internal static Func<string> LinuxForegroundSource = X11Windows.ForegroundProcess;
+    internal static (string? Process, bool Own) OcrForeground()
+    {
+        if (OperatingSystem.IsWindows()) { GetWindowThreadProcessId(GetForegroundWindow(), out var id); return Foreground(id); }
+        var name = LinuxForegroundSource();
+        if (string.IsNullOrEmpty(name)) return (null, false);
+        string self;
+        try { self = ConditioningControlPanel.Services.UI.DndProcessList.Normalize(Process.GetCurrentProcess().ProcessName); } catch { self = ""; }
+        return (name, name == self);
+    }
 
     internal static IReadOnlyList<ScreenOcrService.Word> WithoutOwnWindows(
         IReadOnlyList<ScreenOcrService.Word> words, IReadOnlyList<System.Drawing.Rectangle> own) =>
@@ -414,6 +421,7 @@ internal sealed class KeywordAudioRuntime
         var s = CoreSettings.Current;
         // WPF :716-743: a lapse or stop keeps the streak; an empty scan or a blocked app clears it.
         if (!IsActive || !HasAccess) return false;
+        if (words.Count > 0) RememberSeenApp(process, own);   // WPF :763 IsForegroundAppAllowed samples the chips
         if (words.Count == 0 || !KeywordMatchRules.AppAllowed(s, process, own)) { ClearOcr(); return false; }
         if (!s.KeywordTriggersEnabled || !s.ScreenOcrEnabled) return false;
         if (s.KeywordTriggers is not { Count: > 0 }) return false; // WPF :741-742 keeps the guards
