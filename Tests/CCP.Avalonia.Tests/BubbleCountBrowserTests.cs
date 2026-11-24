@@ -212,6 +212,26 @@ public sealed class BubbleCountBrowserTests {
     }
 
     [Fact]
+    public Task BrowserGameRestoresSharedFailureState() => AvaloniaTestDispatcher.RunAsync(() => {
+        EnsureApp();
+        var (stoodDown, failures) = (BrowserVideoSurface.StoodDown, BrowserVideoSurface.ProcessFailures);
+        try {
+            BrowserVideoSurface.StoodDown = true;
+            BrowserVideoSurface.ProcessFailures = 7;
+            using (var game = new BrowserGame()) {
+                Assert.False(BrowserVideoSurface.StoodDown);
+                Assert.Equal(0, BrowserVideoSurface.ProcessFailures);
+                BrowserVideoSurface.StoodDown = true;
+                BrowserVideoSurface.ProcessFailures = 2;
+            }
+            Assert.True(BrowserVideoSurface.StoodDown);
+            Assert.Equal(7, BrowserVideoSurface.ProcessFailures);
+        }
+        finally { (BrowserVideoSurface.StoodDown, BrowserVideoSurface.ProcessFailures) = (stoodDown, failures); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task PanicStopsPendingBrowserFailure() => AvaloniaTestDispatcher.RunAsync(() => {
         EnsureApp();
         using var game = new BrowserGame();
@@ -399,6 +419,8 @@ public sealed class BubbleCountBrowserTests {
         private readonly Func<SettingsService?>? _settings = CoreSettings.ServiceProvider;
         private readonly Func<string, string?, bool>? _gate = BrowserVideoGate.EngineAccepts;
         private readonly Func<BrowserVideoSurface?> _create = BrowserVideoSurface.Create;
+        private readonly bool _stoodDown = BrowserVideoSurface.StoodDown;
+        private readonly int _processFailures = BrowserVideoSurface.ProcessFailures;
         private readonly string _dir = Directory.CreateTempSubdirectory("ccp-bcount-browser-").FullName;
         internal readonly SettingsService Settings = new();
         internal int Completed, Skipped;
@@ -409,12 +431,15 @@ public sealed class BubbleCountBrowserTests {
             CoreSettings.ServiceProvider = () => Settings;
             (Settings.Current.BrowserVideoEngineEnabled, Settings.Current.AudioOutputDeviceId, Settings.Current.DualMonitorEnabled, Settings.Current.MasterVolume) = (true, "", false, 75);
             BrowserVideoSurface.StoodDown = false;
+            BrowserVideoSurface.ProcessFailures = 0;
             BrowserVideoGate.EngineAccepts = (p, k) => !BrowserUnsafeVideoCache.Contains(p, k) && BrowserVideoSurface.Map(p) != null;
             BrowserVideoSurface.Create = () => { return new BrowserVideoSurface(_ => Task.FromResult<string?>("true")); };
         }
         public void Dispose() {
             BubbleCountWindow.ForceCloseAll();
             BubbleCountResultWindow.ForceCloseAll();
+            BrowserVideoSurface.StoodDown = _stoodDown;
+            BrowserVideoSurface.ProcessFailures = _processFailures;
             (BrowserVideoSurface.Create, BrowserVideoGate.EngineAccepts, CorePaths.EffectiveAssetsProvider, CoreSettings.ServiceProvider) = (_create, _gate, _assets, _settings);
             Directory.Delete(_dir, true);
         }

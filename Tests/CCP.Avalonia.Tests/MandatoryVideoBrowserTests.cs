@@ -198,6 +198,42 @@ public sealed class MandatoryVideoBrowserTests
     });
 
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public Task ProcessFailuresShareTwoStrikesAcrossVideoFeatures(bool mandatoryFirst) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        using var rig = new Rig();
+        rig.TwoScreens();
+        async Task FailMandatory()
+        {
+            await rig.Open(strict: false, windows: 2);
+            var views = MandatoryVideoOverlay.Instance.Browser!.Views;
+            Assert.Equal(2, views.Count);
+            views[1].View.OnBrowserProcessFailed(); // One shared process must not count a mirror.
+            Assert.Equal(mandatoryFirst ? 0 : 1, BrowserVideoSurface.ProcessFailures);
+            views[0].View.OnBrowserProcessFailed();
+            rig.Video.Stop(); // Retire the posted fallback before starting the next feature.
+            Dispatcher.UIThread.RunJobs();
+        }
+        void FailBubble()
+        {
+            BubbleCountWindow.ShowOnAllMonitors(rig.Clip, BubbleCountScheduler.Difficulty.Easy, true, _ => { });
+            var primary = BubbleCountWindow.OpenWindows.Single(w => w.Browser != null && w.Browser.Volume > 0);
+            primary.Browser!.View.OnBrowserProcessFailed();
+            BubbleCountWindow.ForceCloseAll();
+            Dispatcher.UIThread.RunJobs();
+        }
+        if (mandatoryFirst) await FailMandatory(); else FailBubble();
+        Assert.Equal(1, BrowserVideoSurface.ProcessFailures);
+        Assert.False(BrowserVideoSurface.StoodDown);
+        Assert.False(BrowserUnsafeVideoCache.Contains(rig.Clip));
+        if (mandatoryFirst) FailBubble(); else await FailMandatory();
+        Assert.Equal(2, BrowserVideoSurface.ProcessFailures);
+        Assert.True(BrowserVideoSurface.StoodDown);
+        Assert.False(BrowserUnsafeVideoCache.Contains(rig.Clip));
+    });
+
+    [Theory]
     [InlineData(false, false, 4, true)]    // media error before playing: LibVLC replay, the file is marked
     [InlineData(false, false, 0, true)]    // engine failure before playing: LibVLC replay, the engine stands down
     [InlineData(true, false, 100, false)]  // mid-clip: the clip ends
@@ -320,6 +356,7 @@ public sealed class MandatoryVideoBrowserTests
         private readonly Func<string, string?, bool>? _gate = BrowserVideoGate.EngineAccepts;
         private readonly Func<BrowserVideoSurface?> _create = BrowserVideoSurface.Create;
         private readonly bool _stoodDown = BrowserVideoSurface.StoodDown;
+        private readonly int _processFailures = BrowserVideoSurface.ProcessFailures;
         private readonly (Action<int>?, Action<long>?) _duck = (CoreAudio.DuckProvider, CoreAudio.UnduckProvider);
         private readonly MandatoryVideoScheduler _scheduler = MandatoryVideoOverlay.Instance.Scheduler;
         private readonly Func<bool> _listener = MandatoryVideoOverlay.PanicListenerLive;
@@ -347,6 +384,7 @@ public sealed class MandatoryVideoBrowserTests
             (s.AttentionChecksEnabled, s.MandatoryVideoFloating, s.GentleVisuals, s.AudioDuckingEnabled) = (false, false, false, true);
             (s.PanicKeyEnabled, s.PanicKey, s.VideoMaxDurationSeconds) = (true, "F12", 0);
             BrowserVideoSurface.StoodDown = false;
+            BrowserVideoSurface.ProcessFailures = 0;
             BrowserVideoGate.EngineAccepts = (p, k) => !BrowserUnsafeVideoCache.Contains(p, k) && BrowserVideoSurface.Map(p) != null;
             BrowserVideoSurface.Create = () => new BrowserVideoSurface(_ => Task.FromResult<string?>("true"));
             (CoreAudio.DuckProvider, CoreAudio.UnduckProvider) = (_ => Ducks++, _ => Unducks++);
@@ -399,6 +437,7 @@ public sealed class MandatoryVideoBrowserTests
             CoreEngine.Video = _engineVideo;
             (CoreAudio.DuckProvider, CoreAudio.UnduckProvider) = _duck;
             BrowserVideoSurface.StoodDown = _stoodDown;
+            BrowserVideoSurface.ProcessFailures = _processFailures;
             (BrowserVideoSurface.Create, BrowserVideoGate.EngineAccepts, CorePaths.EffectiveAssetsProvider, CoreSettings.ServiceProvider) = (_create, _gate, _assets, _settings);
             try { Directory.Delete(_dir, true); } catch { }
         }

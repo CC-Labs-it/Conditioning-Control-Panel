@@ -159,6 +159,7 @@ internal sealed partial class MandatoryVideoOverlay
             return;
         }
         if (mediaFailure) BrowserUnsafeVideoCache.Add(_path, "mandatory video media error");
+        else if (view.ProcessFailed) BrowserVideoSurface.RecordProcessFailure();
         else BrowserVideoSurface.StoodDown = true;
         var action = VideoSurfaceHealth.DecideBrowserFailure(true, _forceLibVlc, playback.Started, _strict, mediaFailure);
         if (action == VideoSurfaceHealth.BrowserFailureAction.Ignore) return;
