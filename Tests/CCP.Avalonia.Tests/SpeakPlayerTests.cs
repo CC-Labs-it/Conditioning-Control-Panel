@@ -60,10 +60,10 @@ public class SpeakPlayerTests
         var player = new EnhancementPlayerWindow(null, null);
         var cards = new System.Collections.Generic.List<SubliminalOverlayWindow>();
         SubliminalWhisperShow.DrawNow = text => { SubliminalOverlay.CloseAll(); var card = new SubliminalOverlayWindow(text); cards.Add(card); SubliminalOverlay.Present(card); };
-        // Suppress repeated cues: a busy dispatcher can otherwise
-        // fire the real 250 ms timer before the first card-count assertion.
+        Action? cueTick = null;
+        int timerStops = 0;
         player.SpeakSessionFactory = Runtime(async (_, _, ct) => { await Task.Delay(Timeout.Infinite, ct); return PhraseResult.NotAvailable; },
-            startCueTimer: (_, _) => () => { }).CreateSession;
+            startCueTimer: (_, tick) => { cueTick = tick; return () => timerStops++; }).CreateSession;
         try
         {
             player.Show(); player.OpenLocalMediaFile(media.Path);
@@ -84,9 +84,13 @@ public class SpeakPlayerTests
             player.LoadEnhancementFromMemory(enhancement, "test"); Tick(player); audio.PositionSeconds = 1.2; Tick(player);
             Dispatcher.UIThread.RunJobs();
             Assert.Single(cards); Assert.True(cards[0].IsVisible);
+            Assert.NotNull(cueTick);
+            cueTick();
             SubliminalWhisperShow.DrawSpeak("queued feedback");
             player.LoadEnhancementFromMemory(enhancement, "replacement");
             Assert.False(cards[0].IsVisible);
+            Assert.True(timerStops > 0);
+            cueTick(); // An already queued callback must not display a cue.
             await Task.Delay(250); // longer than the player timer, even on a slow runner
             Dispatcher.UIThread.RunJobs();
             Assert.Single(cards);
