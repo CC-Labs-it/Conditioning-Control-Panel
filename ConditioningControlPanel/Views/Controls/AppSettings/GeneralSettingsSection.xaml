@@ -96,7 +96,7 @@
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                         <Image Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"
                                Source="{Binding Source='🌍', Converter={StaticResource EmojiToImageSource}}"/>
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="{loc:Str set2_general_language_title}"
+                        <TextBlock Style="{StaticResource SettingsCardTitle}" Text="{loc:Str set2_general_language_title}"
                                    Foreground="{StaticResource SectionHueGeneralBrush}" VerticalAlignment="Center" Margin="0"/>
                     </StackPanel>
 
@@ -133,7 +133,7 @@
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                         <Image Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"
                                Source="{Binding Source='🖥', Converter={StaticResource EmojiToImageSource}}"/>
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="{loc:Str set2_general_display_title}"
+                        <TextBlock Style="{StaticResource SettingsCardTitle}" Text="{loc:Str set2_general_display_title}"
                                    Foreground="{StaticResource SectionHueGeneralBrush}" VerticalAlignment="Center" Margin="0"/>
                     </StackPanel>
 
@@ -168,7 +168,7 @@
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                         <Image Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"
                                Source="{Binding Source='🚀', Converter={StaticResource EmojiToImageSource}}"/>
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="{loc:Str set2_general_startup_title}"
+                        <TextBlock Style="{StaticResource SettingsCardTitle}" Text="{loc:Str set2_general_startup_title}"
                                    Foreground="{StaticResource SectionHueStartupBrush}" VerticalAlignment="Center" Margin="0"/>
                     </StackPanel>
 
@@ -271,7 +271,7 @@
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                         <Image Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"
                                Source="{Binding Source='🪟', Converter={StaticResource EmojiToImageSource}}"/>
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="{loc:Str set2_general_tray_title}"
+                        <TextBlock Style="{StaticResource SettingsCardTitle}" Text="{loc:Str set2_general_tray_title}"
                                    Foreground="{StaticResource SectionHueGeneralBrush}" VerticalAlignment="Center" Margin="0"/>
                     </StackPanel>
                     <TextBlock Text="{loc:Str set2_general_tray_body}" TextWrapping="Wrap"
@@ -292,7 +292,7 @@
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                         <Image Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"
                                Source="{Binding Source='🌊', Converter={StaticResource EmojiToImageSource}}"/>
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="{loc:Str section_deeper}"
+                        <TextBlock Style="{StaticResource SettingsCardTitle}" Text="{loc:Str section_deeper}"
                                    Foreground="{DynamicResource DeeperAccentBrush}" VerticalAlignment="Center" Margin="0"/>
                     </StackPanel>
                     <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_deeper_enable}">
