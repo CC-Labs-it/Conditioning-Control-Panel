@@ -3,7 +3,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
-             xmlns:feat="clr-namespace:ConditioningControlPanel.Features">
+             xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
+             xmlns:pv="clr-namespace:ConditioningControlPanel.Controls.Preview">
 
     <!-- Velvet Kit 2 density pass. The root stays a StackPanel: MainWindow.SessionFeatureLock.cs
          inserts the session-lock banner at index 0 of this panel. -->
@@ -151,15 +152,12 @@
                 </Border>
             </StackPanel>
 
-            <!-- SIDE CARD, no art: this feature has no plate in Resources/features and round 3 invents
-                 no assets. The page's own glyph, huge and nearly transparent, on the section wash. -->
+            <!-- SIDE CARD -> LIVE PREVIEW (pilot, owner 2026-11-24): this page owns Flash Size, Opacity
+                 and Fade, so it shows the same Flash preview as the Flash page (Controls/Preview). -->
             <Border Grid.Column="1" Margin="10,0,0,0" CornerRadius="14"
                     BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
-                    Background="{StaticResource SectionHueStudioWashBrush}"
-                    VerticalAlignment="Stretch" MinHeight="200">
-                <Image Width="120" Height="120" Opacity="0.18"
-                       HorizontalAlignment="Center" VerticalAlignment="Center"
-                       Source="{Binding Source='👁', Converter={StaticResource EmojiToImageSource}}"/>
+                    Background="#06050D" VerticalAlignment="Stretch" MinHeight="200">
+                <pv:EffectPreview Scene="flash"/>
             </Border>
         </Grid>
 

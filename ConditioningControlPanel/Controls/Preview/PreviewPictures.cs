@@ -6,7 +6,7 @@ namespace ConditioningControlPanel.Controls.Preview
     /// <summary>
     /// The fake pictures of a preview: a diagonal gradient card in one of six hue pairs with a white
     /// spiral stroke, as in the mockup. Generated in code; never the user's media, a pack, a mod picture
-    /// or Scrolller. Each call makes a new image because a FlashLayer takes ownership of its frames.
+    /// or an online feed. Each call makes a new image because a FlashLayer takes ownership of its frames.
     /// </summary>
     public static class PreviewPictures
     {

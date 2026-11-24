@@ -108,6 +108,13 @@ public class FlashBoxRowsRenderTests
             // The Deck rows still dim and lock as a block, RowLabels and all.
             Assert.True(page.DeckRows.Opacity is 1 or SuperRows.LockedOpacity);
 
+            // Live Preview pilot: the side-art card holds the desktop slice; play a moment of it for the still.
+            var preview = Descendants(page).OfType<ConditioningControlPanel.Controls.Preview.EffectPreview>().Single();
+            Assert.True(preview.ActualHeight > 600, $"the preview is {preview.ActualHeight:0} DIP tall, not the card");
+            preview.Driver!.Open();
+            for (int i = 0; i < 45; i++) preview.Driver.Scene.Tick(1 / 30.0);
+            preview.Repaint();
+
             if (Environment.GetEnvironmentVariable("CCP_ROWS_DUMP") is not { Length: > 0 } dir) return;
             Directory.CreateDirectory(dir);
             Save(host, Path.Combine(dir, "flash-box.png"), 144);

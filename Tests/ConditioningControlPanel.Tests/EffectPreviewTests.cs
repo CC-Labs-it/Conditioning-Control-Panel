@@ -234,6 +234,13 @@ public class EffectPreviewTests
         Assert.True(scene.OnScreen >= 6);
         Assert.All(scene.Items, i => Assert.InRange(i.Y + i.H / 2, band.Top, band.Bottom));
 
+        // With the whole slice on screen they spread over all of it, top half and bottom half.
+        using var all = Flash(s, height: 1800, seed: 3);
+        all.Start();
+        Run(all, 5);
+        Assert.Contains(all.Items, i => i.Y + i.H / 2 < 889);
+        Assert.Contains(all.Items, i => i.Y + i.H / 2 > 889);
+
         // A sliver under 160 DIP falls back to the top of the slice, as the mockup does.
         scene.Layout(new SKRect(0, 0, 378, 1778), new SKRect(0, 1700, 378, 1778));
         Assert.Equal(0, scene.SpawnBand.Top);
@@ -328,5 +335,31 @@ public class EffectPreviewTests
         enc.Frames.Add(BitmapFrame.Create(b));
         using var fs = File.Create(path);
         enc.Save(fs);
+    }
+
+    /// <summary>The preview shows fake pictures only: nothing under Controls/Preview reaches for the user's
+    /// media lists, a pack decrypt, Scrolller, audio playback or a settings write.</summary>
+    [Fact]
+    public void Nothing_under_Controls_Preview_touches_media_packs_scrolller_audio_or_saves()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Controls", "Preview")))
+            dir = dir.Parent;
+        Assert.NotNull(dir);
+        var files = Directory.GetFiles(Path.Combine(dir!.FullName, "ConditioningControlPanel", "Controls", "Preview"), "*.cs", SearchOption.AllDirectories);
+        Assert.True(files.Length >= 5);
+        string[] banned =
+        {
+            "GetChaosImagePaths", "GetNextImages", "LoadImageAsync", "ImagePaths", "assets/images", @"assets\images",
+            "PackEncryption", "DecryptFile", "ContentPack", "ModResourceResolver", "Scrolller",
+            "NAudio", "WaveOut", "LibVLC", "MediaPlayer", "SoundPlayer", "AudioService", "App.Audio", "PlaySound", "Haptics",
+            "Settings?.Save", "Settings.Save", "SaveSettings", "App.Flash",
+        };
+        var hits = (from f in files
+                    let text = File.ReadAllText(f)
+                    from word in banned
+                    where text.Contains(word, StringComparison.Ordinal)
+                    select $"{Path.GetFileName(f)}: {word}").ToList();
+        Assert.True(hits.Count == 0, "the preview reaches for real media or effects: " + string.Join(", ", hits));
     }
 }
