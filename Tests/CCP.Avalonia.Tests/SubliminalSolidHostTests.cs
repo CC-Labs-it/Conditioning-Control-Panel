@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -145,4 +146,47 @@ public sealed class SubliminalSolidHostTests
         }
         finally { SubliminalOverlay.CloseAll(); SharedOverlayHost.Configure = configure; SharedOverlayHost.Raise = raise; }
     });
+    [Fact]
+    public void Pinned_chaos_tick_does_not_re_raise_the_hosted_card() => AvaloniaTestDispatcher.Run(() =>
+    {
+        SubliminalSilentHintTests.EnsureAvalonia();
+        var configure = SharedOverlayHost.Configure;
+        var raise = SharedOverlayHost.Raise;
+        var bubbles = ChaosRunHost.RaiseBubbles;
+        var overlayRaise = ChaosRunHost.RaiseOverlayWindow;
+        var flash = new FlashOverlayWindow();
+        var spawning = typeof(ChaosRunHost).GetField("_spawning", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var oldSpawning = spawning.GetValue(null);
+        var pin = ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop;
+        var order = new List<string>();
+        SharedOverlayHost.Configure = (w, _) => { w.Width = 300; w.Height = 200; return true; };
+        SharedOverlayHost.Raise = _ => { order.Add("card"); return true; };
+        ChaosRunHost.RaiseBubbles = () => order.Add("bubbles");
+        ChaosRunHost.RaiseOverlayWindow = w => { if (ReferenceEquals(w, flash)) order.Add("flash"); };
+        try
+        {
+            flash.Show(); FlashOverlay.Active.Add((flash, new PixelRect(0, 0, 100, 100)));
+            Assert.True(SubliminalOverlay.ShowHosted(new PixelRect(0, 0, 300, 200), "TEST", 0.8, TimeSpan.FromSeconds(1), (_, _) => { }));
+            order.Clear();
+            spawning.SetValue(null, true);
+            ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop = true;
+            ChaosRunHost.KeepChromeTopmost();
+            // WPF ChaosModeService.cs:788-806 never raises ChaosBubbleHostOverlay: BringAllToFront skips
+            // host-borne bubbles (BubbleService.cs:5551, :3584), so the tick lifts chrome, bubbles and
+            // flashes over a live card. The card host is raised only on show (SubliminalService.cs:829).
+            Assert.Equal(new[] { "bubbles", "flash" }, order);
+        }
+        finally
+        {
+            SubliminalOverlay.CloseAll();
+            FlashOverlay.Active.RemoveAll(x => ReferenceEquals(x.Window, flash)); flash.Close();
+            ChaosRunHost.RaiseOverlayWindow = overlayRaise;
+            SharedOverlayHost.Configure = configure;
+            SharedOverlayHost.Raise = raise;
+            ChaosRunHost.RaiseBubbles = bubbles;
+            spawning.SetValue(null, oldSpawning);
+            ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop = pin;
+        }
+    });
+
 }

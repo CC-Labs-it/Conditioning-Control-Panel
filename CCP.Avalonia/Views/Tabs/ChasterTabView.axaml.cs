@@ -52,7 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             HookLinkComet();
             InitializeCalendarFx();
             _tick.Tick += (_, _) => { PaintHeroClock(); PaintChasterChip(ChasterHead.Service); };
-            SlowTick.Tick += (_, _) => RefreshHero();
+            SlowTick.Tick += (_, _) => PageTick();
             // WPF (:99) only listens and ticks while the page is on screen; the shell hides tabs with IsVisible.
             AttachedToVisualTree += (_, _) => { _attached = true; Subscribe(IsVisible); };
             DetachedFromVisualTree += (_, _) => { _attached = false; Subscribe(false); };
@@ -77,6 +77,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public void OnTabShown()
         {
             Refresh();
+            TrailerWeb.Start();
             LadderOnShown();
             RefreshHeroSheen();
             // WPF FxOnShown (Fx.cs:159-160): the word lands, then idles.
@@ -130,7 +131,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void OnLockChanged() => Dispatcher.UIThread.Post(RepaintForLock);
 
         // WPF :173: stamps repaint when the lock changes, not on the 30 s tick (P07).
-        internal void RepaintForLock() { RefreshHero(); PaintStamps(); }
+        internal void RepaintForLock() { RefreshHero(); RefreshDay(false); PaintStamps(); }
+
+        // WPF xaml.cs:93: the page tick also refreshes today and its cap.
+        internal void PageTick() { RefreshHero(); RefreshDay(false); }
         private void OnBooked(string eventId, TabBooking booking) => Dispatcher.UIThread.Post(() =>
         {
             RefreshHero(); RefreshAdded(); RefreshNumbers();
@@ -275,12 +279,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             }
             RefreshSetupHint();
             PaintHeroClock();
-            var ends = LiveLockClock.EndsAt(snapshot, chaster!.BalanceSeconds, DateTime.UtcNow)?.ToLocalTime();
-            TxtHeroEnds.Text = ends is { } when ? Loc.GetF("chaster_hero_ends", when.ToString("ddd d MMM HH:mm")) : "";
-            TxtHeroEnds.IsVisible = ends != null;
+            PaintHeroEnds(snapshot, chaster!.BalanceSeconds);
             RefreshPills(chaster.LockLookup, snapshot, chaster.SafetyHoldRemaining);
             BuildCalendar(snapshot);
             RefreshTag(chaster.BalanceSeconds);
+        }
+
+        // WPF ChasterTabView.xaml.cs:307: distinguish Chaster's end from the pending add.
+        internal void PaintHeroEnds(LockSnapshot? snapshot, int balance)
+        {
+            var ends = LiveLockClock.EndsAt(snapshot, balance, DateTime.UtcNow)?.ToLocalTime();
+            TxtHeroEnds.Text = ends is { } when ? Loc.GetF("chaster_hero_ends", when.ToString("ddd d MMM HH:mm")) : "";
+            TxtHeroEnds.IsVisible = ends != null;
+            var pending = LiveLockClock.PendingAdd(balance);
+            ToolTip.SetTip(TxtHeroEnds, ends != null && pending > 0 && snapshot?.EndsAtUtc is { } own
+                ? Loc.GetF("chaster_hero_ends_tip", own.ToLocalTime().ToString("ddd d MMM HH:mm"), CircesTab.Format(pending))
+                : null);
         }
 
         private void RefreshSetupHint()
