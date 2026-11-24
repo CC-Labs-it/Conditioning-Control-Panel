@@ -39,7 +39,8 @@ public partial class EmiDeskWindow
     private PongPainter? _glassPong;
     private Rectangle? _glassDim;
     private TextBlock? _glassSignal;
-    private bool _glassLive, _glassLanded, _glassMotion;
+    private bool _glassLive, _glassLanded, _glassMotion, _glassOffering;
+    internal Action<string>? GlassOfferForTest;
     private double _glassScale, _nextGlassGlitchMs;
 
     private static TimeSpan NextGlassIdle() => EmiDebug.IdleMs is int ms
@@ -182,6 +183,13 @@ public partial class EmiDeskWindow
             _glassLanded = true;
             _glassPhase = now;
             LandGlassChannel();
+            _glassOffering = true;
+            try
+            {
+                if (GlassOfferForTest != null) GlassOfferForTest(_glassChannel!);
+                else EmiDeskService.Instance.Fire("glassOffer", new { channel = _glassChannel });
+            }
+            finally { _glassOffering = false; }
             return;
         }
         if (_glassWrong != null)
@@ -325,6 +333,7 @@ public partial class EmiDeskWindow
 
     private void CloseGlass()
     {
+        if (_glassOffering) return; // WPF: the offer cannot close its own channel.
         bool wasLive = _glassLive;
         _glassLive = _glassLanded = false;
         _glassFrames?.Stop(); _glassFrames = null;

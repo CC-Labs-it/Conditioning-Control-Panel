@@ -48,7 +48,12 @@ public sealed class InputComboChromeTests
             Assert.Equal(((ISolidColorBrush)window.FindResource("TransparentPink20Brush")!).Color, ((ISolidColorBrush)Part<Border>(other, "Bd").Background!).Color);
             selected.Focus(); Dispatcher.UIThread.RunJobs();
             Assert.Equal(((ISolidColorBrush)window.FindResource("TransparentPink40Brush")!).Color, ((ISolidColorBrush)Part<Border>(selected, "Bd").Background!).Color);
-            Assert.Equal(1, Part<Ellipse>(selected, "SelDot").Opacity);
+            if (compact)
+            {
+                Assert.Equal(new Thickness(8, 5), selected.Padding);
+                Assert.Empty(selected.GetVisualDescendants().OfType<Ellipse>().Where(e => e.Name == "SelDot"));
+            }
+            else Assert.Equal(1, Part<Ellipse>(selected, "SelDot").Opacity);
             combo.IsDropDownOpen = false; Dispatcher.UIThread.RunJobs();
             Assert.Equal(0, border.BoxShadow.Count);
         }
@@ -90,7 +95,12 @@ public sealed class InputComboChromeTests
             Assert.Equal(Colors.Transparent, ((ISolidColorBrush)Part<Border>(keyboard, "Bd").Background!).Color);
             Assert.Equal(pink20, ((ISolidColorBrush)Part<Border>(hovered, "Bd").Background!).Color);
             Assert.Equal(pink40, ((ISolidColorBrush)Part<Border>(selected, "Bd").Background!).Color);
-            Assert.Equal(1, Part<Ellipse>(selected, "SelDot").Opacity);
+            if (compact)
+            {
+                Assert.Equal(new Thickness(8, 5), selected.Padding);
+                Assert.Empty(selected.GetVisualDescendants().OfType<Ellipse>().Where(e => e.Name == "SelDot"));
+            }
+            else Assert.Equal(1, Part<Ellipse>(selected, "SelDot").Opacity);
             popup.KeyPress(Key.Up, RawInputModifiers.None, PhysicalKey.ArrowUp, "");
             Dispatcher.UIThread.RunJobs();
             Assert.True(keyboard.IsFocused);

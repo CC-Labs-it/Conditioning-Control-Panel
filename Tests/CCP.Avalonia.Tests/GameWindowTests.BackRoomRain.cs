@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.IO;
 using System.Collections.Generic;
 using ConditioningControlPanel.Services.BackRoom;
 using Avalonia.Threading;
@@ -29,9 +30,10 @@ public sealed partial class GameWindowTests
         w.Web.OnNavigationCompleted(w.PageUrl!);
         w.Web.OnWebMessage("{\"type\":\"fx\",\"token\":\"rain\",\"fxId\":\"fx.gif_storm\",\"station\":\"breakout\"}");
         Assert.Equal("rain", (string?)ack!["token"]);
-        Assert.Equal("gif-rain", (string?)ack["fired"]!.Single());
+        Assert.Contains(ack["fired"]!, x => (string?)x == "gif-rain");
+        Assert.Contains(ack["fired"]!, x => (string?)x == "glitch-bubbles");
         Assert.Contains(ack["skipped"]!, x => (string?)x["prim"] == "flash-burst" && (string?)x["why"] == "unknown");
-        Assert.Contains(ack["skipped"]!, x => (string?)x["prim"] == "glitch-bubbles" && (string?)x["why"] == "unknown");
+
         scheduler.RunAll();
         Assert.NotNull(shown);
         Assert.Equal(14.0 / 3, shown![0], 6);
@@ -105,6 +107,74 @@ public sealed partial class GameWindowTests
         w.Web.OnWebMessage(new JObject { ["type"] = type, ["token"] = "jackpot", ["station"] = "breakout" }.ToString());
         scheduler.RunAll();
         Assert.Equal(0, shown);
+        w.Close();
+    });
+
+    [Fact]
+    public void StormDispatchesGlitchWash() => Run((_, _) =>
+    {
+        var w = GameWindow.Launch("breakoutdemo")!;
+        var clock = new FxClock(); w.RoomFxSchedulerFactory = () => clock;
+        int duration = 0; double opacity = 0;
+        w.FlashBridgeFactory = () => new BackRoomFlashBridge((ms, alpha) => { duration = ms; opacity = alpha; },
+            (_, _, _, _, _) => { }, () => { }, () => { }, () => false, () => 100, "/tmp", "/tmp");
+        JObject? ack = null; w.Posted += json => ack = JObject.Parse(json);
+        w.Web.OnNavigationCompleted(w.PageUrl!);
+        w.Web.OnWebMessage("{\"type\":\"fx\",\"fxId\":\"fx.gif_storm\",\"station\":\"breakout\"}");
+        Assert.Contains(ack!["fired"]!, x => (string?)x == "glitch-bubbles");
+        clock.RunAll();
+        Assert.Equal(BackRoomFxPlan.GlitchPulseMs, duration);
+        Assert.Equal(BackRoomFxPlan.GlitchOpacity, opacity);
+        w.Close();
+    });
+
+    [Theory]
+    [InlineData("local", true)]
+    [InlineData("remote", false)]
+    [InlineData("escape", false)]
+    public void DealtGifFullReachesOnlyLocalHero(string kind, bool expected) => Run((_, _) =>
+    {
+        var file = Path.GetTempFileName();
+        try
+        {
+            var w = GameWindow.Launch("breakoutdemo")!;
+            var clock = new FxClock(); w.RoomFxSchedulerFactory = () => clock;
+            int heroes = 0;
+            w.FlashBridgeFactory = () => new BackRoomFlashBridge((_, _) => { },
+                (_, _, _, _, _) => heroes++, () => { }, () => { }, () => false, () => 100,
+                Path.GetDirectoryName(file)!, Path.GetDirectoryName(file)!);
+            var url = kind == "local" ? "https://ccp.assets/" + Path.GetFileName(file) :
+                kind == "remote" ? "https://example.com/" + Path.GetFileName(file) : "https://ccp.assets/%2e%2e%2f" + Path.GetFileName(file);
+            w.RoomFxDealFactory = () => new BackRoomMediaDeal(0, [new BackRoomGif("g0", url, 0, 0, "pool")], Array.Empty<BackRoomWord>());
+            JObject? ack = null; w.Posted += json => ack = JObject.Parse(json);
+            w.Web.OnNavigationCompleted(w.PageUrl!);
+            w.Web.OnWebMessage("{\"type\":\"fx\",\"fxId\":\"fx.sub_cascade\",\"station\":\"breakout\"}");
+            Assert.Contains(ack!["fired"]!, x => (string?)x == "gif-full");
+            clock.RunAll(); Assert.Equal(expected ? 1 : 0, heroes); w.Close();
+        }
+        finally { File.Delete(file); }
+    });
+
+    [Theory]
+    [InlineData("close", false, 100L, 1)]
+    [InlineData("minimize", false, 100L, 1)]
+    [InlineData("exit", false, 100L, 1)]
+    [InlineData("close", true, 100L, 0)]
+    [InlineData("close", false, 12100L, 0)]
+    public void TeardownStopsFlashAndRespectsWashOwnership(string route, bool chaos, long end, int closes) => Run((_, _) =>
+    {
+        var w = GameWindow.Launch("breakoutdemo")!;
+        var clock = new FxClock(); w.RoomFxSchedulerFactory = () => clock;
+        int stopped = 0, closed = 0; long now = 100;
+        w.FlashBridgeFactory = () => new BackRoomFlashBridge((_, _) => { }, (_, _, _, _, _) => { },
+            () => stopped++, () => closed++, () => chaos, () => now, "/tmp", "/tmp");
+        w.Web.OnNavigationCompleted(w.PageUrl!);
+        w.Web.OnWebMessage("{\"type\":\"fx\",\"fxId\":\"fx.gif_storm\",\"station\":\"breakout\"}");
+        clock.RunAll(); now = end;
+        if (route == "close") w.Close();
+        else if (route == "minimize") w.RoomMinimizedChanged(true);
+        else w.Web.OnWebMessage("{\"type\":\"exit\"}");
+        Assert.Equal(1, stopped); Assert.Equal(closes, closed);
         w.Close();
     });
 

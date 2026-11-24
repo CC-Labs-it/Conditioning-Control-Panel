@@ -18,17 +18,18 @@ internal sealed class PortalCameraHotkey : IDisposable
     private readonly Action _pressed;
     private readonly PanicKeyHold _hold = new();
     private DBusConnection? _bus;
-    private IDisposable? _down, _up, _closed;
+    private IDisposable? _down, _up, _closed, _changed;
     private string? _session;
-    private bool _disposed, _bound;
-    internal string Trigger { get; private set; } = "";
+    private bool _disposed, _bound, _triggerChanged;
+    private string _trigger = "";
+    internal string? BoundTrigger { get { lock (_gate) return _bound && !_disposed && !string.IsNullOrWhiteSpace(_trigger) ? _trigger : null; } }
     internal bool IsBound { get { lock (_gate) return _bound && !_disposed; } }
 
     internal PortalCameraHotkey(Action pressed) => _pressed = pressed;
     internal static Func<DBusConnection> OpenConnection = () => new DBusConnection(DBusAddress.Session!);
-    internal void SetSessionForTests(string session)
+    internal void SetSessionForTests(string session, string trigger = "")
     {
-        lock (_gate) { _session = session; _bound = true; }
+        lock (_gate) { _session = session; _trigger = trigger; _bound = true; }
     }
 
     internal static string PreferredTrigger(ChordMods mods, string key)
@@ -74,6 +75,26 @@ internal sealed class PortalCameraHotkey : IDisposable
                 (Message m, object? _) => true,
                 (Exception? ex, bool _, object? __, object? ___) => Dispose(), null, null, false, ObserverFlags.None);
             lock (_gate) { if (_disposed) { closed.Dispose(); return; } _closed = closed; }
+            var changed = await bus.AddMatchAsync(new MatchRule { Type = MessageType.Signal, Interface = Iface, Member = "ShortcutsChanged", Path = Desktop },
+                (Message m, object? _) =>
+                {
+                    var r = m.GetBodyReader();
+                    var changedSession = r.ReadObjectPathAsString();
+                    var end = r.ReadArrayStart(DBusType.Struct);
+                    string? trigger = null;
+                    while (r.HasNext(end))
+                    {
+                        r.AlignStruct();
+                        var id = r.ReadString();
+                        var props = r.ReadDictionaryOfStringToVariantValue();
+                        if (id == Id && props.TryGetValue("trigger_description", out var value))
+                            trigger = (value.Type == VariantValueType.Variant ? value.GetVariantValue() : value).GetString();
+                    }
+                    return (changedSession, trigger);
+                },
+                (Exception? ex, (string Session, string? Trigger) a, object? _, object? _) =>
+                { if (ex != null) Dispose(); else ShortcutChanged(a.Session, a.Trigger); }, null, null, false, ObserverFlags.None);
+            lock (_gate) { if (_disposed) { changed.Dispose(); return; } _changed = changed; }
             (code, result) = await PortalPanicShortcut.RequestAsync(bus, "BindShortcuts", "oa(sa{sv})sa{sv}", (ref MessageWriter w, string token) =>
             {
                 w.WriteObjectPath(session);
@@ -87,11 +108,21 @@ internal sealed class PortalCameraHotkey : IDisposable
             lock (_gate)
             {
                 if (_disposed) return;
-                Trigger = PortalPanicShortcut.TriggerOf(result, Id);
+                if (!_triggerChanged) _trigger = PortalPanicShortcut.TriggerOf(result, Id);
                 _bound = true;
             }
         }
         catch (Exception ex) { Log.Warning(ex, "Camera shortcut portal unavailable"); Dispose(); }
+    }
+
+    internal void ShortcutChanged(string session, string? trigger)
+    {
+        lock (_gate)
+        {
+            if (_disposed || session != _session) return;
+            _triggerChanged = true;
+            _trigger = trigger ?? "";
+        }
     }
 
     internal void Route(string session, string id, bool down, DateTime? now = null)
@@ -107,16 +138,16 @@ internal sealed class PortalCameraHotkey : IDisposable
     public void Dispose()
     {
         DBusConnection? bus;
-        IDisposable? down, up, closed;
+        IDisposable? down, up, closed, changed;
         lock (_gate)
         {
             if (_disposed) return;
             _disposed = true; _bound = false; _hold.Up();
             bus = _bus; _bus = null;
-            down = _down; up = _up; closed = _closed;
-            _down = _up = _closed = null;
+            down = _down; up = _up; closed = _closed; changed = _changed;
+            _down = _up = _closed = _changed = null;
         }
-        down?.Dispose(); up?.Dispose(); closed?.Dispose();
+        down?.Dispose(); up?.Dispose(); closed?.Dispose(); changed?.Dispose();
         // Closing the owned connection also closes its portal session, including pending requests.
         bus?.Dispose();
     }

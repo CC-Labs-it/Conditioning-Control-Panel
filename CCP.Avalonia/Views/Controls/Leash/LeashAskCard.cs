@@ -1,7 +1,7 @@
 // WPF Controls/Leash/LeashAskCard.cs:70-138 (layout), :141-240 (levels), :244-278 (answer).
 // WPF Controls/Leash/Explain/LeashExplainCard.cs:70-225 (grid), :232-246 (visible read clock).
 // WPF Controls/Leash/Explain/LeashExplainer.cs:278-282 (remember the answered intro).
-// Missing: drawn art, entrance, LeashFx motion, help and the avatar photo (the Denied cue is wired). WPF cut copy: Explain/LeashExplainCard.cs:91.
+// Missing: drawn art, entrance, LeashFx motion and the avatar photo (the Denied cue is wired). WPF cut copy: Explain/LeashExplainCard.cs:91.
 using System;
 using System.Threading.Tasks;
 using Avalonia;
@@ -58,7 +58,7 @@ public sealed class LeashAskCard : Border
         BoxShadow = BoxShadows.Parse("0 10 34 0 #99000000");
         Tag = "leash-ask:" + offer.From.Id;
         Child = _body;
-        var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
         var av = F.Avatar(offer.From.Name, 60, null, offer.From.Look);   // WPF :78 (the photo URL is a gap here)
         av.Margin = new Thickness(0, 0, 14, 0);
         head.Children.Add(av);
@@ -70,6 +70,10 @@ public sealed class LeashAskCard : Border
         };
         Grid.SetColumn(t, 1);
         head.Children.Add(t);
+        var help = LeashExplainWindow.HelpButton("ask", () => TopLevel.GetTopLevel(this) as Window);
+        help.VerticalAlignment = VerticalAlignment.Top;
+        Grid.SetColumn(help, 2);
+        head.Children.Add(help);
         _body.Children.Add(head);
         _body.Children.Add(Explainer(offer.From.Name));
         _body.Children.Add(Caption(Loc.Get("leash_ask_level")));
