@@ -142,7 +142,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     // WPF PaintLevelChip: its fill follows PinkBrush, but the glow follows PinkColor.
                     Hold(Named<global::Avalonia.Controls.Border>("LevelChip")?.Effect as global::Avalonia.Media.DropShadowEffect,
                         global::Avalonia.Media.DropShadowEffect.ColorProperty, LockdownCrimson);
-                    // PinkBrush also repaints TxtPlayerTitle, XPBar (TxtHeaderVersion is gone, eac44ef9f) and both banner lines.
+                    // The XP fill uses AccentGradientBrush; hold crimson until its dynamic binding is restored.
+                    Hold(Named<global::Avalonia.Controls.Border>("XPBar"), global::Avalonia.Controls.Border.BackgroundProperty,
+                        (global::Avalonia.Media.IBrush?)new global::Avalonia.Media.SolidColorBrush(LockdownCrimson));
+                    // PinkBrush also repaints TxtPlayerTitle (TxtHeaderVersion is gone, eac44ef9f) and both banner lines.
                     res["PinkBrush"] = new global::Avalonia.Media.SolidColorBrush(LockdownCrimson);
                     res["DarkPinkBrush"] = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.Parse("#8B0000"));
                     res["TransparentPinkBrush"] = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.FromArgb(0x30, 0xDC, 0x14, 0x3C));
