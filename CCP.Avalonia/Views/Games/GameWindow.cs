@@ -188,6 +188,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             Spec = spec;
             Web = new WebHost();
+            if (spec.Id == GoonId) Web.InjectCarrier = true; // before the native view or first navigation
             if (spec.Id == FypId) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
             if (spec.Id == "loom") Web.EnvironmentRequested += ConfigureLoomEnvironment;
             // Before Load/Show can create the native environment (WPF Pbp host :200-215).
@@ -222,7 +223,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Opened += (_, _) => FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);
                 Closed += (_, _) => FriendsHead.Service?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);
             }
-            if (spec.Id == "goon") { Opened += (_, _) => StartGoonWatch(); Closed += (_, _) => StopGoonWatch(); }
+            if (spec.Id == GoonId)
+            {
+                WireGoon();
+                Web.NavigationStarting += () => _goonEarlyReady = false;
+                Web.NavigationBeginning += () => { _goonNavigationConfirmed = false; IsReady = false; };
+                Web.NavigationFinished += (url, ok) =>
+                {
+                    var ready = _goonEarlyReady;
+                    _goonEarlyReady = false;
+                    _goonNavigationConfirmed = ok && PageUrl != null && ConditioningControlPanel.Services.Quiz.IntakeRun.SameDocument(url, PageUrl);
+                    if (ready && _goonNavigationConfirmed && !_closing)
+                        HandleMessage("{\"type\":\"ready\"}");
+                };
+                Opened += (_, _) => StartGoonWatch();
+                Closed += (_, _) => StopGoonWatch();
+            }
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
             if (spec.Id == FypId)
             {
@@ -276,11 +292,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>WPF ChaosWebViewHost.cs:238,1704 fences transferred documents; JustDropHostService.cs:105-108
         /// keeps site navigation for the sign-in redirect. NativeWebView has no message source;
-        /// use its last completed top-level URL, as Intake does. Before the first completion only
-        /// host Escape can use an accepted in-flight navigation, not a page business message.</summary>
+        /// use its last completed top-level URL, as Intake does. Goon may retain ready during an
+        /// accepted navigation, but acts on it only after that document completes successfully.</summary>
+        private bool _goonEarlyReady, _goonNavigationConfirmed;
         private void OnPageMessage(string json)
         {
             if (PageUrl == null) return;
+            if (Spec.Id == GoonId && (Web.CurrentUrl == null || Web.ActiveNavigation != null))
+            {
+                // The carrier has no source URI. Retain only ready, and only for an accepted
+                // navigation to this page; do not act until that navigation succeeds.
+                if (json.Length <= 1024 && Web.ActiveNavigation is { } active
+                    && ConditioningControlPanel.Services.Quiz.IntakeRun.SameDocument(active, PageUrl))
+                    try { if ((string?)JObject.Parse(Unwrap(json))["type"] == "ready") _goonEarlyReady = true; } catch { }
+                return;
+            }
+            if (Spec.Id == GoonId && !_goonNavigationConfirmed) return;
             if (Web.CurrentUrl == null)
             {
                 // The listener runs at document start. Before the first completion, accept only
