@@ -86,6 +86,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var host = BrowserView;
                 if (isOffline)
                 {
+                    host?.SetStartupWatchOffline(true);
                     // Stop whatever was loading, as WPF navigates to about:blank.
                     if (host?.Source != null) host.Navigate(new Uri("about:blank"));
                     if (container != null) container.Opacity = 0.3;
@@ -95,6 +96,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     if (container != null) container.Opacity = 1.0;
                     // WPF reloads the selected site only when the browser was already up.
                     if (host?.Source != null) NavigateBrowser(SiteHomeUrl());
+                    host?.SetStartupWatchOffline(false);
                 }
 
                 // WPF UiUpdates.cs:2582-2622 switches the offline placeholder. Reuse the card's

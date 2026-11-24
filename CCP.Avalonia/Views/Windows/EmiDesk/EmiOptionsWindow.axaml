@@ -360,6 +360,9 @@
                     <WrapPanel x:Name="DeskHatPicks" Margin="0,5,0,0"/>
                     <TextBlock Text="{loc:Str emi_desk_opt_toy}" Theme="{StaticResource EmiPanelLabel}" Margin="0,9,0,0"/>
                     <WrapPanel x:Name="DeskToyPicks" Margin="0,5,0,0"/>
+                    <Button x:Name="BtnDeskCounter" Theme="{StaticResource EmiPanelButton}"
+                            HorizontalAlignment="Left" Margin="0,9,0,0"
+                            Content="{loc:Str emi_desk_opt_counter}"/>
                     <!-- 3. HER RING. The same control the settings tab hosts, writing the same
                             EmiState.Pins through the same EmiSuggester. Header shown here: this
                             panel has no other place to put the count or the reset. -->

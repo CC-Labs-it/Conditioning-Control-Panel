@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Services.Flash;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Services;                   // AssetFolderExclusion
 using ConditioningControlPanel.Services.UI;                // MonitorTarget
@@ -30,6 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     internal static class ChaosFlashOverlay
     {
         internal static bool SkipPlatformChecksForTests;
+        internal static Func<Window, PixelRect, bool, bool, bool> ConfigureWindow = X11Overlay.SetOverrideRedirect;
         /// <summary>The one-shot scheduler for the fade steps; tests swap in a stepped clock (P08).</summary>
         internal static Action<Action, TimeSpan> Schedule = (a, t) => DispatcherTimer.RunOnce(a, t);
 
@@ -92,7 +94,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>A wash of one given file (tests and a future caller that picked its own).</summary>
         internal static Task ShowPath(IReadOnlyList<PixelRect> targets, string path, int durationMs, double opacity)
-            => LastShow = Wash.ShowAsync(targets, durationMs, opacity, () => (path, false));
+            => ShowPick(targets, () => (path, false), durationMs, opacity);
+
+        internal static Task ShowPick(IReadOnlyList<PixelRect> targets, Func<(string? Path, bool Remote)> pick, int durationMs, double opacity)
+            => LastShow = Wash.ShowAsync(targets, durationMs, opacity, pick);
 
         /// <summary>Back Room gif-full: a separate local-only surface, spanning every screen.</summary>
         public static void ShowHero(Visual host, string path, int durationMs, double opacity, bool still, Action? shown = null)
@@ -119,7 +124,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
         public static void RaiseActive()
         {
-            foreach (var window in Wash.Windows) X11Overlay.Raise(window);
+            foreach (var window in Wash.Windows)
+                if (!ChaosRunHost.IsDescending || CoreSettings.Current.ChaosPinOnTop) X11Overlay.Raise(window);
+                else { window.Topmost = false; ConfigureWindow(window, Wash.Bounds, false, false); }
         }
         internal static void NextFrame() => Wash.NextFrame();
 
@@ -187,6 +194,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 catch (Exception ex) { Log.Debug("ChaosFlash: pick failed: {E}", ex.Message); return; }
                 var path = selected.Path;
                 if (request != _request || path == null) return;
+                // After the pick, like WPF ShowWithPick (ChaosFlashOverlay.cs:74): a run may start mid-pick.
+                var topmost = this == Hero || !ChaosRunHost.IsDescending || CoreSettings.Current.ChaosPinOnTop;
 
                 var gen = ++_gen;
                 ClearImage();
@@ -194,10 +203,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 Bounds = bounds;
                 if (Windows.Count == 0)
                 {
-                    var w = new SpiralOverlayWindow();
+                    var w = new SpiralOverlayWindow { Topmost = topmost };
                     // Apply before Show: a full-stage surface must never intercept desktop clicks.
                     var safe = X11Overlay.SetClickThrough(w, true) & X11Overlay.SetOpacity(w, 0)
-                        & X11Overlay.SetOverrideRedirect(w, bounds);
+                        & ConfigureWindow(w, bounds, false, topmost);
                     if (!safe && !SkipPlatformChecksForTests)
                     {
                         _refused = true;
@@ -215,10 +224,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 }
                 foreach (var w in Windows)
                 {
+                    w.Topmost = topmost;
                     X11Overlay.SetOpacity(w, 0);
                     w.Show();
-                    X11Overlay.SetOverrideRedirect(w, bounds);
-                    X11Overlay.Raise(w); // WPF ChaosFlashOverlay.cs:72, :104: re-stack after Show
+                    ConfigureWindow(w, bounds, false, topmost);
+                    if (topmost) X11Overlay.Raise(w); // WPF ChaosWindowZ demotes an unpinned run
                 }
                 Alpha = 0;
                 var plan = ChaosFlashWash.For(durationMs, opacity);

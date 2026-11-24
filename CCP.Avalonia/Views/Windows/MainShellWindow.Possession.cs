@@ -45,6 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private bool _possessionAttached;
         private PossessionRuntime? _possessionRuntime;
         private readonly PossessionPointer _possessionPointer = new();
+        private PossessionReactive? _possessionReactive;
 
         /// <summary>Live target objects, keyed by the control they describe: the director hangs cooldowns and
         /// the "currently possessed" flag off these, so they must outlive every rebuilt list.</summary>
@@ -86,6 +87,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     try
                     {
+                        _possessionReactive?.Dispose();
+                        _possessionReactive = null;
                         _possessionPointer.Detach();
                         if (_possessionAttached) Director?.DetachHost(this);
                         _possessionAttached = false;
@@ -116,6 +119,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 _possessionPointer.Attach(this);
                 director.AttachHost(this);
                 _possessionAttached = true;
+                _possessionReactive = new PossessionReactive(director, _possessionPointer, CoreSettings.Service?.Current);
             }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Possession: failed to attach the main window host"); }
         }

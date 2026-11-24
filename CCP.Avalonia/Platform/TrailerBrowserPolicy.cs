@@ -6,8 +6,8 @@ namespace ConditioningControlPanel.Avalonia.Platform; // 7cf2cee4dcfa; WPF Contr
 internal sealed class TrailerBrowserPolicy(Action detach) : IDisposable {
     private Action? _detach = detach;
     public void Dispose() { var stop = _detach; _detach = null; stop?.Invoke(); }
-    internal static IDisposable Attach(IPlatformHandle? handle, Action failed) {
-        if (OperatingSystem.IsWindows() && handle is IWindowsWebView2PlatformHandle win) return Windows(win, failed);
+    internal static IDisposable Attach(IPlatformHandle? handle, Action failed, Action? unresponsive = null) {
+        if (OperatingSystem.IsWindows() && handle is IWindowsWebView2PlatformHandle win) return Windows(win, failed, unresponsive);
         var view = handle switch { IGtkWebViewPlatformHandle gtk => gtk.WebKitWebView, ILinuxWpePlatformHandle wpe => wpe.WebKitWebView, _ => IntPtr.Zero };
         if (!OperatingSystem.IsLinux() || view == IntPtr.Zero) throw new NotSupportedException("Trailer browser handle unavailable");
         g_object_ref(view); var live = true;
@@ -18,9 +18,9 @@ internal sealed class TrailerBrowserPolicy(Action detach) : IDisposable {
     }
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    private static IDisposable Windows(IWindowsWebView2PlatformHandle handle, Action failed) {
+    private static IDisposable Windows(IWindowsWebView2PlatformHandle handle, Action failed, Action? unresponsive) {
         var core = Microsoft.Web.WebView2.Core.CoreWebView2.CreateFromComICoreWebView2(handle.CoreWebView2);
-        EventHandler<Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedEventArgs> callback = (_, _) => failed();
+        EventHandler<Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedEventArgs> callback = (_, e) => { if (unresponsive != null && e.ProcessFailedKind == Microsoft.Web.WebView2.Core.CoreWebView2ProcessFailedKind.RenderProcessUnresponsive) unresponsive(); else failed(); };
         core.ProcessFailed += callback;
         return new TrailerBrowserPolicy(() => core.ProcessFailed -= callback);
     }
