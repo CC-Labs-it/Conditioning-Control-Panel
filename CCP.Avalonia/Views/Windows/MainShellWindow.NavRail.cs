@@ -9,7 +9,8 @@
 // in MainShellWindow.NavCoin.cs. Rail shadow is covered separately by PR #3337.
 // The guarded possession reroute press seam is here (#4419); it has no effect writer on this head yet
 // (WPF Services/Possession/Effects/MisrouteEffect.cs). Mod door art (ApplyDoorArt) landed in sync6-nav-rail-d. No Lobby producer feeds NavBadges here yet, so the
-// Social pill stays down until the Lobby service lands.
+// Social pill stays down until the Lobby service lands. When it does, the badge lease polls at the slow
+// badge pace (WPF LobbyService.WatchBadge: LobbyPollPlan.Badge / BadgeWantsRoundNow, main c3390d90ea).
 
 using System;
 using System.Collections.Generic;

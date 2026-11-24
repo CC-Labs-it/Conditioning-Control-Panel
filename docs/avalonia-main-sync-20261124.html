@@ -54,7 +54,7 @@ Rows: one per non-merge commit in <code>git rev-list --no-merges --cherry-pick -
 <li>7.3.8: <code>installer-avalonia.iss</code> and <code>packaging/aur/PKGBUILD</code> (was 7.2.3 on this line) follow <code>Version.props</code>.</li>
 </ul>
 <p>Avalonia version check (nuget.org, 2026-11-24): <code>Avalonia 12.2.0</code> was published 2026-11-23; this stack references <code>12.1.6</code> (<code>CCP.Avalonia/CCP.Avalonia.csproj</code>). Not bumped here.</p>
-<p>PR #5091/#5092 (sync #17): main <code>42c0936b17</code> and release/7.2.4 <code>7b84587b8f</code> are ancestors of this result, but #5092's own Avalonia replays (redeem-code link, PostCodeDialog pass, haptics free on the Avalonia pages, VaultGate, nav rail, the 20261114 ledger) are absent, and release/7.2.0's cup-replay fix <code>5b36867188</code> (only on <code>98cdc5cdd7</code>, never on main) is missing from <code>Assets/web/piecebypiece/net/replay-seat.js</code>. Not superseded: lane <code>s19-sync17-recut</code>.</p>
+<p>Lane <code>s19-sync17-recut</code> is ported: the account code door and pass redemption, free haptics surfaces and cup replay timing are present. Haptics connection and setup gates were already on this base. Side by side checks remain in the test plan.</p>
 
 <h2>Watch list (heading for main)</h2>
 <ul>
@@ -308,7 +308,7 @@ Rows: one per non-merge commit in <code>git rev-list --no-merges --cherry-pick -
 <tr><td><code>s19-dares-drawer</code></td><td><code>583d5e464d</code> <code>67fadbf70f</code> <code>e0065f6b76</code></td><td><code>Controls/Friends/FriendsDrawer.Dares.cs</code> <code>FriendsDrawer.Pickers.cs</code> <code>FriendsDrawer.cs</code></td><td><code>CCP.Avalonia/Views/Controls/FriendsDrawer.Dares.cs</code> <code>CCP.Avalonia/Views/Controls/FriendsDrawer.Pickers.cs</code></td><td>450</td><td>s19-dares-look-a; s19-dares-rules; CB #5560 (WPF 7.4 friends fold) lands on main first</td><td>no</td></tr>
 <tr><td><code>s19-sync17-recut</code></td><td><code>256eda7a31</code> <code>5b36867188</code></td><td><code>(sync #17 compat, PR #5092)</code> <code>Resources/web/piecebypiece/net/replay-seat.js (release/7.2.0)</code></td><td><code>CCP.Avalonia/Views/Controls/AppSettings/AccountSettingsSection.axaml(.cs)</code> <code>CCP.Avalonia/Views/Dialogs/PostCodeDialog.cs</code> <code>CCP.Avalonia/Views/Dialogs/VaultGateDialog.cs</code> <code>CCP.Avalonia/Views/Tabs/HapticsTabView.Connection.cs</code> <code>CCP.Avalonia/Views/Windows/HapticsSetupWindow.axaml.cs</code> <code>CCP.Avalonia/Views/Windows/MainShellWindow.NavRail.cs</code> <code>Assets/web/piecebypiece/net/replay-seat.js</code></td><td>350</td><td>-</td><td>no</td></tr>
 </table>
-<p><code>s19-sync17-recut</code> is outside the row set: it re-cuts PR #5092 (sync #17 compat) and release/7.2.0 <code>5b36867188</code> onto this line.</p>
+<p><code>s19-sync17-recut</code> is ported outside the row set: it re-cuts PR #5092 (sync #17 compat) and release/7.2.0 <code>5b36867188</code> onto this line.</p>
 
 <script>
 (()=>{const all={};for(const t of document.querySelectorAll('table')){const h=[...t.querySelectorAll('tr:first-child th')].map(x=>x.textContent.trim());const i=h.indexOf('status');if(i<0)continue;const c={};for(const r of t.querySelectorAll('tr')){const d=r.children[i];if(!d||d.tagName!=='TD')continue;const k=d.textContent.trim().split(/[ (]/)[0];c[k]=(c[k]||0)+1;all[k]=(all[k]||0)+1;}const p=document.createElement('p');p.className='src';p.textContent=Object.entries(c).map(([k,v])=>v+' '+k).join(', ');t.before(p);}
