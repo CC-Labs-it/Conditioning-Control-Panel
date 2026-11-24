@@ -342,6 +342,49 @@ public class CompanionBrainTests
         Assert.Empty(store.Saved);
     }
 
+    /// <summary>An app-started AI line asked for before a persona or identity change and shown
+    /// after it never reaches the prompt as history; a line asked for under the current stamp, and
+    /// a scripted line no request produced, still do.</summary>
+    [Fact]
+    public void TubeLine_AskedBeforeAFence_NeverReachesHistory()
+    {
+        var identity = "old";
+        using var brain = new CompanionBrain(new FakeTransport(), new StubAssembler(), new InertMemoryStore(), new FakeStore(),
+            preview: () => true, contextStamp: () => identity);
+
+        brain.NoteIssuedLine("that video got you good, old friend", brain.LineStamp());
+        identity = "new";
+        brain.NoteTubeLine("that video got you good, old friend");
+        Assert.DoesNotContain(brain.Session.Turns, t => t.Kind == TurnKind.TubeLine);
+
+        brain.NoteIssuedLine("fresh line from the new voice", brain.LineStamp());
+        brain.NoteTubeLine("fresh line from the new voice");
+        brain.NoteTubeLine("a scripted line nobody asked the model for");
+        Assert.Equal(2, brain.Session.Turns.Count(t => t.Kind == TurnKind.TubeLine));
+    }
+
+    [Fact]
+    public void TubeLine_AskedBeforeAForget_NeverReachesHistory()
+    {
+        using var brain = new CompanionBrain(new FakeTransport(), new StubAssembler(), new InertMemoryStore(), new FakeStore(),
+            preview: () => true, contextStamp: () => "same");
+        brain.NoteIssuedLine("still thinking about that lock card", brain.LineStamp());
+        brain.ForgetThread();
+        brain.NoteTubeLine("still thinking about that lock card");
+        Assert.DoesNotContain(brain.Session.Turns, t => t.Kind == TurnKind.TubeLine);
+    }
+
+    [Fact]
+    public void IssuedUnderAnotherStamp_MatchesTheNewestRecordAndTrimmedText()
+    {
+        var issued = new List<(string, string)> { ("one two three four five", "a"), ("one two three four five", "b") };
+        Assert.False(ChatSession.IssuedUnderAnotherStamp(issued, "one  two three four five", "b"));
+        Assert.True(ChatSession.IssuedUnderAnotherStamp(issued, "one two three four five", "c"));
+        Assert.True(ChatSession.IssuedUnderAnotherStamp(issued, "two three four", "c"));
+        Assert.False(ChatSession.IssuedUnderAnotherStamp(issued, "unrelated words entirely", "c"));
+        Assert.False(ChatSession.IssuedUnderAnotherStamp(null, "anything", "c"));
+    }
+
     [Fact]
     public async Task Preview_CharacterChangesWhileReplyPending_DiscardsOldVoice()
     {
