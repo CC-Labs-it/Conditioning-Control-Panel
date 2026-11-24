@@ -21,8 +21,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// in sequence; the envelope is <see cref="ChaosAnnounceTiming"/> (Core). Master-gated on
     /// <c>ChaosAnnouncerEnabled</c>. ONE window is created on first use and kept alive (hidden while idle),
     /// as WPF does; <see cref="CloseActive"/> drops the queue and closes it (run teardown and panic).
-    /// <para>ponytail: narrator/CutShort and mandatory-video re-stacking wait for their
-    /// Story narrator and video-orchestration callers on this head.</para>
+    /// <para>ponytail: narrator/CutShort waits for its Story narrator caller on this head.</para>
     /// </summary>
     internal sealed class ChaosAnnouncerOverlay : Window
     {

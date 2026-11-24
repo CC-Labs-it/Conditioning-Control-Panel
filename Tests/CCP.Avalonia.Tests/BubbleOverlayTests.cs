@@ -9,6 +9,8 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services;
 using Xunit;
 
@@ -18,6 +20,63 @@ namespace CCP.Avalonia.Tests;
 /// from the daily bucket; a press beside it pops nothing.</summary>
 public sealed class BubbleOverlayTests
 {
+    [Fact]
+    public void Variant_art_and_fallback_label_follow_wpf()
+    {
+        var pink = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec { VariantId = "pink", Label = "PINK" };
+        var missing = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec { VariantId = "no-such-variant", Label = "MISSING" };
+        var image = BubbleOverlay.VariantImage(pink);
+        Assert.NotNull(image);
+        Assert.False(BubbleOverlay.ShowVariantLabel(pink, image));
+        Assert.Null(BubbleOverlay.VariantImage(missing));
+        Assert.True(BubbleOverlay.ShowVariantLabel(missing, null));
+        Assert.Same(BubbleOverlay.Image, BubbleOverlay.VariantImage(new() { VariantId = "flash" }));
+    }
+
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(false, false, true)]
+    public void Chaos_window_birth_respects_pin_and_existing_ambient(bool pin, bool ambient, bool oneShot) => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .WithInterFont().With(AppFonts.Options()).ConfigureFonts(AppFonts.Register)
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var host = new Window();
+        var oldChecks = BubbleOverlay.SkipPlatformChecksForTests;
+        var oldPin = CoreSettings.Current.ChaosPinOnTop;
+        try
+        {
+            BubbleOverlay.SkipPlatformChecksForTests = true;
+            CoreSettings.Current.ChaosPinOnTop = pin;
+            host.Show();
+            if (ambient) BubbleOverlay.Start(host);
+            ChaosRunHost.StartRun(new ChaosRunConfig { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
+            Assert.True(ChaosRunHost.IsActive);
+            if (oneShot) BubbleOverlay.SpawnOnce(host);
+            else BubbleOverlay.BeginChaos(host, _ => { });
+            Assert.NotEmpty(BubbleOverlay.OpenWindows);
+            Assert.All(BubbleOverlay.OpenWindows, w => Assert.Equal(pin || ambient, w.Topmost));
+            ChaosRunHost.ForceShutdown();
+            BubbleOverlay.EndChaos();
+            BubbleOverlay.Stop();
+            BubbleOverlay.Start(host);
+            Assert.NotEmpty(BubbleOverlay.OpenWindows);
+            Assert.All(BubbleOverlay.OpenWindows, w => Assert.True(w.Topmost));
+        }
+        finally
+        {
+            ChaosRunHost.ForceShutdown();
+            BubbleOverlay.EndChaos();
+            BubbleOverlay.Stop();
+            BubbleOverlay.SkipPlatformChecksForTests = oldChecks;
+            CoreSettings.Current.ChaosPinOnTop = oldPin;
+            host.Close();
+        }
+    });
+
     [Theory]
     [InlineData(1.0, 0, false)]
     [InlineData(1.5, -1920, false)]
@@ -458,6 +517,8 @@ public sealed class BubbleOverlayTests
             if (Application.Current is null)
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosArt.ResetForTest();
+            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosArt.RootsOverride = () => Array.Empty<string>();
             var saved = BubbleOverlay.Field.Bubbles.ToArray();
             var w = new BubbleOverlayWindow(0, new PixelRect(0, 0, 1280, 720), 1) { Width = 1280, Height = 720 };
             ConditioningControlPanel.Services.Chaos.EffectBubbleSpec Spec(string label) => new()
@@ -494,6 +555,72 @@ public sealed class BubbleOverlayTests
             }
             finally
             {
+                ConditioningControlPanel.Avalonia.Views.Chaos.ChaosArt.ResetForTest();
+                w.Close();
+                BubbleOverlay.Field.Bubbles.Clear();
+                BubbleOverlay.Field.Bubbles.AddRange(saved);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>WPF BubbleService.cs:4967-4975: with tease art missing, the fallback label is drawn
+    /// above the tease face, so the face does not hide it.</summary>
+    [Fact]
+    public async Task Tease_fallback_label_draws_above_the_face()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosArt.ResetForTest();
+            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosArt.RootsOverride = () => Array.Empty<string>();
+            var saved = BubbleOverlay.Field.Bubbles.ToArray();
+            var w = new BubbleOverlayWindow(0, new PixelRect(0, 0, 1280, 720), 1) { Width = 1280, Height = 720 };
+            ConditioningControlPanel.Services.Chaos.EffectBubbleSpec Spec(string label) => new()
+                { VariantId = "tease", IsTease = true, SizePx = 200, Label = label };
+            var b = new AmbientBubble { Screen = 0, X = 400, Y = 200, Size = 200, Clickable = true, Spec = Spec("\u2716") };
+            using var black = new SkiaSharp.SKBitmap(2, 2);
+            black.Erase(SkiaSharp.SKColors.Black);
+            using var png = black.Encode(SkiaSharp.SKEncodedImageFormat.Png, 100);
+            var face = new global::Avalonia.Media.Imaging.Bitmap(png.AsStream());
+            int stride = 0;
+            byte[] Frame()
+            {
+                (w.Content as Control)!.InvalidateVisual();
+                using var bmp = w.CaptureRenderedFrame()!;
+                using var fb = bmp.Lock();
+                stride = fb.RowBytes;
+                var px = new byte[fb.RowBytes * fb.Size.Height];
+                System.Runtime.InteropServices.Marshal.Copy(fb.Address, px, 0, px.Length);
+                return px;
+            }
+            try
+            {
+                Assert.Null(BubbleOverlay.VariantImage(b.Spec));
+                BubbleOverlay.Field.Bubbles.Clear();
+                BubbleOverlay.Field.Bubbles.Add(b);
+                BubbleOverlay.TeaseFaces[b] = (new() { face }, 100, Environment.TickCount64, false);
+                w.Show();
+                var labelled = Frame();
+                b.Spec = Spec("");
+                var plain = Frame();
+                int shown = 0;
+                for (int i = 0; i < labelled.Length; i += 4)
+                {
+                    int x = i % stride / 4, y = i / stride;
+                    if (Math.Abs(x - 500) >= 50 || Math.Abs(y - 300) >= 50) continue;
+                    // Under the 0.92 face the label shifts a pixel by at most ~20; above it, far more.
+                    if (Math.Abs(labelled[i] - plain[i]) + Math.Abs(labelled[i + 1] - plain[i + 1]) + Math.Abs(labelled[i + 2] - plain[i + 2]) > 150) shown++;
+                }
+                Assert.True(shown > 50, $"label pixels over the face {shown}");
+            }
+            finally
+            {
+                BubbleOverlay.TeaseFaces.Remove(b);
+                face.Dispose();
+                ConditioningControlPanel.Avalonia.Views.Chaos.ChaosArt.ResetForTest();
                 w.Close();
                 BubbleOverlay.Field.Bubbles.Clear();
                 BubbleOverlay.Field.Bubbles.AddRange(saved);

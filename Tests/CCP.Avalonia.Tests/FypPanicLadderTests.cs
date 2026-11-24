@@ -56,14 +56,116 @@ public sealed class FypPanicLadderTests
             CoreSettings.ServiceProvider = oldProvider;
         }
     });
-    // WPF FypGhostOverlay.Diagnose order: Windows/no X11 = unsupported, no compositor = composition-disabled.
+    // WPF FypGhostOverlay.Diagnose order: no X11 = unsupported, no compositor = composition-disabled. Windows
+    // runs the DWM mirror, which checks composition itself (Win32GhostMirror.Diagnose).
     [Theory]
-    [InlineData(true, true, true, "unsupported")]
+    [InlineData(true, false, false, null)]
     [InlineData(false, false, true, "unsupported")]
     [InlineData(false, true, false, "composition-disabled")]
     [InlineData(false, true, true, null)]
     public void GhostRefusalFollowsThePlatform(bool windows, bool x11, bool compositing, string? expected)
         => Assert.Equal(expected, GameWindow.FypGhostRefusal(windows, x11, compositing));
+
+    // WPF FypGhostOverlay.Diagnose (:142): composition, then colour key, then registration, then source size.
+    [Theory]
+    [InlineData(false, false, 1, 0, 0, "composition-disabled")]
+    [InlineData(true, false, 1, 0, 0, "colorkey-rejected")]
+    [InlineData(true, true, unchecked((int)0x80070006), 0, 0, "thumbnail-register-failed-0x80070006")]
+    [InlineData(true, true, 0, 0, 720, "thumbnail-source-empty")]
+    [InlineData(true, true, 0, 1280, 720, null)]
+    public void WindowsMirrorDiagnoseFollowsWpfOrder(bool composed, bool key, int hr, int w, int h, string? expected)
+        => Assert.Equal(expected, global::ConditioningControlPanel.Avalonia.Platform.Win32GhostMirror.Diagnose(composed, key, hr, w, h));
+
+    /// <summary>WPF EnterGhost (FypHostService.cs:458-591) on Windows: the feed parks off every monitor, still shown,
+    /// and a DWM mirror (FypGhostOverlay.cs:286) covers its home monitor at the user's opacity. The feed window never
+    /// gets alpha or click-through (WebView2 goes black, :14). Panic rung 1, the games panic and a refusing mirror
+    /// all close the mirror and give the window back where it was.</summary>
+    [Fact]
+    public void WindowsGhostParksTheFeedBehindAMirrorAndPanicClosesIt() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var oldProvider = CoreSettings.ServiceProvider;
+        var old = (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostButtonConfigure,
+            GameWindow.FypGhostMirror, GameWindow.FypGhostMirrorOpacity, GameWindow.FypGhostNow);
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var s = service.Current;
+        (s.PanicKeyEnabled, s.PanicKey, s.PanicOverridesAll, s.FypWindowOpacity) = (true, "F8", false, 0.5);
+        int feedStyleCalls = 0, opened = 0, closed = 0;
+        double mirrorAlpha = -1;
+        string? refuse = null;
+        var home = default(PixelRect);
+        var now = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        GameWindow.FypGhostNow = () => now;
+        GameWindow.FypGhostSupport = () => GameWindow.FypGhostRefusal(true, false, false);
+        GameWindow.FypGhostButtonConfigure = (_, _, passive) => passive;
+        GameWindow.FypGhostClickThrough = (_, _) => { feedStyleCalls++; return true; };
+        GameWindow.FypGhostOpacity = (_, _) => { feedStyleCalls++; return true; };
+        GameWindow.FypGhostMirror = (_, bounds, alpha) =>
+        {
+            opened++;
+            (home, mirrorAlpha) = (bounds, alpha);
+            return refuse == null ? (new Disposer(() => closed++), null) : (null, refuse);
+        };
+        GameWindow.FypGhostMirrorOpacity = (_, a) => mirrorAlpha = a;
+        var shell = new MainShellWindow();
+        var feed = new GameWindow(GameWindow.Games[GameWindow.FypId]);
+        var sent = new List<JObject>();
+        feed.Posted += json => sent.Add(JObject.Parse(json));
+        void Ghost() => feed.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"clickThrough\",\"value\":true}");
+        try
+        {
+            feed.Show();
+            var position = feed.Position;
+            Ghost();
+            Assert.True(feed.IsFypGhosted);
+            Assert.Equal((1, 0.5), (opened, mirrorAlpha));
+            Assert.True(feed.IsVisible);   // parked, never hidden or minimized: DWM must keep composing it
+            Assert.True(feed.Position.X >= home.Right + 200);
+            Assert.Equal(2, feed.FypGhostButtons.Count);
+            feed.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"windowOpacity\",\"value\":0.3}");
+            Assert.Equal(0.3, mirrorAlpha);
+            Assert.Equal(0, feedStyleCalls);
+
+            shell.HandlePanicKeyPress(now.ToLocalTime());   // rung 1: mirror gone, window back
+            Assert.False(feed.IsFypGhosted);
+            Assert.Equal(1, closed);
+            Assert.Equal(position, feed.Position);
+            Assert.Empty(feed.FypGhostButtons);
+
+            Ghost();
+            var buttons = feed.FypGhostButtons.ToArray();
+            GameWindow.CloseAllForPanic();   // the "games" panic surface
+            Assert.Equal(2, closed);
+            Assert.All(buttons, b => Assert.False(b.IsVisible));
+
+            feed = new GameWindow(GameWindow.Games[GameWindow.FypId]);
+            feed.Posted += json => sent.Add(JObject.Parse(json));
+            feed.Show();
+            position = feed.Position;
+            refuse = "thumbnail-source-empty";   // a mirror that cannot compose: stay solid, say why
+            Ghost();
+            Assert.False(feed.IsFypGhosted);
+            Assert.Equal("thumbnail-source-empty", (string?)sent.Last()["reason"]);
+            Assert.Equal(position, feed.Position);
+            Assert.Empty(feed.FypGhostButtons);
+            Assert.Equal(0, feedStyleCalls);
+        }
+        finally
+        {
+            feed.Close();
+            shell.Close();
+            (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostButtonConfigure,
+                GameWindow.FypGhostMirror, GameWindow.FypGhostMirrorOpacity, GameWindow.FypGhostNow) = old;
+            CoreSettings.ServiceProvider = oldProvider;
+        }
+    });
+
+    private sealed class Disposer(Action dispose) : IDisposable { public void Dispose() => dispose(); }
 
     /// <summary>WPF EnterGhost/ExitGhost (FypHostService.cs:458, :630), the ghost buttons (:604, :618) and the
     /// two-rung panic ladder (MainWindow.xaml.cs:1776-1795): every rung leaves no button, no click-through and
@@ -79,7 +181,7 @@ public sealed class FypPanicLadderTests
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var oldProvider = CoreSettings.ServiceProvider;
-        var old = (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostNow, GameWindow.FypGhostButtonConfigure);
+        var old = (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostNow, GameWindow.FypGhostButtonConfigure, GameWindow.FypGhostMirror);
         var oldAssets = CorePaths.EffectiveAssetsProvider;
         var lib = System.IO.Directory.CreateTempSubdirectory("fyp-ghost-").FullName;
         CorePaths.EffectiveAssetsProvider = () => lib;   // the page-reboot rung builds a manifest
@@ -96,6 +198,7 @@ public sealed class FypPanicLadderTests
         var now = new DateTime(2026, 1, 1, 12, 0, 0, DateTimeKind.Utc);
         GameWindow.FypGhostButtonConfigure = (_, _, passive) => passive; // headless has no native window
         GameWindow.FypGhostSupport = () => null;
+        GameWindow.FypGhostMirror = null;   // pin the X11 path: on Windows the default is the DWM mirror
         GameWindow.FypGhostClickThrough = (_, on) => { clickThrough = on; return true; };
         GameWindow.FypGhostOpacity = (_, a) => { alpha = a; return opacityOk; };
         GameWindow.FypGhostNow = () => now;
@@ -183,7 +286,7 @@ public sealed class FypPanicLadderTests
         {
             feed.Close();
             shell.Close();
-            (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostNow, GameWindow.FypGhostButtonConfigure) = old;
+            (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostNow, GameWindow.FypGhostButtonConfigure, GameWindow.FypGhostMirror) = old;
             CorePaths.EffectiveAssetsProvider = oldAssets;
             CoreSettings.ServiceProvider = oldProvider;
             System.IO.Directory.Delete(lib, true);
@@ -200,10 +303,11 @@ public sealed class FypPanicLadderTests
                 .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
                 .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
-        var old = (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostButtonConfigure);
+        var old = (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostButtonConfigure, GameWindow.FypGhostMirror);
         bool through = false;
         double alpha = 1;
         GameWindow.FypGhostSupport = () => null;
+        GameWindow.FypGhostMirror = null;   // pin the X11 path: on Windows the default is the DWM mirror
         GameWindow.FypGhostButtonConfigure = (_, _, passive) => passive;
         GameWindow.FypGhostClickThrough = (_, on) => { through = on; return true; };
         GameWindow.FypGhostOpacity = (_, value) => { alpha = value; return true; };
@@ -236,7 +340,7 @@ public sealed class FypPanicLadderTests
         finally
         {
             feed.Close();
-            (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostButtonConfigure) = old;
+            (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostButtonConfigure, GameWindow.FypGhostMirror) = old;
         }
     });
 
@@ -252,12 +356,13 @@ public sealed class FypPanicLadderTests
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var oldProvider = CoreSettings.ServiceProvider;
-        var old = (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostButtonConfigure);
+        var old = (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostButtonConfigure, GameWindow.FypGhostMirror);
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         bool clickThrough = false;
         GameWindow.FypGhostButtonConfigure = (_, _, passive) => passive; // headless has no native window
         GameWindow.FypGhostSupport = () => null;
+        GameWindow.FypGhostMirror = null;   // pin the X11 path: on Windows the default is the DWM mirror
         GameWindow.FypGhostClickThrough = (_, on) => { clickThrough = on; return true; };
         GameWindow.FypGhostOpacity = (_, _) => true;
         var feed = new GameWindow(GameWindow.Games[GameWindow.FypId]);
@@ -276,8 +381,94 @@ public sealed class FypPanicLadderTests
         finally
         {
             feed.Close();
-            (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostButtonConfigure) = old;
+            (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity, GameWindow.FypGhostButtonConfigure, GameWindow.FypGhostMirror) = old;
             CoreSettings.ServiceProvider = oldProvider;
         }
     });
+    [Theory]
+    [InlineData("exit")]
+    [InlineData("minimize")]
+    [InlineData("hide")]
+    [InlineData("close")]
+    [InlineData("start-failure")]
+    [InlineData("repair-start-failure")]
+    public void GhostReassertsAndStops(string exit) => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont()
+                .With(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Options())
+                .ConfigureFonts(global::ConditioningControlPanel.Avalonia.Platform.AppFonts.Register)
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var old = (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity,
+            GameWindow.FypGhostButtonConfigure, GameWindow.FypGhostRaise, GameWindow.FypGhostRaiseManaged, GameWindow.FypGhostStartTick, GameWindow.FypGhostStartButtonRepair, GameWindow.FypGhostMirror);
+        Action? tick = null, repair = null;
+        bool stopped = false, repairStopped = false, through = false;
+        var raised = new List<(string operation, global::Avalonia.Controls.TopLevel window)>();
+        GameWindow.FypGhostSupport = () => null;
+        GameWindow.FypGhostMirror = null;   // pin the X11 path: on Windows the default is the DWM mirror
+        GameWindow.FypGhostClickThrough = (_, on) => { through = on; return true; };
+        GameWindow.FypGhostOpacity = (_, _) => true;
+        GameWindow.FypGhostButtonConfigure = (_, _, passive) => passive;
+        GameWindow.FypGhostRaise = w => { raised.Add(("direct", w)); return true; };
+        GameWindow.FypGhostRaiseManaged = w => { raised.Add(("managed", w)); return true; };
+        GameWindow.FypGhostStartTick = action =>
+        {
+            if (exit == "start-failure") throw new InvalidOperationException();
+            tick = action;
+            return new TickDisposal(() => stopped = true);
+        };
+        GameWindow.FypGhostStartButtonRepair = action =>
+        {
+            if (exit == "repair-start-failure") throw new InvalidOperationException();
+            repair = action;
+            return new TickDisposal(() => repairStopped = true);
+        };
+        var feed = new GameWindow(GameWindow.Games[GameWindow.FypId]);
+        var sent = new List<JObject>();
+        feed.Posted += json => sent.Add(JObject.Parse(json));
+        try
+        {
+            feed.Show();
+            feed.HandleMessage("{\"type\":\"settings-changed\",\"key\":\"clickThrough\",\"value\":true}");
+            if (exit == "start-failure" || exit == "repair-start-failure")
+            {
+                Assert.False(feed.IsFypGhosted);
+                Assert.False(through);
+                Assert.Empty(feed.FypGhostButtons);
+                Assert.Contains(sent, o => (string?)o["type"] == "ghost-unavailable");
+                if (exit == "repair-start-failure") Assert.True(stopped);
+                return;
+            }
+            Assert.True(feed.IsFypGhosted);
+            var buttons = feed.FypGhostButtons.ToArray();
+            tick!();
+            Assert.Equal(new[] { ("managed", (global::Avalonia.Controls.TopLevel)feed), ("direct", buttons[0]), ("direct", buttons[1]) }, raised);
+            raised.Clear();
+            repair!(); // The WM may finish raising the feed after the five second tick.
+            Assert.Equal(new[] { ("direct", (global::Avalonia.Controls.TopLevel)buttons[0]), ("direct", buttons[1]) }, raised);
+            if (exit == "exit") feed.ExitFypGhost();
+            else if (exit == "minimize") feed.WindowState = global::Avalonia.Controls.WindowState.Minimized;
+            else if (exit == "hide") feed.Hide();
+            else feed.Close();
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.True(stopped);
+            Assert.True(repairStopped);
+            raised.Clear();
+            tick();
+            repair();
+            Assert.Empty(raised);
+        }
+        finally
+        {
+            feed.Close();
+            (GameWindow.FypGhostSupport, GameWindow.FypGhostClickThrough, GameWindow.FypGhostOpacity,
+                GameWindow.FypGhostButtonConfigure, GameWindow.FypGhostRaise, GameWindow.FypGhostRaiseManaged, GameWindow.FypGhostStartTick, GameWindow.FypGhostStartButtonRepair, GameWindow.FypGhostMirror) = old;
+        }
+    });
+
+    private sealed class TickDisposal(Action stop) : IDisposable
+    {
+        public void Dispose() => stop();
+    }
+
 }
