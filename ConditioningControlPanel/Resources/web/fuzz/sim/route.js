@@ -8,7 +8,8 @@ import { CONFIG } from '../data/config.js';
 import { FOLD, LEAD_OF } from '../data/folds.js';
 import * as E from './economy.js';
 import { routeFate } from '../data/fate.js';
-import { isCut, reqFor } from '../ui/edition.js';
+import { sleepsHere, reqFor, endingSetOpen } from '../ui/edition.js';
+import { SMALL_ENDING_SET } from '../data/editions.js';
 
 export function allRoutes() {
   let all = [{}];
@@ -23,13 +24,15 @@ export function allRoutes() {
 /* Fate cards (data/fate.js): a route also carries one ending set. `fate` picks it; by default each fork route samples
  * one set it is offered (routeFate), so the 192 routes cover every set without a full cross product. The set's seed is
  * the only seed the run buys, so it holds that set's ending. */
-/* ed: an edition reading (ui/edition.js readEdition). Small leaves the cut rows out and reads requirements through reqFor. */
+/* ed: an edition reading (ui/edition.js readEdition). Small leaves the cut rows out and reads requirements through reqFor.
+ * Small holds one ending (data/editions.js SMALL_ENDING_SET): every small route plays Go Outside, whatever `fate` says. */
 export function playRoute(picks, { taps = 4, mood = null, mods = null, maxS = 7200, side = false, fate = routeFate(picks), ed = null } = {}) {
   const dt = 0.25;
   const s = E.createRun({ mood, ed });
   const small = !!E.runEdition(s);
+  if (small && !endingSetOpen(fate, ed)) fate = SMALL_ENDING_SET;
   const reqOf = small ? (it) => reqFor(it, ed).req : (it) => it.req;
-  const inRoute = (it) => { const f = FORK_OF_LANE[it.lane]; return (!f || picks[f] === it.lane) && (!it.fate || it.fate === fate) && !(small && isCut(it.id, ed)); };
+  const inRoute = (it) => { const f = FORK_OF_LANE[it.lane]; return (!f || picks[f] === it.lane) && (!it.fate || it.fate === fate) && !(small && sleepsHere(it.id, ed)); };
   /* A rider is never pressed: its lead's purchase brings it (data/folds.js). */
   let pending = ITEMS.filter((r) => r.group === 'run' && r.id !== 'start' && r.kind !== 'end' && !r.grow && !LEAD_OF[r.id] && inRoute(r)).concat(ITEMS.filter((r) => r.id === 'drop'));
   pending = pending.map((r) => ({ r, cost: E.price(s, r.id, mods) })).sort((a, b) => a.cost - b.cost);

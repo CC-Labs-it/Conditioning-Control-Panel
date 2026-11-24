@@ -19,6 +19,8 @@
 import { menuKey, sheetScale } from './menu-model.js';
 import { llamaSvg } from './llama-pen.js';   // the pen's own drawing; its .lp-ic / .lp-spit rules in styles.css reach the menu
 import { BRAND } from '../data/brand.js';
+import { isSmall } from './edition.js';
+import { EDITION_TAG_COPY } from '../data/content/small-funnel.js';
 
 const THUD = 'cubic-bezier(.2,1.5,.4,1)';
 const STAR = 'assets/adcard/sprite-star.webp', HEART = 'assets/adcard/sprite-heart.webp';
@@ -65,6 +67,8 @@ body.gentle #main-menu .mm-flock { display: none; }
 #main-menu .mm-sheet { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 16px; overflow-x: hidden; overflow-y: auto; }
 #main-menu .mm-logo, #main-menu .mm-rows { zoom: var(--mm-k); }   /* the whole column, gaps included, from one number */
 #main-menu .mm-logo { display: block; width: min(440px, 88%); height: auto; aspect-ratio: 15 / 4; margin: 0 auto; filter: drop-shadow(2px 4px 0 rgba(0, 0, 0, .22)); animation: mm-wig 4.6s ease-in-out infinite; }
+/* small edition only: the Courier tag under the title (the recap's .rr-cap look); the full edition never builds it */
+#main-menu .mm-edtag { zoom: var(--mm-k); margin: -2px 0 6px; translate: 88px 0; padding: 5px 10px 4px; border-radius: 4px; background: #1b1a17; color: #fff; font: 700 12px/1 RrMono, "Courier New", monospace; letter-spacing: .14em; text-transform: uppercase; white-space: nowrap; rotate: -2deg; box-shadow: 0 0 0 3px #fff, 2px 4px 0 3px rgba(0, 0, 0, .18); }
 #main-menu .mm-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; justify-items: center; }
 #main-menu .mm-rows li { animation: mm-drift 5s ease-in-out infinite; animation-delay: calc(var(--i) * -.7s); }
 #main-menu .mm-row { --tilt: -1.6deg; --dx: -24px; --fill: #1b1a17; --on: #fff; appearance: none; margin: 0; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
@@ -143,7 +147,7 @@ function drawSpiral(c) {
  * sides: () => [{ kind: 'got'|'slot'|'portrait', src, cls, spot, side }] (ui/menu-model.js sideStickers, art resolved).
  * Answers { el, open, refresh(), rattle(id), flash(id), leave(id, { back }), hide(), show(), focus(), close() }.
  */
-export function openMainMenu({ doc = document, rows, actions = {}, gentle = () => false, sound = () => {}, sides = () => [], llamas = () => null, logo = 'assets/adcard/logo.webp' }) {
+export function openMainMenu({ doc = document, rows, actions = {}, gentle = () => false, sound = () => {}, sides = () => [], llamas = () => null, logo = 'assets/adcard/logo.webp', edTag = isSmall() ? EDITION_TAG_COPY.tag : null }) {
   const win = doc.defaultView;
   if (!doc.getElementById('main-menu-css')) { const st = doc.createElement('style'); st.id = 'main-menu-css'; st.textContent = CSS; doc.head.appendChild(st); }
   const calm = () => !!gentle() || !!win?.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -154,6 +158,9 @@ export function openMainMenu({ doc = document, rows, actions = {}, gentle = () =
   const spiral = mk('canvas', 'mm-spiral', bg);
   const sheet = mk('div', 'mm-sheet', root);
   const img = mk('img', 'mm-logo', sheet); img.src = logo; img.alt = BRAND.game; img.width = 904; img.height = 240;
+  /* The small edition's tag beside the title (in flow under it, never over the logo). Full: nothing is built. */
+  const tag = edTag ? mk('span', 'mm-edtag', sheet) : null;
+  if (tag) tag.textContent = edTag;
   const list = mk('ul', 'mm-rows', sheet);
   const fx = mk('div', 'mm-fx', root); fx.setAttribute('aria-hidden', 'true');
   const sideLayer = mk('div', 'mm-sides'); sideLayer.setAttribute('aria-hidden', 'true');
@@ -219,7 +226,7 @@ export function openMainMenu({ doc = document, rows, actions = {}, gentle = () =
   /* Leave out any place that would sit under the logo or the rows (a narrow window). Read once per draw and resize. */
   function fit() {
     if (!sideEls.length || win.innerWidth <= 620) { for (const d of sideEls) d.hidden = false; return; }
-    const boxes = [img.getBoundingClientRect(), list.getBoundingClientRect()].map((r) => ({ l: r.left - 34, r: r.right + 34, t: r.top - 8, b: r.bottom + 8 }));
+    const boxes = [img, tag, list].filter(Boolean).map((e) => e.getBoundingClientRect()).map((r) => ({ l: r.left - 34, r: r.right + 34, t: r.top - 8, b: r.bottom + 8 }));
     for (const d of sideEls) {
       d.hidden = false;
       const r = d.getBoundingClientRect();
@@ -280,6 +287,7 @@ export function openMainMenu({ doc = document, rows, actions = {}, gentle = () =
     clearFx();
     let last = an(img, [{ transform: 'scale(0) rotate(-16deg)', opacity: 0 }, { transform: 'scale(1) rotate(0deg)', opacity: 1 }], { duration: 430, easing: THUD, fill: 'backwards' });
     later(140, () => sound('land'));
+    if (tag) an(tag, [{ transform: 'scale(1.7) rotate(-9deg)', opacity: 0 }, { transform: 'scale(1) rotate(0deg)', opacity: 1 }], { duration: 260, delay: 300, easing: THUD, fill: 'backwards' });
     els.forEach((r, i) => {
       const g = i % 2 ? 1 : -1;
       last = an(r, [{ transform: `translate(${g * 130}px,-46px) scale(1.55) rotate(${g * 19}deg)`, opacity: 0 }, { transform: 'translate(0,0) scale(1) rotate(0deg)', opacity: 1 }],
@@ -321,6 +329,7 @@ export function openMainMenu({ doc = document, rows, actions = {}, gentle = () =
     el.classList.add('down'); win.setTimeout(() => el.classList.remove('down'), 120);
     sound('burst'); burst(el);
     an(img, [{ transform: 'scale(1)', opacity: 1 }, { transform: 'scale(.4) rotate(12deg)', opacity: 0 }], { duration: 260, delay: 120, easing: 'ease-in', fill: 'forwards' });
+    if (tag) an(tag, [{ transform: 'scale(1)', opacity: 1 }, { transform: 'scale(.5) rotate(-10deg)', opacity: 0 }], { duration: 220, delay: 100, easing: 'ease-in', fill: 'forwards' });
     els.forEach((r, i) => {
       if (r === el) return;
       const g = i % 2 ? 1 : -1;

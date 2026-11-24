@@ -8,7 +8,9 @@
  * COPY: APPROVED AND FROZEN (owner 2026-11-22, fourth dialog): character for character, pinned in
  * tests/editions-placeholders.test.mjs. */
 
-import { sendNudge } from './edition.js';
+import { sendNudge, nudgeLink, editionState } from './edition.js';
+import { NUDGE_WHERE, NUDGE_WANT } from '../data/editions.js';
+import { openAllowedLink } from './links.js';
 
 export const NUDGE_COPY = Object.freeze({
   endingButton: "More endings in the full game",
@@ -25,7 +27,22 @@ export const realPress = (win, ev = null) => () => {
 };
 
 /** The ending card's door: a hook for ui/recap/recap.js (hooks.nudge). Answers whether a nudge went. */
-export const endingNudge = ({ win = globalThis.window, send = () => {}, ed } = {}) => (ev) => sendNudge('ending', { inPress: realPress(win, ev), send, win, ed });
+export const endingNudge = ({ win = globalThis.window, send = () => {}, ed } = {}) => Object.assign(
+  (ev, want) => (want
+    ? sendNudgeAs('ending', want, { inPress: realPress(win, ev), send, win, ed: ed || editionState() })
+    : sendNudge('ending', { inPress: realPress(win, ev), send, win, ed })),
+  /* false inside the desktop app, where a "get CCP" button has nowhere to go */
+  { offersDownload: (ed || editionState()).platform !== 'desktop' });
+
+/** One nudge whose `want` the door itself names (the funnel, owner 2026-11-24: a locked ending card and the recap
+ *  wall's main button ask for the plan, its second button for the app). Both ids must be on the fixed lists
+ *  (CONTRACT.md 6.2), so the frame is the same `nudge {where, want}`; unhosted, the fixed link for that want. Only from
+ *  a real press. Answers whether it went. */
+export function sendNudgeAs(where, want, { inPress = () => false, send = () => {}, win = globalThis.window, ed = editionState() } = {}) {
+  if (!NUDGE_WHERE.includes(where) || !NUDGE_WANT.includes(want) || !inPress()) return false;
+  if (ed.hosted) { send('nudge', { where, want }); return true; }
+  return openAllowedLink(nudgeLink(want), { inPress, hosted: false, win });
+}
 
 /** One quiet line and its button on the pause card (index.html #pause), once. Answers the line, or null. */
 export function mountPauseNudge({ doc = document, win = doc.defaultView, send = () => {}, ed } = {}) {

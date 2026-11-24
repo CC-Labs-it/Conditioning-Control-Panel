@@ -91,7 +91,7 @@ try { storage = fresh ? memoryStorage() : window.localStorage; } catch { storage
 let preferenceStorage;
 try { preferenceStorage = window.localStorage; } catch { preferenceStorage = memoryStorage(); }
 
-/* Prime only until the anniversary (ui/seal.js): no Prime host, no game, just the notice. ?seal=1 shows it on a local preview. */
+/* Until the anniversary the app's small edition sees only the notice (ui/seal.js); the website never does. ?seal=1 shows it on a local preview. */
 /* The Expo download landed mid-run (CONTRACT.md 6.5): the edition switch learns it here, first. Cards that show the
  * progress listen for the same frame on their own. A base the switch refuses changes nothing. */
 bridge.on('expo-ready', (frame) => { expoArrived(frame?.base); });

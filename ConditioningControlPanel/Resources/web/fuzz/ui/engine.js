@@ -148,7 +148,7 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     if (id === 'quiz' && emiRoams()) return false;
     const item = BY_ID[id];
     const entry = registry[id];
-    if (!item || !entry?.mount || E.asleep(run, id)) return false;   // a sleeping row (small edition) never mounts
+    if (!item || !entry?.mount || E.sleeps(run, id)) return false;   // a sleeping row (small edition: cut, or a locked fate set's card) never mounts
     if (scopes.has(id)) unmount(id);
     const scope = newScope(item);
     scope.restored = restored;
