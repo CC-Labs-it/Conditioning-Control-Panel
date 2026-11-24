@@ -41,6 +41,17 @@
 
   <ItemGroup>
     <Compile Include="..\ConditioningControlPanel\Services\ChromeFxNav.cs" Link="Services\ChromeFxNav.cs" />
+    <!-- Reuse WPF's SMTC watcher; the Windows projection is only activated on Windows. -->
+    <Compile Include="..\ConditioningControlPanel\Services\Awareness\SmtcMediaWatcher.cs" Link="Platform\SmtcMediaWatcher.cs" />
+    <PackageDownload Include="Microsoft.Windows.SDK.NET.Ref" Version="[10.0.19041.57]" />
+    <Reference Include="Microsoft.Windows.SDK.NET">
+      <HintPath>$(NuGetPackageRoot)microsoft.windows.sdk.net.ref/10.0.19041.57/lib/net8.0/Microsoft.Windows.SDK.NET.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="WinRT.Runtime">
+      <HintPath>$(NuGetPackageRoot)microsoft.windows.sdk.net.ref/10.0.19041.57/lib/net8.0/WinRT.Runtime.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
     <!-- Where a subliminal card sits while a mandatory video is up (ccp-bugs #1422): pure z-order rule, one source for both heads. -->
     <Compile Include="..\ConditioningControlPanel\Services\Subliminal\SubliminalOverVideo.cs" Link="Services\Subliminal\SubliminalOverVideo.cs" />
     <Compile Include="..\ConditioningControlPanel\Services\Deeper\PlayheadExtrapolator.cs" Link="Services\Deeper\PlayheadExtrapolator.cs" />

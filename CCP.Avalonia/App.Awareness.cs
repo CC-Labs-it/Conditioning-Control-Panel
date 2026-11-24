@@ -13,7 +13,7 @@ public partial class App
     internal static AwarenessObserver? AwarenessObserverForTest => _awarenessObserver;
 
     // WPF App.xaml.cs:3136-3200: the observer, arbiter and privacy controls share one ledger and scorer.
-    internal static void InstallAwarenessObserver(ActivityLedger ledger, IForegroundProbe? foreground = null, IInputProbe? input = null, IMicrophoneProbe? microphone = null)
+    internal static void InstallAwarenessObserver(ActivityLedger ledger, IForegroundProbe? foreground = null, IInputProbe? input = null, IMicrophoneProbe? microphone = null, IMediaWatcher? media = null)
     {
         var memory = new StubCompanionMemory();
         var scorer = new WorthinessScorer();
@@ -28,7 +28,7 @@ public partial class App
                 foreground ?? (OperatingSystem.IsWindows() ? new Platform.Win32AwarenessForegroundProbe() : new Platform.X11ForegroundProbe()),
                 input ?? (OperatingSystem.IsWindows() ? new Platform.Win32AwarenessInputProbe() : new Platform.X11AwarenessInputProbe()),
                 microphone ?? (OperatingSystem.IsWindows() ? new Platform.Win32AwarenessMicrophoneProbe() : new Platform.AwarenessMicrophoneProbe()),
-                OperatingSystem.IsLinux() ? new Platform.MprisMediaWatcher() : null,
+                media ?? CreateAwarenessMediaWatcher(OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763), OperatingSystem.IsLinux(), SandboxNet.Active),
                 state, null, attachAppState: state.Attach);
             _awarenessObserver = observer;
             AwarenessObserver.EntitlementProvider = () => WindowAwarenessService.HasEntitlement;
@@ -69,6 +69,14 @@ public partial class App
         }
     }
 
+    // WPF App.xaml.cs:3150. Tests and sandbox profiles never read the real desktop's media session.
+    internal static IMediaWatcher? CreateAwarenessMediaWatcher(bool windows, bool linux, bool sandboxed)
+    {
+        if (sandboxed) return null;
+        if (windows) return new SmtcMediaWatcher();
+        return linux ? new Platform.MprisMediaWatcher() : null;
+    }
+
     internal static void ReleaseAwarenessObserver()
     {
         WindowAwarenessService.V2Lifecycle = null;
@@ -85,8 +93,8 @@ public partial class App
         AwarenessObserver.PostToUi = null;
     }
 
-    // WPF AwarenessProbes.cs:414-501. Game windows are conservatively treated as blocking.
-    private sealed class AwarenessAppState : IAppStateProbe, IDisposable
+    // WPF AwarenessProbes.cs:414-501: DtRH and Arcademy block ambient speech.
+    internal sealed class AwarenessAppState : IAppStateProbe, IDisposable
     {
         private AchievementEngine? _achievements;
         private string? _recentId;
@@ -108,7 +116,7 @@ public partial class App
             lock (_gate) recent = (at - _recentAt).TotalMinutes <= 30 ? _recentId : null;
             var s = CoreSettings.Current;
             return new AppStateSample(CoreSession.IsSessionRunning, s.PlayerLevel, s.CurrentStreak, recent,
-                CoreEngine.Video?.IsPlaying == true || Views.Windows.LockCardWindow.IsAnyOpen() || Views.Games.GameWindow.IsAnyOpen());
+                CoreEngine.Video?.IsPlaying == true || Views.Windows.LockCardWindow.IsAnyOpen() || Views.Games.GameWindow.IsAwarenessBlockingGameOpen());
         }
         public void Dispose()
         {

@@ -30,6 +30,28 @@ public sealed class AwarenessObserverHeadTests
     }
     private sealed class Mic : IMicrophoneProbe { public bool IsInUse(DateTime at) => false; }
 
+    private sealed class Media : IMediaWatcher
+    {
+        public MediaSample? Sample = new("First track", "Artist", "Playing", TimeSpan.FromSeconds(40));
+        public bool IsAvailable { get; private set; }
+        public bool Disposed { get; private set; }
+        public MediaSample? Current => IsAvailable ? Sample : null;
+        public void Start() => IsAvailable = true;
+        public void Stop() => IsAvailable = false;
+        public void Dispose() { Stop(); Disposed = true; }
+    }
+
+    [Fact]
+    public void MediaFactorySelectsWindowsAndRespectsTheSandbox()
+    {
+        using var windows = AvApp.CreateAwarenessMediaWatcher(true, false, false);
+        Assert.IsType<SmtcMediaWatcher>(windows);
+        using var linux = AvApp.CreateAwarenessMediaWatcher(false, true, false);
+        Assert.IsType<ConditioningControlPanel.Avalonia.Platform.MprisMediaWatcher>(linux);
+        Assert.Null(AvApp.CreateAwarenessMediaWatcher(true, false, true));
+        Assert.Null(AvApp.CreateAwarenessMediaWatcher(false, false, false));
+    }
+
     [Fact]
     public Task ConsentFrameWipeAndPanicFollowTheLiveObserver() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
@@ -68,15 +90,17 @@ public sealed class AwarenessObserverHeadTests
         s.UseAwarenessV2 = s.AwarenessModeEnabled = s.AwarenessConsentGiven = true;
         s.AwarenessConsentShownV2 = false;
         using var ledger = new ActivityLedger(Path.Combine(dir, "ledger.json"));
+        var media = new Media();
         try
         {
             AwarenessLive.Clear();
             AwarenessLive.Ledger = ledger;
-            AvApp.InstallAwarenessObserver(ledger, new Foreground(), new Input(), new Mic());
+            AvApp.InstallAwarenessObserver(ledger, new Foreground(), new Input(), new Mic(), media);
             var vm = new AwarenessPrivacyViewModel(() => null);
             Assert.True(vm.CanReviewConsent);
             AvApp.WindowAwareness.Start();
             Assert.False(AwarenessLive.ObserverEnabled);
+            Assert.False(media.IsAvailable);
             vm.Sync();
             Assert.True(vm.IsLegacyPipeline);
             Assert.Null(AwarenessLive.LastFrame);
@@ -86,14 +110,19 @@ public sealed class AwarenessObserverHeadTests
             Assert.True(AwarenessLive.ObserverEnabled);
             Assert.True(AwarenessV2Routing.IsActive);
             var observer = Assert.IsType<AwarenessObserver>(AvApp.AwarenessObserverForTest);
+            Assert.True(observer.MediaSignalAvailable);
             var now = DateTime.Now;
             await observer.TickAsync(now);
             await observer.TickAsync(now.AddSeconds(21));
             vm.Sync();
-            Assert.NotNull(AwarenessLive.LastFrame);
+            Assert.Equal("First track", AwarenessLive.LastFrame?.NowPlaying?.Title);
             Assert.False(vm.IsLegacyPipeline);
             Assert.True(vm.IsWireLive);
             Assert.Contains("spotify", vm.WireJson, StringComparison.OrdinalIgnoreCase);
+            media.Sample = new MediaSample("Second track", "Artist", "Playing", TimeSpan.FromSeconds(10));
+            await observer.TickAsync(now.AddSeconds(22));
+            Assert.Equal("Second track", AwarenessLive.LastFrame?.NowPlaying?.Title);
+            Assert.Equal(TransitionKind.MediaChanged, AwarenessLive.LastFrame?.Transition);
             var arbiter = Assert.IsType<ReactionArbiter>(AwarenessV2Routing.Arbiter);
             arbiter.Cooldowns.RecordDelivery(ReactionSource.Keyword, "forget-this-app", now.AddMinutes(-2));
             Assert.False(arbiter.Cooldowns.CanSpeak(ReactionSource.Keyword, "forget-this-app", now, out _));
@@ -106,11 +135,12 @@ public sealed class AwarenessObserverHeadTests
             Assert.Null(observer.CurrentAppId);
             Assert.Equal(0, arbiter.Cooldowns.LinesLastHour(now));
             Assert.Empty(ledger.KnownAppIds);
-            await observer.TickAsync(now.AddSeconds(22));
+            await observer.TickAsync(now.AddSeconds(23));
             Assert.Null(AwarenessLive.LastFrame);
             var panic = PanicSurfaces.All.Single(surface => surface.Id == "awareness-companion");
             panic.Stop(null);
             Assert.False(observer.IsRunning);
+            Assert.False(media.IsAvailable);
             Assert.False(AwarenessLive.ObserverEnabled);
             Assert.Null(AwarenessV2Routing.Arbiter);
         }
@@ -138,5 +168,6 @@ public sealed class AwarenessObserverHeadTests
             Dispatcher.UIThread.RunJobs();
             try { Directory.Delete(dir, true); } catch { }
         }
+        Assert.True(media.Disposed);
     });
 }
