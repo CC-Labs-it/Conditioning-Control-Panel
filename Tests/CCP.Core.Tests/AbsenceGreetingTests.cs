@@ -8,6 +8,12 @@ namespace ConditioningControlPanel.Tests;
 /// FormatGreetingName and :2638 the streak-milestone latch.</summary>
 public class AbsenceGreetingTests
 {
+    private sealed class RestoreLanguage : IDisposable
+    {
+        private readonly string _language = ConditioningControlPanel.Localization.LocalizationManager.Instance.CurrentLanguage;
+        public void Dispose() => ConditioningControlPanel.Localization.LocalizationManager.Instance.SetLanguage(_language);
+    }
+
     private static readonly DateTime Now = new(2026, 10, 12, 12, 0, 0, DateTimeKind.Utc);
 
     [Theory]
@@ -25,6 +31,7 @@ public class AbsenceGreetingTests
     [Fact]
     public void BuildPicksTheTierAndNamesTheUser()
     {
+        using var restore = new RestoreLanguage();
         ConditioningControlPanel.Localization.LocalizationManager.Instance.SetLanguage("en");
         Assert.Null(AbsenceGreeting.Build(null, Now, "Mia", new Random(1)));
         var tiers = new (double Hours, string[] Lines)[]
@@ -91,6 +98,7 @@ public class AbsenceGreetingTests
                         Assert.Equal(value, loc.Get(key));
                     }
                 for (int i = 1; i <= 3; i++) Assert.Contains("{tier}", entries[$"avatar_lapse_{i}"]);
+                Assert.Equal(entries["avatar_bubble_pop_praise"], loc.Get("avatar_bubble_pop_praise"));
             }
         }
         finally { loc.SetLanguage(previous); }

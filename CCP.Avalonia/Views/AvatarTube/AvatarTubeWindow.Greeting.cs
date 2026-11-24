@@ -1,9 +1,10 @@
 // PORTED from ConditioningControlPanel/AvatarTube/AvatarTubeWindow.Speech.cs:2558-2665 (ShowGreeting,
 // CheckStreakMilestoneGreeting) and its 2 s timer (AvatarTubeWindow.xaml.cs:343-353); the pure half is Core
-// AbsenceGreeting. Not ported: per-phrase audio
-// overrides (Speech.cs:2291-2297); the mod event-audio fallback is.
+// AbsenceGreeting. Category phrases use their selected audio override before mod event audio.
 
 using System;
+using System.IO;
+using System.Linq;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.Awareness;
 using ConditioningControlPanel.Services.Companion;
@@ -83,14 +84,25 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             catch (Exception ex) { Log.Debug(ex, "Lapse greeting skipped"); return null; }
         }
 
-        /// <summary>WPF GiggleFromCategory (Speech.cs:2279): an enabled phrase of the category, with the mod's
-        /// event audio when it ships one.</summary>
+        internal static string? CategoryAudio(string category, string text)
+        {
+            var settings = CoreSettings.Current;
+            int index = Array.IndexOf(CoreMods.GetPhrases(category) ?? Array.Empty<string>(), text);
+            var id = index >= 0 ? $"{category}:{index}" : settings.CustomCompanionPhrases?.FirstOrDefault(p => p.Category == category && p.Text == text)?.Id;
+            if (id == null) return null;
+            string? Existing(string? file) => !string.IsNullOrEmpty(file) && File.Exists(Path.Combine(Models.CompanionPhrase.DefaultAudioFolder, file))
+                ? Path.Combine(Models.CompanionPhrase.DefaultAudioFolder, file) : null;
+            return (settings.PhraseAudioOverrides.TryGetValue(id, out var audio) ? Existing(audio) : null)
+                ?? Existing(settings.CustomCompanionPhrases?.FirstOrDefault(p => p.Id == id)?.AudioFileName);
+        }
+
+        /// <summary>WPF GiggleFromCategory (Speech.cs:2279): an enabled phrase with user or mod audio.</summary>
         internal void GiggleFromCategory(string category)
         {
             var enabled = AwarenessReactionPhrases.Enabled(category);
             if (enabled.Length == 0) return;
             var text = enabled[_random.Next(enabled.Length)];
-            Giggle(text, phraseAudioPath: CompanionEventAudio.Resolve(text));
+            Giggle(text, phraseAudioPath: CategoryAudio(category, text) ?? CompanionEventAudio.Resolve(text));
         }
     }
 }

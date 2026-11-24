@@ -90,7 +90,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             }
             catch (Exception ex) { Log.Debug("RandomBubble: pop sound failed - {Error}", ex.Message); }
             CoreProgression.AddXP(5, "AvatarInteraction");
-            Giggle("Good girl! *giggles*");
+            Giggle(ConditioningControlPanel.Localization.Loc.Get("avatar_bubble_pop_praise"));
         }
 
         /// <summary>WPF AvatarRandomBubble: floats up at 20 fps with one of four wobbles; a click pops it

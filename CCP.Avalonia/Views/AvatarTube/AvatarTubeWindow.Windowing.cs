@@ -344,7 +344,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// Windowing.cs:367). Routes to the native platform probe.</summary>
         internal static bool ReadOtherAppFullscreen(bool windows, Func<bool> win32, Func<bool> x11) => windows ? win32() : x11();
         internal static Func<bool> OtherAppFullscreen = static () => ReadOtherAppFullscreen(OperatingSystem.IsWindows(),
-            Platform.Win32AwarenessForegroundProbe.ReadTubeFullscreen, static () => Platform.X11ActiveWindow.ReadSample() is { IsFullscreen: true } s
+            Platform.Win32AwarenessForegroundProbe.ReadTubeFullscreen, static () => Platform.X11ActiveWindow.ReadTubeSample() is { IsFullscreen: true } s
                 && !IsOwnWindow(s.Handle) && !FakeFullscreen(s.ProcessName));
 
         /// <summary>Seam: WPF ReassertTopmost's raise (HWND_TOPMOST, no activation).</summary>

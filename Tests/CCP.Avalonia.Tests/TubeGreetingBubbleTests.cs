@@ -156,7 +156,7 @@ public sealed class TubeGreetingBubbleTests
             bubble.Pop();
             Assert.Equal(new[] { (5.0, "AvatarInteraction") }, xp);
             Assert.Contains(sounds, x => x.StartsWith("avatar-bubble-pop:Pop", StringComparison.Ordinal));
-            Assert.Equal("Good girl! *giggles*", Said(tube, gaps));
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("avatar_bubble_pop_praise"), Said(tube, gaps));
             bubble.Pop();
             Assert.Single(xp);                               // a popping bubble pays once
             for (int i = 0; i < 12 && bubble.IsAlive; i++) bubble.Step();
@@ -243,8 +243,32 @@ public sealed class TubeGreetingBubbleTests
         Assert.False(Win32AwarenessForegroundProbe.TubeFullscreen(2, 1, "GameWindow", popup | 0x00c00000, 8, r, r));
         var small = new Win32AwarenessForegroundProbe.Rect { Left = 0, Top = 0, Right = 100, Bottom = 100 };
         Assert.False(Win32AwarenessForegroundProbe.TubeFullscreen(2, 1, "GameWindow", popup, 8, small, r));
+        Assert.False(X11ActiveWindow.TubeTopmost(new uint[] { 7 }, 9)); // covering borderless window, not above
+        Assert.True(X11ActiveWindow.TubeTopmost(new uint[] { 7, 9 }, 9));
         Assert.True(AvatarTubeWindow.ReadOtherAppFullscreen(true, () => true, () => false));
         Assert.False(AvatarTubeWindow.ReadOtherAppFullscreen(false, () => true, () => false));
+    }
+
+    [Fact]
+    public void CategoryAudioPrefersOverrideThenCustomAndSkipsMissingFiles()
+    {
+        var s = CoreSettings.Current;
+        var phrase = new CustomCompanionPhrase { Id = Guid.NewGuid().ToString(), Category = "ReviewAudio", Text = "review audio" };
+        var dir = CompanionPhrase.DefaultAudioFolder;
+        System.IO.Directory.CreateDirectory(dir);
+        var a = System.IO.Path.GetRandomFileName(); var b = System.IO.Path.GetRandomFileName();
+        var pa = System.IO.Path.Combine(dir, a); var pb = System.IO.Path.Combine(dir, b);
+        try
+        {
+            System.IO.File.WriteAllText(pa, "a"); System.IO.File.WriteAllText(pb, "b");
+            phrase.AudioFileName = b; s.CustomCompanionPhrases.Add(phrase); s.PhraseAudioOverrides[phrase.Id] = a;
+            Assert.Equal(pa, AvatarTubeWindow.CategoryAudio(phrase.Category, phrase.Text));
+            System.IO.File.Delete(pa);
+            Assert.Equal(pb, AvatarTubeWindow.CategoryAudio(phrase.Category, phrase.Text));
+            System.IO.File.Delete(pb);
+            Assert.Null(AvatarTubeWindow.CategoryAudio(phrase.Category, phrase.Text));
+        }
+        finally { s.PhraseAudioOverrides.Remove(phrase.Id); s.CustomCompanionPhrases.Remove(phrase); System.IO.File.Delete(pa); System.IO.File.Delete(pb); }
     }
 
 }
