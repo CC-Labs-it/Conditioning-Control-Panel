@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using ConditioningControlPanel.Looks;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Safety;
@@ -26,6 +27,7 @@ namespace ConditioningControlPanel.Controls.Preview.Scenes
             nameof(AppSettings.PinkFilterOpacity), nameof(AppSettings.PinkFilterColor), nameof(AppSettings.SuperModes),
             nameof(AppSettings.SteamReach), nameof(AppSettings.SteamWipeSize), nameof(AppSettings.SteamFogReturn),
             nameof(AppSettings.SteamDrift), nameof(AppSettings.SuperCreepCap), nameof(AppSettings.SuperCreepSpeed),
+            nameof(AppSettings.PinkComfortLimitOn), nameof(AppSettings.PinkComfortLimitPct),
         };
 
         /// <summary>Width of the small fog picture (px); its height follows the band.</summary>
@@ -86,7 +88,10 @@ namespace ConditioningControlPanel.Controls.Preview.Scenes
 
         private AppSettings S => _settings() ?? (_defaults ??= new AppSettings());
         private bool Gentle => _gentle() || _level() == MotionLevel.Reduced;
-        private double Opacity => Math.Clamp(S.PinkFilterOpacity / 100.0, 0, 1);
+        // The Accessibility limit (#5606) clips the painted value the way the real layers do
+        // (PinkTintLayer / SteamLayer through PinkComfortLimit): the preview never paints past it.
+        private double ComfortCap => PinkComfort.Cap(S.PinkComfortLimitOn, S.PinkComfortLimitPct);
+        private double Opacity => PinkComfort.Apply(S.PinkFilterOpacity / 100.0, S.PinkComfortLimitOn, S.PinkComfortLimitPct);
 
         private static bool CreepLit()
         {
@@ -177,6 +182,7 @@ namespace ConditioningControlPanel.Controls.Preview.Scenes
             var s = S;
             double reach = SteamOptions.ClampReach(s.SteamReach) / 100.0;
             double cap = Math.Clamp(s.SuperCreepCap, 0.2, 0.9) * _creep * _shown;
+            double comfort = ComfortCap;   // the fog is held to the limit too (PinkComfort.FogStrength)
             // Fog is the filter colour lifted toward white.
             float fr = _r + (255 - _r) * 0.55f, fg = _g + (255 - _g) * 0.55f, fb = _b + (255 - _b) * 0.55f;
             float sx = _band.Width / FogW, sy = _band.Height / h;
@@ -203,7 +209,7 @@ namespace ConditioningControlPanel.Controls.Preview.Scenes
                         double d = Math.Sqrt((dx - hole.X) * (dx - hole.X) + (dy - hole.Y) * (dy - hole.Y)) / wipe;
                         if (d < 1) a *= 1 - hole.Open * (1 - d * d);
                     }
-                    byte al = (byte)Math.Clamp(a * 255, 0, 255);
+                    byte al = (byte)Math.Clamp(Math.Min(a, comfort) * 255, 0, 255);
                     float m = al / 255f;
                     px[q] = (byte)(fb * m); px[q + 1] = (byte)(fg * m); px[q + 2] = (byte)(fr * m); px[q + 3] = al;
                 }
