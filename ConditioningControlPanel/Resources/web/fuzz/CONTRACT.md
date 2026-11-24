@@ -28,7 +28,7 @@ this file disagree, this file wins until it is amended here first. Shape and hyg
 | `set-setting` | `key:'media.remoteConsent', value, ask:true` | Only from the player's own press on the consent card. |
 | `set-setting` | `key:'window.fullscreen', value: bool` | Section 3.3. The Options view's Full screen row, only to a host that sent `caps.window.fullscreen`. The host answers `setting` with what the window now is. |
 | `account` | | Section 3.3. The player pressed Account in Options: the host shows its own account page. Only to a host that sent `caps.account`. |
-| `own-media-list` | | Section 3.3. Once at start, only to a host that sent `caps.ownMedia.folder`: the files of the folder it remembers. Answered by `own-media`. |
+| `own-media-list` | | Section 3.3. Once at start, only to a host that sent `caps.ownMedia.folder` (the files of the folder it remembers) or `caps.ownMedia.library` (the pictures the app itself uses). Answered by `own-media`. |
 | `own-media-pick` | | Section 3.3. The player pressed the folder button: the host opens its own folder window. Answered by `own-media` with `asked:true`. |
 | `haptic` | `level, ms, tag?` | Optional toy pulse on crits and the Drop; hosts clamp. |
 | `open-url` | `url` | The player pressed a real link. The page only ever sends https on `cclabs.app`, `www.cclabs.app` or `app.cclabs.app` (any path) or exactly `https://discord.gg/YxVAMt4qaZ`, `https://neal.fun/` or `https://neal.fun/stimulation-clicker/` (the credit, `ui/links.js`), from inside a press; the page is untrusted, so the host checks the same rule and opens it in the system browser (the website: a new tab, `noopener`). Unhosted the page opens a new tab itself. |
@@ -45,7 +45,7 @@ this file disagree, this file wins until it is amended here first. Shape and hyg
 | `close` | `reason` | Answer `exit-done` within 300 ms; the host force-closes at 800 ms. |
 | `kept-escape` | | Escape the host kept: `host-escape.js` replays it as one keydown (pause card, never close). |
 | `setting` | `key, value` | A setting changed while open (`gentle`, `motion`, `media.remoteConsent`, `window.fullscreen`). |
-| `own-media` | `v:1, path, rows:[{url, name, type, size, mtime, kind?}], asked?: bool, reason?` | Section 3.3. The player's own folder, served by the host. |
+| `own-media` | `v:1, path, rows:[{url, name, type, size, mtime, kind?}], asked?: bool, reason?` | Section 3.3. The player's own folder, or the app's own library, served by the host. |
 
 ### 3.1 `init.caps`
 
@@ -62,7 +62,7 @@ caps: {
   expo: { state: 'ready' | 'absent', base?: url, mb?: int },  // section 6.5; desktop and full only
   window: { fullscreen: bool },  // section 3.3; the host's window can go full screen, and is or is not right now
   account: bool,               // section 3.3; the host has an account page of its own (sign in, sign out)
-  ownMedia: { folder: bool, path?: string },  // section 3.3; the host keeps and serves the player's own folder
+  ownMedia: { folder: bool, path?: string, library?: bool, mediaOrigin?: url },  // section 3.3; the host keeps and serves the player's own folder, or (library) the app's own pictures
   dev: bool,                   // the hidden dev console (ui/preview-bar-model.js): only a host that prices nothing sends it (the standalone program); never the website, never the CCP app
 }
 mod: 'default' | 'bambi' | 'sissy' | 'locked' | 'drone'
@@ -120,6 +120,12 @@ row; the unframed page uses the browser's own full screen instead.
   a pick: only that one switches the source to the player's files. A pick the player closed answers `rows:[]`,
   `reason:'cancelled'`. The page asks `own-media-list` once at start for the remembered folder. Nothing is uploaded:
   the files never leave the device.
+- **The library (CCP desktop, 2026-11-24).** A host with `caps.ownMedia.library` (and no `folder`) answers "Use local
+  files" with the pictures the app itself uses: the CCP app sends the ticked images of its asset library (the disk half of
+  the Flash Images pool, deselected files left out) and the ticked videos, each with `kind`, from `caps.ownMedia.mediaOrigin`
+  (`https://ccp.assets`), the one other origin the page accepts rows from. The page asks `own-media-list` once at start
+  and keeps the answer; nothing changes source until the player presses Use local files. An empty library answers
+  `rows:[]` and the press opens the browser's own file picker, as without a host. There is no row in Options.
 
 ## 4. Safety
 

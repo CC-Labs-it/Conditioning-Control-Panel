@@ -288,6 +288,9 @@ internal static partial class TcHostService
                 case "fuzz-ended":
                     OnRunEnded(f);
                     break;
+                case "own-media-list":
+                    RunOnUi(OnOwnMediaList);   // the app's own pictures for "Use local files" (caps.ownMedia.library)
+                    break;
                 case "expo-fetch":
                     OnExpoFetch();   // the page sends it only from a press
                     break;

@@ -5,6 +5,8 @@
  *                   the unframed page uses the browser's own full screen; any other host shows no row.
  *   The folder row  only for a host that keeps the player's folder (caps.ownMedia.folder, CONTRACT.md 3.3): the host
  *                   opens its own folder window, remembers the pick and serves the files; nothing is uploaded.
+ *   The library    no row: a host with caps.ownMedia.library (the CCP desktop app) hands "Use local files" the pictures
+ *                   the app itself uses (useLibrary below, read by ui/picture-card.js).
  *   Camera          the Expo's own look options (ui/expo/camera-options.js), offered wherever the Expo can be walked.
  *                   During a visit the Expo keeps its own copy on the pause card, so this one stands down.
  *   Account         a host with an account page of its own (caps.account, CONTRACT.md 3.3): the row names who is signed
@@ -24,10 +26,20 @@ export function fullscreenRoute({ hosted = false, caps = null, doc = null } = {}
 /** True for a host that keeps and serves the player's own folder. */
 export const folderHost = (caps, hosted) => hosted === true && caps?.ownMedia?.folder === true;
 
+/** True for a host that answers "Use local files" with the pictures the app itself uses (caps.ownMedia.library,
+ * CONTRACT.md 3.3: the CCP desktop app's ticked library). */
+export const libraryHost = (caps, hosted) => hosted === true && caps?.ownMedia?.library === true;
+
+/** The one https origin a library host serves its rows from, or ''. */
+export function libraryOrigin(caps) {
+  try { const u = new URL(String(caps?.ownMedia?.mediaOrigin || '')); return u.protocol === 'https:' ? u.origin : ''; } catch { return ''; }
+}
+
 /** True for a host that has an account page of its own to show. */
 export const accountHost = (caps, hosted) => hosted === true && caps?.account === true;
 
-const NONE = Object.freeze({ open() {}, close() { return false; }, refresh() {}, pickFolder() { return false; }, canPickFolder: false, get isOpen() { return false; } });
+const NONE = Object.freeze({ open() {}, close() { return false; }, refresh() {}, pickFolder() { return false; }, canPickFolder: false,
+  useLibrary() { return false; }, canUseLibrary: false, get isOpen() { return false; } });
 
 export function mountOptions({ doc, win = doc?.defaultView, caps = {}, hosted = false, send = () => {}, on = () => () => {},
   pictures = null, expo = false, identity = null, onChange = () => {} } = {}) {
@@ -87,6 +99,32 @@ export function mountOptions({ doc, win = doc?.defaultView, caps = {}, hosted = 
     send('own-media-list', {});   // a folder remembered from an earlier launch: its files, once the host has read them
   }
 
+  /* ---- the app's own library, kept by the host (a folder host never is one) ---- */
+  const library = !folders && libraryHost(caps, hosted) && !!pictures?.replaceOwnHosted;
+  const libraryFrom = library ? libraryOrigin(caps) : '';
+  let libraryRows = null;   // null until the host has answered own-media-list
+  const libraryWaiting = [];
+  /** "Use local files" on a library host: done(kept) with how many went in, 0 when the app has nothing ticked (the card
+   * then opens the browser's own picker, as before). Answers whether done already ran, inside this call. */
+  function useLibrary(done) {
+    if (!library) return false;
+    const apply = () => {
+      const kept = libraryRows?.length ? pictures.replaceOwnHosted(libraryRows, libraryFrom) : 0;
+      if (kept) { pictures.setSource('own'); onChange(); }
+      try { done?.(kept); } catch { /* the card's answer never stops the page */ }
+    };
+    if (libraryRows) { apply(); return true; }
+    libraryWaiting.push(apply);
+    return false;
+  }
+  if (library) {
+    on('own-media', (frame) => {
+      libraryRows = Array.isArray(frame?.rows) ? frame.rows : [];
+      for (const apply of libraryWaiting.splice(0)) apply();
+    });
+    send('own-media-list', {});   // the library as the app has it ticked now; nothing changes source until a press
+  }
+
   /* ---- the host's account page ---- */
   const accountRow = $('account-row');
   accountRow.hidden = !accountHost(caps, hosted);
@@ -128,5 +166,6 @@ export function mountOptions({ doc, win = doc?.defaultView, caps = {}, hosted = 
   $('options-open').addEventListener('click', open);
   back.addEventListener('click', () => { close(); $('resume')?.focus({ preventScroll: true }); });
 
-  return { open, close, refresh: paintFolder, pickFolder, canPickFolder: folders, get isOpen() { return !view.hidden; } };
+  return { open, close, refresh: paintFolder, pickFolder, canPickFolder: folders, useLibrary, canUseLibrary: library,
+    get isOpen() { return !view.hidden; } };
 }

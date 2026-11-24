@@ -71,6 +71,7 @@ internal static class TcHostRules
         caps["words"] = new JObject { ["bank"] = "circe" };
         caps["toys"] = toys;
         caps["toysConnected"] = toys && toysConnected;
+        caps["ownMedia"] = TcOwnMediaRules.Cap();   // "Use local files" = the app's own ticked pictures (CONTRACT.md 3.3)
         return new JObject
         {
             ["type"] = "init",

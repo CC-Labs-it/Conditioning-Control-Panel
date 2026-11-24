@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 using ConditioningControlPanel.Services.GoonGame;
@@ -148,6 +150,54 @@ internal static partial class TcHostService
         _pictureNiches = Array.Empty<string>();
         _pictureOffset = 0;
         _picturesOffInWindow = false;
+    }
+
+    // ============================ the app's own pictures ("Use local files") ============================
+
+    private static bool _ownListInFlight;
+
+    /// <summary>page -&gt; host <c>own-media-list</c> (CONTRACT.md 3.3, the library): the ticked images and videos of the
+    /// asset library, read off the UI thread and posted to the window that asked. One read at a time.</summary>
+    private static void OnOwnMediaList()
+    {
+        if (_host == null || _ownListInFlight) return;
+        _ownListInFlight = true;
+        var asked = _host;
+        _ = Task.Run(() => TcOwnMediaRules.Frame(ReadLibrary())).ContinueWith(t => RunOnUi(() =>
+        {
+            _ownListInFlight = false;
+            if (t.Status != TaskStatus.RanToCompletion || !ReferenceEquals(asked, _host)) return;
+            App.Logger?.Information("Tc: own library answered with {N} files", ((JArray)t.Result["rows"]!).Count);
+            try { _host?.Post(t.Result); } catch (Exception ex) { App.Logger?.Debug("Tc: own library post failed: {E}", ex.Message); }
+        }), TaskScheduler.Default);
+    }
+
+    /// <summary>The same two sources Back Room's local deal and Just Drop read. Counts only are ever logged.</summary>
+    private static JArray ReadLibrary()
+    {
+        var sources = new List<TcOwnMediaRules.Source>();
+        var root = App.EffectiveAssetsPath;
+        try
+        {
+            foreach (var p in App.Flash?.SnapshotLocalImagePaths() ?? new List<string>())
+                sources.Add(new TcOwnMediaRules.Source(p, false));
+            foreach (var e in Fyp.FypAssetManifest.Build(new Fyp.FypMetaStore()))
+                if (e.Type == "video")
+                    sources.Add(new TcOwnMediaRules.Source(Path.Combine(root, e.Id.Replace('/', Path.DirectorySeparatorChar)), true));
+        }
+        catch (Exception ex) { App.Logger?.Debug("Tc: own library listing failed ({Type})", ex.GetType().Name); }
+        return TcOwnMediaRules.Rows(sources, root,
+            path => BackRoom.BackRoomMedia.ProbeAnimated(path).Ok,
+            path =>
+            {
+                try
+                {
+                    var fi = new FileInfo(path);
+                    return fi.Exists ? new TcOwnMediaRules.Stat(fi.Length, new DateTimeOffset(fi.LastWriteTimeUtc).ToUnixTimeMilliseconds()) : null;
+                }
+                catch { return null; }
+            },
+            new Random());
     }
 
     /// <summary>page -&gt; host <c>fuzz-ended</c>: always the same claim (the finished fee, the ending id and minutes

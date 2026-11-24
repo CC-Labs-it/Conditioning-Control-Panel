@@ -21,7 +21,7 @@ export function pictureRow(pictures) {
 /* pickFolder: a host that keeps the player's folder (ui/options.js). It opens the host's own folder window and answers
  * done(kept) once the files are in; the browser's folder input is not used then. */
 export function openPictureCard({ doc = document, pictures, above = false, gentle = () => false, onChoice = () => {}, onClose = () => {}, pickFolder = null,
-  navigate = (url) => doc.defaultView?.location.assign(url) }) {
+  useLibrary = null, navigate = (url) => doc.defaultView?.location.assign(url) }) {
   const legal = createLegal({ doc, gentle, above, xLines: X_LINES_PICTURES });
   /* Folders (owner 2026-11-08): desktop browsers only; a phone has no folder picker and no drop. */
   const folders = !!pickFolder || folderPickerWorks(doc);
@@ -67,13 +67,21 @@ export function openPictureCard({ doc = document, pictures, above = false, gentl
       }
     });
   });
-  /* The picker opens inside the press itself; a browser refuses it from anywhere later. */
+  /* The picker opens inside the press itself; a browser refuses it from anywhere later. A library host (useLibrary,
+     ui/options.js) answers with the pictures the app itself uses; with nothing ticked there the picker opens as before. */
   pick('files').addEventListener('click', () => {
     cancelRequest?.();
     cancelRequest = null;
     remote.disabled = false;
     status.textContent = '';
-    input.click();
+    if (!useLibrary) { input.click(); return; }
+    const answered = useLibrary((kept) => {
+      if (!open) return;
+      if (kept) { onChoice('own'); close(); return; }
+      status.textContent = '';
+      input.click();
+    });
+    if (!answered && open) status.textContent = C.reading;
   });
   /** One pick of own files (a list, a folder or a drop) replaces the last. */
   const useFiles = (files) => {

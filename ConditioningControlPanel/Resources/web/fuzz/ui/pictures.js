@@ -85,13 +85,14 @@ export function ownUsable(files, max = OWN_MAX, rand = Math.random) {
 const emptyOwn = () => ({ picture: [], gif: [], clip: [], pending: 0, retired: false, hosted: false, ready: Promise.resolve() });
 
 /** Rows a host serves from the player's own folder (CONTRACT.md 3.3), as the file-like things the own-file code takes.
- * Only urls on the page's own origin count. `kind` is the host's own reading of the file's header, when it has one. */
-export function hostedFiles(rows, pageOrigin, fetchImpl = globalThis.fetch) {
+ * Only urls on the page's own origin count, or on the one media origin the host named in caps.ownMedia.mediaOrigin
+ * (the desktop app's library, CONTRACT.md 3.3). `kind` is the host's own reading of the file's header, when it has one. */
+export function hostedFiles(rows, pageOrigin, fetchImpl = globalThis.fetch, mediaOrigin = '') {
   const out = [];
   for (const row of Array.isArray(rows) ? rows : []) {
     let url;
     try { url = new URL(String(row?.url || '')); } catch { continue; }
-    if (!pageOrigin || url.origin !== pageOrigin) continue;
+    if (!pageOrigin || (url.origin !== pageOrigin && !(mediaOrigin && url.origin === mediaOrigin))) continue;
     const size = Number(row.size) > 0 ? Number(row.size) : 0, href = url.href;
     out.push({
       name: String(row.name || ''), type: String(row.type || ''), size, lastModified: Number(row.mtime) || 0, url: href,
@@ -439,8 +440,8 @@ export function createPictures({ source = null, onChange = () => {}, onAdded = (
       return kept;
     },
     /** The files of a folder the host keeps and serves (CONTRACT.md 3.3). Answers how many were kept. */
-    replaceOwnHosted(rows) {
-      const kept = this.replaceOwn(hostedFiles(rows, pageOrigin));
+    replaceOwnHosted(rows, mediaOrigin = '') {
+      const kept = this.replaceOwn(hostedFiles(rows, pageOrigin, undefined, mediaOrigin));
       if (kept) own.hosted = true;
       return kept;
     },

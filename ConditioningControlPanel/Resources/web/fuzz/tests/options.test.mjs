@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { fullscreenRoute, folderHost, accountHost, FULLSCREEN_KEY } from '../ui/options.js';
+import { fullscreenRoute, folderHost, accountHost, libraryHost, libraryOrigin, mountOptions, FULLSCREEN_KEY } from '../ui/options.js';
 import { createPictures, hostedFiles } from '../ui/pictures.js';
 import { pictureRow } from '../ui/picture-card.js';
 import { PICTURE_CARD } from '../data/content/terms.js';
@@ -96,6 +96,93 @@ test('a folder from the host becomes the own files, by url, and the row says fol
   assert.equal(p.ownCount, 3);
   p.clearOwn();
   assert.equal(p.ownFromFolder, false);
+});
+
+test('the library belongs only to a host that says so, with one https media origin', () => {
+  assert.equal(libraryHost({ ownMedia: { library: true } }, true), true);
+  assert.equal(libraryHost({ ownMedia: { library: true } }, false), false, 'the website and a plain browser never');
+  assert.equal(libraryHost({ ownMedia: { folder: true } }, true), false);
+  assert.equal(libraryHost({}, true), false);
+  assert.equal(libraryOrigin({ ownMedia: { mediaOrigin: 'https://ccp.assets' } }), 'https://ccp.assets');
+  assert.equal(libraryOrigin({ ownMedia: { mediaOrigin: 'https://ccp.assets/x/y' } }), 'https://ccp.assets');
+  assert.equal(libraryOrigin({ ownMedia: { mediaOrigin: 'http://ccp.assets' } }), '');
+  assert.equal(libraryOrigin({ ownMedia: { mediaOrigin: 'nope' } }), '');
+  assert.equal(libraryOrigin({}), '');
+});
+
+test('rows on the host-named media origin count beside the page origin, any other origin still does not', () => {
+  const page = 'https://ccp.game', media = 'https://ccp.assets';
+  const rows = [
+    { url: media + '/images/a.jpg', name: 'images/a.jpg', type: 'image/jpeg', size: 10, kind: 'picture' },
+    { url: page + '/own/b.gif', name: 'b.gif', type: 'image/gif', size: 10, kind: 'gif' },
+    { url: 'https://elsewhere.example/c.jpg', name: 'c.jpg', type: 'image/jpeg', size: 10, kind: 'picture' },
+  ];
+  assert.deepEqual(hostedFiles(rows, page).map((f) => f.name), ['b.gif'], 'no media origin: the page origin only, as before');
+  assert.deepEqual(hostedFiles(rows, page, undefined, media).map((f) => f.name), ['images/a.jpg', 'b.gif']);
+});
+
+/* A stand-in page for mountOptions: every id is an element that takes listeners and ignores the rest. */
+function fakeDoc() {
+  const els = new Map();
+  const el = () => ({ hidden: false, textContent: '', title: '', checked: false, children: [], classList: { add() {}, remove() {}, contains() { return false; } },
+    addEventListener() {}, focus() {}, querySelector() { return el(); } });
+  return { defaultView: {}, getElementById: (id) => { if (!els.has(id)) els.set(id, el()); return els.get(id); } };
+}
+
+function mountLibrary(caps) {
+  const sent = [], handlers = new Map();
+  const pictures = createPictures({ pageOrigin: 'https://ccp.game' });
+  const view = mountOptions({ doc: fakeDoc(), caps, hosted: true, pictures,
+    send: (t, f) => sent.push([t, f]), on: (t, fn) => { handlers.set(t, fn); return () => {}; } });
+  return { view, pictures, sent, answer: (frame) => handlers.get('own-media')?.(frame) };
+}
+
+const LIBRARY = { ownMedia: { library: true, mediaOrigin: 'https://ccp.assets' } };
+const LIBRARY_ROWS = [
+  { url: 'https://ccp.assets/images/a.jpg', name: 'images/a.jpg', type: 'image/jpeg', size: 10, mtime: 1, kind: 'picture' },
+  { url: 'https://ccp.assets/images/b.gif', name: 'images/b.gif', type: 'image/gif', size: 10, mtime: 1, kind: 'gif' },
+  { url: 'https://ccp.assets/videos/c.mp4', name: 'videos/c.mp4', type: 'video/mp4', size: 10, mtime: 1, kind: 'clip' },
+];
+
+test('a library host: the list is asked once at start, and only the press switches the source to it', () => {
+  const { view, pictures, sent, answer } = mountLibrary(LIBRARY);
+  assert.equal(view.canUseLibrary, true);
+  assert.equal(view.canPickFolder, false, 'the library is not a folder host');
+  assert.deepEqual(sent.map(([t]) => t), ['own-media-list']);
+  answer({ type: 'own-media', v: 1, path: '', rows: LIBRARY_ROWS, asked: false });
+  assert.equal(pictures.source, 'none', 'the answer alone changes nothing');
+  let kept = null;
+  assert.equal(view.useLibrary((n) => { kept = n; }), true, 'answered inside the press');
+  assert.equal(kept, 3);
+  assert.equal(pictures.source, 'own');
+  assert.deepEqual(pictures.ownCounts, { picture: 1, gif: 1, clip: 1 });
+});
+
+test('a press before the answer waits for it, and an empty library hands the press back to the browser picker', () => {
+  const early = mountLibrary(LIBRARY);
+  let kept = null;
+  assert.equal(early.view.useLibrary((n) => { kept = n; }), false, 'still on its way');
+  assert.equal(kept, null);
+  early.answer({ type: 'own-media', v: 1, path: '', rows: LIBRARY_ROWS, asked: false });
+  assert.equal(kept, 3);
+  assert.equal(early.pictures.source, 'own');
+
+  const empty = mountLibrary(LIBRARY);
+  empty.answer({ type: 'own-media', v: 1, path: '', rows: [], asked: false });
+  let none = null;
+  assert.equal(empty.view.useLibrary((n) => { none = n; }), true);
+  assert.equal(none, 0, 'nothing ticked in the app: the card opens its own file input');
+  assert.equal(empty.pictures.source, 'none');
+});
+
+test('without the library cap nothing is asked and Use local files is the browser picker, as on the website', () => {
+  const { view, sent } = mountLibrary({});
+  assert.equal(view.canUseLibrary, false);
+  assert.deepEqual(sent, []);
+  assert.equal(view.useLibrary(() => assert.fail('never called')), false);
+  const card = read('ui/picture-card.js');
+  assert.ok(card.includes("if (!useLibrary) { input.click(); return; }"));
+  assert.ok(read('main.js').includes('useLibrary: ui.options?.canUseLibrary ? ui.options.useLibrary : null,'));
 });
 
 test('the Options view holds the rows that left the pause card, under their old ids', () => {

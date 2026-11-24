@@ -207,6 +207,7 @@ function start(init) {
       onChoice: persist,
       onClose,
       pickFolder: ui.options?.canPickFolder ? ui.options.pickFolder : null,   // a host that keeps the folder (ui/options.js)
+      useLibrary: ui.options?.canUseLibrary ? ui.options.useLibrary : null,   // a host that hands over the app's own pictures
     });
   }
   engine.subscribe('choose-pictures', () => {

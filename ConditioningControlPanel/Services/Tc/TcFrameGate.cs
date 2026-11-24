@@ -80,6 +80,7 @@ internal static class TcFrameGate
     {
         "ready", "heartbeat", "exit-done", "save-ask", "expo-fetch", "expo-cancel", "tab",
         "scrolller-release", "scrolller-play", "scrolller-view",
+        "own-media-list",
     };
 
     /// <summary>A fixed id: lower-case letters, digits, '_' and '-', at most 40.</summary>
