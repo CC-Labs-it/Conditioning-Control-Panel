@@ -51,6 +51,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
         }
 
+        // WPF App.AiEffects.cs:139-149 starts the overlay service for AI commands.
+        internal static bool AiHold { get; set; }
+        internal static int AiStopGeneration { get; private set; }
+
         // WPF voice "go pink": a 40% floor, without dimming a stronger configured tint.
         internal static double? VoiceOpacity { get; private set; }
         internal static void SetVoiceHold(Visual host, bool on)
@@ -68,7 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             VoiceOpacity = next;
             return changed;
         }
-        internal static void Stop() { VoiceOpacity = null; CloseAll(); }
+        internal static void Stop() { AiStopGeneration++; AiHold = false; VoiceOpacity = null; CloseAll(); }
 
         private static bool _refused;
         internal static bool SkipPlatformChecksForTests;
@@ -156,6 +160,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// the owning window. A detached one enumerates no screens and hides the tint.</param>
         public static void Refresh(Visual host)
         {
+            if (RemoteCommands.OverlaysStopped && AiHold) Stop();
             var s = CoreSettings.Current;
             if (VoiceOpacity == null && !HasTimedPayload && (!s.PinkFilterEnabled || !ShouldShow())) { HideAll(); return; }
 
@@ -323,7 +328,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <para>A session counts as running (WPF ResumeSession's App.Overlay.Start() after a panic) and a
         /// paused one hides the tint (PauseSession's App.Overlay.Stop()).</para>
         private static bool ShouldShow()
-            => PulseHold || (!RemoteCommands.OverlaysStopped && (RemoteCommands.OverlayRunning || App.Sessions?.IsPaused != true
+            => PulseHold || (!RemoteCommands.OverlaysStopped && (AiHold || RemoteCommands.OverlayRunning || App.Sessions?.IsPaused != true
                && (CoreSession.IsEngineRunningProvider is null || CoreSession.IsEngineRunning || App.Sessions?.IsRunning == true)));
 
         // Start (MainShellWindow.StartEngine) is what restores a tint left enabled - WPF OverlayService.Start().

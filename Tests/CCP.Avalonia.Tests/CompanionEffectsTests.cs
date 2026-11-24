@@ -1,6 +1,9 @@
 using System.Linq;
 using Avalonia;
 using Avalonia.Headless;
+using Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -100,6 +103,70 @@ public sealed class CompanionEffectsTests
             }
         });
     }
+
+    [Fact]
+    public void PinkCommandShowsWithEngineOffAndPanicClearsIt() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var (provider, lab, engine) = (CoreSettings.ServiceProvider, CoreAccount.HasLabAccessProvider, CoreSession.IsEngineRunningProvider);
+        var (skip, query, start, remoteRefresh) = (PinkFilterOverlay.SkipPlatformChecksForTests, ScreenList.QueryOverride, CompanionEffects.StartEffect, RemoteCommands.RefreshOverlays);
+        var service = new SettingsService();
+        var host = new Window();
+        try
+        {
+            CoreSettings.ServiceProvider = () => service;
+            CoreAccount.HasLabAccessProvider = () => true;
+            CoreSession.IsEngineRunningProvider = () => false;
+            service.Current.CompanionPrompt.AllowAiToControlEffects = true;
+            service.Current.GentleVisuals = false;
+            PinkFilterOverlay.Stop();
+            PinkFilterOverlay.SkipPlatformChecksForTests = true;
+            CompanionEffects.StartEffect = action => action();
+            var screen = (global::Avalonia.Platform.Screen)System.Activator.CreateInstance(typeof(global::Avalonia.Platform.PlatformScreen),
+                new object[] { new global::Avalonia.Platform.PlatformHandle(new System.IntPtr(1), "headless-test") })!;
+            typeof(global::Avalonia.Platform.Screen).GetProperty("Scaling")!.SetValue(screen, 1.0);
+            typeof(global::Avalonia.Platform.Screen).GetProperty("Bounds")!.SetValue(screen, new PixelRect(0, 0, 800, 600));
+            typeof(global::Avalonia.Platform.Screen).GetProperty("WorkingArea")!.SetValue(screen, new PixelRect(0, 0, 800, 600));
+            typeof(global::Avalonia.Platform.Screen).GetProperty("IsPrimary")!.SetValue(screen, true);
+            ScreenList.QueryOverride = _ => new[] { screen };
+            host.Show();
+            RemoteCommands.RefreshOverlays = () => PinkFilterOverlay.Refresh(host);
+            RemoteCommands.StopOverlays(); // A new AI command can start after an earlier engine stop.
+            Assert.True(CompanionEffects.ApplyPink(host, true, 25));
+            Assert.True(PinkFilterOverlay.IsShowing);
+            Assert.Equal(25, service.Current.PinkFilterOpacity);
+            PanicSurfaces.All.Single(s => s.Id == "voice-overlays").Stop(null);
+            Assert.False(PinkFilterOverlay.IsShowing);
+            PinkFilterOverlay.Refresh(host);
+            Assert.False(PinkFilterOverlay.IsShowing);
+
+            System.Action? pending = null;
+            CompanionEffects.StartEffect = action => pending = action;
+            Assert.True(CompanionEffects.ApplyPink(host, true, 30));
+            PanicSurfaces.All.Single(s => s.Id == "voice-overlays").Stop(null);
+            pending!();
+            Assert.False(PinkFilterOverlay.IsShowing);
+            CompanionEffects.StartEffect = action => action();
+
+            Assert.True(CompanionEffects.ApplyPink(host, true, 25));
+            RemoteCommands.StopOverlays();
+            Assert.False(PinkFilterOverlay.IsShowing);
+            RemoteCommands.ReleaseOverlayStop();
+            PinkFilterOverlay.Refresh(host);
+            Assert.False(PinkFilterOverlay.IsShowing);
+        }
+        finally
+        {
+            RemoteCommands.RefreshOverlays = remoteRefresh;
+            RemoteCommands.ReleaseOverlayStop();
+            PinkFilterOverlay.Stop(); host.Close();
+            (PinkFilterOverlay.SkipPlatformChecksForTests, ScreenList.QueryOverride, CompanionEffects.StartEffect) = (skip, query, start);
+            (CoreSettings.ServiceProvider, CoreAccount.HasLabAccessProvider, CoreSession.IsEngineRunningProvider) = (provider, lab, engine);
+        }
+    });
 
     /// <summary>The AI's lock card follows the user's strict switch and reports "fired" only when a card really came up: a
     /// second request while one is open never stacks, so it is reported as not fired.</summary>

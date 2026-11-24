@@ -105,25 +105,7 @@ namespace ConditioningControlPanel.Avalonia
                     voiceMode: CoreSettings.Current.LockCardVoiceMode);
                 return LockCardWindow.IsAnyOpen();
             });
-            // Without WPF's BypassLevelCheck the tint shows only while the engine does; refused otherwise.
-            // Null opacity for "off" (and an "on" with no intensity): the saved opacity is the user's.
-            PinkCommand.Surface = (on, opacity) => Start(() =>
-            {
-                var s = CoreSettings.Current;
-                var (oldOpacity, oldEnabled) = (s.PinkFilterOpacity, s.PinkFilterEnabled);
-                if (opacity is int o) s.PinkFilterOpacity = o;
-                s.PinkFilterEnabled = on;
-                if (Host is { } host) PinkFilterOverlay.Refresh(host);
-                if (on && !PinkFilterOverlay.IsShowing)
-                {
-                    // Refused: nothing showed, so the user's saved Pink filter settings stay as they were.
-                    (s.PinkFilterOpacity, s.PinkFilterEnabled) = (oldOpacity, oldEnabled);
-                    if (Host is { } h) PinkFilterOverlay.Refresh(h);
-                    return false;
-                }
-                CoreSettings.Save();
-                return true;
-            });
+            PinkCommand.Surface = (on, opacity) => OnUi(() => ApplyPink(Host, on, opacity));
             // WPF App.AiEffects.cs:69-74: a video already playing refuses (a floating run would otherwise add a random window).
             MediaCommand.VideoSurface = PlayVideo;
             MediaCommand.AudioSurface = PlayAudio;
@@ -137,6 +119,37 @@ namespace ConditioningControlPanel.Avalonia
                 Views.AvatarTube.AvatarTubeWindow.Live?.RunOnAvatar(() =>
                     Views.AvatarTube.AvatarTubeWindow.Live?.GigglePriority(text, playSound: true, aiGenerated: aiGenerated));
         }
+
+        // WPF App.AiEffects.cs:64,128-150: start the overlay even with the engine off.
+        internal static bool ApplyPink(Window? host, bool on, int? opacity) => OnUi(() =>
+        {
+            var stopGeneration = PinkFilterOverlay.AiStopGeneration;
+            var remoteStopGeneration = RemoteCommands.OverlayStopGeneration;
+            return Start(() =>
+            {
+                if (stopGeneration != PinkFilterOverlay.AiStopGeneration ||
+                    remoteStopGeneration != RemoteCommands.OverlayStopGeneration) return false;
+                var s = CoreSettings.Current;
+                var (oldOpacity, oldEnabled, oldHold, wasStopped) = (s.PinkFilterOpacity, s.PinkFilterEnabled, PinkFilterOverlay.AiHold, RemoteCommands.OverlaysStopped);
+                if (opacity is int o) s.PinkFilterOpacity = o;
+                s.PinkFilterEnabled = on;
+                if (host is not null)
+                {
+                    RemoteCommands.ReleaseOverlayStop();
+                    PinkFilterOverlay.AiHold = true;
+                    PinkFilterOverlay.Refresh(host);
+                }
+                if (on && !PinkFilterOverlay.IsShowing)
+                {
+                    (s.PinkFilterOpacity, s.PinkFilterEnabled, PinkFilterOverlay.AiHold) = (oldOpacity, oldEnabled, oldHold);
+                    if (wasStopped) RemoteCommands.StopOverlays();
+                    if (host is not null) PinkFilterOverlay.Refresh(host);
+                    return false;
+                }
+                CoreSettings.Save();
+                return true;
+            });
+        });
 
         private static Action? _stopAudio;
 
