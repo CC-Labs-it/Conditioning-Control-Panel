@@ -289,7 +289,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _playback = new NativeMandatoryPlayback(_player);
             ApplyVolume(_player);
             var blur = s.VideoBlurredBackgroundEnabled;
-            _sink = new VlcFrameSink(_player, () => _media, bmp =>
+            Media? sinkMedia = null;
+            _sink = new VlcFrameSink(_player, () => sinkMedia, bmp =>
             {
                 foreach (var x in _surfaces) x.Video.Source = bmp;
                 if (!blur) return;
@@ -364,7 +365,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 });
             };
             _player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(() => { if (_player == live) EndPrimary("player error"); });
-            _media = new Media(vlc, path, VideoSelectionRules.IsRemoteMediaPath(path) ? FromType.FromLocation : FromType.FromPath);
+            _media = sinkMedia = new Media(vlc, path, VideoSelectionRules.IsRemoteMediaPath(path) ? FromType.FromLocation : FromType.FromPath);
             foreach (var option in ConditioningControlPanel.Services.Video.RemoteVideoOptions.For(path)) _media.AddOption(option);
             if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } swDecode) _media.AddOption(swDecode);
             _player.Play(_media);
@@ -1392,19 +1393,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _spawnTimes.Clear();
                 _targets.Clear();
                 ReleaseToyBatches();
-                _volumePump?.Dispose();
-                _volumePump = null;
-                // Stop joins the decoder thread, so after it no callback touches the frame buffer.
-                if (_playback != null)
+                var playback = _playback;
+                var media = _media;
+                var sink = _sink;
+                sink?.Detach();
+                if (playback is NativeMandatoryPlayback native)
                 {
-                    try { _playback.Stop(); } catch { }
-                    try { _playback.Dispose(); } catch { }
+                    native.PrepareForTeardown();
+                    _ = VlcPlaybackRetirement.Retire(_volumePump, native.Stop, native.Dispose,
+                        () => Dispatcher.UIThread.Post(() =>
+                        {
+                            try { media?.Dispose(); } catch (Exception ex) { Log.Debug("Video media disposal failed: {Error}", ex.Message); }
+                            sink?.Free();
+                        }));
                 }
+                else
+                {
+                    try { playback?.Stop(); } catch { }
+                    try { playback?.Dispose(); } catch { }
+                    try { media?.Dispose(); } catch { }
+                    sink?.Free();
+                }
+                _volumePump = null;
                 _playback = null;
                 _browser = null;
                 CloseControlHosts();
                 _player = null;
-                try { _media?.Dispose(); } catch { }
                 _media = null;
                 foreach (var x in _surfaces)
                 {
@@ -1414,7 +1428,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     CloseGentleSurface(x.Window, Scheduler.SoftExit);
                 }
                 _surfaces.Clear();
-                _sink?.Free();
                 _sink = null;
                 _fill?.Dispose();
                 _fill = null;

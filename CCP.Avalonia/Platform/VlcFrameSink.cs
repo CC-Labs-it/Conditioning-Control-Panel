@@ -27,7 +27,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private readonly int _decodeWidth;
         private IntPtr _buffer;
         private int _width, _height, _blitQueued, _frames;
-        private bool _freed;
+        private bool _freed, _detached;
         private readonly Action _blit;
 
         /// <param name="bitmapChanged">UI thread: a new bitmap (first frame or a size change) to show.</param>
@@ -101,6 +101,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         private void Blit()
         {
             Volatile.Write(ref _blitQueued, 0);
+            if (_detached) return;
             lock (_lock)
             {
                 if (_buffer == IntPtr.Zero) return;
@@ -123,6 +124,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         private static ref byte At(IntPtr p) => ref Unsafe.AddByteOffset(ref Unsafe.NullRef<byte>(), p);
+
+        // UI thread: ignore queued and future blits while the decoder is stopping.
+        public void Detach() => _detached = true;
 
         /// <summary>Free the buffer and bitmap. Call after <c>MediaPlayer.Stop</c>, which joins the
         /// decoder thread, so no callback touches the buffer afterwards.</summary>

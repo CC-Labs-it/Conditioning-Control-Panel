@@ -161,7 +161,8 @@ internal sealed partial class MandatoryVideoOverlay
                 f.Playback = new NativeMandatoryPlayback(player);
                 f.Playback.SetAudioOff(true);   // WPF :534-535 (WatchInstance re-applies once the track exists)
                 ApplyInstanceVolume(f);
-                f.Sink = new VlcFrameSink(player, () => f.Media, bmp => f.Surface.Video.Source = bmp, () =>
+                Media? sinkMedia = null;
+                f.Sink = new VlcFrameSink(player, () => sinkMedia, bmp => f.Surface.Video.Source = bmp, () =>
                 {
                     f.FrameSeen = true;
                     f.Surface.Video.InvalidateVisual();
@@ -176,7 +177,7 @@ internal sealed partial class MandatoryVideoOverlay
                 // Never torn down on LibVLC's own thread.
                 player.EndReached += (_, _) => Dispatcher.UIThread.Post(() => CloseInstance(f, "clip ended", watchedToEnd: true));
                 player.EncounteredError += (_, _) => Dispatcher.UIThread.Post(() => CloseInstance(f, "player error"));
-                f.Media = new Media(vlc, play, VideoSelectionRules.IsRemoteMediaPath(play) ? FromType.FromLocation : FromType.FromPath);
+                f.Media = sinkMedia = new Media(vlc, play, VideoSelectionRules.IsRemoteMediaPath(play) ? FromType.FromLocation : FromType.FromPath);
                 foreach (var option in RemoteVideoOptions.For(play)) f.Media.AddOption(option);
                 if (MandatoryVideoScheduler.SoftwareDecodeOption(s.VideoForceHardwareDecoding) is { } sw) f.Media.AddOption(sw);
                 player.Play(f.Media);
@@ -357,12 +358,28 @@ internal sealed partial class MandatoryVideoOverlay
         catch (Exception ex) { Log.Debug("VideoService: floating position read failed - {Error}", ex.Message); }
         if (f.PlayedMs >= 1000) CoreProgression.TrackVideoWatched(f.PlayedMs / 1000.0);
         if (watchedToEnd) App.ChasterNote("video");
-        f.VolumePump?.Dispose();
+        var playback = f.Playback;
+        var media = f.Media;
+        var sink = f.Sink;
+        sink?.Detach();
+        if (playback is NativeMandatoryPlayback native)
+        {
+            native.PrepareForTeardown();
+            _ = VlcPlaybackRetirement.Retire(f.VolumePump, native.Stop, native.Dispose,
+                () => Dispatcher.UIThread.Post(() =>
+                        {
+                            try { media?.Dispose(); } catch (Exception ex) { Log.Debug("Video media disposal failed: {Error}", ex.Message); }
+                            sink?.Free();
+                        }));
+        }
+        else
+        {
+            try { playback?.Stop(); } catch { }
+            try { playback?.Dispose(); } catch { }
+            try { media?.Dispose(); } catch { }
+            sink?.Free();
+        }
         f.VolumePump = null;
-        // As CloseAll: Stop joins the decoder thread, so no frame callback outlives the buffer.
-        try { f.Playback?.Stop(); } catch { }
-        try { f.Playback?.Dispose(); } catch { }
-        try { f.Media?.Dispose(); } catch { }
         f.Playback = null;
         f.Player = null;
         f.Media = null;
@@ -375,7 +392,6 @@ internal sealed partial class MandatoryVideoOverlay
             x.Reveal?.Cancel();
             x.Window.Close();
         }
-        f.Sink?.Free();
         f.Sink = null;
         Log.Information("VideoService: floating window closed ({Reason}), {Left} left", reason, FloatingUp);
         if (refocus) ApplyAudioFocus();

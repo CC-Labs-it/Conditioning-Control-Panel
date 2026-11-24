@@ -49,6 +49,7 @@ internal sealed class NativeMandatoryPlayback : IMandatoryPlayback
     public bool HasVideo => player.VideoTrackCount != 0;
     public void SetPause(bool paused) => player.SetPause(paused);
     public void SetAudioOff(bool off) => _audio.Set(off);
+    internal void PrepareForTeardown() => _disposed = true;
     public void Stop() => player.Stop();
     public void Dispose() { _disposed = true; player.Dispose(); }
 }
