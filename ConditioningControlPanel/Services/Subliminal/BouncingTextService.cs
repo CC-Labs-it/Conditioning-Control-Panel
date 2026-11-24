@@ -645,7 +645,7 @@ public class BouncingTextService : IDisposable
         _scrawlSlam = SuperCore.ScrawlOptions.ClampSlam(so?.ScrawlSlam ?? SuperCore.ScrawlOptions.SlamDefault);
         scene.Configure(SuperCore.ScrawlOptions.ClampStampSeconds(so?.ScrawlStampSeconds ?? SuperCore.ScrawlOptions.StampSecondsDefault),
             SuperCore.ScrawlOptions.EffectiveCap(so?.ScrawlStampCap ?? SuperCore.ScrawlOptions.StampCapDefault,
-                _scrawlSize / BASE_FONT_SIZE * 100.0, _logos.Count),
+                _scrawlSize / BouncingTextEngine.BaseFontSize * 100.0, _logos.Count),
             SuperCore.ScrawlOptions.ShakeFactor(_scrawlSlam, Safety.GentleVisuals.On),
             cornerLabel: so?.BouncingTextFxCornerBurst != false);
         scene.Tick(dt, _scrawlMotion, so?.LockdownPhotosafe == true);

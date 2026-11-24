@@ -101,13 +101,13 @@ public class V2InteractionSwitchTests
             foreach (var n in names) Assert.InRange(xaml.IndexOf($"x:Name=\"{n}\"", StringComparison.Ordinal), box, end);
         }
         InBox("SpiralFeatureControl.xaml", "PoolRows", "ChkPoolDragsWords");
-        var host = File.ReadAllText(Path.Combine(root, "Services", "Super", "SuperStageHost.cs"));
+        var host = SourceRoots.ReadProductFile("Super", "SuperStageHost.cs");
         Assert.Contains("Stage.DragsWords = set?.WhirlpoolDragsWords", host);
         var steam = File.ReadAllText(Path.Combine(root, "Services", "Compositor", "SteamLayer.cs"));
         Assert.Contains("SteamOptions.Strength(look.Opacity)", steam);
 
         var keys = new[] { "super_pool_drags_words", "tooltip_super_pool_drags" };
-        var files = Directory.GetFiles(Path.Combine(root, "Localization", "Languages"), "*.json");
+        var files = Directory.GetFiles(SourceRoots.LanguagesDirectory, "*.json");
         Assert.Equal(10, files.Length);
         foreach (var file in files)
         {

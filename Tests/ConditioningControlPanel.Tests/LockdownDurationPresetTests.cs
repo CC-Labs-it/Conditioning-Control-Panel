@@ -41,7 +41,7 @@ public class LockdownDurationPresetTests
     public void Every_length_has_a_label_in_every_language()
     {
         var (tags, keys, _) = Picker();
-        var langs = Directory.GetFiles(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Localization", "Languages"), "*.json");
+        var langs = Directory.GetFiles(SourceRoots.LanguagesDirectory, "*.json");
         Assert.Equal(10, langs.Length);
         foreach (var file in langs)
         {

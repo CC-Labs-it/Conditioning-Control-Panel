@@ -93,7 +93,7 @@ public sealed class AppDareHost : IDareHost
         try
         {
             // Pressing "Add the minutes" is the consent to the row, the way a time stake is.
-            StakeBridge.AppEnableLossRow();
+            StakeAppHooks.AppEnableLossRow();
             // The row id is literal on purpose: the price-row wiring test reads it.
             return Math.Max(0, App.Chaster?.NoteSeconds("pvp_loss", seconds).AppliedSeconds ?? 0);
         }

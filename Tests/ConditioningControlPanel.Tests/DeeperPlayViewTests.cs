@@ -90,7 +90,7 @@ public class DeeperPlayViewTests
     [Fact]
     public void Every_play_view_string_has_an_english_master()
     {
-        var en = ReadSource("Localization", "Languages", "en.json");
+        var en = File.ReadAllText(Path.Combine(SourceRoots.LanguagesDirectory, "en.json"));
         var used = new HashSet<string>();
         foreach (var text in new[] { PlayViewXaml(), ReadSource("MainWindow", "MainWindow.DeeperPlayView.cs"),
                                      ReadSource("Views", "Tabs", "DeeperTabView.xaml") })

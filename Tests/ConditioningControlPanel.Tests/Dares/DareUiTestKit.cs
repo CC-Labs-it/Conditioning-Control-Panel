@@ -19,7 +19,7 @@ internal static class DareUiTestKit
         return dir.FullName;
     }
 
-    public static string LanguagesDir => Path.Combine(RepoRoot(), "ConditioningControlPanel", "Localization", "Languages");
+    public static string LanguagesDir => SourceRoots.LanguagesDirectory;
 
     public static Dictionary<string, string> Strings(string lang)
     {

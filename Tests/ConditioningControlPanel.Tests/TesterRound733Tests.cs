@@ -107,7 +107,7 @@ public class TesterRound733Tests
     [Fact]
     public void Stay_centred_switches_eating_off_in_the_host()
     {
-        var src = File.ReadAllText(Path.Combine(AppDir(), "Services", "Super", "SuperStageHost.cs"));
+        var src = SourceRoots.ReadProductFile("Super", "SuperStageHost.cs");
         Assert.Contains("Stage.Pool.Eats = !centred", src);
     }
 

@@ -1670,7 +1670,7 @@ namespace ConditioningControlPanel.Services
 
                     // The balance this request carries, captured with its level and bubble count:
                     // the reply handler compares it with the wallet then (V2WalletNet sentSp).
-                    int sentSkillPoints = v2SyncData.skill_points;
+                    int sentSkillPoints = v2SyncData.SkillPoints;
 
                     var v2Request = new HttpRequestMessage(HttpMethod.Post, $"{ProxyBaseUrl}/v2/user/sync");
                     AddAuthHeader(v2Request);

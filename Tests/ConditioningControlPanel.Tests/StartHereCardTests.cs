@@ -16,6 +16,7 @@ namespace ConditioningControlPanel.Tests;
 /// row lands on something that exists, every language file carries its text, Help can replay it,
 /// and the card realizes offscreen.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class StartHereCardTests
 {
     private static string RepoRoot()
@@ -81,13 +82,13 @@ public class StartHereCardTests
         // The panic key really is in Settings > Devices, and Spiral Overlay really is a Studio module.
         Assert.Contains("BtnPanicKey_Click", Source("Views", "Controls", "AppSettings", "DevicesSettingsSection.xaml"));
         Assert.Contains("Add(\"spiral\"", Source("Views", "Tabs", "StudioTabView.xaml.cs"));
-        Assert.Contains("_spiralOpacity = 10;", Source("Models", "AppSettings.cs"));
+        Assert.Contains("_spiralOpacity = 10;", SourceRoots.ReadProductFile("Models", "AppSettings.cs"));
     }
 
     [Fact]
     public void Every_language_file_carries_the_text()
     {
-        var dir = Path.Combine(RepoRoot(), "ConditioningControlPanel", "Localization", "Languages");
+        var dir = SourceRoots.LanguagesDirectory;
         var files = Directory.GetFiles(dir, "*.json");
         Assert.Equal(10, files.Length);
         foreach (var f in files)

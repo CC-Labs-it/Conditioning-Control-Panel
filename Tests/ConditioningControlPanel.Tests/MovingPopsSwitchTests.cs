@@ -63,7 +63,7 @@ public class MovingPopsSwitchTests
     public void Both_drivers_hand_the_stage_the_players_switch()
     {
         var root = Root();
-        var host = File.ReadAllText(Path.Combine(root, "Services", "Super", "SuperStageHost.cs"));
+        var host = SourceRoots.ReadProductFile("Super", "SuperStageHost.cs");
         Assert.Contains("Stage.MovingPops = set?.MovingEffectsPop == true;", host);
         var word = File.ReadAllText(Path.Combine(root, "Services", "Subliminal", "BouncingTextService.cs"));
         int set = word.IndexOf("stage.MovingPops = App.Settings?.Current?.MovingEffectsPop == true;", StringComparison.Ordinal);
