@@ -260,13 +260,15 @@ public class HomeBrowserEnhanceTests
         var psi = new System.Diagnostics.ProcessStartInfo("node") { RedirectStandardInput = true, RedirectStandardOutput = true, UseShellExecute = false };
         System.Diagnostics.Process? node;
         try { node = System.Diagnostics.Process.Start(psi); }
-        catch (System.ComponentModel.Win32Exception e) { Assert.Skip("node not installed: " + e.Message); return; }
-        using (node!)
+        catch (System.ComponentModel.Win32Exception e) { throw new InvalidOperationException("Node.js 24 is required for the browser resume script test.", e); }
+        Assert.NotNull(node);
+        using (node)
         {
             node.StandardInput.Write(dom + SettingsTabView.ResumeScriptFor("tok") + drive);
             node.StandardInput.Close();
             var output = node.StandardOutput.ReadToEnd();
             Assert.True(node.WaitForExit(10000));
+            Assert.Equal(0, node.ExitCode);
             using var result = System.Text.Json.JsonDocument.Parse(output);
             Assert.Equal(0, result.RootElement.GetProperty("early").GetInt32());
             var sent = result.RootElement.GetProperty("sent");
