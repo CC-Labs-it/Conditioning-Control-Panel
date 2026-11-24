@@ -52,7 +52,7 @@ namespace ConditioningControlPanel.Features
             {
                 ChkEnable.IsChecked = s.MindWipeEnabled;
                 SliderFreq.Value = s.MindWipeFrequency;
-                TxtFreq.Text = $"{s.MindWipeFrequency}/h";
+                TxtFreq.Text = s.MindWipeFrequency.ToString(); // Readable Rows: the unit sits under it
                 SliderVolume.Value = s.MindWipeVolume;
                 TxtVolume.Text = $"{s.MindWipeVolume}%";
                 ChkLoop.IsChecked = s.MindWipeLoop;
@@ -98,7 +98,7 @@ namespace ConditioningControlPanel.Features
             var s = App.Settings?.Current;
             if (s == null) return;
             var v = (int)e.NewValue;
-            TxtFreq.Text = $"{v}/h";
+            TxtFreq.Text = v.ToString();
             s.MindWipeFrequency = v;
             try { App.MindWipe?.UpdateSettings(s.MindWipeFrequency, s.MindWipeVolume / 100.0); }
             catch (Exception ex) { App.Logger?.Warning(ex, "MindWipe UpdateSettings failed"); }
