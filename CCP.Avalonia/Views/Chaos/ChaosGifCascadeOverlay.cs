@@ -18,6 +18,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Flash;
+using ConditioningControlPanel.Services.Fyp.Online;
 using ConditioningControlPanel.Services.UI;
 using Serilog;
 
@@ -176,7 +177,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private sealed class Clip
         {
-            public bool Remote;
             public Image Image = null!;
             public ScaleTransform Grow = null!;
             public TranslateTransform Move = null!;
@@ -319,7 +319,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (remote)
             {
                 path = path.Substring(RemotePrefix.Length);
-                if (!ScrolllerCreditChip.Hold(this, _bounds)) return;
             }
             bool animatedFormat = !remote && (path.EndsWith(".gif", StringComparison.OrdinalIgnoreCase)
                                   || IsAnimatedWebp(path));
@@ -340,8 +339,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             };
             Canvas.SetLeft(img, f.CenterX - size / 2);
             Canvas.SetTop(img, 0);
+            // Do not show Scrolller media unless its independent credit window is available.
+            if ((remote || ScrolllerCreditRules.IsScrolllerMedia(path)) && !ScrolllerCreditChip.Hold(img, _bounds)) return;
             _canvas.Children.Add(img);
-            var clip = new Clip { Image = img, Grow = grow, Move = move, Remote = remote };
+            var clip = new Clip { Image = img, Grow = grow, Move = move };
             _clips[f] = clip;
 
             // Decoded at display size off the UI thread; the clip falls empty for the few frames it takes.
@@ -428,10 +429,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!_clips.Remove(f, out var c)) return;
             // WPF ChaosGifCascadeOverlay.cs:511-521,555-560 detaches media on removal.
             c.DecodeCancellation?.Cancel();
+            ScrolllerCreditChip.Release(c.Image);
             c.Image.Source = null;
             _canvas.Children.Remove(c.Image);
             if (c.Frames != null) foreach (var b in c.Frames) b.Dispose();
-            if (c.Remote && !_clips.Values.Any(x => x.Remote)) ScrolllerCreditChip.Release(this);
         }
 
         private void CloseNow()

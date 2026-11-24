@@ -144,6 +144,16 @@ internal sealed partial class GameWindow
         });
     }
 
+    // WPF BackRoomHostService.cs:434 and BackRoomBridge.cs:204-208.
+    internal Action<ConditioningControlPanel.Services.BackRoom.BackRoomHaptic> BreakoutHaptic = ConditioningControlPanel.Services.Haptics.BackRoomHapticDirector.OnHaptic;
+    private void StopBreakoutHaptic() => BreakoutHaptic(new("breakout", 0, 0, "host"));
+    private void HandleBreakoutHaptic(Newtonsoft.Json.Linq.JObject message)
+    {
+        var pulse = ConditioningControlPanel.Services.BackRoom.BackRoomBridge.ReadHaptic(message);
+        if (pulse == null || pulse.Station != "breakout") return;
+        if (pulse.IsStop || (!_closing && !_shellExiting && !_roomMinimized && !_breakoutPanicSuspended)) BreakoutHaptic(pulse);
+    }
+
     private bool IsBreakout => Spec.Id is "breakout" or "breakoutdemo";
     private bool _breakoutSwitchPending;
 

@@ -70,6 +70,112 @@ public sealed class KeywordAudioRuntimeTests
         }
     });
 
+    [Fact]
+    public void OcrHighlightAllDispatchesEveryConfirmedWordAndSubsetDispatchesSome() => Run((engine, s, played) =>
+    {
+        var screens = ConditioningControlPanel.Avalonia.Views.Overlays.KeywordHighlightOverlay.Screens;
+        var configure = ConditioningControlPanel.Avalonia.Views.Overlays.KeywordHighlightOverlay.Configure;
+        var saved = (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.KeywordHighlightEnabled);
+        try
+        {
+            ConditioningControlPanel.Avalonia.Views.Overlays.KeywordHighlightOverlay.Screens = () => [new(new PixelRect(0, 0, 1200, 800), 1)];
+            ConditioningControlPanel.Avalonia.Views.Overlays.KeywordHighlightOverlay.Configure = (_, _) => true;
+            s.KeywordTriggers = [new KeywordTrigger { Keyword = "sit", CooldownSeconds = 0, Actions = [new HighlightAction { Enabled = true }] }];
+            s.ScreenOcrEnabled = true; s.OcrConfirmationScans = 1; s.OcrHighlightAll = true; s.KeywordHighlightEnabled = true;
+            var words = new[] { new ScreenOcrService.Word("sit", new(20, 20, 20, 20)), new ScreenOcrService.Word("sit", new(300, 20, 20, 20)) };
+            engine.CheckOcrWords(words);
+            Assert.Equal(2, Assert.Single(ConditioningControlPanel.Avalonia.Views.Overlays.KeywordHighlightOverlay.Canvases).Children.Count);
+            ConditioningControlPanel.Avalonia.Views.Overlays.KeywordHighlightOverlay.CloseAll();
+            engine.CheckOcrWords(Array.Empty<ScreenOcrService.Word>());
+            engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 20);
+            s.OcrHighlightAll = false;
+            engine.CheckOcrWords(words);
+            Assert.InRange(Assert.Single(ConditioningControlPanel.Avalonia.Views.Overlays.KeywordHighlightOverlay.Canvases).Children.Count, 1, 2);
+        }
+        finally
+        {
+            ConditioningControlPanel.Avalonia.Views.Overlays.KeywordHighlightOverlay.CloseAll();
+            ConditioningControlPanel.Avalonia.Views.Overlays.KeywordHighlightOverlay.Screens = screens;
+            ConditioningControlPanel.Avalonia.Views.Overlays.KeywordHighlightOverlay.Configure = configure;
+            (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll, s.KeywordHighlightEnabled) = saved;
+        }
+    });
+
+    [Fact]
+    public void X11SourceDeliversKeywordsAndPanicDropsQueuedKeys() => Run((_, s, played) =>
+    {
+        var fired = 0;
+        Action<KeywordTrigger> handler = _ => fired++;
+        KeywordTriggerHead.Engine.TriggerFired += handler;
+        KeywordTriggerHead.KeyboardSupportedForTests = true;
+        KeywordTriggerHead.UseX11ForTests = true;
+        KeywordTriggerHead.ResolveX11ForTests = (_, code) => (ulong)code;
+        KeywordTriggerHead.X11ForegroundForTests = () => 0;
+        try
+        {
+            KeywordTriggerHead.Sync();
+            var source = Assert.IsType<Action<IntPtr, int>>(X11PanicKey.KeywordPress);
+            foreach (var c in "sit") source(IntPtr.Zero, c);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, fired);
+            // A queued press cannot outlive panic, even if the user immediately re-arms.
+            KeywordTriggerHead.Engine.Now = () => _singletonNow.AddSeconds(10);
+            foreach (var c in "sit") source(IntPtr.Zero, c);
+            Assert.Single(PanicSurfaces.All, x => x.Id == "keyword-triggers").Stop(null);
+            Assert.Null(X11PanicKey.KeywordPress);
+            Assert.False(KeywordTriggerHead.Engine.IsActive);
+            s.KeywordTriggersEnabled = true; KeywordTriggerHead.Sync();
+            foreach (var c in "sit") source(IntPtr.Zero, c); // callback captured by listener before stop
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, fired);
+        }
+        finally
+        {
+            KeywordTriggerHead.Stop();
+            KeywordTriggerHead.Engine.TriggerFired -= handler;
+            KeywordTriggerHead.KeyboardSupportedForTests = null;
+            KeywordTriggerHead.UseX11ForTests = false;
+            KeywordTriggerHead.ResolveX11ForTests = null;
+            KeywordTriggerHead.X11ForegroundForTests = null;
+        }
+    });
+
+    [Fact]
+    public void X11SourceHonoursMasterAccessAndOwnFocus() => Run((_, s, played) =>
+    {
+        KeywordTriggerHead.KeyboardSupportedForTests = true;
+        KeywordTriggerHead.UseX11ForTests = true;
+        KeywordTriggerHead.ResolveX11ForTests = (_, code) => (ulong)code;
+        KeywordTriggerHead.X11ForegroundForTests = () => (uint)Environment.ProcessId;
+        var fired = 0;
+        Action<KeywordTrigger> handler = _ => fired++;
+        KeywordTriggerHead.Engine.TriggerFired += handler;
+        try
+        {
+            s.KeywordTriggersEnabled = false;
+            KeywordTriggerHead.AttachKeyboard(); Assert.Null(X11PanicKey.KeywordPress);
+            s.KeywordTriggersEnabled = true;
+            CoreEntitlement.HasPremiumProvider = () => false;
+            KeywordTriggerHead.AttachKeyboard(); Assert.Null(X11PanicKey.KeywordPress);
+            CoreEntitlement.HasPremiumProvider = () => true;
+            s.KeywordTriggerIgnoreOwnFocus = true;
+            KeywordTriggerHead.Sync();
+            var source = Assert.IsType<Action<IntPtr, int>>(X11PanicKey.KeywordPress);
+            foreach (var c in "sit") source(IntPtr.Zero, c);
+            Dispatcher.UIThread.RunJobs(); Assert.Equal(0, fired);
+            KeywordTriggerHead.DetachKeyboard(); Assert.Null(X11PanicKey.KeywordPress);
+        }
+        finally
+        {
+            KeywordTriggerHead.Stop();
+            KeywordTriggerHead.Engine.TriggerFired -= handler;
+            KeywordTriggerHead.KeyboardSupportedForTests = null;
+            KeywordTriggerHead.UseX11ForTests = false;
+            KeywordTriggerHead.ResolveX11ForTests = null;
+            KeywordTriggerHead.X11ForegroundForTests = null;
+        }
+    });
+
     // restack b220 (#4299, Mich): the OCR consumer and scan lifecycle.
     [Fact] // WPF KeywordTriggerService.cs:193-200,712-739,842-862,913-943
     public void OcrRequiresConsecutivePositionsKeepsThemThroughALapseAndStopAndClearsOnScopeLoss() => Run((engine, s, played) =>
@@ -1238,8 +1344,10 @@ public sealed class KeywordAudioRuntimeTests
     {
         KeywordTriggerHead.Stop();
         Assert.False(KeywordTriggerHead.Engine.IsActive);
-        _ = new MainShellWindow();   // WPF MainWindow.xaml.cs:341 starts the service at boot
-        Assert.True(KeywordTriggerHead.Engine.IsActive);
+        var shell = new MainShellWindow();   // WPF MainWindow.xaml.cs:341 starts the service at boot
+        // Closed, or its language handler outlives the test and breaks later language tests (restack r2-b016).
+        try { Assert.True(KeywordTriggerHead.Engine.IsActive); }
+        finally { shell.Close(); }
     });
 
     /// <summary>WPF b9368d963 KeywordTriggerService.DispatchMergedAsync: a keyword never plays inside a panic's quiet.</summary>

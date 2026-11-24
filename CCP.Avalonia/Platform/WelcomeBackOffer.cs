@@ -157,7 +157,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             }
         }
 
-        private static void FileRestoreFailure() => StartupLadder.Inbox.File(new InboxItem
+        private static void FileRestoreFailure() => StartupLadder.PresentOrInbox(new InboxItem
         {
             Key = "welcome-back:restore-failed", IconKey = nameof(IconKind.Cloud),
             Title = Loc.Get("wb_restore_failed_title"),
