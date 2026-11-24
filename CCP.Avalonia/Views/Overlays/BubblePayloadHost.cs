@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Platform;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Services.Notifications;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -18,6 +21,53 @@ internal static class BubblePayloadHost
         BubbleOverlay.Payloads.Stop();
         foreach (var timer in Waiting) timer.Dispose();
         Waiting.Clear();
+        StopMelt();
+    }
+
+    // WPF EffectPayloadFiring.cs:71-102: the Brain Drain bubble's timed drain. This head has no
+    // desktop capture on Linux, so the drain is the milky veil FirstShowEffects.cs:89-99 uses.
+    private static readonly List<TintOverlayWindow> MeltWindows = new();
+    private static int _meltGeneration;
+    internal static bool MeltActive { get; private set; }
+    internal static IReadOnlyList<TintOverlayWindow> Melt => MeltWindows;
+    internal static Func<bool> UserDrainUp = () => Platform.BrainDrainPlayer.Instance?.IsRunning == true;
+    internal static bool SkipPlatformChecksForTests;
+
+    internal static void BrainDrainMelt(Visual host)
+    {
+        if (!BrainDrainBubble.ShouldPlayOverlay(MeltActive, UserDrainUp()))
+        { Log.Information("Bubble: brain drain pop paid XP only - a drain is already up"); return; }
+        var strength = CoreSettings.Current.BrainDrainBlurStrength;
+        if (BrainDrainVisualPolicy.IsSilent(strength))
+        { Log.Information("Bubble: brain drain pop paid XP only - the blur dial is at 0"); return; }
+        if (!SkipPlatformChecksForTests && !Platform.X11Overlay.IsAvailable) return;
+        MeltActive = true;
+        var generation = ++_meltGeneration;
+        // FirstShowEffects.cs:89: 70/255 at the dial's 70, so the veil scales the same way.
+        var alpha = BrainDrainBubble.OverlayOpacity(strength) * 0.4;
+        foreach (var screen in Features.ScreenList.Enumerate(host))
+        {
+            var w = new TintOverlayWindow();
+            w.PlaceOn(screen);
+            w.SetTint(236, 228, 244, alpha);
+            w.Show();
+            MeltWindows.Add(w);
+            if (!SkipPlatformChecksForTests && (!Platform.X11Overlay.SetClickThrough(w, true)
+                || w.ActualTransparencyLevel == WindowTransparencyLevel.None)) { StopMelt(); return; }
+        }
+        Log.Debug("Bubble: brain drain {Kind} veil for {Ms} ms", BrainDrainBubble.OverlayKindFor(CoreSettings.Current.MotionLevel), BrainDrainBubble.OverlayMs);
+        DispatcherTimer.RunOnce(() => { if (generation == _meltGeneration) StopMelt(); }, TimeSpan.FromMilliseconds(BrainDrainBubble.OverlayMs));
+    }
+
+    private static void StopMelt()
+    {
+        _meltGeneration++;
+        MeltActive = false;
+        foreach (var w in MeltWindows)
+        {
+            try { w.Close(); } catch (Exception ex) { Log.Debug("Bubble: melt close failed: {E}", ex.Message); }
+        }
+        MeltWindows.Clear();
     }
 
     internal static void Run(EffectPayload payload) => BubbleOverlay.Payloads.Run(payload,
@@ -43,7 +93,7 @@ internal static class BubblePayloadHost
     internal static void Fire(EffectPayload payload)
     {
         var host = (global::Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-        if (host == null && payload is FlashPayload or OverlayPayload) return;
+        if (host == null && payload is FlashPayload or OverlayPayload or BrainDrainMeltPayload) return;
         switch (payload)
         {
             case FlashPayload p:
@@ -66,6 +116,7 @@ internal static class BubblePayloadHost
                 break;
             // WPF EffectPayload.cs:250 / VideoService.cs:2311: a popped bubble is user-earned, so a
             // visible For You feed does not hold it (only scheduled and other non-earned videos wait).
+            case BrainDrainMeltPayload: BrainDrainMelt(host!); break;
             case VideoPayload: CoreEngine.Video?.Trigger(silentIfEmpty: true, userEarned: true); break;
             case GifCascadePayload:
                 Chaos.ChaosGifCascadeOverlay.Show(GifCascadePayload.SPAWN_RATE_PER_SEC,
@@ -73,7 +124,7 @@ internal static class BubblePayloadHost
                     GifCascadePayload.GIF_SIZE, GifCascadePayload.FALL_SPEED, GifCascadePayload.OPACITY, GifCascadePayload.START_SCALE);
                 break;
             default:
-                // ponytail: melt, whisper, HT link and bouncing-text payloads
+                // ponytail: whisper, HT link and bouncing-text payloads
                 // need their own one-shot hosts. Do not mutate the user's persistent effect settings.
                 Log.Warning("Bubble: {Payload} has no one-shot host yet", payload.DisplayName);
                 break;
