@@ -52,7 +52,8 @@ namespace ConditioningControlPanel.Controls.Rows
     /// set) then the text, 16 Bold Nunito in 70% TextLight + 30% section hue. With an emblem a leading
     /// emoji in the text is dropped ("🐙Hydra" draws "Hydra"); the loc files keep it. An OFF option
     /// (<see cref="IsOn"/> false) draws its label at 60% and its emblem grey. No animation.
-    /// The hue comes from the inherited <see cref="RowHue"/>, else PinkBrush.
+    /// The hue comes from the inherited <see cref="RowHue"/>, else PinkBrush. Long labels wrap
+    /// (never an ellipsis, never smaller text).
     /// </summary>
     [ContentProperty(nameof(Text))]
     public class RowLabel : RowPart
@@ -98,8 +99,12 @@ namespace ConditioningControlPanel.Controls.Rows
             FontFamily = RowFonts.Nunito,
             FontSize = RowFonts.LabelSize,
             FontWeight = FontWeights.Bold,
-            TextWrapping = TextWrapping.NoWrap,
-            TextTrimming = TextTrimming.CharacterEllipsis,
+            // Never clipped, never shrunk (integration 2026-11-24): a label whose column cannot hold it
+            // on one line wraps to a second line and the row grows (OptionRow has MinHeight only). A
+            // label that fits stays one line; in an Auto column it is measured unbounded and the
+            // column grows instead. The emblem stays centred on the block.
+            TextWrapping = TextWrapping.Wrap,
+            TextTrimming = TextTrimming.None,
             VerticalAlignment = VerticalAlignment.Center,
         };
 
