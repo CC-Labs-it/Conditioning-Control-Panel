@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Platform;
@@ -24,8 +25,9 @@ internal static class BubblePayloadHost
         StopMelt();
     }
 
-    // WPF EffectPayloadFiring.cs:71-102: the Brain Drain bubble's timed drain. This head has no
-    // desktop capture on Linux, so the drain is the milky veil FirstShowEffects.cs:89-99 uses.
+    // WPF EffectPayloadFiring.cs:71-102: the Brain Drain bubble's timed drain. On X11 this head has no capture
+    // that leaves out its own overlay windows, so the drain is the milky veil FirstShowEffects.cs:89-99 uses
+    // (docs/avalonia-decisions.html#2026-11-24-bubble-brain-drain-veil).
     private static readonly List<TintOverlayWindow> MeltWindows = new();
     private static int _meltGeneration;
     internal static bool MeltActive { get; private set; }
@@ -45,10 +47,14 @@ internal static class BubblePayloadHost
         var generation = ++_meltGeneration;
         // FirstShowEffects.cs:89: 70/255 at the dial's 70, so the veil scales the same way.
         var alpha = BrainDrainBubble.OverlayOpacity(strength) * 0.4;
-        foreach (var screen in Features.ScreenList.Enumerate(host))
+        // WPF Compositor/BrainDrainLayer.cs:397-403 / Notifications/OverlayService.cs:2407-2414: only the "Show content on" screens.
+        var screens = Features.ScreenList.Enumerate(host);
+        var s = CoreSettings.Current;
+        var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
+        foreach (var i in PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
         {
             var w = new TintOverlayWindow();
-            w.PlaceOn(screen);
+            w.PlaceOn(screens[i]);
             w.SetTint(236, 228, 244, alpha);
             w.Show();
             MeltWindows.Add(w);

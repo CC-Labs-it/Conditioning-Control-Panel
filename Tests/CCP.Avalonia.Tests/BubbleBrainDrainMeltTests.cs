@@ -6,9 +6,11 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Views.Features;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Services.UI;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -58,6 +60,40 @@ public sealed class BubbleBrainDrainMeltTests
         {
             BubblePayloadHost.Stop();
             (s.BrainDrainBlurStrength, BubblePayloadHost.UserDrainUp, BubblePayloadHost.SkipPlatformChecksForTests) = (strength, userUp, skip);
+            host.Close();
+            Dispatcher.UIThread.RunJobs();
+        }
+    });
+
+    /// <summary>WPF Compositor/BrainDrainLayer.cs:397-403: the drain covers only the "Show content on" screens.</summary>
+    [Fact]
+    public void MeltFollowsTheGlobalShowContentOnPicker() => AvaloniaTestDispatcher.Run(() =>
+    {
+        BubbleMotionPickerTests.Setup();
+        var s = CoreSettings.Current;
+        var old = (s.BrainDrainBlurStrength, s.DualMonitorEnabled, s.GlobalTargetMonitor, BubblePayloadHost.UserDrainUp, BubblePayloadHost.SkipPlatformChecksForTests, ScreenList.QueryOverride);
+        var host = new Window();
+        try
+        {
+            var screens = new[] { EnhancementScreenMirrorTests.MakeScreen(0, false), EnhancementScreenMirrorTests.MakeScreen(1920, true) };
+            ScreenList.QueryOverride = _ => screens;
+            BubblePayloadHost.SkipPlatformChecksForTests = true;
+            BubblePayloadHost.UserDrainUp = () => false;
+            (s.BrainDrainBlurStrength, s.DualMonitorEnabled, s.GlobalTargetMonitor) = (70, false, MonitorTarget.FollowGlobal);
+            host.Show();
+
+            BubblePayloadHost.BrainDrainMelt(host);   // primary only
+            Assert.Equal(1920, Assert.Single(BubblePayloadHost.Melt).Position.X);
+
+            BubblePayloadHost.Stop();
+            s.DualMonitorEnabled = true;   // every screen
+            BubblePayloadHost.BrainDrainMelt(host);
+            Assert.Equal(2, BubblePayloadHost.Melt.Count);
+        }
+        finally
+        {
+            BubblePayloadHost.Stop();
+            (s.BrainDrainBlurStrength, s.DualMonitorEnabled, s.GlobalTargetMonitor, BubblePayloadHost.UserDrainUp, BubblePayloadHost.SkipPlatformChecksForTests, ScreenList.QueryOverride) = old;
             host.Close();
             Dispatcher.UIThread.RunJobs();
         }
