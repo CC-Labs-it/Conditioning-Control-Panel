@@ -11,6 +11,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
@@ -98,7 +99,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             private readonly Action _onPop;
             internal readonly Window Window;
             private readonly Control _art;
-            private readonly DispatcherTimer _anim;
+            private readonly BeatLoop _anim;
             private readonly double _k, _speed, _wobbleOffset, _startX, _top;
             private readonly int _size, _animType;
             private double _posX, _posY, _timeAlive, _angle, _scale = 1.0, _fade = 1.0;
@@ -136,8 +137,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 };
                 Place();
                 Window.Show();
-                _anim = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
-                _anim.Tick += (_, _) => Step();
+                _anim = new BeatLoop(Window, elapsed => { if (elapsed > 0) Step(); }, TimeSpan.FromMilliseconds(50));
                 _anim.Start();
             }
 
@@ -185,7 +185,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             {
                 if (!IsAlive) return;
                 IsAlive = false;
-                _anim?.Stop();
+                _anim.Stop();
                 _owner._randomBubbles.Remove(this);
                 try { Window.Close(); } catch (Exception ex) { Log.Debug("RandomBubble close: {E}", ex.Message); }
             }
