@@ -96,11 +96,15 @@ namespace ConditioningControlPanel.Services
         private bool _floatingRun, _cascadeJoinPending, _feedJoinPending;
         private bool _videoFreeze;   // this clip played a Freeze: its end finishes it (Reset or cancel)
         private int _retryGeneration, _noVideosShown;
+        internal int PlaybackGeneration => _retryGeneration;
         private int _chaosGeneration, _chaosToken, _playingChaosToken, _cascadeChaosToken, _bubbleChaosToken;
 
         /// <summary>The library came back empty for the first time this launch (WPF's "no videos"
         /// guidance dialog). Raised on the UI thread.</summary>
         public event Action? NoVideos;
+
+        /// <summary>WPF VideoService.cs:3124: announce 1.3 seconds before playback.</summary>
+        public event Action? VideoAboutToStart;
 
         /// <summary>A clip is on screen (WPF VideoService.VideoStarted, VideoService.cs:3370).</summary>
         public event Action? VideoStarted;
@@ -585,6 +589,11 @@ namespace ConditioningControlPanel.Services
             // WPF b6ff63fbd: only full-screen playback clears flashes, including a Test press.
             else if (!_host.IsFloating(IsStrict)) CoreFlash.Stop();
             var strict = IsStrict;
+            void Announce()
+            {
+                try { VideoAboutToStart?.Invoke(); }
+                catch (Exception ex) { Log.Debug("VideoAboutToStart handler failed: {Error}", ex.Message); }
+            }
             Dispose(ref _preroll);
             ITimer? created = null;
             created = _time.CreateTimer(_ => { var mine = created; CoreDispatch.Post(() =>
@@ -596,7 +605,8 @@ namespace ConditioningControlPanel.Services
                     freezeBeforePreroll = false;
                     // WPF PlayVideo prologue (VideoService.cs:3127): the floating rule holds after the freeze too.
                     if (!_host.IsFloating(strict)) CoreFlash.Stop();
-                    mine!.Change(PreRoll, Timeout.InfiniteTimeSpan);
+                    Announce();
+                    if (ReferenceEquals(mine, _preroll) && _playing) mine!.Change(PreRoll, Timeout.InfiniteTimeSpan);
                     return;
                 }
                 Dispose(ref _preroll);
@@ -627,7 +637,12 @@ namespace ConditioningControlPanel.Services
                 catch (Exception ex) { Log.Debug("FunScript start hook failed: {Error}", ex.Message); }
             }); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
             _preroll = created;
-            created.Change(freezeBeforePreroll ? FreezeLead : PreRoll, Timeout.InfiniteTimeSpan);
+            if (freezeBeforePreroll) created.Change(FreezeLead, Timeout.InfiniteTimeSpan);
+            else
+            {
+                Announce();
+                if (ReferenceEquals(created, _preroll) && _playing) created.Change(PreRoll, Timeout.InfiniteTimeSpan);
+            }
             Log.Information("VideoService: playing {File} (strict={Strict})", Path.GetFileName(path), strict);
             return true;
         }

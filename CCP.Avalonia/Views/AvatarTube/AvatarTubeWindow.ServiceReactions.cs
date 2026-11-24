@@ -2,25 +2,71 @@ using System;
 using Avalonia.Threading;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Companion;
 
 namespace ConditioningControlPanel.Avalonia.Views.AvatarTube;
 
 public partial class AvatarTubeWindow
 {
     private AchievementEngine? _reactionAchievements;
+    private MandatoryVideoScheduler? _reactionVideo;
+    private bool _videoAnnouncementActive, _videoAnnouncementShowing;
+    private const string VideoAnnouncement = "Ooh, pretty spir-rals...";
     internal Action<string>? AchievementReactionSink; // test seam
 
-    internal void AttachServiceReactions(AchievementEngine? achievements)
+    internal void AttachServiceReactions(AchievementEngine? achievements, MandatoryVideoScheduler? video = null)
     {
         DetachServiceReactions();
         _reactionAchievements = achievements;
         if (achievements != null) achievements.Unlocked += OnTubeAchievementUnlocked;
+        _reactionVideo = video;
+        if (video != null) { video.VideoAboutToStart += OnTubeVideoAboutToStart; video.VideoEnded += OnTubeVideoEnded; }
     }
 
     private void DetachServiceReactions()
     {
         if (_reactionAchievements != null) _reactionAchievements.Unlocked -= OnTubeAchievementUnlocked;
         _reactionAchievements = null;
+        if (_reactionVideo != null) { _reactionVideo.VideoAboutToStart -= OnTubeVideoAboutToStart; _reactionVideo.VideoEnded -= OnTubeVideoEnded; }
+        _videoAnnouncementActive = false;
+        _reactionVideo = null;
+    }
+
+    // WPF AvatarTubeWindow.Reactions.cs:355: announce the imminent clip.
+    private void OnTubeVideoAboutToStart()
+    {
+        var video = _reactionVideo;
+        var generation = video?.PlaybackGeneration;
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => SpeakVideoAnnouncement(video, generation));
+            return;
+        }
+        SpeakVideoAnnouncement(video, generation);
+    }
+
+    private void SpeakVideoAnnouncement(MandatoryVideoScheduler? video, int? generation)
+    {
+        if (video == null || !ReferenceEquals(video, _reactionVideo) || !video.IsPlaying || video.PlaybackGeneration != generation ||
+            Services.Safety.PanicAftermath.TriggersSilenced() || _isPlayingUninterruptibleClip || _isWaitingForAi || _isShowingAiBubble ||
+            !IsAvatarVisibleOnScreen || Windows.EmiDesk.EmiDeskService.Instance.AvatarMuted) return;
+        Giggle(VideoAnnouncement, phraseAudioPath: CompanionEventAudio.Resolve(VideoAnnouncement));
+        _videoAnnouncementActive = true;
+    }
+
+    private void OnTubeVideoEnded()
+    {
+        var video = _reactionVideo;
+        var generation = video?.PlaybackGeneration;
+        if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => FinishVideoAnnouncement(video, generation)); return; }
+        FinishVideoAnnouncement(video, generation);
+    }
+
+    private void FinishVideoAnnouncement(MandatoryVideoScheduler? video, int? generation)
+    {
+        if (video == null || !ReferenceEquals(video, _reactionVideo) || video.PlaybackGeneration != generation || !_videoAnnouncementActive) return;
+        _videoAnnouncementActive = false;
+        PanicSilence();
     }
 
     // WPF AvatarTubeWindow.Reactions.cs:525-529. Ignore an event posted before the tube closed.

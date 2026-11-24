@@ -114,6 +114,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>The bubble's auto-hide (WPF Speech.cs:588-596): collapse it, then the next line.</summary>
         internal void EndSpeechBubble()
         {
+            if (_videoAnnouncementShowing) _videoAnnouncementActive = _videoAnnouncementShowing = false;
             CancelTriggerAnimation();
             _speechTimer?.Stop();
             _speechBubble.IsVisible = false;
