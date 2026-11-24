@@ -14,9 +14,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// Trigger replays through its own bubble (ShowSpeechBySource :217).</summary>
         internal enum SpeechSource { Preset, AI, Trigger }
 
-        // Queued lines keep their sensing classification and their source until delivery; clips still drop as on
-        // WPF (Speech.cs:35: a QUEUED line carries text only, "audio is still text-only on this delayed path", :283).
-        private readonly Queue<(string Text, bool Unprompted, SpeechSource Source)> _speechQueue = new();
+        // WPF Speech.cs:35,283: queued audio drops, but the line id and mood still drive the expression.
+        private readonly Queue<(string Text, bool Unprompted, SpeechSource Source, string? LineId, string? Mood)> _speechQueue = new();
         private DateTime _lastSpeechEndTime = DateTime.MinValue;
         private SpeechSource _lastSpeechSource = SpeechSource.Preset;
         private int _lastSpeechLength;
@@ -85,10 +84,10 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         }
 
         /// <summary>WPF ShowSpeechBySource: a trigger gets its own bubble, a preset the giggle cue on every fifth.</summary>
-        private void ShowQueued((string Text, bool Unprompted, SpeechSource Source) line)
+        private void ShowQueued((string Text, bool Unprompted, SpeechSource Source, string? LineId, string? Mood) line)
         {
             if (line.Source == SpeechSource.Trigger) ShowTriggerBubbleImmediate(line.Text);
-            else ShowSpeech(line.Text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true, unprompted: line.Unprompted);
+            else ShowSpeech(line.Text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true, unprompted: line.Unprompted, mood: line.Mood, emotionLineId: line.LineId);
         }
 
         /// <summary>WPF GigglePriority / PanicSilence: drop every waiting line and the pending gap.</summary>

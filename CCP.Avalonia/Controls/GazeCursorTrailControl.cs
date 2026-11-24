@@ -13,14 +13,24 @@ public class GazeCursorTrailControl : Control
 
     // Paints are cached per fade step (WPF caches its paints too): no allocation per segment or frame.
     private const int Steps = 32;
-    private static readonly Pen[] Glow = Build(70, 2.5, 7.5), Core = Build(140, 1, 2.4);
-    private static Pen[] Build(int alpha, double width, double grow)
+    private static readonly Pen[] PinkGlow = Build(70, 2.5, 7.5, false), PinkCore = Build(140, 1, 2.4, false);
+    private static readonly Pen[] GoldGlow = Build(70, 2.5, 7.5, true), GoldCore = Build(140, 1, 2.4, true);
+    internal bool Locked { get; set; }
+    internal Color TrailColor
+    {
+        get
+        {
+            var color = ((ISolidColorBrush)(Locked ? GoldCore : PinkCore)[Steps].Brush!).Color;
+            return Color.FromRgb(color.R, color.G, color.B);
+        }
+    }
+    private static Pen[] Build(int alpha, double width, double grow, bool locked)
     {
         var pens = new Pen[Steps + 1];
         for (int s = 0; s <= Steps; s++)
         {
             double ease = (double)s / Steps;
-            pens[s] = new Pen(new SolidColorBrush(Color.FromArgb((byte)(alpha * ease), 255, 105, 180)), width + grow * ease, lineCap: PenLineCap.Round);
+            pens[s] = new Pen(new SolidColorBrush(Color.FromArgb((byte)(alpha * ease), 255, locked ? (byte)208 : (byte)105, locked ? (byte)128 : (byte)180)), width + grow * ease, lineCap: PenLineCap.Round);
         }
         return pens;
     }
@@ -34,8 +44,8 @@ public class GazeCursorTrailControl : Control
             double t = 1 - b.Age / GazeCursorTrail.LifeSeconds;
             int step = (int)Math.Round(Math.Clamp(t * t, 0, 1) * Steps);
             var from = new Point(a.X, a.Y); var to = new Point(b.X, b.Y);
-            context.DrawLine(Glow[step], from, to);
-            context.DrawLine(Core[step], from, to);
+            context.DrawLine((Locked ? GoldGlow : PinkGlow)[step], from, to);
+            context.DrawLine((Locked ? GoldCore : PinkCore)[step], from, to);
         }
     }
 }
