@@ -51,6 +51,17 @@ public class DareLookTests
         Assert.Equal(icon, DareLook.ToneIcon(tone));
     }
 
+    [Theory]
+    [InlineData(DareTone.Pics, "\uE8B9")]
+    [InlineData(DareTone.Lockdown, "\uEA18")]
+    [InlineData(DareTone.CameraOff, "\uED1A")]
+    [InlineData(DareTone.Who, "\uE77B")]
+    [InlineData(DareTone.When, "\uE787")]
+    public void OriginalToneGlyphMappingsRemainAvailable(DareTone tone, string glyph)
+    {
+        Assert.Equal(glyph, DareLook.ToneGlyph(tone));
+    }
+
     [Fact]
     public void ChoiceIsSquareCorneredAndInvokesAction()
     {
