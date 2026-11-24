@@ -22,14 +22,14 @@ public partial class AvatarTubeWindow
         _reactionAchievements = achievements;
         if (achievements != null) achievements.Unlocked += OnTubeAchievementUnlocked;
         _reactionVideo = video;
-        if (video != null) { video.VideoAboutToStart += OnTubeVideoAboutToStart; video.VideoEnded += OnTubeVideoEnded; }
+        if (video != null) { video.VideoAboutToStart += OnTubeVideoAboutToStart; video.VideoForceStopped += OnTubeVideoForceStopped; }
     }
 
     private void DetachServiceReactions()
     {
         if (_reactionAchievements != null) _reactionAchievements.Unlocked -= OnTubeAchievementUnlocked;
         _reactionAchievements = null;
-        if (_reactionVideo != null) { _reactionVideo.VideoAboutToStart -= OnTubeVideoAboutToStart; _reactionVideo.VideoEnded -= OnTubeVideoEnded; }
+        if (_reactionVideo != null) { _reactionVideo.VideoAboutToStart -= OnTubeVideoAboutToStart; _reactionVideo.VideoForceStopped -= OnTubeVideoForceStopped; }
         _videoAnnouncementShowing = false;
         _reactionVideo = null;
     }
@@ -56,7 +56,7 @@ public partial class AvatarTubeWindow
         GiggleCore(line, false, CompanionEventAudio.Resolve(VideoAnnouncementAudio), false, null, videoAnnouncement: true);
     }
 
-    private void OnTubeVideoEnded()
+    private void OnTubeVideoForceStopped()
     {
         var video = _reactionVideo;
         var generation = video?.PlaybackGeneration;

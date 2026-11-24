@@ -113,6 +113,9 @@ namespace ConditioningControlPanel.Services
         /// WPF VideoService.Cleanup:7950; fires once after the host closes and IsPlaying clears.</summary>
         public event Action? VideoEnded;
 
+        /// <summary>A force stop, including an idle stop after a natural end.</summary>
+        public event Action? VideoForceStopped;
+
         /// <summary>The clip <see cref="VideoStarted"/> announced (WPF VideoService.LastVideoPath).</summary>
         public string? LastVideoPath { get; private set; }
 
@@ -791,10 +794,16 @@ namespace ConditioningControlPanel.Services
             _waitEndsRun = false;
             _bubbleChaosToken = 0;
             var heldReplay = DropDefer();
-            _retryGeneration++;
+            var generation = ++_retryGeneration;
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
             // fall-open panic force-stops the clip alone, and must not leave the field held forever.
-            if (!Finish(cancelled: true))
+            var finished = Finish(cancelled: true);
+            if (generation == _retryGeneration)
+            {
+                try { VideoForceStopped?.Invoke(); }
+                catch (Exception ex) { Log.Debug("VideoForceStopped handler failed: {Error}", ex.Message); }
+            }
+            if (!finished)
             {
                 // Also drop a fading curtain while idle; a host failure must not interrupt panic.
                 try { _host.CloseAll(); }

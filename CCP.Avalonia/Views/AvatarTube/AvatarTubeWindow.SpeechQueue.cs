@@ -98,8 +98,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             else
             {
                 var video = line.Source == SpeechSource.VideoAnnouncement;
-                var audio = video ? Services.Companion.CompanionEventAudio.Resolve(VideoAnnouncementAudio) : null;
-                ShowSpeech(line.Text, NextPresetGiggleSound(), aiGenerated: false, audio, false, preset: true, unprompted: line.Unprompted, mood: line.Mood, emotionLineId: line.LineId, videoAnnouncement: video);
+                // WPF AvatarTubeWindow.Speech.cs:230-234: queued presets keep their emotion ID, not audio.
+                ShowSpeech(line.Text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true, unprompted: line.Unprompted, mood: line.Mood, emotionLineId: line.LineId, videoAnnouncement: video);
             }
         }
 

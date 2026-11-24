@@ -60,6 +60,81 @@ public class TubeServiceReactionTests
         return Task.CompletedTask;
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task NaturalEndKeepsAnnouncementUntilForcedStop(bool queued) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var freeze = CoreSubliminal.BambiFreezeProvider;
+        var attention = CoreSettings.Current.AttentionChecksEnabled;
+        CoreSubliminal.BambiFreezeProvider = null;
+        CoreSettings.Current.AttentionChecksEnabled = false;
+        var video = new MandatoryVideoScheduler(new VideoHost(), library: () => new[] { "/video.mp4" });
+        var tube = new AvatarTubeWindow(null);
+        try
+        {
+            tube.Show();
+            tube.AttachServiceReactions(null, video);
+            if (queued) tube.Giggle("ordinary line");
+            Assert.True(video.Trigger(path: "/video.mp4"));
+            Assert.True(tube.FindControl<Border>("SpeechBubble")!.IsVisible);
+            Assert.Equal(queued ? 1 : 0, tube.QueuedSpeechCount);
+            video.Ended();
+            Assert.True(tube.FindControl<Border>("SpeechBubble")!.IsVisible);
+            Assert.Equal(queued ? 1 : 0, tube.QueuedSpeechCount);
+            video.ForceCleanup(); // also cancels an announcement after the video has ended
+            Assert.Equal(0, tube.QueuedSpeechCount);
+            Assert.Equal(queued, tube.FindControl<Border>("SpeechBubble")!.IsVisible);
+        }
+        finally { video.ForceCleanup(); tube.Close(); CoreSubliminal.BambiFreezeProvider = freeze; CoreSettings.Current.AttentionChecksEnabled = attention; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task QueuedVideoAnnouncementDropsEventAudio() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var freeze = CoreSubliminal.BambiFreezeProvider;
+        var oldMods = (CoreMods.ActiveModIdProvider, CoreMods.ActiveModPackageProvider);
+        var s = CoreSettings.Current;
+        var audioSettings = (s.AvatarMuted, s.MasterVolume, s.CompanionVoiceLinesMuted);
+        CoreSubliminal.BambiFreezeProvider = null;
+        var video = new MandatoryVideoScheduler(new VideoHost(), library: () => new[] { "/video.mp4" });
+        var tube = new AvatarTubeWindow(null);
+        var root = Path.Combine(Path.GetTempPath(), "ccp-video-queue-" + Guid.NewGuid());
+        var folder = Path.Combine(root, "resources", "sounds", "event_audio");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, "ooh pretty spir rals.mp3"), "audio");
+        Action? pending = null;
+        string? played = null;
+        var calls = 0;
+        tube.SpeechDelayScheduler = (_, fire) => { pending = fire; return () => { }; };
+        tube.SpeechAudioPlayer = (_, path, _, done) => { played = path; calls++; done?.Invoke(); };
+        try
+        {
+            CoreMods.ActiveModIdProvider = () => "test";
+            CoreMods.ActiveModPackageProvider = () => new ModPackage(new ModManifest { Id = "test" }, root, false);
+            (s.AvatarMuted, s.MasterVolume, s.CompanionVoiceLinesMuted) = (false, 80, false);
+            tube.Show(); tube.AttachServiceReactions(null, video);
+            tube.Giggle("ordinary line");
+            Assert.True(video.Trigger(path: "/video.mp4"));
+            Assert.Equal(1, tube.QueuedSpeechCount);
+            tube.EndSpeechBubble();
+            Assert.NotNull(pending);
+            calls = 0; played = "not called";
+            pending!();
+            Assert.Equal(1, calls);
+            Assert.Null(played);
+        }
+        finally
+        {
+            video.ForceCleanup(); tube.Close(); CoreSubliminal.BambiFreezeProvider = freeze;
+            (CoreMods.ActiveModIdProvider, CoreMods.ActiveModPackageProvider) = oldMods;
+            (s.AvatarMuted, s.MasterVolume, s.CompanionVoiceLinesMuted) = audioSettings;
+            Directory.Delete(root, recursive: true);
+        }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task VideoEndRemovesOnlyTheQueuedAnnouncement() => AvaloniaTestDispatcher.RunAsync(() =>
     {
