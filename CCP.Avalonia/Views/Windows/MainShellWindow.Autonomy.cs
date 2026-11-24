@@ -87,7 +87,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Autonomy.CanPerform = CanPerformAutonomy;
             // WPF CanTakeAction: never over a fullscreen interaction (InteractionQueue.IsBusy).
             Autonomy.IsBusy = () => CoreEngine.Video?.IsPlaying == true || LockCardWindow.IsAnyOpen()
-                                    || BubbleCountWindow.IsAnyOpen() || PopQuizWindow.IsAnyOpen();
+                                    || CoreEngine.BubbleCount?.IsBusy == true || PopQuizWindow.IsAnyOpen();
             Autonomy.Perform = (a, announced) => Dispatcher.UIThread.Post(() => PerformAutonomy(a, announced));
             Autonomy.EnabledChanged += (_, on) => Dispatcher.UIThread.Post(() =>
             {
@@ -153,38 +153,44 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void PerformAutonomy(AutonomyActionType a, bool announced = false)
         {
             if (!Autonomy.IsEnabled) return;   // stopped while the post was queued
-            // WPF :961: the HUD cue, every effect but Comment, only on the announce roll (#534: 0% = silent).
-            if (announced) TakeoverAnnouncerOverlay.Announce(AutonomyScheduler.TakeoverEffectLabel(a));
-            switch (a)
+            var previousAutonomy = CompanionCore.AutonomyActionInProgress;
+            CompanionCore.AutonomyActionInProgress = () => Autonomy.IsEnabled;
+            try
             {
-                case AutonomyActionType.WallpaperShuffle: _ = TriggerWallpaperChangeAsync(); break;
-                case AutonomyActionType.Flash: CoreFlash.ShowProvider?.Invoke(); break;
-                case AutonomyActionType.Subliminal:
-                    if (CoreSubliminal.PickPhrase() is { } phrase) CoreSubliminal.ShowProvider?.Invoke(phrase);
-                    break;
-                case AutonomyActionType.LockCard: CoreLockCard.Show(); break;
-                // No strict override: a Takeover video follows the global StrictLockEnabled (WPF TriggerVideoSafely).
-                case AutonomyActionType.Video: CoreEngine.Video?.Trigger(); break;
-                case AutonomyActionType.StartBubbles:
-                    if (_bubblesPulse || BubbleOverlay.IsRunning) break;
-                    _bubblesPulse = true;
-                    CoreBubbles.Start();
-                    EndPulseAfter30s(() => { if (_bubblesPulse) { _bubblesPulse = false; CoreBubbles.Stop(); } });
-                    break;
-                case AutonomyActionType.BouncingText:
-                    if (_bouncingPulse || BouncingTextOverlay.IsRunning) break;
-                    _bouncingPulse = true;
-                    CoreBouncingText.Start();
-                    EndPulseAfter30s(() => { if (_bouncingPulse) { _bouncingPulse = false; CoreBouncingText.Stop(); } });
-                    break;
-                case AutonomyActionType.PinkFilterPulse: PulsePinkFilter(); break;
-                // WPF: TriggerGame(forceTest: true) - runs with the engine stopped and the card off.
-                case AutonomyActionType.BubbleCount: CoreEngine.BubbleCount?.Trigger(forceTest: true); break;
-                case AutonomyActionType.Comment: _ = MakeAutonomyCommentAsync(); break;
-                // WPF #1458's "switched off during the announcement" recheck is AutonomyScheduler.Run's.
-                case AutonomyActionType.MindWipe: CoreMindWipe.TriggerOnce(); break;
-                case AutonomyActionType.SpokenMantra: _ = RequestVoiceCommandAsync(allowCommands: false); break;
+                // WPF :961: the HUD cue, every effect but Comment, only on the announce roll (#534: 0% = silent).
+                if (announced) TakeoverAnnouncerOverlay.Announce(AutonomyScheduler.TakeoverEffectLabel(a));
+                switch (a)
+                {
+                    case AutonomyActionType.WallpaperShuffle: _ = TriggerWallpaperChangeAsync(); break;
+                    case AutonomyActionType.Flash: CoreFlash.ShowProvider?.Invoke(); break;
+                    case AutonomyActionType.Subliminal:
+                        if (CoreSubliminal.PickPhrase() is { } phrase) CoreSubliminal.ShowProvider?.Invoke(phrase);
+                        break;
+                    case AutonomyActionType.LockCard: CoreLockCard.Show(); break;
+                    // No strict override: a Takeover video follows the global StrictLockEnabled (WPF TriggerVideoSafely).
+                    case AutonomyActionType.Video: CoreEngine.Video?.Trigger(); break;
+                    case AutonomyActionType.StartBubbles:
+                        if (_bubblesPulse || BubbleOverlay.IsRunning) break;
+                        _bubblesPulse = true;
+                        CoreBubbles.Start();
+                        EndPulseAfter30s(() => { if (_bubblesPulse) { _bubblesPulse = false; CoreBubbles.Stop(); } });
+                        break;
+                    case AutonomyActionType.BouncingText:
+                        if (_bouncingPulse || BouncingTextOverlay.IsRunning) break;
+                        _bouncingPulse = true;
+                        CoreBouncingText.Start();
+                        EndPulseAfter30s(() => { if (_bouncingPulse) { _bouncingPulse = false; CoreBouncingText.Stop(); } });
+                        break;
+                    case AutonomyActionType.PinkFilterPulse: PulsePinkFilter(); break;
+                    // WPF: TriggerGame(forceTest: true) - runs with the engine stopped and the card off.
+                    case AutonomyActionType.BubbleCount: CoreEngine.BubbleCount?.Trigger(forceTest: true); break;
+                    case AutonomyActionType.Comment: _ = MakeAutonomyCommentAsync(); break;
+                    // WPF #1458's "switched off during the announcement" recheck is AutonomyScheduler.Run's.
+                    case AutonomyActionType.MindWipe: CoreMindWipe.TriggerOnce(); break;
+                    case AutonomyActionType.SpokenMantra: _ = RequestVoiceCommandAsync(allowCommands: false); break;
+                }
             }
+            finally { CompanionCore.AutonomyActionInProgress = previousAutonomy; }
         }
 
         private int _wallpaperGen, _wallpaperStopGen;

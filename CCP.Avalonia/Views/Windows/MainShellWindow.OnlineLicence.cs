@@ -11,10 +11,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows;
 
 /// <summary>
 /// The one-time licence card (WPF MainWindow.OnlineMeter.cs OfferOnlineLicenceCard / OnlineOfficialNice, #2503).
-/// WPF queues it on the startup ladder's modal pump at priority 40 (after What's New, 30). This head has no general
-/// modal pump yet (MainShellWindow.UpgradeIntro.cs), so the card waits the way the display-name ask does: the
-/// 750 ms settle, then until no startup modal, update dialog or tour is up and What's New has drained
-/// (<see cref="StartupLadder.ModalPending"/>). A card that never got its turn is offered again next launch.
+/// WPF queues it on the startup ladder at priority 40 (after What's New, 30). This head polls readiness,
+/// including the queued upgrade turn, so it cannot overtake the notes during their settle or wait.
+/// A card that never got its turn is offered again next launch.
 /// <para>The ladder's modal pump does NOT wait for a session or a Lockdown, and the flag can flip mid-run, so the
 /// card asks the same hold the spent notice does: while it holds nothing is queued, and the minute clock offers it
 /// again once the hold ends. A card queued before a session started steps aside at show time.</para>
@@ -35,7 +34,9 @@ public partial class MainShellWindow
         OnlineLicenceTask = RunOnlineLicenceCardAsync();
     }
 
-    private bool OnlineLicenceReady() => !StartupLadder.ModalPending && StartupQueueCore.CanStartModal(
+    private bool UpgradeBlocksOnlineLicence => StartupLadder.ModalPending || _upgradeTurn?.Task.IsCompleted == false;
+
+    private bool OnlineLicenceReady() => !UpgradeBlocksOnlineLicence && StartupQueueCore.CanStartModal(
         IsStartupDialogShowing || OwnedWindows.Any(w => w.IsVisible && w.IsDialog),
         AppUpdater.IsUpdateDialogActive, CoreTutorial.IsActive, IsVisible && CoreSettings.Current.HasAcceptedAgeVerification);
 
@@ -48,8 +49,9 @@ public partial class MainShellWindow
             var waited = TimeSpan.Zero;
             while (!_onlineLicenceCancelled && waited < TimeSpan.FromMinutes(5) && !OnlineLicenceReady())
             {
+                var waitingForUpgrade = UpgradeBlocksOnlineLicence;
                 await OnlineLicenceDelay(TimeSpan.FromMilliseconds(500));
-                waited += TimeSpan.FromMilliseconds(500);
+                if (!waitingForUpgrade) waited += TimeSpan.FromMilliseconds(500);
             }
             if (_onlineLicenceCancelled || !OnlineLicenceReady()) return;   // owed next launch
 

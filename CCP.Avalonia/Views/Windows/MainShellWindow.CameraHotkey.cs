@@ -21,6 +21,7 @@ public partial class MainShellWindow
     private PortalCameraHotkey? _portalCameraHotkey;
     private bool _cameraHotkeyBusy, _cameraKeyHooked;
     internal Func<Window, ChordMods, string, Action, IDisposable?> RegisterCameraHotkey = RegisterCameraHotkeyNative;
+    internal Func<bool> CameraHotkeyWayland = static () => OperatingSystem.IsLinux() && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"));
     internal Func<ChordMods, string, Action, PortalCameraHotkey> RegisterPortalCamera = (mods, key, pressed) =>
     {
         var portal = new PortalCameraHotkey(pressed);
@@ -59,7 +60,7 @@ public partial class MainShellWindow
         _portalCameraHotkey?.Dispose();
         _portalCameraHotkey = null;
         if (_quickRecalClosed || !binding.Item1) return;
-        if (OperatingSystem.IsLinux() && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY")))
+        if (CameraHotkeyWayland())
         {
             PortalCameraHotkey? portal = null;
             portal = RegisterPortalCamera(mods, key, () => Dispatcher.UIThread.Post(async () =>

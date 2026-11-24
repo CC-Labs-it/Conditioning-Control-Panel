@@ -40,7 +40,7 @@
         <SolidColorBrush x:Key="Bg" Color="#FF14122A"/>
         <SolidColorBrush x:Key="TextDim" Color="#AAB8B8D0"/>
         <SolidColorBrush x:Key="TextMut" Color="#88A0A0C0"/>
-        <!-- ponytail: local copy of ChaosSlotPickerWindow.xaml:Brand, hoist when a second view
+        <!-- ponytail: local copy of ChaosSlotPickerWindow.xaml:Brand, hoist when a third view
              needs it. Theme/Brushes.xaml has BrandGradient with the same two stops, but its
              endpoints are written "0,0"/"1,1", which Avalonia reads as absolute pixels. -->
         <LinearGradientBrush x:Key="Brand" StartPoint="0%,0%" EndPoint="100%,100%">
