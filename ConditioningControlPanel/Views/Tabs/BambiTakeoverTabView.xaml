@@ -7,6 +7,7 @@
              xmlns:fx="clr-namespace:ConditioningControlPanel.Controls"
              xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
              xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             xmlns:pv="clr-namespace:ConditioningControlPanel.Controls.Preview"
              rows:RowHue.TintSliders="True"
              xmlns:hover="clr-namespace:ConditioningControlPanel.Behaviors"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
@@ -785,25 +786,16 @@
                          Background to CornerRadius but does NOT clip child content, so a child
                          Image would square off the rounded corners (round-2 lesson). -->
                     <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                        <!-- Live Preview (lane P5, 2026-11-24): the card is a slice of a mock desktop where a
+                             compressed takeover plays (Controls/Preview/Scenes/TakeoverPreviewScene). The art
+                             brush stays (ApplyFeatureArt writes it) but is parked in Tag, so nothing shows
+                             behind the preview. The preview measures to zero, so the card gets a fixed height. -->
                         <Border CornerRadius="14" BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
-                                MinHeight="200" MaxHeight="300" Margin="0,0,0,10">
-                            <Border.Background>
-                                <ImageBrush x:Name="TakeoverSideArtBrush" Stretch="UniformToFill">
-                                    <ImageBrush.ImageSource>
-                                        <BitmapImage UriSource="pack://application:,,,/Resources/features/takeover.png"
-                                                     DecodePixelWidth="800"/>
-                                    </ImageBrush.ImageSource>
-                                </ImageBrush>
-                            </Border.Background>
-                            <!-- Scrim so the plate sits under the page instead of fighting it. -->
-                            <Border CornerRadius="12">
-                                <Border.Background>
-                                    <LinearGradientBrush StartPoint="0,1" EndPoint="0,0">
-                                        <GradientStop Color="#66000000" Offset="0"/>
-                                        <GradientStop Color="#00000000" Offset="0.45"/>
-                                    </LinearGradientBrush>
-                                </Border.Background>
-                            </Border>
+                                Background="#06050D" Height="300" MinHeight="200" MaxHeight="300" Margin="0,0,0,10">
+                            <Border.Tag>
+                                <ImageBrush x:Name="TakeoverSideArtBrush" Stretch="UniformToFill"/>
+                            </Border.Tag>
+                            <pv:EffectPreview Scene="takeover"/>
                         </Border>
 
                         <!-- Explanatory guide -->
