@@ -14,6 +14,7 @@ using System.Collections.Generic;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.GoonGame;
@@ -79,6 +80,11 @@ internal sealed partial class GameWindow
                 break;
             case "fullscreen-set":
                 SetGoonFullscreen(message["on"]?.Type == JTokenType.Boolean && (bool)message["on"]!);
+                handled = true;
+                break;
+            case "open-prime":
+                // WPF :813: the Prime sheet and recap send the player to the app's own refusal and upgrade path.
+                TierGate.DemandPremium(Loc.Get("launcher_game_goon_title"));
                 handled = true;
                 break;
             case "net-post":
