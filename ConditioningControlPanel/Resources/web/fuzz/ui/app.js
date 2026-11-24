@@ -19,7 +19,7 @@ import { bindAudioControls } from './audio-controls.js';
 import { iconFor, stopIconMotion } from './icons.js';
 import { openFork } from './fork.js';
 import { pictureRow } from './picture-card.js';
-import { openAllowedLink } from './links.js';
+import { openAllowedLink, trimCredits } from './links.js';
 import { mountUsageRing } from './usage-ring.js';
 import { mountDepthBadge } from './depth-badge.js';
 import { createDock } from './dock.js';
@@ -42,7 +42,7 @@ import { mountRenewalMenu } from './renewal-menu.js';
 import { createStage } from './stage.js';
 import { isPhone, tickerMs } from './phone.js';
 import { mountOptions } from './options.js';
-import { expoAllowed } from './edition.js';
+import { expoAllowed, editionState } from './edition.js';
 
 export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   const $ = (id) => doc.getElementById(id);
@@ -298,13 +298,13 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
       /* The backdrop stops a mouse. This stops the keyboard: a tile's preview, a collect or a card's button behind the pause card. */
       worldWasInert = !!el.world.inert;
       el.world.inert = true;
-      el.cards.inert = true;
+      cards.hold(true);   // #cards inert (ui/cards.js), unless its card is one the pause card asked for
     } else {
       for (const a of frozen) { if (a.playState === 'paused') a.play(); }  // anything cancelled during the pause stays cancelled
       frozen = [];
       if (tickerHeld || tickerAnim?.playState === 'paused') { tickerHeld = false; tickerAnim?.play(); }   // a finger held on the strip as the pause came
       el.world.inert = worldWasInert;
-      el.cards.inert = false;
+      cards.hold(false);
     }
     if (!forkCard?.closed) forkCard?.hold(on);
   }
@@ -402,7 +402,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
   function drawPictureRow() {
     $('pics-now').textContent = pictureRow(engine.pictures);
     $('new-run').hidden = !!wakeGate;   // the intro: no run to start over yet
-    $('to-menu').hidden = !toMenu || !!wakeGate;
+    $('to-menu').hidden = !toMenu || !!wakeGate || !!doc.body?.classList?.contains('mm-on');   // over the menu itself: no row back to it
     options?.refresh();
   }
   function resume() {
@@ -466,6 +466,7 @@ export function createUi({ doc = document, init = {}, audio, extras = {} }) {
         inPress, hosted: !!engine.host?.isHosted, send: (t, f) => engine.host?.send?.(t, f), win,
       }));
     }
+    trimCredits(el.pause, editionState().platform);   // inside a desktop host: no "Get the desktop app"
     mountAccountChip();
     /* The day's online picture meter, beside the chip (web host only, ui/usage-ring.js). */
     const ringRefresh = mountUsageRing({

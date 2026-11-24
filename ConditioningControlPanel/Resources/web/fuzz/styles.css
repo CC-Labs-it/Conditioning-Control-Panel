@@ -209,6 +209,7 @@ body.gentle .dk-chip.dk-new .dk-i { animation: none; }
 #cards { position: fixed; inset: 0; z-index: 90; pointer-events: none; }
 .backdrop { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 16px; padding-top: 56px; background: rgba(0, 0, 0, .35); pointer-events: auto; animation: fadein .15s ease-out; }
 #pause.backdrop { z-index: 95; }
+#cards.over-pause { z-index: 96; }   /* ui/cards.js overPause: a card the pause card asked for shows over it, like .tc.above */
 .backdrop.clear { background: transparent; }
 .backdrop.corner { pointer-events: none; place-items: end; }
 .backdrop.corner .card { max-width: 320px; pointer-events: auto; }
