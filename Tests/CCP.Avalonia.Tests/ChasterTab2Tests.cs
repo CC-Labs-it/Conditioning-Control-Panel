@@ -142,6 +142,23 @@ public sealed class ChasterTab2Tests
         Dispatcher.UIThread.RunJobs();
     }
 
+    [Fact]
+    public Task EndsTooltipNamesChastersEndAndPendingAdd() => AvaloniaTestDispatcher.RunAsync(() => Run((_, _, _) =>
+    {
+        var tab = new ChasterTabView();
+        var end = DateTime.UtcNow.AddDays(2);
+        var snapshot = new LockSnapshot("l1", "Cage", end, false, false, false, end);
+        var line = tab.FindControl<TextBlock>("TxtHeroEnds")!;
+        tab.PaintHeroEnds(snapshot, 3600);
+        Assert.Equal(ConditioningControlPanel.Localization.Loc.GetF("chaster_hero_ends_tip",
+            end.ToLocalTime().ToString("ddd d MMM HH:mm"), CircesTab.Format(3600)), ToolTip.GetTip(line));
+        tab.PaintHeroEnds(snapshot, 0);
+        Assert.Null(ToolTip.GetTip(line));
+        tab.PaintHeroEnds(null, 3600);
+        Assert.Null(ToolTip.GetTip(line));
+        return Task.CompletedTask;
+    }));
+
     // WPF ChasterTabView.xaml.cs:99: the ticks run only while the page is on screen.
     [Fact]
     public Task HidingTheTabStopsBothTicksAndShowingResumesThem() => AvaloniaTestDispatcher.RunAsync(() => Run((_, _, _) =>
@@ -182,6 +199,29 @@ public sealed class ChasterTab2Tests
             Assert.True(title.IsVisible);
         }
         finally { w.Close(); }
+    }));
+
+    [Fact]
+    public Task PanicHoldRefreshesThePageEverySecond() => AvaloniaTestDispatcher.RunAsync(() => Run(async (chaster, _, _) =>
+    {
+        var tab = new ChasterTabView();
+        var w = new Window { Width = 1200, Height = 800, Content = tab };
+        var previous = ConditioningControlPanel.Services.Safety.PanicChasterHold.Service;
+        ConditioningControlPanel.Services.Safety.PanicChasterHold.Service = () => chaster;
+        w.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(x => x.Id == "chaster-hold").Stop(null);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(TimeSpan.FromSeconds(1), tab.SlowTick.Interval);
+            var today = tab.FindControl<TextBlock>("TxtToday")!;
+            today.Text = "stale";
+            for (var i = 0; i < 100 && today.Text == "stale"; i++) { await Task.Delay(20); Dispatcher.UIThread.RunJobs(); }
+            Assert.NotEqual("stale", today.Text);
+            Assert.Contains(tab.PillTexts, text => text.StartsWith(ConditioningControlPanel.Localization.Loc.Get("chaster_stat_hold") + " "));
+        }
+        finally { w.Close(); ConditioningControlPanel.Services.Safety.PanicChasterHold.Service = previous; }
     }));
 
     [Fact]
@@ -343,6 +383,7 @@ public sealed class ChasterTab2Tests
 
     private sealed class RemoteVideoHost : IMandatoryVideoHost
     {
+        public int FloatingLimit => 1; public int FloatingUp => 0;
         public void Show(string path, bool strict) { }
         public double CloseAll() => 0;
         public void ShowMessage(AttentionVerdict verdict, int ms, Action then) => then();

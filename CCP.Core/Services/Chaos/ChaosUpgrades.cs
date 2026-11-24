@@ -321,12 +321,15 @@ public static class ChaosMeta
         IsOwned(id) && (State.DisabledUpgrades == null || !State.DisabledUpgrades.Contains(id));
 
     /// <summary>Switch a trained habit on/off (no-op on untrained ids). Persists on change.</summary>
+    public static event Action? LoadoutChanged;
+    internal static void NotifyLoadoutChanged() => LoadoutChanged?.Invoke();
+
     public static void SetUpgradeActive(string id, bool active)
     {
         if (!IsOwned(id)) return;
         State.DisabledUpgrades ??= new();
         bool changed = active ? State.DisabledUpgrades.Remove(id) : State.DisabledUpgrades.Add(id);
-        if (changed) Save();
+        if (changed) { Save(); LoadoutChanged?.Invoke(); }
     }
 
     public static bool CanAfford(string id)
@@ -360,6 +363,7 @@ public static class ChaosMeta
         State.PurchasedUpgrades.Add(id);
         if (id == "extreme_tier") State.ExtremeUnlocked = true;
         ChaosMetaStore.Save(State);
+        LoadoutChanged?.Invoke();
         return true;
     }
 
@@ -473,6 +477,7 @@ public static class ChaosMeta
         var cat = ChaosLifetimeBoons.ById(id)?.Category ?? ChaosBoonCategory.Utility;
         if (HasFreePocket(cat)) State.ActiveLifetimeBoons.Add(id);
         ChaosMetaStore.Save(State);
+        LoadoutChanged?.Invoke();
         return true;
     }
 
@@ -498,6 +503,7 @@ public static class ChaosMeta
         State.Sparks -= c.Value;
         State.LifetimeBoonLevels[id] = Math.Min(BoonLevel(id) + 1, b.MaxLevel);
         ChaosMetaStore.Save(State);
+        LoadoutChanged?.Invoke();
         return true;
     }
 
@@ -513,7 +519,7 @@ public static class ChaosMeta
         }
         State.ActiveLifetimeBoons ??= new();
         bool changed = active ? State.ActiveLifetimeBoons.Add(id) : State.ActiveLifetimeBoons.Remove(id);
-        if (changed) ChaosMetaStore.Save(State);
+        if (changed) { ChaosMetaStore.Save(State); LoadoutChanged?.Invoke(); }
         return true;
     }
 

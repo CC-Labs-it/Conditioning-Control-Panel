@@ -9,6 +9,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Games;
 internal sealed partial class GameWindow
 {
     internal bool JustDropOwnerLinked { get; private set; }
+    internal Action? RenderVisibilityResyncForTests;
+
+    internal static bool IsOwnerCascadeHide(uint message, IntPtr wParam, IntPtr lParam) =>
+        message == 0x18 && wParam == IntPtr.Zero && lParam == new IntPtr(1);
+
+    internal IntPtr VetoOwnerCascade(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (!_closing && IsOwnerCascadeHide(message, wParam, lParam))
+        {
+            NativeWindowOwner.Set(this, null);
+            JustDropOwnerLinked = false;
+            handled = true;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_closing || !IsVisible || WindowState == WindowState.Minimized) return;
+                if (RenderVisibilityResyncForTests is { } resync) resync();
+                else NativeWindowOwner.ResyncRenderVisibility(this, Web.NativeView?.TryGetPlatformHandle());
+            }, DispatcherPriority.Background);
+        }
+        return IntPtr.Zero;
+    }
 
     // WPF ChaosWebViewHost.AttachMainWindowGlue: ownership is useful only while main is up.
     // Keep it native: Show(owner) would also couple Avalonia's managed visibility/lifetime.
@@ -19,8 +40,6 @@ internal sealed partial class GameWindow
             bool ownerUp = shell.IsVisible && shell.WindowState != WindowState.Minimized;
             JustDropOwnerLinked = NativeWindowOwner.Set(this, ownerUp ? shell : null) && ownerUp;
             if (ownerUp) return;
-            // ponytail: WPF also vetoes Win32 cascade hide before it lands; this head repairs
-            // it after the notification. The pre-hide veto still needs a native message seam.
             // WPF EnsureNativeVisible (:1102-1110) never restores WindowState. Repair only
             // native cascade hiding once the queue drains; replay ducks before attaching.
             Dispatcher.UIThread.Post(() =>
@@ -34,10 +53,15 @@ internal sealed partial class GameWindow
             if (e.Property == WindowStateProperty || e.Property == IsVisibleProperty) Refresh();
         }
         void OwnerClosed(object? sender, EventArgs e) => Close();
+        // Only Win32 installs this hook; the headless test calls the same callback directly.
+        bool hooked = OperatingSystem.IsWindows() &&
+            X11Overlay.BackendOf(TryGetPlatformHandle()) == OverlayBackend.Win32;
+        if (hooked) Win32Properties.AddWndProcHookCallback(this, VetoOwnerCascade);
         shell.PropertyChanged += OwnerChanged;
         shell.Closed += OwnerClosed;
         Closed += (_, _) =>
         {
+            if (hooked) Win32Properties.RemoveWndProcHookCallback(this, VetoOwnerCascade);
             shell.PropertyChanged -= OwnerChanged;
             shell.Closed -= OwnerClosed;
             JustDropOwnerLinked = false;

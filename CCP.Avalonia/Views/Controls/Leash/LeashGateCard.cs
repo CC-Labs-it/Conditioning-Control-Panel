@@ -4,8 +4,7 @@
 // leash sit on the card ALWAYS; neither is ever disabled here.
 // Flat on this head (P82): the WPF glow Effects become a BoxShadow on the card and nothing on the bar;
 // the stamp sits at its 10 degree rest.
-// ponytail: not ported yet - the "?" explainer button (WPF LeashLook.Help(LeashExplainRole.Gate), lands
-// with the explainer unit), the fade/thud/stamp swing and pip sparks (WPF LeashFx, lands with the leash
+// Not ported yet: the fade/thud/stamp swing and pip sparks (WPF LeashFx, lands with the leash
 // fx unit), and the holder's avatar picture (initials only, as the friends drawer draws them).
 using System;
 using Avalonia;
@@ -111,6 +110,10 @@ public sealed class LeashGateCard : Grid
         if (_p is not { } p) return;
 
         var top = new Grid();
+        var help = LeashExplainWindow.HelpButton("gate", () => TopLevel.GetTopLevel(this) as Window);
+        help.HorizontalAlignment = HorizontalAlignment.Left;
+        help.VerticalAlignment = VerticalAlignment.Top;
+        top.Children.Add(help);
         var stamp = new Border
         {
             BorderBrush = F.Red, BorderThickness = new Thickness(2), CornerRadius = new CornerRadius(4), Padding = new Thickness(6, 1, 6, 1),
