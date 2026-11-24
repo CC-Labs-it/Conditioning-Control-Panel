@@ -5770,28 +5770,19 @@ namespace ConditioningControlPanel.Services
                         var dur = Video.GentleWindowRules.WallSeconds(_duration > 0 ? _duration : 60, _playRate);
                         // Use setting directly as total count (not density)
                         var maxTargets = Math.Max(1, App.Settings.Current.AttentionDensity);
-                        _total = App.Settings.Current.RandomizeAttentionTargets
+                        var wanted = App.Settings.Current.RandomizeAttentionTargets
                             ? _random.Next(1, maxTargets + 1)  // Random from 1 to max (inclusive)
                             : maxTargets;
 
-                        // Generate spawn times with minimum gap to prevent simultaneous targets
-                        var minGap = 3.0; // Minimum 3 seconds between targets
-                        var availableWindow = Math.Max(1, dur - 8); // Stop spawning ~5s before end
-                        for (int i = 0; i < _total; i++)
-                        {
-                            var spawnTime = 3 + _random.NextDouble() * availableWindow;
-                            _spawnTimes.Add(spawnTime);
-                        }
-                        _spawnTimes.Sort();
-
-                        // Ensure minimum gap between targets (adjust times if too close)
-                        for (int i = 1; i < _spawnTimes.Count; i++)
-                        {
-                            if (_spawnTimes[i] - _spawnTimes[i - 1] < minGap)
-                            {
-                                _spawnTimes[i] = _spawnTimes[i - 1] + minGap;
-                            }
-                        }
+                        // No target spawns later than duration - lifespan - 1 s, so each one gets
+                        // the user's full lifespan; a clip too short for that gets none (#1736).
+                        var lifespan = App.Settings.Current.AttentionLifespan;
+                        var plan = Video.AttentionSchedule.Plan(dur, wanted, lifespan, _random.NextDouble);
+                        _spawnTimes.AddRange(plan);
+                        _total = plan.Count;
+                        if (plan.Count < wanted)
+                            App.Logger.Information("Attention: {Planned} of {Wanted} targets fit a {Duration}s clip with a {Lifespan}s lifespan",
+                                plan.Count, wanted, (int)dur, lifespan);
 
                         _attentionTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(20) };
                         _attentionTimer.Tick += CheckSpawnTargets;
@@ -6194,10 +6185,28 @@ namespace ConditioningControlPanel.Services
             var settings = App.Settings.Current;
             bool loop = false, troll = false;
 
-            if (Video.MandatoryVideoPresentation.AttentionChecksApply(settings.AttentionChecksEnabled, IsFloating) && _spawned > 0)
+            // A target still on screen with lifespan left when the video ended was cut short by
+            // the end, not missed by the user: it is not judged (#1736). Answered spawns have left
+            // _targets (the hit handler removes them), so "any copy still listed" = unanswered.
+            int cutShort = 0;
+            try
             {
-                bool passed = _hits >= _spawned;
-                App.Logger.Information("Attention result: {Hits}/{Spawned} (of {Total} scheduled) = {Result}", _hits, _spawned, _total, passed ? "PASS" : "FAIL");
+                var endedElapsed = (DateTime.Now - _startTime).TotalSeconds;
+                lock (_targets)
+                {
+                    cutShort = Video.AttentionSchedule.CutShort(
+                        _spawnExpiries.Select(s => (s.DueElapsed, !s.Targets.Any(t => _targets.Contains(t)))),
+                        endedElapsed);
+                }
+            }
+            catch (Exception ex) { Diag.Swallowed(ex, "attention cut-short count"); }
+            var judged = Video.AttentionSchedule.Judged(_spawned, cutShort);
+
+            if (Video.MandatoryVideoPresentation.AttentionChecksApply(settings.AttentionChecksEnabled, IsFloating) && judged > 0)
+            {
+                bool passed = Video.AttentionSchedule.Passed(_hits, judged);
+                App.Logger.Information("Attention result: {Hits}/{Judged} ({Spawned} spawned, {CutShort} cut short by the end, {Total} scheduled) = {Result}",
+                    _hits, judged, _spawned, cutShort, _total, passed ? "PASS" : "FAIL");
 
                 if (passed)
                 {
