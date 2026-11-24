@@ -83,6 +83,16 @@ public sealed class ChaosRunBarkTests
     });
 
     [Fact]
+    public Task Freeze_catch_at_a_milestone_barks_freeze_first() => WithRun(false, heard =>
+    {
+        ChaosRunHost.State!.Combo = 9;
+        ChaosRunHost.OnBubblePopped(new AmbientBubble { Spec = new EffectBubbleSpec { VariantId = "freeze", IsFreeze = true, Payload = new FlashPayload() } });
+        // WPF ChaosModeService.cs:2390-2393: the freeze bark is raised before CheckComboMilestone.
+        Assert.Equal(10.0, One(heard, "ChaosComboMilestone").Values["combo"]);
+        Assert.True(heard.FindIndex(x => x.Trigger == "ChaosFreezeCaught") < heard.FindIndex(x => x.Trigger == "ChaosComboMilestone"));
+    });
+
+    [Fact]
     public Task Hold_defuse_and_no_focus_bark_first_times_once() => WithRun(false, heard =>
     {
         var state = ChaosRunHost.State!;

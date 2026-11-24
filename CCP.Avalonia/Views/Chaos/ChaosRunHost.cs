@@ -528,10 +528,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state.Heat = Math.Min(1.0, _state.Heat + 0.05);
                 CreditPop();
                 ChaosLessons.Tick("freeze_trigger");
-                _state.PushEvent(Loc.Get("chaos_freeze_event"));   // WPF :2391 prefixes a snowflake; no emoji in event lines
-                CheckComboMilestone();
                 ActivateFreeze();
-                RunBark("ChaosFreezeCaught", c => c.Set("points", 140 * _state.TotalMult).Set("combo", (double)_state.Combo));   // WPF :2391
+                RunBark("ChaosFreezeCaught", c => c.Set("points", 140 * _state.TotalMult).Set("combo", (double)_state.Combo));   // WPF :2391, before the milestone so it wins the 60 s bark gap
+                _state.PushEvent(Loc.Get("chaos_freeze_event"));   // WPF :2392 prefixes a snowflake; no emoji in event lines
+                CheckComboMilestone();
                 return;
             }
             CountRegenPop();   // WPF ChaosModeService :1768
