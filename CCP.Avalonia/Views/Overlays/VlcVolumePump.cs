@@ -1,60 +1,92 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 
-// The gate protects bookkeeping only. Native calls never hold it.
-internal sealed class VlcVolumePump(Action<int> apply)
+// All players share a Windows audio session, so one worker orders every volume write.
+internal sealed class VlcVolumePump
 {
-    private readonly object _gate = new();
-    private readonly TaskCompletionSource _closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private int _pending = -1;
-    private bool _running, _closing;
+    internal sealed class Player(VlcVolumePump owner, Action<int> apply)
+    {
+        internal readonly Action<int> Apply = apply;
+        internal readonly TaskCompletionSource Closed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        internal long AppliedVersion = -1;
+        internal bool Busy, Removed;
+        internal Task CloseAsync() => owner.Remove(this);
+    }
 
-    internal void Push(int value)
+    private readonly object _gate = new();
+    private readonly List<Player> _players = new();
+    private long _version;
+    private int _volume;
+    private bool _running;
+
+    internal Player Add(Action<int> apply, int volume)
     {
         lock (_gate)
         {
-            if (_closing) return;
-            _pending = Math.Max(0, value);
-            if (_running) return;
-            _running = true;
-            _ = Task.Run(Drain);
+            var player = new Player(this, apply);
+            _players.Add(player);
+            SetVolume(volume);
+            return player;
         }
+    }
+
+    internal void Push(int value)
+    {
+        lock (_gate) SetVolume(value);
+    }
+
+    // Caller holds the gate; adding a player and publishing its current volume are atomic.
+    private void SetVolume(int value)
+    {
+        _volume = Math.Max(0, value);
+        _version++;
+        if (_running || _players.Count == 0) return;
+        _running = true;
+        _ = Task.Run(Drain);
     }
 
     private void Drain()
     {
         while (true)
         {
-            int value;
+            Player? player = null;
+            int volume;
             lock (_gate)
             {
-                if (_closing || _pending < 0)
-                {
-                    _running = false;
-                    if (_closing) _closed.TrySetResult();
-                    return;
-                }
-                value = _pending;
-                _pending = -1;
+                foreach (var candidate in _players)
+                    if (candidate.AppliedVersion != _version) { player = candidate; break; }
+                if (player == null) { _running = false; return; }
+                player.AppliedVersion = _version;
+                player.Busy = true;
+                volume = _volume;
             }
-            try { apply(value); }
+            try { player.Apply(volume); }
             catch (Exception ex) { Log.Debug("Video volume update failed: {Error}", ex.Message); }
+            finally
+            {
+                lock (_gate)
+                {
+                    player.Busy = false;
+                    if (player.Removed) player.Closed.TrySetResult();
+                }
+            }
         }
     }
 
-    // Reject new updates immediately; the task completes after any native call returns.
-    internal Task CloseAsync()
+    // No native call holds the gate. A removed player cannot start another call.
+    private Task Remove(Player player)
     {
         lock (_gate)
         {
-            _closing = true;
-            _pending = -1;
-            if (!_running) _closed.TrySetResult();
-            return _closed.Task;
+            player.Removed = true;
+            _players.Remove(player);
+            if (!player.Busy) player.Closed.TrySetResult();
+            return player.Closed.Task;
         }
     }
 }
@@ -64,7 +96,7 @@ internal static class VlcPlaybackRetirement
 {
     private static readonly ConcurrentBag<object> Quarantine = new();
 
-    internal static Task Retire(VlcVolumePump? pump, Action stop, Action dispose, Action cleanup,
+    internal static Task Retire(VlcVolumePump.Player? pump, Action stop, Action dispose, Action cleanup,
         Action<object>? quarantine = null)
     {
         var volumeFinished = pump?.CloseAsync() ?? Task.CompletedTask;

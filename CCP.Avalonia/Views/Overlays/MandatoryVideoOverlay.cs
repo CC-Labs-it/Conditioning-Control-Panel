@@ -287,6 +287,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF VideoService.cs:3494: software decode unless the user opted into GPU decode.
             _player = new MediaPlayer(vlc!) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
             _playback = new NativeMandatoryPlayback(_player);
+            if (Floating && _revealAudioHeld) _playback.SetAudioOff(true);
             ApplyVolume(_player);
             var blur = s.VideoBlurredBackgroundEnabled;
             Media? sinkMedia = null;
@@ -415,7 +416,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// Settings · Audio live. UI thread (teardown runs there too).</summary>
         internal void UpdateVolume()
         {
-            if (_player is { } p) ApplyVolume(p);
+            PlayerVolume = EffectivePlayerVolume;
+            _sessionVolume.Push(PlayerVolume);
             foreach (var f in _floaters) ApplyInstanceVolume(f);
             _browser?.SetVolume(PlayerVolume = EffectivePlayerVolume);
             _refreshFloating?.Invoke();
@@ -509,7 +511,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     global::Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
                 Func<bool> audible = inst == null
                     ? () => _player?.IsPlaying == true && !_userMuted && PlayerVolume > 0 && HasFloatingSound(w)
-                    : () => inst.Playback?.IsPlaying == true && !inst.UserMuted && !inst.Held && HasFloatingSound(w);
+                    : () => inst.Playback?.IsPlaying == true && !_userMuted && !inst.UserMuted && !inst.Held && HasFloatingSound(w);
                 w.Opened += (_, _) =>
                 {
                     ApplyFloatingPassive(w);
@@ -1386,7 +1388,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 SafetyDeadline.Reset();
                 // WPF ResetUserMute: the next video has its sound (ShowMessage carries it into a verdict replay).
                 _mutedAtClose = _userMuted;
-                _userMuted = false;
+                if (!retire) _userMuted = false;
                 _graceTimer?.Stop();
                 _guard?.Stop();
                 _graceTimer = _guard = null;
@@ -1400,7 +1402,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (playback is NativeMandatoryPlayback native)
                 {
                     native.PrepareForTeardown();
-                    _ = VlcPlaybackRetirement.Retire(_volumePump, native.Stop, native.Dispose,
+                    _ = VlcPlaybackRetirement.Retire(_volumePlayer, native.Stop, native.Dispose,
                         () => Dispatcher.UIThread.Post(() =>
                         {
                             try { media?.Dispose(); } catch (Exception ex) { Log.Debug("Video media disposal failed: {Error}", ex.Message); }
@@ -1414,7 +1416,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     try { media?.Dispose(); } catch { }
                     sink?.Free();
                 }
-                _volumePump = null;
+                _volumePlayer = null;
                 _playback = null;
                 _browser = null;
                 CloseControlHosts();

@@ -43,22 +43,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private bool CloseAllowed => MandatoryVideoControls.ShowClose(_strict, LockdownActive, Chaos.ChaosRunHost.IsActive);
         private bool ControlsAllowed => MandatoryVideoControls.ShowMute(_strict, LockdownActive, Chaos.ChaosRunHost.IsActive);
 
-        internal int EffectivePlayerVolume => (_userMuted || _revealAudioHeld) ? 0 :
+        internal int EffectivePlayerVolume => (_userMuted || (_revealAudioHeld && !Floating)) ? 0 :
             MandatoryVideoScheduler.EffectiveVolume(CoreSettings.Current.MasterVolume, CoreSettings.Current.VideoVolume);
 
         internal void HoldRevealAudio(bool held)
         {
             _revealAudioHeld = held;
+            if (Floating) ApplyAudioFocus();
             UpdateVolume();
         }
 
-        private VlcVolumePump? _volumePump;
+        private readonly VlcVolumePump _sessionVolume = new();
+        private VlcVolumePump.Player? _volumePlayer;
 
         private void ApplyVolume(LibVLCSharp.Shared.MediaPlayer p)
         {
             PlayerVolume = EffectivePlayerVolume;
-            _volumePump ??= new VlcVolumePump(value => p.Volume = value);
-            _volumePump.Push(PlayerVolume);
+            if (_volumePlayer == null) _volumePlayer = _sessionVolume.Add(value => p.Volume = value, PlayerVolume);
+            else _sessionVolume.Push(PlayerVolume);
         }
 
         /// <summary>WPF ShowVideoControls: after the picture fade completes, on every screen. UI thread.</summary>
