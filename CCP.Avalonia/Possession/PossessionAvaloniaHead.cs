@@ -10,7 +10,7 @@
 // context fields (BarkService.cs:398-416).
 //
 // Not on this head yet (honest no-ops, recorded in docs/avalonia-parity.html shell-possession):
-// the scenes (Scenes = none) and the reactive adapter (WPF PossessionEvents).
+// two scenes and the reactive adapter (WPF PossessionEvents).
 
 using System;
 using System.Collections.Generic;
@@ -60,6 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         private IDisposable? _possessed;
         private CancellationTokenSource? _cts;
         private bool _applying;
+        private PossessionRung _rung;
 
         public DirectedHeadEffect(HeadEffect inner) => _inner = inner ?? throw new ArgumentNullException(nameof(inner));
 
@@ -67,9 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         public string Id => _inner.Id;
         public PossessionRung MinRung => _inner.MinRung;
         public PossessionIntensity MinIntensity => _inner.MinIntensity;
-        /// <summary>Nudge, drift, breathe and wobble are micro-tics on WPF (IsBig false): charged and
-        /// tinted, never named by the warden.</summary>
-        public bool IsBig => false;
+        public bool IsBig => _inner.IsBig(_rung);
         public bool UsesFlicker => _inner.UsesFlicker;
         public double Weight => _inner.Weight;
         public TimeSpan HoldFor => _inner.HoldFor;
@@ -83,6 +82,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             try
             {
                 if (IsLive || ctx?.Host is not IAvaloniaPossessionHost) return false;
+                _rung = ctx.Rung;
                 if (target?.Visual is not Control c) return false;
                 if (!Contains(Roles, target.Role)) return false;
                 if (!c.IsEffectivelyVisible || c.Bounds.Width <= 0 || c.Bounds.Height <= 0) return false;
@@ -97,6 +97,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         public async Task ApplyAsync(PossessionContext ctx, PossessionTarget? target, CancellationToken ct)
         {
             if (IsLive || ctx.Host is not IAvaloniaPossessionHost host || target?.Visual is not Control c) return;
+            _rung = ctx.Rung;
             _applying = true;
             try
             {
@@ -108,6 +109,8 @@ namespace ConditioningControlPanel.Avalonia.Possession
                 catch (Exception ex) { Serilog.Log.Warning("Possession {Id} charge failed: {Error}", Id, ex.Message); }
                 if (token.IsCancellationRequested) return;
 
+                try { if (IsBig) ctx.Name(Id, string.IsNullOrWhiteSpace(target.DisplayName) ? null : target.DisplayName); }
+                catch (Exception ex) { Serilog.Log.Warning("Possession {Id} name failed: {Error}", Id, ex.Message); }
                 var runtime = _runtime = host.PossessionEffectRuntime;
                 runtime.Photosafe = ctx.Photosafe;
                 if (!runtime.TryApply(_inner, new PossessionHeadTarget(c, target.Role, target.Key), directed: true)) return;
@@ -150,6 +153,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             var list = new List<IPossessionEffect>();
             foreach (var e in PossessionRuntime.CreateAll()) list.Add(new DirectedHeadEffect(e));
             list.Add(new RetitleEffect());
+            list.Add(new RetitleHeadingEffect());
             list.Add(new DokiDialogEffect());
             list.Add(new DeleteDialogEffect());
             list.Add(new DodgeEffect());
@@ -163,6 +167,9 @@ namespace ConditioningControlPanel.Avalonia.Possession
             list.Add(new RoomWarpEffect());
             list.Add(new GlitchPortraitEffect());
             list.Add(new StealCardEffect());
+            list.Add(new ToastEffect());
+            list.Add(new SwapEffect());
+            list.Add(new GhostCursorEffect());
             return list;
         }
 
@@ -177,6 +184,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
 
         internal static PossessionDirectorHead CreateDirectorHead() => new()
         {
+            Scenes = () => new[] { new WhereYouAreScene() },
             OnUi = OnUi,
             UiAlive = () => Application.Current != null && !_shutdownStarted,
             Settings = () => CoreSettings.Service?.Current,

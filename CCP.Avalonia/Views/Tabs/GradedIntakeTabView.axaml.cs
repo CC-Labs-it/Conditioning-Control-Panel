@@ -245,7 +245,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (!recovery && CoreSettings.Current.IntakeFullscreen) intake.WindowState = WindowState.FullScreen;
             intake.Relaunch = () => OpenIntake(owner, duckMain, recovery: true);
             intake.Drafted += (session, path) => OnSessionDrafted(shell, session, path);
-            try { LoadAndShowIntake(intake); }
+            try
+            {
+                LoadAndShowIntake(intake);
+                if (owner != null) intake.AttachIntakeOwner(owner);
+            }
             catch { intake.Close(); emi.EndIntake(); throw; }
             return intake;
         }
@@ -407,15 +411,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CoreSettings.Save();
         }
 
-        /// <summary>Gate CTA. Serves both closed states: the shared App Info &amp; Data popup is
-        /// where signing in lives as well as where the tiers are, so NeedsLogin and Spent can share
-        /// one destination even though their button labels differ. WPF's <c>BtnGateUnlock_Click</c>
-        /// is <c>ShowAppInfoPopup()</c> → <c>ShowTab("appsettings")</c> + FocusSection("account"),
-        /// which is exactly <see cref="Windows.MainShellWindow.OpenAppSettingsSection"/> here.
-        ///
-        /// <para>The gate itself is left hidden by the markup until RefreshGradedIntakeGate exists
-        /// (see the class note), so today this is reachable only from a preview.</para></summary>
+        /// <summary>Forward both closed gate states to the shared padlock handler, as in WPF.</summary>
         private void BtnGI_GateUnlock_Click(object? sender, RoutedEventArgs e)
-            => (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.OpenAppSettingsSection("account");
+            => (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.BtnGateUnlock_Click(sender, e);
     }
 }

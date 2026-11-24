@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Threading;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
@@ -51,10 +52,26 @@ public sealed class ModServiceCoreTests
     private static void ResetProfile()
     {
         Assert.Equal(RoadmapTestProfile.DirectoryPath, Root);
+        // An earlier test's debounced save (any class in this shared sandbox) can still be armed or
+        // mid-write; it would hold its .tmp open (Windows CI: IOException on File.Delete) or land after this.
+        SettingsService.DisarmAllPendingSaves();
         Directory.CreateDirectory(Root);
-        foreach (var f in Directory.GetFiles(Root, "settings*")) File.Delete(f);
+        // A .tmp still held by its writer is skipped: it is never read as settings.json.
+        foreach (var f in RoadmapTestProfile.SettingsFiles(Root)) File.Delete(f);
         foreach (var dir in new[] { "mods", "builtin_mods", "content" })
             if (Directory.Exists(Path.Combine(Root, dir))) Directory.Delete(Path.Combine(Root, dir), recursive: true);
+    }
+
+    [Fact]
+    public void ResetProfileDisarmsAnEarlierDebouncedSave()
+    {
+        ResetProfile();
+        var leaked = new SettingsService();
+        leaked.SaveDebounceDueTimeMilliseconds = 100;
+        leaked.Save();   // what a finished test leaves armed on the shared settings.json
+        ResetProfile();
+        Thread.Sleep(400);
+        Assert.False(File.Exists(Path.Combine(Root, "settings.json")));
     }
 
     [Fact]
