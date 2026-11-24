@@ -5,6 +5,7 @@ using System.Linq;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Tests;
+using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -41,7 +42,7 @@ public sealed partial class GameWindowTests
     {
         var spec = GameWindow.Games[id];
         // Glassroad runs in Electron on Linux, not this WebHost.
-        if (spec.Id == "glassroad" && OperatingSystem.IsLinux()) return;
+        if (spec.Id == "glassroad" && OperatingSystem.IsLinux()) Assert.Skip("Glassroad uses Electron on Linux");
         var w = new GameWindow(spec);
         try
         {
@@ -49,8 +50,12 @@ public sealed partial class GameWindowTests
             var sent = new List<string>();
             w.Posted += sent.Add;
             BootLikeEngine(w, "{\"type\":\"ready\"}");
-            var passed = w.IsReady && sent.Count == 1;
-            Assert.True(EarlyBootGaps.Contains(id) != passed, $"{id}: ready={w.IsReady}, frames={sent.Count}; update the ratchet");
+            var knownGap = EarlyBootGaps.Contains(id);
+            var handshakeSucceeded = w.IsReady && sent.Count == 1 && (string?)JObject.Parse(sent[0])["type"] == "init";
+            Assert.False(knownGap && handshakeSucceeded, $"{id}: handshake now works; remove the tracked gap");
+            Assert.SkipWhen(knownGap, $"{id}: tracked early-ready gap (ready={w.IsReady}, frames={sent.Count})");
+            Assert.True(w.IsReady, $"{id}: early ready did not mark the host ready");
+            Assert.Equal("init", (string?)JObject.Parse(Assert.Single(sent))["type"]);
         }
         finally { w.Close(); }
     });
