@@ -254,9 +254,8 @@
                 <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
                         Background="{StaticResource SectionHueAccountBrush}"/>
                 <StackPanel Margin="15,12,15,12">
-                    <TextBlock Text="{loc:Str label_link_accounts}"
-                               Foreground="{StaticResource SectionHueAccountBrush}"
-                               FontSize="14" FontWeight="Bold" Margin="0,0,0,6"/>
+                    <TextBlock Style="{StaticResource SettingsCardTitle}" Text="{loc:Str label_link_accounts}"
+                               Foreground="{StaticResource SectionHueAccountBrush}" Margin="0,0,0,6"/>
                     <TextBlock Text="{loc:Str label_link_both_providers_to_access_your_account_fr}"
                                Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"/>
 
@@ -297,9 +296,8 @@
                 <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
                         Background="{StaticResource SectionHueAccountBrush}"/>
                 <StackPanel Margin="15,12,15,12">
-                    <TextBlock Text="{loc:Str label_cloud_settings_backup}"
-                               Foreground="{StaticResource SectionHueAccountBrush}"
-                               FontSize="14" FontWeight="Bold" Margin="0,0,0,6"/>
+                    <TextBlock Style="{StaticResource SettingsCardTitle}" Text="{loc:Str label_cloud_settings_backup}"
+                               Foreground="{StaticResource SectionHueAccountBrush}" Margin="0,0,0,6"/>
                     <TextBlock x:Name="TxtCloudBackupStatus" x:FieldModifier="internal"
                                Text="{loc:Str label_checking_backup_status}"
                                Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"/>
@@ -332,9 +330,8 @@
                 <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
                         Background="{StaticResource SectionHueAccountBrush}"/>
                 <StackPanel Margin="15,12,15,12">
-                    <TextBlock Text="{loc:Str label_data_privacy}"
-                               Foreground="{StaticResource SectionHueAccountBrush}"
-                               FontSize="14" FontWeight="Bold" Margin="0,0,0,6"/>
+                    <TextBlock Style="{StaticResource SettingsCardTitle}" Text="{loc:Str label_data_privacy}"
+                               Foreground="{StaticResource SectionHueAccountBrush}" Margin="0,0,0,6"/>
                     <TextBlock Text="{loc:Str label_export_your_cloud_data_or_view_our_privacy_po}"
                                Foreground="{DynamicResource TextMutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10"/>
 
@@ -384,8 +381,8 @@
                 <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
                         Background="{StaticResource SectionHueAccountBrush}"/>
                 <StackPanel Margin="15,12,15,12">
-                    <TextBlock Text="{loc:Str section_support_development}"
-                               Foreground="{StaticResource SectionHueAccountBrush}" FontSize="14" FontWeight="Bold"/>
+                    <TextBlock Style="{StaticResource SettingsCardTitle}" Text="{loc:Str section_support_development}"
+                               Foreground="{StaticResource SectionHueAccountBrush}"/>
                     <TextBlock TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12" Margin="0,6,0,0">
                         <Run Text="{loc:Str section_patreon_unlocks}"/> <Run x:Name="RunPatreonFeatures" x:FieldModifier="internal" Text="{loc:Str section_ai_chat_window_awareness_slut_mode_takeover}" Foreground="{DynamicResource TextLightBrush}"/>
                     </TextBlock>

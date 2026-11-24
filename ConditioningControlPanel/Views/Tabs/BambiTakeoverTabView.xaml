@@ -253,7 +253,16 @@
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto" MinWidth="56"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_interval}" Emblem="Often"/>
+                                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_interval}" Emblem="Often">
+                                                        <rows:RowLabel.Value>
+                                                            <!-- A bigger number is LESS often: the period form of the fraction. -->
+                                                            <MultiBinding Converter="{x:Static rows:RowFraction.Inverse}">
+                                                                <Binding Path="Value" ElementName="SliderAutonomyInterval"/>
+                                                                <Binding Path="Maximum" ElementName="SliderAutonomyInterval"/>
+                                                                <Binding Path="Minimum" ElementName="SliderAutonomyInterval"/>
+                                                            </MultiBinding>
+                                                        </rows:RowLabel.Value>
+                                                    </rows:RowLabel>
                                                     <Slider Grid.Column="1" x:Name="SliderAutonomyInterval" x:FieldModifier="internal"
                                                             Minimum="30" Maximum="300" Value="60" VerticalAlignment="Center" Margin="14,0"
                                                             ValueChanged="SliderAutonomyInterval_Changed"/>
@@ -268,7 +277,16 @@
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto" MinWidth="56"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str label_cooldown}" Emblem="Often"/>
+                                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str label_cooldown}" Emblem="Often">
+                                                        <rows:RowLabel.Value>
+                                                            <!-- A bigger number is LESS often: the period form of the fraction. -->
+                                                            <MultiBinding Converter="{x:Static rows:RowFraction.Inverse}">
+                                                                <Binding Path="Value" ElementName="SliderAutonomyCooldown"/>
+                                                                <Binding Path="Maximum" ElementName="SliderAutonomyCooldown"/>
+                                                                <Binding Path="Minimum" ElementName="SliderAutonomyCooldown"/>
+                                                            </MultiBinding>
+                                                        </rows:RowLabel.Value>
+                                                    </rows:RowLabel>
                                                     <Slider Grid.Column="1" x:Name="SliderAutonomyCooldown" x:FieldModifier="internal"
                                                             Minimum="10" Maximum="300" Value="30" VerticalAlignment="Center" Margin="14,0"
                                                             ValueChanged="SliderAutonomyCooldown_Changed"/>

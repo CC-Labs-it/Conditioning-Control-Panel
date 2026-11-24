@@ -614,6 +614,17 @@
             <Setter Property="Margin" Value="0,0,0,8"/>
         </Style>
 
+        <!-- Readable Rows (integration 2026-11-24): the title of a Settings card wears the look of an
+             OptionSection fold header (22 SemiBold Fredoka, Features/OptionSection.cs) so it leads its
+             16 px Bold rows instead of sitting under them in 11 px Consolas. The card still sets its own
+             hue as Foreground. -->
+        <Style x:Key="SettingsCardTitle" TargetType="TextBlock" BasedOn="{StaticResource SectionHeader}">
+            <Setter Property="FontFamily" Value="/Fonts/#Fredoka, Segoe UI"/>
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+
         <!-- Label Style. Polish 8: Type.Body's size, but the row title stays TextLight (it is
              the actionable line) and keeps NoWrap so no settings row changes height. -->
         <Style x:Key="SettingLabel" TargetType="TextBlock" BasedOn="{StaticResource Type.Body}">

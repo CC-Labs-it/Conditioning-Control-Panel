@@ -71,7 +71,7 @@
                 <StackPanel Orientation="Horizontal">
                     <Image Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"
                            Source="{Binding Source='⚡', Converter={StaticResource EmojiToImageSource}}"/>
-                    <TextBlock Style="{StaticResource SectionHeader}" Text="{loc:Str set2_section_performance}"
+                    <TextBlock Style="{StaticResource SettingsCardTitle}" Text="{loc:Str set2_section_performance}"
                                Foreground="{StaticResource SectionHuePerformanceBrush}" VerticalAlignment="Center"/>
                 </StackPanel>
                 <TextBlock Text="{loc:Str set2_section_performance_hint}" TextWrapping="Wrap"

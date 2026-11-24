@@ -110,7 +110,7 @@
                                    Source="{Binding Source='👁', Converter={StaticResource EmojiToImageSource}}"/>
                         </Border>
                         <StackPanel VerticalAlignment="Center">
-                            <helpers:EmojiTextBlock Style="{StaticResource SectionHeader}"
+                            <helpers:EmojiTextBlock Style="{StaticResource SettingsCardTitle}"
                                                     Foreground="{StaticResource SectionHueDevicesBrush}"
                                                     Text="{loc:Str set2_devices_webcam_title}" Margin="0"/>
                             <TextBlock Text="{loc:Str set2_devices_webcam_sub}"
@@ -313,7 +313,7 @@
                                    Source="{Binding Source='🎤', Converter={StaticResource EmojiToImageSource}}"/>
                         </Border>
                         <StackPanel VerticalAlignment="Center">
-                            <helpers:EmojiTextBlock Style="{StaticResource SectionHeader}"
+                            <helpers:EmojiTextBlock Style="{StaticResource SettingsCardTitle}"
                                                     Foreground="{StaticResource SectionHueDevicesBrush}"
                                                     Text="{loc:Str set2_devices_mic_title}" Margin="0"/>
                             <TextBlock Text="{loc:Str set2_devices_mic_sub}"
@@ -474,7 +474,7 @@
                             <Image Width="18" Height="18"
                                    Source="{Binding Source='⌨️', Converter={StaticResource EmojiToImageSource}}"/>
                         </Border>
-                        <helpers:EmojiTextBlock Style="{StaticResource SectionHeader}" VerticalAlignment="Center"
+                        <helpers:EmojiTextBlock Style="{StaticResource SettingsCardTitle}" VerticalAlignment="Center"
                                                 Foreground="{StaticResource SectionHueDevicesBrush}"
                                                 Text="{loc:Str set2_devices_safety_title}" Margin="0"/>
                     </StackPanel>

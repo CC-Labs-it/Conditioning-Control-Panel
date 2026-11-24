@@ -39,11 +39,17 @@ internal static class RowsRender
     /// </summary>
     public static IReadOnlyList<RowLabel> Check(FrameworkElement page, string name, int minLabels = 1,
         IEnumerable<string>? show = null, IEnumerable<string>? noEmblem = null, double width = Width,
-        Action<FrameworkElement>? before = null)
+        Action<FrameworkElement>? before = null, string? lang = null)
     {
-        var host = Host(page, width, show, before);
-        var labels = AssertRows(page, minLabels, noEmblem);
-        Dump(host, name);
+        // lang (or env CCP_ROWS_LANG) re-reads the page's {loc:Str} bindings in that language for the
+        // check and the still, then puts the previous language back.
+        var labels = InLanguage(lang, () =>
+        {
+            var host = Host(page, width, show, before);
+            var found = AssertRows(page, minLabels, noEmblem);
+            Dump(host, name);
+            return found;
+        });
         AssertSilent(name);
         return labels;
     }
@@ -100,38 +106,121 @@ internal static class RowsRender
     /// </summary>
     public static IReadOnlyList<RowLabel> AssertRows(FrameworkElement root, int minLabels = 1, IEnumerable<string>? noEmblem = null)
     {
-        var bare = new HashSet<string>(noEmblem ?? Array.Empty<string>(), StringComparer.Ordinal);
         var labels = Descendants(root).OfType<RowLabel>().Where(IsShown).ToList();
         Assert.True(labels.Count >= minLabels, $"only {labels.Count} RowLabels on {root.GetType().Name} (want {minLabels})");
+        var problems = Problems(labels, noEmblem);
+        Assert.True(problems.Count == 0, string.Join("\n", problems));
+        return labels;
+    }
+
+    /// <summary>
+    /// The rows rules of <see cref="AssertRows"/> as a list of sentences instead of a first failure,
+    /// for the language sweep (which reports what squeezes rather than failing on it).
+    /// </summary>
+    public static List<string> Problems(IEnumerable<RowLabel> labels, IEnumerable<string>? noEmblem = null, bool squeeze = false)
+    {
+        var bare = new HashSet<string>(noEmblem ?? Array.Empty<string>(), StringComparer.Ordinal);
+        var problems = new List<string>();
         foreach (var label in labels)
         {
-            if (!bare.Contains(label.Text ?? "") && !bare.Contains(label.ShownText))
-                Assert.True(label.Emblem.HasValue, $"'{label.Text}' has no emblem");
+            if (!bare.Contains(label.Text ?? "") && !bare.Contains(label.ShownText) && !label.Emblem.HasValue)
+                problems.Add($"'{label.Text}' has no emblem");
             if (label.Parent is Grid row)
             {
-                Assert.True(row.MinHeight >= 46, $"'{label.ShownText}' row is not an OptionRow");
-                Assert.True(double.IsNaN(row.Height), $"'{label.ShownText}' row keeps a fixed Height");
-                Assert.True(row.ActualHeight + 0.5 >= label.DesiredSize.Height, $"'{label.ShownText}' is clipped by its row");
+                if (row.MinHeight < 46) problems.Add($"'{label.ShownText}' row is not an OptionRow");
+                if (!double.IsNaN(row.Height)) problems.Add($"'{label.ShownText}' row keeps a fixed Height");
+                if (row.ActualHeight + 0.5 < label.DesiredSize.Height) problems.Add($"'{label.ShownText}' is clipped by its row");
                 double right = label.TranslatePoint(new Point(label.ActualWidth, 0), row).X;
+                if (right > row.ActualWidth + 0.5)
+                    problems.Add($"'{label.ShownText}' runs past its row ({right:0} > {row.ActualWidth:0})");
                 foreach (UIElement other in row.Children)
                 {
                     if (other == label || other is not FrameworkElement fe || fe.Visibility != Visibility.Visible) continue;
                     // Only siblings sharing the label's line can overlap it.
                     if (Grid.GetRow(fe) != Grid.GetRow(label)) continue;
                     double left = fe.TranslatePoint(new Point(0, 0), row).X;
-                    Assert.True(left + 0.5 >= right, $"'{label.ShownText}' overlaps {fe.GetType().Name} {fe.Name}");
+                    if (left + 0.5 < right) problems.Add($"'{label.ShownText}' overlaps {fe.GetType().Name} {fe.Name}");
+                    else if (squeeze && fe.ActualWidth < 1 && fe.DesiredSize.Width > 1)
+                        problems.Add($"'{label.ShownText}' squeezes {fe.GetType().Name} {fe.Name} to nothing");
                 }
             }
             var tb = label.TextPart;
             if (string.IsNullOrEmpty(tb.Text)) continue;
-            var ft = new FormattedText(tb.Text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
-                new Typeface(tb.FontFamily, tb.FontStyle, tb.FontWeight, tb.FontStretch), tb.FontSize, Brushes.White, 1.0);
-            Assert.True(ft.WidthIncludingTrailingWhitespace <= tb.ActualWidth + 1,
-                $"'{tb.Text}' is trimmed ({ft.WidthIncludingTrailingWhitespace:0} > {tb.ActualWidth:0})");
-            if (label.Emblem.HasValue)
-                Assert.False(LeadingEmoji.Strip(tb.Text) != tb.Text, $"'{tb.Text}' still leads with an emoji");
+            if (Clipped(label) is { } clip) problems.Add(clip);
+            if (label.Emblem.HasValue && LeadingEmoji.Strip(tb.Text) != tb.Text)
+                problems.Add($"'{tb.Text}' still leads with an emoji");
         }
-        return labels;
+        return problems;
+    }
+
+    /// <summary>Most lines a label may wrap to before the page counts as squeezed.</summary>
+    public const int MaxLabelLines = 3;
+
+    /// <summary>
+    /// Null when the label's text is drawn whole: never trimmed, no word wider than its box, every
+    /// wrapped line inside the box's height, at most <see cref="MaxLabelLines"/> lines. Wrapping is
+    /// allowed (integration 2026-11-24). Otherwise a sentence naming what is wrong.
+    /// </summary>
+    public static string? Clipped(RowLabel label)
+    {
+        var tb = label.TextPart;
+        if (string.IsNullOrEmpty(tb.Text)) return null;
+        if (tb.TextTrimming != TextTrimming.None) return $"'{tb.Text}' can be trimmed ({tb.TextTrimming})";
+        var face = new Typeface(tb.FontFamily, tb.FontStyle, tb.FontWeight, tb.FontStretch);
+        FormattedText Fmt(string s) => new(s, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+            face, tb.FontSize, Brushes.White, 1.0);
+        double box = tb.ActualWidth;
+        foreach (var word in tb.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            double w = Fmt(word).Width;
+            if (w > box + 1) return $"'{tb.Text}': the word '{word}' is wider than its box ({w:0} > {box:0})";
+        }
+        var all = Fmt(tb.Text);
+        if (tb.TextWrapping == TextWrapping.NoWrap)
+            return all.WidthIncludingTrailingWhitespace <= box + 1 ? null
+                : $"'{tb.Text}' is trimmed ({all.WidthIncludingTrailingWhitespace:0} > {box:0})";
+        // +1: layout rounding can hand the TextBlock a hair less than the text's own width.
+        all.MaxTextWidth = Math.Max(1, box + 1);
+        if (all.Height > tb.ActualHeight + 1) return $"'{tb.Text}' is cut off ({all.Height:0} > {tb.ActualHeight:0} px tall)";
+        int lines = Lines(label);
+        if (lines > MaxLabelLines) return $"'{tb.Text}' wraps to {lines} lines (box {box:0} px)";
+        return null;
+    }
+
+    /// <summary>How many lines the label's text is drawn on.</summary>
+    public static int Lines(RowLabel label)
+    {
+        var tb = label.TextPart;
+        if (string.IsNullOrEmpty(tb.Text)) return 0;
+        var one = new FormattedText("Ag", CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+            new Typeface(tb.FontFamily, tb.FontStyle, tb.FontWeight, tb.FontStretch), tb.FontSize, Brushes.White, 1.0);
+        return Math.Max(1, (int)Math.Round(tb.ActualHeight / Math.Max(1, one.Height)));
+    }
+
+    /// <summary>
+    /// Runs <paramref name="body"/> with the UI in <paramref name="lang"/> (a code of
+    /// <c>LocalizationManager.AvailableLanguages</c>; null or empty = env <c>CCP_ROWS_LANG</c>, else
+    /// unchanged) and puts the previous language back afterwards, so other tests keep English.
+    /// Build the page INSIDE the body: <c>{loc:Str}</c> bindings re-read on the switch, but text set
+    /// from code at construction does not.
+    /// </summary>
+    public static T InLanguage<T>(string? lang, Func<T> body)
+    {
+        lang = string.IsNullOrWhiteSpace(lang) ? Environment.GetEnvironmentVariable("CCP_ROWS_LANG") : lang;
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        if (string.IsNullOrWhiteSpace(lang) || lang == loc.CurrentLanguage) return body();
+        string was = loc.CurrentLanguage;
+        var culture = CultureInfo.CurrentUICulture;
+        try
+        {
+            loc.SetLanguage(lang);
+            return body();
+        }
+        finally
+        {
+            loc.SetLanguage(was);
+            CultureInfo.CurrentUICulture = culture;
+        }
     }
 
     /// <summary>

@@ -61,7 +61,7 @@
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                         <Image Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"
                                Source="{Binding Source='📴', Converter={StaticResource EmojiToImageSource}}"/>
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="{loc:Str set2_data_offline_title}"
+                        <TextBlock Style="{StaticResource SettingsCardTitle}" Text="{loc:Str set2_data_offline_title}"
                                    Foreground="{StaticResource SectionHueDataBrush}" VerticalAlignment="Center" Margin="0"/>
                     </StackPanel>
 
@@ -90,7 +90,7 @@
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                         <Image Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"
                                Source="{Binding Source='📤', Converter={StaticResource EmojiToImageSource}}"/>
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="{loc:Str set2_data_phrase_backup_title}"
+                        <TextBlock Style="{StaticResource SettingsCardTitle}" Text="{loc:Str set2_data_phrase_backup_title}"
                                    Foreground="{StaticResource SectionHueDataBrush}" VerticalAlignment="Center" Margin="0"/>
                     </StackPanel>
                     <TextBlock Text="{loc:Str set2_data_phrase_backup_hint}" TextWrapping="Wrap"
@@ -171,7 +171,7 @@
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                         <Image Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"
                                Source="{Binding Source='☠️', Converter={StaticResource EmojiToImageSource}}"/>
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="{loc:Str set2_data_danger_title}"
+                        <TextBlock Style="{StaticResource SettingsCardTitle}" Text="{loc:Str set2_data_danger_title}"
                                    Foreground="{DynamicResource DangerBrush}" VerticalAlignment="Center" Margin="0"/>
                     </StackPanel>
 

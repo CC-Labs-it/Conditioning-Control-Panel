@@ -62,7 +62,7 @@
 
                 <!-- Header -->
                 <Grid Margin="0,0,0,8">
-                    <helpers:EmojiTextBlock Style="{StaticResource SectionHeader}"
+                    <helpers:EmojiTextBlock Style="{StaticResource SettingsCardTitle}"
                                             Foreground="{StaticResource SectionHueAudioBrush}"
                                             Text="{loc:Str section_audio}" Margin="0"/>
                     <Button x:Name="HelpBtnAudio" x:FieldModifier="internal"
