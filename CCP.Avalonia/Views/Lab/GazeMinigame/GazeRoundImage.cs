@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Serilog;
 
@@ -19,6 +20,7 @@ internal sealed class GazeRoundImage : Image, IDisposable
     private double _loopMs;
     private DateTimeOffset _started;
     private bool _disposed;
+    private DispatcherTimer? _timer;
 
     internal Task Decoding { get; } = Task.CompletedTask;
 
@@ -41,10 +43,7 @@ internal sealed class GazeRoundImage : Image, IDisposable
     private async Task Decode(string path, int fitLongSide)
     {
         // WPF GazeMinigameWindow.xaml.cs:935-939: animate GIFs with source timing and repeat forever.
-        // ponytail: retain the shared decoder's memory/size budget (at most 120 frames, the pane's
-        // long side) instead of WPF's unbounded cache. Preserve source timing, summing skipped
-        // frames into the sampled frame's hold.
-        var (frames, _) = await Task.Run(() => SpiralOverlay.Decode(path, fitLongSide, frameDurations: _durations));
+        var (frames, _) = await Task.Run(() => SpiralOverlay.Decode(path, fitLongSide, frameDurations: _durations, allFrames: true));
         if (_disposed || frames.Count < 2)
         {
             foreach (var frame in frames) frame.Dispose();
@@ -55,9 +54,29 @@ internal sealed class GazeRoundImage : Image, IDisposable
         foreach (var duration in _durations) _loopMs += duration.TotalMilliseconds;
         _started = GazeMinigameWindow.Clock.GetUtcNow();
         Source = frames[0];
+        _timer = new DispatcherTimer();
+        _timer.Tick += OnFrameTick;
+        ScheduleFrame();
     }
 
-    /// <summary>Called on the game's 50ms clock, including its gaze grace period. No ambient loop.</summary>
+    private void OnFrameTick(object? sender, EventArgs e)
+    {
+        AdvanceFrame(GazeMinigameWindow.Clock.GetUtcNow());
+        ScheduleFrame();
+    }
+
+    private void ScheduleFrame()
+    {
+        if (_timer == null || _frames == null) return;
+        var phase = Math.Max(0, (GazeMinigameWindow.Clock.GetUtcNow() - _started).TotalMilliseconds) % _loopMs;
+        var index = 0;
+        while (index < _frames.Count - 1 && phase >= _durations[index].TotalMilliseconds)
+            phase -= _durations[index++].TotalMilliseconds;
+        _timer.Interval = TimeSpan.FromMilliseconds(Math.Max(1, _durations[index].TotalMilliseconds - phase));
+        _timer.Start();
+    }
+
+    /// <summary>Advance to the frame at the current loop phase.</summary>
     internal void AdvanceFrame(DateTimeOffset now)
     {
         if (_frames == null) return;
@@ -73,6 +92,8 @@ internal sealed class GazeRoundImage : Image, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _timer?.Stop();
+        _timer = null;
         var still = Source as Bitmap;
         Source = null;
         if (_frames != null)

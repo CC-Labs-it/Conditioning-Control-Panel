@@ -609,6 +609,36 @@ public sealed class GazeMinigameTests
     });
 
     [Fact]
+    public Task GifFrames_AnimateWithoutRoundTicker_AndStopOnDispose() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsureApp();
+        var dir = Directory.CreateTempSubdirectory("gaze-gif-clock-");
+        var oldClock = GazeMinigameWindow.Clock;
+        var clock = new SteppedClock();
+        GazeMinigameWindow.Clock = clock;
+        try
+        {
+            var path = Path.Combine(dir.FullName, "round.gif");
+            File.WriteAllBytes(path, Convert.FromBase64String(Gif));
+            using var image = new GazeRoundImage(path);
+            await image.Decoding;
+            var first = image.Source;
+            clock.Now += TimeSpan.FromMilliseconds(30);
+            await Task.Delay(150);
+            Assert.NotSame(first, image.Source);
+            image.Dispose();
+            clock.Now += TimeSpan.FromMilliseconds(30);
+            await Task.Delay(150);
+            Assert.Null(image.Source);
+        }
+        finally
+        {
+            GazeMinigameWindow.Clock = oldClock;
+            dir.Delete(true);
+        }
+    });
+
+    [Fact]
     public Task GifFrames_DisposedDuringDecode_NeverPublishLateFrames() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         EnsureApp();
@@ -812,7 +842,7 @@ public sealed class GazeMinigameTests
     [Theory]
     [InlineData(1, 3)]
     [InlineData(1, 0)]
-    [InlineData(41, 3)] // 123 source frames: the shared budget samples every second frame
+    [InlineData(41, 3)] // 123 source frames
     public Task GifFrames_PreserveUnequalDelays_LongHolds_AndLoopBoundary(int repeats, int firstDelayCs) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         EnsureApp();
@@ -850,14 +880,16 @@ public sealed class GazeMinigameTests
             var first = image.Source;
             if (repeats > 1)
             {
-                image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(firstMs + 69));
-                Assert.Same(first, image.Source); // sampled frame holds for 30 + 70ms
-                image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(firstMs + 70));
+                image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(firstMs - 1));
+                Assert.Same(first, image.Source);
+                image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(firstMs));
                 Assert.NotSame(first, image.Source);
+                image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(40 * loopMs));
+                Assert.NotSame(first, image.Source); // frame 120 is retained
                 image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(repeats * loopMs - 1));
                 Assert.NotSame(first, image.Source);
                 image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(repeats * loopMs));
-                Assert.Same(first, image.Source); // final sampled frame includes the full tail hold
+                Assert.Same(first, image.Source); // all frames reach the loop boundary
                 return;
             }
             image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(firstMs));

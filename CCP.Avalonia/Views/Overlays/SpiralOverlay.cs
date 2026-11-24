@@ -469,9 +469,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <param name="cancellationToken">Cancel a removed cascade faller's pending decode.</param>
         internal static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int fitLongSide = 0, int maxFrames = 0,
             List<TimeSpan>? frameDurations = null, bool flash = false, long maxMemoryBytes = 0, int maxDecodedFrames = 0,
-            long maxSourcePixels = 0, bool averageFrameDelay = false, CancellationToken cancellationToken = default) =>
+            long maxSourcePixels = 0, bool averageFrameDelay = false, CancellationToken cancellationToken = default, bool allFrames = false) =>
             RunGatedDecode(() => DecodeCore(path, fitLongSide, maxFrames, frameDurations, flash, maxMemoryBytes,
-                maxDecodedFrames, maxSourcePixels, averageFrameDelay, cancellationToken), cancellationToken);
+                maxDecodedFrames, maxSourcePixels, averageFrameDelay, cancellationToken, allFrames), cancellationToken);
 
         // WPF AnimatedWebp.cs:62-84: bound native decode memory across concurrent callers.
         private static readonly SemaphoreSlim DecodeGate = new(2, 2);
@@ -485,7 +485,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static (List<Bitmap> Frames, TimeSpan Delay) DecodeCore(string path, int fitLongSide, int maxFrames,
             List<TimeSpan>? frameDurations, bool flash, long maxMemoryBytes, int maxDecodedFrames, long maxSourcePixels,
-            bool averageFrameDelay, CancellationToken cancellationToken)
+            bool averageFrameDelay, CancellationToken cancellationToken, bool allFrames)
         {
             var frames = new List<Bitmap>();
             try
@@ -501,6 +501,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var plan = SpiralFrames.Plan(codec.Info.Width, codec.Info.Height, count,
                     codec.FrameCount > 0 ? codec.FrameInfo[0].Duration : 50);
                 var decodeCount = count;
+                if (allFrames) (plan.Frames, plan.Step) = (count, 1);
                 if (flash)
                 {
                     var f = FlashFrames.Plan(codec.Info.Width, codec.Info.Height, count, fitLongSide);
