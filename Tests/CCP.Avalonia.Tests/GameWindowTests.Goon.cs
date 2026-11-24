@@ -4,8 +4,12 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.GoonGame;
+using ConditioningControlPanel.Services.Haptics.Core;
 using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
 using Xunit;
@@ -199,7 +203,7 @@ public sealed partial class GameWindowTests
         Assert.False((bool)init["solo"]!);
         Assert.Equal("", (string?)init["net"]!["authToken"]);   // the token never reaches the page
         Assert.True((bool)init["net"]!["viaHost"]!);
-        Assert.False((bool)init["caps"]!["haptics"]!);
+        Assert.False((bool)init["caps"]!["haptics"]!);   // no toy connected
         Assert.NotNull(init["consent"]!["liveDurationSec"]);
         Assert.NotNull(frames[1]["images"]);
         Assert.Empty((JArray)frames[1]["received"]!);
@@ -232,5 +236,86 @@ public sealed partial class GameWindowTests
         Assert.Equal(WindowState.FullScreen, again.WindowState);
         again.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":false}");
         Assert.False(CoreSettings.Current.GoonFullscreen);
+    });
+
+    /// <summary>WPF GoonHostService.cs:757-768: a finished practice claims practice and the slip reaches the page.</summary>
+    [Fact]
+    public void Goon_PracticeResultClaimsSparklesAndPostsTheSlip() => Run((_, _) =>
+    {
+        var previous = SparklesHead.Service;
+        var wire = new RewardWire();
+        using var http = new System.Net.Http.HttpClient(wire);
+        try
+        {
+            CoreAccount.IsLoggedInProvider = () => true;
+            SparklesHead.Service = new ConditioningControlPanel.Services.Sparkles.Claims.SparklesClaimService(http, () => ("account", "test-token"), "http://localhost");
+            var goon = GameWindow.Launch(GameWindow.GoonId)!;
+            var frames = new System.Collections.Generic.List<JObject>();
+            goon.Posted += json => frames.Add(JObject.Parse(json));
+            goon.HandleMessage("{\"type\":\"match-result\",\"practice\":true,\"code\":\"\",\"result\":{\"endReason\":1,\"winnerIsHost\":true,\"localIsHost\":true,\"survivedMs\":90000}}");
+            wire.Reply.SetResult(new(System.Net.HttpStatusCode.OK) { Content = new System.Net.Http.StringContent("{ok:true,receipt:{paid:8,credited:8,result:{kind:'duel',outcome:'win'}}}") });
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (!goon.SparklesPending.IsCompleted && DateTime.UtcNow < deadline) { Dispatcher.UIThread.RunJobs(); System.Threading.Thread.Sleep(1); }
+            Assert.True(goon.SparklesPending.IsCompletedSuccessfully);
+            Assert.Equal(1, wire.Calls);
+            Assert.Equal(("goon", "practice", "win"), ((string?)wire.Body!["game"], (string?)wire.Body["mode"], (string?)wire.Body["result"]!["outcome"]));
+            Assert.Single(frames, f => (string?)f["type"] == "sparkles-receipt");
+            goon.Close();
+        }
+        finally { SparklesHead.Service = previous; }
+    });
+
+    /// <summary>WPF GoonHostService.cs:469,749-756,2074-2099 and :361: a connected toy is advertised, its state is
+    /// pushed, cues play on it, and once the window closes the cue stops and later cues are refused.</summary>
+    [Fact]
+    public void Goon_ToyCuesPlayOnAConnectedToyAndStopWithTheWindow() => Run((_, _) =>
+    {
+        var s = CoreSettings.Current.Haptics;
+        s.EnsureV2Migrated();
+        var old = (CoreHaptics.Service, CoreEntitlement.HasPremiumProvider, MockProviderV2.Toast);
+        var toasts = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        MockProviderV2.Toast = toasts.Enqueue;
+        CoreEntitlement.HasPremiumProvider = () => true;
+        (s.Enabled, s.ButtplugUrl) = (true, "ws://127.0.0.1:1");
+        s.V2.Provider("mock").Enabled = true;
+        s.V2.Provider("buttplug").Enabled = false;
+        s.V2.Provider("lovense").Enabled = false;
+        var haptics = new HapticService(s);
+        CoreHaptics.Service = haptics;
+        bool Wait(Func<bool> done)
+        {
+            for (var t = 0; t < 3000 && !done(); t += 20) { Dispatcher.UIThread.RunJobs(); System.Threading.Thread.Sleep(20); }
+            return done();
+        }
+        try
+        {
+            Assert.True(haptics.ConnectAsync().Result);
+            CoreAccount.IsLoggedInProvider = () => true;
+            var goon = GameWindow.Launch(GameWindow.GoonId)!;
+            var frames = new System.Collections.Generic.List<JObject>();
+            goon.Posted += json => frames.Add(JObject.Parse(json));
+            goon.HandleMessage("{\"type\":\"ready\"}");
+            Assert.True((bool)frames.First(f => (string?)f["type"] == "init")["caps"]!["haptics"]!);
+
+            haptics.DisconnectAsync().Wait();
+            Assert.True(Wait(() => frames.Any(f => (string?)f["type"] == "haptics-state" && !(bool)f["connected"]!)));
+            Assert.True(haptics.ConnectAsync().Result);
+            Assert.True(Wait(() => frames.Any(f => (string?)f["type"] == "haptics-state" && (bool)f["connected"]!)));
+
+            goon.HandleMessage("{\"type\":\"toy-pattern\",\"intensity\":0.3,\"durationMs\":0,\"pattern\":\"steady\"}");
+            Assert.True(Wait(() => toasts.Any(t => t.Contains('%'))), string.Join(" | ", toasts));
+            goon.Close();
+            System.Threading.Thread.Sleep(400);
+            toasts.Clear();
+            GoonToyCues.OnPattern(JObject.Parse("{\"intensity\":0.9,\"durationMs\":0}"));
+            System.Threading.Thread.Sleep(600);
+            Assert.DoesNotContain(toasts, t => t.Contains('%'));
+        }
+        finally
+        {
+            haptics.PanicStop();
+            haptics.Dispose();
+            (CoreHaptics.Service, CoreEntitlement.HasPremiumProvider, MockProviderV2.Toast) = old;
+        }
     });
 }

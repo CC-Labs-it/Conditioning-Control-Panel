@@ -2,12 +2,13 @@
 // Ported: the Play door registers the page (StartUrl :290), the boot handshake answers ready with init and
 // manifest (OnPageReady :426-545), the page-driven window mode is applied, echoed and remembered
 // (ApplyHostFullscreen :983, StartFullscreen :300), presence lasts while the window is open (:328), the
-// window keeps Escape as its pause (MainWindow.xaml.cs:1526-1588) and the heartbeat watchdog (:1667-1782).
+// window keeps Escape as its pause (MainWindow.xaml.cs:1526-1588), the heartbeat watchdog (:1667-1782), toy cues on
+// a connected device (:749-756, HookToys :2074-2099) and the practice Sparkles claim with its slip (:757-768).
 // Practice runs on the page's own loopback. Panic closes it with every other game (PanicSurfaces "games";
 // WPF GameSurfaces.cs:64).
 // Part B: the net-post proxy (:1008) is answered as unreachable (status 0, the page's offline path) until a
-// trusted sender-origin seam exists, so hosted and joined duels do not connect yet; toys (:749), Sparkles
-// match-result (:757), cache and inbox verbs (:776-785), Discord verbs (:789-804), online media (:807-819),
+// trusted sender-origin seam exists, so hosted and joined duels do not connect yet (and so no last-opponent
+// record, :767); cache and inbox verbs (:776-785), Discord verbs (:789-804), online media (:807-819),
 // share card (:835), main-window duck (:385) and the boot-error dialog (:1801).
 using System;
 using System.Collections.Generic;
@@ -42,7 +43,29 @@ internal sealed partial class GameWindow
         if (CoreSettings.Current.GoonFullscreen && !_goonRecoveryWindowed) WindowState = WindowState.FullScreen;
         Opened += (_, _) => FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Goon);
         Closed += (_, _) => FriendsHead.Service?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Goon);
+        // WPF :361,2110 UnhookToys: the toy first, and refused until a window is up again (panic included).
+        Closing += (_, _) =>
+        {
+            GoonToyCues.Close();
+            if (_goonToys != null) _goonToys.ConnectionChanged -= OnGoonToys;
+            _goonToys = null;
+        };
     }
+
+    // WPF HookToys (:2074): cues may play while the window is up, and the page hears a toy connect or drop.
+    private HapticService? _goonToys;
+    private void HookGoonToys()
+    {
+        GoonToyCues.Open();
+        if (_goonToys != null || CoreHaptics.Service is not { } haptics) return;
+        haptics.ConnectionChanged += OnGoonToys;
+        _goonToys = haptics;
+    }
+
+    private void OnGoonToys(object? sender, bool connected) => Dispatcher.UIThread.Post(() =>
+    {
+        if (!_closing) Post(new { type = "haptics-state", connected = GoonToyCues.ReadyNow });
+    });
 
     // WPF GoonHostService.cs:1667-1782: a live page must keep beating and painting.
     internal static Func<DateTime> GoonUtcNow = () => DateTime.UtcNow;
@@ -69,6 +92,7 @@ internal sealed partial class GameWindow
                 _goonBeat = _goonPaintMove = _goonTick = GoonUtcNow();
                 _goonPaint = null;
                 IsReady = true;
+                HookGoonToys();
                 try { Web.Focus(); } catch (Exception ex) { Log.Debug("[Game] goon focus: {E}", ex.Message); }
                 Post(GoonInitMessage());
                 var m = _server == null ? new GameMediaManifest.Manifest() : GameMediaManifest.BuildActive(WebAssetServer.AssetPath);
@@ -80,6 +104,21 @@ internal sealed partial class GameWindow
                 break;
             case "fullscreen-set":
                 SetGoonFullscreen(message["on"]?.Type == JTokenType.Boolean && (bool)message["on"]!);
+                handled = true;
+                break;
+            case "toy-pattern":
+                // WPF :749: clamped to the cap the page sends; the player's master cap applies in the mixer.
+                GoonToyCues.OnPattern(message);
+                handled = true;
+                break;
+            case "toy-stop":
+                GoonToyCues.Stop();
+                handled = true;
+                break;
+            case "match-result":
+                // WPF :757-768: practice claims practice, a leave or mercy claims nothing; the slip goes to the page.
+                DeliverSparkles(ConditioningControlPanel.Services.Sparkles.Claims.SparklesPageResults.Send(
+                    ConditioningControlPanel.Services.Sparkles.Claims.SparklesPageResults.Goon(message), SparklesHead.Service));
                 handled = true;
                 break;
             case "open-prime":
@@ -115,6 +154,8 @@ internal sealed partial class GameWindow
         _goonTick = now;
         if (_closing || _shellExiting || !IsReady) return;
         var silent = (now - _goonBeat).TotalSeconds;
+        // WPF :1716-1718: a page that stopped beating cannot send toy-stop, so its cue ends long before recovery.
+        if (silent > 6) GoonToyCues.Stop();
         if (silent > 20) { RecoverGoon(); return; }
         if (_goonPaint != null)
         {
@@ -156,8 +197,7 @@ internal sealed partial class GameWindow
         CoreSettings.Service?.Save();
     }
 
-    /// <summary>WPF OnPageReady (:443-504) with the fields this head can honour: no toy director
-    /// (haptics false), no Discord or online-media block (the page reads null as none).</summary>
+    /// <summary>WPF OnPageReady (:443-504) with the fields this head can honour: no Discord or online-media block (the page reads null as none).</summary>
     internal object GoonInitMessage()
     {
         var settings = CoreSettings.Current;
@@ -178,7 +218,7 @@ internal sealed partial class GameWindow
             net = new { serverBase = GoonProxyBase, authToken = "", viaHost = true },
             caps = new
             {
-                haptics = false,
+                haptics = GoonToyCues.ReadyNow,   // WPF :469
                 brainDrain = true,
                 spiral = true,
                 camera = false,
