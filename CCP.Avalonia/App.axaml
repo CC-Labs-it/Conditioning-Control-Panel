@@ -46,6 +46,12 @@
       <Setter Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}"/>
       <Setter Property="BorderThickness" Value="{Binding BorderThickness, RelativeSource={RelativeSource TemplatedParent}}"/>
     </Style>
+    <!-- Transparent inputs retain their host background through hover and focus. -->
+    <Style Selector="TextBox.transparent /template/ Border#PART_BorderElement">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="BorderBrush" Value="Transparent"/>
+      <Setter Property="BorderThickness" Value="0"/>
+    </Style>
     <!-- Inputs.xaml:218 and 394. Local Theme and ItemContainerTheme still win. -->
     <Style Selector="CheckBox">
       <Setter Property="Theme" Value="{StaticResource InputCheckBoxTheme}"/>

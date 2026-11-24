@@ -173,8 +173,10 @@ public sealed class VoiceCommandsTests
         await Until(() => mic.Starts > starts && engine.IsListening, 10);   // the wake loop listens again
     });
 
+    // A silent room: with the WAV, the live wake loop wakes on it and the command listen can match a
+    // Lockdown-guarded intent ("one [unk]" -> pause), whose refusal is a second "stop" escape below.
     [Fact]
-    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(async (shell, mic, engine) =>
+    public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(new byte[32000], async (shell, mic, engine) =>
     {
         var s = CoreSettings.Current;
         s.AutonomyConsentGiven = true;

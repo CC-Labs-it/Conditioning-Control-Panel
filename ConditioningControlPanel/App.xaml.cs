@@ -3084,6 +3084,23 @@ namespace ConditioningControlPanel
             // Core service since awareness-observer; the head supplies the user32 title read and the
             // v2 hooks it used to call directly. No privacy filter: unchanged legacy behaviour.
             WindowAwarenessService.V2OwnsReactionsProvider = () => Services.Awareness.AwarenessV2Routing.IsActive;
+            // The awareness mouth moved to Core; these are the App.* reads it used to make.
+            Services.Awareness.AvatarAwarenessSpeaker.RaiseBark = frame => Bark?.RaiseAwarenessBark(frame) ?? false;
+            Services.Awareness.AvatarAwarenessSpeaker.DeliverLine = (line, doubleBounce) =>
+            {
+                var dispatcher = Current?.Dispatcher;
+                if (dispatcher == null || dispatcher.HasShutdownStarted) return false;
+                var avatar = AvatarWindow;
+                if (avatar == null) return false;
+                avatar.SpeakAwarenessLine(line, doubleBounce);
+                return true;
+            };
+            Services.Awareness.AvatarAwarenessSpeaker.CompanionBusy = window => AvatarWindow?.IsCompanionBusy(window) ?? false;
+            Services.Awareness.AvatarAwarenessSpeaker.LineSpoken = () => Bark?.NotifyExternalLineSpoken();
+            Services.Awareness.AvatarAwarenessSpeaker.MuteKeywordEcho = (line, ms) => KeywordTriggers?.MuteKeywordEcho(line, ms);
+            Services.Awareness.AvatarAwarenessSpeaker.ForegroundTitle = ReadForegroundWindowTitle;
+            Services.Awareness.BrainAwarenessLineSource.BrainProvider = () => Brain;
+            Services.Awareness.BrainAwarenessLineSource.AiProvider = () => Ai;
             WindowAwarenessService.V2Lifecycle = start => { if (start) Awareness?.Start(); else Awareness?.Stop(); };
             WindowAwareness = new WindowAwarenessService(ReadForegroundWindowTitle);
 
