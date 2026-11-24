@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -136,6 +137,156 @@ public sealed partial class PossessionShellTests
             CoreEngine.Stop(); CoreEngine.StartedHook = oldStarted; warden.Stop();
             PossessionAvaloniaHead.Warden = previous; AvatarTubeWindow.TestLive = null; tube.Close();
         }
+    });
+
+    private sealed class ReassemblyGate : IPossessionEffect
+    {
+        private readonly TaskCompletionSource _finished = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public string Id => "test-reassembly-gate";
+        public PossessionRung MinRung => PossessionRung.Settle;
+        public PossessionIntensity MinIntensity => PossessionIntensity.Gentle;
+        public bool IsBig => false;
+        public bool UsesFlicker => false;
+        public double Weight => 1;
+        public TimeSpan HoldFor => TimeSpan.Zero;
+        public IReadOnlyList<PossessionRole> Roles => Array.Empty<PossessionRole>();
+        public bool IsLive { get; private set; }
+        public bool CanApply(PossessionContext ctx, PossessionTarget? target) => !IsLive;
+        public Task ApplyAsync(PossessionContext ctx, PossessionTarget? target, CancellationToken ct)
+        {
+            IsLive = true;
+            return Task.CompletedTask;
+        }
+        public Task UndoAsync(TimeSpan duration)
+        {
+            if (duration <= TimeSpan.Zero) Finish();
+            return _finished.Task;
+        }
+        public void Finish() { IsLive = false; _finished.TrySetResult(); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task NewLockdownPreservesQueuedReassemblyAndPanicStillStops(bool panic) => RunAsync(async rig =>
+    {
+        CoreSettings.Current.AvatarEnabled = true;
+        CoreSettings.Current.AvatarTubeDetached = true;
+        CoreSettings.Current.LockdownWardenEnabled = true;
+        CoreSettings.Current.LockdownDoseKeeperEnabled = false;
+        var tube = new AvatarTubeWindow(null) { PossessionMoveSupportedOverride = true };
+        using var warden = new Warden(rig.Lockdown);
+        var previous = PossessionAvaloniaHead.Warden;
+        var gate = new ReassemblyGate();
+        try
+        {
+            tube.Show(); AvatarTubeWindow.TestLive = tube; PossessionAvaloniaHead.Warden = warden;
+            var home = new PixelPoint(200, 250); tube.Position = home;
+            rig.Director.Warden = warden; AvApp.Possession = rig.Director;
+            rig.Lockdown.Activate(TimeSpan.FromMinutes(30));
+            await warden.LeaveAsync(CancellationToken.None);
+            var leftAt = tube.Position;
+            Assert.True(tube.FindControl<Border>("PossessionNoteCard")!.IsVisible);
+
+            Frame();
+            var host = (IAvaloniaPossessionHost)rig.Shell;
+            var button = rig.Shell.Named<Button>("BtnClose")!;
+            var target = ((IPossessionHost)rig.Shell).Targets.Single(t => ReferenceEquals(t.Visual, button));
+            rig.Clock = rig.Clock.AddMinutes(4); Tick(rig.Lockdown);
+            rig.Director.RequestReactive("dodge", target);
+            Dispatcher.UIThread.RunJobs();
+            var bounds = host.BoundsOnGhostLayer(button)!.Value; var now = DateTime.UtcNow;
+            host.PossessionPointer.Move(new Point(bounds.X - 110, bounds.Center.Y), null, now);
+            host.PossessionPointer.Move(new Point(bounds.X - 70, bounds.Center.Y), null, now.AddMilliseconds(50));
+            rig.Frames.Frame(TimeSpan.FromMilliseconds(1000)); rig.Frames.Frame(TimeSpan.FromMilliseconds(1450));
+            Dispatcher.UIThread.RunJobs();
+            rig.Frames.Frame(TimeSpan.FromMilliseconds(1500)); rig.Frames.Frame(TimeSpan.FromMilliseconds(1900));
+            Assert.True(PossessionLease.IsLeased(button));
+            var displaced = host.BoundsOnGhostLayer(button)!.Value;
+            Assert.NotEqual(bounds.X, displaced.X);
+            var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            var effects = (List<IPossessionEffect>)typeof(PossessionDirector).GetField("_effects", flags)!.GetValue(rig.Director)!;
+            effects.Add(gate);
+            typeof(PossessionDirector).GetField("_lastReactiveAt", flags)!.SetValue(rig.Director, DateTime.MinValue);
+            rig.Director.RequestReactive(gate.Id, null);
+            Assert.Equal(2, rig.Director.LiveEffectCount);
+
+            rig.Lockdown.Deactivate(); // the gate holds the newest return, leaving dodge queued
+            Assert.True(gate.IsLive);
+            Assert.Equal(1, rig.Director.LiveEffectCount);
+            Assert.True(PossessionLease.IsLeased(button));
+            rig.Lockdown.Activate(TimeSpan.FromMinutes(30));
+            Assert.True(PossessionLease.IsLeased(button));
+            Assert.Equal(1, rig.Director.LiveEffectCount);
+            Assert.Equal(displaced.X, host.BoundsOnGhostLayer(button)!.Value.X);
+            Assert.False(tube.FindControl<Border>("PossessionNoteCard")!.IsVisible);
+            Assert.Equal(leftAt, tube.Position); // WPF reset does not snap the tube home
+            Assert.True(warden.IsAvailable); // activation clears the previous appearance cooldown
+
+            if (panic)
+            {
+                PanicSurfaces.All.Single(s => s.Id == "possession").Stop(null);
+                Assert.False(PossessionLease.IsLeased(button));
+                Assert.Equal(0, rig.Director.LiveEffectCount);
+                Assert.Equal(home, tube.Position);
+            }
+            gate.Finish();
+            for (int i = 0; i < 100 && rig.Director.LiveEffectCount != 0; i++) await Task.Delay(25);
+            Assert.Equal(0, rig.Director.LiveEffectCount);
+            if (!panic)
+            {
+                Assert.True(PossessionLease.IsLeased(button));
+                rig.Frames.Frame(TimeSpan.FromMilliseconds(2000)); rig.Frames.Frame(TimeSpan.FromMilliseconds(2400));
+                Assert.True(PossessionLease.IsLeased(button));
+                rig.Frames.Frame(TimeSpan.FromMilliseconds(3000));
+                for (int i = 0; i < 100 && PossessionLease.IsLeased(button); i++) await Task.Delay(25);
+                Assert.False(PossessionLease.IsLeased(button));
+                Assert.Equal(leftAt, tube.Position); // the old reassembly cannot return a new lockdown's warden
+                Assert.False(tube.FindControl<Border>("PossessionNoteCard")!.IsVisible);
+            }
+            Assert.Equal(bounds.X, host.BoundsOnGhostLayer(button)!.Value.X, 3);
+        }
+        finally { gate.Finish(); warden.Stop(); PossessionAvaloniaHead.Warden = previous; AvatarTubeWindow.TestLive = null; tube.Close(); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task NewLockdownCancelsAnInFlightLeaveWithoutLateNote(bool panic) => RunAsync(async rig =>
+    {
+        CoreSettings.Current.AvatarEnabled = true; CoreSettings.Current.AvatarTubeDetached = true;
+        CoreSettings.Current.LockdownWardenEnabled = true;
+        CoreSettings.Current.LockdownDoseKeeperEnabled = false;
+        var tube = new AvatarTubeWindow(null) { PossessionMoveSupportedOverride = true };
+        using var warden = new Warden(rig.Lockdown);
+        var previous = PossessionAvaloniaHead.Warden; var gate = new ReassemblyGate();
+        try
+        {
+            tube.Show(); AvatarTubeWindow.TestLive = tube; PossessionAvaloniaHead.Warden = warden;
+            var home = new PixelPoint(200, 250); tube.Position = home;
+            rig.Director.Warden = warden; AvApp.Possession = rig.Director;
+            rig.Lockdown.Activate(TimeSpan.FromMinutes(30)); Frame();
+            var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            var effects = (List<IPossessionEffect>)typeof(PossessionDirector).GetField("_effects", flags)!.GetValue(rig.Director)!;
+            effects.Add(gate);
+            rig.Director.RequestReactive(gate.Id, null);
+            Assert.Equal(1, rig.Director.LiveEffectCount);
+            var leave = warden.LeaveAsync(CancellationToken.None);
+            await Task.Delay(90);
+            var before = tube.Position; Assert.NotEqual(home, before);
+            rig.Lockdown.Deactivate(); // gate holds reassembly before it can return the tube
+            rig.Lockdown.Activate(TimeSpan.FromMinutes(30));
+            await leave;
+            Assert.Equal(before, tube.Position);
+            Assert.True(warden.IsAvailable);
+            Assert.False(tube.FindControl<Border>("PossessionNoteCard")!.IsVisible);
+            if (panic) PanicSurfaces.All.Single(s => s.Id == "possession").Stop(null);
+            gate.Finish();
+            await Task.Delay(500);
+            Assert.Equal(panic ? home : before, tube.Position);
+            Assert.False(tube.FindControl<Border>("PossessionNoteCard")!.IsVisible);
+        }
+        finally { gate.Finish(); warden.Stop(); PossessionAvaloniaHead.Warden = previous; AvatarTubeWindow.TestLive = null; tube.Close(); }
     });
 
 }

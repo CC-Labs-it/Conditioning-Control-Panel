@@ -109,6 +109,54 @@ public sealed class PossessionWardenTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public Task NewLockdownLetsPriorReturnFinishOrPanicStopIt(bool panic) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var settings = new SettingsService(); CoreSettings.ServiceProvider = () => settings;
+        CoreSettings.Current.AvatarEnabled = true; CoreSettings.Current.AvatarTubeDetached = true;
+        CoreSettings.Current.LockdownWardenEnabled = true; CoreSettings.Current.LockdownPossessionEnabled = true;
+        CoreSettings.Current.LockdownForceStrictLock = false; CoreSettings.Current.LockdownDisablePanicKey = false;
+        var lockdown = new LockdownService();
+        var tube = new AvatarTubeWindow(null) { PossessionMoveSupportedOverride = true };
+        using var warden = new Warden(lockdown);
+        using var director = new PossessionDirector(lockdown, Array.Empty<IPossessionEffect>(), PossessionAvaloniaHead.CreateDirectorHead()) { Warden = warden };
+        var previous = PossessionAvaloniaHead.Warden; var oldBark = BarkHead.Engine; var spoken = new List<string>();
+        var bark = new BarkEngine(() => new BarkRuleSet(new[] { new BarkRule { Id = "warden_reset_return",
+            Trigger = PossessionBarkTriggers.Warden, VariantPool = new() { new BarkVariant("{verb}") } } }))
+            { Speak = line => spoken.Add(line.Text) };
+        try
+        {
+            bark.Start(); BarkHead.Engine = bark; tube.Show(); AvatarTubeWindow.TestLive = tube; PossessionAvaloniaHead.Warden = warden;
+            var home = new PixelPoint(200, 250); tube.Position = home;
+            lockdown.Activate(TimeSpan.FromMinutes(2));
+            await warden.LeaveAsync(CancellationToken.None);
+            lockdown.Deactivate();
+            await Task.Delay(80);
+            Assert.NotEqual(home, tube.Position);
+            var before = tube.Position;
+            lockdown.Activate(TimeSpan.FromMinutes(2));
+            Assert.Equal(before, tube.Position); // reset does not snap the previous return
+            Assert.False(tube.FindControl<Border>("PossessionNoteCard")!.IsVisible);
+            if (panic)
+            {
+                PanicSurfaces.All.Single(s => s.Id == "possession").Stop(null);
+                Assert.Equal(home, tube.Position);
+                await Task.Delay(450);
+                Assert.Equal(home, tube.Position);
+            }
+            else
+            {
+                for (int i = 0; i < 200 && (tube.Position != home || !warden.IsAvailable); i++) await Task.Delay(25);
+                Assert.Equal(home, tube.Position);
+                Assert.True(warden.IsAvailable);
+            }
+            Assert.Equal(new[] { "leave" }, spoken); // the previous leave cannot announce a return in the new lockdown
+        }
+        finally { warden.Stop(); PossessionAvaloniaHead.Warden = previous; BarkHead.Engine = oldBark; AvatarTubeWindow.TestLive = null; tube.Close(); lockdown.Dispose(); CoreSettings.ServiceProvider = null; }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public Task PanicRestoresDuringLeaveOrReturn(bool returning) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var settings = new SettingsService();

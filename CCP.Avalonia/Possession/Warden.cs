@@ -18,7 +18,8 @@ namespace ConditioningControlPanel.Avalonia.Possession;
 internal sealed class Warden : IPossessionWarden, IDisposable
 {
     private readonly LockdownService _lockdown;
-    private CancellationTokenSource? _active;
+    private CancellationTokenSource? _active, _leaving;
+    private readonly object _leaveGate = new();
     private DateTime _lastAppearance = DateTime.MinValue, _lastStare = DateTime.MinValue;
     private bool _busy, _hasLeft, _stopped, _returning;
     private int _epoch;
@@ -113,8 +114,13 @@ internal sealed class Warden : IPossessionWarden, IDisposable
 
     public async Task LeaveAsync(CancellationToken ct)
     {
-        if (_hasLeft) return;
-        var cts = Begin(ct); if (cts == null) return;
+        CancellationTokenSource? cts;
+        lock (_leaveGate)
+        {
+            if (_hasLeft) return;
+            cts = Begin(ct); if (cts == null) return;
+            _leaving = cts;
+        }
         var tube = _ownedTube!;
         try
         {
@@ -122,15 +128,23 @@ internal sealed class Warden : IPossessionWarden, IDisposable
             if (screen == null) return;
             _lastAppearance = DateTime.UtcNow;
             await tube.GlideToScreenPointAsync(new PixelPoint(tube.Position.X, screen.Bounds.Bottom), cts.Token, false);
+            lock (_leaveGate)
+            {
+                cts.Token.ThrowIfCancellationRequested();
+                if (!ReferenceEquals(_leaving, cts)) return;
+                _hasLeft = true;
+                int i = Random.Shared.Next(WardenRules.NoteKeys.Length);
+                tube.ShowPossessionNote(WardenRules.NoteText(i, Loc.Get(WardenRules.NoteKeys[i])));
+            }
             cts.Token.ThrowIfCancellationRequested();
-            _hasLeft = true;
-            int i = Random.Shared.Next(WardenRules.NoteKeys.Length);
-            tube.ShowPossessionNote(WardenRules.NoteText(i, Loc.Get(WardenRules.NoteKeys[i])));
             Bark(WardenRules.Leave);
         }
         catch (OperationCanceledException) { }
         catch (Exception ex) { Serilog.Log.Warning("Warden leave failed: {Error}", ex.Message); }
-        finally { End(cts); }
+        finally
+        {
+            lock (_leaveGate) { if (ReferenceEquals(_leaving, cts)) _leaving = null; End(cts); }
+        }
     }
 
     public async Task ReturnAsync(CancellationToken ct)
@@ -161,11 +175,19 @@ internal sealed class Warden : IPossessionWarden, IDisposable
         catch (Exception ex) { Serilog.Log.Debug("Warden bark failed: {Error}", ex.Message); }
     }
 
+    // WPF Warden.cs:81-95: cancel a leave and clear per-lockdown state without undoing the room
+    // or interrupting a return that already belongs to the previous reassembly.
     private void Reset()
     {
-        Stop();
+        lock (_leaveGate)
+        {
+            try { _leaving?.Cancel(); } catch (ObjectDisposedException) { }
+            _leaving = null; _hasLeft = false;
+        }
         _stopped = false;
         _lastAppearance = _lastStare = DateTime.MinValue;
+        try { AvatarTubeWindow.Live?.HidePossessionNote(); }
+        catch (Exception ex) { Serilog.Log.Debug("Warden reset note failed: {Error}", ex.Message); }
     }
 
     // A real engine restart may rearm the warden in the same Lockdown without resetting cooldowns.
@@ -177,7 +199,11 @@ internal sealed class Warden : IPossessionWarden, IDisposable
         _stopped = true;
         ++_epoch;
         try { _active?.Cancel(); } catch (ObjectDisposedException) { }
-        _active = null; _busy = false; _hasLeft = false; _returning = false;
+        lock (_leaveGate)
+        {
+            _active = null; _leaving = null;
+            _busy = false; _hasLeft = false; _returning = false;
+        }
         var tube = _ownedTube;
         _ownedTube = null;
         void Restore()
