@@ -343,13 +343,14 @@
                         </Grid>
                         <!-- What the pool drags in: four switches, all on by default (words: owner 2026-11-18).
                              Readable Rows: each switch wears its effect's picture, so the four no longer fit on
-                             the title's line; they wrap under it. -->
+                             the title's line; they sit under it as two tidy rows of two (a WrapPanel left
+                             "Words" alone on a second line at the default window size, 7.4 desk run). -->
                         <StackPanel x:Name="PoolDragsRow" Background="Transparent"
                                     ToolTip="{loc:Str tooltip_super_pool_drags}">
                             <Grid Style="{StaticResource OptionRow}">
                                 <rows:RowLabel Text="{loc:Str super_pool_drags}" Emblem="Reacts"/>
                             </Grid>
-                            <WrapPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <UniformGrid x:Name="PoolDragsChips" Columns="2" Margin="0,0,0,6">
                                 <StackPanel Orientation="Horizontal" Margin="0,4,22,4">
                                     <rows:RowLabel Text="{loc:Str super_pool_drags_fog}" Emblem="Fog" Margin="0,0,8,0"
                                                    IsOn="{Binding IsChecked, ElementName=ChkPoolDragsFog}"/>
@@ -374,7 +375,7 @@
                                     <CheckBox x:Name="ChkPoolDragsWords" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                               Checked="ChkPoolDrags_Changed" Unchecked="ChkPoolDrags_Changed"/>
                                 </StackPanel>
-                            </WrapPanel>
+                            </UniformGrid>
                         </StackPanel>
                       </StackPanel>
                     </feat:MoreFold>
