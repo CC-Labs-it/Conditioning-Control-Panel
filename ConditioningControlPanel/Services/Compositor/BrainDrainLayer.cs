@@ -422,7 +422,17 @@ public sealed class BrainDrainLayer : BaseLayer
         {
             _undertowStale = false;
             bool on = false;
-            try { on = Super.SuperAccess.IsOn(Super.SuperEffect.Undertow); } catch { }
+            try
+            {
+                // A bubble pop or Deeper point lends a timed drain with the base off: it still
+                // follows the V2 switch (ccp-bugs #1718, SuperBase.UndertowLit). IsOn is the base
+                // half (it implies the base) and wires the base hooks.
+                on = Super.SuperBase.UndertowLit(
+                    Super.SuperAccess.IsOn(Super.SuperEffect.Undertow),
+                    Super.SuperAccess.IsSelected(Super.SuperEffect.Undertow),
+                    App.Overlay?.LentBrainDrainActive == true);
+            }
+            catch { }
             if (on != _undertowOn)
             {
                 _dirty = true;

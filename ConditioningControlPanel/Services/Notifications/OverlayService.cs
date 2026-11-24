@@ -346,6 +346,10 @@ public class OverlayService : IDisposable
     /// <summary>True while at least one TIMED brain-drain overlay is still in flight. Melt and
     /// plain blur are one overlay, so a second timed drain must never start over the first.</summary>
     public bool TimedBrainDrainActive => _timedBrainDrainHolds > 0;
+
+    /// <summary>A drain lent by a bubble's timer or a Deeper band, i.e. running without the player's
+    /// own Brain Drain: V2 rides the player's pick for it (ccp-bugs #1718).</summary>
+    public bool LentBrainDrainActive => _timedBrainDrainHolds > 0 || _sustainedBrainDrainHeld;
     private bool SpiralShowing => _spiralWindows.Count > 0 || _spiralLayer?.IsShowing == true
         || _spiralLayerDecodePending != null;
     // Off-thread spiral decode state for the layer route: the path being decoded right now
