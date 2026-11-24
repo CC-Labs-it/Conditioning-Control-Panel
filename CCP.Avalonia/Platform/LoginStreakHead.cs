@@ -36,6 +36,11 @@ internal static class LoginStreakHead
         var hadHistory = engine.Progress.LastLaunchDate != default;
         if (Update(engine.Progress, settings, DateTime.Today, false) && hadHistory)
             SaveAndPay(engine, settings);
+        // WPF App.xaml.cs:3653-3666: restore the prior suppression state after retroactive awards.
+        var wasSuppressed = engine.SuppressPopups;
+        engine.SuppressPopups = true;
+        try { engine.CheckDailyMaintenance(); }
+        finally { engine.SuppressPopups = wasSuppressed; }
         if (engine.Progress.PendingStreakBreak)
         {
             var id = settings.UnifiedId;

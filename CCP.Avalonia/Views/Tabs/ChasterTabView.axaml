@@ -157,7 +157,7 @@
     </UserControl.Styles>
 
     <!-- WPF ChasterTabView.xaml:262-308: the page ground stays behind the scroll content. -->
-    <Grid ClipToBounds="True">
+    <Grid x:Name="Ground" ClipToBounds="True" Loaded="GroundLoaded">
         <Border x:Name="GroundBackdrop" CornerRadius="18" IsHitTestVisible="False">
             <Border.Background>
                 <RadialGradientBrush Center="22%,18%" GradientOrigin="22%,18%" RadiusX="100%" RadiusY="95%">
@@ -168,6 +168,16 @@
                 </RadialGradientBrush>
             </Border.Background>
         </Border>
+        <Grid x:Name="SpiralLayer" Width="760" Height="760" HorizontalAlignment="Right" VerticalAlignment="Top"
+              Margin="0,-300,-260,0" Opacity="0.1" IsHitTestVisible="False" RenderTransformOrigin="50%,50%">
+            <Grid.RenderTransform><RotateTransform/></Grid.RenderTransform>
+            <Path x:Name="SpiralPath" StrokeThickness="2.2" StrokeLineCap="Round">
+                <Path.Stroke><LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                    <GradientStop Color="{DynamicResource FxGlowColor}" Offset="0"/>
+                    <GradientStop Color="{DynamicResource FxParticleColor}" Offset="1"/>
+                </LinearGradientBrush></Path.Stroke>
+            </Path>
+        </Grid>
         <Border x:Name="GroundGlow" CornerRadius="18" Opacity="0.3" IsHitTestVisible="False">
             <Border.Background>
                 <RadialGradientBrush Center="78%,12%" GradientOrigin="78%,12%" RadiusX="50%" RadiusY="55%">
@@ -185,8 +195,12 @@
                 </RadialGradientBrush>
             </Border.Background>
         </Border>
+        <fx:AmbientFxCanvas x:Name="GroundAmbient" IsHitTestVisible="False"/>
     <ScrollViewer x:Name="PageScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <Grid Margin="26,22,26,20" MaxWidth="1080" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
+            <Grid x:Name="TrailerWarmHost" Width="320" Height="190" IsVisible="False" IsHitTestVisible="False">
+                <fx:ChasterTrailerView x:Name="TrailerWeb" IsVisible="False"/>
+            </Grid>
             <!-- header: the name, and the account -->
             <Grid Grid.Row="0" Margin="4,0,4,14">
                 <TextBlock Text="{loc:Str chaster_title}" FontFamily="Fredoka, Segoe UI" FontSize="28"
@@ -258,7 +272,7 @@
                 <Panel ClipToBounds="True">
                 <!-- WPF ChasterTabView.xaml:432: art bleeds into the hero from the right. -->
                 <Grid x:Name="HeroArtPlate" Width="380" HorizontalAlignment="Right" ClipToBounds="True" IsHitTestVisible="False">
-                    <Image x:Name="HeroArt" Source="avares://CCP.Avalonia/Resources/features/Phrase_Lock.png" Stretch="UniformToFill" Opacity="0.85"/>
+                    <Image x:Name="HeroArt" RenderTransformOrigin="50%,50%" Source="avares://CCP.Avalonia/Resources/features/Phrase_Lock.png" Stretch="UniformToFill" Opacity="0.85"><Image.RenderTransform><ScaleTransform/></Image.RenderTransform></Image>
                     <Border Background="{DynamicResource SurfaceBgBrush}">
                         <Border.OpacityMask>
                             <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
@@ -774,7 +788,6 @@
                     <StackPanel>
                         <Grid x:Name="TrailerPlate" Height="190" ClipToBounds="True" Background="#FF120C1F">
                             <Image x:Name="TrailerArt" Stretch="UniformToFill" RenderOptions.BitmapInterpolationMode="HighQuality"/>
-                            <fx:ChasterTrailerView x:Name="TrailerWeb" IsVisible="False"/>
                         </Grid>
                         <Grid Margin="6,8,6,0" ColumnDefinitions="*,Auto">
                             <TextBlock x:Name="TxtTrailerFlavour" FontFamily="Fredoka, Segoe UI" FontSize="14" FontWeight="Medium"

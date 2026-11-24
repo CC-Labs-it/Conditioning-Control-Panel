@@ -31,6 +31,7 @@ public sealed class PackMediaPoolTests : IDisposable
 
     private sealed class ClosingHost : IBubbleCountHost, IMandatoryVideoHost
     {
+        public int FloatingLimit => 1; public int FloatingUp => 0;
         public Action Release = () => { };
         public double LastVideoDurationSeconds => 0;
         public string? Path;

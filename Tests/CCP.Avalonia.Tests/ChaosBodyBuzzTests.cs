@@ -1,6 +1,6 @@
 using System;
-using System.Reflection;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using CCP.Avalonia.Testing;
@@ -14,8 +14,8 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-/// <summary>Runs alone: it fills the shared BubbleOverlay.Field and waits 800 ms for the hops to land; a parallel chaos class
-/// popping a bubble in that gap counted 9 instead of 8 (restack wave 2 run 3, Linux shard 0).</summary>
+/// <summary>Runs alone: it borrows the shared BubbleOverlay.Field (cleared, then restored) and waits for the hops to land;
+/// a parallel chaos class popping a bubble in that gap counted 9 instead of 8 (restack wave 2 run 3, Linux shard 0).</summary>
 [Collection(RunsAloneCollection.Name)]
 public class ChaosBodyBuzzTests
 {
@@ -39,6 +39,20 @@ public class ChaosBodyBuzzTests
             ChaosFieldFxOverlay.SkipPlatformChecksForTests = previous;
             zapField.SetValue(null, previousZap);
         }
+    }
+
+    [Fact]
+    public async Task ShockwaveTestPreservesAnIncomingPoppingBubble()
+    {
+        var incoming = new AmbientBubble { Popping = true };
+        AvaloniaTestDispatcher.Run(() => BubbleOverlay.Field.Bubbles.Add(incoming));
+        try
+        {
+            await ShockwaveSelectsRendererAndCancelsHops(false);
+            AvaloniaTestDispatcher.Run(() => Assert.Contains(incoming, BubbleOverlay.Field.Bubbles));
+            Assert.True(incoming.Popping);
+        }
+        finally { AvaloniaTestDispatcher.Run(() => BubbleOverlay.Field.Bubbles.Remove(incoming)); }
     }
 
     [Fact]
@@ -80,9 +94,9 @@ public class ChaosBodyBuzzTests
         var fieldChecks = ChaosFieldFxOverlay.SkipPlatformChecksForTests;
         var language = LocalizationManager.Instance.CurrentLanguage;
         var incomingBubbles = BubbleOverlay.Field.Bubbles.ToArray();
-        BubbleOverlay.Field.Bubbles.Clear();
         try
         {
+            BubbleOverlay.Field.Bubbles.Clear(); // an earlier ambient run can leave (popping) bubbles in the shared field
             settings.ChaosSkiaFxEnabled = skia;
             ChaosSkiaFxOverlay.SkipPlatformChecksForTests = true;
             ChaosSkiaFxOverlay.Composited = () => true;
@@ -93,7 +107,8 @@ public class ChaosBodyBuzzTests
             ChaosRunHost.Rng = new Random(7);
             BubbleOverlay.BeginChaos(new Border(), _ => { });
             var source = new AmbientBubble { X = -10, Y = -10, Size = 20, Popping = true, Spec = new EffectBubbleSpec() };
-            for (int i = 1; i <= 10; i++) BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = i * 30 - 10, Y = -10, Size = 20, Spec = new EffectBubbleSpec() });
+            var targets = Enumerable.Range(1, 10).Select(i => new AmbientBubble { X = i * 30 - 10, Y = -10, Size = 20, Spec = new EffectBubbleSpec() }).ToArray();
+            BubbleOverlay.Field.Bubbles.AddRange(targets);
             var outside = new AmbientBubble { X = 431, Y = -10, Size = 20, Spec = new EffectBubbleSpec() };
             BubbleOverlay.Field.Bubbles.Add(outside);
             ChaosRunHost.BodyBuzz(source);
@@ -101,10 +116,13 @@ public class ChaosBodyBuzzTests
             Assert.Equal(8, ChaosRunHost.BodyBuzzHopCount);
             if (skia) Assert.Equal(1, ChaosSkiaFxOverlay.Active!.Fx.RippleCount);
             else Assert.Equal(1, ChaosFieldFxOverlay.Active!.Model.TransientCount);
-            await Task.Delay(800);
+            // The last hop is due at 560 ms; a loaded runner can tick the dispatcher timers late, so wait on a deadline.
+            for (var end = DateTime.UtcNow.AddSeconds(10); ChaosRunHost.BodyBuzzHopCount > 0 && DateTime.UtcNow < end;) await Task.Delay(20);
             Assert.Equal(0, ChaosRunHost.BodyBuzzHopCount);
             Assert.False(outside.Popping);
             Assert.Equal(8, BubbleOverlay.Field.Bubbles.FindAll(b => b.Popping).Count);
+            Assert.All(targets.Take(8), b => Assert.True(b.Popping));
+            Assert.All(targets.Skip(8), b => Assert.False(b.Popping));
             ChaosRunHost.BodyBuzz(source);
             BubbleOverlay.EndChaos();
             Assert.Equal(0, ChaosRunHost.BodyBuzzHopCount);
@@ -117,8 +135,7 @@ public class ChaosBodyBuzzTests
         }
         finally
         {
-            BubbleOverlay.EndChaos();
-            BubbleOverlay.Field.Bubbles.Clear();
+            BubbleOverlay.EndChaos(); BubbleOverlay.Field.Bubbles.Clear();
             BubbleOverlay.Field.Bubbles.AddRange(incomingBubbles);
             ChaosFieldFxOverlay.CloseActive(); ChaosFieldFxOverlay.SkipPlatformChecksForTests = fieldChecks;
             LocalizationManager.Instance.SetLanguage(language);
