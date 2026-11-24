@@ -9,6 +9,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Media.Immutable;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
@@ -21,7 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.WelcomeShow;
 /// <summary>PORTED from ConditioningControlPanel/Services/FirstShow/FirstShowEffects.cs: the show's private, disposable
 /// effect layer; never registers a session or writes a setting. Timeline, slots and gather spiral (Tick :106, Spawn
 /// :167, Animate :211) are WPF's, timings from <see cref="S"/>. WPF stepped the production compositor layers, none of
-/// which exist on this head, so <see cref="Render"/> draws with plain calls (no Effect: P82): pictures, bubbles,
+/// which exist on this head, so <see cref="Render"/> draws without Effect (P82): pictures, bubbles,
 /// pink tint, spiral, floating words, subliminal flash, gather, cues. The sparks (burst, ripple, trail) are WPF's own
 /// Core <see cref="ChaosFxLayer"/> (WPF ChaosFxLayerWpf.Create :55), so counts, colours, additive bloom, the electric
 /// ripple and timing are WPF's by construction; it is recorded into an SKPicture the render thread replays, as
@@ -47,6 +48,10 @@ internal sealed class FirstShowEffects : Control, IDisposable
     private FirstShowDeck? _deck;
     private Media? _spiral;
     private Bitmap? _drainFrame;
+    private readonly Bitmap? _bubbleSprite;
+    private static readonly IBrush FaceEdge = new RadialGradientBrush { GradientStops = { new GradientStop(Colors.White, .80), new GradientStop(Colors.Transparent, 1) } };
+    private static readonly IBrush FaceShine = new LinearGradientBrush { StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative), GradientStops = { new GradientStop(Color.FromArgb(150, 255, 255, 255), 0), new GradientStop(Colors.Transparent, 1) } };
+    private static readonly IBrush GlassShine = new RadialGradientBrush { Center = new RelativePoint(.34, .27, RelativeUnit.Relative), GradientOrigin = new RelativePoint(.34, .27, RelativeUnit.Relative), RadiusX = new RelativeScalar(.32, RelativeUnit.Relative), RadiusY = new RelativeScalar(.32, RelativeUnit.Relative), GradientStops = { new GradientStop(Color.FromArgb(190, 255, 255, 255), 0), new GradientStop(Color.FromArgb(70, 255, 255, 255), .5), new GradientStop(Colors.Transparent, 1) } };
     private (Func<byte[]?> Take, Action Stop)? _capture;
     private int _drainPhase;
     internal Func<bool, (Func<byte[]?> Take, Action Stop)?>? StartCapture;
@@ -65,8 +70,11 @@ internal sealed class FirstShowEffects : Control, IDisposable
     internal int SparkCount => Fx.ParticleCount + Fx.RippleCount;
     /// <summary>Tests: render the frame without the spark field, to diff the burst out of an otherwise identical frame.</summary>
     internal bool DrawSparks = true;
+    internal bool DrawBubbleSprite = true;
+    internal bool DrawWords = true;
     /// <summary>Tests: the live bubbles' centres and widths, in stage DIPs.</summary>
     internal (double X, double Y, double W)[] LiveBubbles => _actors.Where(a => a.Bubble && !a.Gone).Select(a => (a.X, a.Y, a.W)).ToArray();
+    internal Rect[] LiveFlashes => _actors.Where(a => a.Media != null && !a.Bubble && !a.Gone).Select(a => new Rect(a.X - a.W / 2, a.Y - a.H / 2, a.W, a.H)).ToArray();
     internal int WordCount => _actors.Count(a => a.Text != null);
     internal bool HasSpiral => _spiral != null;
     internal bool HasDrainFrame => _drainFrame != null;
@@ -90,6 +98,7 @@ internal sealed class FirstShowEffects : Control, IDisposable
     public FirstShowEffects(Action<string> cue, Random? rng = null, PixelRect screen = default, Func<bool>? captureAllowed = null)
     {
         _cue = cue; IsHitTestVisible = false;
+        _bubbleSprite = ModArt.TryLoad("bubble.png");
         Fx = new ChaosFxLayer(() => { }, rng: rng);   // Tick repaints every frame; nothing to wake
         if (captureAllowed != null && screen.Width > 0 && screen.Height > 0)
         {
@@ -310,18 +319,34 @@ internal sealed class FirstShowEffects : Control, IDisposable
             using (dc.PushOpacity(a.Alpha))
             {
                 var box = new Rect(a.X - a.W / 2, a.Y - a.H / 2, a.W, a.H);
-                if (a.Text != null) DrawOutlined(dc, a.Text, Math.Min(56, W * .035), a.X, a.Y, Colors.HotPink, 6);
+                if (a.Text != null) { if (DrawWords) DrawOutlined(dc, a.Text, Math.Min(56, W * .035), a.X, a.Y, Colors.HotPink, 6); }
                 else if (a.Bubble)
                 {
+                    DrawGlow(dc, box, true, a.Alpha);
+                    if (_bubbleSprite != null) { if (DrawBubbleSprite) dc.DrawImage(_bubbleSprite, box); }
+                    else dc.DrawEllipse(new SolidColorBrush(Color.FromRgb(232, 232, 240)), new Pen(Brushes.White, 2), box);
+                    dc.DrawEllipse(GlassShine, null, box);
                     var inner = box.Deflate(a.W * .135);
-                    using (dc.PushGeometryClip(new EllipseGeometry(inner))) dc.DrawImage(a.Media!.Frames[a.Frame], inner);
-                    dc.DrawEllipse(new SolidColorBrush(Colors.White, .12), new Pen(new SolidColorBrush(Colors.HotPink, .45), 6), box.Deflate(3));
-                    dc.DrawEllipse(new SolidColorBrush(Colors.White, .28), null, new Rect(box.X + a.W * .22, box.Y + a.H * .16, a.W * .2, a.H * .12));
+                    var frame = a.Media!.Frames[a.Frame];
+                    double side = Math.Min(frame.Size.Width, frame.Size.Height);
+                    var source = new Rect((frame.Size.Width - side) / 2, (frame.Size.Height - side) / 2, side, side);
+                    using (dc.PushGeometryClip(new EllipseGeometry(inner)))
+                    using (dc.PushOpacityMask(FaceEdge, inner))
+                    {
+                        dc.DrawEllipse(new SolidColorBrush(Color.FromRgb(20, 7, 12)), null, inner);
+                        using (dc.PushOpacity(.92)) dc.DrawImage(frame, source, inner);
+                        using (dc.PushOpacity(.28)) dc.DrawEllipse(FaceShine, null, inner);
+                    }
                 }
                 else
                 {
-                    using (dc.PushClip(new RoundedRect(box, 14))) dc.DrawImage(a.Media!.Frames[a.Frame], box);
-                    dc.DrawRectangle(null, new Pen(Brushes.HotPink, 4), new RoundedRect(box, 14));
+                    var inner = box.Deflate(4);
+                    var frame = a.Media!.Frames[a.Frame];
+                    double scale = Math.Min(inner.Width / frame.Size.Width, inner.Height / frame.Size.Height);
+                    double width = frame.Size.Width * scale, height = frame.Size.Height * scale;
+                    var fit = new Rect(a.X - width / 2, a.Y - height / 2, width, height);
+                    DrawGlow(dc, fit, false, a.Alpha);
+                    using (dc.PushClip(new RoundedRect(fit, 14))) dc.DrawImage(frame, fit);
                 }
             }
         }
@@ -335,6 +360,18 @@ internal sealed class FirstShowEffects : Control, IDisposable
             Fx.Render(canvas, new SkiaSharp.SKRectI(0, 0, (int)W, (int)H), 1, TimeSpan.Zero);
             dc.Custom(new PictureOp(rec.EndRecording(), all));
         }
+    }
+    // WPF BubbleLayer.cs:183-190 and FlashLayer.cs:413-438: blurred filled shapes, not strokes.
+    // The raw Skia replay skips PushOpacity (no opacity save layer), so the actor alpha goes into the paint (WPF BubbleLayer.cs:186, FlashLayer.cs:436).
+    private void DrawGlow(DrawingContext dc, Rect box, bool bubble, double alpha)
+    {
+        using var rec = new SkiaSharp.SKPictureRecorder();
+        var canvas = rec.BeginRecording(new SkiaSharp.SKRect(0, 0, (float)W, (float)H));
+        using var blur = SkiaSharp.SKMaskFilter.CreateBlur(SkiaSharp.SKBlurStyle.Normal, bubble ? 4 : 6);
+        using var paint = new SkiaSharp.SKPaint { IsAntialias = true, Color = HotPink.WithAlpha((byte)((bubble ? .45 : .65) * Math.Clamp(alpha, 0, 1) * 255)), MaskFilter = blur };
+        if (bubble) canvas.DrawCircle((float)box.Center.X, (float)box.Center.Y, (float)box.Width / 2, paint);
+        else canvas.DrawRoundRect(new SkiaSharp.SKRect((float)box.Left, (float)box.Top, (float)box.Right, (float)box.Bottom), 14, 14, paint);
+        dc.Custom(new PictureOp(rec.EndRecording(), new Rect(0, 0, W, H)));
     }
     /// <summary>The recorded spark field, replayed on the render thread's Skia canvas (ChaosSkiaFxOverlay.PictureOp).</summary>
     private sealed class PictureOp : global::Avalonia.Rendering.SceneGraph.ICustomDrawOperation
@@ -374,6 +411,7 @@ internal sealed class FirstShowEffects : Control, IDisposable
     {
         if (_disposed) return; _disposed = true;
         _capture?.Stop(); _capture = null; _drainFrame?.Dispose(); _drainFrame = null;
+        _bubbleSprite?.Dispose();
         _actors.Clear(); Fx.Clear(); _glyphs.Clear(); Free(_media); _media.Clear();
         if (_spiral != null) Free(new[] { _spiral }); _spiral = null;
         InvalidateVisual();

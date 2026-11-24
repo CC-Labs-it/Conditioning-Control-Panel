@@ -121,7 +121,6 @@ namespace ConditioningControlPanel.Input
     /// 2 s quit the app. The first down is the press; a down within <see cref="RepeatGap"/> of the
     /// last one with no key-up between is a repeat and is swallowed, so a lost key-up can never eat
     /// the next real press. PURE; not thread-safe (one listener thread).
-    /// ponytail: trunk's leashed five-second hold (<c>Due</c>) is left to the Leash hold-to-cut unit.
     /// </summary>
     public sealed class PanicKeyHold
     {

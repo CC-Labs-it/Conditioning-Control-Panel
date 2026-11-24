@@ -17,10 +17,6 @@
 // test. On Windows the small window keeps all of its input, as WPF's layered bubble takes clicks on
 // its shadow too. Either way the bubble no longer appears in the tube's region at all.
 //
-// ponytail: WPF also hides the bubble while a Chaos game window is up (ChaosWebViewHost.AnyGameActive,
-// ccp-bugs #1345). This head has no game-active signal to listen to yet; add it to ShouldShowBubble
-// when one exists.
-
 using System;
 using System.Collections.Generic;
 using Avalonia;
@@ -29,6 +25,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.AvatarTubeLayout;
 using Serilog;
 
@@ -64,6 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// this window's name scope) and wires the re-placement hooks of WPF HookSpeechBubblePlacement.</summary>
         private void InitSpeechWindow()
         {
+            GameActivity.GameActiveChanged += SyncSpeechPopupOpen;
             _speechPopupRoot = this.FindControl<Grid>("SpeechPopupRoot")!;
             _speechTail = this.FindControl<Path>("SpeechTail")!;
             _speechTail.RenderTransform = _speechTailFlip;
@@ -95,6 +93,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         private void ReleaseSpeechWindow()
         {
+            GameActivity.GameActiveChanged -= SyncSpeechPopupOpen;
             if (_parentWindow != null) _parentWindow.PropertyChanged -= OnParentPropertyChangedForBubble;
             try { _bubbleWindow?.Close(); } catch (Exception ex) { Log.Debug(ex, "AvatarTube: bubble window close"); }
             _bubbleWindow = null;
@@ -151,7 +150,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         /// <summary>WPF SpeechBubbleVisibility: the bubble window is up exactly while the bubble is meant
         /// to show and the tube (and, while attached, main) is on screen.</summary>
-        internal bool ShouldShowBubble() => SpeechBubbleVisibility.ShouldShow(
+        internal bool ShouldShowBubble() => !GameActivity.AnyGameActive && SpeechBubbleVisibility.ShouldShow(
             _speechBubble.IsVisible, IsVisible, WindowState == WindowState.Minimized,
             _isAttached, _parentWindow?.IsVisible ?? true, _parentWindow?.WindowState == WindowState.Minimized);
 
