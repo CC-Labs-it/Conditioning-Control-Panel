@@ -81,9 +81,26 @@ public sealed partial class FriendsRailChip
         foreach (var run in _bumps.Values) run.Cancel();
         _bumps.Clear();
     }
+    private bool _lookSubscribed;
+
+    // WPF FriendsRailChip.cs:76-84,99-107,121-129,418-441.
+    private void RefreshLook()
+    {
+        _pill.BorderThickness = new Thickness(2);
+        _pill.BorderBrush = new SolidColorBrush(Color.FromRgb(0x0E, 0x09, 0x19));
+        _pill.BoxShadow = new BoxShadows(new BoxShadow { Blur = 8, Color = Color.FromArgb(0xB3, 0x5F, 0xFF, 0xD0) });
+        _badge.BoxShadow = new BoxShadows(new BoxShadow { Blur = 8, Color = Color.FromArgb(0xB3, 0xFF, 0x5F, 0xB4) });
+        _face.BorderThickness = new Thickness(1);
+        _face.BorderBrush = IsOpen ? FriendsDrawer.Line2 : Brushes.Transparent;
+        if (_lookSubscribed) return;
+        _lookSubscribed = true;
+        _popup.Opened += (_, _) => _face.BorderBrush = FriendsDrawer.Line2;
+        _popup.Closed += (_, _) => _face.BorderBrush = Brushes.Transparent;
+    }
     // WPF FriendsRailChip.cs:279-296, FriendsLook.cs:260-275.
     internal void RefreshFace()
     {
+        RefreshLook();
         // Name and avatar repaint in UpdatePill (the integration copy); this adds the tier plate.
         while (_nameLine.Children.Count > 1) _nameLine.Children.RemoveAt(1);
         var tier = FriendsDrawerRules.DisplayTier(Drawer.MeTier());

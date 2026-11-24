@@ -47,7 +47,7 @@
          ================================================================ -->
 
     <UserControl.Resources>
-        <!-- ponytail: local copy of DevicesSettingsSection.xaml:SettingChip, hoist when a second view needs it -->
+        <!-- SettingChip stays local: the hover border brush is specific to this section. -->
         <ControlTheme x:Key="SettingChip" TargetType="Border">
             <Setter Property="CornerRadius" Value="10"/>
             <Setter Property="Background" Value="{DynamicResource SurfaceBgBrush}"/>

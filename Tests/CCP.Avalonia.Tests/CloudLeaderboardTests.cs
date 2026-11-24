@@ -9,6 +9,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media;
+using Avalonia.Input;
+using Avalonia.Input.Raw;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Models;
@@ -113,6 +115,59 @@ public sealed partial class AccountSeedTests
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct) =>
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError) { Content = new StringContent("{}") });
+    }
+
+    [Fact]
+    public async Task LeaderboardTierBandsAreInertContainers()
+    {
+        var oldClient = LeaderboardTabView.NewClient;
+        var oldOffline = CoreSettings.Current.OfflineMode;
+        try
+        {
+            LeaderboardTabView.NewClient = () => new LeaderboardClient(new BoardWire());
+            CoreSettings.Current.OfflineMode = false;
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (Application.Current is null)
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                        .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+                var tab = new LeaderboardTabView();
+                var host = new Window { Width = 1200, Height = 900, Content = tab };
+                try
+                {
+                    host.Show();
+                    await tab.SetLeaderboardMode(false);
+                    Dispatcher.UIThread.RunJobs();
+                    host.UpdateLayout();
+                    var list = tab.FindControl<ListBox>("LstLeaderboard")!;
+                    var containers = list.GetVisualDescendants().OfType<ListBoxItem>().ToArray();
+                    var bands = containers.Where(c => c.DataContext is LeaderboardTierBand).ToArray();
+                    var rows = containers.Where(c => c.DataContext is LeaderboardRow).ToArray();
+                    Assert.NotEmpty(bands);
+                    Assert.NotEmpty(rows);
+                    Assert.All(bands, c => { Assert.False(c.Focusable); Assert.False(c.IsHitTestVisible); });
+                    Assert.All(rows, c => { Assert.True(c.Focusable); Assert.True(c.IsHitTestVisible); });
+                    var row = rows[0];
+                    list.SelectedItem = row.DataContext;
+                    row.Focus();
+                    host.KeyPress(Key.Down, RawInputModifiers.None, PhysicalKey.ArrowDown, "");
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.IsType<LeaderboardRow>(list.SelectedItem);
+                    var band = bands[0];
+                    var point = band.TranslatePoint(new Point(band.Bounds.Width / 2, band.Bounds.Height / 2), host)!.Value;
+                    host.MouseDown(point, MouseButton.Left);
+                    host.MouseUp(point, MouseButton.Left);
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.IsType<LeaderboardRow>(list.SelectedItem);
+                }
+                finally { host.Close(); }
+            });
+        }
+        finally
+        {
+            LeaderboardTabView.NewClient = oldClient;
+            CoreSettings.Current.OfflineMode = oldOffline;
+        }
     }
 
     [Fact]
