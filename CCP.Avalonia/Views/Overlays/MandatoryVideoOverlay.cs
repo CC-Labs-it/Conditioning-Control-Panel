@@ -403,12 +403,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private volatile bool _floatingOnScreen;   // read by the global keyboard hook
 
         /// <summary>WPF DecidePresentation: floating is for an ordinary video only - never a strict one,
-        /// a Lockdown or a Chaos run (DtRH is n/a on this head).</summary>
+        /// a Lockdown, a Chaos run or a DtRH descent.</summary>
         public bool IsFloating(bool strict) => Floats(strict);
 
         internal static bool Floats(bool strict) => ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.ShouldFloat(
             CoreSettings.Current.MandatoryVideoFloating, strict,
-            ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true, global::ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsActive);
+            ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true, LockedRun);   // WPF VideoService.Floating.cs:50-54
 
         /// <summary>WPF VideoService.UpdateMasterVolume / UpdateVideoVolume: a playing clip follows
         /// Settings · Audio live. UI thread (teardown runs there too).</summary>

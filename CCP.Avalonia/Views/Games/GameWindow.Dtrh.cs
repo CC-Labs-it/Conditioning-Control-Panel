@@ -47,6 +47,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>The host's own clock inside a descent (P08); tests step it.</summary>
         internal static Func<DateTime> DtrhUtcNow = () => DateTime.UtcNow;
+        // WPF DtrhHostService.cs:386-396: the page's haptic-state feed and every bark (effect-fired included).
+        internal static Action<JObject> DtrhHapticState = ConditioningControlPanel.Services.Haptics.DtrhHapticDirector.OnHapticState;
+        internal static Action<JObject> DtrhHapticEvent = ConditioningControlPanel.Services.Haptics.DtrhHapticDirector.OnGameEvent;
+        private DateTime? _dtrhOpenedUtc;
 
         internal static Action<GameWindow, int> DtrhCreditBubbles = (window, count) => window.CreditRaceBubbles(count);
 
@@ -110,8 +114,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             var type = (string?)o["type"];
             // A dead carrier cannot start another run; a funnel event is still counted (Handle refuses checkout).
             if (_closing && type != "funnel") return true;
+            // WPF :388-390: the tap comes first; the bark itself stays unclaimed for the shell route.
+            if (type == "bark") { try { DtrhHapticEvent(o); } catch (Exception ex) { Log.Debug("DtrhHost haptic tap: {E}", ex.Message); } }
             switch (type)
             {
+                case "haptic-state":
+                    try { DtrhHapticState(o); } catch (Exception ex) { Log.Debug("DtrhHost haptic state: {E}", ex.Message); }
+                    return true;
                 case "boot-error":
                     // WPF DtrhHostService.cs:1014-1025: close the failed web host, then fall back on the
                     // dispatcher (BeginInvoke), so a run started in between keeps the screen (#3540).
@@ -463,6 +472,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>WPF DtrhHostService.cs:959-981 StartHeartbeatWatch: the page beats only after ready, every ~2 s.</summary>
         private void StartDtrh()
         {
+            // WPF DtrhHostService.cs:146-153: the ring notes the open, EMI hears it, the audio-web pack is asked for.
+            try { RaceNoteUsage(DtrhId); } catch (Exception ex) { Log.Debug("DtrhHost: usage: {E}", ex.Message); }
+            try { Windows.EmiDesk.EmiTargets.Moment("dtrhOpened", null); } catch (Exception ex) { Log.Debug("DtrhHost: emi: {E}", ex.Message); }
+            _dtrhOpenedUtc = DtrhUtcNow();
+            try { RaceRequestPack("audio-web"); } catch (Exception ex) { Log.Debug("DtrhHost: audio pack: {E}", ex.Message); }
             _dtrhLastHeartbeatUtc = DtrhUtcNow();
             _dtrhHeartbeatWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(DtrhHeartbeatRule.PollSeconds) };
             _dtrhHeartbeatWatch.Tick += (_, _) => CheckDtrhHeartbeat(DtrhUtcNow());
@@ -522,6 +536,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             }
             _dtrhRunActive = false;
             _dtrhExiting = false;
+            // WPF DtrhHostService.cs:1041-1046: dtrhClosed {minutes}, once per open.
+            if (_dtrhOpenedUtc is DateTime opened)
+            {
+                _dtrhOpenedUtc = null;
+                int minutes = Math.Max(0, (int)(DtrhUtcNow() - opened).TotalMinutes);
+                try { Windows.EmiDesk.EmiTargets.Moment("dtrhClosed", new { minutes }); } catch (Exception ex) { Log.Debug("DtrhHost: emi: {E}", ex.Message); }
+            }
             Log.Information("DtrhHostService: closed");
         }
     }
