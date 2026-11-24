@@ -1,5 +1,6 @@
 using System;
 using System.Text.Json;
+using System.Threading;
 using Avalonia.Interactivity;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Platform.Deeper;
@@ -18,6 +19,7 @@ public partial class SettingsTabView
     internal WebHostVideoTimeSource? BrowserEnhanceSource => _browserEnhanceSource;
     internal bool BrowserAutomaticPolling = true;
     private WebHostVideoTimeSource? _browserEnhanceSource;
+    private int _browserPanicGeneration;
     private Uri? _browserResumeUrl;
     internal string? BrowserEnhanceResumeToken { get; private set; }
     internal EnhancementHostService BrowserEnhanceHost => _browserEnhanceHost;
@@ -52,6 +54,8 @@ public partial class SettingsTabView
 
     internal void StopBrowserEnhancementForPanic()
     {
+        // Sessions from earlier unbinds may still be finishing recognition and releasing a hold.
+        Interlocked.Increment(ref _browserPanicGeneration);
         bool rearm = _browserEnhanceHost.IsRunning || BrowserEnhanceResumeToken != null;
         var url = BrowserWebHost.CurrentUrl;
         _browserEnhanceSource?.RetirePlayback();
@@ -112,7 +116,9 @@ public partial class SettingsTabView
                 TxtEnhanceMatchStatus.Text = Loc.Get("browser_enhance_unsupported");
                 return;
             }
-            var source = _browserEnhanceSource = new WebHostVideoTimeSource(BrowserWebHost, BrowserAutomaticPolling, startTime);
+            int generation = Volatile.Read(ref _browserPanicGeneration);
+            var source = _browserEnhanceSource = new WebHostVideoTimeSource(BrowserWebHost, BrowserAutomaticPolling, startTime,
+                () => Volatile.Read(ref _browserPanicGeneration) == generation);
             var webcam = new BrowserEnhancementWebcam();
             if (!_browserEnhanceHost.Bind(source, source.Attach, source.Detach, new SpeakActionDispatcher(BrowserSpeakSessionFactory ?? BrowserSpeakRuntime.CreateSession, new BrowserEnhancementDispatcher()), webcam))
             {

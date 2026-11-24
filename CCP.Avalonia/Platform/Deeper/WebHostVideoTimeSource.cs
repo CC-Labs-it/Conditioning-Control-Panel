@@ -16,6 +16,7 @@ internal sealed class WebHostVideoTimeSource : IPlaybackTimeSource, IDisposable
 {
     private readonly WebHost _host;
     private readonly bool _automaticPolling;
+    private readonly Func<bool>? _playbackAllowed;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private bool _attached, _polling, _playbackRetired;
     private int _generation;
@@ -25,10 +26,11 @@ internal sealed class WebHostVideoTimeSource : IPlaybackTimeSource, IDisposable
     private const string PollScript = "(function(){var v=document.querySelector('video');if(!v)return null;var r=v.getBoundingClientRect(),w=window.innerWidth||1,h=window.innerHeight||1;return JSON.stringify({t:v.currentTime||0,d:isFinite(v.duration)?v.duration:0,paused:!!v.paused,rx:r.left/w,ry:r.top/h,rw:r.width/w,rh:r.height/h});})();";
 
     // startTime primes the engine cursor (EnhancementEngine.Start reads it) before the first poll.
-    public WebHostVideoTimeSource(WebHost host, bool automaticPolling = true, double startTime = 0)
+    public WebHostVideoTimeSource(WebHost host, bool automaticPolling = true, double startTime = 0, Func<bool>? playbackAllowed = null)
     {
         _host = host;
         _automaticPolling = automaticPolling;
+        _playbackAllowed = playbackAllowed;
         _time = startTime;
         _timer.Tick += async (_, _) => await PollAsync();
     }
@@ -77,7 +79,7 @@ internal sealed class WebHostVideoTimeSource : IPlaybackTimeSource, IDisposable
         "(function(){{var v=document.querySelector('video');if(v)v.currentTime={0:0.###};}})();", Math.Max(0, seconds)));
     public void Pause() => Send("(function(){var v=document.querySelector('video');if(v)v.pause();})();");
     public void Play() => Send("(function(){var v=document.querySelector('video');if(v)v.play();})();");
-    private void Send(string script) { if (!_playbackRetired) _ = _host.InvokeScriptAsync(script); }
+    private void Send(string script) { if (!_playbackRetired && (_playbackAllowed?.Invoke() ?? true)) _ = _host.InvokeScriptAsync(script); }
     public PlaybackRect GetVideoRect()
     {
         if (TopLevel.GetTopLevel(_host) is not { } top || _host.Bounds.Width <= 0 || _host.Bounds.Height <= 0)
