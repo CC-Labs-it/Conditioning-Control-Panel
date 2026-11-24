@@ -12,7 +12,7 @@ import { cleanOff } from './switches.js';
 import { setupJourney } from './journey-effects.js';
 import { createPrestige, parsePrestige, parseStamp } from './prestige.js';
 import { cardSnapshot, parseCardSnapshot, parseLifeTally, parseStickers, syncLife } from './stickers.js';
-import { isCut } from '../ui/edition.js';
+import { sleepsHere } from '../ui/edition.js';
 
 // The playable preview has its own persistent slot, including both save import paths.
 const params = new URLSearchParams(globalThis.location?.search);
@@ -94,12 +94,13 @@ const smallEd = (ed) => ed?.edition === 'small';
 /** THE rule for an open Renewal Sky visit (a renewal applied, no run yet) loaded in small: no Sky, the plain ended card
  *  with New run on the player's own press, and `extras.sky` written back untouched (owner 2026-11-22). */
 export const sleepingSky = (saved, ed) => smallEd(ed) && !!saved && !saved.run && !!saved.extras?.sky && typeof saved.extras.sky === 'object';
-/** True when this save holds something the small edition keeps asleep: a cut row the run owns, a Renewal stamp on the
+/** True when this save holds something the small edition keeps asleep: a cut row the run owns (or a card or ending of
+ *  a fate set small keeps locked), a Renewal stamp on the
  *  run, Renewal state in the life, or an open Sky visit. The save-sleep card says so once (extras.sleepSeen). */
 export function sleepsSomething(saved, ed) {
   if (!smallEd(ed) || !saved) return false;
   const run = saved.run, p = saved.life?.prestige;
-  if (run && (run.sleepingStamp || Object.keys(run.owned || {}).some((id) => isCut(id, ed)))) return true;
+  if (run && (run.sleepingStamp || Object.keys(run.owned || {}).some((id) => sleepsHere(id, ed)))) return true;
   if (p && (p.depth > 0 || p.dust > 0 || p.spent > 0 || p.core || Object.keys(p.own || {}).length || Object.keys(p.lit || {}).length
     || Object.keys(p.later?.own || {}).length)) return true;
   return sleepingSky(saved, ed);
