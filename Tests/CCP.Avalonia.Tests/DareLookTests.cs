@@ -10,15 +10,45 @@ namespace CCP.Avalonia.Tests;
 public class DareLookTests
 {
     [Theory]
-    [InlineData(DareTone.Pics, 0xFF9A5C, "\uE8B9")]
-    [InlineData(DareTone.Lockdown, 0x9C7BFF, "\uEA18")]
-    [InlineData(DareTone.CameraOff, 0x6F629A, "\uED1A")]
-    [InlineData(DareTone.Who, 0xB99CFF, "\uE77B")]
-    [InlineData(DareTone.When, 0xA395C4, "\uE787")]
-    public void TonePaletteAndGlyphFollowWpf(DareTone tone, int rgb, string glyph)
+    [InlineData(DareTone.Cant, 0xC22B2B)]
+    [InlineData(DareTone.Duel, 0x2C8A57)]
+    [InlineData(DareTone.Pics, 0xE0663A)]
+    [InlineData(DareTone.Minutes, 0x1F8A8A)]
+    [InlineData(DareTone.Video, 0xCC3D7A)]
+    [InlineData(DareTone.Session, 0x8A3F8F)]
+    [InlineData(DareTone.Bubbles, 0x2F86C9)]
+    [InlineData(DareTone.Dare, 0xC22B2B)]
+    [InlineData(DareTone.Sp, 0xB07A00)]
+    [InlineData(DareTone.Lock, 0x33618F)]
+    [InlineData(DareTone.CameraOn, 0x2C8A57)]
+    [InlineData(DareTone.CameraOff, 0x7A6A8F)]
+    [InlineData(DareTone.Lockdown, 0x3A1D78)]
+    [InlineData(DareTone.When, 0x3A1D78)]
+    [InlineData(DareTone.Who, 0x3A1D78)]
+    public void RedesignedTonePaletteFollowsWpf(DareTone tone, int rgb)
     {
         Assert.Equal(Color.FromRgb((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb), DareLook.ToneColor(tone));
-        Assert.Equal(glyph, DareLook.ToneGlyph(tone));
+    }
+
+    [Theory]
+    [InlineData(DareTone.Pics, "picture")]
+    [InlineData(DareTone.Minutes, "clock")]
+    [InlineData(DareTone.When, "clock")]
+    [InlineData(DareTone.Video, "video")]
+    [InlineData(DareTone.Session, "play")]
+    [InlineData(DareTone.Bubbles, "bubble")]
+    [InlineData(DareTone.Sp, "star")]
+    [InlineData(DareTone.Lock, "lock")]
+    [InlineData(DareTone.Lockdown, "ldn")]
+    [InlineData(DareTone.CameraOn, "eye")]
+    [InlineData(DareTone.CameraOff, "eyeoff")]
+    [InlineData(DareTone.Cant, "cross")]
+    [InlineData(DareTone.Duel, "versus")]
+    [InlineData(DareTone.Dare, "envelope")]
+    [InlineData(DareTone.Who, "envelope")]
+    public void RedesignedToneIconsFollowWpf(DareTone tone, string icon)
+    {
+        Assert.Equal(icon, DareLook.ToneIcon(tone));
     }
 
     [Fact]
