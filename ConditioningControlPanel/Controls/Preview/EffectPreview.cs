@@ -39,7 +39,7 @@ namespace ConditioningControlPanel.Controls.Preview
             nameof(Scene), typeof(string), typeof(EffectPreview),
             new PropertyMetadata(null, (d, _) => ((EffectPreview)d).OnSceneChanged()));
 
-        /// <summary>Which scene plays: "flash".</summary>
+        /// <summary>Which scene plays: "flash", or any id whose class is Scenes.&lt;Id&gt;PreviewScene.</summary>
         public string? Scene
         {
             get => (string?)GetValue(SceneProperty);
@@ -93,11 +93,19 @@ namespace ConditioningControlPanel.Controls.Preview
         /// <summary>The scene's raster window inside the element (tests).</summary>
         internal Rect RasterBand => _fxRect;
 
-        private static IPreviewScene? Create(string? id) => id?.ToLowerInvariant() switch
+        /// <summary>
+        /// A scene id names its class by convention: "bubbles" is Scenes.BubblesPreviewScene (case ignored),
+        /// so a new scene is one new file and needs no edit here.
+        /// </summary>
+        private static IPreviewScene? Create(string? id)
         {
-            "flash" => new FlashPreviewScene(),
-            _ => null,
-        };
+            if (string.IsNullOrWhiteSpace(id)) return null;
+            if (id.Trim().Equals("flash", StringComparison.OrdinalIgnoreCase)) return new FlashPreviewScene();
+            var type = typeof(FlashPreviewScene).Assembly.GetType(
+                typeof(FlashPreviewScene).Namespace + "." + id.Trim() + "PreviewScene", throwOnError: false, ignoreCase: true);
+            if (type == null || type.IsAbstract || !typeof(IPreviewScene).IsAssignableFrom(type)) return null;
+            return Activator.CreateInstance(type, nonPublic: true) as IPreviewScene;
+        }
 
         private void OnSceneChanged()
         {
