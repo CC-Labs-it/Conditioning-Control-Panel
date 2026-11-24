@@ -53,6 +53,53 @@ public sealed partial class AccountSeedTests
     }
 
     [Fact]
+    public async Task TrainerCard_ArtAndPatreon()
+    {
+        var settings = CoreSettings.Current;
+        var old = (settings.PatreonTier, settings.OfflineMode, CoreAccount.IsWhitelistedProvider);
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(() =>
+            {
+                if (global::Avalonia.Application.Current is null)
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                        .UseSkia().UseHeadless(new global::Avalonia.Headless.AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                var tab = new DiscordTabView();
+                T F<T>(string name) where T : Control => tab.FindControl<T>(name)!;
+                foreach (var name in new[] { "ImgStatXp", "ImgStatBubbles", "ImgStatVideos", "ImgStatGifs", "ImgStatLockCards", "ImgStatAchievements" })
+                    Assert.NotNull(F<Image>(name).Source);
+                settings.PatreonTier = 2;
+                tab.DisplayOwnProfile();
+                Assert.True(F<Image>("ProfilePatreonBadge").IsVisible);
+                Assert.NotNull(F<Image>("ProfilePatreonTierBadge").Source);
+                Assert.True(F<Border>("ProfilePatreonTierBanner").IsVisible);
+                Assert.NotNull(F<Image>("ImgPatreonTierBanner").Source);
+                settings.PatreonTier = 3;
+                tab.DisplayOwnProfile();
+                Assert.NotNull(F<Image>("ImgPatreonTierBanner").Source);
+                settings.PatreonTier = 0;
+                CoreAccount.IsWhitelistedProvider = () => true;
+                tab.DisplayOwnProfile();
+                Assert.False(F<Image>("ProfilePatreonBadge").IsVisible);
+                Assert.True(F<Image>("ProfilePatreonTierBadge").IsVisible);
+                Assert.True(F<Border>("ProfilePatreonTierBanner").IsVisible);
+                settings.OfflineMode = true;
+                tab.DisplayProfileEntry(new LeaderboardRow { DisplayName = "other", IsPatreon = false, PatreonTier = 2 });
+                Assert.False(F<Image>("ProfilePatreonBadge").IsVisible);
+                Assert.False(F<Image>("ProfilePatreonTierBadge").IsVisible);
+                Assert.False(F<Border>("ProfilePatreonTierBanner").IsVisible);
+                tab.ShowAchievements(new[] { "plastic_initiation", "not_a_real_id" }, "");
+                F<Expander>("ProfileAllAchievementsExpander").IsExpanded = true;
+                var tile = Assert.Single((IEnumerable<ProfileAchievementTile>)F<ItemsControl>("ProfileAchievementGrid").ItemsSource!);
+                Assert.NotNull(tile.Image);
+                return Task.CompletedTask;
+            });
+        }
+        finally { (settings.PatreonTier, settings.OfflineMode, CoreAccount.IsWhitelistedProvider) = old; }
+    }
+
+    [Fact]
     public async Task TrainerCard_OwnCard_LookedUpCard_Unknown_Offline_GetsOnly()
     {
         var s = CoreSettings.Current;

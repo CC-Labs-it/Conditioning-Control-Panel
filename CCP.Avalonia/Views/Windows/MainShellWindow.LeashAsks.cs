@@ -52,6 +52,7 @@ public partial class MainShellWindow
             if (_askService != null) { _askService.SnapshotChanged -= OnLeashAskSnapshot; _askService.EventArrived -= OnLeashEvent; }
             _askService = next;
             _seenLeashOffers.Clear();
+            _waitingLeashAsks.Clear();
             _heldLeashNotices.Clear();
             if (next != null)
             {
@@ -84,11 +85,12 @@ public partial class MainShellWindow
 
     // WPF LeashSurfaces.cs:117-125, :230-255 drains waiting asks when an overlay closes.
     // A manual Look has already shown this offer, but other queued offers still wait.
+    // WPF binds the one static service up front; here Look can beat the two-second rebind, so bind first,
+    // then consume the offer (seen + unqueued) so neither that rebind nor a late snapshot reopens it.
     private void OnLeashOfferShown(LeashOffer offer)
     {
-        // A manual Look can beat the periodic service rebind. Bind while the ask occupies the
-        // overlay slot, then remove it from the snapshot queue so closing it cannot reopen it.
         if (!ReferenceEquals(_askService, LeashHead.Service)) RebindLeashAsks();
+        _seenLeashOffers.Add(offer.From.Id + "@" + offer.At.ToUnixTimeSeconds());
         _waitingLeashAsks.RemoveAll(w => w.From.Id == offer.From.Id && w.At.ToUnixTimeSeconds() == offer.At.ToUnixTimeSeconds());
     }
 
