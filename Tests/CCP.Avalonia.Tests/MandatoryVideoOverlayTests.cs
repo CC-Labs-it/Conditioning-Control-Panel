@@ -53,6 +53,25 @@ public sealed class MandatoryVideoOverlayTests
         });
 
     [Fact]
+    public Task BrowserSurfaceReportsOnlyTheFirstFailure() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var failures = new System.Collections.Generic.List<bool>();
+        var messages = 0;
+        var surface = new BrowserVideoSurface(_ => Task.FromResult<string?>("true"));
+        surface.Start("http://localhost/clip.mp4", true, 50);
+        surface.View.OnNavigationCompleted(new Uri("about:blank"));
+        surface.Failed += media => failures.Add(media);
+        surface.Message += _ => messages++;
+        var error = $"{{\"session\":\"{surface.SessionId}\",\"type\":\"error\",\"code\":4}}";
+        surface.Receive(error);
+        surface.Receive(error);
+        Assert.Equal(new[] { true }, failures);
+        Assert.Equal(1, messages);
+        surface.Dispose();
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public void NoVideosDialogBlamesTheLengthFilterWhenItEmptiedTheLibrary()
     {
         // WPF #1352 (854ac954a): files exist, the length filter kept none -> name the filter, not "add files".

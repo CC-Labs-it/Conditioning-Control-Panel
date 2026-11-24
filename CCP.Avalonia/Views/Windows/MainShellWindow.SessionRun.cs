@@ -74,6 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     _suppressSessionSummaryUntil = DateTime.MinValue;
                     bool engineWasRunning = CoreEngine.IsRunning;
                     runner.Start(session);
+                    Views.Controls.AppSettings.AudioSettingsBinder.RaiseChanged(); // WPF ApplySessionSettings -> LoadSettings
                     if (!engineWasRunning && CoreEngine.IsRunning)
                     {
                         EmiEngineStarted(false); // WPF Presets.cs:1619

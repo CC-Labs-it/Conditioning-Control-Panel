@@ -48,7 +48,7 @@ public class SpeakPlayerTests
     private static void Tick(EnhancementPlayerWindow p) => Call(p, "UiTimer_Tick", null, EventArgs.Empty);
     private static SpeakPromptRuntime Runtime(Func<string, RecognizeOptions, CancellationToken, Task<PhraseResult>> listen,
         Action? stopListening = null, Action<string>? show = null, Action? hide = null, Action<string>? flash = null,
-        Func<int, Action, Action>? startCueTimer = null) =>
+        Func<TimeSpan, Action, Action>? startCueTimer = null) =>
         new(() => true, () => true, () => Task.FromResult(true), () => false, () => { }, () => { }, () => false,
             listen, stopListening ?? (() => { }), show ?? (_ => { }), hide ?? (() => { }), flash, startCueTimer);
 
@@ -70,23 +70,28 @@ public class SpeakPlayerTests
             // The trunk player starts audio only after its waveform load (#4751), off the UI thread.
             for (int i = 0; i < 500 && !audio.Playing; i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
             Assert.True(audio.Playing);
-            // Drive player ticks explicitly below so replacement cannot start on a background UI tick.
-            var uiTimer = (DispatcherTimer)player.GetType().GetField("_uiTimer",
+            // This test drives playback with Tick. Do not let the real 100 ms UI timer
+            // enter the replacement band at the old position while the queue is drained.
+            var uiTimer = (DispatcherTimer)typeof(EnhancementPlayerWindow).GetField("_uiTimer",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(player)!;
             uiTimer.Stop();
             var enhancement = new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*", TimelineItems = {
+                // Keep periodic ticks outside this test's card-count assertions. The separate
+                // replacement timer test below exercises recurring cues and their cancellation.
                 new TimelineItem { Kind = TimelineItemKind.Effect, Start = 1, Duration = 3, EffectType = EffectTypes.Speak,
-                    EffectActivation = EffectActivation.Region, EffectSpeakTarget = "yes", EffectSpeakCueMode = SpeakCueMode.Intermittent } } };
+                    EffectActivation = EffectActivation.Region, EffectSpeakTarget = "yes", EffectSpeakCueMode = SpeakCueMode.Intermittent,
+                    EffectSpeakCueIntervalMs = 60_000 } } };
             player.LoadEnhancementFromMemory(enhancement, "test"); Tick(player); audio.PositionSeconds = 1.2; Tick(player);
             Dispatcher.UIThread.RunJobs();
             Assert.Single(cards); Assert.True(cards[0].IsVisible);
             Assert.NotNull(cueTick);
-            cueTick(); // Queue a timer cue alongside the feedback before replacement.
+            cueTick();
             SubliminalWhisperShow.DrawSpeak("queued feedback");
             player.LoadEnhancementFromMemory(enhancement, "replacement");
             Assert.False(cards[0].IsVisible);
             Assert.True(timerStops > 0);
-            cueTick(); // A callback already in flight must not queue another cue.
+            cueTick(); // An already queued callback must not display a cue.
+            await Task.Delay(250); // longer than the player timer, even on a slow runner
             Dispatcher.UIThread.RunJobs();
             Assert.Single(cards);
             audio.PositionSeconds = 0; Tick(player); audio.PositionSeconds = 1.2; Tick(player);
@@ -98,6 +103,42 @@ public class SpeakPlayerTests
             Assert.True(cards[2].IsVisible);
         }
         finally { player.Close(); SubliminalOverlay.CloseAll(); SubliminalWhisperShow.DrawNow = oldDraw; }
+    });
+
+    [Fact]
+    public Task ReplacementStopsRecurringSpeakCues() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        using var media = new Media();
+        var audio = media.Audio;
+        var player = new EnhancementPlayerWindow(null, null);
+        var repeated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        int flashes = 0;
+        player.SpeakSessionFactory = Runtime(async (_, _, ct) => { await Task.Delay(Timeout.Infinite, ct); return PhraseResult.NotAvailable; },
+            flash: _ => { if (++flashes >= 2) repeated.TrySetResult(); }).CreateSession;
+        try
+        {
+            player.Show(); player.OpenLocalMediaFile(media.Path);
+            for (int i = 0; i < 500 && !audio.Playing; i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
+            Assert.True(audio.Playing);
+            // Drive playback ticks explicitly so a later automatic band-exit tick cannot mask a
+            // replacement that failed to stop the old cue timer.
+            var uiTimer = (DispatcherTimer)typeof(EnhancementPlayerWindow).GetField("_uiTimer",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(player)!;
+            uiTimer.Stop();
+            var enhancement = new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*", TimelineItems = {
+                new TimelineItem { Kind = TimelineItemKind.Effect, Start = 1, Duration = 3, EffectType = EffectTypes.Speak,
+                    EffectActivation = EffectActivation.Region, EffectSpeakTarget = "yes", EffectSpeakCueMode = SpeakCueMode.Intermittent,
+                    EffectSpeakCueIntervalMs = 80 } } };
+            player.LoadEnhancementFromMemory(enhancement, "test"); Tick(player); audio.PositionSeconds = 1.2; Tick(player);
+            await repeated.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            // Do not tick the old enhancement at zero: replacement itself must stop its timer.
+            audio.PositionSeconds = 0;
+            player.LoadEnhancementFromMemory(enhancement, "replacement");
+            int atReplacement = flashes;
+            await Task.Delay(350);
+            Assert.Equal(atReplacement, flashes);
+        }
+        finally { player.Close(); }
     });
 
     [Fact]

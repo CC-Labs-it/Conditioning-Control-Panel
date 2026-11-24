@@ -16,19 +16,25 @@ internal sealed class SpeakPromptRuntime
     private readonly Func<string, RecognizeOptions, CancellationToken, Task<PhraseResult>> _recognize;
     private readonly Action<string> _show, _flash;
     private Task<bool>? _consentAttempt;
-    private readonly Func<int, Action, Action> _startCueTimer;
+    private readonly Func<TimeSpan, Action, Action> _startCueTimer;
 
     internal SpeakPromptRuntime(Func<bool> available, Func<bool> consented, Func<Task<bool>> askConsent,
         Func<bool> armed, Action stopVoice, Action restoreVoice, Func<bool> listening,
         Func<string, RecognizeOptions, CancellationToken, Task<PhraseResult>> recognize, Action stopListening,
         Action<string> show, Action hide, Action<string>? flash = null,
-        Func<int, Action, Action>? startCueTimer = null)
+        Func<TimeSpan, Action, Action>? startCueTimer = null)
     {
         _available = available; _consented = consented; _askConsent = askConsent;
         _armed = armed; _stopVoice = stopVoice; _restoreVoice = restoreVoice; _listening = listening;
         _recognize = recognize; _stopListening = stopListening; _show = show; _hide = hide;
         _flash = flash ?? SpeakPromptSession.FlashCustom;
-        _startCueTimer = startCueTimer ?? StartCueTimer;
+        _startCueTimer = startCueTimer ?? ((interval, tick) =>
+        {
+            var timer = new global::Avalonia.Threading.DispatcherTimer { Interval = interval };
+            timer.Tick += (_, _) => tick();
+            timer.Start();
+            return timer.Stop;
+        });
     }
 
     internal SpeakPromptSession CreateSession(TriggerEffectAction effect, IPlaybackTimeSource? source)
@@ -54,7 +60,7 @@ internal sealed class SpeakPromptRuntime
             {
                 if (!intermittent) { _show(cue); return; }
                 _flash(cue);
-                stopTimer = _startCueTimer(Math.Max(80, effect.SpeakCueIntervalMs),
+                stopTimer = _startCueTimer(TimeSpan.FromMilliseconds(Math.Max(80, effect.SpeakCueIntervalMs)),
                     () => { if (Volatile.Read(ref cueStopped) == 0) _flash(cue); });
             }, () => { if (intermittent) stopTimer?.Invoke(); else _hide(); }, stopCapture: () =>
             {
@@ -62,14 +68,6 @@ internal sealed class SpeakPromptRuntime
                 stopTimer?.Invoke();
                 if (Volatile.Read(ref capturing) != 0) _stopListening();
             }, intermittentCues: true);
-    }
-
-    private static Action StartCueTimer(int intervalMs, Action tick)
-    {
-        var timer = new global::Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(intervalMs) };
-        timer.Tick += (_, _) => tick();
-        timer.Start();
-        return timer.Stop;
     }
 
     private async Task<bool> ConsentAsync()

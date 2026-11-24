@@ -13,7 +13,7 @@ namespace CCP.Avalonia.Tests;
 public sealed partial class AccountSeedTests
 {
     [Fact]
-    public Task FreshLaunchOwnershipEnablesDeskEquipmentWithoutAShopDoor() => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task FreshLaunchOwnershipEnablesDeskEquipment() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         if (Application.Current is null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().WithInterFont().UseSkia()
@@ -45,7 +45,7 @@ public sealed partial class AccountSeedTests
             Assert.Equal("desk.hat.party", desk.Window.DeskItems.Hat);
             Assert.True(CoreSettings.Current.EmiDeskEquipPushOwed);
             hats[0].IsChecked = true; Assert.Null(CoreSettings.Current.EmiDeskHat);
-            Assert.Null(options.Window.FindControl<Button>("BtnDeskCounter"));
+            Assert.NotNull(options.Window.FindControl<Button>("BtnDeskCounter"));
             Assert.Null(desk.Window.FindControl<Image>("DeskHatOverImage")!.Source);
         }
         finally
