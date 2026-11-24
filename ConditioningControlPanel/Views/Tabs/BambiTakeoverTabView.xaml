@@ -793,7 +793,13 @@
                         <Border CornerRadius="14" BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
                                 Background="#06050D" Height="300" MinHeight="200" MaxHeight="300" Margin="0,0,0,10">
                             <Border.Tag>
-                                <ImageBrush x:Name="TakeoverSideArtBrush" Stretch="UniformToFill"/>
+                                <!-- The authored fallback stays (ModAwarePremiumPlateTests pins it and its 800 px cap). -->
+                                <ImageBrush x:Name="TakeoverSideArtBrush" Stretch="UniformToFill">
+                                    <ImageBrush.ImageSource>
+                                        <BitmapImage UriSource="pack://application:,,,/Resources/features/takeover.png"
+                                                     DecodePixelWidth="800"/>
+                                    </ImageBrush.ImageSource>
+                                </ImageBrush>
                             </Border.Tag>
                             <pv:EffectPreview Scene="takeover"/>
                         </Border>
