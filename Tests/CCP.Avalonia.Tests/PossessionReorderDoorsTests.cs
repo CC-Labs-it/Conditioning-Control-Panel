@@ -220,6 +220,9 @@ public sealed class PossessionReorderDoorsTests
         int clicksA = 0, clicksB = 0, commandsA = 0, commandsB = 0;
         a.Click += (_, _) => clicksA++; b.Click += (_, _) => clicksB++;
         a.Command = new CountCommand(() => commandsA++); b.Command = new CountCommand(() => commandsB++);
+        a.Click += (_, _) => a.Content = new Border { Background = Brushes.Red, Width = 30, Height = 30 };
+        var menu = new ContextMenu { Items = { new MenuItem { Header = "Pin" } } };
+        a.ContextMenu = menu; ToolTip.SetTip(a, "Home tip");
         try
         {
             var homeA = host.BoundsOnGhostLayer(a)!.Value; var homeB = host.BoundsOnGhostLayer(b)!.Value;
@@ -236,11 +239,28 @@ public sealed class PossessionReorderDoorsTests
                 Assert.Equal(homeB.Y, host.BoundsOnGhostLayer(a)!.Value.Y, 1);
                 Assert.Equal(homeA.Y, host.BoundsOnGhostLayer(b)!.Value.Y, 1);
                 HeadlessInput.RenderLiveTree(window);
+                var ghostA0 = (global::Avalonia.Media.Imaging.Bitmap)layer.Children.OfType<Image>().First().Source!;
+                Assert.NotEqual('R', Tint(ghostA0));
                 window.MouseDown(homeB.Center, MouseButton.Left); window.MouseUp(homeB.Center, MouseButton.Left);
                 window.MouseDown(homeA.Center, MouseButton.Left); window.MouseUp(homeA.Center, MouseButton.Left);
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal(1, clicksA); Assert.Equal(1, clicksB);
                 Assert.Equal(1, commandsA); Assert.Equal(1, commandsB);
+                // The covered door's stand-in shows the selected door's new look, then later badge changes.
+                var ghostA = (global::Avalonia.Media.Imaging.Bitmap)layer.Children.OfType<Image>().First().Source!;
+                Assert.Equal('R', Tint(ghostA));
+                a.Content = new Border { Background = Brushes.Blue, Width = 30, Height = 30 };
+                window.UpdateLayout(); Assert.Equal('R', Tint(ghostA));
+                frames.Frame(TimeSpan.FromMilliseconds(800));
+                Assert.Equal('B', Tint(ghostA));
+                var seatA = (Button)((Canvas)root.Children[2]).Children[0];
+                Assert.Equal("Home tip", ToolTip.GetTip(seatA));
+                window.MouseMove(homeB.Center); Dispatcher.UIThread.RunJobs();
+                Assert.Contains(":pointerover", a.Classes);
+                window.MouseDown(homeB.Center, MouseButton.Right); window.MouseUp(homeB.Center, MouseButton.Right);
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(menu.IsOpen);
+                menu.Close();
                 if (stop == 2)
                 {
                     var returning = effect.UndoAsync(TimeSpan.FromMilliseconds(520));
@@ -254,6 +274,7 @@ public sealed class PossessionReorderDoorsTests
             Assert.False(effect.IsLive); Assert.All(targets, t => Assert.False(t.IsLive));
             Assert.Empty(layer.Children); Assert.Equal(2, root.Children.Count);
             Assert.Equal(0.7, a.Opacity); Assert.Equal(0.8, b.Opacity);
+            Assert.DoesNotContain(":pointerover", a.Classes);
             Assert.True(a.IsHitTestVisible); Assert.True(b.IsHitTestVisible);
             Assert.Same(originalA, a.RenderTransform); Assert.Same(originalB, b.RenderTransform);
             Assert.False(PossessionLease.IsLeased(a)); Assert.False(PossessionLease.IsLeased(b));
@@ -266,6 +287,20 @@ public sealed class PossessionReorderDoorsTests
             LockdownService.Current = previousLockdown; window.Close();
         }
     });
+
+    // Dominant channel of the premultiplied BGRA pixel at the bitmap's centre.
+    private static char Tint(global::Avalonia.Media.Imaging.Bitmap bitmap)
+    {
+        var buffer = System.Runtime.InteropServices.Marshal.AllocHGlobal(4);
+        try
+        {
+            bitmap.CopyPixels(new PixelRect(bitmap.PixelSize.Width / 2, bitmap.PixelSize.Height / 2, 1, 1), buffer, 4, 4);
+            int p = System.Runtime.InteropServices.Marshal.ReadInt32(buffer);
+            int r = (p >> 16) & 0xFF, b = p & 0xFF;
+            return r > 0x80 && b < 0x40 ? 'R' : b > 0x80 && r < 0x40 ? 'B' : '-';
+        }
+        finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(buffer); }
+    }
 
     [Fact]
     public Task BarkNamesTheDoorGroup() => AvaloniaTestDispatcher.RunAsync(async () =>

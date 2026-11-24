@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Templates;
 using Avalonia.Automation.Peers;
 using Avalonia.Automation.Provider;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -31,6 +32,7 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
         public PossessionGhost? Ghost;
         public TranslateTransform? OverlayMove;
         public double LayerDistance;
+        public Action? Unmirror;
     }
     private readonly List<Mover> _movers = new();
     private readonly List<IDisposable> _outlines = new();
@@ -39,7 +41,8 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
     private Canvas? _inputLayer;
     private LockdownService? _lockdown;
     private IDisposable? _timeout;
-    private TimeSpan? _start;
+    private TimeSpan? _start, _refreshed;
+    private bool _held;
     private TaskCompletionSource? _returned, _swapped;
     private CancellationTokenRegistration _cancellation;
     private int _generation;
@@ -138,8 +141,8 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
             _movers.Add(ma); _movers.Add(mb);
             if (covered)
             {
-                AddInput(ma, a.Bounds, invokeA!);
-                AddInput(mb, b.Bounds, invokeB!);
+                AddInput(ma, a.Door, a.Bounds, invokeA!);
+                AddInput(mb, b.Door, b.Bounds, invokeB!);
                 ga!.Hide(true); gb!.Hide(true);
             }
             foreach (var node in unclip)
@@ -160,7 +163,7 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
 
     }
 
-    private void AddInput(Mover mover, Rect bounds, IInvokeProvider invoke)
+    private void AddInput(Mover mover, Control door, Rect bounds, IInvokeProvider invoke)
     {
         var move = mover.OverlayMove = new TranslateTransform();
         mover.Ghost!.Image.RenderTransform = move;
@@ -170,14 +173,41 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
             RenderTransform = move,
             Template = new FuncControlTemplate<Button>((_, _) => new Border { Background = Brushes.Transparent })
         };
+        bool Usable() => IsLive && door.IsEffectivelyVisible && door.IsEffectivelyEnabled && !PossessionTree.IsOffLimits(door);
         seat.Click += (_, _) =>
+        {
+            try { if (Usable()) invoke.Invoke(); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Possession reorderdoors input failed"); }
+            Dispatcher.UIThread.Post(() => mover.Ghost?.Refresh(), DispatcherPriority.Background);
+        };
+        // The door keeps its own menu, tooltip, cursor and hover look while the seat stands in for it.
+        seat.ContextRequested += (_, e) =>
         {
             try
             {
-                if (IsLive && mover.Target.Visual is Control door && door.IsEffectivelyVisible &&
-                    door.IsEffectivelyEnabled && !PossessionTree.IsOffLimits(door)) invoke.Invoke();
+                if (!Usable()) return;
+                if (door.ContextMenu is { } menu) { menu.Open(door); e.Handled = true; }
+                else if (door.ContextFlyout is { } flyout) { flyout.ShowAt(door); e.Handled = true; }
             }
-            catch (Exception ex) { Serilog.Log.Warning(ex, "Possession reorderdoors input failed"); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Possession reorderdoors menu failed"); }
+        };
+        var tip = seat.Bind(ToolTip.TipProperty, door.GetObservable(ToolTip.TipProperty));
+        var cursor = seat.Bind(InputElement.CursorProperty, door.GetObservable(InputElement.CursorProperty));
+        var states = (IPseudoClasses)door.Classes;
+        void Mirror(bool over, bool pressed)
+        {
+            states.Set(":pointerover", over); states.Set(":pressed", pressed);
+            try { mover.Ghost?.Refresh(); } catch (Exception ex) { Serilog.Log.Warning(ex, "Possession reorderdoors refresh failed"); }
+        }
+        seat.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == InputElement.IsPointerOverProperty || e.Property == Button.IsPressedProperty)
+                Mirror(seat.IsPointerOver, seat.IsPressed);
+        };
+        mover.Unmirror = () =>
+        {
+            tip.Dispose(); cursor.Dispose();
+            states.Set(":pointerover", door.IsPointerOver); states.Set(":pressed", door is Button { IsPressed: true });
         };
         Canvas.SetLeft(seat, bounds.X); Canvas.SetTop(seat, bounds.Y);
         _inputLayer!.Children.Add(seat);
@@ -185,6 +215,14 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
 
     private void Frame(TimeSpan now)
     {
+        // A covered door's stand-in follows its live highlight and badges for the whole hold.
+        if (_refreshed is not { } last || now - last >= TimeSpan.FromMilliseconds(100))
+        {
+            _refreshed = now;
+            foreach (var mover in _movers)
+                try { mover.Ghost?.Refresh(); } catch (Exception ex) { Serilog.Log.Warning(ex, "Possession reorderdoors refresh failed"); }
+        }
+        if (_held) return;
         _start ??= now;
         double elapsed = (now - _start.Value).TotalMilliseconds;
         for (int i = 0; i < _movers.Count; i++)
@@ -208,7 +246,9 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
             mover.Lease.Translate.Y = mover.Distance;
             if (mover.OverlayMove != null) mover.OverlayMove.Y = mover.LayerDistance;
         }
-        Park(); _timeout?.Dispose(); _timeout = null; _start = null;
+        _held = true;
+        if (!_movers.Exists(m => m.Ghost != null)) Park();
+        _timeout?.Dispose(); _timeout = null; _start = null;
         var done = _swapped; _swapped = null; done?.TrySetResult();
     }
 
@@ -216,7 +256,7 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
     {
         _swapped?.TrySetResult(); _swapped = null;
         if (_movers.Count == 0 || duration <= TimeSpan.Zero) { Finish(); return; }
-        _returning = true;
+        _returning = true; _held = false;
         _timeout?.Dispose(); _timeout = null;
         _returnMs = Math.Clamp(duration.TotalMilliseconds, 260, 520);
         foreach (var mover in _movers) mover.From = mover.Lease.Translate.Y;
@@ -245,6 +285,7 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
         _inputLayer = null;
         foreach (var mover in _movers)
         {
+            try { mover.Unmirror?.Invoke(); } catch { }
             try { mover.Ghost?.Dispose(); } catch { }
             try { mover.Lease.ReleaseImmediate(); } catch { }
             mover.Target.IsLive = false;
@@ -252,7 +293,7 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
         foreach (var outline in _outlines) try { outline.Dispose(); } catch { }
         foreach (var hold in _unclips) try { hold.Dispose(); } catch { }
         _movers.Clear(); _outlines.Clear(); _unclips.Clear(); Live.Remove(this);
-        _frames = null; _start = null; _returning = false;
+        _frames = null; _start = _refreshed = null; _returning = _held = false;
         var done = _returned; _returned = null; done?.TrySetResult();
     }
     internal static void UndoAllLive()
