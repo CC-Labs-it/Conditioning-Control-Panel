@@ -61,4 +61,25 @@ public class HapticConnectFailureTests
         Assert.DoesNotContain("\"label_disconnected\"", refresh);
         Assert.Contains("_hapticConnectFailure = new HapticConnectFailure(\"label_failed\", \"haptics_connect_failed_hint\", null)", src);
     }
+
+    /// <summary>Wave 8 (reviewer nit): a connect press that stops early (no provider ticked, an unusable
+    /// Intiface address) clears the kept failure too, so an old "Failed" and its hint do not stay up.</summary>
+    [Fact]
+    public void A_press_that_stops_early_clears_the_kept_failure()
+    {
+        var dir = new DirectoryInfo(System.AppContext.BaseDirectory);
+        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Localization")))
+            dir = dir.Parent;
+        Assert.NotNull(dir);
+        var src = File.ReadAllText(Path.Combine(dir!.FullName, "ConditioningControlPanel", "MainWindow", "MainWindow.Haptics.cs"));
+        var click = src.Substring(src.IndexOf("internal async void BtnHapticConnect_Click("));
+        click = click.Substring(0, click.IndexOf("internal void BtnHapticPanic_Click"));
+        int clear = click.IndexOf("_hapticConnectFailure = null;");
+        int noProvider = click.IndexOf("\"haptics_no_provider_enabled\"");
+        Assert.True(clear >= 0, "the connect press never clears the kept failure");
+        Assert.True(clear < noProvider, "the no-provider return leaves before the clear");
+        Assert.True(clear < click.IndexOf("\"haptics_intiface_url_invalid\""), "the bad Intiface address return leaves before the clear");
+        int repaint = click.IndexOf("RefreshHapticConnectionUi();");
+        Assert.True(repaint > clear && repaint < noProvider, "the cleared failure is not repainted before an early return");
+    }
 }

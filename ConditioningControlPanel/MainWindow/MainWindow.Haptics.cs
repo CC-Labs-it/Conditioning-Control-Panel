@@ -681,6 +681,11 @@ namespace ConditioningControlPanel
                 return;
             }
 
+            // A new press drops the kept failure first, so a press that stops below (no provider ticked,
+            // an unusable Intiface address) does not leave an old "Failed" and its hint up.
+            _hapticConnectFailure = null;
+            RefreshHapticConnectionUi();
+
             var anyProvider = new[] { "lovense", "buttplug", "mock" }
                 .Any(k => HapticCfg.V2.Provider(k).Enabled);
             if (!anyProvider)
@@ -715,7 +720,6 @@ namespace ConditioningControlPanel
 
             HapticsTab.BtnHapticConnect.Content = Loc.Get("login_connecting");
             HapticsTab.BtnHapticConnect.IsEnabled = false;
-            _hapticConnectFailure = null;
             try
             {
                 var success = await App.Haptics.ConnectAsync();
