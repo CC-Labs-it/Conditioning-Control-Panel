@@ -232,7 +232,18 @@ namespace ConditioningControlPanel.Avalonia.Platform
             player.Stopped += (_, _) => Finish();
             if (!player.Play()) Finish();
             // Off the caller's thread: libvlc's Stop must never run inside one of its own events.
-            return () => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) player.Stop(); });
+            Action stop = () => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) player.Stop(); });
+            Pausers.AddOrUpdate(stop, paused => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) player.SetPause(paused); }));
+            return stop;
+        }
+
+        /// <summary>WPF AudioPlaybackHandle.Pause/Resume for a one-shot, keyed by the stop it handed back.</summary>
+        internal static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Action, Action<bool>> Pausers = new();
+
+        /// <summary>Pauses or resumes the clip behind <paramref name="stop"/>; a no-op for any other stop.</summary>
+        internal static void SetPaused(Action stop, bool paused)
+        {
+            if (Pausers.TryGetValue(stop, out var pause)) pause(paused);
         }
 
         /// <summary>A clip the caller can re-volume and stop (mind wipe). A loop is WPF's overlap

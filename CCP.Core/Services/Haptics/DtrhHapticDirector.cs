@@ -144,7 +144,7 @@ namespace ConditioningControlPanel.Services.Haptics
         private static DateTime _lastAmbientSendUtc = DateTime.MinValue;
 
         private static CancellationTokenSource? _accentCts;
-        private static CancellationTokenSource? _farewellCts;   // the run-end wave; OnClosed cancels it
+        private static CancellationTokenSource? _farewellCts;   // the run-end wave; CancelFarewell cuts it
         private static int _accentTierPlaying;              // 0 = idle
         private static DateTime _lastAccentEndUtc = DateTime.MinValue;
 
@@ -212,9 +212,12 @@ namespace ConditioningControlPanel.Services.Haptics
             StopAmbientTimer();
             CancelCoalesce();
             _accentCts?.Cancel();
-            _farewellCts?.Cancel();   // a panic close must not let the run-end wave outlive the mixer's mute
             if (wasActive) _ = SafeStopDevice();
         }
+
+        /// <summary>Cuts a playing run-end wave. Only a head whose close is a panic or teardown calls it;
+        /// WPF's ordinary close lets the wave finish.</summary>
+        public static void CancelFarewell() => _farewellCts?.Cancel();
 
         public static void OnRunStarted()
         {

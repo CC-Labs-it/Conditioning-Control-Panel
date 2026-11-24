@@ -103,6 +103,34 @@ public sealed partial class GameWindowTests
         }
     });
 
+    // Review P2: WPF DtrhHostService.cs:814-837,1073: the Freeze holds the primary video and the spoken line,
+    // releases them with the bubble or the run's end, and a close while frozen releases them too.
+    [Fact]
+    public void Dtrh_WorldFreezePausesVideoAndVoiceUntilItLiftsOrTheHostCloses() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var old = GameWindow.DtrhFreezeMedia;
+        var media = new List<bool>();
+        try
+        {
+            GameWindow.DtrhFreezeMedia = media.Add;
+            var w = GameWindow.Launch("dtrh")!;
+            w.HandleMessage("{type:'ready'}");
+            w.HandleMessage("{type:'run-started'}");
+            w.HandleMessage("{type:'freeze-state',on:true}");
+            w.HandleMessage("{type:'freeze-state',on:true}");                    // idempotent, as WPF :816
+            w.HandleMessage("{type:'freeze-state',on:false}");
+            Assert.Equal(new[] { true, false }, media);
+            w.HandleMessage("{type:'freeze-state',on:true}");
+            w.HandleMessage("{type:'run-ended',abandoned:true}");
+            Assert.Equal(new[] { true, false, true, false }, media);
+            w.HandleMessage("{type:'run-started'}");
+            w.HandleMessage("{type:'freeze-state',on:true}");
+            w.Close();
+            Assert.Equal(new[] { true, false, true, false, true, false }, media);
+        }
+        finally { GameWindow.DtrhFreezeMedia = old; }
+    });
+
     [Fact]
     public void Dtrh_RunningDescentLocksMandatoryVideo() => RunDtrh(lab: true, (_, _, _, _) =>
     {

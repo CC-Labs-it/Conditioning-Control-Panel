@@ -10,7 +10,7 @@
 // Slice C: heartbeat recovery (one relaunch per app session).
 // ponytail: slice game-dtrh-host-d, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
 // meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.spirals / ccp.content / ccp.mod origins, bark routing, sfx,
-// fire-payload, freeze/mute (native video, payload-state), vn-speaking, session stats,
+// fire-payload, mute (native video), payload-state, vn-speaking, session stats,
 // achievements bubble credit, RevealService.Sync, tucking the panel to the tray. Browser failures and silent ready pages share recovery.
 // Slice D: favorites + asset-stats (engagement history, #3727), the saved Loom spirals (loom-list and loom-*, #3949).
 using System;
@@ -217,7 +217,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private void CloseDtrhForPanic()
         {
             // Panic stops the toy now: the page may take the whole 1,200 ms watchdog to settle (review P1).
-            try { ConditioningControlPanel.Services.Haptics.DtrhHapticDirector.OnClosed(); }
+            // Only panic cuts a farewell still playing; an ordinary close lets it finish, as WPF :1071.
+            try { ConditioningControlPanel.Services.Haptics.DtrhHapticDirector.CancelFarewell(); ConditioningControlPanel.Services.Haptics.DtrhHapticDirector.OnClosed(); }
             catch (Exception ex) { Log.Debug("DtrhHost haptics: {E}", ex.Message); }
             try
             {
@@ -420,14 +421,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             catch (Exception ex) { Log.Warning("DtrhHost.OnRequestRun: {E}", ex.Message); }
         }
 
-        // WPF ApplyWorldFreeze (:814): the in-world Freeze holds the toy. ponytail: pausing the covering video and voice.
+        // WPF ApplyWorldFreeze (:814-837): the in-world Freeze holds the toy, the primary video and the spoken line.
         private void ApplyDtrhWorldFreeze(bool on)
         {
             if (on == _dtrhWorldFrozen) return;
             _dtrhWorldFrozen = on;
             try { ConditioningControlPanel.Services.Haptics.DtrhHapticDirector.OnWorldFreeze(on); }
             catch (Exception ex) { Log.Debug("DtrhHost haptic freeze: {E}", ex.Message); }
+            try { DtrhFreezeMedia(on); }
+            catch (Exception ex) { Log.Debug("DtrhHost.ApplyWorldFreeze: {E}", ex.Message); }
         }
+
+        /// <summary>WPF :826-834: PausePrimary + PauseSpokenAudio, or PlayPrimary + ResumeSpokenAudio; tests swap it.</summary>
+        internal static Action<bool> DtrhFreezeMedia = on =>
+        {
+            var video = Overlays.MandatoryVideoOverlay.Instance;
+            if (on) video.PausePrimary(); else video.PlayPrimary();
+            Views.AvatarTube.AvatarTubeWindow.Live?.SetSpokenPaused(on);
+        };
 
         /// <summary>WPF OnRunEnded (:583): XP + Sparks, answered with payout-result. One payout per descent:
         /// the page's run-ended and the teardown's synthetic one share the latch.</summary>
@@ -577,6 +588,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             // WPF :1071: never leave the toy running after the window dies (panic, watchdog, recovery alike).
             try { ConditioningControlPanel.Services.Haptics.DtrhHapticDirector.OnClosed(); }
             catch (Exception ex) { Log.Debug("DtrhHost haptics: {E}", ex.Message); }
+            // WPF :1073: a freeze still held at close lets the video and the spoken line go again.
+            if (_dtrhWorldFrozen)
+            {
+                _dtrhWorldFrozen = false;
+                try { DtrhFreezeMedia(false); } catch (Exception ex) { Log.Debug("DtrhHost.ApplyWorldFreeze: {E}", ex.Message); }
+            }
             // WPF DtrhHostService.cs:1041-1046: dtrhClosed {minutes}, once per open.
             if (_dtrhOpenedUtc is DateTime opened)
             {

@@ -128,7 +128,7 @@ public class DtrhHapticDirectorTests
     }
 
     /// <summary>Review P1 (s10-game-dtrh-1): a panic close that banks the run must leave nothing queued on
-    /// the toy. The farewell wave is skipped when asked and cancelled by OnClosed, so it cannot start
+    /// the toy. The farewell wave is skipped when asked and cut by CancelFarewell, so it cannot start
     /// after the mixer's 400 ms panic mute (HapticMixer.PanicMuteMs) has run out.</summary>
     [Fact]
     public void CloseCancelsTheFarewellAndATeardownEndSkipsIt()
@@ -163,17 +163,23 @@ public class DtrhHapticDirectorTests
             Assert.Same(before, DtrhHapticDirector.FarewellTask);
             Assert.True(WaitLive(0));                                             // the run-started accent was cancelled too
 
-            // An ordinary end plays the wave; the close that follows cuts it.
+            // An ordinary end plays the wave; WPF's plain close keeps it, CancelFarewell cuts it.
             DtrhHapticDirector.OnRunStarted();
             DtrhHapticDirector.OnRunEnded();
             var farewell = DtrhHapticDirector.FarewellTask!;
             Assert.True(WaitLive(1));                                             // the wave is on the mixer
+            var cts = (CancellationTokenSource)typeof(DtrhHapticDirector)
+                .GetField("_farewellCts", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
             DtrhHapticDirector.OnClosed();
-            Assert.Equal(0, Live());                                              // nothing left to play
+            Assert.False(cts.IsCancellationRequested);                            // WPF DtrhHostService.cs:1071 unchanged
+            DtrhHapticDirector.CancelFarewell();
+            Assert.True(cts.IsCancellationRequested);
+            Assert.True(WaitLive(0));                                             // nothing left to play
             Assert.True(farewell.Wait(TimeSpan.FromSeconds(5)));
         }
         finally
         {
+            DtrhHapticDirector.CancelFarewell();
             DtrhHapticDirector.OnClosed();
             CoreHaptics.Service = oldHaptics;
             CoreSettings.ServiceProvider = oldProvider;
