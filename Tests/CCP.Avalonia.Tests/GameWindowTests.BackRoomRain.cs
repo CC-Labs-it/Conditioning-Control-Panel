@@ -178,6 +178,29 @@ public sealed partial class GameWindowTests
         w.Close();
     });
 
+    [Fact]
+    public void WordEffectUsesAuthoredEnvelopeAndStopsOnMinimize() => Run((_, _) =>
+    {
+        var w = GameWindow.Launch("breakoutdemo")!;
+        var clock = new FxClock(); w.RoomFxSchedulerFactory = () => clock;
+        w.RoomFxDealFactory = () => new BackRoomMediaDeal(0, Array.Empty<BackRoomGif>(), [new BackRoomWord("k", "WORD", "pool")]);
+        var words = new List<(string, int, int, bool, int, int)>();
+        int stops = 0;
+        w.RoomSubliminal = (text, opacity, hold, suppress, fadeIn, fadeOut) => words.Add((text, opacity, hold, suppress, fadeIn, fadeOut));
+        w.StopRoomSubliminal = () => stops++;
+        JObject? ack = null; w.Posted += json => ack = JObject.Parse(json);
+        w.Web.OnNavigationCompleted(w.PageUrl!);
+        w.Web.OnWebMessage("{\"type\":\"fx\",\"fxId\":\"fx.sub_cascade\",\"station\":\"breakout\"}");
+        Assert.Contains(ack!["fired"]!, x => (string?)x == "sub-burst9");
+        clock.RunAll();
+        Assert.NotEmpty(words);
+        Assert.All(words, word => { Assert.Equal("WORD", word.Item1); Assert.Equal(100, word.Item2); Assert.Equal(400, word.Item3); Assert.True(word.Item4); Assert.Equal(80, word.Item5); Assert.Equal(350, word.Item6); });
+        w.RoomMinimizedChanged(true);
+        Assert.Equal(1, stops);
+        w.Close();
+        Assert.Equal(1, stops);
+    });
+
     private sealed class FxClock : IFxScheduler
     {
         public readonly List<Action> Pending = new();
