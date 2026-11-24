@@ -43,6 +43,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             })();
             """;
 
+        // WPF MainWindow.Browser.cs:1017-1080: wait for the React playlist play button.
+        // BrowserCard's media reporter observes audio playing and ended for the WebVideo slot.
+        internal const string PlaylistAutoPlayScript = """
+            (async function() {
+                window._ccpTakeoverStopped = false;
+                let button = document.querySelector('button.play-action');
+                for (let i = 0; i < 20 && !button; i++) {
+                    await new Promise(r => setTimeout(r, 250));
+                    if (window._ccpTakeoverStopped) return;
+                    button = document.querySelector('button.play-action');
+                }
+                if (button && !window._ccpTakeoverStopped) button.click();
+            })();
+            """;
+
         // WPF MainWindow.Browser.cs:981: latch before stopping media, so retries cannot resume it.
         internal const string StopScript = "window._ccpForcedFs = false; window._ccpTakeoverStopped = true;" +
             "document.querySelectorAll('video,audio').forEach(v => { try { v.pause(); } catch (e) {} });" +
