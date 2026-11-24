@@ -11,6 +11,13 @@ namespace ConditioningControlPanel.Controls.Preview
     /// Units are screen DIPs. The help loops' desktop (<c>LoopFrame.Desktop</c>) is a WPF painter for a
     /// fixed 480x270 stage with one window; this one fills a tall slice of any height, so it is its own.
     /// </summary>
+    /// <summary>
+    /// The one seam for a scene that changes the slice's OWN wallpaper (Wallpaper page, lane P1): its
+    /// <see cref="IPreviewScene.Render"/> paints the wallpaper, and the host lays the desktop's windows,
+    /// icons and taskbar (baked once per size, no wallpaper) over it, so they stay on top and crisp.
+    /// </summary>
+    public interface IPreviewWallpaperScene : IPreviewScene { }
+
     public static class PreviewDesktop
     {
         /// <summary>Taskbar strip at the bottom of the slice.</summary>
@@ -21,10 +28,15 @@ namespace ConditioningControlPanel.Controls.Preview
         /// <summary>The height the mockup was laid out for: windows sit at the same share of a taller slice.</summary>
         private const float DesignHeight = 1100;
 
-        public static void Paint(SKCanvas c, float w, float h)
+        public static void Paint(SKCanvas c, float w, float h) => Paint(c, w, h, wallpaper: true);
+
+        /// <summary>The desktop; with <paramref name="wallpaper"/> false only what sits ON the wallpaper (windows,
+        /// icons, taskbar) over a clear background, for a scene that paints its own wallpaper
+        /// (<see cref="IPreviewWallpaperScene"/>).</summary>
+        public static void Paint(SKCanvas c, float w, float h, bool wallpaper)
         {
             using var p = new SKPaint { IsAntialias = true };
-            Wallpaper(c, p, w, h);
+            if (wallpaper) Wallpaper(c, p, w, h);
             float k = Math.Max(1f, h / DesignHeight);
             Window(c, p, w * .34f, 70 * k, w * .92f, 230, false, new[] { .46f, .60f, .38f, .54f, .30f }, .08f);
             Window(c, p, -w * .34f, 440 * k, w * .92f, 210, true, new[] { .44f, .30f, .48f }, .44f);
