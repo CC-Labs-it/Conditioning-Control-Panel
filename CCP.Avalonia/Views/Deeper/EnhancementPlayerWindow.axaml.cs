@@ -860,6 +860,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         {
             foreach (var p in OpenPlayers.ToArray())
             {
+                p.StopPlayNow();
                 p.StopDeeper();
                 ++p._audioLoad; ++p._videoLoad; p._localAudio?.Pause(); p._isPlaying = false;
                 p._txtPlayPauseGlyph.Kind = IconKind.Play;
@@ -2004,6 +2005,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
 
         private void Window_Closing()
         {
+            StopPlayNow();
             _videoClosing = true; CancelEscHold();
             ExitVideoFullscreen();
             _videoBrowser.NavigationCompleted -= OnVideoNavigationCompleted;
