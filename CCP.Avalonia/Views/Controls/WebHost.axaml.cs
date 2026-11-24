@@ -133,9 +133,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         // message event has no source, so callers must not treat this as a message's proven origin.
         internal Uri? ActiveNavigation { get; private set; }
 
+        // The native completion has a URL but no navigation ID. Keep replaced starts so their late
+        // failures cannot end a newer load, including a reload of the same URL.
+        private readonly List<Uri> _replacedNavigations = new();
+        private void ClearActiveNavigation()
+        {
+            ActiveNavigation = null;
+            _replacedNavigations.Clear();
+        }
+
         /// <summary>
-        /// Raised on the UI thread with <see cref="CurrentUrl"/> after every top-level navigation
-        /// completes, failed ones included, as WPF's <c>BrowserService.NavigationCompleted</c>
+        /// Raised on the UI thread with <see cref="CurrentUrl"/> after a top-level navigation
+        /// completes, including failures except those from a replaced load, as WPF's <c>BrowserService.NavigationCompleted</c>
         /// does (BrowserService.cs:1435-1443) - the live-URL signal MainWindow.Browser.cs:132
         /// hangs its status line and catalogue lookup on.
         /// </summary>
@@ -153,7 +162,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         internal void OnNavigationCompleted(Uri? url, bool success = true)
         {
-            ActiveNavigation = null;
+            if (!success && ActiveNavigation != null && url != null && _replacedNavigations.Remove(url))
+                return; // the replacement is still loading; do not publish the old failure
+            ClearActiveNavigation();
             if (url is null || _panicBlank) return;
             CurrentUrl = url;
             if (InjectCarrier) _ = InvokeScriptAsync(CarrierShim);
@@ -723,6 +734,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             NavigationStarting?.Invoke();
             var target = e.Request;
+            if (ActiveNavigation is { } replaced)
+            {
+                if (_replacedNavigations.Count == 64) _replacedNavigations.RemoveAt(0);
+                _replacedNavigations.Add(replaced);
+            }
+            else _replacedNavigations.Clear();
             ActiveNavigation = null;
             if (e.Cancel) return;
             // Panic teardown must pass a caller's page allowlist, including on reattachment.
@@ -763,7 +780,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public bool Navigate(Uri url)
         {
-            ActiveNavigation = null;
+            ClearActiveNavigation();
             _panicBlank = false;
             CancelPendingNavigation();
             NavigationRequests++;
@@ -991,7 +1008,7 @@ document.addEventListener('DOMContentLoaded',scan);})();";
         internal Action<bool> NewScrolllerEngine()
         {
             _scrolllerGate = null;
-            ActiveNavigation = null;
+            ClearActiveNavigation();
             _loadedOnThisEngine = false;
             _carrierInstall = null;
             _allFramesInstall = null;
@@ -1042,7 +1059,7 @@ document.addEventListener('DOMContentLoaded',scan);})();";
             base.OnPropertyChanged(change);
             if (change.Property == SourceProperty)
             {
-                ActiveNavigation = null;
+                ClearActiveNavigation();
                 if (Source != null) _panicBlank = false; // a new explicit request may load normally
                 if (!_explicitNavigate) CancelPendingNavigation();
                 ApplySource();

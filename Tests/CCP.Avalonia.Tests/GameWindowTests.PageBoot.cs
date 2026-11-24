@@ -82,6 +82,8 @@ public sealed partial class GameWindowTests
             w.Web.OnWebMessage("{\"type\":\"ready\"}");
             w.Web.OnNavigationCompleted(page, success: false);
             Assert.Empty(sent);
+            w.Web.OnNavigationCompleted(page); // a failed load must not leave a ready to replay
+            Assert.Empty(sent);
             Start(page);
             w.Web.OnWebMessage("{\"type\":\"exit-done\"}");
             w.Web.OnWebMessage("{\"type\":\"ready\"}");
@@ -96,9 +98,11 @@ public sealed partial class GameWindowTests
     });
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void EarlyReady_SurvivesTheReplacedLoadsLateFailure(bool reload) => RunPageBoot(() =>
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void EarlyReady_SurvivesTheReplacedLoadsLateFailure(bool reload, bool readyBeforeFailure) => RunPageBoot(() =>
     {
         // WPF ChaosWebViewHost.cs:1700-1715 takes ready from the document that sent it.
         var w = new GameWindow(GameWindow.Games["breakoutdemo"]);
@@ -117,10 +121,12 @@ public sealed partial class GameWindowTests
             }
             Start(first);
             Start(page);
-            w.Web.OnWebMessage("{\"type\":\"ready\"}");
+            if (readyBeforeFailure) w.Web.OnWebMessage("{\"type\":\"ready\"}");
             w.Web.OnNavigationCompleted(first, success: false); // the replaced load ends late
             Assert.Empty(sent);
-            w.Web.RecordAllowedNavigation(page); // the late completion cleared the host's active start
+            Assert.Equal(page, w.Web.ActiveNavigation);
+            Assert.Null(w.Web.CurrentUrl);
+            if (!readyBeforeFailure) w.Web.OnWebMessage("{\"type\":\"ready\"}");
             w.Web.OnNavigationCompleted(page);
             Assert.True(w.IsReady);
             Assert.Equal("init", (string?)JObject.Parse(Assert.Single(sent))["type"]);

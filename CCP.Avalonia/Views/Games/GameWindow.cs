@@ -268,12 +268,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Web.NavigationStarting += () => _earlyReady = null;
                 Web.NavigationFinished += (url, ok) =>
                 {
-                    // Completions carry no navigation id. A replaced load ends as a failure, so only a new
-                    // start or the retaining page's successful completion ends the retained ready.
-                    if (_earlyReady is not { } retained || !ok
+                    // WebHost filters late failures from replaced loads. A failure of this page
+                    // clears its retained ready; only a successful completion may replay it.
+                    if (_earlyReady is not { } retained
                         || !ConditioningControlPanel.Services.Quiz.IntakeRun.SameDocument(url, retained)) return;
                     _earlyReady = null;
-                    if (!_closing && PageUrl != null && ConditioningControlPanel.Services.Quiz.IntakeRun.SameDocument(url, PageUrl))
+                    if (ok && !_closing && PageUrl != null && ConditioningControlPanel.Services.Quiz.IntakeRun.SameDocument(url, PageUrl))
                         HandleMessage("{\"type\":\"ready\"}");
                 };
             }
