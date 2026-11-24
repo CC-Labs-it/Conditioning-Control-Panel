@@ -360,7 +360,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 // The listener runs at document start. Before the first completion, accept only
                 // host Escape for an allowed Just Drop navigation, never a page business frame.
-                if (Spec.Id != JustDropId || !JustDropHandoff.IsSite(Web.ActiveNavigation)) return;
+                if (Spec.Id != JustDropId || !JustDropHandoff.IsSite(Web.ActiveNavigation))
+                {
+                    try { Log.Debug("[Game] {Id}: dropped {Type} before navigation completed", Spec.Id, (string?)JObject.Parse(Unwrap(json))["type"]); } catch { }
+                    return;
+                }
                 try
                 {
                     var early = JObject.Parse(Unwrap(json));
