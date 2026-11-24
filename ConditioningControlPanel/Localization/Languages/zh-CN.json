@@ -1814,6 +1814,8 @@
   "row_unit_each_time": "每次",
   "row_unit_at_least": "至少",
   "row_unit_at_once": "同时",
+  "row_unit_a_minute": "每分钟",
+  "row_unit_at_most": "最多",
   "tooltip_number_of_images_shown_per_flash_event_multip": "每次闪图事件显示的图片数量。\n多张图片同时出现。",
   "setting_images": "图片",
   "setting_flash_random_images": "随机图片数量",

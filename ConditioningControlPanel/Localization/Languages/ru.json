@@ -1191,6 +1191,8 @@
   "row_unit_each_time": "каждый раз",
   "row_unit_at_least": "не меньше",
   "row_unit_at_once": "одновременно",
+  "row_unit_a_minute": "в минуту",
+  "row_unit_at_most": "не больше",
   "tooltip_number_of_images_shown_per_flash_event_multip": "Количество изображений за одно всплытие. Несколько изображений появляется одновременно.",
   "setting_images": "Число изображений",
   "setting_flash_random_images": "Случайное число изображений",

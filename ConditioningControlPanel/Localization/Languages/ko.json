@@ -1191,6 +1191,8 @@
   "row_unit_each_time": "매번",
   "row_unit_at_least": "최소",
   "row_unit_at_once": "동시에",
+  "row_unit_a_minute": "분당",
+  "row_unit_at_most": "최대",
   "tooltip_number_of_images_shown_per_flash_event_multip": "플래시 이벤트당 표시되는 이미지 수.\r\n여러 이미지가 동시에 나타나요.",
   "setting_images": "이미지",
   "setting_flash_random_images": "이미지 수 무작위",

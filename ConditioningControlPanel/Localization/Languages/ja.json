@@ -1191,6 +1191,8 @@
   "row_unit_each_time": "毎回",
   "row_unit_at_least": "最低",
   "row_unit_at_once": "同時に",
+  "row_unit_a_minute": "1分あたり",
+  "row_unit_at_most": "最大",
   "tooltip_number_of_images_shown_per_flash_event_multip": "フラッシュイベントごとの画像数\r\n複数の画像が同時に表示されます",
   "setting_images": "画像数",
   "setting_flash_random_images": "画像数をランダムに",

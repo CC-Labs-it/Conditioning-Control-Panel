@@ -1947,6 +1947,8 @@
   "row_unit_each_time": "ogni volta",
   "row_unit_at_least": "almeno",
   "row_unit_at_once": "insieme",
+  "row_unit_a_minute": "al minuto",
+  "row_unit_at_most": "al massimo",
   "tooltip_number_of_images_shown_per_flash_event_multip": "Quante immagini mostra ogni flash.\nCompaiono tutte insieme.",
   "setting_images": "Immagini",
   "setting_flash_random_images": "Numero di immagini casuale",

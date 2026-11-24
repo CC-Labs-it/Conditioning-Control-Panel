@@ -4,13 +4,18 @@ namespace ConditioningControlPanel.Emblems;
 /// What an option MEANS, which picks its emblem (owner 2026-11-24, Readable Rows pilot). One meaning,
 /// one picture, in every box: a stopwatch is "how often" everywhere. Art is ported 1:1 from the
 /// approved mockup's <c>E</c> table (handoff-1124/readable-rows/index.html); the mockup kinds
-/// <c>words</c> and <c>sound</c> are not in the pilot.
+/// <c>words</c> (live text "Aa") and <c>sound</c> are not ported: <see cref="Words"/> is the
+/// mockup's <c>wordslip</c> pill.
 /// </summary>
 public enum EmblemKind
 {
     Often, Many, Most, Long, Big, Clear, Loud, Fast, Much, Random, Click, Stay,
     After, Splits, Link, Where, Screens, Colour, When, Safe, Motion, Reacts, Eye, Glow, Solid,
     Keepout, Corners, Drag, Shatter, Jackpot, Flip,
+    // Second batch (overnight sweep 2026-11-24): the mockup's wordslip, perf, lock, layers, loop,
+    // folder, mic, plug, power, bell, gentle, persona, ramp, spiral, fog, stamp, lamp, card, target, cam.
+    Words, Perf, Lock, Layers, Loop, Folder, Mic, Plug, Power, Bell,
+    Gentle, Persona, Ramp, Spiral, Fog, Stamp, Lamp, Card, Target, Cam,
 }
 
 /// <summary>What a stack is made of: the box it sits in (photos, clips, bubbles, words).</summary>
