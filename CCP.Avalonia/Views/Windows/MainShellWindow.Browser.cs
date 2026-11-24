@@ -4,7 +4,7 @@
 // BrowserPopout.cs wires pop-out, focus and return without discarding the native page.
 // First load uses the mod default (WPF MainWindow.Browser.cs:225).
 // Native engine mute and construction retry are live (WebHost). Missing: asynchronous init retry, general
-// document-created scripts, media/audio-sync reporting and playlist autoplay. Page fullscreen,
+// document-created scripts, media reporting and playlist autoplay. Page fullscreen,
 // its zoom and mirroring live in MainShellWindow.BrowserFullscreen.cs.
 // The remote controller's HypnoTube video (play_hypnotube) plays here with the same autoplay request. Watch links request video autoplay after navigation completes (#3961); WPF also has an
 // earlier DOM-ready signal that WebHost does not expose.
@@ -38,6 +38,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Panic surface "browser-media" (WPF b9368d963 PanicEndBrowserMedia): page video stops, fullscreen drops.</summary>
         internal void PanicPauseBrowserMedia()
         {
+            StopBrowserAudioSync();
+            LockCardWindow.EndWebVideo();
             ExitBrowserPopoutFullscreen();
             // Invalidate a delayed autoplay before the page is asked to stop (WPF MainWindow.Browser.cs:973-990).
             CancelVideoAutoPlay();
@@ -53,9 +55,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF MainWindow.Browser.cs:973: stop pending takeover playback and page fullscreen.</summary>
         internal void EndWebVideoTakeover()
         {
+            LockCardWindow.EndWebVideo();
+            ExitBrowserPopoutFullscreen(); // WPF MainWindow.Browser.cs:990
             CancelVideoAutoPlay();
             if (BrowserView is { } host) _ = host.InvokeScriptAsync(WebHostTakeover.StopScript);
-            ExitBrowserPopoutFullscreen();   // WPF :990, before the remote branch navigates home
             EndRemoteBrowserVideo();
         }
 
@@ -117,7 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Any new navigation, panic or takeover stop drops a pending or delayed autoplay.</summary>
         private void CancelVideoAutoPlay()
         {
-            ++_browserRequestGeneration;
+            ++_browserRequestGeneration; LockCardWindow.CancelWebVideoTakeover();
             if (_pendingVideoHost != null && _pendingVideoAutoPlay != null)
                 _pendingVideoHost.NavigationFinished -= _pendingVideoAutoPlay;
             _pendingVideoHost = null;
@@ -188,7 +191,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (BrowserPage?.PrepareBrowserNavigation() == false) return false;
                 // WPF MainWindow.Browser.cs:458,730: later links waiting for init use 50%.
                 host.SetBrowserZoom(host.BrowserZoomReady || (linkNavigation && host.BrowserZoom is not null) ? 0.5 : 0.75);
-                if (autoPlayFullscreen && WantsVideoAutoPlay(url, host)) ArmVideoAutoPlay(host);
+                if (autoPlayFullscreen && WantsVideoAutoPlay(url, host)) { LockCardWindow.BeginWebVideoTakeover(); ArmVideoAutoPlay(host); }
                 if (!host.Navigate(target)) { CancelVideoAutoPlay(); return false; }   // even when equal: WPF #867, re-click goes home
                 Log.Information("Browser navigated to {Host}", ConditioningControlPanel.Services.Logging.UrlLog.Host(url));
                 return true;
@@ -276,12 +279,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             CancelVideoAutoPlay();
             if (!PrepareBrowserNavigation(url, true, true)) return false;
+            if (BrowserPage?.PrepareBrowserNavigation() == false) return false;
             var host = BrowserView;
             if (host == null) return false;
             // A companion link is a link (WPF NavigateToUrlInBrowser :729): 50% once the browser exists.
             host.SetBrowserZoom(host.BrowserZoomReady || host.BrowserZoom is not null ? 0.5 : 0.75);
             var request = _browserRequestGeneration;
-            var result = await host.NavigateWhenReadyAsync(new Uri(url));
+            var takeover = WantsVideoAutoPlay(url, host);
+            if (takeover) LockCardWindow.BeginWebVideoTakeover();
+            bool? result;
+            try { result = await host.NavigateWhenReadyAsync(new Uri(url)); }
+            catch { if (takeover && request == _browserRequestGeneration) LockCardWindow.EndWebVideo(); throw; }
+            if (takeover && result != true && request == _browserRequestGeneration) LockCardWindow.EndWebVideo();
             // Armed only once this request was the one that loaded: panic or a newer navigation
             // during the gate wait bumps the generation, and a refused or cancelled wait plays nothing.
             if (result == true && request == _browserRequestGeneration && WantsVideoAutoPlay(url, host))
@@ -345,6 +354,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var patreon = page.FindControl<Image>("ProfilePatreonTierBadge");
                 if (patreon != null) patreon.IsVisible = false;
 
+                var badge = page.FindControl<Image>("ProfilePatreonBadge");
+                if (badge != null) badge.IsVisible = false;
+                var banner = page.FindControl<Border>("ProfilePatreonTierBanner");
+                if (banner != null) banner.IsVisible = false;
                 SetProfileViewingSelf(true);
             }
             catch (Exception ex) { Log.Debug("ClearProfileViewer: {E}", ex.Message); }

@@ -630,7 +630,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private static void CardHover(object? sender, bool on)
         {
             if (sender is not Border card) return;
-            if (card.RenderTransform is not ScaleTransform scale)
+            var scale = card.RenderTransform as ScaleTransform ?? (card.RenderTransform as TransformGroup)?.Children.OfType<ScaleTransform>().FirstOrDefault();
+            if (scale == null)
             {
                 card.RenderTransformOrigin = RelativePoint.Center; // WPF Services/MotionFx.cs:300
                 card.RenderTransform = scale = new ScaleTransform();

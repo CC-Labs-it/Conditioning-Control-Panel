@@ -3,8 +3,6 @@
 // in AppSettings and runs a card's button. The rules are Core DashboardBillboard/BillboardDeck, the
 // drawing is Controls/Billboard/BillboardCardHost. Providers so far: the house cards and the Prime
 // tips, Core's Waiting/Resume/Event adapters over this head's services, and the premium showcase.
-// ponytail: Live waits on a Lobby service (none on this head); the Board card waits on BoardTileView
-// and the marquee hand-off (neither on this head), so it offers no card here.
 
 using System;
 using System.Collections.Generic;

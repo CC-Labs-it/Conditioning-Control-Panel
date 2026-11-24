@@ -32,6 +32,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             return false;
         }
 
+        internal static bool RaceCloudOffered;
+        internal static Action<string> RaceRequestPack = id => { _ = App.ReleaseContent?.RequestPackAsync(id); };
+        internal static Action<string> RaceNoteUsage = id => ConditioningControlPanel.Services.EmiDesk.EmiState.NoteUsage(id);
+
         /// <summary>Spark banking (WPF DtrhMetaBridge.AwardRun, real state: ChaosMeta.AwardRunRewards); tests swap it.</summary>
         internal static Func<ChaosMeta.ChaosRunRewardInput, int> RaceBankSparks = input => ChaosMeta.AwardRunRewards(input);
 
@@ -55,6 +59,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (_raceStarted) return;
             _raceStarted = true;
+            try { RaceNoteUsage("race"); } catch (Exception ex) { Log.Debug("RaceHost: usage: {E}", ex.Message); }
+            try { RaceRequestPack("audio-web"); } catch (Exception ex) { Log.Debug("RaceHost: audio pack: {E}", ex.Message); }
             _raceOwnedTracks = RacingAccess.OwnedTracks;
             PrizeGrants.GrantsChanged += OnRaceGrantsChanged;
             _raceRun.Reset();
@@ -188,8 +194,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 reducedMotion = RaceSafe(() => CoreSettings.Current.MotionLevel != MotionLevel.Full, false),
                 // The page plays the bundled host cues when this host does not handle sfx.
                 hostSfx = false,
-                // WPF sends true (:278): only a host that owns the levels browser offers it; not yet here.
-                cloud = false,
+                // WPF sends true (:278); the levels host seeds this offer when available.
+                cloud = RaceCloudOffered,
                 racingTracks = RacingAccess.OwnedTracks,
                 returnToCasino = false,   // no Back Room cabinet on this head
             },

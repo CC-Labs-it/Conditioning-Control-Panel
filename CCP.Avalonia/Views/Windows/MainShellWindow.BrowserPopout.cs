@@ -19,6 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void InitializeBrowserSurfaceLifecycle()
         {
             InitializeBrowserFullscreen();
+            InitializeBrowserAudioSync();
             Closed += (_, _) => CloseBrowserSurfaces();
         }
 
@@ -82,6 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF MainWindow.xaml.cs:1987 disposes the browser on shell close; unload the page and close its unowned window.</summary>
         private void CloseBrowserSurfaces()
         {
+            DisposeBrowserAudioSync();
             DisposeBrowserFullscreen();
             if (BrowserView is { } host)
             {

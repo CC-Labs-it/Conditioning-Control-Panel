@@ -40,6 +40,30 @@ public sealed class DeeperEditorInteractionTests
     });
 
     [Fact]
+    public Task HoverTimeFollowsPointerAndPanicClearsIt() => Run((w, model) =>
+    {
+        Set(w, "_totalSeconds", 30d);
+        var canvas = w.FindControl<Canvas>("TimelineCanvas")!;
+        var tip = w.FindControl<Border>("HoverTimeTip")!;
+        var label = w.FindControl<TextBlock>("TxtHoverTime")!;
+        void Move(double x) => canvas.RaiseEvent(new PointerEventArgs(InputElement.PointerMovedEvent, canvas,
+            new global::Avalonia.Input.Pointer(1, PointerType.Mouse, true), w, canvas.TranslatePoint(new Point(x, 1), w) ?? default,
+            0, PointerPointProperties.None, KeyModifiers.None));
+        Assert.True(canvas.Bounds.Width > 0);
+        Move(canvas.Bounds.Width / 2);
+        Assert.True(tip.IsVisible);
+        Assert.Equal("0:15.00", label.Text);
+        Move(canvas.Bounds.Width + 100);
+        Assert.Equal("0:30.00", label.Text);
+        canvas.RaiseEvent(new PointerEventArgs(InputElement.PointerExitedEvent, canvas,
+            new global::Avalonia.Input.Pointer(1, PointerType.Mouse, true), w, default, 0, PointerPointProperties.None, KeyModifiers.None));
+        Assert.False(tip.IsVisible);
+        Move(1);
+        ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.StopAll("test");
+        Assert.False(tip.IsVisible);
+    });
+
+    [Fact]
     public Task RuleDeleteAndEscapeUseThePrimarySelection() => Run((w, model) =>
     {
         var rule = new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 3 } };
@@ -94,6 +118,128 @@ public sealed class DeeperEditorInteractionTests
     });
 
     [Fact]
+    public Task ParkedRulesAndTimeRulesOnBandsShowPins() => Run((w, model) =>
+    {
+        Set(w, "_totalSeconds", 30d);
+        var past = new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 40 } };
+        var gone = new EnhancementRule { Trigger = new GazeTargetTrigger(), RegionConstraint = "deleted" };
+        var band = new Region { Id = "band", Start = 1, End = 5 };
+        var onBand = new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 3 }, RegionConstraint = band.Id };
+        var pastOnBand = new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 50 }, RegionConstraint = band.Id };
+        var gazeOnBand = new EnhancementRule { Trigger = new GazeTargetTrigger(), RegionConstraint = band.Id };
+        model.Regions.Add(band);
+        model.Rules.Add(past);
+        model.Rules.Add(gone);
+        model.Rules.Add(onBand);
+        model.Rules.Add(pastOnBand);
+        model.Rules.Add(gazeOnBand);
+        Call(w, "RebuildRuleVisuals");
+        var pins = w.TimelineCanvas.Children.OfType<Control>().Where(c => c.Tag is EnhancementRule).ToArray();
+        Assert.Equal(4, pins.Length);
+        var pastPin = Assert.Single(pins, c => ReferenceEquals(c.Tag, past));
+        var gonePin = Assert.Single(pins, c => ReferenceEquals(c.Tag, gone));
+        Assert.Equal(16, pastPin.Height);
+        Assert.Contains("past the end of the media", (string)ToolTip.GetTip(pastPin)!);
+        Assert.Contains("its region is gone", (string)ToolTip.GetTip(gonePin)!);
+        Assert.Contains(pins, c => ReferenceEquals(c.Tag, onBand));
+        Assert.Contains("past the end of the media", (string)ToolTip.GetTip(Assert.Single(pins, c => ReferenceEquals(c.Tag, pastOnBand)))!);
+        Assert.DoesNotContain(pins, c => ReferenceEquals(c.Tag, gazeOnBand));
+    });
+
+    [Fact]
+    public Task RegionChoiceRefreshesParkedRulePin() => Run((w, model) =>
+    {
+        Set(w, "_totalSeconds", 30d);
+        model.Regions.Add(new Region { Id = "band", Start = 1, End = 5 });
+        var rule = new EnhancementRule { Trigger = new GazeTargetTrigger() };
+        model.Rules.Add(rule);
+        Call(w, "RebuildRuleVisuals");
+        Call(w, "SelectRule", rule);
+        Assert.Contains(w.TimelineCanvas.Children.OfType<Control>(), c => ReferenceEquals(c.Tag, rule));
+        w.CmbRuleRegion.SelectedIndex = 1;
+        Assert.DoesNotContain(w.TimelineCanvas.Children.OfType<Control>(), c => ReferenceEquals(c.Tag, rule));
+        w.CmbRuleRegion.SelectedIndex = 0;
+        Assert.Contains(w.TimelineCanvas.Children.OfType<Control>(), c => ReferenceEquals(c.Tag, rule));
+    });
+
+    [Fact]
+    public Task BulkRegionDeleteRefreshesParkedRulePin() => Run((w, model) =>
+    {
+        Set(w, "_totalSeconds", 30d);
+        var region = new Region { Id = "band", Start = 1, End = 5 };
+        var rule = new EnhancementRule { Trigger = new GazeTargetTrigger(), RegionConstraint = region.Id };
+        model.Regions.Add(region);
+        model.Rules.Add(rule);
+        Call(w, "RebuildRuleVisuals");
+        Assert.DoesNotContain(w.TimelineCanvas.Children.OfType<Control>(), c => ReferenceEquals(c.Tag, rule));
+        w._selectionSet.Add(region);
+        w.DeleteSelection();
+        Assert.Contains(w.TimelineCanvas.Children.OfType<Control>(), c => ReferenceEquals(c.Tag, rule));
+    });
+
+    [Fact]
+    public Task SingleRegionDeleteDetachesRuleAndRefreshesPin() => Run((w, model) =>
+    {
+        Set(w, "_totalSeconds", 30d);
+        var region = new Region { Id = "band", Start = 1, End = 5 };
+        var rule = new EnhancementRule { Trigger = new GazeTargetTrigger(), RegionConstraint = region.Id };
+        var otherRule = new EnhancementRule { Trigger = new GazeTargetTrigger(), RegionConstraint = "other" };
+        model.Regions.Add(region);
+        model.Regions.Add(new Region { Id = "other", Start = 6, End = 8 });
+        model.Rules.Add(rule);
+        model.Rules.Add(otherRule);
+        Call(w, "SelectRegion", region);
+        w.BtnDeleteRegion.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.DoesNotContain(region, model.Regions);
+        Assert.Null(rule.RegionConstraint);
+        Assert.Equal("other", otherRule.RegionConstraint);
+        var pin = Assert.Single(w.TimelineCanvas.Children.OfType<Control>(), c => ReferenceEquals(c.Tag, rule));
+        Assert.Contains("fires anywhere, no place on the ruler", (string)ToolTip.GetTip(pin)!);
+        w.Undo();
+        var restored = (Enhancement)Field(w, "_enhancement")!;
+        Assert.Contains(restored.Regions, r => r.Id == "band");
+        Assert.Contains(restored.Rules, r => r.RegionConstraint == "band");
+    });
+
+    [Fact]
+    public Task SingleRegionDeleteRemovesOnlyItsProjectedRuleItem() => Run((w, model) =>
+    {
+        var region = new Region { Id = "band", Start = 1, End = 5 };
+        var projected = new TimelineItem { Id = "band", Kind = TimelineItemKind.Rule };
+        var effect = new TimelineItem { Id = "band", Kind = TimelineItemKind.Effect };
+        var other = new TimelineItem { Id = "other", Kind = TimelineItemKind.Rule };
+        model.Regions.Add(region);
+        model.TimelineItems.Add(projected);
+        model.TimelineItems.Add(effect);
+        model.TimelineItems.Add(other);
+        Call(w, "SelectRegion", region);
+        w.BtnDeleteRegion.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.DoesNotContain(projected, model.TimelineItems);
+        Assert.Contains(effect, model.TimelineItems);
+        Assert.Contains(other, model.TimelineItems);
+        w.Undo();
+        Assert.Contains(((Enhancement)Field(w, "_enhancement")!).TimelineItems, t => t.Id == "band" && t.Kind == TimelineItemKind.Rule);
+    });
+
+    [Fact]
+    public Task ParkedRuleTooltipUsesSelectedLanguage() => Run((w, model) =>
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage("it");
+            Set(w, "_totalSeconds", 30d);
+            var rule = new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 40 } };
+            model.Rules.Add(rule);
+            Call(w, "RebuildRuleVisuals");
+            var pin = Assert.Single(w.TimelineCanvas.Children.OfType<Control>(), c => ReferenceEquals(c.Tag, rule));
+            Assert.Equal("Regola #1 · tempo 40s, oltre la fine del media", ToolTip.GetTip(pin));
+        }
+        finally { loc.SetLanguage(previous); }
+    });
+
+    [Fact]
     public Task HistoryPinsReferenceRestoredRules() => Run((w, model) =>
     {
         Set(w, "_totalSeconds", 30d);
@@ -141,6 +287,8 @@ public sealed class DeeperEditorInteractionTests
         Assert.NotNull(script);
         Assert.Contains("ccp_editor_zoom_fit", script);
         Assert.Contains("keydown", script);
+        Assert.Contains("ccp_zoom_out", script);
+        Assert.Contains("wheel", script);
     });
 
     // Focus inside the preview (any frame, cross-origin included): the engine's native key signal is the route.
@@ -177,6 +325,34 @@ public sealed class DeeperEditorInteractionTests
         Assert.Equal(2d, Field(w, "_zoomFactor"));
         w.BrowserPreview.OnWebMessage("ccp_editor_zoom_fit");
         Assert.Equal(1d, Field(w, "_zoomFactor"));
+    });
+
+    [Fact]
+    public Task PreviewWheelScriptIsInstalledForAllFrames() => Run((w, _) =>
+    {
+        var property = w.BrowserPreview.GetType().GetProperty("AllFramesDocumentStartScript", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(property);
+        var script = Assert.IsType<string>(property!.GetValue(w.BrowserPreview));
+        Assert.Contains("ccp_zoom_out", script);
+        Assert.Contains("window.top.postMessage", script);
+    });
+
+    [Fact]
+    public Task PreviewPageZoomButtonsAndMessagesClamp() => Run((w, _) =>
+    {
+        double applied = 0;
+        w.BrowserPreview.ZoomInvoker = (zoom, _) => applied = zoom;
+        w.BrowserPreview.BrowserZoomAdapterReady();
+        w.BtnPreviewZoomIn.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(1.1, applied, 8);
+        w.BrowserPreview.OnWebMessage("ccp_zoom_out");
+        Assert.Equal(1.0, applied, 8);
+        for (int i = 0; i < 100; i++) w.BrowserPreview.OnWebMessage("ccp_zoom_out");
+        Assert.Equal(0.25, applied, 8);
+        for (int i = 0; i < 100; i++) w.BrowserPreview.OnWebMessage("ccp_zoom_in");
+        Assert.Equal(5.0, applied, 8);
+        w.BtnPreviewZoomOut.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.Equal(4.9, applied, 8);
     });
 
     [Fact]
