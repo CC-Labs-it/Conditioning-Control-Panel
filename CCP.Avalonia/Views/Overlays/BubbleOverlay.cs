@@ -61,7 +61,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static Bitmap? Image;
         internal static Bitmap? TeaseImage;
         internal static Bitmap? BrainDrainImage;   // WPF the bundled molten-spiral bubble (braindrain_melt.png)
-        internal static Bitmap? DarterImage;   // WPF assets/Chaos/bubbles/darter.png
         internal static readonly Dictionary<AmbientBubble, (List<Bitmap> Frames, double Delay, long Start, bool Animated)> TeaseFaces = new();
         private static int _teaseAnimated;
 
@@ -212,7 +211,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             LoadBubbleImage();
             TeaseImage = ChaosArt.Resolve("bubbles", "tease");
             BrainDrainImage = ChaosArt.Resolve("bubbles", Services.Chaos.BrainDrainBubble.VariantId);
-            DarterImage = ChaosArt.Resolve("bubbles", "darter");   // WPF assets/Chaos/bubbles/darter.png
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
                 var sc = screens[i];
@@ -1292,9 +1290,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     var b = bubbles[i];
                     if (b.Screen != _w.Index) continue;
-                    var variantImage = (b.Spec?.IsTease == true ? BubbleOverlay.TeaseImage : null)
-                        ?? (b.Spec?.IsDarter == true ? BubbleOverlay.DarterImage : null)
-                        ?? BubbleOverlay.VariantImage(b.Spec);
+                    var variantImage = BubbleOverlay.VariantImage(b.Spec);
                     var img = variantImage ?? BubbleOverlay.Image;
                     double cx = (b.CenterX - ox) * k, cy = (b.CenterY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale;
                     var m = Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateRotation(b.Angle * Math.PI / 180)
