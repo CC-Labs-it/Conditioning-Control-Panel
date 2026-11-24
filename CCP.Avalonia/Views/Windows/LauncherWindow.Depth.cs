@@ -36,6 +36,56 @@ public partial class LauncherWindow
     private readonly ScaleTransform _wordmarkScale = new(1, 1);
     private double _wordmarkTime, _wordmarkApplyIn;
 
+    // WPF Fx.cs:437-469: a 1.1 second pass after a random 25-40 second gap.
+    private double _wordmarkSheenWait, _wordmarkSheenElapsed = -1;
+    private bool _wordmarkSheenStopped;
+
+    private void StartWordmarkSheen()
+    {
+        _wordmarkSheenStopped = false;
+        _wordmarkSheenWait = Random.Shared.Next(25, 41);
+        _wordmarkSheenElapsed = -1;
+        WordmarkSheen.Opacity = 0;
+    }
+
+    private void ParkWordmarkSheen()
+    {
+        _wordmarkSheenElapsed = -1;
+        WordmarkSheen.Opacity = 0;
+    }
+
+    internal static void StopWordmarkSheenForPanic()
+    {
+        if (_window is not { } w) return;
+        w._wordmarkSheenStopped = true;
+        w.ParkWordmarkSheen();
+    }
+
+    private bool StepWordmarkSheen(double dt)
+    {
+        if (_wordmarkSheenStopped || !Env.AllowAmbientLoops || !Wordmark.IsVisible)
+        {
+            ParkWordmarkSheen();
+            return false;
+        }
+        if (_wordmarkSheenElapsed < 0)
+        {
+            _wordmarkSheenWait -= dt;
+            if (_wordmarkSheenWait > 0) return true;
+            _wordmarkSheenElapsed = 0;
+            _wordmarkSheenWait = Random.Shared.Next(25, 41);
+        }
+        _wordmarkSheenWait -= dt;
+        _wordmarkSheenElapsed += dt;
+        var u = Math.Min(1, _wordmarkSheenElapsed / 1.1);
+        var eased = (1 - Math.Cos(Math.PI * u)) / 2;
+        ((TranslateTransform)((TransformGroup)WordmarkSheen.RenderTransform!).Children[1]).X =
+            -90 + (Wordmark.Bounds.Width + 110) * eased;
+        WordmarkSheen.Opacity = 0.3 * (u <= 0.45 ? u / 0.45 : (1 - u) / 0.55);
+        if (u >= 1) ParkWordmarkSheen();
+        return true;
+    }
+
     private void HookDepth()
     {
         // WPF LauncherWindow.xaml:357-365: only the logo drifts, inside the clipped wordmark.
