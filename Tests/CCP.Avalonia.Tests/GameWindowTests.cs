@@ -953,6 +953,43 @@ public sealed partial class GameWindowTests
         return w;
     }
 
+    // WPF CaucusHostService.cs:131,219,263: launch, ready and relaunch return steering to the page.
+    [Theory]
+    [InlineData("open")]
+    [InlineData("ready")]
+    [InlineData("reopen")]
+    public void ClassicRace_ReturnsKeyboardToPage(string path) => RunRace("rt.original.03", (_, _, _) =>
+    {
+        var race = new GameWindow(GameWindow.Games["raceclassic"]);
+        race.Web.Focusable = true;
+        race.Load(GameWindow.Server());
+        race.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            if (path != "open")
+            {
+                var other = new global::Avalonia.Controls.Button { Content = "Focus probe" };
+                var panel = new global::Avalonia.Controls.StackPanel();
+                race.Content = null;
+                panel.Children.Add(race.Web);
+                panel.Children.Add(other);
+                race.Content = panel;
+                Assert.True(other.Focus());
+                Assert.False(race.Web.IsFocused);
+                if (path == "ready") race.HandleMessage("{\"type\":\"ready\"}");
+                else Assert.Same(race, GameWindow.Launch("raceclassic"));
+                Dispatcher.UIThread.RunJobs();
+            }
+            Assert.True(race.Web.IsFocused);
+            GameWindow.CloseAllForPanic();
+            race.HandleMessage("{\"type\":\"exit-done\"}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(race.IsVisible);
+        }
+        finally { race.Close(); }
+    });
+
     [Fact]
     public void ClassicDoor_OpensThe2DHostAndLauncherTile() => RunRace("rt.original.03", (launcher, _, _) =>
     {
