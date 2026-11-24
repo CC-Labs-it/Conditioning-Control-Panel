@@ -716,6 +716,7 @@ namespace ConditioningControlPanel.Services
             Step("flash-ramp", s.ClearSessionFlashRamp);   // SessionEngine.cs:390, ahead of the restore
             PinkOpacity = SpiralOpacity = null;   // WPF ReleaseOpacityRampHolds
             bool restored = RestoreSettings();
+            if (completed) Dares.DareTaps.RaiseSessionFinished(session.Difficulty);
             Step("engine", CoreEngine.Stop);   // MainWindow.Presets.cs:1951
             if (restored) Step("save-settings", () => CoreSettings.Save());
 

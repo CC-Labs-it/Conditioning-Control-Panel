@@ -677,6 +677,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // ---- grace pause (WPF TryGracePauseFromPanic / DoGracePause / ResumeFromGrace, #735) ----
 
         internal bool GracePaused => _gracePaused;
+        internal bool CountsForDares => _floaters.Count > 0 || (Scheduler.IsPlaying && !_gracePaused && _playback?.IsPlaying == true);
 
         /// <summary>WPF VideoService.WantsGlobalEscape (:6361): a NON-strict clip is on screen, so a plain Esc
         /// from the global hook may reach it when its window lost focus (Platform/Win32Input.EscapeDoor).</summary>

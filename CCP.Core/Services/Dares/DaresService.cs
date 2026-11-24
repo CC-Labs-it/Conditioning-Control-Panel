@@ -1,12 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Threading;
 using ConditioningControlPanel.Services.Friends;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Dares;
 
@@ -55,12 +54,16 @@ public sealed class DaresService : IDaresService, IDisposable
     private readonly Dictionary<string, DareReading> _lastReported = new(StringComparer.Ordinal);
     private readonly HashSet<string> _lockBooked = new(StringComparer.Ordinal);
 
-    private DispatcherTimer? _timer;
+    private IUiTimer? _timer;
     private string? _lastAccount;
     private bool _off;
     private bool _fault;
     private bool _busy;
     private bool _disposed;
+    private readonly object _safetyGate = new();
+    private int _safetyGeneration;
+    private volatile bool _suspended;
+    private CancellationTokenSource _safety = new();
 
     public DaresService(IDaresApi api, IDareHost host, DareMeter meter, DareLockdownKeeper keeper, Func<DateTimeOffset>? now = null)
     {
@@ -70,16 +73,6 @@ public sealed class DaresService : IDaresService, IDisposable
         _keeper = keeper;
         _now = now ?? (() => ServerClock.UtcNow);
         _keeper.Ended += OnServeEnded;
-    }
-
-    /// <summary>The app's wiring: the real wire, the app host, the meter file and the serve file.</summary>
-    public static DaresService CreateForApp(out DareMeter meter)
-    {
-        var host = new AppDareHost();
-        meter = new DareMeter(new DareMeter.FileStore(Path.Combine(App.UserDataPath, "dares_meter.json")));
-        var keeper = new DareLockdownKeeper(host,
-            new DareLockdownKeeper.FileStore(Path.Combine(App.UserDataPath, "dares_lockdown_serve.json")));
-        return new DaresService(new DaresApi(), host, meter, keeper);
     }
 
     // ---- IDaresService ----
@@ -102,13 +95,18 @@ public sealed class DaresService : IDaresService, IDisposable
 
     public async Task RefreshAsync(CancellationToken ct = default)
     {
-        if (!CheckAccount(out var account)) return;
-        await ReadStateAsync(account!, ct);
+        if (!TryLink(ct, out var linked, out _)) return;
+        using var scope = linked;
+        if (linked.IsCancellationRequested || !CheckAccount(out var account)) return;
+        await ReadStateAsync(account!, linked.Token);
     }
 
     public async Task<DareCreateOutcome> CreateAsync(string friendId, DareSlip slip, CancellationToken ct = default)
     {
-        if (!CheckAccount(out _)) return new DareCreateOutcome(DareCreateStatus.TryLater);
+        if (!TryLink(ct, out var linked, out _)) return new DareCreateOutcome(DareCreateStatus.TryLater);
+        using var scope = linked;
+        ct = linked.Token;
+        if (ct.IsCancellationRequested || !CheckAccount(out _)) return new DareCreateOutcome(DareCreateStatus.TryLater);
         if (string.IsNullOrEmpty(friendId) || slip == null) return new DareCreateOutcome(DareCreateStatus.Refused);
         var numbered = DareSlipCheck.Numbered(slip);
         if (!DareSlipCheck.IsValid(numbered)) return new DareCreateOutcome(DareCreateStatus.Refused);
@@ -118,6 +116,7 @@ public sealed class DaresService : IDaresService, IDisposable
             ["slip"] = DaresParse.SlipToWire(numbered),
             ["tz_min"] = Math.Clamp(_host.TzMinutes(), -840, 840),
         }, ct);
+        if (ct.IsCancellationRequested || _disposed) return new DareCreateOutcome(DareCreateStatus.TryLater);
         if (DaresParse.IsOff(reply)) GoOff();
         var outcome = DaresParse.Create(reply);
         if (outcome.Status is DareCreateStatus.Sent or DareCreateStatus.Writing) await RefreshAsync(ct);
@@ -126,8 +125,10 @@ public sealed class DaresService : IDaresService, IDisposable
 
     public async Task<DareActResult> ActAsync(string betId, DareOp op, CancellationToken ct = default)
     {
-        if (string.IsNullOrEmpty(betId)) return DareActResult.Refused;
-        if (!CheckAccount(out var account)) return DareActResult.TryLater;
+        if (string.IsNullOrEmpty(betId) || !TryLink(ct, out var linked, out var generation)) return DareActResult.Refused;
+        using var scope = linked;
+        ct = linked.Token;
+        if (ct.IsCancellationRequested || !CheckAccount(out var account)) return DareActResult.TryLater;
         var bet = Snapshot.Bets.FirstOrDefault(b => b.Id == betId);
         DareActResult result;
         switch (op)
@@ -138,10 +139,11 @@ public sealed class DaresService : IDaresService, IDisposable
             case DareOp.Tick: result = DaresParse.Act(await Call("tick", betId, ct)); break;
             case DareOp.Renounce: result = DaresParse.Act(await Call("renounce", betId, ct)); break;
             case DareOp.DidIt: result = await DidItAsync(bet, betId, ct); break;
-            case DareOp.StartLockdown: result = await StartLockdownAsync(account!, bet, ct); break;
-            case DareOp.Pay: result = await PayAsync(account!, bet, ct); break;
+            case DareOp.StartLockdown: result = await StartLockdownAsync(account!, bet, ct, generation); break;
+            case DareOp.Pay: result = await PayAsync(account!, bet, ct, generation); break;
             default: result = DareActResult.Refused; break;
         }
+        if (ct.IsCancellationRequested || _disposed) return DareActResult.Refused;
         if (result == DareActResult.Off) GoOff();
         if (result is DareActResult.Done or DareActResult.Gone) await RefreshAsync(ct);
         return result;
@@ -149,20 +151,20 @@ public sealed class DaresService : IDaresService, IDisposable
 
     // ---- the presses with side effects ----
 
-    private async Task<DareActResult> PayAsync(string account, DareBet? bet, CancellationToken ct)
+    private async Task<DareActResult> PayAsync(string account, DareBet? bet, CancellationToken ct, int generation)
     {
         if (bet == null) return DareActResult.Gone;
         if (!bet.IOwe) return DareActResult.Refused;
         var stake = bet.MyStake;
         switch (stake.Kind)
         {
-            case DareStakeKind.Lockdown: return await StartLockdownAsync(account, bet, ct);
+            case DareStakeKind.Lockdown: return await StartLockdownAsync(account, bet, ct, generation);
             case DareStakeKind.Dare: return await DidItAsync(bet, bet.Id, ct);
             case DareStakeKind.Sp:
             {
                 var reply = await Call("pay", bet.Id, ct);
                 var r = DaresParse.Act(reply);
-                if (r == DareActResult.Done && reply?["sp"] is JValue { Type: JTokenType.Integer } sp) _host.AdoptSp(account, sp.Value<int>());
+                if (generation == Volatile.Read(ref _safetyGeneration) && r == DareActResult.Done && reply?["sp"] is JValue { Type: JTokenType.Integer } sp) _host.AdoptSp(account, sp.Value<int>());
                 return r;
             }
             case DareStakeKind.Lock:
@@ -183,7 +185,7 @@ public sealed class DaresService : IDaresService, IDisposable
         }
     }
 
-    private async Task<DareActResult> StartLockdownAsync(string account, DareBet? bet, CancellationToken ct)
+    private async Task<DareActResult> StartLockdownAsync(string account, DareBet? bet, CancellationToken ct, int generation)
     {
         if (bet == null) return DareActResult.Gone;
         if (!bet.IOwe || bet.MyStake.Kind != DareStakeKind.Lockdown) return DareActResult.Refused;
@@ -194,7 +196,11 @@ public sealed class DaresService : IDaresService, IDisposable
             var r = DaresParse.Act(await Call("start", bet.Id, ct));
             if (r != DareActResult.Done) return r;
         }
-        return _keeper.Begin(account, bet.Id, bet.MyStake.Amount, _now()) ? DareActResult.Done : DareActResult.Refused;
+        lock (_safetyGate)
+        {
+            if (generation != _safetyGeneration || _suspended || _disposed) return DareActResult.Refused;
+            return _keeper.Begin(account, bet.Id, bet.MyStake.Amount, _now()) ? DareActResult.Done : DareActResult.Refused;
+        }
     }
 
     private async Task<DareActResult> DidItAsync(DareBet? bet, string betId, CancellationToken ct)
@@ -211,51 +217,93 @@ public sealed class DaresService : IDaresService, IDisposable
     private async void OnServeEnded(DareServe serve)
     {
         try { await SendServeAsync(); }
-        catch (Exception ex) { App.Logger?.Debug("Dares serve send failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("Dares serve send failed: {E}", ex.Message); }
     }
 
     private async Task SendServeAsync()
     {
         var s = _keeper.Pending;
-        if (s?.Outcome == null || _disposed) return;
-        if (!string.Equals(_host.Account(), s.Account, StringComparison.Ordinal)) return;
-        var reply = await _api.CallAsync("served", new JObject { ["id"] = s.BetId, ["outcome"] = s.Outcome });
-        if (reply == null) return;
+        if (s?.Outcome == null || !TryLink(CancellationToken.None, out var linked, out var generation)) return;
+        using var scope = linked;
+        if (linked.IsCancellationRequested || !string.Equals(_host.Account(), s.Account, StringComparison.Ordinal)) return;
+        var reply = await _api.CallAsync("served", new JObject { ["id"] = s.BetId, ["outcome"] = s.Outcome }, linked.Token);
+        if (reply == null || _disposed || _suspended || generation != Volatile.Read(ref _safetyGeneration)) return;
         // A worded answer (paid, owed again, gone) is final for this serve: never send it twice.
         _keeper.Delivered(s.BetId);
         if (DaresParse.IsOff(reply)) { GoOff(); return; }
         await RefreshAsync();
     }
 
+    private bool TryLink(CancellationToken ct, out CancellationTokenSource linked, out int generation)
+    {
+        lock (_safetyGate)
+        {
+            generation = _safetyGeneration;
+            if (_suspended || _disposed) { linked = null!; return false; }
+            linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _safety.Token);
+            return true;
+        }
+    }
+
+    /// <summary>Invalidate a side effect waiting on the wire when a stop is requested.</summary>
+    public void CancelPending()
+    {
+        CancellationTokenSource safety;
+        IUiTimer? timer;
+        lock (_safetyGate)
+        {
+            Interlocked.Increment(ref _safetyGeneration);
+            _suspended = true;
+            safety = _safety;
+            timer = _timer;
+        }
+        _ = safety.CancelAsync();
+        timer?.OnUiThread(() => { if (_suspended) timer.Stop(); });
+    }
+
+    /// <summary>Resume after an explicit user restart.</summary>
+    public void Resume()
+    {
+        lock (_safetyGate)
+        {
+            if (_disposed || !_suspended) return;
+            _safety = new CancellationTokenSource();
+            _suspended = false;
+        }
+        Kick();
+    }
+
     // ---- the poll ----
 
-    public void Start()
+    public void Start(IUiTimer timer)
     {
         if (_disposed || _timer != null) return;
-        _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(3) };
-        _timer.Tick += async (_, _) =>
-        {
-            _timer?.Stop();
-            try { await TickAsync(); }
-            catch (Exception ex) { App.Logger?.Debug("Dares poll failed: {E}", ex.Message); }
-            finally { Reschedule(); }
-        };
-        _timer.Start();
+        _timer = timer;
+        timer.Interval = TimeSpan.FromSeconds(3);
+        timer.Tick += OnTick;
+        timer.Start();
+    }
+
+    private async void OnTick(object? sender, EventArgs e)
+    {
+        _timer?.Stop();
+        try { await TickAsync(); }
+        catch (Exception ex) { Log.Debug("Dares poll failed: {E}", ex.Message); }
+        finally { Reschedule(); }
     }
 
     /// <summary>Poll now (sign-in, the drawer opening). Safe from any thread.</summary>
     public void Kick()
     {
-        var t = _timer;
-        if (t == null || _disposed) return;
-        void Go()
+        var timer = _timer;
+        if (timer == null || _disposed || _suspended) return;
+        timer.OnUiThread(() =>
         {
-            if (_disposed || _timer == null || _busy) return;
+            if (_disposed || _suspended || _timer == null || _busy) return;
             _timer.Stop();
             _timer.Interval = TimeSpan.FromMilliseconds(300);
             _timer.Start();
-        }
-        if (t.Dispatcher.CheckAccess()) Go(); else t.Dispatcher.BeginInvoke((Action)Go);
+        });
     }
 
     internal int NextIntervalSeconds() =>
@@ -263,7 +311,7 @@ public sealed class DaresService : IDaresService, IDisposable
 
     private void Reschedule()
     {
-        if (_disposed || _timer == null) return;
+        if (_disposed || _suspended || _timer == null) return;
         _timer.Stop();
         _timer.Interval = TimeSpan.FromSeconds(NextIntervalSeconds());
         _timer.Start();
@@ -272,8 +320,10 @@ public sealed class DaresService : IDaresService, IDisposable
     /// <summary>One poll: an owed serve out, the state in, then a report for each bet this client counts.</summary>
     public async Task TickAsync(CancellationToken ct = default)
     {
-        if (_busy || _disposed) return;
-        if (!CheckAccount(out var account)) return;
+        if (_busy || !TryLink(ct, out var linked, out _)) return;
+        using var scope = linked;
+        ct = linked.Token;
+        if (ct.IsCancellationRequested || !CheckAccount(out var account)) return;
         _busy = true;
         try
         {
@@ -288,7 +338,7 @@ public sealed class DaresService : IDaresService, IDisposable
     private async Task<bool> ReadStateAsync(string account, CancellationToken ct)
     {
         var reply = await _api.CallAsync("state", new JObject(), ct);
-        if (!string.Equals(SafeAccount(), account, StringComparison.Ordinal)) return false;
+        if (ct.IsCancellationRequested || _suspended || _disposed || !string.Equals(SafeAccount(), account, StringComparison.Ordinal)) return false;
         if (reply == null) { _fault = true; return false; }
         _fault = false;
         if (reply.Value<bool?>("ok") != true)
@@ -302,7 +352,7 @@ public sealed class DaresService : IDaresService, IDisposable
         var snap = DaresParse.State(reply) ?? DaresSnapshot.Dark;
         _meter.Track(snap.Bets);
         Publish(snap);
-        try { BetsRead?.Invoke(); } catch (Exception ex) { App.Logger?.Debug("Dares bets handler failed: {E}", ex.Message); }
+        try { BetsRead?.Invoke(); } catch (Exception ex) { Log.Debug("Dares bets handler failed: {E}", ex.Message); }
         return true;
     }
 
@@ -310,12 +360,13 @@ public sealed class DaresService : IDaresService, IDisposable
     {
         foreach (var b in Snapshot.Bets.ToList())
         {
+            if (ct.IsCancellationRequested || _suspended || _disposed) return;
             if (!DareMeter.Reports(b) || _meter.Reading(b.Id) is not { } r) continue;
             if (_lastReported.TryGetValue(b.Id, out var last) && last == r) continue;
             var body = new JObject { ["id"] = b.Id, ["count"] = r.Count };
             if (r.Camera) { body["seen_s"] = r.SeenSeconds; body["counted_s"] = r.CountedSeconds; }
             var reply = await _api.CallAsync("report", body, ct);
-            if (!string.Equals(SafeAccount(), account, StringComparison.Ordinal)) return;
+            if (ct.IsCancellationRequested || _suspended || _disposed || !string.Equals(SafeAccount(), account, StringComparison.Ordinal)) return;
             if (reply?.Value<bool?>("ok") != true) continue;
             _lastReported[b.Id] = r;
             if (DaresParse.Bet(reply["bet"] as JObject) is { } fresh)
@@ -361,14 +412,16 @@ public sealed class DaresService : IDaresService, IDisposable
         if (DaresSnapshotEquality.Same(Snapshot, next)) return;
         Snapshot = next;
         try { Changed?.Invoke(); }
-        catch (Exception ex) { App.Logger?.Debug("Dares change handler failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("Dares change handler failed: {E}", ex.Message); }
     }
 
     public void Dispose()
     {
         _disposed = true;
-        _timer?.Stop();
+        CancelPending();
+        if (_timer != null) { _timer.Stop(); _timer.Tick -= OnTick; }
         _timer = null;
+        _keeper.Ended -= OnServeEnded;
         _meter.Save();
     }
 }
