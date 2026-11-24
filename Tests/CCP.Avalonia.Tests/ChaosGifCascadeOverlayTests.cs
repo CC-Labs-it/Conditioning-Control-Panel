@@ -1253,8 +1253,10 @@ public sealed class ChaosGifCascadeOverlayTests
         return result.ToArray();
     }
 
-    [Fact]
-    public void ClosingCancelsPendingImagePick()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ClosingCancelsPendingImagePick(bool initialConsumer)
     {
         var dir = Directory.CreateTempSubdirectory("ccp-rain-close-").FullName;
         var gif = Path.Combine(dir, "tiny.gif");
@@ -1267,25 +1269,68 @@ public sealed class ChaosGifCascadeOverlayTests
                     AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                         .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                         .SetupWithoutStarting();
-                ChaosGifCascadeOverlay.CloseActive();
-                ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true;
-                ChaosGifCascadeOverlay.ManualFramesForTests = true;
-                ChaosGifCascadeOverlay.PickForTests = (_, _) => new() { gif };
+                var originalConsumer = RemoteFlashSource.ClipConsumer;
+                var oldSettings = RemoteFlashSource.Settings;
+                var oldFetch = RemoteFlashSource.Fetch;
                 try
                 {
-                    ChaosGifCascadeOverlay.Show(1, 3, 400, 3.6, 0.9, 0.45);
-                    ChaosGifCascadeOverlay.LastPick!.GetAwaiter().GetResult();
-                    // The pick has posted the show, but it has not run on the UI thread.
+                    // Keep this test off the network and prove its own pending prefetch is settled.
+                    RemoteFlashSource.CleanupCache();
+                    RemoteFlashSource.Prefetching.GetAwaiter().GetResult();
+                    RemoteFlashSource.ClipConsumer = initialConsumer;
+                    RemoteFlashSource.Settings = () => new AppSettings { MediaSource = "online", RemoteMediaConsented = true };
+                    int fetches = 0;
+                    RemoteFlashSource.Fetch = async ct =>
+                    {
+                        Interlocked.Increment(ref fetches);
+                        await Task.Delay(Timeout.Infinite, ct);
+                        return (new List<FypAssetManifest.Entry>(), (string?)null);
+                    };
+                    var oldConsumer = RemoteFlashSource.ClipConsumer;
+                    var oldPicker = ChaosGifCascadeOverlay.PickForTests;
+                    var oldSkip = ChaosGifCascadeOverlay.SkipPlatformChecksForTests;
+                    var oldManual = ChaosGifCascadeOverlay.ManualFramesForTests;
                     ChaosGifCascadeOverlay.CloseActive();
-                    Dispatcher.UIThread.RunJobs();
-                    Assert.Null(ChaosGifCascadeOverlay.Active);
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = true;
+                    ChaosGifCascadeOverlay.PickForTests = (_, _) => new() { gif };
+                    try
+                    {
+                        ChaosGifCascadeOverlay.Show(1, 3, 400, 3.6, 0.9, 0.45);
+                        ChaosGifCascadeOverlay.LastPick!.GetAwaiter().GetResult();
+                        // The pick has posted the show, but it has not run on the UI thread.
+                        ChaosGifCascadeOverlay.CloseActive();
+                        Dispatcher.UIThread.RunJobs();
+                        Assert.Null(ChaosGifCascadeOverlay.Active);
+                    }
+                    finally
+                    {
+                        ChaosGifCascadeOverlay.CloseActive();
+                        try
+                        {
+                            RemoteFlashSource.CleanupCache();
+                            RemoteFlashSource.Prefetching.GetAwaiter().GetResult();
+                        }
+                        finally
+                        {
+                            RemoteFlashSource.ClipConsumer = oldConsumer;
+                            ChaosGifCascadeOverlay.PickForTests = oldPicker;
+                            ChaosGifCascadeOverlay.SkipPlatformChecksForTests = oldSkip;
+                            ChaosGifCascadeOverlay.ManualFramesForTests = oldManual;
+                        }
+                    }
+                    Assert.Equal(initialConsumer, RemoteFlashSource.ClipConsumer);
+                    Assert.True(RemoteFlashSource.Prefetching.IsCompleted);
+                    Assert.True(Volatile.Read(ref fetches) > 0);
+                    Assert.Equal(0, RemoteFlashSource.ReadyCount);
                 }
                 finally
                 {
-                    ChaosGifCascadeOverlay.CloseActive();
-                    ChaosGifCascadeOverlay.PickForTests = ChaosGifCascadeOverlay.PickFiles;
-                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = false;
-                    ChaosGifCascadeOverlay.ManualFramesForTests = false;
+                    RemoteFlashSource.CleanupCache();
+                    RemoteFlashSource.Prefetching.GetAwaiter().GetResult();
+                    RemoteFlashSource.Settings = oldSettings;
+                    RemoteFlashSource.Fetch = oldFetch;
+                    RemoteFlashSource.ClipConsumer = originalConsumer;
                 }
             });
         }
