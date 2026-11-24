@@ -1316,20 +1316,24 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// flight or an AI bubble is up, never logged to chat history, sound on every fifth. Queued
         /// behind a line still up, or until the previous line's gap has passed (Speech.cs:273-294).</summary>
         public void Giggle(string text, bool unprompted = false, string? phraseAudioPath = null, bool barkVoice = false, string? mood = null)
+            => GiggleCore(text, unprompted, phraseAudioPath, barkVoice, mood, videoAnnouncement: false);
+
+        private void GiggleCore(string text, bool unprompted, string? phraseAudioPath, bool barkVoice, string? mood, bool videoAnnouncement)
         {
             if (_isPlayingUninterruptibleClip || _isWaitingForAi || _isShowingAiBubble) return;
             RunOnAvatar(() =>
             {
                 if (_isWaitingForAi || _isShowingAiBubble) return;   // re-checked on the UI thread, as WPF
-                if (_isGiggling) { _speechQueue.Enqueue((text, unprompted, SpeechSource.Preset, phraseAudioPath == null ? null : System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath), mood)); return; }
+                var source = videoAnnouncement ? SpeechSource.VideoAnnouncement : SpeechSource.Preset;
+                if (_isGiggling) { _speechQueue.Enqueue((text, unprompted, source, phraseAudioPath == null ? null : System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath), mood)); return; }
                 if (!IsSpeechReady())
                 {
-                    _speechQueue.Enqueue((text, unprompted, SpeechSource.Preset, phraseAudioPath == null ? null : System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath), mood));
+                    _speechQueue.Enqueue((text, unprompted, source, phraseAudioPath == null ? null : System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath), mood));
                     _isGiggling = true;
                     ProcessNextSpeech();
                     return;
                 }
-                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, phraseAudioPath, barkVoice, preset: true, unprompted: unprompted, mood: mood);
+                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, phraseAudioPath, barkVoice, preset: true, unprompted: unprompted, mood: mood, videoAnnouncement: videoAnnouncement);
             });
         }
 
@@ -1337,10 +1341,10 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal bool NextPresetGiggleSound() => ++_presetGiggleCounter % 5 == 0;
 
         private void ShowSpeech(string text, bool playSound, bool aiGenerated, string? phraseAudioPath,
-                                bool barkVoice, bool preset, Action? onSpoken = null, bool unprompted = false, bool trigger = false, string? soundCaller = null, string? mood = null, string? emotionLineId = null)
+                                bool barkVoice, bool preset, Action? onSpoken = null, bool unprompted = false, bool trigger = false, string? soundCaller = null, string? mood = null, string? emotionLineId = null, bool videoAnnouncement = false)
         {
-            if (_videoAnnouncementShowing) _videoAnnouncementActive = false;
-            _videoAnnouncementShowing = text == VideoAnnouncement;
+            _videoAnnouncementShowing = videoAnnouncement;
+            if (videoAnnouncement) _videoAnnouncementLength = text.Length;
             ResetIdleTimer();
                 if (!trigger) CancelTriggerAnimation(); // a newer line owns the bubble
                 var spokenHandled = false;
