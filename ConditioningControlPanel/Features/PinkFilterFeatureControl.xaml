@@ -6,6 +6,7 @@
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
              xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
              xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             xmlns:pv="clr-namespace:ConditioningControlPanel.Controls.Preview"
              rows:RowHue.TintSliders="True">
 
     <!-- Velvet Kit 2 density pass. The root IS the StackPanel (the old Grid wrapper is gone):
@@ -253,29 +254,17 @@
                 </ctl:SuperBox>
             </StackPanel>
 
-            <!-- SIDE ART. The art is the Border's BACKGROUND, not a child Image: a Border clips its
-                 Background to CornerRadius but does NOT clip child content, so a child Image would
-                 square off the rounded corners (round-2 lesson). Same plate the hero uses. -->
+            <!-- SIDE ART -> LIVE PREVIEW (owner 2026-11-24): the card is a framed slice of a desktop where
+                 the effect plays with fake content (Controls/Preview/EffectPreview.cs). The mod art brush stays
+                 (ApplyFeatureArt writes it) but is parked in Tag, so nothing shows behind the preview; the card
+                 keeps its size and its AdaptiveSideArt collapse. -->
             <Border Grid.Column="1" Margin="10,0,0,0" CornerRadius="14"
                     BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
-                    VerticalAlignment="Stretch" MinHeight="200">
-                <Border.Background>
-                    <ImageBrush x:Name="SideArtBrush" Stretch="UniformToFill">
-                        <ImageBrush.ImageSource>
-                            <BitmapImage UriSource="pack://application:,,,/Resources/features/Pink_filter.png"
-                                         DecodePixelWidth="800"/>
-                        </ImageBrush.ImageSource>
-                    </ImageBrush>
-                </Border.Background>
-                <!-- Scrim so the plate sits under the page instead of fighting it. -->
-                <Border CornerRadius="12">
-                    <Border.Background>
-                        <LinearGradientBrush StartPoint="0,1" EndPoint="0,0">
-                            <GradientStop Color="#66000000" Offset="0"/>
-                            <GradientStop Color="#00000000" Offset="0.45"/>
-                        </LinearGradientBrush>
-                    </Border.Background>
-                </Border>
+                    Background="#06050D" VerticalAlignment="Stretch" MinHeight="200">
+                <Border.Tag>
+                    <ImageBrush x:Name="SideArtBrush" Stretch="UniformToFill"/>
+                </Border.Tag>
+                <pv:EffectPreview Scene="pinkfilter"/>
             </Border>
         </Grid>
 
