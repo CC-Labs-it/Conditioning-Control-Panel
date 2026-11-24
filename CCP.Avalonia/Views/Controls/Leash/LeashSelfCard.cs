@@ -142,7 +142,7 @@ public sealed class LeashSelfCard : Border
     }
 
     // WPF Controls/Leash/LeashLook.cs:351-383: the same disc artwork and seeded tilt.
-    internal static Grid StickerDisc(string id, int seed, double size = 26)
+    internal static Grid StickerDisc(string id, int seed, double size = 36)
     {
         var (brush, word) = id switch
         {
@@ -173,7 +173,7 @@ public sealed class LeashSelfCard : Border
         else disc.Children.Add(new TextBlock
         {
             Text = word, FontFamily = F.Mono, FontWeight = FontWeight.Bold,
-            FontSize = word.Length > 1 ? size * 0.26 : size * 0.5,
+            FontSize = word.Length > 1 ? size * 0.3 : size * 0.5,
             Foreground = new SolidColorBrush(Color.Parse("#1B1026")),
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         });
