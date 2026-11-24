@@ -1350,7 +1350,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 bool unlocked = b.Level >= 1, active = b.Active, rankLocked = b.RankLocked;
                 var state = active ? TileState.Equipped : unlocked ? TileState.Owned : TileState.Locked;
                 Action onClick = active ? () => { Shelf.ToggleBoon(id); EquipCue(id); AfterBoonChange(); }   // WPF xaml.cs:1104
-                    : unlocked ? () => { Shelf.EquipSwapping(id, category); EquipCue(id); AfterBoonChange(); }   // WPF xaml.cs:1136
+                    // WPF xaml.cs:1136 plays ui_equip even when a pocketless category refuses the equip.
+                    : unlocked ? () => { Shelf.EquipSwapping(id, category); PlayCue("ui_equip", 0.45f); AfterBoonChange(); }
                     : () => JumpToTab("enhance");
                 // Rank-locked → mystery: "???" everywhere, the depth gate instead of a price.
                 string extra = active ? "click to unequip"

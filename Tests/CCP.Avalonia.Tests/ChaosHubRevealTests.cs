@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using CCP.Avalonia.Testing;
@@ -132,6 +133,29 @@ public sealed class ChaosHubRevealTests
             Assert.Contains("ui_unequip", cues);
             Assert.False(ChaosMeta.IsBoonActive("vibe_popping"));
             Assert.Equal(4321.ToString("N0"), Part<TextBlock>(w, "StSparks").Text);
+        }
+        finally { ChaosHubWindow.PlayCue = old; }
+    });
+
+    // WPF xaml.cs:1136: an owned bag tile plays ui_equip even when no toy pocket is sewn yet.
+    [Fact]
+    public Task Owned_bag_tile_plays_equip_cue_without_a_pocket() => Run(() =>
+    {
+        ChaosMeta.State.RunsCompleted = 50;
+        ChaosMeta.State.LifetimeBoonLevels = new() { ["vibe_popping"] = 1 };
+        var old = ChaosHubWindow.PlayCue;
+        var cues = new System.Collections.Generic.List<string>();
+        ChaosHubWindow.PlayCue = (k, _) => cues.Add(k);
+        try
+        {
+            using var hub = new Hub();
+            Assert.Equal(0, ChaosMeta.SlotsFor(ChaosBoonCategory.Skill));
+            var tile = Part<Panel>(hub.Window, "TilesSkills").Children
+                .Single(c => (ToolTip.GetTip(c) as string)?.Contains("click to equip") == true);
+            tile.RaiseEvent(new PointerPressedEventArgs(tile, new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true), hub.Window, default, 0,
+                new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None));
+            Assert.False(ChaosMeta.IsBoonActive("vibe_popping"));
+            Assert.Equal(new[] { "ui_equip" }, cues);
         }
         finally { ChaosHubWindow.PlayCue = old; }
     });
