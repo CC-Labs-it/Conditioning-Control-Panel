@@ -4,6 +4,8 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.TintSliders="True"
              mc:Ignorable="d" d:DesignWidth="620">
 
     <!-- ================================================================
@@ -58,7 +60,7 @@
 
     <Border x:Name="PerformanceSectionCard" CornerRadius="12" Padding="0" Margin="0,0,0,10"
             Background="{DynamicResource ElevatedSurfaceBrush}"
-            BorderBrush="{StaticResource SectionHuePerformanceBorderBrush}" BorderThickness="1">
+            BorderBrush="{StaticResource SectionHuePerformanceBorderBrush}" BorderThickness="1" rows:RowHue.Hue="{StaticResource SectionHuePerformance}">
         <Grid>
             <Border CornerRadius="11" Background="{StaticResource SectionHuePerformanceWashBrush}"/>
             <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
@@ -76,14 +78,12 @@
                            Foreground="{DynamicResource TextMutedBrush}" FontSize="11" Margin="0,0,0,8"/>
 
                 <!-- Motion (accessibility). The three items ARE the enum ordinals — never reorder. -->
-                <Grid MinHeight="34" Margin="0,2,0,0" ToolTip="{loc:Str tooltip_motion_level}">
+                <Grid Style="{StaticResource OptionRow}" Margin="0,2,0,0" ToolTip="{loc:Str tooltip_motion_level}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}"
-                               Text="{loc:Str setting_motion_level}"
-                               Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                    <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_motion_level}" Emblem="Motion" Margin="0,0,14,0"/>
                     <ComboBox Grid.Column="1" x:Name="CmbMotionLevel" x:FieldModifier="internal"
                               Style="{StaticResource DarkComboBoxStyle}" FontSize="11"
                               Width="110" MinHeight="28" VerticalAlignment="Center"
@@ -96,126 +96,87 @@
 
                 <!-- Four related switches = one 2-column chip grid (contract). Every
                      description became its chip's ToolTip; not one loc key changed. -->
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="6"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
+                <StackPanel>
 
-                    <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource SettingChip}"
-                            ToolTip="{loc:Str set2_tooltip_performance_mode}">
-                        <Grid MinHeight="22">
+                    <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str set2_tooltip_performance_mode}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{loc:Str set2_setting_performance_mode}"
-                                       Foreground="{DynamicResource TextLightBrush}"
-                                       FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap"
-                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <rows:RowLabel Grid.Column="0" Text="{loc:Str set2_setting_performance_mode}" Emblem="Perf" IsOn="{Binding IsChecked, ElementName=ChkPerformanceMode}" Margin="0,0,10,0"/>
                             <CheckBox Grid.Column="1" x:Name="ChkPerformanceMode" x:FieldModifier="internal"
                                       Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                       Checked="ChkPerformanceMode_Changed" Unchecked="ChkPerformanceMode_Changed"/>
                         </Grid>
-                    </Border>
 
-                    <Border Grid.Row="0" Grid.Column="2" Style="{StaticResource SettingChip}"
-                            ToolTip="{loc:Str set2_tooltip_auto_performance}">
-                        <Grid MinHeight="22">
+                    <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str set2_tooltip_auto_performance}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{loc:Str set2_setting_auto_performance}"
-                                       Foreground="{DynamicResource TextLightBrush}"
-                                       FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap"
-                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <rows:RowLabel Grid.Column="0" Text="{loc:Str set2_setting_auto_performance}" Emblem="Perf" IsOn="{Binding IsChecked, ElementName=ChkAutoPerformance}" Margin="0,0,10,0"/>
                             <CheckBox Grid.Column="1" x:Name="ChkAutoPerformance" x:FieldModifier="internal"
                                       Style="{StaticResource ToggleStyle}" VerticalAlignment="Center" IsChecked="True"
                                       Checked="ChkAutoPerformance_Changed" Unchecked="ChkAutoPerformance_Changed"/>
                         </Grid>
-                    </Border>
 
-                    <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource SettingChip}"
-                            ToolTip="{loc:Str set2_tooltip_unified_overlay}">
-                        <Grid MinHeight="22">
+                    <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str set2_tooltip_unified_overlay}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{loc:Str set2_setting_unified_overlay}"
-                                       Foreground="{DynamicResource TextLightBrush}"
-                                       FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap"
-                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <rows:RowLabel Grid.Column="0" Text="{loc:Str set2_setting_unified_overlay}" Emblem="Layers" IsOn="{Binding IsChecked, ElementName=ChkUnifiedOverlay}" Margin="0,0,10,0"/>
                             <CheckBox Grid.Column="1" x:Name="ChkUnifiedOverlay" x:FieldModifier="internal"
                                       Style="{StaticResource ToggleStyle}" VerticalAlignment="Center" IsChecked="True"
                                       Checked="ChkUnifiedOverlay_Changed" Unchecked="ChkUnifiedOverlay_Changed"/>
                         </Grid>
-                    </Border>
 
                     <!-- Force video GPU decode. Phase-3 rescue: this toggle only ever existed inside
                          the Collapsed LegacyDashboardHost, so it had been unreachable since
                          velvet-mosaic. -->
-                    <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource SettingChip}"
-                            ToolTip="{loc:Str set2_tooltip_video_hw_decode}">
-                        <Grid MinHeight="22">
+                    <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str set2_tooltip_video_hw_decode}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{loc:Str set2_setting_video_hw_decode}"
-                                       Foreground="{DynamicResource TextLightBrush}"
-                                       FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap"
-                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <rows:RowLabel Grid.Column="0" Text="{loc:Str set2_setting_video_hw_decode}" Emblem="Perf" IsOn="{Binding IsChecked, ElementName=ChkVideoHwDecode}" Margin="0,0,10,0"/>
                             <CheckBox Grid.Column="1" x:Name="ChkVideoHwDecode" x:FieldModifier="internal"
                                       Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                       Checked="ChkVideoHwDecode_Changed" Unchecked="ChkVideoHwDecode_Changed"/>
                         </Grid>
-                    </Border>
-                </Grid>
+                </StackPanel>
 
                 <!-- Gentle visuals (photosensitivity, 2026-10-14): one switch; its two choices show
                      only while it is on. Item lists are filled from GentleVisuals.FadeChoices /
                      SpeedChoices in code so the steps live in one place. -->
-                <Grid MinHeight="34" Margin="0,2,0,0" ToolTip="{loc:Str tooltip_gentle_visuals}">
+                <Grid Style="{StaticResource OptionRow}" Margin="0,2,0,0" ToolTip="{loc:Str tooltip_gentle_visuals}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}"
-                               Text="{loc:Str setting_gentle_visuals}"
-                               Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                    <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_gentle_visuals}" Emblem="Gentle" IsOn="{Binding IsChecked, ElementName=ChkGentleVisuals}" Margin="0,0,14,0"/>
                     <CheckBox Grid.Column="1" x:Name="ChkGentleVisuals" x:FieldModifier="internal"
                               Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                               Checked="ChkGentleVisuals_Changed" Unchecked="ChkGentleVisuals_Changed"/>
                 </Grid>
                 <StackPanel x:Name="PnlGentleChoices" x:FieldModifier="internal" Visibility="Collapsed" Margin="14,0,0,0">
-                    <Grid MinHeight="34" Margin="0,2,0,0">
+                    <Grid Style="{StaticResource OptionRow}" Margin="0,2,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}"
-                                   Text="{loc:Str setting_gentle_fade}"
-                                   Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_gentle_fade}" Emblem="Long" Margin="0,0,14,0"/>
                         <ComboBox Grid.Column="1" x:Name="CmbGentleFade" x:FieldModifier="internal"
                                   Style="{StaticResource DarkComboBoxStyle}" FontSize="11"
                                   Width="110" MinHeight="28" VerticalAlignment="Center"
                                   SelectionChanged="CmbGentle_SelectionChanged"/>
                     </Grid>
-                    <Grid MinHeight="34" Margin="0,2,0,0">
+                    <Grid Style="{StaticResource OptionRow}" Margin="0,2,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}"
-                                   Text="{loc:Str setting_gentle_speed}"
-                                   Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_gentle_speed}" Emblem="Fast" Margin="0,0,14,0"/>
                         <ComboBox Grid.Column="1" x:Name="CmbGentleSpeed" x:FieldModifier="internal"
                                   Style="{StaticResource DarkComboBoxStyle}" FontSize="11"
                                   Width="110" MinHeight="28" VerticalAlignment="Center"
@@ -226,14 +187,12 @@
                 <!-- THE BACK ROOM effects intensity (CONTRACT section 4). Item order IS the
                      BackRoomFxIntensity ordinal (Calm=0, Normal=1, Full=2) - never reorder. It sits
                      under Motion because Motion caps it: anything below Full plays Calm. -->
-                <Grid MinHeight="34" Margin="0,2,0,0" ToolTip="{loc:Str tooltip_backroom_fx_intensity}">
+                <Grid Style="{StaticResource OptionRow}" Margin="0,2,0,0" ToolTip="{loc:Str tooltip_backroom_fx_intensity}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}"
-                               Text="{loc:Str setting_backroom_fx_intensity}"
-                               Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                    <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_backroom_fx_intensity}" Emblem="Much" Margin="0,0,14,0"/>
                     <ComboBox Grid.Column="1" x:Name="CmbBackRoomFxIntensity" x:FieldModifier="internal"
                               Style="{StaticResource DarkComboBoxStyle}" FontSize="11"
                               Width="110" MinHeight="28" VerticalAlignment="Center"
@@ -287,47 +246,30 @@
                             ToolTip="{loc:Str set2_dnd_btn_pick_tooltip}"/>
                 </StackPanel>
 
-                <Grid Margin="0,6,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="6"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
+                <StackPanel Margin="0,6,0,0">
 
-                    <Border Grid.Column="0" Style="{StaticResource SettingChip}"
-                            ToolTip="{loc:Str set2_tooltip_dnd_videos}">
-                        <Grid MinHeight="22">
+                    <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str set2_tooltip_dnd_videos}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{loc:Str set2_setting_dnd_videos}"
-                                       Foreground="{DynamicResource TextLightBrush}"
-                                       FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap"
-                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <rows:RowLabel Grid.Column="0" Text="{loc:Str set2_setting_dnd_videos}" Emblem="Many" Subject="Video" IsOn="{Binding IsChecked, ElementName=ChkDndSuppressVideos}" Margin="0,0,10,0"/>
                             <CheckBox Grid.Column="1" x:Name="ChkDndSuppressVideos" x:FieldModifier="internal"
                                       Style="{StaticResource ToggleStyle}" VerticalAlignment="Center" IsChecked="True"
                                       Checked="ChkDndSuppressVideos_Changed" Unchecked="ChkDndSuppressVideos_Changed"/>
                         </Grid>
-                    </Border>
 
-                    <Border Grid.Column="2" Style="{StaticResource SettingChip}"
-                            ToolTip="{loc:Str set2_tooltip_dnd_flashes}">
-                        <Grid MinHeight="22">
+                    <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str set2_tooltip_dnd_flashes}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{loc:Str set2_setting_dnd_flashes}"
-                                       Foreground="{DynamicResource TextLightBrush}"
-                                       FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap"
-                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <rows:RowLabel Grid.Column="0" Text="{loc:Str set2_setting_dnd_flashes}" Emblem="Many" Subject="Image" IsOn="{Binding IsChecked, ElementName=ChkDndSuppressFlashes}" Margin="0,0,10,0"/>
                             <CheckBox Grid.Column="1" x:Name="ChkDndSuppressFlashes" x:FieldModifier="internal"
                                       Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                       Checked="ChkDndSuppressFlashes_Changed" Unchecked="ChkDndSuppressFlashes_Changed"/>
                         </Grid>
-                    </Border>
-                </Grid>
+                </StackPanel>
 
             </StackPanel>
         </Grid>

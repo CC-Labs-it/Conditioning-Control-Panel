@@ -4,6 +4,8 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.TintSliders="True"
              mc:Ignorable="d" d:DesignWidth="620">
 
     <!-- ================================================================
@@ -50,7 +52,7 @@
 
         <!-- ============================ offline mode ========================== -->
         <Border Style="{StaticResource SectionPanel}" Padding="0" Margin="0,0,0,10"
-                BorderBrush="{StaticResource SectionHueDataBorderBrush}">
+                BorderBrush="{StaticResource SectionHueDataBorderBrush}" rows:RowHue.Hue="{StaticResource SectionHueData}">
             <Grid>
                 <Border CornerRadius="11" Background="{StaticResource SectionHueDataWashBrush}"/>
                 <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
@@ -63,14 +65,12 @@
                                    Foreground="{StaticResource SectionHueDataBrush}" VerticalAlignment="Center" Margin="0"/>
                     </StackPanel>
 
-                    <Grid MinHeight="34" ToolTip="{loc:Str tooltip_disable_all_network_features_updates_ai_leade}">
+                    <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_disable_all_network_features_updates_ai_leade}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}"
-                                   Text="{loc:Str setting_offline_mode}"
-                                   Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_offline_mode}" Emblem="Safe" IsOn="{Binding IsChecked, ElementName=ChkOfflineMode}" Margin="0,0,14,0"/>
                         <CheckBox Grid.Column="1" x:Name="ChkOfflineMode" x:FieldModifier="internal"
                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                   Checked="ChkOfflineMode_Changed" Unchecked="ChkOfflineMode_Changed"/>
@@ -81,7 +81,7 @@
 
         <!-- =========================== phrase backup ========================== -->
         <Border Style="{StaticResource SectionPanel}" Padding="0" Margin="0,0,0,10"
-                BorderBrush="{StaticResource SectionHueDataBorderBrush}">
+                BorderBrush="{StaticResource SectionHueDataBorderBrush}" rows:RowHue.Hue="{StaticResource SectionHueData}">
             <Grid>
                 <Border CornerRadius="11" Background="{StaticResource SectionHueDataWashBrush}"/>
                 <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
@@ -115,19 +115,17 @@
         <!-- BtnViewLog_Click (MainWindow.UiUpdates.cs) had lost its button in an older
              settings pass; support asks for these files, so it gets a row here. -->
         <Border Style="{StaticResource SectionPanel}" Padding="0" Margin="0,0,0,10"
-                BorderBrush="{StaticResource SectionHueDataBorderBrush}">
+                BorderBrush="{StaticResource SectionHueDataBorderBrush}" rows:RowHue.Hue="{StaticResource SectionHueData}">
             <Grid>
                 <Border CornerRadius="11" Background="{StaticResource SectionHueDataWashBrush}"/>
                 <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
                         Background="{StaticResource SectionHueDataBrush}"/>
-                <Grid Margin="15,12,15,12" MinHeight="34" ToolTip="{loc:Str settings_data_logs_tip}">
+                <Grid Margin="15,12,15,12" Style="{StaticResource OptionRow}" ToolTip="{loc:Str settings_data_logs_tip}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}"
-                               Text="{loc:Str settings_data_logs_label}"
-                               Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                    <rows:RowLabel Grid.Column="0" Text="{loc:Str settings_data_logs_label}" Emblem="Folder" Margin="0,0,14,0"/>
                     <Button Grid.Column="1" x:Name="BtnOpenLogsFolder" x:FieldModifier="internal"
                             Content="{loc:Str settings_data_logs_open}"
                             Style="{StaticResource OutlineButton}" Padding="12,5" VerticalAlignment="Center"
@@ -138,19 +136,17 @@
 
         <!-- ====================== cloud backup signpost ======================= -->
         <Border Style="{StaticResource SectionPanel}" Padding="0" Margin="0,0,0,10"
-                BorderBrush="{StaticResource SectionHueDataBorderBrush}">
+                BorderBrush="{StaticResource SectionHueDataBorderBrush}" rows:RowHue.Hue="{StaticResource SectionHueData}">
             <Grid>
                 <Border CornerRadius="11" Background="{StaticResource SectionHueDataWashBrush}"/>
                 <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
                         Background="{StaticResource SectionHueDataBrush}"/>
-                <Grid Margin="15,12,15,12" MinHeight="34" ToolTip="{loc:Str set2_data_cloud_signpost}">
+                <Grid Margin="15,12,15,12" Style="{StaticResource OptionRow}" ToolTip="{loc:Str set2_data_cloud_signpost}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}"
-                               Text="{loc:Str label_cloud_settings_backup}"
-                               Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                    <rows:RowLabel Grid.Column="0" Text="{loc:Str label_cloud_settings_backup}" Emblem="Link" Margin="0,0,14,0"/>
                     <Button Grid.Column="1" x:Name="BtnGoToAccountBackup"
                             Content="{loc:Str set2_btn_open_account_section}"
                             Style="{StaticResource OutlineButton}" Padding="12,5" VerticalAlignment="Center"
