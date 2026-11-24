@@ -20,7 +20,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// false, WS_EX_NOACTIVATE -> ShowActivated false, WS_EX_TRANSPARENT ->
     /// <see cref="X11Overlay.SetClickThrough"/>. UI thread only: <see cref="ChaosRunHost"/> calls it
     /// from its run tick and closes it on every teardown, including panic (PanicSurfaces "chaos").</para>
-    /// <para>ponytail: RaiseActive() (re-stack above a mandatory video) has no caller here yet.</para>
     /// </summary>
     internal sealed class ChaosWaveTimerWindow : Window
     {

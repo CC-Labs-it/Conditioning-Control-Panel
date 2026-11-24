@@ -87,7 +87,9 @@ internal sealed class ToggleLieEffect : PossessionEffectBase
         double h = Math.Max(8, image.Height * 0.72);
         bool left = knob?.TranslatePoint(default, toggle) is not { } at ||
                     at.X < (toggle.Bounds.Width - knob.Bounds.Width) / 2;
-        var pill = new Ellipse { Width = h, Height = h, Fill = new SolidColorBrush(EmberAttribution.Ember),
+        var pill = new Border { Width = h, Height = h, CornerRadius = new CornerRadius(h / 2),
+            Background = new SolidColorBrush(EmberAttribution.Ember),
+            BoxShadow = new BoxShadows(new BoxShadow { Blur = 12, Color = Color.FromArgb(230, EmberAttribution.Ember.R, EmberAttribution.Ember.G, EmberAttribution.Ember.B) }),
             Opacity = 0.85, IsHitTestVisible = false };
         double inset = Math.Max(2, image.Height * 0.14);
         _ghost.AddExtra(pill, Canvas.GetLeft(image) + (left ? image.Width - h - inset : inset),

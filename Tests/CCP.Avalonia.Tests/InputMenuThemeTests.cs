@@ -134,6 +134,67 @@ public sealed class InputMenuThemeTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task MenuBarRowsUseHouseChrome() => Run(window =>
+    {
+        var row = new MenuItem { Header = "Row" };
+        var top = new MenuItem { Header = "Top", Items = { row } };
+        window.Content = new Menu { Items = { top } };
+        window.Show();
+        top.IsSubMenuOpen = true;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(new Thickness(10, 6), row.Padding);
+        Assert.Equal(new Thickness(0, 1), row.Margin);
+        Assert.Equal(new CornerRadius(6), row.CornerRadius);
+        row.IsSelected = true;
+        Dispatcher.UIThread.RunJobs();
+        var border = row.GetVisualDescendants().OfType<Border>().First(x => x.Name == "PART_LayoutRoot");
+        Assert.Equal(Colour(window, "TransparentPink20Brush"), ((ISolidColorBrush)border.Background!).Color);
+        row.IsEnabled = false;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(0.45, row.Opacity);
+        top.IsSubMenuOpen = false;
+        return Task.CompletedTask;
+    });
+
+    // WPF DeeperEditorWindow.xaml:155-206,476-486: File rows use the local TimelineCtxMenuItem.
+    [Fact]
+    public Task DeeperFileRowsKeepTheirLocalRowChrome() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var editor = new DeeperEditorWindow();
+        try
+        {
+            editor.Show();
+            var file = (MenuItem)editor.GetVisualDescendants().OfType<Menu>().Single().Items[0]!;
+            file.IsSubMenuOpen = true;
+            Dispatcher.UIThread.RunJobs();
+            var row = editor.FindControl<MenuItem>("MenuSave")!;
+            Assert.Equal(new Thickness(10, 6), row.Padding);
+            Assert.Equal(new Thickness(0), row.Margin);
+            Assert.Equal(new CornerRadius(0), row.CornerRadius);
+            Assert.Equal(12, row.FontSize);
+            row.IsSelected = true;
+            Dispatcher.UIThread.RunJobs();
+            var border = row.GetVisualDescendants().OfType<Border>().First(x => x.Name == "PART_LayoutRoot");
+            Assert.Equal(new CornerRadius(0), border.CornerRadius);
+            Assert.Equal(Colour(editor, "DeeperMenuItemHoverBgBrush"), ((ISolidColorBrush)border.Background!).Color);
+            row.IsSelected = false;
+            row.IsEnabled = false;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, row.Opacity);
+            var header = row.GetVisualDescendants().OfType<ContentPresenter>().Single(x => x.Name == "PART_HeaderPresenter");
+            Assert.Equal(Color.Parse("#666666"), ((ISolidColorBrush)header.Foreground!).Color);
+            file.IsSubMenuOpen = false;
+        }
+        finally
+        {
+            editor.Close();
+            Dispatcher.UIThread.RunJobs();
+        }
+        return Task.CompletedTask;
+    });
+
     private static void Setup()
     {
         if (Application.Current is not null) return;
