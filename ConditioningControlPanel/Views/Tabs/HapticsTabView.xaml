@@ -909,7 +909,12 @@
                                     BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
                                     Background="#06050D" VerticalAlignment="Stretch" MinHeight="200" MaxHeight="560">
                                 <Border.Tag>
-                                    <ImageBrush x:Name="HapticsSideArtBrush" Stretch="UniformToFill"/>
+                                    <ImageBrush x:Name="HapticsSideArtBrush" Stretch="UniformToFill">
+                                        <ImageBrush.ImageSource>
+                                            <BitmapImage UriSource="pack://application:,,,/Resources/features/vibe.png"
+                                                         DecodePixelWidth="800"/>
+                                        </ImageBrush.ImageSource>
+                                    </ImageBrush>
                                 </Border.Tag>
                                 <pv:EffectPreview Scene="haptics"/>
                             </Border>
