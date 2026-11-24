@@ -241,6 +241,118 @@ public static class EmblemArt
                 k.Fill(EmblemPath.Rect(25.2, 4, 4.2, 24, 1.6), EmblemInk.Soft);
                 break;
 
+            // ---------- second batch (overnight sweep 2026-11-24) ----------
+
+            case EmblemKind.Words: // mockup "wordslip": one word pill, tilted
+                using (k.Push(Affine.Group(16, 16, -6, 1.36))) Item(k, EmblemSubject.Word, back: false);
+                break;
+
+            case EmblemKind.Perf:
+                k.Fill("M18.4 2 6 18h8.4l-2.2 12L26 13.4h-8.2z", EmblemInk.Main);
+                break;
+
+            case EmblemKind.Lock:
+                k.Stroke("M10 14v-4a6 6 0 0 1 12 0v4", EmblemInk.Soft, 3.2, true);
+                k.Fill(EmblemPath.Rect(6, 13.5, 20, 15, 3.6), EmblemInk.Main);
+                k.Fill(EmblemPath.Circle(16, 19.6, 2.4), EmblemInk.Cut);
+                k.Fill(EmblemPath.Rect(15, 19.6, 2, 5.2, 1), EmblemInk.Cut);
+                break;
+
+            case EmblemKind.Layers:
+                k.Fill("M5.6 21 16 26.6 26.4 21 29 22.4 16 29.4 3 22.4z", EmblemInk.Soft);
+                k.Fill("M5.6 15 16 20.6 26.4 15 29 16.4 16 23.4 3 16.4z", EmblemInk.Soft);
+                k.Fill("M16 3 29 10 16 17 3 10z", EmblemInk.Main);
+                break;
+
+            case EmblemKind.Loop:
+                k.Stroke("M6 16a10 10 0 0 1 17.6-6.5M26 16a10 10 0 0 1-17.6 6.5", EmblemInk.Main, 3.2, true);
+                k.Stroke("M24.6 3.4v6.6H18M7.4 28.6V22H14", EmblemInk.Main, 3.2, true);
+                break;
+
+            case EmblemKind.Folder:
+                k.Fill("M3 8a3 3 0 0 1 3-3h6l3.2 3.6H26a3 3 0 0 1 3 3V14H3z", EmblemInk.Soft);
+                k.Fill(EmblemPath.Rect(3, 11.4, 26, 16, 3), EmblemInk.Main);
+                break;
+
+            case EmblemKind.Mic:
+                k.Stroke("M7 15a9 9 0 0 0 18 0M16 24v4.6M11.6 28.8h8.8", EmblemInk.Soft, 2.8, true);
+                k.Fill(EmblemPath.Rect(11.5, 3, 9, 16, 4.5), EmblemInk.Main);
+                break;
+
+            case EmblemKind.Plug:
+                k.Stroke("M11 3v6.4M21 3v6.4", EmblemInk.Soft, 3, true);
+                k.Fill("M7 9h18v5a9 9 0 0 1-18 0z", EmblemInk.Main);
+                k.Stroke("M16 23v6", EmblemInk.Main, 3.2, true);
+                break;
+
+            case EmblemKind.Power:
+                k.Stroke("M10 7.6a11 11 0 1 0 12 0", EmblemInk.Main, 3.4, true);
+                k.Stroke("M16 3v11", EmblemInk.Soft, 3.4, true);
+                break;
+
+            case EmblemKind.Bell:
+                k.Stroke("M12.6 25.4a3.6 3.6 0 0 0 6.8 0", EmblemInk.Soft, 2.8, true);
+                k.Fill("M16 3a8 8 0 0 1 8 8v6l3 5.4H5L8 17v-6a8 8 0 0 1 8-8z", EmblemInk.Main);
+                break;
+
+            case EmblemKind.Gentle:
+                k.Stroke("M3 12c4-5 8-5 13 0s9 5 13 0", EmblemInk.Main, 3.2, true);
+                k.Stroke("M3 21c4-5 8-5 13 0s9 5 13 0", EmblemInk.Soft, 3.2, true);
+                break;
+
+            case EmblemKind.Persona:
+                k.Fill("M4 6h24v9c0 8-5 13-12 13S4 23 4 15z", EmblemInk.Main);
+                k.Stroke("M9 13.6c1.6-1.9 4-1.9 5.4 0M17.6 13.6c1.6-1.9 4-1.9 5.4 0M11 20c3 2.6 7 2.6 10 0", EmblemInk.Cut, 2.4, true);
+                break;
+
+            case EmblemKind.Ramp:
+                k.Stroke("M4 27.4h24", EmblemInk.Soft, 2.6, true);
+                k.Stroke("M5 23c8-1 12-5 16-15", EmblemInk.Main, 3.4, true);
+                k.Stroke("M17.2 6.6 22 4.6l1.6 5", EmblemInk.Main, 3, true);
+                break;
+
+            case EmblemKind.Spiral:
+                k.Fill(EmblemPath.Circle(16, 16, 13.6), EmblemInk.Main);
+                k.Stroke("M16 16c0-1.6 2.4-1.6 2.4.8s-4 3.2-4.8 0 2.4-6.4 6.4-4.8 4.8 7.2.8 9.6-10.4.8-10.4-5.6 7.2-10.4 12.8-7.2", EmblemInk.Cut, 2.2, true);
+                break;
+
+            case EmblemKind.Fog:
+                k.Stroke("M6 27.4h14M23.6 27.4h3", EmblemInk.Soft, 2.6, true);
+                k.Fill("M9 22.4a6 6 0 0 1 .6-12A8 8 0 0 1 25 12.4a5 5 0 0 1-1 10z", EmblemInk.Main);
+                break;
+
+            case EmblemKind.Stamp:
+                k.Fill(EmblemPath.Rect(7, 26.6, 18, 2.6, 1.3), EmblemInk.Soft);
+                k.Fill(EmblemPath.Rect(12, 3, 8, 9.4, 3.4), EmblemInk.Main);
+                k.Fill("M13 11.4h6l2 7.8H11z", EmblemInk.Main);
+                k.Fill(EmblemPath.Rect(5, 18.8, 22, 5.4, 2), EmblemInk.Main);
+                break;
+
+            case EmblemKind.Lamp:
+                k.Stroke("M16 17v9", EmblemInk.Soft, 3, true);
+                k.Fill("M10.4 4h11.2L27 17H5z", EmblemInk.Main);
+                k.Fill(EmblemPath.Rect(9, 26, 14, 3.2, 1.6), EmblemInk.Main);
+                break;
+
+            case EmblemKind.Card:
+                k.Fill(EmblemPath.Rect(3, 6, 26, 20, 3.6), EmblemInk.Main);
+                k.Fill(EmblemPath.Rect(7, 10.8, 13, 2.8, 1.4), EmblemInk.Cut);
+                k.Fill(EmblemPath.Rect(7, 16.4, 18, 5.6, 1.8), EmblemInk.Cut);
+                k.Fill(EmblemPath.Rect(9.2, 17.8, 1.7, 2.8), EmblemInk.Main);
+                break;
+
+            case EmblemKind.Target:
+                k.Fill(EmblemPath.Circle(16, 16, 13.4), EmblemInk.Main);
+                k.Fill(EmblemPath.Circle(16, 16, 8.8), EmblemInk.Cut);
+                k.Fill(EmblemPath.Circle(16, 16, 4.2), EmblemInk.Main);
+                break;
+
+            case EmblemKind.Cam:
+                k.Fill("M21 14l8-4.6v13.2L21 18z", EmblemInk.Soft);
+                k.Fill(EmblemPath.Rect(3, 8, 18.6, 16, 3.6), EmblemInk.Main);
+                k.Fill(EmblemPath.Circle(12.3, 16, 3.6), EmblemInk.Cut);
+                break;
+
             default:
                 throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
         }
