@@ -548,7 +548,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (spec.PayMult > 1) _state.PushEvent("🪨 heavy drop! x3");
             RollCamGirlTip();
             BodyBuzz(b);
-            // ponytail: GG make more GG (WPF ChaosModeService.cs:1879-1888) waits for rabbit movement (#4339); spawning now would give catchable, paying floaters.
+            // ponytail: GG make more GG (WPF ChaosModeService.cs:1879-1888) waits for darter spawn and movement (lane s10-chaos-darters); spawning now would give catchable, paying floaters.
             CheckComboMilestone();
         }
 
