@@ -6,6 +6,8 @@
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
              xmlns:hover="clr-namespace:ConditioningControlPanel.Behaviors"
              xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.TintSliders="True"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              xmlns:poss="clr-namespace:ConditioningControlPanel.Services.Possession"
              mc:Ignorable="d"
@@ -93,7 +95,7 @@
     </UserControl.Resources>
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-        <Grid Margin="36,28,36,28">
+        <Grid Margin="36,28,36,28" Grid.IsSharedSizeScope="True" rows:RowHue.Hue="#FF8A5C">
             <!-- Root grid. LockdownGate is its LAST sibling on purpose: the gate has to cover the
                  hero AND both columns, and RefreshPremiumGate(LockdownTab.LockdownGate) only ever
                  flips its Visibility. -->
@@ -173,14 +175,12 @@
 
                                         <!-- Setup Panel (visible when lockdown is NOT active) -->
                                         <StackPanel x:Name="LockdownSetupPanel" x:FieldModifier="internal">
-                                            <Grid Height="36" Background="Transparent">
+                                            <Grid Style="{StaticResource OptionRow}" Background="Transparent">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{loc:Str label_duration_2}" FontSize="13"
-                                                           FontWeight="SemiBold" Foreground="{StaticResource TextLightBrush}"
-                                                           VerticalAlignment="Center"/>
+                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str label_duration_2}" Emblem="Long"/>
                                                 <ComboBox Grid.Column="1" x:Name="CmbLockdownDuration" x:FieldModifier="internal"
                                                           Width="160" SelectedIndex="3" VerticalAlignment="Center" FontSize="13"
                                                           Style="{DynamicResource DarkComboBoxStyle}"
@@ -208,15 +208,14 @@
                                             <!-- Hide the clock. The digits' TextBlock stays in place either way (it is the
                                                  five-click exit handle); only what it says changes. Masks the badge and the
                                                  Home chip too - see AppSettings.HideLockdownTimer. -->
-                                            <Grid Height="28" Background="Transparent"
+                                            <Grid Style="{StaticResource OptionRow}" Background="Transparent"
                                                   ToolTip="{loc:Str lockdown_hide_timer_tip}">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{loc:Str lockdown_hide_timer}" FontSize="11.5"
-                                                           Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"
-                                                           TextTrimming="CharacterEllipsis"/>
+                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str lockdown_hide_timer}" Emblem="When"
+                                                               IsOn="{Binding IsChecked, ElementName=ChkLockdownHideTimer}"/>
                                                 <CheckBox Grid.Column="1" x:Name="ChkLockdownHideTimer" x:FieldModifier="internal"
                                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                           poss:Possession.Role="Toggle" poss:Possession.Name="the hidden clock toggle"
@@ -233,14 +232,13 @@
                                                  The master switch greys the block rather than collapsing it: someone who
                                                  turned the haunt off still has to be able to see WHAT they turned off, or
                                                  the card reads as if the feature vanished. -->
-                                            <Grid Height="32" Background="Transparent">
+                                            <Grid Style="{StaticResource OptionRow}" Background="Transparent">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{loc:Str lockdown_poss_title}" FontSize="13"
-                                                           FontWeight="SemiBold" Foreground="{StaticResource TextLightBrush}"
-                                                           VerticalAlignment="Center"/>
+                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str lockdown_poss_title}" Emblem="Persona"
+                                                               IsOn="{Binding IsChecked, ElementName=ChkPossessionEnabled}"/>
                                                 <CheckBox Grid.Column="1" x:Name="ChkPossessionEnabled" x:FieldModifier="internal"
                                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                           poss:Possession.Role="Toggle" poss:Possession.Name="the Possession switch"
@@ -273,14 +271,14 @@
                                                 <TextBlock Text="{loc:Str lockdown_poss_fulldoki_hint}" FontSize="10.5"
                                                            Foreground="#B38A6E" TextWrapping="Wrap" Margin="0,0,0,6"/>
 
-                                                <Grid Height="40" Background="Transparent">
+                                                <Grid Style="{StaticResource OptionRow}" Background="Transparent">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                        <TextBlock Text="{loc:Str lockdown_poss_tripwires}" FontSize="12.5"
-                                                                   Foreground="{StaticResource TextLightBrush}"/>
+                                                        <rows:RowLabel Text="{loc:Str lockdown_poss_tripwires}" Emblem="Reacts"
+                                                                       IsOn="{Binding IsChecked, ElementName=ChkPossTripwires}"/>
                                                         <TextBlock Text="{loc:Str lockdown_poss_tripwires_hint}" FontSize="10.5"
                                                                    Foreground="{StaticResource TextMutedBrush}"/>
                                                     </StackPanel>
@@ -290,14 +288,14 @@
                                                               Checked="ChkPossTripwires_Changed" Unchecked="ChkPossTripwires_Changed"/>
                                                 </Grid>
 
-                                                <Grid Height="40" Background="Transparent">
+                                                <Grid Style="{StaticResource OptionRow}" Background="Transparent">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                        <TextBlock Text="{loc:Str lockdown_poss_warden}" FontSize="12.5"
-                                                                   Foreground="{StaticResource TextLightBrush}"/>
+                                                        <rows:RowLabel Text="{loc:Str lockdown_poss_warden}" Emblem="Persona"
+                                                                       IsOn="{Binding IsChecked, ElementName=ChkPossWarden}"/>
                                                         <TextBlock Text="{loc:Str lockdown_poss_warden_hint}" FontSize="10.5"
                                                                    Foreground="{StaticResource TextMutedBrush}"/>
                                                     </StackPanel>
@@ -307,14 +305,14 @@
                                                               Checked="ChkPossWarden_Changed" Unchecked="ChkPossWarden_Changed"/>
                                                 </Grid>
 
-                                                <Grid Height="40" Background="Transparent">
+                                                <Grid Style="{StaticResource OptionRow}" Background="Transparent">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                                        <TextBlock Text="{loc:Str lockdown_poss_photosafe}" FontSize="12.5"
-                                                                   Foreground="{StaticResource TextLightBrush}"/>
+                                                        <rows:RowLabel Text="{loc:Str lockdown_poss_photosafe}" Emblem="Gentle"
+                                                                       IsOn="{Binding IsChecked, ElementName=ChkPossPhotosafe}"/>
                                                         <TextBlock Text="{loc:Str lockdown_poss_photosafe_hint}" FontSize="10.5"
                                                                    Foreground="{StaticResource TextMutedBrush}"/>
                                                     </StackPanel>
@@ -337,55 +335,53 @@
                                                        FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}"
                                                        Margin="0,0,0,2"/>
 
-                                            <Grid Height="28" Background="Transparent">
+                                            <Grid Style="{StaticResource OptionRow}" Background="Transparent">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{loc:Str lockdown_poss_safety_strict}" FontSize="11.5"
-                                                           Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str lockdown_poss_safety_strict}" Emblem="Lock"
+                                                               IsOn="{Binding IsChecked, ElementName=ChkLockdownStrict}"/>
                                                 <CheckBox Grid.Column="1" x:Name="ChkLockdownStrict" x:FieldModifier="internal"
                                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                           poss:Possession.Role="Toggle" poss:Possession.Name="the Strict Lock safety"
                                                           Checked="ChkLockdownSafety_Changed" Unchecked="ChkLockdownSafety_Changed"/>
                                             </Grid>
 
-                                            <Grid Height="28" Background="Transparent">
+                                            <Grid Style="{StaticResource OptionRow}" Background="Transparent">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{loc:Str lockdown_poss_safety_panic}" FontSize="11.5"
-                                                           Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str lockdown_poss_safety_panic}" Emblem="Safe"
+                                                               IsOn="{Binding IsChecked, ElementName=ChkLockdownNoPanic}"/>
                                                 <CheckBox Grid.Column="1" x:Name="ChkLockdownNoPanic" x:FieldModifier="internal"
                                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                           poss:Possession.Role="Toggle" poss:Possession.Name="the panic key safety"
                                                           Checked="ChkLockdownSafety_Changed" Unchecked="ChkLockdownSafety_Changed"/>
                                             </Grid>
 
-                                            <Grid Height="28" Background="Transparent">
+                                            <Grid Style="{StaticResource OptionRow}" Background="Transparent">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{loc:Str lockdown_poss_safety_syskeys}" FontSize="11.5"
-                                                           Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"
-                                                           TextTrimming="CharacterEllipsis"/>
+                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str lockdown_poss_safety_syskeys}" Emblem="Lock"
+                                                               IsOn="{Binding IsChecked, ElementName=ChkLockdownSysKeys}"/>
                                                 <CheckBox Grid.Column="1" x:Name="ChkLockdownSysKeys" x:FieldModifier="internal"
                                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                           poss:Possession.Role="Toggle" poss:Possession.Name="the system keys safety"
                                                           Checked="ChkLockdownSafety_Changed" Unchecked="ChkLockdownSafety_Changed"/>
                                             </Grid>
 
-                                            <Grid Height="28" Background="Transparent"
+                                            <Grid Style="{StaticResource OptionRow}" Background="Transparent"
                                                   ToolTip="{loc:Str lockdown_poss_safety_dose_tip}">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{loc:Str lockdown_poss_safety_dose}" FontSize="11.5"
-                                                           Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"
-                                                           TextTrimming="CharacterEllipsis"/>
+                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str lockdown_poss_safety_dose}" Emblem="Random"
+                                                               IsOn="{Binding IsChecked, ElementName=ChkLockdownDose}"/>
                                                 <CheckBox Grid.Column="1" x:Name="ChkLockdownDose" x:FieldModifier="internal"
                                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                           poss:Possession.Role="Toggle" poss:Possession.Name="the dose safety"

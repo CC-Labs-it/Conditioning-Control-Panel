@@ -35,4 +35,8 @@ public class RowsR6aTests
     public void Remote_rows_read() => WpfRenderHarness.OnStaThread(() =>
         RowsRender.Check(new RemoteControlTabView(), "r6a-remote", minLabels: 5,
             show: new[] { "OptInFormPanel" }, before: ExpandAll));
+
+    [Fact]
+    public void Lockdown_rows_read() => WpfRenderHarness.OnStaThread(() =>
+        RowsRender.Check(new LockdownTabView(), "r6a-lockdown", minLabels: 10, before: ExpandAll));
 }
