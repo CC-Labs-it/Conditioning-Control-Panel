@@ -352,12 +352,7 @@ public sealed class HapticsHeadTests
                 Assert.Equal(ConditioningControlPanel.Services.Haptics.HapticProviderType.Mock, s.Provider);
                 Assert.True(wiz.ConnectPage.IsVisible && wiz.BtnConnect.IsVisible && !wiz.BtnDone.IsVisible);
 
-                click(wiz.BtnConnect);                                 // no premium, no free day: refused
-                Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("gate_premium_locked"), wiz.TxtConnectStatus.Text);
-                Assert.False(wiz.BtnWizardTestBuzz.IsVisible);
-                Assert.False(h.IsConnected);
-
-                CoreEntitlement.HasPremiumProvider = () => true;
+                // WPF MainWindow.Haptics.cs:544 uses HapticsAccess, open to every account.
                 click(wiz.BtnConnect);
                 Assert.True(Wait(pump(() => wiz.BtnDone.IsVisible)), wiz.TxtConnectStatus.Text);
                 Assert.True(h.IsConnected);
@@ -383,7 +378,7 @@ public sealed class HapticsHeadTests
         });
     });
 
-    /// <summary>The page loads real settings, gates Enable behind premium as WPF (#1917), and a connect
+    /// <summary>The page loads real settings, enables toys for free accounts as WPF MainWindow.Haptics.cs:463, and a connect
     /// with Intiface not running ends "Disconnected" with the button usable again.</summary>
     [Fact]
     public void TabLoadsSettingsGatesEnableAndFailsConnectGracefully()
@@ -404,13 +399,9 @@ public sealed class HapticsHeadTests
                     Assert.Equal("ws://127.0.0.1:1", tab.TxtHapticIntifaceUrl.Text);
                     Assert.False(tab.ChkHapticsEnabled.IsChecked);
 
-                    tab.ChkHapticsEnabled.IsChecked = true;                 // no premium: refused
+                    tab.ChkHapticsEnabled.IsChecked = true;                 // no premium: allowed
                     Dispatcher.UIThread.RunJobs();
-                    Assert.False(tab.ChkHapticsEnabled.IsChecked);
-                    Assert.False(h.Settings.Enabled);
-
-                    CoreEntitlement.HasPremiumProvider = () => true;
-                    tab.ChkHapticsEnabled.IsChecked = true;
+                    Assert.True(tab.ChkHapticsEnabled.IsChecked);
                     Assert.True(h.Settings.Enabled);
 
                     tab.BtnHapticConnect.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

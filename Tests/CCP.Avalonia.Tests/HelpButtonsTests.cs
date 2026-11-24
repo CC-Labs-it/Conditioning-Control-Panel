@@ -33,7 +33,7 @@ public sealed class HelpButtonsTests
 
     private static readonly string[] Tabs =
     {
-        "settings", "studio", "presets", "haptics", "companion", "awareness", "play", "gradedintake",
+        "settings", "studio", "presets", "haptics", "companion", "awareness", "playeyes", "gradedintake",
         "blinktrainer", "remotecontrol", "discord", "quests", "achievements", "leaderboard", "assets", "appsettings",
     };
 
@@ -54,6 +54,7 @@ public sealed class HelpButtonsTests
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        var oldLanguage = LocalizationManager.Instance.CurrentLanguage;
         LocalizationManager.Instance.SetLanguage("en");
         var w = new MainShellWindow();
         w.Show();
@@ -63,21 +64,45 @@ public sealed class HelpButtonsTests
             // A hidden tab is never measured, so its templated content does not exist until the
             // user opens it: walk every door the way a user does.
             var buttons = new HashSet<Button>();
+            var checkedNames = new HashSet<string>();
+            var problems = new List<string>();
+            void CheckVisibleButtons()
+            {
+                w.UpdateLayout();
+                var visible = w.GetVisualDescendants().OfType<Button>().ToList();
+                buttons.UnionWith(visible);
+                foreach (var b in visible)
+                {
+                    if (b.Name is not { } name || !MainShellWindow.HelpButtonSections.TryGetValue(name, out var id)
+                        || !checkedNames.Add(name)) continue;
+                    if (HelpPopover.SectionOf(b) != id) { problems.Add($"{name}: attached to '{HelpPopover.SectionOf(b)}', want '{id}'"); continue; }
+                    b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    Dispatcher.UIThread.RunJobs();
+                    HelpPopover.PopupContent(b)?.UpdateLayout();
+                    if (!HelpPopover.IsOpen(b)) problems.Add($"{name}: ? did not open");
+                    else if (HelpLoopRegistry.Has(id) && HelpPopover.PopupContent(b)!.GetVisualDescendants().OfType<HelpLoopView>().Count() != 1)
+                        problems.Add($"{name}: popover has no {id} loop");
+                    HelpPopover.CloseActive();
+                }
+            }
             // HelpBtnCompanions / HelpBtnCompanionSettings sit in the Workshop drawer, which v2 leaves in
             // the collapsed room (as WPF does): show the room so their attachment is still checked.
             CollapsedRoom.Show(w);
             foreach (var tab in Tabs)
             {
+                // WPF MainWindow.TabNavigation.cs:265-280 moves the old play key to the launcher.
                 w.ShowTab(tab);
                 Dispatcher.UIThread.RunJobs();
+                w.UpdateLayout();
                 // Open every disclosure on the page, as a user unfolding drawers would (nested ones too).
                 for (var round = 0; round < 4; round++)
                 {
                     foreach (var ex in w.GetVisualDescendants().OfType<Expander>().Where(e => !e.IsExpanded).ToList())
                         ex.IsExpanded = true;
                     Dispatcher.UIThread.RunJobs();
+                    w.UpdateLayout();
                 }
-                buttons.UnionWith(w.GetVisualDescendants().OfType<Button>());
+                CheckVisibleButtons();
             }
             // The Studio rack shows one module at a time; its Scheduler/Ramp panels carry their own ?.
             foreach (var rack in new[] { "scheduler", "ramp" })
@@ -85,21 +110,10 @@ public sealed class HelpButtonsTests
                 w.ShowTab("studio");
                 w.Named<StudioTabView>("StudioTab")!.FocusRackEntry(rack);
                 Dispatcher.UIThread.RunJobs();
-                buttons.UnionWith(w.GetVisualDescendants().OfType<Button>());
+                CheckVisibleButtons();
             }
-            var problems = new List<string>();
-            foreach (var (name, id) in MainShellWindow.HelpButtonSections)
-            {
-                var b = buttons.FirstOrDefault(x => x.Name == name);
-                if (b is null) { problems.Add($"{name}: not in the shell"); continue; }
-                if (HelpPopover.SectionOf(b) != id) { problems.Add($"{name}: attached to '{HelpPopover.SectionOf(b)}', want '{id}'"); continue; }
-                b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                Dispatcher.UIThread.RunJobs();
-                if (!HelpPopover.IsOpen(b)) problems.Add($"{name}: ? did not open");
-                else if (HelpLoopRegistry.Has(id) && HelpPopover.PopupContent(b)!.GetVisualDescendants().OfType<HelpLoopView>().Count() != 1)
-                    problems.Add($"{name}: popover has no {id} loop");
-                HelpPopover.CloseActive();
-            }
+            foreach (var name in MainShellWindow.HelpButtonSections.Keys)
+                if (!checkedNames.Contains(name)) problems.Add($"{name}: not in the shell");
             // WPF MainWindow.UiUpdates.cs:1708: the Intake Pass tile's ? (no section, no loop).
             var pass = buttons.FirstOrDefault(x => x.Name == "BtnIntakePassHelp");
             if (pass is null || HelpPopover.SectionOf(pass) != "IntakePass") problems.Add("BtnIntakePassHelp: not attached");
@@ -114,6 +128,7 @@ public sealed class HelpButtonsTests
         {
             HelpPopover.CloseActive();
             w.Close();
+            LocalizationManager.Instance.SetLanguage(oldLanguage);
         }
         return Task.CompletedTask;
     });

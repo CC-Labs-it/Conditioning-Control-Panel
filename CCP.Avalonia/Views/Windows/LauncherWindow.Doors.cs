@@ -17,6 +17,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.JustDrop;
@@ -172,7 +173,7 @@ public partial class LauncherWindow
             DoorsHost.IsVisible = !page;
             if (_door is { } door)
             {
-                DoorBackText.Text = "‹ " + Loc.Get("btn_back");
+                DoorBackText.Text = Loc.Get("btn_back");
                 AutomationProperties.SetName(DoorBack, Loc.Get("btn_back"));
                 GamesEyebrow.Text = DoorTitle(door);
                 GamesEyebrow.Foreground = new SolidColorBrush(Lighten(DoorHue(door), 0.55));
@@ -521,9 +522,9 @@ public partial class LauncherWindow
             Margin = new Thickness(0, 0, 28, 0),
             IsHitTestVisible = false,
             RenderTransform = view.ChevronSlide,
-            Child = new TextBlock
+            Child = new IconGlyph
             {
-                Text = "›", FontFamily = DoorFont, FontSize = 30, Margin = new Thickness(2, -4, 0, 0),
+                Kind = IconKind.ChevronRight, Size = 30, Margin = new Thickness(2, -4, 0, 0),
                 Foreground = new SolidColorBrush(Lighten(hue, 0.55)),
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             },
@@ -555,7 +556,7 @@ public partial class LauncherWindow
     {
         var text = Loc.GetF("launcher_door_continue", Loc.Get(last.TitleKey));
         var label = new StackPanel { Orientation = Orientation.Horizontal };
-        label.Children.Add(new TextBlock { Text = "▶", FontSize = 11, Margin = new Thickness(0, 0, 9, 0), VerticalAlignment = VerticalAlignment.Center });
+        label.Children.Add(new IconGlyph { Kind = IconKind.Play, Variant = IconVariant.Filled, Size = 11, Margin = new Thickness(0, 0, 9, 0), VerticalAlignment = VerticalAlignment.Center });
         label.Children.Add(new TextBlock
         {
             Text = text, FontFamily = DoorFont, FontSize = 16, FontWeight = FontWeight.SemiBold,
