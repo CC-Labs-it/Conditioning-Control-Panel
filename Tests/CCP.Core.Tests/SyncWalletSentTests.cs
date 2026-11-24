@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
@@ -21,11 +22,16 @@ public sealed class SyncWalletSentTests
     {
         var oldSettings = CoreSettings.ServiceProvider;
         var oldLogin = CoreAccount.IsLoggedInProvider;
-        var settings = new SettingsService();
+        var directory = Path.Combine(Path.GetTempPath(), "ccp-wallet-sync-" + Guid.NewGuid().ToString("N"));
+        var settings = new SettingsService(Path.Combine(directory, "settings.json"))
+        {
+            SaveDebounceDueTimeMilliseconds = 60000
+        };
         CoreSettings.ServiceProvider = () => settings;
         CoreAccount.IsLoggedInProvider = () => true;
         var wire = new Wire(reset);
         var sync = new SyncPush(() => Array.Empty<string>(), () => false, wire);
+        Task<bool>? push = null;
         try
         {
             var s = settings.Current;
@@ -39,20 +45,32 @@ public sealed class SyncWalletSentTests
             sync.UtcNow = () => now;
             Assert.True(await sync.PushAsync("seed"));
             now += SyncPush.Cooldown + TimeSpan.FromSeconds(1);
-            var push = sync.PushAsync("wallet-test");
+            push = sync.PushAsync("wallet-test");
             await wire.Received.Task;
             Assert.Equal(100, wire.Sent);
             s.SkillPoints += credit;
             wire.Release.SetResult(true);
             Assert.True(await push);
             Assert.Equal(expected, s.SkillPoints);
+            Assert.True(settings.HasPendingSave);
+            settings.SealForReset();
+            Assert.False(settings.HasPendingSave);
         }
         finally
         {
             wire.Release.TrySetResult(true);
-            sync.Reset();
-            CoreSettings.ServiceProvider = oldSettings;
-            CoreAccount.IsLoggedInProvider = oldLogin;
+            try
+            {
+                if (push != null) await push;
+            }
+            finally
+            {
+                sync.Reset();
+                settings.SealForReset();
+                CoreSettings.ServiceProvider = oldSettings;
+                CoreAccount.IsLoggedInProvider = oldLogin;
+                if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+            }
         }
     }
 
