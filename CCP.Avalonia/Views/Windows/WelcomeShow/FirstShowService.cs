@@ -18,9 +18,11 @@ internal static class FirstShowService
     /// <summary>Test seam: headless has no native window to make click-through.</summary>
     internal static bool RequireClickThrough = true;
     /// <summary>Open the show. False when it is refused or could not start.</summary>
-    public static bool Open(MainShellWindow? owner = null, bool preview = false)
+    public static bool Open(MainShellWindow? owner = null, bool preview = false, Action? onEnded = null)
     {
         if (_window != null) { _window.Activate(); return true; }
+        var ended = false;
+        void Ended() { if (ended) return; ended = true; onEnded?.Invoke(); }
         FirstShowStageWindow? window = null;
         EmiDeskWindow? desk = null;
         try
@@ -31,14 +33,15 @@ internal static class FirstShowService
             {
                 Log.Warning("[FirstShow] not opened: this desktop cannot make the stage click-through");
                 window.Close();
+                Ended();
                 return false;
             }
             desk = EmiDeskService.Instance.BeginPresentation();
-            if (desk == null) { window.Close(); return false; }
+            if (desk == null) { window.Close(); Ended(); return false; }
             _window = window;
             var shown = window;
             window.Closing += (_, _) => desk.EndPresentation();
-            window.Closed += (_, _) => { if (ReferenceEquals(_window, shown)) _window = null; if (preview) desk.ShutDown(); };
+            window.Closed += (_, _) => { if (ReferenceEquals(_window, shown)) _window = null; if (preview) desk.ShutDown(); Ended(); };
             desk.BeginPresentation(() => Stop());
             window.BeginEntrance(desk);
             return true;
@@ -49,6 +52,7 @@ internal static class FirstShowService
             _window = null;
             try { window?.Close(); } catch { /* already down */ }
             desk?.EndPresentation();
+            Ended();
             return false;
         }
     }

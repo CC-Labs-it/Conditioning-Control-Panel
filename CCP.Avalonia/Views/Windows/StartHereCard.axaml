@@ -1,0 +1,32 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
+        xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
+        x:Class="ConditioningControlPanel.Avalonia.Views.Windows.StartHereCard"
+        Title="Start here" Width="540" SizeToContent="Height"
+        SystemDecorations="None" TransparencyLevelHint="Transparent" Background="Transparent"
+        ShowInTaskbar="False" CanResize="False" WindowStartupLocation="CenterOwner">
+    <Border x:Name="CardRoot" CornerRadius="16" BorderThickness="1" Margin="18" BorderBrush="{DynamicResource PinkBrush}">
+        <Border.Background>
+            <LinearGradientBrush StartPoint="0%,0%" EndPoint="40%,100%">
+                <GradientStop Color="#FF2C1450" Offset="0"/>
+                <GradientStop Color="#FF1C1233" Offset="0.45"/>
+                <GradientStop Color="#FF100A1E" Offset="1"/>
+            </LinearGradientBrush>
+        </Border.Background>
+        <Border.Effect><DropShadowEffect Color="#000000" BlurRadius="28" OffsetX="2.8" OffsetY="2.8" Opacity="0.6"/></Border.Effect>
+        <StackPanel Margin="26,22,26,22">
+            <Grid>
+                <TextBlock Text="{loc:Str starthere_title}" FontSize="24" FontWeight="ExtraBold" Foreground="{DynamicResource PinkBrush}"/>
+                <Button x:Name="BtnX" HorizontalAlignment="Right" VerticalAlignment="Top" AutomationProperties.Name="{loc:Str btn_close}"
+                        Background="Transparent" Foreground="#99FFFFFF" BorderThickness="0" Padding="4,0" Cursor="Hand">
+                    <fx:IconGlyph Kind="Dismiss" Size="13"/>
+                </Button>
+            </Grid>
+            <TextBlock Text="{loc:Str starthere_intro}" Margin="0,6,0,16" FontSize="13" Foreground="#CCFFFFFF" TextWrapping="Wrap"/>
+            <StackPanel x:Name="Rows"/>
+            <Button x:Name="BtnDone" Content="{loc:Str starthere_done}" Theme="{StaticResource SecondaryButton}"
+                    HorizontalAlignment="Right" Padding="18,7" Margin="0,8,0,0"/>
+        </StackPanel>
+    </Border>
+</Window>
