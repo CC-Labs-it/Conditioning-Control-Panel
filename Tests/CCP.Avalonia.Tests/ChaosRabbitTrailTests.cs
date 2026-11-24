@@ -12,7 +12,7 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-/// <summary>WPF BubbleService.cs:3929-3951, 1763-1780 (Tail-Plug trail) and ChaosModeService.cs:1879-1888 (GG sweepers).
+/// <summary>WPF BubbleService.cs:3929-3951, 1763-1780 (Tail-Plug trail).
 /// Borrows the shared BubbleOverlay.Field, so it runs alone.</summary>
 [Collection(RunsAloneCollection.Name)]
 public class ChaosRabbitTrailTests
@@ -26,7 +26,6 @@ public class ChaosRabbitTrailTests
         var incoming = BubbleOverlay.Field.Bubbles.ToArray();
         var fieldChecks = ChaosFieldFxOverlay.SkipPlatformChecksForTests;
         var firer = EffectPayload.Firer;
-        var rng = ChaosRunHost.Rng;
         var skia = ConditioningControlPanel.CoreSettings.Current.ChaosSkiaFxEnabled;
         try
         {
@@ -44,7 +43,7 @@ public class ChaosRabbitTrailTests
             BubbleOverlay.EndChaos(); BubbleOverlay.Field.Bubbles.Clear();
             BubbleOverlay.Field.Bubbles.AddRange(incoming);
             ChaosFieldFxOverlay.CloseActive(); ChaosFieldFxOverlay.SkipPlatformChecksForTests = fieldChecks;
-            EffectPayload.Firer = firer; ChaosRunHost.Rng = rng;
+            EffectPayload.Firer = firer;
             ConditioningControlPanel.CoreSettings.Current.ChaosSkiaFxEnabled = skia; StateField.SetValue(null, old);
         }
         return Task.CompletedTask;
@@ -80,20 +79,5 @@ public class ChaosRabbitTrailTests
         StepTrails.Invoke(null, null);
         Assert.Single(BubbleOverlay.RabbitTrails[sweeper].Points);
         Assert.False(treat.Popping);
-    });
-
-    [Fact]
-    public Task GgMakeMoreGgBurstsThreeSweepersFromAPoppedTreat() => WithField(state =>
-    {
-        state.GgRabbitChance = 1.0;
-        ChaosRunHost.Rng = new Random(3);
-        var treat = new AmbientBubble { X = 500, Y = 500, Size = 40, Spec = new EffectBubbleSpec { Payload = new FlashPayload() } };
-        ChaosRunHost.OnBubblePopped(treat);
-        var sweepers = BubbleOverlay.Field.Bubbles.Where(b => b.Spec is { IsDarter: true, IsSweeper: true }).ToList();
-        Assert.Equal(3, sweepers.Count);
-        Assert.All(sweepers, s => Assert.InRange(s.CenterX, 460, 560));
-        state.GgRabbitChance = 0;
-        ChaosRunHost.OnBubblePopped(treat);
-        Assert.Equal(3, BubbleOverlay.Field.Bubbles.Count(b => b.Spec is { IsSweeper: true }));
     });
 }

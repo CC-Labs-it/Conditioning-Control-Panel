@@ -548,16 +548,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (spec.PayMult > 1) _state.PushEvent("🪨 heavy drop! x3");
             RollCamGirlTip();
             BodyBuzz(b);
-            // WPF ChaosModeService.cs:1879-1888 (GG make more GG): a treat can burst into 3 sweeper rabbits.
-            if (_state.GgRabbitChance > 0 && Rng.NextDouble() < _state.GgRabbitChance)
-            {
-                var at = BubbleOverlay.CenterPx(b);
-                for (int i = 0; i < 3; i++)
-                    BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildDarter(_state.RunIntensity, spotlight: false,
-                        at.X + Rng.Next(-40, 41), at.Y + Rng.Next(-40, 41), sweeper: true));
-                ChaosOverlayWindow.ChaosSfx.Play("rabbit_spawn", 0.5f);
-                _state.PushEvent("🐇 GG, they multiply");
-            }
+            // ponytail: GG make more GG (WPF ChaosModeService.cs:1879-1888) waits for rabbit movement (#4339); spawning now would give catchable, paying floaters.
             CheckComboMilestone();
         }
 
