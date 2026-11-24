@@ -215,7 +215,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal GameWindow(Game spec)
         {
             Spec = spec;
-            Web = new WebHost { HostedPageMotion = true };
+            // WPF ChaosWebViewHost.cs:1520-1527: suppress browser chrome in game windows.
+            Web = new WebHost { HostedPageMotion = true, ConfigureNative = Platform.SpiralWebView2Policy.Attach };
             if (spec.Id == DtrhId) Web.BrowserProcessFailed += () => RecoverDtrh("process-failed");
             if (spec.Id == "goon") Web.InjectCarrier = true; // before the native view or first navigation
             if (spec.Id == FypId || spec.Id == JustDropId || spec.Id == "loom" || IsRace || IsGlassroad) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
