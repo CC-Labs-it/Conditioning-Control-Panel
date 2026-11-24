@@ -356,6 +356,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void OnFxActivated(bool active)
         {
+            if (active != _fxActive)
+            {
+                if (active) ResetWordmarkSheenGap(); else ParkWordmarkSheen();
+            }
             _fxActive = active;
             if (!active) ClearHoverComet();
             RefreshPanelComet();

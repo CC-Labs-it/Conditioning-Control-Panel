@@ -95,6 +95,28 @@ public sealed class LauncherFxTests
         Assert.Equal(0, sheen.Opacity);
     });
 
+    // WPF LauncherWindow.Fx.cs:192-230: deactivation parks; activation starts a fresh gap.
+    [Fact]
+    public void WordmarkSheenParksOnFocusLossAndRestartsItsGap() => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        var sheen = w.FindControl<global::Avalonia.Controls.Shapes.Rectangle>("WordmarkSheen")!;
+        w.OnFxActivated(false);
+        w.OnFxActivated(true);
+        for (int i = 0; i < 210 && sheen.Opacity == 0; i++) w.StepFx(0.2);
+        Assert.True(sheen.Opacity > 0);
+        w.OnFxActivated(false);
+        Assert.Equal(0, sheen.Opacity);
+        for (int i = 0; i < 250; i++) { w.StepFx(0.2); Assert.Equal(0, sheen.Opacity); }
+        w.OnFxActivated(true);
+        for (int i = 0; i < 120; i++) { w.StepFx(0.2); Assert.Equal(0, sheen.Opacity); }
+        for (int i = 0; i < 90 && sheen.Opacity == 0; i++) w.StepFx(0.2);
+        Assert.True(sheen.Opacity > 0);
+        PanicSurfaces.All.Single(x => x.Id == "launcher-wordmark-sheen").Stop(null);
+        w.OnFxActivated(false);
+        w.OnFxActivated(true);
+        for (int i = 0; i < 250; i++) { w.StepFx(0.2); Assert.Equal(0, sheen.Opacity); }
+    });
+
     [Fact]
     public void WordmarkSheenStaysOffWithMotionOff() => Run(MotionLevel.Off, (_, w, _) =>
     {

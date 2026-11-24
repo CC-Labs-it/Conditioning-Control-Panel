@@ -43,9 +43,13 @@ public partial class LauncherWindow
     private void StartWordmarkSheen()
     {
         _wordmarkSheenStopped = false;
+        ResetWordmarkSheenGap();
+    }
+
+    private void ResetWordmarkSheenGap()
+    {
         _wordmarkSheenWait = Random.Shared.Next(25, 41);
-        _wordmarkSheenElapsed = -1;
-        WordmarkSheen.Opacity = 0;
+        ParkWordmarkSheen();
     }
 
     private void ParkWordmarkSheen()
@@ -63,7 +67,7 @@ public partial class LauncherWindow
 
     private bool StepWordmarkSheen(double dt)
     {
-        if (_wordmarkSheenStopped || !Env.AllowAmbientLoops || !Wordmark.IsVisible)
+        if (_wordmarkSheenStopped || !_fxActive || !Env.AllowAmbientLoops || !Wordmark.IsVisible)
         {
             ParkWordmarkSheen();
             return false;
