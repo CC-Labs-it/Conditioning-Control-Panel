@@ -706,6 +706,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.ClearFreezeVisuals();
             ChaosRipples.Clear();
             ChaosResidues.Clear();   // WPF EndChaosMode :2069
+            RabbitTrails.Clear();
             ChaosRunHost.ClearBodyBuzzHops();
             _hoverScreen = -1;
             _chaosPopped = null;
@@ -1001,6 +1002,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Field.Step();
             TickBoundPairs();
             if (Field.HoldChaos) return;
+            StepRabbitTrails();
             foreach (var b in Field.Bubbles)
             {
                 if (b.Spec is not { IsEscort: true } || b.Popping || b.OrbitFrames == 0 || b.OrbitFrames % 7 != 0 || b.OrbitTarget is not { Popping: false } live) continue;
@@ -1011,6 +1013,44 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.TrailDot(p, 0.35);
                 else ChaosFieldFxOverlay.TrailDot(p, 0.35);
             }
+        }
+
+        /// <summary>Per-rabbit trails (WPF Bubble._trailPts).</summary>
+        internal static readonly Dictionary<AmbientBubble, ChaosRabbitTrails> RabbitTrails = new();
+
+        /// <summary>WPF BubbleService.cs:3929-3951: every rabbit records a point each ~40 DIPs (22 under Skia)
+        /// while Tail-Plug holds, GG sweepers always (amber); each point is mirrored as a trail spark.
+        /// WPF :1763-1780: with Tail-Plug on, a treat or live bubble within 46 px of a trail point pops.</summary>
+        private static void StepRabbitTrails()
+        {
+            double trailSec = ChaosRunHost.State?.RabbitTrailSec ?? 0;
+            var now = Field.Clock();
+            bool skia = ChaosSkiaFxOverlay.Enabled;
+            foreach (var b in Field.Bubbles)
+            {
+                if (b.Spec is not { IsDarter: true } spec) continue;
+                if (!RabbitTrails.TryGetValue(b, out var trail)) RabbitTrails[b] = trail = new ChaosRabbitTrails();
+                var p = CenterPx(b);
+                double life = spec.IsSweeper ? Math.Max(0.5, trailSec) : trailSec;
+                if (trail.Step(p.X, p.Y, ScaleFor(b), trailSec, spec.IsSweeper, false, b.Popping, skia, now) is not { } d) continue;
+                if (skia) ChaosSkiaFxOverlay.TrailDot(p, life, spec.IsSweeper, d.X, d.Y);
+                else ChaosFieldFxOverlay.TrailDot(p, life, warm: spec.IsSweeper);
+            }
+            foreach (var gone in RabbitTrails.Keys.Where(k => !Field.Bubbles.Contains(k)).ToList()) RabbitTrails.Remove(gone);
+            if (trailSec <= 0) return;
+            const double r2 = 46 * 46;
+            var hits = new List<AmbientBubble>();
+            foreach (var (darter, trail) in RabbitTrails)
+            {
+                if (trail.Points.Count == 0) continue;
+                foreach (var b in Field.Bubbles)
+                {
+                    if (b.Popping || b.Spec is not { IsDarter: false, IsFreeze: false } || ReferenceEquals(b, darter) || hits.Contains(b)) continue;
+                    var c = CenterPx(b);
+                    if (trail.Points.Any(t => (t.X - c.X) * (t.X - c.X) + (t.Y - c.Y) * (t.Y - c.Y) <= r2)) hits.Add(b);
+                }
+            }
+            foreach (var b in hits) PopChaos(b);
         }
 
         private static void Sample(double ms)
