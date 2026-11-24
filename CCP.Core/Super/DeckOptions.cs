@@ -48,6 +48,20 @@ public static class DeckOptions
         return (lo, Math.Max(lo, hi));
     }
 
+    /// <summary>
+    /// The two ends to store for a roll the player set on the sliders. An end equal to what the older
+    /// single slider already rolls (<paramref name="flips"/>, one either side) is stored unset, so
+    /// moving one slider never marks the other as changed and a roll back at stock (3..5) counts as
+    /// no change at all. <see cref="BreakRange(int, int, int)"/> of the result is the same roll.
+    /// </summary>
+    public static (int Fewest, int Most) StoredEnds(int flips, int lo, int hi)
+    {
+        var (followLo, followHi) = BreakRange(flips);
+        lo = ClampRoll(lo);
+        hi = Math.Max(lo, ClampRoll(hi));
+        return (lo == followLo ? RollUnset : lo, hi == followHi ? RollUnset : hi);
+    }
+
     /// <summary>How far the ring travels, in sides of the card that broke.</summary>
     public static double ReachSides(int reachPercent) => StockReachSides * (ClampReach(reachPercent) / 100.0);
 }

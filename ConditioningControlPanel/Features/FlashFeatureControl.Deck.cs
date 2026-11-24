@@ -81,8 +81,10 @@ namespace ConditioningControlPanel.Features
             var (lo, hi) = DeckOptions.BreakRange(s.DeckFlips, s.DeckFlipsFewest, s.DeckFlipsMost);
             if (fewest is int f) { lo = DeckOptions.ClampRoll(f); hi = Math.Max(lo, hi); }
             if (most is int m) { hi = DeckOptions.ClampRoll(m); lo = Math.Min(lo, hi); }
-            s.DeckFlipsFewest = lo;
-            s.DeckFlipsMost = hi;
+            // An end the old single slider already rolls stays unset, so it never reads as "changed".
+            var (storeLo, storeHi) = DeckOptions.StoredEnds(s.DeckFlips, lo, hi);
+            s.DeckFlipsFewest = storeLo;
+            s.DeckFlipsMost = storeHi;
             ShowDeckRoll(s);
             App.Settings?.Save();
         }
