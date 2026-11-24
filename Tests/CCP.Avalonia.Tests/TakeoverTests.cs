@@ -428,6 +428,47 @@ public sealed class TakeoverTests
         }
     });
 
+    [Fact]
+    public Task CompanionBonusOnlyDuringTakeoverDispatchAndStopsOnPanic() => WithArmedShell((shell, _) =>
+    {
+        var s = CoreSettings.Current;
+        var oldPerk = s.CompanionPerk;
+        var oldProgress = s.CompanionProgressData;
+        var oldEnvironment = Environment.GetEnvironmentVariable("CCP_COMPANION_V2");
+        var flash = CoreFlash.ShowProvider;
+        var modifiers = new System.Collections.Generic.List<double>();
+        Action<CompanionId, double, double> onAward = (_, _, modifier) => modifiers.Add(modifier);
+        try
+        {
+            Environment.SetEnvironmentVariable("CCP_COMPANION_V2", "1");
+            s.CompanionPerk = CompanionBonusType.AutonomyBonus;
+            s.CompanionProgressData = new();
+            CompanionCore.XPAwarded += onAward;
+            CompanionCore.AddCompanionXP(1, "outside");
+            CoreFlash.ShowProvider = () => CompanionCore.AddCompanionXP(1, "takeover");
+            shell.PerformAutonomy(AutonomyActionType.Flash);
+            CoreFlash.ShowProvider = () => throw new InvalidOperationException();
+            Assert.Throws<InvalidOperationException>(() => shell.PerformAutonomy(AutonomyActionType.Flash));
+            CompanionCore.AddCompanionXP(1, "after exception");
+            CoreFlash.ShowProvider = () =>
+            {
+                PanicSurfaces.StopAll("test", shell);
+                CompanionCore.AddCompanionXP(1, "after panic");
+            };
+            shell.PerformAutonomy(AutonomyActionType.Flash);
+            shell.PerformAutonomy(AutonomyActionType.Flash);
+            Assert.Equal(new[] { 1.0, 1.5, 1.0, 1.0 }, modifiers);
+        }
+        finally
+        {
+            CompanionCore.XPAwarded -= onAward;
+            CoreFlash.ShowProvider = flash;
+            s.CompanionPerk = oldPerk;
+            s.CompanionProgressData = oldProgress;
+            Environment.SetEnvironmentVariable("CCP_COMPANION_V2", oldEnvironment);
+        }
+    });
+
     /// <summary>overlay-takeover-announcer: an announced action queues the "TAKEOVER" cue (WPF
     /// AutonomyService.cs:961, #534 silent roll shows none), cues play in turn on the real timings,
     /// the window hides when idle, and panic drops the queue and closes the window.</summary>

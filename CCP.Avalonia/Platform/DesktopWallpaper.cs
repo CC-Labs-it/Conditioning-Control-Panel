@@ -111,7 +111,7 @@ internal static class WallpaperHead
     {
         if (!OperatingSystem.IsLinux()) return;
         if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"))) return;
-        Service = new WallpaperHost(new LinuxWallpaperPlatform());
+        Service = new WallpaperHost(new LinuxWallpaperPlatform(), () => RemoteMediaOffer.Offer("wallpaper"));
         _ = Service.RestoreStaleAsync();
     }
 }
