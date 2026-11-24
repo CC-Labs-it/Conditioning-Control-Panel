@@ -18,6 +18,8 @@ public sealed partial class GameWindowTests
         var sent = new List<JObject>();
         race.Posted += json => sent.Add(JObject.Parse(json));
         race.HandleMessage("{\"type\":\"ready\"}");
+        var raceInit = sent.Single(o => (string?)o["type"] == "init");
+        Assert.True((bool)raceInit["caps"]!["prizeCounter"]!);
         sent.Clear();
         race.HandleMessage("{\"type\":\"open-prize-counter\"}");
         Dispatcher.UIThread.RunJobs();
