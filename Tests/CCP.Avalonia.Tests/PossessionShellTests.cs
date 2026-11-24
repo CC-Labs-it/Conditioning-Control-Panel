@@ -581,6 +581,83 @@ public sealed partial class PossessionShellTests
         Assert.Null(effect.Dialog);
     });
 
+    private sealed class FirstDokiTitle : Random
+    {
+        public override int Next(int maxValue) => 0;
+    }
+
+    [Fact]
+    public void DokiDialog_UsesBambiTitleOnlyForBambiAndNamesTheWindow() => Run(rig =>
+    {
+        var oldProvider = CoreMods.ActiveModIdProvider;
+        try
+        {
+            foreach (var mod in new[] { BuiltInMods.BambiSleepId.ToUpperInvariant(), BuiltInMods.CCPDefaultId })
+            {
+                CoreMods.ActiveModIdProvider = () => mod;
+                string? named = null;
+                var ctx = new PossessionContext
+                {
+                    Host = rig.Shell, Attribution = new ImmediateAttribution(), Rung = PossessionRung.ItKnows,
+                    Intensity = PossessionIntensity.FullDoki, Photosafe = false, Rng = new FirstDokiTitle(),
+                    ElapsedFraction = .9, Remaining = TimeSpan.FromMinutes(1), Name = (_, name) => named = name
+                };
+                var effect = new DokiDialogEffect();
+                effect.ApplyAsync(ctx, null, CancellationToken.None).GetAwaiter().GetResult();
+                var dialog = Assert.IsType<Window>(effect.Dialog);
+                var expected = mod == BuiltInMods.CCPDefaultId ? "possession_doki_title_1" : "possession_doki_title_bambi";
+                Assert.NotEqual(expected, Loc.Get(expected));
+                Assert.Equal(Loc.Get(expected), dialog.Title);
+                Assert.Equal(Loc.Get("possession_doki_window"), named);
+                effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+                Assert.False(dialog.IsVisible);
+            }
+        }
+        finally { CoreMods.ActiveModIdProvider = oldProvider; }
+    });
+
+    [Fact]
+    public void DokiDialog_BarkNamesTheWindow() => Run(rig =>
+    {
+        string? named = null;
+        var ctx = new PossessionContext
+        {
+            Host = rig.Shell, Attribution = new ImmediateAttribution(), Rung = PossessionRung.ItKnows,
+            Intensity = PossessionIntensity.FullDoki, Photosafe = false, Rng = new Random(1),
+            ElapsedFraction = .9, Remaining = TimeSpan.FromMinutes(1), Name = (_, name) => named = name
+        };
+        var effect = new DokiDialogEffect();
+        effect.ApplyAsync(ctx, null, CancellationToken.None).GetAwaiter().GetResult();
+        Assert.NotEqual("possession_doki_window", Loc.Get("possession_doki_window"));
+        Assert.Equal(Loc.Get("possession_doki_window"), named);
+        effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+    });
+
+    [Fact]
+    public void DokiDialog_PanicSurfaceClosesTheLiveWindow() => Run(rig =>
+    {
+        rig.Lockdown.Activate(TimeSpan.FromMinutes(30));
+        Frame();
+        typeof(PossessionDirector).GetField("_nextDue", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(rig.Director, DateTime.MaxValue);
+        rig.Clock += TimeSpan.FromMinutes(27);
+        Tick(rig.Lockdown);
+        Frame();
+        var effect = new DokiDialogEffect();
+        var effects = (List<IPossessionEffect>)typeof(PossessionDirector).GetField("_effects", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(rig.Director)!;
+        effects.Clear(); effects.Add(effect);
+        rig.Director.RequestReactive("dokidialog", null);
+        Dispatcher.UIThread.RunJobs();
+        rig.Frames.Frame(TimeSpan.FromMilliseconds(1000));
+        rig.Frames.Frame(TimeSpan.FromMilliseconds(1500));
+        Dispatcher.UIThread.RunJobs();
+        var dialog = Assert.IsType<Window>(effect.Dialog);
+        Assert.True(dialog.IsVisible);
+        AvApp.Possession = rig.Director;
+        PanicSurfaces.All.Single(s => s.Id == "possession").Stop(rig.Shell);
+        Assert.False(dialog.IsVisible);
+        Assert.Null(effect.Dialog);
+    }, s => s.LockdownPossessionIntensity = 2);
+
     [Fact]
     public void DokiDialog_ProgressAdmitsNothingHappened_AndFailsafeCloses() => Run(rig =>
     {
