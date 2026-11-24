@@ -290,6 +290,23 @@ namespace ConditioningControlPanel
             return sb.ToString();
         }
 
+        /// <summary>The last connect press that failed, kept until a connect works or is pressed again, so
+        /// every repaint (the connect's own finally, a language switch) shows the failure and its hint in
+        /// the current language instead of a plain "Disconnected".</summary>
+        internal sealed record HapticConnectFailure(string StatusKey, string? DetailKey, string? Detail);
+
+        private HapticConnectFailure? _hapticConnectFailure;
+
+        /// <summary>The status line and the device line for a connection state, in the current language.</summary>
+        internal static (string Status, string Devices) HapticConnectionLines(bool connected, int deviceCount,
+            string providerName, HapticConnectFailure? failure)
+        {
+            if (!connected && failure != null)
+                return (Loc.Get(failure.StatusKey), failure.DetailKey != null ? Loc.Get(failure.DetailKey) : failure.Detail ?? "");
+            return (Loc.Get(connected ? "label_connected" : "label_disconnected"),
+                deviceCount == 0 ? Loc.Get("label_no_devices") : Loc.GetF("haptics_devices_merged", deviceCount, providerName));
+        }
+
         /// <summary>Status dot, status text, device summary, connect button and provider chips.</summary>
         internal void RefreshHapticConnectionUi()
         {
@@ -297,17 +314,16 @@ namespace ConditioningControlPanel
 
             var haptics = App.Haptics;
             var connected = haptics?.IsConnected == true;
+            if (connected) _hapticConnectFailure = null;
 
-            HapticsTab.TxtHapticStatus.Text = Loc.Get(connected ? "label_connected" : "label_disconnected");
+            var count = haptics?.DeviceManager.Devices.Count ?? 0;
+            var (statusText, devicesText) = HapticConnectionLines(connected, count, haptics?.ProviderName ?? "", _hapticConnectFailure);
+            HapticsTab.TxtHapticStatus.Text = statusText;
             var statusColor = connected ? Color.FromRgb(0x00, 0xE6, 0x76) : Color.FromRgb(0xFF, 0x6B, 0x6B);
             HapticsTab.TxtHapticStatus.Foreground = new SolidColorBrush(statusColor);
             HapticsTab.HapticStatusDot.Fill = new SolidColorBrush(statusColor);
             HapticsTab.BtnHapticConnect.Content = Loc.Get(connected ? "btn_disconnect" : "btn_connect");
-
-            var count = haptics?.DeviceManager.Devices.Count ?? 0;
-            HapticsTab.TxtHapticDevices.Text = count == 0
-                ? Loc.Get("label_no_devices")
-                : Loc.GetF("haptics_devices_merged", count, haptics?.ProviderName ?? "");
+            HapticsTab.TxtHapticDevices.Text = devicesText;
 
             var v2 = HapticCfg.V2;
             foreach (var chip in _hapticProviderChips)
@@ -699,22 +715,17 @@ namespace ConditioningControlPanel
 
             HapticsTab.BtnHapticConnect.Content = Loc.Get("login_connecting");
             HapticsTab.BtnHapticConnect.IsEnabled = false;
+            _hapticConnectFailure = null;
             try
             {
                 var success = await App.Haptics.ConnectAsync();
                 RefreshHapticToys();
-                if (!success)
-                {
-                    HapticsTab.TxtHapticStatus.Text = Loc.Get("label_failed");
-                    HapticsTab.TxtHapticStatus.Foreground =
-                        new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x6B));
-                    HapticsTab.TxtHapticDevices.Text = Loc.Get("haptics_connect_failed_hint");
-                }
+                // Kept, so the repaint below (and a later language switch) shows the failure, not "Disconnected".
+                if (!success) _hapticConnectFailure = new HapticConnectFailure("label_failed", "haptics_connect_failed_hint", null);
             }
             catch (Exception ex)
             {
-                HapticsTab.TxtHapticStatus.Text = Loc.Get("label_error");
-                HapticsTab.TxtHapticDevices.Text = ex.Message;
+                _hapticConnectFailure = new HapticConnectFailure("label_error", null, ex.Message);
             }
             finally
             {
