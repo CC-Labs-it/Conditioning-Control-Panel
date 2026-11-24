@@ -219,7 +219,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
             {
                 Volatile.Write(ref playing, 1);
                 // The bug report's last section (#4076): every sound, engine on or off.
-                ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("oneshot:" + tag, path, CoreEngine.IsRunning, false, DateTime.Now);
+                ConditioningControlPanel.Services.Audio.RecentSounds.Shared.Note("oneshot:" + tag, path, CoreEngine.IsRunning || ConditioningControlPanel.CoreSession.IsSessionRunning, false, DateTime.Now);
                 // Setting volume before Play, or inside this libvlc event, is lost: the pulse
                 // output only takes it once it exists, from a thread that is not libvlc's own.
                 ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) { if (volume != 0f) ApplyPreferredDevice(player); player.Volume = vol; } });
@@ -611,8 +611,9 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 foreach (var si in DuckRecovery.ParseSinkInputs(_pactl("-f json list sink-inputs")))
                 {
                     if (si.Pid == Environment.ProcessId) continue;
-                    // WPF AudioService.cs:1021-1041. WebKit audio runs in a child process.
-                    if ((CoreSettings.Current?.ExcludeBambiCloudFromDucking ?? true)
+                    // WPF AudioService.cs:1021-1041. WebKit audio runs in a child process; a browser video
+                    // session is the app's own audio, so it is never swept (WPF :1030-1031).
+                    if (((CoreSettings.Current?.ExcludeBambiCloudFromDucking ?? true) || BrowserVideoSurface.SessionActive)
                         && (si.Name.StartsWith("WebKit", StringComparison.Ordinal)
                             || si.Name.Contains("webview2", StringComparison.OrdinalIgnoreCase))) continue;
                     var index = si.Index;
