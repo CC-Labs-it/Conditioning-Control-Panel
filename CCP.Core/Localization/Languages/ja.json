@@ -7496,6 +7496,7 @@
   "launcher_game_dtrh_title": "Down the Rabbit Hole",
   "launcher_game_dtrh_blurb": "降下。落ちて、変わって戻る。",
   "launcher_game_arcademy_title": "The Arcademy",
+  "arcademy_audio_only_refused": "音声のみのセッションが実行中です。終了するまでArcademyは閉まっています。",
   "launcher_game_arcademy_blurb": "ゲームのように遊べるレッスン。",
   "rf_play_zone_games": "ゲーム",
   "launcher_game_breakoutdemo_title": "Breakout デモ",

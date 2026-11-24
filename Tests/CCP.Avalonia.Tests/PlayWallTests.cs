@@ -204,12 +204,15 @@ public sealed class PlayWallTests
                     .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
             var view = new PlayTabView();
             T C<T>(string name) where T : Control => view.FindControl<T>(name)!;
-            foreach (var name in new[] { "BackRoom", "Arcademy" })
+            foreach (var name in new[] { "BackRoom" })
             {
                 var button = C<Button>("BtnPlay" + name);
                 Assert.False(button.IsEnabled);
                 Assert.Equal(Loc.Get("exclusives_not_on_this_build"), ToolTip.GetTip(button));
             }
+            // The Arcademy host is registered (GameWindow.Arcademy.cs), so its card is live.
+            Assert.True(C<Button>("BtnPlayArcademy").IsEnabled);
+            Assert.Null(ToolTip.GetTip(C<Button>("BtnPlayArcademy")));
             var games = (Panel)C<Grid>("SlotBackRoom").Parent!;
             Assert.Equal(3, ((global::Avalonia.Controls.Primitives.UniformGrid)games).Columns);
             Assert.Equal(new[] { "SlotBackRoom", "SlotDtrh", "SlotArcademy", "SlotRacingThoughts", "SlotRacingThoughtsClassic", "SlotWebApp" },
@@ -450,11 +453,12 @@ public sealed class PlayWallTests
                 Assert.Equal(Loc.Get("pl6_play_subtitle"), Assert.IsType<TextBlock>(wall.Children[0]).Text);
 
                 // Hostless doors refuse honestly; the T2 bands follow the tier.
-                foreach (var n in new[] { "BtnPlayBackRoom", "BtnPlayArcademy" })
+                foreach (var n in new[] { "BtnPlayBackRoom" })
                 {
                     Assert.False(C<Button>(n).IsEnabled, n);
                     Assert.Equal(Loc.Get("exclusives_not_on_this_build"), ToolTip.GetTip(C<Button>(n)));
                 }
+                Assert.True(C<Button>("BtnPlayArcademy").IsEnabled);   // the Arcademy host is registered
                 Assert.True(C<Border>("PlayLockDtrh").IsVisible);
                 Assert.True(C<Border>("PlayLockArcademy").IsVisible);
                 Assert.True(C<Border>("PlayLockRacingThoughts").IsVisible);

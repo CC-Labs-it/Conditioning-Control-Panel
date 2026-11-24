@@ -7496,6 +7496,7 @@
   "launcher_game_dtrh_title": "Down the Rabbit Hole",
   "launcher_game_dtrh_blurb": "La descente. Tombe dedans, le retour te change.",
   "launcher_game_arcademy_title": "L'Arcademy",
+  "arcademy_audio_only_refused": "Une session audio seule est en cours. L'Arcademy reste fermée jusqu'à sa fin.",
   "launcher_game_arcademy_blurb": "Des leçons qui se jouent comme un jeu.",
   "rf_play_zone_games": "JEUX",
   "launcher_game_breakoutdemo_title": "Démo Breakout",
