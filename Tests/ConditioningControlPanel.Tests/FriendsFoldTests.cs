@@ -138,13 +138,13 @@ public partial class FriendsDrawerTests
         {
             try
             {
-                var leash = new Controls.Leash.FakeLeashService(LeashWith(Held("ada", "Ada")));
+                var leash = new Controls.Leash.FakeLeashService(NoOffer(LeashWith(Held("ada", "Ada"))));
                 Controls.Leash.LeashLocator.Service = () => leash;
                 var d = NewDrawer(new FakeFriends(Sample()));
                 d.IsOpen = true;
                 d.Render();
 
-                // Folded on a first look: one header line, who is on the leash, no bubble for what was already there.
+                // Folded on a first look (no offer waiting): one header line, who is on the leash, no bubble for what was already there.
                 Assert.Equal(Visibility.Visible, d.LeashFold.Visibility);
                 Assert.Equal(0, d.LeashBadge);
                 Assert.Null(Find(d.LeashFold, "friends-fold-badge"));
@@ -155,7 +155,7 @@ public partial class FriendsDrawerTests
                 Assert.False(IsShown(d, "leash-section"));
 
                 // Bo's task got done: the bubble says 1.
-                leash.Snapshot = LeashWith(Held("ada", "Ada"), Held("bo", "Bo"));
+                leash.Snapshot = NoOffer(LeashWith(Held("ada", "Ada"), Held("bo", "Bo")));
                 Assert.Equal(1, d.LeashBadge);
                 Assert.NotNull(Find(d.LeashFold, "friends-fold-badge"));
 
@@ -165,6 +165,65 @@ public partial class FriendsDrawerTests
                 Assert.Equal(0, d.LeashBadge);
                 d.ToggleLeash();
                 Assert.Equal(0, d.LeashBadge);
+                Layout(d);
+            }
+            finally { Controls.Leash.LeashLocator.Service = () => null; }   // never the saved getter: it reads itself (stack overflow)
+        });
+    }
+
+    private static LeashSnapshot NoOffer(LeashSnapshot s) => s with { Offers = Array.Empty<LeashOffer>() };
+
+    [Fact]
+    public void Live_offer_rule_opens_the_leash_without_the_stored_switch()
+    {
+        var snap = LeashWith(Held("ada", "Ada"));
+        var live = FriendsFold.LiveOfferKeys(snap, FoldNow);
+        Assert.Equal(new[] { "o:o1" }, live);
+        Assert.Empty(FriendsFold.LiveOfferKeys(snap, FoldNow.AddDays(2)));   // past its life: no longer opens anything
+        Assert.True(FriendsFold.LeashShownOpen(false, live, new HashSet<string>()));
+        Assert.False(FriendsFold.LeashShownOpen(false, live, new HashSet<string> { "o:o1" }));
+        Assert.False(FriendsFold.LeashShownOpen(false, Array.Empty<string>(), new HashSet<string>()));
+        Assert.True(FriendsFold.LeashShownOpen(true, Array.Empty<string>(), new HashSet<string>()));
+    }
+
+    [Fact]
+    public void An_incoming_offer_opens_the_folded_leash_by_itself()
+    {
+        WpfRenderHarness.OnStaThread(() =>
+        {
+            try
+            {
+                var leash = new Controls.Leash.FakeLeashService(NoOffer(LeashWith(Held("ada", "Ada"))));
+                Controls.Leash.LeashLocator.Service = () => leash;
+                var d = NewDrawer(new FakeFriends(Sample()));
+                d.IsOpen = true;
+                d.Render();
+                Assert.False(IsShown(d, "leash-section"));
+
+                // Kit's offer arrives: the fold opens, the stored switch is untouched.
+                leash.Snapshot = LeashWith(Held("ada", "Ada"));
+                Assert.True(IsShown(d, "leash-section"));
+                Assert.Equal(0, d.LeashBadge);
+                Assert.False(FriendsFold.State.LeashOpen);
+
+                // The player folds it: it stays folded for that offer, the stored switch still off.
+                d.ToggleLeash();
+                Assert.False(IsShown(d, "leash-section"));
+                Assert.False(FriendsFold.State.LeashOpen);
+                leash.Snapshot = LeashWith(Held("ada", "Ada"));
+                Assert.False(IsShown(d, "leash-section"));
+
+                // A press opens it the player's way (stored), and folding it again turns that off.
+                d.ToggleLeash();
+                Assert.True(IsShown(d, "leash-section"));
+                Assert.True(FriendsFold.State.LeashOpen);
+                d.ToggleLeash();
+                Assert.False(FriendsFold.State.LeashOpen);
+                Assert.False(IsShown(d, "leash-section"));
+
+                // The offer gone, nothing pending: the leash stays folded.
+                leash.Snapshot = NoOffer(LeashWith(Held("ada", "Ada")));
+                Assert.False(IsShown(d, "leash-section"));
                 Layout(d);
             }
             finally { Controls.Leash.LeashLocator.Service = () => null; }   // never the saved getter: it reads itself (stack overflow)

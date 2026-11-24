@@ -1663,12 +1663,13 @@ namespace ConditioningControlPanel
 
         private void HandlePanicKeyPress()
         {
+            // A promo card goes at once on every rung, a game's Escape pause included: it is topmost, so
+            // it must not stay up over a paused game (the stop pass closes it again; both are idempotent).
+            try { PromoCardWindow.CloseForPanic(); } catch (Exception ex) { Diag.Swallowed(ex); }
             // Racing Thoughts' pause, BEFORE everything below: a pause is not a panic, so it must not
             // arm EMI's silence, the Chaster safety hold or the stop pass.
             if (TryRacePauseOnEscape()) return;
             Services.FirstShow.FirstShowService.Stop();
-            // A promo card goes at once on every rung (the stop pass closes it again; both are idempotent).
-            try { PromoCardWindow.CloseForPanic(); } catch (Exception ex) { Diag.Swallowed(ex); }
             // The Sparkles flight and its bells stop, the wallet snaps to its balance, nothing stays owed.
             try { Services.Prizes.SparkleFlightDirector.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             // The weekly free Super try ends with a cut, before any hand-off below can return early.

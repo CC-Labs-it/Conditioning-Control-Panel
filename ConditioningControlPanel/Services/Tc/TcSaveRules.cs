@@ -31,6 +31,20 @@ internal static class TcSaveRules
     public static bool SignedIn(string? unifiedId, string? token)
         => !string.IsNullOrWhiteSpace(unifiedId) && !string.IsNullOrWhiteSpace(token);
 
+    /// <summary><c>caps.saveSlot</c>: a signed-in account with Offline mode off (Offline mode disables every
+    /// network feature, the same way this host's pictures and Expo stand down).</summary>
+    public static bool SlotOpen(string? unifiedId, string? token, bool offlineMode)
+        => !offlineMode && SignedIn(unifiedId, token);
+
+    /// <summary>The answer a save call gets before any request is built, or null when it may go out:
+    /// Offline mode = <c>offline</c> (no request leaves), no account = <c>sign-in</c>.</summary>
+    public static JObject? RefuseBeforeSend(string? unifiedId, string? token, bool offlineMode)
+    {
+        if (offlineMode) return Result(false, ReasonOffline);
+        if (!SignedIn(unifiedId, token)) return Result(false, ReasonSignIn);
+        return null;
+    }
+
     public static JObject Result(bool ok, string? reason = null)
     {
         var o = new JObject { ["type"] = "save-result", ["ok"] = ok };

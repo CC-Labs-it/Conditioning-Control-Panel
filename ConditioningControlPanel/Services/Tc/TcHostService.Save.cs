@@ -28,8 +28,9 @@ internal static partial class TcHostService
         return c;
     }
 
-    /// <summary><c>caps.saveSlot</c>: true only for a signed-in account (the slot is keyed on it).</summary>
-    private static bool SaveSlotOpen => TcSaveRules.SignedIn(App.UnifiedUserId, SafeAuthToken());
+    /// <summary><c>caps.saveSlot</c>: true only for a signed-in account (the slot is keyed on it) with
+    /// Offline mode off.</summary>
+    private static bool SaveSlotOpen => TcSaveRules.SlotOpen(App.UnifiedUserId, SafeAuthToken(), SafeOfflineMode());
 
     private static string SafeAuthToken()
     {
@@ -37,12 +38,18 @@ internal static partial class TcHostService
         catch { return string.Empty; }
     }
 
+    private static bool SafeOfflineMode()
+    {
+        try { return App.Settings?.Current?.OfflineMode == true; }
+        catch { return false; }
+    }
+
     /// <summary><c>save-offer</c> (already within the gate's size caps) -&gt; PUT -&gt; <c>save-result</c>.</summary>
     private static void OnSaveOffer(TcPageFrame f)
     {
         var uid = App.UnifiedUserId;
         var token = SafeAuthToken();
-        if (!TcSaveRules.SignedIn(uid, token)) { PostSave(TcSaveRules.Result(false, TcSaveRules.ReasonSignIn)); return; }
+        if (TcSaveRules.RefuseBeforeSend(uid, token, SafeOfflineMode()) is { } refused) { PostSave(refused); return; }
         var body = TcSaveRules.PutBody(uid!, f.Save ?? "");
         _ = SendSaveAsync(HttpMethod.Put, TcSaveRules.Path, body, token, TcSaveRules.MapPut);
     }
@@ -52,7 +59,7 @@ internal static partial class TcHostService
     {
         var uid = App.UnifiedUserId;
         var token = SafeAuthToken();
-        if (!TcSaveRules.SignedIn(uid, token)) { PostSave(TcSaveRules.Result(false, TcSaveRules.ReasonSignIn)); return; }
+        if (TcSaveRules.RefuseBeforeSend(uid, token, SafeOfflineMode()) is { } refused) { PostSave(refused); return; }
         _ = SendSaveAsync(HttpMethod.Get, TcSaveRules.GetPath(uid!), null, token, TcSaveRules.MapGet);
     }
 

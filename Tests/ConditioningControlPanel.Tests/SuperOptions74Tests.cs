@@ -260,6 +260,36 @@ public class SuperOptions74Tests
         Assert.Equal(6, seen.Count);
     }
 
+    [Fact]
+    public void Deck_slider_moves_store_only_the_ends_that_differ_from_the_old_slider()
+    {
+        // Stock settings (3..5): one touch of "Fewest" to 2 marks that end only; the other stays unset.
+        var s = new AppSettings();
+        (s.DeckFlipsFewest, s.DeckFlipsMost) = DeckOptions.StoredEnds(s.DeckFlips, 2, 5);
+        Assert.Equal(2, s.DeckFlipsFewest);
+        Assert.Equal(DeckOptions.RollUnset, s.DeckFlipsMost);
+
+        // Back to 3: both ends are stock again, so nothing reads as changed against a fresh settings object.
+        (s.DeckFlipsFewest, s.DeckFlipsMost) = DeckOptions.StoredEnds(s.DeckFlips, 3, 5);
+        var stock = new AppSettings();
+        Assert.Equal(stock.DeckFlipsFewest, s.DeckFlipsFewest);
+        Assert.Equal(stock.DeckFlipsMost, s.DeckFlipsMost);
+
+        // Whatever is stored, the deck rolls exactly what the sliders showed.
+        for (int f = DeckOptions.FlipsMin; f <= DeckOptions.FlipsMax; f++)
+            for (int lo = DeckOptions.RollMin; lo <= DeckOptions.RollMax; lo++)
+                for (int hi = lo; hi <= DeckOptions.RollMax; hi++)
+                {
+                    var (sf, sm) = DeckOptions.StoredEnds(f, lo, hi);
+                    Assert.Equal((lo, hi), DeckOptions.BreakRange(f, sf, sm));
+                }
+
+        // The page writes through that rule, never both raw ends.
+        var page = File.ReadAllText(Path.Combine(Root(), "Features", "FlashFeatureControl.Deck.cs"));
+        Assert.Contains("DeckOptions.StoredEnds(s.DeckFlips, lo, hi)", page);
+        Assert.DoesNotContain("s.DeckFlipsFewest = lo;", page);
+    }
+
     private static string Root()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
