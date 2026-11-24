@@ -25,6 +25,7 @@ public class AbsenceGreetingTests
     [Fact]
     public void BuildPicksTheTierAndNamesTheUser()
     {
+        ConditioningControlPanel.Localization.LocalizationManager.Instance.SetLanguage("en");
         Assert.Null(AbsenceGreeting.Build(null, Now, "Mia", new Random(1)));
         var tiers = new (double Hours, string[] Lines)[]
         {
@@ -56,4 +57,43 @@ public class AbsenceGreetingTests
     [InlineData(400, 100, 365, true)]
     public void StreakMilestoneAnnouncesOnlyANewHigherMilestone(int streak, int announced, int? latch, bool announce) =>
         Assert.Equal((latch, announce), AbsenceGreeting.StreakMilestone(streak, announced));
+    [Fact]
+    public void LapseNeedsConfirmationAndIsOncePerClosure()
+    {
+        var s = new ConditioningControlPanel.Models.AppSettings { GraceClosedTier = 2, GraceClosedAtUtc = Now.AddHours(-1) };
+        var reading = AbsenceGreeting.Lapse(s, Now, true, false, _ => false);
+        Assert.NotNull(reading);
+        Assert.Equal(2, reading.Value.Tier);
+        Assert.Null(AbsenceGreeting.Lapse(s, Now, false, false, _ => false));
+        Assert.Null(AbsenceGreeting.Lapse(s, Now, true, false, _ => true));
+        ConditioningControlPanel.Services.Startup.Conversion.ConversionRules.Stamp(s.InboxStamps,
+            ConditioningControlPanel.Services.Startup.Conversion.ConversionRules.KeyLapseGreeting, reading.Value.Stamp);
+        Assert.Null(AbsenceGreeting.Lapse(s, Now, true, false, _ => false));
+    }
+
+    [Fact]
+    public void AllLanguagesContainLocalizedGreetingTemplates()
+    {
+        var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try
+        {
+            foreach (var (code, _, _) in ConditioningControlPanel.Localization.LocalizationManager.AvailableLanguages)
+            {
+                var path = System.IO.Path.Combine(AppContext.BaseDirectory, "Localization", "Languages", code + ".json");
+                var entries = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, string>>(System.IO.File.ReadAllText(path))!;
+                loc.SetLanguage(code);
+                for (int bucket = 1; bucket <= 6; bucket++)
+                    for (int variant = 1; variant <= 3; variant++)
+                    {
+                        var key = $"avatar_greeting_{bucket}_{variant}";
+                        Assert.True(entries.TryGetValue(key, out var value), $"{code}: {key}");
+                        Assert.Equal(value, loc.Get(key));
+                    }
+                for (int i = 1; i <= 3; i++) Assert.Contains("{tier}", entries[$"avatar_lapse_{i}"]);
+            }
+        }
+        finally { loc.SetLanguage(previous); }
+    }
+
 }

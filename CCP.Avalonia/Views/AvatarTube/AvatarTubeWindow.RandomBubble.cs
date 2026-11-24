@@ -12,6 +12,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Services.Safety;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
@@ -55,6 +56,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal void RandomBubbleTick()
         {
             if (_randomBubbleTimer != null) _randomBubbleTimer.Interval = TimeSpan.FromSeconds(_random.Next(180, 301));
+            if (PanicAftermath.TriggersSilenced()) return;
             if (!AppHasFocus()) { Log.Debug("RandomBubble: skipped, app not in focus"); return; }
             GiggleFromCategory("RandomBubble");
             // The line shows first, the bubble a second later (WPF Speech.cs:1782).
@@ -66,6 +68,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         internal void SpawnRandomBubble()
         {
+            if (PanicAftermath.TriggersSilenced()) return;
             try
             {
                 var center = _avatarBorder.TranslatePoint(new Point(_avatarBorder.Bounds.Width / 2, _avatarBorder.Bounds.Height / 2), this) ?? default;

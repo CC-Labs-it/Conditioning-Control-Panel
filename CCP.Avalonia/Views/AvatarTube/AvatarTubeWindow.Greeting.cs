@@ -1,12 +1,18 @@
 // PORTED from ConditioningControlPanel/AvatarTube/AvatarTubeWindow.Speech.cs:2558-2665 (ShowGreeting,
 // CheckStreakMilestoneGreeting) and its 2 s timer (AvatarTubeWindow.xaml.cs:343-353); the pure half is Core
-// AbsenceGreeting. Not ported: the lapse line (Speech.cs:2746 TakeLapseGreeting) and per-phrase audio
+// AbsenceGreeting. Not ported: per-phrase audio
 // overrides (Speech.cs:2291-2297); the mod event-audio fallback is.
 
 using System;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.Awareness;
 using ConditioningControlPanel.Services.Companion;
+using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Startup.Conversion;
+using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Windows;
+using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 {
@@ -41,7 +47,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             bool spoke = bark?.Raise("AppOpened", c => c.Set("away_bucket", AbsenceGreeting.AwayBucket(lastSeen, now))) ?? false;
             if (!spoke)
             {
-                var greeting = AbsenceGreeting.Build(lastSeen, now, CoreAccount.DisplayName, _random);
+                var greeting = lastSeen is { } seen && now - seen >= TimeSpan.FromDays(3)
+                    ? TakeLapseGreeting(now) ?? AbsenceGreeting.Build(lastSeen, now, CoreAccount.DisplayName, _random)
+                    : AbsenceGreeting.Build(lastSeen, now, CoreAccount.DisplayName, _random);
                 if (greeting == null) GiggleFromCategory("StartupGreeting");
                 else Giggle(greeting);
             }
@@ -51,6 +59,28 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             s.LastAnnouncedStreakMilestone = reached;
             CoreSettings.Save(suppressCloudBackup: true);
             if (announce) bark.Raise("StreakMilestone", c => c.Set("streak_days", (double)reached), guaranteed: true);
+        }
+
+        // WPF Speech.cs:2746: only a server-confirmed closed tier, once per closure.
+        internal string? TakeLapseGreeting(DateTime now)
+        {
+            try
+            {
+                var s = CoreSettings.Current;
+                var reading = AbsenceGreeting.Lapse(s, now, EntitlementRefresh.ServerAnsweredThisRun,
+                    AccountSeed.Patreon?.GrantLooksDead == true, MainShellWindow.LiveCoversLapse);
+                if (reading is not { } lapse) return null;
+                const string key = ConversionRules.KeyLapseGreeting;
+                var tier = lapse.Tier >= 2 ? "Prime" : "Basic";
+                var line = Loc.Get("avatar_lapse_" + _random.Next(1, 4)).Replace("{tier}", tier);
+                var stamp = lapse.Stamp;
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (ConversionRules.Stamp(CoreSettings.Current.InboxStamps, key, stamp)) CoreSettings.Save();
+                });
+                return AbsenceGreeting.FormatName(line, CoreAccount.DisplayName);
+            }
+            catch (Exception ex) { Log.Debug(ex, "Lapse greeting skipped"); return null; }
         }
 
         /// <summary>WPF GiggleFromCategory (Speech.cs:2279): an enabled phrase of the category, with the mod's

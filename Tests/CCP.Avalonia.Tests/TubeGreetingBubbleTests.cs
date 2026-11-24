@@ -171,11 +171,19 @@ public sealed class TubeGreetingBubbleTests
             Assert.Empty(tube.RandomBubbles);
             Assert.False(live.Window.IsVisible);
             Assert.Single(xp);
+            // The real panic handler arms the shared quiet before stopping surfaces.
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            tube.RandomBubbleTick();
+            tube.SpawnRandomBubble();
+            Assert.Empty(tube.RandomBubbles);
+            Assert.Equal(0, tube.QueuedSpeechCount);
+            Assert.False(tube.FindControl<Border>("SpeechBubble")!.IsVisible);
         }
         finally
         {
             tube.Close();
             s.CustomCompanionPhrases.Remove(phrase);
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
             (s.RandomBubbleEnabled, s.AvatarMuted, AvatarTubeWindow.AppHasFocus, CoreProgression.AddXPProvider, AvatarTubeWindow.TestLive, CoreAudio.PlayOneShotProvider) = saved;
         }
         Assert.False(tube.RandomBubbleTimerRunning);         // closing the tube stops the loop
@@ -223,4 +231,20 @@ public sealed class TubeGreetingBubbleTests
         }
         return Task.CompletedTask;
     });
+    [Fact]
+    public void WindowsFullscreenProbeUsesWpfRulesAndPlatformRoute()
+    {
+        var r = new Win32AwarenessForegroundProbe.Rect { Left = 0, Top = 0, Right = 1920, Bottom = 1080 };
+        const int popup = unchecked((int)0x80000000);
+        Assert.True(Win32AwarenessForegroundProbe.TubeFullscreen(2, 1, "GameWindow", popup, 8, r, r));
+        Assert.False(Win32AwarenessForegroundProbe.TubeFullscreen(1, 1, "GameWindow", popup, 8, r, r));
+        Assert.False(Win32AwarenessForegroundProbe.TubeFullscreen(2, 1, "Chrome_WidgetWin_1", popup, 8, r, r));
+        Assert.False(Win32AwarenessForegroundProbe.TubeFullscreen(2, 1, "GameWindow", popup, 0, r, r));
+        Assert.False(Win32AwarenessForegroundProbe.TubeFullscreen(2, 1, "GameWindow", popup | 0x00c00000, 8, r, r));
+        var small = new Win32AwarenessForegroundProbe.Rect { Left = 0, Top = 0, Right = 100, Bottom = 100 };
+        Assert.False(Win32AwarenessForegroundProbe.TubeFullscreen(2, 1, "GameWindow", popup, 8, small, r));
+        Assert.True(AvatarTubeWindow.ReadOtherAppFullscreen(true, () => true, () => false));
+        Assert.False(AvatarTubeWindow.ReadOtherAppFullscreen(false, () => true, () => false));
+    }
+
 }

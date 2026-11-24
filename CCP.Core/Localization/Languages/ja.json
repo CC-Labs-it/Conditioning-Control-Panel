@@ -8532,5 +8532,12 @@
   "remote_invalid_hypnotube_url": "有効なHypnoTube動画のURLではありません",
   "remote_browser_unavailable": "ブラウザーで開けませんでした",
   "remote_browser_screen_busy": "{0}が画面に表示されています",
-  "chaos_camgirl_tip": "チップ +{0} ゴールド"
+  "chaos_camgirl_tip": "チップ +{0} ゴールド",
+  "avatar_greeting_1_1": "もう戻ったの？ えへへ~ 💕", "avatar_greeting_1_2": "わあ、もう戻ってきたのね！ ✨", "avatar_greeting_1_3": "離れていられなかったの、{name}？ 😘",
+  "avatar_greeting_2_1": "おかえり、{name}！ 💖", "avatar_greeting_2_2": "やった、また会えたね！ ✨", "avatar_greeting_2_3": "また会えたね、かわいこちゃん~ 💕",
+  "avatar_greeting_3_1": "いた！ 会えてうれしい~ 💕", "avatar_greeting_3_2": "おかえり、{name}！ ✨", "avatar_greeting_3_3": "えへへ、また会えたね！ 💖",
+  "avatar_greeting_4_1": "やった、戻ってきたね！ 💕", "avatar_greeting_4_2": "来てくれてうれしい、{name}！ ✨", "avatar_greeting_4_3": "こんにちは！ 一緒に楽しもう~ 💖",
+  "avatar_greeting_5_1": "誰が戻ったのかな！ 💕", "avatar_greeting_5_2": "また会えてうれしい、{name}！ ✨", "avatar_greeting_5_3": "おかえり、素敵なあなた~ 💖",
+  "avatar_greeting_6_1": "久しぶりね、おかえり！ 💕✨", "avatar_greeting_6_2": "おかえり、{name}！ 会えてうれしい！ 💖", "avatar_greeting_6_3": "おかえり！ 続きから始めよう~ ✨",
+  "avatar_lapse_1": "おかえり、{name}。留守の間に{tier}は終了したけれど、設定はすべて残っているよ。 💕", "avatar_lapse_2": "おかえり~ 留守の間に{tier}は終了したけれど、設定は大切に残してあるよ。 ✨", "avatar_lapse_3": "また会えたね、{name}！ {tier}は終了したけれど、何も失われていないよ。 💖"
 }

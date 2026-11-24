@@ -8532,5 +8532,12 @@
   "remote_invalid_hypnotube_url": "недопустимый URL видео HypnoTube",
   "remote_browser_unavailable": "браузеру не удалось открыть страницу",
   "remote_browser_screen_busy": "{0} на экране",
-  "chaos_camgirl_tip": "чаевые +{0} золота"
+  "chaos_camgirl_tip": "чаевые +{0} золота",
+  "avatar_greeting_1_1": "Уже вернулась? Хи-хи~ 💕", "avatar_greeting_1_2": "О, ты так скоро вернулась! ✨", "avatar_greeting_1_3": "Не смогла долго быть вдали, {name}? 😘",
+  "avatar_greeting_2_1": "С возвращением, {name}! 💖", "avatar_greeting_2_2": "Ура, ты снова здесь! ✨", "avatar_greeting_2_3": "Привет снова, милая~ 💕",
+  "avatar_greeting_3_1": "Вот ты где! Рада тебя видеть~ 💕", "avatar_greeting_3_2": "Ты вернулась, {name}! ✨", "avatar_greeting_3_3": "Хи-хи, снова привет! 💖",
+  "avatar_greeting_4_1": "Ура, ты вернулась! 💕", "avatar_greeting_4_2": "Как хорошо, что ты здесь, {name}! ✨", "avatar_greeting_4_3": "Привет! Давай повеселимся~ 💖",
+  "avatar_greeting_5_1": "Посмотри, кто вернулся! 💕", "avatar_greeting_5_2": "Рада снова тебя видеть, {name}! ✨", "avatar_greeting_5_3": "С возвращением, красавица~ 💖",
+  "avatar_greeting_6_1": "Давно не виделись — с возвращением! 💕✨", "avatar_greeting_6_2": "Ты вернулась, {name}! Рада тебя видеть! 💖", "avatar_greeting_6_3": "С возвращением! Продолжим с того же места~ ✨",
+  "avatar_lapse_1": "С возвращением, {name}. Пока тебя не было, {tier} закрылся; все настройки на месте. 💕", "avatar_lapse_2": "Вот ты где~ {tier} закрылся, но я сохранила все твои настройки. ✨", "avatar_lapse_3": "Привет снова, {name}! {tier} закончился, но ничего не потеряно. 💖"
 }

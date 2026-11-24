@@ -341,9 +341,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal bool HiddenForFullscreen => _hiddenForFullscreen;
 
         /// <summary>Seam: another app's window is the active one and covers its monitor (WPF IsOtherAppFullscreen,
-        /// Windowing.cs:367). X11 only; elsewhere and headless it reads null and is never fullscreen.</summary>
-        internal static Func<bool> OtherAppFullscreen = static () =>
-            Platform.X11ActiveWindow.ReadSample() is { IsFullscreen: true } s && !IsOwnWindow(s.Handle) && !FakeFullscreen(s.ProcessName);
+        /// Windowing.cs:367). Routes to the native platform probe.</summary>
+        internal static bool ReadOtherAppFullscreen(bool windows, Func<bool> win32, Func<bool> x11) => windows ? win32() : x11();
+        internal static Func<bool> OtherAppFullscreen = static () => ReadOtherAppFullscreen(OperatingSystem.IsWindows(),
+            Platform.Win32AwarenessForegroundProbe.ReadTubeFullscreen, static () => Platform.X11ActiveWindow.ReadSample() is { IsFullscreen: true } s
+                && !IsOwnWindow(s.Handle) && !FakeFullscreen(s.ProcessName));
 
         /// <summary>Seam: WPF ReassertTopmost's raise (HWND_TOPMOST, no activation).</summary>
         internal static Func<TopLevel, bool> RaiseTopmost = Platform.X11Overlay.RaiseManaged;

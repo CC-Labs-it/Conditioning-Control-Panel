@@ -8532,5 +8532,12 @@
   "remote_invalid_hypnotube_url": "올바른 HypnoTube 동영상 URL이 아닙니다",
   "remote_browser_unavailable": "브라우저에서 열 수 없습니다",
   "remote_browser_screen_busy": "{0}이(가) 화면에 표시되어 있습니다",
-  "chaos_camgirl_tip": "팁 +{0} 골드"
+  "chaos_camgirl_tip": "팁 +{0} 골드",
+  "avatar_greeting_1_1": "벌써 돌아왔어? 헤헤~ 💕", "avatar_greeting_1_2": "와, 이렇게 빨리 돌아왔네! ✨", "avatar_greeting_1_3": "떨어져 있을 수 없었어, {name}? 😘",
+  "avatar_greeting_2_1": "다시 와줘서 반가워, {name}! 💖", "avatar_greeting_2_2": "야호, 다시 왔구나! ✨", "avatar_greeting_2_3": "또 만나네, 귀염둥이~ 💕",
+  "avatar_greeting_3_1": "여기 있었구나! 만나서 반가워~ 💕", "avatar_greeting_3_2": "돌아왔구나, {name}! ✨", "avatar_greeting_3_3": "헤헤, 또 만나네! 💖",
+  "avatar_greeting_4_1": "야호, 돌아왔구나! 💕", "avatar_greeting_4_2": "와줘서 기뻐, {name}! ✨", "avatar_greeting_4_3": "안녕! 같이 즐겁게 놀자~ 💖",
+  "avatar_greeting_5_1": "누가 돌아왔는지 봐! 💕", "avatar_greeting_5_2": "다시 만나서 반가워, {name}! ✨", "avatar_greeting_5_3": "돌아온 걸 환영해, 아름다운 사람~ 💖",
+  "avatar_greeting_6_1": "정말 오랜만이야, 어서 와! 💕✨", "avatar_greeting_6_2": "돌아왔구나, {name}! 만나서 기뻐! 💖", "avatar_greeting_6_3": "어서 와! 멈춘 곳부터 다시 시작하자~ ✨",
+  "avatar_lapse_1": "다시 만나 반가워, {name}. 자리를 비운 동안 {tier}가 종료됐지만 설정은 그대로야. 💕", "avatar_lapse_2": "돌아왔구나~ 없는 동안 {tier}가 종료됐지만 설정은 잘 보관했어. ✨", "avatar_lapse_3": "또 만나네, {name}! {tier}가 끝났지만 잃은 건 없어. 💖"
 }

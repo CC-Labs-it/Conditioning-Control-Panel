@@ -8532,5 +8532,12 @@
   "remote_invalid_hypnotube_url": "no es una URL de video de HypnoTube válida",
   "remote_browser_unavailable": "el navegador no pudo abrirlo",
   "remote_browser_screen_busy": "{0} está en pantalla",
-  "chaos_camgirl_tip": "propina +{0} de oro"
+  "chaos_camgirl_tip": "propina +{0} de oro",
+  "avatar_greeting_1_1": "¿Ya volviste? Jeje~ 💕", "avatar_greeting_1_2": "¡Oh, qué pronto vuelves! ✨", "avatar_greeting_1_3": "¿No pudiste alejarte, {name}? 😘",
+  "avatar_greeting_2_1": "¡Bienvenida de nuevo, {name}! 💖", "avatar_greeting_2_2": "¡Bien, estás aquí otra vez! ✨", "avatar_greeting_2_3": "Hola de nuevo, preciosa~ 💕",
+  "avatar_greeting_3_1": "¡Ahí estás! Qué alegría verte~ 💕", "avatar_greeting_3_2": "¡Has vuelto, {name}! ✨", "avatar_greeting_3_3": "Jeje, ¡hola otra vez! 💖",
+  "avatar_greeting_4_1": "¡Qué bien que volviste! 💕", "avatar_greeting_4_2": "¡Qué alegría verte aquí, {name}! ✨", "avatar_greeting_4_3": "¡Hola! Vamos a divertirnos~ 💖",
+  "avatar_greeting_5_1": "¡Mira quién ha vuelto! 💕", "avatar_greeting_5_2": "¡Qué alegría verte de nuevo, {name}! ✨", "avatar_greeting_5_3": "Bienvenida de nuevo, preciosa~ 💖",
+  "avatar_greeting_6_1": "¡Cuánto tiempo! ¡Bienvenida de nuevo! 💕✨", "avatar_greeting_6_2": "¡Has vuelto, {name}! ¡Qué alegría verte! 💖", "avatar_greeting_6_3": "¡Bienvenida! Sigamos donde lo dejamos~ ✨",
+  "avatar_lapse_1": "Bienvenida de nuevo, {name}. Tu {tier} se cerró mientras no estabas; todo sigue aquí. 💕", "avatar_lapse_2": "Ahí estás~ {tier} se cerró en tu ausencia, y guardé todos tus ajustes. ✨", "avatar_lapse_3": "¡Hola de nuevo, {name}! Tu {tier} terminó; no se ha perdido nada. 💖"
 }
