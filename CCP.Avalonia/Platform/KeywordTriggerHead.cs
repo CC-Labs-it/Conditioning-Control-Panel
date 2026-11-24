@@ -313,6 +313,7 @@ internal sealed class KeywordAudioRuntime
         return true;
     }
     internal string[] GetRecentForegroundApps() => _seenApps.ToArray();
+    internal void RestoreRecentAppsForTest(string[] apps) { _seenApps.Clear(); foreach (var a in apps) _seenApps.AddLast(a); }
     private void RememberSeenApp(string? process, bool own)
     {
         if (own || string.IsNullOrWhiteSpace(process)) return;

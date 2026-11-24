@@ -106,6 +106,7 @@ public sealed class KeywordAudioRuntimeTests
     {
         if (OperatingSystem.IsWindows()) Assert.Skip("Windows reads user32 GetForegroundWindow, not the X11 seam");
         var source = KeywordTriggerHead.LinuxForegroundSource;
+        var recent = KeywordTriggerHead.Engine.GetRecentForegroundApps();
         var saved = (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.KeywordTriggerApps, s.ScreenOcrIntervalMs, s.AwarenessIgnoreOwnUi);
         var foreground = "gedit";
         KeywordTriggerHead.LinuxForegroundSource = () => foreground;
@@ -129,6 +130,7 @@ public sealed class KeywordAudioRuntimeTests
         finally
         {
             KeywordTriggerHead.LinuxForegroundSource = source; KeywordTriggerHead.OcrSource = null;
+            KeywordTriggerHead.Engine.RestoreRecentAppsForTest(recent);   // the singleton's chips outlive the test
             (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.KeywordTriggerApps, s.ScreenOcrIntervalMs, s.AwarenessIgnoreOwnUi) = saved;
         }
     });
