@@ -37,7 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("chaster-hold", _ => ConditioningControlPanel.Services.Safety.PanicChasterHold.Open("panic")),
             // WPF LeashOnPanicPress, the first thing a panic press does: the leash task parks (kept pending), its
             // video window closes, the gate stands back ten minutes.
-            new("leash-task", sh => Platform.LeashTaskHost.OnPanicPress(sh)),
+            new("leash-task", sh => { Platform.LeashSound.StopRefusal(); Platform.LeashTaskHost.OnPanicPress(sh); }),
             // Stricter than WPF: panic must not leave this modal or its delete confirmation open.
             new("personality-studio", _ => Dialogs.PersonalityStudio.CloseForPanic()),
             new("deeper-tutorial", _ => Deeper.DeeperEditorWindow.StopTutorialContinuationForPanic()),
@@ -94,6 +94,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("settings-palette", _ => SettingsPaletteWindow.CloseIfOpen()),
             new("perfect-week-bonus", _ => App.StopPerfectWeekBonus()), // WPF SkillTreeService.cs:535-563; close every new popup on panic.
             // WPF PanicStopEverySurface (:2003): the toys go to zero, bypassing throttles and gates.
+            new("keyword-highlights", _ => Overlays.KeywordHighlightOverlay.CloseAll()),
             new("keyword-comments", _ => Platform.KeywordAvatarComment.CancelPending()),
             // Owner call 2026-10-10: panic switches keyword triggers off (master, saved screen read) and stops
             // their sources; the Awareness tab repaints if it is up. Stricter than WPF main (clip + quiet only).
@@ -169,7 +170,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("roster-personality", _ => Controls.Companion.WorkshopAccordion.CloseRosterMessagesForPanic()),
             new("companion-transcript", _ => Controls.Companion.CompanionTranscriptWindow.CloseForPanic()),   // P06; WPF left the History modal up
             new("screen-shake", _ => Deeper.ScreenShake.Stop()),
-            new("possession", _ => { App.Possession?.UndoAll(); Possession.PossessionRuntime.UndoAllLive(); }),   // every touched control gets its own transform back now (WPF PossessionDirector.UndoAll)
+            new("possession", _ => { App.Possession?.UndoAll(); Possession.PossessionRuntime.UndoAllLive(); Possession.WhereYouAreScene.UndoAllLive(); }),   // every touched control gets its own transform back now (WPF PossessionDirector.UndoAll)
             // WPF Features/VideoFeatureControl.xaml.cs:533 error box; also close it on panic.
             new("video-test-error", _ => Features.VideoFeatureControl.CloseTestErrorsForPanic()),
             new("chaster-booked-pop", _ => Overlays.ChasterBookedPop.CloseAll()),
@@ -188,6 +189,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("quick-recal", _ => WebcamQuickRecalWindow.CloseAllForPanic()),
             new("mod-creator-preview", _ => ModCreatorWindow.StopPreviewsForPanic()), // Creator-owned audio, like close/reset; stricter than WPF.
             new("asset-preview", _ => MiniPlayerWindow.CloseAllForPanic()),  // Library local and encrypted-pack previews (P06; WPF left the preview open)
+            new("input-popups", _ => global::ConditioningControlPanel.Avalonia.Controls.InputPopupFx.CloseAllForPanic()),
             new("help-tooltips", _ => global::ConditioningControlPanel.Avalonia.Controls.ToolTipLifetime.CloseAll()), // WPF help lifetime :750; stricter panic cleanup
             new("launcher-notes", _ => LauncherWindow.CloseNotesForPanic()),
             new("launcher-friends", _ => LauncherWindow.CloseFriendsForPanic()),

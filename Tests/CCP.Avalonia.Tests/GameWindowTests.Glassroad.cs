@@ -29,13 +29,15 @@ public sealed partial class GameWindowTests
     private sealed class GrHttp : System.Net.Http.HttpMessageHandler
     {
         public readonly List<(string Method, string Url, string Body, string? Token)> Seen = new();
+        public System.Net.HttpStatusCode Status = System.Net.HttpStatusCode.OK;
+        public string Reply = "{\"ok\":1}";
         protected override async System.Threading.Tasks.Task<System.Net.Http.HttpResponseMessage> SendAsync(
             System.Net.Http.HttpRequestMessage request, System.Threading.CancellationToken ct)
         {
             var body = request.Content == null ? "" : await request.Content.ReadAsStringAsync(ct);
             Seen.Add((request.Method.Method, request.RequestUri!.ToString(), body,
                 request.Headers.TryGetValues("X-Auth-Token", out var t) ? t.Single() : null));
-            return new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new System.Net.Http.StringContent("{\"ok\":1}") };
+            return new System.Net.Http.HttpResponseMessage(Status) { Content = new System.Net.Http.StringContent(Reply) };
         }
     }
 

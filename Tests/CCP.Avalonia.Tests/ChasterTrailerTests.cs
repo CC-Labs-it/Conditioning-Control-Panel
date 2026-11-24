@@ -38,7 +38,7 @@ public sealed class ChasterTrailerTests {
                 Content = new StringContent(r.RequestUri!.AbsolutePath switch { "/auth/profile" => "{\"username\":\"kitten\"}", "/locks" => Locks, _ => "{}" }),
             });
     }
-    private static async Task WithTab(Func<ChasterTabView, Window, Task> body) {
+    private static async Task WithTab(Func<ChasterTabView, Window, Task> body, bool show = true, Action<ChasterTabView>? beforeShow = null) {
         App(); var service = new SettingsService(); CoreSettings.ServiceProvider = () => service;
         var s = CoreSettings.Current;
         s.MotionLevel = MotionLevel.Full; s.PerformanceMode = false; s.AutoPerformanceMode = false;
@@ -56,7 +56,8 @@ public sealed class ChasterTrailerTests {
         var tab = new ChasterTabView(); var w = new Window { Width = 1200, Height = 3000, Content = tab };
         try {
             w.Show(); await chaster.RefreshLockAsync();
-            tab.OnTabShown(); Dispatcher.UIThread.RunJobs();
+            beforeShow?.Invoke(tab);
+            if (show) tab.OnTabShown(); Dispatcher.UIThread.RunJobs();
             await body(tab, w);
         }
         finally {
@@ -67,6 +68,47 @@ public sealed class ChasterTrailerTests {
             service.SaveImmediate(); CoreSettings.ServiceProvider = null;
         }
     }
+    private sealed class TrailerCore : TrailerWebView2Settings.ICore {
+        public bool AreDevToolsEnabled { get; set; } = true;
+        public bool AreDefaultContextMenusEnabled { get; set; } = true;
+        public bool IsStatusBarEnabled { get; set; } = true;
+        public bool AreBrowserAcceleratorKeysEnabled { get; set; } = true;
+        public bool IsZoomControlEnabled { get; set; } = true;
+        public bool IsBuiltInErrorPageEnabled { get; set; } = true;
+        public bool IsWebMessageEnabled { get; set; } = true;
+    }
+    [Fact] public void TrailerNativeSettingsDisableEverySwitch() {
+        var core = new TrailerCore(); TrailerWebView2Settings.Apply(core);
+        Assert.False(core.AreDevToolsEnabled); Assert.False(core.AreDefaultContextMenusEnabled);
+        Assert.False(core.IsStatusBarEnabled); Assert.False(core.AreBrowserAcceleratorKeysEnabled);
+        Assert.False(core.IsZoomControlEnabled); Assert.False(core.IsBuiltInErrorPageEnabled); Assert.False(core.IsWebMessageEnabled);
+    }
+    [Fact] public Task TabShowPrewarmsAndFirstHoverMovesTheSameBrowser() => AvaloniaTestDispatcher.RunAsync(() => {
+        var scripts = new List<string>();
+        var host = new ConditioningControlPanel.Avalonia.Views.Controls.WebHost { ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>("true"); } };
+        return WithTab(async (tab, _) => {
+            var view = tab.FindControl<ChasterTrailerView>("TrailerWeb")!;
+            var warmHost = tab.FindControl<Grid>("TrailerWarmHost")!;
+            Assert.Same(host, view.Browser); Assert.Same(warmHost, view.Parent);
+            Assert.Same(tab.FindControl<ScrollViewer>("PageScroll")!.Content, warmHost.Parent);
+            Assert.False(warmHost.IsVisible); Assert.False(warmHost.IsHitTestVisible);
+            Assert.False(view.IsVisible); Assert.Empty(scripts); Assert.EndsWith("/chaster/trailers.html", view.Page!.AbsolutePath);
+            Assert.Equal(1, host.NavigationRequests); Assert.NotNull(host.ConfigureNative);
+            await view.NavigationFinished(view.Page, true); Assert.Single(scripts); Assert.False(view.IsVisible);
+            tab.OpenTrailer(tab.PriceRows["typo"]); tab.OpenTrailer(tab.PriceRows["program_done"]);
+            Assert.Same(tab.FindControl<Grid>("TrailerPlate"), view.Parent); Assert.Same(host, view.Browser);
+            Assert.Equal(1, host.NavigationRequests); Assert.Equal(ChasterTrailerView.MountScript("program", 1800, 600), scripts.Last());
+        }, beforeShow: tab => tab.FindControl<ChasterTrailerView>("TrailerWeb")!.Browser = host);
+    });
+    [Theory, InlineData(false), InlineData(true)] public Task TabShowDoesNotRestartFailedOrDisposedView(bool disposed) => AvaloniaTestDispatcher.RunAsync(() => {
+        var host = new ConditioningControlPanel.Avalonia.Views.Controls.WebHost { ScriptInvoker = _ => Task.FromResult<string?>("true") };
+        return WithTab((tab, _) => {
+            var view = tab.FindControl<ChasterTrailerView>("TrailerWeb")!;
+            if (disposed) view.Shutdown(); else host.OnBrowserProcessFailed();
+            tab.OnTabShown(); Assert.Equal(1, host.NavigationRequests); Assert.False(view.IsVisible);
+            return Task.CompletedTask;
+        }, beforeShow: tab => tab.FindControl<ChasterTrailerView>("TrailerWeb")!.Browser = host);
+    });
     [Fact]
     public Task HoverWaitsThenRetargetsImmediatelyAndClosesAfterTheGrace() => AvaloniaTestDispatcher.RunAsync(() => WithTab((tab, w) => {
         void Hover(Control row) => w.MouseMove(row.TranslatePoint(new Point(20, row.Bounds.Height / 2), w)!.Value);
@@ -173,7 +215,7 @@ public sealed class ChasterTrailerTests {
         var host = new ConditioningControlPanel.Avalonia.Views.Controls.WebHost { ScriptInvoker = script =>
         { scripts.Add(script); return script.StartsWith("window.__mount") && scripts.Count == 2 ? pending.Task : Task.FromResult<string?>("true"); } };
         view.Browser = host;
-        tab.OpenTrailer(tab.PriceRows["typo"]); tab.OpenTrailer(tab.PriceRows["program_done"]);
+        tab.OnTabShown(); tab.OpenTrailer(tab.PriceRows["typo"]); tab.OpenTrailer(tab.PriceRows["program_done"]);
         Assert.Empty(scripts);
         var navigation = view.NavigationFinished(view.Page, true);
         var figures = TabMenuCopy.SceneFigures("program_done", ChasterTabView.ShownSeconds);
@@ -188,29 +230,29 @@ public sealed class ChasterTrailerTests {
         Assert.True(host.AllowNavigation!(view.Page!)); Assert.False(host.AllowNavigation(new Uri("https://example.invalid/")));
         Assert.True(host.SuppressNewWindows);
         tab.HideTrailer(); Assert.False(view.IsVisible); Assert.Equal(ChasterTrailerView.PauseScript, scripts.Last());
-    }));
+    }, false));
     [Theory, InlineData(false, "true"), InlineData(true, "false"), InlineData(true, null), InlineData(true, "throw")]
     public Task BrowserFailureKeepsTheArtwork(bool navigationOk, string? result) => AvaloniaTestDispatcher.RunAsync(() => WithTab(async (tab, w) => {
         var view = tab.FindControl<ChasterTrailerView>("TrailerWeb")!;
         view.Browser = new ConditioningControlPanel.Avalonia.Views.Controls.WebHost { ScriptInvoker = script =>
             !script.StartsWith("window.__mount") ? Task.FromResult<string?>("true") : result == "throw" ? Task.FromException<string?>(new InvalidOperationException()) : Task.FromResult(result) };
-        tab.OpenTrailer(tab.PriceRows["typo"]);
+        tab.OnTabShown(); tab.OpenTrailer(tab.PriceRows["typo"]);
         view.Browser.OnNavigationCompleted(view.Page, navigationOk);
         Assert.True(view.HasFailed); Assert.False(view.IsVisible); Assert.False(view.IsReady);
         Assert.NotNull(tab.FindControl<Image>("TrailerArt")!.Source);
         tab.OpenTrailer(tab.PriceRows["program_done"]); Assert.True(view.HasFailed); Assert.False(view.IsVisible);
         await Task.CompletedTask;
-    }));
+    }, false));
     [Fact]
     public Task HidingDuringMountStopsTheSceneAndNeverRevealsIt() => AvaloniaTestDispatcher.RunAsync(() => WithTab(async (tab, w) => {
         var view = tab.FindControl<ChasterTrailerView>("TrailerWeb")!; var scripts = new List<string>();
         var pending = new TaskCompletionSource<string?>();
         view.Browser = new ConditioningControlPanel.Avalonia.Views.Controls.WebHost { ScriptInvoker = script =>
         { scripts.Add(script); return script.StartsWith("window.__mount") ? pending.Task : Task.FromResult<string?>("true"); } };
-        tab.OpenTrailer(tab.PriceRows["typo"]); var navigation = view.NavigationFinished(view.Page, true);
+        tab.OnTabShown(); tab.OpenTrailer(tab.PriceRows["typo"]); var navigation = view.NavigationFinished(view.Page, true);
         tab.HideTrailer(); pending.SetResult("true"); await navigation;
         Assert.False(view.IsVisible); Assert.Equal(ChasterTrailerView.PauseScript, scripts.Last());
-    }));
+    }, false));
     /// <summary>Panic always closes the trailer popup, even one left up without _trailerShown (a failed
     /// open, or a park that threw before the close): HideTrailer used to return early and skip it.</summary>
     [Fact]
@@ -241,7 +283,7 @@ public sealed class ChasterTrailerTests {
         var mount = new TaskCompletionSource<string?>(); var pause = new TaskCompletionSource<string?>();
         view.Browser = new ConditioningControlPanel.Avalonia.Views.Controls.WebHost { ScriptInvoker = script => {
             scripts.Add(script); return script == ChasterTrailerView.PauseScript ? pause.Task : script.StartsWith("window.__mount") && !alreadyReady && scripts.Count == 2 ? mount.Task : Task.FromResult<string?>("true"); } };
-        tab.OpenTrailer(tab.PriceRows["typo"]); var navigation = view.NavigationFinished(view.Page, true);
+        tab.OnTabShown(); tab.OpenTrailer(tab.PriceRows["typo"]); var navigation = view.NavigationFinished(view.Page, true);
         if (alreadyReady) await navigation;
         tab.HideTrailer(); mount.SetResult("true"); await Task.Yield();
         Assert.Equal(ChasterTrailerView.PauseScript, scripts.Last());
@@ -249,26 +291,26 @@ public sealed class ChasterTrailerTests {
         pause.SetResult("true"); await navigation; await Task.Yield();
         Assert.Equal(ChasterTrailerView.MountScript("program", 1800, 600), scripts.Last());
         Assert.True(view.IsVisible); Assert.True(view.IsReady);
-    }));
+    }, false));
     [Fact]
     public Task ProcessFailureAfterReadinessImmediatelyRestoresArtwork() => AvaloniaTestDispatcher.RunAsync(() => WithTab(async (tab, w) => {
         var view = tab.FindControl<ChasterTrailerView>("TrailerWeb")!;
         var host = new ConditioningControlPanel.Avalonia.Views.Controls.WebHost { ScriptInvoker = _ => Task.FromResult<string?>("true") };
-        view.Browser = host; tab.OpenTrailer(tab.PriceRows["typo"]); await view.NavigationFinished(view.Page, true);
+        view.Browser = host; tab.OnTabShown(); tab.OpenTrailer(tab.PriceRows["typo"]); await view.NavigationFinished(view.Page, true);
         Assert.True(view.IsVisible); var failures = 0; view.Failed += (_, _) => failures++;
         host.OnBrowserProcessFailed(); Assert.True(view.HasFailed); Assert.False(view.IsReady); Assert.False(view.IsVisible); Assert.Empty(view.Children);
         Assert.NotNull(tab.FindControl<Image>("TrailerArt")!.Source);
         host.OnBrowserProcessFailed(); Assert.Equal(1, failures);
-    }));
+    }, false));
     [Fact] public Task ReadyPlayerStaysVisibleDuringRowMountAndFailureRestoresArtwork() => AvaloniaTestDispatcher.RunAsync(() => WithTab(async (tab, w) => {
         var view = tab.FindControl<ChasterTrailerView>("TrailerWeb")!; var pending = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously); var swapped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         view.Browser = new ConditioningControlPanel.Avalonia.Views.Controls.WebHost { ScriptInvoker = _ => Task.FromResult<string?>("true") };
-        tab.OpenTrailer(tab.PriceRows["typo"]); await view.NavigationFinished(view.Page, true); Assert.True(view.IsVisible);
+        tab.OnTabShown(); tab.OpenTrailer(tab.PriceRows["typo"]); await view.NavigationFinished(view.Page, true); Assert.True(view.IsVisible);
         view.Browser.ScriptInvoker = script => script.StartsWith("window.__mount") ? pending.Task : Task.FromResult<string?>("true");
         view.Ready += (_, _) => swapped.TrySetResult(); tab.OpenTrailer(tab.PriceRows["program_done"]); Assert.False(view.IsReady); Assert.True(view.IsVisible);
         pending.SetResult("true"); await swapped.Task; Assert.True(view.IsVisible);
         view.Browser.ScriptInvoker = _ => Task.FromResult<string?>("false"); tab.OpenTrailer(tab.PriceRows["typo"]); Assert.True(view.HasFailed); Assert.False(view.IsVisible);
-    }));
+    }, false));
 
     // Ported from the views-tab-chaster re-cut (#3599): effective-visibility and unlink dismissal.
     [Theory, InlineData(false), InlineData(true)]

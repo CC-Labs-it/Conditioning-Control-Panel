@@ -768,7 +768,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (_advanceFiredThisStep) return;
             _advanceFiredThisStep = true;
-            UnsubscribeAdvanceTrigger();
+            UnsubscribeAdvanceTrigger(keepDialog: true);
             var step = _step;
             Dispatcher.UIThread.Post(() =>
             {
