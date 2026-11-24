@@ -28,7 +28,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
     public partial class UpdateNotificationDialog : Window
     {
         // Same address, same Core constant UpdateFailedDialog reads.
-        private const string ReleasesPageUrl = ConditioningControlPanel.Services.ReleaseLinks.ReleasesPageUrl;
+        // Off Windows: the offered Linux release's page, never /releases/latest (the Windows build, ccp-bugs #1627).
+        private static string ReleasesPageUrl => OperatingSystem.IsWindows()
+            ? ConditioningControlPanel.Services.ReleaseLinks.ReleasesPageUrl
+            : Platform.AppUpdater.LinuxPage ?? ConditioningControlPanel.Services.ReleaseLinks.ReleasesListUrl;
 
         /// <summary>
         /// Whether the user chose to install the update

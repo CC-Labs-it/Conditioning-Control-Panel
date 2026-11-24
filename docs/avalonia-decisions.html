@@ -1761,9 +1761,40 @@ const m=document.getElementById('ledger-meta');const s=document.querySelector('.
 </ul>
 <h2 id="2026-11-04-ocr-engine-deferred">2026-11-04: OCR engine on the Avalonia head deferred (routine; supervisor; landed in restack b220, 2026-11-14)</h2>
 <ul>
+<li><strong>Superseded</strong> by <a href="#2026-11-15-screen-ocr-engine-rapidocrnet">2026-11-15: Screen OCR engine is RapidOcrNet in CCP.Core</a>. Kept as the record of the deferral.</li>
 <li>Options: (A) wire the Screen OCR lifecycle behind a nullable <code>KeywordTriggerHead.OcrSource</code> and ship no engine, (B) shell out to a tesseract CLI plus an X11 capture tool, (C) leave OCR blocked. Chose A: this head is plain net10.0 (no Windows TFM) so WinRT <code>Windows.Media.Ocr</code> is out of reach, Linux has no OCR engine, Wayland capture is interactive only, and B adds runtime dependencies. The scanner never starts while the source is null: no timer runs, so the 2026-11-12 entry above still holds for the user path (the switch saves, nothing scans).</li>
 <li>Restack b220 (#4299): the consumer (<code>KeywordAudioRuntime.CheckOcrWords</code>, one fire path with the keyboard) and the lifecycle (<code>ScreenOcrService</code>, <code>KeywordTriggerHead.SyncOcr</code> from the master and OCR switches and the interval slider) are in; #4267's parallel matcher was dropped for this one consumer.</li>
 <li>When an engine lands: <code>ScreenOcrService.Word</code> has no screen, so a regex match unions word rectangles across monitors; WPF <code>KeywordTriggerService.cs:1102</code> unions only words on the first word's screen. Add the screen to <code>Word</code> then. The panic fallback must also stop and restart the scanner (WPF PanicWatchdog; #4551).</li>
+</ul>
+<h2 id="2026-11-14-open-pr-pile-is-cbs">2026-11-14: The restacked open PR pile is CB's (owner)</h2>
+<ul>
+<li>Decision: the open port PR pile (1,043 avalonia-port PRs after CB's restack waves 1-4; 254 of 259 port/7.2-based ones conflict) is left to CB's restack. The port does not re-cut or close it.</li>
+<li>Port work: new parity slices on port/7.2, main syncs, a5 and perf. Scouts count an open PR as covering its work (done for scouting).</li>
+<li>Why: re-cutting 254 conflicting PRs duplicates CB's restack and competes with it.</li>
+<li>Alternatives: re-cut the pile onto port/7.2; close it. Both rejected by the owner.</li>
+<li>Evidence: <code>bin/r72-recut-dispatch</code> removed from <code>r72-tick</code>.</li>
+</ul>
+<h2 id="2026-11-15-perf-bench-definition">2026-11-15: Perf bench definition: startup frame and compositor tab entrance (owner-delegated)</h2>
+<ul>
+<li>Decision: <code>startup_since_process_ms</code> is read at the startup frame in both benches, not after the await continuation (documented definition; the cloud review P2 asking otherwise is rejected). PR #5199.</li>
+<li>Decision: the tab entrance runs on compositor animations, as WPF runs its storyboards on the render thread. This removes the CPU-render frame wait. PR #5202.</li>
+<li>Why: both benches must measure the same point, and the entrance should cost what WPF's costs.</li>
+<li>Alternatives: skip frames in the entrance; document the gap and keep the CPU animation. Owner delegated the choice; compositor animations (choice A) taken.</li>
+<li>Evidence: #5199, #5202.</li>
+</ul>
+<h2 id="2026-11-15-screen-ocr-engine-rapidocrnet">2026-11-15: Screen OCR engine is RapidOcrNet in CCP.Core (owner)</h2>
+<ul>
+<li>Decision: Screen OCR (Awareness keyword triggers) uses RapidOcrNet (PaddleOCR PP-OCR ONNX models, Apache-2.0) in CCP.Core, used by both heads. A deliberate improvement over WPF's <code>Windows.Media.Ocr</code>: cross-platform, word boxes, more languages.</li>
+<li>Supersedes <a href="#2026-11-04-ocr-engine-deferred">2026-11-04: OCR engine on the Avalonia head deferred</a> (option A, no engine).</li>
+<li>Alternatives: earlier the same day the owner chose to bundle a pinned tesseract (plus English data) in the Linux tarball and Flatpak, like the pinned libVLC runtime, over optional system tesseract and over n/a. That choice was considered and dropped for RapidOcrNet; no tesseract ships.</li>
+<li>Capture: X11 and GDI (#5207); Wayland through the XDG Screenshot portal (#5219, live on KDE: no dialog, about 230 ms per capture). Engine: #5288. Moving the WPF head onto the Core engine is a follow-up lane.</li>
+<li>Dependencies: the SkiaSharp 4 and ONNX Runtime upgrade this needs is the 2026-11-15 row in the table above (#5231).</li>
+</ul>
+<h2 id="2026-11-15-season-peak-rank-sampling-not-ported">2026-11-15: Season peak-rank sampling not ported (views-tab-enhancements; supervisor)</h2>
+<ul>
+<li>Decision: the Avalonia head does not sample the season peak rank.</li>
+<li>Why: WPF never calls <code>SeasonRecapService.SampleRank</code> (no caller on origin/main or port/7.2), so WPF's peak stays 0. Parity is the same 0 peak.</li>
+<li>Alternatives: wire sampling on this head only (a deviation WPF does not have).</li>
 </ul>
 </body>
 </html>

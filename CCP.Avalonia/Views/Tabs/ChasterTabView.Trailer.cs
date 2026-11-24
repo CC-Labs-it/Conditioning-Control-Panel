@@ -90,9 +90,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs {
             if (!TrailerCanOpen) return;
             if (row?.Tag is not string id || TabPrices.Find(id) is not { } price) return;
             _trailerRow = row;
-            using var reparent = _trailerPark;
+            using var reparent = _trailerPark ?? (TrailerWeb.Parent == TrailerWarmHost ? TrailerWeb.PreserveForMove() : null);
             _trailerPark = null;
             try {
+                if (TrailerWeb.Parent == TrailerWarmHost) {
+                    TrailerWarmHost.Children.Remove(TrailerWeb);
+                    TrailerPlate.Children.Add(TrailerWeb);
+                }
                 TrailerArt.Source = TabMenuCopy.ArtFor(id) is { } art ? Helpers.ModArt.TryLoadBuiltIn(art, 640) : null;
                 TxtTrailerFlavour.Text = Loc.Get(TabMenuCopy.FlavourKey(id));
                 TxtTrailerWhy.Text = TabMenuCopy.Why(id, Loc.Get, ShownSeconds(id));
