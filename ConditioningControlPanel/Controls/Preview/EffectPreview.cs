@@ -46,6 +46,20 @@ namespace ConditioningControlPanel.Controls.Preview
             set => SetValue(SceneProperty, value);
         }
 
+        public static readonly DependencyProperty WakeOnPageInputProperty = DependencyProperty.Register(
+            nameof(WakeOnPageInput), typeof(bool), typeof(EffectPreview), new PropertyMetadata(false));
+
+        /// <summary>
+        /// On a page whose settings raise no change event of their own (the Haptics tab keeps most of its
+        /// values in a plain nested object), the preview wakes whenever a slider, switch or dropdown of
+        /// its own page is touched. Off by default: Studio pages wake on the settings their scene watches.
+        /// </summary>
+        public bool WakeOnPageInput
+        {
+            get => (bool)GetValue(WakeOnPageInputProperty);
+            set => SetValue(WakeOnPageInputProperty, value);
+        }
+
         /// <summary>Tests: the pixel scale the desktop is painted at, instead of the element's DPI.</summary>
         internal static double? DesktopScaleOverride;
 
@@ -70,6 +84,9 @@ namespace ConditioningControlPanel.Controls.Preview
         private Rect _screen, _fxRect;
         private int _faults;
         private bool _hooked, _wasVisible;
+        private readonly System.Collections.Generic.List<INotifyPropertyChanged> _nested = new();
+        private FrameworkElement? _inputRoot;
+        private RoutedEventHandler? _inputHandler;
 
         public EffectPreview()
         {
@@ -293,7 +310,9 @@ namespace ConditioningControlPanel.Controls.Preview
                     MotionFx.AmbientChanged += OnAmbientChanged;
                     if (App.Settings != null) App.Settings.CurrentReplaced += OnSettingsReplaced;
                     _hook.Rebind();
+                    HookNested();
                 }
+                if (WakeOnPageInput) HookPageInput(FindPage(this));
                 OnVisibilityMaybeChanged();
             }
             catch (Exception ex) { App.Logger?.Debug("EffectPreview.OnLoaded: {E}", ex.Message); }
@@ -314,7 +333,9 @@ namespace ConditioningControlPanel.Controls.Preview
                     MotionFx.AmbientChanged -= OnAmbientChanged;
                     if (App.Settings != null) App.Settings.CurrentReplaced -= OnSettingsReplaced;
                     _hook.Unhook();
+                    UnhookNested();
                 }
+                UnhookPageInput();
                 _wasVisible = false;
             }
             catch (Exception ex) { App.Logger?.Debug("EffectPreview.OnUnloaded: {E}", ex.Message); }
@@ -348,7 +369,70 @@ namespace ConditioningControlPanel.Controls.Preview
 
         private void OnSettingsReplaced()
         {
-            try { Dispatcher.BeginInvoke(new Action(() => _hook.Rebind())); } catch { }
+            try { Dispatcher.BeginInvoke(new Action(() => { _hook.Rebind(); HookNested(); })); } catch { }
+        }
+
+        /// <summary>
+        /// Settings objects that live INSIDE AppSettings and raise their own change events (Haptics and
+        /// its audio sync) reach the scene through the same handler, under their own property names.
+        /// </summary>
+        private void HookNested()
+        {
+            UnhookNested();
+            var haptics = App.Settings?.Current?.Haptics;
+            if (haptics is INotifyPropertyChanged h) { h.PropertyChanged += OnSettingChanged; _nested.Add(h); }
+            if (haptics?.AudioSync is INotifyPropertyChanged a) { a.PropertyChanged += OnSettingChanged; _nested.Add(a); }
+        }
+
+        private void UnhookNested()
+        {
+            foreach (var n in _nested) n.PropertyChanged -= OnSettingChanged;
+            _nested.Clear();
+        }
+
+        private static FrameworkElement? FindPage(DependencyObject from)
+        {
+            for (var d = VisualTreeHelper.GetParent(from); d != null; d = VisualTreeHelper.GetParent(d))
+                if (d is UserControl page) return page;
+            return null;
+        }
+
+        /// <summary>Wake on any slider, switch or dropdown of <paramref name="page"/> (see <see cref="WakeOnPageInput"/>).</summary>
+        internal void HookPageInput(FrameworkElement? page)
+        {
+            UnhookPageInput();
+            if (page == null) return;
+            _inputRoot = page;
+            _inputHandler = (_, _) => Poke();
+            page.AddHandler(System.Windows.Controls.Primitives.RangeBase.ValueChangedEvent, _inputHandler, true);
+            page.AddHandler(System.Windows.Controls.Primitives.ToggleButton.CheckedEvent, _inputHandler, true);
+            page.AddHandler(System.Windows.Controls.Primitives.ToggleButton.UncheckedEvent, _inputHandler, true);
+            page.AddHandler(System.Windows.Controls.Primitives.Selector.SelectionChangedEvent, _inputHandler, true);
+        }
+
+        private void UnhookPageInput()
+        {
+            if (_inputRoot != null && _inputHandler != null)
+            {
+                _inputRoot.RemoveHandler(System.Windows.Controls.Primitives.RangeBase.ValueChangedEvent, _inputHandler);
+                _inputRoot.RemoveHandler(System.Windows.Controls.Primitives.ToggleButton.CheckedEvent, _inputHandler);
+                _inputRoot.RemoveHandler(System.Windows.Controls.Primitives.ToggleButton.UncheckedEvent, _inputHandler);
+                _inputRoot.RemoveHandler(System.Windows.Controls.Primitives.Selector.SelectionChangedEvent, _inputHandler);
+            }
+            _inputRoot = null;
+            _inputHandler = null;
+        }
+
+        /// <summary>Start the wake window without naming a setting (a control of the page was touched).</summary>
+        private void Poke()
+        {
+            if (_driver == null) return;
+            try
+            {
+                Evaluate();
+                if (_driver.Wake()) { Evaluate(); _fx.Redraw(); }
+            }
+            catch (Exception ex) { Fault(ex); }
         }
 
         private void OnSettingChanged(object? sender, PropertyChangedEventArgs e)

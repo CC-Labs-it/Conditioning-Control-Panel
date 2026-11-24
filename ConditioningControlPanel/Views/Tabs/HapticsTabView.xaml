@@ -916,7 +916,7 @@
                                         </ImageBrush.ImageSource>
                                     </ImageBrush>
                                 </Border.Tag>
-                                <pv:EffectPreview Scene="haptics"/>
+                                <pv:EffectPreview Scene="haptics" WakeOnPageInput="True"/>
                             </Border>
                         </Grid>
 
