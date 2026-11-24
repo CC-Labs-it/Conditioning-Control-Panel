@@ -137,7 +137,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 };
                 Place();
                 Window.Show();
-                _anim = new BeatLoop(Window, elapsed => { if (elapsed > 0) Step(); }, TimeSpan.FromMilliseconds(50));
+                _anim = new BeatLoop(Window, elapsed => { if (elapsed > 0) Step(); }, TimeSpan.FromSeconds(0.05));   // AvatarRandomBubble.cs:150, 50 ms frames
                 _anim.Start();
             }
 
