@@ -201,7 +201,7 @@ public sealed class CompanionVideoAutoPlayTests
             host.OnNavigationCompleted(url);
             delay.SetResult();
             Dispatcher.UIThread.RunJobs();
-            Assert.Single(scripts, script => script == WebHostTakeover.PlaylistAutoPlayScript);
+            Assert.Single(scripts, script => script.Contains("ccpPlaylistNoButton"));
             var reporter = scripts.Last(script => script.Contains("ccpRemixMedia"));
             var id = System.Text.RegularExpressions.Regex.Match(reporter, "const id = \"([^\"]+)\"").Groups[1].Value;
             Assert.NotEmpty(id);
@@ -218,7 +218,77 @@ public sealed class CompanionVideoAutoPlayTests
             Assert.Contains(WebHostMedia.PanicPauseScript, scripts);
             delay.SetResult();
             Dispatcher.UIThread.RunJobs();
-            Assert.Single(scripts, script => script == WebHostTakeover.PlaylistAutoPlayScript);
+            Assert.Single(scripts, script => script.Contains("ccpPlaylistNoButton"));
+        }
+        finally
+        {
+            CoreSettings.ServiceProvider = oldSettings;
+            LockCardWindow.EndWebVideo();
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+        }
+    });
+
+    [Fact]
+    public Task MissingPlaylistButtonReleasesOnlyItsPendingClaim() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var oldSettings = CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        settings.Current.OfflineMode = false;
+        (settings.Current.Welcomed, settings.Current.HasAcceptedAgeVerification,
+            settings.Current.WhatMovedCardShown, settings.Current.AvatarEnabled) = (true, true, 1, false);
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            var host = shell.Named<SettingsTabView>("SettingsTab")!.FindControl<WebHost>("BrowserWebHost")!;
+            var scripts = new List<string>();
+            host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
+            host.NavigationInvoker = _ => true;
+            host.NewScrolllerEngine()(true);
+            shell.BrowserAutoPlayDelay = () => Task.CompletedTask;
+            var url = new Uri("https://127.0.0.1/bambicloud.com/playlist/1");
+            async Task<string> Start()
+            {
+                Assert.True(await shell.NavigateCompanionUrlAsync(url.ToString()));
+                Assert.True(LockCardWindow.WebVideoClaimed);
+                host.OnNavigationCompleted(url);
+                Dispatcher.UIThread.RunJobs();
+                var script = scripts.Last(script => script.Contains("ccpPlaylistNoButton"));
+                var token = System.Text.RegularExpressions.Regex.Match(script, "token: \"([^\"]+)\"").Groups[1].Value;
+                Assert.NotEmpty(token);
+                return token;
+            }
+            string Message(string token) => System.Text.Json.JsonSerializer.Serialize(new { type = "ccpPlaylistNoButton", token });
+
+            var first = await Start();
+            host.OnWebMessage("{");
+            host.OnWebMessage("[]");
+            host.OnWebMessage(Message("wrong"));
+            Assert.True(LockCardWindow.WebVideoClaimed);
+            host.OnWebMessage(System.Text.Json.JsonSerializer.Serialize(Message(first)));
+            Assert.False(LockCardWindow.WebVideoClaimed);
+
+            var stale = await Start();
+            var current = await Start();
+            host.OnWebMessage(Message(stale));
+            Assert.True(LockCardWindow.WebVideoClaimed);
+            LockCardWindow.NoteWebVideo(true);
+            host.OnWebMessage(Message(current));
+            Assert.True(LockCardWindow.WebVideoClaimed);
+            LockCardWindow.EndWebVideo();
+
+            var beforePanic = await Start();
+            PanicSurfaces.All.Single(s => s.Id == "browser-media").Stop(shell);
+            Assert.False(LockCardWindow.WebVideoClaimed);
+            var afterPanic = await Start();
+            host.OnWebMessage(Message(beforePanic));
+            Assert.True(LockCardWindow.WebVideoClaimed);
+            host.OnWebMessage(Message(afterPanic));
+            Assert.False(LockCardWindow.WebVideoClaimed);
         }
         finally
         {

@@ -54,7 +54,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     if (window._ccpTakeoverStopped) return;
                     button = document.querySelector('button.play-action');
                 }
-                if (button && !window._ccpTakeoverStopped) button.click();
+                if (window._ccpTakeoverStopped) return;
+                if (button) { button.click(); return; }
+                const message = { type: 'ccpPlaylistNoButton', token: __CCP_TOKEN__ };
+                if (typeof window.invokeCSharpAction === 'function') window.invokeCSharpAction(JSON.stringify(message));
+                else if (window.chrome?.webview) window.chrome.webview.postMessage(message);
             })();
             """;
 

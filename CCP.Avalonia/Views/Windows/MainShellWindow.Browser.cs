@@ -111,6 +111,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private int _browserRequestGeneration;
         private Action<Uri, bool>? _pendingVideoAutoPlay;
         private WebHost? _pendingVideoHost;
+        private WebHost? _playlistFailureHost;
+        private Action<string>? _playlistFailureHandler;
+
+        private void DisarmPlaylistFailure()
+        {
+            if (_playlistFailureHost != null && _playlistFailureHandler != null)
+                _playlistFailureHost.WebMessage -= _playlistFailureHandler;
+            _playlistFailureHost = null;
+            _playlistFailureHandler = null;
+        }
 
         // WPF MainWindow.Browser.cs:793-815 arms once before navigation, and :835-837
         // waits 1.5 seconds before injection. WebHost has completion but no DOM-ready event.
@@ -120,6 +130,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void CancelVideoAutoPlay()
         {
             ++_browserRequestGeneration; LockCardWindow.CancelWebVideoTakeover();
+            DisarmPlaylistFailure();
             if (_pendingVideoHost != null && _pendingVideoAutoPlay != null)
                 _pendingVideoHost.NavigationFinished -= _pendingVideoAutoPlay;
             _pendingVideoHost = null;
@@ -151,8 +162,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             await BrowserAutoPlayDelay();
             if (request != _browserRequestGeneration) return;
-            await host.InvokeScriptAsync(IsBambiCloudPlaylist(url)
-                ? WebHostTakeover.PlaylistAutoPlayScript : WebHostTakeover.VideoAutoPlayScript);
+            if (!IsBambiCloudPlaylist(url))
+            {
+                await host.InvokeScriptAsync(WebHostTakeover.VideoAutoPlayScript);
+                return;
+            }
+
+            // WPF Browser.cs:1035 releases a playlist that has no play button. Match only this
+            // request, so a delayed page message cannot release a later or already-playing claim.
+            var token = Guid.NewGuid().ToString("N");
+            void OnMessage(string body)
+            {
+                try
+                {
+                    using var outer = System.Text.Json.JsonDocument.Parse(body);
+                    using var json = System.Text.Json.JsonDocument.Parse(
+                        outer.RootElement.ValueKind == System.Text.Json.JsonValueKind.String ? outer.RootElement.GetString()! : body);
+                    var root = json.RootElement;
+                    if (!root.TryGetProperty("type", out var type) || type.GetString() != "ccpPlaylistNoButton"
+                        || !root.TryGetProperty("token", out var value) || value.GetString() != token) return;
+                    if (request != _browserRequestGeneration) return;
+                    DisarmPlaylistFailure();
+                    LockCardWindow.CancelWebVideoTakeover();
+                }
+                catch (System.Text.Json.JsonException) { }
+                catch (InvalidOperationException) { }
+            }
+            _playlistFailureHost = host;
+            _playlistFailureHandler = OnMessage;
+            host.WebMessage += OnMessage;
+            await host.InvokeScriptAsync(WebHostTakeover.PlaylistAutoPlayScript.Replace(
+                "__CCP_TOKEN__", System.Text.Json.JsonSerializer.Serialize(token)));
         }
 
         /// <summary>Homepage of whichever site radio is selected. BambiCloud is the default, as on
