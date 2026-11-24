@@ -482,16 +482,18 @@
          14px gap), so a 72px horizontal inset now costs 6% of a pane that already gave up 16%,
          and it left the page visibly indented relative to every other rack module (they sit at
          the rack ScrollViewer's 2,0,14,10 padding). Trimmed to match, keeping enough right-hand
-         room for the scrollbar. MaxWidth/Center are retained: at the old full-tab width they
-         were what stopped the toy cards from stretching, and this view is still reachable at
-         that width if it is ever hosted alone again.
+         room for the scrollbar. MaxWidth is retained: at the old full-tab width it is what
+         stops the toy cards from stretching (a Stretch element wider than its MaxWidth is
+         centred, so this view still centres if it is ever hosted alone again). Stretch, not
+         Center: a Center StackPanel takes its content's desired width, about 860px, and sat
+         in the middle of the rack pane with an empty band on each side (7.4 desk run).
 
          Nothing inside changed. In particular the routing rows built in
          MainWindow.Haptics.cs:124-129 keep their exact order and labels - the last of them,
          "Deeper", also gates FunScript because both ride HapticLayer.Pattern, and relabelling,
          reordering or splitting that row is a documented regression. -->
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-        <StackPanel Margin="6,2,18,22" MaxWidth="1280" HorizontalAlignment="Center"
+        <StackPanel Margin="6,2,18,22" MaxWidth="1280" HorizontalAlignment="Stretch"
                     Grid.IsSharedSizeScope="True" rows:RowHue.Hue="#B47BFF">
 
             <!-- Interactive controls + translucent premium gate.
