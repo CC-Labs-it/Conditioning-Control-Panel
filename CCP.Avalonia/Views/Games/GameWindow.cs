@@ -262,6 +262,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Opened += (_, _) => FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);
                 Closed += (_, _) => FriendsHead.Service?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);
             }
+            if (spec.Id != "goon" && spec.Id != JustDropId)
+            {
+                Web.NavigationStarting += () => _earlyReady = false;
+                Web.NavigationFinished += (url, ok) =>
+                {
+                    var ready = _earlyReady;
+                    _earlyReady = false;
+                    if (ready && ok && !_closing && PageUrl != null
+                        && ConditioningControlPanel.Services.Quiz.IntakeRun.SameDocument(url, PageUrl))
+                        HandleMessage("{\"type\":\"ready\"}");
+                };
+            }
             if (spec.Id == "goon")
             {
                 Web.NavigationStarting += () => _goonEarlyReady = false;
@@ -340,9 +352,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>WPF ChaosWebViewHost.cs:238,1704 fences transferred documents; JustDropHostService.cs:105-108
         /// keeps site navigation for the sign-in redirect. NativeWebView has no message source;
-        /// use its last completed top-level URL, as Intake does. Goon may retain ready during an
-        /// accepted navigation, but acts on it only after that document completes successfully.</summary>
-        private bool _goonEarlyReady, _goonNavigationConfirmed;
+        /// use its last completed top-level URL, as Intake does. Retain ready during an accepted
+        /// navigation, but act on it only after that document completes successfully.</summary>
+        private bool _earlyReady, _goonEarlyReady, _goonNavigationConfirmed;
         private void OnPageMessage(string json)
         {
             if (PageUrl == null) return;
@@ -356,6 +368,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 return;
             }
             if (Spec.Id == "goon" && !_goonNavigationConfirmed) return;
+            if (Spec.Id != "goon" && Spec.Id != JustDropId && (Web.CurrentUrl == null || Web.ActiveNavigation != null))
+            {
+                // NativeWebView supplies no message source. Hold only ready for the accepted page,
+                // and discard it if another navigation starts or this one fails.
+                try
+                {
+                    var type = (string?)JObject.Parse(Unwrap(json))["type"];
+                    if (json.Length <= 1024 && type == "ready" && Web.ActiveNavigation is { } active
+                        && ConditioningControlPanel.Services.Quiz.IntakeRun.SameDocument(active, PageUrl))
+                        _earlyReady = true;
+                    else Log.Debug("[Game] {Id}: dropped {Type} before navigation completed", Spec.Id, type);
+                }
+                catch { }
+                return;
+            }
             if (Web.CurrentUrl == null)
             {
                 // The listener runs at document start. Before the first completion, accept only

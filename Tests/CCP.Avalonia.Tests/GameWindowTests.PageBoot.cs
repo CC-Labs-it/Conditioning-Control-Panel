@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
+using Avalonia.Controls;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Tests;
@@ -13,8 +15,6 @@ namespace CCP.Avalonia.Tests;
 public sealed partial class GameWindowTests
 {
     // WPF ChaosWebViewHost.cs:1700-1715 receives ready before calling the page-ready handler.
-    private static readonly HashSet<string> EarlyBootGaps = new(StringComparer.Ordinal)
-    { "breakout", "breakoutdemo", "fyp", "piecebypiece", "loom", "raceclassic", "dtrh", "prizecounter" };
     private static readonly HashSet<string> CarrierGaps = new(StringComparer.Ordinal)
     { "race", "glassroad" };
 
@@ -46,15 +46,55 @@ public sealed partial class GameWindowTests
         var w = new GameWindow(spec);
         try
         {
+            if (id == "piecebypiece") w.PbpOsAnimations = () => Task.FromResult(true);
             w.Load(GameWindow.Server());
             var sent = new List<string>();
             w.Posted += sent.Add;
             BootLikeEngine(w, "{\"type\":\"ready\"}");
-            var knownGap = EarlyBootGaps.Contains(id);
-            var handshakeSucceeded = w.IsReady && sent.Count == 1 && (string?)JObject.Parse(sent[0])["type"] == "init";
-            Assert.False(knownGap && handshakeSucceeded, $"{id}: handshake now works; remove the tracked gap");
-            Assert.SkipWhen(knownGap, $"{id}: tracked early-ready gap (ready={w.IsReady}, frames={sent.Count})");
             Assert.True(w.IsReady, $"{id}: early ready did not mark the host ready");
+            // WPF LoomHostService.cs:140 sends loom-list; PieceByPieceHostService.cs:286 sends settings.
+            var expected = id == "loom" ? "loom-list" : id == "piecebypiece" ? "pbp:settings" : "init";
+            Assert.NotEmpty(sent);
+            Assert.Equal(expected, (string?)JObject.Parse(sent[0])["type"]);
+        }
+        finally { w.Close(); }
+    });
+
+    [Fact]
+    public void EarlyReady_RequiresSuccessfulMatchingNavigation() => RunPageBoot(() =>
+    {
+        var w = new GameWindow(GameWindow.Games["breakoutdemo"]);
+        try
+        {
+            w.Load(GameWindow.Server());
+            var sent = new List<string>();
+            w.Posted += sent.Add;
+            var page = w.PageUrl!;
+            var wrong = new Uri(page, "/other.html");
+            void Start(Uri url)
+            {
+                var e = new WebViewNavigationStartingEventArgs { Request = url };
+                w.Web.OnNavigationStarted(null, e);
+                Assert.False(e.Cancel);
+            }
+            w.Web.OnWebMessage("{\"type\":\"ready\"}"); // no accepted navigation
+            Start(page);
+            w.Web.OnWebMessage("{\"type\":\"ready\"}");
+            Start(wrong); // a new start discards the pending ready
+            w.Web.OnNavigationCompleted(wrong);
+            Assert.Empty(sent);
+            Start(page);
+            w.Web.OnWebMessage("{\"type\":\"ready\"}");
+            w.Web.OnNavigationCompleted(page, success: false);
+            Assert.Empty(sent);
+            Start(page);
+            w.Web.OnWebMessage("{\"type\":\"exit-done\"}");
+            w.Web.OnWebMessage("{\"type\":\"ready\"}");
+            w.Web.OnWebMessage("{\"type\":\"ready\"}");
+            Assert.Empty(sent);
+            Assert.False(w.IsReady);
+            w.Web.OnNavigationCompleted(page);
+            Assert.True(w.IsReady);
             Assert.Equal("init", (string?)JObject.Parse(Assert.Single(sent))["type"]);
         }
         finally { w.Close(); }
