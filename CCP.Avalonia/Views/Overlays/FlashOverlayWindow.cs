@@ -235,6 +235,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var state = FlashShatter.Create(x, y, fit.Width * scale, fit.Height * scale,
                 bounds.X, bounds.Y, bounds.Width, bounds.Height, motion, rng);
             if (state.Shards.Length == 0) return false; // Motion Off falls through to FlashExit, like WPF.
+            // WPF FlashLayer.cs:103,181-188 holds the current frame for the entire shatter.
+            // A video sink reuses and eventually disposes its writable bitmap on eviction.
+            if (source is WriteableBitmap videoFrame)
+            {
+                var snapshot = new WriteableBitmap(videoFrame.PixelSize, videoFrame.Dpi,
+                    videoFrame.Format!.Value, videoFrame.AlphaFormat ?? AlphaFormat.Premul);
+                try { using var target = snapshot.Lock(); videoFrame.CopyPixels(target); }
+                catch { snapshot.Dispose(); return false; }
+                source = snapshot;
+                Closed += (_, _) => snapshot.Dispose();
+            }
             // WPF FlashLayer.cs:194-196: break the hanging media at its frozen tilt.
             if (FlashOverlay.Drifting.Find(e => e.Window == this).Motion is { Style: FlashMotionStyle.Pendulum } pend)
                 FlashShatter.TakeOverHangingRect(state, pend.PivotX, pend.PivotY, pend.Rope, pend.AngleRad, pend.MediaW, pend.MediaH);
@@ -346,6 +357,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             if (exit.Style == FlashExitStyle.Glitch && _image.Source is { } src)
             {
+                // WPF FlashLayer.cs:204-212 retains the exit frame after its window closes.
+                if (src is WriteableBitmap videoFrame)
+                {
+                    var snapshot = new WriteableBitmap(videoFrame.PixelSize, videoFrame.Dpi,
+                        videoFrame.Format!.Value, videoFrame.AlphaFormat ?? AlphaFormat.Premul);
+                    try { using var target = snapshot.Lock(); videoFrame.CopyPixels(target); }
+                    catch { snapshot.Dispose(); return; }
+                    src = snapshot;
+                    Closed += (_, _) => snapshot.Dispose();
+                }
                 const int n = 7;
                 double w = _card.Bounds.Width, h = _card.Bounds.Height;
                 _slices = new Panel();
@@ -558,7 +579,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         internal bool IsRemix { get; set; }
-        internal void SetPicture(Bitmap picture) => _image.Source = picture;
+        internal void SetPicture(Bitmap picture)
+        {
+            _image.Source = picture;
+            _image.InvalidateVisual(); // video frames reuse the same bitmap
+        }
         internal object? Picture => _image.Source;
 
         public FlashOverlayWindow(Bitmap picture, string? path = null, bool ownsPicture = true)

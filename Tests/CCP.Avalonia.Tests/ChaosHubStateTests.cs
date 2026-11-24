@@ -124,6 +124,54 @@ public sealed class ChaosHubStateTests
         });
     }
 
+    [Fact]
+    public async Task Hub_displays_optional_banner_backdrop_and_empty_pocket_art()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var oldRendering = global::ConditioningControlPanel.Avalonia.RenderProof.Rendering;
+            global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = true;
+            ChaosHubWindow? hub = null;
+            try
+            {
+                ChaosArt.ResetForTest();
+                hub = new ChaosHubWindow();
+                foreach (var name in new[] { "BannerImage", "HubBackdrop" })
+                {
+                    var image = hub.FindControl<Image>(name)!;
+                    Assert.NotNull(image.Source);
+                    Assert.True(image.IsVisible);
+                }
+                // Rebuild with an empty save to expose the pockets vignette.
+                var state = ChaosMeta.State;
+                var toys = state.ToyPockets;
+                var accessories = state.AccessoryPockets;
+                try
+                {
+                    state.ToyPockets = 0;
+                    state.AccessoryPockets = 0;
+                    typeof(ChaosHubWindow).GetMethod("BuildLoadoutTiles", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.Invoke(hub, null);
+                    var host = hub.FindControl<StackPanel>("PocketSlotsHost")!;
+                    var empty = Assert.IsType<StackPanel>(Assert.Single(host.Children));
+                    Assert.NotNull(Assert.IsType<Image>(empty.Children[0]).Source);
+                    Assert.Equal("no pockets sewn yet.", Assert.IsType<TextBlock>(empty.Children[1]).Text);
+                }
+                finally { state.ToyPockets = toys; state.AccessoryPockets = accessories; }
+            }
+            finally
+            {
+                hub?.Close();
+                ChaosArt.ResetForTest();
+                global::ConditioningControlPanel.Avalonia.RenderProof.Rendering = oldRendering;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     private static void Click(Control root, string tag, string label)
     {
         var button = root.GetLogicalDescendants().OfType<Button>()

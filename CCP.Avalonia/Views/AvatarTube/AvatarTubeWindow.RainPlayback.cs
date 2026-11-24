@@ -163,6 +163,6 @@ public partial class AvatarTubeWindow
         foreach (var name in new[] { "ImgAvatarAnimated", "ImgAvatarAnimatedB" }) this.FindControl<Image>(name)!.IsVisible = false;
         _imgAvatar.IsVisible = true; _rainPack = null; _rainMap = null; _rainFolder = _rainClip = null;
         ApplyTubeLayoutOffsets();
-        if (!_avatarSetsClosed && _avatarPoses.Count(p => p != null) > 1) _poseTimer.Start();
+        if (!_avatarSetsClosed && !IsPortraitMode && _avatarPoses.Count(p => p != null) > 1) _poseTimer.Start();
     }
 }

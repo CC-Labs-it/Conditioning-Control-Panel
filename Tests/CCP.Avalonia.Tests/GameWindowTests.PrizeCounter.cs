@@ -21,11 +21,12 @@ public sealed partial class GameWindowTests
     private sealed class ShopWire : HttpMessageHandler
     {
         internal readonly List<string> Urls = new();
+        internal bool Ok = true;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             lock (Urls) Urls.Add(r.RequestUri!.ToString() + " " + string.Join(",", r.Headers.GetValues("X-Auth-Token")));
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(
-                "{\"ok\":true,\"tabs\":[{\"id\":\"rain-clothes\"},{\"id\":\"kart\",\"shelves\":[{\"rows\":[{\"id\":\"rain.x\"},{\"id\":\"kart.y\"}]}]}]}") });
+                (Ok ? "{\"ok\":true,\"tabs\":[{\"id\":\"rain-clothes\"},{\"id\":\"kart\",\"shelves\":[{\"rows\":[{\"id\":\"rain.x\"},{\"id\":\"kart.y\"}]}]}]}" : "{\"ok\":false,\"reason\":\"owned\"}")) });
         }
     }
 
@@ -151,6 +152,27 @@ public sealed partial class GameWindowTests
         sent.Clear(); w.HandleMessage("{\"type\":\"ready\"}");
         var again = sent.Single(o => (string?)o["type"] == "init");
         Assert.Equal(("chess", "glassroad", true), ((string?)again["tab"], (string?)again["from"], (bool)again["reducedMotion"]!));
+    });
+
+    [Fact]
+    public void PrizeCounter_BuyReceiptNotesShopOnce() => RunCounter((_, wire, sent) =>
+    {
+        var old = GameWindow.CounterNoteEvent;
+        var events = new List<string>();
+        try
+        {
+            GameWindow.CounterNoteEvent = events.Add;
+            CoreSettings.Current.UnifiedId = "acct-1";
+            var w = OpenCounter(sent);
+            w.HandleMessage("{\"type\":\"request\",\"reqId\":\"b1\",\"op\":\"shop-buy\",\"idem\":\"i1\",\"body\":{\"itemId\":\"kart.y\"}}");
+            Assert.True((bool)AwaitReply(sent, "b1")["ok"]!);
+            Assert.Equal(new[] { "e_shop" }, events);
+            wire.Ok = false;
+            w.HandleMessage("{\"type\":\"request\",\"reqId\":\"b2\",\"op\":\"shop-buy\",\"idem\":\"i2\",\"body\":{\"itemId\":\"kart.y\"}}");
+            Assert.False((bool)AwaitReply(sent, "b2")["ok"]!);
+            Assert.Equal(new[] { "e_shop" }, events);
+        }
+        finally { GameWindow.CounterNoteEvent = old; }
     });
 
     /// <summary>WPF SignInFromPage: signed out answers signed_out; signin opens the sign-in, then pins and reloads.</summary>

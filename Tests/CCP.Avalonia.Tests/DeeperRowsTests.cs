@@ -61,6 +61,32 @@ public sealed class DeeperRowsTests
     });
 
     [Fact]
+    public Task ClearingLinkedMediaStopsBrowserPreview() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var model = new Enhancement { MediaType = MediaTypes.Video, MediaSource = "https://www.tiktok.com/@a/video/1" };
+        var editor = new DeeperEditorWindow(model, null);
+        try
+        {
+            editor.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(editor.BrowserPreview.IsVisible);
+            editor.BrowserPreview.Source = new Uri(model.MediaSource);
+            typeof(DeeperEditorWindow).GetField("_browserNavigated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(editor, true);
+            Click(editor.FindControl<Button>("BtnLinkedMediaClear")!);
+            Dispatcher.UIThread.RunJobs();
+            var dialog = Assert.Single(editor.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>());
+            dialog.Close(true);
+            for (var i = 0; i < 20 && model.MediaSource != ""; i++)
+                await Task.Delay(10);
+            Assert.Equal("", model.MediaSource);
+            Assert.Equal("about:blank", editor.BrowserPreview.Source!.AbsoluteUri);
+            Assert.True(editor.PreviewPlaceholder.IsVisible);
+        }
+        finally { editor.ForceClose(); }
+    });
+
+    [Fact]
     public Task PreviewFromPlayerOwnedEditorReusesOwner() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
@@ -1358,4 +1384,83 @@ public sealed class DeeperRowsTests
         }
         return Task.CompletedTask;
     });
+    [Fact]
+    public Task VideoPollPublishesOneCompletionAtTheEnd() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var player = new EnhancementPlayerWindow(null, null);
+        var web = player.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.WebHost>("VideoBrowser")!;
+        var value = "50|100|0";
+        web.ScriptInvoker = _ => Task.FromResult<string?>(value);
+        var count = 0;
+        void OnFinished(string? _) => count++;
+        EnhancementPlayerWindow.PlaybackFinished += OnFinished;
+        try
+        {
+            player.Show();
+            typeof(EnhancementPlayerWindow).GetField("_videoNavigated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(player, true);
+            var poll = typeof(EnhancementPlayerWindow).GetMethod("PollVideoTimeAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            await (Task)poll.Invoke(player, null)!;
+            Assert.Equal(0, count);
+            // EnhancementEngine.cs:680-688: within 0.75 s of the end counts, still playing (a looping page) or not.
+            value = "99.5|100|1";
+            await (Task)poll.Invoke(player, null)!;
+            Assert.Equal(1, count);
+            value = "100|100|0";
+            await (Task)poll.Invoke(player, null)!;
+            value = "10|100|1";
+            await (Task)poll.Invoke(player, null)!;
+            value = "99.9|100|1";
+            await (Task)poll.Invoke(player, null)!;
+            Assert.Equal(1, count);
+        }
+        finally { EnhancementPlayerWindow.PlaybackFinished -= OnFinished; player.Close(); }
+    });
+
+    [Fact]
+    public Task VideoWithoutDurationFinishesOnStopAfterAMinute() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Setup();
+        var player = new EnhancementPlayerWindow(null, null);
+        var web = player.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.WebHost>("VideoBrowser")!;
+        var value = "30|NaN|1";
+        web.ScriptInvoker = _ => Task.FromResult<string?>(value);
+        var count = 0;
+        void OnFinished(string? _) => count++;
+        EnhancementPlayerWindow.PlaybackFinished += OnFinished;
+        var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var navigated = typeof(EnhancementPlayerWindow).GetField("_videoNavigated", flags)!;
+        var poll = typeof(EnhancementPlayerWindow).GetMethod("PollVideoTimeAsync", flags)!;
+        var stop = typeof(EnhancementPlayerWindow).GetMethod("BtnStop_Click", flags)!;
+        try
+        {
+            player.Show();
+            navigated.SetValue(player, true);
+            // Engine Stop fallback (EnhancementEngine.cs:481-490): under 60 s played does not count.
+            await (Task)poll.Invoke(player, null)!;
+            stop.Invoke(player, null);
+            Assert.Equal(0, count);
+            value = "61|Infinity|1";
+            await (Task)poll.Invoke(player, null)!;
+            Assert.Equal(0, count);
+            stop.Invoke(player, null);
+            Assert.Equal(1, count);
+            stop.Invoke(player, null);
+            Assert.Equal(1, count);
+            // A video that once reported a duration and was stopped early does not count.
+            value = "61|100|1";
+            await (Task)poll.Invoke(player, null)!;
+            value = "62|0|1";
+            await (Task)poll.Invoke(player, null)!;
+            stop.Invoke(player, null);
+            Assert.Equal(1, count);
+            // Closing the window is a stop too.
+            value = "90|0|1";
+            await (Task)poll.Invoke(player, null)!;
+            player.Close();
+            Assert.Equal(2, count);
+        }
+        finally { EnhancementPlayerWindow.PlaybackFinished -= OnFinished; player.Close(); }
+    });
+
 }

@@ -31,7 +31,7 @@ namespace CCP.Avalonia.Tests;
 /// MainWindow/MainWindow.Possession.cs (host + walk), MainWindow.Lab.cs:871-986 (readout) and 1100
 /// (first-run rules), Services/Possession/PossessionWpfHead.cs, EmberAttribution.cs, PossessionEffectBase.cs.
 /// The director is built BEFORE the shell, as App does (its lockdown handlers run first).</summary>
-public sealed class PossessionShellTests
+public sealed partial class PossessionShellTests
 {
     private sealed record Rig(MainShellWindow Shell, LockdownService Lockdown, PossessionDirector Director, FakeFrames Frames)
     {
@@ -41,7 +41,7 @@ public sealed class PossessionShellTests
     private static void Run(Action<Rig> body, Action<AppSettings>? seed = null) =>
         RunAsync(rig => { body(rig); return Task.CompletedTask; }, seed).GetAwaiter().GetResult();
 
-    private static Task RunAsync(Func<Rig, Task> body, Action<AppSettings>? seed = null)
+    private static Task RunAsync(Func<Rig, Task> body, Action<AppSettings>? seed = null, IPossessionEffect[]? effects = null, PossessionDirectorHead? head = null)
     {
         return AvaloniaTestDispatcher.RunAsync(async () =>
         {
@@ -69,7 +69,7 @@ public sealed class PossessionShellTests
             var priorPost = CoreDispatch.PostProvider;
             CoreDispatch.PostProvider = a => Dispatcher.UIThread.Post(a);
             var ld = LockdownService.Current = new LockdownService();
-            var director = new PossessionDirector(ld, PossessionAvaloniaHead.CreateEffects(), PossessionAvaloniaHead.CreateDirectorHead());
+            var director = new PossessionDirector(ld, effects != null ? effects : PossessionAvaloniaHead.CreateEffects(), head ?? PossessionAvaloniaHead.CreateDirectorHead());
             var frames = new FakeFrames();
             var shell = new MainShellWindow { PossessionFramesOverride = frames, PossessionDirectorOverride = director };
             var rig = new Rig(shell, ld, director, frames);
@@ -710,4 +710,36 @@ public sealed class PossessionShellTests
         Frame();
         Assert.Equal(1, starts);
     });
+    [Fact]
+    public Task CatalogSwapFindsAndMovesRealShellButtons() => RunAsync(async rig =>
+    {
+        rig.Shell.ShowTab("settings");
+        Frame(); rig.Shell.CompleteTabTransition(); Frame();
+        rig.Shell.InvalidatePossessionTargets();
+        var host = (IAvaloniaPossessionHost)rig.Shell;
+        var effect = Assert.IsType<SwapEffect>(PossessionAvaloniaHead.CreateEffects().Single(e => e.Id == "swap"));
+        var ctx = new PossessionContext { Host = rig.Shell, Attribution = new DodgeAttribution(), Rung = PossessionRung.Drift,
+            Intensity = PossessionIntensity.Gentle, Photosafe = false, Rng = new Random(1), ElapsedFraction = 0,
+            Remaining = TimeSpan.FromMinutes(1), Name = (_, _) => { } };
+        var target = ((IPossessionHost)rig.Shell).Targets.FirstOrDefault(t => effect.CanApply(ctx, t));
+        Assert.NotNull(target);
+        var partner = SwapEffect.FindPartner(ctx, target!);
+        Assert.NotNull(partner);
+        var a = (Control)target!.Visual; var b = (Control)partner!.Visual;
+        var homeA = host.BoundsOnGhostLayer(a)!.Value; var homeB = host.BoundsOnGhostLayer(b)!.Value;
+        try
+        {
+            var apply = effect.ApplyAsync(ctx, target, CancellationToken.None);
+            Assert.True(PossessionLease.IsLeased(a) && PossessionLease.IsLeased(b));
+            rig.Frames.Frame(TimeSpan.Zero); rig.Frames.Frame(TimeSpan.FromMilliseconds(550)); await apply;
+            Assert.Equal(homeB.X, host.BoundsOnGhostLayer(a)!.Value.X, 1);
+            PointerTestFrame.Render(rig.Shell);
+            var point = host.GhostLayer!.TranslatePoint(host.BoundsOnGhostLayer(a)!.Value.Center, rig.Shell)!.Value;
+            var hit = rig.Shell.InputHitTest(point) as Visual;
+            Assert.True(ReferenceEquals(hit, a) || (hit != null && a.IsVisualAncestorOf(hit)));
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); }
+        Assert.Equal(homeA.X, host.BoundsOnGhostLayer(a)!.Value.X, 1);
+    });
+
 }

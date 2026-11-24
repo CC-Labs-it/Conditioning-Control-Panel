@@ -10,6 +10,7 @@ public partial class EmiDeskWindow
     internal void SpeakLine(LineDraw line, EmiLineEngine engine)
     {
         if (PresentationActive || !IsVisible) return;
+        if (!AskLive) StopAskTimer();
         CancelChain();
         CancelHold();
         engine.Ack(line.Id, spoke: !line.Hold);
