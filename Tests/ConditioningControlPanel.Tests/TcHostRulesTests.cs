@@ -119,16 +119,17 @@ public class TcHostRulesTests
     [Fact]
     public void Save_offer_passes_up_to_the_cap()
     {
-        var save = new string('a', TcRules.MaxSaveBytes);
+        var save = new string('a', TcRules.MaxSaveChars);
         var r = TcFrameGate.Check(new JObject { ["type"] = "save-offer", ["save"] = save });
         Assert.True(r.Accepted);
         Assert.Equal(save, r.Frame!.Save);
     }
 
     [Fact]
-    public void Save_offer_over_the_cap_is_too_big()
+    public void Save_offer_over_the_page_parser_cap_is_too_big()
     {
-        var r = TcFrameGate.Check(new JObject { ["type"] = "save-offer", ["save"] = new string('a', TcRules.MaxSaveBytes + 1) });
+        // 400,001 one-byte characters: under the byte cap, over what the page can read back.
+        var r = TcFrameGate.Check(new JObject { ["type"] = "save-offer", ["save"] = new string('a', TcRules.MaxSaveChars + 1) });
         Assert.False(r.Accepted);
         Assert.Equal(TcFrameGate.RefuseTooBig, r.Refusal);
     }
@@ -220,7 +221,8 @@ public class TcHostRulesTests
         var r = Gate("{\"type\":\"fuzz-ended\",\"total\":1e12,\"minutes\":71.5,\"items\":120,\"ending\":\"llama_expo\",\"route\":[\"a\"],\"dayUtc\":\"2026-11-22\"}");
         Assert.True(r.Accepted);
         Assert.Equal("llama_expo", r.Frame!.Ending);
-        Assert.Equal(71, r.Frame.Ms);
+        Assert.Equal(71, r.Frame.Minutes);
+        Assert.Equal(0, r.Frame.Ms);
         Assert.False(Gate("{\"type\":\"fuzz-ended\",\"minutes\":3,\"ending\":\"<script>\"}").Accepted);
         Assert.False(Gate("{\"type\":\"fuzz-ended\",\"ending\":\"good\"}").Accepted);
     }

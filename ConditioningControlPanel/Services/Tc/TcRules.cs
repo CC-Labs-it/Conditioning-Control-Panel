@@ -21,6 +21,9 @@ internal static class TcRules
     /// <summary>The page never sends a save bigger than this (Contract v2 <c>save-offer</c>).</summary>
     public const int MaxSaveBytes = 512_000;
 
+    /// <summary>...and never more characters than the page's own save parser reads back (SAVE_CARRY_MAX_CHARS).</summary>
+    public const int MaxSaveChars = 400_000;
+
     /// <summary>Where a downloaded Expo is served from (its own virtual host, Allow, so the game on
     /// <c>ccp.game</c> can fetch it).</summary>
     public const string ExpoHost = "ccp.expo";

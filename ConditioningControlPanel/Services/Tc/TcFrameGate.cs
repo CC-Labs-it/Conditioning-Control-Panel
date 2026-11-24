@@ -19,8 +19,13 @@ internal sealed record TcPageFrame(string Type)
     public string? Tag { get; init; }
     public IReadOnlyList<string>? Niches { get; init; }
     public double Level { get; init; }
+    /// <summary><c>haptic</c>: pulse length in milliseconds.</summary>
     public int Ms { get; init; }
+    /// <summary><c>fuzz-ended</c>: run length in whole MINUTES (never milliseconds).</summary>
+    public int Minutes { get; init; }
     public bool Value { get; init; }
+    /// <summary><c>set-setting</c>: the page says this came from the player's own press (<c>ask:true</c>).</summary>
+    public bool Ask { get; init; }
 }
 
 /// <summary>The gate's answer. <paramref name="Refusal"/> is a fixed code; for <c>save-offer</c> it is
@@ -126,7 +131,7 @@ internal static class TcFrameGate
                 if (o["save"] is not JValue { Type: JTokenType.String } v) return TcGateResult.No(RefuseField);
                 var save = (string)v!;
                 if (save.Length == 0) return TcGateResult.No(RefuseField);
-                if (save.Length > TcRules.MaxSaveBytes || Encoding.UTF8.GetByteCount(save) > TcRules.MaxSaveBytes)
+                if (save.Length > TcRules.MaxSaveChars || Encoding.UTF8.GetByteCount(save) > TcRules.MaxSaveBytes)
                     return TcGateResult.No(RefuseTooBig);
                 return TcGateResult.Ok(new TcPageFrame(type) { Save = save });
             }
@@ -139,7 +144,11 @@ internal static class TcFrameGate
             {
                 if (Str(o, "key") != "media.remoteConsent" || o["value"] is not JValue { Type: JTokenType.Boolean } val)
                     return TcGateResult.No(RefuseField);
-                return TcGateResult.Ok(new TcPageFrame(type) { Value = (bool)val! });
+                return TcGateResult.Ok(new TcPageFrame(type)
+                {
+                    Value = (bool)val!,
+                    Ask = o["ask"] is JValue { Type: JTokenType.Boolean } a && (bool)a!,
+                });
             }
             case "scrolller-niches":
             {
@@ -170,7 +179,7 @@ internal static class TcFrameGate
                 var ending = Str(o, "ending");
                 if (ending == null || !Id.IsMatch(ending)) return TcGateResult.No(RefuseField);
                 if (!TryNumber(o["minutes"], out var minutes)) return TcGateResult.No(RefuseField);
-                return TcGateResult.Ok(new TcPageFrame(type) { Ending = ending, Ms = (int)Math.Clamp(minutes, 0, 24 * 60) });
+                return TcGateResult.Ok(new TcPageFrame(type) { Ending = ending, Minutes = (int)Math.Clamp(minutes, 0, 24 * 60) });
             }
             default:
                 return TcGateResult.No(RefuseType);
