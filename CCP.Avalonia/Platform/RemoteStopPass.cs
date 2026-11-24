@@ -13,6 +13,7 @@ internal static class RemoteStopPass
 
     internal static void Post() => Dispatcher.UIThread.Post(() =>
     {
+        Possession.PossessionAvaloniaHead.Warden?.Stop();
         foreach (var surface in PanicSurfaces.All)
         {
             if (!RemoteStopIds.Contains(surface.Id)) continue;
