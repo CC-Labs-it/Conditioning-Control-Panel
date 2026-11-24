@@ -53,6 +53,65 @@ public sealed class AwarenessObserverHeadTests
     }
 
     [Fact]
+    public void InputFactoryTakesWaylandIdleFromTheCompositor()
+    {
+        using var wayland = AvApp.CreateAwarenessInputProbe(false, true);
+        Assert.IsType<ConditioningControlPanel.Avalonia.Platform.WaylandAwarenessInputProbe>(wayland);
+        using var x11 = AvApp.CreateAwarenessInputProbe(false, false);
+        Assert.IsType<ConditioningControlPanel.Avalonia.Platform.X11AwarenessInputProbe>(x11);
+    }
+
+    private sealed class Burst : IInputProbe
+    {
+        public int IdleSeconds => 999;
+        public bool IsTypingBurst => true;
+        public int Starts, Stops, Disposes;
+        public void Start() => Starts++;
+        public void Stop() => Stops++;
+        public void Dispose() => Disposes++;
+    }
+
+    [Fact]
+    public async Task WaylandInputReadsCompositorIdleAndFailsClosedWithoutIt()
+    {
+        int? idle = 400;
+        var burst = new Burst();
+        using var probe = new ConditioningControlPanel.Avalonia.Platform.WaylandAwarenessInputProbe(burst, () => Task.FromResult(idle));
+        Assert.Equal(0, probe.IdleSeconds); // before the first read finishes
+        Assert.True(await Settle(probe, 400));
+        idle = null;
+        Assert.True(await Settle(probe, AwarenessObserver.AfkSuspendSeconds));
+        using var failing = new ConditioningControlPanel.Avalonia.Platform.WaylandAwarenessInputProbe(burst, () => throw new InvalidOperationException());
+        Assert.True(await Settle(failing, AwarenessObserver.AfkSuspendSeconds));
+        Assert.True(probe.IsTypingBurst);
+        probe.Start(); probe.Stop();
+        Assert.Equal((1, 1), (burst.Starts, burst.Stops));
+
+        static async Task<bool> Settle(IInputProbe p, int expected)
+        {
+            for (int i = 0; i < 200; i++) { if (p.IdleSeconds == expected) return true; await Task.Delay(10); }
+            return false;
+        }
+    }
+
+    [Fact]
+    public void WaylandIdleNotifyReportsFromItsOwnThreshold()
+    {
+        long t = 0;
+        var notify = new ConditioningControlPanel.Avalonia.Platform.WaylandIdleNotify(30_000) { Now = () => t };
+        var w = ConditioningControlPanel.Avalonia.Platform.WaylandIdleNotify.Message;
+        var rx = new MemoryStream(new[] { w(2, 0, new object[] { 7u, "wl_seat", 7u }), w(2, 0, new object[] { 9u, "ext_idle_notifier_v1", 2u }),
+            w(3, 0, new object[] { 1u }), w(6, 0, Array.Empty<object>()) }.SelectMany(m => m).ToArray());
+        var tx = new MemoryStream();
+        notify.Run(rx, tx);
+        Assert.EndsWith(Convert.ToHexString(w(5, 2, new object[] { 6u, 30_000u, 4u })), Convert.ToHexString(tx.ToArray()));
+        t = 15_000;
+        Assert.Equal(45, notify.Seconds);
+        notify.OnEvent(1);
+        Assert.Equal(0, notify.Seconds);
+    }
+
+    [Fact]
     public Task ConsentFrameWipeAndPanicFollowTheLiveObserver() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var oldSettings = CoreSettings.ServiceProvider;

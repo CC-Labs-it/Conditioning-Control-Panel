@@ -26,7 +26,7 @@ public partial class App
         {
             observer = new AwarenessObserver(ledger, scorer, arbiter, memory, null,
                 foreground ?? (OperatingSystem.IsWindows() ? new Platform.Win32AwarenessForegroundProbe() : new Platform.X11ForegroundProbe()),
-                input ?? (OperatingSystem.IsWindows() ? new Platform.Win32AwarenessInputProbe() : new Platform.X11AwarenessInputProbe()),
+                input ?? CreateAwarenessInputProbe(OperatingSystem.IsWindows(), Platform.WaylandAwarenessInputProbe.IsSession()),
                 microphone ?? (OperatingSystem.IsWindows() ? new Platform.Win32AwarenessMicrophoneProbe() : new Platform.AwarenessMicrophoneProbe()),
                 media ?? CreateAwarenessMediaWatcher(OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763), OperatingSystem.IsLinux(), SandboxNet.Active),
                 state, null, attachAppState: state.Attach);
@@ -76,6 +76,12 @@ public partial class App
         if (windows) return new SmtcMediaWatcher();
         return linux ? new Platform.MprisMediaWatcher() : null;
     }
+
+    // WPF AwarenessProbes.cs:165. A Wayland session takes idle from the compositor, not XWayland.
+    internal static IInputProbe CreateAwarenessInputProbe(bool windows, bool wayland) =>
+        windows ? new Platform.Win32AwarenessInputProbe()
+        : wayland ? new Platform.WaylandAwarenessInputProbe(new Platform.X11AwarenessInputProbe())
+        : new Platform.X11AwarenessInputProbe();
 
     internal static void ReleaseAwarenessObserver()
     {

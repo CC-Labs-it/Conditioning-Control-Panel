@@ -62,7 +62,7 @@ internal static class DesktopIdle
         catch { return null; }
     }
 
-    private static async Task<ulong> ReadMutterMillisecondsAsync()
+    internal static async Task<ulong> ReadMutterMillisecondsAsync()
     {
         using var bus = new DBusConnection(DBusAddress.Session!);
         // Disposing this connection on timeout also ends any outstanding call.
@@ -124,12 +124,15 @@ internal sealed class WaylandIdleNotify
     internal static readonly WaylandIdleNotify Shared = new();
     internal const uint TimeoutMs = 300_000;
     internal Func<long> Now = () => Environment.TickCount64;
+    private readonly uint _timeoutMs;
     private long _idledAt = -1;
     private int _started;
-    internal volatile bool Live;
+    internal volatile bool Live, Done;
+
+    internal WaylandIdleNotify(uint timeoutMs = TimeoutMs) => _timeoutMs = timeoutMs;
 
     internal void OnEvent(uint opcode) => Interlocked.Exchange(ref _idledAt, opcode == 0 ? Now() : -1);
-    internal int Seconds => Interlocked.Read(ref _idledAt) is var at && at < 0 ? 0 : (int)((Now() - at + TimeoutMs) / 1000);
+    internal int Seconds => Interlocked.Read(ref _idledAt) is var at && at < 0 ? 0 : (int)((Now() - at + _timeoutMs) / 1000);
 
     internal void Start()
     {
@@ -144,7 +147,7 @@ internal sealed class WaylandIdleNotify
                 Run(stream, stream);
             }
             catch (Exception ex) { Serilog.Log.Debug(ex, "[EmiDesk] Wayland idle notify unavailable"); }
-            finally { Live = false; }
+            finally { Live = false; Done = true; }
         }) { IsBackground = true, Name = "wayland-idle" }.Start();
     }
 
@@ -166,7 +169,7 @@ internal sealed class WaylandIdleNotify
         if (seat == 0 || notifier == 0) return;
         // v2's input notification ignores idle inhibitors, as WPF's GetLastInputInfo does.
         tx.Write(Message(2, 0, seat, "wl_seat", 1u, 4u).Concat(Message(2, 0, notifier, "ext_idle_notifier_v1", Math.Min(version, 2), 5u))
-            .Concat(Message(5, version >= 2 ? 2u : 1u, 6u, TimeoutMs, 4u)).ToArray());
+            .Concat(Message(5, version >= 2 ? 2u : 1u, 6u, _timeoutMs, 4u)).ToArray());
         Live = true;
         while (Read(rx, out obj, out op, out _)) if (obj == 6) OnEvent(op);
     }
