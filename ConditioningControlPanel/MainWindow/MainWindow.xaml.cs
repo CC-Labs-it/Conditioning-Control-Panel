@@ -3741,6 +3741,7 @@ namespace ConditioningControlPanel
             // Wire the in-app notification surface. Anything App.Notifications.Show()'d
             // before this point is replayed on attach.
             App.Notifications?.AttachHost(NotificationHost);
+            WireNotificationHistory();
 
             // First-run picker: activate the mod the user chose there once its pack is on disk. Armed
             // here rather than in the ctor because the switch repaints this window's tabs, and the
