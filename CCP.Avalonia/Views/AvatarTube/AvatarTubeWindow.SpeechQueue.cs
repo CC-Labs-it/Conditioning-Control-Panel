@@ -4,6 +4,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia.Threading;
 
 namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
@@ -12,7 +13,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
     {
         /// <summary>Where a line came from: decides the gap after it (WPF Speech.cs:71); a queued
         /// Trigger replays through its own bubble (ShowSpeechBySource :217).</summary>
-        internal enum SpeechSource { Preset, AI, Trigger }
+        internal enum SpeechSource { Preset, AI, Trigger, FlashPre }
 
         // WPF Speech.cs:35,283: queued audio drops, but the line id and mood still drive the expression.
         private readonly Queue<(string Text, bool Unprompted, SpeechSource Source, string? LineId, string? Mood)> _speechQueue = new();
@@ -28,6 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         /// <summary>Cancels the pending post-line gap (WPF _speechDelayTimer.Stop). Never null.</summary>
         private Action _cancelSpeechDelay = NoSpeechDelay;
+        private SpeechSource? _pendingSpeechSource;
         /// <summary>The idle cancel; anything else means a gap is pending (the stale-latch check reads it).</summary>
         private static readonly Action NoSpeechDelay = static () => { };
 
@@ -74,11 +76,15 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _cancelSpeechDelay();
             _cancelSpeechDelay = NoSpeechDelay;
             if (remaining > 0)
+            {
+                _pendingSpeechSource = next.Source;
                 _cancelSpeechDelay = SpeechDelayScheduler(TimeSpan.FromSeconds(remaining), () =>
                 {
                     _cancelSpeechDelay = NoSpeechDelay;
+                    _pendingSpeechSource = null;
                     ShowQueued(next);
                 });
+            }
             else
                 ShowQueued(next);
         }
@@ -87,7 +93,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private void ShowQueued((string Text, bool Unprompted, SpeechSource Source, string? LineId, string? Mood) line)
         {
             if (line.Source == SpeechSource.Trigger) ShowTriggerBubbleImmediate(line.Text);
-            else ShowSpeech(line.Text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true, unprompted: line.Unprompted, mood: line.Mood, emotionLineId: line.LineId);
+            else ShowSpeech(line.Text, NextPresetGiggleSound(), aiGenerated: false, null, false, preset: true, unprompted: line.Unprompted, mood: line.Mood, emotionLineId: line.LineId, flashPre: line.Source == SpeechSource.FlashPre);
         }
 
         /// <summary>WPF GigglePriority / PanicSilence: drop every waiting line and the pending gap.</summary>
@@ -97,7 +103,34 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _speechQueue.Clear();
             _cancelSpeechDelay();
             _cancelSpeechDelay = NoSpeechDelay;
+            _pendingSpeechSource = null;
         }
+
+        /// <summary>Remove only flash pre-phrases when flashes stop.</summary>
+        private void StopFlashPre() => RunOnAvatar(() =>
+        {
+            var keep = _speechQueue.Where(line => line.Source != SpeechSource.FlashPre).ToArray();
+            _speechQueue.Clear();
+            foreach (var line in keep) _speechQueue.Enqueue(line);
+            if (_pendingSpeechSource == SpeechSource.FlashPre)
+            {
+                _cancelSpeechDelay();
+                _cancelSpeechDelay = NoSpeechDelay;
+                _pendingSpeechSource = null;
+                ProcessNextSpeech();
+            }
+            else if (_pendingSpeechSource == null && _isGiggling && _currentSpeechSource == SpeechSource.FlashPre)
+            {
+                CancelTriggerAnimation();
+                _speechTimer?.Stop();
+                try { _stopSpoken(); } catch { }
+                _stopSpoken = static () => { };
+                _speechBubble.IsVisible = false;
+                _isGiggling = false;
+                _currentSpeechSource = SpeechSource.Preset;
+                NoteSpeechEnded(SpeechSource.Preset, _currentSpeechLength);
+            }
+        });
 
         /// <summary>A line left the screen (or was skipped): remember what it earned, then the next.</summary>
         private void NoteSpeechEnded(SpeechSource source, int length)
@@ -118,7 +151,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _speechTimer?.Stop();
             _speechBubble.IsVisible = false;
             _isShowingAiBubble = false;
-            NoteSpeechEnded(_currentSpeechSource, _currentSpeechLength);
+            var ended = _currentSpeechSource;
+            _currentSpeechSource = SpeechSource.Preset;
+            NoteSpeechEnded(ended, _currentSpeechLength);
         }
     }
 }

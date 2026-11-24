@@ -139,6 +139,9 @@ public class FlashCuesTests
             CorePaths.EffectiveAssetsProvider, ScreenList.QueryOverride, CoreSettings.Current.FlashAudioEnabled);
         var host = new Window();
         var scheduled = new List<Action>();
+        var announcements = 0;
+        void Announced() => announcements++;
+        FlashOverlay.AboutToDisplay += Announced;
         try
         {
             CoreHaptics.Service = service;
@@ -153,6 +156,7 @@ public class FlashCuesTests
             FlashOverlay.TriggerOnce(host, amount: 1, durationMs: 1600, suppressHaptic: suppress);
             for (int i = 0; i < 250 && scheduled.Count == 0; i++) await Task.Delay(20);
             Assert.Single(scheduled);
+            Assert.Equal(1, announcements);
             scheduled[0]();
             Assert.Single(FlashOverlay.Active);
             Assert.Equal(suppress ? 0 : 1, luminance.Count);
@@ -161,6 +165,7 @@ public class FlashCuesTests
         finally
         {
             FlashOverlay.CloseAll(final: false);
+            FlashOverlay.AboutToDisplay -= Announced;
             host.Close();
             (CoreHaptics.Service, FlashOverlay.SetLuminance, FlashOverlay.Present,
                 FlashOverlay.OverlaysAvailable, FlashOverlay.After, FlashOverlay.VoiceLead,

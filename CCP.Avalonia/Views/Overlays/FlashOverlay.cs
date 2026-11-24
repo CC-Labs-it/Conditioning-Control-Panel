@@ -35,7 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>ponytail: not here yet, each a later branch - the subliminal whisper source,
     /// the lucky glow pulse, Natasha's favourite,
-    /// gaze pop/linger, solid hosting and avatar pre-announce.</para>
+    /// gaze pop/linger and solid hosting.</para>
     /// </summary>
     internal static partial class FlashOverlay
     {
@@ -59,6 +59,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             new(ConditioningControlPanel.Services.ContentPackStore.ImageType);
         // WPF FlashService.cs:1674: notify at display, after loading and the pre-display wait.
         internal static event Action? Displayed;
+        internal static event Action? AboutToDisplay;
+        internal static event Action? Stopped;
+        internal static bool Announce(int generation)
+        {
+            if (_closed || generation != Volatile.Read(ref _generation)) return false;
+            AboutToDisplay?.Invoke();
+            return true;
+        }
         internal static event Action? Clicked;
         internal static Action<Action, TimeSpan> After = (then, delay) => DispatcherTimer.RunOnce(then, delay);
         // Test seam: headless has no click-through overlays, so the burst would stop before loading.
@@ -118,6 +126,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     return;
                 }
 
+                // WPF FlashService.cs:993: the avatar speaks before the one second lead.
+                if (!Announce(generation)) { foreach (var f in flashes) Drop(f.Bitmap); return; }
                 // WPF's pre-announce has a one second lead before ShowImages starts the voice.
                 var timing = new BurstLifetime(s, ambient, durationMs);
                 await VoiceAfterLead(s, generation, durationChanged: seconds => Dispatcher.UIThread.Post(() =>
@@ -605,6 +615,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             lock (BurstGate) { Interlocked.Increment(ref _generation); _busy = false; Volatile.Write(ref _voiceAttempted, 0); }   // WPF FlashService.cs:5118
             Interlocked.Exchange(ref _stopFlashVoice, null)?.Invoke();
+            Stopped?.Invoke();
         }
 
         private static void CloseWindows(bool final)

@@ -1315,21 +1315,21 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// <summary>WPF Giggle (Speech.cs:240): a PRESET line. Dropped while an AI request is in
         /// flight or an AI bubble is up, never logged to chat history, sound on every fifth. Queued
         /// behind a line still up, or until the previous line's gap has passed (Speech.cs:273-294).</summary>
-        public void Giggle(string text, bool unprompted = false, string? phraseAudioPath = null, bool barkVoice = false, string? mood = null)
+        public void Giggle(string text, bool unprompted = false, string? phraseAudioPath = null, bool barkVoice = false, string? mood = null, bool flashPre = false)
         {
             if (_isPlayingUninterruptibleClip || _isWaitingForAi || _isShowingAiBubble) return;
             RunOnAvatar(() =>
             {
                 if (_isWaitingForAi || _isShowingAiBubble) return;   // re-checked on the UI thread, as WPF
-                if (_isGiggling) { _speechQueue.Enqueue((text, unprompted, SpeechSource.Preset, phraseAudioPath == null ? null : System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath), mood)); return; }
+                if (_isGiggling) { _speechQueue.Enqueue((text, unprompted, flashPre ? SpeechSource.FlashPre : SpeechSource.Preset, phraseAudioPath == null ? null : System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath), mood)); return; }
                 if (!IsSpeechReady())
                 {
-                    _speechQueue.Enqueue((text, unprompted, SpeechSource.Preset, phraseAudioPath == null ? null : System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath), mood));
+                    _speechQueue.Enqueue((text, unprompted, flashPre ? SpeechSource.FlashPre : SpeechSource.Preset, phraseAudioPath == null ? null : System.IO.Path.GetFileNameWithoutExtension(phraseAudioPath), mood));
                     _isGiggling = true;
                     ProcessNextSpeech();
                     return;
                 }
-                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, phraseAudioPath, barkVoice, preset: true, unprompted: unprompted, mood: mood);
+                ShowSpeech(text, NextPresetGiggleSound(), aiGenerated: false, phraseAudioPath, barkVoice, preset: true, unprompted: unprompted, mood: mood, flashPre: flashPre);
             });
         }
 
@@ -1337,7 +1337,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal bool NextPresetGiggleSound() => ++_presetGiggleCounter % 5 == 0;
 
         private void ShowSpeech(string text, bool playSound, bool aiGenerated, string? phraseAudioPath,
-                                bool barkVoice, bool preset, Action? onSpoken = null, bool unprompted = false, bool trigger = false, string? soundCaller = null, string? mood = null, string? emotionLineId = null)
+                                bool barkVoice, bool preset, Action? onSpoken = null, bool unprompted = false, bool trigger = false, string? soundCaller = null, string? mood = null, string? emotionLineId = null, bool flashPre = false)
         {
             ResetIdleTimer();
                 if (!trigger) CancelTriggerAnimation(); // a newer line owns the bubble
@@ -1355,7 +1355,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     if (!preset) AddToChatHistory(text, isUser: false);   // WPF Giggle logs nothing
                     if (aiGenerated) App.Brain?.NoteTubeLine(text);
 
-                    var source = trigger ? SpeechSource.Trigger : preset ? SpeechSource.Preset : SpeechSource.AI;
+                    var source = trigger ? SpeechSource.Trigger : flashPre ? SpeechSource.FlashPre : preset ? SpeechSource.Preset : SpeechSource.AI;
                     // #4071, WPF Speech.cs:442: EMI Desk hears every line, muted or hidden, before the gate below.
                     Windows.EmiDesk.EmiDeskService.Instance.NoteAvatarSpeaking(this);
                     // WPF Speech.cs:481: a hidden avatar skips the bubble and audio of every line.
@@ -1377,6 +1377,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     {
                         // WPF Speech.cs:114,646-661: the expression leads the bubble and voice by 0.6 s.
                         _isGiggling = true;
+                        _currentSpeechSource = source;
+                        _currentSpeechLength = text.Length;
                         spokenHandled = true;
                         _clipPlaying = Task.CompletedTask;   // WPF _isSpeakingAudio stays false until the clip plays
                         var generation = _triggerAnimationGeneration;
