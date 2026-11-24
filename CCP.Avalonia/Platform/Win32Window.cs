@@ -50,6 +50,18 @@ internal static class Win32Window
         return true;
     }
 
+    /// <summary>Keep the Chaos video window non-activating across Avalonia style rebuilds.</summary>
+    internal static void MakeNonActivating(TopLevel window)
+    {
+        var hwnd = Hwnd(window);
+        if (hwnd == IntPtr.Zero) return;
+        Win32Properties.AddWindowStylesCallback(window, (style, ex) => (style, ex | Win32Overlay.WsExNoActivate));
+        SetWindowLong(hwnd, -20, Win32Overlay.GetWindowLong(hwnd, -20) | Win32Overlay.WsExNoActivate);
+    }
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongW")]
+    private static extern uint SetWindowLong(IntPtr hwnd, int index, uint value);
+
     /// <summary>WindowChromeHelper's colours as COLORREF (0x00BBGGRR): caption/border = accent, text dark
     /// ink on a bright accent and white on a dark one.</summary>
     internal static (int Caption, int Text) TitleBarColors((byte R, byte G, byte B) accent)

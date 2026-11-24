@@ -5,6 +5,8 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
 using Serilog;
+using ConditioningControlPanel.Services.EmiDesk;
+using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows;
 
@@ -12,7 +14,27 @@ public partial class MainShellWindow
 {
     private IDisposable? _chatHotkey;
     private bool _chatHotkeyStarted, _chatHotkeyClosed;
-    internal Func<Window, Key, KeyModifiers, Action, IDisposable?> RegisterChatHotkey = Win32ChatHotkey.Register;
+    internal Func<Window, Key, KeyModifiers, Action, IDisposable?> RegisterChatHotkey = RegisterChatHotkeyNative;
+    internal static Func<Window, bool> ChatUsesPortal = owner =>
+        owner.TryGetPlatformHandle()?.HandleDescriptor != "XID" && !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"));
+    internal static Func<string, ChordMods, string, Action, IDisposable?> RegisterChatX11 = X11SummonChord.Register;
+    internal static Func<ChordMods, string, Action, IDisposable?> RegisterChatPortal = (mods, key, pressed) =>
+    {
+        var portal = new PortalChatHotkey(pressed);
+        _ = portal.BindAsync(mods, key, Loc.Get("set2_palette_chat_shortcut"));
+        return portal;
+    };
+    private static IDisposable? RegisterChatHotkeyNative(Window owner, Key key, KeyModifiers mods, Action pressed)
+    {
+        if (OperatingSystem.IsWindows()) return Win32ChatHotkey.Register(owner, key, mods, pressed);
+        if (!OperatingSystem.IsLinux()) return null;
+        var chord = ((mods & KeyModifiers.Control) != 0 ? ChordMods.Ctrl : 0)
+            | ((mods & KeyModifiers.Alt) != 0 ? ChordMods.Alt : 0)
+            | ((mods & KeyModifiers.Shift) != 0 ? ChordMods.Shift : 0)
+            | ((mods & KeyModifiers.Meta) != 0 ? ChordMods.Win : 0);
+        return ChatUsesPortal(owner) ? RegisterChatPortal(chord, key.ToString(), pressed)
+            : RegisterChatX11("chat", chord, key.ToString(), pressed);
+    }
     internal bool ChatHotkeyArmed => _chatHotkey != null;
 
     // WPF MainWindow.xaml.cs:237, once the native window exists.

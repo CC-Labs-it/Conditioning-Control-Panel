@@ -129,6 +129,15 @@ public class VideoCutPlaybackIntegrationTests
         Assert.True(ready(), "Playback teardown or replay did not complete");
     }
 
+    [Fact]
+    public Task Chaos_segment_seeks_with_fifteen_seconds_left() => Run(0, (o, v, clock, players, credit) =>
+    {
+        o.GuardTick();
+        Assert.Equal(60000, players.Single().Time);
+        Assert.InRange(players.Single().Time, 0, players.Single().Length - 15000);
+        return Task.CompletedTask;
+    }, chaos: true);
+
     private static void Step(MandatoryVideoOverlay o, Clock clock, Decoder p, int ms)
     {
         clock.Advance(ms);
@@ -137,7 +146,7 @@ public class VideoCutPlaybackIntegrationTests
         o.GuardTick();
     }
 
-    private static Task Run(int cap, Func<MandatoryVideoOverlay, MandatoryVideoScheduler, Clock, List<Decoder>, Func<double>, Task> body)
+    private static Task Run(int cap, Func<MandatoryVideoOverlay, MandatoryVideoScheduler, Clock, List<Decoder>, Func<double>, Task> body, bool chaos = false)
         => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var s = CoreSettings.Current;
@@ -156,7 +165,9 @@ public class VideoCutPlaybackIntegrationTests
             (s.VideoMaxDurationSeconds, s.VideoCutRandomStart) = (cap, true);
             CoreDispatch.PostProvider = a => a();
             CoreProgression.TrackVideoWatchedProvider = n => credit += n;
-            Assert.True(v.Trigger());
+            int token = chaos ? v.ClaimChaosVideoToken() : 0;
+            if (chaos) v.ArmRandomSegment(token, 15);
+            Assert.True(v.Trigger(chaosToken: token));
             clock.Fire(); // pre-roll, no sleeping
             Assert.Single(players);
             await body(o, v, clock, players, () => credit);

@@ -10,12 +10,14 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Services.Fyp.Online;
 using ConditioningControlPanel.Services.UI;
 using Serilog;
 
@@ -301,6 +303,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             };
             Canvas.SetLeft(img, f.CenterX - size / 2);
             Canvas.SetTop(img, 0);
+            // Do not show Scrolller media unless its independent credit window is available.
+            if (ScrolllerCreditRules.IsScrolllerMedia(path) && !ScrolllerCreditChip.Hold(img, _bounds)) return;
             _canvas.Children.Add(img);
             var clip = new Clip { Image = img, Grow = grow, Move = move };
             _clips[f] = clip;
@@ -389,6 +393,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (!_clips.Remove(f, out var c)) return;
             // WPF ChaosGifCascadeOverlay.cs:511-521,555-560 detaches media on removal.
             c.DecodeCancellation?.Cancel();
+            ScrolllerCreditChip.Release(c.Image);
             c.Image.Source = null;
             _canvas.Children.Remove(c.Image);
             if (c.Frames != null) foreach (var b in c.Frames) b.Dispose();
