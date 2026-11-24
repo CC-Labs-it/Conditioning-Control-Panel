@@ -137,7 +137,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 live.HandoffRaceRoom(room);
                 // #4286: a feed the WM hid (ghost restored on hide) comes back with its door.
                 if (live.Spec.Id == FypId && !live.IsVisible) live.Show();
-                if (live.RaceShell != null) live.RaceShell.Focus(); else live.Activate();   // the shell's window is never shown
+                // WPF JustDropHostService.cs:101: a live shop is refocused through FocusWeb.
+                if (live.RaceShell != null) live.RaceShell.Focus();
+                else if (live.Spec.Id == JustDropId) live.FocusJustDropPage();
+                else live.Activate();   // the shell's window is never shown
                 // WPF PieceByPieceHostService.cs:165: reopening a live board returns its keyboard too.
                 if (live.Spec.Id == PbpId)
                     Dispatcher.UIThread.Post(() => { if (!live._closing) live.Web.FocusPage(); }, DispatcherPriority.Loaded);
