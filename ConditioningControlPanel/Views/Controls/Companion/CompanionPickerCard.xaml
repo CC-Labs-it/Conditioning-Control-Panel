@@ -1,7 +1,8 @@
 <UserControl x:Class="ConditioningControlPanel.Views.Controls.Companion.CompanionPickerCard"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:loc="clr-namespace:ConditioningControlPanel.Localization">
+             xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows">
 
     <UserControl.Resources>
         <ControlTemplate x:Key="PickerLinkTemplate" TargetType="Button">
@@ -57,13 +58,13 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0">
-                        <TextBlock Text="{loc:Str modmgr_label_look}" Style="{StaticResource Type.Label}" Margin="0,0,0,3"/>
+                        <rows:RowLabel Text="{loc:Str modmgr_label_look}" Emblem="Colour" Margin="0,0,0,3"/>
                         <ComboBox x:Name="CmbAvatar" Style="{DynamicResource DarkComboBoxStyle}"
                                   Foreground="{DynamicResource TextLightBrush}" MinHeight="30"
                                   SelectionChanged="CmbAvatar_SelectionChanged"/>
                     </StackPanel>
                     <StackPanel Grid.Column="2">
-                        <TextBlock Text="{loc:Str modmgr_label_personality}" Style="{StaticResource Type.Label}" Margin="0,0,0,3"/>
+                        <rows:RowLabel Text="{loc:Str modmgr_label_personality}" Emblem="Persona" Margin="0,0,0,3"/>
                         <ComboBox x:Name="CmbPersonality" Style="{DynamicResource DarkComboBoxStyle}"
                                   Foreground="{DynamicResource TextLightBrush}" MinHeight="30"
                                   SelectionChanged="CmbPersonality_SelectionChanged"/>
