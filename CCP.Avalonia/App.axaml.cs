@@ -992,8 +992,10 @@ namespace ConditioningControlPanel.Avalonia
                 InitializeChaos();
                 Platform.WallpaperHead.Initialize();
                 // WPF App.xaml.cs:2928: launch only sweeps retention on disk (creates nothing, arms no timer);
-                // the ledger starts when awareness turns on. No observer feeds it on this head yet.
+                // The observer starts from the awareness switch after consent.
                 InstallPrivacyLedger(new ConditioningControlPanel.Services.Awareness.ActivityLedger());
+                try { InstallAwarenessObserver(ConditioningControlPanel.Services.Awareness.AwarenessLive.Ledger!); }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Awareness: observer unavailable; using legacy pipeline"); }
 
                 // Main 8a89eaeb0 / 36370021a: a session or intensity ramp that crashed or was killed before
                 // it handed the user's settings back gets them back now, before anything reads them.
@@ -1951,6 +1953,7 @@ namespace ConditioningControlPanel.Avalonia
             try { DiscordRpc?.Dispose(); } catch { /* WPF App.OnExit:6296 */ }
             try { Platform.FriendsLanding.Stop(); } catch { /* WPF FriendsLanding.Stop on the panel's Closed: no card outlives the app */ }
             try { (Platform.FriendsHead.Service as IDisposable)?.Dispose(); } catch { /* WPF App.OnExit: the friends poll stops */ }
+            ReleaseAwarenessObserver();
             ReleasePrivacyLedger();
             try { Brain?.Dispose(); } catch { /* WPF App.OnExit:6121; flushes the turn log */ }
             try { Ai?.Dispose(); } catch { /* WPF App.OnExit:6250 (#629): unloads the local Ollama model */ }

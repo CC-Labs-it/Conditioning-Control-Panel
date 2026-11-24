@@ -161,8 +161,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public string LegacyHead => Loc.Get("companion_awareness_legacy_head");
         public string LegacyBody => Loc.Get("companion_awareness_legacy_body");
         public string LegacyAction => Loc.Get("companion_awareness_legacy_action");
-        // The current lifecycle starts only the ledger. Show this action when an observer can start.
-        public bool CanReviewConsent => false;
+        // The review action is useful only when this head has an observer to start.
+        public bool CanReviewConsent => AvApp.HasAwarenessObserver;
 
         // ------------------------------- the wire -------------------------------
 
