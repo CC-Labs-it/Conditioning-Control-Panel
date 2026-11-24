@@ -47,7 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // A watch-chip request still waiting for the gate must not load after panic.
             host.CancelPendingNavigation();
             host.CancelBrowserZoom();
-            _ = host.InvokeScriptAsync(WebHostMedia.PanicPauseScript);
+            _ = host.InvokeScriptAsync(WebHostMedia.PanicPauseScript + (BrowserPage?.BrowserEnhanceResumeScript() ?? ""));
             // WPF PanicEndBrowserMedia -> EndWebVideoTakeover (Browser.cs:995): the controller's page goes too.
             EndRemoteBrowserVideo();
         }

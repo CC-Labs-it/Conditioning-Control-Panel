@@ -220,10 +220,19 @@ public class HomeBrowserEnhanceTests
             Assert.Equal(1, shown);
             Assert.Contains(scripts, s => s.Contains("v.pause()"));
             scripts.Clear();
+            var oldSource = tab.BrowserEnhanceSource;
             PanicSurfaces.All.Single(s => s.Id == "browser-media").Stop(shell);
             Assert.Equal(1, stopped);
             Assert.False(tab.BrowserEnhanceHost.IsRunning);
-            Assert.Contains(WebHostMedia.PanicPauseScript, scripts);
+            Assert.Contains(scripts, s => s.StartsWith(WebHostMedia.PanicPauseScript) && s.Contains("ccpEnhancementResume"));
+            var token = tab.BrowserEnhanceResumeToken;
+            Assert.NotNull(token);
+            web.OnWebMessage("{\"type\":\"ccpEnhancementResume\",\"id\":\"stale\"}");
+            Assert.False(tab.BrowserEnhanceHost.IsRunning);
+            web.OnWebMessage(System.Text.Json.JsonSerializer.Serialize(new { type = "ccpEnhancementResume", id = token }));
+            Assert.True(tab.BrowserEnhanceHost.IsRunning);
+            Assert.NotSame(oldSource, tab.BrowserEnhanceSource);
+            Assert.Equal(1, shown); // the retired session is not restarted by the rebind
             heard.SetResult(ConditioningControlPanel.Services.Speech.PhraseResult.NotAvailable);
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             Assert.Equal(1, hidden);
@@ -232,6 +241,65 @@ public class HomeBrowserEnhanceTests
         finally
         {
             heard.TrySetResult(ConditioningControlPanel.Services.Speech.PhraseResult.NotAvailable);
+            shell.Close();
+            if (path != null) File.Delete(path);
+            CoreSettings.Current.BrowserEnhanceIfPossible = previous;
+        }
+    });
+
+    [Fact]
+    public void PanicThenResumeRebindsNonSpeakEnhancementOnSamePage() => AvaloniaTestDispatcher.Run(() =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var previous = CoreSettings.Current.BrowserEnhanceIfPossible;
+        CoreSettings.Current.BrowserEnhanceIfPossible = false;
+        var shell = new MainShellWindow();
+        string? path = null;
+        double time = 0;
+        var scripts = new List<string>();
+        try
+        {
+            shell.Show();
+            var tab = shell.FindControl<SettingsTabView>("SettingsTab")!;
+            var web = tab.FindControl<WebHost>("BrowserWebHost")!;
+            tab.BrowserAutomaticPolling = false;
+            web.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(FormattableString.Invariant($"{{\"t\":{time},\"d\":20,\"paused\":false,\"rx\":0,\"ry\":0,\"rw\":1,\"rh\":1}}")); };
+            const string url = "https://hypnotube.com/watch/ccp-resume-test";
+            path = Path.Combine(shell.BrowserEnhancementLibrary!.LibraryFolder, "home-browser-resume.ccpenh.json");
+            var enhancement = new Enhancement { MediaType = MediaTypes.Video, MediaSource = url,
+                Metadata = new EnhancementMetadata { Name = "Resume test", Creator = "test" } };
+            enhancement.Rules.Add(new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 1 }, Action = new PauseAction() });
+            File.WriteAllText(path, EnhancementSerializer.Save(enhancement));
+            tab.FindControl<CheckBox>("ToggleEnhanceIfPossible")!.IsChecked = true;
+            web.OnNavigationCompleted(new Uri(url));
+            Assert.True(tab.BrowserEnhanceHost.IsRunning);
+            var old = tab.BrowserEnhanceSource;
+            PanicSurfaces.All.Single(s => s.Id == "browser-media").Stop(shell);
+            Assert.False(tab.BrowserEnhanceHost.IsRunning);
+            var token = tab.BrowserEnhanceResumeToken;
+            Assert.NotNull(token);
+            web.OnWebMessage("{\"type\":\"ccpEnhancementResume\",\"id\":\"stale\"}");
+            Assert.False(tab.BrowserEnhanceHost.IsRunning);
+            var message = System.Text.Json.JsonSerializer.Serialize(new { type = "ccpEnhancementResume", id = token });
+            web.OnWebMessage(message);
+            Assert.True(tab.BrowserEnhanceHost.IsRunning);
+            Assert.NotSame(old, tab.BrowserEnhanceSource);
+            var current = tab.BrowserEnhanceSource;
+            web.OnWebMessage(message);
+            Assert.Same(current, tab.BrowserEnhanceSource);
+            scripts.Clear();
+            tab.BrowserEnhanceSource!.PollAsync().GetAwaiter().GetResult();
+            time = 1.2;
+            tab.BrowserEnhanceSource.PollAsync().GetAwaiter().GetResult();
+            Assert.Contains(scripts, s => s.Contains("v.pause()"));
+            PanicSurfaces.All.Single(s => s.Id == "browser-media").Stop(shell);
+            var invalidated = tab.BrowserEnhanceResumeToken;
+            tab.FindControl<CheckBox>("ToggleEnhanceIfPossible")!.IsChecked = false;
+            web.OnWebMessage(System.Text.Json.JsonSerializer.Serialize(new { type = "ccpEnhancementResume", id = invalidated }));
+            Assert.False(tab.BrowserEnhanceHost.IsRunning);
+        }
+        finally
+        {
             shell.Close();
             if (path != null) File.Delete(path);
             CoreSettings.Current.BrowserEnhanceIfPossible = previous;
