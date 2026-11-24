@@ -3,12 +3,14 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
-             xmlns:feat="clr-namespace:ConditioningControlPanel.Features">
+             xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.TintSliders="True">
 
     <!-- Velvet Kit 2 density pass. The root IS the StackPanel (the old Grid wrapper is gone):
          MainWindow.SessionFeatureLock.cs inserts the session-lock banner at index 0 of
          content.Content, and into a Grid that banner would have overlapped the settings. -->
-    <StackPanel>
+    <StackPanel Grid.IsSharedSizeScope="True">
 
         <!-- HERO. No subtitle line: this module's only description string
              (tooltip_count_the_bubbles_challenge_memory_and_attent) is three lines long and
@@ -70,31 +72,34 @@
                                 Background="{StaticResource SectionHueStudioBrush}"/>
                         <StackPanel Margin="16,8,16,8">
 
-                            <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_challenges_per_hour_1_10}">
+                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_challenges_per_hour_1_10}">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto" MinWidth="56"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str setting_per_hour}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_per_hour}" Emblem="Often">
+                                    <rows:RowLabel.Value>
+                                        <MultiBinding Converter="{x:Static rows:RowFraction.Instance}">
+                                            <Binding Path="Value" ElementName="SliderFreq"/>
+                                            <Binding Path="Maximum" ElementName="SliderFreq"/>
+                                        </MultiBinding>
+                                    </rows:RowLabel.Value>
+                                </rows:RowLabel>
                                 <Slider Grid.Column="1" x:Name="SliderFreq" Minimum="1" Maximum="10" Value="2"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderFreq_Changed"/>
-                                <TextBlock Grid.Column="2" x:Name="TxtFreq" Text="2" HorizontalAlignment="Right"
-                                           VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
-                                           FontSize="13" FontWeight="Bold"/>
+                                <rows:RowValue Grid.Column="2" x:Name="TxtFreq" Text="2" Unit="{loc:Str row_unit_an_hour}"/>
                             </Grid>
 
                             <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
-                            <Grid Height="36">
+                            <Grid Style="{StaticResource OptionRow}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str setting_difficulty}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_difficulty}" Emblem="Much"/>
                                 <ComboBox Grid.Column="1" x:Name="CmbDifficulty" Width="130" feat:SessionLock.Owned="True"
                                           VerticalAlignment="Center"
                                           Style="{DynamicResource DarkComboBoxStyle}"
@@ -105,13 +110,13 @@
                                 </ComboBox>
                             </Grid>
 
-                            <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_prevent_closing_until_correctly_answered}">
+                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_prevent_closing_until_correctly_answered}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str setting_strict_lock}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_strict_lock}" Emblem="Lock"
+                                               IsOn="{Binding IsChecked, ElementName=ChkStrict}"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkStrict"
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkStrict_Changed" Unchecked="ChkStrict_Changed"/>
@@ -119,14 +124,13 @@
 
                             <!-- #1418: off by default. On, a round holds flashes, spirals and the
                                  overlays the way a mandatory video does. -->
-                            <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_bubble_count_pause_effects}">
+                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_bubble_count_pause_effects}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str setting_bubble_count_pause_effects}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"
-                                           TextTrimming="CharacterEllipsis"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_bubble_count_pause_effects}" Emblem="Reacts"
+                                               IsOn="{Binding IsChecked, ElementName=ChkPauseEffects}"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkPauseEffects"
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkPauseEffects_Changed" Unchecked="ChkPauseEffects_Changed"/>
