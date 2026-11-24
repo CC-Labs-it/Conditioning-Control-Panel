@@ -28,6 +28,7 @@ internal sealed partial class MandatoryVideoOverlay
         public Window Window => Surface.Window;
         public IMandatoryPlayback? Playback { get; set; }
         public MediaPlayer? Player;
+        public VlcVolumePump? VolumePump;
         public Media? Media;
         public VlcFrameSink? Sink;
         public DispatcherTimer? Watch;
@@ -264,7 +265,10 @@ internal sealed partial class MandatoryVideoOverlay
     private void ApplyInstanceVolume(FloatingInstance f)
     {
         if (f.Player is { } p)
-            p.Volume = MandatoryVideoScheduler.EffectiveVolume(CoreSettings.Current.MasterVolume, CoreSettings.Current.VideoVolume);
+        {
+            f.VolumePump ??= new VlcVolumePump(value => p.Volume = value);
+            f.VolumePump.Push(MandatoryVideoScheduler.EffectiveVolume(CoreSettings.Current.MasterVolume, CoreSettings.Current.VideoVolume));
+        }
         if (f.Surface is null) return;   // the reveal holds the sound while the window is still being built
         try { f.Playback?.SetAudioOff(InstanceAudioOff(f)); }
         catch (Exception ex) { Log.Debug("VideoService: floating audio switch failed - {Error}", ex.Message); }
@@ -353,6 +357,8 @@ internal sealed partial class MandatoryVideoOverlay
         catch (Exception ex) { Log.Debug("VideoService: floating position read failed - {Error}", ex.Message); }
         if (f.PlayedMs >= 1000) CoreProgression.TrackVideoWatched(f.PlayedMs / 1000.0);
         if (watchedToEnd) App.ChasterNote("video");
+        f.VolumePump?.Dispose();
+        f.VolumePump = null;
         // As CloseAll: Stop joins the decoder thread, so no frame callback outlives the buffer.
         try { f.Playback?.Stop(); } catch { }
         try { f.Playback?.Dispose(); } catch { }

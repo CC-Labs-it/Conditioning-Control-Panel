@@ -52,8 +52,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             UpdateVolume();
         }
 
-        private void ApplyVolume(LibVLCSharp.Shared.MediaPlayer p) =>
-            p.Volume = PlayerVolume = EffectivePlayerVolume;
+        private VlcVolumePump? _volumePump;
+
+        private void ApplyVolume(LibVLCSharp.Shared.MediaPlayer p)
+        {
+            PlayerVolume = EffectivePlayerVolume;
+            _volumePump ??= new VlcVolumePump(value => p.Volume = value);
+            _volumePump.Push(PlayerVolume);
+        }
 
         /// <summary>WPF ShowVideoControls: after the picture fade completes, on every screen. UI thread.</summary>
         private void ShowVideoControls()

@@ -1392,6 +1392,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _spawnTimes.Clear();
                 _targets.Clear();
                 ReleaseToyBatches();
+                _volumePump?.Dispose();
+                _volumePump = null;
                 // Stop joins the decoder thread, so after it no callback touches the frame buffer.
                 if (_playback != null)
                 {
