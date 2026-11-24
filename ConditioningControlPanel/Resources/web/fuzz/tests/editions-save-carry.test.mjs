@@ -206,6 +206,72 @@ test('the incoming run card shows over the pause card and is answerable at once'
   assert.equal(host.inert, false, 'resumed: the queue takes presses again');
 });
 
+/* Wave 5 (W4 review of 461ce9e623): the incoming card waited behind ANY other open card, inert under the pause (small
+ * edition: the save-sleep corner note is up from boot), and its answer left focus on the page body. */
+async function pausedCarry() {
+  const { createCards } = await import('../ui/cards.js');
+  const doc = fakeDom(), host = doc.createElement('div'), handlers = {}, sent = [];
+  const byId = new Map();
+  doc.getElementById = (id) => byId.get(id) || null;
+  const pause = doc.createElement('div'), pauseCard = doc.createElement('div');
+  pause.hidden = false;
+  byId.set('pause', pause);
+  const row = pauseCard.appendChild(doc.createElement('div'));
+  const resume = row.appendChild(doc.createElement('button'));
+  resume.textContent = 'Resume';
+  doc.querySelector = (q) => (q === '#pause .card' ? pauseCard : null);
+  const cards = createCards(doc, host);
+  mountSaveCarry({ doc, win: { navigator: {} }, slot: true, cards, send: (t) => sent.push(t), on: (t, fn) => { handlers[t] = fn; },
+    exportSave: goodSave, accept: () => true });
+  const askBtn = pauseCard.children[1].children[1];
+  const incoming = () => handlers['save-incoming']({ save: goodSave(), savedAt: Date.UTC(2026, 10, 24, 12, 10), from: 'web' });
+  return { doc, host, cards, pause, resume, askBtn, incoming, sent };
+}
+
+test('the incoming run card shows at once over the pause card even while another card is open', async () => {
+  const { doc, host, cards, askBtn, incoming } = await pausedCarry();
+  const note = cards.open({ title: 'Some clauses are asleep.', corner: true, buttons: [{ label: 'Carry on' }] });
+  const noteDom = host.children[0];
+  cards.hold(true);   // the player pauses with the corner note still up
+  assert.equal(host.inert, true);
+  askBtn.click({ isTrusted: true });
+  incoming();
+  assert.equal(note.closed, false, 'the open card is not lost');
+  assert.equal(noteDom.hidden, true, 'it steps aside while the incoming card shows');
+  const shown = host.children.filter((c) => !c.hidden);
+  assert.equal(shown.length, 1, 'one card showing at a time');
+  assert.notEqual(shown[0], noteDom, 'and it is the incoming card');
+  assert.equal(host.classList.contains('over-pause'), true);
+  assert.equal(host.inert, false, 'answerable at once under the pause');
+  assert.equal(doc.activeElement?.textContent, SAVE_CARRY_COPY.keep);
+  doc.activeElement.click({ isTrusted: true });
+  assert.deepEqual(host.children, [noteDom], 'answered: the note is back as it was');
+  assert.equal(noteDom.hidden, false);
+  assert.equal(host.classList.contains('over-pause'), false);
+  assert.equal(host.inert, true, 'the note gains no input while the pause is up');
+  cards.hold(false);
+  assert.equal(host.inert, false, 'resumed: the note takes presses again');
+  noteDom.querySelector('button').click({ isTrusted: true });
+  assert.equal(note.closed, true);
+  assert.equal(host.children.length, 0);
+  assert.equal(cards.busy, false);
+});
+
+test('after the answer the focus goes back to the pause card, only while it is up', async () => {
+  const { doc, cards, pause, resume, askBtn, incoming } = await pausedCarry();
+  cards.hold(true);
+  askBtn.click({ isTrusted: true });
+  incoming();
+  doc.activeElement.click({ isTrusted: true });   // Keep mine
+  assert.equal(doc.activeElement, resume, "the pause card's first control, not the page body");
+  askBtn.click({ isTrusted: true });
+  incoming();
+  pause.hidden = true;   // Escape resumed under the card
+  cards.hold(false);
+  doc.activeElement.click({ isTrusted: true });
+  assert.notEqual(doc.activeElement, resume, 'no focus pulled to a hidden pause card');
+});
+
 test('the lifted queue really is above the pause card in the stylesheet', () => {
   const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
   const z = (sel) => Number(new RegExp(`^${sel.replace(/[.#]/g, '\\$&')} \\{ z-index: (\\d+); \\}`, 'm').exec(css)?.[1]);

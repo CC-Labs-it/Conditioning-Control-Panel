@@ -1,6 +1,8 @@
 /* ui/cards.js - one card at a time, queued. Every card closes: it has a button or closes itself. The pause card lives
  * in index.html and sits above this queue. A card the pause card itself asked for (`overPause`, the save carry's
- * incoming run) lifts the queue over it while it shows, so it can be answered at once. */
+ * incoming run) lifts the queue over it while it shows, so it can be answered at once. It never waits behind another
+ * card: an open ordinary card (say the corner note, inert under the pause) steps aside, hidden and kept, and comes back
+ * as it was once the overPause card is answered. Still one card showing at a time. */
 
 import { brandText } from '../data/brand.js';
 import { setRich } from './rich-text.js';
@@ -60,7 +62,29 @@ export function createCards(doc, host) {
     if (spec.ms) spec.timer = setTimeout(() => spec.handle.close(), spec.ms);
   }
 
-  function pump() { if (!current && queue.length) show(queue.shift()); }
+  /* Cards an overPause card stepped in front of: hidden, never closed; the last one back first. A timed card keeps no
+     clock while aside and gets its whole time again when it is back. */
+  const aside = [];
+  function stepAside() {
+    clearTimeout(current.timer);
+    current.dom.hidden = true;
+    aside.push(current);
+    current = null;
+  }
+  function comeBack() {
+    current = aside.pop();
+    current.dom.hidden = false;
+    lift();
+    const s = current;
+    if (s.ms) s.timer = setTimeout(() => s.handle.close(), s.ms);
+  }
+
+  function pump() {
+    if (current) return;
+    if (queue[0]?.overPause) show(queue.shift());
+    else if (aside.length) comeBack();
+    else if (queue.length) show(queue.shift());
+  }
 
   function open(spec) {
     const s = { ...spec };
@@ -72,6 +96,8 @@ export function createCards(doc, host) {
         clearTimeout(s.timer);
         const i = queue.indexOf(s);
         if (i >= 0) queue.splice(i, 1);
+        const j = aside.indexOf(s);
+        if (j >= 0) { aside.splice(j, 1); s.dom.remove(); s.onClose?.(); }
         if (current === s) {
           s.dom.remove();
           current = null;
@@ -82,7 +108,8 @@ export function createCards(doc, host) {
       },
       get closed() { return closed; },
     };
-    if (s.front) queue.unshift(s); else queue.push(s);
+    if (s.front || s.overPause) queue.unshift(s); else queue.push(s);
+    if (s.overPause && current && !current.overPause) stepAside();
     pump();
     return s.handle;
   }
