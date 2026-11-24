@@ -77,7 +77,9 @@ sections 1 and 2; only the transport differs (`bridge.js`, transport `web`):
   `event.origin === parentOrigin && event.source === parent`; objects or JSON strings. The host posts to the game's origin.
 - `caps.plan` (web host, the account's effective plan): `basic` and `prime` get no CCP ads (owner 2026-11-08); missing = free.
 - No `init` within 4 s = standalone (`hosted:false`, empty caps), so a broken embed never hangs the game.
-- `init`: `{protocol:1, lang, reduced, motion, gentle, mod, caps:{platform:'web', scrolller:{consent, clips:true}, plan?:'free'|'basic'|'prime'}, identity:{displayName}}`.
+- `init`: `{protocol:1, lang, reduced, motion, gentle, mod, caps:{platform:'web', edition:'small'|'full', scrolller:{consent, clips:true}, plan?:'free'|'basic'|'prime'}, identity?:{displayName}}`.
+  `edition` is `small` for a visitor without an account and for a free account, `full` for a signed-in subscriber
+  (Basic or Prime). `identity` is absent for a visitor without an account. The website sends no `caps.expo`.
   No `mediaOrigin`, no `origin:'device'`: `scrolller-feed` rows are remote Scrolller CDN urls (`https://*.scrolller.com/...`),
   shown as plain `<img>`/`<video>` with "via Scrolller", never fetched, cached or saved by the page. About one row in three is
   a clip, `{url, kind:'video', mime:'video/mp4'}` (one mp4 rendition, short side at most 720, served from Scrolller's rotating
@@ -121,7 +123,7 @@ ONE reader of the host's choice. Plan and lanes: `handoff-1122/TC-EDITIONS-PLAN.
 
 | | small | full |
 |---|---|---|
-| Where | the website, phones, free accounts everywhere | the CCP desktop app and the standalone, for any subscriber |
+| Where | the website without an account, phones, free accounts everywhere | the CCP desktop app, the standalone and the website, for any subscriber |
 | Rows | 260 of 316 (`SMALL_CUT` is never offered) | all |
 | Renewal | none, for anyone: the ending leads to New run | Sky, Depth, Stardust |
 | Llama Expo | never; the pen and the hunt stay | opens once its files are on the PC (6.5) |
@@ -130,11 +132,13 @@ ONE reader of the host's choice. Plan and lanes: `handoff-1122/TC-EDITIONS-PLAN.
 ### 6.1 Who decides
 
 - `init.caps.edition`: `'small'` or `'full'`. Missing, unknown, or no host at all = small. The page is untrusted: a host
-  says full only for an account it has checked (any subscriber, Basic or Prime). The website always says small.
+  says full only for an account it has checked (any subscriber, Basic or Prime). The website says small for a visitor
+  without an account and for a free account, full for a signed-in subscriber; it sends no `caps.expo`, and no
+  `identity` for a visitor without an account.
 - A page on 127.0.0.1 or localhost with no host is the whole game, so dev drives and the Expo preview keep working;
   `?edition=small` or `?edition=full` wins over everything there and is ignored everywhere else.
 - `init.caps.platform`: `'web'` or `'desktop'` (missing = web). It picks the nudge and the seal rule.
-- The seal until 22 December (`ui/seal.js`, owner 2026-11-22): on the website only Prime plays, as before. In the
+- The seal until 22 December (`ui/seal.js`, owner 2026-11-22): the website is never sealed (owner 2026-11-24). In the
   desktop app the edition decides: full (any subscriber) plays now, small (a free account) sees the sealed notice
   until the anniversary, worded for subscribers, with one button that sends `nudge {where:'locked-tile', want:'upgrade'}`.
   The host needs no date check. A sealed page still answers the host's `close` with `exit-done`.

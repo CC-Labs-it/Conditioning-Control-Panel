@@ -11,13 +11,17 @@ test('the anniversary is midnight UTC on 22 December 2026', () => {
   assert.equal(new Date(SEAL_OPEN_AT_MS).toISOString(), '2026-12-22T00:00:00.000Z');
 });
 
-test('before the anniversary only a host that says Prime gets the game', () => {
-  assert.equal(sealedFor(standalone, before, 'tc.cclabs.app'), true, 'a page on its own has no plan');
-  assert.equal(sealedFor(hosted('free'), before, 'tc.cclabs.app'), true);
-  assert.equal(sealedFor(hosted('basic'), before, 'tc.cclabs.app'), true);
-  assert.equal(sealedFor(hosted(undefined), before, 'tc.cclabs.app'), true);
-  assert.equal(sealedFor(null, before, 'tc.cclabs.app'), true);
-  assert.equal(sealedFor(hosted('prime'), before, 'tc.cclabs.app'), false);
+test('the website is never sealed: no host, any plan, with or without identity, either edition', () => {
+  const small = { edition: 'small', platform: 'web' }, full = { edition: 'full', platform: 'web' };
+  for (const ed of [null, small, full]) {
+    assert.equal(sealedFor(standalone, before, 'tc.cclabs.app', false, ed), false, 'a page on its own');
+    assert.equal(sealedFor(null, before, 'tc.cclabs.app', false, ed), false);
+    for (const plan of ['free', 'basic', 'prime', undefined]) {
+      assert.equal(sealedFor(hosted(plan), before, 'app.cclabs.app', false, ed), false);
+      assert.equal(sealedFor({ ...hosted(plan), identity: { displayName: 'x' } }, before, 'app.cclabs.app', false, ed), false);
+      assert.equal(sealedFor({ protocol: 1, caps: { plan } }, before, 'app.cclabs.app', false, ed), false, 'missing platform = web');
+    }
+  }
 });
 
 test('from the anniversary on nobody is sealed', () => {
@@ -32,7 +36,7 @@ test('a local preview is sealed only when it asks', () => {
   assert.equal(sealedFor(standalone, before, '127.0.0.1'), false);
   assert.equal(sealedFor(standalone, before, 'localhost'), false);
   assert.equal(sealedFor(standalone, before, '127.0.0.1', true), true);
-  assert.equal(sealedFor(standalone, before, 'tc.cclabs.app', false), true, 'the switch cannot unseal a public host');
+  assert.equal(sealedFor(standalone, before, 'tc.cclabs.app', true), false, 'the switch cannot seal a public host');
 });
 
 test('the countdown splits what is left and stops at zero', () => {
