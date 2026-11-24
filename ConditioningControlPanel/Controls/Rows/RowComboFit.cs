@@ -55,14 +55,22 @@ namespace ConditioningControlPanel.Controls.Rows
             public object? AuthoredTip;           // value or BindingBase the box wore before we set ours
             public bool Queued;
             public EventHandler? OnLanguage;
+            public int ItemsVersion;              // bumped on every item list change
+            public string? NeedKey;               // what the cached Need was measured for
+            public double NeedValue;
         }
+
+        /// <summary>A list this long (the font pickers: every installed family) keeps its widest-item width
+        /// until its items, face or language change, so a resize does not re-measure hundreds of names.
+        /// Shorter lists re-measure every pass, as their items may be relabelled in place.</summary>
+        internal const int CacheFromItems = 40;
 
         private static void OnFitChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             if (d is not ComboBox c || e.NewValue is not true || c.GetValue(StateProperty) != null) return;
             var st = new FitState { Box = c, OriginalMinWidth = c.MinWidth };
             c.SetValue(StateProperty, st);
-            ((INotifyCollectionChanged)c.Items).CollectionChanged += (_, _) => Queue(st);
+            ((INotifyCollectionChanged)c.Items).CollectionChanged += (_, _) => { st.ItemsVersion++; Queue(st); };
             c.SelectionChanged += (_, _) => Queue(st);
             c.SizeChanged += (_, _) => Apply(st);
             c.Loaded += (_, _) =>
@@ -107,7 +115,7 @@ namespace ConditioningControlPanel.Controls.Rows
             {
                 if (!GetFit(c)) return;
                 HookRow(st);
-                double need = Need(c);
+                double need = CachedNeed(st);
                 bool stretches = double.IsNaN(c.Width) && c.HorizontalAlignment == HorizontalAlignment.Stretch;
                 if (!stretches)
                 {
@@ -183,6 +191,23 @@ namespace ConditioningControlPanel.Controls.Rows
                 word = Math.Max(word, new FormattedText(w, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
                     face, tb.FontSize, Brushes.White, 1.0).Width);
             return word;
+        }
+
+        private static double CachedNeed(FitState st)
+        {
+            var c = st.Box;
+            if (c.Items.Count < CacheFromItems) return Need(c);
+            double dpi = 1.0;
+            try { dpi = VisualTreeHelper.GetDpi(c).PixelsPerDip; } catch { }
+            string key = string.Join("|", st.ItemsVersion, c.Items.Count, c.FontFamily?.Source, c.FontStyle, c.FontWeight,
+                c.FontStretch, c.FontSize.ToString(CultureInfo.InvariantCulture), dpi.ToString(CultureInfo.InvariantCulture),
+                c.DisplayMemberPath, Localization.LocalizationManager.Instance.CurrentLanguage);
+            if (key != st.NeedKey)
+            {
+                st.NeedValue = Need(c);
+                st.NeedKey = key;
+            }
+            return st.NeedValue;
         }
 
         /// <summary>The width the widest item needs, box chrome included.</summary>
