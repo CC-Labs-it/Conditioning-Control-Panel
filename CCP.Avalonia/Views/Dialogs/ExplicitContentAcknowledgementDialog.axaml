@@ -22,13 +22,7 @@
         Background="{DynamicResource DarkerBgBrush}">
 
     <Window.Resources>
-        <!-- ponytail: local copy of Dialogs/ExplicitContentAcknowledgementDialog.xaml:DlgHeader…DlgSecondaryButton, hoist when a second view needs it -->
-        <ControlTheme x:Key="DlgHeader" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource PinkBrush}"/>
-            <Setter Property="FontSize" Value="20"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="TextWrapping" Value="Wrap"/>
-        </ControlTheme>
+        <!-- ponytail: local copy of Dialogs/ExplicitContentAcknowledgementDialog.xaml:DlgSub…DlgSecondaryButton, hoist when a second view needs it -->
         <ControlTheme x:Key="DlgBody" TargetType="TextBlock">
             <Setter Property="Foreground" Value="#E8E8E8"/>
             <Setter Property="FontSize" Value="14"/>

@@ -27,6 +27,48 @@ public sealed class EmiDeskPresentationTests
         (T)typeof(EmiDeskWindow).GetField(name, Private)!.GetValue(desk)!;
 
     [Fact]
+    public Task PresentationCancelsLiveAskAndSpeechResumes() => Run(desk =>
+    {
+        var oldAskProbe = EmiLineEngine.AskSituationProbe;
+        var oldEffectProbe = EmiLineEngine.EffectFeasibleProbe;
+        try
+        {
+            var service = new EmiDeskService();
+            typeof(EmiDeskService).GetField("_window", Private)!.SetValue(service, desk);
+            typeof(EmiDeskService).GetProperty("IsOut")!.SetValue(service, true);
+            var engine = EmiLineEngine.FromJson("""{"version":1,"moments":{"resized":{"priority":3,"pools":["lines"]}},"pools":{"lines":[{"id":"line","t":"hello","spice":0}]}}""");
+            service.LineEngine = engine;
+            var line = new LineDraw("answer", "lines", "answer", "0_0", null, 3, false, 0);
+            var ask = new AskDraw("offer", "resized", "offer?", "0_0", new[] { "yes", "no" }, line, line, "", null);
+            var ignored = typeof(EmiLineEngine).GetField("_ignoredAsksThisLaunch", Private)!;
+            int before = (int)ignored.GetValue(engine)!;
+            desk.ShowAsk(ask, engine);
+            // The ask opens on the WPF dot cadence (#5242): ".", "..", "..." then the question.
+            for (int i = 0; i < 3; i++) desk.AdvanceAskTimer();
+            Assert.True(desk.AskLive);
+            Assert.Equal("offer?", desk.BubbleText);
+            desk.BeginPresentation(() => { });
+            Assert.False(desk.AskLive);
+            Assert.Null(desk.BubbleText);
+            Assert.Equal(before + 1, (int)ignored.GetValue(engine)!);
+            var chips = Field<StackPanel>(desk, "_askChips");
+            Assert.False(chips.IsVisible);
+            Assert.Empty(chips.Children);
+            desk.EndPresentation();
+            service.Fire("resized");
+            Assert.Equal(".", desk.BubbleText);
+            for (int i = 0; i < 3; i++) desk.AdvanceSpeech();
+            Assert.Equal("hello", desk.BubbleText);
+        }
+        finally
+        {
+            EmiLineEngine.AskSituationProbe = oldAskProbe;
+            EmiLineEngine.EffectFeasibleProbe = oldEffectProbe;
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task BorrowingReleasesTheDragAndRestoresPlacementAndControls() => Run(async desk =>
     {
         var body = desk.FindControl<Grid>("BodyRoot")!;

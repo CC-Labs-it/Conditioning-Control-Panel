@@ -130,7 +130,10 @@ public static class ChaosBubbleVariants
     public const int    DARTER_QUICK_BONUS    = 90;
     private static readonly uint DarterTint  = 0xFFFF4DC4u; // bright flash-pink
 
-    private static readonly Random _rng = new();
+    /// <summary>The unseeded roll behind every spec built here (sizes, fuses, picks). A test that
+    /// compares two specs pins it, or a rare size draw makes them differ (flake: BubblePayloadHostTests).</summary>
+    internal static Random Rng { get; set; } = new();
+    private static Random _rng => Rng;
 
     /// <summary>
     /// Per-spawn-tick roll for a darter. Density climbs with run intensity (present from

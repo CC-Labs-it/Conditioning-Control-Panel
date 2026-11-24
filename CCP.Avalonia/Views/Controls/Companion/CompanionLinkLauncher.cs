@@ -24,7 +24,7 @@ internal static class CompanionLinkLauncher
             if (RemoteControlTabView.Relay.IsValueCreated && RemoteControlTabView.Relay.Value.ControllerConnected)
                 return;
             if (!CompanionLinkNavigation.TryBrowserUri(url, out var uri)) return;
-            // The shell requests video autoplay after the page loads. Media-session ownership remains a browser follow-up.
+            // The shell claims the browser interaction and requests video autoplay after the page loads.
             if (await Navigate(url!) != false) return;
             // WPF MainWindow/MainWindow.Browser.cs:657-667: offline also blocks external fallback.
             if (CoreSettings.Current.OfflineMode) return;

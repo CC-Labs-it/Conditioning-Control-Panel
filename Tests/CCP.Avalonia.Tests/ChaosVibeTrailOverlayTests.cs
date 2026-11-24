@@ -6,7 +6,10 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Chaos;
 using Xunit;
@@ -150,6 +153,59 @@ public sealed class ChaosVibeTrailOverlayTests
                 Assert.False((bool)refused.GetValue(null)!);
             }
             finally { refused.SetValue(null, false); ChaosVibeTrailOverlay.CloseActive(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Start_raises_only_for_pinned_playing_video_and_demotes_unpinned()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            var settings = CoreSettings.Current;
+            var oldPin = settings.ChaosPinOnTop;
+            var oldVideo = CoreEngine.Video;
+            var scheduler = MandatoryVideoOverlay.Instance.Scheduler;
+            var playing = scheduler.GetType().GetField("_playing", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            var oldPlaying = playing.GetValue(scheduler);
+            var oldRaise = X11Overlay.RaiseRequestedForTests;
+            int raises = 0;
+            try
+            {
+                settings.ChaosPinOnTop = true;
+                CoreEngine.Video = scheduler;
+                ChaosVibeTrailOverlay.SkipPlatformChecksForTests = true;
+                ChaosVibeTrailOverlay.EnsureCreated();
+                var w = ChaosVibeTrailOverlay.Active!;
+                w.Show(); // Headless cannot supply a native click-through surface.
+                X11Overlay.RaiseRequestedForTests = window => { Assert.Same(w, window); Assert.True(w.IsVisible); raises++; };
+                playing.SetValue(scheduler, false);
+                ChaosVibeTrailOverlay.Start();
+                Assert.Equal(0, raises);
+                playing.SetValue(scheduler, true);
+                ChaosVibeTrailOverlay.Start();
+                Assert.Equal(1, raises);
+                settings.ChaosPinOnTop = false;
+                w.Topmost = true;
+                ChaosVibeTrailOverlay.Start();
+                Assert.Equal(1, raises);
+                Assert.False(w.Topmost);
+                playing.SetValue(scheduler, false);
+                w.Topmost = true;
+                ChaosVibeTrailOverlay.Start();
+                Assert.Equal(1, raises);
+                Assert.False(w.Topmost);
+            }
+            finally
+            {
+                ChaosVibeTrailOverlay.CloseActive();
+                ChaosVibeTrailOverlay.SkipPlatformChecksForTests = false;
+                X11Overlay.RaiseRequestedForTests = oldRaise;
+                playing.SetValue(scheduler, oldPlaying);
+                CoreEngine.Video = oldVideo;
+                settings.ChaosPinOnTop = oldPin;
+            }
             return Task.CompletedTask;
         });
     }

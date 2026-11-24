@@ -241,12 +241,28 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 c.Flush();
                 using var cts = new CancellationTokenSource(ShowAckTimeoutMs);
                 var buf = new byte[1];
-                return c.ReadAsync(buf, cts.Token).AsTask().GetAwaiter().GetResult() == 1;
+                if (c.ReadAsync(buf, cts.Token).AsTask().GetAwaiter().GetResult() != 1) return false;
+                // Older primaries may close immediately after the ack. It still proves liveness.
+                try { c.WriteByte(1); } catch (IOException) { } catch (ObjectDisposedException) { }
+                return true;
             }
             catch (TimeoutException) { return null; }
             catch (OperationCanceledException) { return false; }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Single-instance show request failed"); return null; }
             finally { if (ownsGate) gate.ReleaseMutex(); }
+        }
+
+        // The client confirms receipt before Disconnect can discard an unread ack on Windows.
+        internal static async Task AcknowledgeAsync(Stream pipe, CancellationToken ct)
+        {
+            await pipe.WriteAsync(new byte[] { 1 }, ct);
+            await pipe.FlushAsync(ct);
+            // A legacy client closes after reading the ack; a stalled client must not block the queue forever.
+            using var receiptTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            receiptTimeout.CancelAfter(TimeSpan.FromSeconds(10));
+            try { await pipe.ReadAsync(new byte[1], receiptTimeout.Token); }
+            catch (IOException) { }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
         }
 
         static async Task ListenAsync(string pipe, Func<string?, Task> show, Func<bool> startupPhase, CancellationToken ct)
@@ -257,41 +273,43 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 {
                     await using var s = new NamedPipeServerStream(pipe, PipeDirection.InOut, 1,
                         PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-                    await s.WaitForConnectionAsync(ct);
-                    var len = new byte[1];
-                    await s.ReadExactlyAsync(len, ct);
-                    int count = len[0];
-                    if (count == byte.MaxValue)
+                    while (!ct.IsCancellationRequested)
                     {
-                        var size = new byte[4];
-                        await s.ReadExactlyAsync(size, ct);
-                        count = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(size);
-                        if (count < 0 || count > 65536) continue;
+                        await s.WaitForConnectionAsync(ct);
+                        var len = new byte[1];
+                        await s.ReadExactlyAsync(len, ct);
+                        int count = len[0];
+                        if (count == byte.MaxValue)
+                        {
+                            var size = new byte[4];
+                            await s.ReadExactlyAsync(size, ct);
+                            count = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(size);
+                            if (count < 0 || count > 65536) { s.Disconnect(); continue; }
+                        }
+                        var body = new byte[count];
+                        await s.ReadExactlyAsync(body, ct);
+                        string? payload = body.Length == 0 ? null : Encoding.UTF8.GetString(body);
+                        if (startupPhase())
+                        {
+                            // Starting, not wedged: ack now and let the show run when the dispatcher pumps.
+                            await AcknowledgeAsync(s, ct);
+                            // Hand it over before accepting the next request, so requests keep arrival order;
+                            // show only queues it (HandoffQueue) and does not wait for the UI. Disconnect
+                            // this client while keeping the listening endpoint for the next launch.
+                            s.Disconnect();
+                            Task shown;
+                            try { shown = show(payload); } catch (Exception ex) { shown = Task.FromException(ex); }
+                            _ = shown.ContinueWith(
+                                t => Serilog.Log.Warning(t.Exception, "Single-instance show failed"),
+                                TaskContinuationOptions.OnlyOnFaulted);
+                            continue;
+                        }
+                        // Ack even when showing fails: WPF acks after the attempt (App.xaml.cs:2220), and a
+                        // missing ack reads as "wedged" to the second launch.
+                        try { await show(payload); } catch (Exception ex) { Serilog.Log.Warning(ex, "Single-instance show failed"); }
+                        await AcknowledgeAsync(s, ct);
+                        s.Disconnect();
                     }
-                    var body = new byte[count];
-                    await s.ReadExactlyAsync(body, ct);
-                    string? payload = body.Length == 0 ? null : Encoding.UTF8.GetString(body);
-                    if (startupPhase())
-                    {
-                        // Starting, not wedged: ack now and let the show run when the dispatcher pumps.
-                        await s.WriteAsync(new byte[] { 1 }, ct);
-                        await s.FlushAsync(ct);
-                        // Hand it over before accepting the next request, so requests keep arrival order;
-                        // show only queues it (HandoffQueue) and does not wait for the UI. Close this pipe
-                        // first: a launch connecting to it meanwhile would be dropped unanswered.
-                        await s.DisposeAsync();
-                        Task shown;
-                        try { shown = show(payload); } catch (Exception ex) { shown = Task.FromException(ex); }
-                        _ = shown.ContinueWith(
-                            t => Serilog.Log.Warning(t.Exception, "Single-instance show failed"),
-                            TaskContinuationOptions.OnlyOnFaulted);
-                        continue;
-                    }
-                    // Ack even when showing fails: WPF acks after the attempt (App.xaml.cs:2220), and a
-                    // missing ack reads as "wedged" to the second launch.
-                    try { await show(payload); } catch (Exception ex) { Serilog.Log.Warning(ex, "Single-instance show failed"); }
-                    await s.WriteAsync(new byte[] { 1 }, ct);
-                    await s.FlushAsync(ct);
                 }
                 catch (OperationCanceledException) { return; }
                 catch (Exception ex)

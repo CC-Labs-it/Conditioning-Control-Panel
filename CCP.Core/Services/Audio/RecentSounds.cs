@@ -38,6 +38,8 @@ namespace ConditioningControlPanel.Services.Audio
 
         public sealed record Entry(DateTime At, string Player, string File, bool EngineRunning, bool Asked, int Count);
 
+        public Action<string>? TraceSink { get; set; }
+        private readonly EngineOffAudioLine _trace = new();
         private readonly Queue<Entry> _ring = new();
         private Entry? _newest;
         private readonly object _gate = new();
@@ -45,6 +47,12 @@ namespace ConditioningControlPanel.Services.Audio
         /// <summary>A sound just started. <paramref name="path"/> is reduced to its file name here.</summary>
         public void Note(string player, string? path, bool engineRunning, bool asked, DateTime now)
         {
+            try
+            {
+                var sink = TraceSink;
+                if (sink != null && _trace.LineFor(player, path, engineRunning, asked, now) is { } line) sink(line);
+            }
+            catch { } // Diagnostics must never interrupt playback.
             if (string.IsNullOrEmpty(player)) player = "audio";
             var file = CleanName(path);
 
