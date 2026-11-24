@@ -145,6 +145,7 @@ public sealed class TubeSpeechQueueTests
             Dispatcher.UIThread.RunJobs();
             Assert.True(delays[0].Cancelled());       // the pending gap is dropped
             Assert.Equal(0, tube.QueuedSpeechCount);
+            while (tube.TypewriterFrame is { } voicedFrame) voicedFrame();
             Assert.Equal("voiced", text.Text);
             Assert.Single(live);
 

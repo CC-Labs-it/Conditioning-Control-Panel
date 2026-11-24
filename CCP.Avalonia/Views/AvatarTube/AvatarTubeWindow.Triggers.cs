@@ -147,10 +147,10 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             });
         }
 
-        // WPF Speech.cs:3095 StartTypewriter(slow: true): the ONE slow typing path, shared by
-        // trigger and preset bubbles. Markdown links are stripped for the frames; the final pass
+        // WPF Speech.cs:2922-2989: trigger, preset and priority bubbles share typing.
+        // Markdown links are stripped for the frames; the final pass
         // renders the full text with clickable links. A newer line bumps the generation.
-        private void TypeBubble(string text, Func<bool> alive)
+        private void TypeBubble(string text, Func<bool> alive, bool slow = true)
         {
             var generation = _triggerAnimationGeneration;
             var plain = System.Text.RegularExpressions.Regex.Replace(text,
@@ -158,7 +158,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _txtSpeech.Text = "";
             if (plain.Length == 0) { RenderTriggerText(text); return; }
             var index = 0;
-            var interval = TimeSpan.FromMilliseconds(TriggerTypewriterStepMs(plain.Length));
+            var interval = TimeSpan.FromMilliseconds(TypewriterStepMs(plain.Length, slow));
             Action tick = () =>
             {
                 if (generation != _triggerAnimationGeneration || !alive()) return;
@@ -196,10 +196,16 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _cancelTriggerAnimation = static () => { };
         }
 
-        // WPF Speech.cs:2938-2965: slow profile, batched ticks, plus readable time after typing.
-        private static int TriggerTypewriterStepMs(int length) => Math.Clamp(7000 / Math.Max(1, length), 24, 75);
-        internal static int TriggerTypingMs(int length) => length <= 0 ? 0 :
-            TriggerTypewriterStepMs(length) * (int)Math.Ceiling((double)length / Math.Max(1, length / 100));
+        // WPF Speech.cs:2887-2919: both profiles, batched ticks and reading time after typing.
+        private static int TypewriterStepMs(int length, bool slow) => slow
+            ? Math.Clamp(7000 / Math.Max(1, length), 24, 75)
+            : Math.Clamp(2000 / Math.Max(1, length), 8, 30);
+        private static int TypingMs(int length, bool slow) => length <= 0 ? 0 :
+            TypewriterStepMs(length, slow) * (int)Math.Ceiling((double)length / Math.Max(1, length / 100));
+        internal static int TriggerTypingMs(int length) => TypingMs(length, slow: true);
+        private static double PriorityDisplaySeconds(string text, bool aiGenerated) =>
+            Math.Max(Math.Clamp(CoreSettings.Current.BubbleDurationSeconds, 1.0, 10.0), Math.Min(30.0, text.Length / 12.0))
+            + TypingMs(text.Length, slow: !aiGenerated) / 1000.0;
         internal TimeSpan? SpeechHideDelay => _speechTimer?.Interval;
         internal static double TriggerDisplaySeconds(string trigger) =>
             Math.Clamp(5.0 + trigger.Length * 0.05, 5.0, 14.0) + TriggerTypingMs(trigger.Length) / 1000.0;
