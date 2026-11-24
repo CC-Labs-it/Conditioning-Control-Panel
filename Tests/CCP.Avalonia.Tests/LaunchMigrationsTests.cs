@@ -53,11 +53,17 @@ public class LaunchMigrationsTests
     public void ExitFlushWritesPendingEmiState()
     {
         var path = EmiState.FilePath;
-        int pets = EmiState.NotePet();   // debounced SaveSoon
-        if (File.Exists(path)) File.Delete(path);
-        AvApp.FlushEmiDeskOnExit();
-        Assert.True(File.Exists(path));
-        Assert.Contains(pets.ToString(), File.ReadAllText(path));
+        var st = EmiState.Current;
+        int pets0 = st.PetsTotal; bool gist0 = st.PetGistGot;
+        try
+        {
+            int pets = EmiState.NotePet();   // debounced SaveSoon
+            if (File.Exists(path)) File.Delete(path);
+            AvApp.FlushEmiDeskOnExit();
+            Assert.True(File.Exists(path));
+            Assert.Contains(pets.ToString(), File.ReadAllText(path));
+        }
+        finally { st.PetsTotal = pets0; st.PetGistGot = gist0; }
     }
 
     [Fact]
