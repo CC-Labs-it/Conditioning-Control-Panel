@@ -15,7 +15,8 @@ import { createLife, parse, serialize, sleepsSomething } from '../sim/save.js';
 
 const HOSTED = { hostname: 'tc.cclabs.app', hosted: true };
 const small = Ed.readEdition({ caps: { edition: 'small' } }, HOSTED);
-const full = Ed.readEdition({ caps: { edition: 'full' } }, HOSTED);
+/* The whole game: the desktop. A full WEB reading has no Expo and cuts the Llama set (tests/editions-llama-hole.test.mjs). */
+const full = Ed.readEdition({ caps: { edition: 'full', platform: 'desktop' } }, HOSTED);
 const THEMES = Object.keys(FORKS.f5.opts);
 const rich = (s) => { s.fuzz = 1e12; s.total = 1e12; return s; };
 /** A run past Pick a Theme with this first theme, at the seed shelf, rich. */
