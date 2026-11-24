@@ -73,7 +73,23 @@ internal static class RowsRender
         foreach (var s in Descendants(page).OfType<OptionSection>())
             if (!s.IsOpen) { s.IsOpen = true; more = true; }
         if (more) Layout(host, width);
+        PlayPreviews(page);
         return host;
+    }
+
+    /// <summary>
+    /// A page whose side card holds the live preview: plays two seconds of it by hand (an element that
+    /// is never loaded never opens its driver), so a still shows the scene and not an empty desktop.
+    /// </summary>
+    public static void PlayPreviews(FrameworkElement page)
+    {
+        foreach (var pv in Descendants(page).OfType<ConditioningControlPanel.Controls.Preview.EffectPreview>())
+        {
+            if (pv.Driver == null || pv.ActualHeight < 1) continue;
+            pv.Driver.Open();
+            for (int i = 0; i < 60; i++) pv.Driver.Scene.Tick(1 / 30.0);
+            pv.Repaint();
+        }
     }
 
     /// <summary>
