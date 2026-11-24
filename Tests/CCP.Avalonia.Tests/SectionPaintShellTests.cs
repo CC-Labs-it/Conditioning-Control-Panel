@@ -166,6 +166,7 @@ public sealed class SectionPaintShellTests
                 AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
                     .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                     .SetupWithoutStarting();
+            var previousMotion = CoreSettings.Current.MotionLevel;
             CoreSettings.Current.MotionLevel = MotionLevel.Off;
             MainShellWindow? w = null;
             try
@@ -173,7 +174,8 @@ public sealed class SectionPaintShellTests
                 w = new MainShellWindow();
                 w.Show();
                 var home = w.Named<global::ConditioningControlPanel.Avalonia.Views.Tabs.SettingsTabView>("SettingsTab")!;
-                foreach (var tab in new[] { "settings", "play", "settings" })
+                // WPF MainWindow.TabNavigation.cs:268 routes play to the launcher; playeyes paints Play.
+                foreach (var tab in new[] { "settings", "playeyes", "settings" })
                 {
                     w.ShowTab(tab);
                     Dispatcher.UIThread.RunJobs();
@@ -189,7 +191,7 @@ public sealed class SectionPaintShellTests
                     Assert.Same(band, home.FindControl<Border>("AccountStripDrop")!.Background);
                 }
             }
-            finally { w?.Close(); }
+            finally { w?.Close(); CoreSettings.Current.MotionLevel = previousMotion; }
             return Task.CompletedTask;
         });
     }
