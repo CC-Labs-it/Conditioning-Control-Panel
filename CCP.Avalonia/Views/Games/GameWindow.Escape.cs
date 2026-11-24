@@ -4,7 +4,7 @@
 // plays it once through its own host-escape.js. Here one GameWindow hosts every game, so the same three
 // answers live on the window, keyed by the game it runs. A second Escape inside 2 s stays a full panic
 // (PanicPolicy.GameClaimsEscapeAsPause), which closes it through PanicSurfaces "games".
-// The Goon Practice host does not yet keep Escape as pause, so its first Escape closes it.
+// Goon keeps the first Escape once ready; a second press remains a full panic.
 // Arcademy and the Back Room room are not hosted here; FYP and Just Drop are not Escape-pause games on WPF.
 using System;
 using System.Linq;
@@ -22,6 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// game that does not pause on Escape.</summary>
         internal PanicPolicy.KeptEscapePage KeptEscapePage => Spec.Id.ToLowerInvariant() switch
         {
+            "goon" => PanicPolicy.KeptEscapePage.Goon,
             "raceclassic" => PanicPolicy.KeptEscapePage.Race,
             PbpId => PanicPolicy.KeptEscapePage.Board,
             "breakoutdemo" or "breakout" => PanicPolicy.KeptEscapePage.Breakout,

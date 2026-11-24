@@ -18,9 +18,9 @@ public sealed partial class GameWindowTests
         window.Web.OnNavigationCompleted(window.PageUrl);
         window.Web.OnWebMessage("{\"type\":\"ready\"}");
         var init = Assert.Single(frames.Where(f => (string?)f["type"] == "init"));
-        Assert.True((bool?)init["practiceOnly"]);
-        Assert.False((bool?)init["caps"]?["canHost"]);
-        Assert.False((bool?)init["caps"]?["canJoin"]);
+        Assert.Null(init["practiceOnly"]);
+        Assert.Equal("https://codebambi-proxy.vercel.app", (string?)init["net"]?["serverBase"]);
+        Assert.True((bool?)init["net"]?["viaHost"]);
         Assert.True(window.IsReady);
         for (int i = 0; i < 1000 && !frames.Any(f => (string?)f["type"] == "manifest"); i++)
         {

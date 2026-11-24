@@ -231,7 +231,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// press is handed to the page as well (each page's host-escape.js), since its own keydown never comes
         /// while the web view is out of focus. The Remote HUD Stop passes fromPanicKey false, so a click never pauses
         /// the game under the non-activating pill (WPF MainWindow.xaml.cs:1548).
-        /// The Goon Practice host does not yet keep Escape as pause; the first Escape closes it.</summary>
+        /// Goon follows the same ready and two-press rules.</summary>
         internal bool TryGamePauseOnEscape(DateTime now, bool fromPanicKey = true)
         {
             try
@@ -246,6 +246,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 PanicPolicy.KeptEscapePage Route(bool claimed) => PanicPolicy.KeptEscapeGoesTo(claimed,
                     In(PanicPolicy.KeptEscapePage.Race), ready, In(PanicPolicy.KeptEscapePage.Board), ready,
                     In(PanicPolicy.KeptEscapePage.Breakout), ready, In(PanicPolicy.KeptEscapePage.Dtrh), ready,
+                    goonInFront: In(PanicPolicy.KeptEscapePage.Goon), goonReady: ready,
                     intakeInFront: intake != null, intakeReady: intakeReady,
                     counterInFront: In(PanicPolicy.KeptEscapePage.Counter), counterReady: ready,
                     glassroadInFront: In(PanicPolicy.KeptEscapePage.Glassroad), glassroadReady: ready);

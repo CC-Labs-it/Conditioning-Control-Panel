@@ -1,7 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.GoonGame;
+using ConditioningControlPanel.Services.Safety;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Transfer;
 using Newtonsoft.Json.Linq;
 
@@ -12,6 +18,16 @@ internal sealed partial class GameWindow
     // WPF GoonHostService.cs:290: the Play door opens the hosted Goon page.
     static partial void RegisterGoon(Dictionary<string, Game> games) =>
         games["goon"] = new("goon", "launcher_game_goon_title", "goon/index.html");
+
+    // WPF GoonHostService.cs:210,1008: one client, 40 second long-poll timeout.
+    private static readonly Lazy<HttpClient> GoonHttp = new(() =>
+    {
+        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(40) };
+        try { client.DefaultRequestHeaders.UserAgent.ParseAdd("ConditioningControlPanel/" + CoreReleaseContent.AppVersion); }
+        catch (Exception ex) { Diag.Swallowed(ex); }
+        return client;
+    });
+    internal static Func<HttpClient> GoonHttpClient = () => GoonHttp.Value;
 
     // WPF GoonHostService.cs:1667-1782: a live page must keep beating and painting.
     internal static Func<DateTime> GoonUtcNow = () => DateTime.UtcNow;
@@ -48,15 +64,18 @@ internal sealed partial class GameWindow
                 Post(new { type = "init", protocol = 1, lang = CoreSettings.Current.Language,
                     identity = new { unifiedId = CoreAccount.UnifiedUserId ?? "",
                         displayName = CoreAccount.DisplayName ?? "", appVersion = CoreReleaseContent.AppVersion },
-                    practiceOnly = true,
-                    net = new { viaHost = true },
+                    net = new { serverBase = GoonSignalingClient.ProxyBaseUrl, authToken = PbpAuthToken(), viaHost = true },
                     caps = new { haptics = false, brainDrain = false, spiral = true, camera = false,
-                        video = true, mediaTransfer = false, canHost = false, canJoin = false },
+                        video = true, mediaTransfer = false, canHost = GoonHostRules.HostingAllowed(), canJoin = GoonHostRules.JoiningAllowed() },
                     consent = new { liveDurationSec = consent.LiveDurationSec, toyCap = consent.ToyCap,
                         payloadMinGapMs = consent.PayloadMinGapMs }, fullscreen = WindowState == global::Avalonia.Controls.WindowState.FullScreen });
                 BootGoonInbox();
                 _goonBeat = _goonPaintMove = _goonTick = GoonUtcNow();
                 _goonPaint = null;
+                handled = true;
+                break;
+            case "net-post":
+                if (!_closing) RelayGoonPost(message);
                 handled = true;
                 break;
             case "heartbeat":
@@ -73,6 +92,42 @@ internal sealed partial class GameWindow
                 handled = true;
                 break;
         }
+    }
+
+    // WPF GoonHostService.cs:1020-1087: only the built Goon URI may carry the account token.
+    private void RelayGoonPost(JObject message)
+    {
+        var id = (string?)message["id"] ?? "";
+        var path = (string?)message["path"] ?? "";
+        var generation = Volatile.Read(ref _goonInboxGeneration);
+        void Reply(int status, string body) => Dispatcher.UIThread.Post(() =>
+        {
+            if (!_closing && generation == Volatile.Read(ref _goonInboxGeneration))
+                Post(new { type = "net-post-result", id, status, body });
+        });
+        if (!HostNetPathRule.TryBuild(GoonSignalingClient.ProxyBaseUrl, path, "/v2/goon/", out var target) || target == null)
+        {
+            Reply(0, "forbidden_path");
+            return;
+        }
+        var body = message["body"]?.Type == JTokenType.String ? (string?)message["body"] ?? ""
+            : message["body"]?.ToString(Newtonsoft.Json.Formatting.None) ?? "";
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Post, target)
+                { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+                var token = PbpAuthToken();
+                if (!string.IsNullOrEmpty(token)) request.Headers.Add("X-Auth-Token", token);
+                request.Headers.Add("X-Client-Version", CoreReleaseContent.AppVersion);
+                using var response = await GoonHttpClient().SendAsync(request).ConfigureAwait(false);
+                var result = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                MergedAccountRecovery.TryHandle((int)response.StatusCode, result);
+                Reply((int)response.StatusCode, result);
+            }
+            catch (Exception ex) { Serilog.Log.Debug("[Goon] net-post failed: {Error}", ex.Message); Reply(0, ""); }
+        });
     }
 
     internal void CheckGoonWatch(DateTime now)
