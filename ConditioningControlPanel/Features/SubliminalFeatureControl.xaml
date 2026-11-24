@@ -4,11 +4,13 @@
              xmlns:ctl="clr-namespace:ConditioningControlPanel.Controls"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
-             xmlns:feat="clr-namespace:ConditioningControlPanel.Features">
+             xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.TintSliders="True">
 
     <!-- Velvet Kit 2 density pass. The root stays a StackPanel: MainWindow.SessionFeatureLock.cs
          inserts the session-lock banner at index 0 of this panel. -->
-    <StackPanel>
+    <StackPanel Grid.IsSharedSizeScope="True">
 
         <!-- HERO -->
         <Border Height="72" CornerRadius="16" Background="{DynamicResource SurfaceBgBrush}"
@@ -70,78 +72,73 @@
                         <StackPanel Margin="16,8,16,8">
 
                             <feat:OptionSection Key="subliminal.basics" Title="{loc:Str studio_section_basics}" Theme="Main">
-                            <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_messages_shown_per_minute}">
+                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_messages_shown_per_minute}">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto" MinWidth="56"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str label_per_min}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str label_per_min}" Emblem="Often">
+                                    <rows:RowLabel.Value>
+                                        <MultiBinding Converter="{x:Static rows:RowFraction.Instance}">
+                                            <Binding Path="Value" ElementName="SliderPerMin"/>
+                                            <Binding Path="Maximum" ElementName="SliderPerMin"/>
+                                        </MultiBinding>
+                                    </rows:RowLabel.Value>
+                                </rows:RowLabel>
                                 <Slider Grid.Column="1" x:Name="SliderPerMin" feat:OptionSection.Setting="SubliminalFrequency" Minimum="1" Maximum="30" Value="5"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderPerMin_Changed"/>
-                                <TextBlock Grid.Column="2" x:Name="TxtPerMin" Text="5" HorizontalAlignment="Right"
-                                           VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
-                                           FontSize="13" FontWeight="Bold"/>
+                                <rows:RowValue Grid.Column="2" x:Name="TxtPerMin" Text="5" Unit="{loc:Str row_unit_a_minute}"/>
                             </Grid>
 
-                            <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_display_duration_in_frames_lower_faster_flash}">
+                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_display_duration_in_frames_lower_faster_flash}">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto" MinWidth="56"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str label_frames}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str label_frames}" Emblem="Long"/>
                                 <Slider Grid.Column="1" x:Name="SliderFrames" feat:OptionSection.Setting="SubliminalDuration" Minimum="1" Maximum="10" Value="2"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderFrames_Changed"/>
-                                <TextBlock Grid.Column="2" x:Name="TxtFrames" Text="2" HorizontalAlignment="Right"
-                                           VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
-                                           FontSize="13" FontWeight="Bold"/>
+                                <rows:RowValue Grid.Column="2" x:Name="TxtFrames" Text="2"/>
                             </Grid>
 
-                            <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_text_visibility_lower_more_subtle}">
+                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_text_visibility_lower_more_subtle}">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto" MinWidth="56"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str setting_opacity}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_opacity}" Emblem="Clear"/>
                                 <Slider Grid.Column="1" x:Name="SliderOpacity" feat:OptionSection.Setting="SubliminalOpacity" Minimum="10" Maximum="100" Value="80"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderOpacity_Changed"/>
-                                <TextBlock Grid.Column="2" x:Name="TxtOpacity" Text="80%" HorizontalAlignment="Right"
-                                           VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
-                                           FontSize="13" FontWeight="Bold"/>
+                                <rows:RowValue Grid.Column="2" x:Name="TxtOpacity" Text="80%"/>
                             </Grid>
                             </feat:OptionSection>
 
                             <feat:OptionSection Key="subliminal.sound" Title="{loc:Str studio_section_sound}" Theme="Sound">
-                            <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_play_whispered_audio_when_subliminal_messages}">
+                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_play_whispered_audio_when_subliminal_messages}">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto" MinWidth="56"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str setting_volume}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_volume}" Emblem="Loud"/>
                                 <Slider Grid.Column="1" x:Name="SliderWhisperVol" feat:OptionSection.Setting="SubAudioVolume" Minimum="0" Maximum="100" Value="50"
                                         VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderWhisperVol_Changed"/>
-                                <TextBlock Grid.Column="2" x:Name="TxtWhisperVol" Text="50%" HorizontalAlignment="Right"
-                                           VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
-                                           FontSize="13" FontWeight="Bold"/>
+                                <rows:RowValue Grid.Column="2" x:Name="TxtWhisperVol" Text="50%"/>
                             </Grid>
-                            <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_play_whispered_audio_when_subliminal_messages}">
+                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_play_whispered_audio_when_subliminal_messages}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <helpers:EmojiTextBlock Grid.Column="0" Text="{loc:Str setting_audio_whispers}" FontSize="13" FontWeight="SemiBold"
-                                                        Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_audio_whispers}" Emblem="Loud"
+                                               IsOn="{Binding IsChecked, ElementName=ChkWhispers}"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkWhispers" feat:SessionLock.Owned="True"
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkWhispers_Changed" Unchecked="ChkWhispers_Changed"/>
@@ -153,13 +150,13 @@
 
                             <feat:OptionSection Key="subliminal.extras" Title="{loc:Str studio_section_extras}" Theme="Advanced" DefaultOpen="False">
                             <!-- Solid mode: shared-host renderer, mirrors the Flashes/Bubble Pop toggle -->
-                            <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_subliminal_solid_mode}">
+                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_subliminal_solid_mode}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str setting_subliminal_solid_mode}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_subliminal_solid_mode}" Emblem="Perf"
+                                               IsOn="{Binding IsChecked, ElementName=ChkSolidMode}"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkSolidMode"
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkSolidMode_Changed" Unchecked="ChkSolidMode_Changed"/>
@@ -168,14 +165,13 @@
 
                             <feat:OptionSection Key="subliminal.look" Title="{loc:Str studio_section_look}" Theme="Look">
                             <!-- Font: any family installed on Windows, plus the bundled Fredoka. -->
-                            <Grid Height="34" Background="Transparent"
+                            <Grid Style="{StaticResource OptionRow}" Background="Transparent"
                                   ToolTip="{loc:Str tooltip_subliminal_font_any_installed}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" MinWidth="90"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str label_font}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str label_font}" Emblem="Words"/>
                                 <ComboBox Grid.Column="1" x:Name="CmbFont" feat:OptionSection.Setting="SubliminalFont" Height="26" MaxWidth="220"
                                           HorizontalAlignment="Right" VerticalAlignment="Center"
                                           Style="{DynamicResource DarkComboBoxStyle}"
@@ -208,7 +204,7 @@
 
                 <!-- The gold V2 box (Controls/SuperBox): Super switch, BASIC sign, weekly try. -->
                 <ctl:SuperBox x:Name="SuperBoxMain" Effect="Afterglow">
-                    <StackPanel>
+                    <StackPanel rows:RowHue.Hue="#FFE08A">
                         <!-- Afterglow's own rows (take two), shown while Afterglow is lit:
                              Features/SubliminalFeatureControl.Afterglow.cs. The October near-cursor
                              options are not read by this effect, so they get no rows. -->
@@ -216,66 +212,57 @@
                                     Loaded="AfterglowRows_Loaded" Unloaded="AfterglowRows_Unloaded">
                             <Border Height="1" Background="#33FFE08A" Margin="0,2,0,6"/>
                             <!-- Owner 2026-11-17: with the V2 on, the normal cards rest; this brings them back. -->
-                            <Grid x:Name="AfterglowAlsoBaseRow" Height="36" Background="Transparent"
+                            <Grid x:Name="AfterglowAlsoBaseRow" Style="{StaticResource OptionRow}" Background="Transparent"
                                   ToolTip="{loc:Str tooltip_super_afterglow_also_base}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str super_afterglow_also_base}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"
-                                           TextWrapping="Wrap"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str super_afterglow_also_base}" Emblem="Words"
+                                               IsOn="{Binding IsChecked, ElementName=ChkAfterglowAlsoBase}"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkAfterglowAlsoBase" feat:OptionSection.Setting="AfterglowAlsoBase"
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center" Margin="10,0,0,0"
                                           Checked="ChkAfterglowAlsoBase_Changed" Unchecked="ChkAfterglowAlsoBase_Changed"/>
                             </Grid>
-                            <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_super_afterglow_words}">
+                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_super_afterglow_words}">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto" MinWidth="56"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str super_afterglow_words}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str super_afterglow_words}" Emblem="Many" Subject="Word"
+                                               Value="{Binding Value, ElementName=SliderAfterglowWords}"/>
                                 <Slider Grid.Column="1" x:Name="SliderAfterglowWords" feat:OptionSection.Setting="AfterglowLineWords" Minimum="2" Maximum="6" Value="4"
                                         SmallChange="1" LargeChange="1" TickFrequency="1" IsSnapToTickEnabled="True"
                                         VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderAfterglowWords_Changed"/>
-                                <TextBlock Grid.Column="2" x:Name="TxtAfterglowWords" Text="4" HorizontalAlignment="Right"
-                                           VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
-                                           FontSize="13" FontWeight="Bold"/>
+                                <rows:RowValue Grid.Column="2" x:Name="TxtAfterglowWords" Text="4"/>
                             </Grid>
-                            <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_super_afterglow_hold}">
+                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_super_afterglow_hold}">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto" MinWidth="56"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str super_afterglow_hold}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str super_afterglow_hold}" Emblem="Long"/>
                                 <Slider Grid.Column="1" x:Name="SliderAfterglowHold" feat:OptionSection.Setting="AfterglowLineHold" Minimum="0.5" Maximum="6" Value="1.2"
                                         SmallChange="0.1" LargeChange="0.1" TickFrequency="0.1" IsSnapToTickEnabled="True"
                                         VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderAfterglowHold_Changed"/>
-                                <TextBlock Grid.Column="2" x:Name="TxtAfterglowHold" Text="1.2s" HorizontalAlignment="Right"
-                                           VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
-                                           FontSize="13" FontWeight="Bold"/>
+                                <rows:RowValue Grid.Column="2" x:Name="TxtAfterglowHold" Text="1.2s"/>
                             </Grid>
-                            <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_super_afterglow_ghost}">
+                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_super_afterglow_ghost}">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto" MinWidth="56"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str super_afterglow_ghost}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str super_afterglow_ghost}" Emblem="Clear"/>
                                 <Slider Grid.Column="1" x:Name="SliderAfterglowGhost" feat:OptionSection.Setting="AfterglowGhostOpacity" Minimum="15" Maximum="90" Value="42"
                                         SmallChange="1" LargeChange="1" TickFrequency="1" IsSnapToTickEnabled="True"
                                         VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderAfterglowGhost_Changed"/>
-                                <TextBlock Grid.Column="2" x:Name="TxtAfterglowGhost" Text="42%" HorizontalAlignment="Right"
-                                           VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
-                                           FontSize="13" FontWeight="Bold"/>
+                                <rows:RowValue Grid.Column="2" x:Name="TxtAfterglowGhost" Text="42%"/>
                             </Grid>
                         </StackPanel>
                         <!-- Take two: the October options box. Kept folded, not removed. -->
