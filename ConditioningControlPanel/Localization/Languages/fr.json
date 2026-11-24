@@ -1191,6 +1191,8 @@
   "row_unit_each_time": "à chaque fois",
   "row_unit_at_least": "au moins",
   "row_unit_at_once": "à la fois",
+  "row_unit_a_minute": "par minute",
+  "row_unit_at_most": "au plus",
   "tooltip_number_of_images_shown_per_flash_event_multip": "Nombre d'images affichées par événement flash.\r\nPlusieurs images apparaissent simultanément.",
   "setting_images": "Images",
   "setting_flash_random_images": "Nombre d'images aléatoire",
