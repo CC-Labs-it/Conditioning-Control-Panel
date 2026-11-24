@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
@@ -9,6 +10,7 @@ using ConditioningControlPanel.Services.GoonGame;
 using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Transfer;
+using ConditioningControlPanel.Services.Stakes;
 using Newtonsoft.Json.Linq;
 
 namespace ConditioningControlPanel.Avalonia.Views.Games;
@@ -36,11 +38,35 @@ internal sealed partial class GameWindow
     private long? _goonPaint;
     private bool _goonRetried;
     private static int _goonPanicEpoch;
+    private static bool _goonRecovering;
+    private HapticService? _goonHaptics;
+    private static StakeBridge? _goonStakes;
+    private static Func<string, Action<JObject>, StakeBridge> _goonStakeBridge = StakeBridge.ForApp;
+    internal static Func<string, Action<JObject>, StakeBridge> GoonStakeBridge
+    {
+        get => _goonStakeBridge;
+        set { _goonStakeBridge = value; _goonStakes = null; }
+    }
+    internal static Task GoonStakePending { get; private set; } = Task.CompletedTask;
+    private static void PostGoonStake(JObject frame) => Dispatcher.UIThread.Post(() =>
+    {
+        GameWindow? game;
+        lock (Open) game = Open.Find(w => w.Spec.Id == "goon" && !w._closing);
+        game?.Post(frame);
+    });
+    private void GoonToyConnectionChanged(object? sender, bool connected) => Dispatcher.UIThread.Post(() =>
+    {
+        if (!_closing) Post(new { type = "haptics-state", connected = GoonToyDirector.ReadyNow });
+    });
 
     private void StartGoonWatch()
     {
         _goonBeat = _goonPaintMove = _goonTick = GoonUtcNow();
         GoonCacheBridge.Attach(PostGoonCache);
+        GoonToyDirector.Open();
+        _goonHaptics = CoreHaptics.Service;
+        if (_goonHaptics != null) _goonHaptics.ConnectionChanged += GoonToyConnectionChanged;
+        if (!_goonRecovering && CoreSettings.Current.GoonFullscreen) SetPageFullscreen(true);
         _goonWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(GoonHostRules.WatchIntervalSeconds) };
         _goonWatch.Tick += (_, _) => CheckGoonWatch(GoonUtcNow());
         _goonWatch.Start();
@@ -49,6 +75,12 @@ internal sealed partial class GameWindow
     partial void HandleGoonMessage(JObject message, ref bool handled)
     {
         if (HandleGoonInbox(message)) { handled = true; return; }
+        if (StakeBridge.Handles((string?)message["type"]))
+        {
+            if (!_closing) { _goonStakes ??= GoonStakeBridge("goon", PostGoonStake); GoonStakePending = _goonStakes.Handle(message); }
+            handled = true;
+            return;
+        }
         switch ((string?)message["type"])
         {
             case "cache-req":
@@ -65,13 +97,32 @@ internal sealed partial class GameWindow
                     identity = new { unifiedId = CoreAccount.UnifiedUserId ?? "",
                         displayName = CoreAccount.DisplayName ?? "", appVersion = CoreReleaseContent.AppVersion },
                     net = new { serverBase = GoonSignalingClient.ProxyBaseUrl, authToken = PbpAuthToken(), viaHost = true },
-                    caps = new { haptics = false, brainDrain = false, spiral = true, camera = false,
-                        video = true, mediaTransfer = false, canHost = GoonHostRules.HostingAllowed(), canJoin = GoonHostRules.JoiningAllowed() },
+                    caps = new { haptics = GoonToyDirector.ReadyNow, brainDrain = true, spiral = true, camera = false,
+                        video = true, mediaTransfer = GoonHostRules.TransferAllowed(), canHost = GoonHostRules.HostingAllowed(), canJoin = GoonHostRules.JoiningAllowed() },
                     consent = new { liveDurationSec = consent.LiveDurationSec, toyCap = consent.ToyCap,
                         payloadMinGapMs = consent.PayloadMinGapMs }, fullscreen = WindowState == global::Avalonia.Controls.WindowState.FullScreen });
                 BootGoonInbox();
                 _goonBeat = _goonPaintMove = _goonTick = GoonUtcNow();
                 _goonPaint = null;
+                handled = true;
+                break;
+            case "toy-pattern":
+                if (!_closing) GoonToyDirector.OnPattern(message);
+                handled = true;
+                break;
+            case "toy-stop":
+                GoonToyDirector.Stop();
+                handled = true;
+                break;
+            case "fullscreen-set":
+                if (!_closing)
+                {
+                    SetPageFullscreen((bool?)message["on"] ?? false);
+                    var fullscreen = WindowState == global::Avalonia.Controls.WindowState.FullScreen;
+                    Post(new { type = "fullscreen", on = fullscreen });
+                    if (CoreSettings.Current.GoonFullscreen != fullscreen)
+                    { CoreSettings.Current.GoonFullscreen = fullscreen; CoreSettings.Save(); }
+                }
                 handled = true;
                 break;
             case "net-post":
@@ -136,6 +187,7 @@ internal sealed partial class GameWindow
         _goonTick = now;
         if (_closing || _shellExiting || !IsReady) return;
         var silent = (now - _goonBeat).TotalSeconds;
+        if (silent > 6) GoonToyDirector.Stop();
         if (silent > 20) { RecoverGoon(); return; }
         if (_goonPaint != null)
         {
@@ -152,18 +204,36 @@ internal sealed partial class GameWindow
         var epoch = _goonPanicEpoch;
         Close();
         if (!retry || epoch != _goonPanicEpoch) return;
-        var next = LaunchWindow(Spec);
-        if (next != null) _goonRetried = next._goonRetried = true;
+        _goonRecovering = true;
+        try
+        {
+            var next = LaunchWindow(Spec);
+            if (next != null) _goonRetried = next._goonRetried = true;
+        }
+        finally { _goonRecovering = false; }
     }
 
-    private void PostGoonCache(object frame) => Dispatcher.UIThread.Post(() =>
+    internal void PostGoonCache(object frame) => Dispatcher.UIThread.Post(() =>
     {
-        if (!_closing) Post(frame);
+        if (_closing || _server == null) return;
+        var json = JObject.FromObject(frame);
+        foreach (var value in json.Descendants().OfType<JValue>())
+        {
+            if (value.Type != JTokenType.String || value.Value is not string url) continue;
+            if (url.StartsWith("https://ccp.assets/", StringComparison.Ordinal))
+                value.Value = _server.Url("ccp.assets/" + url["https://ccp.assets/".Length..]);
+            else if (url.StartsWith("https://ccp.cache/", StringComparison.Ordinal))
+                value.Value = _server.Url("__goon_cache__/" + url["https://ccp.cache/".Length..]);
+        }
+        Post(json);
     });
 
     private void StopGoonWatch()
     {
         // WPF GoonHostService.cs:2113-2118: a closed match must not strand the queue.
+        GoonToyDirector.Close();
+        if (_goonHaptics != null) _goonHaptics.ConnectionChanged -= GoonToyConnectionChanged;
+        _goonHaptics = null;
         try { GoonCacheBridge.Detach(); } catch (Exception ex) { Diag.Swallowed(ex); }
         try { TransferCompressionService.Instance.ResumeAfterMatch(); } catch (Exception ex) { Diag.Swallowed(ex); }
         _goonWatch?.Stop();

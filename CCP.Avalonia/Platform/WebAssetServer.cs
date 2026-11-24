@@ -379,10 +379,29 @@ public sealed class WebAssetServer : IDisposable
     public Func<string?>? ContentRoot { get; init; }
 
     /// <summary>The file a URL path names, or null if it is missing or lies outside its root, symlinks followed.</summary>
+    internal Func<string> GoonCacheRoot { get; init; } = () => Path.Combine(CorePaths.UserData, "transfer-cache");
+
     internal string? ResolveFile(string urlPath)
     {
         var rel = Uri.UnescapeDataString(urlPath).TrimStart('/');
         var root = _root;
+        // WPF maps ccp.cache art and preview folders. Keep the token gate and expose only flat
+        // content-addressed files, never the cache index, temporary files, or symlinks.
+        if (rel.StartsWith("__goon_cache__/", StringComparison.Ordinal))
+        {
+            var parts = rel["__goon_cache__/".Length..].Split('/');
+            if (parts.Length != 2 || parts[0] is not ("art" or "prv")) return null;
+            var name = parts[1];
+            var dot = name.IndexOf('.');
+            if (dot != 64 || name[..dot].Any(c => !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')))
+                || name[(dot + 1)..] is not ("png" or "jpg" or "gif" or "webp" or "mp4" or "webm")) return null;
+            var cache = GoonCacheRoot();
+            var folder = Path.Combine(cache, parts[0]);
+            var file = Path.Combine(folder, name);
+            return Directory.Exists(cache) && new DirectoryInfo(cache).LinkTarget == null
+                && Directory.Exists(folder) && new DirectoryInfo(folder).LinkTarget == null
+                && File.Exists(file) && new FileInfo(file).LinkTarget == null ? file : null;
+        }
         // WPF maps ccp.cache/recv to the ephemeral inbox. Only flat hash-named media is exposed,
         // under the same loopback/token gate as the page, never the profile or index.
         if (rel.StartsWith("__goon_recv__/", StringComparison.Ordinal))

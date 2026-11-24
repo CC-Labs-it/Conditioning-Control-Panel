@@ -36,6 +36,8 @@ public sealed partial class GameWindowTests
             w.Posted += json => frames.Add(JObject.Parse(json));
             w.HandleMessage("{\"type\":\"ready\"}");
             var init = Assert.Single(frames, x => (string?)x["type"] == "init");
+            Assert.True((bool?)init["caps"]?["brainDrain"]);
+            Assert.Equal(paid, (bool?)init["caps"]?["mediaTransfer"]);
             Assert.Equal(paid, (bool?)init["caps"]?["canHost"]);
             Assert.True((bool?)init["caps"]?["canJoin"]);
             Assert.NotEqual(true, (bool?)init["practiceOnly"]);
