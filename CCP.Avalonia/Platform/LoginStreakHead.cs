@@ -230,7 +230,11 @@ internal static class LoginStreakHead
         if (!p.PendingStreakBonus) return;
         p.PendingStreakBonus = false;
         var xp = p.ConsecutiveDays switch { <= 0 => 0, <= 3 => 50, <= 6 => 100, <= 13 => 150, <= 29 => 200, _ => 300 };
-        if (xp > 0) ProgressionBank.Add(xp, "Other");
+        if (xp > 0)
+        {
+            ProgressionBank.Add(xp, "Other");
+            App.QueueDailyStreakBonus(xp, p.ConsecutiveDays);
+        }
         // The cleared bonus flag is saved with the XP, so a crash cannot pay the same day twice.
         engine.Save();
         CoreSettings.SaveImmediate();

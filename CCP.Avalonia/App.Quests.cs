@@ -1,3 +1,4 @@
+using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
@@ -60,6 +61,28 @@ public partial class App
         popup.Closed += (_, _) => _perfectWeekPopups.Remove(popup);
         popup.Show();
         return popup;
+    }
+
+    // WPF SkillTreeService.cs:420-445: show the daily login award once the bonus is paid.
+    internal static void QueueDailyStreakBonus(int xp, int streak)
+    {
+        var generation = _perfectWeekGeneration;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (generation != _perfectWeekGeneration) return;
+            try
+            {
+                var popup = new Views.Windows.AchievementPopup(
+                    Loc.GetF("skill_streak_bonus_name", streak),
+                    Loc.GetF("skill_streak_bonus_flavor", xp, streak),
+                    "skills/milestone_rewards.png", headerText: Loc.Get("skill_daily_streak_bonus_header"));
+                popup.FindControl<Controls.IconGlyph>("TxtHeaderIcon")!.Apply(Controls.IconMap.ForSkill("milestone_rewards")!.Value);
+                _perfectWeekPopups.Add(popup);
+                popup.Closed += (_, _) => _perfectWeekPopups.Remove(popup);
+                popup.Show();
+            }
+            catch (System.Exception ex) { Serilog.Log.Warning(ex, "Daily streak notification failed"); }
+        }, DispatcherPriority.ApplicationIdle);
     }
 
     internal static void StopPerfectWeekBonus()
