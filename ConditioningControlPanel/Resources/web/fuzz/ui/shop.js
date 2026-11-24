@@ -61,6 +61,10 @@ const GHOST = { wide: 60, narrow: 48 };   // the Next up tiles' most height, as 
  *  tile makes (terms card, guards, price check, purchase feel all live behind it in ui/app.js press()). Null before a shop. */
 export let shopDoor = null;
 
+/** The tail tile's time (lane D, owner 2026-11-24): true from the moment the seed shelf shows seeds (seeds = how many it
+ *  shows), and after a seed is picked (picked = sim/economy.js fateOf). Never before the shelf. */
+export const tailTime = (seeds, picked) => seeds > 0 || !!picked;
+
 export function createShop({ doc, engine, onPress, onReady = () => {} }) {
   const box = doc.getElementById('shop'), goalEl = doc.getElementById('goal'), rowsEl = doc.getElementById('rows'), moreEl = doc.getElementById('more');
   const rows = new Map();
@@ -69,10 +73,14 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
   let guestEl = null, guestOff = null;
   /* The tail tile (small edition, ui/shop-locked.js): one element kept at the very end, after any guest. Never a row. */
   let tailEl = null;
+  /* Late, never early (lane D, owner 2026-11-24): the tail shows only from the moment the run's fate seed shelf shows
+   * (the moment the locked ending seeds appear), and stays once a seed is picked. Before that it is not in the grid. */
+  let tailDue = false;
   const keepEnds = () => {
+    if (tailEl && !tailDue && tailEl.parentNode === rowsEl) tailEl.remove();
     const after = tailEl?.parentNode === rowsEl ? tailEl : null;
     if (guestEl && guestEl.nextSibling !== after) rowsEl.insertBefore(guestEl, after);
-    if (tailEl && rowsEl.lastElementChild !== tailEl) rowsEl.appendChild(tailEl);
+    if (tailEl && tailDue && rowsEl.lastElementChild !== tailEl) rowsEl.appendChild(tailEl);
   };
   if (!doc.getElementById('shop-ready-css')) {
     const st = doc.createElement('style'); st.id = 'shop-ready-css'; st.textContent = SHOP_READY_CSS; doc.head.appendChild(st);
@@ -273,6 +281,7 @@ export function createShop({ doc, engine, onPress, onReady = () => {} }) {
     const win = fateShelf(raw, picked, picked ? raw : offered(99), SEEDS);
     drawShelf(win.seeds, picked);
     drawLocked(win.seeds);
+    tailDue = tailTime(win.seeds.length, picked);
 
     if (goalRow?.item !== win.goal) { goalRow?.el.remove(); goalRow = null; }
     if (win.goal && !goalRow) { goalRow = makeRow(win.goal, true); goalEl.appendChild(goalRow.el); }
