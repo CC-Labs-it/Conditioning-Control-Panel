@@ -1000,6 +1000,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             Field.Step();
             TickBoundPairs();
+            StepRabbitTrails();
             if (Field.HoldChaos) return;
             foreach (var b in Field.Bubbles)
             {
@@ -1011,6 +1012,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.TrailDot(p, 0.35);
                 else ChaosFieldFxOverlay.TrailDot(p, 0.35);
             }
+        }
+
+        // Per darter: its trail and its age in steps (the telegraph gate).
+        private static readonly Dictionary<AmbientBubble, (ChaosRabbitTrails Trail, int Steps)> RabbitTrails = new();
+
+        /// <summary>WPF BubbleService.cs:3929-3949: Tail-Plug pink sparkles (RabbitTrailSec) and the
+        /// GG sweeper amber streak (min 0.5 s), one TrailDot per 22 px (Skia, 40 classic) x dpi of travel,
+        /// silent while telegraphing or popping. Dots are fire-and-forget fades on the FX overlays.</summary>
+        internal static void StepRabbitTrails()
+        {
+            double trailSec = ChaosRunHost.IsDescending ? ChaosRunHost.State?.RabbitTrailSec ?? 0 : 0;
+            bool skia = ChaosSkiaFxOverlay.Enabled;
+            foreach (var b in Field.Bubbles)
+            {
+                if (b.Spec is not { IsDarter: true } spec) continue;
+                RabbitTrails.TryGetValue(b, out var e);
+                e.Trail ??= new ChaosRabbitTrails();
+                e.Steps++;
+                RabbitTrails[b] = e;
+                var p = CenterPx(b);
+                if (e.Trail.Step(p.X, p.Y, ScaleFor(b), trailSec, spec.IsSweeper,
+                        e.Steps * AmbientBubbleField.StepMs < spec.TelegraphMs, b.Popping, skia, DateTime.UtcNow) is not { } dir) continue;
+                double life = spec.IsSweeper ? Math.Max(0.5, trailSec) : trailSec;
+                if (skia) ChaosSkiaFxOverlay.TrailDot(p, life, spec.IsSweeper, dir.X, dir.Y);
+                else ChaosFieldFxOverlay.TrailDot(p, life, warm: spec.IsSweeper);
+            }
+            foreach (var gone in RabbitTrails.Keys.Where(k => !Field.Bubbles.Contains(k)).ToList()) RabbitTrails.Remove(gone);
         }
 
         private static void Sample(double ms)
