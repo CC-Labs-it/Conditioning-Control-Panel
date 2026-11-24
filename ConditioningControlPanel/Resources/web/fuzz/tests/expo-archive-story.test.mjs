@@ -1,0 +1,147 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {createArchiveStory} from '../ui/expo/archive-story.js';
+import {createPlanterVisit,planterLines} from '../ui/expo/planter.js';
+import {visitDirection} from '../ui/expo/visit-guide.js';
+import {serialize,parse,createLife} from '../sim/save.js';
+
+const manifest=JSON.parse(await readFile(new URL('../assets/expo/narration/manifest.json',import.meta.url),'utf8'));
+test('the archive follows the approved order in freely chosen rooms and repeats only on request',()=>{
+  const story=createArchiveStory([...manifest].reverse());
+  const expected=manifest.filter(row=>row.set==='event');
+  assert.equal(expected.length,40);
+  for(const [i,row] of expected.entries()){
+    const from='slot_'+String(40-i).padStart(2,'0'), ticket=story.request(from);
+    assert.equal(ticket.row.id,row.id);
+    assert.equal(story.request('another'),null);
+    story.finish(ticket,true);
+    assert.equal(story.canStartNew(from),false);
+    assert.equal(story.at(from),row);
+    const review=story.request(from,true);
+    assert.equal(review.row.id,row.id);
+    story.finish(review,true);
+    assert.equal(story.completed,i+1);
+    assert.ok(row.archive.title && row.archive.date && row.archive.body);
+    assert.equal(row.slides.length,3);
+  }
+  assert.equal(story.request('last'),null);
+  assert.equal(story.displayed.id,expected.at(-1).id);
+});
+test('abandoned, stale and interrupted events cannot advance progress',()=>{
+  let saved,sites;
+  const story=createArchiveStory(manifest,'bad-old-id',(id,places)=>{saved=id;sites=places;});
+  const lost=story.request('slot_13');
+  story.finish(lost,false);
+  const retry=story.request('slot_22');
+  story.finish(lost,true);
+  assert.equal(story.completed,0);
+  story.finish(retry,true);
+  assert.equal(createArchiveStory(manifest,saved).next.archive.number,2);
+  const restored=createArchiveStory(manifest,saved,null,sites);
+  assert.equal(restored.canStartNew('slot_22'),false);
+  assert.equal(restored.at('slot_22').archive.number,1);
+  for(let i=0;i<2;i++)story.finish(story.request('slot_22'),true);
+  assert.equal(story.canStartNew('slot_22'),false);
+  assert.equal(story.canStartNew('slot_11'),true);
+  assert.equal(story.request('slot_01').row.archive.number,2);
+});
+test('older saves retain their place and every completed record has a replay screen',()=>{
+  const records=manifest.filter(r=>r.set==='event');
+  for(const n of [0,1,12,39,40]){
+    for(const history of [undefined,['slot_05','slot_05','unknown']]){
+      const s=createArchiveStory(manifest,records[n-1]?.id,null,history);
+      const slots=Array.from({length:40},(_,i)=>'slot_'+String(i+1).padStart(2,'0'));
+      assert.deepEqual(slots.map(id=>s.assigned(id)?.archive.number).filter(Boolean).sort((a,b)=>a-b),records.slice(0,n).map(r=>r.archive.number));
+      assert.equal(slots.filter(id=>s.canStartNew(id)).length,40-n);
+    }
+  }
+});
+test('virgin, queued, canceled and legacy replay screens conceal unrevealed records',()=>{
+  const story=createArchiveStory(manifest);
+  const next=story.next,first=story.request('slot_08');
+  assert.equal(story.at('slot_08'),undefined);
+  assert.equal(story.displayed,undefined);
+  story.finish(first,false);story.start(first);
+  assert.equal(story.at('slot_08'),undefined);
+  const playing=story.request('slot_12');
+  story.start(playing);
+  assert.equal(story.at('slot_12'),next);
+  assert.equal(story.at('slot_08'),undefined);
+  story.finish(playing,true);
+  assert.equal(story.at('slot_12'),next);
+  assert.equal(story.at('slot_08'),undefined);
+
+  let history;
+  const old=createArchiveStory(manifest,manifest.find(r=>r.archive?.number===2).id,(_,slots)=>{history=slots;});
+  assert.equal(old.at('slot_01'),undefined);
+  const third=old.request('slot_09');old.start(third);old.finish(third,true);
+  assert.deepEqual(history,[null,null,'slot_09']);
+  const replay=old.request('slot_02',true);old.start(replay);
+  assert.equal(old.at('slot_02').archive.number,2);
+  assert.deepEqual(history,[null,'slot_02','slot_09']);
+  const resumed=createArchiveStory(manifest,third.row.id,null,history);
+  assert.equal(resumed.at('slot_01'),undefined);
+  assert.equal(resumed.at('slot_02').archive.number,2);
+  assert.equal(resumed.at('slot_09').archive.number,3);
+});
+test('the planter claims the lifetime on first landing, including a visit abandoned before the first cue',()=>{
+  const life=createLife();
+  function visit(owner) {
+    const once=()=>{const flags=owner.store.ll_end||={};if(flags.planterDetour)return false;flags.planterDetour=true;return true;};
+    return createPlanterVisit(()=>{},once);
+  }
+  const first=visit(life);
+  first.land({planter:true},{support:{planter:false}});
+  assert.equal(first.held,true);
+  first.leave();
+  const imported=visit(parse(serialize(null,life)).life);
+  imported.land({planter:true},{support:{planter:false}});
+  assert.equal(imported.held,false);
+});
+
+test('the planter speaks at 10, 45 and 90 seconds and holds the visitor until the release words',async()=>{
+  const cues=[];
+  const visit=createPlanterVisit(id=>cues.push(id));
+  visit.land({planter:true},{support:{}});
+  visit.tick(9.9);assert.deepEqual(cues,[]);
+  visit.tick(.1);assert.deepEqual(cues,['planter_10']);
+  visit.tick(35);assert.deepEqual(cues,['planter_10','planter_45']);
+  visit.tick(45);assert.deepEqual(cues,['planter_10','planter_45','planter_90']);
+  assert.equal(visit.held,true);assert.equal(visit.released,false);
+  visit.tick(8.9);assert.equal(visit.held,true);
+  visit.tick(.1);assert.equal(visit.held,false);assert.equal(visit.released,true);
+  visit.tick(60);assert.deepEqual(visit.state(),{used:true,held:false,seconds:99,cues:3});
+  const voices=JSON.parse(await readFile(new URL('../assets/expo/audio/planter-voices.json',import.meta.url),'utf8'));
+  assert.deepEqual(Object.keys(voices),planterLines);
+  // House copy: no exclamation marks, no en or em dashes.
+  const banned=c=>c==='!'||c.codePointAt(0)===0x2013||c.codePointAt(0)===0x2014;
+  for(const line of Object.values(voices))assert.ok(line.subtitle&&line.seconds>0&&![...line.subtitle].some(banned));
+  // A line ends before the next one is due.
+  assert.ok(10+voices.planter_10.seconds<=45&&45+voices.planter_45.seconds<=90);
+});
+
+test('admission and local exhibit directions are independent of optional record progress',()=>{
+  const story=createArchiveStory(manifest), at={x:0,y:0,z:0}, visitor={ticket:{issued:true}};
+  assert.match(visitDirection(null,story,'atrium',at,{}),/turnstile/);
+  const direction=visitDirection(null,story,'atrium',at,visitor);
+  story.finish(story.request('slot_14'),true);
+  assert.equal(visitDirection(null,story,'atrium',at,visitor),direction);
+  assert.match(visitDirection(null,story,'hoof',at,{hoof:'pictures'}),/picture grid/);
+  assert.match(visitDirection(null,story,'shop',at,{boughtExit:true}),/Renewal door/);
+});
+
+test('a simultaneous planter claim cannot start a second set of timed cues',async()=>{
+  let resolve;
+  const claim=new Promise(r=>{resolve=r;});
+  const cues=[];
+  const other=createPlanterVisit(id=>cues.push(id),()=>claim);
+  other.land({planter:true},{support:{}});
+  other.tick(120);
+  assert.deepEqual(cues,[]);
+  resolve(false);
+  await claim;
+  other.tick(120);
+  assert.equal(other.held,false);
+  assert.deepEqual(cues,[]);
+});
