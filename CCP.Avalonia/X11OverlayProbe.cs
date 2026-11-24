@@ -6,6 +6,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Games;
 
 namespace ConditioningControlPanel.Avalonia
 {
@@ -47,6 +48,7 @@ namespace ConditioningControlPanel.Avalonia
         [DllImport(LibX11)] private static extern IntPtr XOpenDisplay(IntPtr name);
         [DllImport(LibX11)] private static extern int XCloseDisplay(IntPtr display);
         [DllImport(LibX11)] private static extern int XSync(IntPtr display, bool discard);
+        [DllImport(LibX11)] private static extern int XLowerWindow(IntPtr display, IntPtr window);
         [DllImport(LibX11)] private static extern int XGetInputFocus(IntPtr display, out IntPtr focus, out int revertTo);
         [DllImport(LibX11)] private static extern int XFree(IntPtr data);
         [DllImport(LibX11)] private static extern int XGetGeometry(IntPtr display, IntPtr drawable,
@@ -164,16 +166,33 @@ namespace ConditioningControlPanel.Avalonia
                     XGetInputFocus(display, out var focusAfter, out _);
                     var restored = a2 >= 0 && b2 >= 0 && (a2 > b2) == (a0 > b0);
                     var focusPreserved = focusBefore == focusAfter;
-                    // Match the run tick: WM-managed chrome, then an override-redirect bubble.
+                    // Simulate a late WM frame raise by putting the override window below the frame
+                    // after the managed raise. The same recurring repair used by ghost mode must heal it.
                     Raise(lower);
                     X11Overlay.Raise(overlay);
                     System.Threading.Thread.Sleep(700);
-                    var overlayAbove = IndexOf(display, root, Xid(overlay)) > IndexOf(display, root, Xid(lower));
-                    Console.WriteLine($"reparented=True first-raise={flipped} second-raise={restored} focus-preserved={focusPreserved} overlay-above={overlayAbove}");
-                    exit = flipped && restored && focusPreserved && overlayAbove ? 0 : 1;
+                    XLowerWindow(display, Xid(overlay));
+                    XSync(display, false);
+                    var below = IndexOf(display, root, Xid(overlay)) < IndexOf(display, root, Xid(lower));
+                    var repair = GameWindow.FypGhostStartButtonRepair(() => GameWindow.RaiseFypGhostButtons(new[] { overlay }));
+                    DispatcherTimer.RunOnce(() =>
+                    {
+                        try
+                        {
+                            var above = IndexOf(display, root, Xid(overlay)) > IndexOf(display, root, Xid(lower));
+                            Console.WriteLine($"reparented=True first-raise={flipped} second-raise={restored} focus-preserved={focusPreserved} forced-below={below} repaired-above={above}");
+                            exit = flipped && restored && focusPreserved && below && above ? 0 : 1;
+                        }
+                        catch (Exception e) { Console.Error.WriteLine("managed raise repair probe failed: " + e.Message); }
+                        finally { repair.Dispose(); XCloseDisplay(display); lifetime.Shutdown(); }
+                    }, TimeSpan.FromMilliseconds(700));
                 }
-                catch (Exception e) { Console.Error.WriteLine("managed raise probe failed: " + e.Message); }
-                finally { if (display != IntPtr.Zero) XCloseDisplay(display); lifetime.Shutdown(); }
+                catch (Exception e)
+                {
+                    Console.Error.WriteLine("managed raise probe failed: " + e.Message);
+                    if (display != IntPtr.Zero) XCloseDisplay(display);
+                    lifetime.Shutdown();
+                }
             }, TimeSpan.FromMilliseconds(1200));
             second.Show(); first.Show(); overlay.Show(); lifetime.Start(Array.Empty<string>());
             return exit;

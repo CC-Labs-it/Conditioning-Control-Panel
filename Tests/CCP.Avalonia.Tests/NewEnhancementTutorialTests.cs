@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -21,6 +22,13 @@ namespace CCP.Avalonia.Tests;
 [Collection(RunsAloneCollection.Name)]
 public sealed class NewEnhancementTutorialTests
 {
+    private sealed class FakeStore : TutorialService.ITourCompletionStore
+    {
+        public readonly System.Collections.Generic.List<string> Latched = new();
+        public bool Has(string name) => false;
+        public void Latch(string name) => Latched.Add(name);
+    }
+    private static readonly FakeStore Store = new();
     private static void Click(Window w, string name) => w.FindControl<Button>(name)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
     private static Task Run(Func<Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
@@ -28,12 +36,16 @@ public sealed class NewEnhancementTutorialTests
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var performance = CoreSettings.Current.PerformanceMode;
+        var seenHt = CoreSettings.Current.HasSeenDeeperHTInteractiveTutorial; // the HypnoTube button sets it
+        var store = TutorialService.CompletionStore; // a completed Part 1 must not reach the EMI ledger
+        TutorialService.CompletionStore = Store;
+        Store.Latched.Clear();
         CoreSettings.Current.PerformanceMode = true; // RunJobs must not drain ambient clocks forever
         TutorialHead.Seed();
         TutorialHead.ResetForTests();
         CoreTutorialEvents.PendingPart2Tutorial = null;
         try { await body(); }
-        finally { TutorialHead.ResetForTests(); CoreTutorialEvents.PendingPart2Tutorial = null; CoreSettings.Current.PerformanceMode = performance; }
+        finally { TutorialHead.ResetForTests(); CoreTutorialEvents.PendingPart2Tutorial = null; CoreSettings.Current.PerformanceMode = performance; CoreSettings.Current.HasSeenDeeperHTInteractiveTutorial = seenHt; TutorialService.CompletionStore = store; }
     });
 
     [Theory]
@@ -70,6 +82,44 @@ public sealed class NewEnhancementTutorialTests
             Assert.False(CoreTutorial.IsActive);
         }
         finally { dialog.Close(); }
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task PositiveCreateCompletesTheTourWithOrWithoutButtonEvents(bool realClick) => Run(async () =>
+    {
+        var dialog = new NewEnhancementDialog();
+        dialog.Show();
+        bool? completed = null;
+        EventHandler<bool> finished = (_, value) => completed = value;
+        CoreTutorial.Finished += finished;
+        try
+        {
+            Click(dialog, "BtnTryHypnoTubeTutorial");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("iht_create", CoreTutorial.CurrentStep!.Id);
+            dialog.FindControl<TextBox>("TxtSource")!.Text = "sample-media";
+            if (realClick)
+            {
+                // Pointer release advances first; the Click then closes the dialog and its overlay.
+                var create = dialog.FindControl<Button>("BtnCreate")!;
+                var at = create.TranslatePoint(new Point(create.Bounds.Width / 2, create.Bounds.Height / 2), dialog)!.Value;
+                dialog.MouseDown(at, MouseButton.Left);
+                dialog.MouseUp(at, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                Assert.False(dialog.IsVisible);
+            }
+            else
+            {
+                var create = typeof(NewEnhancementDialog).GetMethod("BtnCreateAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+                await (Task)create.Invoke(dialog, null)!; // no pointer or click route
+            }
+            Assert.True(completed);
+            Assert.False(CoreTutorial.IsActive);
+            Assert.Contains("DeeperEditorInteractiveHT", Store.Latched);
+        }
+        finally { CoreTutorial.Finished -= finished; dialog.Close(); }
     });
 
     [Theory]
