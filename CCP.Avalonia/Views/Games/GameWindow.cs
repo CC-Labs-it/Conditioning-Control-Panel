@@ -217,6 +217,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Spec = spec;
             Web = new WebHost { HostedPageMotion = true };
             if (spec.Id == DtrhId) Web.BrowserProcessFailed += () => RecoverDtrh("process-failed");
+            if (spec.Id == "arcademy") WireArcademy();
             if (spec.Id == "goon") Web.InjectCarrier = true; // before the native view or first navigation
             if (spec.Id == FypId || spec.Id == JustDropId || spec.Id == "loom" || IsRace || IsGlassroad) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
             if (IsGlassroad) Web.BrowserProcessUnresponsive += () => _grUnresponsive = true;

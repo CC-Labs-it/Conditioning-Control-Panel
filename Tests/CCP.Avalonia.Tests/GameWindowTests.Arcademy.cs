@@ -144,4 +144,69 @@ public sealed partial class GameWindowTests
         }
         finally { w.Close(); GameWindow.ArcademyUtcNow = oldClock; GameWindow.ArcademyRelaunchedOnce = oldRetry; }
     });
+    [Fact]
+    public void Arcademy_DoorGatesBootsAndPanicCloses() => Run((_, _) =>
+    {
+        var oldLab = CoreEntitlement.HasLabProvider;
+        var oldDenied = CoreEntitlement.ShowDeniedHandler;
+        var settings = CoreSettings.Current;
+        bool oldAudio = settings.AudioOnlySession;
+        var oldMotion = settings.MotionLevel;
+        try
+        {
+            CoreEntitlement.ShowDeniedHandler = _ => { };
+            CoreEntitlement.HasLabProvider = () => false;
+            Assert.Null(GameWindow.Launch("arcademy"));
+            CoreEntitlement.HasLabProvider = () => true;
+            settings.AudioOnlySession = true;
+            Assert.Null(GameWindow.Launch("arcademy"));
+            settings.AudioOnlySession = false;
+            var w = Assert.IsType<GameWindow>(GameWindow.Launch("arcademy"));
+            Assert.EndsWith("/arcademy/index.html", w.PageUrl!.AbsolutePath);
+            Assert.True(w.Web.InjectCarrier);
+            Assert.Same(w, GameWindow.Launch("arcademy"));
+            var frames = new List<JObject>();
+            w.Posted += json => frames.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            w.HandleMessage("{\"type\":\"ready\"}");
+            Assert.True(w.IsReady);
+            var init = Assert.Single(frames, f => (string?)f["type"] == "init");
+            Assert.Equal(1, (int?)init["protocol"]);
+            Assert.NotNull(init["meta"]);
+            Assert.NotNull(init["caps"]);
+            w.HandleMessage("{\"type\":\"meta-command\",\"op\":\"set\",\"key\":\"test_value\",\"value\":7}");
+            Assert.Contains(frames, f => (string?)f["type"] == "meta" && (string?)f["key"] == "test_value" && (int?)f["value"] == 7);
+            settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(frames, f => (string?)f["type"] == "setting" && (string?)f["key"] == "motionLevel" && (int?)f["value"] == 0);
+            w.HandleMessage("{\"type\":\"fullscreen-request\",\"on\":true}");
+            Assert.Contains(frames, f => (string?)f["type"] == "fullscreen" && (bool?)f["on"] == true);
+            settings.AudioOnlySession = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains(frames, f => (string?)f["type"] == "suspend" && (bool?)f["on"] == true);
+            GameWindow.CloseAllForPanic();
+            Assert.Null(GameWindow.OpenForTests("arcademy"));
+        }
+        finally { settings.AudioOnlySession = oldAudio; settings.MotionLevel = oldMotion; CoreEntitlement.HasLabProvider = oldLab; CoreEntitlement.ShowDeniedHandler = oldDenied; }
+    });
+
+    [Fact]
+    public void Arcademy_BootDeadlineTracksProgress() => Run((_, _) =>
+    {
+        var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var oldClock = GameWindow.ArcademyUtcNow;
+        GameWindow.ArcademyUtcNow = () => now;
+        var w = new GameWindow(GameWindow.Games["arcademy"]);
+        try
+        {
+            w.Show();
+            Assert.False(w.CheckArcademyBoot(now.AddSeconds(44)));
+            now = now.AddSeconds(40);
+            w.HandleMessage("{\"type\":\"heartbeat\"}");
+            Assert.False(w.CheckArcademyBoot(now.AddSeconds(44)));
+            Assert.True(w.CheckArcademyBoot(now.AddSeconds(45)));
+            Assert.Null(GameWindow.OpenForTests("arcademy"));
+        }
+        finally { w.Close(); GameWindow.ArcademyUtcNow = oldClock; }
+    });
 }
