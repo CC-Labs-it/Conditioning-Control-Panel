@@ -176,8 +176,8 @@
                             <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_wallpaper_fit}" Emblem="Big" Margin="0,0,14,0"/>
                             <ComboBox Grid.Column="1" x:Name="CmbWpFit" x:FieldModifier="internal"
                                       feat:SessionLock.Owned="True"
-                                      Style="{StaticResource DarkComboBoxStyle}" FontSize="11"
-                                      Width="150" MinHeight="28" VerticalAlignment="Center"
+                                      Style="{DynamicResource RowComboBoxStyle}"
+                                      Width="205" MinHeight="28" VerticalAlignment="Center"
                                       SelectionChanged="CmbWpFit_SelectionChanged">
                                 <ComboBoxItem Content="{loc:Str wallpaper_fit_windows}"/>
                                 <ComboBoxItem Content="{loc:Str wallpaper_fit_fill}"/>

@@ -175,7 +175,7 @@
                                 <rows:RowLabel Grid.Column="0" Text="{loc:Str label_font}" Emblem="Words"/>
                                 <ComboBox Grid.Column="1" x:Name="CmbFont" feat:OptionSection.Setting="SubliminalFont" Height="26" MaxWidth="220"
                                           HorizontalAlignment="Right" VerticalAlignment="Center"
-                                          Style="{DynamicResource DarkComboBoxStyle}"
+                                          Style="{DynamicResource RowComboBoxStyle}"
                                           SelectionChanged="CmbFont_Changed"/>
                             </Grid>
                             </feat:OptionSection>

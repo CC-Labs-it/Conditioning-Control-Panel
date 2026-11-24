@@ -107,7 +107,7 @@
                         </Grid.ColumnDefinitions>
                         <rows:RowLabel Grid.Column="0" Text="{loc:Str label_language}" Emblem="Words" Margin="0,0,14,0"/>
                         <ComboBox Grid.Column="1" x:Name="CmbLanguageSetting" x:FieldModifier="internal"
-                                  Style="{StaticResource DarkComboBoxStyle}" FontSize="11"
+                                  Style="{DynamicResource RowComboBoxStyle}"
                                   Width="190" MinHeight="28" VerticalAlignment="Center"
                                   ToolTip="{loc:Str set2_general_language_hint}"
                                   SelectionChanged="CmbLanguageSetting_SelectionChanged"/>

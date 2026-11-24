@@ -18,7 +18,7 @@
                        IsOn="{Binding IsChecked, ElementName=ChkMercy}"/>
         <ComboBox Grid.Column="1" x:Name="CmbAfter" feat:OptionSection.Setting="MercyAfterFails" Width="130" Margin="0,0,10,0"
                   VerticalAlignment="Center"
-                  Style="{DynamicResource DarkComboBoxStyle}"
+                  Style="{DynamicResource RowComboBoxStyle}"
                   SelectionChanged="CmbAfter_Changed"/>
         <CheckBox Grid.Column="2" x:Name="ChkMercy"
                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"

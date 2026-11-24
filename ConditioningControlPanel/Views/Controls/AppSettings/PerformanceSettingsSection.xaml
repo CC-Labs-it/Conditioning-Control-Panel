@@ -85,8 +85,8 @@
                     </Grid.ColumnDefinitions>
                     <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_motion_level}" Emblem="Motion" Margin="0,0,14,0"/>
                     <ComboBox Grid.Column="1" x:Name="CmbMotionLevel" x:FieldModifier="internal"
-                              Style="{StaticResource DarkComboBoxStyle}" FontSize="11"
-                              Width="110" MinHeight="28" VerticalAlignment="Center"
+                              Style="{DynamicResource RowComboBoxStyle}"
+                              Width="130" MinHeight="28" VerticalAlignment="Center"
                               SelectionChanged="CmbMotionLevel_SelectionChanged">
                         <ComboBoxItem Content="{loc:Str label_motion_full}"/>
                         <ComboBoxItem Content="{loc:Str label_motion_reduced}"/>
@@ -167,8 +167,8 @@
                         </Grid.ColumnDefinitions>
                         <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_gentle_fade}" Emblem="Long" Margin="0,0,14,0"/>
                         <ComboBox Grid.Column="1" x:Name="CmbGentleFade" x:FieldModifier="internal"
-                                  Style="{StaticResource DarkComboBoxStyle}" FontSize="11"
-                                  Width="110" MinHeight="28" VerticalAlignment="Center"
+                                  Style="{DynamicResource RowComboBoxStyle}"
+                                  Width="130" MinHeight="28" VerticalAlignment="Center"
                                   SelectionChanged="CmbGentle_SelectionChanged"/>
                     </Grid>
                     <Grid Style="{StaticResource OptionRow}" Margin="0,2,0,0">
@@ -178,8 +178,8 @@
                         </Grid.ColumnDefinitions>
                         <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_gentle_speed}" Emblem="Fast" Margin="0,0,14,0"/>
                         <ComboBox Grid.Column="1" x:Name="CmbGentleSpeed" x:FieldModifier="internal"
-                                  Style="{StaticResource DarkComboBoxStyle}" FontSize="11"
-                                  Width="110" MinHeight="28" VerticalAlignment="Center"
+                                  Style="{DynamicResource RowComboBoxStyle}"
+                                  Width="130" MinHeight="28" VerticalAlignment="Center"
                                   SelectionChanged="CmbGentle_SelectionChanged"/>
                     </Grid>
                 </StackPanel>
@@ -226,8 +226,8 @@
                     </Grid.ColumnDefinitions>
                     <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_backroom_fx_intensity}" Emblem="Much" Margin="0,0,14,0"/>
                     <ComboBox Grid.Column="1" x:Name="CmbBackRoomFxIntensity" x:FieldModifier="internal"
-                              Style="{StaticResource DarkComboBoxStyle}" FontSize="11"
-                              Width="110" MinHeight="28" VerticalAlignment="Center"
+                              Style="{DynamicResource RowComboBoxStyle}"
+                              Width="130" MinHeight="28" VerticalAlignment="Center"
                               SelectionChanged="CmbBackRoomFxIntensity_SelectionChanged">
                         <ComboBoxItem Content="{loc:Str label_backroom_fx_calm}"/>
                         <ComboBoxItem Content="{loc:Str label_backroom_fx_normal}"/>

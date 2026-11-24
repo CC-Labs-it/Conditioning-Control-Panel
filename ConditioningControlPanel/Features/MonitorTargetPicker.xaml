@@ -16,8 +16,8 @@
         <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_content_monitor}" Emblem="Screens"
                        Margin="0,0,12,0"/>
         <ComboBox Grid.Column="1" x:Name="CmbContentMonitor" x:FieldModifier="internal"
-                  Width="200" MinHeight="28" VerticalAlignment="Center" FontSize="11"
-                  Style="{DynamicResource DarkComboBoxStyle}"
+                  Width="200" MinHeight="28" VerticalAlignment="Center"
+                  Style="{DynamicResource RowComboBoxStyle}"
                   DropDownOpened="CmbContentMonitor_DropDownOpened"
                   SelectionChanged="CmbContentMonitor_Changed"/>
     </Grid>

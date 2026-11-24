@@ -133,7 +133,7 @@
                                 <ComboBox Grid.Column="1"
                                           x:Name="CmbMonitor" feat:OptionSection.Setting="SpiralTargetMonitor"
                                           Width="180" VerticalAlignment="Center"
-                                          Style="{DynamicResource DarkComboBoxStyle}"
+                                          Style="{DynamicResource RowComboBoxStyle}"
                                           DropDownOpened="CmbMonitor_DropDownOpened"
                                           SelectionChanged="CmbMonitor_Changed"/>
                             </Grid>
@@ -303,7 +303,7 @@
                             </Grid.ColumnDefinitions>
                             <rows:RowLabel Grid.Column="0" Text="{loc:Str super_pool_spiral}" Emblem="Spiral"/>
                             <ComboBox Grid.Column="1" x:Name="CmbPoolSpiral" feat:OptionSection.Setting="WhirlpoolSpiral" Width="180" VerticalAlignment="Center"
-                                      Style="{DynamicResource DarkComboBoxStyle}"
+                                      Style="{DynamicResource RowComboBoxStyle}"
                                       SelectionChanged="CmbPoolSpiral_Changed"/>
                         </Grid>
                         <!-- How long each spiral holds before it melts into the next. Dims while one is held. -->

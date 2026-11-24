@@ -139,7 +139,7 @@
                                 <!-- camera -->
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,4,12,4">
                                     <rows:RowLabel Text="CAM" Emblem="Cam" Margin="0,0,7,0"/>
-                                    <ComboBox x:Name="CmbWebcamDevice" x:FieldModifier="internal" Width="170"
+                                    <ComboBox x:Name="CmbWebcamDevice" Style="{DynamicResource RowComboBoxStyle}" x:FieldModifier="internal" Width="170"
                                               VerticalAlignment="Center"
                                               ToolTip="{loc:Str tooltip_devices_cam_pick}"
                                               SelectionChanged="CmbWebcamDevice_SelectionChanged"/>
@@ -157,7 +157,7 @@
                                 <!-- monitor -->
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,4,12,4">
                                     <rows:RowLabel Text="MON" Emblem="Screens" Margin="0,0,7,0"/>
-                                    <ComboBox x:Name="CmbWebcamMonitor" x:FieldModifier="internal" Width="150"
+                                    <ComboBox x:Name="CmbWebcamMonitor" Style="{DynamicResource RowComboBoxStyle}" x:FieldModifier="internal" Width="150"
                                               VerticalAlignment="Center"
                                               ToolTip="{loc:Str webcam_monitor_tooltip}"
                                               SelectionChanged="CmbWebcamMonitor_SelectionChanged"/>
@@ -339,8 +339,8 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <rows:RowLabel Text="{loc:Str set2_devices_mic_input}" Emblem="Mic"/>
-                        <ComboBox Grid.Column="1" x:Name="CmbMicDevice" x:FieldModifier="internal"
-                                  Margin="6,0" FontSize="12" VerticalAlignment="Center"
+                        <ComboBox Grid.Column="1" x:Name="CmbMicDevice" Style="{DynamicResource RowComboBoxStyle}" x:FieldModifier="internal"
+                                  Margin="6,0" VerticalAlignment="Center"
                                   SelectionChanged="CmbMicDevice_SelectionChanged"
                                   ToolTip="{loc:Str tooltip_devices_mic_pick}"/>
                         <Button Grid.Column="2" x:Name="BtnMicRefresh" x:FieldModifier="internal" Content="↻"

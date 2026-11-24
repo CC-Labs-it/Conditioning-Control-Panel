@@ -162,7 +162,7 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <rows:RowLabel Text="{loc:Str setting_output}" Emblem="Plug" ToolTip="{loc:Str tooltip_audio_output_device}"/>
-                    <ComboBox Grid.Column="1" x:Name="CmbAudioOutputDevice" x:FieldModifier="internal"
+                    <ComboBox Grid.Column="1" x:Name="CmbAudioOutputDevice" Style="{DynamicResource RowComboBoxStyle}" x:FieldModifier="internal"
                               Margin="6,0" VerticalAlignment="Center"
                               ToolTip="{loc:Str tooltip_audio_output_device}"
                               SelectionChanged="CmbAudioOutputDevice_SelectionChanged"/>

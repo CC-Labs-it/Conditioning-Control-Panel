@@ -378,7 +378,7 @@
                             <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_bubble_motion}" Emblem="Motion"/>
                             <ComboBox Grid.Column="1" x:Name="CmbMotion" feat:OptionSection.Setting="BubbleMotionStyle" Width="150" feat:SessionLock.Owned="True"
                                       VerticalAlignment="Center"
-                                      Style="{DynamicResource DarkComboBoxStyle}"
+                                      Style="{DynamicResource RowComboBoxStyle}"
                                       SelectionChanged="CmbMotion_Changed"/>
                         </Grid>
                     </StackPanel>

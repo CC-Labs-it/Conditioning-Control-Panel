@@ -103,7 +103,7 @@
                                 <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_difficulty}" Emblem="Much"/>
                                 <ComboBox Grid.Column="1" x:Name="CmbDifficulty" Width="130" feat:SessionLock.Owned="True"
                                           VerticalAlignment="Center"
-                                          Style="{DynamicResource DarkComboBoxStyle}"
+                                          Style="{DynamicResource RowComboBoxStyle}"
                                           SelectionChanged="CmbDifficulty_Changed">
                                     <ComboBoxItem Content="{loc:Str btn_easy}" Tag="0"/>
                                     <ComboBoxItem Content="{loc:Str btn_medium}" Tag="1" IsSelected="True"/>

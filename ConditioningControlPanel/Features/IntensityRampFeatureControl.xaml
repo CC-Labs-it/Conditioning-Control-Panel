@@ -65,7 +65,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <rows:RowLabel Grid.Column="0" Text="{loc:Str label_ramp_mode}" Emblem="Ramp"/>
-                        <ComboBox Grid.Column="1" x:Name="CmbRampMode" feat:OptionSection.Setting="RampMode"
+                        <ComboBox Grid.Column="1" x:Name="CmbRampMode" Style="{DynamicResource RowComboBoxStyle}" feat:OptionSection.Setting="RampMode"
                                   Height="26" MaxWidth="220" HorizontalAlignment="Right" VerticalAlignment="Center"
                                   SelectionChanged="CmbRampMode_Changed">
                             <ComboBoxItem Content="{loc:Str ramp_mode_multiplier}" Tag="Multiplier"/>
@@ -143,7 +143,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <rows:RowLabel Grid.Column="0" Text="{loc:Str label_ramp_curve}" Emblem="Ramp"/>
-                        <ComboBox Grid.Column="1" x:Name="CmbRampCurve" feat:OptionSection.Setting="RampCurve" feat:SessionLock.Owned="True"
+                        <ComboBox Grid.Column="1" x:Name="CmbRampCurve" Style="{DynamicResource RowComboBoxStyle}" feat:OptionSection.Setting="RampCurve" feat:SessionLock.Owned="True"
                                   Height="26" MaxWidth="220" HorizontalAlignment="Right" VerticalAlignment="Center"
                                   SelectionChanged="CmbRampCurve_Changed">
                             <ComboBoxItem Content="{loc:Str ramp_curve_linear}" Tag="Linear"/>

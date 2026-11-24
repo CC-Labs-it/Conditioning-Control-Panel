@@ -182,8 +182,8 @@
                                                 </Grid.ColumnDefinitions>
                                                 <rows:RowLabel Grid.Column="0" Text="{loc:Str label_duration_2}" Emblem="Long"/>
                                                 <ComboBox Grid.Column="1" x:Name="CmbLockdownDuration" x:FieldModifier="internal"
-                                                          Width="160" SelectedIndex="3" VerticalAlignment="Center" FontSize="13"
-                                                          Style="{DynamicResource DarkComboBoxStyle}"
+                                                          Width="160" SelectedIndex="3" VerticalAlignment="Center"
+                                                          Style="{DynamicResource RowComboBoxStyle}"
                                                           SelectionChanged="CmbLockdownDuration_SelectionChanged">
                                                     <ComboBoxItem Content="{loc:Str btn_5_minutes}" Tag="5"/>
                                                     <ComboBoxItem Content="{loc:Str btn_10_minutes}" Tag="10"/>

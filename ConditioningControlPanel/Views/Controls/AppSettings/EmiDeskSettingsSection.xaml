@@ -101,7 +101,7 @@
                         </Grid.ColumnDefinitions>
                         <rows:RowLabel Grid.Column="0" Text="{loc:Str label_emi_desk_spice}" Emblem="Much" Margin="0,0,12,0"/>
                         <ComboBox Grid.Column="1" x:Name="CmbSpice" Width="170"
-                                  Style="{StaticResource DarkComboBoxStyle}" FontSize="11"
+                                  Style="{DynamicResource RowComboBoxStyle}"
                                   VerticalAlignment="Center"
                                   SelectionChanged="CmbSpice_SelectionChanged"/>
                     </Grid>

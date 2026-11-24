@@ -137,7 +137,7 @@
                                     <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_color_mode}" Emblem="Colour"/>
                                     <ComboBox Grid.Column="1" x:Name="CmbColorMode" feat:OptionSection.Setting="BouncingTextColorMode" Height="26" MaxWidth="220"
                                               HorizontalAlignment="Right" VerticalAlignment="Center"
-                                              Style="{DynamicResource DarkComboBoxStyle}"
+                                              Style="{DynamicResource RowComboBoxStyle}"
                                               SelectionChanged="CmbColorMode_Changed">
                                         <ComboBoxItem Content="{loc:Str option_color_random}"/>
                                         <ComboBoxItem Content="{loc:Str option_color_fixed}"/>
@@ -174,7 +174,7 @@
                                     <rows:RowLabel Grid.Column="0" Text="{loc:Str label_font}" Emblem="Words"/>
                                     <ComboBox Grid.Column="1" x:Name="CmbFont" feat:OptionSection.Setting="BouncingTextFont" Height="26" MaxWidth="220"
                                               HorizontalAlignment="Right" VerticalAlignment="Center"
-                                              Style="{DynamicResource DarkComboBoxStyle}"
+                                              Style="{DynamicResource RowComboBoxStyle}"
                                               SelectionChanged="CmbFont_Changed"/>
                                 </Grid>
                                 </feat:OptionSection>

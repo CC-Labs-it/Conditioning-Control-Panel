@@ -59,13 +59,13 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0">
                         <rows:RowLabel Text="{loc:Str modmgr_label_look}" Emblem="Colour" Margin="0,0,0,3"/>
-                        <ComboBox x:Name="CmbAvatar" Style="{DynamicResource DarkComboBoxStyle}"
+                        <ComboBox x:Name="CmbAvatar" Style="{DynamicResource RowComboBoxStyle}"
                                   Foreground="{DynamicResource TextLightBrush}" MinHeight="30"
                                   SelectionChanged="CmbAvatar_SelectionChanged"/>
                     </StackPanel>
                     <StackPanel Grid.Column="2">
                         <rows:RowLabel Text="{loc:Str modmgr_label_personality}" Emblem="Persona" Margin="0,0,0,3"/>
-                        <ComboBox x:Name="CmbPersonality" Style="{DynamicResource DarkComboBoxStyle}"
+                        <ComboBox x:Name="CmbPersonality" Style="{DynamicResource RowComboBoxStyle}"
                                   Foreground="{DynamicResource TextLightBrush}" MinHeight="30"
                                   SelectionChanged="CmbPersonality_SelectionChanged"/>
                         <!-- The deeper personality editor, right under the choice it refines. It used

@@ -74,7 +74,7 @@
                         </Grid.ColumnDefinitions>
                         <rows:RowLabel Grid.Column="0" Text="{loc:Str label_suppress_perk_notifications}" Emblem="Bell" Margin="0,0,14,0"/>
                         <ComboBox Grid.Column="1" x:Name="CmbPerkEffects" x:FieldModifier="internal" Width="130"
-                                  Style="{StaticResource DarkComboBoxStyle}" FontSize="11"
+                                  Style="{DynamicResource RowComboBoxStyle}"
                                   VerticalAlignment="Center"
                                   SelectionChanged="CmbPerkEffects_SelectionChanged"/>
                     </Grid>

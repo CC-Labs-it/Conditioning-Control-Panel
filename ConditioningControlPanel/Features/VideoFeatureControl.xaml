@@ -187,7 +187,7 @@
                                 <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_video_appearance}" Emblem="Colour"/>
                                 <ComboBox Grid.Column="1" x:Name="CmbAppearance" feat:OptionSection.Setting="MandatoryVideoFloating"
                                           Width="180" VerticalAlignment="Center"
-                                          Style="{DynamicResource DarkComboBoxStyle}"
+                                          Style="{DynamicResource RowComboBoxStyle}"
                                           SelectionChanged="CmbAppearance_Changed"/>
                             </Grid>
                             <!-- Floating only (progressive disclosure): size, drift speed, and the most at once. -->
@@ -226,7 +226,7 @@
                                     <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_video_appearance_count}" Emblem="Most" Margin="14,0,0,0"/>
                                     <ComboBox Grid.Column="1" x:Name="CmbFloatingCount" feat:OptionSection.Setting="MandatoryVideoFloatingCount"
                                               Width="180" VerticalAlignment="Center"
-                                              Style="{DynamicResource DarkComboBoxStyle}"
+                                              Style="{DynamicResource RowComboBoxStyle}"
                                               SelectionChanged="CmbFloatingCount_Changed"/>
                                 </Grid>
                                 <!-- One trigger fills every free slot at once (MandatoryVideoPresentation.WindowsToOpen). -->
@@ -273,7 +273,7 @@
                                         <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_effect_monitor}" Emblem="Screens"/>
                                         <ComboBox Grid.Column="1" x:Name="CmbMonitor" feat:OptionSection.Setting="VideoTargetMonitor"
                                                   Width="180" VerticalAlignment="Center"
-                                                  Style="{DynamicResource DarkComboBoxStyle}"
+                                                  Style="{DynamicResource RowComboBoxStyle}"
                                                   DropDownOpened="CmbMonitor_DropDownOpened"
                                                   SelectionChanged="CmbMonitor_Changed"/>
                                     </Grid>

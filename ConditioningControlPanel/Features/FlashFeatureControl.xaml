@@ -191,7 +191,7 @@
                                 <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_flash_exit}" Emblem="After"/>
                                 <ComboBox Grid.Column="1" x:Name="CmbExit" feat:OptionSection.Setting="FlashExitStyle" Width="170"
                                           VerticalAlignment="Center"
-                                          Style="{DynamicResource DarkComboBoxStyle}"
+                                          Style="{DynamicResource RowComboBoxStyle}"
                                           SelectionChanged="CmbExit_Changed"/>
                             </Grid>
                             <!-- #1386: while an owned Shatter is on it decides the leave, so the picker greys out. -->
@@ -329,7 +329,7 @@
                                              black is the one colour that cannot be read. -->
                                         <ComboBox Grid.Column="1" x:Name="CmbMotion" feat:OptionSection.Setting="FlashMotionStyle" Width="170"
                                                   VerticalAlignment="Center"
-                                                  Style="{DynamicResource DarkComboBoxStyle}"
+                                                  Style="{DynamicResource RowComboBoxStyle}"
                                                   SelectionChanged="CmbMotion_Changed"/>
                                     </Grid>
 

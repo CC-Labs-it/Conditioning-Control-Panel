@@ -512,9 +512,8 @@
                                                        Foreground="{DynamicResource TextMutedBrush}" FontSize="11"
                                                        TextWrapping="Wrap" Margin="0,0,0,8"/>
                                             <ComboBox x:Name="CmbAwarenessAppScope" x:FieldModifier="internal"
-                                                      Style="{DynamicResource DarkComboBoxStyle}"
-                                                      SelectionChanged="CmbAwarenessAppScope_SelectionChanged"
-                                                      FontSize="11" Padding="6,4" HorizontalAlignment="Left" MinWidth="210">
+                                                      Style="{DynamicResource RowComboBoxStyle}"
+                                                      SelectionChanged="CmbAwarenessAppScope_SelectionChanged" Padding="6,4" HorizontalAlignment="Left" MinWidth="210">
                                                 <ComboBox.ToolTip>
                                                     <ToolTip>
                                                         <StackPanel MaxWidth="340">

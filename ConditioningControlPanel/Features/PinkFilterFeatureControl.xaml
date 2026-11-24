@@ -127,7 +127,7 @@
                                 <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_effect_monitor}" Emblem="Screens"/>
                                 <ComboBox Grid.Column="1" x:Name="CmbMonitor" feat:OptionSection.Setting="PinkFilterTargetMonitor"
                                           Width="180" VerticalAlignment="Center"
-                                          Style="{DynamicResource DarkComboBoxStyle}"
+                                          Style="{DynamicResource RowComboBoxStyle}"
                                           DropDownOpened="CmbMonitor_DropDownOpened"
                                           SelectionChanged="CmbMonitor_Changed"/>
                             </Grid>
@@ -183,7 +183,7 @@
                         </Grid.ColumnDefinitions>
                         <rows:RowLabel Grid.Column="0" Text="{loc:Str super_steam_creep}" Emblem="Fast"/>
                         <ComboBox Grid.Column="1" x:Name="CmbCreepSpeed" feat:OptionSection.Setting="SuperCreepSpeed" Width="180" VerticalAlignment="Center"
-                                  Style="{DynamicResource DarkComboBoxStyle}"
+                                  Style="{DynamicResource RowComboBoxStyle}"
                                   SelectionChanged="CmbCreepSpeed_Changed"/>
                     </Grid>
                     <!-- Steam: how far in the fog may come (edges only at the bottom, the centre at the top). -->

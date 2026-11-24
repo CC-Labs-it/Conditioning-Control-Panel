@@ -1446,6 +1446,19 @@
             </Setter>
         </Style>
 
+        <!-- Readable Rows (7.4 desk run): the ComboBox of a rows-look option row shows its value in the
+             row's own face, 14 Bold Nunito in TextLight, beside the 16 Bold labels; the compact 11 px value
+             read small and faint there. Only rows opt in (Style="{DynamicResource RowComboBoxStyle}"), so
+             every other DarkComboBoxStyle in the app keeps its compact look. Never set a local FontSize on
+             a ComboBox wearing it: a local value beats the style. -->
+        <Style x:Key="RowComboBoxStyle" TargetType="ComboBox" BasedOn="{StaticResource DarkComboBoxStyle}">
+            <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+            <Setter Property="FontFamily" Value="{x:Static rows:RowFonts.Nunito}"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="MinHeight" Value="28"/>
+        </Style>
+
         <!-- Exclusives Section Expander Style -->
         <!-- Reusable collapsible card: gradient-border chrome + animated chevron + left accent strip.
              Used by the Patreon Exclusives tab and the Companion accordions. Defaults to expanded;

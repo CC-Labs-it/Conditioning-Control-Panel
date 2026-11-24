@@ -1260,7 +1260,7 @@
                                                     <rows:RowLabel Grid.Column="0" Text="{loc:Str label_dtrh_density}" Emblem="Often"/>
                                                     <ComboBox x:Name="CmbHapticDtrhDensity" x:FieldModifier="internal" Grid.Column="1"
                                                               Width="140" Height="24" VerticalAlignment="Center"
-                                                              Style="{StaticResource DarkComboBoxStyle}" FontSize="11"
+                                                              Style="{DynamicResource RowComboBoxStyle}"
                                                               SelectedIndex="1" SelectionChanged="CmbHapticDtrhDensity_SelectionChanged">
                                                         <ComboBoxItem Content="{loc:Str btn_density_sparse}"/>
                                                         <ComboBoxItem Content="{loc:Str btn_density_balanced}"/>
