@@ -35,7 +35,7 @@ internal sealed partial class MandatoryVideoOverlay
         public VideoReveal? Fade;
         public readonly Stopwatch SinceReady = new();
         public long StartMs, PlayedMs;
-        public bool FrameSeen, Revealed, Closed, UserMuted, Held, CutStartChosen;
+        public bool FrameSeen, Revealed, Closed, Held, CutStartChosen;
     }
 
     /// <summary>Joined windows, oldest first; the run's own clip is older than all of them. UI thread only.</summary>
@@ -247,21 +247,12 @@ internal sealed partial class MandatoryVideoOverlay
         if (f.Closed || !ControlsAllowed) return;
         WatchForLocks();   // WPF VideoService.Controls.cs:66
         f.Surface.Buttons.Close.IsVisible = CloseAllowed;
-        f.Surface.Buttons.SetMuted(f.UserMuted);
+        f.Surface.Buttons.SetMuted(_userMuted);   // WPF VideoService.Controls.cs:67: the shared mute
         f.Surface.Buttons.Row.IsVisible = true;
     }
 
-    private void ToggleInstanceMute(FloatingInstance f)
-    {
-        if (f.Closed) return;
-        f.UserMuted = !f.UserMuted;
-        ApplyInstanceVolume(f);
-        f.Surface.Buttons.SetMuted(f.UserMuted);
-        _refreshFloating?.Invoke();
-    }
-
     /// <summary>LibVLC volume is shared by the whole process on Windows (one audio session for every player), so a
-    /// joined window's own mute and its reveal hold go through its audio track, like WPF ApplyPrimaryAudioTrack
+    /// joined window's audio focus and its reveal hold go through its audio track, like WPF ApplyPrimaryAudioTrack
     /// (VideoService.FloatingInstances.cs:74-75, :378-401); volume and global mute are shared.</summary>
     private void ApplyInstanceVolume(FloatingInstance f)
     {
@@ -277,8 +268,8 @@ internal sealed partial class MandatoryVideoOverlay
         catch (Exception ex) { Log.Debug("VideoService: floating audio switch failed - {Error}", ex.Message); }
     }
 
-    /// <summary>Silent unless it holds the focus, is not muted by its own button and is not held by its reveal.</summary>
-    private bool InstanceAudioOff(FloatingInstance f) => f.UserMuted || f.Held || !_audioFocus.HasSound(f.Window);
+    /// <summary>Silent unless it holds the focus and is not held by its reveal (the mute button is the shared volume).</summary>
+    private bool InstanceAudioOff(FloatingInstance f) => f.Held || !_audioFocus.HasSound(f.Window);
 
     /// <summary>WPF OnFloatingTouched (:256-260): a pressed window takes the sound.</summary>
     internal void TouchFloating(Window w)

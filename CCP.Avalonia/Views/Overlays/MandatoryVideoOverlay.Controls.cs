@@ -85,7 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _userMuted = !_userMuted;
             Log.Information("VideoService: mute button - video {State}", _userMuted ? "muted" : "unmuted");
             UpdateVolume();
-            foreach (var x in _surfaces) x.Buttons.SetMuted(_userMuted);
+            foreach (var x in AllSurfaces) x.Buttons.SetMuted(_userMuted);   // WPF :80: every window's button, joined ones too
         }
 
         /// <summary>WPF CloseVideoFromButton: the non-strict Esc dismiss, refused (and hidden) under a lock.</summary>

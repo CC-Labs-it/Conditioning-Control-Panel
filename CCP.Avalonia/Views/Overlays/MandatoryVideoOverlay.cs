@@ -482,7 +482,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var layer = new Canvas { ClipToBounds = true };
             var (grace, countdown) = GraceCard();
             var buttons = inst == null ? new VideoButtons(ToggleUserMute, CloseFromButton)
-                : new VideoButtons(() => ToggleInstanceMute(inst),   // WPF VideoService.Controls.cs:157-159: a lock refuses and hides the X
+                : new VideoButtons(ToggleUserMute,   // WPF VideoService.Controls.cs:67,157-159: the shared mute; a lock refuses and hides the X
                     () => { if (!CloseAllowed) HideCloseButtons(); else CloseInstance(inst, "close button"); });
             var w = new Window
             {
@@ -511,7 +511,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     global::Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
                 Func<bool> audible = inst == null
                     ? () => _player?.IsPlaying == true && !_userMuted && PlayerVolume > 0 && HasFloatingSound(w)
-                    : () => inst.Playback?.IsPlaying == true && !_userMuted && !inst.UserMuted && !inst.Held && HasFloatingSound(w);
+                    : () => inst.Playback?.IsPlaying == true && !_userMuted && !inst.Held && HasFloatingSound(w);
                 w.Opened += (_, _) =>
                 {
                     ApplyFloatingPassive(w);
