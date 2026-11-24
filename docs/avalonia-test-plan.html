@@ -532,7 +532,7 @@ compare text, order, layout, sound and timing with the same screen on Windows. R
 <li>Season recap: Leaderboard -&gt; recap button opens the card window. WPF <code>Controls/SeasonRecapCard.xaml</code>, <code>Controls/SeasonRecapWindow.xaml</code>. Rows: <code>ctrl-season-recap-card</code>, <code>ctrl-season-recap-window</code>.</li>
 <li>The retired attention-check ring is render-only (section 15); use Studio -&gt; Video to test live mandatory-video targets. WPF <code>App.xaml.cs:3229-3246</code>. Rows: <code>ctrl-attention-check</code>.</li>
 <li>Launcher tiles: hover sheen and the comet around the edge. WPF <code>Windows/Launcher/LauncherWindow.Fx.cs:141</code>, <code>:381</code>. Rows: <code>ctrl-card-sheen-adorner</code>, <code>ctrl-perimeter-comet-adorner</code>.</li>
-<li>In the Back Room, trigger a word effect with a word deal; expect the word to fade in, hold and fade out. Panic while it is visible; expect it to disappear. WPF <code>Services/BackRoom/BackRoomFxServices.cs:157,345</code>. Rows: <code>feat-subliminal</code>.</li>
+<li>In Breakout, deal media with an active subliminal word, then trigger a word effect; expect a dealt word to fade in, hold and fade out. Panic while it is visible; expect it to disappear. WPF <code>Services/BackRoom/BackRoomFxServices.cs:157,345</code>. Rows: <code>feat-subliminal</code>.</li>
 <li>EMI Desk out, Subliminals on, press Start. Expect one EMI line about subliminals starting, as on Windows; Stop and Start again gives one more, panic leaves no card. WPF <code>Services/Subliminal/SubliminalService.cs:138</code>. Rows: <code>feat-subliminal</code>.</li>
 </ol>
 <h3 id="rows-general-check-g-4">Rows (general check G)</h3>

@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
 using System.IO;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.BackRoom;
@@ -23,7 +24,7 @@ internal sealed partial class GameWindow
     }
     internal Func<BackRoomRainBridge> RainBridgeFactory = () => new BackRoomRainBridge();
     internal Func<BackRoomFlashBridge>? FlashBridgeFactory;
-    internal Func<BackRoomMediaDeal> RoomFxDealFactory = () => new BackRoomMediaDeal(0, Array.Empty<BackRoomGif>(), Array.Empty<BackRoomWord>());
+    internal readonly Dictionary<string, BackRoomMediaDeal> RoomFxDeals = new(StringComparer.Ordinal);
     internal Action<string, int, int, bool, int, int> RoomSubliminal = (text, opacity, hold, suppress, fadeIn, fadeOut) =>
         SubliminalWhisperShow.Custom(text, opacity, hold, suppress, fadeIn, fadeOut);
     internal Action StopRoomSubliminal = SubliminalWhisperShow.StopOneShots;
@@ -41,7 +42,8 @@ internal sealed partial class GameWindow
         var id = (string?)message["fxId"] ?? "";
         var station = (string?)message["station"] ?? "";
         var symbols = (message["symbols"] as JArray)?.Where(s => s.Type == JTokenType.String).Select(s => (string)s!).ToArray() ?? Array.Empty<string>();
-        var deal = RoomFxDealFactory();
+        var deal = RoomFxDeals.TryGetValue(station, out var saved) ? saved :
+            new BackRoomMediaDeal(0, Array.Empty<BackRoomGif>(), Array.Empty<BackRoomWord>());
         var ack = RoomFx.Fire(id, station, symbols, deal, BackRoomFxArgs.Parse(message["args"]), token is { Length: <= 64 } ? token : null);
         Post(new { type = "fx-ack", token, fired = ack.Fired,
             skipped = ack.Skipped.Select(s => new { prim = s.Prim, why = s.Why.ToString().ToLowerInvariant() }) });
