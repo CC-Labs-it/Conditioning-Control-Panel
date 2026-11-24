@@ -2735,8 +2735,9 @@ namespace ConditioningControlPanel.Services
                     dragOwnedOn: s?.FlashDraggable == true && owned,
                     shatterOwnedOn: s?.FlashShatterEnabled == true && owned))
                 return;
-            // Flips to break (DeckOptions): the stock 4 rolls 3..5, exactly as before it had options.
-            var (breakMin, breakMax) = SuperCore.DeckOptions.BreakRange(s?.DeckFlips ?? SuperCore.DeckOptions.FlipsDefault);
+            // Fewest / Most flips (DeckOptions): unset ends follow the older single slider, so the stock 4 rolls 3..5 as before.
+            var (breakMin, breakMax) = SuperCore.DeckOptions.BreakRange(s?.DeckFlips ?? SuperCore.DeckOptions.FlipsDefault,
+                s?.DeckFlipsFewest ?? 0, s?.DeckFlipsMost ?? 0);
             item.Deck = FlickerDeck.Create(_deckIndex++ % 8, _random, breakMin, breakMax);
             item.OnDeckRaise = _ => RaiseDeckWindow(window);
             item.OnDeckSwap = _ => ApplyDeckSwap(window);
