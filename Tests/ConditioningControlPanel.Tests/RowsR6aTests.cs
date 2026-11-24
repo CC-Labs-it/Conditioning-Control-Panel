@@ -26,4 +26,8 @@ public class RowsR6aTests
     public void Haptics_rows_read() => WpfRenderHarness.OnStaThread(() =>
         RowsRender.Check(new HapticsTabView(), "r6a-haptics", minLabels: 21,
             show: new[] { "VideoHapticSyncSliders", "HapticAudioAdvanced" }, before: ExpandAll));
+
+    [Fact]
+    public void Takeover_rows_read() => WpfRenderHarness.OnStaThread(() =>
+        RowsRender.Check(new BambiTakeoverTabView(), "r6a-takeover", minLabels: 27, before: ExpandAll));
 }
