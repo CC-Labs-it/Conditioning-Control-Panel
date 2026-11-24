@@ -530,7 +530,7 @@ namespace ConditioningControlPanel
 
         /// <summary>Sliders here are all "0-100 of a 0..1 setting"; sensitivity is the one that reads
         /// as a multiplier instead of a percentage.</summary>
-        private static void SetDspSlider(Slider? slider, TextBlock? label, double value100, string unit)
+        private static void SetDspSlider(Slider? slider, Controls.Rows.RowValue? label, double value100, string unit)
         {
             if (slider == null) return;
             var v = Math.Clamp(value100, slider.Minimum, slider.Maximum);
@@ -999,7 +999,7 @@ namespace ConditioningControlPanel
 
         /// <summary>Shared shape for all six: label first (so it tracks even during a load), then
         /// the settings write. AudioSyncSettings clamps every one of these itself.</summary>
-        private void OnDspSliderChanged(Slider? slider, TextBlock? label, string unit, Action<double> apply)
+        private void OnDspSliderChanged(Slider? slider, Controls.Rows.RowValue? label, string unit, Action<double> apply)
         {
             if (slider == null) return;
             if (label != null) label.Text = FormatDsp(slider.Value, unit);

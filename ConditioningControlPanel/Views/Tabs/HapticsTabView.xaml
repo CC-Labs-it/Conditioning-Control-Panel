@@ -7,6 +7,8 @@
              xmlns:hover="clr-namespace:ConditioningControlPanel.Behaviors"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.TintSliders="True"
              xmlns:hx="clr-namespace:ConditioningControlPanel.Views.Controls"
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800">
@@ -489,7 +491,8 @@
          "Deeper", also gates FunScript because both ride HapticLayer.Pattern, and relabelling,
          reordering or splitting that row is a documented regression. -->
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-        <StackPanel Margin="6,2,18,22" MaxWidth="1280" HorizontalAlignment="Center">
+        <StackPanel Margin="6,2,18,22" MaxWidth="1280" HorizontalAlignment="Center"
+                    Grid.IsSharedSizeScope="True" rows:RowHue.Hue="#B47BFF">
 
             <!-- Interactive controls + translucent premium gate.
 
@@ -798,17 +801,20 @@
                                                                Foreground="{StaticResource TextDimBrush}" FontSize="11"
                                                                TextWrapping="Wrap" Margin="0,0,0,10"/>
 
-                                                    <Grid Height="34" Background="Transparent"
+                                                    <Grid Style="{StaticResource OptionRow}" Background="Transparent"
                                                           ToolTip="{loc:Str tooltip_automatically_connect_to_your_haptic_device_w}">
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="*"/>
                                                             <ColumnDefinition Width="Auto"/>
                                                         </Grid.ColumnDefinitions>
                                                         <CheckBox x:Name="ChkHapticAutoConnect" x:FieldModifier="internal"
-                                                                  Grid.Column="0" Content="{loc:Str setting_auto_connect_on_startup}"
+                                                                  Grid.Column="0"
                                                                   Foreground="{DynamicResource TextSecondaryBrush}"
-                                                                  FontSize="12" VerticalAlignment="Center"
-                                                                  Checked="ChkHapticAutoConnect_Changed" Unchecked="ChkHapticAutoConnect_Changed"/>
+                                                                  FontSize="12" VerticalAlignment="Center" VerticalContentAlignment="Center"
+                                                                  Checked="ChkHapticAutoConnect_Changed" Unchecked="ChkHapticAutoConnect_Changed">
+                                                            <rows:RowLabel Text="{loc:Str setting_auto_connect_on_startup}" Emblem="Power"
+                                                                           IsOn="{Binding IsChecked, ElementName=ChkHapticAutoConnect}"/>
+                                                        </CheckBox>
                                                         <Button x:Name="BtnHapticTest" x:FieldModifier="internal" Grid.Column="1"
                                                                 Content="{loc:Str btn_test_vibration}" Background="{DynamicResource SurfaceBgBrush}"
                                                                 Foreground="White" BorderBrush="{DynamicResource PinkBrush}"
@@ -842,23 +848,19 @@
                                                        FontSize="11" TextWrapping="Wrap" Margin="0,0,0,4"/>
 
                                             <!-- THE one slider on first paint -->
-                                            <Grid Height="36" Background="Transparent"
+                                            <Grid Style="{StaticResource OptionRow}" Background="Transparent"
                                                   ToolTip="{loc:Str haptics_master_intensity_tip}">
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                                    <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto" MinWidth="56"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{loc:Str haptics_intensity}" FontSize="13"
-                                                           FontWeight="SemiBold" Foreground="{StaticResource TextLightBrush}"
-                                                           VerticalAlignment="Center"/>
+                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str haptics_intensity}" Emblem="Much"/>
                                                 <Slider x:Name="SliderHapticIntensity" x:FieldModifier="internal" Grid.Column="1"
                                                         Style="{StaticResource PinkSlider}" Minimum="0" Maximum="100" Value="70"
                                                         VerticalAlignment="Center" Margin="14,0"
                                                         ValueChanged="SliderHapticIntensity_ValueChanged"/>
-                                                <TextBlock x:Name="TxtHapticIntensity" x:FieldModifier="internal" Grid.Column="2"
-                                                           Text="70%" Foreground="{DynamicResource PinkBrush}" FontSize="13"
-                                                           FontWeight="Bold" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                <rows:RowValue Grid.Column="2" x:Name="TxtHapticIntensity" x:FieldModifier="internal" Text="70%"/>
                                             </Grid>
 
                                             <Border Style="{StaticResource HapticRowDivider}"/>
@@ -1040,10 +1042,10 @@
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="20"/>
-                                                    <ColumnDefinition Width="*"/>
                                                 </Grid.ColumnDefinitions>
                                                 <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
                                                     <RowDefinition Height="Auto"/>
                                                     <RowDefinition Height="Auto"/>
                                                     <RowDefinition Height="Auto"/>
@@ -1051,42 +1053,52 @@
 
                                                 <CheckBox x:Name="ChkHapticFunScript" x:FieldModifier="internal"
                                                           Grid.Row="0" Grid.Column="0"
-                                                          Content="{loc:Str haptics_funscript_enable}"
                                                           Foreground="{DynamicResource TextLightBrush}"
                                                           FontSize="12" Margin="0,0,0,10"
                                                           Checked="ChkHapticFunScript_Changed" Unchecked="ChkHapticFunScript_Changed"
-                                                          ToolTip="{loc:Str haptics_funscript_enable_tip}"/>
+                                                          ToolTip="{loc:Str haptics_funscript_enable_tip}" VerticalContentAlignment="Center">
+                                                    <rows:RowLabel Text="{loc:Str haptics_funscript_enable}" Emblem="Plug"
+                                                                   IsOn="{Binding IsChecked, ElementName=ChkHapticFunScript}"/>
+                                                </CheckBox>
                                                 <CheckBox x:Name="ChkHapticLuminance" x:FieldModifier="internal"
-                                                          Grid.Row="0" Grid.Column="2"
-                                                          Content="{loc:Str haptics_luminance_enable}"
+                                                          Grid.Row="1" Grid.Column="0"
                                                           Foreground="{DynamicResource TextLightBrush}"
                                                           FontSize="12" Margin="0,0,0,10"
                                                           Checked="ChkHapticLuminance_Changed" Unchecked="ChkHapticLuminance_Changed"
-                                                          ToolTip="{loc:Str haptics_luminance_enable_tip}"/>
+                                                          ToolTip="{loc:Str haptics_luminance_enable_tip}" VerticalContentAlignment="Center">
+                                                    <rows:RowLabel Text="{loc:Str haptics_luminance_enable}" Emblem="Link"
+                                                                   IsOn="{Binding IsChecked, ElementName=ChkHapticLuminance}"/>
+                                                </CheckBox>
 
                                                 <CheckBox x:Name="ChkHapticToyInput" x:FieldModifier="internal"
-                                                          Grid.Row="1" Grid.Column="0"
-                                                          Content="{loc:Str haptics_toy_input_enable}"
+                                                          Grid.Row="2" Grid.Column="0"
                                                           Foreground="{DynamicResource TextLightBrush}"
                                                           FontSize="12" Margin="0,0,0,10"
                                                           Checked="ChkHapticToyInput_Changed" Unchecked="ChkHapticToyInput_Changed"
-                                                          ToolTip="{loc:Str haptics_toy_input_enable_tip}"/>
+                                                          ToolTip="{loc:Str haptics_toy_input_enable_tip}" VerticalContentAlignment="Center">
+                                                    <rows:RowLabel Text="{loc:Str haptics_toy_input_enable}" Emblem="Plug"
+                                                                   IsOn="{Binding IsChecked, ElementName=ChkHapticToyInput}"/>
+                                                </CheckBox>
                                                 <CheckBox x:Name="ChkHapticBandSplit" x:FieldModifier="internal"
-                                                          Grid.Row="1" Grid.Column="2"
-                                                          Content="{loc:Str haptics_band_split}"
+                                                          Grid.Row="4" Grid.Column="0"
                                                           Foreground="{DynamicResource TextLightBrush}"
                                                           FontSize="12" Margin="0,0,0,10"
                                                           Checked="ChkHapticBandSplit_Changed" Unchecked="ChkHapticBandSplit_Changed"
-                                                          ToolTip="{loc:Str haptics_band_split_tip}"/>
+                                                          ToolTip="{loc:Str haptics_band_split_tip}" VerticalContentAlignment="Center">
+                                                    <rows:RowLabel Text="{loc:Str haptics_band_split}" Emblem="Plug"
+                                                                   IsOn="{Binding IsChecked, ElementName=ChkHapticBandSplit}"/>
+                                                </CheckBox>
 
                                                 <!-- Depends on the toy-input master above, so it sits under it. -->
                                                 <CheckBox x:Name="ChkHapticToyAttentionCheck" x:FieldModifier="internal"
-                                                          Grid.Row="2" Grid.Column="0"
-                                                          Content="{loc:Str haptics_toy_attention_check}"
+                                                          Grid.Row="3" Grid.Column="0"
                                                           Foreground="{DynamicResource TextSecondaryBrush}"
                                                           FontSize="12" Margin="18,0,0,0"
                                                           Checked="ChkHapticToyAttentionCheck_Changed" Unchecked="ChkHapticToyAttentionCheck_Changed"
-                                                          ToolTip="{loc:Str haptics_toy_attention_check_tip}"/>
+                                                          ToolTip="{loc:Str haptics_toy_attention_check_tip}" VerticalContentAlignment="Center">
+                                                    <rows:RowLabel Text="{loc:Str haptics_toy_attention_check}" Emblem="Click"
+                                                                   IsOn="{Binding IsChecked, ElementName=ChkHapticToyAttentionCheck}"/>
+                                                </CheckBox>
                                             </Grid>
                                         </Border>
                                     </StackPanel>
@@ -1120,23 +1132,20 @@
                                         <Border Style="{StaticResource HapticAdvBlock}">
                                             <StackPanel>
                                                 <TextBlock Text="{loc:Str haptics_safety}" Style="{StaticResource HapticSubHeader}"/>
-                                                <Grid Height="34" Background="Transparent"
+                                                <Grid Style="{StaticResource OptionRow}" Background="Transparent"
                                                       ToolTip="{loc:Str haptics_max_power_tip}">
                                                     <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                                        <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto" MinWidth="52"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Text="{loc:Str haptics_max_power}"
-                                                               Foreground="{StaticResource TextLightBrush}" FontSize="13"
-                                                               FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str haptics_max_power}" Emblem="Most"
+                                                                   Value="{Binding Value, ElementName=SliderHapticMaxPower}"/>
                                                     <Slider x:Name="SliderHapticMaxPower" x:FieldModifier="internal" Grid.Column="1"
                                                             Style="{StaticResource PinkSlider}" Minimum="5" Maximum="100" Value="70"
                                                             VerticalAlignment="Center" Margin="14,0"
                                                             ValueChanged="SliderHapticMaxPower_ValueChanged"/>
-                                                    <TextBlock x:Name="TxtHapticMaxPower" x:FieldModifier="internal" Grid.Column="2"
-                                                               Text="70%" Foreground="{DynamicResource PinkBrush}" FontSize="13"
-                                                               FontWeight="Bold" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                    <rows:RowValue Grid.Column="2" x:Name="TxtHapticMaxPower" x:FieldModifier="internal" Text="70%" Unit="{loc:Str row_unit_at_most}"/>
                                                 </Grid>
                                                 <Border x:Name="HapticMaxPowerWarning" x:FieldModifier="internal" Visibility="Collapsed"
                                                         Background="#33FFB020" BorderBrush="#88FFB020" BorderThickness="1"
@@ -1151,25 +1160,20 @@
                                         <Border Style="{StaticResource HapticAdvBlock}">
                                             <StackPanel>
                                                 <TextBlock Text="{loc:Str haptics_toy_input}" Style="{StaticResource HapticSubHeader}"/>
-                                                <Grid Height="34" Background="Transparent"
+                                                <Grid Style="{StaticResource OptionRow}" Background="Transparent"
                                                       ToolTip="{loc:Str haptics_toy_input_sub}">
                                                     <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                                        <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto" MinWidth="52"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Text="{loc:Str haptics_override_cooldown}"
-                                                               Foreground="{StaticResource TextLightBrush}" FontSize="13"
-                                                               FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str haptics_override_cooldown}" Emblem="Long"/>
                                                     <Slider x:Name="SliderHapticOverrideCooldown" x:FieldModifier="internal"
                                                             Grid.Column="1" Style="{StaticResource PinkSlider}"
                                                             Minimum="5" Maximum="120" Value="30" VerticalAlignment="Center"
                                                             Margin="14,0" ValueChanged="SliderHapticOverrideCooldown_Changed"
                                                             ToolTip="{loc:Str haptics_override_cooldown_tip}"/>
-                                                    <TextBlock x:Name="TxtHapticOverrideCooldown" x:FieldModifier="internal"
-                                                               Grid.Column="2" Text="30s" Foreground="{DynamicResource PinkBrush}"
-                                                               FontSize="13" FontWeight="Bold" HorizontalAlignment="Right"
-                                                               VerticalAlignment="Center"/>
+                                                    <rows:RowValue Grid.Column="2" x:Name="TxtHapticOverrideCooldown" x:FieldModifier="internal" Text="30s"/>
                                                 </Grid>
                                             </StackPanel>
                                         </Border>
@@ -1178,16 +1182,14 @@
                                         <Border Style="{StaticResource HapticAdvBlock}">
                                             <StackPanel>
                                                 <TextBlock Text="{loc:Str haptics_funscript}" Style="{StaticResource HapticSubHeader}"/>
-                                                <Grid Height="34" Background="Transparent"
+                                                <Grid Style="{StaticResource OptionRow}" Background="Transparent"
                                                       ToolTip="{loc:Str haptics_funscript_sub}">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Text="{loc:Str haptics_funscript_vibe}"
-                                                               Foreground="{StaticResource TextLightBrush}" FontSize="13"
-                                                               FontWeight="SemiBold" VerticalAlignment="Center"
-                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str haptics_funscript_vibe}" Emblem="Plug"
+                                                                   IsOn="{Binding IsChecked, ElementName=ChkHapticFunScriptVibe}"/>
                                                     <CheckBox x:Name="ChkHapticFunScriptVibe" x:FieldModifier="internal"
                                                               Grid.Column="1" Style="{StaticResource ToggleStyle}"
                                                               VerticalAlignment="Center"
@@ -1203,25 +1205,20 @@
                                         <Border Style="{StaticResource HapticAdvBlock}">
                                             <StackPanel>
                                                 <TextBlock Text="{loc:Str haptics_luminance}" Style="{StaticResource HapticSubHeader}"/>
-                                                <Grid Height="34" Background="Transparent"
+                                                <Grid Style="{StaticResource OptionRow}" Background="Transparent"
                                                       ToolTip="{loc:Str haptics_luminance_sub}">
                                                     <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                                        <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto" MinWidth="52"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Text="{loc:Str haptics_luminance_intensity}"
-                                                               Foreground="{StaticResource TextLightBrush}" FontSize="13"
-                                                               FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str haptics_luminance_intensity}" Emblem="Much"/>
                                                     <Slider x:Name="SliderHapticLuminance" x:FieldModifier="internal"
                                                             Grid.Column="1" Style="{StaticResource PinkSlider}"
                                                             Minimum="0" Maximum="100" Value="50" VerticalAlignment="Center"
                                                             Margin="14,0" ValueChanged="SliderHapticLuminance_Changed"
                                                             ToolTip="{loc:Str haptics_luminance_intensity_tip}"/>
-                                                    <TextBlock x:Name="TxtHapticLuminance" x:FieldModifier="internal"
-                                                               Grid.Column="2" Text="50%" Foreground="{DynamicResource PinkBrush}"
-                                                               FontSize="13" FontWeight="Bold" HorizontalAlignment="Right"
-                                                               VerticalAlignment="Center"/>
+                                                    <rows:RowValue Grid.Column="2" x:Name="TxtHapticLuminance" x:FieldModifier="internal" Text="50%"/>
                                                 </Grid>
                                             </StackPanel>
                                         </Border>
@@ -1237,35 +1234,28 @@
                                                 <TextBlock Text="{loc:Str haptics_dtrh_accent_pointer}"
                                                            Style="{StaticResource HapticSubCaption}"/>
 
-                                                <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_dtrh_ambient}">
+                                                <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_dtrh_ambient}">
                                                     <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                                        <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto" MinWidth="52"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Text="{loc:Str haptics_dtrh_ambient_label}"
-                                                               Foreground="{StaticResource TextLightBrush}" FontSize="13"
-                                                               FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str haptics_dtrh_ambient_label}" Emblem="Much"/>
                                                     <Slider x:Name="SliderHapticDtrhAmbient" x:FieldModifier="internal"
                                                             Grid.Column="1" Style="{StaticResource PinkSlider}"
                                                             Minimum="0" Maximum="60" Value="12" VerticalAlignment="Center"
                                                             Margin="14,0" ValueChanged="SliderHapticDtrhAmbient_Changed"/>
-                                                    <TextBlock x:Name="TxtHapticDtrhAmbient" x:FieldModifier="internal"
-                                                               Grid.Column="2" Text="12%" Foreground="{DynamicResource PinkBrush}"
-                                                               FontSize="13" FontWeight="Bold" HorizontalAlignment="Right"
-                                                               VerticalAlignment="Center"/>
+                                                    <rows:RowValue Grid.Column="2" x:Name="TxtHapticDtrhAmbient" x:FieldModifier="internal" Text="12%"/>
                                                 </Grid>
 
                                                 <Border Style="{StaticResource HapticRowDivider}"/>
 
-                                                <Grid Height="34">
+                                                <Grid Style="{StaticResource OptionRow}">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Text="{loc:Str label_dtrh_density}"
-                                                               Foreground="{StaticResource TextLightBrush}" FontSize="13"
-                                                               FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str label_dtrh_density}" Emblem="Often"/>
                                                     <ComboBox x:Name="CmbHapticDtrhDensity" x:FieldModifier="internal" Grid.Column="1"
                                                               Width="140" Height="24" VerticalAlignment="Center"
                                                               Style="{StaticResource DarkComboBoxStyle}" FontSize="11"
@@ -1328,46 +1318,34 @@
                                                             <ColumnDefinition Width="*"/>
                                                         </Grid.ColumnDefinitions>
 
-                                                        <Grid Grid.Column="0" Height="34" Background="Transparent"
+                                                        <Grid Grid.Column="0" Style="{StaticResource OptionRow}" Background="Transparent"
                                                               ToolTip="{loc:Str tooltip_adjust_haptic_timing_positive_earlier_negativ}">
                                                             <Grid.ColumnDefinitions>
                                                                 <ColumnDefinition Width="Auto" MinWidth="70"/>
                                                                 <ColumnDefinition Width="*"/>
                                                                 <ColumnDefinition Width="Auto" MinWidth="52"/>
                                                             </Grid.ColumnDefinitions>
-                                                            <TextBlock Grid.Column="0" Text="{loc:Str label_delay_2}"
-                                                                       Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
-                                                                       VerticalAlignment="Center"/>
+                                                            <rows:RowLabel Grid.Column="0" Text="{loc:Str label_delay_2}" Emblem="When"/>
                                                             <Slider x:Name="SliderVideoHapticDelay" x:FieldModifier="internal"
                                                                     Grid.Column="1" Style="{StaticResource PinkSlider}"
                                                                     Minimum="-600" Maximum="600" Value="0" Margin="10,0"
                                                                     VerticalAlignment="Center" ValueChanged="SliderVideoHapticDelay_Changed"/>
-                                                            <TextBlock x:Name="TxtVideoHapticDelay" x:FieldModifier="internal"
-                                                                       Grid.Column="2" Text="{loc:Str label_0ms}"
-                                                                       Foreground="{DynamicResource PinkBrush}" FontSize="12"
-                                                                       FontWeight="Bold" HorizontalAlignment="Right"
-                                                                       VerticalAlignment="Center"/>
+                                                            <rows:RowValue Grid.Column="2" x:Name="TxtVideoHapticDelay" x:FieldModifier="internal" Text="{loc:Str label_0ms}"/>
                                                         </Grid>
 
-                                                        <Grid Grid.Column="2" Height="34" Background="Transparent"
+                                                        <Grid Grid.Column="2" Style="{StaticResource OptionRow}" Background="Transparent"
                                                               ToolTip="{loc:Str tooltip_live_intensity_control_reduce_if_vibration_is}">
                                                             <Grid.ColumnDefinitions>
                                                                 <ColumnDefinition Width="Auto" MinWidth="70"/>
                                                                 <ColumnDefinition Width="*"/>
                                                                 <ColumnDefinition Width="Auto" MinWidth="52"/>
                                                             </Grid.ColumnDefinitions>
-                                                            <TextBlock Grid.Column="0" Text="{loc:Str label_power_2}"
-                                                                       Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
-                                                                       VerticalAlignment="Center"/>
+                                                            <rows:RowLabel Grid.Column="0" Text="{loc:Str label_power_2}" Emblem="Much"/>
                                                             <Slider x:Name="SliderVideoHapticPower" x:FieldModifier="internal"
                                                                     Grid.Column="1" Style="{StaticResource PinkSlider}"
                                                                     Minimum="0" Maximum="100" Value="100" Margin="10,0"
                                                                     VerticalAlignment="Center" ValueChanged="SliderVideoHapticPower_Changed"/>
-                                                            <TextBlock x:Name="TxtVideoHapticPower" x:FieldModifier="internal"
-                                                                       Grid.Column="2" Text="100%"
-                                                                       Foreground="{DynamicResource PinkBrush}" FontSize="12"
-                                                                       FontWeight="Bold" HorizontalAlignment="Right"
-                                                                       VerticalAlignment="Center"/>
+                                                            <rows:RowValue Grid.Column="2" x:Name="TxtVideoHapticPower" x:FieldModifier="internal" Text="100%"/>
                                                         </Grid>
                                                     </Grid>
                                                 </Border>
@@ -1402,124 +1380,95 @@
                                                                 <RowDefinition Height="Auto"/>
                                                             </Grid.RowDefinitions>
 
-                                                            <Grid Grid.Row="0" Grid.Column="0" Height="34" Background="Transparent"
+                                                            <Grid Grid.Row="0" Grid.Column="0" Style="{StaticResource OptionRow}" Background="Transparent"
                                                                   ToolTip="{loc:Str haptics_dsp_sensitivity_tip}">
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="Auto" MinWidth="92"/>
                                                                     <ColumnDefinition Width="*"/>
                                                                     <ColumnDefinition Width="Auto" MinWidth="46"/>
                                                                 </Grid.ColumnDefinitions>
-                                                                <TextBlock Grid.Column="0" Text="{loc:Str haptics_dsp_sensitivity}"
-                                                                           Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
-                                                                           VerticalAlignment="Center"/>
+                                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str haptics_dsp_sensitivity}" Emblem="Reacts"/>
                                                                 <Slider x:Name="SliderDspSensitivity" x:FieldModifier="internal"
                                                                         Grid.Column="1" Style="{StaticResource PinkSlider}"
                                                                         Minimum="10" Maximum="300" Value="100" Margin="10,0"
                                                                         VerticalAlignment="Center" ValueChanged="SliderDspSensitivity_Changed"/>
-                                                                <TextBlock x:Name="TxtDspSensitivity" x:FieldModifier="internal"
-                                                                           Grid.Column="2" Text="1.00" Foreground="{DynamicResource PinkBrush}"
-                                                                           FontSize="12" FontWeight="Bold" HorizontalAlignment="Right"
-                                                                           VerticalAlignment="Center"/>
+                                                                <rows:RowValue Grid.Column="2" x:Name="TxtDspSensitivity" x:FieldModifier="internal" Text="1.00"/>
                                                             </Grid>
 
-                                                            <Grid Grid.Row="0" Grid.Column="2" Height="34" Background="Transparent"
+                                                            <Grid Grid.Row="0" Grid.Column="2" Style="{StaticResource OptionRow}" Background="Transparent"
                                                                   ToolTip="{loc:Str haptics_dsp_smoothing_tip}">
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="Auto" MinWidth="92"/>
                                                                     <ColumnDefinition Width="*"/>
                                                                     <ColumnDefinition Width="Auto" MinWidth="46"/>
                                                                 </Grid.ColumnDefinitions>
-                                                                <TextBlock Grid.Column="0" Text="{loc:Str haptics_dsp_smoothing}"
-                                                                           Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
-                                                                           VerticalAlignment="Center"/>
+                                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str haptics_dsp_smoothing}" Emblem="Motion"/>
                                                                 <Slider x:Name="SliderDspSmoothing" x:FieldModifier="internal"
                                                                         Grid.Column="1" Style="{StaticResource PinkSlider}"
                                                                         Minimum="0" Maximum="95" Value="30" Margin="10,0"
                                                                         VerticalAlignment="Center" ValueChanged="SliderDspSmoothing_Changed"/>
-                                                                <TextBlock x:Name="TxtDspSmoothing" x:FieldModifier="internal"
-                                                                           Grid.Column="2" Text="30%" Foreground="{DynamicResource PinkBrush}"
-                                                                           FontSize="12" FontWeight="Bold" HorizontalAlignment="Right"
-                                                                           VerticalAlignment="Center"/>
+                                                                <rows:RowValue Grid.Column="2" x:Name="TxtDspSmoothing" x:FieldModifier="internal" Text="30%"/>
                                                             </Grid>
 
-                                                            <Grid Grid.Row="1" Grid.Column="0" Height="34" Background="Transparent"
+                                                            <Grid Grid.Row="1" Grid.Column="0" Style="{StaticResource OptionRow}" Background="Transparent"
                                                                   ToolTip="{loc:Str haptics_dsp_bass_tip}">
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="Auto" MinWidth="92"/>
                                                                     <ColumnDefinition Width="*"/>
                                                                     <ColumnDefinition Width="Auto" MinWidth="46"/>
                                                                 </Grid.ColumnDefinitions>
-                                                                <TextBlock Grid.Column="0" Text="{loc:Str haptics_dsp_bass}"
-                                                                           Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
-                                                                           VerticalAlignment="Center"/>
+                                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str haptics_dsp_bass}" Emblem="Loud"/>
                                                                 <Slider x:Name="SliderDspBass" x:FieldModifier="internal"
                                                                         Grid.Column="1" Style="{StaticResource PinkSlider}"
                                                                         Minimum="0" Maximum="100" Value="40" Margin="10,0"
                                                                         VerticalAlignment="Center" ValueChanged="SliderDspBass_Changed"/>
-                                                                <TextBlock x:Name="TxtDspBass" x:FieldModifier="internal"
-                                                                           Grid.Column="2" Text="40%" Foreground="{DynamicResource PinkBrush}"
-                                                                           FontSize="12" FontWeight="Bold" HorizontalAlignment="Right"
-                                                                           VerticalAlignment="Center"/>
+                                                                <rows:RowValue Grid.Column="2" x:Name="TxtDspBass" x:FieldModifier="internal" Text="40%"/>
                                                             </Grid>
 
-                                                            <Grid Grid.Row="1" Grid.Column="2" Height="34" Background="Transparent"
+                                                            <Grid Grid.Row="1" Grid.Column="2" Style="{StaticResource OptionRow}" Background="Transparent"
                                                                   ToolTip="{loc:Str haptics_dsp_rms_tip}">
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="Auto" MinWidth="92"/>
                                                                     <ColumnDefinition Width="*"/>
                                                                     <ColumnDefinition Width="Auto" MinWidth="46"/>
                                                                 </Grid.ColumnDefinitions>
-                                                                <TextBlock Grid.Column="0" Text="{loc:Str haptics_dsp_rms}"
-                                                                           Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
-                                                                           VerticalAlignment="Center"/>
+                                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str haptics_dsp_rms}" Emblem="Loud"/>
                                                                 <Slider x:Name="SliderDspRms" x:FieldModifier="internal"
                                                                         Grid.Column="1" Style="{StaticResource PinkSlider}"
                                                                         Minimum="0" Maximum="100" Value="35" Margin="10,0"
                                                                         VerticalAlignment="Center" ValueChanged="SliderDspRms_Changed"/>
-                                                                <TextBlock x:Name="TxtDspRms" x:FieldModifier="internal"
-                                                                           Grid.Column="2" Text="35%" Foreground="{DynamicResource PinkBrush}"
-                                                                           FontSize="12" FontWeight="Bold" HorizontalAlignment="Right"
-                                                                           VerticalAlignment="Center"/>
+                                                                <rows:RowValue Grid.Column="2" x:Name="TxtDspRms" x:FieldModifier="internal" Text="35%"/>
                                                             </Grid>
 
-                                                            <Grid Grid.Row="2" Grid.Column="0" Height="34" Background="Transparent"
+                                                            <Grid Grid.Row="2" Grid.Column="0" Style="{StaticResource OptionRow}" Background="Transparent"
                                                                   ToolTip="{loc:Str haptics_dsp_onset_tip}">
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="Auto" MinWidth="92"/>
                                                                     <ColumnDefinition Width="*"/>
                                                                     <ColumnDefinition Width="Auto" MinWidth="46"/>
                                                                 </Grid.ColumnDefinitions>
-                                                                <TextBlock Grid.Column="0" Text="{loc:Str haptics_dsp_onset}"
-                                                                           Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
-                                                                           VerticalAlignment="Center"/>
+                                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str haptics_dsp_onset}" Emblem="Loud"/>
                                                                 <Slider x:Name="SliderDspOnset" x:FieldModifier="internal"
                                                                         Grid.Column="1" Style="{StaticResource PinkSlider}"
                                                                         Minimum="0" Maximum="100" Value="25" Margin="10,0"
                                                                         VerticalAlignment="Center" ValueChanged="SliderDspOnset_Changed"/>
-                                                                <TextBlock x:Name="TxtDspOnset" x:FieldModifier="internal"
-                                                                           Grid.Column="2" Text="25%" Foreground="{DynamicResource PinkBrush}"
-                                                                           FontSize="12" FontWeight="Bold" HorizontalAlignment="Right"
-                                                                           VerticalAlignment="Center"/>
+                                                                <rows:RowValue Grid.Column="2" x:Name="TxtDspOnset" x:FieldModifier="internal" Text="25%"/>
                                                             </Grid>
 
-                                                            <Grid Grid.Row="2" Grid.Column="2" Height="34" Background="Transparent"
+                                                            <Grid Grid.Row="2" Grid.Column="2" Style="{StaticResource OptionRow}" Background="Transparent"
                                                                   ToolTip="{loc:Str haptics_dsp_max_tip}">
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="Auto" MinWidth="92"/>
                                                                     <ColumnDefinition Width="*"/>
                                                                     <ColumnDefinition Width="Auto" MinWidth="46"/>
                                                                 </Grid.ColumnDefinitions>
-                                                                <TextBlock Grid.Column="0" Text="{loc:Str haptics_dsp_max}"
-                                                                           Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
-                                                                           VerticalAlignment="Center"/>
+                                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str haptics_dsp_max}" Emblem="Most"
+                                                                               Value="{Binding Value, ElementName=SliderDspMax}"/>
                                                                 <Slider x:Name="SliderDspMax" x:FieldModifier="internal"
                                                                         Grid.Column="1" Style="{StaticResource PinkSlider}"
                                                                         Minimum="50" Maximum="100" Value="100" Margin="10,0"
                                                                         VerticalAlignment="Center" ValueChanged="SliderDspMax_Changed"/>
-                                                                <TextBlock x:Name="TxtDspMax" x:FieldModifier="internal"
-                                                                           Grid.Column="2" Text="100%" Foreground="{DynamicResource PinkBrush}"
-                                                                           FontSize="12" FontWeight="Bold" HorizontalAlignment="Right"
-                                                                           VerticalAlignment="Center"/>
+                                                                <rows:RowValue Grid.Column="2" x:Name="TxtDspMax" x:FieldModifier="internal" Text="100%" Unit="{loc:Str row_unit_at_most}"/>
                                                             </Grid>
                                                         </Grid>
 
