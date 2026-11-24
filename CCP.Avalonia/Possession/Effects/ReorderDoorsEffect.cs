@@ -9,10 +9,12 @@ using Avalonia.Controls.Templates;
 using Avalonia.Automation.Peers;
 using Avalonia.Automation.Provider;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Possession;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Localization;
@@ -174,6 +176,12 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
             Template = new FuncControlTemplate<Button>((_, _) => new Border { Background = Brushes.Transparent })
         };
         bool Usable() => IsLive && door.IsEffectivelyVisible && door.IsEffectivelyEnabled && !PossessionTree.IsOffLimits(door);
+        // WPF presses the real door, so the rail's misroute hook sees it first (MainWindow.NavRail.cs:532).
+        seat.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
+        {
+            try { if (Usable() && TopLevel.GetTopLevel(door) is MainShellWindow shell) shell.RouteDoorPress(door, e); }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Possession reorderdoors reroute failed"); }
+        }, RoutingStrategies.Tunnel);
         seat.Click += (_, _) =>
         {
             try { if (Usable()) invoke.Invoke(); }
