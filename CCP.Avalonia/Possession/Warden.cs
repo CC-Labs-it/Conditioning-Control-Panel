@@ -28,7 +28,6 @@ internal sealed class Warden : IPossessionWarden, IDisposable
     {
         _lockdown = lockdown;
         lockdown.LockdownActivated += Reset;
-        lockdown.LockdownDeactivated += Stop;
     }
 
     public bool IsAvailable => !_stopped && !_busy && CoreSettings.Current.LockdownWardenEnabled
@@ -169,7 +168,10 @@ internal sealed class Warden : IPossessionWarden, IDisposable
         _lastAppearance = _lastStare = DateTime.MinValue;
     }
 
-    // Both panic and every lockdown deactivation stop immediately; never resume a queued glide.
+    // A real engine restart may rearm the warden in the same Lockdown without resetting cooldowns.
+    internal void ResumeForEngineStart() { if (_lockdown.IsActive) _stopped = false; }
+
+    // Panic and explicit stop paths restore immediately; normal Lockdown end reassembles through the director.
     internal void Stop()
     {
         _stopped = true;
@@ -192,7 +194,6 @@ internal sealed class Warden : IPossessionWarden, IDisposable
     public void Dispose()
     {
         _lockdown.LockdownActivated -= Reset;
-        _lockdown.LockdownDeactivated -= Stop;
         Stop();
     }
 }

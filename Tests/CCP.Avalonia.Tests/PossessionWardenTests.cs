@@ -73,9 +73,13 @@ public sealed class PossessionWardenTests
         CoreSettings.Current.AvatarEnabled = true;
         CoreSettings.Current.AvatarTubeDetached = true;
         CoreSettings.Current.LockdownWardenEnabled = true;
+        CoreSettings.Current.LockdownPossessionEnabled = true;
+        CoreSettings.Current.LockdownForceStrictLock = false;
+        CoreSettings.Current.LockdownDisablePanicKey = false;
         var lockdown = new LockdownService();
         var tube = new AvatarTubeWindow(null) { PossessionMoveSupportedOverride = true };
         using var warden = new Warden(lockdown);
+        using var director = new PossessionDirector(lockdown, Array.Empty<IPossessionEffect>(), PossessionAvaloniaHead.CreateDirectorHead()) { Warden = warden };
         var oldBark = BarkHead.Engine; var spoken = new List<string>();
         var bark = new BarkEngine(() => new BarkRuleSet(new[] { new BarkRule { Id = "warden_leave",
             Trigger = PossessionBarkTriggers.Warden, VariantPool = new() { new BarkVariant("{verb}") } } }))
@@ -85,14 +89,17 @@ public sealed class PossessionWardenTests
             bark.Start(); BarkHead.Engine = bark; tube.Show(); AvatarTubeWindow.TestLive = tube;
             tube.Position = new PixelPoint(200, 250);
             var note = tube.FindControl<Border>("PossessionNoteCard")!;
+            lockdown.Activate(TimeSpan.FromMinutes(2));
             Assert.True(warden.IsAvailable);
             await warden.LeaveAsync(CancellationToken.None);
             Assert.NotEqual(new PixelPoint(200, 250), tube.Position);
             Assert.True(note.IsVisible);
             Assert.False(string.IsNullOrWhiteSpace(tube.FindControl<TextBlock>("TxtPossessionNote")!.Text));
             Assert.False(warden.IsAvailable); // appearance cooldown
-            await warden.ReturnAsync(CancellationToken.None);
+            lockdown.Deactivate(); // the director returns her after reassembly
             Assert.False(note.IsVisible);
+            Assert.NotEqual(new PixelPoint(200, 250), tube.Position);
+            for (int i = 0; i < 200 && (tube.Position != new PixelPoint(200, 250) || spoken.Count < 2); i++) await Task.Delay(25);
             Assert.Equal(new PixelPoint(200, 250), tube.Position);
             Assert.Equal(new[] { "leave", "return" }, spoken);
         }
@@ -194,9 +201,13 @@ public sealed class PossessionWardenTests
         CoreSettings.Current.AvatarEnabled = true;
         CoreSettings.Current.AvatarTubeDetached = true;
         CoreSettings.Current.LockdownWardenEnabled = true;
+        CoreSettings.Current.LockdownPossessionEnabled = true;
+        CoreSettings.Current.LockdownForceStrictLock = false;
+        CoreSettings.Current.LockdownDisablePanicKey = false;
         var lockdown = new LockdownService();
         var tube = new AvatarTubeWindow(null) { PossessionMoveSupportedOverride = true };
         using var warden = new Warden(lockdown);
+        using var director = new PossessionDirector(lockdown, Array.Empty<IPossessionEffect>(), PossessionAvaloniaHead.CreateDirectorHead()) { Warden = warden };
         var previous = PossessionAvaloniaHead.Warden;
         try
         {
@@ -206,7 +217,18 @@ public sealed class PossessionWardenTests
             var move = warden.LeaveAsync(CancellationToken.None);
             await Task.Delay(90);
             Assert.NotEqual(home, tube.Position);
-            if (route == "lockdown") lockdown.Deactivate();
+            if (route == "lockdown")
+            {
+                lockdown.Deactivate();
+                Assert.NotEqual(home, tube.Position); // normal reassembly glides home
+                await move;
+                for (int i = 0; i < 200 && tube.Position != home; i++) await Task.Delay(25);
+                Assert.Equal(home, tube.Position);
+                await Task.Delay(70);
+                Assert.Equal(home, tube.Position);
+                Assert.False(tube.FindControl<Border>("PossessionNoteCard")!.IsVisible);
+                return;
+            }
             else if (route == "engine") MainShellWindow.StopEngine();
             else if (route == "remote-session") MainShellWindow.StopSessionFromRemote();
             else

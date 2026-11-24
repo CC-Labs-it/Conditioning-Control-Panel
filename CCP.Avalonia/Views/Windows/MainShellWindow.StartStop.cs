@@ -152,6 +152,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF MainWindow.StartStop.cs:365-367: Audio Only forces the existing layered bed.</summary>
         internal void OnEngineStarted()
         {
+            Possession.PossessionAvaloniaHead.Warden?.ResumeForEngineStart();
             var settings = CoreSettings.Current;
             Services.EngineCrashSentinel.Mark(
                 $"started {System.DateTime.Now:yyyy-MM-dd HH:mm:ss} | flash {settings.FlashFrequency}/min x{settings.SimultaneousImages}" +
