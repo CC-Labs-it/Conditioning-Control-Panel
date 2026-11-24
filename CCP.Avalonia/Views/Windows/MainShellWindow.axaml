@@ -190,10 +190,7 @@
             </Style>
         </ControlTheme>
 
-        <!-- The WPF original templated a watermark driven by two EmoteHelper attached properties
-             and a MultiBinding converter; both live in the WPF head.
-             ponytail: watermark dropped, plain dark TextBox kept. Restore it with Avalonia's own
-             Watermark property once EmoteHelper moves to Core. -->
+        <!-- WPF EmoteCustomTextBoxStyle watermark and focus chrome. -->
         <ControlTheme x:Key="EmoteCustomTextBoxStyle" TargetType="TextBox"
                       BasedOn="{StaticResource {x:Type TextBox}}">
             <Setter Property="Background" Value="#252542"/>
@@ -206,6 +203,17 @@
             <Setter Property="FontSize" Value="14"/>
             <Setter Property="MaxLength" Value="60"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="PlaceholderForeground" Value="#5A5A75"/>
+            <Style Selector="^ /template/ TextBlock#PART_Placeholder">
+                <Setter Property="FontStyle" Value="Italic"/>
+                <Setter Property="Opacity" Value="1"/>
+            </Style>
+            <Style Selector="^:not(:focus) /template/ Border#PART_BorderElement">
+                <Setter Property="BorderBrush" Value="#3A3A55"/>
+            </Style>
+            <Style Selector="^:focus /template/ Border#PART_BorderElement">
+                <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+            </Style>
         </ControlTheme>
     </Window.Resources>
 
@@ -2463,6 +2471,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBox Grid.Column="0" x:Name="TxtEmoteCustomBig"
+                                 Watermark="{loc:Str watermark_emote_custom}"
                                  Theme="{StaticResource EmoteCustomTextBoxStyle}"
                                  FontSize="16" Padding="12,10"
                                  Margin="0,0,8,0"

@@ -15,6 +15,7 @@ public sealed class FypFeedDeferTests
 {
     private sealed class VideoHost : IMandatoryVideoHost
     {
+        public int FloatingLimit => 1; public int FloatingUp => 0;
         public readonly List<string> Shown = new();
         public readonly List<bool> Strictness = new();
         public Action? Then;

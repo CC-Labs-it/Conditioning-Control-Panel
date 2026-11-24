@@ -17,7 +17,7 @@ internal sealed partial class EmiDeskService
     internal EmiDeskService()
     {
         EmiLineEngine.AskSituationProbe = static () => Instance.AskSituationOk();
-        EmiLineEngine.EffectFeasibleProbe = EffectFeasible;
+        EmiLineEngine.EffectFeasibleProbe = EmiOffers.EffectFeasible;
     }
     private bool AskSituationOk()
     {
@@ -26,13 +26,6 @@ internal sealed partial class EmiDeskService
         return IsOut && win is { IsVisible: true, PresentationActive: false, InputLocked: false, Transiting: false, AskLive: false, RainAskLive: false }
             && !CoreSession.IsSessionRunning && App.Sessions?.IsRunning != true && CoreEngine.Video?.IsPlaying != true
             && !TubeBubbleLive() && main?.WindowState != WindowState.Minimized;
-    }
-    private static bool EffectFeasible(string? effect)
-    {
-        if (!string.Equals(effect, "pinTop:fyp", StringComparison.OrdinalIgnoreCase)) return false;
-        var target = EmiTargets.Find("fyp");
-        return target is { Available: true, Locked: false }
-            && !EmiState.Current.Pins.Contains("fyp", StringComparer.OrdinalIgnoreCase);
     }
     internal EmiLineEngine LineEngine { get; set; } = EmiLineEngine.Instance;
     internal Func<bool> TubeBubbleLive = () => global::ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow.Live?.HasBubbleUp == true;
@@ -102,6 +95,11 @@ internal sealed partial class EmiDeskService
         if (tube != null) _speakingTube = tube;
         try { ArmVoiceHold("avatarSpeaking"); }
         catch (Exception ex) { Log.Debug(ex, "[EmiDesk] avatar hold arm failed"); }
+    }
+    internal void NoteAwarenessReaction()
+    {
+        try { ArmVoiceHold("awarenessReaction"); }
+        catch (Exception ex) { Log.Debug(ex, "[EmiDesk] awareness hold arm failed"); }
     }
     private void ArmVoiceHold(string momentId)
     {

@@ -55,6 +55,50 @@ namespace ConditioningControlPanel.Services
             return (notes, null);
         }
 
+        /// <summary>The asset that makes a release a Linux release (packaging/linux/build-tarball.sh).</summary>
+        public const string LinuxTarballSuffix = "-linux-x64.tar.gz";
+
+        /// <summary>A release the Linux head may offer: it carries the linux-x64 tarball.</summary>
+        public sealed record LinuxRelease(Version Version, string Tag, string PageUrl, string Notes, long Size);
+
+        /// <summary>
+        /// ccp-bugs #1627: /releases/latest is the Windows build, so the Linux head reads the release
+        /// LIST (newest first) and takes the highest version among releases that carry a
+        /// <see cref="LinuxTarballSuffix"/> asset. Drafts never count; pre-releases only when
+        /// <paramref name="includePrereleases"/> (a beta install). The version comes from the tarball
+        /// name (ConditioningControlPanel-7.2.2-linux-x64.tar.gz), else from the tag's leading
+        /// numbers ("v7.2.2-linux-beta2"). On a tie the newer listing wins, so beta 2 beats beta 1.
+        /// Null when no release qualifies. Throws on malformed JSON; the caller treats that as no update.
+        /// </summary>
+        public static LinuxRelease? PickLinuxRelease(string releasesJson, bool includePrereleases)
+        {
+            LinuxRelease? best = null;
+            foreach (var release in Newtonsoft.Json.Linq.JArray.Parse(releasesJson).OfType<Newtonsoft.Json.Linq.JObject>())
+            {
+                if (release.Value<bool?>("draft") == true) continue;
+                if (release.Value<bool?>("prerelease") == true && !includePrereleases) continue;
+                var tag = release.Value<string>("tag_name") ?? "";
+                if (tag.Length == 0 || release["assets"] is not Newtonsoft.Json.Linq.JArray assets) continue;
+                var tarball = assets.OfType<Newtonsoft.Json.Linq.JObject>().FirstOrDefault(a =>
+                    (a.Value<string>("name") ?? "").EndsWith(LinuxTarballSuffix, StringComparison.OrdinalIgnoreCase));
+                if (tarball is null) continue;
+
+                var name = tarball.Value<string>("name")!;
+                var m = Regex.Match(name, "-(\\d+\\.\\d+(?:\\.\\d+){0,2})" + Regex.Escape(LinuxTarballSuffix) + "$", RegexOptions.IgnoreCase);
+                if (!m.Success) m = Regex.Match(tag, "^v?(\\d+\\.\\d+(?:\\.\\d+){0,2})");
+                if (!m.Success || !Version.TryParse(m.Groups[1].Value, out var version)) continue;
+                if (best is not null && version <= best.Version) continue;
+
+                // Only a page on our own releases list is opened; anything else is rebuilt from the tag.
+                var page = release.Value<string>("html_url") ?? "";
+                if (!page.StartsWith(ReleaseLinks.ReleasesListUrl + "/", StringComparison.Ordinal))
+                    page = $"{ReleaseLinks.ReleasesListUrl}/tag/{Uri.EscapeDataString(tag)}";
+                best = new LinuxRelease(version, tag, page, release.Value<string>("body") ?? "",
+                    tarball.Value<long?>("size") ?? 0);
+            }
+            return best;
+        }
+
         /// <summary>
         /// The installer's browser_download_url in a releases/tags response, or null. Pattern order
         /// matters: more specific first.

@@ -68,6 +68,40 @@ public class LoginStreakTests
         finally { Directory.Delete(dir, true); }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void StartupBanksAndSilentlyUnlocksStreakAchievements(bool initiallySuppressed)
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-streak-awards-").FullName;
+        var oldProvider = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        service.Current.OfflineMode = true;
+        CoreSettings.ServiceProvider = () => service;
+        try
+        {
+            var path = Path.Combine(dir, "achievements.json");
+            var engine = new AchievementEngine(new AchievementStore(path)) { SuppressPopups = initiallySuppressed };
+            engine.Progress.ConsecutiveDays = 29;
+            engine.Progress.LastLaunchDate = DateTime.Today.AddDays(-1);
+            var notices = 0;
+            engine.Unlocked += (_, _) => notices++;
+            LoginStreakHead.Start(engine, service.Current);
+            var saved = new AchievementStore(path).Load();
+            Assert.Equal(30, saved.ConsecutiveDays);
+            Assert.True(saved.IsUnlocked("daily_maintenance"));
+            Assert.True(saved.IsUnlocked("thirty_day_doll"));
+            Assert.Equal(0, notices);
+            Assert.Equal(initiallySuppressed, engine.SuppressPopups);
+        }
+        finally
+        {
+            LoginStreakHead.Stop();
+            CoreSettings.ServiceProvider = oldProvider;
+            Directory.Delete(dir, true);
+        }
+    }
+
     [Fact]
     public void StartupPaysYesterdayBonusOnceAndPersistsBeforeRestart()
     {
