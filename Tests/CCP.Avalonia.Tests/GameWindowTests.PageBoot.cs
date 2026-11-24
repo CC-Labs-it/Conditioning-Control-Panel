@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Tests;
 using Newtonsoft.Json.Linq;
@@ -14,10 +15,6 @@ namespace CCP.Avalonia.Tests;
 
 public sealed partial class GameWindowTests
 {
-    // WPF ChaosWebViewHost.cs:1700-1715 receives ready before calling the page-ready handler.
-    private static readonly HashSet<string> CarrierGaps = new(StringComparer.Ordinal)
-    { "race", "glassroad" };
-
     public static IEnumerable<object[]> HostedGames => GameWindow.Games
         .Where(pair => !string.IsNullOrEmpty(pair.Value.Page))
         .Select(pair => new object[] { pair.Key });
@@ -41,8 +38,6 @@ public sealed partial class GameWindowTests
     public void EveryHostedGame_EarlyReadyBoots(string id) => RunPageBoot(() =>
     {
         var spec = GameWindow.Games[id];
-        // Glassroad runs in Electron on Linux, not this WebHost.
-        if (spec.Id == "glassroad" && OperatingSystem.IsLinux()) Assert.Skip("Glassroad uses Electron on Linux");
         var w = new GameWindow(spec);
         try
         {
@@ -101,6 +96,44 @@ public sealed partial class GameWindowTests
     });
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void EarlyReady_SurvivesTheReplacedLoadsLateFailure(bool reload) => RunPageBoot(() =>
+    {
+        // WPF ChaosWebViewHost.cs:1700-1715 takes ready from the document that sent it.
+        var w = new GameWindow(GameWindow.Games["breakoutdemo"]);
+        try
+        {
+            w.Load(GameWindow.Server());
+            var sent = new List<string>();
+            w.Posted += sent.Add;
+            var page = w.PageUrl!;
+            var first = reload ? page : new Uri(page, "/other.html");
+            void Start(Uri url)
+            {
+                var e = new WebViewNavigationStartingEventArgs { Request = url };
+                w.Web.OnNavigationStarted(null, e);
+                Assert.False(e.Cancel);
+            }
+            Start(first);
+            Start(page);
+            w.Web.OnWebMessage("{\"type\":\"ready\"}");
+            w.Web.OnNavigationCompleted(first, success: false); // the replaced load ends late
+            Assert.Empty(sent);
+            w.Web.RecordAllowedNavigation(page); // the late completion cleared the host's active start
+            w.Web.OnNavigationCompleted(page);
+            Assert.True(w.IsReady);
+            Assert.Equal("init", (string?)JObject.Parse(Assert.Single(sent))["type"]);
+        }
+        finally { w.Close(); }
+    });
+
+    // Comments and strings may name chrome.webview without using it; only code counts.
+    private static readonly System.Text.RegularExpressions.Regex Comments =
+        new(@"/\*[\s\S]*?\*/|(?<![:'""\\])//[^\n]*");
+    private static readonly System.Text.RegularExpressions.Regex WebviewUse = new(@"chrome\??\.webview");
+
+    [Theory]
     [MemberData(nameof(HostedGames))]
     public void EveryHostedGame_PageCanFindItsHost(string id) => RunPageBoot(() =>
     {
@@ -108,15 +141,30 @@ public sealed partial class GameWindowTests
         var folder = Path.Combine(SourceRoots.RepoRoot, "Assets", "web", Path.GetDirectoryName(spec.Page)!);
         var scripts = Directory.GetFiles(folder, "*.js", SearchOption.AllDirectories)
             .Where(path => !path.Contains("test", StringComparison.OrdinalIgnoreCase))
-            .Select(File.ReadAllText).ToArray();
-        Assert.NotEmpty(scripts);
-        var needsCarrier = scripts.Any(s => s.Contains("chrome.webview"))
-            && !scripts.Any(s => s.Contains("shared/carrier.js") || s.Contains("invokeCSharpAction"));
+            .Select(path => Comments.Replace(File.ReadAllText(path), "")).ToArray();
+        var stringCarrier = scripts.Any(s => s.Contains("shared/carrier.js") || s.Contains("invokeCSharpAction"));
+        Assert.True(stringCarrier || scripts.Any(WebviewUse.IsMatch), $"{id}: the page names no host carrier");
         var w = new GameWindow(spec);
         try
         {
-            var passed = !needsCarrier || w.Web.InjectCarrier;
-            Assert.True(CarrierGaps.Contains(id) != passed, $"{id}: needs carrier={needsCarrier}, injected={w.Web.InjectCarrier}; update the ratchet");
+            // WebView2 supplies chrome.webview; WebKitGTK and WPE have only invokeCSharpAction, so a page
+            // without the string carrier needs the shim installed before its scripts (WebHost.CarrierShim).
+            Assert.True(stringCarrier || w.Web.InjectCarrier, $"{id}: speaks only chrome.webview and gets no shim");
+            var installed = new List<string>();
+            w.Web.NativeCarrierInvoker = script => { installed.Add(script); return Task.FromResult(true); };
+            w.Web.NewScrolllerEngine()(true);
+            if (w.Web.InjectCarrier) Assert.Equal(WebHost.CarrierShim, Assert.Single(installed));
+            // The page's frame through that carrier reaches the host, and the host answers.
+            if (id == "piecebypiece") w.PbpOsAnimations = () => Task.FromResult(true);
+            w.Load(GameWindow.Server());
+            var sent = new List<string>();
+            w.Posted += sent.Add;
+            w.Web.RecordAllowedNavigation(w.PageUrl!);
+            w.Web.OnNavigationCompleted(w.PageUrl);
+            sent.Clear();
+            w.Web.OnWebMessage("{\"type\":\"ready\"}");
+            Assert.True(w.IsReady, $"{id}: ready through the carrier did not reach the host");
+            Assert.NotEmpty(sent);
         }
         finally { w.Close(); }
     });

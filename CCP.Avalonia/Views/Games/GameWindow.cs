@@ -217,7 +217,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Spec = spec;
             Web = new WebHost { HostedPageMotion = true };
             if (spec.Id == DtrhId) Web.BrowserProcessFailed += () => RecoverDtrh("process-failed");
-            if (spec.Id == "goon") Web.InjectCarrier = true; // before the native view or first navigation
+            // Glassroad speaks only chrome.webview (WebView2 native); WebKitGTK gets it from the shim.
+            if (spec.Id == "goon" || IsGlassroad) Web.InjectCarrier = true; // before the native view or first navigation
             if (spec.Id == FypId || spec.Id == JustDropId || spec.Id == "loom" || IsRace || IsGlassroad) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
             if (IsGlassroad) Web.BrowserProcessUnresponsive += () => _grUnresponsive = true;
             // WPF ChaosWebViewHost.cs:1645: Just Drop owns its window mode.
@@ -264,13 +265,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             }
             if (spec.Id != "goon" && spec.Id != JustDropId)
             {
-                Web.NavigationStarting += () => _earlyReady = false;
+                Web.NavigationStarting += () => _earlyReady = null;
                 Web.NavigationFinished += (url, ok) =>
                 {
-                    var ready = _earlyReady;
-                    _earlyReady = false;
-                    if (ready && ok && !_closing && PageUrl != null
-                        && ConditioningControlPanel.Services.Quiz.IntakeRun.SameDocument(url, PageUrl))
+                    // Completions carry no navigation id. A replaced load ends as a failure, so only a new
+                    // start or the retaining page's successful completion ends the retained ready.
+                    if (_earlyReady is not { } retained || !ok
+                        || !ConditioningControlPanel.Services.Quiz.IntakeRun.SameDocument(url, retained)) return;
+                    _earlyReady = null;
+                    if (!_closing && PageUrl != null && ConditioningControlPanel.Services.Quiz.IntakeRun.SameDocument(url, PageUrl))
                         HandleMessage("{\"type\":\"ready\"}");
                 };
             }
@@ -354,7 +357,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// keeps site navigation for the sign-in redirect. NativeWebView has no message source;
         /// use its last completed top-level URL, as Intake does. Retain ready during an accepted
         /// navigation, but act on it only after that document completes successfully.</summary>
-        private bool _earlyReady, _goonEarlyReady, _goonNavigationConfirmed;
+        private bool _goonEarlyReady, _goonNavigationConfirmed;
+        private Uri? _earlyReady;   // the accepted navigation a page ready arrived during
         private void OnPageMessage(string json)
         {
             if (PageUrl == null) return;
@@ -377,7 +381,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     var type = (string?)JObject.Parse(Unwrap(json))["type"];
                     if (json.Length <= 1024 && type == "ready" && Web.ActiveNavigation is { } active
                         && ConditioningControlPanel.Services.Quiz.IntakeRun.SameDocument(active, PageUrl))
-                        _earlyReady = true;
+                        _earlyReady = active;
                     else Log.Debug("[Game] {Id}: dropped {Type} before navigation completed", Spec.Id, type);
                 }
                 catch { }
