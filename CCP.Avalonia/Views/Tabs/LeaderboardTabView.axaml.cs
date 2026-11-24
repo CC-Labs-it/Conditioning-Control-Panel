@@ -77,6 +77,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _hdrLevelSeasonal = this.FindControl<TextBlock>("HdrLevelSeasonal")!;
             _hdrLevelPeak = this.FindControl<TextBlock>("HdrLevelPeak")!;
             _roster = this.FindControl<ListBox>("LstLeaderboard")!;
+            // WPF MainWindow.Leaderboard.cs:899: tier bands are inert separators.
+            // Containers can be recycled, so restore both properties for rows too.
+            _roster.ContainerPrepared += (_, e) =>
+            {
+                var isBand = _roster.Items[e.Index] is LeaderboardTierBand;
+                e.Container.Focusable = !isBand;
+                e.Container.IsHitTestVisible = !isBand;
+            };
             _podium = this.FindControl<ItemsControl>("PodiumHost")!;
             _empty = this.FindControl<TextBlock>("TxtLeaderboardEmpty")!;
 

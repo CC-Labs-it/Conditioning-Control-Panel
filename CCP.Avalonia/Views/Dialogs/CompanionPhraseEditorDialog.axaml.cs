@@ -219,7 +219,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         // WPF CompanionPhraseService.cs:378-381: count the same enabled rows the editor uses.
         internal static int ActivePhraseCount() => LoadPhrases().Count(p => p.IsEnabled);
 
-        private static List<CompanionPhrase> LoadPhrases()
+        internal static List<CompanionPhrase> LoadPhrases()
         {
             var settings = CoreSettings.Current;
             var disabled = settings.DisabledPhraseIds;
