@@ -191,13 +191,23 @@ public sealed class MandatoryVideoBrowserTests
     public Task AttentionChecksKeepTheClipOnLibVlc() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         using var rig = new Rig();
-        // TestIsolation restores LibVlcAudio.Shared per test: seed the engine this LibVLC clip needs.
-        try { _ = new LibVlcAudio("--aout=dummy"); }
-        catch (Exception e) { Assert.Skip("libvlc not available: " + e.Message); }
-        rig.Settings.Current.AttentionChecksEnabled = true;            // in-window targets: the web view would cover them
-        await rig.Open(strict: false);
-        Assert.Null(MandatoryVideoOverlay.Instance.Browser);
-        Assert.False(BrowserVideoSurface.SessionActive);
+        var o = MandatoryVideoOverlay.Instance;
+        var browserCreates = 0;
+        var nativeCreates = 0;
+        var createBrowser = BrowserVideoSurface.Create;
+        BrowserVideoSurface.Create = () => { browserCreates++; return createBrowser(); };
+        o.RoutedPlaybackForTests = () => { nativeCreates++; return new FakePlayback(); };
+        try
+        {
+            rig.Settings.Current.AttentionChecksEnabled = true;        // in-window targets: the web view would cover them
+            await rig.Open(strict: false);
+            Assert.True(o.AttentionArmed);
+            Assert.Equal(1, nativeCreates);
+            Assert.Equal(0, browserCreates);
+            Assert.Null(o.Browser);
+            Assert.False(BrowserVideoSurface.SessionActive);
+        }
+        finally { o.RoutedPlaybackForTests = null; }
     });
 
     [Theory]
@@ -312,6 +322,18 @@ public sealed class MandatoryVideoBrowserTests
         var body = new Dictionary<string, JsonElement> { ["session"] = JsonSerializer.SerializeToElement(page.SessionId) };
         foreach (var p in json.EnumerateObject()) body[p.Name] = p.Value;
         page.View.OnWebMessage(JsonSerializer.Serialize(body));
+    }
+
+    private sealed class FakePlayback : IMandatoryPlayback
+    {
+        public long Time { get; set; }
+        public long Length => 60_000;
+        public bool IsPlaying => true;
+        public bool IsSeekable => true;
+        public bool HasVideo => true;
+        public void SetPause(bool paused) { }
+        public void Stop() { }
+        public void Dispose() { }
     }
 
     private sealed class Unsub(Action? off) : IDisposable { public void Dispose() => off?.Invoke(); }

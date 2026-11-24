@@ -207,6 +207,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal IReadOnlyList<Window> Messages => _messages;
         internal VlcFrameSink? Sink => _sink;
         internal bool PlaybackActive => _playback != null;
+        internal Func<IMandatoryPlayback>? RoutedPlaybackForTests { get; set; }
         internal int LiveTargets => _targets.Count;
         internal IEnumerable<Target> GazeTargets => _gracePaused ? Enumerable.Empty<Target>() : _targets.AsEnumerable().Reverse();
         /// <summary>This clip arms the attention checks (never on a floating window).</summary>
@@ -367,8 +368,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF VideoService.cs:3207: the browser engine first, before the duck so its own audio is never swept.
             var browser = TryStartBrowser(path);
 
-            var vlc = _videoEngine ?? LibVlcAudio.Shared;
-            if (vlc == null && !browser)
+            var vlc = RoutedPlaybackForTests == null ? _videoEngine ?? LibVlcAudio.Shared : null;
+            if (vlc == null && !browser && RoutedPlaybackForTests == null)
             {
                 Log.Warning("VideoService: LibVLC is not available - cannot play {Path}", path);
                 Dispatcher.UIThread.Post(Scheduler.End);
@@ -379,6 +380,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (s.AudioDuckingEnabled && !_didDuck) { CoreAudio.Duck(s.DuckingLevel); _didDuck = true; }
             BouncingTextOverlay.PauseForVideo(true);
             if (browser) { StartBrowserClocks(path); return true; }
+            if (RoutedPlaybackForTests is { } routedPlayback)
+            {
+                _playback = routedPlayback();
+                return true;
+            }
 
             // WPF VideoService.cs:3494: software decode unless the user opted into GPU decode.
             _playingEngine = vlc;
