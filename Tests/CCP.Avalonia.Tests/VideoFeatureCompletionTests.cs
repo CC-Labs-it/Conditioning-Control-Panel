@@ -30,6 +30,7 @@ public sealed class VideoFeatureCompletionTests
 
     private sealed class FloatingTestHost : IMandatoryVideoHost
     {
+        public int FloatingLimit => 1; public int FloatingUp => 0;
         public MandatoryVideoScheduler Video = null!;
         public int Replacements;
         public bool IsFloating(bool strict) => !strict;
