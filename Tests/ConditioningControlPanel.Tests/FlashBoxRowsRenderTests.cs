@@ -56,6 +56,9 @@ public class FlashBoxRowsRenderTests
                     page.ChkFlashAvoidCenter.IsChecked = true;
                     page.ChkFlashShatter.IsChecked = true;
                     page.ChkFlashGazePop.IsChecked = true;
+                    // The box paints its name on Loaded, which an off-screen page never gets (Deck is
+                    // the Effect default, so no change callback either): paint it as the app does.
+                    page.SuperBoxMain.Refresh();
                     SuperRows.Apply(page.DeckRows, SuperEffect.FlickerDeck);
                     page.DeckRows.Visibility = Visibility.Visible;
                 });

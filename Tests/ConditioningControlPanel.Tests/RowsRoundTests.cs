@@ -1,3 +1,4 @@
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -58,6 +59,96 @@ public class RowsRoundTests
         Assert.Equal(RowFonts.Nunito, note.FontFamily);
         Assert.Equal(RowFonts.UnitSize, note.FontSize);
     });
+
+    // ------------------------------------------------------------- gold Deck box name
+
+    /// <summary>
+    /// Why the off-screen Flash still drew the gold Deck box with no name: SuperBox paints its words in
+    /// Refresh, which runs when Effect CHANGES or on Loaded. FlickerDeck is Effect's default value, so
+    /// Effect="FlickerDeck" never fires the change callback, and an off-screen render never loads.
+    /// Every other box (Vortex, Creep...) is a change and paints at construction. In the app the
+    /// page loads, so the Deck box is named there: a still artefact, not a product bug.
+    /// </summary>
+    [Fact]
+    public void The_deck_box_paints_its_words_on_load_not_at_construction() => WpfRenderHarness.OnStaThread(() =>
+    {
+        string Words(ConditioningControlPanel.Controls.SuperBox b) =>
+            System.Windows.Automation.AutomationProperties.GetName(b.V2Toggle);
+
+        var deck = new ConditioningControlPanel.Controls.SuperBox { Effect = ConditioningControlPanel.Services.Super.SuperEffect.FlickerDeck };
+        var pool = new ConditioningControlPanel.Controls.SuperBox { Effect = ConditioningControlPanel.Services.Super.SuperEffect.Vortex };
+        Assert.True(string.IsNullOrEmpty(Words(deck)), "the default effect never fires the change callback");
+        Assert.False(string.IsNullOrEmpty(Words(pool)));
+        deck.Refresh();   // what Loaded does in the app
+        Assert.Equal(Words(pool), Words(deck));
+    });
+
+    // ------------------------------------------------------------- haptics width
+
+    /// <summary>
+    /// The narrowest width the panel ever lays Haptics out at. MainWindow draws a fixed 1585 x 901
+    /// design canvas inside a Stretch="Fill" Viewbox, so resizing the window only scales it; column 1
+    /// is always 1489. Haptics is hosted only in the Studio rack's detail pane (StudioTabView
+    /// PanelHaptics; the rack routes "haptics" to ShowTab, never to FeaturePopupWindow, the 520 px
+    /// popup): 1489 - 2 x 10 (StudioTab margin) - 230 (rack) - 14 (rack gap) = 1225. Less a 10 px
+    /// scroll bar gives the width checked below.
+    /// </summary>
+    public const double HapticsNarrowest = 1489 - 2 * 10 - 230 - 14 - 10;
+
+    [Fact]
+    public void Haptics_is_never_laid_out_at_the_popup_width()
+    {
+        string Xaml(string rel) => File.ReadAllText(Path.Combine(Root(), rel));
+        var main = Xaml(Path.Combine("MainWindow", "MainWindow.xaml"));
+        Assert.Contains("<Viewbox Stretch=\"Fill\">", main);
+        Assert.Contains("<Grid x:Name=\"DesignCanvas\" Width=\"1585\" Height=\"901\">", main);
+        Assert.Contains("<ColumnDefinition Width=\"96\"/>", main);
+        Assert.Contains("<views:StudioTabView x:Name=\"StudioTab\" Margin=\"10,5,10,10\"", main);
+        var studio = Xaml(Path.Combine("Views", "Tabs", "StudioTabView.xaml"));
+        Assert.Contains("<Border Grid.Column=\"0\" Width=\"230\" Margin=\"0,0,14,0\"", studio);
+        Assert.Contains("<tabs:HapticsTabView x:Name=\"PanelHaptics\"", studio);
+        // The only other host of feature pages is the popup, and nothing hands it Haptics.
+        var hosts = Directory.EnumerateFiles(Root(), "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar)
+                     && !f.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar))
+            .Where(f => File.ReadAllText(f).Contains("new HapticsTabView(") || File.ReadAllText(f).Contains("new Views.Tabs.HapticsTabView("))
+            .ToList();
+        Assert.Empty(hosts);
+    }
+
+    [Theory]
+    [InlineData("ru")]
+    [InlineData("de")]
+    [InlineData("pt-BR")]
+    public void Haptics_rows_hold_at_the_narrowest_real_width(string lang)
+    {
+        WpfRenderHarness.OnStaThread(() => RowsRender.InLanguage(lang, () =>
+        {
+            var page = RowsPageStillsTests.Make("haptics");
+            var host = RowsRender.Host(page, HapticsNarrowest, show: new[] { "VideoHapticSyncSliders", "HapticAudioAdvanced" },
+                before: p => { foreach (var ex in RowsRender.Descendants(p).OfType<Expander>().ToList()) ex.IsExpanded = true; });
+            var labels = RowsRender.Descendants(page).OfType<RowLabel>().Where(l => l.IsVisible || l.ActualWidth > 0).ToList();
+            Assert.True(labels.Count > 10, $"{labels.Count} labels");
+            var problems = RowsRender.Problems(labels, squeeze: true);
+            // A slider beside a label keeps a usable track, not just a sliver.
+            foreach (var l in labels)
+                if (l.Parent is Grid row)
+                    foreach (var s in row.Children.OfType<Slider>().Where(s => s.Visibility == Visibility.Visible))
+                        if (s.ActualWidth < 120) problems.Add($"'{l.ShownText}' leaves its slider {s.Name} {s.ActualWidth:0} px");
+            RowsRender.Dump(host, $"w1-haptics-{lang}-{HapticsNarrowest:0}");
+            Assert.True(problems.Count == 0, string.Join("\n", problems));
+            return 0;
+        }));
+        RowsRender.AssertSilent("w1-haptics-" + lang);
+    }
+
+    private static string Root()
+    {
+        var dir = new DirectoryInfo(System.AppContext.BaseDirectory);
+        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Resources"))) dir = dir.Parent;
+        Assert.True(dir != null, "could not locate the repo root");
+        return Path.Combine(dir!.FullName, "ConditioningControlPanel");
+    }
 
     [Fact]
     public void The_pink_preview_never_paints_past_the_comfort_limit()
