@@ -12,6 +12,8 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Chaos;
+using ConditioningControlPanel.Services.Flash;
+using ConditioningControlPanel.Services.Fyp;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
@@ -37,6 +39,113 @@ public sealed class ChaosGifCascadeOverlayTests
         public override long GetTimestamp() => Now;
         public override long TimestampFrequency => TimeSpan.TicksPerSecond;
         public void Advance(double sec) => Now += TimeSpan.FromSeconds(sec).Ticks;
+    }
+
+    [Fact]
+    public void RemotePicksDeduplicateUrlsAndFallBackToLocal()
+    {
+        var root = Directory.CreateTempSubdirectory("ccp-cascade-pick-").FullName;
+        try
+        {
+            var settings = new AppSettings { MediaSource = "online", RemoteMediaConsented = true };
+            var store = new ContentPackStore(() => root, () => settings, () => { }, tempDir: () => root);
+            var packs = new PackMediaPool(ContentPackStore.ImageType, new Random(1), () => store);
+            var remote = new RemoteFlashItem("https://example.invalid/a", "/poster.gif", "");
+            int draws = 0;
+            var picks = ChaosGifCascadeOverlay.PickFiles(10, new[] { "/local.png" }, packs, settings, 2,
+                () => ++draws < 3 ? remote : new RemoteFlashItem("https://example.invalid/b", "/other.gif", ""));
+            Assert.Equal(3, picks.Count); // duplicate URL never occupies a second slot
+            Assert.Equal(3, draws);
+            Assert.Contains("/local.png", picks);
+            Assert.Contains(picks, p => p.EndsWith("/poster.gif", StringComparison.Ordinal));
+            var fallback = ChaosGifCascadeOverlay.PickFiles(1, new[] { "/local.png" }, packs, settings, 1, () => null);
+            Assert.Equal(new[] { "/local.png" }, fallback);
+            settings.MediaSource = "local";
+            Assert.Empty(ChaosGifCascadeOverlay.PickFiles(1, Array.Empty<string>(), packs, settings, 1, () => remote));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task OnlineOnlyShowPrefetchesRainsPosterAndPanicClearsIt()
+    {
+        var dir = Directory.CreateTempSubdirectory("ccp-cascade-remote-").FullName;
+        var poster = Path.Combine(dir, "poster.gif");
+        File.WriteAllBytes(poster, Convert.FromBase64String(TinyGif));
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                if (Application.Current is null)
+                    global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                        .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                        .SetupWithoutStarting();
+                var s = CoreSettings.Current;
+                var oldSource = s.MediaSource; var oldConsent = s.RemoteMediaConsented;
+                var oldRoot = CorePaths.EffectiveAssetsProvider;
+                var oldSettings = RemoteFlashSource.Settings; var oldFetch = RemoteFlashSource.Fetch;
+                var oldDownload = RemoteFlashSource.Download; var oldConsumer = RemoteFlashSource.ClipConsumer;
+                var oldSkip = ChaosGifCascadeOverlay.SkipPlatformChecksForTests;
+                var oldFlashSkip = ChaosFlashOverlay.SkipPlatformChecksForTests;
+                var oldManual = ChaosGifCascadeOverlay.ManualFramesForTests;
+                var oldBefore = ChaosGifCascadeOverlay.BeforeDecodeForTests;
+                var fetchGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                var entry = new FypAssetManifest.Entry { Id = "rain", Url = "https://example.invalid/rain.mp4",
+                    PosterUrl = "https://example.invalid/poster.gif", Origin = "online", Type = "video" };
+                int decodeThread = 0; int uiThread = Environment.CurrentManagedThreadId;
+                try
+                {
+                    ChaosGifCascadeOverlay.CloseActive(); RemoteFlashSource.CleanupCache();
+                    s.MediaSource = "online"; s.RemoteMediaConsented = true;
+                    CorePaths.EffectiveAssetsProvider = () => dir;
+                    RemoteFlashSource.Settings = () => s; RemoteFlashSource.ClipConsumer = false;
+                    RemoteFlashSource.Fetch = async _ => { await fetchGate.Task; return (new List<FypAssetManifest.Entry> { entry }, (string?)null); };
+                    RemoteFlashSource.Download = (_, _, _) => Task.FromResult<string?>(poster);
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = true;
+                    ChaosFlashOverlay.SkipPlatformChecksForTests = true;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = true;
+                    ChaosGifCascadeOverlay.BeforeDecodeForTests = _ => decodeThread = Environment.CurrentManagedThreadId;
+                    int credits = ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditChip.HolderCount;
+                    ChaosGifCascadeOverlay.Show(1, 2, 100, 3, 1);
+                    await ChaosGifCascadeOverlay.LastPick!;
+                    fetchGate.SetResult(); await RemoteFlashSource.Prefetching;
+                    Dispatcher.UIThread.RunJobs();
+                    ChaosGifCascadeOverlay.Show(1, 2, 100, 3, 1);
+                    await ChaosGifCascadeOverlay.LastPick!;
+                    Dispatcher.UIThread.RunJobs();
+                    var rain = Assert.IsType<ChaosGifCascadeOverlay>(ChaosGifCascadeOverlay.Active);
+                    var image = Assert.IsType<Image>(Assert.Single(rain.Surface.Children));
+                    Assert.Equal(credits + 1, ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditChip.HolderCount);
+                    Assert.False(Assert.Single(rain.Cascade.Fallers).Animated); // remote poster skips GIF file probes
+                    await Decoded();
+                    Assert.NotNull(image.Source);
+                    Assert.NotEqual(uiThread, decodeThread);
+                    PanicSurfaces.All.Single(x => x.Id == "gif-cascade").Stop(null);
+                    Assert.Null(ChaosGifCascadeOverlay.Active);
+                    Assert.Equal(credits, ConditioningControlPanel.Avalonia.Controls.ScrolllerCreditChip.HolderCount);
+                    Assert.Empty(rain.Surface.Children);
+                    await rain.PendingDecodes;
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.Empty(rain.Surface.Children);
+                }
+                finally
+                {
+                    fetchGate.TrySetResult();
+                    ChaosGifCascadeOverlay.CloseActive();
+                    await RemoteFlashSource.Prefetching;
+                    RemoteFlashSource.CleanupCache();
+                    (RemoteFlashSource.Settings, RemoteFlashSource.Fetch, RemoteFlashSource.Download, RemoteFlashSource.ClipConsumer) =
+                        (oldSettings, oldFetch, oldDownload, oldConsumer);
+                    (s.MediaSource, s.RemoteMediaConsented) = (oldSource, oldConsent);
+                    CorePaths.EffectiveAssetsProvider = oldRoot;
+                    ChaosGifCascadeOverlay.SkipPlatformChecksForTests = oldSkip;
+                    ChaosFlashOverlay.SkipPlatformChecksForTests = oldFlashSkip;
+                    ChaosGifCascadeOverlay.ManualFramesForTests = oldManual;
+                    ChaosGifCascadeOverlay.BeforeDecodeForTests = oldBefore;
+                }
+            });
+        }
+        finally { Directory.Delete(dir, true); }
     }
 
     [Theory]

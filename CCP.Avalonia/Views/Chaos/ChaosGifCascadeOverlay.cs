@@ -18,6 +18,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Fyp.Online;
+using ConditioningControlPanel.Services.Flash;
 using ConditioningControlPanel.Services.UI;
 using Serilog;
 
@@ -44,6 +45,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private const long MaxFrameBytes = 24L * 1024 * 1024, MaxSourcePixels = 4096L * 4096;
         private static ChaosGifCascadeOverlay? _active;
         private static int _generation;
+        // NUL cannot occur in a file name: mark a cached remote poster without probing a URL.
+        private const string RemotePoster = "\0";
         internal static Func<int, AppSettings, List<string>> PickForTests = PickFiles;
 
         internal static ChaosGifCascadeOverlay? Active => _active;
@@ -58,6 +61,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>WPF Show: draws a batch from the enabled flash pool off the UI thread, then rains it.</summary>
         public static void Show(double spawnRatePerSec, double durationSec, double gifSize, double fallSpeed, double opacity, double startScale = 1.0)
         {
+            RemoteFlashSource.EnsurePrefetch();
             int generation = _generation;
             int batch = GifCascade.BatchSize(spawnRatePerSec, durationSec);
             var s = CoreSettings.Current;
@@ -75,18 +79,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             var root = CorePaths.EffectiveAssets;
             var files = AssetFolderExclusion.Enabled(ChaosImagePool.GetFiles(), root, s);
-            return PickFiles(batch, files, FlashOverlay.PackImages);
+            return PickFiles(batch, files, FlashOverlay.PackImages, s, RemoteFlashSource.ReadyCount,
+                () => RemoteFlashSource.TryTake(FlashOverlay.Rng));
         }
 
         internal static List<string> PickFiles(int batch, IReadOnlyList<string> files, PackMediaPool packs)
+            => PickFiles(batch, files, packs, null, 0, () => null);
+
+        // WPF FlashService.cs:3693-3740: remote draws use flash weighting and dedup by URL.
+        internal static List<string> PickFiles(int batch, IReadOnlyList<string> files, PackMediaPool packs,
+            AppSettings? settings, int remoteReady, Func<RemoteFlashItem?> takeRemote)
         {
-            int poolSize = files.Count + packs.Count;
+            int localPool = files.Count + packs.Count;
+            if (!FlashSourceRules.RemoteEnabled(settings)) remoteReady = 0;
+            int poolSize = localPool + remoteReady;
             int want = Math.Min(Math.Max(0, batch), poolSize);
             var picked = new List<string>(want);
             var chosenPack = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var chosenRemote = new HashSet<string>(StringComparer.Ordinal);
             long guard = (long)poolSize * 8 + 16;
             while (picked.Count < want && guard-- > 0)
             {
+                bool remoteSpent = remoteReady <= 0 || chosenRemote.Count >= remoteReady;
+                if (localPool == 0 && remoteSpent) break;
+                if (!remoteSpent && FlashSourceRules.ShouldDrawRemote(settings, localPool > 0, FlashOverlay.Rng))
+                {
+                    var item = takeRemote();
+                    if (item is { } remote)
+                    {
+                        if (chosenRemote.Add(remote.Url)) picked.Add(RemotePoster + remote.PosterPath);
+                        continue;
+                    }
+                    remoteReady = 0; // cold remote pool falls back to local
+                    if (localPool == 0) break;
+                }
                 var p = packs.TryDraw(files.Count, chosen: chosenPack) ?? FlashOverlay.NextPath(files);
                 if (p != null && !picked.Contains(p, StringComparer.OrdinalIgnoreCase)) picked.Add(p);
             }
@@ -284,8 +310,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private void OnSpawned(GifCascade.Faller f)
         {
             string path = _files[f.FileIndex];
-            bool animatedFormat = path.EndsWith(".gif", StringComparison.OrdinalIgnoreCase)
-                                  || IsAnimatedWebp(path);
+            bool remote = path.StartsWith(RemotePoster, StringComparison.Ordinal);
+            if (remote) path = path.Substring(RemotePoster.Length);
+            bool animatedFormat = !remote && (path.EndsWith(".gif", StringComparison.OrdinalIgnoreCase)
+                                  || IsAnimatedWebp(path));
             long len = 0;
             if (animatedFormat) { try { len = new FileInfo(path).Length; } catch { } }
             f.Animated = _cascade.CanAnimate(animatedFormat, len);
@@ -304,7 +332,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             Canvas.SetLeft(img, f.CenterX - size / 2);
             Canvas.SetTop(img, 0);
             // Do not show Scrolller media unless its independent credit window is available.
-            if (ScrolllerCreditRules.IsScrolllerMedia(path) && !ScrolllerCreditChip.Hold(img, _bounds)) return;
+            if ((remote || ScrolllerCreditRules.IsScrolllerMedia(path)) && !ScrolllerCreditChip.Hold(img, _bounds)) return;
             _canvas.Children.Add(img);
             var clip = new Clip { Image = img, Grow = grow, Move = move };
             _clips[f] = clip;
