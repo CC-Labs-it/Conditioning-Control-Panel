@@ -15,7 +15,7 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class MultiMonitorResultTests
 {
-    private static Screen MakeScreen(double scaling, PixelRect bounds, PixelRect workingArea, bool primary)
+    internal static Screen MakeScreen(double scaling, PixelRect bounds, PixelRect workingArea, bool primary)
     {
         // Avalonia's reference assembly hides the runtime platform-screen constructor.
         // These synthetic handles never reach a native backend or the real desktop.

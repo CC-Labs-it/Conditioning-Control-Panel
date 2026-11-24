@@ -86,7 +86,7 @@ internal static class AnimatedWebp
 
     // Hard CPU ceiling on frames decoded for pathological files (composition is sequential,
     // so this bounds work even when only a handful of frames are kept).
-    internal const int DECODE_CEILING = 600;
+    internal const int DECODE_CEILING = Flash.FlashGifRules.DECODE_CEILING;
 
     /// <summary>
     /// Frame cap for the GIF cascade and the Blink Trainer, whose GIFs came here from
@@ -113,18 +113,10 @@ internal static class AnimatedWebp
     {
         public static FramePlan Create(int frameCount, int maxKeep, int decodeCeiling = DECODE_CEILING)
         {
-            int keep = Math.Max(1, maxKeep);
-            int step = Math.Max(1, (int)Math.Ceiling(frameCount / (double)keep));
-            return new FramePlan(step, Math.Clamp(frameCount, 0, Math.Max(0, decodeCeiling)), keep);
+            var plan = Flash.FlashGifRules.FramePlan.Create(frameCount, maxKeep, decodeCeiling);
+            return new FramePlan(plan.Step, plan.DecodeCount, plan.MaxKeep);
         }
-
-        /// <summary>Kept frame indices in order — exactly the set the decode loop selects.</summary>
-        public IEnumerable<int> KeptIndices()
-        {
-            int kept = 0;
-            for (int i = 0; i < DecodeCount && kept < MaxKeep; i++)
-                if (i % Step == 0) { kept++; yield return i; }
-        }
+        public IEnumerable<int> KeptIndices() => new Flash.FlashGifRules.FramePlan(Step, DecodeCount, MaxKeep).KeptIndices();
     }
 
     /// <summary>

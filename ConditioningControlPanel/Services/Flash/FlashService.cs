@@ -98,7 +98,7 @@ namespace ConditioningControlPanel.Services
         /// keeps the UI thread out of a spin. It also guards the frame-index division below against
         /// a decoder that hands back a zero delay.
         /// </summary>
-        internal const double MIN_GIF_FRAME_DELAY_MS = 10.0;
+        internal const double MIN_GIF_FRAME_DELAY_MS = FlashGifRules.MIN_GIF_FRAME_DELAY_MS;
 
         /// <summary>
         /// Extra DISTINCT candidates an authored burst draws beyond the images it needs, so a file that
@@ -117,13 +117,7 @@ namespace ConditioningControlPanel.Services
         /// Pure so it can be unit-tested without spinning up WPF.
         /// </summary>
         internal static TimeSpan ScaleFrameDelay(TimeSpan sourceDelay, double multiplier)
-        {
-            var ms = sourceDelay.TotalMilliseconds;
-            if (double.IsNaN(ms) || double.IsInfinity(ms) || ms <= 0) ms = 100.0;
-            if (double.IsNaN(multiplier) || double.IsInfinity(multiplier) || multiplier <= 0) multiplier = 1.0;
-            multiplier = Math.Clamp(multiplier, 0.25, 4.0);
-            return TimeSpan.FromMilliseconds(Math.Max(MIN_GIF_FRAME_DELAY_MS, ms / multiplier));
-        }
+            => FlashGifRules.ScaleFrameDelay(sourceDelay, multiplier);
 
         /// <summary>
         /// The current run's cancellation token, or <see cref="CancellationToken.None"/> when no run
@@ -1488,10 +1482,7 @@ namespace ConditioningControlPanel.Services
         /// </summary>
         private static int ComputeDecodeMaxDim()
         {
-            int baseCap = PerformanceProfile.MaxDecodeDimension(PerformanceProfile.CurrentTier);
-            int scale = App.Settings?.Current?.ImageScale ?? 100;
-            int dim = (int)(baseCap * (scale / 100.0));
-            return Math.Clamp(dim, 256, 2048);
+            return FlashGifRules.DecodeMax(PerformanceProfile.CurrentTier, App.Settings?.Current?.ImageScale ?? 100);
         }
 
         // ScaledSize / DownscaleBitmap / ConvertToBitmapSource (the GDI+ decode helpers)
