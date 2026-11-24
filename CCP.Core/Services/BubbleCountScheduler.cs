@@ -16,6 +16,9 @@ namespace ConditioningControlPanel.Services
         // WPF BubbleCountWindow.xaml.cs:308-319: a poisoned native start is a skip, not a loss.
         void Show(string path, int difficulty, bool strict, Action<bool> onComplete, Action onSkipped) =>
             Show(path, difficulty, strict, onComplete);
+        /// <summary>Report duration corrections for this game only.</summary>
+        void Show(string path, int difficulty, bool strict, Action<bool> onComplete, Action onSkipped, Action<double> onDuration) =>
+            Show(path, difficulty, strict, onComplete, onSkipped);
         /// <summary>Full-screen retry/mercy message for <paramref name="ms"/>, then <paramref name="then"/>
         /// (WPF ShowFullscreenMessage).</summary>
         void ShowMessage(string text, int ms, Action then);
@@ -66,7 +69,7 @@ namespace ConditioningControlPanel.Services
         private readonly Func<IReadOnlyList<string>> _library;
         private readonly Random _random = new();
         private Queue<string> _queue = new();
-        private ITimer? _scheduler, _leadIn, _queued, _feedDefer;
+        private ITimer? _scheduler, _leadIn, _queued, _feedDefer, _stuck;
         private readonly HashSet<ITimer> _feedPolls = new();
         private DateTimeOffset? _feedDeadline;
         private bool _toldNoVideos, _heldFlashes;
@@ -206,6 +209,7 @@ namespace ConditioningControlPanel.Services
                 return;
             }
             IsBusy = true;
+            ArmStuck(TimeSpan.FromMinutes(5));
             HoldsEffects = CoreSettings.Current.BubbleCountPauseEffects;
             if (HoldsEffects)
             {
@@ -295,7 +299,12 @@ namespace ConditioningControlPanel.Services
             {
                 _host.Show(path, CoreSettings.Current.BubbleCountDifficulty, strict,
                     success => { if (generation == _generation) OnComplete(success); },
-                    () => { if (generation == _generation) OnSkipped(); });
+                    () => { if (generation == _generation) OnSkipped(); },
+                    duration => { if (IsBusy && generation == _generation) ExtendStuck(duration); });
+                if (IsBusy && generation == _generation)
+                {
+                    ExtendStuck(_host.LastVideoDurationSeconds);
+                }
             }
             catch (Exception ex) { Log.Error(ex, "Failed to start bubble count game"); Idle(); _retryCount = 0; }
             return true;
@@ -312,6 +321,7 @@ namespace ConditioningControlPanel.Services
         internal void OnComplete(bool success)
         {
             if (!IsBusy) return;   // panic got there first
+            Remote.RemoteScreenFeed.CountEnded(success);   // WPF GameCompleted/GameFailed -> the remote preview
             var generation = ++_generation; // retire the clip callback before showing a message
             if (success)
             {
@@ -347,7 +357,24 @@ namespace ConditioningControlPanel.Services
             _host.ShowMessage(CoreMods.BubbleCountRetryMessage ?? "WRONG!\nWATCH AGAIN", 2000, () =>
             {
                 if (!IsBusy || generation != _generation) return;   // panic or replacement during the message
+                ArmStuck(TimeSpan.FromMinutes(5));
                 if (!Play(true)) { Log.Warning("BubbleCountService: No videos for retry, granting mercy"); _retryCount = 0; Idle(); }
+            });
+        }
+
+        private void ExtendStuck(double duration)
+        {
+            if (!double.IsFinite(duration) || duration < 0) return;
+            ArmStuck(TimeSpan.FromSeconds(Math.Max(300, Math.Min(duration + 150, 4294967))));
+        }
+
+        private void ArmStuck(TimeSpan timeout)
+        {
+            Dispose(ref _stuck);
+            _stuck = After(timeout, mine =>
+            {
+                if (!ReferenceEquals(mine, _stuck) || !IsBusy) return;
+                ForceCleanup();
             });
         }
 
@@ -359,6 +386,7 @@ namespace ConditioningControlPanel.Services
 
         private void Idle(bool resumeFlashes = true, bool cleanupTemps = true)
         {
+            Dispose(ref _stuck);
             _generation++; // invalidate callbacks from a closed round
             IsBusy = false;
             if (HoldsEffects)

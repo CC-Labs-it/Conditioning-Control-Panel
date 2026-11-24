@@ -210,6 +210,7 @@ namespace ConditioningControlPanel.Services
                     var customText = p?["text"]?.ToString();
                     if (string.IsNullOrWhiteSpace(customText)) return null;   // WPF: blank text is a no-op
                     if (CoreSubliminal.CustomShowProvider is not { } custom) return NotOnThisBuild;
+                    Remote.RemoteScreenFeed.ControllerWord(customText);   // WPF NoteControllerWord (:1311)
                     custom(customText);
                     return null;
                 case "start_brain_drain":

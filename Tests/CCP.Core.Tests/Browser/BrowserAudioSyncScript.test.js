@@ -58,4 +58,20 @@ listeners.ended();
 assert.deepEqual(messages.shift(), { type: 'audioSyncEnded' });
 window.__hapticRearm();
 assert.deepEqual(messages.shift(), { type: 'audioSyncVideoDetected', url: video.currentSrc, duration: 90 });
-console.log('BrowserAudioSyncScript: parse, interception, ready, messages and rearm passed');
+window.__hapticCancel();
+assert.equal(overlay.style.display, 'none');
+const count = messages.length;
+video.play();
+assert.equal(plays, 2); // Panic does not resume it, but a later manual play works.
+listeners.pause(); listeners.seeked(); listeners.ended();
+assert.equal(messages.length, count);
+window.__hapticRearm();
+assert.equal(messages.pop().type, 'audioSyncVideoDetected');
+window.__hapticCancel();
+window.__hapticCancelled = false;
+window.__hapticReady = false;
+window.__hapticVideoReported = false;
+video.currentSrc = '';
+video.play();
+assert.equal(plays, 3); // No usable URL must not trap playback.
+console.log('BrowserAudioSyncScript: parse, interception, ready, messages, rearm and cancel passed');

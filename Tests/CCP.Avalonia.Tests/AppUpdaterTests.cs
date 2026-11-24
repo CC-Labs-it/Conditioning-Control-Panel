@@ -32,10 +32,18 @@ public sealed class AppUpdaterTests
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             Requests.Add(request.RequestUri!.AbsolutePath);
-            const string json = """
+            const string latest = """
                 {"tag_name":"v99.1.0","body":"notes","assets":[{"name":"ConditioningControlPanel-99.1.0-Setup.exe","size":1234,
                  "browser_download_url":"http://127.0.0.1:9/dl/ConditioningControlPanel-99.1.0-Setup.exe"}]}
                 """;
+            // ccp-bugs #1627: Latest (99.2.0) is Windows-only; the Linux head must offer the 99.1.0 beta instead.
+            const string list = """
+                [{"tag_name":"v99.2.0","draft":false,"prerelease":false,"body":"win","html_url":"https://github.com/CC-Labs-it/Conditioning-Control-Panel/releases/tag/v99.2.0",
+                  "assets":[{"name":"ConditioningControlPanel-99.2.0-Setup.exe","size":1,"browser_download_url":"http://127.0.0.1:9/dl/a"}]},
+                 {"tag_name":"v99.1.0-linux-beta1","draft":false,"prerelease":true,"body":"notes","html_url":"https://github.com/CC-Labs-it/Conditioning-Control-Panel/releases/tag/v99.1.0-linux-beta1",
+                  "assets":[{"name":"ConditioningControlPanel-99.1.0-linux-x64.tar.gz","size":1234,"browser_download_url":"http://127.0.0.1:9/dl/b"}]}]
+                """;
+            var json = request.RequestUri.AbsolutePath.EndsWith("/releases", StringComparison.Ordinal) ? list : latest;
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) });
         }
     }
@@ -68,6 +76,7 @@ public sealed class AppUpdaterTests
         var feed = new FakeFeed();
         var oldVersion = CoreReleaseContent.AppVersionProvider;
         var oldOpen = AppUpdater.OpenUrl;
+        var oldBeta = AppUpdater.BetaInstall;
         var oldAccepted = CoreSettings.Current.HasAcceptedAgeVerification;
         string? opened = null;
         await AvaloniaTestDispatcher.RunAsync(async () =>
@@ -89,6 +98,7 @@ public sealed class AppUpdaterTests
                 Assert.Equal("http://127.0.0.1:9/api", AppUpdater.ApiBase());
 
                 AppUpdater.Handler = feed;
+                AppUpdater.BetaInstall = () => true;
                 AppUpdater.OpenUrl = (_, url) => { opened = url; return Task.CompletedTask; };
                 CoreReleaseContent.AppVersionProvider = () => "6.11.3";
 
@@ -130,9 +140,10 @@ public sealed class AppUpdaterTests
                 Assert.Equal(Loc.GetF("tooltip_update_to_version_download", "99.1.0"), ToolTip.GetTip(pill));
 
                 await AppUpdater.PillClickedAsync(shell);
-                Assert.Equal(ReleaseLinks.ReleasesPageUrl, opened);
-                // Only the feed was read: no releases/tags lookup, no asset GET.
-                Assert.Equal(new[] { "/api/releases/latest" }, feed.Requests);
+                // The Linux beta's own page, never /releases/latest (Windows-only 99.2.0, ccp-bugs #1627).
+                Assert.Equal("https://github.com/CC-Labs-it/Conditioning-Control-Panel/releases/tag/v99.1.0-linux-beta1", opened);
+                // Only the release list was read: no releases/latest, no releases/tags lookup, no asset GET.
+                Assert.Equal(new[] { "/api/releases" }, feed.Requests);
 
                 // "Later": the version is skipped for 24h, so the next startup neither lights nor asks.
                 dialog.FindControl<Button>("BtnLater")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
@@ -149,6 +160,7 @@ public sealed class AppUpdaterTests
             finally
             {
                 AppUpdater.Handler = null;
+                AppUpdater.BetaInstall = oldBeta;
                 AppUpdater.OpenUrl = oldOpen;
                 CoreReleaseContent.AppVersionProvider = oldVersion;
                 CoreSettings.Current.HasAcceptedAgeVerification = oldAccepted;

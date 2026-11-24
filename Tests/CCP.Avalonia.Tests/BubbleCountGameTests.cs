@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -9,6 +11,7 @@ using Avalonia.Input;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Audio;
@@ -20,7 +23,7 @@ namespace CCP.Avalonia.Tests;
 /// opens the game after the lead-in and frames reach the window; the clip's end opens the answer
 /// window and a correct answer completes the game with XP; strict falls open to the panic key with
 /// no global listener and swallows it with one; engine Stop (panic) closes it. The clip is committed
-/// (Assets/bubblecount-2s.mp4); only a missing libvlc skips, and never on Linux CI.</summary>
+/// (Assets/voice-video-30s.mp4); only a missing libvlc skips, and never on Linux CI.</summary>
 public sealed class BubbleCountGameTests
 {
     [Fact]
@@ -46,7 +49,7 @@ public sealed class BubbleCountGameTests
         var clip = Path.Combine(dir, "clip.mp4");
         try
         {
-            File.Copy(Path.Combine(AppContext.BaseDirectory, "Assets", "bubblecount-2s.mp4"), clip);
+            File.Copy(Path.Combine(AppContext.BaseDirectory, "Assets", "voice-video-30s.mp4"), clip);
             try { _ = new LibVlcAudio("--aout=dummy"); }
             catch (Exception e)
             {
@@ -61,6 +64,15 @@ public sealed class BubbleCountGameTests
             double xp = 0;
             var prevXp = CoreProgression.AddXPProvider;
             CoreProgression.AddXPProvider = (a, _) => xp += a;
+            // Start from a stale cached duration to keep proving that the real length replaces it.
+            var lengths = typeof(MandatoryVideoOverlay).GetField("_lengths", BindingFlags.Static | BindingFlags.NonPublic)!;
+            var previousLengths = lengths.GetValue(null);
+            var cache = new VideoMetadataCache(null!);
+            cache.StoreDuration(clip, 2);
+            Assert.Equal(2, cache.TryGetDuration(clip));
+            (typeof(VideoMetadataCache).GetField("_saveTimer", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .GetValue(cache) as Timer)?.Dispose(); // test cache must not write after profile restoration
+            lengths.SetValue(null, cache);
             var host = BubbleCountHost.Instance;
             var b = new BubbleCountScheduler(host, library: () => new[] { clip });
             var real = host.Scheduler;
@@ -97,8 +109,8 @@ public sealed class BubbleCountGameTests
                                     sink.FramePresented -= Presented;
                                     try
                                     {
-                                        // Hold real playback while checking strict/panic input. Polling a
-                                        // two-second clip could observe the hidden result-screen window.
+                                        // Hold real playback while checking strict/panic input. The longer clip gives
+                                        // busy CI runners time to present frames before the result screen.
                                         BubbleCountWindow.Player!.SetPause(true);
                                         Assert.Same(w, Assert.Single(BubbleCountWindow.OpenWindows));
                                         Assert.True(sink.FrameCount >= 3, "frames decoded");
@@ -117,7 +129,7 @@ public sealed class BubbleCountGameTests
                         return await ready.Task.WaitAsync(TimeSpan.FromSeconds(20));
                     }
 
-                    // Non-strict: the 2 s clip ends, the answer window asks, the right count wins.
+                    // Non-strict: seek near the end, then the real end opens the answer window.
                     // A session with the engine stopped (paused) is running, not engine-off (WPF EngineOffAudioLog.cs:29).
                     Assert.False(CoreEngine.IsRunning);
                     CoreSession.IsSessionRunningProvider = () => true;
@@ -125,18 +137,19 @@ public sealed class BubbleCountGameTests
                     var noted = RecentSounds.Shared.Snapshot().Last(e => e.Player == "bubblecount-video");
                     Assert.Equal(("clip.mp4", true), (noted.File, noted.EngineRunning));
                     CoreSession.IsSessionRunningProvider = prevSession;
-                    BubbleCountWindow.Player!.SetPause(false); // the real EndReached opens the answer window
+                    BubbleCountWindow.Player!.Time = 29_000;
+                    BubbleCountWindow.Player.SetPause(false); // the real EndReached opens the answer window
                     for (var i = 0; i < 400 && BubbleCountResultWindow.OpenWindows.Count == 0; i++) await Task.Delay(50);
                     var r = Assert.Single(BubbleCountResultWindow.OpenWindows);
                     Assert.All(BubbleCountWindow.OpenWindows, w => Assert.False(w.IsVisible));
-                    Assert.Equal(2, BubbleCountWindow.LastVideoDurationSeconds, 0);   // LengthChanged replaced the 30 s fallback
+                    Assert.Equal(30, BubbleCountWindow.LastVideoDurationSeconds, 0);  // LengthChanged replaced the stale 2 s cache
                     r.FindControl<TextBox>("TxtAnswer")!.Text = r.CorrectAnswer.ToString();
                     r.FindControl<TextBox>("TxtAnswer")!.Focus();
                     r.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, "");
-                    Assert.Equal(25, xp);                                 // 250 scaled by a 2 s clip
+                    Assert.Equal(125, xp);                                // 250 scaled by a 30 s clip
                     for (var i = 0; i < 60 && b.IsBusy; i++) await Task.Delay(50);
                     Assert.False(b.IsBusy);
-                    Assert.Equal(25 + 10, xp);                            // + the service's 100, scaled
+                    Assert.Equal(125 + 50, xp);                           // + the service's 100, scaled
                     Assert.Empty(BubbleCountWindow.OpenWindows);
 
                     // Strict with a live listener: the panic key and Esc are swallowed; engine stop closes it.
@@ -164,6 +177,7 @@ public sealed class BubbleCountGameTests
             finally
             {
                 b.ForceCleanup();
+                lengths.SetValue(null, previousLengths);
                 host.Scheduler = real;
                 CoreEngine.BubbleCount = prevEngine;
                 BubbleCountWindow.PanicListenerLive = listener;
