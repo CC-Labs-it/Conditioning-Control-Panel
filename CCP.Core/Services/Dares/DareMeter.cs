@@ -5,6 +5,7 @@ using System.Linq;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Progression;
 using Newtonsoft.Json;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Dares;
 
@@ -76,7 +77,7 @@ public sealed class DareMeter
             var text = _store.Read();
             if (!string.IsNullOrWhiteSpace(text)) _data = JsonConvert.DeserializeObject<FileShape>(text!) ?? new FileShape();
         }
-        catch (Exception ex) { App.Logger?.Debug("Dares meter unreadable: {E}", ex.Message); _data = new FileShape(); }
+        catch (Exception ex) { Log.Debug("Dares meter unreadable: {E}", ex.Message); _data = new FileShape(); }
         _data.Bets ??= new();
     }
 
@@ -225,7 +226,7 @@ public sealed class DareMeter
             _dirty = false;
         }
         try { _store.Write(text); }
-        catch (Exception ex) { App.Logger?.Debug("Dares meter save failed: {E}", ex.Message); }
+        catch (Exception ex) { Log.Debug("Dares meter save failed: {E}", ex.Message); }
     }
 
     private void Add(DareKind kind, int n, DateTimeOffset now)
