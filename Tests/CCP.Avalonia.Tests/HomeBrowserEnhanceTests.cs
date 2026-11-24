@@ -288,18 +288,21 @@ public class HomeBrowserEnhanceTests
             Poll(0); Poll(1.2);
             Assert.Equal(1, shown);
             Assert.Contains(scripts, s => s.Contains("v.pause()"));
+            scripts.Clear();
             toggle.IsChecked = false;
             Assert.Equal(1, stopped);
             Assert.Null(tab.BrowserEnhanceSource);
+            Assert.Contains(scripts, s => s.Contains("v.play()")); // ordinary unbind releases the hold at stop
+
+            toggle.IsChecked = true; // rebind: the new session pauses before the old one finishes
+            Poll(0); Poll(1.2);
+            Assert.Equal(2, shown);
             scripts.Clear();
             pending[0].SetResult(ConditioningControlPanel.Services.Speech.PhraseResult.NotAvailable);
             global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            Assert.Contains(scripts, s => s.Contains("v.play()")); // ordinary unbind releases the hold
             Assert.Equal(1, hidden);
+            Assert.DoesNotContain(scripts, s => s.Contains("v.play()")); // the old cleanup cannot release the new hold
 
-            toggle.IsChecked = true;
-            Poll(0); Poll(1.2);
-            Assert.Equal(2, shown);
             toggle.IsChecked = false;
             Assert.Equal(2, stopped);
             Assert.Null(tab.BrowserEnhanceSource);
