@@ -43,7 +43,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         private bool _bubblesPulse, _bouncingPulse, _pinkPulse;
-        private bool _pinkWasEnabled;
+        private bool _pinkWasEnabled, _pinkPulseStartedOverlay;
         private int _pinkBaseOpacity, _pinkAppliedOpacity;
         private int _pulseGen;
 
@@ -212,13 +212,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>WPF PulsePinkFilter: boost the tint for 30 s, then hand it back. Skipped while a
-        /// session runs (it owns the overlays). <see cref="PinkFilterOverlay.PulseHold"/> is WPF's
-        /// "pulse started the overlay service" (#1180): it shows the tint with the engine off and
-        /// is released, not left on, when the pulse ends.</summary>
+        /// session runs (it owns the overlays). <see cref="PinkFilterOverlay.PulseHold"/> keeps the
+        /// tint visible until the pulse ends; service ownership is captured before the pulse starts.</summary>
         private void PulsePinkFilter()
         {
             if (App.Sessions?.IsRunning == true || _pinkPulse) return;
             var s = CoreSettings.Current;
+            _pinkPulseStartedOverlay = !App.OverlayRunningWithoutPulse; // WPF AutonomyService.cs:1519-1521
             _pinkPulse = true;
             _pinkWasEnabled = s.PinkFilterEnabled;
             _pinkBaseOpacity = s.PinkFilterOpacity;
@@ -234,6 +234,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (!_pinkPulse) return;
             _pinkPulse = false;
+            var startedOverlay = _pinkPulseStartedOverlay;
+            _pinkPulseStartedOverlay = false;
             var s = CoreSettings.Current;
             s.PinkFilterEnabled = _pinkWasEnabled;
             // WPF CancelActivePulses restores unconditionally; the natural end respects a slider move.
@@ -241,7 +243,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 s.PinkFilterOpacity = _pinkBaseOpacity;
             PinkFilterOverlay.PulseHold = false;
             // WPF AutonomyService.cs:574,1604: give an idle pulse's overlay service back.
-            if (!CoreEngine.IsRunning) { SpiralOverlay.Stop(); PinkFilterOverlay.Stop(); }
+            if (startedOverlay && !CoreEngine.IsRunning) { SpiralOverlay.Stop(); PinkFilterOverlay.Stop(); }
             else PinkFilterOverlay.Refresh(this);
         }
 
