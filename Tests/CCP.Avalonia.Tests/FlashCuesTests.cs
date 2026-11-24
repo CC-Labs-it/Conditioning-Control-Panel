@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -116,6 +117,22 @@ public class FlashCuesTests
     });
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EmptyLibraryScenarioRestoresWarningFlag(bool initial)
+    {
+        var warning = typeof(FlashOverlay).GetField("_warnedEmpty", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var original = warning.GetValue(null);
+        try
+        {
+            warning.SetValue(null, initial);
+            await BurstAnnouncesAfterSelectionBeforeDecode("empty");
+            Assert.Equal(initial, (bool)warning.GetValue(null)!);
+        }
+        finally { warning.SetValue(null, original); }
+    }
+
+    [Theory]
     [InlineData("corrupt")]
     [InlineData("repair")]
     [InlineData("retry")]
@@ -139,6 +156,8 @@ public class FlashCuesTests
             File.WriteAllText(dealt == path ? other : path, "not an image");
         }
         var s = CoreSettings.Current;
+        var warning = typeof(FlashOverlay).GetField("_warnedEmpty", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var warnedEmpty = warning.GetValue(null);
         var saved = (FlashOverlay.OverlaysAvailable, FlashOverlay.After, FlashOverlay.VoiceLead,
             FlashOverlay.Present, CorePaths.EffectiveAssetsProvider, ScreenList.QueryOverride,
             s.FlashAudioEnabled, s.MediaSource, ConditioningControlPanel.Avalonia.Platform.PopupSwitches.RemoteMediaOffer);
@@ -190,6 +209,7 @@ public class FlashCuesTests
         }
         finally
         {
+            warning.SetValue(null, warnedEmpty);
             lead.TrySetResult();
             FlashOverlay.CloseAll(final: false);
             FlashOverlay.AboutToDisplay -= Announced;
