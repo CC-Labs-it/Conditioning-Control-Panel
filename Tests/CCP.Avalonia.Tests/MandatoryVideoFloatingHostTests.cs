@@ -100,10 +100,19 @@ public sealed class MandatoryVideoFloatingHostTests
     private static List<Window> Up(MandatoryVideoOverlay o) => o.Windows.Where(w => w.IsVisible).ToList();
 
     [Fact]
+    public async Task Joined_credit_test_does_not_change_global_scroller_index()
+    {
+        var paths = new[] { "/v/a.mp4", "/v/b.mp4", "/v/c.mp4", "/v/d.mp4", "/v/e.mp4" };
+        var before = paths.Select(ScrolllerItemIndex.MetaFor).ToArray();
+        await Joined_floating_credit_opens_its_own_link_and_panic_cancels_pending_open();
+        Assert.Equal(before, paths.Select(ScrolllerItemIndex.MetaFor).ToArray());
+    }
+
+    [Fact]
     public Task Joined_floating_credit_opens_its_own_link_and_panic_cancels_pending_open() => Run((o, _) =>
     {
-        foreach (var path in new[] { "/v/a.mp4", "/v/b.mp4", "/v/c.mp4", "/v/d.mp4", "/v/e.mp4" })
-            ScrolllerItemIndex.Remember(path, new ScrolllerCacheMeta("clip", "joined_sub"));
+        var paths = new[] { "/v/a.mp4", "/v/b.mp4", "/v/c.mp4", "/v/d.mp4", "/v/e.mp4" };
+        o.CreditLookup = path => paths.Contains(path) ? new ScrolllerCacheMeta("clip", "joined_sub") : ScrolllerItemIndex.MetaFor(path);
         var opener = MandatoryVideoOverlay.CreditOpener;
         var previousVideo = CoreEngine.Video;
         var opened = new List<string>();

@@ -29,6 +29,7 @@ internal sealed partial class MandatoryVideoOverlay
 {
     /// <summary>Test seam: the opener (WPF BrowserLauncher.TryOpenUrl).</summary>
     internal static Func<string, bool> CreditOpener = ExternalOpener.Open;
+    internal Func<string, ScrolllerCacheMeta?> CreditLookup = ScrolllerItemIndex.MetaFor;
     private readonly List<ScrolllerCreditBadge> _creditBadges = new();
     private string? _queuedCreditPath;
     /// <summary>The picked source of the clip on screen (see <see cref="Services.MandatoryVideoScheduler.ShowingPath"/>).</summary>
@@ -47,11 +48,11 @@ internal sealed partial class MandatoryVideoOverlay
         global::ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsActive
         || global::ConditioningControlPanel.Avalonia.Views.Games.GameWindow.IsDtrhRunning);
 
-    private static string? CreditLink(string path) => ScrolllerCreditRules.LinkFor(ScrolllerItemIndex.MetaFor(path)?.Sub);
+    private string? CreditLink(string path) => ScrolllerCreditRules.LinkFor(CreditLookup(path)?.Sub);
 
     internal Button CreditButton(string path, FloatingInstance? instance = null)
     {
-        var mark = CreditFor(path);
+        var mark = CreditFor(path, CreditLookup);
         // WPF player.css:165-166,169-171 fades the badge and its hover over 600 ms.
         mark.Transitions = new Transitions { new DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromMilliseconds(GentleVisuals.FadeMs(600)) } };
         var label = mark.Child!;
