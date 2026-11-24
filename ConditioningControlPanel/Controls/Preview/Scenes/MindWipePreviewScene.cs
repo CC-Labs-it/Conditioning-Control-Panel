@@ -169,7 +169,11 @@ namespace ConditioningControlPanel.Controls.Preview.Scenes
             _cone.Close();
             canvas.DrawPath(_cone, _fill);
             _fill.Color = new SKColor(255, 140, 215, a);
-            canvas.DrawCircle(c.X + 8, c.Y, 2, _fill);
+            _fill.Style = SKPaintStyle.Stroke;
+            _fill.StrokeWidth = 1.8f;
+            _fill.StrokeCap = SKStrokeCap.Round;
+            canvas.DrawArc(new SKRect(c.X - 2, c.Y - 7, c.X + 10, c.Y + 7), -50, 100, false, _fill);
+            _fill.Style = SKPaintStyle.Fill;
         }
 
         public void SettingChanged(string name)

@@ -29,7 +29,7 @@ namespace ConditioningControlPanel.Controls.Preview.Scenes
         };
 
         /// <summary>The small disc the spiral is worked out in (px).</summary>
-        public const int DiscPx = 256;
+        public const int DiscPx = 384;
         /// <summary>Turn speed of the base spiral, degrees a second (gentle: half).</summary>
         public const float TurnDegPerSecond = 38f;
         /// <summary>How much rest the pool is given at once when it appears, so it shows inside the wake window.</summary>
