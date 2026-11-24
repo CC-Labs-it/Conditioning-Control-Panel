@@ -69,6 +69,18 @@ public class RowsLangTests
         RowsRender.AssertSilent(name);
     }
 
+    /// <summary>The period form for "every N seconds" sliders: the Minimum is the fullest clock.</summary>
+    [Fact]
+    public void Inverse_fraction_fills_at_the_minimum()
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        double F(double v, double max, double min) => (double)RowFraction.Inverse.Convert(new object[] { v, max, min }, typeof(double), null!, inv);
+        Assert.Equal(1.0, F(30, 300, 30), 3);
+        Assert.Equal(0.0, F(300, 300, 30), 3);
+        Assert.Equal(0.5, F(165, 300, 30), 3);
+        Assert.Equal(0.25, (double)RowFraction.Instance.Convert(new object[] { 15.0, 60.0 }, typeof(double), null!, inv), 3);
+    }
+
     /// <summary>
     /// A RowLabel in a star column too narrow for its text wraps to a second line and its OptionRow
     /// grows; the same label with room stays one line at the row's usual height. No ellipsis.

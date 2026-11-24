@@ -257,7 +257,16 @@
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto" MinWidth="56"/>
                         </Grid.ColumnDefinitions>
-                        <rows:RowLabel Grid.Column="0" Text="{loc:Str super_pool_every}" Emblem="Often"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str super_pool_every}" Emblem="Often">
+                            <rows:RowLabel.Value>
+                                <!-- A bigger number is LESS often: the period form of the fraction. -->
+                                <MultiBinding Converter="{x:Static rows:RowFraction.Inverse}">
+                                    <Binding Path="Value" ElementName="SliderPoolEvery"/>
+                                    <Binding Path="Maximum" ElementName="SliderPoolEvery"/>
+                                    <Binding Path="Minimum" ElementName="SliderPoolEvery"/>
+                                </MultiBinding>
+                            </rows:RowLabel.Value>
+                        </rows:RowLabel>
                         <Slider Grid.Column="1" x:Name="SliderPoolEvery" feat:OptionSection.Setting="WhirlpoolNewEvery" Minimum="8" Maximum="60" Value="18"
                                 VerticalAlignment="Center" Margin="14,0" ValueChanged="SliderPoolEvery_Changed"/>
                         <rows:RowValue Grid.Column="2" x:Name="TxtPoolEvery" Text="18 s"/>
