@@ -42,8 +42,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         /// <summary>Click-through + invisible + override-redirect at <paramref name="rect"/> (screen
         /// px), before the first map. False = the platform refused; the word is dropped. Test seam.</summary>
-        internal static Func<ChaosPopText, PixelRect, bool> Prepare = (w, rect) =>
-            X11Overlay.SetClickThrough(w, true) && X11Overlay.SetOpacity(w, 0) && X11Overlay.SetOverrideRedirect(w, rect);
+        internal static Func<ChaosPopText, PixelRect, bool> Prepare = (w, rect) => Configure(w, rect, w.Topmost);
+
+        /// <summary>Platform calls behind <see cref="Prepare"/>; topmost follows ChaosPinOnTop so an
+        /// unpinned word is not forced to HWND_TOPMOST (WPF ChaosPopText.cs:104). Test seam.</summary>
+        internal static Func<ChaosPopText, PixelRect, bool, bool> Configure = (w, rect, topmost) =>
+            X11Overlay.SetClickThrough(w, true) && X11Overlay.SetOpacity(w, 0) && X11Overlay.SetOverrideRedirect(w, rect, topmost: topmost);
 
         /// <summary>Gate for the static path; tests flip it (headless has no overlay backend).</summary>
         internal static Func<bool> PlatformCanShow = () => X11Overlay.IsAvailable;
