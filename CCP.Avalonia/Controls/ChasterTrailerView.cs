@@ -23,7 +23,7 @@ public sealed class ChasterTrailerView : Grid {
         + "return window.__ccpTrailerStage=window.__ccpTrailerRun.apply(CT,arguments);};}return true;})()";
     internal const string PauseScript = "(function(){var s=window.__ccpTrailerStage;if(s)s.dead=true;"
         + "document.getAnimations().forEach(function(a){a.cancel();});})()";
-    private void Start() {
+    internal void Start() {
         if (_started || _disposed || HasFailed) return;
         _started = true;
         try {
@@ -33,6 +33,7 @@ public sealed class ChasterTrailerView : Grid {
             Page = new Uri(WebAssetServer.Shared.Url("chaster/trailers.html"));
             Browser.AllowNavigation = uri => uri == Page;
             Browser.SuppressNewWindows = true;
+            Browser.ConfigureNative = TrailerWebView2Settings.Attach;
             Browser.EnvironmentRequested += ConfigureBrowser;
             Browser.BrowserProcessFailed += Fail;
             Browser.NavigationFinished += (uri, ok) => _ = NavigationFinished(uri, ok);

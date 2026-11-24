@@ -322,7 +322,18 @@ namespace ConditioningControlPanel.Services
             if (Popping || Spec is not { IsLive: true }) return;
             FuseRemainingMs = Math.Max(600, FuseRemainingMs / 2);
             _speed *= Chaos.ChaosTuning.BOUND_ENRAGE_SPEED_MULT;
+            _vx *= Chaos.ChaosTuning.BOUND_ENRAGE_SPEED_MULT;   // WPF BubbleService.cs:2751-2752: roaming halves move by velocity
+            _vy *= Chaos.ChaosTuning.BOUND_ENRAGE_SPEED_MULT;
+            Enraged = true;
         }
+
+        /// <summary>WPF Bubble.Enrage red flare (BubbleService.cs:2756): the renderer draws it.</summary>
+        public bool Enraged { get; private set; }
+
+        /// <summary>WPF MirrorVelocityFrom (BubbleService.cs:2738): the second Bound half pulls against the first.</summary>
+        public void MirrorVelocityFrom(AmbientBubble other) { _vx = -other._vx; _vy = -other._vy; }
+
+        internal (double X, double Y) Velocity => (_vx, _vy);
 
         /// <summary>WPF DANGER_TELEGRAPH_MS: the last stretch of a live fuse breathes faster and deeper.</summary>
         public const double DangerTelegraphMs = 1200;
@@ -707,6 +718,9 @@ namespace ConditioningControlPanel.Services
         public static volatile Action? StartAction;
         public static volatile Action? StopAction;
         public static volatile Action? RefreshFrequencyAction;
+        /// <summary>The head's bubble field runs (WPF App.Bubbles.IsRunning, for the remote status).</summary>
+        public static volatile Func<bool>? IsRunningProvider;
+        public static bool IsRunning { get { try { return IsRunningProvider?.Invoke() ?? false; } catch { return false; } } }
 
         public static void Start() { try { StartAction?.Invoke(); } catch { } }
         public static void Stop() { try { StopAction?.Invoke(); } catch { } }

@@ -130,7 +130,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             catch (Exception ex) { Serilog.Log.Warning(ex, "Glassroad: race shell did not start"); return false; }
             if (shell == null) return null;
             (RaceShell, PageUrl, _shellRoom) = (shell, url, room);
-            Closed += (_, _) => shell.Dispose();
+            Closed += (_, _) => { GameActivity.Unregister(this); shell.Dispose(); };
+            // The shell owns the visible window, so this session never raises Opened.
+            GameActivity.Register(this);
             lock (Open) Open.Add(this);   // what Opened does for a shown window
             OpenGlassroad();
             return true;

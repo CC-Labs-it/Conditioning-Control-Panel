@@ -58,6 +58,21 @@ public sealed class ChaosBoundPairsTests
         var copyY = copy.Y; copy.Step();
         Assert.Equal((copyY - copy.Y) * 1.4, bY - b.Y, 8);
     }
+    [Fact] public void Roaming_halves_mirror_and_enrage_scales_velocity()
+    {
+        // WPF BubbleService.cs:2738-2753: mirrored drift, then velocity x BOUND_ENRAGE_SPEED_MULT and the flare.
+        var (sa, sb) = ChaosBubbleVariants.BuildBoundPair(1);
+        var a = AmbientBubble.SpawnChaos(new Random(1), 0, 0, 0, 1920, 1080, 1, sa, ChaosMotion.RoamBounce);
+        var b = AmbientBubble.SpawnChaos(new Random(2), 0, 0, 0, 1920, 1080, 1, sb, ChaosMotion.RoamBounce);
+        b.MirrorVelocityFrom(a);
+        Assert.Equal((-a.Velocity.X, -a.Velocity.Y), b.Velocity);
+        var v = b.Velocity;
+        Assert.False(b.Enraged);
+        b.Enrage();
+        Assert.True(b.Enraged);
+        Assert.Equal(v.X * ChaosTuning.BOUND_ENRAGE_SPEED_MULT, b.Velocity.X, 8);
+        Assert.Equal(v.Y * ChaosTuning.BOUND_ENRAGE_SPEED_MULT, b.Velocity.Y, 8);
+    }
     [Fact] public void Clear_drops_all_pairs()
     {
         var (p, a, b) = Pair(); var now = DateTime.UtcNow;

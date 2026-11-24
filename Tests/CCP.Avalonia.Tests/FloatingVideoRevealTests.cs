@@ -178,6 +178,46 @@ public class FloatingVideoRevealTests
         });
     }
 
+    // WPF VideoService.FloatingInstances.cs:882-896: a single LibVLC window makes room on Test.
+    [Fact]
+    public async Task Test_trigger_during_grace_replaces_the_single_floating_clip()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var settings = ConditioningControlPanel.CoreSettings.Current;
+            var saved = (settings.MasterVolume, settings.VideoVolume, settings.StrictLockEnabled);
+            var (overlay, window, reveal) = FloatingSurface();
+            try
+            {
+                settings.StrictLockEnabled = false;
+                overlay.Scheduler = new ConditioningControlPanel.Services.MandatoryVideoScheduler(overlay,
+                    library: () => new[] { "/test/video.mp4" });
+                typeof(ConditioningControlPanel.Services.MandatoryVideoScheduler).GetField("_playing",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(overlay.Scheduler, true);
+                reveal.Present();
+                var surface = overlay.Surfaces[0];
+                MandatoryVideoOverlay.ShowGraceHost(surface);
+                var card = surface.GraceHost!;
+                typeof(MandatoryVideoOverlay).GetField("_gracePaused",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.SetValue(overlay, true);
+
+                Assert.True(overlay.TryFloatingTrigger(userInitiated: true));
+                Assert.True(overlay.Scheduler.IsPlaying); // replacement was accepted
+                Assert.False(overlay.GracePaused);
+                Assert.False(window.IsVisible);
+                Assert.False(card.IsVisible);
+                Assert.Empty(overlay.Surfaces);
+            }
+            finally
+            {
+                overlay.Scheduler.ForceCleanup();
+                reveal.Close();
+                (settings.MasterVolume, settings.VideoVolume, settings.StrictLockEnabled) = saved;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     // WPF GracePauseOverlayWindow: a floating clip's card is its own 360x200 window, so a small clip never clips Resume.
     [Fact]
     public async Task A_floating_grace_card_opens_in_its_own_window_and_closes_with_the_clip()
