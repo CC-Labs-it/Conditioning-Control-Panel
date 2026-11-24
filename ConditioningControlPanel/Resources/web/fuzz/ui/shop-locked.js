@@ -66,6 +66,12 @@ export const LOCKED_SEED_CSS = `
 #shop .row.fate.fate-locked:hover { --frame: var(--fk); }
 #shop .row.fate.fate-locked:hover .ico { opacity: .55; }
 #shop .row.fate.fate-locked:active { translate: 0 2px; }
+@media (max-width: 759px) {
+  #shop .row.fate.fate-locked .cost { font-size: 10px; padding: 0 2px; }
+  #shop .row.fate.fate-locked .fl-stamp { top: 36%; font-size: 8px; padding: 1px 3px; }
+  #shop .row.fate.fate-locked .fl-lock { width: 22px; height: 22px; right: 3px; top: 3px; }
+  #shop .row.fate.fate-locked .fl-lock svg { width: 13px; height: 13px; }
+}
 @media (prefers-reduced-motion: reduce) { #shop .row.fate.fate-locked:active { translate: none; } }
 body.gentle #shop .row.fate.fate-locked:active { translate: none; }
 `;

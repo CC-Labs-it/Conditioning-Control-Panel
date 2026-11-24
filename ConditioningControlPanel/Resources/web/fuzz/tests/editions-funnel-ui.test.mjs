@@ -4,6 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as Ed from '../ui/edition.js';
+import * as E from '../sim/economy.js';
 import { SMALL_CUT, NUDGE_WHERE, NUDGE_WANT, SMALL_ENDING_SET } from '../data/editions.js';
 import { FATE_SETS, setsFor } from '../data/fate.js';
 import { BY_ID } from '../data/items.js';
@@ -20,15 +21,18 @@ const small = Ed.readEdition({ caps: { edition: 'small', platform: 'web' } }, HO
 const smallDesk = Ed.readEdition({ caps: { edition: 'small', platform: 'desktop' } }, HOSTED);
 const unhosted = Ed.readEdition(null, { hostname: 'tc.cclabs.app' });
 
-test('locked sets: what a full run with these picks is offered, minus Go Outside', () => {
+const smallRun = (f5) => { const s = E.createRun({ ed: small }); if (f5) s.picks.f5 = f5; return s; };
+
+test('locked sets: what a full run with these picks is offered, minus Go Outside; none in full', () => {
   for (const f5 of [null, 'bimbo', 'drone', 'goon', 'trance']) {
-    const got = lockedSets({ picks: { f5 } });
+    const got = lockedSets(smallRun(f5));
     const want = setsFor(f5, 0).filter((s) => s.id !== SMALL_ENDING_SET);
     assert.deepEqual(got.map((s) => s.id), want.map((s) => s.id));
     for (const s of got) assert.equal(s.seed, want.find((w) => w.id === s.id).cards[0]);
     assert.ok(!got.some((s) => s.id === SMALL_ENDING_SET));
   }
-  assert.deepEqual(lockedSets({ picks: { f5: 'bimbo' } }).map((s) => s.id), ['emi', 'button', 'doll']);
+  assert.deepEqual(lockedSets(smallRun('bimbo')).map((s) => s.id), ['emi', 'button', 'doll']);
+  assert.deepEqual(lockedSets(E.createRun()), [], 'full: nothing is locked');
   assert.equal(endingName('go_end'), 'EMI Takeover');
 });
 
@@ -85,7 +89,7 @@ test('locked seeds: handed to the shop with the tile, named, never engine rows, 
   const door = { tail() {}, lockedSeeds: (fn) => { provider = fn; } };
   mountLockedTile({ doc, win: {}, door, send: (t, f) => sent.push([t, f]), ed: small });
   assert.equal(typeof provider, 'function');
-  const list = provider({ picks: { f5: 'drone' } });
+  const list = provider(smallRun('drone'));
   assert.deepEqual(list.map((x) => x.id), ['emi', 'button', 'unit']);
   const el = list[2].make();
   assert.match(el.className, /\bfate\b/);

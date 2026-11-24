@@ -247,8 +247,8 @@
 #cards .rr .rr-strow img.ticket { border-radius: 5px; }
 
 /* the small edition's wall (ui/recap/wall.js): one card, one main door to the full game */
-#cards .rr .rr-wall { padding: 20px 18px 18px; overflow: hidden; }
-#cards .rr .rr-wall::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+#cards .rr .rr-wall { padding: 20px 18px 18px; }   /* no overflow clip: the Courier tag sits on the edge */
+#cards .rr .rr-wall::before { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
   background: repeating-linear-gradient(-45deg, color-mix(in srgb, var(--rr-ink) 5%, transparent) 0 10px, transparent 10px 20px); }
 #cards .rr .rr-offer { position: relative; margin: 2px 0 4px; font: 400 clamp(22px, 3.2vw, 34px)/1.02 var(--display); color: var(--rr-ink); text-wrap: balance; text-shadow: 3px 2px 0 var(--rr-a); }
 #cards .rr .rr-wsub { position: relative; margin: 0 0 12px; font: 600 15px/1.4 var(--body); max-width: 52ch; }

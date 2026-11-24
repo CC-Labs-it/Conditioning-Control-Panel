@@ -5,19 +5,16 @@
  * never typed by hand. */
 
 import { BY_ID } from '../data/items.js';
-import { FATE_SETS, setsFor } from '../data/fate.js';
+import { FATE_SETS } from '../data/fate.js';
+import { teasedSets } from '../sim/economy.js';
 import { SMALL_CUT, SMALL_ENDING_SET } from '../data/editions.js';
 import { LANES } from '../data/prestige.js';
 import { brandText } from '../data/brand.js';
 import { SMALL_WALL_COPY } from '../data/content/small-funnel.js';
 
 /** The sets a full run with these picks would be offered that small keeps locked: [{ id, end, seed }], in
- *  data/fate.js order. THE ONE PLACE to swap for lane A's sim helper (sim/economy.js teasedSets) once it lands. */
-export function lockedSets(run) {
-  return setsFor(run?.picks?.f5 || null, run?.herd || 0)
-    .filter((set) => set.id !== SMALL_ENDING_SET)
-    .map((set) => ({ id: set.id, end: set.end, seed: set.cards[0] }));
-}
+ *  data/fate.js order. Lane A's sim rule (sim/economy.js teasedSets): empty for a full run, the cut Expo never teased. */
+export const lockedSets = (run) => teasedSets(run);
 
 /** An ending's own name from the catalog ("Ending: EMI Takeover" -> "EMI Takeover"). */
 export const endingName = (endId) => brandText(String(BY_ID[endId]?.name || endId).replace(/^Ending:\s*/, ''));
