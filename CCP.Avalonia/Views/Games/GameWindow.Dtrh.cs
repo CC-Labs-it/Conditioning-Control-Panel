@@ -66,7 +66,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 .Set("runs_completed", (double)ChaosMeta.State.RunsCompleted).Set("rank", ChaosRanks.NameLower(ChaosMeta.RankIndex)));
 
         private bool IsDtrh => string.Equals(Spec.Id, DtrhId, StringComparison.OrdinalIgnoreCase);
-        private bool _dtrhRunActive, _dtrhExiting;
+        private bool _dtrhRunActive, _dtrhExiting, _dtrhWorldFrozen;
         private IDisposable? _dtrhExitWatchdog;
         private JObject? _dtrhLastProgress;
         private global::Avalonia.PixelPoint _dtrhWindowPosition;
@@ -121,6 +121,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case "haptic-state":
                     try { DtrhHapticState(o); } catch (Exception ex) { Log.Debug("DtrhHost haptic state: {E}", ex.Message); }
                     return true;
+                case "freeze-state":
+                    ApplyDtrhWorldFreeze((bool?)o["on"] ?? false);
+                    return true;
                 case "boot-error":
                     // WPF DtrhHostService.cs:1014-1025: close the failed web host, then fall back on the
                     // dispatcher (BeginInvoke), so a run started in between keeps the screen (#3540).
@@ -174,6 +177,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     var difficulty = (string?)o["difficulty"] ?? "Gentle";
                     try { ChaosCrashSentinel.Mark($"mode=dtrh-web diff={difficulty}"); }
                     catch (Exception ex) { Log.Debug("DtrhHost sentinel: {E}", ex.Message); }
+                    ApplyDtrhWorldFreeze(false);   // WPF :371: a stale freeze must not bleed into this descent
                     try { DtrhRunStartedBark(difficulty); }
                     catch (Exception ex) { Log.Debug("DtrhHost start bark: {E}", ex.Message); }
                     try { ConditioningControlPanel.Services.Haptics.DtrhHapticDirector.OnRunStarted(); }   // WPF :379
@@ -412,6 +416,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             catch (Exception ex) { Log.Warning("DtrhHost.OnRequestRun: {E}", ex.Message); }
         }
 
+        // WPF ApplyWorldFreeze (:814): the in-world Freeze holds the toy. ponytail: pausing the covering video and voice.
+        private void ApplyDtrhWorldFreeze(bool on)
+        {
+            if (on == _dtrhWorldFrozen) return;
+            _dtrhWorldFrozen = on;
+            try { ConditioningControlPanel.Services.Haptics.DtrhHapticDirector.OnWorldFreeze(on); }
+            catch (Exception ex) { Log.Debug("DtrhHost haptic freeze: {E}", ex.Message); }
+        }
+
         /// <summary>WPF OnRunEnded (:583): XP + Sparks, answered with payout-result. One payout per descent:
         /// the page's run-ended and the teardown's synthetic one share the latch.</summary>
         private void OnDtrhRunEnded(JObject o, bool fromTeardown)
@@ -423,6 +436,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _dtrhRunStartedUtc = DateTime.MinValue;
             try { ConditioningControlPanel.Services.Haptics.DtrhHapticDirector.OnRunEnded(); }   // WPF :606
             catch (Exception ex) { Log.Debug("DtrhHost haptics: {E}", ex.Message); }
+            ApplyDtrhWorldFreeze(false);   // WPF :607
             if (!DtrhRunCloseRule.ShouldPayBooking(wasActive))
             {
                 Log.Debug("DtrhHost: run-ended for a descent that is already banked - ignored");

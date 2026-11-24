@@ -81,7 +81,14 @@ public sealed partial class GameWindowTests
             Assert.True(DtrhHapticDirector.Snapshot.VideoCovering);
             Assert.IsType<Action>(ended.GetValue(video)).Invoke();
             Assert.False(DtrhHapticDirector.Snapshot.VideoCovering);
+            // WPF :346,607,817: the in-world Freeze holds the toy, lifts with the bubble or the run's end.
+            w.HandleMessage("{type:'freeze-state',on:true}");
+            Assert.True(DtrhHapticDirector.Snapshot.WorldFrozen);
+            w.HandleMessage("{type:'freeze-state',on:false}");
+            Assert.False(DtrhHapticDirector.Snapshot.WorldFrozen);
+            w.HandleMessage("{type:'freeze-state',on:true}");
             w.HandleMessage("{type:'run-ended',abandoned:true}");
+            Assert.False(DtrhHapticDirector.Snapshot.WorldFrozen);
             Assert.False(DtrhHapticDirector.Snapshot.RunActive);
             Assert.True(DtrhHapticDirector.Snapshot.Active);
             w.Close();
