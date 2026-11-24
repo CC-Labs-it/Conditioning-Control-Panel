@@ -39,4 +39,21 @@ public class RowsR6aTests
     [Fact]
     public void Lockdown_rows_read() => WpfRenderHarness.OnStaThread(() =>
         RowsRender.Check(new LockdownTabView(), "r6a-lockdown", minLabels: 10, before: ExpandAll));
+
+    [Fact]
+    public void Chaster_rows_read() => WpfRenderHarness.OnStaThread(() =>
+        RowsRender.Check(new ChasterTabView(), "r6a-chaster", minLabels: 5, before: p =>
+        {
+            // The tab draws nothing until a lock is linked: show only the boards that hold the rows.
+            ((Features.MoreFold)p.FindName("NatashaFold")!).IsOpen = true;
+            ShowAncestors(p);
+        }));
+
+    /// <summary>Makes every collapsed ancestor of a RowLabel visible (look only, nothing is invoked).</summary>
+    private static void ShowAncestors(FrameworkElement page)
+    {
+        foreach (var label in RowsRender.Descendants(page).OfType<Controls.Rows.RowLabel>().ToList())
+            for (DependencyObject? d = label; d != null && d != page; d = LogicalTreeHelper.GetParent(d))
+                if (d is FrameworkElement { Visibility: not Visibility.Visible } fe) fe.Visibility = Visibility.Visible;
+    }
 }
