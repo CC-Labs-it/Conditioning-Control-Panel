@@ -28,6 +28,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     // Inside our own window the dim still absorbs clicks outside the hole and the card, as WPF's does
     // (TutorialStep.BlockBackgroundClicks).
     //
+    // Exception: on Windows/X11 a dimmed step also opens the owned monitor satellite (Monitor partial),
+    // which dims and blocks the rest of the main window's monitor as WPF did.
+    //
     // The parameterless render constructor still shows the real window (RenderProof needs a Window).
     public partial class TutorialOverlay
     {
@@ -54,10 +57,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // on a dialog. This in-window portion also works on Wayland without taking focus.
         private void UpdateMainWindowDim(bool blockClicks)
         {
-            if (!_live || !IsOnStage || !blockClicks || _tutorialMainWindow == null ||
-                ReferenceEquals(_tutorialMainWindow, _targetWindow))
+            if (!_live || !IsOnStage || !blockClicks)
             {
                 RemoveMainWindowDim();
+                return;
+            }
+            UpdateMonitorDim();
+            // The monitor satellite already dims and blocks the main window when it is not the host.
+            if (_monitorDim != null || _tutorialMainWindow == null || ReferenceEquals(_tutorialMainWindow, _targetWindow))
+            {
+                RemoveInWindowDim();
                 return;
             }
             if (_mainDim != null) return;
@@ -90,6 +99,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         private void RemoveMainWindowDim()
+        {
+            RemoveMonitorDim();
+            RemoveInWindowDim();
+        }
+
+        private void RemoveInWindowDim()
         {
             _mainDimBoundsSub?.Dispose();
             _mainDimBoundsSub = null;
@@ -248,6 +263,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_stage == null || _tornDown) return;
             _stage.Width = b.Width;
             _stage.Height = b.Height;
+            if (_monitorDim != null) UpdateMonitorDim();   // the host resized: move the satellite's hole
             // Re-measure after this layout pass: the target moved with the window's size.
             Dispatcher.UIThread.Post(() =>
             {
