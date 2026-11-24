@@ -141,6 +141,10 @@ internal sealed partial class GameWindow
                 var currentClips = BreakoutClips(currentSource, start: false);
                 var deal = GameMediaManifest.BreakoutMedia(local, seed, count, currentSource,
                     CoreSettings.Current.RemoteMediaRatio, currentClips, BreakoutWords(seed));
+                // WPF BackRoomMedia.cs:295-306: bundled loops are the final rung, not an empty deal.
+                if (deal.Gifs.Count == 0 && server != null)
+                    deal = deal with { Gifs = Enumerable.Range(0, 4).Select(i => new BackRoomGif(
+                        "g" + i, server.Url($"backroom/stations/slot/fallback/gif{i}.webp"), 180, 180, "fallback")).ToArray() };
                 // WPF BackRoomBridge.cs:445,503-505: retain exactly what the station received.
                 RoomFxDeals[station] = deal;
                 Post(new { type = "media", reqId, seed = deal.Seed, source = deal.Source,

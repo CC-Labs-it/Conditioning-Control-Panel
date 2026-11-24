@@ -236,6 +236,47 @@ public sealed partial class GameWindowTests
         finally { settings.SubliminalPool = oldPool; settings.KeywordTriggers = oldTriggers; }
     });
 
+    [Theory]
+    [InlineData("bundled")]
+    [InlineData("local")]
+    public void BreakoutEmptyPictureDealIncludesFallbacksAndActiveWords(string source) => Run((_, _) =>
+    {
+        var settings = ConditioningControlPanel.CoreSettings.Current;
+        var oldPool = settings.SubliminalPool;
+        var oldTriggers = settings.KeywordTriggers;
+        var oldAssets = ConditioningControlPanel.CorePaths.EffectiveAssetsProvider;
+        var root = Directory.CreateTempSubdirectory("room-empty-").FullName;
+        try
+        {
+            settings.SubliminalPool = new() { ["ACTIVE WORD"] = true };
+            settings.KeywordTriggers = new();
+            ConditioningControlPanel.CorePaths.EffectiveAssetsProvider = () => root;
+            var w = GameWindow.Launch("breakoutdemo")!;
+            JObject? media = null;
+            w.Posted += json => { var frame = JObject.Parse(json); if ((string?)frame["type"] == "media") media = frame; };
+            w.Web.OnNavigationCompleted(w.PageUrl!);
+            w.Web.OnWebMessage($"{{\"type\":\"media-request\",\"reqId\":\"empty\",\"station\":\"breakout\",\"source\":\"{source}\"}}");
+            var until = DateTime.UtcNow.AddSeconds(10);
+            while (media == null && DateTime.UtcNow < until) Dispatcher.UIThread.RunJobs();
+            Assert.NotNull(media);
+            Assert.Equal("ACTIVE WORD", (string?)media!["words"]![0]!["text"]);
+            Assert.Equal(4, media["gifs"]!.Count());
+            for (int i = 0; i < 4; i++)
+            {
+                Assert.Equal("g" + i, (string?)media["gifs"]![i]!["key"]);
+                Assert.Equal("fallback", (string?)media["gifs"]![i]!["src"]);
+                Assert.Contains($"/backroom/stations/slot/fallback/gif{i}.webp", (string?)media["gifs"]![i]!["url"]);
+            }
+            w.Close();
+        }
+        finally
+        {
+            settings.SubliminalPool = oldPool; settings.KeywordTriggers = oldTriggers;
+            ConditioningControlPanel.CorePaths.EffectiveAssetsProvider = oldAssets;
+            Directory.Delete(root, true);
+        }
+    });
+
     private sealed class FxClock : IFxScheduler
     {
         public readonly List<Action> Pending = new();
