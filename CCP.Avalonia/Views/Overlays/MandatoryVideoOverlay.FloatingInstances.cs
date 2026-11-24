@@ -35,7 +35,7 @@ internal sealed partial class MandatoryVideoOverlay
         public VideoReveal? Fade;
         public readonly Stopwatch SinceReady = new();
         public long StartMs, PlayedMs;
-        public bool FrameSeen, Revealed, Closed, Held, CutStartChosen;
+        public bool FrameSeen, Revealed, Closed, Held, VolumeHeld, CutStartChosen;
     }
 
     /// <summary>Joined windows, oldest first; the run's own clip is older than all of them. UI thread only.</summary>
@@ -160,7 +160,15 @@ internal sealed partial class MandatoryVideoOverlay
                 var player = f.Player = new MediaPlayer(vlc) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
                 f.Playback = new NativeMandatoryPlayback(player);
                 f.Playback.SetAudioOff(true);   // WPF :534-535 (WatchInstance re-applies once the track exists)
+                f.VolumeHeld = true;   // until the volume re-applied after Play lands (WPF VideoService.cs:4007-4015)
                 ApplyInstanceVolume(f);
+                var volume = f.VolumePlayer;
+                player.Playing += (_, _) => volume?.Reapply(() => Dispatcher.UIThread.Post(() =>
+                {
+                    if (f.Closed || !f.VolumeHeld) return;
+                    f.VolumeHeld = false;
+                    ApplyInstanceVolume(f);
+                }));
                 Media? sinkMedia = null;
                 f.Sink = new VlcFrameSink(player, () => sinkMedia, bmp => f.Surface.Video.Source = bmp, () =>
                 {
@@ -269,7 +277,7 @@ internal sealed partial class MandatoryVideoOverlay
     }
 
     /// <summary>Silent unless it holds the focus and is not held by its reveal (the mute button is the shared volume).</summary>
-    private bool InstanceAudioOff(FloatingInstance f) => f.Held || !_audioFocus.HasSound(f.Window);
+    private bool InstanceAudioOff(FloatingInstance f) => f.Held || f.VolumeHeld || !_audioFocus.HasSound(f.Window);
 
     /// <summary>WPF OnFloatingTouched (:256-260): a pressed window takes the sound.</summary>
     internal void TouchFloating(Window w)
@@ -281,7 +289,7 @@ internal sealed partial class MandatoryVideoOverlay
     private void ApplyAudioFocus()
     {
         var primary = Floating && _surfaces.Count > 0 ? _surfaces[0].Window : null;
-        try { if (primary != null) _playback?.SetAudioOff(_revealAudioHeld || !_audioFocus.HasSound(primary)); }
+        try { if (primary != null) _playback?.SetAudioOff(_revealAudioHeld || _volumeHeld || !_audioFocus.HasSound(primary)); }
         catch (Exception ex) { Log.Debug("VideoService: floating audio switch failed - {Error}", ex.Message); }
         foreach (var f in _floaters)
         {

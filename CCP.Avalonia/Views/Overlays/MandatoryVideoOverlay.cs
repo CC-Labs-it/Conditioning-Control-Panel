@@ -250,7 +250,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF DecidePresentation: full screen or ONE floating window, on a random targeted screen.
             Floating = Floats(strict);
             _videoFadeSeconds = Floating ? Services.Safety.GentleVisuals.FadeSeconds : 0;
-            _revealAudioHeld = false;
+            _revealAudioHeld = _volumeHeld = false;
 
             // The injected decoder omits native allocation (and windows, except a floating one); lifecycle methods stay shared.
             if (_playbackFactory != null)
@@ -287,8 +287,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // WPF VideoService.cs:3494: software decode unless the user opted into GPU decode.
             _player = new MediaPlayer(vlc!) { EnableHardwareDecoding = s.VideoForceHardwareDecoding };
             _playback = new NativeMandatoryPlayback(_player);
-            if (Floating && _revealAudioHeld) _playback.SetAudioOff(true);
+            // Silent until the volume re-applied after Play lands (WPF VideoService.cs:4007-4015).
+            _volumeHeld = true;
+            _playback.SetAudioOff(true);
             ApplyVolume(_player);
+            var volume = _volumePlayer;
             var blur = s.VideoBlurredBackgroundEnabled;
             Media? sinkMedia = null;
             _sink = new VlcFrameSink(_player, () => sinkMedia, bmp =>
@@ -335,6 +338,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 }
             });
             var live = _player;
+            _player.Playing += (_, _) => volume?.Reapply(() => Dispatcher.UIThread.Post(() => { if (_player == live) ReleaseVolumeHold(); }));
             // Teardown runs on the UI thread, so checking _player there never touches a disposed player.
             _player.Playing += (_, _) => Dispatcher.UIThread.Post(() => { if (OnPlayerPlaying(_player == live))
             {

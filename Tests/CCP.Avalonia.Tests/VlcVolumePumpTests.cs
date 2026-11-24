@@ -87,6 +87,74 @@ public class VlcVolumePumpTests
     }
 
     [Fact]
+    public async Task ReapplyAfterPlayWritesLatestVolumeBeforeReleasingTheHold()
+    {
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var values = new ConcurrentQueue<int>();
+        var heldAt = new ConcurrentQueue<int[]>();
+        var pump = new VlcVolumePump();
+        var player = pump.Add(value =>
+        {
+            values.Enqueue(value);
+            if (value == 50) { entered.Set(); release.Wait(); }
+        }, 50); // the pre-Play set LibVLC may ignore
+        try
+        {
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(5)));
+            pump.Push(0); // muted before Playing arrives
+            player.Reapply(() => heldAt.Enqueue(values.ToArray()));
+            Assert.True(heldAt.IsEmpty);
+        }
+        finally { release.Set(); }
+        Assert.True(SpinWait.SpinUntil(() => !heldAt.IsEmpty, TimeSpan.FromSeconds(5)));
+        Assert.Equal(new[] { 50, 0 }, heldAt.Single());
+        player.Reapply(() => heldAt.Enqueue(values.ToArray()));
+        Assert.True(SpinWait.SpinUntil(() => heldAt.Count == 2, TimeSpan.FromSeconds(5)));
+        Assert.Equal(new[] { 50, 0, 0 }, heldAt.Last());
+        await player.CloseAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        var released = false;
+        player.Reapply(() => released = true); // a retired player never applies again
+        await Task.Delay(100);
+        Assert.False(released);
+        Assert.Equal(3, values.Count);
+    }
+
+    [Fact]
+    public async Task RetiredStalledPlayerDoesNotBlockLaterPlayers()
+    {
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var stalled = new ConcurrentQueue<int>();
+        var next = new ConcurrentQueue<int>();
+        var pump = new VlcVolumePump();
+        var old = pump.Add(value => { stalled.Enqueue(value); entered.Set(); release.Wait(); }, 60);
+        VlcVolumePump.Player? later = null;
+        try
+        {
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(5)));
+            var closed = old.CloseAsync();
+            later = pump.Add(next.Enqueue, 60);
+            Assert.True(SpinWait.SpinUntil(() => next.Contains(60), TimeSpan.FromSeconds(5)));
+            pump.Push(0); // mute while the retired call is still stalled
+            Assert.True(SpinWait.SpinUntil(() => next.Contains(0), TimeSpan.FromSeconds(5)));
+            Assert.False(closed.IsCompleted);
+            release.Set();
+            await closed.WaitAsync(TimeSpan.FromSeconds(5));
+            // The late stale call may land last on the shared session, so the latest is written again.
+            Assert.True(SpinWait.SpinUntil(() => next.Count >= 3, TimeSpan.FromSeconds(5)));
+            Assert.Equal(0, next.Last());
+            Assert.Equal(new[] { 60 }, stalled.ToArray());
+        }
+        finally
+        {
+            release.Set();
+            await old.CloseAsync().WaitAsync(TimeSpan.FromSeconds(5));
+            if (later != null) await later.CloseAsync().WaitAsync(TimeSpan.FromSeconds(5));
+        }
+    }
+
+    [Fact]
     public async Task OverlayMuteAndSliderChangesReachEverySessionPlayer()
     {
         var settings = ConditioningControlPanel.CoreSettings.Current;

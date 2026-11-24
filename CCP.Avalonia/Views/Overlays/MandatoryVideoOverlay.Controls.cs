@@ -31,7 +31,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     internal sealed partial class MandatoryVideoOverlay
     {
         private volatile bool _userMuted;
-        private bool _revealAudioHeld;
+        private bool _revealAudioHeld, _volumeHeld;
         private bool _mutedAtClose;
         private object? _lockWatchOwner;
 
@@ -61,6 +61,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             PlayerVolume = EffectivePlayerVolume;
             if (_volumePlayer == null) _volumePlayer = _sessionVolume.Add(value => p.Volume = value, PlayerVolume);
             else _sessionVolume.Push(PlayerVolume);
+        }
+
+        private void ReleaseVolumeHold()
+        {
+            if (!_volumeHeld) return;
+            _volumeHeld = false;
+            if (Floating) ApplyAudioFocus();
+            else
+            {
+                try { _playback?.SetAudioOff(false); }
+                catch (Exception ex) { Log.Debug("VideoService: audio release failed - {Error}", ex.Message); }
+            }
         }
 
         /// <summary>WPF ShowVideoControls: after the picture fade completes, on every screen. UI thread.</summary>
