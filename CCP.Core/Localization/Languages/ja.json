@@ -7497,6 +7497,7 @@
   "launcher_game_dtrh_blurb": "降下。落ちて、変わって戻る。",
   "launcher_game_arcademy_title": "The Arcademy",
   "launcher_game_arcademy_blurb": "ゲームのように遊べるレッスン。",
+  "arcademy_audio_only_refused": "音声のみのセッション中です。終了するまでArcademyは閉まっています。出席ストリークは守られます。",
   "rf_play_zone_games": "ゲーム",
   "launcher_game_breakoutdemo_title": "Breakout デモ",
   "launcher_game_breakoutdemo_blurb": "ストーリーの最初の3ステージを無料で。",

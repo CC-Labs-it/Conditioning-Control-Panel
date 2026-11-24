@@ -23,8 +23,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         static partial void RegisterArcademy(Dictionary<string, Game> games)
             => games["arcademy"] = new("arcademy", "launcher_game_arcademy_title", "arcademy/index.html", ArcademyGate);
 
-        internal static bool ArcademyGate() => TierGate.DemandLab(Loc.Get("launcher_game_arcademy_title"))
-            && !CoreSettings.Current.AudioOnlySession;
+        internal static bool ArcademyGate()
+        {
+            if (!TierGate.DemandLab(Loc.Get("launcher_game_arcademy_title"))) return false;
+            if (!CoreSettings.Current.AudioOnlySession) return true;
+            // WPF ArcademyHostService.cs:204,494-504: a toast, not a modal, and the streak is safe.
+            App.Notifications.Show(Loc.Get("arcademy_audio_only_refused"), Helpers.NotificationType.Info, TimeSpan.FromSeconds(7));
+            return false;
+        }
 
         private ArcademyMetaStore? _arcademyMeta;
         private AppSettings? _arcademySettings;
@@ -72,6 +78,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             // The page announces ready during module evaluation. The Linux carrier must exist first.
             Web.InjectCarrier = true;
+            // WPF ArcademyHostService.cs:308,318: own profile, the shell's audio bed starts without a click.
+            // Linux adapters have no autoplay-policy switch, so the grant is projected only on Windows.
+            Web.WindowsBrowserArguments = "--autoplay-policy=no-user-gesture-required";
+            Web.WindowsUserDataFolder = System.IO.Path.Combine(CorePaths.UserData, "browser_data_avalonia_arcademy");
             _arcademyMeta = new ArcademyMetaStore(Post);
             void Changed() => Dispatcher.UIThread.Post(() => { if (!_closing && _arcademyMeta != null) Post(_arcademyMeta.SnapshotMessage()); });
             ArcademySyncService.Attach(_arcademyMeta, Changed);
@@ -187,6 +197,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     subDensity = s.ArcademyCapSubDensity, duckDepth = s.ArcademyCapDuckDepth,
                     bubbleRate = s.ArcademyCapBubbleRate, binauralDepth = s.ArcademyCapBinauralDepth, bgIntensity = s.ArcademyCapBgIntensity },
                 audioLevels = s.ArcademyAudioLevels, audioMute = s.ArcademyAudioMute, sfxSamples = ArcademySfxSamples(),
+                autoplayOk = OperatingSystem.IsWindows() && Web.WindowsBrowserArguments != null,
                 masterVolume = Math.Clamp(s.MasterVolume / 100.0, 0, 1), audioOnlySession = s.AudioOnlySession,
                 audioAudible = s.SubAudioAudible, offlineMode = s.OfflineMode, remoteMediaEnabled = s.MediaSource != "local" && s.HasRemoteMediaConsent,
                 remoteMediaRatio = Math.Clamp(s.RemoteMediaRatio / 100.0, 0, 1),
@@ -295,21 +306,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal static Func<DateTime> ArcademyUtcNow = () => DateTime.UtcNow;
         internal static bool ArcademyRelaunchedOnce;
         private DispatcherTimer? _arcademyWatch;
-        private DateTime _arcademyLastBeat;
+        private DateTime _arcademyLastBeat, _arcademyBeatChecked;
         private bool _arcademyClassActive, _arcademyRecovering;
         internal bool ArcademyWatchRunning => _arcademyWatch?.IsEnabled == true;
 
         private void StartArcademyWatch()
         {
-            _arcademyLastBeat = _arcademyProgress = ArcademyUtcNow();
+            _arcademyLastBeat = _arcademyProgress = _arcademyBeatChecked = ArcademyUtcNow();
             _arcademyWatch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
-            _arcademyWatch.Tick += (_, _) => {
-                var now = ArcademyUtcNow();
-                ArcademyPushSuspension();
-                if (CheckArcademyBoot(now)) return;
-                CheckArcademyHeartbeat(now);
-            };
+            _arcademyWatch.Tick += (_, _) => ArcademyWatchTick(ArcademyUtcNow());
             _arcademyWatch.Start();
+        }
+
+        internal string ArcademyWatchTick(DateTime now)
+        {
+            ArcademyPushSuspension();
+            if (CheckArcademyBoot(now)) return "boot";
+            // WPF ArcademyHostService.cs:5939 polls the heartbeat every 5 s; only suspension polls faster.
+            if (now - _arcademyBeatChecked < TimeSpan.FromSeconds(5)) return "wait";
+            _arcademyBeatChecked = now;
+            return CheckArcademyHeartbeat(now);
         }
 
         internal bool CheckArcademyBoot(DateTime now)

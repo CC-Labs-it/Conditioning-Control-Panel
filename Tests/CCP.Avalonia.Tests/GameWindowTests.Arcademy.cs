@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia.Threading;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Services;
@@ -208,5 +209,54 @@ public sealed partial class GameWindowTests
             Assert.Null(GameWindow.OpenForTests("arcademy"));
         }
         finally { w.Close(); GameWindow.ArcademyUtcNow = oldClock; }
+    });
+
+    // WPF ArcademyHostService.cs:204,494-504: the refusal is explained, never silent.
+    [Fact]
+    public void Arcademy_AudioOnlyRefusalShowsToast() => Run((_, _) =>
+    {
+        var (oldLab, oldAudio, oldToasts) = (CoreEntitlement.HasLabProvider, CoreSettings.Current.AudioOnlySession, global::ConditioningControlPanel.Avalonia.App.Notifications);
+        var host = new global::Avalonia.Controls.StackPanel();
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.App.Notifications = new();
+            global::ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(host);
+            CoreEntitlement.HasLabProvider = () => true;
+            CoreSettings.Current.AudioOnlySession = true;
+            Assert.Null(GameWindow.Launch("arcademy"));
+            var text = ConditioningControlPanel.Localization.Loc.Get("arcademy_audio_only_refused");
+            Assert.Contains(global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(host)
+                .OfType<global::Avalonia.Controls.TextBlock>(), t => t.Text == text);
+        }
+        finally
+        {
+            foreach (var toast in host.Children.OfType<global::Avalonia.Controls.Border>()) (toast.Tag as DispatcherTimer)?.Stop();
+            (CoreEntitlement.HasLabProvider, CoreSettings.Current.AudioOnlySession, global::ConditioningControlPanel.Avalonia.App.Notifications) = (oldLab, oldAudio, oldToasts);
+        }
+    });
+
+    // WPF ArcademyHostService.cs:318,741 (autoplay grant) and :5939 (heartbeat every 5 s).
+    [Fact]
+    public void Arcademy_AutoplayGrantAndHeartbeatCadence() => Run((_, _) =>
+    {
+        var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var (oldClock, oldRetry) = (GameWindow.ArcademyUtcNow, GameWindow.ArcademyRelaunchedOnce);
+        GameWindow.ArcademyUtcNow = () => now;
+        GameWindow.ArcademyRelaunchedOnce = true;
+        var w = new GameWindow(GameWindow.Games["arcademy"]);
+        try
+        {
+            var frames = new List<JObject>();
+            w.Posted += json => frames.Add(JObject.Parse(json));
+            w.Show();
+            w.HandleMessage("{\"type\":\"ready\"}");
+            Assert.Contains("--autoplay-policy=no-user-gesture-required", w.Web.WindowsBrowserArguments);
+            Assert.Equal(OperatingSystem.IsWindows(), (bool?)frames.Single(f => (string?)f["type"] == "init")["autoplayOk"]);
+            Assert.Equal("wait", w.ArcademyWatchTick(now.AddSeconds(4.9)));
+            Assert.Equal("ok", w.ArcademyWatchTick(now.AddSeconds(20)));
+            Assert.Equal("wait", w.ArcademyWatchTick(now.AddSeconds(24.5)));
+            Assert.Equal("recovering", w.ArcademyWatchTick(now.AddSeconds(25)));
+        }
+        finally { w.Close(); (GameWindow.ArcademyUtcNow, GameWindow.ArcademyRelaunchedOnce) = (oldClock, oldRetry); }
     });
 }
