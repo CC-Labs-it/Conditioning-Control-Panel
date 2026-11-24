@@ -70,6 +70,7 @@
    <Setter Property="Margin" Value="4,6,6,0"/><Setter Property="TextWrapping" Value="Wrap"/>
   </ControlTheme>
   <DataTemplate x:Key="LobbyRowTemplate" x:DataType="tabs:LobbyCardView">
+   <Grid Tag="lobby-hover" PointerEntered="LobbyCard_PointerEntered" PointerExited="LobbyCard_PointerExited">
    <Grid Margin="0,0,6,8" Tag="lobby-card" Classes="lobby-row">
     <Grid.Styles>
      <Style Selector="Grid.lobby-row > Border.card"><Setter Property="BorderBrush" Value="{Binding CardRim}"/></Style>
@@ -108,6 +109,7 @@
     <Rectangle Classes="card-sheen" Tag="lobby-sheen" RadiusX="14" RadiusY="14" IsHitTestVisible="False">
      <Rectangle.Fill><LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%"><GradientStop Color="#00FFFFFF" Offset="0.2"/><GradientStop Color="#1EFFFFFF" Offset="0.5"/><GradientStop Color="#00FFFFFF" Offset="0.8"/></LinearGradientBrush></Rectangle.Fill>
     </Rectangle>
+   </Grid>
    </Grid>
   </DataTemplate>
  </UserControl.Resources>

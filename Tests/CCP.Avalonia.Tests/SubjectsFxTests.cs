@@ -247,6 +247,64 @@ public sealed class SubjectsFxTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task LobbyHoverLiftsAndReturnsWithoutOverwritingPop() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var previous = CoreSettings.ServiceProvider;
+        var service = new SettingsService();
+        CoreSettings.ServiceProvider = () => service;
+        var clock = new Clock();
+        SetClock(clock);
+        Window? window = null;
+        try
+        {
+            CoreSettings.Current.MotionLevel = MotionLevel.Full;
+            var view = new AvailableSubjectsTabView();
+            Paint(view, 1);
+            window = new Window { Width = 1300, Height = 700, Content = view };
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            Step(view, clock, 600);
+            var list = view.FindControl<ItemsControl>("AvailableSubjectsList")!;
+            var item = list.ContainerFromIndex(0)!;
+            var hover = Tagged<Grid>(item, "lobby-hover");
+            var card = Tagged<Grid>(item, "lobby-card");
+            window.UpdateLayout();
+            HeadlessInput.RenderLiveTree(window);
+            var at = card.TranslatePoint(new Point(15, 15), window)!.Value;
+            window.MouseMove(at);
+            Dispatcher.UIThread.RunJobs();
+            var scale = Assert.IsType<ScaleTransform>(hover.RenderTransform);
+            Assert.Null(card.RenderTransform);
+            Step(view, clock, 75);
+            Assert.InRange(scale.ScaleX, 1.014, 1.016);
+            Step(view, clock, 75);
+            Assert.Equal(1.02, scale.ScaleX, 6);
+            window.MouseMove(new Point(1, 1));
+            Dispatcher.UIThread.RunJobs();
+            Step(view, clock, 150);
+            Assert.Equal(1, scale.ScaleX, 6);
+            Assert.False(view.SubjectsFxRunning);
+
+            CoreSettings.Current.MotionLevel = MotionLevel.Off;
+            window.MouseMove(at);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1.02, scale.ScaleX, 6);
+            Assert.False(view.SubjectsFxRunning);
+            view.IsVisible = false;
+            Assert.Equal(1, scale.ScaleX, 6);
+        }
+        finally
+        {
+            window?.Close();
+            SetClock(TimeProvider.System);
+            service.SaveImmediate();
+            CoreSettings.ServiceProvider = previous;
+        }
+        return Task.CompletedTask;
+    });
+
     private static T Tagged<T>(Control root, string tag) where T : Control =>
         root.GetVisualDescendants().OfType<T>().First(c => Equals(c.Tag, tag));
 

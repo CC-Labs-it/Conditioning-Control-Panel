@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Media;
+using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Helpers;
@@ -26,7 +27,25 @@ public partial class AvailableSubjectsTabView
     private sealed record Entrance(Control Container, TranslateTransform Slide, long Start, int Delay);
     private sealed record Pop(ScaleTransform Card, Rectangle? Ring, ScaleTransform? RingScale, long Start);
     private readonly List<Pop> _pops = new();
+    private sealed record Hover(ScaleTransform Scale, double From, double To, long Start);
+    private readonly List<Hover> _hovers = new();
     private readonly HashSet<string> _seenRows = new();
+
+    // WPF AvailableSubjectsTabView.xaml.cs:60-64 and MotionFx.HoverLift: 150 ms quadratic ease out.
+    private void LobbyCard_PointerEntered(object? sender, PointerEventArgs e) => SetLobbyHover(sender as Control, true);
+    private void LobbyCard_PointerExited(object? sender, PointerEventArgs e) => SetLobbyHover(sender as Control, false);
+
+    private void SetLobbyHover(Control? card, bool on)
+    {
+        if (card == null) return;
+        var scale = card.RenderTransform as ScaleTransform ?? new ScaleTransform();
+        card.RenderTransform = scale;
+        _hovers.RemoveAll(h => h.Scale == scale);
+        double target = on ? 1.02 : 1;
+        if (!Env.AllowTransitions) { scale.ScaleX = scale.ScaleY = target; return; }
+        _hovers.Add(new Hover(scale, scale.ScaleX, target, FxTime.GetTimestamp()));
+        StartSubjectsFxClock();
+    }
 
     // WPF MainWindow.Lobby.cs:146-155: the first fill staggers every column in; after that only a new table pops.
     private void QueueLobbyEntrance(List<string> ids)
@@ -167,7 +186,14 @@ public partial class AvailableSubjectsTabView
             }
             if (p.Ring == null ? grow == 1 : spread == 1) _pops.RemoveAt(i);
         }
-        if (_entrances.Count == 0 && _pops.Count == 0) _subjectsFxBeat?.Stop();
+        for (int i = _hovers.Count - 1; i >= 0; i--)
+        {
+            var h = _hovers[i];
+            double t = Math.Clamp(FxTime.GetElapsedTime(h.Start).TotalMilliseconds / 150, 0, 1);
+            h.Scale.ScaleX = h.Scale.ScaleY = h.From + (h.To - h.From) * (1 - (1 - t) * (1 - t));
+            if (t == 1) _hovers.RemoveAt(i);
+        }
+        if (_entrances.Count == 0 && _pops.Count == 0 && _hovers.Count == 0) _subjectsFxBeat?.Stop();
     }
 
     private void FinishSubjectsFx()
@@ -178,5 +204,8 @@ public partial class AvailableSubjectsTabView
         _entrances.Clear();
         foreach (var p in _pops) { p.Card.ScaleX = p.Card.ScaleY = 1; if (p.Ring != null) p.Ring.Opacity = 0; }
         _pops.Clear();
+        foreach (var card in this.GetVisualDescendants().OfType<Control>().Where(c => Equals(c.Tag, "lobby-hover")))
+            if (card.RenderTransform is ScaleTransform scale) scale.ScaleX = scale.ScaleY = 1;
+        _hovers.Clear();
     }
 }
