@@ -216,6 +216,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// A booting page, or a second close while exiting, closes immediately.</summary>
         private void CloseDtrhForPanic()
         {
+            // Panic stops the toy now: the page may take the whole 1,200 ms watchdog to settle (review P1).
+            try { ConditioningControlPanel.Services.Haptics.DtrhHapticDirector.OnClosed(); }
+            catch (Exception ex) { Log.Debug("DtrhHost haptics: {E}", ex.Message); }
             try
             {
                 if (DtrhReady)

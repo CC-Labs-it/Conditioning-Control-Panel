@@ -155,4 +155,66 @@ public sealed partial class GameWindowTests
         }
         finally { GameWindow.DtrhHapticRunEnded = old; }
     });
+    // Review P1 (cloud): panic stops the real director before end-run; an unresponsive page that keeps
+    // barking through the 1,200 ms watchdog wait cannot drive the toy.
+    [Fact]
+    public void Dtrh_PanicStopsTheToyBeforeAnUnresponsivePageSettles() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var settings = ConditioningControlPanel.CoreSettings.Current;
+        var oldHapticSettings = settings.Haptics;
+        var oldHaptics = ConditioningControlPanel.CoreHaptics.Service;
+        var hs = new ConditioningControlPanel.Models.HapticSettings { Enabled = true };
+        hs.EnsureV2Migrated();
+        var haptics = new ConditioningControlPanel.Services.HapticService(hs);
+        haptics.DeviceManager.Register(new ConnectedToy());
+        var sequences = (System.Collections.ICollection)typeof(ConditioningControlPanel.Services.Haptics.Core.HapticMixer)
+            .GetField("_sequences", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(haptics.Mixer)!;
+        bool WaitLive(int n) { var until = DateTime.UtcNow.AddSeconds(5); while (sequences.Count != n && DateTime.UtcNow < until) System.Threading.Thread.Sleep(10); return sequences.Count == n; }
+        try
+        {
+            settings.Haptics = hs;
+            ConditioningControlPanel.CoreHaptics.Service = haptics;
+            var w = GameWindow.Launch("dtrh")!;
+            w.HandleMessage("{type:'ready'}");
+            w.HandleMessage("{type:'run-started'}");
+            Assert.True(DtrhHapticDirector.IsReady);
+            Assert.True(WaitLive(1));                                             // the drop-in wave is on the toy
+
+            Assert.True(GameWindow.HandleDtrhPanic());                            // end-run posted, page silent
+            Assert.False(DtrhHapticDirector.Snapshot.Active);
+            Assert.False(DtrhHapticDirector.IsReady);
+            Assert.True(WaitLive(0));                                             // the wave was cut at once
+            w.HandleMessage("{type:'haptic-state',running:true,depth:1,melt:1}");
+            w.HandleMessage("{type:'bark',event:'detonated'}");
+            System.Threading.Thread.Sleep(100);
+            Assert.Equal(0, sequences.Count);                                     // nothing new reaches the toy
+            w.Close();                                                            // what the watchdog does
+        }
+        finally
+        {
+            DtrhHapticDirector.OnClosed();
+            ConditioningControlPanel.CoreHaptics.Service = oldHaptics;
+            settings.Haptics = oldHapticSettings;
+            haptics.Dispose();
+        }
+    });
+
+    private sealed class ConnectedToy : ConditioningControlPanel.Services.Haptics.Core.IHapticProviderV2
+    {
+        public string Key => "test-connected";
+        public string DisplayName => Key;
+        public bool IsConnected => true;
+        public IReadOnlyList<ConditioningControlPanel.Services.Haptics.Core.HapticDevice> Devices => Array.Empty<ConditioningControlPanel.Services.Haptics.Core.HapticDevice>();
+#pragma warning disable CS0067
+        public event EventHandler<ConditioningControlPanel.Services.Haptics.Core.HapticToyEvent>? ToyEvent;
+        public event EventHandler? DevicesChanged;
+        public event EventHandler<string>? Error;
+#pragma warning restore CS0067
+        public System.Threading.Tasks.Task<bool> ConnectAsync(System.Threading.CancellationToken ct) => System.Threading.Tasks.Task.FromResult(true);
+        public System.Threading.Tasks.Task DisconnectAsync() => System.Threading.Tasks.Task.CompletedTask;
+        public System.Threading.Tasks.Task SetOutputsAsync(string id, IReadOnlyList<ConditioningControlPanel.Services.Haptics.Core.ActuatorOutput> outputs, System.Threading.CancellationToken ct) => System.Threading.Tasks.Task.CompletedTask;
+        public System.Threading.Tasks.Task StopAllAsync() => System.Threading.Tasks.Task.CompletedTask;
+        public System.Threading.Tasks.Task<bool> PingAsync() => System.Threading.Tasks.Task.FromResult(true);
+        public void Dispose() { }
+    }
 }
