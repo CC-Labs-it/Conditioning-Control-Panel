@@ -243,6 +243,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         {
             PossessionGhost.UndoAll();
             DropEffect.UndoAllLive();
+            RoomWarpEffect.UndoAllLive();
             List<PossessionRuntime> alive = new();
             lock (Live)
             {

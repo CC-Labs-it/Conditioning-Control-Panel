@@ -102,6 +102,18 @@ public class TutorialMainWindowDimTests
     });
 
     [Fact]
+    public Task ClosingMainEndsDialogTourEvenDuringNonBlockingStep() => WithWindows((main, dialog, _, overlay) =>
+    {
+        CoreTutorial.RaiseStepChanged(null, new CoreTutorial.Step { BlockBackgroundClicks = false });
+        Assert.True(CoreTutorial.IsActive);
+        main.Close();
+        Assert.True(overlay.HasClosed);
+        Assert.False(CoreTutorial.IsActive);
+        Assert.False(overlay.IsOnStage);
+        Assert.True(dialog.IsVisible);
+    });
+
+    [Fact]
     public Task ResizingMainKeepsItsInputBlocked() => WithWindows((main, dialog, button, overlay) =>
     {
         button.HorizontalAlignment = HorizontalAlignment.Right;
