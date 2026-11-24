@@ -8,6 +8,7 @@
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
              xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             xmlns:pv="clr-namespace:ConditioningControlPanel.Controls.Preview"
              rows:RowHue.TintSliders="True"
              xmlns:hx="clr-namespace:ConditioningControlPanel.Views.Controls"
              mc:Ignorable="d"
@@ -900,29 +901,17 @@
                                 </Border>
                             </StackPanel>
 
-                            <!-- SIDE ART. The art is the Border's BACKGROUND, not a child Image: a Border
-                                 clips its Background to CornerRadius but does NOT clip child content, so a
-                                 child Image would square off the rounded corners (round-2 lesson). -->
+                            <!-- SIDE ART -> LIVE PREVIEW (owner 2026-11-24): a framed slice of a desktop where a
+                                 drawn pulse monitor shows what the toy would feel (Controls/Preview/Scenes/
+                                 HapticsPreviewScene.cs; drawn only, it never reaches a toy). The art brush stays
+                                 (ApplyFeatureArt writes it) but is parked in Tag, so nothing shows behind it. -->
                             <Border Grid.Column="1" Margin="10,0,0,10" CornerRadius="14"
                                     BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
-                                    VerticalAlignment="Stretch" MinHeight="200" MaxHeight="560">
-                                <Border.Background>
-                                    <ImageBrush x:Name="HapticsSideArtBrush" Stretch="UniformToFill">
-                                        <ImageBrush.ImageSource>
-                                            <BitmapImage UriSource="pack://application:,,,/Resources/features/vibe.png"
-                                                         DecodePixelWidth="800"/>
-                                        </ImageBrush.ImageSource>
-                                    </ImageBrush>
-                                </Border.Background>
-                                <!-- Scrim so the plate sits under the page instead of fighting it. -->
-                                <Border CornerRadius="12">
-                                    <Border.Background>
-                                        <LinearGradientBrush StartPoint="0,1" EndPoint="0,0">
-                                            <GradientStop Color="#66000000" Offset="0"/>
-                                            <GradientStop Color="#00000000" Offset="0.45"/>
-                                        </LinearGradientBrush>
-                                    </Border.Background>
-                                </Border>
+                                    Background="#06050D" VerticalAlignment="Stretch" MinHeight="200" MaxHeight="560">
+                                <Border.Tag>
+                                    <ImageBrush x:Name="HapticsSideArtBrush" Stretch="UniformToFill"/>
+                                </Border.Tag>
+                                <pv:EffectPreview Scene="haptics"/>
                             </Border>
                         </Grid>
 

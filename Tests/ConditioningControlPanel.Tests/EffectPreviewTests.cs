@@ -352,7 +352,7 @@ public class EffectPreviewTests
         {
             "GetChaosImagePaths", "GetNextImages", "LoadImageAsync", "ImagePaths", "assets/images", @"assets\images",
             "PackEncryption", "DecryptFile", "ContentPack", "ModResourceResolver", "Scrolller",
-            "NAudio", "WaveOut", "LibVLC", "MediaPlayer", "SoundPlayer", "AudioService", "App.Audio", "PlaySound", "Haptics",
+            "NAudio", "WaveOut", "LibVLC", "MediaPlayer", "SoundPlayer", "AudioService", "App.Audio", "PlaySound", "App.Haptics", "Services.Haptics",
             "Settings?.Save", "Settings.Save", "SaveSettings", "App.Flash",
         };
         var hits = (from f in files
