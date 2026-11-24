@@ -19,6 +19,7 @@ using ConditioningControlPanel.Avalonia.Views.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.UI;
 using Serilog;
 
@@ -38,8 +39,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para>Chaos runs share the field: ChaosRunHost spawns treat bubbles here (BeginChaos/
     /// SpawnChaos/EndChaos) and gets their pops; they draw tinted and pay no ambient XP.</para>
     ///
-    /// <para>ponytail: Bubbles v2 motions (Rain/Spiral In),
-    /// Brain Drain, Natasha's red bubble, the avatar egg
+    /// <para>ponytail: Natasha's red bubble, the avatar egg
     /// and the milestone popup remain unported. The lucky gold glow is wired (LuckyGlow).
     /// Gaze pops, pop sparkles, pop haptics, mod pop audio and achievement credit are wired.
     /// See the feat-bubble-pop ledger row for the current parity evidence.</para>
@@ -149,6 +149,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 }
         }
         internal static int WindowCount => Windows.Count;
+        internal static IReadOnlyList<BubbleOverlayWindow> OpenWindows => Windows;
 
         /// <summary>WPF BubbleService.LoadBubbleImage (BubbleService.cs:221, :918-936): every Start re-resolves
         /// the active mod's bubble.png, so a mod switch shows its sprite on the next start (a <c>??=</c>
@@ -173,6 +174,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             foreach (var window in Windows) if (window.IsVisible) raise(window);
         }
+
+        // WPF BubbleService.cs:3428-3435: flash uses the base image; sweepers try their own art first.
+        internal static Bitmap? VariantImage(EffectBubbleSpec? spec)
+        {
+            if (spec == null) return null;
+            if (spec.VariantId == "flash") return Image;
+            return (spec.IsSweeper ? ChaosArt.Resolve("bubbles", "sweeper") : null)
+                ?? ChaosArt.Resolve("bubbles", spec.VariantId);
+        }
+
+        internal static bool ShowVariantLabel(EffectBubbleSpec? spec, Bitmap? image) =>
+            spec != null && image == null && !string.IsNullOrEmpty(spec.Label);
 
         public static bool IsRunning => _running && !_chaosOpenedWindows && !_oneShotWindows;
         internal static bool IsFrameOwner(BubbleOverlayWindow w) => Windows.Count > 0 && Windows[0] == w;
@@ -202,8 +215,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
                 var sc = screens[i];
-                var w = new BubbleOverlayWindow(Targets.Count, sc.Bounds, sc.Scaling > 0 ? sc.Scaling : 1);
-                if (!SkipPlatformChecksForTests && (!X11Overlay.SetInputRects(w, w.Rects, 0) || !X11Overlay.SetOverrideRedirect(w, sc.Bounds)))
+                var topmost = !ChaosRunHost.IsActive || s.ChaosPinOnTop;
+                var w = new BubbleOverlayWindow(Targets.Count, sc.Bounds, sc.Scaling > 0 ? sc.Scaling : 1, topmost);
+                if (!SkipPlatformChecksForTests && (!X11Overlay.SetInputRects(w, w.Rects, 0) || !X11Overlay.SetOverrideRedirect(w, sc.Bounds, topmost: topmost)))
                 {
                     Log.Warning("Bubbles: the platform refused a click-through topmost overlay window; skipped");
                     w.Close();
@@ -570,27 +584,91 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return centers.ToArray();
         }
 
+        // WPF BubbleService.cs:1538, 1800-1894: both halves share a clock and a tether.
+        private static readonly ChaosBoundPairs BoundPairs = new();
+        private static readonly Dictionary<int, (AmbientBubble A, AmbientBubble B)> BoundHalves = new();
+        private static Action<AmbientBubble>? _chaosBoundEnraged;   // WPF _chaosOnBoundEnraged (:1791)
+
+        internal static (AmbientBubble A, AmbientBubble B) SpawnBoundPair(EffectBubbleSpec a, EffectBubbleSpec b,
+            double hitboxScale = 1, bool liveMagnet = false)
+        {
+            // WPF BubbleService.cs:1550-1563: primary screen, an anchor clear of the edges, a random angle in [0, pi)
+            // with the vertical spread flattened to 0.6, each half half the separation from the anchor.
+            int i = Math.Max(0, Targets.FindIndex(t => t.IsPrimary));
+            var wa = i < Targets.Count ? Targets[i].WorkingArea : new PixelRect(0, 0, 1920, 1080);
+            double sepPx = ChaosTuning.BOUND_SEPARATION_DIP * (i < Targets.Count ? Targets[i].Scaling : 1);
+            var r = Field.Random;
+            double mx = sepPx / 2 + 120;
+            double ax = wa.X + mx + r.NextDouble() * Math.Max(1, wa.Width - 2 * mx);
+            double ay = wa.Y + 160 + r.NextDouble() * Math.Max(1, wa.Height - 320);
+            double ang = r.NextDouble() * Math.PI;
+            double ox = Math.Cos(ang) * sepPx / 2, oy = Math.Sin(ang) * sepPx / 2 * 0.6;
+            a.SpawnAtPxX = ax - ox; a.SpawnAtPxY = ay - oy;
+            b.SpawnAtPxX = ax + ox; b.SpawnAtPxY = ay + oy;
+            // WPF CreateChaosBubble (BubbleService.cs:1620-1621) gives both halves the run's hitbox and magnet.
+            var first = SpawnChaos(a, motion: ChaosMotion.RoamBounce, hitboxScale: hitboxScale, liveMagnet: liveMagnet);
+            var second = SpawnChaos(b, motion: ChaosMotion.RoamBounce, hitboxScale: hitboxScale, liveMagnet: liveMagnet);
+            second.MirrorVelocityFrom(first);   // WPF BubbleService.cs:1567
+            BoundPairs.Add(a.PairId, first, second);
+            BoundHalves.Add(a.PairId, (first, second));
+            TickBoundPairs();
+            return (first, second);
+        }
+
+        private static void ResolveBound(AmbientBubble half, bool defused)
+        {
+            if (half.Spec is not { IsBoundHalf: true } spec || !BoundHalves.TryGetValue(spec.PairId, out var pair)) return;
+            if (BoundPairs.Resolve(spec.PairId, half, defused, Field.Clock()) is { } survivor) _chaosBoundEnraged?.Invoke(survivor);
+            ChaosFieldFxOverlay.ClearTether(spec.PairId);
+            if (!defused || (pair.A.Popping && pair.B.Popping)) BoundHalves.Remove(spec.PairId);
+        }
+
+        internal static void TickBoundPairs()
+        {
+            var expired = BoundPairs.Step(Field.Clock(), Field.FreezeChaos || Field.HoldChaos);
+            foreach (var (id, pair) in BoundHalves.ToArray())
+            {
+                if (expired.Contains(pair.A) || expired.Contains(pair.B))
+                {
+                    BoundHalves.Remove(id); ChaosFieldFxOverlay.ClearTether(id);
+                    _chaosBoundEnraged?.Invoke(expired.Contains(pair.A) ? pair.A : pair.B);   // WPF :1873
+                }
+                else if (!pair.A.Popping && !pair.B.Popping && Field.Bubbles.Contains(pair.A) && Field.Bubbles.Contains(pair.B))
+                    ChaosFieldFxOverlay.SetTether(id, CenterPx(pair.A), CenterPx(pair.B));
+                else ChaosFieldFxOverlay.ClearTether(id);
+            }
+        }
+
+        private static void ClearBoundPairs()
+        {
+            foreach (var id in BoundHalves.Keys) ChaosFieldFxOverlay.ClearTether(id);
+            BoundHalves.Clear();
+            BoundPairs.Clear();
+        }
+
         /// <summary>WPF BeginChaosMode: chaos pops go to <paramref name="onPop"/>; opens the windows
         /// if the ambient field is not already running.</summary>
         internal static void BeginChaos(Visual host, Action<AmbientBubble> onPop,
             Action<AmbientBubble>? onDefuse = null, Action<AmbientBubble>? onDetonate = null,
             Func<AmbientBubble, bool>? canChannel = null,
             Action<AmbientBubble>? onTeaseTouched = null, Action<AmbientBubble>? onTeaseDenied = null,
-            Action<AmbientBubble>? onTreatExpired = null)
+            Action<AmbientBubble>? onTreatExpired = null, Action<AmbientBubble>? onBoundEnraged = null)
         {
             _chaosPopped = onPop;
+            _chaosBoundEnraged = onBoundEnraged;
             _chaosCanChannel = canChannel;
             _chaosTeaseTouched = onTeaseTouched;
             Field.ChaosTeaseDenied = onTeaseDenied == null ? null : b => { AnchorPop(b); onTeaseDenied(b); };
             Field.Held = false;
             Field.ChaosDefused = onDefuse == null ? null : b =>
             {
+                ResolveBound(b, true);
                 AnchorPop(b);
                 // WPF CreateChaosBubble onDefuse (:1571): a held snap deflates with a hiss, a sweep snaps.
                 PlayChaosCue(b.DefusedViaChannel && File.Exists(ChaosCuePath("defuse_hiss")) ? "defuse_hiss" : "snap", 0.6f);
                 onDefuse(b);
             };
-            Field.ChaosDetonated = onDetonate == null ? null : b => { AnchorPop(b); onDetonate(b); };
+            Field.ChaosDetonated = onDetonate == null ? null : b => { AnchorPop(b); onDetonate(b); ResolveBound(b, false); };   // WPF BubbleService.cs:1611-1612
             Field.ChaosTreatExpired = onTreatExpired;
             if (_running) return;
             Start(host, null, ambient: false);
@@ -609,6 +687,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF PopAllBubbles at a wave boundary, retaining the chaos callbacks.</summary>
         internal static void ClearChaos()
         {
+            ClearBoundPairs();
             Field.Held = false;
             Field.Bubbles.Clear();
             ChaosRipples.Clear();   // hand-ported from #4776: no ripple or hover outlives the field
@@ -621,6 +700,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF EndChaosMode: every chaos bubble goes at once (panic/stop clear the field).</summary>
         internal static void EndChaos()
         {
+            ClearBoundPairs();
             Field.HoldChaos = false;
             ClearEStim();
             Field.FreezeChaos = false;
@@ -633,6 +713,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _chaosPopped = null;
             _chaosCanChannel = null;
             _chaosTeaseTouched = null;
+            _chaosBoundEnraged = null;
             Field.ChaosTeaseDenied = null;
             Field.ChaosDefused = Field.ChaosDetonated = Field.ChaosTreatExpired = null;
             Field.Held = false;
@@ -759,6 +840,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var a = Targets[i].WorkingArea;
                 b = AmbientBubble.SpawnChaos((random ?? Field.Random), i, a.X, a.Y, a.Width, a.Height, Windows[i].Scaling, spec, motion);
             }
+            // WPF BubbleService.cs:3060,5085: golden chaos bubbles glow while alive.
+            if (spec.IsGolden) b.LuckyGlowBlur = 20;
             b.ApplyChaosHitbox(hitboxScale, liveMagnet);
             Field.Bubbles.Add(b);
             if (spec.IsTease) LoadTeaseFace(b);
@@ -870,6 +953,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             try { App.Quests?.TrackBubblePopped(); } catch (Exception ex) { Log.Debug("bubble quest credit: {E}", ex.Message); }
             _ = CoreHaptics.Service?.BubblePopAsync();   // WPF BubbleService.cs:1089
             try { Popped?.Invoke(); } catch (Exception ex) { Log.Debug("bubble popped handler: {E}", ex.Message); }   // WPF OnBubblePopped
+            ConditioningControlPanel.Services.Remote.RemoteScreenFeed.Note("pop");
         }
 
         // WPF BubbleService.cs:2191-2236: mod audio, perk opt-out and missing-chime fallback.
@@ -917,6 +1001,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void StepChaosField()
         {
             Field.Step();
+            TickBoundPairs();
             if (Field.HoldChaos) return;
             foreach (var b in Field.Bubbles)
             {
@@ -981,7 +1066,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
             GradientStops = { new GradientStop(Color.FromArgb(150, 255, 255, 255), 0), new GradientStop(Colors.Transparent, .7) }
         };
-        private static readonly IPen TeasePen = new Pen(Brushes.White, 5);
         /// <summary>WPF BubbleService.cs:2533-2550, :3551-3565 (hand-ported from #4599): the glassy
         /// specular highlight on a plain chaos bubble while the Skia FX layer is on. Variant sprites
         /// bring their own art; ambient bubbles keep their bubble.png highlights.</summary>
@@ -1041,7 +1125,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
         }
 
-        public BubbleOverlayWindow(int index, PixelRect bounds, double scaling)
+        public BubbleOverlayWindow(int index, PixelRect bounds, double scaling, bool topmost = true)
         {
             Index = index;
             Bounds = bounds;
@@ -1049,7 +1133,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             WindowDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Background = Brushes.Transparent;
-            Topmost = true;
+            Topmost = topmost;
             ShowInTaskbar = false;
             ShowActivated = false;
             CanResize = false;
@@ -1159,6 +1243,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return false;
         }
 
+        private static readonly Dictionary<(double Blur, double Opacity), DropShadowEffect> LuckyShadows = new();
+        private static readonly Dictionary<double, DropShadowEffect> EnragedShadows = new();
+        internal static DropShadowEffect? GlowEffect(AmbientBubble b, double k)
+        {
+            // WPF Bubble.Enrage (BubbleService.cs:2756) replaces any glow with a #FF2D2D flare, blur 30 at 0.95.
+            if (b.Enraged)
+            {
+                var blur = 30 * k;
+                if (!EnragedShadows.TryGetValue(blur, out var flare))
+                    EnragedShadows[blur] = flare = new DropShadowEffect { Color = Color.FromRgb(0xFF, 0x2D, 0x2D), BlurRadius = blur, OffsetX = 0, OffsetY = 0, Opacity = 0.95 };
+                return flare;
+            }
+            if (b.LuckyGlowBlur <= 0) return null;
+            var key = (b.LuckyGlowBlur * k, b.Spec?.IsGolden == true ? 0.55 : 0.8);
+            if (!LuckyShadows.TryGetValue(key, out var effect))
+                LuckyShadows[key] = effect = new DropShadowEffect { Color = Color.FromRgb(0xFF, 0xD7, 0x00), BlurRadius = key.Item1, OffsetX = 0, OffsetY = 0, Opacity = key.Item2 };
+            return effect;
+        }
+
         private sealed class Layer : Control
         {
             private readonly BubbleOverlayWindow _w;
@@ -1202,8 +1305,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 {
                     var b = bubbles[i];
                     if (b.Screen != _w.Index) continue;
-                    var teaseImage = b.Spec?.IsTease == true ? BubbleOverlay.TeaseImage : null;
-                    var variantImage = teaseImage ?? (b.Spec?.VariantId == Services.Chaos.BrainDrainBubble.VariantId ? BubbleOverlay.BrainDrainImage : null);
+                    var variantImage = BubbleOverlay.VariantImage(b.Spec);
                     var img = variantImage ?? BubbleOverlay.Image;
                     double cx = (b.CenterX - ox) * k, cy = (b.CenterY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale;
                     var m = Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateRotation(b.Angle * Math.PI / 180)
@@ -1228,8 +1330,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                             else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
                             if (HasChaosShine(b, variantImage != null))
                                 dc.DrawEllipse(ChaosShine, null, new Point(cx, cy), size / 2, size / 2);
-                            // WPF's no-sprite path: the label carries the variant. Only the freeze pickup draws it so far.
-                            if (b.Spec is { IsFreeze: true, Label.Length: > 0 }) DrawLabel(dc, b.Spec.Label, cx, cy, size, k);
                             if (b.Spec?.IsTease == true && BubbleOverlay.TeaseFaces.TryGetValue(b, out var face)) using (dc.PushTransform(m.TryInvert(out var inverse) ? inverse : Matrix.Identity))
                             {
                                 var frame = face.Frames[face.Animated
@@ -1249,12 +1349,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                                     }
                                 }
                             }
-                            if (b.Spec?.IsTease == true && teaseImage == null && !b.Popping)
-                            {
-                                double r = size * 0.12;
-                                dc.DrawLine(TeasePen, new Point(cx - r, cy - r), new Point(cx + r, cy + r));
-                                dc.DrawLine(TeasePen, new Point(cx + r, cy - r), new Point(cx - r, cy + r));
-                            }
+                            // WPF BubbleService.cs:4967-4975: the tease face sits under the label.
+                            if (BubbleOverlay.ShowVariantLabel(b.Spec, variantImage)) DrawLabel(dc, b.Spec!.Label, cx, cy, size, k);
                             if (!b.Popping && BubbleOverlay.IsShielded(b))
                             {
                                 using (dc.PushOpacity(b.ShieldOpacity))
@@ -1291,16 +1387,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     finally { glow?.Dispose(); }
                 }
             }
-            private static readonly Dictionary<double, DropShadowEffect> LuckyShadows = new();
             /// <summary>WPF Bubble.SetLucky: #FFD700 at 0.8, no offset. The shadow is taken of what is drawn,
             /// so it fades with the bubble and its sparkles. Bounds cover the turned sprite and every live sparkle.</summary>
             private static DrawingContext.PushedState? LuckyGlow(DrawingContext dc, AmbientBubble b, double cx, double cy,
                 double size, double scale, double k, double ox, double oy)
             {
-                if (b.LuckyGlowBlur <= 0) return null;
-                var blur = b.LuckyGlowBlur * k;
-                if (!LuckyShadows.TryGetValue(blur, out var effect))
-                    LuckyShadows[blur] = effect = new DropShadowEffect { Color = Color.FromRgb(0xFF, 0xD7, 0x00), BlurRadius = blur, OffsetX = 0, OffsetY = 0, Opacity = 0.8 };
+                var effect = GlowEffect(b, k);
+                if (effect == null) return null;
                 var angle = b.Angle * Math.PI / 180;
                 var half = size * Math.Abs(scale) / 2 * (Math.Abs(Math.Cos(angle)) + Math.Abs(Math.Sin(angle))) + 2 * k;
                 double left = cx - half, top = cy - half, right = cx + half, bottom = cy + half;

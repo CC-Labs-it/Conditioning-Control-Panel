@@ -52,10 +52,7 @@ public sealed class ModPersistenceShapeTests
         }
         finally
         {
-            // Other test classes save into this shared profile in parallel; their live *.tmp files are
-            // open (Windows sharing violation) or about to be renamed, and load-time recovery reaps leftovers.
-            foreach (var f in Directory.GetFiles(CorePaths.UserData, "settings*").Where(f => !f.EndsWith(".tmp")))
-                File.Delete(f);
+            foreach (var f in RoadmapTestProfile.SettingsFiles(CorePaths.UserData)) File.Delete(f);
         }
     }
 

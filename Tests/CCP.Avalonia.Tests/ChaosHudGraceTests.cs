@@ -27,6 +27,42 @@ public class ChaosHudGraceTests
     }
 
     [Fact]
+    public async Task InputRegionTracksHudAndStopsOnClose()
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            Setup();
+            var hud = new ChaosHudWindow(new ChaosRunState(new ChaosRunConfig()));
+            var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            PixelRect region = default;
+            int calls = 0;
+            hud.InputRegionOverride = rects => { region = Assert.Single(rects); calls++; };
+            try
+            {
+                hud.Show();
+                hud.UpdateLayout();
+                typeof(ChaosHudWindow).GetMethod("ApplySide", flags)!.Invoke(hud, new object[] { false });
+                Assert.Equal(ChaosHudWindow.InputRect(hud.Bounds.Width, hud.Bounds.Height, hud.RenderScaling, false, false), region);
+                Assert.Equal(116, region.Width);
+                typeof(ChaosHudWindow).GetMethod("ApplySide", flags)!.Invoke(hud, new object[] { true });
+                Assert.Equal((int)hud.Bounds.Width - 116, region.X);
+                typeof(ChaosHudWindow).GetMethod("Expand", flags)!.Invoke(hud, null);
+                Assert.Equal((int)hud.Bounds.Width, region.Width);
+                typeof(ChaosHudWindow).GetMethod("Collapse", flags)!.Invoke(hud, null);
+                await Task.Delay(300);
+                Assert.Equal(116, region.Width);
+                hud.Close();
+                var afterClose = calls;
+                await Task.Delay(250);
+                Assert.Equal(afterClose, calls);
+            }
+            finally { if (hud.IsVisible) hud.Close(); }
+        });
+        Assert.Equal(new PixelRect(276, 0, 174, 900), ChaosHudWindow.InputRect(300, 600, 1.5, true, false));
+        Assert.Equal(new PixelRect(0, 0, 450, 900), ChaosHudWindow.InputRect(300, 600, 1.5, false, true));
+    }
+
+    [Fact]
     public void NativeWindowsPointerProbeIsPlatformGuarded()
     {
         if (OperatingSystem.IsWindows()) Assert.NotNull(Win32Overlay.CursorPosition());

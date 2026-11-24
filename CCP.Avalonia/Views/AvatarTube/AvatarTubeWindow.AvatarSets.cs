@@ -92,14 +92,15 @@ public partial class AvatarTubeWindow
         return others ? null : only;
     }
 
-    internal int[] PickableAvatarSets() => SingleEmoteSet() is int only ? new[] { only } : SupportedAvatarSets();
+    internal int[] PickableAvatarSets() => SingleEmoteSet() is int only ? new[] { only }
+        : _portrait != null ? Enumerable.Range(1, _portrait.Manifest.Skins.Count).ToArray() : SupportedAvatarSets();
 
     private int ResolveStartAvatarSet()
     {
         var s = CoreSettings.Current;
         var sets = PickableAvatarSets();
         int set = ModAvatarLooks.StoredFor(s.ModAvatarSet, CoreMods.ActiveModId, sets) ?? s.SelectedAvatarSet;
-        if (CoreMods.ActiveModPackage?.Manifest.CustomAvatarSets?.Any(c => c.SetNumber == set) != true)
+        if (_portrait == null && CoreMods.ActiveModPackage?.Manifest.CustomAvatarSets?.Any(c => c.SetNumber == set) != true)
             set = Math.Clamp(set, 1, 7);
         return sets.Contains(set) || sets.Length == 0 ? set : sets[^1];
     }
@@ -132,7 +133,7 @@ public partial class AvatarTubeWindow
         BarkHead.Engine?.Raise("AvatarChanged");
         FadeAvatarSwitch(() =>
         {
-            if (CompanionForAvatarSet(setNumber) is { } companion) CoreModsHooks.SwitchCompanion?.Invoke(companion);
+            if (_portrait == null && CompanionForAvatarSet(setNumber) is { } companion) CoreModsHooks.SwitchCompanion?.Invoke(companion);
             ApplyAvatarSet();
             UpdateNavigationArrows();
         });
@@ -178,6 +179,7 @@ public partial class AvatarTubeWindow
     {
         if (_avatarSetsClosed) return;
         CancelAvatarSwitch();
+        LoadPortrait();
         var s = CoreSettings.Current;
         var sets = PickableAvatarSets();
         var only = SingleEmoteSet();
