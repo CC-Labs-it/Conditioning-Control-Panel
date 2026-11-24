@@ -63,17 +63,22 @@ public partial class SettingsTabView
         }
     }
 
-    // Appended to the panic pause in the same page script: only a later playing event
-    // from the first video can rebind. The nonce rejects delayed messages from old pages.
-    internal string BrowserEnhanceResumeScript()
+    // Appended to the panic pause in the same page script: only a playing event from the first
+    // video within 5 s of a trusted user press after panic can rebind, so a page's own play()
+    // cannot. The nonce rejects delayed messages from old pages; t primes the new engine cursor.
+    internal string BrowserEnhanceResumeScript() => BrowserEnhanceResumeToken is { } token ? ResumeScriptFor(token) : "";
+
+    internal static string ResumeScriptFor(string token)
     {
-        if (BrowserEnhanceResumeToken is not { } token) return "";
         var id = JsonSerializer.Serialize(token);
-        return "(function(){var id=" + id + ";function resume(e){var v=document.querySelector('video');" +
-            "if(e.target!==v||v.paused)return;document.removeEventListener('playing',resume,true);" +
-            "var m=JSON.stringify({type:'ccpEnhancementResume',id:id});" +
+        return "(function(){var id=" + id + ",act=0;function press(e){if(e.isTrusted)act=Date.now();}" +
+            "function resume(e){var v=document.querySelector('video');" +
+            "if(e.target!==v||v.paused||!act||Date.now()-act>5000)return;document.removeEventListener('playing',resume,true);" +
+            "document.removeEventListener('pointerdown',press,true);document.removeEventListener('keydown',press,true);" +
+            "var m=JSON.stringify({type:'ccpEnhancementResume',id:id,t:v.currentTime||0});" +
             "if(typeof window.invokeCSharpAction==='function')window.invokeCSharpAction(m);" +
             "else if(window.chrome&&window.chrome.webview)window.chrome.webview.postMessage(m);}" +
+            "document.addEventListener('pointerdown',press,true);document.addEventListener('keydown',press,true);" +
             "document.addEventListener('playing',resume,true);})();";
     }
 
@@ -87,12 +92,13 @@ public partial class SettingsTabView
             using var json = JsonDocument.Parse(outer.RootElement.ValueKind == JsonValueKind.String ? outer.RootElement.GetString()! : body);
             var root = json.RootElement;
             if (root.GetProperty("type").GetString() != "ccpEnhancementResume" || root.GetProperty("id").GetString() != token) return;
-            EvaluateBrowserEnhancement(_browserResumeUrl?.ToString());
+            double t = root.TryGetProperty("t", out var at) && at.TryGetDouble(out var v) && double.IsFinite(v) ? Math.Max(0, v) : 0;
+            EvaluateBrowserEnhancement(_browserResumeUrl?.ToString(), t);
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or System.Collections.Generic.KeyNotFoundException) { }
     }
 
-    private void EvaluateBrowserEnhancement(string? url)
+    private void EvaluateBrowserEnhancement(string? url, double startTime = 0)
     {
         StopBrowserEnhancement();
         if (!CoreSettings.Current.BrowserEnhanceIfPossible || string.IsNullOrEmpty(url)) return;
@@ -106,7 +112,7 @@ public partial class SettingsTabView
                 TxtEnhanceMatchStatus.Text = Loc.Get("browser_enhance_unsupported");
                 return;
             }
-            var source = _browserEnhanceSource = new WebHostVideoTimeSource(BrowserWebHost, BrowserAutomaticPolling);
+            var source = _browserEnhanceSource = new WebHostVideoTimeSource(BrowserWebHost, BrowserAutomaticPolling, startTime);
             var webcam = new BrowserEnhancementWebcam();
             if (!_browserEnhanceHost.Bind(source, source.Attach, source.Detach, new SpeakActionDispatcher(BrowserSpeakSessionFactory ?? BrowserSpeakRuntime.CreateSession, new BrowserEnhancementDispatcher()), webcam))
             {

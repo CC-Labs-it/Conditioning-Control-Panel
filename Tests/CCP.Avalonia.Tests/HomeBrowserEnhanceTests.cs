@@ -248,6 +248,36 @@ public class HomeBrowserEnhanceTests
     });
 
     [Fact]
+    public void ResumeScriptIgnoresPagePlayUntilATrustedPress()
+    {
+        // The real page script under a minimal DOM: a page's own play() after panic must not rebind.
+        const string dom = "var L={},v={paused:false,currentTime:1.2},sent=[];" +
+            "globalThis.document={querySelector:()=>v,addEventListener:(n,f)=>(L[n]=L[n]||[]).push(f),removeEventListener:(n,f)=>L[n]=(L[n]||[]).filter(x=>x!==f)};" +
+            "globalThis.window={invokeCSharpAction:m=>sent.push(m)};function fire(n,e){(L[n]||[]).slice().forEach(f=>f(e));}";
+        const string drive = "fire('playing',{target:v});fire('pointerdown',{isTrusted:false});fire('playing',{target:v});var early=sent.length;" +
+            "fire('keydown',{isTrusted:true});v.paused=true;fire('playing',{target:v});v.paused=false;fire('playing',{target:v});fire('playing',{target:v});" +
+            "console.log(JSON.stringify({early:early,sent:sent}));";
+        var psi = new System.Diagnostics.ProcessStartInfo("node") { RedirectStandardInput = true, RedirectStandardOutput = true, UseShellExecute = false };
+        System.Diagnostics.Process? node;
+        try { node = System.Diagnostics.Process.Start(psi); }
+        catch (System.ComponentModel.Win32Exception e) { Assert.Skip("node not installed: " + e.Message); return; }
+        using (node!)
+        {
+            node.StandardInput.Write(dom + SettingsTabView.ResumeScriptFor("tok") + drive);
+            node.StandardInput.Close();
+            var output = node.StandardOutput.ReadToEnd();
+            Assert.True(node.WaitForExit(10000));
+            using var result = System.Text.Json.JsonDocument.Parse(output);
+            Assert.Equal(0, result.RootElement.GetProperty("early").GetInt32());
+            var sent = result.RootElement.GetProperty("sent");
+            Assert.Equal(1, sent.GetArrayLength());
+            using var message = System.Text.Json.JsonDocument.Parse(sent[0].GetString()!);
+            Assert.Equal("tok", message.RootElement.GetProperty("id").GetString());
+            Assert.Equal(1.2, message.RootElement.GetProperty("t").GetDouble());
+        }
+    }
+
+    [Fact]
     public void PanicThenResumeRebindsNonSpeakEnhancementOnSamePage() => AvaloniaTestDispatcher.Run(() =>
     {
         ChatThresholdLinksTests.Setup();
@@ -273,6 +303,9 @@ public class HomeBrowserEnhanceTests
             tab.FindControl<CheckBox>("ToggleEnhanceIfPossible")!.IsChecked = true;
             web.OnNavigationCompleted(new Uri(url));
             Assert.True(tab.BrowserEnhanceHost.IsRunning);
+            void Poll(double t) { time = t; tab.BrowserEnhanceSource!.PollAsync().GetAwaiter().GetResult(); }
+            Poll(0); Poll(1.2);
+            Assert.Contains(scripts, s => s.Contains("v.pause()"));
             var old = tab.BrowserEnhanceSource;
             PanicSurfaces.All.Single(s => s.Id == "browser-media").Stop(shell);
             Assert.False(tab.BrowserEnhanceHost.IsRunning);
@@ -280,17 +313,18 @@ public class HomeBrowserEnhanceTests
             Assert.NotNull(token);
             web.OnWebMessage("{\"type\":\"ccpEnhancementResume\",\"id\":\"stale\"}");
             Assert.False(tab.BrowserEnhanceHost.IsRunning);
-            var message = System.Text.Json.JsonSerializer.Serialize(new { type = "ccpEnhancementResume", id = token });
+            var message = System.Text.Json.JsonSerializer.Serialize(new { type = "ccpEnhancementResume", id = token, t = 1.2 });
             web.OnWebMessage(message);
             Assert.True(tab.BrowserEnhanceHost.IsRunning);
             Assert.NotSame(old, tab.BrowserEnhanceSource);
             var current = tab.BrowserEnhanceSource;
             web.OnWebMessage(message);
             Assert.Same(current, tab.BrowserEnhanceSource);
+            // The rebind starts at the resumed playhead: the pause at 1 s already fired on this page.
             scripts.Clear();
-            tab.BrowserEnhanceSource!.PollAsync().GetAwaiter().GetResult();
-            time = 1.2;
-            tab.BrowserEnhanceSource.PollAsync().GetAwaiter().GetResult();
+            Poll(1.2); Poll(1.5);
+            Assert.DoesNotContain(scripts, s => s.Contains("v.pause()"));
+            Poll(0); Poll(1.2);
             Assert.Contains(scripts, s => s.Contains("v.pause()"));
             PanicSurfaces.All.Single(s => s.Id == "browser-media").Stop(shell);
             var invalidated = tab.BrowserEnhanceResumeToken;

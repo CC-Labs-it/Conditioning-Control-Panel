@@ -24,10 +24,12 @@ internal sealed class WebHostVideoTimeSource : IPlaybackTimeSource, IDisposable
     private bool _playing;
     private const string PollScript = "(function(){var v=document.querySelector('video');if(!v)return null;var r=v.getBoundingClientRect(),w=window.innerWidth||1,h=window.innerHeight||1;return JSON.stringify({t:v.currentTime||0,d:isFinite(v.duration)?v.duration:0,paused:!!v.paused,rx:r.left/w,ry:r.top/h,rw:r.width/w,rh:r.height/h});})();";
 
-    public WebHostVideoTimeSource(WebHost host, bool automaticPolling = true)
+    // startTime primes the engine cursor (EnhancementEngine.Start reads it) before the first poll.
+    public WebHostVideoTimeSource(WebHost host, bool automaticPolling = true, double startTime = 0)
     {
         _host = host;
         _automaticPolling = automaticPolling;
+        _time = startTime;
         _timer.Tick += async (_, _) => await PollAsync();
     }
 
