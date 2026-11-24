@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -7,6 +8,7 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel;
 using Xunit;
@@ -64,4 +66,48 @@ public sealed class DeeperPlayNowTests
         }
         return Task.CompletedTask;
     });
+
+    [Fact]
+    public Task PanicCancelsPlayNowWhileWaitingForTheRequestedFile() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        if (Application.Current is null)
+            ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var settings = CoreSettings.Current;
+        var bounds = (settings.DeeperPlayerWindowLeft, settings.DeeperPlayerWindowTop, settings.DeeperPlayerWindowWidth, settings.DeeperPlayerWindowHeight, settings.DeeperPlayerWindowPositionHint);
+        var media = Path.GetTempFileName();
+        var oldOpen = DeeperLocalAudio.Open;
+        var audio = new Audio();
+        var opens = 0;
+        DeeperLocalAudio.Open = _ => { opens++; return Task.FromResult<IDeeperLocalAudio?>(audio); };
+        var window = new EnhancementPlayerWindow(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = media }, "test")
+            { LoadWaveformPeaks = DeeperPlayerAudioTests.NoPeaks };
+        try
+        {
+            window.Show();
+            var loaded = typeof(EnhancementPlayerWindow).GetProperty("LoadedFilePath")!;
+            loaded.SetValue(window, "other.ccpenh.json");
+            window.MaximizeAndPlayWhenReady("chosen.ccpenh.json");
+            window.PlayNowTick();
+            Assert.Equal(0, opens);
+            PanicSurfaces.All.Single(s => s.Id == "deeper-player").Stop(null);
+            loaded.SetValue(window, "chosen.ccpenh.json");
+            window.PlayNowTick();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, opens);
+            Assert.False(audio.Playing);
+            window.MaximizeAndPlayWhenReady("chosen.ccpenh.json");
+            window.PlayNowTick();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, opens);
+            Assert.True(audio.Playing);
+        }
+        finally
+        {
+            window.Close(); DeeperLocalAudio.Open = oldOpen; File.Delete(media);
+            (settings.DeeperPlayerWindowLeft, settings.DeeperPlayerWindowTop, settings.DeeperPlayerWindowWidth, settings.DeeperPlayerWindowHeight, settings.DeeperPlayerWindowPositionHint) = bounds;
+        }
+        return Task.CompletedTask;
+    });
+
 }
