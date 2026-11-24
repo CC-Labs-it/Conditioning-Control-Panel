@@ -68,6 +68,46 @@ public sealed class RemoteDirectoryTabTests
     }
 
     [Fact]
+    public Task ModChangeRedrawsSessionQrAndPendingRedrawStopsOnPanicOrEnd() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsureAvalonia();
+        var oldRelay = RemoteControlTabView.Relay;
+        using var relay = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", (_, _) => null, _ => { }, new FakeRelay()) { AutoPoll = false };
+        RemoteControlTabView.Relay = new Lazy<RemoteRelay>(() => relay);
+        Window? host = null;
+        try
+        {
+            Assert.NotNull(await relay.StartAsync("light"));
+            var view = new RemoteControlTabView();
+            host = new Window { Content = view };
+            host.Show();
+            Dispatcher.UIThread.RunJobs();
+            var qr = view.FindControl<Image>("ImgRemoteQrCode")!;
+            var initial = qr.Source;
+            Assert.NotNull(initial);
+            var mod = new ConditioningControlPanel.Models.ModPackage(new ConditioningControlPanel.Models.ModManifest { Id = "qr-test" }, null, false);
+            CoreMods.RaiseModChanged(null, mod);
+            Dispatcher.UIThread.RunJobs();
+            Assert.NotSame(initial, qr.Source);
+            var repainted = qr.Source;
+            CoreMods.RaiseModChanged(null, mod);
+            PanicSurfaces.All.First(x => x.Id == "remote-haptics").Stop(null);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(repainted, qr.Source);
+            CoreMods.RaiseModChanged(null, mod);
+            relay.EndSessionNow();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(qr.Source);
+        }
+        finally
+        {
+            host?.Close();
+            relay.EndSessionNow();
+            RemoteControlTabView.Relay = oldRelay;
+        }
+    });
+
+    [Fact]
     public Task Opt_in_form_caps_tags_counts_the_status_lists_the_session_and_remembers_only_when_asked() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         EnsureAvalonia();
