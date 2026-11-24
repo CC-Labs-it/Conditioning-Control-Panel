@@ -259,7 +259,11 @@ public sealed partial class FriendsDrawer
         var keys = FriendsFold.LeashKeys(snap, id => svc?.SentTo(id) ?? Array.Empty<LeashSentItem>());
         var state = FriendsFold.State;
         if (state.LeashSeen == null) FriendsFold.Update(s => s.LeashSeen = keys.Distinct().ToList());
-        bool open = state.LeashOpen;
+        // An incoming offer opens the fold by itself; the stored switch stays the player's own.
+        _leashLiveOffers = FriendsFold.LiveOfferKeys(snap, ServerClock.UtcNow);
+        bool wasShownOpen = _leashShownOpen;
+        bool open = FriendsFold.LeashShownOpen(state.LeashOpen, _leashLiveOffers, FriendsFold.OffersFoldedOver);
+        _leashShownOpen = open;
         if (open && _isOpen)
         {
             var seen = state.LeashSeen!;
@@ -273,13 +277,26 @@ public sealed partial class FriendsDrawer
             open ? null : summary, LeashBadge));
         _leashBody.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
         _leashFold.Children.Add(_leashBody);
+        // The in of an open the offer did by itself (a press does its own in).
+        if (open && !wasShownOpen && !state.LeashOpen && _isOpen && _foldTurned == null)
+            RiseIn(new FrameworkElement[] { _leashBody });
     }
 
-    /// <summary>Opens or folds the leash. Internal for the suite.</summary>
+    /// <summary>Whether the leash showed open on the last fill, and the live offers it saw.</summary>
+    private bool _leashShownOpen;
+    private IReadOnlyList<string> _leashLiveOffers = Array.Empty<string>();
+
+    /// <summary>Opens or folds the leash. Folding an open that a live offer did folds over that offer
+    /// (memory only) and leaves the stored switch alone unless the player had it on. Internal for the suite.</summary>
     internal void ToggleLeash()
     {
-        FriendsFold.Update(s => s.LeashOpen = !s.LeashOpen);
+        if (_leashShownOpen)
+        {
+            foreach (var k in _leashLiveOffers) FriendsFold.OffersFoldedOver.Add(k);
+            if (FriendsFold.State.LeashOpen) FriendsFold.Update(s => s.LeashOpen = false);
+        }
+        else FriendsFold.Update(s => s.LeashOpen = true);
         FillLeashFold();
-        if (FriendsFold.State.LeashOpen) RiseIn(new FrameworkElement[] { _leashBody });
+        if (_leashShownOpen) RiseIn(new FrameworkElement[] { _leashBody });
     }
 }

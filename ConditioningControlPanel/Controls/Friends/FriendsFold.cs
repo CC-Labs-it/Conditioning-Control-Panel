@@ -78,6 +78,7 @@ internal static class FriendsFold
     internal static void UseMemory()
     {
         _state = new FriendsFoldState();
+        OffersFoldedOver.Clear();
         Load = () => new FriendsFoldState();
         Save = _ => { };
     }
@@ -134,7 +135,7 @@ internal static class FriendsFold
     public static IReadOnlyList<string> LeashKeys(LeashSnapshot s, Func<string, IReadOnlyList<LeashSentItem>> sentTo)
     {
         var keys = new List<string>();
-        foreach (var o in s.Offers) keys.Add("o:" + (o.Id ?? o.From.Id + "@" + o.At.ToUnixTimeSeconds()));
+        foreach (var o in s.Offers) keys.Add(OfferKey(o));
         if (s.Me is { } me)
         {
             foreach (var p in me.Pending) keys.Add("p:" + p.Pid);
@@ -151,6 +152,21 @@ internal static class FriendsFold
         }
         return keys;
     }
+
+    private static string OfferKey(LeashOffer o) => "o:" + (o.Id ?? o.From.Id + "@" + o.At.ToUnixTimeSeconds());
+
+    /// <summary>Incoming leash offers still inside their life (invites live 5 minutes).</summary>
+    public static IReadOnlyList<string> LiveOfferKeys(LeashSnapshot s, DateTimeOffset nowUtc)
+        => s.Offers.Where(o => o.ExpiresAt > nowUtc).Select(OfferKey).Distinct().ToList();
+
+    /// <summary>Offers the player folded the leash over while they showed: they no longer open it.
+    /// Memory only, never saved, so the stored fold switch stays the player's own.</summary>
+    internal static HashSet<string> OffersFoldedOver { get; } = new();
+
+    /// <summary>Whether the leash shows open: the player's stored switch, or a live incoming offer the
+    /// player has not folded over (it opens the fold by itself without touching the stored switch).</summary>
+    public static bool LeashShownOpen(bool storedOpen, IReadOnlyList<string> liveOffers, ICollection<string> foldedOver)
+        => storedOpen || liveOffers.Any(k => !foldedOver.Contains(k));
 
     /// <summary>The bubble on the folded leash: keys not seen yet. Zero before the first fill.</summary>
     public static int LeashUnseen(IReadOnlyList<string> keys, ICollection<string>? seen)
