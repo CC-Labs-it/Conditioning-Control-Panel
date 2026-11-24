@@ -41,9 +41,8 @@ namespace ConditioningControlPanel.Services
     /// (<c>FinalizeWatchCredit</c> :7424) and the strict-key rules. Drawing is the head's
     /// <see cref="IMandatoryVideoHost"/>.
     /// Content-pack clips come through <see cref="PackVideos"/>.
-    /// ponytail: remote clips, the duration filter
-    /// (MetadataCache; the max-length cap in <see cref="Guard"/> still holds the max), cascade/feed/DND/browser-media defers and the
-    /// interaction queue are WPF-head services; add each here when it reaches Core.
+    /// ponytail: cascade/feed/browser-media defers and the interaction queue are WPF-head services;
+    /// add each here when it reaches Core.
     /// <para><b>Deliberate deviation:</b> a scheduled tick that finds an empty library re-arms the
     /// schedule. WPF returns from ContinueTriggerVideo (:2424) without ScheduleNext, so its schedule
     /// silently dies until the engine restarts; here a video added mid-session still plays
@@ -62,6 +61,7 @@ namespace ConditioningControlPanel.Services
         private readonly TimeProvider _time;
         private readonly Func<IReadOnlyList<string>> _library;
         private readonly Random _random = new();
+        private readonly RemoteVideoPool _remote = new();
         private Queue<string> _queue = new();
         private ITimer? _scheduler, _preroll;
         private volatile bool _running, _playing;
@@ -263,6 +263,7 @@ namespace ConditioningControlPanel.Services
         {
             if (_running) return;
             _running = true;
+            _remote.Prefetch();
             ScheduleNext();
             Log.Information("VideoService started");
         }
@@ -454,6 +455,15 @@ namespace ConditioningControlPanel.Services
                 LastFunnelDuration = kept.Count;
                 _queue = new Queue<string>(kept.OrderBy(_ => _random.Next()));
             }
+            // WPF VideoService.cs:7985: the remote buffer is non-blocking and falls back to local.
+            var settings = CoreSettings.Current;
+            if (settings.MediaSource != "local" && settings.HasRemoteMediaConsent)
+            {
+                if (RemotePick == null) _remote.Prefetch();
+                bool localEmpty = _queue.Count == 0 && PackVideos?.HasEntries != true;
+                if (VideoSelectionRules.WantsRemote(localEmpty, settings.MediaSource, settings.RemoteMediaRatio, _random)
+                    && (RemotePick ?? _remote.Take)() is { } remote) return remote;
+            }
             // WPF GetNextVideo (VideoService.cs:8015-8049): active pack clips join the local pick,
             // weighted by count; a failed decrypt falls back to the local queue. Pack clips skip the
             // length filter (PackFileEntry carries no duration).
@@ -463,6 +473,8 @@ namespace ConditioningControlPanel.Services
 
         /// <summary>The content-pack clips mixed in (WPF _packVideoQueue); null = local only.</summary>
         public PackMediaPool? PackVideos { get; set; }
+
+        internal Func<string?>? RemotePick { get; set; }
 
         /// <summary>WPF VideoService.MetadataCache: a clip's cached length, null on a miss. Null keeps
         /// every clip (WPF without LibVLC).</summary>
