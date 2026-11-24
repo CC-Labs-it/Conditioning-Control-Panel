@@ -5,6 +5,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
@@ -40,6 +42,13 @@ public sealed class PossessionReorderDoorsTests
         public void EdgePulse(double strength) { }
         public void ReleaseAll() { }
         private sealed class Handle : IDisposable { public void Dispose() { } }
+    }
+
+    private sealed class CountCommand(Action execute) : System.Windows.Input.ICommand
+    {
+        public event EventHandler? CanExecuteChanged { add { } remove { } }
+        public bool CanExecute(object? parameter) => true;
+        public void Execute(object? parameter) => execute();
     }
 
     [Theory]
@@ -176,35 +185,86 @@ public sealed class PossessionReorderDoorsTests
         finally { await effect.UndoAsync(TimeSpan.Zero); window.Close(); }
     });
 
-    [Fact]
-    public Task RejectsAContainerThatWouldCoverTheLanding() => AvaloniaTestDispatcher.RunAsync(async () =>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public Task CoveredContainerDoorsMoveAndRemainClickable(int stop) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var frames = new FakeFrames();
-        var a = new Button { Content = "Home", Width = 80, Height = 40 };
-        var b = new Button { Content = "Settings", Width = 80, Height = 40 };
+        var a = new Button { Content = "Home", Width = 80, Height = 40, Opacity = 0.7 };
+        var b = new Button { Content = "Settings", Width = 80, Height = 40, Opacity = 0.8 };
         var wrapperA = new Border { Width = 80, Height = 40, Child = a, Background = Brushes.Transparent };
         var wrapperB = new Border { Width = 80, Height = 40, Child = b, Background = Brushes.Transparent };
         var panel = new Canvas { Background = Brushes.Transparent, Children = { wrapperA, wrapperB } };
         Canvas.SetLeft(wrapperA, 20); Canvas.SetTop(wrapperA, 20);
         Canvas.SetLeft(wrapperB, 20); Canvas.SetTop(wrapperB, 100);
         var layer = new Canvas { IsHitTestVisible = false };
-        var window = new Window { Width = 250, Height = 200, Content = new Grid { Children = { panel, layer } } };
+        var root = new Grid { Children = { panel, layer } };
+        var window = new Window { Width = 250, Height = 200, Content = root };
         window.Show(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); HeadlessInput.RenderLiveTree(window);
         var host = new Host(window, layer, frames);
-        var target = new PossessionTarget { Visual = a, Key = "home", Role = PossessionRole.TabHeader };
-        host.Targets = new[] { target, new PossessionTarget { Visual = b, Key = "settings", Role = PossessionRole.TabHeader } };
+        var targets = new[] { new PossessionTarget { Visual = a, Key = "home", Role = PossessionRole.TabHeader },
+            new PossessionTarget { Visual = b, Key = "settings", Role = PossessionRole.TabHeader } };
+        host.Targets = targets;
         var ctx = new PossessionContext { Host = host, Attribution = new Attribution(), Rung = PossessionRung.Collapse,
             Intensity = PossessionIntensity.Eerie, Photosafe = false, Rng = new Random(1), ElapsedFraction = 0,
             Remaining = TimeSpan.FromMinutes(1), Name = (_, _) => { } };
+        var previousLockdown = LockdownService.Current;
+        using var lockdown = new LockdownService();
+        LockdownService.Current = lockdown;
+        if (stop == 3) lockdown.Activate(TimeSpan.FromMinutes(5));
         var effect = new ReorderDoorsEffect();
+        var originalA = a.RenderTransform; var originalB = b.RenderTransform;
+        int clicksA = 0, clicksB = 0, commandsA = 0, commandsB = 0;
+        a.Click += (_, _) => clicksA++; b.Click += (_, _) => clicksB++;
+        a.Command = new CountCommand(() => commandsA++); b.Command = new CountCommand(() => commandsB++);
         try
         {
-            await effect.ApplyAsync(ctx, target, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
-            Assert.False(effect.IsLive);
+            var homeA = host.BoundsOnGhostLayer(a)!.Value; var homeB = host.BoundsOnGhostLayer(b)!.Value;
+            var applying = effect.ApplyAsync(ctx, targets[0], CancellationToken.None);
+            Assert.False(applying.IsCompleted);
+            Assert.True(targets.All(t => t.IsLive));
+            Assert.Equal(2, layer.Children.Count);
+            frames.Frame(TimeSpan.Zero); frames.Frame(TimeSpan.FromMilliseconds(260));
+            if (stop == 1) PanicSurfaces.All.Single(s => s.Id == "possession").Stop(null!);
+            else if (stop == 3) lockdown.Deactivate();
+            else
+            {
+                frames.Frame(TimeSpan.FromMilliseconds(520)); await applying.WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.Equal(homeB.Y, host.BoundsOnGhostLayer(a)!.Value.Y, 1);
+                Assert.Equal(homeA.Y, host.BoundsOnGhostLayer(b)!.Value.Y, 1);
+                HeadlessInput.RenderLiveTree(window);
+                window.MouseDown(homeB.Center, MouseButton.Left); window.MouseUp(homeB.Center, MouseButton.Left);
+                window.MouseDown(homeA.Center, MouseButton.Left); window.MouseUp(homeA.Center, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(1, clicksA); Assert.Equal(1, clicksB);
+                Assert.Equal(1, commandsA); Assert.Equal(1, commandsB);
+                if (stop == 2)
+                {
+                    var returning = effect.UndoAsync(TimeSpan.FromMilliseconds(520));
+                    frames.Frame(TimeSpan.FromMilliseconds(600)); frames.Frame(TimeSpan.FromMilliseconds(700));
+                    PanicSurfaces.All.Single(s => s.Id == "possession").Stop(null!);
+                    await returning.WaitAsync(TimeSpan.FromSeconds(5));
+                }
+                else await effect.UndoAsync(TimeSpan.Zero);
+            }
+            await applying.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.False(effect.IsLive); Assert.All(targets, t => Assert.False(t.IsLive));
+            Assert.Empty(layer.Children); Assert.Equal(2, root.Children.Count);
+            Assert.Equal(0.7, a.Opacity); Assert.Equal(0.8, b.Opacity);
+            Assert.True(a.IsHitTestVisible); Assert.True(b.IsHitTestVisible);
+            Assert.Same(originalA, a.RenderTransform); Assert.Same(originalB, b.RenderTransform);
             Assert.False(PossessionLease.IsLeased(a)); Assert.False(PossessionLease.IsLeased(b));
             Assert.Equal(0, frames.Count);
         }
-        finally { await effect.UndoAsync(TimeSpan.Zero); window.Close(); }
+        finally
+        {
+            await effect.UndoAsync(TimeSpan.Zero);
+            if (lockdown.IsActive) lockdown.Deactivate();
+            LockdownService.Current = previousLockdown; window.Close();
+        }
     });
 
     [Fact]

@@ -5,6 +5,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Templates;
+using Avalonia.Automation.Peers;
+using Avalonia.Automation.Provider;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
@@ -24,11 +28,15 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
         public required PossessionLease Lease;
         public required double Distance;
         public double From;
+        public PossessionGhost? Ghost;
+        public TranslateTransform? OverlayMove;
+        public double LayerDistance;
     }
     private readonly List<Mover> _movers = new();
     private readonly List<IDisposable> _outlines = new();
     private readonly List<IDisposable> _unclips = new();
     private IFrameSource? _frames;
+    private Canvas? _inputLayer;
     private LockdownService? _lockdown;
     private IDisposable? _timeout;
     private TimeSpan? _start;
@@ -87,14 +95,53 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
             var landingB = new Rect(b.Bounds.X, a.Bounds.Y, b.Bounds.Width, b.Bounds.Height);
             var unclip = new List<Visual>();
             if (!SwapEffect.MoveFor(a.Door, layer, landingA, delta, out var moveA, unclip) ||
-                !SwapEffect.MoveFor(b.Door, layer, landingB, -delta, out var moveB, unclip) ||
-                !SwapEffect.OnTop(layer, a.Door, b.Door, landingA) ||
-                !SwapEffect.OnTop(layer, b.Door, a.Door, landingB)) continue;
+                !SwapEffect.MoveFor(b.Door, layer, landingB, -delta, out var moveB, unclip)) continue;
+            bool covered = !SwapEffect.OnTop(layer, a.Door, b.Door, landingA) ||
+                !SwapEffect.OnTop(layer, b.Door, a.Door, landingB);
+            PossessionGhost? ga = null, gb = null;
+            IInvokeProvider? invokeA = null, invokeB = null;
+            if (covered)
+            {
+                // The shell's doors are buttons. Their automation peers invoke the original Click and
+                // command, while the snapshot and input seat travel above the obstructing parents.
+                if (a.Door is not Button || b.Door is not Button || layer.GetVisualParent() is not Grid root ||
+                    ControlAutomationPeer.CreatePeerForElement(a.Door) is not IInvokeProvider pa ||
+                    ControlAutomationPeer.CreatePeerForElement(b.Door) is not IInvokeProvider pb) continue;
+                try
+                {
+                    ga = PossessionGhost.Capture(a.Door, layer);
+                    gb = PossessionGhost.Capture(b.Door, layer);
+                    if (ga == null || gb == null) { ga?.Dispose(); gb?.Dispose(); continue; }
+                    invokeA = pa; invokeB = pb;
+                    if (_inputLayer == null)
+                    {
+                        _inputLayer = new Canvas { Background = null, ClipToBounds = false, ZIndex = layer.ZIndex + 1 };
+                        Grid.SetRow(_inputLayer, Grid.GetRow(layer)); Grid.SetColumn(_inputLayer, Grid.GetColumn(layer));
+                        Grid.SetRowSpan(_inputLayer, Grid.GetRowSpan(layer)); Grid.SetColumnSpan(_inputLayer, Grid.GetColumnSpan(layer));
+                        root.Children.Add(_inputLayer);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    try { ga?.Dispose(); } catch { }
+                    try { gb?.Dispose(); } catch { }
+                    if (_inputLayer?.GetVisualParent() == null) _inputLayer = null;
+                    Serilog.Log.Warning(ex, "Possession reorderdoors snapshot failed");
+                    continue;
+                }
+            }
             var la = PossessionLease.Take(a.Door);
             var lb = PossessionLease.Take(b.Door);
-            if (la == null || lb == null) { la?.ReleaseImmediate(); lb?.ReleaseImmediate(); continue; }
-            _movers.Add(new Mover { Target = a.Target, Lease = la, Distance = moveA.Y });
-            _movers.Add(new Mover { Target = b.Target, Lease = lb, Distance = moveB.Y });
+            if (la == null || lb == null) { la?.ReleaseImmediate(); lb?.ReleaseImmediate(); ga?.Dispose(); gb?.Dispose(); continue; }
+            var ma = new Mover { Target = a.Target, Lease = la, Distance = moveA.Y, LayerDistance = gap, Ghost = ga };
+            var mb = new Mover { Target = b.Target, Lease = lb, Distance = moveB.Y, LayerDistance = -gap, Ghost = gb };
+            _movers.Add(ma); _movers.Add(mb);
+            if (covered)
+            {
+                AddInput(ma, a.Bounds, invokeA!);
+                AddInput(mb, b.Bounds, invokeB!);
+                ga!.Hide(true); gb!.Hide(true);
+            }
             foreach (var node in unclip)
                 if (node.SetValue(Visual.ClipToBoundsProperty, false, global::Avalonia.Data.BindingPriority.Animation) is { } hold) _unclips.Add(hold);
             a.Target.IsLive = b.Target.IsLive = true;
@@ -113,6 +160,29 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
 
     }
 
+    private void AddInput(Mover mover, Rect bounds, IInvokeProvider invoke)
+    {
+        var move = mover.OverlayMove = new TranslateTransform();
+        mover.Ghost!.Image.RenderTransform = move;
+        var seat = new Button
+        {
+            Width = bounds.Width, Height = bounds.Height, Focusable = false, Padding = new Thickness(0),
+            RenderTransform = move,
+            Template = new FuncControlTemplate<Button>((_, _) => new Border { Background = Brushes.Transparent })
+        };
+        seat.Click += (_, _) =>
+        {
+            try
+            {
+                if (IsLive && mover.Target.Visual is Control door && door.IsEffectivelyVisible &&
+                    door.IsEffectivelyEnabled && !PossessionTree.IsOffLimits(door)) invoke.Invoke();
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Possession reorderdoors input failed"); }
+        };
+        Canvas.SetLeft(seat, bounds.X); Canvas.SetTop(seat, bounds.Y);
+        _inputLayer!.Children.Add(seat);
+    }
+
     private void Frame(TimeSpan now)
     {
         _start ??= now;
@@ -124,6 +194,8 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
             double f = Math.Clamp((elapsed - (_returning ? 0 : i / 2 * 90)) / duration, 0, 1);
             double k = HeadEffect.CubicInOut(f);
             mover.Lease.Translate.Y = _returning ? mover.From * (1 - k) : mover.Distance * k;
+            if (mover.OverlayMove != null)
+                mover.OverlayMove.Y = mover.Distance == 0 ? 0 : mover.LayerDistance * mover.Lease.Translate.Y / mover.Distance;
         }
         if (_returning && elapsed >= _returnMs) Finish();
         else if (!_returning && elapsed >= 520 + (_movers.Count / 2 - 1) * 90) CompleteSwap();
@@ -131,7 +203,11 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
 
     private void CompleteSwap()
     {
-        foreach (var mover in _movers) mover.Lease.Translate.Y = mover.Distance;
+        foreach (var mover in _movers)
+        {
+            mover.Lease.Translate.Y = mover.Distance;
+            if (mover.OverlayMove != null) mover.OverlayMove.Y = mover.LayerDistance;
+        }
         Park(); _timeout?.Dispose(); _timeout = null; _start = null;
         var done = _swapped; _swapped = null; done?.TrySetResult();
     }
@@ -165,7 +241,14 @@ internal sealed class ReorderDoorsEffect : PossessionEffectBase
         _swapped?.TrySetResult(); _swapped = null;
         if (_lockdown != null) _lockdown.LockdownDeactivated -= StopForLockdown;
         _lockdown = null;
-        foreach (var mover in _movers) { try { mover.Lease.ReleaseImmediate(); } catch { } mover.Target.IsLive = false; }
+        if (_inputLayer?.GetVisualParent() is Panel parent) parent.Children.Remove(_inputLayer);
+        _inputLayer = null;
+        foreach (var mover in _movers)
+        {
+            try { mover.Ghost?.Dispose(); } catch { }
+            try { mover.Lease.ReleaseImmediate(); } catch { }
+            mover.Target.IsLive = false;
+        }
         foreach (var outline in _outlines) try { outline.Dispose(); } catch { }
         foreach (var hold in _unclips) try { hold.Dispose(); } catch { }
         _movers.Clear(); _outlines.Clear(); _unclips.Clear(); Live.Remove(this);
