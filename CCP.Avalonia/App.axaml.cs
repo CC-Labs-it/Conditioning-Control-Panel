@@ -1009,6 +1009,7 @@ namespace ConditioningControlPanel.Avalonia
                 // folder's subdirs (#391), before anything resolves the assets folder.
                 Platform.InstallerAssetsPath.Apply(Settings);
                 CorePaths.EnsureCustomAssetsDirectories(Settings.Current.CustomAssetsPath);
+                RunLaunchMigrations(Settings, DefaultAssetsRoot, CorePaths.UserData);
                 // WPF ConditioningControlPanel/App.xaml.cs:3494-3503: never auto-start.
                 MantraChant.StopAndDisarm();
                 // Core RacingAccess asks this head's prize store (WPF seeds PrizeGrants.IsGranted in App()).
@@ -1048,6 +1049,8 @@ namespace ConditioningControlPanel.Avalonia
                 // No event skin on this head yet (nothing arms LiveEventService on either head).
                 CoreModArt.OverridePathProvider = p => CoreModArt.ResolveOverride(p, null, CoreMods.ActiveModPackage?.InstalledPath);
                 CoreModArt.AudioOverridePathProvider = p => CoreModArt.ModAudioFile(p, CoreMods.ActiveModPackage?.InstalledPath);
+                // WPF App.xaml.cs:333: TubeFitDialog's portrait mode asks whether the active mod's portraits are on disk.
+                CoreModArt.HasAvatarPortraitsProvider = () => Platform.AvatarPortraitLoader.Load() != null;
 
                 // The lock-card surface seam. The schedule and the no-repeat phrase rotation are in
                 // Core now (LockCardScheduler); this is the half that draws, and on this head that
@@ -1884,6 +1887,47 @@ namespace ConditioningControlPanel.Avalonia
                 try { fire(); } catch (Exception ex) { Serilog.Log.Debug(ex, "EMI crash recovery failed"); }
         }
 
+        /// <summary>
+        /// WPF App.xaml.cs:2582-2589 (default assets scaffold), 2612-2624 (FlashClickable/gaze decoupling)
+        /// and 2787 (CompanionService.MigrateFromLegacy: an empty progress map starts OG Bambi Sprite at
+        /// min(50, PlayerLevel/2), made active). Runs before anything reads ActiveCompanionProgress,
+        /// which would otherwise create level-1 progress and skip the migration for good.
+        /// </summary>
+        internal static void RunLaunchMigrations(SettingsService settings, string assetsRoot, string userData)
+        {
+            try
+            {
+                foreach (var sub in new[] { "images", "videos", "audio", "wallpapers", "mindwipe" })
+                    Directory.CreateDirectory(Path.Combine(assetsRoot, sub));
+                Directory.CreateDirectory(Path.Combine(userData, "Spirals"));
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Default assets scaffold failed (non-fatal)"); }
+            try
+            {
+                var s = settings.Current;
+                s.RunFlashClickableDecouplingMigration();
+                if (s.CompanionProgressData.Count == 0)
+                {
+                    var og = ConditioningControlPanel.Models.CompanionProgress.CreateNew(ConditioningControlPanel.Models.CompanionId.OGBambiSprite);
+                    og.Level = Math.Max(1, Math.Min(50, s.PlayerLevel / 2));
+                    og.FirstActivated = DateTime.Now;
+                    s.CompanionProgressData[(int)og.CompanionId] = og;
+                    s.ActiveCompanionId = (int)og.CompanionId;
+                }
+                settings.Save();
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Settings migration failed (non-fatal, defaults apply)"); }
+        }
+
+        /// <summary>WPF App.OnExit:6480 fires the wordless appClosing flinch, then :6515 EmiDesk.Dispose
+        /// (EmiDeskService.cs:2121) writes emi-desk.json now so a pending debounced save is not lost.</summary>
+        internal static void FlushEmiDeskOnExit()
+        {
+            try { Views.Windows.EmiDesk.EmiDeskService.Instance.Fire("appClosing", null); } catch { }
+            try { Views.Windows.EmiDesk.EmiDeskService.Instance.UnwireAppEvents(); } catch { }
+            try { ConditioningControlPanel.Services.EmiDesk.EmiState.SaveNow(); } catch { }
+        }
+
         internal static void ClearEngineCrashOnExit() => Services.EngineCrashSentinel.Clear();
 
         private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
@@ -1900,7 +1944,7 @@ namespace ConditioningControlPanel.Avalonia
             try { CoreHaptics.Service?.ShutdownStop(); } catch (Exception ex) { Serilog.Log.Warning(ex, "Haptics shutdown stop failed"); }
             try { Views.Overlays.HapticMockToast.Close(); } catch (Exception ex) { Serilog.Log.Debug(ex, "Mock haptics feedback close failed"); }
 
-            try { Views.Windows.EmiDesk.EmiDeskService.Instance.UnwireAppEvents(); } catch { }
+            FlushEmiDeskOnExit();
             try { (((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).MainWindow as Views.Windows.MainShellWindow)?.Tray?.Dispose(); } catch { }
 
             // Before libvlc goes: close the Mantra Lab (stops and disposes its drone), then its temp WAVs.
