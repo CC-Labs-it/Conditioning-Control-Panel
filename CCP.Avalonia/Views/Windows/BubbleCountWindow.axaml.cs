@@ -523,7 +523,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (!_isPrimary || _closed || _gameCompleted || _videoEnded || _browserFailed) return;
             _browserFailed = true;
-            if (!mediaFailure) BrowserVideoSurface.StoodDown = true;
+            if (_browser?.ProcessFailed == true)
+                BrowserVideoSurface.StoodDown |= ++BrowserVideoSurface.ProcessFailures >= 2;
+            else if (!mediaFailure) BrowserVideoSurface.StoodDown = true;
             var played = _browser?.Playing == true;
             Dispatcher.UIThread.Post(() =>
             {
