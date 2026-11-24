@@ -278,12 +278,16 @@ public class PreviewP6Tests
     public void The_tab_renders_silently_with_the_preview_in_its_card() => WpfRenderHarness.OnStaThread(() =>
     {
         var page = new SheListeningTabView();
-        var host = RowsRender.Host(page, width: 1200);
+        // The two rows the player tunes here (sensitivity, spoken mantras) read as rows; the chips,
+        // status lines, buttons and the command list are not rows.
+        var labels = RowsRender.Check(page, Environment.GetEnvironmentVariable("CCP_P6_NAME") is { Length: > 0 } n ? n : "voice",
+            minLabels: 2, width: 1200);
+        Assert.Equal(2, labels.Count);
+        Assert.All(labels, l => Assert.Equal(Color.FromRgb(0xFF, 0x7E, 0x6B), l.EffectiveHue));
+        Assert.IsType<ConditioningControlPanel.Controls.Rows.RowValue>(page.TxtSL_MicSensitivity);
         var pv = RowsRender.Descendants(page).OfType<EffectPreview>().Single();
         Assert.IsType<VoicePreviewScene>(pv.Driver!.Scene);
         Assert.InRange(pv.ActualHeight, 500, 520);
-        RowsRender.Dump(host, Environment.GetEnvironmentVariable("CCP_P6_NAME") is { Length: > 0 } n ? n : "voice");
-        RowsRender.AssertSilent("voice tab");
     });
 
     private static void Layout(FrameworkElement e)
