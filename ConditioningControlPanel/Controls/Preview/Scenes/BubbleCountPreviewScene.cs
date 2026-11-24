@@ -53,6 +53,9 @@ namespace ConditioningControlPanel.Controls.Preview.Scenes
         private int _target, _spawned, _popped;
         private bool _disposed;
 
+        /// <summary>The host builds a scene by its id with no arguments (EffectPreview.Create).</summary>
+        public BubbleCountPreviewScene() : this(settings: null) { }
+
         public BubbleCountPreviewScene(Func<AppSettings?>? settings = null, Func<MotionLevel>? level = null,
             Func<bool>? gentle = null, Random? rng = null)
         {
@@ -232,7 +235,9 @@ namespace ConditioningControlPanel.Controls.Preview.Scenes
             double rise = Gentle ? GentleVisuals.RiseFloorMs / 1000.0 : CardFade;
             double a = _level() == MotionLevel.Off ? 1 : Math.Clamp(Math.Min(age / rise, (total - age) / CardFade), 0, 1);
             if (a <= 0) return;
-            float w = Math.Min(_screen.Width * 0.78f, 300), key = w / 4.2f, gap = key * 0.15f;
+            // The card fits the band: on a short page (Bubble Count's is about 200 DIP tall) it shrinks to the height.
+            float key = Math.Min(Math.Min(_screen.Width * 0.78f, 300) / 4.2f, Math.Max(12, (_band.Height - 16) / 6.4f)), gap = key * 0.15f;
+            float w = key * 4.2f;
             float h = key * 0.2f + key * 1.05f + key * 0.8f + gap * 2 + 4 * key * 0.8f + 3 * gap + key * 0.35f;
             float x = _band.MidX - w / 2, y = Math.Max(_band.Top + 8, _band.MidY - h / 2);
             var card = new SKRect(x, y, x + w, y + h);

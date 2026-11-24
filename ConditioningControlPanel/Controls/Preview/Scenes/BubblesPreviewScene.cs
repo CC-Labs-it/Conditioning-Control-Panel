@@ -66,6 +66,9 @@ namespace ConditioningControlPanel.Controls.Preview.Scenes
         private double _t, _next = 0.3;
         private bool _disposed;
 
+        /// <summary>The host builds a scene by its id with no arguments (EffectPreview.Create).</summary>
+        public BubblesPreviewScene() : this(settings: null) { }
+
         public BubblesPreviewScene(Func<AppSettings?>? settings = null, Func<MotionLevel>? level = null,
             Func<bool>? gentle = null, Func<string, bool>? owns = null, Func<bool>? froth = null, Random? rng = null)
         {

@@ -317,6 +317,23 @@ public class PreviewP2Tests
         Assert.Equal(popped + 1, scene.Popped);
     }
 
+    /// <summary>The page XAML names a scene by id; the host builds it with no arguments (a missing
+    /// parameterless constructor broke every page that holds one, once).</summary>
+    [Theory]
+    [InlineData("bubbles", typeof(BubblesPreviewScene))]
+    [InlineData("subliminal", typeof(SubliminalPreviewScene))]
+    [InlineData("bubblecount", typeof(BubbleCountPreviewScene))]
+    [InlineData("bouncingtext", typeof(BouncingTextPreviewScene))]
+    public void The_page_id_finds_its_scene(string id, Type expected)
+    {
+        WpfRenderHarness.OnStaThread(() =>
+        {
+            var preview = new EffectPreview { Scene = id };
+            Assert.IsType(expected, preview.Driver!.Scene);
+            preview.Driver.Scene.Dispose();
+        });
+    }
+
     // ---------------------------------------------------------------- renders
 
     [Fact]
@@ -346,18 +363,26 @@ public class PreviewP2Tests
                     while (count.Now != BubbleCountPreviewScene.Phase.Card && g++ < 900) count.Tick(1 / 30.0);
                     for (int i = 0; i < 18; i++) count.Tick(1 / 30.0);
                 });
+                // Bubble Count's own page is short (about 220 DIP): the card shrinks to the band.
+                var shortCount = new BubbleCountPreviewScene(() => cs, () => MotionLevel.Full, () => false, new Random(4));
+                Shoot("bubblecount-short", shortCount, 0, dir, () =>
+                {
+                    int g = 0;
+                    while (shortCount.Now != BubbleCountPreviewScene.Phase.Card && g++ < 900) shortCount.Tick(1 / 30.0);
+                    for (int i = 0; i < 18; i++) shortCount.Tick(1 / 30.0);
+                }, height: 230, minDiff: 800);
             }
             finally { EffectPreview.DesktopScaleOverride = null; }
         });
     }
 
-    private static void Shoot(string page, IPreviewScene scene, double seconds, string? dir, Action? advance = null)
+    private static void Shoot(string page, IPreviewScene scene, double seconds, string? dir, Action? advance = null, double height = 1100, int minDiff = 2000)
     {
-        var empty = new EffectPreview { Width = 400, Height = 1100 };
+        var empty = new EffectPreview { Width = 400, Height = height };
         Layout(empty);
         var wall = Shot(empty, 144);
 
-        var preview = new EffectPreview { Width = 400, Height = 1100 };
+        var preview = new EffectPreview { Width = 400, Height = height };
         preview.UseScene(scene);
         preview.RasterScale = 0.75;
         Layout(preview);
@@ -366,7 +391,7 @@ public class PreviewP2Tests
         preview.Repaint();
         var shot = Shot(preview, 144);
         if (dir is { Length: > 0 }) { Directory.CreateDirectory(dir); Save(shot, Path.Combine(dir, page + "-preview.png")); }
-        Assert.True(Differs(wall, shot) > 2000, $"{page}: the scene drew almost nothing over the desktop");
+        Assert.True(Differs(wall, shot) > minDiff, $"{page}: the scene drew almost nothing over the desktop");
         scene.Dispose();
     }
 

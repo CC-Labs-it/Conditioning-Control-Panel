@@ -48,6 +48,9 @@ namespace ConditioningControlPanel.Controls.Preview.Scenes
         private int _word = -1;
         private bool _disposed;
 
+        /// <summary>The host builds a scene by its id with no arguments (EffectPreview.Create).</summary>
+        public SubliminalPreviewScene() : this(settings: null) { }
+
         public SubliminalPreviewScene(Func<AppSettings?>? settings = null, Func<MotionLevel>? level = null,
             Func<bool>? gentle = null, Func<(WordStyle, WordMotion)>? look = null, Random? rng = null)
         {

@@ -80,6 +80,9 @@ namespace ConditioningControlPanel.Controls.Preview.Scenes
         private double _t;
         private bool _disposed, _started;
 
+        /// <summary>The host builds a scene by its id with no arguments (EffectPreview.Create).</summary>
+        public BouncingTextPreviewScene() : this(settings: null) { }
+
         public BouncingTextPreviewScene(Func<AppSettings?>? settings = null, Func<MotionLevel>? level = null,
             Func<bool>? gentle = null, Func<bool>? scrawl = null, Random? rng = null)
         {
