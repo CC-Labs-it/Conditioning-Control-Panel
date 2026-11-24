@@ -145,10 +145,25 @@ namespace ConditioningControlPanel
                 App.Haptics.HapticTriggered += OnHapticActivity;
             }
 
+            // The status line, connect button, device line and temperament line are written from
+            // code, so a language switch writes them again (7.4 desk run: German kept "Disconnected").
+            LocalizationManager.Instance.LanguageChanged += (_, _) => HapticsRunOnUi(RefreshHapticLanguageText);
+
             // Phase F live status (suppression badge + loaded script) has no event to hang off, so
             // it is polled — but only while the tab is actually on screen.
             HapticsTab.IsVisibleChanged += OnHapticsTabVisibilityChanged;
             if (HapticsTab.IsVisible) StartHapticLiveStatusTimer();
+        }
+
+        /// <summary>Rewrites the code-set lines of the page in the current language. A connect in
+        /// flight keeps its "Connecting" button; its own result repaints the line when it lands.</summary>
+        internal void RefreshHapticLanguageText()
+        {
+            if (HapticsTab?.BtnHapticConnect == null) return;
+            if (HapticsTab.BtnHapticConnect.IsEnabled) RefreshHapticConnectionUi();
+            if (HapticsTab.TxtHapticTemperamentDesc != null)
+                HapticsTab.TxtHapticTemperamentDesc.Text =
+                    Loc.Get(HapticTemperament.FromKey(HapticCfg.V2.Temperament).DescriptionKey);
         }
 
         private void OnHapticRoutingRowChanged(object? sender, EventArgs e)
