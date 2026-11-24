@@ -72,6 +72,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             st.ActiveSidebarToys.Clear();
             st.ActiveSidebarAccessories.Clear();
             st.RunModifiers.Clear();
+            foreach (var id in ChaosMeta.State.PurchasedUpgrades)
+            {
+                if (!ChaosMeta.IsUpgradeActive(id)) continue;
+                var u = ChaosUpgrades.ById(id);
+                if (u == null) continue;
+                st.RunModifiers.Add(new ChaosSidebarBoon { Icon = u.IconPath != null ? ChaosArt.TryLoad(u.IconPath) : ChaosBoonArt.Resolve("upgrades", u.Id), Glyph = u.Glyph, Name = u.Name, Desc = u.Desc, Flavor = u.Flavor, IsModifier = true });
+            }
             foreach (var cat in new[] { ChaosBoonCategory.Skill, ChaosBoonCategory.Accessory, ChaosBoonCategory.Utility })
             {
                 var group = cat == ChaosBoonCategory.Skill ? st.ActiveSidebarToys : cat == ChaosBoonCategory.Accessory ? st.ActiveSidebarAccessories : st.RunModifiers;
@@ -86,13 +93,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (_preHud != null && cat != ChaosBoonCategory.Utility)
                     for (int i = group.Count; i < ChaosMeta.SlotsFor(cat); i++)
                         group.Add(new ChaosSidebarBoon { IsEmptySlot = true, Glyph = "+", Name = Loc.Get(cat == ChaosBoonCategory.Skill ? "chaos_sidebar_empty_toy" : "chaos_sidebar_empty_accessory"), Desc = Loc.Get("chaos_sidebar_empty_desc") });
-            }
-            foreach (var id in ChaosMeta.State.PurchasedUpgrades)
-            {
-                if (!ChaosMeta.IsUpgradeActive(id)) continue;
-                var u = ChaosUpgrades.ById(id);
-                if (u == null) continue;
-                st.RunModifiers.Add(new ChaosSidebarBoon { Icon = u.IconPath != null ? ChaosArt.TryLoad(u.IconPath) : ChaosBoonArt.Resolve("upgrades", u.Id), Glyph = u.Glyph, Name = u.Name, Desc = u.Desc, Flavor = u.Flavor, IsModifier = true });
             }
         }
     }

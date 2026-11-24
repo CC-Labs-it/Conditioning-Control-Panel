@@ -61,6 +61,7 @@ public sealed class ChaosLoadoutSidebarTests
             Assert.Single(state.ActiveSidebarAccessories, b => b.IsEmptySlot);
             Assert.Contains(state.RunModifiers, b => b.Name == habit.Name);
             Assert.Contains(state.RunModifiers, b => b.Id == charm.Id);
+            Assert.True(state.RunModifiers.ToList().FindIndex(b => b.Name == habit.Name) < state.RunModifiers.ToList().FindIndex(b => b.Id == charm.Id));
             ChaosMeta.SetBoonActive(boon.Id, false);
             ChaosMeta.SetUpgradeActive(habit.Id, false);
             Assert.All(state.ActiveSidebarToys, b => Assert.True(b.IsEmptySlot));
@@ -217,6 +218,7 @@ public sealed class ChaosLoadoutSidebarTests
         Assert.DoesNotContain(state.ActiveSidebarToys.Concat(state.ActiveSidebarAccessories), b => b.IsEmptySlot);
         Assert.Contains(state.RunModifiers, b => b.Id == charm.Id);
         Assert.Contains(state.RunModifiers, b => b.Name == habit.Name);
+        Assert.True(state.RunModifiers.ToList().FindIndex(b => b.Name == habit.Name) < state.RunModifiers.ToList().FindIndex(b => b.Id == charm.Id));
     });
 
     [Fact]
