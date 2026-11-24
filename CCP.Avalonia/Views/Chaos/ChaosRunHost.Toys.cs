@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using Avalonia;
 using Avalonia.Media;
-using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
@@ -31,13 +31,13 @@ internal static partial class ChaosRunHost
     internal static bool ToyEffectPorted(string id) => id is "vibe_popping" or "snap_field" or "porn_dvd" or "e_stim" or "freeze_trigger" or "rabbit_caller";
 
     // WPF ChaosModeService.cs:2814-2815,2834-2841: Rabbit Caller aim and capstone storm state.
-    private static DispatcherTimer? _rabbitAimTimer;
+    private static BeatLoop? _rabbitAimTimer;
     private static int _rabbitCallPending;
     private static bool _rabbitCallMaxed, _rabbitAimPrevDown;
     private static double _rabbitStormRemaining, _rabbitStormAccum;
     private static string _rabbitGlyph = "";
     internal static int RabbitCallPending => _rabbitCallPending;
-    internal static bool RabbitAimRunning => _rabbitAimTimer?.IsEnabled == true;
+    internal static bool RabbitAimRunning => _rabbitAimTimer?.IsRunning == true;
     internal static double RabbitStormRemaining => _rabbitStormRemaining;
 
     // WPF ChaosModeService.cs:2843-2866: arm the whistle; the next click summons the rabbits there.
@@ -47,11 +47,7 @@ internal static partial class ChaosRunHost
         _rabbitCallMaxed = maxed;
         _rabbitAimPrevDown = true;   // the press that armed us is already down
         if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.ArmCursorGlow(); else ChaosCursorGlowOverlay.Arm();
-        if (_rabbitAimTimer == null)
-        {
-            _rabbitAimTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(16) };
-            _rabbitAimTimer.Tick += (_, _) => RabbitAimTick();
-        }
+        _rabbitAimTimer ??= new BeatLoop(_overlay!, _ => RabbitAimTick());
         _rabbitAimTimer.Start();
     }
 
@@ -60,6 +56,7 @@ internal static partial class ChaosRunHost
     {
         _rabbitCallPending = 0;
         _rabbitAimTimer?.Stop();
+        _rabbitAimTimer = null;
         if (ChaosSkiaFxOverlay.Enabled) ChaosSkiaFxOverlay.DisarmCursorGlow(); else ChaosCursorGlowOverlay.Disarm();
     }
 
