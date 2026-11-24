@@ -51,8 +51,30 @@ public class TcMediaRulesTests
     [InlineData("local", true, false, "disabled")]
     [InlineData("scrolller", true, true, "disabled")]
     [InlineData("scrolller", true, false, null)]
-    public void Refusal_reasons_use_the_contract_codes(string source, bool consent, bool offline, string? expected)
+    // 7.4 desk run: a local source or Offline mode is "disabled" whatever the consent, never "declined".
+    [InlineData("local", false, false, "disabled")]
+    [InlineData(null, false, false, "disabled")]
+    [InlineData("scrolller", false, true, "disabled")]
+    public void Refusal_reasons_use_the_contract_codes(string? source, bool consent, bool offline, string? expected)
         => Assert.Equal(expected, TcMediaRules.RefusalReason(source, consent, offline));
+
+    [Theory]
+    [InlineData("scrolller", false, true)]
+    [InlineData("local", false, false)]    // the AppSettings default: asking could not turn anything on
+    [InlineData(null, false, false)]
+    [InlineData("scrolller", true, false)] // Offline mode
+    public void The_consent_question_is_asked_only_when_it_can_matter(string? source, bool offline, bool expected)
+        => Assert.Equal(expected, TcMediaRules.ConsentAskMatters(source, offline));
+
+    [Fact]
+    public void The_host_asks_only_when_the_answer_can_matter()
+    {
+        var media = Src("TcHostService.Media.cs");
+        var at = media.IndexOf("AskPictureConsent())", StringComparison.Ordinal);
+        Assert.True(at > 0);
+        var guard = media.Substring(Math.Max(0, at - 300), 300);
+        Assert.Contains("TcMediaRules.ConsentAskMatters(s.MediaSource, s.OfflineMode)", guard);
+    }
 
     [Fact]
     public void The_setting_echo_carries_a_reason_only_when_off()

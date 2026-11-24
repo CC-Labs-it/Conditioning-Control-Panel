@@ -47,7 +47,9 @@ internal static partial class TcHostService
         if (f.Value && f.Ask)
         {
             _picturesOffInWindow = false;
-            if (!s.HasRemoteMediaConsent && AskPictureConsent())
+            // The question is asked only when its answer can matter (never on a local source or offline).
+            if (!s.HasRemoteMediaConsent && TcMediaRules.ConsentAskMatters(s.MediaSource, s.OfflineMode)
+                && AskPictureConsent())
             {
                 s.RemoteMediaConsented = true;
                 try { App.Settings?.Save(); } catch (Exception ex) { App.Logger?.Debug("Tc: consent save: {E}", ex.Message); }

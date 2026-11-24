@@ -59,14 +59,21 @@ internal static class TcMediaRules
         => consent && !offline && !offInWindow
            && !string.Equals(mediaSource ?? "local", "local", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Why a player's YES on the picture card could not switch pictures on: <c>declined</c> (no app
-    /// consent), <c>disabled</c> (offline mode or the app's media source is local), or null (on).</summary>
+    /// <summary>Why a player's YES on the picture card could not switch pictures on: <c>disabled</c> (offline mode
+    /// or the app's media source is local, checked first because no answer to the consent question can change it),
+    /// <c>declined</c> (no app consent), or null (on).</summary>
     public static string? RefusalReason(string? mediaSource, bool consent, bool offline)
     {
+        if (!ConsentAskMatters(mediaSource, offline)) return "disabled";
         if (!consent) return "declined";
-        if (offline || string.Equals(mediaSource ?? "local", "local", StringComparison.OrdinalIgnoreCase)) return "disabled";
         return null;
     }
+
+    /// <summary>Whether the app's consent question can change anything: not while Offline mode is on or the app's
+    /// media source is local (the default). Then the host answers <c>disabled</c> at once and never asks
+    /// (7.4 desk run: a fresh profile was asked, said Yes, and was told pictures are off anyway).</summary>
+    public static bool ConsentAskMatters(string? mediaSource, bool offline)
+        => !offline && !string.Equals(mediaSource ?? "local", "local", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The <c>setting</c> echo for the consent key, with its reason code when it stayed off.</summary>
     public static JObject SettingEcho(bool on, string? reason)
