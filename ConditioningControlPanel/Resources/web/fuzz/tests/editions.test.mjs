@@ -19,13 +19,13 @@ const small = hosted({ edition: 'small', platform: 'web' });
 const full = hosted({ edition: 'full', platform: 'desktop' }, {}, 'ccp.game');
 const cut = new Set(SMALL_CUT_IDS);
 
-test('the cut list is 56 real rows, each named once, and 260 stay', () => {
+test('the cut list is 55 real rows, each named once, and 261 stay', () => {
   assert.deepEqual(EDITIONS, ['small', 'full']);
   assert.equal(ITEMS.length, 316);
-  assert.equal(SMALL_CUT_IDS.length, 56);
-  assert.equal(cut.size, 56, 'no row is cut twice');
+  assert.equal(SMALL_CUT_IDS.length, 55);
+  assert.equal(cut.size, 55, 'no row is cut twice');
   for (const id of SMALL_CUT_IDS) assert.ok(BY_ID[id], `${id} is in the catalog`);
-  assert.equal(ITEMS.filter((i) => !cut.has(i.id)).length, 260);
+  assert.equal(ITEMS.filter((i) => !cut.has(i.id)).length, 261);
 });
 
 test('every crossover is cut, and nothing else hides in that list', () => {
