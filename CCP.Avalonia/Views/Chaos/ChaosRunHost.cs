@@ -1128,7 +1128,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ChaosRunLessons.OnLoopCompleted();
                 AwardLoopTip();
                 _state.AllLiveNextWave = false;
-                BarkHead.Engine?.Raise("ChaosWaveEscalated", c => c.Set("wave", (double)newWave));
                 if (_state.Config.BoonDraftEnabled)
                 {
                     _pendingWave = newWave;
@@ -1139,6 +1138,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     ChaosOverlayWindow.ChaosSfx.PlayWaveClear();
                     Pulse(WaveClearColor, WaveClearPulse);
                     RunBark("ChaosWaveCleared", c => c.Set("wave", (double)_state.WaveIndex));   // WPF :1468
+                    RunBark("ChaosWaveEscalated", c => c.Set("wave", (double)newWave));   // WPF :1474, after cleared (60 s bark gap)
                     var options = DealDraft(rig: true);
                     _overlay!.ShowBoonDraft(_state.WaveIndex, options, ChooseBoon,
                         _state.Config.DraftAutoResumeSec, _state.RerollsLeft, RerollDraft);
@@ -1148,6 +1148,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     _state.WaveIndex = newWave;
                     int previousAct = _state.ActIndex;
                     _state.ActIndex = ChaosRunEngine.ActFor(newWave);
+                    RunBark("ChaosWaveEscalated", c => c.Set("wave", (double)newWave));   // WPF :1453
                     AnnounceDepthIfCrossed(previousAct);
                     AnnounceFinalLoopIfEntering();   // WPF ChaosModeService.cs:1460
                 }

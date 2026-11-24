@@ -125,6 +125,10 @@ public sealed class ChaosRunBarkTests
     {
         for (int i = 0; i < 80; i++) ChaosRunHost.Tick();
         Assert.Equal(1.0, One(heard, "ChaosWaveCleared").Values["wave"]);
+        // WPF :1468 then :1474: cleared must win the bark engine's 60 s gap over escalated.
+        int cleared = heard.FindIndex(x => x.Trigger == "ChaosWaveCleared");
+        Assert.True(cleared < heard.FindIndex(x => x.Trigger == "ChaosWaveEscalated"));
+        Assert.Equal(2.0, One(heard, "ChaosWaveEscalated").Values["wave"]);
         var card = pick == 0 ? null : ChaosBoonPool.All.First(b => b.IsCurse == (pick == 2));
         ChaosRunHost.ChooseBoon(card);
         string expect = pick switch { 0 => "ChaosBoonSkipped", 1 => "ChaosBoonPicked", _ => "ChaosCursePicked" };
@@ -138,6 +142,7 @@ public sealed class ChaosRunBarkTests
     {
         for (int i = 0; i < 230; i++) ChaosRunHost.Tick();
         One(heard, "ChaosEndingSoon");
+        Assert.Contains(heard, x => x.Trigger == "ChaosWaveEscalated");   // WPF :1453, drafts off
         var act = One(heard, "ChaosActChanged");
         Assert.Equal(2.0, act.Values["act"]);
     }, waves: ChaosRunEngine.WAVES_PER_ACT + 1);
