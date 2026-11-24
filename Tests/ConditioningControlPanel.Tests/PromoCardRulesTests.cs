@@ -215,4 +215,21 @@ public class PromoCardRulesTests
         Assert.Equal("", PromoCountdown.Format(TimeSpan.Zero));
         Assert.Equal("", PromoCountdown.Format(TimeSpan.FromSeconds(-5)));
     }
+
+    [Fact]
+    public void The_first_Escape_closes_the_card_even_when_a_game_takes_it_as_its_pause()
+    {
+        var dir = new System.IO.DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !System.IO.Directory.Exists(System.IO.Path.Combine(dir.FullName, "ConditioningControlPanel", "MainWindow")))
+            dir = dir.Parent;
+        Assert.NotNull(dir);
+        var src = System.IO.File.ReadAllText(System.IO.Path.Combine(dir!.FullName, "ConditioningControlPanel", "MainWindow", "MainWindow.xaml.cs"));
+        int body = src.IndexOf("private void HandlePanicKeyPress()", StringComparison.Ordinal);
+        Assert.True(body > 0, "HandlePanicKeyPress moved - update this test with it");
+        int close = src.IndexOf("PromoCardWindow.CloseForPanic();", body, StringComparison.Ordinal);
+        int pause = src.IndexOf("if (TryRacePauseOnEscape()) return;", body, StringComparison.Ordinal);
+        Assert.True(close > body && pause > body, "both calls must sit in HandlePanicKeyPress");
+        // The card is topmost: it goes before the game's pause can return early.
+        Assert.True(close < pause, "the promo card must close before TryRacePauseOnEscape");
+    }
 }
