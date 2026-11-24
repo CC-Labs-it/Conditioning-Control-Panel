@@ -12,6 +12,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Lobby;
+using ConditioningControlPanel.Services.Friends;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -28,8 +29,9 @@ public class LobbyHoverTests
         var clock = new Clock();
         AvailableSubjectsTabView.FxTime = clock;
         CoreSettings.Current.MotionLevel = motion;
-        var page = new AvailableSubjectsTabView();
         var gates = LobbyGates.From(true, false, false);
+        var page = new AvailableSubjectsTabView { ReadGates = () => gates, CreateLobby = () => new LobbyPoll(new SilentTimer(),
+            () => false, Array.Empty<Friend>, null!, null!, null!) };
         var row = new LobbyRow { Key = "hover", HostName = "Host", Game = LobbyGame.Chess };
         page.PaintSnapshot(new LobbySnapshot(new[] { row }, Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true), gates);
         var window = new Window { Width = 1200, Height = 800, Content = page };
@@ -86,8 +88,9 @@ public class LobbyHoverTests
         var clock = new Clock();
         AvailableSubjectsTabView.FxTime = clock;
         CoreSettings.Current.MotionLevel = MotionLevel.Full;
-        var page = new AvailableSubjectsTabView();
         var gates = LobbyGates.From(true, false, false);
+        var page = new AvailableSubjectsTabView { ReadGates = () => gates, CreateLobby = () => new LobbyPoll(new SilentTimer(),
+            () => false, Array.Empty<Friend>, null!, null!, null!) };
         var row = new LobbyRow { Key = "pop", HostName = "Host", Game = LobbyGame.Chess };
         var snapshot = new LobbySnapshot(new[] { row }, Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true);
         var window = new Window { Width = 1200, Height = 800, Content = page };
@@ -131,6 +134,14 @@ public class LobbyHoverTests
         }
         finally { window.Close(); CoreSettings.Current.MotionLevel = old; AvailableSubjectsTabView.FxTime = TimeProvider.System; }
     });
+    private sealed class SilentTimer : IUiTimer
+    {
+        public TimeSpan Interval { get; set; }
+        public event EventHandler? Tick { add { } remove { } }
+        public void Start() { }
+        public void Stop() { }
+        public void OnUiThread(Action action) { }
+    }
     private sealed class Clock : TimeProvider
     {
         public long Now;
