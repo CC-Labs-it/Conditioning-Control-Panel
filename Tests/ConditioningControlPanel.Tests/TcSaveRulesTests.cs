@@ -111,4 +111,36 @@ public class TcSaveRulesTests
         Assert.DoesNotContain("Sparkles", save);
         Assert.DoesNotContain("f.Url", save);
     }
+
+    [Theory]
+    [InlineData("uid", "tok", false, true)]
+    [InlineData("uid", "tok", true, false)]
+    [InlineData(null, "tok", false, false)]
+    [InlineData(null, null, true, false)]
+    public void The_save_slot_needs_an_account_and_Offline_mode_off(string? uid, string? token, bool offline, bool open)
+        => Assert.Equal(open, TcSaveRules.SlotOpen(uid, token, offline));
+
+    [Fact]
+    public void Offline_mode_answers_offline_before_any_request()
+    {
+        var off = TcSaveRules.RefuseBeforeSend("uid", "tok", offlineMode: true);
+        Assert.NotNull(off);
+        Assert.Equal("save-result", (string?)off!["type"]);
+        Assert.False((bool)off["ok"]!);
+        Assert.Equal(TcSaveRules.ReasonOffline, (string?)off["reason"]);
+        // Offline wins over a missing account: nothing would leave either way, and it is the true reason.
+        Assert.Equal(TcSaveRules.ReasonOffline, (string?)TcSaveRules.RefuseBeforeSend(null, null, true)!["reason"]);
+        Assert.Equal(TcSaveRules.ReasonSignIn, (string?)TcSaveRules.RefuseBeforeSend(null, "tok", false)!["reason"]);
+        Assert.Null(TcSaveRules.RefuseBeforeSend("uid", "tok", false));
+    }
+
+    [Fact]
+    public void Both_save_calls_and_the_cap_ask_the_Offline_mode_switch()
+    {
+        var save = Src("TcHostService.Save.cs");
+        Assert.Contains("TcSaveRules.SlotOpen(App.UnifiedUserId, SafeAuthToken(), SafeOfflineMode())", save);
+        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(save,
+            @"TcSaveRules\.RefuseBeforeSend\(uid, token, SafeOfflineMode\(\)\) is \{ \} refused\) \{ PostSave\(refused\); return; \}").Count);
+        Assert.DoesNotContain("if (!TcSaveRules.SignedIn(uid, token))", save);
+    }
 }
