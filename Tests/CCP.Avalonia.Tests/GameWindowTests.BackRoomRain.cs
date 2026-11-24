@@ -277,6 +277,40 @@ public sealed partial class GameWindowTests
         }
     });
 
+    [Fact]
+    public void RoomBridgeStationWordEffectReachesOverlayAndPanicStopsIt() => Run((_, _) =>
+    {
+        var w = GameWindow.Launch("breakoutdemo")!;
+        var clock = new FxClock(); w.RoomFxSchedulerFactory = () => clock;
+        var shown = new List<string>();
+        int stops = 0;
+        w.RoomSubliminal = (text, _, _, _, _, _) => shown.Add(text);
+        w.StopRoomSubliminal = () => stops++;
+        var posted = new List<JObject>();
+        // The bridge the room host builds (WPF BackRoomHostService.cs:419-426), with this window's effects as Fx.
+        var bridge = new BackRoomBridge(new BackRoomBridge.Deps
+        {
+            Post = m => posted.Add(JObject.FromObject(m)), Relay = new NoRelay(), Fx = w.RoomEffects,
+            BuildInit = () => new { type = "init" }, CloseWindow = () => { }, Schedule = (_, _) => () => { },
+            NextSeed = () => 3,
+        });
+        bridge.Handle(JObject.Parse("{\"type\":\"media-request\",\"reqId\":\"room-word-deal-0001\",\"station\":\"slot\"}"));
+        var word = (string?)posted.Single(p => (string?)p["type"] == "media")["words"]![0]!["text"];
+        bridge.Handle(JObject.Parse("{\"type\":\"fx\",\"token\":\"t1\",\"fxId\":\"fx.sub_cascade\",\"station\":\"slot\",\"symbols\":[\"s0\"]}"));
+        Assert.Contains(posted.Last()["fired"]!, x => (string?)x == "sub-burst9");
+        clock.RunAll();
+        Assert.Contains(word, shown);
+        bridge.Suspend(true, "panic");
+        Assert.Equal(1, stops);
+        w.Close();
+    });
+
+    private sealed class NoRelay : IBackRoomRelay
+    {
+        public System.Threading.Tasks.Task<BackRoomStationResult> RelayAsync(string station, string op, string? idem, JObject? body,
+            System.Threading.CancellationToken ct = default) => throw new NotSupportedException();
+    }
+
     private sealed class FxClock : IFxScheduler
     {
         public readonly List<Action> Pending = new();

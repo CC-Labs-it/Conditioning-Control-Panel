@@ -36,6 +36,9 @@ internal sealed partial class GameWindow
         RoomFxSchedulerFactory(), () => new FxEnvironment(global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level,
             CoreSettings.Current.BackRoomFxIntensity), supports: p => p is FxPrim.GifRain or FxPrim.GlitchBubbles or FxPrim.GifFull or FxPrim.SubSingle or FxPrim.SubSeq or FxPrim.SubBurst9);
 
+    // WPF BackRoomHostService.cs:426 passes its FX service as BackRoomBridge.Deps.Fx; the room host (#3553) wires this.
+    internal IBackRoomFx RoomEffects => RoomFx;
+
     private void FireRoomFx(JObject message)
     {
         var token = (string?)message["token"];
