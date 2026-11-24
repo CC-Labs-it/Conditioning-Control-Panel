@@ -371,6 +371,8 @@ namespace ConditioningControlPanel.Services
                     body = JsonConvert.SerializeObject(recovery);
                 }
                 else body = SerializeBody(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics, ConsentFields(s), _adopted, _knownProgress);
+                // Capture only a balance actually carried by this request.
+                var sentSp = JObject.Parse(body)["skill_points"]?.Value<int>();
                 var tokenUsed = s.AuthToken;
                 HttpRequestMessage NewRequest()
                 {
@@ -461,7 +463,7 @@ namespace ConditioningControlPanel.Services
                         && achievements.All(a => a.Type == JTokenType.String))
                         RestoreCloudAchievements(s, achievements.Values<string>().Select(a => a!), session, id);
                     AdoptMobileQuestTotals(s, reply);
-                    if (AdoptFromResponse(s, reply, id)) _adopted = true;
+                    if (AdoptFromResponse(s, reply, id, sentSp)) _adopted = true;
                     // #3898: the loadout fill has run for this account (an answer that carries cosmetics, even null).
                     if (_sanitizeCosmetics != null
                         && (reply["cosmetics"] is JObject || reply["cosmetics"]?.Type == JTokenType.Null) && CosmeticsAccount != id)
@@ -568,7 +570,7 @@ namespace ConditioningControlPanel.Services
         /// into an EMPTY local one only (WPF AdoptCloudCosmetics). Does not save. True when the response carried both
         /// skill_points and unlocked_skills, i.e. the server's skills are now known.
         /// </summary>
-        internal bool AdoptFromResponse(AppSettings s, JObject reply, string? syncAccount = null)
+        internal bool AdoptFromResponse(AppSettings s, JObject reply, string? syncAccount = null, int? sentSp = null)
         {
             bool Flag(string k) => reply[k]?.Type == JTokenType.Boolean && reply.Value<bool>(k);
             int? points = reply["skill_points"]?.Type == JTokenType.Integer ? reply.Value<int>("skill_points") : null;
@@ -591,7 +593,7 @@ namespace ConditioningControlPanel.Services
                 {
                     var same = string.Equals(live.UnifiedId, account, StringComparison.Ordinal);
                     int? seen = live.WalletNetSeen.TryGetValue(account, out var stored) ? stored : null;
-                    var step = global::ConditioningControlPanel.Services.Prizes.V2WalletNet.Decide(same, global::ConditioningControlPanel.Services.Prizes.V2WalletNet.ParseNet(reply["wallet_net"]), seen, p, live.SkillPoints);
+                    var step = global::ConditioningControlPanel.Services.Prizes.V2WalletNet.Decide(same, global::ConditioningControlPanel.Services.Prizes.V2WalletNet.ParseNet(reply["wallet_net"]), seen, p, live.SkillPoints, Flag("level_reset") ? null : sentSp);
                     if (step.NextSp != live.SkillPoints)
                     {
                         Log.Information("V2 Sync: Skill points server={Server}, local={Local} - now {Next}", p, live.SkillPoints, step.NextSp);
