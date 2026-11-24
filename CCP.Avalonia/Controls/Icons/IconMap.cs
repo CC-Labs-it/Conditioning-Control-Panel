@@ -19,6 +19,7 @@ namespace ConditioningControlPanel.Avalonia.Controls
     public static class IconMap
     {
         public const string Chaperone = "💞";
+        public const string Bound = "⛓";   // WPF ChaosModeService.cs:1290 Bound feed lines, rendered as Link.
         public const string FriendRequest = "💌"; // WPF Services/Friends/FriendsLanding.cs:320,365: Inbox row data, rendered as Mail.
         // Stable keys for the shared InboxItem string hint, resolved by IconGlyph in the flyout.
         public const string DailyGiftRelockKey = "daily-gift.relock";

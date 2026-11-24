@@ -70,12 +70,18 @@
    <Setter Property="Margin" Value="4,6,6,0"/><Setter Property="TextWrapping" Value="Wrap"/>
   </ControlTheme>
   <DataTemplate x:Key="LobbyRowTemplate" x:DataType="tabs:LobbyCardView">
-   <Grid Margin="0,0,6,8" Tag="lobby-card">
+   <Grid Margin="0,0,6,8" Tag="lobby-card" Classes="lobby-row">
+    <Grid.Styles>
+     <Style Selector="Grid.lobby-row > Border.card"><Setter Property="BorderBrush" Value="{Binding CardRim}"/></Style>
+     <Style Selector="Grid.lobby-row:pointerover > Border.card"><Setter Property="BorderBrush" Value="#66FF8CC0"/></Style>
+     <Style Selector="Grid.lobby-row > Rectangle.card-sheen"><Setter Property="Opacity" Value="0"/></Style>
+     <Style Selector="Grid.lobby-row:pointerover > Rectangle.card-sheen"><Setter Property="Opacity" Value="1"/></Style>
+    </Grid.Styles>
     <!-- WPF AvailableSubjectsTabView.xaml:134: the ring a new table sends out (AvailableSubjectsTabView.Fx.cs) -->
     <Rectangle Tag="lobby-ring" RadiusX="16" RadiusY="16" Stroke="#FF8CC0" StrokeThickness="2" Opacity="0" IsHitTestVisible="False"/>
     <Rectangle Tag="lobby-float" Fill="{Binding CardShadow}" Height="{Binding CardShadowPx}" RadiusX="7" RadiusY="7"
                VerticalAlignment="Bottom" Margin="8,0,8,-6" IsHitTestVisible="False"/>
-   <Border CornerRadius="14" Padding="10,9" Background="{StaticResource LobbyGlass}" BorderBrush="{Binding CardRim}" BorderThickness="1">
+   <Border Classes="card" CornerRadius="14" Padding="10,9" Background="{StaticResource LobbyGlass}" BorderThickness="1">
     <Grid ColumnDefinitions="Auto,*,Auto">
      <!-- WPF AvailableSubjectsTabView.xaml:150-165: game art with the host's face and frame on its corner -->
      <Grid Width="40" Height="40" Margin="0,0,10,0" VerticalAlignment="Center">
@@ -98,6 +104,10 @@
      </Button>
     </Grid>
    </Border>
+    <!-- WPF AvailableSubjectsTabView.xaml:190: a Rectangle, like the ring, so the card stays the template's one Border -->
+    <Rectangle Classes="card-sheen" Tag="lobby-sheen" RadiusX="14" RadiusY="14" IsHitTestVisible="False">
+     <Rectangle.Fill><LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%"><GradientStop Color="#00FFFFFF" Offset="0.2"/><GradientStop Color="#1EFFFFFF" Offset="0.5"/><GradientStop Color="#00FFFFFF" Offset="0.8"/></LinearGradientBrush></Rectangle.Fill>
+    </Rectangle>
    </Grid>
   </DataTemplate>
  </UserControl.Resources>

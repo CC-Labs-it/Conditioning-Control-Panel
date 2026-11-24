@@ -23,7 +23,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
     /// The For You feed's host (WPF Services/Fyp/FypHostService.cs): <c>fyp/index.html</c> on the app's origin,
     /// the library through the asset gate every game uses, the rules in Core <see cref="FypRules"/> (shared
     /// with WPF). BRIGHT LINE: batches and probes go straight to the provider, media only when RemoteAllowed.
-    /// <para>Ghost mode: GameWindow.FypGhost.cs (X11 with a compositor; other platforms refuse as WPF does).</para>
+    /// <para>Ghost mode: GameWindow.FypGhost.cs (X11 with a compositor, Windows via a DWM mirror; others refuse as WPF does).</para>
     /// </summary>
     internal sealed partial class GameWindow
     {
@@ -219,7 +219,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case FypRules.SettingEffect.GhostOn: EnterFypGhost(); break;
                 case FypRules.SettingEffect.GhostOff: ExitFypGhost(); break;
                 case FypRules.SettingEffect.OpacityChanged:   // WPF :294: the live ghost follows the slider
-                    if (_fypGhosted) FypGhostOpacity(this, ClampFypGhostOpacity(s.FypWindowOpacity));
+                    if (_fypGhosted) SetFypGhostAlpha(ClampFypGhostOpacity(s.FypWindowOpacity));
                     break;
                 case FypRules.SettingEffect.EyeControlOn:
                     FypEyeTask = EnableFypEyes();
