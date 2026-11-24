@@ -42,6 +42,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private Point _rbStartCanvasPt;
         private const double RubberBandThresholdPx = 3.0;
 
+        /// <summary>
+        /// Single removal path for a region, shared by bulk delete and the
+        /// inspector's Delete button: detaches any rule constrained to it and
+        /// drops the paired Rule-kind TimelineItem the loader projected for it
+        /// (otherwise BackProject on save resurrects the region from the orphan).
+        /// </summary>
+        internal void RemoveRegionFromModel(Region r)
+        {
+            _enhancement.Regions.Remove(r);
+            _selectionSet.Remove(r);
+            foreach (var rule in _enhancement.Rules)
+            {
+                if (rule.RegionConstraint == r.Id) rule.RegionConstraint = null;
+            }
+            if (!string.IsNullOrEmpty(r.Id))
+            {
+                _enhancement.TimelineItems.RemoveAll(ti =>
+                    ti != null
+                    && ti.Kind == TimelineItemKind.Rule
+                    && ti.Id == r.Id);
+            }
+        }
+
         // -- Clipboard ---------------------------------------------------------
         // Process-wide so the user can copy in one editor window and paste in another.
         internal static class DeeperClipboard
@@ -430,21 +453,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                     switch (sel)
                     {
                         case Region r:
-                            _enhancement.Regions.Remove(r);
-                            // Detach any rule that pointed at this region.
-                            foreach (var rule in _enhancement.Rules)
-                            {
-                                if (rule.RegionConstraint == r.Id) rule.RegionConstraint = null;
-                            }
-                            // Remove the paired Rule-kind TimelineItem the loader projected for
-                            // this region, otherwise BackProject on save resurrects it.
-                            if (!string.IsNullOrEmpty(r.Id))
-                            {
-                                _enhancement.TimelineItems.RemoveAll(ti =>
-                                    ti != null
-                                    && ti.Kind == TimelineItemKind.Rule
-                                    && ti.Id == r.Id);
-                            }
+                            RemoveRegionFromModel(r);
                             break;
                         case HapticEvent ev:
                             foreach (var track in _enhancement.HapticTracks)
@@ -466,6 +475,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 RebuildRegionVisuals();
                 RebuildHapticVisuals();
                 RebuildEffectVisuals();
+                RebuildRuleVisuals();
                 RefreshRulesList();
                 ScheduleValidation();
             }

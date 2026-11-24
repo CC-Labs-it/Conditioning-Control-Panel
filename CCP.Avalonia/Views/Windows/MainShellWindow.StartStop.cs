@@ -206,6 +206,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             PinkFilterOverlay.Refresh(this);
             UpdateStartButton();
             StopEngineRamp();
+            Views.Controls.AppSettings.AudioSettingsBinder.RaiseChanged(); // WPF restores session settings before StopEngine
             EngineStopped?.Invoke(this, EventArgs.Empty);
             // A paused session keeps its labels, lock and pause button (WPF StopEngine leaves them).
             if (App.Sessions?.IsRunning == true) { SetPauseButton(App.Sessions.IsPaused); OnSessionTick(); return; }

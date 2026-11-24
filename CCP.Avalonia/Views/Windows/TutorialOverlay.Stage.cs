@@ -69,7 +69,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Width = layer.Bounds.Width, Height = layer.Bounds.Height };
             layer.Children.Add(_mainDim);
             _mainDimBoundsSub = layer.GetObservable(BoundsProperty).Subscribe(new MainDimBoundsObserver(this));
-            _tutorialMainWindow.Closed += OnMainWindowClosed;
         }
 
         private sealed class MainDimBoundsObserver(TutorialOverlay overlay) : IObserver<Rect>
@@ -86,15 +85,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void OnMainWindowClosed(object? sender, EventArgs e)
         {
-            RemoveMainWindowDim();
-            _tutorialMainWindow = null;
+            // WPF TutorialOverlay.xaml.cs:154-165 shuts down the tour on shell close.
+            Teardown();
         }
 
         private void RemoveMainWindowDim()
         {
             _mainDimBoundsSub?.Dispose();
             _mainDimBoundsSub = null;
-            if (_tutorialMainWindow != null) _tutorialMainWindow.Closed -= OnMainWindowClosed;
             if (_mainDimLayer != null && _mainDim != null) _mainDimLayer.Children.Remove(_mainDim);
             _mainDimLayer = null;
             _mainDim = null;
@@ -135,6 +133,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
             Live.Add(this);
+            if (_tutorialMainWindow != null)
+            {
+                _tutorialMainWindow.Closed -= OnMainWindowClosed;
+                _tutorialMainWindow.Closed += OnMainWindowClosed;
+            }
             _loaded = true;
             if (CoreTutorial.CurrentStep is { } first) UpdateStep(first);
         }
@@ -151,6 +154,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_tornDown) return;
             _tornDown = true;
             Live.Remove(this);
+            if (_tutorialMainWindow != null) _tutorialMainWindow.Closed -= OnMainWindowClosed;
             _closed = true;
             try { _spotlightDelayTimer?.Stop(); } catch { /* already stopped */ }
             _spotlightDelayTimer = null;

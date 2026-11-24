@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Reflection;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Awareness;
 using ConditioningControlPanel.Services.Bark;
+using ConditioningControlPanel.Services.EmiDesk;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
@@ -54,6 +56,17 @@ internal static class BarkHead
     // WPF BarkService.cs:715, :795-804, :822-840, :876-894. Preserve context and event order.
     internal static void WireSources(BarkEngine e)
     {
+        // WPF BarkService.cs:656-674: keep the lost interval until FaceFound is evaluated.
+        var webcam = WebcamTracker.Instance;
+        Wire<Action>(h => webcam.OnBlink += h, h => webcam.OnBlink -= h,
+            () => { e.RegisterBlink(); e.Raise("Blink", c => c.Set("blink_count", e.BlinkCount)); });
+        Wire<Action>(h => webcam.OnMouthOpen += h, h => webcam.OnMouthOpen -= h, () => e.Raise("MouthOpen"));
+        Wire<Action>(h => webcam.OnTongueOut += h, h => webcam.OnTongueOut -= h, () => e.Raise("TongueOut"));
+        Wire<Action<global::Avalonia.Point>>(h => webcam.OnLongStare += h, h => webcam.OnLongStare -= h, _ => e.Raise("LongStare"));
+        Wire<Action>(h => webcam.OnFaceLost += h, h => webcam.OnFaceLost -= h, () => { e.FaceLost(); e.Raise("FaceLost"); });
+        Wire<Action>(h => webcam.OnFaceFound += h, h => webcam.OnFaceFound -= h, () => { e.Raise("FaceFound"); e.FaceFound(); });
+        Wire<Action<ConditioningControlPanel.Services.WebcamTrackingState>>(h => webcam.OnTrackingStateChanged += h, h => webcam.OnTrackingStateChanged -= h,
+            state => e.Raise("TrackingStateChanged", c => c.Set("state", state.ToString())));
         Wire<Action<int>>(h => ProgressionBank.LevelUp += h, h => ProgressionBank.LevelUp -= h,
             level => e.Raise("LevelUp", c => c.Set("level", level)));
         Wire<Action<double, string>>(h => ProgressionBank.Awarded += h, h => ProgressionBank.Awarded -= h,
@@ -87,6 +100,27 @@ internal static class BarkHead
             h => Views.Windows.LockCardWindow.ReactionCompleted -= h,
             (phrase, mistakes, repeats) => _ = LockCardReactionAsync(e, phrase, mistakes, repeats, Random.Shared.Next(2) == 0));
         Wire<Action>(h => Views.Overlays.BubbleOverlay.Popped += h, h => Views.Overlays.BubbleOverlay.Popped -= h, () => e.Raise("BubblePopped"));
+        // WPF AttachSessionEngine (BarkService.cs:956-1003, MainWindow.Presets.cs:1627). Stopped fuses WPF's
+        // SessionStopped and SessionCompleted, which WPF raises in that order (SessionEngine.cs:395, :438).
+        if (App.Sessions is { } run)
+        {
+            Wire<Action>(h => run.Started += h, h => run.Started -= h, () => { _phaseName = ""; e.Raise("SessionStarted"); });
+            Wire<Action<Session, bool>>(h => run.Stopped += h, h => run.Stopped -= h, (_, completed) =>
+            {
+                e.Raise("SessionStopped");
+                if (completed) e.Raise("SessionCompleted");
+            });
+            Wire<Action<int>>(h => run.PhaseChanged += h, h => run.PhaseChanged -= h, i =>
+            {
+                _phaseName = run.CurrentSession?.Phases is { } p && i >= 0 && i < p.Count ? p[i].Name ?? "" : "";
+                e.Raise("SessionPhaseChanged", c => c.Set("phase_index", i).Set("phase_name", _phaseName).Set("phase_is_deepener", PhaseIsDeepener));
+            });
+            Wire<Action>(h => run.Progressed += h, h => run.Progressed -= h,
+                () => e.Raise("SessionProgress", c => c.Set("session_elapsed_sec", run.Elapsed.TotalSeconds)));
+            Wire<Action<int>>(h => run.Paused += h, h => run.Paused -= h, n => e.Raise("SessionPaused", c => c.Set("pause_n", (double)n)));
+            Wire<Action<TimeSpan>>(h => run.Resumed += h, h => run.Resumed -= h,
+                gap => e.Raise("SessionResumed", c => c.Set("pause_n", (double)run.PauseCount).Set("paused_sec", gap.TotalSeconds)));
+        }
     }
 
     // WPF BarkService.cs:1315-1368: one coin flip, with pool fallback when AI is silent.
@@ -105,6 +139,9 @@ internal static class BarkHead
         }
         e.Raise("LockCardCompleted", c => c.Set("phrase", phrase ?? "").Set("mistakes", mistakes).Set("repeats", repeats), guaranteed: true);
     }
+    // WPF BarkState.cs:139-143: the last announced phase, kept after the session ends, cleared on the next start.
+    private static string _phaseName = "";
+    private static bool PhaseIsDeepener => _phaseName.Contains("deep", StringComparison.OrdinalIgnoreCase);
 
     private static Action? _onUserMessage;
     private static EventHandler<ModPackage>? _onModChanged;
@@ -113,6 +150,12 @@ internal static class BarkHead
     /// <summary>Drops the engine and detaches sources (tests; the seams are the caller's to restore).</summary>
     internal static void Stop()
     {
+        EmiBarkBridge.DeskFire = null;
+        EmiBarkBridge.VideoTitleProbe = null;
+        WindowAwarenessService.V2OwnsReactionsProvider = null;
+        (AvatarAwarenessSpeaker.RaiseBark, AvatarAwarenessSpeaker.DeliverLine, AvatarAwarenessSpeaker.CompanionBusy) = (null, null, null);
+        (AvatarAwarenessSpeaker.LineSpoken, AvatarAwarenessSpeaker.MuteKeywordEcho) = (null, null);
+        (BrainAwarenessLineSource.BrainProvider, BrainAwarenessLineSource.AiProvider) = (null, null);
         if (Engine != null) Engine.BarkSpoken -= OnBarkSpoken;
         foreach (var detach in _unsubscribe) detach();
         _unsubscribe.Clear();
@@ -124,6 +167,10 @@ internal static class BarkHead
     /// <summary>The mouth, live reads and Core seams; split from Start so a test can seed its own engine.</summary>
     internal static void Seed(BarkEngine e)
     {
+        EmiBarkBridge.DeskFire = () => Views.Windows.EmiDesk.EmiDeskService.Instance.Fire;
+        EmiBarkBridge.VideoTitleProbe = () => CoreEngine.Video?.LastVideoPath;
+        e.NoteAwarenessReaction = () => Views.Windows.EmiDesk.EmiDeskService.Instance.NoteAwarenessReaction();
+        SeedAwarenessMouth(e);
         e.Speak = Speak;
         e.IsWhisperStarting = () => Views.Overlays.FlashOverlay.VoiceStarting;
         // WPF App.xaml.cs:3006: a held idle line is not recorded as spoken (#1468), same policy as the tube.
@@ -136,10 +183,18 @@ internal static class BarkHead
             ? svc : App.WindowAwareness.CurrentDetectedName;
         e.LiveField = field => field switch
         {
+            "webcam_running" => WebcamTracker.Instance.IsRunning,
             "video_playing" => CoreEngine.Video?.IsPlaying == true,
             // WPF ResolveField :1446: the free collection's 100%, the ceiling the tab shows.
             "achievements_all_unlocked" => App.Achievements is { } a && a.GetTotalCount(false) is var total
                 && total > 0 && a.GetUnlockedCount(false) >= total,
+            // WPF BarkState.cs:26-28, :146-147: zero (or -1) once the session is not running.
+            "session_elapsed_sec" => App.Sessions is { IsRunning: true } r ? r.Elapsed.TotalSeconds : 0d,
+            "session_phase_index" => App.Sessions is { IsRunning: true } r ? r.CurrentPhaseIndex : -1,
+            "pauses_this_session" => App.Sessions is { IsRunning: true } r ? (double)r.PauseCount : 0d,
+            "session_planned_min" => App.Sessions is { IsRunning: true } r ? (double)(r.CurrentSession?.DurationMinutes ?? 0) : 0d,
+            "phase_name" => _phaseName,
+            "phase_is_deepener" => PhaseIsDeepener,
             _ => null,
         };
 
@@ -163,6 +218,26 @@ internal static class BarkHead
         CoreSettingsHooks.SettingChangedSink = name => OnSettingChanged(e, name);
     }
 
+    /// <summary>WPF App.xaml.cs:3086 and the App.* reads of the moved AwarenessRouting.cs. The observer lane
+    /// attaches the arbiter; until then IsActive is false and nothing here speaks. The speaker's foreground
+    /// title stays unseeded: the observer hands it currentAppId, as WPF App.xaml.cs:3124.</summary>
+    internal static void SeedAwarenessMouth(BarkEngine e)
+    {
+        WindowAwarenessService.V2OwnsReactionsProvider = () => AwarenessV2Routing.IsActive;
+        AvatarAwarenessSpeaker.RaiseBark = e.RaiseAwarenessBark;
+        AvatarAwarenessSpeaker.DeliverLine = (line, doubleBounce) =>
+        {
+            if (TubeProvider() is not { } tube) return false;
+            tube.SpeakAwarenessLine(line, doubleBounce);
+            return true;
+        };
+        AvatarAwarenessSpeaker.CompanionBusy = ms => TubeProvider()?.IsCompanionBusy(ms) == true;
+        AvatarAwarenessSpeaker.LineSpoken = e.NotifyExternalLineSpoken;
+        AvatarAwarenessSpeaker.MuteKeywordEcho = (line, ms) => EchoTarget().MuteKeywordEcho(line, ms);
+        BrainAwarenessLineSource.BrainProvider = () => App.Brain;
+        BrainAwarenessLineSource.AiProvider = () => App.Ai;
+    }
+
     // The desktop lifetime owns the live tube; headless tests supply their shown tube.
     internal static Func<Views.AvatarTube.AvatarTubeWindow?> TubeProvider = () => Views.AvatarTube.AvatarTubeWindow.Live;
 
@@ -176,7 +251,7 @@ internal static class BarkHead
         if (s.SilentEgg || !s.Priority)
         {
             var voiced = !s.SilentEgg && s.AudioPath != null;
-            tube.Giggle(s.Text, unprompted: s.Unprompted, phraseAudioPath: voiced ? s.AudioPath : null, barkVoice: voiced);
+            tube.Giggle(s.Text, unprompted: s.Unprompted, phraseAudioPath: voiced ? s.AudioPath : null, barkVoice: voiced, mood: s.Mood);
             return;
         }
         tube.GigglePriority(s.Text, playSound: s.AudioPath == null, aiGenerated: false,

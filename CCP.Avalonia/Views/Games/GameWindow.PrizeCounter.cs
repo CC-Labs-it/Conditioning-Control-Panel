@@ -3,7 +3,7 @@
 // WPF GameSurfaces.cs:66), app exit closes it (WPF App.xaml.cs:6433), a first Escape is the page's back
 // (PanicPolicy.KeptEscapePage.Counter, WPF MainWindow.xaml.cs:1531). Openers hear the close once, with its reason.
 // ponytail: part B (row game-prize-counter): wear routing (init.wears stays empty, so no Wear), the doors that
-// call LaunchPrizeCounter, Rain price cache, boot wallet read, SeasonRecap e_shop.
+// call LaunchPrizeCounter, Rain price cache, boot wallet read.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,6 +13,7 @@ using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Companion;
 using ConditioningControlPanel.Services.PrizeCounter;
 using ConditioningControlPanel.Services.Safety;
@@ -28,6 +29,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>Test seams: the relay's transport (null = shared client) and server (null = sandbox: offline).</summary>
         internal static Func<HttpClient?> CounterHttp { get; set; } = () => null;
         internal static Func<string?> CounterServerBase { get; set; } = () => PbpServerBase();
+        internal static Action<string> CounterNoteEvent { get; set; } = key => App.FeatureDayLog?.Note(key);
         /// <summary>WPF RequestSignIn: the panel's account sign-in over the counter.</summary>
         internal static Func<Window, Task> CounterSignIn { get; set; } = owner =>
             Windows.MainShellWindow.Current?.OpenUnifiedLoginDialog(owner) ?? Task.CompletedTask;
@@ -97,7 +99,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 () => FriendsHead.Identity() is { } id && id.UnifiedId == _counterOpener ? id : null,
                 () => baseUrl == null || CoreSettings.Current.OfflineMode,
                 (account, fromBuy, sp) => Dispatcher.UIThread.Post(() => V2PurchaseHead.AdoptSp(account, fromBuy, sp)),
-                PrizeOwnership.ApplySnapshot, baseUrl);
+                PrizeOwnership.ApplySnapshot, baseUrl)
+            {
+                BuyLanded = () => Dispatcher.UIThread.Post(() => SeasonFeatureTracking.Track(CoreSettings.Current,
+                    ConditioningControlPanel.Models.SeasonFeatureKeys.Shop, CounterNoteEvent, DateTime.UtcNow)),
+            };
         }
 
         /// <summary>WPF Reload (:376): the page again in the same window, with a fresh init.</summary>

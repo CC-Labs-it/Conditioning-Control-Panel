@@ -366,6 +366,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             warn.Append(windows
                 ? "  (or Ctrl+Alt+Del → Task Manager as a safety valve)"   // WPF's line verbatim
                 : "  (or ending the app from a system monitor / terminal as a safety valve)");
+            warn.Append("\n- ").Append(Loc.Get("lockdown_exit_gamble_warning"));
             AppendPossessionConsent(warn, cfg, Possession.PossessionAvaloniaHead.HasFullDokiEffects());
             return warn.ToString();
         }

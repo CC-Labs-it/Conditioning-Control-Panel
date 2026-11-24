@@ -15,12 +15,14 @@ public partial class ChaosHubWindow
         public readonly Control Target = target;
         public readonly double Begin = begin;
         public bool Chimed;
+        public bool Superseded;
     }
 
     internal static Action<string, float> PlayRevealSfx = ChaosOverlayWindow.ChaosSfx.Play;
 
     private readonly List<RevealPulse> _revealPulses = new();
     private BeatLoop? _revealLoop;
+    private double _revealElapsed;
     private bool _revealClosed;
 
     // WPF ChaosHubWindow.Reveals.cs:168-244: one batch bark, silent consumption for
@@ -43,18 +45,33 @@ public partial class ChaosHubWindow
                 [RevealIds.Diary] = _hdrDiary,
                 [RevealIds.StatsPanel] = this.FindControl<Control>("HdrStats"),
             };
+            // Each invocation is a new WPF batch, with its own stagger and immediate chime.
+            // All batches share one clock so a later refresh cannot orphan an older loop.
+            if (_revealLoop == null) _revealElapsed = 0;
+            double batchStart = _revealElapsed;
+            int batchCount = 0;
+            string? firstFlashed = null;
             foreach (var id in RevealService.PendingIds())
             {
                 if (map.TryGetValue(id, out var target) && target is { IsVisible: true })
-                    _revealPulses.Add(new(id, target, _revealPulses.Count * 0.6));
+                {
+                    firstFlashed ??= id;
+                    // WPF replaces the target animation, but its delayed chime timer survives.
+                    foreach (var old in _revealPulses)
+                        if (ReferenceEquals(old.Target, target)) old.Superseded = true;
+                    _revealPulses.RemoveAll(old => old.Superseded && old.Chimed);
+                    _revealPulses.Add(new(id, target, batchStart + batchCount++ * 0.6));
+                }
                 else RevealService.MarkSeen(id);
             }
-            if (_revealPulses.Count == 0) return;
-            // The window's shared beat (AmbientBeatLoopsTests), not a per-view frame timer.
-            // Start steps t=0 at once: the first chime, then the batch bark, as before.
-            _revealLoop = new BeatLoop(this, AdvanceRevealFlashes);
-            _revealLoop.Start();
-            Platform.BarkHead.Engine?.Raise("ChaosRevealFlash", c => c.Set("element", _revealPulses[0].Id));
+            if (firstFlashed == null) return;
+            if (_revealLoop == null)
+            {
+                _revealLoop = new BeatLoop(this, AdvanceRevealFlashes);
+                _revealLoop.Start();
+            }
+            else AdvanceRevealFlashes(batchStart);
+            Platform.BarkHead.Engine?.Raise("ChaosRevealFlash", c => c.Set("element", firstFlashed));
         }
         catch (Exception ex) { Log.Warning("RunRevealFlashes failed ({E})", ex.Message); }
     }
@@ -63,6 +80,7 @@ public partial class ChaosHubWindow
     // without sleeping or changing the production clock. No forever composition loop.
     internal void AdvanceRevealFlashes(double elapsed)
     {
+        _revealElapsed = elapsed;
         foreach (var pulse in _revealPulses.ToArray())
         {
             double t = elapsed - pulse.Begin;
@@ -71,6 +89,11 @@ public partial class ChaosHubWindow
             {
                 pulse.Chimed = true;
                 PlayRevealSfx("reveal_chime", 0.5f);
+            }
+            if (pulse.Superseded)
+            {
+                _revealPulses.Remove(pulse);
+                continue;
             }
             if (t >= 3)
             {
@@ -91,6 +114,7 @@ public partial class ChaosHubWindow
         // Teardown settles already-started reveals without leaving timers or delayed sounds.
         foreach (var pulse in _revealPulses)
         {
+            if (pulse.Superseded) continue;
             pulse.Target.Opacity = 1;
             RevealService.MarkSeen(pulse.Id);
         }

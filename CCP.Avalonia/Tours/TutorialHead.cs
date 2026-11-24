@@ -65,7 +65,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
             // WPF Services/TutorialService.cs:927: one 1600 ms demo flash.
             TutorialHeadHooks.FlashDemo ??= () =>
             {
-                if (TutorialHeadHooks.Shell is { } shell) Views.Overlays.FlashOverlay.TriggerOnce(shell, amount: 1, durationMs: 1600);
+                if (TutorialHeadHooks.Shell is { } shell) Views.Overlays.FlashOverlay.TriggerOnce(shell, amount: 1, durationMs: 1600, suppressHaptic: true);
             };
 
             if (_seeded) return;      // the seam is re-pointed every call, the events are wired once
