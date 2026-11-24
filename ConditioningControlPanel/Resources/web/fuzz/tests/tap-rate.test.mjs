@@ -109,6 +109,8 @@ test('ad accident card: the first real press opens, the second asks, the cap sti
   assert.deepEqual([AD_ASK.title, AD_ASK.open, AD_ASK.stay], ['Open the ad in a new tab?', 'Open', 'Stay here']);
   assert.ok(CONFIG.AD_TABS_PER_RUN >= 1);
   const ctxSrc = src('../ui/context.js');
-  assert.match(ctxSrc, /adLinkStep\(used, CONFIG\.AD_TABS_PER_RUN\)/);
-  assert.match(ctxSrc, /if \(used\.n >= CONFIG\.AD_TABS_PER_RUN\) return false;/, 'Open rechecks the cap');
+  /* lane D (2026-11-24): the cap is ui/run-links.js linkCap, AD_TABS_PER_RUN in full, one shared link in small */
+  assert.match(ctxSrc, /const used = linkRecord\(engine\.run\), cap = linkCap\(\);/);
+  assert.match(ctxSrc, /adLinkStep\(used, cap\)/);
+  assert.match(ctxSrc, /if \(used\.n >= cap\) return false;/, 'Open rechecks the cap');
 });

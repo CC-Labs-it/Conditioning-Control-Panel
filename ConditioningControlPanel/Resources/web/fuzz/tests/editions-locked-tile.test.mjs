@@ -35,15 +35,20 @@ test('one tile, last in the shop, in the shop\'s own short look, never an engine
   assert.equal(mountLockedTile({ doc: fakeDoc(), win: {}, door: null, ed: small }), null, 'no shop yet: nothing');
 });
 
-test('its press sends the locked-tile nudge only from a real press, and changes no count', () => {
-  const doc = fakeDoc(), sent = [];
+test('its press opens the door card and sends nothing; the card\'s link sends the locked-tile nudge only from a real press, and changes no count', () => {
+  const doc = fakeDoc(), sent = [], cards = [];
   const run = E.createRun({ ed: small });
   E.lump(run, 1234);
   const before = serialize(run, createLife(), {});
-  const el = mountLockedTile({ doc, win: { navigator: {} }, door: { tail() {} }, send: (t, f) => sent.push([t, f]), ed: small });
-  el.click({ isTrusted: false });
-  assert.deepEqual(sent, []);
+  const open = (spec) => { cards.push(spec); return { open: true, close() {} }; };
+  const el = mountLockedTile({ doc, win: { navigator: {} }, door: { tail() {} }, send: (t, f) => sent.push([t, f]), ed: small, open });
   el.click({ isTrusted: true });
+  assert.deepEqual(sent, [], 'lane D: the tile itself never sends a link');
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].title, LOCKED_TILE_COPY.label);
+  assert.equal(cards[0].go({ isTrusted: false }), false);
+  assert.deepEqual(sent, []);
+  assert.equal(cards[0].go({ isTrusted: true }), true);
   assert.deepEqual(sent, [['nudge', { where: 'locked-tile', want: 'account' }]]);
   assert.equal(serialize(run, createLife(), {}), before, 'the run is what it was');
 });
@@ -53,7 +58,7 @@ test('small only: main.js mounts it behind isSmall, and the shop keeps it last',
   assert.match(main, /if \(isSmall\(ed\)\) mountLockedTile\(/);
   const shop = readFileSync(new URL('../ui/shop.js', import.meta.url), 'utf8');
   assert.match(shop, /tail\(el\) \{/);
-  assert.match(shop, /if \(tailEl && rowsEl\.lastElementChild !== tailEl\) rowsEl\.appendChild\(tailEl\);/);
+  assert.match(shop, /if \(tailEl && tailDue && rowsEl\.lastElementChild !== tailEl\) rowsEl\.appendChild\(tailEl\);/);
   const tile = readFileSync(new URL('../ui/shop-locked.js', import.meta.url), 'utf8');
   assert.doesNotMatch(tile, /\.focus\(|caps\??\.edition|isSmall\(/, 'never takes focus, reads no edition');
 });

@@ -88,7 +88,8 @@ test('locked seeds: handed to the shop with the tile, named, never engine rows, 
   const doc = fakeDoc(), sent = [];
   let provider = null;
   const door = { tail() {}, lockedSeeds: (fn) => { provider = fn; } };
-  mountLockedTile({ doc, win: {}, door, send: (t, f) => sent.push([t, f]), ed: small });
+  const cards = [];
+  mountLockedTile({ doc, win: {}, door, send: (t, f) => sent.push([t, f]), ed: small, open: (spec) => { cards.push(spec); return { open: true }; } });
   assert.equal(typeof provider, 'function');
   const list = provider(smallRun('drone'));
   assert.deepEqual(list.map((x) => x.id), ['emi', 'button', 'unit']);
@@ -98,9 +99,12 @@ test('locked seeds: handed to the shop with the tile, named, never engine rows, 
   assert.equal(el.dataset.id, undefined, 'no row id');
   assert.equal(el.attrs['aria-label'], `Unit Complete. ${LOCKED_SEED_COPY.aria}`);
   assert.ok(el.children.some((c) => c.textContent === 'Unit Complete'));
-  el.click({ isTrusted: false });
-  assert.deepEqual(sent, []);
   el.click({ isTrusted: true });
+  assert.deepEqual(sent, [], 'lane D: the seed opens the door card, never a link');
+  assert.equal(cards.length, 1);
+  assert.equal(cards[0].go({ isTrusted: false }), false);
+  assert.deepEqual(sent, []);
+  assert.equal(cards[0].go({ isTrusted: true }), true);
   assert.deepEqual(sent, [['nudge', { where: 'locked-tile', want: 'upgrade' }]]);
 });
 

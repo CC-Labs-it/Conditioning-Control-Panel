@@ -52,7 +52,8 @@ test('the ending door: a hook that nudges only from a real press', () => {
 test('wiring: small only, through ui/edition.js, never by itself', () => {
   const main = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
   assert.match(main, /nudge: isSmall\(ed\) \? endingNudge\(/);
-  assert.match(main, /if \(isSmall\(ed\)\) mountPauseNudge\(/);
+  /* lane D (owner 2026-11-24): the pause line is no longer mounted in small; the code and its frozen copy stay. */
+  assert.doesNotMatch(main, /mountPauseNudge\(/);
   const recap = readFileSync(new URL('../ui/recap/recap.js', import.meta.url), 'utf8');
   assert.match(recap, /if \(hooks\.nudge\) \{/);
   /* The funnel (2026-11-24): the ending door moved into the recap wall (ui/recap/wall.js), two clicks, each with its event. */

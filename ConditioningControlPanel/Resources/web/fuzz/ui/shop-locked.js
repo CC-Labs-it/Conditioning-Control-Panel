@@ -1,7 +1,7 @@
 /* ui/shop-locked.js - the small edition's one locked tile (lane S, owner 2026-11-22: "one tile, never one per cut item").
  * A greyed tile at the very end of the shop grid (ui/shop.js shopDoor.tail), in the shop's own look: a `.row.short`
- * like any row the player cannot afford yet, with a lock where the icon goes. Its press sends the `locked-tile` nudge
- * from the player's own press. It is never an engine row: not in the sim, the Journey, the Guide map, the sticker or
+ * like any row the player cannot afford yet, with a lock where the icon goes. Its press opens the door card
+ * (ui/door-card.js), whose link button sends the `locked-tile` nudge from the player's own press. It is never an engine row: not in the sim, the Journey, the Guide map, the sticker or
  * recap counts. It never takes focus: nothing here focuses it, and it sits after every row. main.js mounts it in small
  * only (ui/edition.js isSmall); nothing here reads the edition.
  *
@@ -15,15 +15,25 @@ import { iconFor } from './icons.js';
 import { fateCss } from './fate-look.js';
 import { lockedSets, endingName } from './small-funnel.js';
 import { LOCKED_SEED_COPY } from '../data/content/small-funnel.js';
+import { openDoorCard } from './door-card.js';
 
 export const LOCKED_TILE_COPY = Object.freeze({ label: 'More in the full game' });
 
 const LOCK = '<svg viewBox="0 0 20 20" width="30" height="30" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2" '
   + 'stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="9" width="12" height="8.5" rx="1.5"/><path d="M6.5 9V6.5a3.5 3.5 0 0 1 7 0V9"/></g></svg>';
 
-/** Builds the tile and hands it to the shop. door: the live shop (ui/shop.js shopDoor); none yet = nothing shown.
- *  Answers the tile, or null. */
-export function mountLockedTile({ doc = document, win = doc.defaultView, send = () => {}, ed, door = shopDoor } = {}) {
+/** The door card for one door (lane D, owner 2026-11-24): its press opens the card, never a link; the card's link button
+ *  sends `nudge` from its own real press and spends the run's one link (links, ui/run-links.js). */
+export const doorOpener = ({ doc, win, send, ed, links, open = openDoorCard, gentle }) => (nudge) => () => open({
+  doc, gentle, links, title: LOCKED_TILE_COPY.label,
+  go: (ev) => nudge({ inPress: realPress(win, ev), send, win, ed }),
+});
+
+/** Builds the tile and hands it to the shop. door: the live shop (ui/shop.js shopDoor); none yet = nothing shown. The
+ *  shop shows it only from the moment the fate seed shelf shows (ui/shop.js tail). links: the run's link cap; open: the
+ *  card (tests hand a fake). Answers the tile, or null. */
+export function mountLockedTile({ doc = document, win = doc.defaultView, send = () => {}, ed, door = shopDoor,
+  links = undefined, open = openDoorCard, gentle = undefined } = {}) {
   if (!door?.tail || doc.getElementById('locked-tile')) return null;
   const el = doc.createElement('button');
   el.type = 'button';
@@ -39,17 +49,18 @@ export function mountLockedTile({ doc = document, win = doc.defaultView, send = 
   label.style.whiteSpace = 'normal';
   label.textContent = LOCKED_TILE_COPY.label;
   el.append(ico, label);
-  el.addEventListener('click', (ev) => sendNudge('locked-tile', { inPress: realPress(win, ev), send, win, ed }));
+  const card = doorOpener({ doc, win, send, ed, links, open, gentle });
+  el.addEventListener('click', card((o) => sendNudge('locked-tile', o)));
   door.tail(el);
   /* The funnel (owner 2026-11-24): the endings small keeps locked sit on the seed shelf beside the open seed. */
-  door.lockedSeeds?.((run) => lockedSets(run).map((set) => ({ id: set.id, seed: set.seed, make: () => makeLockedSeed({ doc, win, send, ed, set }) })));
+  door.lockedSeeds?.((run) => lockedSets(run).map((set) => ({ id: set.id, seed: set.seed, make: () => makeLockedSeed({ doc, win, send, ed, set, card }) })));
   return el;
 }
 
 /* ---- locked seeds (owner 2026-11-24, handoff-1124/tc-small-funnel/BRIEF.md) ----
  * A fate set a full run would offer here and small keeps locked: its seed card in the fate look (black notched card,
  * ui/fate-look.js), dimmed, a lock where the END seal goes, a FULL GAME stamp where NOT THIS RUN goes, and the ending's
- * name. Its press sends nudge {where:'locked-tile', want:'upgrade'} from a real press. Never an engine row: no data-id,
+ * name. Its press opens the door card, whose link sends nudge {where:'locked-tile', want:'upgrade'} from a real press. Never an engine row: no data-id,
  * no price, nothing counts it. The shop (ui/shop.js lockedSeeds) keeps it after the open seeds and lets it go with them.
  * COPY: drafts, data/content/small-funnel.js. */
 export const LOCKED_SEED_CSS = `
@@ -76,8 +87,8 @@ export const LOCKED_SEED_CSS = `
 body.gentle #shop .row.fate.fate-locked:active { translate: none; }
 `;
 
-/** One locked seed card. Answers the element. */
-export function makeLockedSeed({ doc = document, win = doc.defaultView, send = () => {}, ed, set }) {
+/** One locked seed card. card: the door card opener (doorOpener); its press opens the card. Answers the element. */
+export function makeLockedSeed({ doc = document, win = doc.defaultView, send = () => {}, ed, set, card = doorOpener({ doc, win, send, ed }) }) {
   fateCss(doc, 'locked-seed-css', LOCKED_SEED_CSS);
   const name = endingName(set.end);
   const el = doc.createElement('button');
@@ -100,6 +111,6 @@ export function makeLockedSeed({ doc = document, win = doc.defaultView, send = (
   stamp.setAttribute('aria-hidden', 'true');
   stamp.textContent = LOCKED_SEED_COPY.stamp;
   el.append(art, label, lock, stamp);
-  el.addEventListener('click', (ev) => sendNudgeAs('locked-tile', 'upgrade', { inPress: realPress(win, ev), send, win, ed }));
+  el.addEventListener('click', card((o) => sendNudgeAs('locked-tile', 'upgrade', o)));
   return el;
 }
