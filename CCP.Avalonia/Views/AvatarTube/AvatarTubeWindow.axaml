@@ -73,6 +73,14 @@
         UseLayoutRounding="True">
 
     <Window.Styles>
+        <Style Selector="Image.avatar-layer">
+            <Setter Property="Effect">
+                <DropShadowEffect Color="{StaticResource PinkColor}" BlurRadius="20" OffsetX="0" OffsetY="0" Opacity="0.6"/>
+            </Setter>
+        </Style>
+        <Style Selector="Image.avatar-layer.portrait-mode">
+            <Setter Property="Effect" Value="{x:Null}"/>
+        </Style>
         <!-- ponytail: local copy of AvatarTubeWindow.xaml:ContextMenu.Style / MenuItem Style,
              reduced to the property setters that survive without a template. Hoist when a second
              view needs a dark context menu. -->
@@ -385,26 +393,20 @@
                      of the reply bounce; portrait breathing and animated layers remain part B. -->
                 <Grid x:Name="AvatarBounceHost" RenderTransformOrigin="50%,100%">
                     <!-- Static PNG avatar (default) / emotive-portrait crossfade layer A -->
-                    <Image x:Name="ImgAvatar"
+                    <Image x:Name="ImgAvatar" Classes="avatar-layer"
                            Stretch="Uniform"
                            MaxHeight="306"
                            MaxWidth="198"
                            RenderTransformOrigin="50%,50%">
-                        <Image.Effect>
-                            <DropShadowEffect Color="{StaticResource PinkColor}" BlurRadius="20" OffsetX="0" OffsetY="0" Opacity="0.6"/>
-                        </Image.Effect>
                     </Image>
                     <!-- Emotive-portrait crossfade layer B (hidden unless portrait mode is active) -->
-                    <Image x:Name="ImgAvatarB"
+                    <Image x:Name="ImgAvatarB" Classes="avatar-layer"
                            Stretch="Uniform"
                            MaxHeight="306"
                            MaxWidth="198"
                            Opacity="0"
                            IsVisible="False"
                            RenderTransformOrigin="50%,50%">
-                        <Image.Effect>
-                            <DropShadowEffect Color="{StaticResource PinkColor}" BlurRadius="20" OffsetX="0" OffsetY="0" Opacity="0.6"/>
-                        </Image.Effect>
                     </Image>
                     <!-- Pink mist overlay (emotive-portrait mode only): soft drifting pink glow over the avatar -->
                     <Ellipse x:Name="MistOverlay"
