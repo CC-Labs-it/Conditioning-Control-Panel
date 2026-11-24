@@ -190,10 +190,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             var main = Windows.MainShellWindow.Current;
             var launcher = Windows.LauncherWindow.Instance;
-            Window source = onMain && main is { IsVisible: true } ? main
-                : launcher is { IsVisible: true, IsActive: true } ? launcher
-                : main is { IsVisible: true } ? main
-                : launcher is { IsVisible: true } ? launcher : this;
+            Window source = launcher is { IsVisible: true } ? launcher
+                : main is { IsVisible: true } ? main : this;
             var screens = ScreenList.Enumerate(source);
             if (screens.Count == 0) return;
             var size = source.FrameSize ?? source.ClientSize;
