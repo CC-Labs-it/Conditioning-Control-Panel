@@ -395,6 +395,23 @@ namespace ConditioningControlPanel.Services
                 // WPF ReportCommandRefused: say so on the status push, never a silent "ok".
                 (_lastStatus, _lastReason) = ("fail", reason);
                 Log.Warning("[RemoteControl] {Action} not delivered: {Reason}", action, reason);
+                // WPF RemoteControlService.cs:1235-1244: send the refusal over the emote channel too.
+                // Do not start a notification for a command overtaken by a panic or controller leave.
+                if (gen.Leave == Volatile.Read(ref _leaveGeneration) && gen.Panic == RemoteCommands.PanicGeneration)
+                {
+                    var allowed = reason == "not while on a leash" || action == "play_hypnotube"
+                            && Helpers.HtUrlHelper.IsEligibleHtUrl(parameters?["url"]?.ToString())
+                        || action == "trigger_haptic" && reason == "no_device"
+                        || action is "start_session" or "resume_session" && reason == "panic"
+                        || action == "disable_strict_lock" && reason == "the Lockdown holds the strict lock"
+                        || action == "disable_panic";
+                    if (allowed)
+                    {
+                        var prefix = reason == "panic" || reason == "the Lockdown holds the strict lock"
+                            || action == "disable_panic" ? "Not allowed" : "Can't open that";
+                        _ = SendEmoteAsync($"{prefix}: {reason}", "🚫", "custom");
+                    }
+                }
                 return;
             }
             CommandReceived?.Invoke(this, action);
