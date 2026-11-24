@@ -87,6 +87,9 @@
                                            VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
                                            FontSize="13" FontWeight="Bold"/>
                             </Grid>
+                            <!-- Accessibility limit (Settings > Performance) holds this value back: say so. -->
+                            <TextBlock x:Name="TxtComfortClip" Visibility="Collapsed" TextWrapping="Wrap"
+                                       FontSize="11" Margin="0,0,0,4" Foreground="{DynamicResource TextMutedBrush}"/>
                             </feat:OptionSection>
 
                             <feat:OptionSection Key="pinkfilter.look" Title="{loc:Str studio_section_look}" Theme="Look">

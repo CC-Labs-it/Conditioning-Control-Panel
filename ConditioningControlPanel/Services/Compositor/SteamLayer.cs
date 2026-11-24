@@ -116,7 +116,9 @@ public sealed class SteamLayer : BaseLayer
         }
         // The base filter's own colour and strength: thicker than the flat tint, never opaque.
         var look = PinkTintLayer.LastLook;
-        double strength = SteamOptions.Strength(look.Opacity);
+        // LastLook is already clipped by the Accessibility limit; the fog is drawn thicker than the
+        // tint, so its peak alpha is held to the limit as well (limit off = unchanged).
+        double strength = Safety.PinkComfortLimit.FogStrength(SteamOptions.Strength(look.Opacity));
         // The filter's own colour always (the shop sells no fog colours); Two-tone adds its second colour below.
         var worn = Prizes.WornFog.Shown((look.R, look.G, look.B));
         var (wr, wg, wb) = worn.Main;
