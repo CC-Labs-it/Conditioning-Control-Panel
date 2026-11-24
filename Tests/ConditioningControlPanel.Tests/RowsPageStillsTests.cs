@@ -100,11 +100,20 @@ public class RowsPageStillsTests
         // CCP_ROWS_PAGES=video,visuals limits the run to a lane's own pages.
         if (Environment.GetEnvironmentVariable("CCP_ROWS_PAGES") is { Length: > 0 } only
             && Array.IndexOf(only.Split(',', StringSplitOptions.TrimEntries), page) < 0) return;
-        WpfRenderHarness.OnStaThread(() =>
+        // CCP_ROWS_LANG=ru renders in that language (English put back after); CCP_ROWS_WIDTH=520 sets
+        // the width. Either one adds "-<lang>" / "-<width>" to the file name.
+        string? lang = Environment.GetEnvironmentVariable("CCP_ROWS_LANG");
+        double width = double.TryParse(Environment.GetEnvironmentVariable("CCP_ROWS_WIDTH"),
+            System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var w) && w > 0
+            ? w : RowsRender.Width;
+        string name = page + (string.IsNullOrWhiteSpace(lang) ? "" : "-" + lang)
+                           + (width == RowsRender.Width ? "" : "-" + width.ToString("0", System.Globalization.CultureInfo.InvariantCulture));
+        WpfRenderHarness.OnStaThread(() => RowsRender.InLanguage(lang, () =>
         {
-            var host = RowsRender.Host(Make(page));
-            Assert.NotNull(RowsRender.Dump(host, page));
-        });
+            var host = RowsRender.Host(Make(page), width);
+            Assert.NotNull(RowsRender.Dump(host, name));
+            return 0;
+        }));
         RowsRender.AssertSilent(page);
     }
 }
