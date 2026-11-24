@@ -250,6 +250,47 @@ public sealed class BubbleCountSchedulerTests
         }
     });
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void TerminalResultRaisesOnlyItsEvent(bool success) => With(true, false, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        using var game = new BubbleCountScheduler(host, clock, () => Clips);
+        int wins = 0, losses = 0;
+        game.GameCompleted += () => wins++; game.GameFailed += () => losses++;
+        game.Trigger(true); clock.Advance(BubbleCountScheduler.LeadIn);
+        host.Shown[0].Done(success); host.Shown[0].Done(success);
+        Assert.Equal(success ? 1 : 0, wins);
+        Assert.Equal(success ? 0 : 1, losses);
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void StrictLossAnnouncesOnlyAtMercyOrMissingRetry(bool missingRetry) => With(true, true, true, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); int picks = 0;
+        using var game = new BubbleCountScheduler(host, clock, () => missingRetry && picks++ > 0 ? Array.Empty<string>() : new[] { Clips[0] });
+        var old = CoreSettings.Current.MercyAfterFails; CoreSettings.Current.MercyAfterFails = 2;
+        int losses = 0; game.GameFailed += () => losses++;
+        try
+        {
+            game.Trigger(true); clock.Advance(BubbleCountScheduler.LeadIn);
+            host.Shown[0].Done(false); Assert.Equal(0, losses);
+            host.Messages[0].Then();
+            if (!missingRetry)
+            {
+                host.Shown[1].Done(false); Assert.Equal(0, losses);
+                host.Messages[1].Then();
+            }
+            Assert.Equal(1, losses);
+            host.Messages[^1].Then();
+            Assert.Equal(1, losses);
+        }
+        finally { CoreSettings.Current.MercyAfterFails = old; }
+    });
+
     [Fact]
     public void PanicIgnoresCompletionRaisedWhileClosingAStrictRound() => With(true, true, true, () =>
     {

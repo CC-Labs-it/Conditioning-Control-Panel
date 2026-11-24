@@ -83,6 +83,9 @@ namespace ConditioningControlPanel.Services
             _library = library ?? MandatoryVideoScheduler.LocalLibrary;
         }
 
+        // WPF BubbleCountService.cs:64-65: only terminal game outcomes are announced.
+        public event Action? GameCompleted, GameFailed;
+
         public bool IsRunning { get; private set; }
         /// <summary>A game (lead-in, clip, answer or retry message) is in progress.</summary>
         public bool IsBusy { get; private set; }
@@ -336,6 +339,7 @@ namespace ConditioningControlPanel.Services
                     Log.Information("Bubble count game completed! +{Xp} XP", xp);
                 }
                 CoreProgression.TrackBubbleCountCompleted();
+                GameCompleted?.Invoke();
                 return;
             }
             var s = CoreSettings.Current;
@@ -343,6 +347,7 @@ namespace ConditioningControlPanel.Services
             {
                 _retryCount = 0;
                 Idle();
+                GameFailed?.Invoke();
                 Log.Information("Bubble count game failed");
                 return;
             }
@@ -350,7 +355,7 @@ namespace ConditioningControlPanel.Services
             if (_retryCount >= s.MercyAfterFails && s.MercySystemEnabled)   // #1145: 2..10, default 3
             {
                 Log.Information("Bubble count mercy after {Retries} retries", _retryCount);
-                _host.ShowMessage(CoreMods.AttentionCheckMercyMessage ?? "BAMBI GETS MERCY", 2500, () => { if (generation != _generation) return; _retryCount = 0; Idle(); });
+                _host.ShowMessage(CoreMods.AttentionCheckMercyMessage ?? "BAMBI GETS MERCY", 2500, () => { if (generation != _generation || !IsBusy) return; _retryCount = 0; Idle(); GameFailed?.Invoke(); });
                 return;
             }
             Log.Information("Bubble count retry {Count} (mercy at {Mercy})", _retryCount, s.MercyAfterFails);
@@ -358,7 +363,7 @@ namespace ConditioningControlPanel.Services
             {
                 if (!IsBusy || generation != _generation) return;   // panic or replacement during the message
                 ArmStuck(TimeSpan.FromMinutes(5));
-                if (!Play(true)) { Log.Warning("BubbleCountService: No videos for retry, granting mercy"); _retryCount = 0; Idle(); }
+                if (!Play(true)) { Log.Warning("BubbleCountService: No videos for retry, granting mercy"); _retryCount = 0; Idle(); GameFailed?.Invoke(); }
             });
         }
 

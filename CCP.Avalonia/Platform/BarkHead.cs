@@ -96,6 +96,12 @@ internal static class BarkHead
         if (BrainDrainPlayer.Instance is { } brainDrain)
             Wire<EventHandler>(h => brainDrain.Triggered += h, h => brainDrain.Triggered -= h,
                 (_, _) => e.Raise("BrainDrainTriggered")); // WPF BarkService.cs:749-751
+        // WPF BarkService.cs:720-725: only the completed round reaches the companion.
+        if (CoreEngine.BubbleCount is { } game)
+        {
+            Wire<Action>(h => game.GameCompleted += h, h => game.GameCompleted -= h, () => e.Raise("BubbleCountCompleted"));
+            Wire<Action>(h => game.GameFailed += h, h => game.GameFailed -= h, () => e.Raise("BubbleCountFailed"));
+        }
         Wire<Action>(h => Views.Overlays.BubbleOverlay.Popped += h, h => Views.Overlays.BubbleOverlay.Popped -= h, () => e.Raise("BubblePopped"));
         // WPF AttachSessionEngine (BarkService.cs:956-1003, MainWindow.Presets.cs:1627). Stopped fuses WPF's
         // SessionStopped and SessionCompleted, which WPF raises in that order (SessionEngine.cs:395, :438).
