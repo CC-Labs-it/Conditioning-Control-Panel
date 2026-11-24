@@ -675,6 +675,7 @@ compare text, order, layout, sound and timing with the same screen on Windows. R
 <li>Default mod, companion on: open a tab with a voice line (e.g. Leaderboard). Expect a speech bubble and the voice, at most one per minute. WPF <code>MainWindow/MainWindow.xaml.cs:1755</code>. Rows: <code>feat-companion-barks</code>, <code>companion-ccp-default-voice</code>.</li>
 <li>Master volume 0: text only. Companion muted: text, no voice. WPF <code>Services/Companion/BarkService.cs</code>. Rows: <code>feat-companion-barks</code>.</li>
 <li><strong>[SAFETY] developers re-check this before release.</strong> Press panic while she speaks. Expect the voice cut at once. WPF <code>Services/Companion/BarkService.cs</code>. Rows: <code>feat-companion-barks</code>.</li>
+<li>Awareness v2 on and consented, companion on: trigger an ordinary bark (e.g. open Leaderboard), then switch to a watched app. Expect no awareness quip within the arbiter cooldown after the bark. WPF <code>Services/Companion/BarkService.cs:1786</code>. Rows: <code>barks-wpf-b</code>.</li>
 </ol>
 <h3 id="other">Other</h3>
 <ol start="9">
