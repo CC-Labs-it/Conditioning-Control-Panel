@@ -3,10 +3,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
-             xmlns:feat="clr-namespace:ConditioningControlPanel.Features">
+             xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.TintSliders="True">
 
     <Grid>
-        <StackPanel>
+        <StackPanel Grid.IsSharedSizeScope="True">
             <!-- HERO. The old Enable card is gone: its checkbox lives in the pill (same name,
                  same handlers, same SessionLock marker). That card carried no description of
                  its own, so the feature's existing blurb becomes the hero ToolTip instead of a
@@ -76,50 +78,50 @@
                             <StackPanel Margin="16,8,16,8">
 
                                 <!-- Frequency -->
-                                <Grid Height="36" ToolTip="{loc:Str tooltip_mind_wipe_frequency_1_180_per_hour}">
+                                <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_mind_wipe_frequency_1_180_per_hour}">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto" MinWidth="56"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_frequency}" FontSize="13" FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_frequency}" Emblem="Often">
+                                        <rows:RowLabel.Value>
+                                            <MultiBinding Converter="{x:Static rows:RowFraction.Instance}">
+                                                <Binding Path="Value" ElementName="SliderFreq"/>
+                                                <Binding Path="Maximum" ElementName="SliderFreq"/>
+                                            </MultiBinding>
+                                        </rows:RowLabel.Value>
+                                    </rows:RowLabel>
                                     <Slider Grid.Column="1" x:Name="SliderFreq" Minimum="1" Maximum="180" Value="6"
                                             feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="10,0"
                                             ValueChanged="SliderFreq_Changed"/>
-                                    <TextBlock Grid.Column="2" x:Name="TxtFreq" Text="6/h" HorizontalAlignment="Right"
-                                               VerticalAlignment="Center" FontSize="13" FontWeight="Bold"
-                                               Foreground="{DynamicResource PinkBrush}"/>
+                                    <rows:RowValue Grid.Column="2" x:Name="TxtFreq" Text="6" Unit="{loc:Str row_unit_an_hour}"/>
                                 </Grid>
 
                                 <!-- Volume -->
-                                <Grid Height="36" ToolTip="{loc:Str tooltip_volume_level_0_100}">
+                                <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_volume_level_0_100}">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto" MinWidth="56"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_volume}" FontSize="13" FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_volume}" Emblem="Loud"/>
                                     <Slider Grid.Column="1" x:Name="SliderVolume" Minimum="0" Maximum="100" Value="50"
                                             VerticalAlignment="Center" Margin="10,0"
                                             ValueChanged="SliderVolume_Changed"/>
-                                    <TextBlock Grid.Column="2" x:Name="TxtVolume" Text="50%" HorizontalAlignment="Right"
-                                               VerticalAlignment="Center" FontSize="13" FontWeight="Bold"
-                                               Foreground="{DynamicResource PinkBrush}"/>
+                                    <rows:RowValue Grid.Column="2" x:Name="TxtVolume" Text="50%"/>
                                 </Grid>
 
                                 <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
 
                                 <!-- Loop in background -->
-                                <Grid Height="34" ToolTip="{loc:Str tooltip_continuously_loop_a_single_track_instead_of_r}">
+                                <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_continuously_loop_a_single_track_instead_of_r}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <helpers:EmojiTextBlock Grid.Column="0" Text="{loc:Str setting_loop_in_background}"
-                                                            FontSize="13" FontWeight="SemiBold"
-                                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_loop_in_background}" Emblem="Loop"
+                                                   IsOn="{Binding IsChecked, ElementName=ChkLoop}"/>
                                     <CheckBox Grid.Column="1" x:Name="ChkLoop"
                                               Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                               Checked="ChkLoop_Changed" Unchecked="ChkLoop_Changed"/>
