@@ -1795,5 +1795,12 @@ const m=document.getElementById('ledger-meta');const s=document.querySelector('.
 <li>Why: WPF never calls <code>SeasonRecapService.SampleRank</code> (no caller on origin/main or port/7.2), so WPF's peak stays 0. Parity is the same 0 peak.</li>
 <li>Alternatives: wire sampling on this head only (a deviation WPF does not have).</li>
 </ul>
+<h2 id="2026-11-15-personality-migration-once">2026-11-15: legacy personality migration runs once on the Avalonia head</h2>
+<ul>
+<li>Decision: Avalonia startup runs <code>PersonalityService.MigrateFromLegacy</code> once, latched by <code>AppSettings.PersonalityLegacyMigrated</code> in <code>CCP.Avalonia/App.axaml.cs</code> (set with the migration so one save persists both). The latch is head-side only; Core <code>MigrateFromLegacy</code> stays unchanged, so WPF behaviour is unchanged.</li>
+<li>Why: WPF re-runs the migration on every launch (<code>ConditioningControlPanel/App.xaml.cs:2798</code>). With Spice on, a later CCP Default or BambiSprite pick reverts to Slut Mode, and an activated community prompt becomes a new &quot;My Custom Personality&quot; preset at the next launch. Running once is an intended improvement; reviews must not flag it as a WPF deviation or remove the latch.</li>
+<li>WPF reference: <code>ConditioningControlPanel/App.xaml.cs:2798</code>. Tests: <code>Tests/CCP.Avalonia.Tests/PersonalityLegacyMigrationTests.cs</code>, <code>Tests/CCP.Core.Tests/PersonalityWpfMigrationTests.cs</code>.</li>
+<li>Status: decided by owner.</li>
+</ul>
 </body>
 </html>

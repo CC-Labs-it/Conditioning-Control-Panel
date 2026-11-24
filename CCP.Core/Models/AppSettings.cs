@@ -2611,6 +2611,16 @@ namespace ConditioningControlPanel.Models
             set { _marqueeNeutralDefaultMigrated = value; OnPropertyChanged(); }
         }
 
+        private bool _personalityLegacyMigrated;
+        /// <summary>Avalonia startup guard for the legacy personality migration. WPF retains its original
+        /// migration behavior and does not consult this flag.</summary>
+        [JsonProperty]
+        public bool PersonalityLegacyMigrated
+        {
+            get => _personalityLegacyMigrated;
+            set { _personalityLegacyMigrated = value; OnPropertyChanged(); }
+        }
+
         private bool _circeNeutralTextMigrated;
         /// <summary>One-shot guard for Services.Migrations.CirceNeutralMigration, which rewrites the
         /// old Circe's Lock defaults saved in pools, phrase toggles and a pasted custom prompt. Latched

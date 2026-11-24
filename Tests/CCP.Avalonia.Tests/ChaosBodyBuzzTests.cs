@@ -55,6 +55,28 @@ public class ChaosBodyBuzzTests
         finally { AvaloniaTestDispatcher.Run(() => BubbleOverlay.Field.Bubbles.Remove(incoming)); }
     }
 
+    [Fact]
+    public Task ShockwaveTestIsolatesAndRestoresIncomingBubbles() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var bubbles = BubbleOverlay.Field.Bubbles;
+        var before = bubbles.ToArray();
+        var incoming = new AmbientBubble { X = 5000, Y = 5000, Size = 20, Popping = true };
+        try
+        {
+            bubbles.Clear();
+            bubbles.Add(incoming);
+            await ShockwaveSelectsRendererAndCancelsHops(false);
+            Assert.Single(bubbles);
+            Assert.Same(incoming, bubbles[0]);
+            Assert.True(incoming.Popping);
+        }
+        finally
+        {
+            bubbles.Clear();
+            bubbles.AddRange(before);
+        }
+    });
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
