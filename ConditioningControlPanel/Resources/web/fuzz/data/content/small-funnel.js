@@ -9,6 +9,11 @@
  * Ending names come from the catalog too. Tokens {game} and {cur} as in data/brand.js.
  * ==========================================================================*/
 
+/** The tag beside the game's title wherever the small edition shows it as a title (the main menu). Courier, never in full. */
+export const EDITION_TAG_COPY = Object.freeze({
+  tag: 'FREE EDITION',
+});
+
 /** A fate seed the small edition keeps locked, on the seed shelf beside the open one. */
 export const LOCKED_SEED_COPY = Object.freeze({
   /** The stamp across the card, where a set that was not picked says NOT THIS RUN. */

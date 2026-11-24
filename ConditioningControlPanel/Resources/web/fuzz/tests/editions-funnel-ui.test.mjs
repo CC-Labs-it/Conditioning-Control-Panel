@@ -14,7 +14,8 @@ import { adPool, createAds } from '../ui/ads.js';
 import { endingNudge, sendNudgeAs } from '../ui/nudges.js';
 import { lockedSets, wallModel, endingName } from '../ui/small-funnel.js';
 import { mountLockedTile } from '../ui/shop-locked.js';
-import { SMALL_WALL_COPY, SMALL_CCP_ADS, LOCKED_SEED_COPY } from '../data/content/small-funnel.js';
+import { SMALL_WALL_COPY, SMALL_CCP_ADS, LOCKED_SEED_COPY, EDITION_TAG_COPY } from '../data/content/small-funnel.js';
+import { readFileSync } from 'node:fs';
 
 const HOSTED = { hostname: 'tc.cclabs.app', hosted: true };
 const small = Ed.readEdition({ caps: { edition: 'small', platform: 'web' } }, HOSTED);
@@ -124,10 +125,25 @@ test('ads: small swaps only the real cards, the full pool is the same object as 
 test('copy: drafts in one file, house style, no Prime, no V2, no dash, no exclamation', () => {
   const all = [];
   const walk = (v) => { if (typeof v === 'string') all.push(v); else if (v && typeof v === 'object') Object.values(v).forEach(walk); };
-  walk(SMALL_WALL_COPY); walk(LOCKED_SEED_COPY); walk(SMALL_CCP_ADS.map(({ headline, sub, cta }) => ({ headline, sub, cta })));
+  walk(SMALL_WALL_COPY); walk(LOCKED_SEED_COPY); walk(EDITION_TAG_COPY); walk(SMALL_CCP_ADS.map(({ headline, sub, cta }) => ({ headline, sub, cta })));
   for (const s of all) {
     assert.doesNotMatch(s, /[!–—]/, s);
     assert.doesNotMatch(s, /\bPrime\b|\bV2\b/, s);
   }
   assert.match(SMALL_WALL_COPY.offer, /full game is in CCP, for subscribers/);
+});
+
+test('title tag: the main menu builds it only in small, beside the logo, never over it', () => {
+  const src = readFileSync(new URL('../ui/main-menu.js', import.meta.url), 'utf8');
+  assert.match(src, /edTag = isSmall\(\) \? EDITION_TAG_COPY\.tag : null/);
+  assert.match(src, /const tag = edTag \? mk\('span', 'mm-edtag', sheet\) : null;/);
+  assert.equal(Ed.isSmall(), false, 'no page (node) = full: no tag');
+  assert.equal(EDITION_TAG_COPY.tag, 'FREE EDITION');
+});
+
+test('recap wall: the hand fits its panel (cards shrink, barely overlap, a phone fans less)', () => {
+  const css = readFileSync(new URL('../ui/recap/recap.css', import.meta.url), 'utf8');
+  assert.match(css, /\.rr-fan \{ --fk: 1;[^}]*width: calc\(100% \+ 36px\); margin-inline: -18px;/);
+  assert.match(css, /\.rr-wend \{[^}]*flex: 0 1 96px; min-width: 0;/);
+  assert.match(css, /rotate: calc\(var\(--r, 0deg\) \* var\(--fk\)\)/);
 });

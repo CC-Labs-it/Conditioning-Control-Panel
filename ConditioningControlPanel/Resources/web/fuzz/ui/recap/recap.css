@@ -254,14 +254,14 @@
 #cards .rr .rr-wsub { position: relative; margin: 0 0 12px; font: 600 15px/1.4 var(--body); max-width: 52ch; }
 #cards .rr .rr-hand { position: relative; display: grid; justify-items: center; gap: 6px; margin: 2px 0 10px; }
 #cards .rr .rr-handcap { font: 700 12px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--rr-ink); opacity: .85; }
-#cards .rr .rr-fan { display: flex; justify-content: center; padding: 6px 22px 22px; }
-#cards .rr .rr-wend { position: relative; flex: none; width: 96px; aspect-ratio: 3 / 4; margin-left: -16px; display: grid; grid-template-rows: 1fr auto; justify-items: center; gap: 2px;
+#cards .rr .rr-fan { --fk: 1; display: flex; justify-content: center; align-items: flex-start; width: calc(100% + 36px); margin-inline: -18px; padding: 6px 26px 22px; }
+#cards .rr .rr-wend { position: relative; flex: 0 1 96px; min-width: 0; aspect-ratio: 3 / 4; margin-left: -5px; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; justify-items: center; gap: 2px;
   padding: 12px 6px 7px; background: #0b0b0d; color: #fff; border: 3px solid var(--rr-ink); border-radius: 7px; box-shadow: 3px 4px 0 var(--rr-deep);
-  rotate: var(--r, 0deg); translate: 0 var(--y, 0px); transform-origin: 50% 120%; transition: translate .2s cubic-bezier(.2,1.5,.4,1), rotate .2s; }
+  rotate: calc(var(--r, 0deg) * var(--fk)); translate: 0 calc(var(--y, 0px) * var(--fk)); transform-origin: 50% 120%; transition: translate .2s cubic-bezier(.2,1.5,.4,1), rotate .2s; }
 #cards .rr .rr-wend:first-child { margin-left: 0; }
 #cards .rr .rr-wend::after { content: ""; position: absolute; inset: 5px; border: 1px dashed #fff; border-radius: 3px; opacity: .35; pointer-events: none; }
-#cards .rr .rr-wend .rr-sil { width: 54px; height: 54px; align-self: center; filter: brightness(0) invert(1); opacity: .22; }
-#cards .rr .rr-wend .rr-wname { position: relative; z-index: 1; font: 700 12px/1.05 var(--body); text-align: center; text-wrap: balance; }
+#cards .rr .rr-wend .rr-sil { width: min(54px, 70%); height: auto; aspect-ratio: 1; align-self: center; filter: brightness(0) invert(1); opacity: .22; }
+#cards .rr .rr-wend .rr-wname { position: relative; z-index: 1; max-width: 100%; font: 700 12px/1.05 var(--body); text-align: center; text-wrap: balance; overflow-wrap: break-word; }
 #cards .rr .rr-wlock { position: absolute; left: 50%; top: 36%; translate: -50% -50%; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
   background: var(--gold); color: var(--rr-ink); border: 2.5px solid var(--rr-ink); rotate: -8deg; }
 #cards .rr .rr-wlock svg { width: 16px; height: 16px; display: block; }
@@ -275,7 +275,7 @@
 #cards .rr .rr-wsecond { color: var(--rr-ink); border: 2.5px dashed var(--rr-ink); border-radius: 99px; padding: 6px 16px; min-height: 44px; font: 700 14px/1 var(--mono);
   letter-spacing: .06em; text-transform: uppercase; background: #fff; transition: transform .2s cubic-bezier(.2,1.5,.4,1); }
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
-  #cards .rr:not(.calm) .rr-wend:hover { translate: 0 calc(var(--y, 0px) - 12px); rotate: 0deg; z-index: 20 !important; }
+  #cards .rr:not(.calm) .rr-wend:hover { translate: 0 calc(var(--y, 0px) * var(--fk) - 12px); rotate: 0deg; z-index: 20 !important; }
   #cards .rr:not(.calm) .rr-wmain:hover { transform: rotate(-2deg) scale(1.06); box-shadow: 6px 6px 0 var(--rr-ink); }
   #cards .rr:not(.calm) .rr-wsecond:hover { transform: rotate(2deg) scale(1.05); }
 }
@@ -287,9 +287,9 @@
 }
 @media (max-width: 880px) { #cards .rr .rr-wall { order: 1; } }
 @media (max-width: 560px) {
-  #cards .rr .rr-wend { width: 72px; margin-left: -18px; padding: 9px 4px 5px; }
-  #cards .rr .rr-wend .rr-sil { width: 38px; height: 38px; }
+  #cards .rr .rr-wend { flex-basis: 76px; margin-left: -3px; padding: 9px 3px 5px; }
+  #cards .rr .rr-wend .rr-sil { width: min(38px, 70%); }
   #cards .rr .rr-wend .rr-wname { font-size: 10px; }
   #cards .rr .rr-wlock { width: 24px; height: 24px; }
-  #cards .rr .rr-fan { padding: 4px 10px 18px; }
+  #cards .rr .rr-fan { --fk: .55; padding: 4px 12px 16px; }
 }
