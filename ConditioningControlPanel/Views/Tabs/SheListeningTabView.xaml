@@ -6,6 +6,7 @@
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
+             xmlns:pv="clr-namespace:ConditioningControlPanel.Controls.Preview"
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800">
 
@@ -410,29 +411,23 @@
                         </Border>
                     </StackPanel>
 
-                    <!-- SIDE ART. The art is the Border's BACKGROUND, not a child Image: a Border
-                         clips its Background to CornerRadius but does NOT clip child content, so a
-                         child Image would square off the rounded corners (round-2 lesson). Pinned
-                         top with a fixed height - column 0 is far taller than any plate should be. -->
+                    <!-- SIDE ART -> LIVE PREVIEW (owner 2026-11-24): the card is a framed slice of a desktop
+                         where a drawn listening pill "hears" neutral words (Controls/Preview/Scenes/
+                         VoicePreviewScene.cs). It never opens a device: drawn only, silent. The mod art brush
+                         stays (ApplyFeatureArt writes it) but is parked in Tag, so nothing shows behind the
+                         preview. Pinned top with a fixed height - column 0 is far taller than any plate should be. -->
                     <Border Grid.Column="1" Margin="12,0,0,0" CornerRadius="14"
                             BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
-                            VerticalAlignment="Top" Height="520">
-                        <Border.Background>
+                            Background="#06050D" VerticalAlignment="Top" Height="520">
+                        <Border.Tag>
                             <ImageBrush x:Name="SheListeningSideArtBrush" Stretch="UniformToFill">
                                 <ImageBrush.ImageSource>
                                     <BitmapImage UriSource="pack://application:,,,/Resources/features/audio_whispers.png"
                                                  DecodePixelWidth="800"/>
                                 </ImageBrush.ImageSource>
                             </ImageBrush>
-                        </Border.Background>
-                        <Border CornerRadius="12">
-                            <Border.Background>
-                                <LinearGradientBrush StartPoint="0,1" EndPoint="0,0">
-                                    <GradientStop Color="#66000000" Offset="0"/>
-                                    <GradientStop Color="#00000000" Offset="0.45"/>
-                                </LinearGradientBrush>
-                            </Border.Background>
-                        </Border>
+                        </Border.Tag>
+                        <pv:EffectPreview Scene="voice"/>
                     </Border>
                 </Grid>
 
