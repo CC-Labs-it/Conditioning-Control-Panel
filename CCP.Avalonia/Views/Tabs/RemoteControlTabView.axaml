@@ -34,6 +34,13 @@
     <!-- Velvet Kit 2 - round 4. Per-tab hue identity, LOCAL resources with literal colours.
          Remote Control's hue is signal cyan, the same alpha family the Theme section hues use
          (full / 0x40 border / 0x14 wash). -->
+    <UserControl.Styles>
+        <Style Selector="TextBox.emoteCustom /template/ TextBlock#PART_Placeholder">
+            <Setter Property="FontStyle" Value="Italic"/>
+            <Setter Property="Opacity" Value="1"/>
+        </Style>
+    </UserControl.Styles>
+
     <UserControl.Resources>
         <SolidColorBrush x:Key="TabHueBrush" Color="#5ED4E8"/>
         <SolidColorBrush x:Key="TabHueBorderBrush" Color="#405ED4E8"/>
@@ -509,7 +516,8 @@
                                         <fx:IconGlyph Kind="Edit" Size="18"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                     </Border>
-                                    <TextBox Grid.Column="1" x:Name="TxtEmoteCustom"
+                                    <TextBox Grid.Column="1" x:Name="TxtEmoteCustom" Classes="emoteCustom"
+                                             PlaceholderForeground="#5A5A75"
                                              Watermark="{loc:Str watermark_emote_custom}"
                                              MaxLength="60"
                                              Background="#252542" Foreground="White" CaretBrush="White"

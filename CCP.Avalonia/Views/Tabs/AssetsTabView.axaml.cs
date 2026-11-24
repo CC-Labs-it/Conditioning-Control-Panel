@@ -451,11 +451,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (sender is Control { DataContext: AssetThumbnailViewModel file }) OpenAssetPreview(file);
         }
 
-        private async void ThumbnailItem_OpenInExplorer_Click(object? sender, RoutedEventArgs e)
+        private void ThumbnailItem_OpenInExplorer_Click(object? sender, RoutedEventArgs e)
         {
-            // WPF ExplorerLauncher.RevealInExplorer selects the file; the portable open shows its folder.
             if (sender is Control { DataContext: AssetThumbnailViewModel file } && file.PackFile == null)
-                await Platform.ExternalOpener.OpenAsync(TopLevel.GetTopLevel(this), Path.GetDirectoryName(file.FullPath));
+                Platform.ExternalOpener.Reveal(file.FullPath);
         }
 
         internal Func<Windows.MiniPlayerWindow> CreateAssetPreview = () => new();
@@ -758,7 +757,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// owner is only set when there is a real TopLevel, because the render harness hosts this
         /// view without a Window.
         /// </summary>
-        private void BtnMediaLog_Click(object? sender, RoutedEventArgs e)
+        private void BtnMediaLog_Click(object? sender, RoutedEventArgs e) => OpenMediaLog();
+
+        internal void OpenMediaLog()
         {
             try
             {
