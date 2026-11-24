@@ -157,6 +157,7 @@ internal sealed partial class EmiDeskService
     }
     internal void PanicSilence()
     {
+        _window?.CloseGlassForPanic();
         CancelGreeting();
         _window?.CancelAsk();
         _window?.CancelChain();
