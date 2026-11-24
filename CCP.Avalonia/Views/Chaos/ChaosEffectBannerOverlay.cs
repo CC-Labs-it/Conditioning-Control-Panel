@@ -34,9 +34,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// over the primary screen's work area (WPF Left/Top+6/Width, Height 80). A platform that
     /// refuses either gets no banner rather than a strip that eats clicks.</para>
     ///
-    /// <para>ponytail: nothing calls <see cref="Show"/> on this head yet - the slowmo / vibe / dvd /
-    /// estim / rabbits / freeze effects (WPF ChaosModeService :2417-3063) and the hub run start are
-    /// not ported.</para>
     /// </summary>
     internal sealed class ChaosEffectBannerOverlay : Window
     {
