@@ -15,7 +15,12 @@ internal static class SharedOverlayHost
     // No compositor -> no per-pixel transparency: the stage would paint an opaque full-screen block for the
     // whole run. Refuse like PinkFilterOverlay/CornerGifOverlay; the caller falls back to classic cards.
     internal static Func<Window, PixelRect, bool> Configure = (w, bounds) =>
-        X11Overlay.IsCompositing && X11Overlay.SetClickThrough(w, true) && X11Overlay.SetOverrideRedirect(w, bounds);
+        X11Overlay.IsCompositing && X11Overlay.SetClickThrough(w, true) && X11Overlay.SetOverrideRedirect(w, bounds, topmost: w.Topmost);
+
+    // WPF ChaosWindowZ.cs:41-52 and ChaosBubbleHostOverlay.cs:183: a Free Desktop (pin off) chaos run
+    // keeps the stage out of the topmost band, born and on every raise.
+    private static bool Pinned => !ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsActive
+        || ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop;
 
     internal static Func<Window, bool> Raise = X11Overlay.Raise; // WPF SubliminalService.cs:829
 
@@ -24,7 +29,12 @@ internal static class SharedOverlayHost
         private Window? _window;
         internal Grid Canvas { get; }
         internal Lease(Window window, Grid canvas) => (_window, Canvas) = (window, canvas);
-        internal void Raise() { if (_window != null) SharedOverlayHost.Raise(_window); }
+        internal void Raise()
+        {
+            if (_window == null) return;
+            if (!Pinned) { _window.Topmost = false; return; }
+            SharedOverlayHost.Raise(_window);
+        }
         public void Dispose() { var w = _window; _window = null; w?.Close(); }
     }
 
@@ -35,7 +45,7 @@ internal static class SharedOverlayHost
         {
             WindowDecorations = WindowDecorations.None,
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
-            Background = Brushes.Transparent, Topmost = true, ShowInTaskbar = false,
+            Background = Brushes.Transparent, Topmost = Pinned, ShowInTaskbar = false,
             ShowActivated = false, CanResize = false, Focusable = false,
             IsHitTestVisible = false, Content = canvas,
         };
