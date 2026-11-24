@@ -30,12 +30,19 @@ import { canKeepPlaying as keepPlayingOk, keepPlaying as keepPlayingRun } from '
 import { sealedFor, showSeal } from './ui/seal.js';
 import { setEdition, expoArrived, editionState, renewalAllowed, sendNudge, isSmall, saveSlotOn } from './ui/edition.js';
 import { mountSaveCarry } from './ui/save-carry.js';   // the pause card's carry to and from the account (CONTRACT.md 6.3)
-import { mountLlamaPen } from './ui/llama-pen.js';
+import { mountLlamaPen, herdOf } from './ui/llama-pen.js';
 import { mountTransmission } from './ui/transmission.js';
 import { endingNudge, mountPauseNudge } from './ui/nudges.js';
 import { mountLockedTile } from './ui/shop-locked.js';   // small: one greyed tile at the end of the shop   // small: the ending and pause doors to the full game   // the transmission card, the pen sign and the llama-8 card
 import { mountHomeTip } from './ui/phone.js';
-import { previewBarAllowed } from './ui/preview-bar-model.js';
+import { previewBarAllowed, devConsoleAllowed, devChord } from './ui/preview-bar-model.js';
+import { menuDue, menuRows, MENU_REUSED, MENU_SOUNDS, menuSoundFile, sideStickers, llamaReached } from './ui/menu-model.js';   // the main menu, from the second launch on
+import { openMainMenu } from './ui/main-menu.js';
+import { BOOK_EVENT, stickerArt } from './ui/sticker-book.js';
+import { STICKER_BY_ID } from './data/content/stickers.js';
+import { herdRoster, llamaPortrait } from './data/content/llamas.js';
+import { expoFromMenu } from './ui/unlocks/fate/llama/ending.js';   // the menu's ready row: the ending's own entry
+import { TRANSMISSION_AT_LLAMAS } from './data/editions.js';
 
 const qs = new URLSearchParams(location.search);
 /* Dev doors (jumps, granted items, cheat wallets, the age-gate skip they carry) open only on a local preview.
@@ -84,7 +91,7 @@ try { storage = fresh ? memoryStorage() : window.localStorage; } catch { storage
 let preferenceStorage;
 try { preferenceStorage = window.localStorage; } catch { preferenceStorage = memoryStorage(); }
 
-/* Prime only until the anniversary (ui/seal.js): no Prime host, no game, just the notice. ?seal=1 shows it on a local preview. */
+/* Until the anniversary the app's small edition sees only the notice (ui/seal.js); the website never does. ?seal=1 shows it on a local preview. */
 /* The Expo download landed mid-run (CONTRACT.md 6.5): the edition switch learns it here, first. Cards that show the
  * progress listen for the same frame on their own. A base the switch refuses changes nothing. */
 bridge.on('expo-ready', (frame) => { expoArrived(frame?.base); });
@@ -157,8 +164,12 @@ function start(init) {
      own New run keeps it, with extras.sky written back untouched (owner 2026-11-22). */
   const skySleeps = sleepingSky(saved, ed);
   if (skySleeps) leaving = true;
+  /* A visit from the main menu (ui/main-menu.js, Play Llama Expo 2037) saves like a visit inside a run: the menu only
+     shows to a player who signed the contract once. With no saved run the visit keeps no run (life and extras only). */
+  let menuVisit = false;
   const persist = () => {
-    if (leaving || !accepted) return;
+    if (leaving || !(accepted || menuVisit)) return;
+    if (menuVisit && !accepted) { if (engine && !pictureDoor) extras.pictures = engine.pictures.source; store(storage, saved?.run ? run : null, life, extras); return; }
     if (refillWallet && run.fuzz < previewFunds) E.lump(run, previewFunds-run.fuzz, 'dev');
     if (engine && !pictureDoor) extras.pictures = engine.pictures.source;
     store(storage, run, life, extras);
@@ -171,7 +182,7 @@ function start(init) {
 
   engine = createEngine({
     run, life, ui, audio, registry: REGISTRY, save: persist,
-    host: { send: bridge.send, isHosted: bridge.isHosted },
+    host: { send: bridge.send, isHosted: bridge.isHosted, on: bridge.on },
     env: { journey: JOURNEY_PREVIEW, featuredShop: [...EMI_UPGRADES.slice(1), ...(feedPreview ? ['d_autoscroll'] : []), ...(trailPreview ? ['starburst', 'word_comet'] : [])], caps: init.caps || {}, identity: typeof init.identity?.displayName === 'string' && init.identity.displayName.trim() ? { displayName: init.identity.displayName.trim().slice(0, 40) } : null, mod: init.mod || 'default', hosted: bridge.isHosted, pictureSource: pictureDoor || 'none' },
   });
   engine.env.claimLifetime = claimLifetime;
@@ -195,6 +206,7 @@ function start(init) {
       gentle: ui.gentle,
       onChoice: persist,
       onClose,
+      pickFolder: ui.options?.canPickFolder ? ui.options.pickFolder : null,   // a host that keeps the folder (ui/options.js)
     });
   }
   engine.subscribe('choose-pictures', () => {
@@ -275,6 +287,9 @@ function start(init) {
       return true;
     },
     leave: bridge.isHosted ? () => bridge.send('exit', { reason: 'back' }) : null,
+    /* The pause card's Main menu (ui/app.js #to-menu): the run is saved, then the page starts over, and a player who
+       has accepted the contract lands on the menu (ui/menu-model.js menuDue) with Continue on it. */
+    mainMenu: () => { persist(); leaving = true; location.reload(); },
     routeNames: (r) => Object.keys(FORKS).filter((f) => r.picks[f]).map((f) => brandText(FORKS[f].opts[r.picks[f]].name)).join(', '),
   };
   ui.attach(engine, hooks);
@@ -370,6 +385,24 @@ function start(init) {
       .then((m) => { window.fuzz.bar = m.mountPreviewBar({ doc: document, win: window, engine, ui, life, hooks, remountPen: pen }); })
       .catch((err) => console.error('preview bar:', err));
   };
+  /* The hidden dev console (owner 2026-11-23; rules in ui/preview-bar-model.js): the same bar, on a host that hands it
+     over with caps.dev (the standalone program; never the website, never the CCP app), behind Ctrl + Alt + Shift + T.
+     Armed from boot, so it also answers on the main menu and inside an Expo visit; nothing is fetched until the chord. */
+  const armDevConsole = () => {
+    if (!devConsoleAllowed(init.caps, { hosted: bridge.isHosted })) return;
+    document.documentElement.dataset.devConsole = '';   // the Expo hands its visit over as window.__expo (ending.js)
+    let bar = null, loading = false;
+    window.addEventListener('keydown', (ev) => {
+      if (!devChord(ev)) return;
+      ev.preventDefault(); ev.stopPropagation();
+      if (bar) { bar.toggle(); return; }
+      if (loading) return;
+      loading = true;
+      import('./ui/preview-bar.js')
+        .then((m) => { bar = window.fuzz.bar = m.mountPreviewBar({ doc: document, win: window, engine, ui, life, hooks, remountPen: pen, secret: true, live: () => playing }); bar.toggle(true); })
+        .catch((err) => { loading = false; console.error('dev console:', err); });
+    }, true);
+  };
   const go = () => {
     bindPalette(engine, document);
     previewBar();
@@ -429,6 +462,7 @@ function start(init) {
       go();
     });
   }
+  armDevConsole();
   if (skyVisit) reopenSky();
   else if (skySleeps) openSkyAsleep({ cards: ui.cards, win: window, send: bridge.send, ed,
     newRun: () => { leaving = true; extras.again = 1; store(storage, run, life, extras); location.reload(); } });
@@ -444,9 +478,86 @@ function start(init) {
     openSky({ doc: document, win: window, life, P, audio, gentle: ui.gentle, visit: { caught: 0 },
       frozen: () => engine.paused || engine.suspended, save: () => {}, start: () => location.reload() });
   }
-  else if (pictureDoor) beginIntro();
-  else {
+  else if (menuDue({ life, devDoor, newRunReload, skyVisit: !!skyVisit, skySleeps, skyDemo })) showMenu();
+  else proceed();
+
+  /* The boot as it always was: the pictures card, then the contract (the short window for a returning player). */
+  function proceed() {
+    if (pictureDoor) { beginIntro(); return; }
     ui.setWakeGate(() => pictureCard?.wake());
     askPictures({ onClose: () => { ui.setWakeGate(null); beginIntro(); } });
+  }
+
+  /* The main menu (ui/main-menu.js, rules in ui/menu-model.js): from the second launch on, before the boot goes on.
+     Nothing is saved while it shows (accepted is still false). Its doors are the game's own cards and sheets. */
+  function showMenu() {
+    const liveRun = !!saved?.run && !saved.run.ended;
+    let menu = null, tx = null, sure = 0;
+    const offReady = bridge.on('expo-ready', () => menu?.refresh());   // after expoArrived above: the row becomes the way in
+    const leave = () => { offReady?.(); return menu.close(); };
+    const rowEl = (id) => menu.el.querySelector(`[data-row="${id}"] .mm-lab`);
+    /* The menu's sounds: files the game already ships (ui/menu-model.js MENU_SOUNDS), on its sfx bus (the mixer's existing Effects row), so the game's mute and mixer hold. */
+    const sound = (name) => { const file = menuSoundFile(name); if (file) audio.play(file, { bus: 'sfx', gain: MENU_SOUNDS[name][1] }); };
+    /* A door that opens a sheet or card over the menu: the leave first, the entrance again when it goes. */
+    const over = (id, fn) => menu.leave(id, { back: true }).then(fn);
+    menu = openMainMenu({
+      doc: document,
+      gentle: ui.gentle,
+      sound,
+      /* The flying llamas: the pen's own herd, once the llama ending is reached (every edition). */
+      llamas: () => (llamaReached(life) ? herdRoster(herdOf(life)).map((l) => l.prop) : null),
+      /* The player's own collection either side (ui/menu-model.js sideStickers): the book's pictures, the herd's portraits. */
+      sides: () => sideStickers({ life, ed: editionState(), herd: herdRoster(life.llamas).map((l) => l.id) }).map((it) => {
+        if (it.kind === 'portrait') return { ...it, src: llamaPortrait(it.id), cls: 'round' };
+        const art = stickerArt(STICKER_BY_ID[it.id], life);
+        return { ...it, src: art.src, cls: art.cls };
+      }),
+      rows: () => menuRows({ life, run: saved?.run || null, ed: editionState() }),
+      actions: {
+        continue: () => { menu.leave('continue').then(leave).then(proceed); },
+        /* A live run: the pause card's own two taps. An ended run starts over at once; no run goes on into the contract. */
+        new: () => {
+          if (engine.suspended) return;
+          if (saved?.run?.ended || (liveRun && sure)) { menu.leave('new').then(newRun); return; }
+          if (!liveRun) { menu.leave('new').then(leave).then(proceed); return; }
+          menu.flash('new');
+          const lab = rowEl('new');
+          if (lab) lab.textContent = MENU_REUSED.newRunSure;
+          sure = setTimeout(() => { sure = 0; if (lab) lab.textContent = MENU_REUSED.newRun; }, 4000);
+        },
+        stickers: () => over('stickers', () => document.dispatchEvent(new CustomEvent(BOOK_EVENT))),
+        endings: () => over('endings', () => document.dispatchEvent(new CustomEvent(BOOK_EVENT, { detail: { page: 'endings' } }))),
+        renewal: () => over('renewal', () => { ui.pause(); document.getElementById('renewal-door')?.click(); }),
+        options: () => over('options', () => ui.openOptions()),   // straight into the Options view (ui/options.js)
+        account: () => {
+          menu.flash('account');
+          mountSaveCarry({ doc: document, win: window, cards: ui.cards, on: bridge.on, send: bridge.send, slot: saveSlotOn(ed), small: isSmall(ed), exportSave: () => serialize(run, life, extras), accept: acceptCarried, ed });
+          ui.pause();
+          document.getElementById('save-carry')?.scrollIntoView?.({ block: 'nearest' });
+        },
+        expo: (ev, el, row) => {
+          if (row.kind === 'ready') {
+            /* The ending's own entry, minus the wormhole (ui/unlocks/fate/llama/ending.js expoFromMenu), on its own
+               engine scope (engine.visit). Leaving it comes back here, and what the visit wrote is saved then. */
+            menu.leave('expo').then(() => {
+              menu.hide();
+              menuVisit = true;
+              return engine.visit('ll_end', expoFromMenu);
+            }).then(() => { persist(); menuVisit = false; menu.show(); });
+          } else if (row.kind === 'wait') {
+            /* This player has been to the Expo: the run's own conditions (four llamas, the run clock) do not apply here,
+               only the host's size (no size, no offer: the row rattles). Clock 0 keeps the card from opening by itself. */
+            tx ||= mountTransmission({ doc: document, win: window, cards: ui.cards, on: bridge.on, send: bridge.send,
+              llamas: () => Math.max(run.herd, TRANSMISSION_AT_LLAMAS), clock: () => 0, extras, save: persist });
+            if (tx.open()) menu.flash('expo'); else menu.rattle('expo');
+          } else if (row.kind === 'door') {
+            /* The small edition's existing door: the pause card's line "This is the small edition." / "The full game". */
+            menu.flash('expo');
+            mountPauseNudge({ doc: document, win: window, send: bridge.send, ed });
+            ui.pause();
+          } else menu.rattle('expo');   // sealed
+        },
+      },
+    });
   }
 }

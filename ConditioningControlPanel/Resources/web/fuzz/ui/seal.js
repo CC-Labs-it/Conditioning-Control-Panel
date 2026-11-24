@@ -1,9 +1,9 @@
 /* ============================================================================
- * seal.js - the game is Prime only until the anniversary (owner, 2026-11-14), then free for everyone.
+ * seal.js - in the desktop app a free account waits for the anniversary (owner, 2026-11-22), then plays with everyone.
  *
- * Before SEAL_OPEN_AT_MS the game starts only when a host says the player's plan is Prime (init caps.plan, the same
- * field ui/ads.js reads). A page opened on its own has no host and no plan, so it shows the sealed notice instead of
- * the contract. From the anniversary on, this file does nothing. A local preview is never sealed unless it asks.
+ * Before SEAL_OPEN_AT_MS the app's small edition shows the sealed notice instead of the contract. The website is never
+ * sealed (owner 2026-11-24; it was Prime only until then). From the anniversary on, this file does nothing. A local
+ * preview is never sealed unless it asks.
  * The notice wears the legal window (ui/legal.css) so it reads as one more piece of paperwork.
  * ==========================================================================*/
 
@@ -21,7 +21,9 @@ export function sealedFor(init, nowMs, hostname = '', force = false, ed = null) 
    * subscriber plays the full game now; a free account gets the small edition, and that one opens with everyone else
    * on the anniversary (owner 2026-11-22). No reading = sealed. */
   if (init?.caps?.platform === 'desktop') return ed?.edition !== 'full';
-  return init?.caps?.plan !== 'prime';
+  /* The website is never sealed (owner 2026-11-24): everyone plays there now, a visitor or a free account the small
+   * edition and a signed-in subscriber the full one. */
+  return false;
 }
 
 /** What is left until the anniversary, as the four figures the notice shows. */

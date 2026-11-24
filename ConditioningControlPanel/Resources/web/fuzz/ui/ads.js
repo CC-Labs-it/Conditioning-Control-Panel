@@ -2,11 +2,14 @@
  * with the picked theme's CCP cards mixed in. Jokes off (Joke Ads Gone) leaves only real CCP cards. */
 import { ADS } from '../data/ads.js';
 import { CCP_ADS, CCP_THEME_ADS, JOKE_ADS } from '../data/content/ads.js';
+import { SMALL_CCP_ADS } from '../data/content/small-funnel.js';
+import { isSmall } from './edition.js';
 
 const pools = new Map();
 
 /** The pool for a theme: every other real card becomes one of the theme's, so the mix of jokes to real stays the same. */
-export function adPool(theme) {
+export function adPool(theme, small = false) {
+  if (small) return smallPool();
   const cards = (theme && CCP_THEME_ADS[theme]) || null;
   if (!cards) return ADS;
   if (!pools.has(theme)) {
@@ -18,6 +21,18 @@ export function adPool(theme) {
     })));
   }
   return pools.get(theme);
+}
+
+/* The small edition (owner 2026-11-24, handoff-1124/tc-small-funnel/BRIEF.md): every real CCP card slot shows one of
+ * the cards that point at the full game (data/content/small-funnel.js), in turn. The joke ads and their places are the
+ * same as in the full game. */
+let smallCards = null;
+function smallPool() {
+  if (!smallCards) {
+    let n = 0;
+    smallCards = Object.freeze(ADS.map((ad) => (ad.ccp ? { ...SMALL_CCP_ADS[n++ % SMALL_CCP_ADS.length], ccp: true } : ad)));
+  }
+  return smallCards;
 }
 
 /* Ad accident check (owner 2026-11-09): from the second real CCP ad press of a run on, a small card asks before a tab
@@ -57,7 +72,7 @@ function illustratedRotation(records, ccp) {
   };
 }
 
-export function createAds({ noCcp = () => false } = {}) {
+export function createAds({ noCcp = () => false, smallEdition = () => isSmall() } = {}) {
   let i = 0;
   const holders = new Set();
   const jokePicture = illustratedRotation(JOKE_ADS, false);
@@ -70,7 +85,7 @@ export function createAds({ noCcp = () => false } = {}) {
     /** A kind with no match falls back to any kind, but real-only never falls back to a joke. */
     next({ kind, theme, ccpOnly = false, illustrated = false } = {}) {
       if (illustrated) return !noCcp() && (ccpOnly || holders.size) ? ccpPicture() : jokePicture();
-      const pool = adPool(theme);
+      const pool = adPool(theme, smallEdition());
       const allowed = noCcp() ? pool.filter((a) => !a.ccp) : ccpOnly || holders.size ? pool.filter((a) => a.ccp) : pool;
       const list = kind ? allowed.filter((a) => a.kind === kind) : allowed;
       const from = list.length ? list : allowed;

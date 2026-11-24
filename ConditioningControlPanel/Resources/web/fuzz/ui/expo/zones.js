@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { roomRequest as request, clearEntrance, viewFile, roomAsset } from './entrance.js';
 import {createDoors,loadDoorHardware,streamingPriority} from './doors.js';
-import {batchArchiveHousings,fitArchiveBays} from './archive-furniture.js';
+import {batchArchiveHousings,fitArchiveBays,retireArchiveBays} from './archive-furniture.js';
 import {createRoomVisibility} from './room-visibility.js';
 import {createRoomDecoder} from './room-decoder.js';
 
@@ -178,7 +178,7 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
       zone.probe.colorSpace = THREE.SRGBColorSpace; zone.probe.needsUpdate = true;
       zone.view.userData.reflectionProbe = zone.probe;
       zone.environment = pmrem.fromCubemap(zone.probe);
-      fitArchiveBays(zone,plan.archiveRoute);
+      fitArchiveBays(zone,plan.archiveRoute);retireArchiveBays(zone,plan.archiveRoute);
       zone.view.updateMatrixWorld(true);
       const baked = new Map();
       zone.view.traverse(mesh => {
@@ -297,7 +297,7 @@ export function createZones({ scene, renderer, walker, exhibits, plan, lite, rep
       report(error);
     });
   }
-  return { ensure, stream, resident, visibility, doors:doors.debug,registerDoorLeaf:doors.registerLeaf,
+  return { ensure, stream, resident, visibility, doors:doors.debug,doorOpening:doors.opening,registerDoorLeaf:doors.registerLeaf,
     textureStats:()=>({residentSources:photoSources.size,sharedHits,fullDetailMaps:[...photoSources.values()].filter(e=>e.source).length,pendingDetailMaps:0,
       decodedBytes:[...photoSources.values()].reduce((n,e)=>n+(e.source?e.source.data.width*e.source.data.height*4:0),0)}),
     dispose() {

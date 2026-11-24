@@ -121,9 +121,8 @@ export function trailTask(room,p,v,yaw=0){
   if(room==='habitat'&&marks?.has('Fed')&&!marks.has('Kept'))return task("Sit in the keeper’s chair",'Enquire at the staff door.','The Habitat');
   if(room==='shop'){
     if(v.boughtExit)return task('Walk through the Renewal door','Gift shop');
-    if(v.contract&&v.loops>=2)return task(t.count<8?'Collect a day ticket':'Buy Exit','Gift shop till');
-    if(v.contract)return task('Open the green exit door','Gift shop');
-    if(v.souvenir)return task('Answer the question','Gift shop till');
+    // One press at the till is the whole sale, and a ticket with no stamps has nothing in stock to choose first.
+    if(!t?.count)return task('Use the till','Gift shop');
     return task('Choose one souvenir','Gift shop · carry it to the till.');
   }
   const index={chronology:0,forum:1,commons:2,hoof:5,habitat:6,twelve:7,dome:8}[room];

@@ -4,6 +4,7 @@ import { herdRoster, llamaPortrait } from '../../../../data/content/llamas.js';
  * ending at all (ui/engine.js: a sleeping row never mounts, sim/economy.js sleepingEnd). */
 import { warmEntrance, clearEntrance, createPortal, bindExpoMenus, bindExpoSoundUnlock, prewarm, playSpit, openExpo } from '../../../expo/door.js';
 import { transmissionAtWormhole } from '../../../transmission.js';   // Expo absent: the transmission card comes first
+import { expoAllowed } from '../../../edition.js';
 
 export const PORTAL_DARK = '#071819';
 const ENTRY_CSS = `
@@ -86,9 +87,13 @@ function wormhole(ctx, portal) {
   });
 }
 
-export async function expoEnding(ctx, releaseWorld) {
+/** The main menu's way in (ui/menu-model.js ready row, through engine.visit): the same entry as the ending, minus the
+ *  wormhole question (there is no run and no button to hand over). Leaving resolves, and the menu comes back. */
+export const expoFromMenu = (ctx) => (expoAllowed() ? expoEnding(ctx, () => {}, { direct: true }) : Promise.resolve());
+
+export async function expoEnding(ctx, releaseWorld, { direct = false } = {}) {
   /* Full, desktop, Expo still absent: the transmission card first (CONTRACT.md 6.5). Shut with nothing here: no visit. */
-  if (!await transmissionAtWormhole()) return;
+  if (!direct && !await transmissionAtWormhole()) return;
   const parent = ctx.layer('ending'), doc = parent.ownerDocument, win = doc.defaultView;
   ctx.css(ENTRY_CSS);
   const menus = bindExpoMenus(ctx, parent);
@@ -97,7 +102,8 @@ export async function expoEnding(ctx, releaseWorld) {
   ctx.cleanup(releaseMenus);
   let portal = createPortal(ctx,parent);
   ctx.cleanup(()=>portal.dispose());
-  if (!await wormhole(ctx,portal)) { releaseMenus(); portal.dispose(); return; }
+  if (direct) { prewarm(); portal.begin(); warmEntrance(); portal.cover(1); }   // the wormhole's crossing, already closed
+  else if (!await wormhole(ctx,portal)) { releaseMenus(); portal.dispose(); return; }
   releaseWorld();
   const cover = doc.createElement('div'); cover.className = 'expo-ticket'; parent.append(cover);
   const name = doc.createElement('b'); name.textContent = 'LLAMA EXPO 2037';
@@ -129,7 +135,7 @@ export async function expoEnding(ctx, releaseWorld) {
         scene = visit;
         await Promise.race([scene.ready, done]);
         if (dead) break;
-        if (['localhost','127.0.0.1','[::1]'].includes(win.location.hostname)) win.__expo = scene;
+        if (['localhost','127.0.0.1','[::1]'].includes(win.location.hostname) || doc.documentElement.hasAttribute('data-dev-console')) win.__expo = scene;   // local previews, and a host's dev console (main.js armDevConsole)
         cover.remove();
         let off;
         const reveal = () => {

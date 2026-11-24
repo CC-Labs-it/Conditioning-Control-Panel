@@ -44,6 +44,11 @@ export const PHONE_CAPS = Object.freeze({ bouncingButtons: 4, bouncingWords: 1, 
  *  plays T_RUN[0] and never reads this. */
 export const SMALL_BALANCE = Object.freeze({ minutes: 55 });
 
+/** The funnel (owner 2026-11-24): the small edition holds ONE ending, Go Outside. Only this fate set opens in small;
+ *  the other sets a full run would be offered are shown locked, by name, and lead to the full game. A fate set id
+ *  from data/fate.js. */
+export const SMALL_ENDING_SET = 'outside';
+
 /** Nudges: the only two things a `nudge` frame may say (CONTRACT.md 6.2). No free text, no url from the page. */
 export const NUDGE_WHERE = Object.freeze(['ending', 'llama8', 'transmission', 'locked-tile', 'pause', 'save-sleep']);
 export const NUDGE_WANT = Object.freeze(['account', 'download', 'upgrade']);

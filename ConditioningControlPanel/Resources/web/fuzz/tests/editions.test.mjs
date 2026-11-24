@@ -275,9 +275,9 @@ test('the seal in the app: a subscriber plays the full game now, a free account 
   assert.equal(sealedFor(deskInit('full'), before, 'ccp.game'), true, 'no reading handed over = sealed');
   assert.equal(sealedFor(deskInit('small'), SEAL_OPEN_AT_MS, 'ccp.game', false, reading('small')), false, 'open from the anniversary');
   assert.equal(sealedFor({ protocol: 1, caps: { platform: 'desktop', plan: 'prime' } }, before, 'ccp.game', false, reading(undefined)), true, 'the app goes by the edition, not by the plan field');
-  assert.equal(sealedFor({ protocol: 1, caps: { platform: 'web', plan: 'basic' } }, before, PUBLIC, false, small), true, 'the website still goes by Prime');
+  assert.equal(sealedFor({ protocol: 1, caps: { platform: 'web', plan: 'basic' } }, before, PUBLIC, false, small), false, 'the website is never sealed (owner 2026-11-24)');
   assert.equal(sealedFor({ protocol: 1, caps: { platform: 'web', plan: 'prime' } }, before, PUBLIC, false, small), false);
-  assert.equal(sealedFor({ protocol: 1, hosted: false, caps: {} }, before, PUBLIC), true);
+  assert.equal(sealedFor({ protocol: 1, hosted: false, caps: {} }, before, PUBLIC), false);
 });
 
 test('the sealed notice in the app says subscribers and has one button for the plan card; the website keeps its text', () => {

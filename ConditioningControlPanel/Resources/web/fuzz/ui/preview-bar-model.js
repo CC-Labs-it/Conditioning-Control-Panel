@@ -5,6 +5,8 @@
  *   warpSlices         one frame of game time at a warp, cut into steps the engine accepts (it clamps a step at 1 s)
  *   playAhead          the reference player (dev/journey-timing.mjs measureJourney) stepping a live run forward
  *   depthSetup         a Renewal Depth 0-10 with a sensible owned-star set and some Stardust
+ *   devConsoleAllowed  the hidden dev console: the same bar on a host that hands it over (caps.dev), behind devChord
+ *   devAmount          an amount typed into the console (5000, 2.5m, 1b, 1e15)
  * ==========================================================================*/
 
 import { FORKS } from '../data/items.js';
@@ -174,3 +176,26 @@ export function depthSetup(depth, base) {
   p.last = { route: {}, toys: ['wheel'], ms: 5_400_000 };
   return p;
 }
+
+/* ---- the hidden dev console (owner 2026-11-23): the same bar, behind one chord, on a host that hands it over ---- */
+/** A host opens the console with caps.dev === true. Only a host that prices nothing may send it (the standalone
+ *  program): the website and the CCP app never do, so the chord does nothing there. */
+export const devConsoleAllowed = (caps, { hosted = false } = {}) => !!hosted && caps?.dev === true;
+/** Ctrl + Alt + Shift + T, one press (a held key does not count). Three modifiers: nobody lands on it by accident. */
+export function devChord(ev) {
+  return !!ev && ev.ctrlKey === true && ev.altKey === true && ev.shiftKey === true && !ev.metaKey && ev.code === 'KeyT' && !ev.repeat;
+}
+export const DEV_AMOUNT_MAX = 1e30;
+const AMOUNT_UNIT = { k: 1e3, m: 1e6, b: 1e9, t: 1e12 };
+/** An amount typed into the console: 5000, 2.5m, 1b, 3t or 1e15. Whole, at least 1, at most DEV_AMOUNT_MAX; else 0. */
+export function devAmount(text) {
+  const m = /^(\d+(?:\.\d+)?(?:e\d{1,2})?)([kmbt])?$/i.exec(String(text ?? '').replace(/[\s,_]/g, ''));
+  if (!m) return 0;
+  const n = Number(m[1]) * (m[2] ? AMOUNT_UNIT[m[2].toLowerCase()] : 1);
+  return Number.isFinite(n) && n >= 1 ? Math.min(DEV_AMOUNT_MAX, Math.floor(n)) : 0;
+}
+/** The Expo's six ways out (ui/expo/renewal-endings.js endingTitles), as the console lists them. */
+export const EXPO_EXITS = Object.freeze([
+  ['renewal', 'Renewal'], ['conduct', 'Acceptance by Conduct'], ['stayed', 'Stayed'],
+  ['finger', 'Finger'], ['model', 'Model Visitor'], ['full', 'The Thirteenth'],
+]);

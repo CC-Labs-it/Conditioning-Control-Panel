@@ -16,6 +16,7 @@ export async function departurePrint(api,state,title){
   g.font='22px Georgia';g.fillText(ctx.store.get('souvenirLabel')||state.file.name,33,750,736);
   g.fillStyle='#6e795f';g.fillRect(32,777,736,1);g.fillStyle='#344b3c';g.font='19px Consolas,monospace';
   g.fillText('TICKET   '+state.ticket.count+' / 12     REGISTER   '+(state.file.taps+state.presses),32,814);
-  g.fillText('HISTORY  '+api.records()+' / 40     AGREEMENTS   '+(state.ticket.yes+state.ticket.deviations),32,852);
+  const total=api.recordTotal?.();
+  g.fillText('HISTORY  '+api.records()+(total?' / '+total:'')+'     AGREEMENTS   '+(state.ticket.yes+state.ticket.deviations),32,852);
   for(const quality of [.76,.58,.42]){const url=out.toDataURL('image/webp',quality);if(url.length<=240023){ctx.store.set('departurePrint',url);break;}}
 }

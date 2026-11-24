@@ -1,15 +1,17 @@
 import {BY_ID} from '../../data/items.js';
+import {brandText} from '../../data/brand.js';
 import {LLAMAS} from '../../data/content/llamas.js';
 import {livePanel,placard,terminal} from './display.js';
 import {dial,write} from './staff-fixtures.js';
+import {liftCapRing} from './cap-ring.js';
 
 // Purchases retain their real order. The admissions inventory and final counters are recorded separately.
 export function habitatReel(run,file){
   const pages=[['The first press',file.name,file.taps?'I AGREE was pressed.':'No manual presses recorded.']];
   const order=(run.order||[]).filter(id=>id!=='start'&&BY_ID[id]);
   const fate=order.filter(id=>BY_ID[id].fate);
-  for(let i=0;i<order.length;i+=3)pages.push(['Acquisitions',...order.slice(i,i+3).map(id=>BY_ID[id].name)]);
-  if(fate.length)pages.push(['Fate cards',...fate.map(id=>BY_ID[id].name)]);
+  for(let i=0;i<order.length;i+=3)pages.push(['Acquisitions',...order.slice(i,i+3).map(id=>brandText(BY_ID[id].name))]);
+  if(fate.length)pages.push(['Fate cards',...fate.map(id=>brandText(BY_ID[id].name))]);
   const herd=LLAMAS.filter(llama=>file.herd.includes(llama.id));
   for(let i=0;i<herd.length;i+=3)pages.push(['Admission inventory',...herd.slice(i,i+3).map(llama=>llama.name)]);
   pages.push(['The last return',file.taps.toLocaleString()+' presses',file.total.toLocaleString()+' Yes'],
@@ -87,6 +89,12 @@ export function humanHabitat(api,state,pressRegister){
         ['feeding_slot','Feed one Yes',()=>{state.feeds++;state.ticket.stamp('Fed');state.ticket.book('hab-feed','Fed the exhibit');api.play('feed');api.cue('hab_5');}],
         ['habitat_plaque','Read next accepted clause',clause]
       ]){const mesh=obj(name);if(mesh)undo.push(register(mesh,label,fn,2.65));}
+      // One button in this room, the feeding slot's (owner, 2026-11-23). The glass and the plaque are pressed by
+      // aiming at the thing itself, so their caps leave.
+      for(const name of ['habitat_glass','habitat_plaque']){
+        api.setButtonAvailable?.(name,false);
+        undo.push(liftCapRing(T,group,obj('expo_press_'+name)));   // the ring the cap sat on goes with it
+      }
       undo.push(()=>{if(face)face.material=normalMat;panel?.dispose();plaque?.dispose();target.dispose();eyeMat.dispose();if(view===stateView)view=null;seated=false;});
     }
     undo.push(api.annexProps(group,place=>{

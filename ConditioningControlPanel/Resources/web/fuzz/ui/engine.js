@@ -20,6 +20,7 @@ import { tally } from './adcard/model.js';
 
 const MAX_UNLOCK_ERRORS = 3;
 const ENDING_SCOPE = '__ending';
+const VISIT_SCOPE = '__visit';   // engine.visit: the main menu's way into the Expo
 
 import { createJourney } from '../sim/journey.js';
 import { plainPeek } from './shop-next-model.js';
@@ -147,7 +148,7 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     if (id === 'quiz' && emiRoams()) return false;
     const item = BY_ID[id];
     const entry = registry[id];
-    if (!item || !entry?.mount || E.asleep(run, id)) return false;   // a sleeping row (small edition) never mounts
+    if (!item || !entry?.mount || E.sleeps(run, id)) return false;   // a sleeping row (small edition: cut, or a locked fate set's card) never mounts
     if (scopes.has(id)) unmount(id);
     const scope = newScope(item);
     scope.restored = restored;
@@ -307,6 +308,34 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     real += dt;
     if (stopped && !creditsUp) { const s = scopes.get(ENDING_SCOPE); if (s) runScope(s, scaled); return; }
     for (const scope of [...scopes.values()]) runScope(scope, scaled);
+  }
+
+  /** A visit outside the run (the main menu's Expo row, before any run has started): one scope for row `id` with the
+   *  same ctx an unlock gets, ticked by its own frame loop. The run is never ticked, nothing else is mounted, and pause,
+   *  panic (suspend) and a hidden page hold it like any frame. fn(ctx) -> Promise; when it settles the scope is dropped.
+   *  Answers a promise that settles then; a second visit while one is open answers false at once and does nothing. */
+  function visit(id, fn) {
+    const item = BY_ID[id], win = ui.doc?.defaultView;
+    if (!item || !win || scopes.has(VISIT_SCOPE)) return Promise.resolve(false);
+    const scope = newScope(item);
+    scopes.set(VISIT_SCOPE, scope);
+    scope.ctx = makeContext(api, scope);
+    let raf = 0, last = 0;
+    const frame = (t) => {
+      raf = win.requestAnimationFrame(frame);
+      const dt = last ? Math.min(1000, Math.max(0, t - last)) : 16;
+      last = t;
+      if (paused || suspended || win.document.hidden || scope.dead) return;
+      now += dt;
+      real += dt;
+      runScope(scope, dt);
+    };
+    raf = win.requestAnimationFrame(frame);
+    return Promise.resolve()
+      .then(() => fn(scope.ctx))
+      .catch((e) => console.error(e))
+      .then(() => true)
+      .finally(() => { win.cancelAnimationFrame(raf); if (scopes.get(VISIT_SCOPE) === scope) unmount(VISIT_SCOPE); });
   }
 
   /** Time away with the page open (tab hidden, window minimised, frame off screen, a host focus suspend). Only the
@@ -644,7 +673,7 @@ export function createEngine({ run, life, ui, audio, registry, prestigeRegistry 
     get suspended() { return suspended; },
     get suspendReason() { return suspendReason; },
     get stopped() { return stopped; },
-    mount, unmount, mountAll, unmountAll, emit, subscribe, step, away,
+    mount, unmount, mountAll, unmountAll, emit, subscribe, step, away, visit,
     awayCap: () => E.awayCap(run, mods),
     setPaused, setSuspended, tap, pay, spend, addGuard, wallHit, buy, choose, end, grant, syncQuiet, save,
     purchaseHint,

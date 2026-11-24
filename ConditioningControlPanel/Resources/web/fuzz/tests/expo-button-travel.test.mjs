@@ -80,3 +80,31 @@ test('each interaction reaches the exhibit during a single mechanical excursion'
   assert.deepEqual(cues.filter(Boolean),['keep_2','keep_3','keep_4']);
   assert.equal(buttons.debug()[0].pressed,2);
 });
+test('a press that does nothing leaves its cap still, and a cap waiting on its line stays down with its lamp out',()=>{
+  const {buttons,caps,surface}=desk();
+  let live=false,calls=0;
+  const action=buttons.bind(surface,()=>{calls++;return live?undefined:false;});
+  const hit={object:caps[0]};
+  // The action answers false: nothing moved.
+  assert.equal(action.activate(hit),false);buttons.tick(.05);
+  assert.deepEqual(buttons.debug().map(c=>[c.pressed,c.amount]),[[0,0],[0,0]]);
+  // A live press travels as before.
+  live=true;action.activate(hit);buttons.tick(.09);
+  assert.deepEqual(buttons.debug().map(c=>[c.pressed,c.amount]),[[1,1],[0,0]]);
+  buttons.tick(.4);assert.equal(buttons.debug()[0].amount,0);
+  // Held: both caps of the target sit at the bottom of their 12 mm stroke (the desk is scaled 1.35), lamps out,
+  // and a press cannot move them.
+  buttons.setHeld('hoof_console',true);
+  assert.deepEqual(buttons.debug().map(c=>[c.held,c.lit,c.amount,Math.round(c.travel*1e6)]),[[true,false,1,8889],[true,false,1,8889]]);
+  action.activate(hit);buttons.tick(1);
+  assert.deepEqual(buttons.debug().map(c=>[c.pressed,c.amount]),[[1,1],[0,1]]);
+  // Released: they spring back and can be pressed again.
+  buttons.setHeld('hoof_console',false);buttons.tick(.05);
+  assert.ok(buttons.debug().every(c=>!c.held&&c.lit&&c.amount>0&&c.amount<1));
+  buttons.tick(.3);assert.ok(buttons.debug().every(c=>c.amount===0&&c.travel===0));
+  action.activate(hit);assert.equal(buttons.debug()[0].pressed,2);assert.equal(calls,4);
+  // A lamp can be out without the cap being held, and holding does not relight it.
+  buttons.setLit('hoof_console',false);assert.ok(buttons.debug().every(c=>!c.lit&&!c.held));
+  buttons.setHeld('hoof_console',true);buttons.setHeld('hoof_console',false);assert.ok(buttons.debug().every(c=>!c.lit));
+  buttons.setLit('hoof_console',true);assert.ok(buttons.debug().every(c=>c.lit));
+});

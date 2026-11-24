@@ -6,6 +6,9 @@ export {warmEntrance, clearEntrance} from './entrance.js';
 export {createPortal} from './portal.js';
 export {bindExpoMenus, bindExpoPreviewButton} from './controller-menu.js';
 export {bindExpoSoundUnlock} from './sound-unlock.js';
+// The pause card's Options view offers the look options outside a visit too (ui/options.js). Both files are plain.
+export {createCameraPreferences} from './camera-preferences.js';
+export {mountCameraOptions} from './camera-options.js';
 
 // Called after the visitor accepts the transmission.
 export function prewarm() {

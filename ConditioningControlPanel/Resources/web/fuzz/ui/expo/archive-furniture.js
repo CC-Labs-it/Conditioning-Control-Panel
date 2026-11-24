@@ -1,4 +1,5 @@
 import {Group, InstancedMesh, Matrix4} from 'three';
+import {isArchiveScreen} from './archive-screens.js';
 
 // Only the fixed case and the station body share a draw. Screens, lenses,
 // labels, replay keys and their original interaction targets stay independent.
@@ -41,9 +42,32 @@ export function batchArchiveHousings(room) {
   };
 }
 
+/** Every node of one projector stand in a room's view or collision tree: screen, housing, lens, caps, plaque, label. */
+function standParts(root,id){
+  const parts=[];
+  root.traverse(node=>{
+    const name=node.userData.collider || node.name;
+    if(name.endsWith(id) && (name.startsWith('expo_') || name.startsWith('Screen_support_') || name.startsWith('Screen support ')))parts.push(node);
+  });
+  return parts;
+}
+
+// A room with its own game has no projector (archive-screens.js). Its authored stand leaves the room: unseen, and
+// nothing to walk into. Run before the room's stations, caps and colliders are read.
+export function retireArchiveBays(zone, route, keep=isArchiveScreen) {
+  const gone=[];
+  for(const site of route.slots.filter(row=>row.zone===zone.id && !row.template && !keep(row.id))){
+    for(const node of standParts(zone.view,site.id))node.visible=false;
+    for(const node of standParts(zone.collider,site.id))node.removeFromParent();
+    gone.push(site.id);
+  }
+  return gone;
+}
+
 // Additional bays use their room's freestanding projector, including its moving caps and collision.
-export function fitArchiveBays(zone, route) {
-  for(const site of route.slots.filter(row=>row.zone===zone.id && row.template)){
+// Only the archive's screens are built (archive-screens.js): the route file lists more bays than the building has.
+export function fitArchiveBays(zone, route, keep=isArchiveScreen) {
+  for(const site of route.slots.filter(row=>row.zone===zone.id && row.template && keep(row.id))){
     const source=route.slots.find(row=>row.id===site.template);
     const yaw=row=>Math.atan2(row.front[0],row.front[2]);
     const transform=new Matrix4().makeTranslation(...site.screen)

@@ -32,15 +32,17 @@ try {
   await fr.waitForFunction(()=>window.__expo?.state().ready,null,{timeout:120000});
   const n=()=>fr.evaluate(()=>__expo.narrationState());const state=()=>fr.evaluate(()=>__expo.state());
   const wait=(fn,arg,ms=30000)=>fr.waitForFunction(fn,arg,{timeout:ms});
-  await wait(()=>__expo.narrationState().pa.seconds>.25);
+  // The visit opens on The Rail's welcome, and every control waits until it lowers.
+  await wait(()=>__expo.narrationState().heard.includes('rail_welcome'));
   const route=await fr.evaluate(async()=>(await(await fetch(window.expoReviewAssetURL('station-route.json'))).json()));
   const slot=route.slots.find(s=>s.id==='slot_02'),stationZone=slot.zone;
   const start=await n();
-  assert(start.stations.some(s=>s.id==='slot_01') && start.heard.includes('pa_arrive_1'));
+  assert(start.stations.some(s=>s.id==='slot_01') && start.heard.includes('rail_welcome'));
   const item={device,arrival:(await state()).feet,arrivalHeard:start.heard,stations:start.stations.length,requests};
   report.devices.push(item);
   await page.screenshot({path:path.join(dir,device+'-arrival.jpg'),type:'jpeg',quality:91});
   await beginGameAudio(fr);
+  await wait(()=>!__expo.rails().some(r=>r.up&&r.id==='welcome'),null,60000);
   async function viewStation(feet,object='expo_screen_'+slot.id){
     await fr.evaluate(async({zone,feet,object})=>{
       const e=__expo,T=await import('three');await e.go(zone,feet);
@@ -48,11 +50,19 @@ try {
       e.lookAt(...aim.toArray());e.root.focus();
     },{zone:stationZone,feet,object});
   }
+  // The screen plays the story's next record, whichever that is; a walk into a new room may start it by itself.
+  await wait(()=>__expo.narrationState().archive?.total>0);
+  const opening=(await n()).archive,first=opening.next;assert(first,'the archive has a first record');item.first=first;
   await viewStation(slot.standing,'expo_replay_'+slot.id);
-  if(phone)await fr.locator('.expo-interact').tap();else await page.keyboard.press('e');
+  await page.waitForTimeout(450);
+  if(!(await n()).archive.playingAt){
+    if(phone)await fr.locator('.expo-interact').tap();else await page.keyboard.press('e');
+  }else item.startedByItself=true;
+  await wait(id=>__expo.narrationState().archive.playingAt===id,slot.id,5000);
   await viewStation(slot.standing);
-  await wait(()=>__expo.narrationState().voice.id==='ev_h0'&&__expo.narrationState().voice.seconds>.5);
-  const row=await fr.evaluate(async()=>(await(await fetch(window.expoReviewAssetURL('narration/manifest.json'))).json()).find(r=>r.id==='ev_h0'));
+  await wait(id=>__expo.narrationState().voice.id===id&&__expo.narrationState().voice.seconds>.5,first);
+  const rows=await fr.evaluate(async()=>(await(await fetch(window.expoReviewAssetURL('narration/manifest.json'))).json()));
+  const row=rows.find(r=>r.id===first);
   let started=await n();assert.equal(started.voice.subtitle,row.subtitle);
   item.near=started.voice;
   await viewStation(slot.standing);
@@ -87,7 +97,7 @@ try {
   }
   await viewStation([6.1,0,50.3]);
   await page.waitForTimeout(240);
-  const far=(await n()).voice;assert.equal(far.id,'ev_h0');assert(far.seconds>started.voice.seconds);
+  const far=(await n()).voice;assert.equal(far.id,first);assert(far.seconds>started.voice.seconds);
   item.away=far;
   if(!phone){
     await page.keyboard.press('Escape');await wait(()=>fuzz.engine.paused);
@@ -95,16 +105,25 @@ try {
     assert.equal((await n()).voice.seconds,paused);item.pauseSeconds=paused;
     await fr.locator('#resume').click();
   }
-  await wait(()=>__expo.narrationState().finished.ev_h0>=1,null,31000);
-  await viewStation(slot.standing,'expo_review_'+slot.id);
-  await wait(()=>document.querySelector('.expo-prompt').textContent.includes('Replay The Long Chew'));
-  assert(!(await n()).voice.id);
+  const length=Number(row.duration)||Number(row.seconds)||0;
+  await wait(id=>__expo.narrationState().finished[id]>=1,first,Math.max(31000,(length+20)*1000));
+  // The same cap, pressed again, plays the story's next record on this screen.
+  const after=(await n()).archive;item.afterFirst=after;
+  assert.equal(after.completed,opening.completed+1);
+  await viewStation(slot.standing,'expo_replay_'+slot.id);
+  await wait(()=>document.querySelector('.expo-prompt').textContent.includes('Start projector'));
+  // A room line may follow the record; let it finish so the next voice is the screen's.
+  item.voiceAfterFirst=(await n()).voice.id;
+  await wait(()=>!__expo.narrationState().speech.playing&&!__expo.narrationState().speech.queue.length,null,60000);
+  const cap=await fr.evaluate(name=>__expo.buttons().find(c=>c.node===name),'expo_replay_'+slot.id);
+  assert(cap.lit&&!cap.held,'the cap is back up and lit once its record ends');
   if(phone){
     const center=await fr.locator('.expo-canvas').boundingBox();
     await page.touchscreen.tap(center.x+center.width/2,center.y+center.height/2);
   }else await page.keyboard.press('e');
-  await wait(()=>__expo.narrationState().voice.id==='ev_h0'&&__expo.narrationState().voice.seconds>.1);
-  item.replay=(await n()).voice;
+  await wait(id=>__expo.narrationState().voice.id===id&&__expo.narrationState().voice.seconds>.1,after.next);
+  assert.equal((await n()).archive.playingAt,slot.id);
+  item.next=(await n()).voice;
   await finishGameAudio(fr,path.join(dir,device+'-visit.webm'));
   await fr.evaluate(()=>fuzz.engine.setSuspended(true,'panic'));await fr.locator('.expo-root').waitFor({state:'detached'});
   item.panic=true;await cx.close();

@@ -38,45 +38,19 @@ function writeLines(ctx,text,x,top,width,space,maxSize,face,weight,leading) {
   lines.forEach((line,i)=>ctx.fillText(line,x,top+i*fontSize*leading));
 }
 
-function replayFinish(cap) {
-  const faces=[],clones=new Map();
-  function neutral(material) {
-    if(material.name!=='action_coral')return material;
-    if(!clones.has(material)){
-      const grey=material.clone();
-      grey.name='Replay awaiting first record';
-      grey.map=null;grey.color.setHex(0x939e96);
-      clones.set(material,grey);
-    }
-    return clones.get(material);
-  }
-  cap?.traverse(face=>{
-    if(!face.isMesh)return;
-    const original=face.material;
-    if(![original].flat().some(m=>m.name==='action_coral'))return;
-    const muted=Array.isArray(original)?original.map(neutral):neutral(original);
-    faces.push({face,original,muted});
-  });
-  let available;
-  function set(value) {
-    if(value===available)return;
-    available=value;for(const {face,original,muted} of faces)face.material=value?original:muted;
-  }
-  return {set,dispose(){set(true);for(const copy of clones.values())copy.dispose();}};
-}
-
-export function archiveDisplays(group,id,hasHistory=false) {
+// One button per pedestal: the coral play cap. The second cap and its socket are not part of the stand any more.
+export function archiveDisplays(group,id) {
   const title=panel(group,'expo_label_'+id);
   const caption=panel(group,'expo_caption_'+id);
-  const replay=replayFinish(group.getObjectByName('expo_review_'+id));
-  replay.set(hasHistory);
+  for(const name of ['expo_review_'+id,'expo_review_socket_'+id]){
+    const spare=group.getObjectByName(name);if(spare)spare.visible=false;
+  }
   let painted;
   function base(g,w,h,surface) {
     g.fillStyle=surface;g.fillRect(0,0,w,h);
     g.textBaseline='top';g.textAlign='left';
   }
-  function show(row,total,hasPrevious,secondViewing=false) {
-    replay.set(hasPrevious);
+  function show(row,total,secondViewing=false) {
     if(!row){
       if(painted!==null){
         painted=null;
@@ -109,6 +83,6 @@ export function archiveDisplays(group,id,hasHistory=false) {
       g.fillStyle='#192f31';writeLines(g,a.body,27,49,w-54,h-57,39,sans,'500',1.17);
     });
   }
-  show(null,0,hasHistory);
-  return {show,dispose(){replay.dispose();title?.dispose();caption?.dispose();}};
+  show(null,0);
+  return {show,dispose(){title?.dispose();caption?.dispose();}};
 }

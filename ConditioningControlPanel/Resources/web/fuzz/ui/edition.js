@@ -12,8 +12,9 @@
  * Pure rules take the reading as their last argument (`ed`), so tests need no page and the sim can be handed one. */
 
 import { BY_ID } from '../data/items.js';
+import { setOf } from '../data/fate.js';
 import {
-  SMALL_CUT_IDS, SMALL_REQ, SMALL_BALANCE, PHONE_CAPS, NUDGE_WHERE, NUDGE_LINKS, SAVE_CARRY_MAX_BYTES, SAVE_CARRY_MAX_CHARS, SAVE_FROM,
+  SMALL_CUT, SMALL_CUT_IDS, SMALL_REQ, SMALL_BALANCE, SMALL_ENDING_SET, PHONE_CAPS, NUDGE_WHERE, NUDGE_LINKS, SAVE_CARRY_MAX_BYTES, SAVE_CARRY_MAX_CHARS, SAVE_FROM,
   TRANSMISSION_AT_LLAMAS, EXPO_DEFAULT_BASE,
 } from '../data/editions.js';
 import { allowedLink, openAllowedLink } from './links.js';
@@ -83,10 +84,31 @@ export const edition = () => editionState().edition;
 export const isSmall = (ed = editionState()) => ed.edition === 'small';
 export const isFull = (ed = editionState()) => ed.edition === 'full';
 
+/* THE LLAMA HOLE (owner 2026-11-24): the full edition on the WEB has no Expo (only the desktop host sends caps.expo; a
+ * local page keeps its own files). There the Llama set (data/editions.js SMALL_CUT.expo: The Panel and Llama Expo 2037)
+ * is cut exactly as in small, so a run can never reach a door that cannot open; the llama-8 card says where it lives
+ * (ui/transmission.js llama8Due). The desktop is never holed. */
+const EXPO_CUT = new Set(SMALL_CUT.expo);
+/** True for a full web reading without the Expo's files: the Llama set is cut there as in small. */
+export const expoHole = (ed = editionState()) => ed?.edition === 'full' && ed.platform !== 'desktop' && ed.expo?.state !== 'ready';
+const cutHere = (id, ed) => (ed.edition === 'small' ? CUT.has(id) : EXPO_CUT.has(id) && expoHole(ed));
+
 /** True when this row is never offered here. A save that owns one keeps it, asleep (CONTRACT.md 6.4). */
-export const isCut = (id, ed = editionState()) => ed.edition === 'small' && CUT.has(id);
+export const isCut = (id, ed = editionState()) => cutHere(id, ed);
 /** A list of row ids without the ones cut here (fold riders, any-lists, shop shelves). */
-export const keptIds = (ids, ed = editionState()) => (ed.edition === 'small' ? ids.filter((id) => !CUT.has(id)) : ids);
+export const keptIds = (ids, ed = editionState()) => (ed.edition === 'small' || expoHole(ed) ? ids.filter((id) => !cutHere(id, ed)) : ids);
+
+/* ONE ENDING (owner 2026-11-24, the funnel): small holds only the fate set SMALL_ENDING_SET (Go Outside). Every other
+ * set's cards and ending are LOCKED here: never offered, bought or granted, and asleep when a save already owns one (a
+ * full save opened in small: its set sleeps and the run falls to Go Outside). Unlike a cut row, a locked set is shown to
+ * the player, locked and by name (sim/economy.js teasedSets), so it is kept apart from SMALL_CUT and isCut. */
+const fateLockedIn = (id) => { const set = setOf(id); return !!set && set !== SMALL_ENDING_SET; };
+/** True when this row is a fate card or ending of a set the small edition keeps locked. */
+export const fateLocked = (id, ed = editionState()) => ed.edition === 'small' && fateLockedIn(id);
+/** True when this row never plays here, and sleeps when owned: cut (isCut) or of a locked fate set (fateLocked). */
+export const sleepsHere = (id, ed = editionState()) => (ed.edition === 'small' ? CUT.has(id) || fateLockedIn(id) : cutHere(id, ed));
+/** True when this fate set (a data/fate.js id) may be held as a run's ending here. */
+export const endingSetOpen = (setId, ed = editionState()) => ed.edition !== 'small' || setId === SMALL_ENDING_SET;
 
 function handDown(id, seen) {
   if (!CUT.has(id)) return [id];
@@ -100,11 +122,11 @@ function handDown(id, seen) {
 export function reqFor(item, ed = editionState()) {
   const it = typeof item === 'string' ? BY_ID[item] : item;
   if (!it) return { req: [], any: undefined };
-  if (ed.edition !== 'small') return { req: it.req, any: it.any };
+  if (ed.edition !== 'small') return { req: it.req, any: it.any && expoHole(ed) ? it.any.filter((q) => !EXPO_CUT.has(q)) : it.any };
   const pin = SMALL_REQ[it.id];
   if (pin) return { req: pin.req, any: pin.any };
   const req = [...new Set(it.req.flatMap((q) => handDown(q, new Set())))];
-  return { req, any: it.any ? it.any.filter((q) => !CUT.has(q)) : undefined };
+  return { req, any: it.any ? it.any.filter((q) => !CUT.has(q) && !fateLockedIn(q)) : undefined };
 }
 
 /** Renewal (Sky, Depth, Stardust, the Renewal menu and badge) is a full-edition thing, for everyone. */

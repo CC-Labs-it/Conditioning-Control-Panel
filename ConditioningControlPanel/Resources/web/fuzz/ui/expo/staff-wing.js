@@ -116,11 +116,14 @@ export function createStaffWing(api,state) {
       layThread(api,group,place,routes[id],off);
       r.teaPath=teaThread(api,group,place,id,off);
       if(id==='service'){
+        r.signReturns=[];
         r.signs=locations.map((at,i)=>{
           const n=place('annex_sign',at,i%2===0?Math.PI:0),panel=dial(api,n,'sign_face',off);
           write(panel,'Health and safety',notes[i],'B.   /   '+String(i+1).padStart(2,'0'));
           n.visible=i<signCount&&state.carry?.key!=='staff-sign-'+i;
           bind(n,'Carry the notice',()=>{if(useCarry(api,state,'staff-sign-'+i,n,'Bob’s notice'))cue('bob_sign');});
+          const foot=place('annex_plinth',at,i%2===0?Math.PI:0);foot.scale.set(.55,.32,.55);foot.visible=state.carry?.key==='staff-sign-'+i;r.signReturns.push(foot);
+          bind(foot,'Return the notice to its stand',()=>{if(api.drop('staff-sign-'+i)){n.visible=true;foot.visible=false;}});
           return n;
         });
         const box=place('annex_crate',[24.62,0,34.82],Math.PI),hat=place('annex_hat',[24.62,.48,34.82],Math.PI);
@@ -141,7 +144,10 @@ export function createStaffWing(api,state) {
         bind(roster,'Read tomorrow’s rota',()=>api.say('Tomorrow: '+state.file.name+'. Tea to the reading balcony.'));
         r.tray=place('annex_tea',[16.63,.920,25.52]);r.tray.visible=!view.delivered&&!api.isCarrying('tea');
         const pickup=trailDocket(api,place,off,'tea',[16.82,1.23,25.01]);
-        bind(pickup,'Read the tea docket',()=>{state.ticket.discover('Delivered');api.say(pickupText);});
+        bind(pickup,()=>state.carry?.key==='tea'?'Return the tea to the canteen':'Read the tea docket',()=>{
+          if(api.drop('tea')){r.tray.visible=true;return;}
+          state.ticket.discover('Delivered');api.say(pickupText);
+        });
         const corridor=trailDocket(api,place,off,'corridor',[30.225,1.26,38.86],-Math.PI/2);
         bind(corridor,'Read the corridor sign',()=>{state.ticket.discover('Read');api.say(corridorText);api.trailTask('corridor','service');});
         bind(r.tray,'Carry the tea to the reading balcony',()=>{if(useCarry(api,state,'tea',r.tray,'Tea tray'))api.trailTask('tea','service');});
@@ -197,6 +203,7 @@ export function createStaffWing(api,state) {
     if(pos.y<3&&Math.hypot(pos.x-25.42,pos.z-27.19)<2.8){fromDesk=true;state.ticket.discover('Unplugged');}
     if(pos.y<3&&Math.hypot(pos.x-16.63,pos.z-25.52)<2.5)state.ticket.discover('Delivered');
     const r=rooms.get('service');
+    r?.signReturns?.forEach((foot,i)=>{foot.visible=state.carry?.key==='staff-sign-'+i;});
     if(!r?.signs||pos.z<30.7||pos.z>33.3||pos.x<12||pos.x>33.5){pivotYaw=null;return;}
     const yaw=camera.rotation.y;
     if(pivotYaw===null){pivotYaw=yaw;return;}

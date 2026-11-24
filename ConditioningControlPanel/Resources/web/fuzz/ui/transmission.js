@@ -6,13 +6,13 @@
  *           again. A stop button sends `expo-cancel`. NOT NOW only closes the card: the pen sign offers it again, and at
  *           the wormhole (ui/unlocks/fate/llama/ending.js) the same card comes first while the Expo is still absent.
  *   nudge   small edition, 4 llamas or more: the same card, without the size, and YES is the `transmission` nudge.
- *   llama8  small edition, 8 llamas or more: one card, its button is the `llama8` nudge.
+ *   llama8  small edition (and a full web run with no Expo, ui/edition.js expoHole), 8 llamas or more: one card, its button is the `llama8` nudge.
  *
  * Which kind a herd calls for is ui/edition.js transmissionKind; nothing here reads the edition itself. Nothing here
  * imports or fetches an Expo file. The card is the game's own card queue (ui/cards.js) in its theme tokens.
  * Gentle and reduced motion: nothing here moves; the bar only changes width. Pure rules first, so tests need no page. */
 
-import { transmissionKind, sendNudge, editionState, expoAllowed, expoMb, isSmall } from './edition.js';
+import { transmissionKind, sendNudge, editionState, expoAllowed, expoMb, isSmall, expoHole } from './edition.js';
 import { TRANSMISSION_MIN_RUN_MS, LLAMA8_GAP_MS } from '../data/editions.js';
 import { realPress } from './nudges.js';   // the one press rule
 
@@ -125,8 +125,8 @@ export const autoOfferDue = (llamas, extras, ed = editionState()) => !!transmiss
  *  arrived. */
 export const penSignDue = ({ llamas, extras, open = false, state = 'offer', ed = editionState() }) =>
   !!transmissionKind(llamas, ed) && !!extras?.transmissionSeen && !open && state !== 'arrived';
-/** The llama-8 card: small only, once per save (extras.llama8Seen). */
-export const llama8Due = (llamas, extras, ed = editionState()) => isSmall(ed) && Number(llamas) >= LLAMA8_AT && !extras?.llama8Seen;
+/** The llama-8 card: small, and a full web run with no Expo (ui/edition.js expoHole, the Llama hole), once per save (extras.llama8Seen). */
+export const llama8Due = (llamas, extras, ed = editionState()) => (isSmall(ed) || expoHole(ed)) && Number(llamas) >= LLAMA8_AT && !extras?.llama8Seen;
 
 /** Which card opens by itself now, if any: 'transmission', 'llama8' or null. clock: the run clock (ms played).
  *  opened: this run's self-opened cards, { transmission, llama8 } = the clock each opened at, or null. Nothing before

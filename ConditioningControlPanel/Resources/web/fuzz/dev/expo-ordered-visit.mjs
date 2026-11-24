@@ -1,4 +1,5 @@
-import {reviewPack} from './expo-review-pack.mjs';
+import {reviewPack,isolateReviewInput} from './expo-review-pack.mjs';
+import {ARCHIVE_SCREENS} from '../ui/expo/archive-screens.js';
 import assert from 'node:assert/strict';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {createRequire} from 'node:module';
@@ -18,6 +19,7 @@ const browser=await chromium.launch({executablePath:process.env.CHROME||'C:/Prog
 const report={mode,rate,errors:[],events:[]};
 try {
   const context=await browser.newContext({viewport:{width:1280,height:760}});
+  await isolateReviewInput(context);
   if(mode==='story' || mode==='sample')await context.addInitScript(rate=>{
     const writing=new WeakMap();
     window.expoTestPanel=canvas=>writing.get(canvas);
@@ -31,7 +33,8 @@ try {
       writing.get(this.canvas)?.push(String(text));
       return fillText.apply(this,arguments);
     };
-    const reviewRate=src=>src.includes('ev_h0.')?1:rate;
+    // The story's first record plays at its own pace so the hand-off can be watched; the drive names it once known.
+    const reviewRate=src=>window.expoReviewFirst&&src.includes('/narration/'+window.expoReviewFirst)?1:rate;
     document.addEventListener('play',e=>{if(e.target?.src?.includes('/narration/hall/'))e.target.playbackRate=reviewRate(e.target.src);},true);
     const original=HTMLMediaElement.prototype.play;
     HTMLMediaElement.prototype.play=function(){
@@ -64,12 +67,13 @@ try {
   let game=await enter();
   const shot=name=>page.screenshot({path:path.join(output,name+'.jpg'),type:'jpeg',quality:90});
   const state=()=>game.evaluate(()=>__expo.narrationState().archive);
-  const ready=()=>game.waitForFunction(()=>__expo.narrationState().archive?.total===40);
+  const ready=()=>game.waitForFunction(()=>__expo.narrationState().archive?.total>0);
   const save=()=>writeFile(path.join(output,mode+'.json'),JSON.stringify(report,null,2)+'\n');
   await ready();
   report.admission=await game.evaluate(()=>({feet:__expo.state().feet,yaw:__expo.camera.rotation.y,
     guide:document.querySelector('.expo-route-guide')?.innerText,visibleRooms:__expo.state().loaded}));
   await shot('admission');
+  await game.waitForFunction(()=>!__expo.rails().some(r=>r.up&&r.id==='welcome'),null,{timeout:45000});
   await page.keyboard.down('w');await page.waitForTimeout(600);await page.keyboard.up('w');
   report.walked=await game.evaluate(()=>__expo.walker.feet.toArray());
   assert(Math.hypot(report.walked[0]-report.admission.feet[0],report.walked[2]-report.admission.feet[2])>.4);
@@ -89,11 +93,18 @@ try {
     assert(Math.hypot(report.free[0]-report.secondLanding.feet[0],report.free[2]-report.secondLanding.feet[2])>.5);
   }
   if(mode==='story' || mode==='sample'){
-    const slots=(await (await context.request.get(new URL('station-route.json',packRoot).href)).json()).slots;
-    const records=(await (await context.request.get(new URL('narration/manifest.json',packRoot).href)).json()).filter(r=>r.set==='event');
+    // Only the screens the building puts up; the route file may list more bays.
+    const slots=(await (await context.request.get(new URL('station-route.json',packRoot).href)).json()).slots.filter(s=>ARCHIVE_SCREENS.includes(s.id));
+    // The story order is the archive number, whatever order the manifest lists its rows in.
+    const records=(await (await context.request.get(new URL('narration/manifest.json',packRoot).href)).json())
+      .filter(r=>r.set==='event').sort((a,b)=>a.archive.number-b.archive.number);
+    assert.equal((await state()).total,records.length,'the archive counts the manifest records');
+    assert.equal(slots.length,ARCHIVE_SCREENS.length,'every built screen is on the route');
     const byId=new Map(slots.map(s=>[s.id,s]));
-    await game.evaluate(()=>{
-      window.archiveObservations={played:[],frames:{},panels:{},maxVoices:0};
+    await game.evaluate(({ids,first})=>{
+      window.expoReviewFirst=first;
+      const story=new Set(ids);
+      window.archiveObservations={played:[],frames:{},panels:{},maxVoices:0,screens:{}};
       const writing=(kind,slot)=>{
         let lines;
         __expo.scene.getObjectByName('expo_'+kind+'_'+slot)?.traverse(node=>{
@@ -106,15 +117,16 @@ try {
         const s=__expo.narrationState(), obs=window.archiveObservations;
         const voice=s.voice;
         obs.maxVoices=Math.max(obs.maxVoices,Number(!!voice.id)+Number(!!s.pa.id));
-        if(!voice.id?.startsWith('ev_'))return;
+        if(!story.has(voice.id))return;
         if(obs.played.at(-1)!==voice.id)obs.played.push(voice.id);
+        if(s.archive.playingAt)(obs.screens[voice.id]||=[]).includes(s.archive.playingAt)||obs.screens[voice.id].push(s.archive.playingAt);
         const physical=s.stations.find(p=>p.project?.active && p.id===s.archive.playingAt);
         if(!physical?.project.full)return;
         const title=writing('label',physical.id),caption=writing('caption',physical.id);
         if(title?.length && caption?.length)obs.panels[voice.id]={header:title[0],title:title.slice(1).join(' '),section:caption[0],body:caption.slice(1).join(' ')};
         const images=obs.frames[voice.id]||=[];if(!images.includes(physical.project.texture))images.push(physical.project.texture);
       },35);
-    });
+    },{ids:records.map(r=>r.id),first:records[0].audio});
     async function aim(slot,kind){
       return game.evaluate(async ({slot,kind})=>{
         const {Box3,Vector3}=await import('three');
@@ -125,33 +137,42 @@ try {
         __expo.root.focus();return __expo.focusTarget()?.owner;
       },{slot,kind});
     }
-    // A visitor can choose the aquarium first, then leave it while its reel continues playing.
+    // Approaching the aquarium first starts its nearest projector.
     let slot=byId.get('slot_09');await aim(slot,'screen');
-    await page.waitForTimeout(1500);
-    assert.equal((await state()).displayed,undefined);
-    assert.equal(await aim(slot,'replay'),'expo_replay_'+slot.id);
-    await page.keyboard.press('e');
-    await game.waitForFunction(()=>__expo.narrationState().archive.displayed==='ev_h0',null,{timeout:45000});
+    await game.waitForFunction(id=>__expo.narrationState().archive.displayed===id,records[0].id,{timeout:45000});
     const first=await state();assert.equal(first.displayed,records[0].id);
-    await game.waitForFunction(()=>window.archiveObservations.frames.ev_h0?.length>0);
+    await game.waitForFunction(id=>window.archiveObservations.frames[id]?.length>0,records[0].id);
     const playhead=await game.evaluate(()=>__expo.narrationState().voice.seconds);
-    const elsewhere=byId.get('slot_12');assert.equal(await aim(elsewhere,'replay'),'expo_replay_'+elsewhere.id);
-    await page.keyboard.press('e');
+    await game.waitForFunction(()=>__expo.rails().some(r=>r.up&&r.id==='view'));
+    await game.evaluate(()=>{const p=__expo.walker.feet;__expo.move(0,-4);return p.toArray();});
     report.handoff=await state();
     assert.equal(report.handoff.playingAt,slot.id);
     assert.equal(report.handoff.displayed,records[0].id);
     assert.ok(await game.evaluate(()=>__expo.narrationState().voice.seconds)>=playhead);
-    await aim(slot,'screen');
     await shot('original-screen');
+    // A screen holds many records: the visit goes round the other screens and each press plays the story's next one.
     const destinations=slots.filter(s=>s.id!==slot.id);
     const length=mode==='sample'?2:records.length;
+    const wanted=()=>game.evaluate(()=>__expo.narrationState().archive.playingAt);
     for(let i=0;i<length;i++){
+      let played=slot.id;
       if(i>0){
-        slot=destinations[i-1];
+        slot=destinations[(i-1)%destinations.length];
         assert.equal(await aim(slot,'replay'),'expo_replay_'+slot.id,'main button at '+slot.id);
-        await page.keyboard.press('e');
+        // The first walk into a room can start its nearest screen by itself; then that screen plays the next record.
+        await page.waitForTimeout(450);
+        played=await wanted();
+        if(!played){
+          assert.equal((await state()).next,records[i].id);
+          await page.keyboard.press('e');
+          await game.waitForFunction(()=>__expo.narrationState().archive.playingAt,null,{timeout:3000});
+          played=await wanted();
+          assert.equal(played,slot.id,'the pressed screen plays the next record');
+        }
       }
-      await game.waitForFunction(n=>__expo.narrationState().archive.completed>=n,i+1,{timeout:80000});
+      // The first record plays at its own pace: allow for its length, whatever record that is.
+      const pace=i===0?1:rate,timeout=Math.max(80000,((Number(records[i].seconds)||0)/pace+30)*1000);
+      await game.waitForFunction(n=>__expo.narrationState().archive.completed>=n,i+1,{timeout});
       const result=await state();assert.equal(result.completed,i+1);
       if(i===0){
         await page.waitForTimeout(3200);
@@ -161,16 +182,22 @@ try {
         },slot.id);
         assert.deepEqual(parked,{count:1,playing:undefined,own:records[0].id});
       }
-      report.events.push({number:i+1,id:records[i].id,slot:slot.id,completed:result.completed});
-      if(i===0||i===19||i===39)await shot('after-'+(i+1));
+      report.events.push({number:i+1,id:records[i].id,slot:played,pressedAt:slot.id,completed:result.completed});
+      if(i===0||i===Math.floor(length/2)-1||i===length-1)await shot('after-'+(i+1));
       await save();
     }
-    assert.equal(await aim(slot,'review'),'expo_review_'+slot.id);
-    await page.keyboard.press('e');
-    await game.waitForFunction(id=>__expo.narrationState().voice.id===id,records[length-1].id,{timeout:15000});
+    // One more press on the last screen: the story's next record while any remain, else that screen's own last one.
+    const last=report.events.filter(e=>e.slot===slot.id).at(-1)?.id;
+    const encore=length<records.length?records[length].id:last;
+    assert.equal(await aim(slot,'replay'),'expo_replay_'+slot.id);
+    await page.waitForTimeout(450);
+    if(!(await wanted()))await page.keyboard.press('e');
+    await game.waitForFunction(id=>__expo.narrationState().voice.id===id,encore,{timeout:15000});
+    assert.equal((await state()).playingAt,slot.id);
     assert.equal((await state()).completed,length);
+    report.encore={slot:slot.id,id:encore};
     report.observations=await game.evaluate(()=>window.archiveObservations);
-    assert.deepEqual(report.observations.played,records.slice(0,length).map(r=>r.id));
+    assert.deepEqual(report.observations.played,records.slice(0,length+(length<records.length?1:0)).map(r=>r.id));
     assert.equal(report.observations.maxVoices,1);
     const normal=text=>text.replace(/\s+/g,' ').trim();
     for(const row of records.slice(0,length)){
