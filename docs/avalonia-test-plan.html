@@ -67,7 +67,7 @@ compare text, order, layout, sound and timing with the same screen on Windows. R
 </ol>
 <h3 id="navigation-window-and-startup">Navigation, window and startup</h3>
 <ol start="11">
-<li>Click every rail entry in turn. Expect each tab to open and the rail highlight to follow. WPF <code>MainWindow/MainWindow.TabNavigation.cs:868-895</code>. Rows: <code>shell-tab-navigation</code>, <code>shell-nav-rail</code>, <code>ctrl-section-tab-strip</code>.</li>
+<li>Click every rail entry in turn. Expect each tab to open and the rail highlight to follow. Open Premium, then click Home; expect the dashboard. Repeat from Premium with Ctrl+1. WPF <code>MainWindow/MainWindow.TabNavigation.cs:868-895</code>. Rows: <code>shell-tab-navigation</code>, <code>shell-nav-rail</code>, <code>ctrl-section-tab-strip</code>.</li>
 <li>Resize, maximise and restore the window on a small screen. Expect it to stay inside the screen. WPF <code>MainWindow/MainWindow.WorkAreaFit.cs</code>, <code>MainWindow/MainWindow.WindowChrome.cs</code>. Rows: <code>shell-work-area-fit</code>, <code>shell-window-chrome</code>.</li>
 <li>Start the app a second time. Expect the running window to come to the front, no second copy. WPF <code>App.xaml.cs</code>. Rows: <code>shell-single-instance</code>.</li>
 <li>Quit and start again. Expect the splash, then the launcher or the panel as on Windows. Switch mods and check that open localized text using the companion name refreshes. WPF <code>App.xaml.cs:3149</code>. Rows: <code>shell-app-startup</code>, <code>shell-launcher</code>.</li>
