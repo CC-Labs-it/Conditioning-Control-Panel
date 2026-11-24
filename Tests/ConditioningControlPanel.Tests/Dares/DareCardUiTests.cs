@@ -168,6 +168,7 @@ public class DareCardUiTests
         var app = Path.Combine(RepoRoot(), "ConditioningControlPanel");
         var files = new[] { "Controls/Dares", "Dialogs/Dares" }
             .SelectMany(d => Directory.EnumerateFiles(Path.Combine(app, d), "*.cs"))
+            .Concat(Directory.EnumerateFiles(Path.Combine(RepoRoot(), "CCP.Core", "Services", "Dares"), "*.cs"))
             .Append(Path.Combine(app, "Controls/Friends/FriendsDrawer.Dares.cs"));
         var literal = new Regex("\"(dares_[a-z0-9_]*[a-z0-9])\"");
         foreach (var f in files)
