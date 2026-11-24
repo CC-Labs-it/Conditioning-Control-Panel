@@ -32,8 +32,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     /// gate, the progress bar, the encouragement line, the pulse/shake feedback and the voice
     /// panel's visuals. What does NOT survive, and why:
     ///
-    ///  - <b>Every Win32 call is gone.</b> <c>SetWindowPos(HWND_TOPMOST)</c> is the XAML's
-    ///    <c>Topmost="True"</c>; <c>SetForegroundWindow</c> is <c>Activate()</c>;
+    ///  - <b>Window placement is portable.</b> <c>SetWindowPos(HWND_TOPMOST)</c> is the XAML's
+    ///    <c>Topmost="True"</c>; foreground uses a Windows helper and portable activation;
     ///    <c>WS_EX_TOOLWINDOW</c> is <c>ShowInTaskbar="False"</c>;
     ///    <c>SetLayeredWindowAttributes</c> + <c>AllowsTransparency</c> is
     ///    <c>TransparencyLevelHint="Transparent"</c> + <c>SystemDecorations="None"</c>.
@@ -138,13 +138,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _txtEscHint = this.FindControl<TextBlock>("TxtEscHint")!;
 
             // WPF :167-185: losing focus snaps it back so keystrokes cannot leak into another app.
-            // Win32 SetForegroundWindow has no portable twin; Activate() is the WM-permitting best.
+            // Windows borrows input when needed; other window managers receive Activate().
             Deactivated += (_, _) =>
             {
                 if (!_isPrimary || _isCompleted) return;
                 Dispatcher.UIThread.Post(() =>
                 {
-                    if (_isCompleted || !IsVisible) return;
+                    if (_isCompleted || _fadingOut || !IsVisible) return;
+                    Platform.ForegroundGrab.Take(Platform.ForegroundGrab.Handle(this));
                     Activate();
                     FocusInput();
                 }, DispatcherPriority.Input);
@@ -303,9 +304,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         }
 
         /// <summary>
-        /// Runs on every show. <c>SetWindowPos(HWND_TOPMOST)</c> + <c>SetForegroundWindow</c> become
-        /// the XAML's <c>Topmost="True"</c> plus <c>Activate()</c>; the device-pixel re-cover
-        /// (ApplyPhysicalBounds) is gone with the hwnd it needed.
+        /// Runs on every show. Topmost comes from XAML; Windows foreground uses the native helper.
+        /// Other platforms use Activate().
         /// </summary>
         private void OnShown()
         {
@@ -317,12 +317,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // user can actually type into.
             if (_isPrimary)
             {
+                Platform.ForegroundGrab.Take(Platform.ForegroundGrab.Handle(this));
                 Activate();
                 FocusInput();
             }
 
-            Log.Information("Lock Card shown - Phrase: {Phrase}, Repeats: {Repeats}, Strict: {Strict}, Voice: {Voice}",
-                _phrase, _requiredRepeats, _strictMode, _voiceMode);
+            Log.Information("Lock Card shown - PhraseChars: {Chars}, Repeats: {Repeats}, Strict: {Strict}, Voice: {Voice}, Foreground: {Foreground}",
+                (_phrase ?? "").Length, _requiredRepeats, _strictMode, _voiceMode, Platform.ForegroundGrab.Owns(Platform.ForegroundGrab.Handle(this)));
 
             // Begin the spoken-solve listen loop on the primary monitor (WPF :620).
             if (_isPrimary && _voiceMode) StartVoiceSolve();
@@ -1145,7 +1146,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
 
                 // Last, so the card that can be typed into owns the foreground.
-                primary.Activate();
+                primary.TakeKeyboard();
                 Log.Information("Lock Card shown on {Count} window(s) - {Repeats} repeat(s), strict={Strict}, test={Test}",
                     _allWindows.Count, repeats, strictMode, isTest);
             }
@@ -1154,6 +1155,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Log.Warning("LockCardWindow.ShowOnAllMonitors failed: {Error}", ex.Message);
                 ForceCloseAll();
             }
+        }
+
+        private void TakeKeyboard()
+        {
+            Platform.ForegroundGrab.Take(Platform.ForegroundGrab.Handle(this));
+            Activate();
+            FocusInput();
+            Platform.ForegroundGrab.RecheckSoon(this, () => _isPrimary && !_isCompleted && !_fadingOut && IsVisible,
+                FocusInput, "LockCardWindow");
         }
 
         /// <summary>

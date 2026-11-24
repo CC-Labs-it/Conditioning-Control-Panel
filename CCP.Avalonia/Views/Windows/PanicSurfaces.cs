@@ -156,6 +156,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF :1978-1981: after the corner GIFs.
             new("tube-speech", sh => (sh?.Tube ?? AvatarTube.AvatarTubeWindow.Live)?.PanicSilence(), After: ["corner-gif"]),
             // WPF LockCardService.Stop(dismissOpenCards: true); :2041 StopAdHocEffects closes lock cards after the engine/media stop.
+            new("foreground-grab", _ => Platform.ForegroundGrab.CancelPending()),
             new("lock-cards", _ => MainShellWindow.StopLockCards(), After: ["engine", "leash-task"]),
             new("speak-cue", _ => Overlays.SpeakCueOverlay.CloseActive()),   // WPF: Deeper stop -> SpeakPromptSession.StopCue -> HideCue
             // P06: also dismiss the knowledge-link modal added to the Links page.
