@@ -134,6 +134,23 @@ public sealed class ModChoiceTests
     });
 
     [Fact]
+    public Task ShellAccentControlsTrackModChanges() => Run(async (shell, svc, server) =>
+    {
+        var xp = shell.FindControl<Border>("XPBar")!;
+        var primary = shell.FindControl<TextBlock>("TxtBannerPrimary")!;
+        var secondary = shell.FindControl<TextBlock>("TxtBannerSecondary")!;
+        foreach (var id in new[] { BuiltInMods.CCPDefaultId, BuiltInMods.DronificationId, BuiltInMods.CCPDefaultId })
+        {
+            AvApp.Mods!.ActivateMod(id);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(Application.Current!.Resources["AccentGradientBrush"], xp.Background);
+            Assert.Equal(((ISolidColorBrush)Application.Current.Resources["PinkBrush"]!).Color, ((ISolidColorBrush)primary.Foreground!).Color);
+            Assert.Equal(((ISolidColorBrush)Application.Current.Resources["PinkBrush"]!).Color, ((ISolidColorBrush)secondary.Foreground!).Color);
+        }
+        await Task.CompletedTask;
+    });
+
+    [Fact]
     public Task HeaderComboSwitchesTheModSavesAndRethemes() => Run(async (shell, svc, server) =>
     {
         var combo = shell.FindControl<ComboBox>("ModSelectorCombo")!;

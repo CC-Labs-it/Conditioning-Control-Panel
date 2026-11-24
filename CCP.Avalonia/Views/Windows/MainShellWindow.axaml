@@ -967,7 +967,7 @@
                             <Grid Margin="12,0">
                             <!-- WPF MainWindow.xaml:1132-1146: the Hyperlink trims with the lead. Same embedded
                                  DockPanel as the web beat below, since Avalonia never trims an inline. -->
-                            <TextBlock x:Name="TxtBannerPrimary" Foreground="{DynamicResource PinkButtonHoveredBrush}"
+                            <TextBlock x:Name="TxtBannerPrimary" Foreground="{DynamicResource PinkBrush}"
                                        FontSize="14" FontStyle="Italic"
                                        HorizontalAlignment="Stretch" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
@@ -989,7 +989,7 @@
                                     </DockPanel>
                                 </InlineUIContainer>
                             </TextBlock>
-                            <TextBlock x:Name="TxtBannerSecondary" Foreground="{DynamicResource PinkButtonHoveredBrush}"
+                            <TextBlock x:Name="TxtBannerSecondary" Foreground="{DynamicResource PinkBrush}"
                                        FontSize="14" FontStyle="Italic"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        TextAlignment="Center" TextTrimming="CharacterEllipsis"
@@ -1731,7 +1731,7 @@
                             <Border x:Name="XpDepthTop" Height="5" CornerRadius="5,5,0,0" VerticalAlignment="Top" Background="{DynamicResource DepthWellTop}" IsHitTestVisible="False"/>
                             <Border x:Name="XpDepthLeft" Width="6" CornerRadius="5,0,0,5" HorizontalAlignment="Left" Background="{DynamicResource DepthWellLeft}" IsHitTestVisible="False"/>
                             <Border Height="1" VerticalAlignment="Bottom" Margin="5,0" Background="{DynamicResource DepthWellFoot}" IsHitTestVisible="False"/>
-                            <Border x:Name="XPBar" Background="{DynamicResource PinkBrush}" CornerRadius="5"
+                            <Border x:Name="XPBar" Background="{DynamicResource AccentGradientBrush}" CornerRadius="5"
                                     HorizontalAlignment="Left" Width="100" SizeChanged="XPBar_SizeChanged">
                                 <!-- Chrome FX (PR-1): a slow gloss travelling along the filled part of
                                      the bar. White on purpose - it reads as light catching the fill
