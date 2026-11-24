@@ -55,7 +55,11 @@ test('wiring: small only, through ui/edition.js, never by itself', () => {
   assert.match(main, /if \(isSmall\(ed\)\) mountPauseNudge\(/);
   const recap = readFileSync(new URL('../ui/recap/recap.js', import.meta.url), 'utf8');
   assert.match(recap, /if \(hooks\.nudge\) \{/);
-  assert.match(recap, /addEventListener\('click', \(ev\) => hooks\.nudge\(ev\)\)/, 'the ending door acts only on a click, with its event');
+  /* The funnel (2026-11-24): the ending door moved into the recap wall (ui/recap/wall.js), two clicks, each with its event. */
+  assert.match(recap, /mountWall\(\{ doc, parent: col, go: \(ev, want\) => hooks\.nudge\(ev, want\)/);
+  const wall = readFileSync(new URL('../ui/recap/wall.js', import.meta.url), 'utf8');
+  assert.match(wall, /addEventListener\('click', \(ev\) => \{[^}]*go\(ev, 'upgrade'\); \}\)/, 'the main door acts only on a click, with its event');
+  assert.match(wall, /addEventListener\('click', \(ev\) => \{[^}]*go\(ev, 'download'\); \}\)/, 'the second door too');
   const nudges = readFileSync(new URL('../ui/nudges.js', import.meta.url), 'utf8');
   assert.doesNotMatch(nudges, /caps\??\.edition|isSmall\(/, 'nothing here reads the edition');
 });

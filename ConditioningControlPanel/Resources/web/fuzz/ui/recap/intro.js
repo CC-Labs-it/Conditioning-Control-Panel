@@ -159,6 +159,33 @@ export function createIntro({ doc, root, scroller, fx, sfx, stars, poster, onSet
       }
       return 1600;
     },
+    /* the small edition's wall (ui/recap/wall.js): the panel lands, the locked hand fans out from one stack, the pills
+       pop along the row, then the one main button. */
+    wall(el) {
+      drop(el, 0, { sound: ['thud', .34, .9], kn: 3 });
+      fadeIn(q('.rr-offer', el), 330, 140);
+      A(q('.rr-offer', el), [{ transform: 'scale(1.6) rotate(-3deg)' }, { transform: 'scale(.97)', offset: .6 }, { transform: 'none' }], { delay: 330, duration: 320, easing: 'ease-out', composite: 'add' });
+      say('snap', 470, .32);
+      fadeIn(q('.rr-wsub', el), 560, 200);
+      fadeIn(q('.rr-handcap', el), 640, 160);
+      const fan = q('.rr-fan', el), cards = qa('.rr-wend', el);
+      const mid = fan ? fan.getBoundingClientRect().left + fan.getBoundingClientRect().width / 2 : 0;
+      cards.forEach((c, i) => {
+        const r = c.getBoundingClientRect(), dx = mid - (r.left + r.width / 2), rot = c.style.getPropertyValue('--r') || '0deg';
+        fadeIn(c, 700, 80);
+        A(c, [{ transform: `translateX(${dx.toFixed(1)}px) rotate(calc(-1 * ${rot})) scale(.8)` }, { transform: 'scale(1.06)', offset: .7 }, { transform: 'none' }],
+          { delay: 760 + i * 60, duration: 380, easing: 'cubic-bezier(.3,1.4,.5,1)', composite: 'add' });
+        say(SCALE[1 + (i % (SCALE.length - 1))], 800 + i * 60, .16);
+      });
+      const t0 = 820 + cards.length * 60;
+      qa('.rr-part', el).forEach((p, i) => popIn(p, t0 + i * 80, { from: 'translateY(12px) scale(.5)', dur: 300, sound: i % 2 ? null : ['chip', .14, 1 + i * .05] }));
+      const t1 = t0 + qa('.rr-part', el).length * 80 + 120;
+      const main = q('.rr-wmain', el);
+      popIn(main, t1, { from: 'scale(.4) rotate(-6deg)', dur: 380, sound: ['gold', .26] });
+      later(t1 + 200, () => { if (main) burst(local(main.getBoundingClientRect()), 7, 70); });
+      popIn(q('.rr-wsecond', el), t1 + 160, { from: 'translateY(10px) scale(.6)', dur: 300 });
+      return t1 + 260;
+    },
     next(el) {
       drop(el, 0, { from: 'translateY(220px) rotate(3deg)', dur: 460, sound: ['thud', .5, .85], dustN: 14, big: 1.3, kn: 5, lines: true });
       const renew = q('.rr-renew', el);

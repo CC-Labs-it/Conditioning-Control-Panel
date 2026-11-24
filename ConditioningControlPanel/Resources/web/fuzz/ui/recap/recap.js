@@ -13,7 +13,7 @@
 
 import { ENDINGS } from '../../data/content/endings.js';
 import { FORKS } from '../../data/items.js';
-import { NUDGE_COPY } from '../nudges.js';   // small: the ending's door to the full game
+import { mountWall } from './wall.js';   // small: the one card at the end of the run, the door to the full game
 import { galleryIds } from '../../sim/economy.js';
 import { HERD_ENDINGS } from '../../data/fate.js';
 import { THEME_PALETTES, mixHex } from '../palette.js';
@@ -149,6 +149,12 @@ export function openRunRecap({ cards, doc, id, run, life, hooks, audio, name = '
     sb.addEventListener('click', () => doc.dispatchEvent(new win.CustomEvent(BOOK_EVENT)));
   }
 
+  // 1b the small edition's wall (ui/recap/wall.js): one card, one main door to the full game, right under the ending.
+  // It replaces the old side button: one call to action, never two.
+  if (hooks.nudge) {
+    mountWall({ doc, parent: col, go: (ev, want) => hooks.nudge(ev, want), icon, star: () => starSvg(0), sfx, calm, offersDownload: hooks.nudge.offersDownload !== false });
+  }
+
   // 2 road
   const road = h('section', 'rr-panel rr-road', null, col);
   road.dataset.rr = 'road';
@@ -202,11 +208,6 @@ export function openRunRecap({ cards, doc, id, run, life, hooks, audio, name = '
   const side = h('div', 'rr-side', null, nextRow);
   const keepBtn = button('rr-tool', side); keepBtn.hidden = true;
   const dailyBtn = button('rr-tool rr-ticket', side); dailyBtn.hidden = true;
-  if (hooks.nudge) {
-    const nudgeBtn = button('rr-tool rr-nudge', side);
-    nudgeBtn.textContent = NUDGE_COPY.endingButton;
-    nudgeBtn.addEventListener('click', (ev) => hooks.nudge(ev));
-  }
   const restart = h('div', 'rr-restart', null, side);
   const newRun = button('rr-newrun', restart);
   newRun.append(clipBox('button'), R.newRun);
@@ -541,7 +542,7 @@ export function openRunRecap({ cards, doc, id, run, life, hooks, audio, name = '
   });
 
   /* ---- hover: a quiet note in the one key; press: a click ---- */
-  const HOVERABLE = '.rr-step, .rr-endcard, .rr-tool, .rr-sticker, .rr-renew, .rr-newrun, .rr-look, .rr-chip, .rr-peel, .rr-stamp, .rr-kind, .rr-r5, .rr-go, .rr-credit';
+  const HOVERABLE = '.rr-step, .rr-endcard, .rr-tool, .rr-sticker, .rr-renew, .rr-newrun, .rr-look, .rr-chip, .rr-peel, .rr-stamp, .rr-kind, .rr-r5, .rr-go, .rr-credit, .rr-wend, .rr-wmain, .rr-wsecond';
   root.addEventListener('pointerover', (e) => {
     if (e.pointerType !== 'mouse') return;
     const t = e.target.closest(HOVERABLE);
