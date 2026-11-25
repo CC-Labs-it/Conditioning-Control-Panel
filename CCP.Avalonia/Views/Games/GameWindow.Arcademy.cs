@@ -37,8 +37,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private SettingsService? _arcademySettingsService;
         private MandatoryVideoScheduler? _arcademyVideo;
         private DateTime _arcademyProgress;
-        private bool _arcademyInit, _arcademyPanicSuspended, _arcademyWriting;
-        private bool? _arcademyLastSuspended;
+        // Starts false: WPF SeedNativeState (ArcademyHostService.cs:544-568) posts nothing when idle.
+        private bool _arcademyInit, _arcademyPanicSuspended, _arcademyLastSuspended, _arcademyWriting;
         private string? _arcademyLastSuspendReason;
         private DateTime _arcademyPanicTime;
 
@@ -331,8 +331,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal bool CheckArcademyBoot(DateTime now)
         {
             if (_closing || _shellExiting || IsReady || now - _arcademyProgress < TimeSpan.FromSeconds(45)) return false;
-            Close();
+            ArcademyBootFailed("boot deadline: no progress for 45s");
             return true;
+        }
+
+        internal static Action<string> ShowArcademyBootError = message =>
+            _ = new Dialogs.MessageDialog(Loc.Get("launcher_game_arcademy_title"), message, showCancel: false).ShowDialogSafe<bool?>(null);
+
+        // WPF ArcademyHostService.cs:5986-6005: tear down, then say so; a black window is the worse failure.
+        private void ArcademyBootFailed(string? msg)
+        {
+            Close();
+            ShowArcademyBootError(Loc.GetF("arcademy_boot_error_body", Loc.Get("launcher_game_arcademy_title"), msg ?? ""));
         }
 
         private void StopArcademyWatch()

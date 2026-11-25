@@ -458,7 +458,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     break;
                 case "boot-error":
                     Log.Warning("[Game] {Id}: page boot-error: {Msg}", Spec.Id, (string?)o["msg"]);
-                    Close();
+                    if (Spec.Id == "arcademy") ArcademyBootFailed((string?)o["msg"]);
+                    else Close();
                     break;
                 case "exit":
                     // The page winds down and answers exit-done; WPF's ArmExitWatchdog closes it anyway.
