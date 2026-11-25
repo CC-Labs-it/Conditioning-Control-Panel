@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Threading;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using Newtonsoft.Json.Linq;
@@ -171,6 +172,8 @@ public sealed partial class GameWindowTests
             w.HandleMessage("{\"type\":\"ready\"}");
             w.HandleMessage("{\"type\":\"ready\"}");
             Assert.True(w.IsReady);
+            // WPF SeedNativeState (ArcademyHostService.cs:544-568): an idle boot sends no resume.
+            Assert.DoesNotContain(frames, f => (string?)f["type"] == "suspend");
             var init = Assert.Single(frames, f => (string?)f["type"] == "init");
             Assert.Equal(1, (int?)init["protocol"]);
             Assert.NotNull(init["meta"]);
@@ -197,7 +200,11 @@ public sealed partial class GameWindowTests
         var now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var oldClock = GameWindow.ArcademyUtcNow;
         GameWindow.ArcademyUtcNow = () => now;
+        var oldShow = GameWindow.ShowArcademyBootError;
+        var shown = new List<string>();
+        GameWindow.ShowArcademyBootError = shown.Add;
         var w = new GameWindow(GameWindow.Games["arcademy"]);
+        var w2 = new GameWindow(GameWindow.Games["arcademy"]);
         try
         {
             w.Show();
@@ -205,10 +212,18 @@ public sealed partial class GameWindowTests
             now = now.AddSeconds(40);
             w.HandleMessage("{\"type\":\"heartbeat\"}");
             Assert.False(w.CheckArcademyBoot(now.AddSeconds(44)));
+            Assert.Empty(shown);
             Assert.True(w.CheckArcademyBoot(now.AddSeconds(45)));
             Assert.Null(GameWindow.OpenForTests("arcademy"));
+            // WPF ArcademyHostService.cs:5986-6005: both the deadline and a page boot-error explain themselves.
+            Assert.Equal(Loc.GetF("arcademy_boot_error_body", Loc.Get("launcher_game_arcademy_title"), "boot deadline: no progress for 45s"), Assert.Single(shown));
+            w2.Show();
+            w2.HandleMessage("{\"type\":\"boot-error\",\"msg\":\"renderer failed\"}");
+            Assert.Null(GameWindow.OpenForTests("arcademy"));
+            Assert.Equal(2, shown.Count);
+            Assert.EndsWith("renderer failed", shown[1]);
         }
-        finally { w.Close(); GameWindow.ArcademyUtcNow = oldClock; }
+        finally { w.Close(); w2.Close(); GameWindow.ArcademyUtcNow = oldClock; GameWindow.ShowArcademyBootError = oldShow; }
     });
 
     // WPF ArcademyHostService.cs:204,494-504: the refusal is explained, never silent.
