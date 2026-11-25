@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -8,6 +9,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Avalonia.Helpers;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -81,4 +83,63 @@ public sealed class TubeClickGlowTests
         }
         return Task.CompletedTask;
     });
+
+    [Fact]
+    public Task ClickGlowUsesSharedBeatAndStopsOnPanicOrHide() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var settings = CoreSettings.Current;
+        var enabled = settings.AvatarEnabled;
+        var previousTime = BeatLoop.Time;
+        var clock = new SteppedTime();
+        BeatLoop.Time = clock;
+        settings.AvatarEnabled = true;
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            var tube = Assert.IsType<ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow>(shell.Tube);
+            var image = tube.FindControl<Image>("ImgAvatar")!;
+            foreach (var name in new[] { "ImgAvatarB", "ImgAvatarAnimated", "ImgAvatarAnimatedB" })
+                tube.FindControl<Image>(name)!.IsVisible = false;
+            image.IsVisible = true;
+            image.Opacity = 1;
+            using var bitmap = new WriteableBitmap(new PixelSize(1, 1), new Vector(96, 96));
+            image.Source = bitmap;
+            var original = Assert.IsType<DropShadowEffect>(image.Effect);
+
+            tube.HandleAvatarClick();
+            var glow = Assert.IsType<DropShadowEffect>(image.Effect);
+            var loop = Assert.Single(BeatLoop.Running.Where(x => ReferenceEquals(x.Owner, image)));
+            Assert.True(loop.OnFrameBeat);
+            clock.Advance(TimeSpan.FromMilliseconds(200));
+            BeatLoop.StepAll();
+            Assert.Equal(60, glow.BlurRadius);
+            clock.Advance(TimeSpan.FromMilliseconds(200));
+            BeatLoop.StepAll();
+            Assert.Same(original, image.Effect);
+            Assert.False(loop.IsRunning);
+
+            tube.HandleAvatarClick();
+            loop = Assert.Single(BeatLoop.Running.Where(x => ReferenceEquals(x.Owner, image)));
+            PanicSurfaces.All.Single(x => x.Id == "tube-speech").Stop(shell);
+            Assert.False(loop.IsRunning);
+            Assert.Same(original, image.Effect);
+
+            tube.HandleAvatarClick();
+            loop = Assert.Single(BeatLoop.Running.Where(x => ReferenceEquals(x.Owner, image)));
+            image.IsVisible = false;
+            Assert.False(loop.IsRunning);
+            Assert.Same(original, image.Effect);
+        }
+        finally
+        {
+            shell.MarkExitRequestedForTest();
+            shell.Close();
+            settings.AvatarEnabled = enabled;
+            BeatLoop.Time = previousTime;
+        }
+        return Task.CompletedTask;
+    });
+
 }

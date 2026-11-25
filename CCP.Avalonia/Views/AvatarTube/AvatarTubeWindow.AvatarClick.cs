@@ -3,7 +3,7 @@ using System;
 using Avalonia;
 using Avalonia.Data;
 using Avalonia.Media;
-using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
@@ -27,7 +27,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         }
 
         // WPF ChatInput.cs:116-142: pulse the active image shadow, then restore it.
-        private DispatcherTimer? _avatarGlowTimer;
+        private BeatLoop? _avatarGlowLoop;
         private IDisposable? _avatarGlowHold;
         private DropShadowEffect? _avatarGlow;
 
@@ -38,10 +38,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             if (avatar?.Effect is not DropShadowEffect original) return;
             _avatarGlow = new DropShadowEffect { Color = original.Color, BlurRadius = 20, Opacity = 0.6, OffsetX = original.OffsetX, OffsetY = original.OffsetY };
             _avatarGlowHold = avatar.SetValue(Visual.EffectProperty, _avatarGlow, BindingPriority.Animation);
-            var clock = System.Diagnostics.Stopwatch.StartNew();
-            var timer = _avatarGlowTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-            timer.Tick += (_, _) => StepAvatarGlow(clock.Elapsed.TotalMilliseconds);
-            timer.Start();
+            _avatarGlowLoop = new BeatLoop(avatar, seconds => StepAvatarGlow(seconds * 1000))
+            {
+                OnParked = StopAvatarGlow
+            };
+            _avatarGlowLoop.Start();
         }
 
         internal void StepAvatarGlow(double milliseconds)
@@ -55,8 +56,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         private void StopAvatarGlow()
         {
-            _avatarGlowTimer?.Stop();
-            _avatarGlowTimer = null;
+            _avatarGlowLoop?.Stop();
+            _avatarGlowLoop = null;
             _avatarGlowHold?.Dispose();
             _avatarGlowHold = null;
             _avatarGlow = null;
