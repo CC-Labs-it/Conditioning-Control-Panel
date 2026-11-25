@@ -165,6 +165,34 @@ public sealed class DarePanicTests
             Assert.Null(keeper.Pending);
             Assert.Contains("dares", MainShellWindow.BlinkStopIds);
         }
-        finally { DareHead.Service = null; }
+        finally { DareHead.Service = null; DareHead.Resume(); }
+    }
+
+    [Fact]
+    public async Task An_ordinary_engine_stop_keeps_dares_running_and_a_panic_holds_them_until_a_user_start()
+    {
+        Assert.Null(DareHead.Service);
+        var api = new Api();
+        var host = new Host();
+        var keeper = new DareLockdownKeeper(host, new DareLockdownKeeper.MemoryStore());
+        using var service = new DaresService(api, host, new DareMeter(), keeper);
+        DareHead.Service = service;
+        try
+        {
+            await service.RefreshAsync();
+            DareHead.Interrupt();   // an ordinary engine stop (StopEngine, OnEngineStopped)
+            var live = service.ActAsync("b1", DareOp.StartLockdown);
+            Assert.False(live.IsCompleted);   // still serving: the press reached the wire
+            PanicSurfaces.All.Single(x => x.Id == "dares").Stop(null);
+            api.Start.SetResult(new JObject { ["ok"] = true, ["status"] = "serving" });
+            Assert.Equal(DareActResult.Refused, await live);
+            DareHead.Interrupt();   // the panic's own engine stop must not lift the hold
+            Assert.Equal(DareActResult.Refused, await service.ActAsync("b1", DareOp.StartLockdown));
+            Assert.False(host.Active);
+            DareHead.Resume();   // a user start
+            Assert.Equal(DareActResult.Done, await service.ActAsync("b1", DareOp.StartLockdown));
+            Assert.True(host.Active);
+        }
+        finally { DareHead.Service = null; DareHead.Resume(); }
     }
 }

@@ -132,7 +132,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var resuming = resumeSession && App.Sessions is { IsRunning: true, IsPaused: true };
                 if (!systemInitiated) Platform.DareHead.Resume();
                 try { CoreEngine.Start(resumingSession: resuming, systemInitiated: systemInitiated); }   // WPF StartStop.cs:341
-                catch { Platform.DareHead.StopForSafety(); throw; }
+                catch { Platform.DareHead.Interrupt(); throw; }
                 StartEngineRamp();
                 if (resuming) App.Sessions?.ResumeAfterEngineStart();
                 // WPF StartStop.cs:416-422; refuses unless enabled + consent + entitled. A panic stop holds
@@ -168,7 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             _engineGen++;
             _pendingUserEngineGen = null;
-            Platform.DareHead.StopForSafety();
+            Platform.DareHead.Interrupt();
             App.Sessions?.Pause();
             CoreEngine.Stop();
         }
@@ -176,7 +176,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary><see cref="CoreEngine.StoppedHook"/>: the head half of StopEngineCore.</summary>
         internal void OnEngineStopped()
         {
-            Platform.DareHead.StopForSafety();
+            Platform.DareHead.Interrupt();
             // Direct Core stops (a remote panic) also freeze the session clock. A session's own Stop
             // has already cleared IsRunning by the time it stops the engine, so this is a no-op there.
             App.Sessions?.Pause();

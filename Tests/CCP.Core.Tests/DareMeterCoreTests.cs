@@ -120,4 +120,55 @@ public class DareMeterCoreTests
         Assert.Null(again.Reading("p"));
     }
 
+    private sealed class GatedStore : IDareMeterStore
+    {
+        public string? Text;
+        public bool Fail;
+        public readonly System.Threading.ManualResetEventSlim Entered = new(), Release = new(true);
+        private int _writes;
+        public string? Read() => Text;
+        public void Write(string text)
+        {
+            Entered.Set();
+            if (System.Threading.Interlocked.Increment(ref _writes) == 1) Release.Wait();   // only the first write stalls
+            if (Fail) throw new System.IO.IOException("disk full");
+            Text = text;
+        }
+    }
+
+    [Fact]
+    public void Overlapping_saves_never_land_an_older_snapshot_last()
+    {
+        var store = new GatedStore();
+        var m = new DareMeter(store);
+        m.Track(new[] { Bet("p", DareKind.Pics, "100") });
+        m.NotePics(1, T0.AddMinutes(1));
+        store.Release.Reset();
+        var first = System.Threading.Tasks.Task.Run(m.Save);   // holds the old snapshot inside Write
+        Assert.True(store.Entered.Wait(5000));
+        m.NotePics(4, T0.AddMinutes(1));
+        var second = System.Threading.Tasks.Task.Run(m.Save);
+        Assert.False(second.Wait(200));   // waits for the first write instead of racing it
+        store.Release.Set();
+        System.Threading.Tasks.Task.WaitAll(first, second);
+        var again = new DareMeter(store);
+        again.Track(new[] { Bet("p", DareKind.Pics, "100") });
+        Assert.Equal(5, again.Reading("p")!.Value.Count);
+    }
+
+    [Fact]
+    public void A_failed_write_keeps_the_counts_unsaved()
+    {
+        var store = new GatedStore { Fail = true };
+        var m = new DareMeter(store);
+        m.Track(new[] { Bet("p", DareKind.Pics, "100") });
+        m.NotePics(2, T0.AddMinutes(1));
+        m.Save();
+        Assert.Null(store.Text);
+        store.Fail = false;
+        m.Save();   // nothing new moved, the retry still writes
+        var again = new DareMeter(store);
+        again.Track(new[] { Bet("p", DareKind.Pics, "100") });
+        Assert.Equal(2, again.Reading("p")!.Value.Count);
+    }
 }

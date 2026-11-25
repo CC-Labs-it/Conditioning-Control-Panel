@@ -92,7 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
                 catch (Exception ex)
                 {
-                    Platform.DareHead.StopForSafety();
+                    Platform.DareHead.Interrupt();
                     Log.Error(ex, "Failed to start session");
                     _ = MessageDialog.ShowAsync(this, Loc.Get("title_error"), Loc.GetF("msg_failed_to_start_session", ex.Message));
                 }

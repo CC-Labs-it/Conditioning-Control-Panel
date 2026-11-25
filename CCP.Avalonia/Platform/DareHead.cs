@@ -40,13 +40,37 @@ internal static class DareHead
 
     private static void Kick() => Service?.Kick();
 
+    private static volatile bool _held;
+
+    /// <summary>Panic and shutdown: cancel what is on the wire and hold the service until the user starts again.</summary>
     internal static void StopForSafety()
+    {
+        if (Service != null) _held = true;   // no service, nothing to hold (and no static left latched)
+        Cancel();
+    }
+
+    /// <summary>An ordinary engine stop: cancel what is on the wire, then keep polling and reporting
+    /// (WPF keeps Dares running past a stop, App.xaml.cs:3654-3663) unless a panic holds it.</summary>
+    internal static void Interrupt()
+    {
+        Cancel();
+        if (!_held) Continue();
+    }
+
+    /// <summary>A user start lifts a panic hold.</summary>
+    internal static void Resume()
+    {
+        _held = false;
+        Continue();
+    }
+
+    private static void Cancel()
     {
         try { Service?.CancelPending(); }
         finally { try { _host?.Invalidate(); } finally { _hooks?.Suspend(); } }
     }
 
-    internal static void Resume()
+    private static void Continue()
     {
         _hooks?.Resume();
         Service?.Resume();
@@ -66,6 +90,7 @@ internal static class DareHead
                 _hooks = null;
                 Service = null;
                 _host = null;
+                _held = false;
             }
         }
     }
@@ -235,7 +260,13 @@ internal static class DareHead
             else Dispatcher.UIThread.Post(() => { if (_suspended) StopTimers(); });
             _meter.Save();
         }
-        internal void Resume() { lock (_activityGate) _suspended = false; Wake(); }
+        internal void Resume()
+        {
+            lock (_activityGate) _suspended = false;
+            // A stop hook may run off the UI thread; the sampler is a DispatcherTimer. Wake rechecks _suspended.
+            if (Dispatcher.UIThread.CheckAccess()) Wake();
+            else Dispatcher.UIThread.Post(Wake);
+        }
         public void Dispose()
         {
             Suspend();
