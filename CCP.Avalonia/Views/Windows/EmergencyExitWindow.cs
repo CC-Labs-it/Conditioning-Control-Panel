@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -150,6 +151,13 @@ internal sealed class EmergencyExitWindow : Window
         var (honorific, subject) = EmergencyExitRules.Address(id, name, mod?.Manifest?.Identity?.PetName);
         return new { id, name = string.IsNullOrWhiteSpace(name) ? id : name, honorific, subject };
     }
+    // WPF EmergencyExitHostService.cs:365: use the same asset selection rule as Intake.
+    internal static IEnumerable<string> ActiveGifs(IEnumerable<string> files, string root, IEnumerable<string>? disabledPaths)
+    {
+        var disabled = IntakeRun.DisabledAssetSet(disabledPaths);
+        return files.Where(file => IntakeRun.IsAssetActive(disabled, root, file));
+    }
+
     private static string[] Gifs()
     {
         try
@@ -158,8 +166,9 @@ internal sealed class EmergencyExitWindow : Window
             var folder = Path.Combine(root, "images");
             if (!Directory.Exists(folder)) return Array.Empty<string>();
             // WPF matches *.gif case-insensitively (Windows); Linux needs it spelled out for "PHOTO.GIF".
-            return Directory.EnumerateFiles(folder, "*.gif", new EnumerationOptions
-                    { RecurseSubdirectories = true, MatchCasing = MatchCasing.CaseInsensitive, IgnoreInaccessible = true })
+            return ActiveGifs(Directory.EnumerateFiles(folder, "*.gif", new EnumerationOptions
+                    { RecurseSubdirectories = true, MatchCasing = MatchCasing.CaseInsensitive, IgnoreInaccessible = true }),
+                    root, CoreSettings.Current.DisabledAssetPaths)
                 .OrderBy(_ => Random.Shared.Next()).Take(12)
                 .Select(f => WebAssetServer.Shared.AssetUrl(Path.GetRelativePath(root, f).Replace('\\', '/'))).ToArray();
         }
