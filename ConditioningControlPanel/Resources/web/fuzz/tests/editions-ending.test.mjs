@@ -32,7 +32,7 @@ const LOCKED_ROWS = [...CARD_IDS, ...FATE_ENDINGS].filter((id) => setOf(id) !== 
 
 test('the rule: only Go Outside is open in small, every other fate row is locked, and the cut list does not move', () => {
   assert.equal(SMALL_ENDING_SET, 'outside');
-  assert.equal(SMALL_CUT_IDS.length, 56, 'the 56 cut rows stay cut, no more');
+  assert.equal(SMALL_CUT_IDS.length, 55, 'the 55 cut rows stay cut, no more (56 until Racing Thoughts joined small, owner 2026-11-24)');
   for (const set of ALL_SETS) {
     assert.equal(Ed.endingSetOpen(set.id, small), set.id === 'outside', set.id);
     assert.equal(Ed.endingSetOpen(set.id, full), true, set.id);

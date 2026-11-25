@@ -67,3 +67,20 @@ export const SMALL_CCP_ADS = Object.freeze([
   card('s_socks', 'banner', 'The only product on this network that actually exists is the rest of this game.', 'Sorry about the socks.', 'See it exist'),
   card('s_llama', 'banner', 'The llamas are holding an Expo in the full game.', 'You could live a full and happy life without seeing it. They would notice, though.', 'Ask the llamas'),
 ]);
+
+/** The door card (lane D, owner 2026-11-24, handoff-1124/tc-small-funnel/DOORS-BRIEF.md): the in-game card the shop's
+ *  locked tile, a locked ending seed and the menu's door open before any link. Its title is the tile's approved label
+ *  (ui/shop-locked.js LOCKED_TILE_COPY.label) and its headline the wall's approved offer (SMALL_WALL_COPY.offer).
+ *  Every line below is a DRAFT (handoff-1124/tc-small-funnel/COPY-DRAFT-D.md), owner word owed. */
+export const DOOR_CARD_COPY = Object.freeze({
+  /** Under the headline. */
+  sub: 'Same game, with the parts we kept back put back in. We allow ourselves one link a run, so pick your moment.',
+  /** The link button: sends the door's nudge from this press, then the run's one link is spent. */
+  go: 'Show me the full game',
+  /** Closes the card, nothing else. */
+  back: 'Back to the game',
+  /** In place of the link button once the run has had its one link (an ad or a door). */
+  spent: 'This run has had its one link. The end of the run has a door of its own.',
+  /** The X, read aloud. Unlike the contract's X, this one works. */
+  xLabel: 'Close',
+});

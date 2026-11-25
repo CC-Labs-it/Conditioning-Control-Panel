@@ -12,6 +12,7 @@ import { fmt, money } from '../sim/format.js';
 import * as E from '../sim/economy.js';
 import { openAllowedLink } from './links.js';
 import { AD_ASK, adLinkStep } from './ads.js';
+import { linkCap, linkRecord } from './run-links.js';
 import { paletteOf } from './palette.js';
 import { earnSticker, noteLife, syncLife } from '../sim/stickers.js';
 import { slotOrder } from './dock.js';
@@ -317,13 +318,14 @@ export function makeContext(engine, scope) {
     openLink(url) {
       return openAllowedLink(url, { inPress: () => !!ui.inPress?.(), hosted: !!host.isHosted, send: (t, f) => host.send?.(t, f), win: ui.win });
     },
-    /** A real ad's link: opens a tab only while the run has opened fewer than AD_TABS_PER_RUN. False = nothing opened. */
+    /** A real ad's link: opens a tab only while the run has opened fewer than its cap (ui/run-links.js: full =
+     *  AD_TABS_PER_RUN, small = ONE link a run shared with the in-run doors). False = nothing opened. */
     openAdLink(url) {
-      const used = (engine.run.store.adtabs ||= { n: 0 });
-      const step = adLinkStep(used, CONFIG.AD_TABS_PER_RUN);
+      const used = linkRecord(engine.run), cap = linkCap();
+      const step = adLinkStep(used, cap);
       if (step === 'none') return false;
       const open = () => {
-        if (used.n >= CONFIG.AD_TABS_PER_RUN) return false;
+        if (used.n >= cap) return false;
         const ok = openAllowedLink(url, { inPress: () => !!ui.inPress?.(), hosted: !!host.isHosted, send: (t, f) => host.send?.(t, f), win: ui.win });
         if (ok) used.n += 1;
         return ok;

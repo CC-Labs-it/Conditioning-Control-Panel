@@ -32,8 +32,9 @@ import { setEdition, expoArrived, editionState, renewalAllowed, sendNudge, isSma
 import { mountSaveCarry } from './ui/save-carry.js';   // the pause card's carry to and from the account (CONTRACT.md 6.3)
 import { mountLlamaPen, herdOf } from './ui/llama-pen.js';
 import { mountTransmission } from './ui/transmission.js';
-import { endingNudge, mountPauseNudge } from './ui/nudges.js';
-import { mountLockedTile } from './ui/shop-locked.js';   // small: one greyed tile at the end of the shop   // small: the ending and pause doors to the full game   // the transmission card, the pen sign and the llama-8 card
+import { endingNudge } from './ui/nudges.js';
+import { mountLockedTile, doorOpener } from './ui/shop-locked.js';
+import { runLinks } from './ui/run-links.js';   // small: one outside link a run, ads and doors together (lane D)   // small: one greyed tile at the end of the shop   // small: the ending and pause doors to the full game   // the transmission card, the pen sign and the llama-8 card
 import { mountHomeTip } from './ui/phone.js';
 import { previewBarAllowed, devConsoleAllowed, devChord } from './ui/preview-bar-model.js';
 import { menuDue, menuRows, MENU_REUSED, MENU_SOUNDS, menuSoundFile, sideStickers, llamaReached } from './ui/menu-model.js';   // the main menu, from the second launch on
@@ -404,6 +405,9 @@ function start(init) {
         .catch((err) => { loading = false; console.error('dev console:', err); });
     }, true);
   };
+  /* small: the door card (ui/door-card.js) and the run's one outside link, shared with the ad cards (lane D) */
+  const doorLinks = runLinks(() => engine.run, ed);
+  const doorGentle = () => ui.gentle();
   const go = () => {
     bindPalette(engine, document);
     previewBar();
@@ -414,8 +418,8 @@ function start(init) {
     syncMedia();
     engine.mountAll(!!saved?.run);
     mountSaveCarry({ doc: document, win: window, cards: ui.cards, on: bridge.on, send: bridge.send, slot: saveSlotOn(ed), small: isSmall(ed), exportSave: () => serialize(run, life, extras), accept: acceptCarried, ed });
-    if (isSmall(ed)) mountLockedTile({ doc: document, win: window, send: bridge.send, ed });   // small: the one locked tile
-    if (isSmall(ed)) mountPauseNudge({ doc: document, win: window, send: bridge.send, ed });   // small: one quiet line on the pause card
+    if (isSmall(ed)) mountLockedTile({ doc: document, win: window, send: bridge.send, ed, links: doorLinks, gentle: doorGentle });   // small: the one locked tile, late, opening the door card
+    /* small: the pause card's nudge line (ui/nudges.js mountPauseNudge) is no longer mounted (lane D, owner 2026-11-24). */
     const penView = pen();   // the herd, top left, from the first second
     /* The transmission (CONTRACT.md 6.5): at 4 llamas the card, then the pen sign; in small the nudge and the llama-8 card. */
     mountTransmission({ doc: document, win: window, cards: ui.cards, on: bridge.on, send: bridge.send, llamas: () => run.herd, clock: () => run.clock, extras, save: persist, pen: penView?.el });
@@ -552,10 +556,10 @@ function start(init) {
               llamas: () => Math.max(run.herd, TRANSMISSION_AT_LLAMAS), clock: () => 0, extras, save: persist });
             if (tx.open()) menu.flash('expo'); else menu.rattle('expo');
           } else if (row.kind === 'door') {
-            /* The small edition's existing door: the pause card's line "This is the small edition." / "The full game". */
+            /* The small edition's door (lane D, owner 2026-11-24): the door card first, never a link from this press; its
+               link button sends the pause door's nudge and spends the run's one link. */
             menu.flash('expo');
-            mountPauseNudge({ doc: document, win: window, send: bridge.send, ed });
-            ui.pause();
+            doorOpener({ doc: document, win: window, send: bridge.send, ed, links: doorLinks, gentle: doorGentle })((o) => sendNudge('pause', o))();
           } else menu.rattle('expo');   // sealed
         },
       },

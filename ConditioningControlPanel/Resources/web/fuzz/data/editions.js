@@ -1,6 +1,6 @@
 /* data/editions.js - the two editions of this one game tree (owner 2026-11-22). Plain data, no imports.
  *
- *   small  the website, phones, and free accounts everywhere. No Renewal, no Llama Expo, 56 of the 316 rows never
+ *   small  the website, phones, and free accounts everywhere. No Renewal, no Llama Expo, 55 of the 316 rows never
  *          offered, hard caps on a phone. Runs of about 45 minutes after its own balance pass.
  *   full   inside the CCP desktop app and the standalone, for any subscriber. Everything.
  *
@@ -13,8 +13,9 @@ export const EDITIONS = Object.freeze(['small', 'full']);
 /** Rows the small edition never offers, by the reason they go. A save that already owns one keeps it asleep
  *  (CONTRACT.md 6.4): nothing here ever deletes. */
 export const SMALL_CUT = Object.freeze({
-  /* The arcade keeps Mini Slots, the wheel, the boxes and the golden button. */
-  arcade: Object.freeze(['toy_box', 'mini_breakout', 'mini_race', 'mini_deep', 'dispenser', 'dispenser_fast', 'dispenser_faster']),
+  /* The arcade keeps Mini Slots, the wheel, the boxes, the golden button and Racing Thoughts (owner 2026-11-24: the
+   * race mini plays in the free edition too, low-res clips; handoff-1124/tc-small-funnel/RACE-BRIEF.md). */
+  arcade: Object.freeze(['toy_box', 'mini_breakout', 'mini_deep', 'dispenser', 'dispenser_fast', 'dispenser_faster']),
   /* EMI's quiz keeps quiz, melt, nag, crowd, pbubble and onlyyes. */
   quiz: Object.freeze(['swap', 'flee', 'slider', 'shrink', 'fadeno', 'magnet', 'late', 'holdno', 'dragno', 'stackno', 'robot', 'grid', 'ttype', 'regen', 'hijack']),
   /* EMI keeps her head, petting, chat, the hat and the nap. */
