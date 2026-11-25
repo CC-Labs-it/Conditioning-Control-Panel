@@ -4,10 +4,11 @@ using System.Linq;
 using ConditioningControlPanel.Controls.Preview;
 using ConditioningControlPanel.Controls.Preview.Scenes;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Tests;
 using SkiaSharp;
 using Xunit;
 
-namespace ConditioningControlPanel.Tests;
+namespace CCP.Avalonia.Tests;
 
 /// <summary>
 /// Live Preview lane P1 (overnight sweep 2026-11-24): the Mandatory Video, Lock Card and Wallpaper scenes.
