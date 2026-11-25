@@ -171,8 +171,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Post(RaceInitMessage());
             try
             {
-                var server = _server;
-                var m = (_library ??= new(() => server == null ? new() : GameMediaManifest.BuildLocal(server.AssetUrl))).Value;
+                // Root-relative like DtRH (WebAssetServer.AssetPath): hostMedia.js treats http://127.0.0.1 as remote, never drawn by WebGL.
+                var m = (_library ??= new(() => _server == null ? new() : GameMediaManifest.BuildLocal(ConditioningControlPanel.Avalonia.Platform.WebAssetServer.AssetPath))).Value;
                 Post(GameMediaManifest.Frame(m));
                 var favorites = DtrhAssetStatsStore.TopAssets(12);
                 if (favorites.Count > 0) Post(new { type = "favorites", names = favorites });
