@@ -2,10 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Threading;
 using Avalonia.Threading;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.Sparkles.Claims;
 using Newtonsoft.Json.Linq;
 using Xunit;
 
@@ -107,6 +112,15 @@ public sealed partial class GameWindowTests
     public void Arcademy_ClassAndCounterRepliesUseHostStores() => Run((_, _) =>
     {
         var s = CoreSettings.Current; var oldOffline = s.OfflineMode; var oldXp = CoreProgression.AddXPProvider;
+        var oldSparkles = SparklesHead.Service;
+        // The window's store writes the shared arcademy_meta.json; start clean and put it back after.
+        var metaPath = Path.Combine(CorePaths.UserData, "arcademy_meta.json");
+        var metaBytes = File.Exists(metaPath) ? File.ReadAllBytes(metaPath) : null;
+        File.Delete(metaPath);
+        var wire = new RewardWire();
+        wire.Reply.SetResult(new(HttpStatusCode.OK) { Content = new StringContent("{ok:true,receipt:{credited:1,result:{kind:'medal',medal:'silver'}}}") });
+        using var http = new HttpClient(wire);
+        SparklesHead.Service = new SparklesClaimService(http, () => ("account", "test-token"), "http://localhost");
         var w = new GameWindow(GameWindow.Games["arcademy"]);
         var frames = new List<JObject>(); w.Posted += json => frames.Add(JObject.Parse(json));
         var awards = new List<double>();
@@ -116,7 +130,14 @@ public sealed partial class GameWindowTests
             string key = "test_" + Guid.NewGuid().ToString("N");
             var start = new JObject { ["type"] = "class-started", ["gameKey"] = key };
             var end = new JObject { ["type"] = "class-ended", ["gameKey"] = key, ["gradeTier"] = 1, ["grade"] = "A" };
-            w.HandleMessage(start.ToString()); w.HandleMessage(end.ToString()); w.HandleMessage(end.ToString());
+            w.HandleMessage(start.ToString()); w.HandleMessage(end.ToString());
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (!w.SparklesPending.IsCompleted && DateTime.UtcNow < deadline) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(1); }
+            Assert.Equal(1, wire.Calls);
+            Assert.Equal("arcademy", (string?)wire.Body!["game"]);
+            Assert.Equal("silver", (string?)wire.Body["result"]!["medal"]);
+            Assert.Equal("A", (string?)wire.Body["detail"]?["grade"]);
+            w.HandleMessage(end.ToString());
             Assert.Equal(new[] { 50d }, awards);
             var payouts = frames.Where(f => (string?)f["type"] == "payout-result").ToArray();
             Assert.Equal(2, payouts.Length); Assert.Equal(50, (double?)payouts[0]["xp"]); Assert.Equal(0, (double?)payouts[1]["xp"]);
@@ -139,6 +160,20 @@ public sealed partial class GameWindowTests
             w.HandleMessage("{\"type\":\"prize-buy\",\"sku\":\"id_frame_gold\"}");
             Assert.False((bool?)frames.Last()["ok"]);
         }
-        finally { w.Close(); s.OfflineMode = oldOffline; CoreProgression.AddXPProvider = oldXp; }
+        finally
+        {
+            w.Close(); s.OfflineMode = oldOffline; CoreProgression.AddXPProvider = oldXp; SparklesHead.Service = oldSparkles;
+            if (metaBytes == null) File.Delete(metaPath); else File.WriteAllBytes(metaPath, metaBytes);
+        }
     });
+
+    [Fact]
+    public void Arcademy_BankedPayoutReadsTheServerTill()
+    {
+        var till = GameWindow.ArcademyTill(JObject.Parse(
+            "{tickets:-3,ticketBase:-1,ticketMult:0,payday:{mult:0},tokenMinted:true,lever:'honors',lateSlipUsed:false}"), "standard", true);
+        Assert.Equal((0, 0, 1d, 1, true, "honors", false), (till.Tickets, till.Base, till.Mult, till.Payday, till.Token, till.Lever, till.Slip));
+        till = GameWindow.ArcademyTill(JObject.Parse("{tickets:12,ticketBase:8,ticketMult:1.5,payday:{mult:2},lever:' '}"), "extra", true);
+        Assert.Equal((12, 8, 1.5, 2, "extra", true), (till.Tickets, till.Base, till.Mult, till.Payday, till.Lever, till.Slip));
+    }
 }

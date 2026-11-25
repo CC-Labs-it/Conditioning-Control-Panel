@@ -3,7 +3,9 @@ using System;
 using System.Globalization;
 using Avalonia.Threading;
 using ConditioningControlPanel.Services.Arcademy;
+using ConditioningControlPanel.Services.Sparkles.Claims;
 using Newtonsoft.Json.Linq;
+using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Games;
 
@@ -11,6 +13,7 @@ internal sealed partial class GameWindow
 {
     private string _arcademyGame = "", _arcademyDay = "", _arcademyLever = "standard";
     private bool _arcademyEndless;
+    private DateTime _arcademyStartedUtc; // the Sparkles claim's class length (WPF ArcademyHostService.cs:85)
 
     private static string ArcademyText(JToken? value) => value?.Type == JTokenType.String ? ((string?)value ?? "").Trim() : "";
     private static string ArcademyDay(JToken? value)
@@ -24,6 +27,7 @@ internal sealed partial class GameWindow
 
     private void ArcademyClassStarted(JObject frame)
     {
+        _arcademyStartedUtc = DateTime.UtcNow;
         _arcademyGame = ArcademyKey(frame["gameKey"]);
         _arcademyDay = ArcademyDay(frame["dayUtc"]);
         _arcademyEndless = frame["endless"]?.Type == JTokenType.Boolean && (bool)frame["endless"]!;
@@ -83,6 +87,18 @@ internal sealed partial class GameWindow
         ArcademyWalletResult(sku, purchase.Ok, purchase.Reason);
     }
 
+    // WPF TillFromEconomy (ArcademyHostService.cs:4052-4064) and SettleMint's server late slip (:4023).
+    internal static (int Tickets, int Base, double Mult, int Payday, bool Token, string Lever, bool Slip, JObject Wallet)
+        ArcademyTill(JObject economy, string lever, bool slip)
+    {
+        double mult = (double?)economy["ticketMult"] ?? 1;
+        var serverLever = (string?)economy["lever"];
+        return (Math.Max(0, (int?)economy["tickets"] ?? 0), Math.Max(0, (int?)economy["ticketBase"] ?? 0), mult > 0 ? mult : 1,
+            Math.Max(1, (int?)economy["payday"]?["mult"] ?? 1), (bool?)economy["tokenMinted"] ?? false,
+            string.IsNullOrWhiteSpace(serverLever) ? lever : serverLever, (bool?)economy["lateSlipUsed"] ?? slip,
+            ArcademyEconomy.EnsureShape(economy["wallet"] as JObject));
+    }
+
     private void ArcademyClassEnded(JObject frame)
     {
         var store = _arcademyMeta;
@@ -107,6 +123,11 @@ internal sealed partial class GameWindow
         if (grade == "S+" && lever != "honors") grade = "S";
         double multiplier = grade switch { "S+" => 1.6, "S" => 1.5, "A" => 1.25, "B" or "pass" => 1, _ => .6 };
         if (multiplier == .6) grade = "C";
+        // WPF ArcademyHostService.cs:3770-3778: every graded class claims; no class-started means no length.
+        var length = _arcademyStartedUtc == default ? TimeSpan.Zero : DateTime.UtcNow - _arcademyStartedUtc;
+        _arcademyStartedUtc = default;
+        DeliverSparkles(SparklesGameEnd.Claim(Platform.SparklesHead.Service, "arcademy", "solo",
+            SparklesResult.ForMedal(SparklesGameEnd.ArcademyMedal(grade)), length, new JObject { ["grade"] = grade }));
         var token = frame["flavorXp"];
         double flavor;
         try
@@ -133,29 +154,29 @@ internal sealed partial class GameWindow
 
         void Payout(JObject? economy)
         {
-            int tickets, ticketBase, payday; double mult; bool tokenMinted; JObject wallet;
-            if (economy != null)
+            try
             {
-                tickets = (int?)economy["tickets"] ?? 0; ticketBase = (int?)economy["ticketBase"] ?? 0;
-                mult = (double?)economy["ticketMult"] ?? 1; payday = (int?)economy["payday"]?["mult"] ?? 1;
-                tokenMinted = (bool?)economy["tokenMinted"] ?? false; wallet = ArcademyEconomy.EnsureShape(economy["wallet"] as JObject);
+                int tickets, ticketBase, payday; double mult; bool tokenMinted, slip = slips > 0; JObject wallet; string paidLever = lever;
+                if (economy != null)
+                    (tickets, ticketBase, mult, payday, tokenMinted, paidLever, slip, wallet) = ArcademyTill(economy, lever, slip);
+                else
+                {
+                    store.TryUnlockExtraCredit(grade);
+                    var prior = store.NoteWalletPlay(local, key);
+                    payday = ArcademyEconomy.PaydayMultFor(ArcademyEconomy.PickPayday(DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), store.EnrolledGameKeys()), key);
+                    var sum = ArcademyEconomy.ComputeTickets(grade, prior, streak, payday, lever);
+                    tickets = sum.Tickets; ticketBase = sum.Base; mult = sum.Mult;
+                    store.EarnTickets(tickets);
+                    tokenMinted = ArcademyEconomy.IsTokenGrade(grade, zen) && store.TryClaimTokenDay(local);
+                    wallet = store.WalletSnapshot();
+                }
+                Post(store.SnapshotMessage());
+                Post(new { type = "payout-result", gameKey = key, xp, levelUp, streak, perfectAttendance = perfect,
+                    classesToday = classes, retake = !first, dareXp = darePaid ? 15 : 0, grade,
+                    tickets, ticketBase, ticketMult = mult, tokenMinted, payday, lever = paidLever, lateSlipUsed = slip,
+                    wallet = ArcademyEconomy.BalanceJson(wallet) });
             }
-            else
-            {
-                store.TryUnlockExtraCredit(grade);
-                var prior = store.NoteWalletPlay(local, key);
-                payday = ArcademyEconomy.PaydayMultFor(ArcademyEconomy.PickPayday(DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), store.EnrolledGameKeys()), key);
-                var sum = ArcademyEconomy.ComputeTickets(grade, prior, streak, payday, lever);
-                tickets = sum.Tickets; ticketBase = sum.Base; mult = sum.Mult;
-                store.EarnTickets(tickets);
-                tokenMinted = ArcademyEconomy.IsTokenGrade(grade, zen) && store.TryClaimTokenDay(local);
-                wallet = store.WalletSnapshot();
-            }
-            Post(store.SnapshotMessage());
-            Post(new { type = "payout-result", gameKey = key, xp, levelUp, streak, perfectAttendance = perfect,
-                classesToday = classes, retake = !first, dareXp = darePaid ? 15 : 0, grade,
-                tickets, ticketBase, ticketMult = mult, tokenMinted, payday, lever, lateSlipUsed = slips > 0,
-                wallet = ArcademyEconomy.BalanceJson(wallet) });
+            catch (Exception ex) { Log.Warning("[Arcademy] payout: {E}", ex.Message); }
         }
         if (!ArcademyWalletSyncService.DoorOpen) { Payout(null); return; }
         var request = ArcademyWalletSyncService.BuildMintFrame(key, grade, zen, streak, local, lever, slips, day);

@@ -73,6 +73,17 @@ public class SparklesGameEndTests
         Assert.Equal(medal, SparklesGameEnd.RatioMedal(score, cap));
 
     [Theory]
+    [InlineData("S+", "gold")]
+    [InlineData(" s ", "gold")]
+    [InlineData("A", "silver")]
+    [InlineData("B", "bronze")]
+    [InlineData("C", "none")]
+    [InlineData("pass", "none")]
+    [InlineData(null, "none")]
+    public void ArcademyMedalFollowsTheGrade(string? grade, string medal) =>
+        Assert.Equal(medal, SparklesGameEnd.ArcademyMedal(grade));
+
+    [Theory]
     [InlineData(95, "gold")]
     [InlineData(70, "silver")]
     [InlineData(50, "bronze")]
