@@ -44,7 +44,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void UpdateMonitorDim()
         {
-            var anchor = _tutorialMainWindow ?? _targetWindow;
+            // A hidden shell (tray, launcher) cannot own: Show(owner) throws on a non-visible owner.
+            var anchor = _tutorialMainWindow is { IsVisible: true } shell ? shell : _targetWindow;
             var host = _targetWindow;
             if (anchor == null || host == null) { RemoveMonitorDim(); return; }
             // WPF GetMainWindowMonitorBoundsDip: the monitor MainWindow is on.

@@ -54,7 +54,7 @@ public class TutorialMonitorDimTests
         AssertLeavesClear(rects, new PixelRect(0, 0, 2560, 1440), new PixelRect(80, 100, 800, 600));
     }
 
-    private static Task WithDialogTour(Action<Window, Window, TutorialOverlay> check) => AvaloniaTestDispatcher.RunAsync(() =>
+    private static Task WithDialogTour(Action<Window, Window, TutorialOverlay> check, bool hideMain = false) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         var previousStore = TutorialService.CompletionStore;
         var previousQuery = ScreenList.QueryOverride;
@@ -77,6 +77,7 @@ public class TutorialMonitorDimTests
             previousWindow = step.TargetWindowTypeName;
             step.TargetWindowTypeName = null;
             main.Show();
+            if (hideMain) main.Hide();   // shell in the tray, editor opened without an owner
             dialog.Show();
             overlay = new TutorialOverlay(dialog, main);
             overlay.Show();
@@ -117,6 +118,20 @@ public class TutorialMonitorDimTests
         AssertLeavesClear(overlay.MonitorDimRegion!, new PixelRect(0, 0, 1920, 1080), HostRect(dialog));
         Assert.True(dialog.IsVisible);
     });
+
+    [Fact]
+    public Task HiddenShellAnchorsTheSatelliteOnTheDialog() => WithDialogTour((main, dialog, overlay) =>
+    {
+        var satellite = overlay.MonitorDimWindow;
+        Assert.NotNull(satellite);
+        Assert.True(satellite!.IsVisible);
+        Assert.Same(dialog, satellite.Owner);
+        AssertLeavesClear(overlay.MonitorDimRegion!, new PixelRect(0, 0, 1920, 1080), HostRect(dialog));
+        dialog.Position = new PixelPoint(900, 500);   // move handler re-runs UpdateMonitorDim, must not throw
+        Dispatcher.UIThread.RunJobs();
+        AssertLeavesClear(overlay.MonitorDimRegion!, new PixelRect(0, 0, 1920, 1080), HostRect(dialog));
+        Assert.False(main.IsVisible);
+    }, hideMain: true);
 
     [Fact]
     public Task MovingTheDialogMovesTheClearRect() => WithDialogTour((main, dialog, overlay) =>
