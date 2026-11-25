@@ -1415,6 +1415,7 @@
 
   <!-- WPF TabButton/TabButtonActive, reused from the existing quest view port. -->
   <ControlTheme x:Key="TabButton" TargetType="Button">
+    <Setter Property="FocusAdorner" Value="{x:Null}"/>
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="Foreground" Value="{DynamicResource PinkBrush}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
@@ -1443,6 +1444,7 @@
   </ControlTheme>
 
   <ControlTheme x:Key="TabButtonActive" TargetType="Button">
+    <Setter Property="FocusAdorner" Value="{x:Null}"/>
     <Setter Property="Background" Value="{DynamicResource PinkBrush}"/>
     <Setter Property="Foreground" Value="White"/>
     <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
