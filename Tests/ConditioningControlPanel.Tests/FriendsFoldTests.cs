@@ -242,7 +242,7 @@ public partial class FriendsDrawerTests
     [Fact]
     public void Every_fold_string_is_in_all_ten_languages()
     {
-        var dir = System.IO.Path.Combine(RepoRoot(), "ConditioningControlPanel", "Localization", "Languages");
+        var dir = SourceRoots.LanguagesDirectory;
         foreach (var lang in new[] { "en", "de", "es", "fr", "it", "ja", "ko", "pt-BR", "ru", "zh-CN" })
         {
             var json = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(System.IO.Path.Combine(dir, lang + ".json")));

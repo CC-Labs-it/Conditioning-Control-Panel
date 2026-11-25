@@ -527,8 +527,7 @@ public class OversizeNoticeTests : IDisposable
     [InlineData(ConditioningControlPanel.Models.AiProviderType.OpenAiCompatible)]
     public void OffTheCloud_AnOversizePromptRaisesNoNotice(ConditioningControlPanel.Models.AiProviderType provider)
     {
-        var dispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
-        PromptAssembler.NoticeDispatcherForTests = () => dispatcher;
+        PromptAssembler.NoticeSurface = () => _ => { };
         PromptAssembler.ProviderForTests = () => provider;
 
         PromptAssembler.Compose(OverCapPrefix(), PromptAssembler.TailHeader + "\nAnswer in one short bubble.",
@@ -558,17 +557,7 @@ public class OversizeNoticeTests : IDisposable
         }
     }
 
-    private static string SourceLanguagesDir()
-    {
-        var dir = AppContext.BaseDirectory;
-        for (int i = 0; i < 10 && !string.IsNullOrEmpty(dir); i++)
-        {
-            var candidate = Path.Combine(dir, "ConditioningControlPanel", "Localization", "Languages");
-            if (Directory.Exists(candidate)) return candidate;
-            dir = Path.GetDirectoryName(dir);
-        }
-        throw new DirectoryNotFoundException("Localization/Languages not found from " + AppContext.BaseDirectory);
-    }
+    private static string SourceLanguagesDir() => SourceRoots.LanguagesDirectory;
 
     private static string OverCapPrefix() =>
         SafetyComposer.Preamble

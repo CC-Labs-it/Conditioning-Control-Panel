@@ -71,8 +71,7 @@ public class LockdownSessionCreditTests
     [Fact]
     public void QuestService_wires_both_paths_through_the_guard()
     {
-        var src = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services",
-            "Progression", "QuestService.cs"));
+        var src = SourceRoots.ReadProductFile("Services", "Progression", "QuestService.cs");
 
         var session = Member(src, "public void TrackSessionCompleted()");
         Assert.Contains("_lockdownSession.SessionCredited(", session);

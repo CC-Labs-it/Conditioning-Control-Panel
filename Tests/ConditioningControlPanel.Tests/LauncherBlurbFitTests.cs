@@ -54,7 +54,7 @@ public class LauncherBlurbFitTests
 
     private static string Read(string lang, string key)
     {
-        var path = Path.Combine(RepoRoot(), "ConditioningControlPanel", "Localization", "Languages", lang + ".json");
+        var path = Path.Combine(SourceRoots.LanguagesDirectory, lang + ".json");
         using var doc = JsonDocument.Parse(File.ReadAllText(path));
         Assert.True(doc.RootElement.TryGetProperty(key, out var v), $"{lang}.json is missing {key}");
         return v.GetString() ?? "";

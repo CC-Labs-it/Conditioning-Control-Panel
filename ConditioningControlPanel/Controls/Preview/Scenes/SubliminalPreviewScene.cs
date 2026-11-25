@@ -60,7 +60,7 @@ namespace ConditioningControlPanel.Controls.Preview.Scenes
             _look = look ?? (() => (WornWordStyle.Current, WornWordStyle.Motion));
             _rng = rng ?? new Random();
             _engine.Dispose();
-            _layer = new SubliminalLayer(_engine);
+            _layer = new SubliminalLayer(_engine.Wake);
         }
 
         public string[] Settings => Watched;

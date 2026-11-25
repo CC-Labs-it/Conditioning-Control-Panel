@@ -637,7 +637,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
                 // shown after it is the old conversation's voice: it never reaches the prompt.
                 if (ChatSession.IssuedUnderAnotherStamp(IssuedLinesSnapshot(), text, LineStamp()))
                 {
-                    App.Logger?.Debug("CompanionBrain: tube line from before a fence kept out of history");
+                    Log.Debug("CompanionBrain: tube line from before a fence kept out of history");
                     return;
                 }
                 Session.Append(TurnKind.TubeLine, text!.Trim());

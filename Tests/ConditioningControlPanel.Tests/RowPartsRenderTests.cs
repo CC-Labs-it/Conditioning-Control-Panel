@@ -18,6 +18,7 @@ namespace ConditioningControlPanel.Tests;
 /// screen. With env CCP_ROWS_DUMP=&lt;dir&gt; the sample saves row-samples.png at 144 dpi: six rows in
 /// a pink (inside a real OptionSection), a green and a blue hue, one row OFF.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class RowPartsRenderTests
 {
     private static readonly Color Pink = Color.FromRgb(0xFF, 0x69, 0xB4);

@@ -1,4 +1,5 @@
 using System;
+using Serilog;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -57,7 +58,7 @@ namespace ConditioningControlPanel.Services
                         if (totalBytes > 0 && resumeFrom > totalBytes)
                         {
                             // Longer than advertised — the asset changed under us. Start clean.
-                            App.Logger?.Warning("{Tag}: partial for {Pack} is larger than the manifest size — restarting",
+                            Log.Warning("{Tag}: partial for {Pack} is larger than the manifest size — restarting",
                                 _tag, id);
                             TryDeleteFile(partialPath);
                             resumeFrom = 0;
@@ -70,7 +71,7 @@ namespace ConditioningControlPanel.Services
                         }
                         else if (resumeFrom > 0)
                         {
-                            App.Logger?.Information("{Tag}: resuming {Pack} from byte {Byte} (attempt {Attempt})",
+                            Log.Information("{Tag}: resuming {Pack} from byte {Byte} (attempt {Attempt})",
                                 _tag, id, resumeFrom, attempt);
                         }
                     }
@@ -88,12 +89,12 @@ namespace ConditioningControlPanel.Services
                     if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
                     {
                         // The server thinks we already hold the whole file. Verify upstream.
-                        App.Logger?.Information("{Tag}: server reports {Pack} range complete", _tag, id);
+                        Log.Information("{Tag}: server reports {Pack} range complete", _tag, id);
                         return true;
                     }
                     if (response.StatusCode == HttpStatusCode.NotFound)
                     {
-                        App.Logger?.Warning("{Tag}: pack asset 404 for {Pack} at {Host}", _tag, id, Logging.UrlLog.Host(url));
+                        Log.Warning("{Tag}: pack asset 404 for {Pack} at {Host}", _tag, id, Logging.UrlLog.Host(url));
                         return false;
                     }
                     if (response.StatusCode != HttpStatusCode.OK && response.StatusCode != HttpStatusCode.PartialContent)
@@ -105,7 +106,7 @@ namespace ConditioningControlPanel.Services
                     var serverHonouredRange = response.StatusCode == HttpStatusCode.PartialContent;
                     if (resumeFrom > 0 && !serverHonouredRange)
                     {
-                        App.Logger?.Information("{Tag}: server ignored Range for {Pack} — restarting download", _tag, id);
+                        Log.Information("{Tag}: server ignored Range for {Pack} — restarting download", _tag, id);
                         resumeFrom = 0;
                     }
 
@@ -150,7 +151,7 @@ namespace ConditioningControlPanel.Services
                     }
 
                     report?.Invoke(100, finalSize, totalBytes > 0 ? totalBytes : finalSize);
-                    App.Logger?.Information("{Tag}: downloaded {Pack} ({Bytes} bytes)", _tag, id, finalSize);
+                    Log.Information("{Tag}: downloaded {Pack} ({Bytes} bytes)", _tag, id, finalSize);
                     return true;
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -161,7 +162,7 @@ namespace ConditioningControlPanel.Services
                                            && (ex is HttpRequestException || ex is TaskCanceledException || ex is IOException))
                 {
                     var currentSize = File.Exists(partialPath) ? new FileInfo(partialPath).Length : 0;
-                    App.Logger?.Warning(
+                    Log.Warning(
                         "{Tag}: {Pack} attempt {Attempt}/{Max} failed at {Bytes} bytes: {Error}",
                         _tag, id, attempt, _maxAttempts, currentSize, ex.Message);
 
@@ -171,12 +172,12 @@ namespace ConditioningControlPanel.Services
                 }
                 catch (Exception ex)
                 {
-                    App.Logger?.Error(ex, "{Tag}: {Pack} download failed permanently", _tag, id);
+                    Log.Error(ex, "{Tag}: {Pack} download failed permanently", _tag, id);
                     return false;
                 }
             }
 
-            App.Logger?.Warning("{Tag}: {Pack} exhausted {Max} download attempts", _tag, id, _maxAttempts);
+            Log.Warning("{Tag}: {Pack} exhausted {Max} download attempts", _tag, id, _maxAttempts);
             return false;
         }
 

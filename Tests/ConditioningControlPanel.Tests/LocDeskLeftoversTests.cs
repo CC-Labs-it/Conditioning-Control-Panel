@@ -31,7 +31,7 @@ public class LocDeskLeftoversTests
     [Fact]
     public void The_desk_run_keys_are_translated_in_every_language()
     {
-        var langDir = Path.Combine(Repo(), "ConditioningControlPanel", "Localization", "Languages");
+        var langDir = SourceRoots.LanguagesDirectory;
         using var en = JsonDocument.Parse(File.ReadAllText(Path.Combine(langDir, "en.json")));
         foreach (var file in Directory.GetFiles(langDir, "*.json").Where(f => Path.GetFileName(f) != "en.json"))
         {

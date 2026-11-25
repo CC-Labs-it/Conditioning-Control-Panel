@@ -1,4 +1,5 @@
 using System;
+using Serilog;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -75,7 +76,7 @@ namespace ConditioningControlPanel.Services.AIService
 
             if (!string.IsNullOrEmpty(endpointKey) && SmallEndpoints.TryAdd(endpointKey, 0))
             {
-                App.Logger?.Warning(
+                Log.Warning(
                     "[AI-PROMPT] own endpoint refused the request for context size (HTTP {Status}); history fits ~{Budget} real tokens for the rest of this session",
                     status, PromptAssembler.ContextFitTokenBudget);
             }

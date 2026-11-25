@@ -19,7 +19,7 @@ public class RowLabelColonTests
             dir = Path.GetDirectoryName(dir);
         Assert.NotNull(dir);
         var app = Path.Combine(dir!, "ConditioningControlPanel");
-        var en = JObject.Parse(File.ReadAllText(Path.Combine(app, "Localization", "Languages", "en.json")));
+        var en = JObject.Parse(File.ReadAllText(Path.Combine(SourceRoots.LanguagesDirectory, "en.json")));
         var rowLabel = new Regex("<rows:RowLabel[^>]*Text=\"\\{loc:Str ([a-z0-9_]+)\\}\"");
         var bad = Directory.EnumerateFiles(Path.Combine(app, "Features"), "*.xaml", SearchOption.AllDirectories)
             .SelectMany(f => rowLabel.Matches(File.ReadAllText(f)).Select(m => (File: Path.GetFileName(f), Key: m.Groups[1].Value)))

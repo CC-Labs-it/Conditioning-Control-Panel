@@ -6,13 +6,13 @@ namespace ConditioningControlPanel.Services.Safety;
 /// Live reads of the Accessibility "Limit pink filter to" switch (rules in CCP.Core
 /// <see cref="PinkComfort"/>). The heads clip where the tint is painted: the compositor's
 /// <c>PinkTintLayer</c>, the legacy tint windows in OverlayService and the V2 fog in
-/// <c>SteamLayer</c>. No App.Settings (tests, early start): the limit reads as off.
+/// <c>SteamLayer</c>. No settings service (tests, early start): the limit reads as off.
 /// </summary>
 public static class PinkComfortLimit
 {
-    public static bool On => App.Settings?.Current?.PinkComfortLimitOn == true;
+    public static bool On => CoreSettings.Service?.Current?.PinkComfortLimitOn == true;
 
-    public static int Pct => PinkComfort.ClampPct(App.Settings?.Current?.PinkComfortLimitPct ?? PinkComfort.DefaultPct);
+    public static int Pct => PinkComfort.ClampPct(CoreSettings.Service?.Current?.PinkComfortLimitPct ?? PinkComfort.DefaultPct);
 
     /// <summary>The highest opacity (0..1) the tint may paint right now; 1 with the limit off.</summary>
     public static double Cap => PinkComfort.Cap(On, Pct);

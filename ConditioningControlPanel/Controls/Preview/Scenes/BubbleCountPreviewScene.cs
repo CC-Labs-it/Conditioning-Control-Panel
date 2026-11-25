@@ -65,7 +65,7 @@ namespace ConditioningControlPanel.Controls.Preview.Scenes
             _rng = rng ?? new Random();
             _engine.Dispose();
             _layer = new BubbleLayer(_engine);
-            _fx = new ChaosFxLayer(_engine);
+            _fx = new ChaosFxLayer(_engine.Wake);
         }
 
         public string[] Settings => Watched;

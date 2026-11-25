@@ -148,7 +148,7 @@ namespace ConditioningControlPanel.Services.AIService
         // prompt as history (CompanionBrain.NoteTubeLine).
         private static async Task<string?> Stamped(Func<Task<string?>> call)
         {
-            var brain = App.Brain;
+            var brain = BrainProvider?.Invoke();
             var stamp = brain?.LineStamp();
             var text = await call().ConfigureAwait(false);
             if (brain != null && stamp != null) brain.NoteIssuedLine(text, stamp);
@@ -157,7 +157,7 @@ namespace ConditioningControlPanel.Services.AIService
 
         private static async Task<AiReplyResult> Stamped(Func<Task<AiReplyResult>> call)
         {
-            var brain = App.Brain;
+            var brain = BrainProvider?.Invoke();
             var stamp = brain?.LineStamp();
             var result = await call().ConfigureAwait(false);
             if (brain != null && stamp != null && result != null && result.IsAiGenerated)

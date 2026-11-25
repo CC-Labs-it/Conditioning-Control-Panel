@@ -45,13 +45,7 @@ public class QuestVideoCopyTests
     [Fact]
     public void The_english_copy_names_every_player_that_feeds_the_counter()
     {
-        var dir = AppContext.BaseDirectory;
-        string? en = null;
-        for (var d = new DirectoryInfo(dir); d != null && en == null; d = d.Parent)
-        {
-            var p = Path.Combine(d.FullName, "ConditioningControlPanel", "Localization", "Languages", "en.json");
-            if (File.Exists(p)) en = p;
-        }
+        string? en = Path.Combine(SourceRoots.LanguagesDirectory, "en.json");
         Assert.NotNull(en);
         var full = (string?)JObject.Parse(File.ReadAllText(en!))[QuestVideoCopy.FullKey];
         Assert.NotNull(full);

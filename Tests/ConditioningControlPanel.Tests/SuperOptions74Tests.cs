@@ -329,7 +329,7 @@ public class SuperOptions74Tests
     [Fact]
     public void Every_new_string_is_in_the_ten_languages()
     {
-        var dir = Path.Combine(Root(), "Localization", "Languages");
+        var dir = SourceRoots.LanguagesDirectory;
         var files = Directory.GetFiles(dir, "*.json");
         Assert.Equal(10, files.Length);
         var keys = new[] { "super_pool_smallest", "tooltip_super_pool_smallest", "super_pool_restless", "tooltip_super_pool_restless",

@@ -138,7 +138,7 @@ public class ResumableDownloadTests : IDisposable
         while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Services", "Content")))
             dir = dir.Parent;
         Assert.NotNull(dir);
-        var src = File.ReadAllText(Path.Combine(dir!.FullName, "ConditioningControlPanel", "Services", "Content", "ReleaseContentService.cs"));
+        var src = SourceRoots.ReadProductFile("Services", "Content", "ReleaseContentService.cs");
         Assert.Contains("new ResumableDownload(_httpClient, \"ReleaseContentService\", MaxDownloadAttempts)", src);
         Assert.Contains("ResumableDownload.Sha256Async(path, ct)", src);
     }

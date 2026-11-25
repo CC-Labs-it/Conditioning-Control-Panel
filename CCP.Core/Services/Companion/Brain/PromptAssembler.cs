@@ -684,7 +684,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             {
                 return ProviderForTests != null
                     ? ProviderForTests()
-                    : App.Settings?.Current?.CompanionPrompt?.AiProvider ?? ConditioningControlPanel.Models.AiProviderType.Cloud;
+                    : CoreSettings.Service?.Current?.CompanionPrompt?.AiProvider ?? ConditioningControlPanel.Models.AiProviderType.Cloud;
             }
             catch { return ConditioningControlPanel.Models.AiProviderType.Cloud; }
         }

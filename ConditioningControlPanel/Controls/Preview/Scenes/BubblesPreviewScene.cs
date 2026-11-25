@@ -5,6 +5,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Compositor;
 using ConditioningControlPanel.Services.Prizes;
+using SpiralInPath = ConditioningControlPanel.Services.BubbleSpiralPath;
 using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Services.Super;
 using ConditioningControlPanel.SuperCore;
@@ -81,7 +82,7 @@ namespace ConditioningControlPanel.Controls.Preview.Scenes
             // Draw lists stepped by the preview host, never by a second compositor host (FirstShowEffects).
             _engine.Dispose();
             _layer = new BubbleLayer(_engine);
-            _fx = new ChaosFxLayer(_engine);
+            _fx = new ChaosFxLayer(_engine.Wake);
         }
 
         public string[] Settings => Watched;

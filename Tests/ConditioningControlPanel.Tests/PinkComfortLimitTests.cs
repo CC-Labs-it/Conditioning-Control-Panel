@@ -154,7 +154,7 @@ public class PinkComfortLimitTests
     [Fact]
     public void The_compositor_tint_clips_where_it_paints()
     {
-        var src = File.ReadAllText(Path.Combine(AppRoot(), "Services", "Compositor", "PinkTintLayer.cs"));
+        var src = SourceRoots.ReadProductFile("Services", "Compositor", "PinkTintLayer.cs");
         Assert.Contains("double o = Safety.PinkComfortLimit.Apply(_opacity) * Super.SuperStepAside.Ease(_veil);", src);
         // A moved limit repaints a steady (dirty-gated) tint, and Steam reads the clipped look.
         Assert.Contains("if (cap != _paintedCap) { _paintedCap = cap; _dirty = true; }", src);
@@ -183,7 +183,7 @@ public class PinkComfortLimitTests
     [Fact]
     public void Every_limit_string_is_in_the_ten_languages()
     {
-        var dir = Path.Combine(AppRoot(), "Localization", "Languages");
+        var dir = SourceRoots.LanguagesDirectory;
         var files = Directory.GetFiles(dir, "*.json");
         Assert.Equal(10, files.Length);
         var keys = new[] { "set2_accessibility_header", "setting_pink_comfort_limit", "setting_pink_comfort_max",

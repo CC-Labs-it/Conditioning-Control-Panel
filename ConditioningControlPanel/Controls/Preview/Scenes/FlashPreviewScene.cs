@@ -292,7 +292,7 @@ namespace ConditioningControlPanel.Controls.Preview.Scenes
             if (s.FlashAvoidCenter && _screen.Width > 0)
             {
                 double k = VirtualMonitorWidth / _screen.Width;
-                if (FlashService.TryPickAvoidCenterPointAdaptive(VirtualMonitorWidth, (int)(bandH * k), (int)(w * k), (int)(h * k),
+                if (FlashPlacement.TryPickAvoidCenterPointAdaptive(VirtualMonitorWidth, (int)(bandH * k), (int)(w * k), (int)(h * k),
                         s.FlashCenterExclusionPercent, _rng, out int vx, out int vy, out _))
                     return ((float)(_screen.Left + vx / k), (float)(_band.Top + vy / k));
             }
@@ -307,7 +307,7 @@ namespace ConditioningControlPanel.Controls.Preview.Scenes
             var s = S;
             double k = VirtualMonitorWidth / Math.Max(1, _screen.Width);
             int pct = Math.Clamp(s.FlashCenterExclusionPercent, 5, 60);
-            if (w > 0 && FlashService.TryPickAvoidCenterPointAdaptive(VirtualMonitorWidth, (int)(_band.Height * k), (int)(w * k), (int)(h * k),
+            if (w > 0 && FlashPlacement.TryPickAvoidCenterPointAdaptive(VirtualMonitorWidth, (int)(_band.Height * k), (int)(w * k), (int)(h * k),
                     pct, _probe, out _, out _, out int eff)) pct = eff;
             float side = (float)(pct / 100.0 * Math.Min(_screen.Width, _band.Height));
             float cx = _screen.MidX, cy = _band.MidY;

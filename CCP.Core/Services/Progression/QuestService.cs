@@ -1530,7 +1530,7 @@ public class QuestService : IDisposable
         if (_lockdownSession.LockdownEarnsSession(served, DateTime.UtcNow))
             UpdateQuestProgress(QuestCategory.Session, 1);
         else
-            App.Logger?.Information("Quest: lockdown not counted as a session, a preset session inside it already was");
+            Log.Information("Quest: lockdown not counted as a session, a preset session inside it already was");
     }
 
     /// <summary>
