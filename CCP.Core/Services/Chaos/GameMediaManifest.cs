@@ -32,7 +32,7 @@ namespace ConditioningControlPanel.Services.Chaos
             public bool Truncated { get; set; }
         }
 
-        internal static Manifest Build(string? root, Func<string, string> url, IEnumerable<string>? disabledPaths, bool videos = true)
+        internal static Manifest Build(string? root, Func<string, string> url, IEnumerable<string>? disabledPaths, bool videos = true, IEnumerable<string>? disabledFolders = null, int maxEntries = MaxEntries)
         {
             var m = new Manifest();
             if (string.IsNullOrEmpty(root)) return m;
@@ -60,7 +60,7 @@ namespace ConditioningControlPanel.Services.Chaos
                         string rel;
                         try { rel = Path.GetRelativePath(root, f).Replace('\\', '/'); }
                         catch { rel = Path.GetFileName(f); }
-                        if (disabled.Count > 0 && disabled.Contains(rel)) continue;
+                        if ((disabled.Count > 0 && disabled.Contains(rel)) || AssetFolderExclusion.IsUnderAny(rel, disabledFolders)) continue;
                         long len;
                         try { len = new FileInfo(f).Length; } catch { continue; }
                         if (len <= 0 || len > cap) { m.Skipped++; continue; }
@@ -69,12 +69,12 @@ namespace ConditioningControlPanel.Services.Chaos
                     }
                 }
                 int total = m.Images.Count + m.Videos.Count;
-                if (total > MaxEntries)
+                if (total > maxEntries)
                 {
                     var rng = new Random();
-                    int imgKeep = (int)Math.Round(MaxEntries * (double)m.Images.Count / total);
+                    int imgKeep = (int)Math.Round(maxEntries * (double)m.Images.Count / total);
                     Downsample(m.Images, imgKeep, rng);
-                    Downsample(m.Videos, MaxEntries - imgKeep, rng);
+                    Downsample(m.Videos, maxEntries - imgKeep, rng);
                     m.Truncated = true;
                 }
                 Log.Information("[Game] manifest: {I} images, {V} videos, {S} skipped{T}",

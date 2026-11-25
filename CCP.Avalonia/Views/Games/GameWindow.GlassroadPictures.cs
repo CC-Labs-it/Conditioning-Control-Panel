@@ -50,6 +50,43 @@ internal sealed partial class GameWindow
     private int _grPictureOffset, _grPictureVersion, _grSettingVersion;
     private bool _grWritingSetting;
 
+    // WPF GlassroadHostService.OwnMedia.cs:20: one active walk, with the result sent to the asking window.
+    private bool _grOwnListInFlight;
+    internal Task GlassroadOwnPending { get; private set; } = Task.CompletedTask;
+
+    private void OnGlassroadOwnMediaList()
+    {
+        var server = _server;
+        if (!_grOpen || _closing || server == null || _grOwnListInFlight) return;
+        _grOwnListInFlight = true;
+        var root = CorePaths.EffectiveAssets;
+        var settings = CoreSettings.Current;
+        var disabled = settings.DisabledAssetPaths.ToArray();
+        var folders = settings.DisabledAssetFolders.ToArray();
+        GlassroadOwnPending = Task.Run(() =>
+        {
+            try
+            {
+                // Identity URLs retain the full relative path until the selection rules build the response.
+                var media = GameMediaManifest.Build(root, rel => rel, disabled, disabledFolders: folders, maxEntries: GameMediaManifest.MaxEntries * 2);
+                var sources = media.Images.Select(e => (e.Url, Image: true))
+                    .Concat(media.Videos.Select(e => (e.Url, Image: false)))
+                    .Select(e => new GlassroadOwnMediaSelection.Source(Path.Combine(root, e.Url), e.Image));
+                return GlassroadOwnMediaSelection.Rows(sources, root, new Random(), server.AssetUrl);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug("Glassroad: own library listing failed ({Type})", ex.GetType().Name);
+                return new JArray();
+            }
+        }).ContinueWith(t => Dispatcher.UIThread.Post(() =>
+        {
+            _grOwnListInFlight = false;
+            if (!_grOpen || _closing || !ReferenceEquals(server, _server) || t.Status != TaskStatus.RanToCompletion) return;
+            Post(GlassroadOwnMediaSelection.Frame(t.Result));
+        }), TaskScheduler.Default);
+    }
+
     private static bool GlassroadPicturesOn()
     {
         var s = CoreSettings.Current;

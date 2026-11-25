@@ -34,7 +34,7 @@ internal static class GlassroadOwnMediaSelection
         { ".mp4", ".webm", ".m4v" };
 
     /// <summary><c>caps.ownMedia</c>: the library and the origin its rows sit on.</summary>
-    public static JObject Cap() => new() { ["library"] = true, ["mediaOrigin"] = MediaOrigin };
+    public static JObject Cap(string mediaOrigin = MediaOrigin) => new() { ["library"] = true, ["mediaOrigin"] = mediaOrigin };
 
     /// <summary>
     /// The <c>own-media</c> rows: showable files under <paramref name="assetsRoot"/> only (only those have a

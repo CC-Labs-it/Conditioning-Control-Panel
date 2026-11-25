@@ -93,6 +93,8 @@ public sealed partial class GameWindowTests
         var init = JObject.Parse(echoed.Result!);
         Assert.Equal("init", (string?)init["type"]);
         Assert.Equal("webgl2", (string?)init["caps"]!["forceRenderer"]);
+        Assert.True((bool)init["caps"]!["ownMedia"]!["library"]!);
+        Assert.Equal(w.PageUrl.GetLeftPart(UriPartial.Authority), (string?)init["caps"]!["ownMedia"]!["mediaOrigin"]);
         host.Receive(new JObject { ["type"] = "ready" });
         Assert.True(w.IsReady);
         Assert.Same(w, GameWindow.Launch(GameWindow.GlassroadId));   // a second door focuses the live race
