@@ -95,6 +95,50 @@ public sealed class MandatoryVideoFloatingHostTests
             return Task.CompletedTask;
         });
 
+    [Fact]
+    public Task Joined_blur_uses_its_own_frames_and_panic_releases_it() => Run((o, decoders) =>
+    {
+        Assert.True(o.TryFloatingTrigger(userInitiated: true));
+        Assert.True(o.TryFloatingTrigger(userInitiated: true));
+        var first = o.Floaters[0];
+        var second = o.Floaters[1];
+        using var frame = new global::Avalonia.Media.Imaging.WriteableBitmap(new PixelSize(16, 90), new Vector(96, 96),
+            global::Avalonia.Platform.PixelFormat.Bgra8888, global::Avalonia.Platform.AlphaFormat.Opaque);
+        using (var pixels = frame.Lock())
+            for (var y = 0; y < pixels.Size.Height; y++)
+                for (var x = 0; x < pixels.Size.Width; x++)
+                    System.Runtime.InteropServices.Marshal.WriteInt32(pixels.Address + y * pixels.RowBytes + x * 4, unchecked((int)0xff112233));
+
+        MandatoryVideoOverlay.UpdateFloatingFill(first, frame, true);
+        Assert.True(first.Surface.Fill.IsVisible);
+        Assert.True(first.Surface.Scrim.IsVisible);
+        Assert.Same(first.Fill, first.Surface.Fill.Source);
+        Assert.False(second.Surface.Fill.IsVisible);
+        using (var pixels = first.Fill!.Lock())
+            Assert.Equal(unchecked((int)0xff112233), System.Runtime.InteropServices.Marshal.ReadInt32(pixels.Address));
+
+        MandatoryVideoOverlay.UpdateFloatingFill(second, frame, true);
+        Assert.NotSame(first.Fill, second.Fill);
+        MandatoryVideoOverlay.UpdateFloatingFill(first, frame, false);
+        Assert.Null(first.Fill);
+        Assert.Null(first.Surface.Fill.Source);
+        Assert.False(first.Surface.Scrim.IsVisible);
+        Assert.True(second.Surface.Fill.IsVisible);
+
+        var previous = CoreEngine.Video;
+        try
+        {
+            CoreEngine.Video = o.Scheduler;
+            PanicSurfaces.All.Single(x => x.Id == "engine").Stop(null);
+            Assert.Empty(o.Floaters);
+            Assert.Null(second.Fill);
+            Assert.Null(second.Surface.Fill.Source);
+            Assert.False(second.Surface.Window.IsVisible);
+            Assert.All(decoders, d => Assert.True(d.Stopped));
+        }
+        finally { CoreEngine.Video = previous; }
+    });
+
     private static List<Window> Up(MandatoryVideoOverlay o) => o.Windows.Where(w => w.IsVisible).ToList();
 
     /// <summary>Timers wait for <see cref="FireLast"/>: the most recently armed one fires.</summary>
