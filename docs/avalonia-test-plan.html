@@ -613,7 +613,7 @@ compare text, order, layout, sound and timing with the same screen on Windows. R
 <li>[ ] <code>chaos-wave-timer</code> - WPF <code>Chaos/ChaosWaveTimerOverlay.cs</code></li>
 <li>[ ] <code>chaos-vibe-trail</code> - WPF <code>Chaos/ChaosVibeTrailOverlay.cs</code></li>
 <li>[ ] <code>chaos-unlock-card</code> - WPF <code>Chaos/ChaosUnlockCardOverlay.cs</code></li>
-<li>[ ] <code>chaos-webview-host</code> - On Windows, X11 and XWayland, open DtRH and Piece by Piece; bring the main panel forward, minimize and restore it, and confirm each game stays visible and returns above the panel. Minimize a game separately and confirm restoring the panel does not restore the game. Panic closes the game. WPF <code>Chaos/ChaosWebViewHost.cs:904-1013</code>.</li>
+<li>[ ] <code>chaos-webview-host</code> - On Windows, X11 and XWayland, open DtRH and Piece by Piece; bring the main panel forward, minimize and restore it, and confirm each game stays visible and returns above the panel. Raise an already-active panel and confirm the game returns above it. Restore a minimized game while another app is in front and confirm the game stays in front of that app when it is already above the panel. Minimize a game separately and confirm restoring the panel does not restore the game. Panic closes the game. WPF <code>Chaos/ChaosWebViewHost.cs:904-1013</code>.</li>
 <li>[ ] <code>avatar-tube-window</code> - WPF <code>MainWindow/MainWindow.xaml.cs:3695</code></li>
 <li>[ ] <code>lab-gaze-minigame</code> - WPF <code>Lab/GazeMinigame/GazeMinigameWindow.xaml</code></li>
 <li>[ ] <code>overlay-speak-cue</code> - WPF <code>Overlays/SpeakCueOverlay.cs</code></li>

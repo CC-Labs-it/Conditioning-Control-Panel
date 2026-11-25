@@ -10,7 +10,7 @@ internal sealed partial class GameWindow
 {
     internal bool JustDropOwnerLinked { get; private set; }
     internal Action? RenderVisibilityResyncForTests;
-    internal static Func<Window, Window, bool> RestackGameAboveOwner = X11Overlay.RestackAbove;
+    internal static Func<Window, Window, bool> RestackGameAboveOwner = X11Overlay.RestackAboveIfBelow;
 
     internal static bool IsOwnerCascadeHide(uint message, IntPtr wParam, IntPtr lParam) =>
         message == 0x18 && wParam == IntPtr.Zero && lParam == new IntPtr(1);
@@ -60,6 +60,11 @@ internal sealed partial class GameWindow
             {
                 if (e.Property == WindowStateProperty || e.Property == IsVisibleProperty) QueueRestack();
             }
+            // A raise of an already active panel need not emit Activated. Recheck the WM's
+            // stacking order while open, even without focus or state changes.
+            var watch = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+            watch.Tick += (_, _) => QueueRestack();
+            watch.Start();
             void X11OwnerClosed(object? sender, EventArgs e) => Close();
             shell.Activated += Activated;
             shell.PropertyChanged += Changed;
@@ -67,6 +72,7 @@ internal sealed partial class GameWindow
             shell.Closed += X11OwnerClosed;
             Closed += (_, _) =>
             {
+                watch.Stop();
                 shell.Activated -= Activated;
                 shell.PropertyChanged -= Changed;
                 PropertyChanged -= Changed;

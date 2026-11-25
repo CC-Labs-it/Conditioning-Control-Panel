@@ -709,6 +709,40 @@ internal static class X11Overlay
         return RestackXid(xid, siblingXid);
     }
 
+    // _NET_CLIENT_LIST_STACKING is bottom-to-top. Leave an already higher game in place so
+    // restoring it does not move it behind unrelated windows. Missing/partial data is not proof.
+    internal static bool RestackAboveIfBelow(TopLevel window, TopLevel sibling)
+    {
+        if (IntPtr.Size != 8 || !TryGetXid(window, out var xid) || !TryGetXid(sibling, out var target)) return false;
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            var root = XDefaultRootWindow(_display);
+            var atom = XInternAtom(_display, "_NET_CLIENT_LIST_STACKING", false);
+            if (XGetWindowProperty(_display, root, atom, 0L, 4096L, false, (IntPtr)33,
+                out var type, out var format, out ulong count, out ulong remaining, out var data) != 0 || data == IntPtr.Zero) return false;
+            try
+            {
+                if (type != (IntPtr)33 || format != 32 || remaining != 0) return false;
+                var stacking = new IntPtr[(int)count];
+                for (int i = 0; i < stacking.Length; i++) stacking[i] = Marshal.ReadIntPtr(data, i * IntPtr.Size);
+                return RestackAboveIfBelow(stacking, xid, target, () => RestackXid(xid, target));
+            }
+            finally { XFree(data); }
+        }
+    }
+
+    internal static bool RestackAboveIfBelow(IReadOnlyList<IntPtr> stacking, IntPtr window, IntPtr sibling, Func<bool> restack)
+    {
+        int windowIndex = -1, siblingIndex = -1;
+        for (int i = 0; i < stacking.Count; i++)
+        {
+            if (stacking[i] == window) windowIndex = i;
+            if (stacking[i] == sibling) siblingIndex = i;
+        }
+        return windowIndex >= 0 && siblingIndex >= 0 && (windowIndex >= siblingIndex || restack());
+    }
+
     // WPF ChaosTunnelService.SinkToBottom: leave run chrome above the opaque background.
     internal static bool Sink(TopLevel window)
     {

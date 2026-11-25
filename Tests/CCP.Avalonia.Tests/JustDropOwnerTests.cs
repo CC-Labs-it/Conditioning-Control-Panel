@@ -186,6 +186,75 @@ public sealed class JustDropOwnerTests
             return Task.CompletedTask;
         });
 
+    [Fact]
+    public void X11RestackOnlyMovesAGameBelowItsPanel()
+    {
+        var game = new IntPtr(1);
+        var panel = new IntPtr(2);
+        var other = new IntPtr(3);
+        int moves = 0;
+        bool Move() { moves++; return true; }
+        // An unrelated foreground app between panel and game must remain below the game.
+        Assert.True(X11Overlay.RestackAboveIfBelow(new[] { panel, other, game }, game, panel, Move));
+        Assert.Equal(0, moves);
+        Assert.True(X11Overlay.RestackAboveIfBelow(new[] { game, other, panel }, game, panel, Move));
+        Assert.Equal(1, moves);
+        Assert.False(X11Overlay.RestackAboveIfBelow(new[] { game, other }, game, panel, Move));
+        Assert.False(X11Overlay.RestackAboveIfBelow(new[] { panel, other }, game, panel, Move));
+        Assert.Equal(1, moves);
+    }
+
+    [Fact]
+    public Task X11WatchCorrectsAnAlreadyActivePanelRaiseAndStopsOnClose() =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            var getHandle = NativeWindowOwner.HandleForTests;
+            var restack = GameWindow.RestackGameAboveOwner;
+            NativeWindowOwner.HandleForTests = _ => new PlatformHandle(new IntPtr(42), "XID");
+            var owner = new Window();
+            var player = new GameWindow(GameWindow.Games[GameWindow.DtrhId]);
+            var gameId = new IntPtr(1); var panelId = new IntPtr(2); var otherId = new IntPtr(3);
+            var stacking = new[] { panelId, otherId, gameId };
+            var corrected = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            int moves = 0, checks = 0;
+            bool raised = false;
+            GameWindow.RestackGameAboveOwner = (_, _) =>
+            {
+                checks++;
+                if (!raised) return true;
+                return X11Overlay.RestackAboveIfBelow(stacking, gameId, panelId, () =>
+                {
+                    moves++;
+                    stacking = new[] { otherId, panelId, gameId };
+                    corrected.TrySetResult(true);
+                    return true;
+                });
+            };
+            try
+            {
+                owner.Show(); player.Show();
+                player.AttachEligibleGameOwner(owner);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(0, moves);
+                // Change stacking without activation or state events, as for an already-active raise.
+                stacking = new[] { gameId, otherId, panelId };
+                raised = true;
+                Assert.Same(corrected.Task, await Task.WhenAny(corrected.Task, Task.Delay(5000)));
+                Assert.Equal(1, moves);
+                player.Close();
+                Dispatcher.UIThread.RunJobs();
+                int afterClose = checks;
+                await Task.Delay(600);
+                Assert.Equal(afterClose, checks);
+            }
+            finally
+            {
+                player.Close(); owner.Close(); Dispatcher.UIThread.RunJobs();
+                NativeWindowOwner.HandleForTests = getHandle;
+                GameWindow.RestackGameAboveOwner = restack;
+            }
+        });
+
     private static Task WithWindows(Action<GameWindow, Window, System.Collections.Generic.List<Window>> body) =>
         AvaloniaTestDispatcher.RunAsync(() =>
         {
