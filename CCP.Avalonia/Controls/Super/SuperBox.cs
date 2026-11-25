@@ -146,8 +146,9 @@ public sealed class SuperBox : Border
     /// tint windows (Views/Overlays/SteamOverlay); Afterglow: the line (Views/Overlays/AfterglowLineOverlay); FlickerDeck:
     /// the cards on the flash windows (Views/Overlays/FlashOverlay.Deck); InnerBloom (Froth): the ambient bubbles (Views/Overlays/BubbleOverlay);
     /// Vortex: the Whirlpool on the spiral windows (Views/Overlays/WhirlpoolOverlay); Scrawl: the stamps under the bouncing words
-    /// (Views/Overlays/BouncingTextOverlay.Scrawl).</summary>
-    internal static readonly HashSet<SuperEffect> HostedOnThisHead = new() { SuperEffect.Creep, SuperEffect.Afterglow, SuperEffect.FlickerDeck, SuperEffect.InnerBloom, SuperEffect.Vortex, SuperEffect.Scrawl };
+    /// (Views/Overlays/BouncingTextOverlay.Scrawl); LightsDown: the dim in and around the mandatory video windows
+    /// (Views/Overlays/LightsDownOverlay).</summary>
+    internal static readonly HashSet<SuperEffect> HostedOnThisHead = new() { SuperEffect.Creep, SuperEffect.Afterglow, SuperEffect.FlickerDeck, SuperEffect.InnerBloom, SuperEffect.Vortex, SuperEffect.Scrawl, SuperEffect.LightsDown };
 
     /// <summary>True when the star draws on: hosted, unlocked and switched on.</summary>
     public bool StarLit { get; private set; }

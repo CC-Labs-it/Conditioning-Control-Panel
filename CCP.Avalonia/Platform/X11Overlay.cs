@@ -744,6 +744,38 @@ internal static class X11Overlay
         }
     }
 
+    /// <summary>Lights Down (floating): keep the dim <paramref name="window"/> under every one of
+    /// <paramref name="above"/> in the WM's stacking list (<c>_NET_CLIENT_LIST_STACKING</c>, bottom to top).
+    /// Wrong = the dim sat over one of them, and a restack under the lowest was asked (the WM answers
+    /// asynchronously, so the next check tells); Unknown = the order cannot be read, so nobody can promise
+    /// it (the caller refuses). Core <c>LightsDownStackGuard</c> decides; this only reads and asks.</summary>
+    internal static ConditioningControlPanel.SuperCore.LightsDownStack StackUnder(TopLevel window, IReadOnlyList<TopLevel> above)
+    {
+        const ConditioningControlPanel.SuperCore.LightsDownStack unknown = ConditioningControlPanel.SuperCore.LightsDownStack.Unknown;
+        if (!TryGetXid(window, out var xid)) return unknown;
+        var want = new List<IntPtr>();
+        foreach (var a in above) if (TryGetXid(a, out var x)) want.Add(x);
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return unknown;
+            var atom = XInternAtom(_display, "_NET_CLIENT_LIST_STACKING", false);
+            if (XGetWindowProperty(_display, XDefaultRootWindow(_display), atom, 0L, 4096L, false, (IntPtr)33, out _, out var format,
+                out ulong count, out ulong remaining, out var data) != 0 || data == IntPtr.Zero) return unknown;
+            var list = new List<IntPtr>();
+            try
+            {
+                if (format != 32 || remaining != 0) return unknown;
+                for (int i = 0; i < (int)count; i++) list.Add(Marshal.ReadIntPtr(data, i * IntPtr.Size));
+            }
+            finally { XFree(data); }
+            var at = new List<int>(want.Count);
+            foreach (var w in want) at.Add(list.IndexOf(w));
+            var order = ConditioningControlPanel.SuperCore.LightsDownStackGuard.Order(list.IndexOf(xid), at, out var lowest);
+            if (order == ConditioningControlPanel.SuperCore.LightsDownStack.Wrong) RestackXid(xid, list[lowest], Below);
+            return order;
+        }
+    }
+
     private static bool RestackXid(IntPtr xid, IntPtr siblingXid, int detail = Above)
     {
         lock (Gate)

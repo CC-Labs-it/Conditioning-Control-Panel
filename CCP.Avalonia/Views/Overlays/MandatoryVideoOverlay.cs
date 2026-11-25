@@ -251,6 +251,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Floating = Floats(strict);
             _videoFadeSeconds = Floating ? Services.Safety.GentleVisuals.FadeSeconds : 0;
             _revealAudioHeld = false;
+            // WPF LightsDownService.Attach: VideoStarted posts TryStart, after the windows exist.
+            Dispatcher.UIThread.Post(() => LightsDownOverlay.Start(this));
 
             // The injected decoder omits native allocation (and windows, except a floating one); lifecycle methods stay shared.
             if (_playbackFactory != null)
@@ -1356,7 +1358,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Every window of the run, joined floating windows first (WPF CloseFloatingInstances), then the run's clip.</summary>
         public double CloseAll() => Dispatcher.UIThread.Invoke(() =>
         {
-            LightsDownOverlay.CloseAll(); // WPF LightsDownService.cs:106, before decoder teardown
+            // WPF OnVideoTeardown (VideoService.cs:7616), before decoder teardown: a full-screen dim goes now,
+            // a floating one fades; the panic key's own lights-down surface closes it at once.
+            LightsDownOverlay.EndOfVideo();
             CloseFloatingInstances("close all");
             return ClosePrimary(retire: false);
         });

@@ -10,7 +10,7 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
-public class LightsDownOverlayTests
+public partial class LightsDownOverlayTests
 {
     [Fact]
     public void RefusesUnsafePlatformsBeforeMapping() => AvaloniaTestDispatcher.Run(() =>
