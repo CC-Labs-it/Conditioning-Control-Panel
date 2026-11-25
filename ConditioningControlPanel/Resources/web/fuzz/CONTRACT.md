@@ -64,6 +64,7 @@ caps: {
   account: bool,               // section 3.3; the host has an account page of its own (sign in, sign out)
   ownMedia: { folder: bool, path?: string, library?: bool, mediaOrigin?: url },  // section 3.3; the host keeps and serves the player's own folder, or (library) the app's own pictures
   dev: bool,                   // the hidden dev console (ui/preview-bar-model.js): only a host that prices nothing sends it (the standalone program); never the website, never the CCP app
+  unsealed: bool,              // section 6.1; the host's small edition plays now, never the sealed notice (the standalone program); never the CCP app
 }
 mod: 'default' | 'bambi' | 'sissy' | 'locked' | 'drone'
 ```
