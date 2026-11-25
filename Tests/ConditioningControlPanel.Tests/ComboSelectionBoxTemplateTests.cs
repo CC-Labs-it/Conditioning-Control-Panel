@@ -108,4 +108,13 @@ public class ComboSelectionBoxTemplateTests
         var entry = new EnhancementLibraryEntry { Name = "Night walk", FilePath = @"C:\x\night.ccpenh.json" };
         Assert.Equal("Night walk", entry.ToString());
     }
+
+    [Theory]
+    [InlineData(@"C:\x\Untitled.ccpenh.json", "Untitled")]
+    [InlineData(@"C:\x\Night Walk.CCPENH.json", "Night Walk")]
+    [InlineData(@"C:\x\plain.json", "plain")]
+    public void AnEntryWithNoSavedNameFallsBackToItsFileName(string path, string expected)
+    {
+        Assert.Equal(expected, EnhancementLibrary.FallbackName(path));
+    }
 }
