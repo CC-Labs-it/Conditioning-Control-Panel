@@ -215,6 +215,30 @@ public sealed partial class GameWindowTests
     });
 
     [Fact]
+    public void Goon_NonMediaFramesLeaveTheStaticMediaDelegatesAlone() => Run((_, _) =>
+    {
+        // r2 review: every Goon frame used to set these process-wide delegates and leak them into later tests.
+        var (materialize, release) = (ConditioningControlPanel.Services.GoonGame.GoonOnlineMedia.Materialize,
+            ConditioningControlPanel.Services.GoonGame.GoonOnlineMedia.ReleaseTempFile);
+        try
+        {
+            ConditioningControlPanel.Services.GoonGame.GoonOnlineMedia.Materialize = null;
+            ConditioningControlPanel.Services.GoonGame.GoonOnlineMedia.ReleaseTempFile = null;
+            CoreAccount.IsLoggedInProvider = () => true;
+            var goon = GameWindow.Launch(GameWindow.GoonId)!;
+            goon.HandleMessage("{\"type\":\"ready\"}");
+            goon.HandleMessage("{\"type\":\"heartbeat\"}");
+            Assert.Null(ConditioningControlPanel.Services.GoonGame.GoonOnlineMedia.Materialize);
+            Assert.Null(ConditioningControlPanel.Services.GoonGame.GoonOnlineMedia.ReleaseTempFile);
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.GoonGame.GoonOnlineMedia.Materialize = materialize;
+            ConditioningControlPanel.Services.GoonGame.GoonOnlineMedia.ReleaseTempFile = release;
+        }
+    });
+
+    [Fact]
     public void Goon_NetPostIsRefusedAtOnceAndFullscreenIsEchoedAndRemembered() => Run((_, _) =>
     {
         CoreAccount.IsLoggedInProvider = () => true;

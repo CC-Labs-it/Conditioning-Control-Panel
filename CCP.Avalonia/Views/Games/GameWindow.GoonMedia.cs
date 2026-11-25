@@ -32,11 +32,14 @@ internal sealed partial class GameWindow
 
     private bool HandleGoonMedia(JObject o)
     {
+        var type = (string?)o["type"];
+        if (type is not ("media-flavour" or "media-more" or "peer-niches" or "noise-want")) return false;
         var s = CoreSettings.Current;
         // The head copier enforces the Scrolller licence, byte cap and temp prefix (as Pbp.Media.cs:101).
+        // Process-wide, so set only when a media frame needs it.
         GoonOnlineMedia.Materialize ??= DtrhRemoteMedia.AssetsTempCopier.Materialize;
         GoonOnlineMedia.ReleaseTempFile ??= DtrhRemoteMedia.AssetsTempCopier.Release;
-        switch ((string?)o["type"])
+        switch (type)
         {
             case "media-flavour": // WPF :1866-1889
                 var flavour = GoonOnlineMediaRules.CleanFlavour((string?)o["flavour"]);
