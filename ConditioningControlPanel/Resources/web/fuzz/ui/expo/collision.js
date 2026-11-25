@@ -108,7 +108,9 @@ export function createWalker(camera, onFootstep, onPlanterCue, claimPlanter) {
       resolveWalls(proposed); resolveWalls(proposed);
       rail?.constrain(proposed,feet);
       const clearance = Math.max(0, feet.y-supportY);
-      const rise = airborne ? .012 : MAX_RISE;
+      // A ramp is a walkable face, never a wall, so a hop up a flight that drops back below its surface would
+      // otherwise fall through it to the floor underneath. Look as far up in the air as on foot.
+      const rise = MAX_RISE;
       const closeFloor = floorAt(proposed,rise,MAX_DROP+clearance,zone);
       if (!closeFloor && !floorAt(proposed,rise,1.05+clearance,zone)) break;
       if (planter.held && ground.collider !== planter.support) break;
