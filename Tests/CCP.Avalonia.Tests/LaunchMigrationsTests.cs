@@ -67,6 +67,42 @@ public class LaunchMigrationsTests
         finally { root.Delete(true); }
     }
 
+    // WPF App.xaml.cs:2612-2633: the migration reads the saved FlashClickable before the crash heal puts the
+    // journal's value back. A session left clicking on (journal: off) must keep gaze pop and linger on.
+    [Fact]
+    public void FlashMigrationRunsBeforeTheSessionHeal()
+    {
+        var root = Directory.CreateTempSubdirectory("ccp-launch-heal");
+        try
+        {
+            var settings = new SettingsService(Path.Combine(root.FullName, "settings.json"));
+            var s = settings.Current;
+            s.MigratedFlashClickableDecoupling = false;
+            s.FlashGazeDisabledByDecoupling = false;
+            s.FlashClickable = true;
+            s.FlashGazePopEnabled = true;
+            s.FlashGazeLingerEnabled = true;
+            File.WriteAllText(Path.Combine(root.FullName, SessionSettingsJournal.FileName),
+                """{"at":1,"fields":{"FlashClickable":false}}""");
+
+            AvApp.RunLaunchMigrations(settings, Path.Combine(root.FullName, "assets"), root.FullName);
+            Assert.True(SessionSettingsJournal.HealOnLaunch(root.FullName, s));
+
+            Assert.False(s.FlashClickable);
+            Assert.True(s.FlashGazePopEnabled);
+            Assert.True(s.FlashGazeLingerEnabled);
+            Assert.False(s.FlashGazeDisabledByDecoupling);
+            settings.TrySaveImmediate();
+
+            // And startup calls them in that order.
+            var app = File.ReadAllText(Path.Combine(ConditioningControlPanel.Tests.SourceRoots.RepoRoot, "CCP.Avalonia", "App.axaml.cs"));
+            int mig = app.IndexOf("RunLaunchMigrations(Settings,", StringComparison.Ordinal);
+            int heal = app.IndexOf("SessionSettingsJournal.HealOnLaunch(", StringComparison.Ordinal);
+            Assert.True(mig >= 0 && heal > mig, "RunLaunchMigrations must run before SessionSettingsJournal.HealOnLaunch");
+        }
+        finally { root.Delete(true); }
+    }
+
     private const string ClosingLines = """{"version":1,"moments":{"appClosing":{"hold":true,"holdMs":60000,"pools":[]}},"pools":{}}""";
     private const BindingFlags Private = BindingFlags.Instance | BindingFlags.NonPublic;
 

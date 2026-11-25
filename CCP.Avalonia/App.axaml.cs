@@ -995,6 +995,9 @@ namespace ConditioningControlPanel.Avalonia
                 // the ledger starts when awareness turns on. No observer feeds it on this head yet.
                 InstallPrivacyLedger(new ConditioningControlPanel.Services.Awareness.ActivityLedger());
 
+                // WPF App.xaml.cs:2582-2624: scaffold and the Flash decoupling migration run before the heal
+                // below (2630), so the migration reads the profile's saved FlashClickable, not the journal's.
+                RunLaunchMigrations(Settings, DefaultAssetsRoot, CorePaths.UserData);
                 // Main 8a89eaeb0 / 36370021a: a session or intensity ramp that crashed or was killed before
                 // it handed the user's settings back gets them back now, before anything reads them.
                 try
@@ -1009,7 +1012,6 @@ namespace ConditioningControlPanel.Avalonia
                 // folder's subdirs (#391), before anything resolves the assets folder.
                 Platform.InstallerAssetsPath.Apply(Settings);
                 CorePaths.EnsureCustomAssetsDirectories(Settings.Current.CustomAssetsPath);
-                RunLaunchMigrations(Settings, DefaultAssetsRoot, CorePaths.UserData);
                 // WPF ConditioningControlPanel/App.xaml.cs:3494-3503: never auto-start.
                 MantraChant.StopAndDisarm();
                 // Core RacingAccess asks this head's prize store (WPF seeds PrizeGrants.IsGranted in App()).
