@@ -134,4 +134,37 @@ public class AmbientBubblesFrothTests
         var survivor = Assert.Single(field.Bubbles);
         Assert.Equal(1, survivor.FrothShown); Assert.Equal(0, survivor.FrothRim);
     }
+
+    [Fact]
+    public void The_cursor_pushes_only_while_the_pool_is_not_using_the_bubbles_and_never_at_push_zero()
+    {
+        var stage = new SuperStage();
+        var b = Bubble();                                   // centre (50, 50), glass radius 45
+        var cursor = ((double X, double Y)?)(50 + 45 + 20, 50);
+        var push = AmbientBubbleField.FrothForce(stage, b, 1, cursor, 45, 1);
+        Assert.True(push.Ax < 0 && Math.Abs(push.Ay) < 1e-9 && !push.Eaten && push.PoolScale == 1);
+        Assert.Equal(0, AmbientBubbleField.FrothForce(stage, b, 1, cursor, 45, 0).Ax);
+        Assert.Equal(0, AmbientBubbleField.FrothForce(stage, b, 1, null, 45, 1).Ax);
+        stage.PoolOn = true;
+        stage.Pool.Step(10, 2000, 2000, 0, 1, 1080);       // a live pool far away: it owns the bubbles, no push
+        Assert.True(stage.PoolLive);
+        Assert.Equal(0, AmbientBubbleField.FrothForce(stage, b, 1, cursor, 45, 1).Ax);
+    }
+
+    [Fact]
+    public void A_pushed_bubble_moves_and_one_inside_the_pool_draws_small_and_loses_its_drift()
+    {
+        var field = new AmbientBubbleField();
+        field.Bubbles.AddRange(new[] { Bubble(), Bubble() });
+        field.StepFroth(true, .03, 45, 4.5, NoPop);
+        var merged = Assert.Single(field.Bubbles);
+        double x0 = merged.X;
+        for (int i = 0; i < 10; i++) field.StepFroth(true, .03, 45, 4.5, NoPop, _ => new FrothPush(-500, 0, 1, false, false));
+        Assert.True(merged.X < x0 - 1);
+        field.StepFroth(true, .03, 45, 4.5, NoPop, _ => new FrothPush(0, 0, 0.3, true, false));
+        Assert.True(merged.FrothScale < merged.FrothShown);  // drawn small inside the pool
+        Assert.True(merged.FrothDrift < 1);                  // its own drift dies inside
+        field.StepFroth(true, .03, 45, 4.5, b => b.Popping = true, _ => new FrothPush(0, 0, 0.14, true, true));
+        Assert.True(merged.Popping);                         // the eye takes it through the ordinary pop
+    }
 }

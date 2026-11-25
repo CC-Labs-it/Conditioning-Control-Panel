@@ -68,6 +68,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _frothHooked = true;
             SuperAccess.Changed += FrothChanged;
             SuperStageHost.Stage.Blasted += FrothBlasted;
+            SuperStageHost.Stage.Swept += FrothSwept;
+        }
+        /// <summary>WPF OnStageSwept: the bouncing word pops the Froth bubbles under it (only with "Moving effects pop" on).</summary>
+        private static void FrothSwept(double left, double top, double right, double bottom)
+        {
+            if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => FrothSwept(left, top, right, bottom)); return; }
+            if (FrothOn) Field.FrothSweep(ScaleFor, left, top, right, bottom, Pop);
+        }
+        // One step's read of the cursor and the push option, so the per-bubble force allocates nothing.
+        private static (double X, double Y)? _frothCursor;
+        private static double _frothPush, _frothFreshNow;
+        /// <summary>WPF StepFroth :149-162: the pool's pull (and eye) and the cursor's push. Every stage read
+        /// holds <see cref="SteamOverlay.Gate"/>; the pop of an eaten bubble happens outside it.</summary>
+        private static readonly Func<AmbientBubble, FrothPush> FrothForceOf = b =>
+        {
+            lock (SteamOverlay.Gate)
+                return AmbientBubbleField.FrothForce(SuperStageHost.Stage, b, ScaleFor(b), _frothCursor, _frothFreshNow, _frothPush);
+        };
+        private static void StepFrothNow(double dt)
+        {
+            var s = CoreSettings.Current;
+            bool on = FrothOn;
+            if (on)
+            {
+                _frothFreshNow = FrothFresh;
+                _frothPush = FrothOptions.PushFactor(s.FrothCursorPush);
+                (int X, int Y)? cur = null;
+                try { cur = SuperStageHost.CursorProvider(); } catch (Exception ex) { Log.Debug("Froth cursor: {E}", ex.Message); }
+                _frothCursor = cur is { } c ? (c.X, c.Y) : null;
+            }
+            Field.StepFroth(on, dt, on ? _frothFreshNow : FrothFresh, s.FrothMaxSize, Pop, on ? FrothForceOf : null);
         }
         private static void FrothChanged(SuperEffect effect)
         {
@@ -84,6 +115,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
         private static void FrothBlasted(Blast blast)
         {
+            if (!Dispatcher.UIThread.CheckAccess()) { Dispatcher.UIThread.Post(() => FrothBlasted(blast)); return; }
             if (!FrothOn || blast.ReachPx <= 0) return;
             for (int i = 0; i < Windows.Count; i++)
             {
@@ -1024,14 +1056,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 try { App.Quests?.TrackBubblePopped(); } catch (Exception ex) { Log.Debug("Froth quest credit: {E}", ex.Message); }
                 if (Stopped()) return;
                 try { Popped?.Invoke(); } catch (Exception ex) { Log.Debug("Froth popped handler: {E}", ex.Message); }
+                ConditioningControlPanel.Services.Remote.RemoteScreenFeed.Note("pop");   // WPF: OnBubblePopped once per part
                 if (Stopped()) return;
             }
             if (FrothOn && (b.Spec == null || (b.AmbientTrigger && b.Spec.VariantId == "flash")))
             {
                 double scale = ScaleFor(b), radius = b.FrothRadius * scale, fresh = FrothFresh * scale;
                 double reach = FrothRules.Chains(radius, fresh) ? FrothRules.Reach(radius) * FrothOptions.ReachFactor(s.FrothPopReach) : 0;
-                SuperStageHost.Stage.Blast(new Blast(b.CenterX * scale, b.CenterY * scale, reach,
-                    radius * FrothRules.HoleRadii, FrothRules.Ripe(radius, fresh) ? BlastKind.RipePop : BlastKind.BubblePop));
+                try
+                {
+                    lock (SteamOverlay.Gate)
+                        SuperStageHost.Stage.Blast(new Blast(b.CenterX * scale, b.CenterY * scale, reach,
+                            radius * FrothRules.HoleRadii, FrothRules.Ripe(radius, fresh) ? BlastKind.RipePop : BlastKind.BubblePop));
+                }
+                catch (Exception ex) { Log.Debug("Froth blast: {E}", ex.Message); }   // WPF OnFrothPopped
             }
         }
 
@@ -1060,7 +1098,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _lastStep = now;
                 var t0 = Stats ? Stopwatch.GetTimestamp() : 0;
                 if (Environment.TickCount64 - _frothAsked >= 1000) RefreshFroth();
-                Field.StepFroth(FrothOn, frothDt, FrothFresh, CoreSettings.Current.FrothMaxSize, Pop);
+                StepFrothNow(frothDt);
                 StepChaosField();
                 PruneTeaseFaces();
                 TickChaosRipples();
@@ -1190,6 +1228,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = 300, Y = 250, Size = 200, Angle = 20 });
                 BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = 750, Y = 300, Size = 240, Popping = true, Scale = 1.4, Fade = 0.5 });
+                // Super Froth: two that touched became one ripe bubble with its gold rim.
+                BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = 950, Y = 330, Size = 180 });
+                BubbleOverlay.Field.Bubbles.Add(new AmbientBubble { X = 1010, Y = 360, Size = 180 });
+                for (var i = 0; i < 40; i++) BubbleOverlay.Field.StepFroth(true, 0.03, 45, FrothOptions.MaxSizeDefault, _ => { });
             }
         }
 
@@ -1269,7 +1311,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 // physical pixel row, clipped to this screen. Keep the buffer across frames.
                 var cx = b.CenterX * Scaling - Bounds.X;
                 var cy = b.CenterY * Scaling - Bounds.Y;
-                var r = b.HitSize * Scaling / 2;   // WPF hit disc, not the sprite (#3500)
+                var r = b.HitSize * b.FrothShown * Scaling / 2;   // WPF hit disc, not the sprite (#3500); a merged bubble's grown disc
                 var first = Math.Max(0, (int)Math.Ceiling(cy - r));
                 var last = Math.Min(Bounds.Height - 1, (int)Math.Floor(cy + r));
                 for (var y = first; y <= last; y++)
@@ -1375,9 +1417,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     if (b.Screen != _w.Index) continue;
                     var variantImage = BubbleOverlay.VariantImage(b.Spec);
                     var img = variantImage ?? BubbleOverlay.Image;
-                    double cx = (b.CenterX - ox) * k, cy = (b.CenterY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale * b.FrothShown;
+                    double cx = (b.CenterX - ox) * k, cy = (b.CenterY - oy) * k, size = b.Size * k, s = b.DrawScale * b.ChannelScale * b.FrothScale;
+                    // WPF SyncFrothItem: the merge wobble draws it q wide and 2 - q tall (1 = round; Gentle shallower).
+                    double q = b.FrothSquash(ConditioningControlPanel.Services.Safety.GentleVisuals.On);
                     var m = Matrix.CreateTranslation(-cx, -cy) * Matrix.CreateRotation(b.Angle * Math.PI / 180)
-                          * Matrix.CreateScale(s, s) * Matrix.CreateTranslation(cx, cy);
+                          * Matrix.CreateScale(s * q, s * (2 - q)) * Matrix.CreateTranslation(cx, cy);
                     var glow = LuckyGlow(dc, b, cx, cy, size, s, k, ox, oy);
                     try
                     {
@@ -1398,8 +1442,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                             else dc.DrawEllipse(FallbackFill, FallbackPen, new Point(cx, cy), size / 2 - 5, size / 2 - 5);
                             if (b.FrothRim > 0)
                             {
-                                using (dc.PushOpacity(b.FrothRim))
-                                    dc.DrawEllipse(null, FrothRimPen, new Point(cx, cy), size * FrothRules.GlassOfSprite, size * FrothRules.GlassOfSprite);
+                                // WPF DrawFrothRim: a soft 7 px band at 35% under a 3 px gold line, eased in over 400 ms.
+                                using (dc.PushOpacity(b.FrothRim * 235 / 255.0))
+                                {
+                                    double rr = size * FrothRules.GlassOfSprite;
+                                    dc.DrawEllipse(null, FrothRimHalo, new Point(cx, cy), rr, rr);
+                                    dc.DrawEllipse(null, FrothRimPen, new Point(cx, cy), rr, rr);
+                                }
                             }
                             if (HasChaosShine(b, variantImage != null))
                                 dc.DrawEllipse(ChaosShine, null, new Point(cx, cy), size / 2, size / 2);
@@ -1478,7 +1527,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 }
                 return dc.PushEffect(effect, new Rect(left, top, right - left, bottom - top));
             }
-            private static readonly IPen FrothRimPen = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromRgb(255, 215, 0)), 4);
+            private static readonly IPen FrothRimPen = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromRgb(255, 215, 0)), 3);
+            private static readonly IPen FrothRimHalo = new ImmutablePen(new ImmutableSolidColorBrush(Color.FromArgb(89, 255, 215, 0)), 7);
             private static readonly IBrush GoldSparkle = new ImmutableSolidColorBrush(Color.FromUInt32(0xFFFFD700));
             private static readonly IBrush PinkSparkle = new ImmutableSolidColorBrush(Color.FromUInt32(0xFFFF69B4));
         }
