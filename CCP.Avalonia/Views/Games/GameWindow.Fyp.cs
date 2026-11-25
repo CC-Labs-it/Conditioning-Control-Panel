@@ -53,6 +53,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         }
 
         private FypMetaStore? _fypMeta;
+        internal const string FypStrikesClearedMarker = "fyp_strikes_cleared_1703";
         private bool _fypHooked;
         private bool _fypFileMenuHooked;
         internal ContextMenu? FypFileMenu { get; private set; }
@@ -85,6 +86,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 // WPF PostInit (:170): the page rebooted under the ghost, so give the window back.
                 ExitFypGhost();
                 _fypMeta ??= new FypMetaStore();
+                // ccp-bugs#1703: beta 2 struck linked clips its server refused (404); clear those false strikes once.
+                var marker = Path.Combine(CorePaths.UserData, FypStrikesClearedMarker);
+                if (!File.Exists(marker))
+                {
+                    _fypMeta.ClearStrikes();
+                    try { Directory.CreateDirectory(CorePaths.UserData); File.WriteAllText(marker, ""); }
+                    catch (Exception ex) { Log.Debug("[Game] fyp strike marker: {E}", ex.Message); }
+                }
                 if (!_fypHooked)
                 {
                     _fypHooked = true;

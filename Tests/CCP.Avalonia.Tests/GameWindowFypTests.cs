@@ -265,6 +265,45 @@ public sealed class GameWindowFypTests
         }
     });
 
+    /// <summary>ccp-bugs#1703: beta 2 struck every linked library clip on a 404; the first feed open clears those
+    /// strikes once so the clips come back, and a later strike still counts.</summary>
+    [Fact]
+    public void StaleBeta2Strikes_AreClearedOnce() => Run((_, lib) =>
+    {
+        CoreEntitlement.HasPremiumProvider = () => true;
+        Directory.CreateDirectory(Path.Combine(lib, "videos"));
+        File.WriteAllBytes(Path.Combine(lib, "videos", "struck.mp4"), new byte[] { 1 });
+        var meta = Path.Combine(CorePaths.UserData, "fyp_meta.json");
+        var marker = Path.Combine(CorePaths.UserData, GameWindow.FypStrikesClearedMarker);
+        var oldMeta = File.Exists(meta) ? File.ReadAllText(meta) : null;
+        var hadMarker = File.Exists(marker);
+        try
+        {
+            Directory.CreateDirectory(CorePaths.UserData);
+            File.Delete(marker);
+            File.WriteAllText(meta, "{\"videos/struck.mp4\":{\"FailStrikes\":2}}");
+            List<string?> Ids()
+            {
+                var w = GameWindow.Launch(GameWindow.FypId)!;
+                var sent = new List<JObject>();
+                w.Posted += json => sent.Add(JObject.Parse(json));
+                w.HandleMessage("{\"type\":\"ready\"}");
+                GameWindow.CloseAllForPanic();
+                return sent.First(o => (string?)o["type"] == "init")["assets"]!.Select(a => (string?)a["id"]).ToList();
+            }
+            Assert.Equal(new[] { "videos/struck.mp4" }, Ids());
+            Assert.True(File.Exists(marker));
+            File.WriteAllText(meta, "{\"videos/struck.mp4\":{\"FailStrikes\":2}}");   // a real strike-out after the reset
+            Assert.Empty(Ids());
+        }
+        finally
+        {
+            GameWindow.CloseAllForPanic();
+            if (oldMeta == null) File.Delete(meta); else File.WriteAllText(meta, oldMeta);
+            if (!hadMarker) File.Delete(marker);
+        }
+    });
+
     /// <summary>WPF ServeRemoteBatch / ProbeCustomSub: no media without consent; a found sub is committed.</summary>
     [Fact]
     public void RemoteBatchNeedsConsent_ProbeCommits() => Run((_, _) =>

@@ -188,6 +188,35 @@ public class WebAssetServerTests
         }
     }
 
+    /// <summary>A link target with <c>..</c> after a folder link: the OS follows the folder link first, so
+    /// <c>s/../secret.txt</c> leaves the root even though the text collapses to a path inside it.</summary>
+    [Fact]
+    public void AssetLinkWithDotDotAfterAFolderLink_DoesNotEscapeTheRoot()
+    {
+        Symlinks.RequireOrSkip();
+        var web = Directory.CreateTempSubdirectory("fyp-web-").FullName;
+        var assets = Directory.CreateTempSubdirectory("fyp-assets-").FullName;
+        var outside = Directory.CreateTempSubdirectory("fyp-outside-").FullName;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(outside, "inner"));
+            File.WriteAllText(Path.Combine(outside, "secret.txt"), "secret");
+            Directory.CreateDirectory(Path.Combine(assets, "videos"));
+            Directory.CreateSymbolicLink(Path.Combine(assets, "videos", "s"), Path.Combine(outside, "inner"));
+            File.CreateSymbolicLink(Path.Combine(assets, "videos", "a.mp4"), "s/../secret.txt");
+            Assert.Equal("secret", File.ReadAllText(Path.Combine(assets, "videos", "a.mp4")));   // the OS does escape
+
+            using var server = new WebAssetServer(web) { AssetsRoot = () => assets, DisabledAssets = () => null };
+            Assert.Null(server.ResolveFile("/" + WebAssetServer.AssetsPrefix + "videos/a.mp4"));
+        }
+        finally
+        {
+            Directory.Delete(web, true);
+            Directory.Delete(assets, true);
+            Directory.Delete(outside, true);
+        }
+    }
+
     [Fact]
     public async Task WhisperHosts_ServeOnlyAudioWithToken_AndRefuseTraversalAndLinks()
     {
