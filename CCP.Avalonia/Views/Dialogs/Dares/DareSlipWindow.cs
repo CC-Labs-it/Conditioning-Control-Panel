@@ -12,6 +12,7 @@ using Avalonia.Media;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Dares;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Controls.Dares;
 using ConditioningControlPanel.Localization;
@@ -71,7 +72,7 @@ public sealed class DareSlipWindow : Window
 
     private void ShowComposer()
     {
-        _card.Child = new StackPanel { Children = { Slip(SlipHead(Loc.Get("dares_slip_title"), Close), _sentence, out var paper), _tray } };
+        _card.Child = new StackPanel { Children = { Slip(SlipHead(Loc.Get("dares_slip_title"), Close, "dares_help_numbers"), _sentence, out var paper), _tray } };
         _paper = paper; Render();
     }
 
@@ -126,7 +127,7 @@ public sealed class DareSlipWindow : Window
         switch (step)
         {
             case DareStep.Who:
-                foreach (var f in _friends) tiles.Children.Add(DareSlipLook.Tile(Initial(f.Name), f.Name, DareLook.ToneColor(DareTone.Who), f.Name, null,
+                foreach (var f in _friends) tiles.Children.Add(DareSlipLook.Tile(KnockCard.BuildAvatar(f.Name, f.AvatarUrl, 46, fallback: Initial(f.Name), allowHttps: true), f.Name, DareLook.ToneColor(DareTone.Who), f.Name, null,
                     _draft.Who?.Id == f.Id, () => Press(() => DareSlipRules.SetWho(_draft, f, TierOf(f.Id))), "dares-who:" + f.Id));
                 if (_friends.Count == 0) tiles.Children.Add(Words(Loc.Get("dares_no_friends"), 18, Chalk, wrap: true));
                 break;

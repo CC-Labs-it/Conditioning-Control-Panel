@@ -188,15 +188,20 @@ internal sealed class KnockCard : Window
     internal Ellipse? AvatarFace { get; private set; }
 
     /// <summary>WPF LandingChrome.Avatar :35: initials on lilac, the server picture over them when it loads.
-    /// Only a first-party proxy path ("/...") is fetched; anything else keeps the initials.</summary>
-    internal static Control BuildAvatar(string name, string? avatarPath, double size, Action<Ellipse>? loaded = null)
+    /// By default only a first-party proxy path is fetched. Dares opts into WPF FriendsLook's HTTPS URLs
+    /// and supplies its own initial disc; failures keep that fallback visible.</summary>
+    internal static Control BuildAvatar(string name, string? avatarPath, double size, Action<Ellipse>? loaded = null,
+        Control? fallback = null, bool allowHttps = false)
     {
         var grid = new Grid { Width = size, Height = size };
-        grid.Children.Add(FriendsDrawer.Avatar(name, size, null));
-        if (string.IsNullOrEmpty(avatarPath) || !avatarPath.StartsWith('/')) return grid;
+        grid.Children.Add(fallback ?? FriendsDrawer.Avatar(name, size, null));
+        if (string.IsNullOrEmpty(avatarPath)) return grid;
+        var url = avatarPath.StartsWith('/') ? ProviderSubscription.ProxyBaseUrl + avatarPath
+            : allowHttps && avatarPath.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ? avatarPath : null;
+        if (url == null) return grid;
         var face = new Ellipse { Width = size, Height = size, Opacity = 0 };
         grid.Children.Add(face);
-        _ = LoadFace(face, ProviderSubscription.ProxyBaseUrl + avatarPath, (int)Math.Ceiling(size * 2), loaded);
+        _ = LoadFace(face, url, (int)Math.Ceiling(size * 2), loaded);
         return grid;
     }
 

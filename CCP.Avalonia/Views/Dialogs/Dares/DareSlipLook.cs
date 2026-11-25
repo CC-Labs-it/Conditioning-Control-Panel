@@ -42,13 +42,29 @@ internal static class DareSlipLook
         Margin = new Thickness(2, 4, 2, 8), RenderTransform = new RotateTransform(-0.6), Child = paper = new Grid { Children = { new StackPanel { Children = { head, body } } } },
         BoxShadow = new BoxShadows(new BoxShadow { OffsetY = 12, Blur = 26, Color = Color.FromArgb(0x99, 0, 0, 0) }),
     };
-    internal static Control SlipHead(string title, Action? onClose)
+    internal static Control SlipHead(string title, Action? onClose, string? helpKey = null)
     {
         var head = new DockPanel();
         if (onClose != null)
         {
             head.Children.Add(Bare(Icon(IconKind.Dismiss, 18, Print), "dares-close", Loc.Get("dares_close"), onClose)
                 .Also(c => { c.Margin = new Thickness(6, 0, -6, 0); ToolTip.SetTip(c, Loc.Get("dares_close")); DockPanel.SetDock(c, Dock.Right); }));
+        }
+        if (helpKey != null)
+        {
+            var text = Loc.Get(helpKey);
+            var pinned = false;
+            var face = new Border { Width = 22, Height = 22, CornerRadius = new CornerRadius(11), BorderBrush = Print,
+                BorderThickness = new Thickness(1.5), Child = Words("?", 15, Print, weight: FontWeight.Bold).Also(q => q.HorizontalAlignment = HorizontalAlignment.Center) };
+            Button? help = null;
+            help = Bare(face, "dares-help:" + helpKey, text, () => { pinned = !pinned; ToolTip.SetIsOpen(help!, pinned); });
+            help.Focusable = true;
+            help.Margin = new Thickness(8, 0, 0, 0);
+            ToolTip.SetTip(help, new TextBlock { Text = text, MaxWidth = 320, TextWrapping = TextWrapping.Wrap });
+            ToolTip.SetPlacement(help, PlacementMode.Bottom);
+            help.PointerExited += (_, _) => { pinned = false; ToolTip.SetIsOpen(help, false); };
+            DockPanel.SetDock(help, Dock.Right);
+            head.Children.Add(help);
         }
         head.Children.Add(Caps(title, 19, Print, FontWeight.Bold));
         return new Border { Child = head, Margin = new Thickness(0, 0, 0, 12), Padding = new Thickness(0, 0, 0, 5), BorderBrush = Print, BorderThickness = new Thickness(0, 0, 0, 2) };

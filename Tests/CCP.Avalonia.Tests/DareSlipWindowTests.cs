@@ -1,9 +1,12 @@
 using System;
 using System.Linq;
+using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
 using Avalonia.Automation;
 using Avalonia.Interactivity;
@@ -13,6 +16,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Dialogs.Dares;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Controls.Dares;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Dares;
@@ -99,6 +103,59 @@ public sealed class DareSlipWindowTests
             Assert.True(Assert.IsType<Button>(Find(window, "dares-amount:50")).IsEnabled);
         }
         finally { window.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task HeaderNumbersHelpCanBePinned() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Init();
+        var window = new DareSlipWindow(new FakeService(), null, Array.Empty<DareFriend>(), null, true, () => { });
+        window.Show();
+        try
+        {
+            var help = Assert.IsType<Button>(Find(window, "dares-help:dares_help_numbers"));
+            var explanation = Assert.IsType<TextBlock>(ToolTip.GetTip(help));
+            Assert.Equal(Loc.Get("dares_help_numbers"), explanation.Text);
+            Assert.Equal(TextWrapping.Wrap, explanation.TextWrapping);
+            Assert.Equal(320, explanation.MaxWidth);
+            Assert.Equal(Loc.Get("dares_help_numbers"), AutomationProperties.GetName(help));
+            Click(window, "dares-help:dares_help_numbers");
+            Assert.True(ToolTip.GetIsOpen(help));
+            Click(window, "dares-help:dares_help_numbers");
+            Assert.False(ToolTip.GetIsOpen(help));
+        }
+        finally { window.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task FriendPhotosLoadAndKeepInitialsOnFailure() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Init();
+        byte[] png;
+        using (var stream = global::Avalonia.Platform.AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/features/Phrase_Lock.png")))
+        using (var memory = new MemoryStream()) { stream.CopyTo(memory); png = memory.ToArray(); }
+        var urls = new List<string>();
+        var previous = KnockCard.FetchPicture;
+        KnockCard.FetchPicture = url => { urls.Add(url); return url.EndsWith("bad.png") ? Task.FromException<byte[]>(new IOException()) : Task.FromResult(png); };
+        var friends = new[] { new DareFriend("one", "Alice", "/friends/avatar/alice.png"), new DareFriend("two", "Bob", "https://example.test/bob.png"),
+            new DareFriend("three", "Cara", "/bad.png"), new DareFriend("four", "Dana", null) };
+        var window = new DareSlipWindow(new FakeService(), null, friends, null, true, () => { });
+        try
+        {
+            Assert.Contains("https://codebambi-proxy.vercel.app/friends/avatar/alice.png", urls);
+            Assert.Contains("https://example.test/bob.png", urls);
+            foreach (var id in new[] { "one", "two" })
+                Assert.Contains(Find(window, "dares-who:" + id)!.GetLogicalDescendants().OfType<Ellipse>(), e => e.Opacity == 1 && e.Fill is ImageBrush);
+            foreach (var (id, letter) in new[] { ("three", "C"), ("four", "D") })
+            {
+                var tile = Find(window, "dares-who:" + id)!;
+                Assert.DoesNotContain(tile.GetLogicalDescendants().OfType<Ellipse>(), e => e.Opacity == 1 && e.Fill is ImageBrush);
+                Assert.Contains(tile.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text == letter);
+            }
+        }
+        finally { window.Close(); KnockCard.FetchPicture = previous; }
         return Task.CompletedTask;
     });
 
