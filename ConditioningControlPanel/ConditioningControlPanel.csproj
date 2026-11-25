@@ -146,7 +146,9 @@
     <!-- Embedded Browser -->
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2535.41" />
 
-    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.21">
+    <!-- 3.0.24 bundles FFmpeg 8.1.2 (Lavc62.28.102), which carries the MagicYUV fix for
+         CVE-2026-8461 "PixelSmash"; 3.0.21 had FFmpeg 4.4 (Lavc58.134.100), unpatched. -->
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.24">
       <IncludeAssets>all</IncludeAssets>
     </PackageReference>
 
@@ -1020,7 +1022,7 @@
   <!-- Copy LibVLC native libraries after publish (required for video playback on Windows N/KN) -->
   <Target Name="CopyLibVLCAfterPublish" AfterTargets="Publish">
     <PropertyGroup>
-      <LibVLCPath>$(NuGetPackageRoot)videolan.libvlc.windows\3.0.21\build\x64\</LibVLCPath>
+      <LibVLCPath>$(NuGetPackageRoot)videolan.libvlc.windows\3.0.24\build\x64\</LibVLCPath>
     </PropertyGroup>
     <ItemGroup>
       <LibVLCFiles Include="$(LibVLCPath)**\*" />
