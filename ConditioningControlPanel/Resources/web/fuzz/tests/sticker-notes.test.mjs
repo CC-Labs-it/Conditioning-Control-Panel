@@ -10,6 +10,7 @@ import { earnSticker, noteLife, syncLife } from '../sim/stickers.js';
 import { STICKER_BY_ID, STICKER_NOTE_COPY } from '../data/content/stickers.js';
 import { NOTE_QUEUE_MAX, NOTE_HOLD_MS, createNoteQueue, waitingCopy, moreCopy } from '../sim/sticker-notes.js';
 import trunk from '../ui/unlocks/basics/trunk.js';
+import { clearOfNotes } from '../ui/unlocks/basics/sticker-toast.js';
 
 /* ---- a fake page, just enough for the Achievements row ---- */
 function fakeEl(tag, doc) {
@@ -252,4 +253,27 @@ test('wiring: CONTRACT names the frame, the card sits under every answerable car
   assert.match(view, /\.stk-x[^}]*pointer-events:\s*auto/);
   assert.doesNotMatch(view, /speechSynthesis|SpeechSynthesis/);
   assert.doesNotMatch(view, /\.focus\(/, 'never takes focus');
+  /* Owner 2026-11-25, "bottom right, move the notes": the card is bottom right, the quiet corner notes bottom left. */
+  assert.match(view, /\.stk-note \{ position: absolute; right: max\(12px/);
+  const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+  assert.match(css, /\.backdrop\.corner \{ pointer-events: none; place-items: end start; padding-bottom: calc\(var\(--dock-h\)/);
+});
+
+test('a corner note and the card never meet: on a narrow screen the card steps up over the note', () => {
+  const rect = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height });
+  const make = (noteRect) => {
+    const card = { getBoundingClientRect: () => noteRect };
+    const back = { hidden: false, classList: { contains: (c) => c === 'corner' }, querySelector: (q) => (q === '.card' ? card : null) };
+    const cards = { children: noteRect ? [back] : [] };
+    return { defaultView: { innerHeight: 860 }, getElementById: (id) => (id === 'cards' ? cards : null) };
+  };
+  const el = { style: { bottom: '' }, getBoundingClientRect: () => rect(48, 712, 340, 88) };   // 400 wide, bottom right
+  /* Phone: the note (bottom left, 320 wide) spans under the card: the card sits 12 px above the note's top. */
+  assert.equal(clearOfNotes(el, make(rect(16, 640, 320, 160))), true);
+  assert.equal(el.style.bottom, `${860 - 640 + 12}px`);
+  /* Desktop: the note sits far left, the card far right: nothing moves. */
+  const wide = { style: { bottom: '99px' }, getBoundingClientRect: () => rect(928, 660, 340, 88) };
+  assert.equal(clearOfNotes(wide, make(rect(16, 600, 320, 160))), false);
+  assert.equal(wide.style.bottom, '', 'back to its own place');
+  assert.equal(clearOfNotes(wide, make(null)), false, 'no note, no move');
 });

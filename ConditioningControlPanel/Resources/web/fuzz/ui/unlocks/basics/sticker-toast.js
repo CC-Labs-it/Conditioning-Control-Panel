@@ -2,8 +2,9 @@
  * the Steam achievements"). The Achievements row (trunk.js depth) owns it; the queue rules are sim/sticker-notes.js.
  *
  * A paper card in the Sticker Book's own look (paper, ink edge, the sticker with its white edge, ShopRound) slides up
- * in the bottom-left corner with the sticker's picture, its name and its line, holds NOTE_HOLD_MS, and slides out.
- * Bottom left because the bottom right already holds the game's own corner notes (ui/cards.js corner).
+ * in the bottom-right corner, as Steam does, with the sticker's picture, its name and its line, holds NOTE_HOLD_MS, and
+ * slides out. The game's own quiet corner notes (ui/cards.js corner) moved to the bottom left for it (owner
+ * 2026-11-25, "bottom right, move the notes"); where the two would meet (a phone), the card steps up over the note.
  * - One at a time; the queue (sim/sticker-notes.js) never holds more than three cards.
  * - IN and OUT on every card. Gentle (which includes reduced motion) gets a fade, no slide.
  * - One short chime per card through sfx() (the game's own sound row, its switch and its mute); the summary card is
@@ -22,7 +23,7 @@ import { docOf, sfx } from './fx.js';
 
 const CSS = `
 #stk-notes { position: fixed; inset: 0; z-index: 88; pointer-events: none; }
-.stk-note { position: absolute; left: max(12px, env(safe-area-inset-left, 0px)); bottom: calc(var(--dock-h, 0px) + env(safe-area-inset-bottom, 0px) + 14px);
+.stk-note { position: absolute; right: max(12px, env(safe-area-inset-right, 0px)); bottom: calc(var(--dock-h, 0px) + env(safe-area-inset-bottom, 0px) + 14px);
   width: min(340px, calc(100vw - 24px)); box-sizing: border-box; display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 10px;
   background: #fffdf7; color: #28232b; border: 2px solid #28232b; border-radius: 12px; box-shadow: 4px 5px 0 rgba(40, 35, 43, .32);
   font: 600 15px/1.2 ShopRound, Fredoka, "Trebuchet MS", system-ui, sans-serif; text-align: left; pointer-events: none; will-change: transform, opacity; }
@@ -48,6 +49,30 @@ function answering(doc) {
   return !!host && [...(host.children || [])].some((b) => !b.hidden && !b.classList?.contains('corner'));
 }
 
+/** The quiet corner notes on screen (ui/cards.js corner, bottom left): their cards. */
+function cornerNotes(doc) {
+  const host = doc.getElementById?.('cards');
+  return host ? [...(host.children || [])].filter((b) => !b.hidden && b.classList?.contains('corner')).map((b) => b.querySelector?.('.card')).filter(Boolean) : [];
+}
+
+/** Keeps the card clear of a corner note: where they would meet (a narrow screen), the card sits just above the note.
+ *  Reads layout only; the slide lives on `transform`, so moving `bottom` never fights it. */
+export function clearOfNotes(el, doc) {
+  const win = doc.defaultView;
+  el.style.bottom = '';
+  const notes = cornerNotes(doc);
+  if (!notes.length || !win) return false;
+  const r = el.getBoundingClientRect();
+  for (const n of notes) {
+    const nr = n.getBoundingClientRect();
+    if (nr.width && nr.left < r.right + 8 && nr.right > r.left - 8) {
+      el.style.bottom = `${Math.max(0, Math.round(win.innerHeight - nr.top + 12))}px`;
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Mounts the corner card for one Achievements row. onShow(card) runs when a card that earned something slides in. */
 export function createStickerToasts(ctx, { onShow = () => {} } = {}) {
   ctx.css(CSS);
@@ -57,7 +82,7 @@ export function createStickerToasts(ctx, { onShow = () => {} } = {}) {
   const host = ctx.el('div', '', null, doc.body);
   host.id = 'stk-notes';
   const queue = createNoteQueue();
-  let showing = null, stars = null, leaveNow = null;
+  let showing = null, stars = null, leaveNow = null, leaving = false;
   /* An ending or a panic: the card on screen goes at once; what waits stays in line (the book has it already). */
   const drop = () => { leaveNow?.(); };
   ctx.on('ending', drop);
@@ -106,6 +131,7 @@ export function createStickerToasts(ctx, { onShow = () => {} } = {}) {
 
   function show(card) {
     const { el, x } = build(card);
+    clearOfNotes(el, doc);   // a corner note on a phone: step up over it
     const calm = !!ctx.gentle;
     const at = calm ? [{ opacity: 0 }, { opacity: 1 }] : [{ transform: 'translateY(calc(100% + 28px))', opacity: 0 }, { transform: 'translateY(-4px)', opacity: 1, offset: 0.75 }, { transform: 'none', opacity: 1 }];
     ctx.anim(el, at, { duration: calm ? 450 : 380, easing: 'ease-out', fill: 'backwards' });
@@ -115,10 +141,11 @@ export function createStickerToasts(ctx, { onShow = () => {} } = {}) {
     const leave = () => {
       if (gone) return;
       gone = true;
+      leaving = true;
       stopHold();
       const out = calm ? [{ opacity: 1 }, { opacity: 0 }] : [{ transform: 'none', opacity: 1 }, { transform: 'translateY(calc(100% + 28px))', opacity: 0 }];
       const a = ctx.anim(el, out, { duration: calm ? 450 : 300, easing: 'ease-in', fill: 'forwards' });
-      const done = () => { el.remove(); if (showing === el) showing = null; pump(); };
+      const done = () => { el.remove(); if (showing === el) { showing = null; leaving = false; } pump(); };
       if (a?.finished) a.finished.then(done, done); else done();
     };
     const stopHold = ctx.after(NOTE_HOLD_MS, leave);
@@ -129,13 +156,14 @@ export function createStickerToasts(ctx, { onShow = () => {} } = {}) {
       gone = true;
       stopHold();
       el.remove();
-      if (showing === el) showing = null;
+      if (showing === el) { showing = null; leaving = false; }
       leaveNow = null;
     };
   }
 
   function pump() {
-    if (showing || !queue.size || ctx.paused || ctx.state?.ended || answering(doc)) return;
+    if (showing) { if (!leaving) clearOfNotes(showing, doc); return; }   // a note that opened meanwhile
+    if (!queue.size || ctx.paused || ctx.state?.ended || answering(doc)) return;
     show(queue.next());
   }
 
