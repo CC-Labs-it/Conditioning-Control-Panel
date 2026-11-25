@@ -304,8 +304,6 @@ namespace ConditioningControlPanel.Services
                 b._darterLifeMs = Math.Max(1, spec.LifetimeMs);
                 if (motion != Chaos.ChaosMotion.RoamBounce)
                 {
-                    if (spec.SpawnAtPxY == null)
-                        b.Y = (areaY + r.NextDouble() * Math.Max(0, areaH - b.Size)) / scaling;
                     double a = r.NextDouble() * Math.PI * 2;
                     b._vx = Math.Cos(a); b._vy = Math.Sin(a);
                 }
