@@ -163,6 +163,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             IsHitTestVisible = false;
         }
 
+        /// <summary>--render-all only (RenderProof builds every view with no arguments): one
+        /// 1280x720 monitor at scale 1. Internal, so no production caller ships the sample.</summary>
+        internal SteamCanvas() : this(new PixelRect(0, 0, 1280, 720), 1) { }
+
         public override void Render(DrawingContext context)
             => context.Custom(new Op(this, new Rect(Bounds.Size)));
 

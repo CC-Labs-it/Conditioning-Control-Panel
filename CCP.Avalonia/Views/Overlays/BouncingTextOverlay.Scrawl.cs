@@ -236,6 +236,10 @@ internal sealed partial class BouncingTextOverlayWindow
 
 internal sealed class ScrawlLayer(ScrawlScene scene, double originX, double originY) : Control
 {
+    /// <summary>--render-all only (RenderProof builds every view with no arguments): an empty
+    /// scene at the desktop origin. Internal, so no production caller ships the sample.</summary>
+    internal ScrawlLayer() : this(new ScrawlScene(48, FontFamily.Default), 0, 0) { }
+
     private static readonly Color[] Inks = { Color.FromRgb(255, 111, 181), Color.FromRgb(95, 255, 208), Color.FromRgb(190, 150, 255), Color.FromRgb(255, 207, 107) };
     public override void Render(DrawingContext dc)
     {
