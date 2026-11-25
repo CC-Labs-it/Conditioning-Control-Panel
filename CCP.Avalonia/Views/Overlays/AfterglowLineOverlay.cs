@@ -60,9 +60,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>The face the words are drawn in (the player's Subliminal Font once picked).</summary>
         internal static SKTypeface Face { get; private set; } = AfterglowLineDraw.FaceFor(null);
 
-        /// <summary>The last finished line, for the fog to write. OWED after the rebase onto L0:
-        /// <see cref="SteamCanvas"/> hands it to its <c>SteamWords.Line</c> (WPF <c>SteamLayer.Line</c>).</summary>
+        /// <summary>The last finished line, which every <see cref="SteamCanvas"/> hands to its
+        /// <c>SteamWords.Line</c> (WPF <c>SteamLayer.Line</c>); only the monitor whose fog band was
+        /// remembered wakes the line slot. Read and written under <see cref="SteamOverlay.Gate"/>.</summary>
         internal static string? FogLine { get; private set; }
+
+        /// <summary>The fog forgets the line (WPF <c>SteamLayer.Hide</c>): the fog going off, panic
+        /// (Core <c>SuperStageHost.Stop</c>) and the Afterglow star going off. Any thread.</summary>
+        internal static void ClearFogLine()
+        {
+            lock (SteamOverlay.Gate) FogLine = null;
+        }
 
         /// <summary>The stage is up with words on it.</summary>
         internal static bool Up => _lease != null;
@@ -104,6 +112,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     SuperAccess.Changed += e =>
                     {
                         if (e != SuperEffect.Afterglow || SuperAccess.IsOn(e)) return;
+                        ClearFogLine();
                         if (Dispatcher.UIThread.CheckAccess()) StopAll(); else Dispatcher.UIThread.Post(StopAll);
                     };
                 }

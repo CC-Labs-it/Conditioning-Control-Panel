@@ -153,6 +153,53 @@ public class AfterglowOverlayTests
     });
 
     [Fact]
+    public Task AFinishedLineReachesTheFogAndClearsWithIt() => With(premium: true, s =>
+    {
+        s.AfterglowLineWords = 2;
+        s.SteamWordsInFog = true;
+        SteamOverlay.Seed();
+        void Finish()
+        {
+            AfterglowLineOverlay.WordShown("Deeper");
+            AfterglowLineOverlay.WordShown("softer");
+            AfterglowLineOverlay.Step(0.3);
+            AfterglowLineOverlay.Step(AfterglowLine.LandSeconds);
+            Assert.Equal("deeper softer", AfterglowLineOverlay.FogLine);
+            // The line on its own monitor sinks and goes; the fog keeps writing it.
+            AfterglowLineOverlay.Step(AfterglowLine.FinaleRise + AfterglowLineOptions.HoldMax + AfterglowLine.FinaleSink);
+            Assert.False(AfterglowLineOverlay.Up);
+            Assert.Equal("deeper softer", AfterglowLineOverlay.FogLine);
+        }
+        try
+        {
+            Finish();
+            SuperStageHost.Stage.SteamOn = true;
+            var fog = new SteamCanvas();
+            using var surface = SKSurface.Create(new SKImageInfo(1280, 720));
+            fog.Draw(surface.Canvas);
+            Assert.Equal("deeper softer", fog.Words.Line);
+
+            // The fog going off (the Creep star going off reaches the same switch) forgets it.
+            SuperStageHost.SteamSurface(false);
+            Assert.Null(AfterglowLineOverlay.FogLine);
+            SuperStageHost.Stage.SteamOn = true;
+            fog.Draw(surface.Canvas);
+            Assert.Null(fog.Words.Line);
+
+            // Panic: the super-stage surface is Core SuperStageHost.Stop.
+            Finish();
+            SuperStageHost.Stop();
+            Assert.Null(AfterglowLineOverlay.FogLine);
+
+            // The Afterglow star going off.
+            Finish();
+            SuperAccess.Set(SuperEffect.Afterglow, false);
+            Assert.Null(AfterglowLineOverlay.FogLine);
+        }
+        finally { SuperStageHost.Stop(); }
+    });
+
+    [Fact]
     public void TheRenderSampleDrawsALitLine()
     {
         var canvas = new AfterglowLineCanvas();

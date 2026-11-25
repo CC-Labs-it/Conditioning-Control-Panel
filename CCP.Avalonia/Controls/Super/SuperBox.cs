@@ -142,8 +142,9 @@ public sealed class SuperBox : Border
     }
 
     /// <summary>Effects with a running lane on this head; each host lane adds its own. For any other effect the
-    /// star and the weekly try stay off, so no free try is spent on nothing.</summary>
-    internal static readonly HashSet<SuperEffect> HostedOnThisHead = new();
+    /// star and the weekly try stay off, so no free try is spent on nothing. Creep: the Steam fog on the
+    /// tint windows (Views/Overlays/SteamOverlay); Afterglow: the line (Views/Overlays/AfterglowLineOverlay).</summary>
+    internal static readonly HashSet<SuperEffect> HostedOnThisHead = new() { SuperEffect.Creep, SuperEffect.Afterglow };
 
     /// <summary>True when the star draws on: hosted, unlocked and switched on.</summary>
     public bool StarLit { get; private set; }

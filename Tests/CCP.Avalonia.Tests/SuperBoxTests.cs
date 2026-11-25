@@ -72,6 +72,22 @@ public sealed class SuperBoxTests
 
     private static void Click(Button b) => b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
+    [Fact]
+    public void TheEffectsThatDrawHereAreHosted()
+    {
+        Assert.Contains(SuperEffect.Creep, SuperBox.HostedOnThisHead);       // Steam on the tint windows
+        Assert.Contains(SuperEffect.Afterglow, SuperBox.HostedOnThisHead);   // the Afterglow line
+    }
+
+    [Fact]
+    public void AHostedStarStaysLockedForAFreeAccount() => WithBox(SuperEffect.Afterglow, premium: false, (box, _, _) =>
+    {
+        if (SuperPreview.ThisWeek == SuperEffect.Afterglow) return;   // this week's free try lights it by design
+        Assert.False(box.IsLit);
+        Assert.False(box.StarLit);
+        Assert.False(SuperAccess.IsOn(SuperEffect.Afterglow));
+    });
+
     private static string[] CornerTexts(SuperBox box) => box.Corner.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToArray();
 
     [Fact]

@@ -71,15 +71,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             SuperStageHost.CursorProvider = SuperPointer.Cursor;
             SuperStageHost.ClickProvider = SuperPointer.Click;
             SuperStageHost.SteamSurface = Set;
+            // WPF App.xaml.cs MotionFx.Level: the worn fog mix, the step-aside fade and the worn
+            // word motion read the player's motion level (capped by the OS and Gentle visuals).
+            SuperStepAside.LevelProvider = () => global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level;
+            // WPF FontPickerHelper.BundledFaceStream: "Fredoka (bundled)" off the app's own asset
+            // (the Bold static cut, as the subliminal card draws it), for the Afterglow line's face.
+            global::ConditioningControlPanel.Services.Compositor.SubliminalLayer.BundledFaceStream ??= BundledFace;
             // The tier-events hook (a lapse tears every Super effect down) is AccountSeed's: it binds
             // the providers it creates and the identity change, and rebinds them on a re-seed.
         }
 
+        /// <summary>The bundled Fredoka file for the picker's sentinel name, or null for any other name.</summary>
+        internal static System.IO.Stream? BundledFace(string name)
+        {
+            if (!string.Equals(name, "Fredoka (bundled)", StringComparison.OrdinalIgnoreCase)) return null;
+            try { return AssetLoader.Open(new Uri("avares://CCP.Avalonia/Resources/fonts/fredoka/Fredoka-Bold.ttf")); }
+            catch (Exception ex) { Log.Debug("Steam: bundled Fredoka: {E}", ex.Message); return null; }
+        }
+
         /// <summary>The stage's Steam surface switch. UI thread. Idempotent: it also dresses tint
-        /// windows that were opened since the last call.</summary>
+        /// windows that were opened since the last call. Off (the fog going off, the Creep star going
+        /// off, panic through Core <c>SuperStageHost.Stop</c>) also forgets the Afterglow line, as WPF
+        /// <c>SteamLayer.Hide</c> does.</summary>
         private static void Set(bool on)
         {
             On = on;
+            if (!on) AfterglowLineOverlay.ClearFogLine();
             foreach (var w in PinkFilterOverlay.Shown) w.SetSteam(on);
             if (on)
             {
@@ -147,6 +164,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private readonly SteamWords _words = new();
         private readonly SteamWordsDraw _wordsDraw = new();
         private string[]? _poolSeen;
+
+        /// <summary>This monitor's fog words (tests read the Afterglow line slot).</summary>
+        internal SteamWords Words => _words;
         private double _lastT = -1;
         private bool _gone;
 
@@ -214,6 +234,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
                     double dt = _lastT < 0 ? 0 : Math.Clamp(t - _lastT, 0, 0.1);
                     _lastT = t;
+                    // A finished Afterglow line, written across the middle where its band was remembered.
+                    _words.Line = AfterglowLineOverlay.FogLine;
                     _words.Step(field, dt, GentleVisuals.On, set.SteamWordsInFog);
                     _wordsDraw.Draw(canvas, bounds, field, _words, colour, Face);
                 }
