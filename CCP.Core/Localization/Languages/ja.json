@@ -4833,6 +4833,7 @@
   "bug_report_success_toast": "ありがとうございます！レポートは{0}として登録されました。",
   "bug_report_saved_pending_toast": "レポートを保存しました（{0}）。まもなく開発者に届きます。",
   "bug_report_error_toast": "レポートを送信できませんでした。しばらくしてからお試しください。",
+  "bug_report_clock_off": "PCの時計がずれているため、サーバーがレポートを受け付けませんでした。システム設定で日付と時刻の自動設定をオンにしてから、もう一度送信してください。",
   "btn_suggestion": "機能を提案",
   "suggestion_title": "機能を提案",
   "suggestion_description_label": "アイデアを教えてください",

@@ -1644,6 +1644,7 @@
   "bug_report_success_toast": "谢谢！你的报告已提交为 {0}",
   "bug_report_saved_pending_toast": "报告已保存（{0}）。维护者将很快收到",
   "bug_report_error_toast": "无法发送报告。请稍后重试",
+  "bug_report_clock_off": "你的电脑时钟似乎不准，服务器拒绝了这份报告。请在系统设置中开启自动设置日期和时间，然后重新发送。",
   "btn_create_account": "创建账号",
   "label_language": "语言",
   "label_version": "版本",

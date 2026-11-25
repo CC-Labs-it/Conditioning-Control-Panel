@@ -4833,6 +4833,7 @@
   "bug_report_success_toast": "Obrigada! Seu relatório foi registrado como {0}.",
   "bug_report_saved_pending_toast": "Relatório salvo ({0}). O mantenedor vai recebê-lo em breve.",
   "bug_report_error_toast": "Não deu para enviar o relatório. Tente de novo mais tarde.",
+  "bug_report_clock_off": "O relógio do seu PC parece errado, então o servidor recusou o relatório. Ative data e hora automáticas nas configurações do sistema e envie de novo.",
   "btn_suggestion": "Sugerir um Recurso",
   "suggestion_title": "Sugerir um Recurso",
   "suggestion_description_label": "Qual é a sua ideia?",
