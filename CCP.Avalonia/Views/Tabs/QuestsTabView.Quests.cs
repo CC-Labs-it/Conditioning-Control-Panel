@@ -202,7 +202,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 Slot = slot,
                 Icon = def.Icon,
                 Name = CoreMods.MakeModAware(Localized(def.LocalizedName, def.Name)),
-                Description = CoreMods.MakeModAware(Localized(def.LocalizedDescription, def.Description)),
+                Description = CoreMods.MakeModAware(QuestVideoCopy.Describe(def.Category, Localized(def.LocalizedDescription, def.Description), Loc.Get)),
+                DescriptionTooltip = QuestVideoCopy.Tooltip(def.Category, Loc.Get),
                 Current = quest.CurrentProgress,
                 Target = def.TargetValue,
                 IsCompleted = quest.IsCompleted,
@@ -267,8 +268,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 ImgWeeklyQuest.Source = GetQuestArt(weeklyDef);
                 TxtWeeklyQuestIcon.Emoji = weeklyDef.Icon;   // collapsed, as in WPF
                 if (GetQuestArt(weeklyDef) is { } weeklyArt) ImgWeeklyQuest.Source = weeklyArt;
-                TxtWeeklyQuestName.Text = CoreMods.MakeModAware(weeklyDef.Name);
-                TxtWeeklyQuestDesc.Text = CoreMods.MakeModAware(weeklyDef.Description);
+                TxtWeeklyQuestName.Text = CoreMods.MakeModAware(Localized(weeklyDef.LocalizedName, weeklyDef.Name));
+                TxtWeeklyQuestDesc.Text = CoreMods.MakeModAware(QuestVideoCopy.Describe(weeklyDef.Category, Localized(weeklyDef.LocalizedDescription, weeklyDef.Description), Loc.Get));
+                ToolTip.SetTip(TxtWeeklyQuestDesc, QuestVideoCopy.Tooltip(weeklyDef.Category, Loc.Get));
                 TxtWeeklyProgress.Text = $"{weekly.CurrentProgress} / {weeklyDef.TargetValue}";
                 var (xp, _, _) = ComputeQuestXpDisplay(weeklyDef, s);
                 TxtWeeklyXP.Text = $"{xp} XP";
@@ -295,6 +297,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 TxtWeeklyQuestIcon.Emoji = null;   // WPF wrote "✅" into the collapsed block
                 TxtWeeklyQuestName.Text = Loc.Get("quest_weekly_done_name");
                 TxtWeeklyQuestDesc.Text = Loc.Get("quest_weekly_done_desc");
+                ToolTip.SetTip(TxtWeeklyQuestDesc, null);
                 TxtWeeklyProgress.Text = TxtWeeklyXP.Text = "";
                 WeeklyXpIcon.IsVisible = false;
                 // Empties the icons too, not just hides them (#22339, see DailyQuestCard.SetBonus).

@@ -22,6 +22,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         public string Icon { get; init; } = "";
         public string Name { get; init; } = "";
         public string Description { get; init; } = "";
+        public string? DescriptionTooltip { get; init; }
         public int Current { get; init; }
         public int Target { get; init; }
         public bool IsCompleted { get; init; }
@@ -149,6 +150,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _questIcon.IsVisible = !string.IsNullOrEmpty(m.Icon);
             _txtName.Text = m.Name;
             _txtDesc.Text = m.Description;
+            ToolTip.SetTip(_txtDesc, m.DescriptionTooltip);
             _txtDesc.IsVisible = !string.IsNullOrWhiteSpace(m.Description);
 
             _txtXp.Text = m.XpText;
@@ -233,6 +235,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             _xpIcon.IsVisible = false;
             _txtName.Text = title;
             _txtDesc.Text = subtitle;
+            ToolTip.SetTip(_txtDesc, null);
             _txtDesc.IsVisible = true;
             _txtXp.Text = "";
             _txtXpBonus.IsVisible = SetBonus(_txtXpBonus, 0, 0);   // drops the seeded icon (#22339, see SetBonus)

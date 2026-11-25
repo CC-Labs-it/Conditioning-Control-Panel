@@ -97,13 +97,13 @@ public sealed class QuestsTabLiveTests
                     loc.SetLanguage(lang == "de" ? "en" : "de");
                     Dispatcher.UIThread.RunJobs();
                     Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("section_seasons"), seasonTitle.Text);
-                    Assert.Equal(QuestDefinition.WeeklyQuests.Find(d => d.Id == "flash_monsoon_w")!.Name,
+                    Assert.Equal(QuestDefinition.WeeklyQuests.Find(d => d.Id == "flash_monsoon_w")!.LocalizedName,
                         tab.FindControl<TextBlock>("TxtWeeklyQuestName")!.Text);
                 }
                 finally { loc.SetLanguage(lang); }
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("section_seasons"), seasonTitle.Text);
-                Assert.Equal(QuestDefinition.WeeklyQuests.Find(d => d.Id == "flash_monsoon_w")!.Name,
+                Assert.Equal(QuestDefinition.WeeklyQuests.Find(d => d.Id == "flash_monsoon_w")!.LocalizedName,
                     tab.FindControl<TextBlock>("TxtWeeklyQuestName")!.Text);
 
                 // Progress + completion arrive through the service's events, not a manual refresh.
