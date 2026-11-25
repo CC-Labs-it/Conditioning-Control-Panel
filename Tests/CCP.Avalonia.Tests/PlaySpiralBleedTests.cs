@@ -34,7 +34,7 @@ public sealed class PlaySpiralBleedTests
             w.Activate();
             Dispatcher.UIThread.RunJobs();
 
-            w.ShowTab("play");
+            w.ShowTab("playeyes");
             Dispatcher.UIThread.RunJobs();
             var play = w.Named<global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView>("PlayTab")!;
             var badge = play.FindControl<TierBadge>("PlayBadgeRemote")!;
@@ -50,7 +50,7 @@ public sealed class PlaySpiralBleedTests
             Assert.All(rims, r => Assert.False(r.IsVisible, "a Play rim still draws over another tab"));
             Assert.All(rims, r => Assert.False(r.IsAnimating, "a Play rim kept lapping on another tab"));
 
-            w.ShowTab("play");
+            w.ShowTab("playeyes");
             Dispatcher.UIThread.RunJobs();
             Assert.True(badge.IsAnimating, "coming back to Play did not restart its badge");
             Assert.All(rims, r => Assert.True(r.IsVisible && r.IsAnimating, "coming back to Play did not restore a rim"));

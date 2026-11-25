@@ -23,7 +23,7 @@ public sealed partial class GameWindowTests
         int denials = 0;
         CoreEntitlement.HasLabProvider = () => lab;
         CoreEntitlement.ShowDeniedHandler = _ => denials++;
-        shell.ShowTab("play");
+        shell.ShowTab("playeyes");
         var button = shell.Named<Control>("PlayTab")!.FindControl<Button>("BtnPlayBreakout")!;
         Assert.True(button.IsEnabled);
         Assert.Null(ToolTip.GetTip(button));

@@ -50,7 +50,7 @@ public sealed class PlayWallTests
             try
             {
                 shell.Show();
-                shell.ShowTab("play");
+                shell.ShowTab("playeyes");
                 Dispatcher.UIThread.RunJobs();
                 var play = shell.Named<Control>("PlayTab")!;
                 var button = play.FindControl<Button>(buttonName)!;
@@ -82,7 +82,7 @@ public sealed class PlayWallTests
             try
             {
                 shell.Show();
-                shell.ShowTab("play");
+                shell.ShowTab("playeyes");
                 shell.Named<Control>("PlayTab")!.FindControl<Button>(buttonName)!
                     .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Dispatcher.UIThread.RunJobs();
@@ -113,7 +113,7 @@ public sealed class PlayWallTests
             try
             {
                 shell.Show();
-                shell.ShowTab("play");
+                shell.ShowTab("playeyes");
                 Dispatcher.UIThread.RunJobs();
                 var play = shell.Named<Control>("PlayTab")!;
                 var band = play.FindControl<Border>("PlayLockRacingThoughts");
@@ -156,7 +156,7 @@ public sealed class PlayWallTests
             shell.Show();
             try
             {
-                shell.ShowTab("play");
+                shell.ShowTab("playeyes");
                 Dispatcher.UIThread.RunJobs();
                 var play = shell.Named<Control>("PlayTab")!;
                 var button = play.FindControl<Button>("BtnPlayWebApp")!;
@@ -171,7 +171,7 @@ public sealed class PlayWallTests
                 prompt.Close();
                 Dispatcher.UIThread.RunJobs();
                 Assert.Contains(MainShellWindow.WebBannerSeenKey, seen);
-                Assert.Equal("play", shell.CurrentTab);
+                Assert.Equal("playeyes", shell.CurrentTab);
 
                 // The browser opens: no prompt, and the beat retires.
                 seen.Remove(MainShellWindow.WebBannerSeenKey);
@@ -181,7 +181,7 @@ public sealed class PlayWallTests
                 Assert.Equal(2, opened.Count);
                 Assert.Empty(shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Dialogs.MessageDialog>());
                 Assert.Contains(MainShellWindow.WebBannerSeenKey, seen);
-                Assert.Equal("play", shell.CurrentTab);
+                Assert.Equal("playeyes", shell.CurrentTab);
             }
             finally
             {
@@ -250,7 +250,7 @@ public sealed class PlayWallTests
             shell.Show();
             try
             {
-                shell.ShowTab("play");
+                shell.ShowTab("playeyes");
                 Dispatcher.UIThread.RunJobs();
                 var play = shell.Named<Control>("PlayTab")!;
                 T C<T>(string n) where T : Control => play.FindControl<T>(n)!;
@@ -321,7 +321,7 @@ public sealed class PlayWallTests
                 Assert.True(shell.AppSettingsPage!.FindControl<RadioButton>("SectionPillDevices")!.IsChecked);
 
                 // Loom opens the Studio on the Spiral module (WPF OpenStudioModule("spiral")).
-                shell.ShowTab("play");
+                shell.ShowTab("playeyes");
                 C<Button>("BtnPlayLoom").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Dispatcher.UIThread.RunJobs();
                 Assert.Equal("studio", shell.CurrentTab);
@@ -363,7 +363,7 @@ public sealed class PlayWallTests
             try
             {
                 shell.Show();
-                shell.ShowTab("play");
+                shell.ShowTab("playeyes");
                 Dispatcher.UIThread.RunJobs();
                 var button = shell.Named<Control>("PlayTab")!.FindControl<Button>(buttonName)!;
                 Assert.True(button.IsEnabled);
@@ -436,7 +436,7 @@ public sealed class PlayWallTests
             shell.Show();
             try
             {
-                shell.ShowTab("play");
+                shell.ShowTab("playeyes");
                 Dispatcher.UIThread.RunJobs();
                 var play = shell.Named<Control>("PlayTab")!;
                 T C<T>(string n) where T : Control => play.FindControl<T>(n)!;
@@ -547,15 +547,15 @@ public sealed class PlayWallTests
                 var play = shell.Named<PlayTabView>("PlayTab")!;
                 Assert.False(play.IsVisible); // hidden startup attach starts no Play-local animation
                 var targets = MainShellWindow.FindStaggerTargets(play).ToArray();
-                Assert.Equal(8, targets.Length);
-                Assert.Equal("GamesGrid", targets[2].Name);
+                Assert.Equal(8, targets.Length);   // capped at 8; the collapsed games zone takes no slot (declutter wave 2)
+                Assert.DoesNotContain(targets, t => t.Name is "GamesGrid" or "ZoneGames");
                 void AtRest(Control target)
                 {
                     Assert.Equal(1, target.Opacity);
                     Assert.Equal(0, Assert.IsType<global::Avalonia.Media.TranslateTransform>(target.RenderTransform).Y);
                 }
 
-                shell.ShowTab("play");
+                shell.ShowTab("playeyes");
                 Assert.Same(play, shell.EnteringTab);
                 AvaloniaHeadlessPlatform.ForceRenderTimerTick();
                 Dispatcher.UIThread.RunJobs();
@@ -587,21 +587,21 @@ public sealed class PlayWallTests
                 Assert.All(targets, AtRest); // WPF ChromeFx.cs:400 cleanup on a new entrance
 
                 settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Reduced;
-                shell.ShowTab("play");
+                shell.ShowTab("playeyes");
                 Assert.Same(play, shell.EnteringTab);
                 Assert.All(targets, AtRest);
                 shell.StepTabTransition(100);
                 Assert.Equal(0.75, play.Opacity, 5); // WPF ChromeFx.cs:244 retains the crossfade
                 settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
                 shell.ShowTab("appsettings");
-                shell.ShowTab("play");
+                shell.ShowTab("playeyes");
                 Assert.Null(shell.EnteringTab);
                 Assert.Equal(1, play.Opacity);
                 Assert.All(targets, AtRest);
 
                 settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
                 shell.ShowTab("appsettings");
-                shell.ShowTab("play");
+                shell.ShowTab("playeyes");
                 shell.StepTabTransition(50);
                 shell.Close();
                 Assert.Null(shell.EnteringTab);
@@ -702,7 +702,7 @@ public sealed class PlayWallTests
             try
             {
                 shell.Show();
-                shell.ShowTab("play");
+                shell.ShowTab("playeyes");
                 shell.CompleteTabTransition();
                 Dispatcher.UIThread.RunJobs();
                 var play = shell.Named<PlayTabView>("PlayTab")!;

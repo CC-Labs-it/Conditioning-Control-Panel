@@ -134,7 +134,7 @@ public sealed class TabAmbientRegistryTests
             Assert.False(room.IsTicking);
 
             // WPF retired Play's Rabbit Hole canvas on 2026-09-18: no replacement loop.
-            shell.ShowTab("play"); Settle();
+            shell.ShowTab("playeyes"); Settle();
             Assert.Empty(shell.Named<PlayTabView>("PlayTab")!.GetVisualDescendants().OfType<AmbientFxCanvas>());
             Assert.False(registry.ContainsKey("play"));
         }

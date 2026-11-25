@@ -84,7 +84,7 @@ public class FavoritesRailParityTests
             Assert.DoesNotContain(drawer.RecentList.Children.OfType<Button>(), b => Equals(b.Tag, "tab.haptics"));
             Assert.NotSame(chip, Assert.Single(shell.SettingsPage!.FindControl<StackPanel>("FavoritesList")!.Children));
             Assert.IsType<ImageBrush>(chip.Background);
-            shell.ShowTab("play");
+            shell.ShowTab("playeyes");
             Assert.False(drawer.IsOpen);
             Assert.Equal(0, drawer.Body.Width);
             Assert.Null(drawer.Body.Transitions);
@@ -343,7 +343,7 @@ public class FavoritesRailParityTests
         try
         {
             shell.Show();
-            shell.ShowTab("play");
+            shell.ShowTab("playeyes");
             mod.Manifest.FxPalette = new ModFxPalette { GlowColor = "#123456" };
             CoreMods.RaiseModChanged(null, mod);
             Dispatcher.UIThread.RunJobs();

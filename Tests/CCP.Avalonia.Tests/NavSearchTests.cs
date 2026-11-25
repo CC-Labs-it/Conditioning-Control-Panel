@@ -18,6 +18,7 @@ using IconVariant = FluentIcons.Common.IconVariant;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.UI;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -123,28 +124,35 @@ public sealed class NavSearchTests
         SettingsPaletteWindow.CloseIfOpen();
     });
 
+    // Declutter wave 2 (2026-11-15): the Games row no longer scrolls a Play zone (the games left
+    // the wall); "play" opens the launcher's Games door through Core PanelDoorLink and the
+    // panel stays on the page it was on.
     [Fact]
-    public Task GamesRowReturnsToTheGamesZoneAfterTheWallWasScrolled() => Shell(shell =>
+    public Task GamesRowOpensTheLauncherGamesDoor() => Shell(shell =>
     {
-        shell.ShowTab("play");
-        Dispatcher.UIThread.RunJobs();
-        var play = shell.Named<ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView>("PlayTab")!;
-        var scroll = play.FindControl<ScrollViewer>("WallScroll")!;
-        scroll.Offset = new Vector(0, 400);
-        Dispatcher.UIThread.RunJobs();
-        Assert.True(scroll.Offset.Y > 0, "the wall must be scrolled before the palette landing");
+        var hook = PanelDoorLink.OpenLauncherDoor;
+        var opened = new System.Collections.Generic.List<string>();
+        try
+        {
+            PanelDoorLink.OpenLauncherDoor = opened.Add;
+            shell.ShowTab("presets");
+            Dispatcher.UIThread.RunJobs();
 
-        SettingsPaletteWindow.Toggle(shell);
-        var palette = OpenPalette();
-        palette.FindControl<TextBox>("TxtQuery")!.Text = "games";
-        Dispatcher.UIThread.RunJobs();
-        var list = palette.FindControl<ListBox>("ListResults")!;
-        list.SelectedItem = list.Items.Cast<PaletteRow>().Single(r => r.Entry.Id == "tab.play");
-        Enter(palette);
+            SettingsPaletteWindow.Toggle(shell);
+            var palette = OpenPalette();
+            palette.FindControl<TextBox>("TxtQuery")!.Text = "games";
+            Dispatcher.UIThread.RunJobs();
+            var list = palette.FindControl<ListBox>("ListResults")!;
+            var row = list.Items.Cast<PaletteRow>().Single(r => r.Entry.Id == "tab.play");
+            Assert.Null(row.Entry.PlayZone);
+            list.SelectedItem = row;
+            Enter(palette);
 
-        Assert.False(SettingsPaletteWindow.IsOpen);
-        Assert.Equal("play", shell.CurrentTab);
-        Assert.Equal(0, scroll.Offset.Y);
+            Assert.False(SettingsPaletteWindow.IsOpen);
+            Assert.Equal(new[] { "games" }, opened);
+            Assert.Equal("presets", shell.CurrentTab);
+        }
+        finally { PanelDoorLink.OpenLauncherDoor = hook; }
     });
 
     [Fact]
