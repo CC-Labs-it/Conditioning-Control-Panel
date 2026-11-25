@@ -70,6 +70,38 @@ public sealed class WebcamTrackerTests
         }
     });
 
+    [Fact]
+    public void ShutdownDoesNotWaitForBlockedOpenAndDiscardsLateSuccess()
+    {
+        WithConsent(true, () =>
+        {
+            var tracker = new WebcamTracker();
+            var source = new FakeSource();
+            using var entered = new ManualResetEventSlim();
+            using var release = new ManualResetEventSlim();
+            source.Opening = () => { entered.Set(); release.Wait(); };
+            WebcamTracker.SourceFactory = () => source;
+            var start = tracker.StartAsync();
+            try
+            {
+                Assert.True(entered.Wait(TimeSpan.FromSeconds(20)));
+                var shutdown = System.Threading.Tasks.Task.Run(tracker.Shutdown);
+                Assert.True(shutdown.Wait(TimeSpan.FromSeconds(2)));
+            }
+            finally { release.Set(); }
+            Assert.True(start.Wait(TimeSpan.FromSeconds(20)));
+            Assert.False(start.Result);
+            Assert.True(source.Disposed);
+            Assert.False(tracker.IsRunning);
+            try
+            {
+                Assert.False(tracker.Start());
+                Assert.Equal(1, source.Opens);
+            }
+            finally { tracker.Stop(); }
+        });
+    }
+
     private sealed class DriftHook : IDisposable
     {
         public bool Disposed;
