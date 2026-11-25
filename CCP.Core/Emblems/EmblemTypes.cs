@@ -28,6 +28,13 @@ public enum EmblemSubject { Image, Video, Bubble, Word }
 public enum EmblemInk { Main, Cut, Soft, Paper, Pic, Tape, Fixed }
 
 /// <summary>
+/// The sticker edge around an emblem (ccp-bugs #1742): <see cref="White"/> is the approved look,
+/// <see cref="Dark"/> a near-black outline, <see cref="DarkRim"/> that outline with a thin light rim
+/// outside it. Passes and widths: <see cref="EmblemPalette.EdgePasses"/>.
+/// </summary>
+public enum EmblemEdge { White, Dark, DarkRim }
+
+/// <summary>
 /// One drawing pass of an emblem. <paramref name="PathData"/> is SVG path syntax in the 32 x 32
 /// space with every transform already baked in (absolute M/L/C/Q/A/Z only), so a head only parses
 /// it. <paramref name="StrokeWidth"/> 0 means a fill; otherwise it is a stroke of that width in

@@ -10,6 +10,7 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using ConditioningControlPanel.Controls;
+using ConditioningControlPanel.Controls.Rows;
 using ConditioningControlPanel.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
@@ -829,11 +830,10 @@ namespace ConditioningControlPanel.Views.Tabs
             Grid.SetColumn(chip, 0);
             grid.Children.Add(chip);
 
-            e.Label = new TextBlock
-            {
-                VerticalAlignment = VerticalAlignment.Center,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-            };
+            // Readable Rows reach (owner 2026-11-25): the row label look, tinted with the Studio
+            // hue. It wraps, never trims; RackEntryStyle's 38 is a MinHeight so the row grows.
+            // The 4 px above and below only shows on a wrapped label: one line stays inside 38.
+            e.Label = new DoorLabel { HueKey = StudioRackRules.SelectedBarBrushKey, Margin = new Thickness(0, 4, 0, 4) };
             Grid.SetColumn(e.Label, 1);
             grid.Children.Add(e.Label);
 
@@ -985,13 +985,10 @@ namespace ConditioningControlPanel.Views.Tabs
                 Background = TileScrimBrush,
             });
 
-            e.TileLabel = new TextBlock
+            // The same door label as the resting strip, so a row reads the same picked or not.
+            e.TileLabel = new DoorLabel
             {
-                FontSize = 13,
-                FontWeight = FontWeights.SemiBold,
-                Foreground = Brushes.White,
-                VerticalAlignment = VerticalAlignment.Center,
-                TextTrimming = TextTrimming.CharacterEllipsis,
+                HueKey = StudioRackRules.SelectedBarBrushKey,
                 Margin = new Thickness(12, 0, TileLabelInset, 0),
             };
             tile.Children.Add(e.TileLabel);

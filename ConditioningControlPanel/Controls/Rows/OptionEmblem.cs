@@ -44,6 +44,9 @@ namespace ConditioningControlPanel.Controls.Rows
             // The inherited section hue repaints the picture when it changes.
             RowHue.HueProperty.OverrideMetadata(typeof(OptionEmblem), new FrameworkPropertyMetadata(
                 Colors.Transparent, FrameworkPropertyMetadataOptions.Inherits | FrameworkPropertyMetadataOptions.AffectsRender));
+            // So does the inherited sticker edge (ccp-bugs #1742).
+            RowHue.EdgeProperty.OverrideMetadata(typeof(OptionEmblem), new FrameworkPropertyMetadata(
+                EmblemPalette.ShippedEdge, FrameworkPropertyMetadataOptions.Inherits | FrameworkPropertyMetadataOptions.AffectsRender));
         }
 
         public OptionEmblem()
@@ -85,7 +88,8 @@ namespace ConditioningControlPanel.Controls.Rows
             var place = new MatrixTransform(m);
             place.Freeze();
 
-            double edge = EmblemPalette.StickerEdgeDip / scale;   // grid units
+            var passes = EmblemPalette.EdgePasses(RowHue.GetEdge(this));
+            double edge = passes[0].Dip / scale;                   // grid units, the outermost pass
             double dy = EmblemPalette.StickerShadowDyDip;          // DIP, straight down
 
             if (!on) dc.PushOpacity(EmblemPalette.OffEmblemOpacity);
@@ -104,8 +108,10 @@ namespace ConditioningControlPanel.Controls.Rows
             dc.Pop();
 
             dc.PushTransform(place);
-            // Pass 2: the white edge around the whole picture.
-            Silhouette(dc, parts, RowHue.Frozen(EmblemPalette.StickerEdge), edge);
+            // Pass 2: the edge around the whole picture, outermost first (white by default; dark,
+            // or dark inside a thin light rim, when the inherited RowHue.Edge asks: ccp-bugs #1742).
+            foreach (var (argb, dip) in passes)
+                Silhouette(dc, parts, RowHue.Frozen(argb), dip / scale);
 
             // Pass 3: the inks.
             foreach (var (geo, layer) in parts)
