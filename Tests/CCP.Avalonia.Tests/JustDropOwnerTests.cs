@@ -128,6 +128,64 @@ public sealed class JustDropOwnerTests
             return Task.CompletedTask;
         });
 
+    [Theory]
+    [InlineData("dtrh")]
+    [InlineData("piecebypiece")]
+    public Task X11OwnerRestacksOnActivationAndRestoreWithoutMinimizingGame(string id) =>
+        AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var getHandle = NativeWindowOwner.HandleForTests;
+            var restack = GameWindow.RestackGameAboveOwner;
+            NativeWindowOwner.HandleForTests = _ => new PlatformHandle(new IntPtr(42), "XID");
+            var owner = new Window();
+            var player = new GameWindow(GameWindow.Games[id]);
+            int calls = 0;
+            GameWindow.RestackGameAboveOwner = (game, shell) =>
+            {
+                Assert.Same(player, game);
+                Assert.Same(owner, shell);
+                calls++;
+                return true;
+            };
+            try
+            {
+                owner.Show(); player.Show();
+                player.AttachEligibleGameOwner(owner);
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(calls > 0);
+                calls = 0;
+                player.Activate(); owner.Activate();
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(calls > 0);
+                owner.WindowState = WindowState.Minimized;
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(WindowState.Normal, player.WindowState);
+                calls = 0;
+                owner.WindowState = WindowState.Normal;
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(calls > 0);
+                player.WindowState = WindowState.Minimized;
+                calls = 0;
+                owner.WindowState = WindowState.Minimized;
+                owner.WindowState = WindowState.Normal;
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(WindowState.Minimized, player.WindowState);
+                Assert.Equal(0, calls);
+                player.Close();
+                owner.WindowState = WindowState.Minimized;
+                owner.WindowState = WindowState.Normal;
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(0, calls);
+            }
+            finally
+            {
+                player.Close(); owner.Close(); Dispatcher.UIThread.RunJobs();
+                NativeWindowOwner.HandleForTests = getHandle;
+                GameWindow.RestackGameAboveOwner = restack;
+            }
+            return Task.CompletedTask;
+        });
+
     private static Task WithWindows(Action<GameWindow, Window, System.Collections.Generic.List<Window>> body) =>
         AvaloniaTestDispatcher.RunAsync(() =>
         {
