@@ -22,6 +22,28 @@ namespace CCP.Avalonia.Tests;
 /// (MockProviderV2, an Intiface address nobody listens on) - never a real toy.</summary>
 public sealed class HapticsHeadTests
 {
+    [Fact]
+    public void ConnectionFailureSurvivesRepaint() => AvaloniaTestDispatcher.Run(() =>
+    {
+        EnsureApplication();
+        WithHaptics(premium: true, mock: true, (h, _) =>
+        {
+            var tab = new HapticsTabView();
+            tab._hapticConnectFailure = new("label_failed", "haptics_connect_failed_hint", null);
+            tab.RefreshHapticConnectionUi();
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("label_failed"), tab.TxtHapticStatus.Text);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("haptics_connect_failed_hint"), tab.TxtHapticDevices.Text);
+            tab.RefreshHapticConnectionUi();
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("label_failed"), tab.TxtHapticStatus.Text);
+            tab._hapticConnectFailure = new("label_error", null, "device error");
+            tab.RefreshHapticConnectionUi();
+            Assert.Equal("device error", tab.TxtHapticDevices.Text);
+            CoreSettings.Current.Haptics.V2.Provider("mock").Enabled = false;
+            tab.BtnHapticConnect.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Null(tab._hapticConnectFailure);
+        });
+    });
+
     private static void EnsureApplication()
     {
         if (Application.Current is null)

@@ -71,19 +71,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             UpdateHapticPatternPreview();
         }
 
+        internal sealed record HapticConnectFailure(string StatusKey, string? DetailKey, string? Detail);
+        internal HapticConnectFailure? _hapticConnectFailure;
+
+        private void OnHapticLanguageChanged(object? sender, EventArgs e) => Dispatcher.UIThread.Post(() =>
+        {
+            if (BtnHapticConnect.IsEnabled) RefreshHapticConnectionUi();
+        });
+
         /// <summary>WPF RefreshHapticConnectionUi: status text + dot, button label, device line.</summary>
         internal void RefreshHapticConnectionUi()
         {
             var haptics = Haptics;
             var connected = haptics?.IsConnected == true;
-            SetKey(TxtHapticStatus, connected ? "label_connected" : "label_disconnected");
+            if (connected) _hapticConnectFailure = null;
+            var failure = _hapticConnectFailure;
+            SetKey(TxtHapticStatus, failure?.StatusKey ?? (connected ? "label_connected" : "label_disconnected"));
             var color = connected ? Color.FromRgb(0x00, 0xE6, 0x76) : Color.FromRgb(0xFF, 0x6B, 0x6B);
             TxtHapticStatus.Foreground = new SolidColorBrush(color);
             HapticStatusDot.Fill = new SolidColorBrush(color);
             SetKey(BtnHapticConnect.Content as TextBlock, connected ? "btn_disconnect" : "btn_connect");
 
             var count = haptics?.DeviceManager.Devices.Count ?? 0;
-            if (count == 0) SetKey(TxtHapticDevices, "label_no_devices");
+            if (failure?.DetailKey is { } detailKey) SetKey(TxtHapticDevices, detailKey);
+            else if (failure != null) SetText(TxtHapticDevices, failure.Detail ?? "");
+            else if (count == 0) SetKey(TxtHapticDevices, "label_no_devices");
             else SetText(TxtHapticDevices, Loc.GetF("haptics_devices_merged", count, haptics?.ProviderName ?? ""));
             foreach (var chip in _providerChips) chip.Sync(Cfg, haptics);
 
@@ -160,6 +172,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 RefreshHapticToys();
                 return;
             }
+            _hapticConnectFailure = null;
+            RefreshHapticConnectionUi();
             if (!new[] { "lovense", "buttplug", "mock" }.Any(k => Cfg.V2.Provider(k).Enabled))
             {
                 await ShowAsync("tab_haptics", Loc.Get("haptics_no_provider_enabled"));
@@ -186,14 +200,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             SetKey(BtnHapticConnect.Content as TextBlock, "login_connecting");
             BtnHapticConnect.IsEnabled = false;
-            // WPF writes label_failed + haptics_connect_failed_hint here, and its own finally-refresh
-            // repaints them straight away, so what the user sees is "Disconnected" + "no devices".
             try
             {
-                if (!await haptics.ConnectAsync()) Log.Information("Haptics connect failed");
+                var success = await haptics.ConnectAsync();
                 RefreshHapticToys();
+                if (!success) _hapticConnectFailure = new("label_failed", "haptics_connect_failed_hint", null);
             }
-            catch (Exception ex) { Log.Warning(ex, "Haptics connect error"); }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Haptics connect error");
+                _hapticConnectFailure = new("label_error", null, ex.Message);
+            }
             finally
             {
                 BtnHapticConnect.IsEnabled = true;

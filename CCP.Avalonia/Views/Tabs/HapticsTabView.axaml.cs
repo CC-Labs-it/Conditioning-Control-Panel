@@ -6,6 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Tabs
 {
@@ -51,6 +52,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             CoreMods.ModChanged += OnModChanged;
             ApplyFeatureArt();
             _attached = true;
+            LocalizationManager.Instance.LanguageChanged += OnHapticLanguageChanged;
             HookHapticService(true);
             RefreshHapticToys();
             SyncLiveStatusTimer();
@@ -60,6 +62,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             CoreMods.ModChanged -= OnModChanged;
             _attached = false;
+            LocalizationManager.Instance.LanguageChanged -= OnHapticLanguageChanged;
             HookHapticService(false);
             SyncLiveStatusTimer();
             base.OnDetachedFromVisualTree(e);
