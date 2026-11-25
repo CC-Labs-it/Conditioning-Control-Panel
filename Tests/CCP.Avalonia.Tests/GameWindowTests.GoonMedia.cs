@@ -58,6 +58,8 @@ public sealed partial class GameWindowTests
     {
         const string png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
         var old = GameWindow.GoonSavePicker;
+        var oldMaterialize = GoonOnlineMedia.Materialize;
+        var oldRelease = GoonOnlineMedia.ReleaseTempFile;
         var dir = Directory.CreateTempSubdirectory("goon-share-").FullName;
         var target = Path.Combine(dir, "card.png");
         string? asked = null;
@@ -87,8 +89,36 @@ public sealed partial class GameWindowTests
             Assert.Equal(Convert.FromBase64String(png), File.ReadAllBytes(target));
             w.Close();
         }
-        finally { GameWindow.GoonSavePicker = old; Directory.Delete(dir, true); }
+        finally
+        {
+            GameWindow.GoonSavePicker = old;
+            GoonOnlineMedia.Materialize = oldMaterialize;
+            GoonOnlineMedia.ReleaseTempFile = oldRelease;
+            Directory.Delete(dir, true);
+        }
     });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GoonShareCard_SaveTestRestoresMediaDelegates(bool checkRelease)
+    {
+        var oldMaterialize = GoonOnlineMedia.Materialize;
+        var oldRelease = GoonOnlineMedia.ReleaseTempFile;
+        try
+        {
+            GoonOnlineMedia.Materialize = null;
+            GoonOnlineMedia.ReleaseTempFile = null;
+            GoonShareCard_RefusesBadFramesAndSavesThePng();
+            if (checkRelease) Assert.Null(GoonOnlineMedia.ReleaseTempFile);
+            else Assert.Null(GoonOnlineMedia.Materialize);
+        }
+        finally
+        {
+            GoonOnlineMedia.Materialize = oldMaterialize;
+            GoonOnlineMedia.ReleaseTempFile = oldRelease;
+        }
+    }
 
     [Theory]
     [InlineData(false)]
