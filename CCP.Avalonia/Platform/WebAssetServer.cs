@@ -405,6 +405,17 @@ public sealed class WebAssetServer : IDisposable
             return file != null && new DirectoryInfo(ConditioningControlPanel.Services.Chaos.DtrhLoomStore.SpiralsFolder).LinkTarget == null
                 && new FileInfo(file).LinkTarget == null ? file : null;
         }
+        bool raceMod = rel.StartsWith("ccp.mod/", StringComparison.Ordinal);
+        if (raceMod)
+        {
+            var modRoot = GameMediaManifest.RaceModRoot();
+            if (modRoot == null) return null;
+            root = Path.GetFullPath(modRoot).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            rel = rel["ccp.mod/".Length..];
+            var parts = rel.Split('/');
+            if (parts.Length != 2 || parts[0] is not ("images" or "videos") || parts[1].Contains('\\')
+                || !MediaTypeSniffer.MediaExtensions.Contains(Path.GetExtension(rel)) || HoldsUserData(root)) return null;
+        }
         bool art = rel.StartsWith("__art__/", StringComparison.Ordinal);
         if (art)
         {
@@ -441,7 +452,7 @@ public sealed class WebAssetServer : IDisposable
         if (!Inside(full, root)) return null;
         if (!File.Exists(full))
         {
-            if (art || asset || whisper || !ContentLocator.IsIntakeWebAudio(rel) || ContentRoot?.Invoke() is not { Length: > 0 } content)
+            if (art || asset || whisper || raceMod || !ContentLocator.IsIntakeWebAudio(rel) || ContentRoot?.Invoke() is not { Length: > 0 } content)
                 return null;
             root = Path.GetFullPath(content).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
             if (HoldsUserData(root)) return null;

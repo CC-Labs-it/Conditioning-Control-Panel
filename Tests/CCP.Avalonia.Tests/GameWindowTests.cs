@@ -12,6 +12,7 @@ using Avalonia.Headless;
 using Avalonia.Skia;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
+using CCP.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Games;
@@ -1027,6 +1028,92 @@ public sealed partial class GameWindowTests
             Assert.Empty(xp);
         }
         Assert.False(w.IsVisible);
+    });
+
+    [Fact]
+    public void Race_CreatorModVisualsReachPageAndPanicCloses() => RunRace("rt.original.03", (_, _, _) =>
+    {
+        var old = CoreMods.ActiveModPackageProvider;
+        var dir = Directory.CreateTempSubdirectory("race-mod-").FullName;
+        try
+        {
+            var images = Directory.CreateDirectory(Path.Combine(dir, "resources", "dtrh", "images")).FullName;
+            var file = Path.Combine(images, "mod pic.png");
+            File.WriteAllText(file, "image");
+            CoreMods.ActiveModPackageProvider = () => new ModPackage(new ModManifest(), dir, false);
+            var w = OpenRetiredRace();
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            var manifest = sent.Single(x => (string?)x["type"] == "manifest");
+            var entry = Assert.Single(manifest["images"]!);
+            Assert.Equal("mod:mod pic.png", (string?)entry["name"]);
+            Assert.Equal("/ccp.mod/images/mod%20pic.png", (string?)entry["url"]);
+            var server = GameWindow.Server();
+            Assert.Equal(file, server.ResolveFile((string)entry["url"]!));
+            Assert.Null(server.ResolveFile("/ccp.mod/../dtrh.json"));
+            Assert.Null(server.ResolveFile("/ccp.mod/images/../dtrh.json"));
+            GameWindow.CloseAllForPanic();
+            w.HandleMessage("{\"type\":\"exit-done\"}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(w.IsVisible);
+        }
+        finally { CoreMods.ActiveModPackageProvider = old; Directory.Delete(dir, true); }
+    });
+
+    [Fact]
+    public void Race_CreatorModDotMediaIsServedInReplaceMode() => RunRace("rt.original.03", (_, _, _) =>
+    {
+        var old = CoreMods.ActiveModPackageProvider;
+        var dir = Directory.CreateTempSubdirectory("race-dot-mod-").FullName;
+        GameWindow? w = null;
+        try
+        {
+            var root = Directory.CreateDirectory(Path.Combine(dir, "resources", "dtrh")).FullName;
+            var images = Directory.CreateDirectory(Path.Combine(root, "images")).FullName;
+            var videos = Directory.CreateDirectory(Path.Combine(root, "videos")).FullName;
+            var image = Path.Combine(images, ".scene.png");
+            var video = Path.Combine(videos, ".scene.mp4");
+            File.WriteAllText(image, "image");
+            File.WriteAllText(video, "video");
+            File.WriteAllText(Path.Combine(root, "dtrh.json"), "{\"imageMode\":\"replace\"}");
+            CoreMods.ActiveModPackageProvider = () => new ModPackage(new ModManifest(), dir, false);
+            var local = Directory.CreateDirectory(Path.Combine(CorePaths.EffectiveAssets, "images")).FullName;
+            File.WriteAllText(Path.Combine(local, "local.png"), "local");
+            w = OpenRetiredRace();
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            var manifest = sent.Single(x => (string?)x["type"] == "manifest");
+            var imageEntry = Assert.Single(manifest["images"]!);
+            var videoEntry = Assert.Single(manifest["videos"]!);
+            Assert.Equal("mod:.scene.png", (string?)imageEntry["name"]);
+            Assert.Equal("mod:.scene.mp4", (string?)videoEntry["name"]);
+            var server = GameWindow.Server();
+            Assert.Equal(image, server.ResolveFile((string)imageEntry["url"]!));
+            Assert.Equal(video, server.ResolveFile((string)videoEntry["url"]!));
+            var hidden = Directory.CreateDirectory(Path.Combine(images, ".hidden")).FullName;
+            File.WriteAllText(Path.Combine(hidden, "file.png"), "nested");
+            File.WriteAllText(Path.Combine(images, ".scene.txt"), "text");
+            var outside = Path.Combine(dir, "outside.png");
+            File.WriteAllText(outside, "outside");
+            Assert.Null(server.ResolveFile("/ccp.mod/images/../dtrh.json"));
+            Assert.Null(server.ResolveFile("/ccp.mod/images/../../../outside.png"));
+            Assert.Null(server.ResolveFile("/ccp.mod/images/.hidden/file.png"));
+            Assert.Null(server.ResolveFile("/ccp.mod/images/.scene.txt"));
+            Symlinks.RequireOrSkip();
+            File.CreateSymbolicLink(Path.Combine(images, ".link.png"), outside);
+            Assert.Null(server.ResolveFile("/ccp.mod/images/.link.png"));
+        }
+        finally
+        {
+            try
+            {
+                w?.Close();
+                if (w != null) Assert.DoesNotContain(w, GameWindow.OpenWindowsForTests());
+            }
+            finally { CoreMods.ActiveModPackageProvider = old; Directory.Delete(dir, true); }
+        }
     });
 
     /// <summary>WPF OnPageReady :255 (init with the race settings block, then manifest) and OnRunEnded :431:

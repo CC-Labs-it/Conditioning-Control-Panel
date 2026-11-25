@@ -173,7 +173,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 var server = _server;
                 var m = (_library ??= new(() => server == null ? new() : GameMediaManifest.BuildLocal(server.AssetUrl))).Value;
-                Post(GameMediaManifest.Frame(m));
+                // Copy the shared local snapshot before the race-only creator mod merge.
+                var raceMedia = new GameMediaManifest.Manifest { Skipped = m.Skipped, Truncated = m.Truncated };
+                raceMedia.Images.AddRange(m.Images);
+                raceMedia.Videos.AddRange(m.Videos);
+                GameMediaManifest.MergeRaceModMedia(raceMedia, rel => "/ccp.mod/" + string.Join('/', rel.Split('/').Select(Uri.EscapeDataString)));
+                Post(GameMediaManifest.Frame(raceMedia));
                 var favorites = DtrhAssetStatsStore.TopAssets(12);
                 if (favorites.Count > 0) Post(new { type = "favorites", names = favorites });
                 PostRaceLoomList();

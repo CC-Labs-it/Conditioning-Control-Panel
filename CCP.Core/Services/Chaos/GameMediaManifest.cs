@@ -96,6 +96,56 @@ namespace ConditioningControlPanel.Services.Chaos
         internal static Manifest BuildActive(Func<string, string> assetUrl) =>
             Build(CorePaths.EffectiveAssets, assetUrl, CoreSettings.Current.DisabledAssetPaths);
 
+        // WPF DtrhModContent.cs:55,121: the active creator mod may mix or replace race visuals.
+        internal static string? RaceModRoot()
+        {
+            try
+            {
+                var installed = CoreMods.ActiveModPackage?.InstalledPath;
+                if (string.IsNullOrEmpty(installed)) return null;
+                var root = Path.Combine(installed, "resources", "dtrh");
+                return Directory.Exists(root) ? root : null;
+            }
+            catch { return null; }
+        }
+
+        internal static void MergeRaceModMedia(Manifest manifest, Func<string, string> url)
+        {
+            var root = RaceModRoot();
+            if (root == null) return;
+            try
+            {
+                bool replace = false;
+                try
+                {
+                    var json = Path.Combine(root, "dtrh.json");
+                    if (File.Exists(json))
+                        replace = string.Equals((string?)Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(json))["imageMode"]?.ToString().Trim(), "replace", StringComparison.OrdinalIgnoreCase);
+                }
+                catch { } // malformed optional manifest uses mix
+                foreach (bool image in new[] { true, false })
+                {
+                    var folder = image ? "images" : "videos";
+                    var dir = Path.Combine(root, folder);
+                    if (!Directory.Exists(dir)) continue;
+                    var entries = new List<Entry>();
+                    foreach (var file in Directory.EnumerateFiles(dir))
+                    {
+                        if (!(image ? ImageExts : VideoExts).Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase)) continue;
+                        long size;
+                        try { size = new FileInfo(file).Length; } catch { continue; }
+                        if (size <= 0 || size > (image ? MaxImageBytes : MaxVideoBytes)) continue;
+                        var name = Path.GetFileName(file);
+                        entries.Add(new Entry("mod:" + name, url(folder + "/" + name)));
+                    }
+                    var target = image ? manifest.Images : manifest.Videos;
+                    if (replace && entries.Count > 0) target.Clear();
+                    target.AddRange(entries);
+                }
+            }
+            catch (Exception ex) { Log.Warning("Race mod media failed: {E}", ex.Message); }
+        }
+
         /// <summary>The page's <c>manifest</c> frame (WPF DtrhHostService.PostManifest / CaucusHostService.OnPageReady),
         /// read by hostMedia.js: {name,url} per entry, the skipped count and the truncation flag.</summary>
         internal static object Frame(Manifest m) => new
