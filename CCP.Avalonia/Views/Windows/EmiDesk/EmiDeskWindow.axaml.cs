@@ -1278,7 +1278,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             if (PresentationActive || InputLocked || _transiting) { e.Handled = true; return; }   // the show owns her
             try
             {
-                _rainGlassClick = _rainGlass && GlassRect.Contains(e.GetPosition(_bodyRoot));
+                _rainGlassClick = (_rainGlass || _glassChannel == "spiral") && GlassRect.Contains(e.GetPosition(_bodyRoot));
                 try { RaiseActivity(); } finally { _rainGlassClick = false; }
                 DisarmPet();
                 // Moving her walks the pointer off her silhouette in the first few pixels at any
