@@ -139,6 +139,8 @@ public sealed class ModChoiceTests
         var xp = shell.FindControl<Border>("XPBar")!;
         var primary = shell.FindControl<TextBlock>("TxtBannerPrimary")!;
         var secondary = shell.FindControl<TextBlock>("TxtBannerSecondary")!;
+        // The visible lead words sit in an inner TextBlock inside the InlineUIContainer.
+        var lead = primary.GetLogicalDescendants().OfType<TextBlock>().Single(t => t.Name == "TxtBannerPrimaryLead");
         foreach (var id in new[] { BuiltInMods.CCPDefaultId, BuiltInMods.DronificationId, BuiltInMods.CCPDefaultId })
         {
             AvApp.Mods!.ActivateMod(id);
@@ -146,6 +148,7 @@ public sealed class ModChoiceTests
             Assert.Same(Application.Current!.Resources["AccentGradientBrush"], xp.Background);
             Assert.Equal(((ISolidColorBrush)Application.Current.Resources["PinkBrush"]!).Color, ((ISolidColorBrush)primary.Foreground!).Color);
             Assert.Equal(((ISolidColorBrush)Application.Current.Resources["PinkBrush"]!).Color, ((ISolidColorBrush)secondary.Foreground!).Color);
+            Assert.Equal(((ISolidColorBrush)Application.Current.Resources["PinkBrush"]!).Color, ((ISolidColorBrush)lead.Foreground!).Color);
         }
         await Task.CompletedTask;
     });

@@ -974,8 +974,9 @@
                                        Opacity="1">
                                 <InlineUIContainer BaselineAlignment="Center">
                                     <DockPanel>
-                                        <TextBlock DockPanel.Dock="Left" FontSize="14" FontStyle="Italic"
-                                                   Foreground="{DynamicResource PinkButtonHoveredBrush}" TextTrimming="CharacterEllipsis">
+                                        <!-- WPF MainWindow.xaml.cs:2647: the lead takes TxtBannerPrimary's accent. -->
+                                        <TextBlock x:Name="TxtBannerPrimaryLead" DockPanel.Dock="Left" FontSize="14" FontStyle="Italic"
+                                                   Foreground="{DynamicResource PinkBrush}" TextTrimming="CharacterEllipsis">
                                             <Run Text="{loc:Str label_if_you_love_the_project_please}"/>
                                             <Run Text="{loc:Str label_consider_supporting_it}" FontWeight="Bold" FontStyle="Normal" Foreground="White"/>
                                             <Run Text=" "/>
