@@ -18,8 +18,11 @@ namespace CCP.Avalonia.Tests;
 /// meta-command (:594) and DisposeAll's meta flush: the Play card's door on this head.</summary>
 public sealed partial class GameWindowTests
 {
-    private static void RunArcademy(bool lab, Action<List<string>, List<string>, string> body) => Run((_, launcher) =>
+    private static MainShellWindow? _arcademyShell;
+
+    private static void RunArcademy(bool lab, Action<List<string>, List<string>, string> body) => Run((shell, launcher) =>
     {
+        _arcademyShell = shell;
         var (oldLab, oldDenied, oldNotice, oldMeta, oldAudio) = (CoreEntitlement.HasLabProvider, CoreEntitlement.ShowDeniedHandler,
             GameWindow.ArcademyNotice, GameWindow.NewArcademyMeta, CoreSettings.Current.AudioOnlySession);
         var metaPath = Path.Combine(Directory.CreateTempSubdirectory("arcademy-meta-").FullName, "arcademy_meta.json");
@@ -42,6 +45,7 @@ public sealed partial class GameWindowTests
                 (oldLab, oldDenied, oldNotice, oldMeta);
             CoreSettings.Current.AudioOnlySession = oldAudio;
             Directory.Delete(Path.GetDirectoryName(metaPath)!, true);
+            _arcademyShell = null;
         }
     });
 
@@ -109,5 +113,76 @@ public sealed partial class GameWindowTests
         Assert.Null(GameWindow.OpenForTests("arcademy"));
         Assert.False(w.ArcademyWatchRunning);
         Assert.Equal(1, (int)JObject.Parse(File.ReadAllText(metaPath))["seen"]!);   // no debounce left running
+    });
+    [Fact]
+    public void Arcademy_Window_InjectsTheCarrierForWebKit() => RunArcademy(lab: true, (_, _, _) =>
+        Assert.True(GameWindow.Launch("arcademy")!.Web.InjectCarrier));   // arcademy/bridge.js reads only chrome.webview
+
+    [Fact]
+    public void Arcademy_ReadyInFront_KeepsEscapeAsItsPause() => RunArcademy(lab: true, (_, _, _) =>
+    {
+        var shell = _arcademyShell!;
+        var w = GameWindow.Launch("arcademy")!;
+        Assert.Equal(ConditioningControlPanel.Services.Safety.PanicPolicy.KeptEscapePage.Arcademy, w.KeptEscapePage);
+        var frames = new List<JObject>();
+        w.Posted += json => frames.Add(JObject.Parse(json));
+        w.HandleMessage("{\"type\":\"ready\",\"protocol\":1}");
+        w.Activate();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(shell.TryGamePauseOnEscape(DateTime.UtcNow));
+        Assert.Contains(frames, f => (string?)f["type"] == "kept-escape");
+        Assert.Same(w, GameWindow.OpenForTests("arcademy"));
+    });
+
+    [Fact]
+    public void Arcademy_ClassEnded_PaysXpOnceRecordsAttendanceAndPunches() => RunArcademy(lab: true, (_, _, metaPath) =>
+    {
+        var oldXp = CoreProgression.AddXPProvider;
+        var xp = new List<(double, string)>();
+        try
+        {
+            CoreProgression.AddXPProvider = (a, src) => xp.Add((a, src));
+            var w = GameWindow.Launch("arcademy")!;
+            var frames = new List<JObject>();
+            w.Posted += json => frames.Add(JObject.Parse(json));
+            const string ended = "{\"type\":\"class-ended\",\"gameKey\":\"sort\",\"gradeTier\":2,\"grade\":\"A\",\"flavorXp\":99,\"dareWon\":\"S\",\"dayUtc\":\"2026-01-02\"}";
+            w.HandleMessage(ended);
+            var pay = Assert.Single(frames, f => (string?)f["type"] == "payout-result");
+            Assert.Equal(60 * 1.25 + 15, (double)pay["xp"]!);           // tier 2, A, flavour capped at 15
+            Assert.Equal(15, (double)pay["dareXp"]!);
+            Assert.Equal(1, (int)pay["streak"]!);
+            Assert.False((bool)pay["retake"]!);
+            Assert.Equal(new[] { (90.0, "Other"), (15.0, "Quest") }, xp);
+            Assert.Single(frames, f => (string?)f["type"] == "punchcard-result");
+            Assert.Contains(frames, f => (string?)f["type"] == "meta");
+
+            frames.Clear();
+            w.HandleMessage(ended);                                       // same UTC day: a free retake
+            pay = Assert.Single(frames, f => (string?)f["type"] == "payout-result");
+            Assert.True((bool)pay["retake"]!);
+            Assert.Equal(0, (double)pay["xp"]!);
+            Assert.Equal(2, xp.Count);
+        }
+        finally { CoreProgression.AddXPProvider = oldXp; }
+    });
+
+    [Fact]
+    public void Arcademy_AudioOnlyFlippedWhileOpen_SuspendsThenResumes() => RunArcademy(lab: true, (_, _, _) =>
+    {
+        var w = GameWindow.Launch("arcademy")!;
+        var frames = new List<JObject>();
+        w.Posted += json => frames.Add(JObject.Parse(json));
+        CoreSettings.Current.AudioOnlySession = true;
+        CoreSettings.Current.AudioOnlySession = false;
+        Dispatcher.UIThread.RunJobs();
+        var suspends = frames.Where(f => (string?)f["type"] == "suspend").ToList();
+        Assert.Equal(new[] { true, false }, suspends.Select(f => (bool)f["on"]!));
+        Assert.All(suspends, f => Assert.Equal("audio-only", (string?)f["reason"]));
+        w.Close();
+        Dispatcher.UIThread.RunJobs();
+        frames.Clear();
+        CoreSettings.Current.AudioOnlySession = true;                    // unhooked on close
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(frames);
     });
 }

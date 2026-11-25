@@ -2206,6 +2206,7 @@ public sealed partial class GameWindowTests
     [InlineData(GameWindow.PbpId, "Board", "pbp:escape")]
     [InlineData("breakoutdemo", "Breakout", "kept-escape")]
     [InlineData(GameWindow.DtrhId, "Dtrh", "kept-escape")]
+    [InlineData("arcademy", "Arcademy", "kept-escape")]
     [InlineData(GameWindow.GlassroadId, "Glassroad", "kept-escape")]
     [InlineData(GameWindow.PrizeCounterId, "Counter", "kept-escape")]
     [InlineData(GameWindow.FypId, "None", null)]

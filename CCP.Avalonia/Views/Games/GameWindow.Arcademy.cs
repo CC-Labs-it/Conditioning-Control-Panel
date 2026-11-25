@@ -55,6 +55,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _arcademyWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             _arcademyWatch.Tick += (_, _) => CheckArcademyHeartbeat(ArcademyUtcNow());
             _arcademyWatch.Start();
+            _arcademySettingsService = CoreSettings.Service;
+            if (_arcademySettingsService != null) _arcademySettingsService.CurrentReplaced += OnArcademySettingsReplaced;
+            HookArcademySettings();
+        }
+
+        private SettingsService? _arcademySettingsService;
+        private ConditioningControlPanel.Models.AppSettings? _arcademySettings;
+
+        // WPF HookSettingsWatch (:5721-5768): watch the live settings object, rebound after a cloud restore.
+        private void HookArcademySettings()
+        {
+            if (_arcademySettings != null) _arcademySettings.PropertyChanged -= OnArcademySettingChanged;
+            _arcademySettings = CoreSettings.Current;
+            _arcademySettings.PropertyChanged += OnArcademySettingChanged;
+        }
+
+        private void OnArcademySettingsReplaced() => Dispatcher.UIThread.Post(() => { if (!_closing) HookArcademySettings(); });
+
+        // WPF OnSettingChangedInApp (:5817-5837): an audio-only session switched on mid-class suspends the
+        // page; switched off resumes it. WPF's panic-suspend hold has no twin here: a panic closes the window.
+        private void OnArcademySettingChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName != nameof(ConditioningControlPanel.Models.AppSettings.AudioOnlySession) || sender is not ConditioningControlPanel.Models.AppSettings s) return;
+            bool on = s.AudioOnlySession;
+            Log.Information("Arcademy: audio-only session {State}{Mid}", on ? "started" : "ended", _arcademyClassActive ? " mid-class" : "");
+            Dispatcher.UIThread.Post(() => { if (!_closing) Post(new { type = "suspend", on, reason = "audio-only" }); });
         }
 
         private void StopArcademyWatch()
@@ -65,6 +91,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try { _arcademyMeta?.FlushSave(); }
             catch (Exception ex) { Log.Warning(ex, "Arcademy meta flush failed"); }
             _arcademyMeta = null;
+            if (_arcademySettings != null) _arcademySettings.PropertyChanged -= OnArcademySettingChanged;
+            if (_arcademySettingsService != null) _arcademySettingsService.CurrentReplaced -= OnArcademySettingsReplaced;
+            (_arcademySettings, _arcademySettingsService) = (null, null);
         }
 
         partial void HandleArcademyMessage(JObject message, ref bool handled)
@@ -143,17 +172,90 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     handled = true;
                     break;
                 case "class-left":
-                case "class-ended":
                     _arcademyClassActive = false;
                     handled = true;
                     break;
+                case "class-ended":
+                    _arcademyClassActive = false;
+                    handled = true;
+                    OnArcademyClassEnded(message);
+                    break;
             }
+        }
+
+        // WPF XpBase / XpGradeMult / FlavorXpCap / DareBonusXp / DareKinds (ArcademyHostService.cs:3640-3665).
+        private static readonly Dictionary<int, double> ArcademyXpBase = new() { [1] = 40, [2] = 60, [3] = 85, [4] = 110 };
+        private static readonly Dictionary<string, double> ArcademyXpGradeMult = new(StringComparer.OrdinalIgnoreCase)
+        { ["S+"] = 1.6, ["S"] = 1.5, ["A"] = 1.25, ["B"] = 1.0, ["C"] = 0.6, ["pass"] = 1.0 };
+        private static readonly HashSet<string> ArcademyDareKinds = new(StringComparer.Ordinal) { "S", "streak", "fast" };
+
+        /// <summary>WPF OnClassEnded (:3735-3916), its signed-out ending: the XP table behind the farm guard, the
+        /// dare bonus, the attendance and streak write, the punch card, then meta, payout-result and punchcard-result.
+        /// Not hosted here, matching the init's empty economy: the till (tickets and tokens go out as zero), the
+        /// Extra Credit lever (none unlocked, so S+ grades S), the Sparkles slip and campus presence.</summary>
+        internal void OnArcademyClassEnded(JObject o)
+        {
+            try
+            {
+                // Every field read defensively: one malformed field must never cost the attendance write.
+                string? Str(string n) => o[n] is JValue { Type: JTokenType.String } v ? (string?)v.Value : null;
+                double Num(string n, double fallback) => o[n] is JValue { Type: JTokenType.Integer or JTokenType.Float } v
+                    ? Convert.ToDouble(v.Value, CultureInfo.InvariantCulture)
+                    : double.TryParse(Str(n), NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : fallback;
+                var gameKey = (Str("gameKey") ?? "").Trim();
+                if (gameKey.Length > 64) gameKey = gameKey[..64];
+                var tierRaw = Num("gradeTier", 1);
+                int tier = double.IsFinite(tierRaw) ? (int)Math.Clamp(Math.Round(tierRaw), 1, 4) : 1;   // WPF ReadInt: Convert.ToInt32 rounds
+                bool zen = o["zen"] is JValue { Type: JTokenType.Boolean } z && (bool)z;
+                var grade = (Str("grade") ?? "").Trim();
+                if (zen || !ArcademyXpGradeMult.ContainsKey(grade)) grade = zen ? "pass" : "C";
+                if (string.Equals(grade, "S+", StringComparison.OrdinalIgnoreCase)) grade = "S";
+                var flavorRaw = Num("flavorXp", 0);
+                double flavor = double.IsFinite(flavorRaw) ? Math.Clamp(flavorRaw, 0, 15) : 0;
+                var dayUtc = (Str("dayUtc") ?? "").Trim();
+                if (!DateTime.TryParseExact(dayUtc, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+                    dayUtc = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                var meta = ArcademyMeta();
+                bool firstToday = meta.TryClaimXpDay(gameKey, dayUtc);
+                double xp = firstToday ? ArcademyXpBase[tier] * ArcademyXpGradeMult[grade] + flavor : 0;
+                int levelBefore = CoreSettings.Current.PlayerLevel;
+                if (xp > 0) CoreProgression.AddXP(xp, "Other");
+                var dareWon = (Str("dareWon") ?? "").Trim();
+                if (dareWon.Length > 16) dareWon = dareWon[..16];
+                bool darePaid = firstToday && ArcademyDareKinds.Contains(dareWon);
+                if (darePaid) CoreProgression.AddXP(15, "Quest");
+                int levelAfter = CoreSettings.Current.PlayerLevel;
+                // LOCAL date rolls attendance (#978); RecordAttendance is idempotent per (day, gameKey).
+                var localDate = DateTime.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                var (streak, perfect, classesToday, slipsSpent) = meta.RecordAttendance(localDate, gameKey);
+                ArcademyPunchCards.PunchMint? punch = null;
+                try
+                {
+                    punch = meta.StampPunchCard(gameKey, localDate, ArcademyEconomy.IsTokenGrade(grade, zen: false));
+                    if (punch is { Minted: true }) ArcademySyncService.NotifyMutation();
+                }
+                catch (Exception ex) { Log.Warning("Arcademy punch card: {E}", ex.Message); }
+                Post(meta.SnapshotMessage());
+                Post(new
+                {
+                    type = "payout-result", gameKey, xp, levelUp = levelAfter > levelBefore, streak,
+                    perfectAttendance = perfect, classesToday, retake = !firstToday, dareXp = darePaid ? 15.0 : 0,
+                    grade, tickets = 0, ticketBase = 0, ticketMult = 1.0, tokenMinted = false, payday = 1,
+                    lever = "standard", lateSlipUsed = slipsSpent > 0, wallet = new JObject { ["t"] = 0, ["k"] = 0 },
+                });
+                if (punch is { } m)
+                    Post(new { type = "punchcard-result", gameKey, reason = "daily", minted = m.Punches, justUnlocked = m.JustUnlocked, holes = ArcademyPunchCards.Holes, card = m.Card });
+                Log.Information("Arcademy: class complete ({Game}, tier {Tier}, grade {Grade}) = {Xp:0} XP{Retake}, streak {Streak}, {Today}/4 today",
+                    gameKey, tier, grade, xp, firstToday ? "" : " (retake)", streak, classesToday);
+            }
+            catch (Exception ex) { Log.Warning("Arcademy class-ended: {E}", ex.Message); }
         }
 
         private ArcademyMetaStore ArcademyMeta() => _arcademyMeta ??= NewArcademyMeta(msg => Dispatcher.UIThread.Post(() => { if (!_closing) Post(msg); }));
 
         /// <summary>WPF BuildInit (:708-805), the fields this head can back. Media, sub audio, mods, presence,
-        /// the wallet and the Discord photo are not hosted here, so they go out resolved to off or empty.</summary>
+        /// the wallet and the Discord photo are not hosted here, so they go out resolved to off or empty.
+        /// class-ended pays XP and attendance (OnArcademyClassEnded) but no tickets.</summary>
         internal object ArcademyInit()
         {
             var s = CoreSettings.Current;
