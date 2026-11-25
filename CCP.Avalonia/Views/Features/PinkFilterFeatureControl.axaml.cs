@@ -37,6 +37,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         public PinkFilterFeatureControl()
         {
             InitializeComponent(); // generated: loads the XAML and fills the x:Name fields
+            SuperBoxMain.Body = global::ConditioningControlPanel.Avalonia.Controls.Super.SuperPageRows.Steam();   // the gold box's own rows (WPF SuperRows)
 
             ChkEnable.IsCheckedChanged += ChkEnable_Changed;
             ChkUnderEffects.IsCheckedChanged += ChkUnderEffects_Changed;

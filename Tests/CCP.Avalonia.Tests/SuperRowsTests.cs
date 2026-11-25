@@ -40,7 +40,7 @@ public class SuperRowsTests
             window = new Window { Content = page, Width = 800, Height = 800 };
             window.Show(); Dispatcher.UIThread.RunJobs();
             var box = Assert.Single(page.GetLogicalDescendants().OfType<SuperBox>());
-            var rows = Assert.IsType<StackPanel>(box.Body);
+            var rows = Assert.IsType<SuperOptionRows>(box.Body);
             SuperAccess.Set(SuperEffect.InnerBloom, false);
             Assert.False(rows.IsVisible);
             Assert.Equal(0.45, rows.Opacity);
@@ -102,7 +102,7 @@ public class SuperRowsTests
             var page = new BubblePopFeatureControl();
             window = new Window { Content = page, Width = 800, Height = 800 };
             window.Show(); Dispatcher.UIThread.RunJobs();
-            var rows = Assert.IsType<StackPanel>(Assert.Single(page.GetLogicalDescendants().OfType<SuperBox>()).Body);
+            var rows = Assert.IsType<SuperOptionRows>(Assert.Single(page.GetLogicalDescendants().OfType<SuperBox>()).Body);
             Assert.True(rows.IsVisible);
             Assert.Equal(0.45, rows.Opacity);
             Assert.False(rows.IsHitTestVisible);
@@ -149,7 +149,7 @@ public class SuperRowsTests
             var page = new BubblePopFeatureControl();
             window = new Window { Content = page, Width = 800, Height = 800 };
             window.Show(); Dispatcher.UIThread.RunJobs();
-            var rows = Assert.IsType<StackPanel>(Assert.Single(page.GetLogicalDescendants().OfType<SuperBox>()).Body);
+            var rows = Assert.IsType<SuperOptionRows>(Assert.Single(page.GetLogicalDescendants().OfType<SuperBox>()).Body);
             var row = rows.Children.OfType<Grid>().First();
             var title = Assert.IsType<TextBlock>(row.Children[0]);
             string englishTitle = title.Text!;
