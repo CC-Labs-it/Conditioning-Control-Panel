@@ -17,6 +17,9 @@ internal sealed partial class GameWindow
 {
     private static readonly Dictionary<string, IReadOnlyList<string>> ArcademyTaggedSubs = new(StringComparer.Ordinal);
     internal Func<FeedMediaKind, IReadOnlyList<string>, Task<List<FypAssetManifest.Entry>>>? ArcademyFetchForTests;
+    // WPF RemoteBuffer (ArcademyHostService.cs:106): a batch's surplus rows wait here for the next ask. Per window, so a close clears it (WPF :6078).
+    private readonly Dictionary<string, List<object>> _arcademyAssetBuffer = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string[]> _arcademyPileSubs = new(StringComparer.Ordinal);
     private static bool ArcademyRemoteAllowed() => !CoreSettings.Current.OfflineMode
         && CoreSettings.Current.MediaSource != "local" && CoreSettings.Current.HasRemoteMediaConsent;
 
@@ -39,7 +42,18 @@ internal sealed partial class GameWindow
             else Post(new { type = "assets", reqId = id, urls, done });
         }
         if (!ArcademyRemoteAllowed() || (tagged && subs.Length == 0)) { Reply(Array.Empty<object>(), true); return; }
-        Reply(Array.Empty<object>(), false);
+        string key = tagged ? "sort:" + tag + "|" + kind : kind;
+        if (tagged && (!_arcademyPileSubs.TryGetValue(tag, out var pile) || !pile.SequenceEqual(subs, StringComparer.OrdinalIgnoreCase)))
+        {
+            // A pile pointed at new subs drops its buffered rows: their src names the old subs (WPF :4885-4896).
+            _arcademyAssetBuffer.Remove("sort:" + tag + "|loop");
+            _arcademyAssetBuffer.Remove("sort:" + tag + "|still");
+        }
+        if (tagged) _arcademyPileSubs[tag] = subs;
+        var served = TakeArcademyBuffered(key, count);
+        if (served.Length >= count) { Reply(served, true); return; }
+        Reply(served, false);
+        int want = count - served.Length;
         _ = Task.Run(async () =>
         {
             var mediaKind = kind == "loop" ? FeedMediaKind.Video : FeedMediaKind.Image;
@@ -64,7 +78,7 @@ internal sealed partial class GameWindow
             catch (Exception ex) { Log.Debug(ex, "[Arcademy] remote assets unavailable"); }
             var allowed = new HashSet<string>(subs, StringComparer.OrdinalIgnoreCase);
             var rows = entries.Where(e => RemoteMediaFormats.Validate(e, mediaKind, out _) && (!tagged || allowed.Contains((e.Folder ?? "").StartsWith("r/", StringComparison.OrdinalIgnoreCase) ? e.Folder[2..] : e.Folder ?? "")))
-                .Take(count).Select(e =>
+                .Take(24).Select(e =>   // WPF RemoteBatchCap (:60)
                 {
                     var url = e.SmallUrl;
                     if (!Uri.TryCreate(url, UriKind.Absolute, out var small) || (small.Scheme != Uri.UriSchemeHttp && small.Scheme != Uri.UriSchemeHttps)
@@ -76,7 +90,27 @@ internal sealed partial class GameWindow
                     return tagged ? (object)new { url, kind, mime, tag, src, poster }
                         : new { url, kind, mime, poster };
                 }).ToArray();
-            Dispatcher.UIThread.Post(() => { if (!_closing) Reply(ArcademyRemoteAllowed() ? rows : Array.Empty<object>(), true); });
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_closing) return;
+                if (!ArcademyRemoteAllowed()) { Reply(Array.Empty<object>(), true); return; }
+                // A batch for subs the pile has since left is still this request's answer, but not the pile's stock.
+                if (!tagged || (_arcademyPileSubs.TryGetValue(tag, out var now) && now.SequenceEqual(subs, StringComparer.OrdinalIgnoreCase)))
+                {
+                    if (!_arcademyAssetBuffer.TryGetValue(key, out var buf)) _arcademyAssetBuffer[key] = buf = new List<object>();
+                    buf.AddRange(rows.Skip(want));
+                    if (buf.Count > 120) buf.RemoveRange(0, buf.Count - 120);
+                }
+                Reply(rows.Take(want).ToArray(), true);
+            });
         });
+    }
+
+    private object[] TakeArcademyBuffered(string key, int count)
+    {
+        if (!_arcademyAssetBuffer.TryGetValue(key, out var buf)) return Array.Empty<object>();
+        var taken = buf.Take(count).ToArray();
+        buf.RemoveRange(0, taken.Length);
+        return taken;
     }
 }

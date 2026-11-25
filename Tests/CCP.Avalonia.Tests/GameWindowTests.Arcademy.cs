@@ -203,8 +203,8 @@ public sealed partial class GameWindowTests
         var oldShow = GameWindow.ShowArcademyBootError;
         var shown = new List<string>();
         GameWindow.ShowArcademyBootError = shown.Add;
-        var w = new GameWindow(GameWindow.Games["arcademy"]);
-        var w2 = new GameWindow(GameWindow.Games["arcademy"]);
+        var w = new GameWindow(GameWindow.ArcademySpec);
+        var w2 = new GameWindow(GameWindow.ArcademySpec);
         try
         {
             w.Show();
@@ -258,7 +258,7 @@ public sealed partial class GameWindowTests
         var (oldClock, oldRetry) = (GameWindow.ArcademyUtcNow, GameWindow.ArcademyRelaunchedOnce);
         GameWindow.ArcademyUtcNow = () => now;
         GameWindow.ArcademyRelaunchedOnce = true;
-        var w = new GameWindow(GameWindow.Games["arcademy"]);
+        var w = new GameWindow(GameWindow.ArcademySpec);
         try
         {
             var frames = new List<JObject>();
