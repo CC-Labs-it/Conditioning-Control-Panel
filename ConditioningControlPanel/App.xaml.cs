@@ -295,7 +295,9 @@ namespace ConditioningControlPanel
 
                 // Already pointed at the remote pool - the dead end is a different problem
                 // (no niches selected, no network) and a "try online media" card would be noise.
-                if (!string.Equals(settings.MediaSource, "local", StringComparison.OrdinalIgnoreCase))
+                // UsesRemoteMedia, not the source: a fresh install sits on "mixed" before anyone
+                // said yes, which is still a local-only library and still needs the offer.
+                if (settings.UsesRemoteMedia)
                     return;
 
                 var dispatcher = Current?.Dispatcher;

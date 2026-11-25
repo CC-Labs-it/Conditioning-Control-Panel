@@ -2410,7 +2410,23 @@ namespace ConditioningControlPanel
                     if (string.Equals(key, settings.MediaSource, StringComparison.Ordinal)) chip.IsChecked = true;
                     return;
                 }
-                if (string.Equals(key, settings.MediaSource, StringComparison.Ordinal)) return;
+                if (string.Equals(key, settings.MediaSource, StringComparison.Ordinal))
+                {
+                    // A fresh install starts on Both before anyone said yes (FirstRunGate
+                    // .ApplyFreshInstallMediaDefault), so a click on the live chip is the one
+                    // place left to ask. The un-click branch above re-checks the chip, which
+                    // lands here. A No leaves the chip where it is: the app stays on local files.
+                    if (!string.Equals(key, MediaSrcLocal, StringComparison.Ordinal)
+                        && !settings.HasRemoteMediaConsent
+                        && AskRemoteMediaConsent(settings))
+                    {
+                        Services.Fyp.Online.FypOnlineCoordinator.ResetAllChannels();
+                        InvalidateAssetPoolsAfterSelectionChange();   // also persists
+                        RefreshRemoteMediaPicker();
+                        App.Logger?.Information("[remote media] consent given on the live {Source} chip", key);
+                    }
+                    return;
+                }
 
                 // Anything but "local" starts fetching third-party content, so it is asked for
                 // exactly once - and never asked again of someone who already said yes to the
