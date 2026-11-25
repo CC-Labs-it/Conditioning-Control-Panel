@@ -581,6 +581,60 @@ public sealed partial class PossessionShellTests
         Assert.Null(effect.Dialog);
     });
 
+    [Theory]
+    [InlineData(1, 120)]
+    [InlineData(200, 200)]
+    [InlineData(600, 320)]
+    public Task DokiDialog_UndoFadesAndCloses(int requestedMs, int actualMs) => RunAsync(async rig =>
+    {
+        var effect = new DokiDialogEffect();
+        try
+        {
+            await effect.ApplyAsync(DokiContext(rig, PossessionRung.ItKnows, PossessionIntensity.FullDoki), null, CancellationToken.None);
+            var dialog = Assert.IsType<Window>(effect.Dialog);
+            var undo = effect.UndoAsync(TimeSpan.FromMilliseconds(requestedMs));
+            Assert.True(dialog.IsVisible);
+            Assert.False(undo.IsCompleted);
+            rig.Frames.Frame(TimeSpan.FromMilliseconds(1000));
+            rig.Frames.Frame(TimeSpan.FromMilliseconds(1000 + actualMs / 2));
+            Assert.InRange(dialog.Opacity, 0.49, 0.51);
+            rig.Frames.Frame(TimeSpan.FromMilliseconds(1000 + actualMs));
+            await undo;
+            Assert.False(dialog.IsVisible);
+            Assert.Null(effect.Dialog);
+            Assert.False(effect.IsLive);
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); }
+    });
+
+    [Theory]
+    [InlineData("panic")]
+    [InlineData("director")]
+    [InlineData("detach")]
+    public Task DokiDialog_StopDuringFadeClosesImmediately(string stop) => RunAsync(async rig =>
+    {
+        rig.Shell.AttachPossessionHost();
+        var effect = new DokiDialogEffect();
+        try
+        {
+            await effect.ApplyAsync(DokiContext(rig, PossessionRung.ItKnows, PossessionIntensity.FullDoki), null, CancellationToken.None);
+            var dialog = Assert.IsType<Window>(effect.Dialog);
+            // The director has already released its live entry when an animated undo starts.
+            var undo = effect.UndoAsync(TimeSpan.FromMilliseconds(320));
+            rig.Frames.Frame(TimeSpan.FromMilliseconds(1000));
+            rig.Frames.Frame(TimeSpan.FromMilliseconds(1160));
+            Assert.InRange(dialog.Opacity, 0.49, 0.51);
+            if (stop == "panic") PanicSurfaces.All.Single(s => s.Id == "possession").Stop(null);
+            else if (stop == "director") rig.Director.UndoAll();
+            else rig.Director.DetachHost(rig.Shell);
+            Assert.False(dialog.IsVisible);
+            Assert.Null(effect.Dialog);
+            await undo;
+            Assert.False(effect.IsLive);
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); }
+    });
+
     [Fact]
     public void DokiDialog_ProgressAdmitsNothingHappened_AndFailsafeCloses() => Run(rig =>
     {

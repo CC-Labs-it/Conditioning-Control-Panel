@@ -1,5 +1,7 @@
 // WPF: Services/Possession/Effects/DokiDialogEffect.cs:14-297.
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -8,6 +10,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Controls.Fx;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Possession;
@@ -16,6 +19,12 @@ namespace ConditioningControlPanel.Avalonia.Possession;
 
 internal sealed class DokiDialogEffect : PossessionEffectBase
 {
+    private static readonly HashSet<DokiDialogEffect> Fading = new();
+    private IFrameSource? _fadeFrames;
+    private IDisposable? _fadeTimeout;
+    private TaskCompletionSource? _faded;
+    private TimeSpan? _fadeStart;
+    private double _fadeMs;
     private Window? _dialog;
     private BeatLoop? _progress;
     private DispatcherTimer? _failsafe;
@@ -74,6 +83,7 @@ internal sealed class DokiDialogEffect : PossessionEffectBase
         dialog.Closed += (_, _) => { if (ReferenceEquals(_dialog, dialog)) CloseDialog(); };
         dialog.Show(owner);
         _status = status; _bar = bar;
+        _fadeFrames = ((IAvaloniaPossessionHost)ctx.Host).PossessionFrames;
         // The reveal rides the window's shared beat (parked while hidden); the close failsafe is wall
         // clock, so a dialog whose frames stop still goes away (WPF DokiDialogEffect failsafe timer).
         _progress = new BeatLoop(bar, seconds => StepProgress(seconds * 1000));
@@ -97,6 +107,10 @@ internal sealed class DokiDialogEffect : PossessionEffectBase
 
     private void CloseDialog()
     {
+        _fadeFrames?.Unsubscribe(FadeFrame); _fadeFrames = null;
+        _fadeTimeout?.Dispose(); _fadeTimeout = null;
+        _fadeStart = null; Fading.Remove(this);
+        var faded = _faded; _faded = null; faded?.TrySetResult();
         _progress?.Stop(); _progress = null;
         _failsafe?.Stop(); _failsafe = null;
         _status = null; _bar = null;
@@ -104,5 +118,37 @@ internal sealed class DokiDialogEffect : PossessionEffectBase
         dialog?.Close();
     }
 
-    protected override Task UndoCoreAsync(TimeSpan duration) { CloseDialog(); return Task.CompletedTask; }
+    // WPF DokiDialogEffect.cs:281-295: cubic fade, clamped to 120-320 ms.
+    protected override Task UndoCoreAsync(TimeSpan duration)
+    {
+        if (_dialog == null || duration <= TimeSpan.Zero || _fadeFrames == null)
+        {
+            CloseDialog();
+            return Task.CompletedTask;
+        }
+        _fadeMs = Math.Clamp(duration.TotalMilliseconds, 120, 320);
+        _fadeStart = null;
+        var faded = _faded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Fading.Add(this);
+        _fadeFrames.Subscribe(FadeFrame);
+        _fadeTimeout = DispatcherTimer.RunOnce(() => { if (ReferenceEquals(_faded, faded)) CloseDialog(); },
+            TimeSpan.FromMilliseconds(_fadeMs + 100));
+        return faded.Task;
+    }
+
+    private void FadeFrame(TimeSpan now)
+    {
+        if (_dialog == null) return;
+        _fadeStart ??= now;
+        var t = Math.Clamp((now - _fadeStart.Value).TotalMilliseconds / _fadeMs, 0, 1);
+        var ease = t < .5 ? 4 * t * t * t : 1 - Math.Pow(-2 * t + 2, 3) / 2;
+        _dialog.Opacity = 1 - ease;
+        if (t >= 1) CloseDialog();
+    }
+
+    internal static void StopFades(IPossessionHost? host = null)
+    {
+        foreach (var effect in Fading.ToArray())
+            if (host == null || ReferenceEquals(effect.Context?.Host, host)) effect.CloseDialog();
+    }
 }

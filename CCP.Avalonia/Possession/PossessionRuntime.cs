@@ -241,6 +241,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         /// <summary>Panic (PanicSurfaces "possession"): UndoAll on every runtime still alive.</summary>
         internal static void UndoAllLive()
         {
+            DokiDialogEffect.StopFades();
             PossessionGhost.UndoAll();
             DropEffect.UndoAllLive();
             RoomWarpEffect.UndoAllLive();

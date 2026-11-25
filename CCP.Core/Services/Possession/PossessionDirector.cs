@@ -136,6 +136,7 @@ public sealed class PossessionDirector : IDisposable
             // down now rather than leaking a ghost that outlives its room.
             foreach (var g in _live.Where(g => ReferenceEquals(g.Host.Host, host)).ToArray())
                 UndoGhostSync(g);
+            try { _head.StopReleasedEffects(host); } catch (Exception ex) { Diag.Swallowed(ex); }
             try { _head.DetachReactive(host); } catch (Exception ex) { Diag.Swallowed(ex); }
             try { entry.Attribution.ReleaseAll(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _hosts.Remove(entry);
@@ -152,6 +153,8 @@ public sealed class PossessionDirector : IDisposable
             // Release() (inside UndoGhostSync) is what owns the ledger; these two are a belt, and they
             // are only safe HERE because there is no await above them for a new ghost to arrive in.
             foreach (var g in _live.ToArray()) UndoGhostSync(g);
+            foreach (var h in _hosts)
+                try { _head.StopReleasedEffects(h.Host); } catch (Exception ex) { Diag.Swallowed(ex); }
             _live.Clear();
             _liveKeys.Clear();
             foreach (var h in _hosts) { try { h.Attribution.ReleaseAll(); } catch (Exception ex) { Diag.Swallowed(ex); } }
@@ -1176,6 +1179,8 @@ public sealed class PossessionDirectorHead
     public Action<PossessionDirector, IPossessionHost> AttachReactive { get; init; } = (_, _) => { };
     public Action<IPossessionHost> DetachReactive { get; init; } = _ => { };
     public Action DetachAllReactive { get; init; } = () => { };
+    /// <summary>Stop head effects still animating after leaving the live ledger.</summary>
+    public Action<IPossessionHost> StopReleasedEffects { get; init; } = _ => { };
     /// <summary>Last cursor position in ghost-layer coordinates; (0,0) until the mouse has moved.</summary>
     public Func<(double X, double Y)> Pointer { get; init; } = () => (0, 0);
     /// <summary>A control's bounds in ghost-layer coordinates, or null when it has none.</summary>
