@@ -99,8 +99,22 @@ public class TutorialMonitorDimTests
         return Task.CompletedTask;
     });
 
+    // The client area only: the dialog's frame (title bar) stays dimmed and blocked, as in WPF.
     private static PixelRect HostRect(Window dialog) =>
-        TutorialOverlay.HostPixelRect(dialog.Position, dialog.FrameSize ?? dialog.ClientSize, dialog.DesktopScaling);
+        TutorialOverlay.HostPixelRect(dialog.PointToScreen(default), dialog.ClientSize, dialog.DesktopScaling);
+
+    private static void PumpUntil(Func<bool> done)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();   // bounded by time, not turns
+        while (!done() && sw.Elapsed < TimeSpan.FromSeconds(10)) Dispatcher.UIThread.RunJobs();
+        Assert.True(done(), "timed out");
+    }
+
+    private static global::Avalonia.Controls.Shapes.Path DimPath(Window satellite) =>
+        Assert.IsType<global::Avalonia.Controls.Shapes.Path>(satellite.Content);
+
+    private static global::Avalonia.Animation.DoubleTransition OpacityFade(Control c) =>
+        Assert.Single(c.Transitions!.OfType<global::Avalonia.Animation.DoubleTransition>(), t => t.Property == Visual.OpacityProperty);
 
     [Fact]
     public Task DialogTourCoversMainMonitorFromOwnedNonActivatingSatellite() => WithDialogTour((main, dialog, overlay) =>
@@ -108,7 +122,7 @@ public class TutorialMonitorDimTests
         var satellite = overlay.MonitorDimWindow;
         Assert.NotNull(satellite);
         Assert.True(satellite!.IsVisible);
-        Assert.Same(main, satellite.Owner);
+        Assert.Same(dialog, satellite.Owner);   // above the dialog, so its frame stays covered
         Assert.False(satellite.ShowActivated);
         Assert.False(satellite.Topmost);
         Assert.False(satellite.ShowInTaskbar);
@@ -155,21 +169,37 @@ public class TutorialMonitorDimTests
 
     [Theory]
     [InlineData("skip")]
+    [InlineData("finish")]
+    public Task NormalEndFadesTheSatelliteWithTheCard(string ending) => WithDialogTour((main, dialog, overlay) =>
+    {
+        var satellite = overlay.MonitorDimWindow!;
+        var path = DimPath(satellite);
+        Assert.Equal(TimeSpan.FromMilliseconds(300), OpacityFade(path).Duration);   // faded in with the card
+        Assert.True(path.Opacity < 1);   // mid fade-in, heading for 1
+        Assert.Equal(1.0, path.GetBaseValue(Visual.OpacityProperty));
+        if (ending == "skip") TutorialHead.Service.Skip();
+        else CoreTutorial.RaiseFinished(null, true);   // completed from this blocking step
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(satellite.IsVisible);   // still fading out
+        Assert.Equal(TimeSpan.FromMilliseconds(200), OpacityFade(path).Duration);
+        Assert.Equal(0.0, path.GetBaseValue(Visual.OpacityProperty));
+        PumpUntil(() => !satellite.IsVisible);
+        Assert.Null(overlay.MonitorDimWindow);
+    });
+
+    [Theory]
     [InlineData("panic")]
     [InlineData("panic-surfaces")]
     [InlineData("host-close")]
-    [InlineData("finish")]
     public Task EndingTourClosesTheSatelliteAtOnce(string ending) => WithDialogTour((main, dialog, overlay) =>
     {
         var satellite = overlay.MonitorDimWindow!;
         Assert.True(satellite.IsVisible);
         switch (ending)
         {
-            case "skip": TutorialHead.Service.Skip(); break;
             case "panic": TutorialHead.OnPanic(); break;
             case "panic-surfaces": PanicSurfaces.StopAll("tutorial monitor dim test"); break;
             case "host-close": dialog.Close(); break;
-            case "finish": while (TutorialHead.Service.IsActive) TutorialHead.Service.Next(); break;
         }
         // No dispatcher pump: the satellite is gone within the same tick.
         Assert.False(satellite.IsVisible);

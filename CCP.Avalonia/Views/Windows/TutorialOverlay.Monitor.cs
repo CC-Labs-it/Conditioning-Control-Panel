@@ -14,15 +14,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     // Monitor-wide coach mark. WPF's overlay is one window sized to MainWindow's monitor
     // (TutorialOverlay.xaml:8; TutorialOverlay.xaml.cs:360-424), owned by MainWindow (:52-59), so
     // it dims and blocks everything outside CCP on that monitor. The live card stays in the host's
-    // OverlayLayer; this satellite draws the rest of the monitor, minus the host's rect, from an
-    // owned, non-topmost, non-activating window. Native Wayland and headless have no XID/HWND,
-    // so the satellite is never shown there and the tour stays host-only.
+    // OverlayLayer; this satellite draws the rest of the monitor, minus the host's client area, from
+    // a non-topmost, non-activating window owned by the host, so it stays above the host's frame
+    // (title bar, borders) and blocks it as WPF's monitor-wide window did. Native Wayland and
+    // headless have no XID/HWND, so the satellite is never shown there and the tour stays host-only.
     public partial class TutorialOverlay
     {
         private Window? _monitorDim;
         private Path? _monitorDimPath;
         private Window? _monitorDimAnchor;
         private Window? _monitorDimHost;
+        private bool _monitorDimFadedIn;
 
         /// <summary>Test seam: headless windows have no XID/HWND, so tests force the satellite on.</summary>
         internal static bool ForceMonitorDimForTests;
@@ -31,10 +33,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal PixelRect[]? MonitorDimRegion { get; private set; }
         internal Window? MonitorDimWindow => _monitorDim;
 
-        /// <summary>The host's frame in physical px from its own scaling, so a host on a
+        /// <summary>The host's client area in physical px from its own scaling, so a host on a
         /// different-DPI monitor than the satellite still leaves its real rect clear.</summary>
-        internal static PixelRect HostPixelRect(PixelPoint position, Size frame, double hostScaling) =>
-            new(position, PixelSize.FromSize(frame, hostScaling > 0 ? hostScaling : 1));
+        internal static PixelRect HostPixelRect(PixelPoint position, Size client, double hostScaling) =>
+            new(position, PixelSize.FromSize(client, hostScaling > 0 ? hostScaling : 1));
 
         /// <summary>Satellite-relative input/draw rects: the monitor minus the host (Core rules).</summary>
         internal static PixelRect[] MonitorDimRects(PixelRect monitor, PixelRect host) =>
@@ -44,7 +46,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void UpdateMonitorDim()
         {
-            // A hidden shell (tray, launcher) cannot own: Show(owner) throws on a non-visible owner.
+            // The monitor comes from the shell while it is shown; a hidden shell (tray, launcher) falls back to the host.
             var anchor = _tutorialMainWindow is { IsVisible: true } shell ? shell : _targetWindow;
             var host = _targetWindow;
             if (anchor == null || host == null) { RemoveMonitorDim(); return; }
@@ -56,7 +58,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (screen == null) { RemoveMonitorDim(); return; }
             var monitor = screen.Bounds;
             var scale = screen.Scaling > 0 ? screen.Scaling : 1;
-            var hostRect = HostPixelRect(host.Position, host.FrameSize ?? host.ClientSize, host.DesktopScaling);
+            // Client area only: the frame stays under the dim (WPF covers it too, :360-396).
+            var hostRect = HostPixelRect(host.PointToScreen(default), host.ClientSize, host.DesktopScaling);
             var rects = MonitorDimRects(monitor, hostRect);
 
             if (_monitorDim == null)
@@ -78,6 +81,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     return;
                 }
                 _monitorDimPath = new Path { Fill = new SolidColorBrush(Color.FromArgb(DimAlpha(), 0, 0, 0)) };
+                if (!_monitorDimFadedIn)
+                {
+                    // WPF fades the whole overlay in over 300 ms on Loaded (:99-109), once per tour.
+                    _monitorDimFadedIn = true;
+                    _monitorDimPath.Opacity = 0;
+                    _monitorDimPath.Transitions = OpacityFade(FadeInDuration);
+                }
                 w.Content = _monitorDimPath;
                 w.KeyDown += OnMonitorDimKeyDown;
                 X11Overlay.SetPassive(w);   // Windows: WS_EX_NOACTIVATE, never HWND_TOPMOST
@@ -97,7 +107,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _monitorDimPath!.Data = geometry;
             MonitorDimRegion = rects;
             X11Overlay.SetWindowInputRegion(win, rects);
-            if (!win.IsVisible) win.Show(anchor);   // owned: X11 WM_TRANSIENT_FOR, Win32 owner
+            if (win.IsVisible) return;
+            win.Show(host);   // owned: X11 WM_TRANSIENT_FOR, Win32 owner
+            if (_monitorDimPath.Opacity == 0 && !_fadingOut) _monitorDimPath.Opacity = 1;   // runs the fade-in
         }
 
         private void OnMonitorDimMoved(object? sender, PixelPointEventArgs e)
@@ -110,6 +122,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (e.Key != Key.Escape || _closed) return;
             SkipTutorial();
             e.Handled = true;
+        }
+
+        /// <summary>Normal end: fade with the card over 200 ms (WPF :1305); Teardown closes it.</summary>
+        private void FadeOutMonitorDim()
+        {
+            if (_monitorDimPath == null) return;
+            _monitorDimPath.Transitions = OpacityFade(FadeOutDuration);
+            _monitorDimPath.Opacity = 0;
         }
 
         private void RemoveMonitorDim()

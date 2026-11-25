@@ -245,7 +245,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _fadingOut = true;
             _closed = true;
             // The tour has ended: hand the main window its input back now, not after the card's fade.
-            RemoveMainWindowDim();
+            // The monitor satellite fades with the card and closes in Teardown, as WPF's window does.
+            RemoveInWindowDim();
+            FadeOutMonitorDim();
             try { _spotlightDelayTimer?.Stop(); } catch { /* already stopped */ }
             _spotlightDelayTimer = null;
             UnsubscribeAdvanceTrigger();
