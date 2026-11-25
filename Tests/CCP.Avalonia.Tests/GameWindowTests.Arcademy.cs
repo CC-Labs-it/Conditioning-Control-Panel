@@ -154,7 +154,6 @@ public sealed partial class GameWindowTests
         var settings = CoreSettings.Current;
         bool oldAudio = settings.AudioOnlySession;
         var oldMotion = settings.MotionLevel;
-        GameWindow.Games["arcademy"] = GameWindow.ArcademySpec; // not exposed until #5772
         try
         {
             CoreEntitlement.ShowDeniedHandler = _ => { };
@@ -192,7 +191,7 @@ public sealed partial class GameWindowTests
             GameWindow.CloseAllForPanic();
             Assert.Null(GameWindow.OpenForTests("arcademy"));
         }
-        finally { GameWindow.Games.Remove("arcademy"); settings.AudioOnlySession = oldAudio; settings.MotionLevel = oldMotion; CoreEntitlement.HasLabProvider = oldLab; CoreEntitlement.ShowDeniedHandler = oldDenied; }
+        finally { settings.AudioOnlySession = oldAudio; settings.MotionLevel = oldMotion; CoreEntitlement.HasLabProvider = oldLab; CoreEntitlement.ShowDeniedHandler = oldDenied; }
     });
 
     [Fact]
@@ -235,7 +234,6 @@ public sealed partial class GameWindowTests
         var host = new global::Avalonia.Controls.StackPanel();
         try
         {
-            GameWindow.Games["arcademy"] = GameWindow.ArcademySpec;
             global::ConditioningControlPanel.Avalonia.App.Notifications = new();
             global::ConditioningControlPanel.Avalonia.App.Notifications.AttachHost(host);
             CoreEntitlement.HasLabProvider = () => true;
@@ -247,7 +245,6 @@ public sealed partial class GameWindowTests
         }
         finally
         {
-            GameWindow.Games.Remove("arcademy");
             foreach (var toast in host.Children.OfType<global::Avalonia.Controls.Border>()) (toast.Tag as DispatcherTimer)?.Stop();
             (CoreEntitlement.HasLabProvider, CoreSettings.Current.AudioOnlySession, global::ConditioningControlPanel.Avalonia.App.Notifications) = (oldLab, oldAudio, oldToasts);
         }

@@ -20,9 +20,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 {
     internal sealed partial class GameWindow
     {
-        // The door, the launcher card and the EMI ring open only once a class can be banked: WPF
-        // OnClassEnded (ArcademyHostService.cs:3735) lands in #5772, which flips this to true.
-        internal static bool ArcademyExposed => false;
+        // The door, the launcher card and the EMI ring open only once a class can be banked
+        // (WPF OnClassEnded, ArcademyHostService.cs:3735; GameWindow.ArcademyResults.cs).
+        internal static bool ArcademyExposed => true;
         internal static Game ArcademySpec => new("arcademy", "launcher_game_arcademy_title", "arcademy/index.html", ArcademyGate);
 
         static partial void RegisterArcademy(Dictionary<string, Game> games)
