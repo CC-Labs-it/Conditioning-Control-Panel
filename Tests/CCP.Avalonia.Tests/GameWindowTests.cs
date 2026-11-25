@@ -956,7 +956,7 @@ public sealed partial class GameWindowTests
     [Fact]
     public void ClassicDoor_OpensThe2DHostAndLauncherTile() => RunRace("rt.original.03", (launcher, _, _) =>
     {
-        launcher.BuildTiles();
+        launcher.SeatDoorPage(LauncherDoor.Games);   // declutter: the tiles live behind the Games door
         Assert.Contains(launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Children,
             c => Equals(c.Tag, "raceclassic"));
         var w = Assert.IsType<GameWindow>(GameWindow.Launch("raceclassic"));
@@ -1068,7 +1068,7 @@ public sealed partial class GameWindowTests
     {
         var tracks = new HashSet<string> { "rt.original.03" };
         RacingAccess.IsGrantedProvider = tracks.Contains;
-        launcher.BuildTiles();
+        launcher.SeatDoorPage(LauncherDoor.Games);   // declutter: the tiles live behind the Games door
         var w = OpenRetiredRace();
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));

@@ -15,8 +15,9 @@ public class LauncherRulesTests
             LauncherCards.All.Select(c => c.Id));
         Assert.Equal("launcher_game_intake_title", LauncherCards.Find(" INTAKE ")!.TitleKey);
         Assert.Null(LauncherCards.Find("panel"));
-        // Only the free demo and Piece by Piece open signed out.
-        Assert.Equal(new[] { "breakoutdemo", "piecebypiece" }, LauncherCards.All.Where(c => !c.RequiresAccount).Select(c => c.Id));
+        // Only the free demo, the one Breakout card (the demo for anyone not entitled, declutter
+        // 2026-11-15) and Piece by Piece open signed out.
+        Assert.Equal(new[] { "breakoutdemo", "breakout", "piecebypiece" }, LauncherCards.All.Where(c => !c.RequiresAccount).Select(c => c.Id));
         var race = LauncherCards.Find("race")!;
         Assert.Equal((0xFF, 0xB3, 0x6B), (race.R, race.G, race.B));
     }
