@@ -77,7 +77,7 @@ public sealed class AwarenessObserverHeadTests
         int? idle = 400;
         var burst = new Burst();
         using var probe = new ConditioningControlPanel.Avalonia.Platform.WaylandAwarenessInputProbe(burst, () => Task.FromResult(idle));
-        Assert.Equal(0, probe.IdleSeconds); // before the first read finishes
+        Assert.Equal(AwarenessObserver.AfkSuspendSeconds, probe.IdleSeconds); // no read has completed
         Assert.True(await Settle(probe, 400));
         idle = null;
         Assert.True(await Settle(probe, AwarenessObserver.AfkSuspendSeconds));

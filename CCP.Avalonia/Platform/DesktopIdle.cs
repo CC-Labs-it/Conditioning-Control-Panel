@@ -126,12 +126,18 @@ internal sealed class WaylandIdleNotify
     internal Func<long> Now = () => Environment.TickCount64;
     private readonly uint _timeoutMs;
     private long _idledAt = -1;
-    private int _started;
+    private int _started, _activityObserved;
     internal volatile bool Live, Done;
 
     internal WaylandIdleNotify(uint timeoutMs = TimeoutMs) => _timeoutMs = timeoutMs;
 
-    internal void OnEvent(uint opcode) => Interlocked.Exchange(ref _idledAt, opcode == 0 ? Now() : -1);
+    // A newly created notification has no knowledge of activity before its creation.
+    internal bool ActivityObserved => Volatile.Read(ref _activityObserved) != 0;
+    internal void OnEvent(uint opcode)
+    {
+        Interlocked.Exchange(ref _idledAt, opcode == 0 ? Now() : -1);
+        if (opcode == 1) Volatile.Write(ref _activityObserved, 1);
+    }
     internal int Seconds => Interlocked.Read(ref _idledAt) is var at && at < 0 ? 0 : (int)((Now() - at + _timeoutMs) / 1000);
 
     internal void Start()

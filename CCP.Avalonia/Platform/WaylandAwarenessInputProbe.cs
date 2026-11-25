@@ -14,7 +14,11 @@ internal sealed class WaylandAwarenessInputProbe : IInputProbe
     private static readonly WaylandIdleNotify Notify = new(AwarenessObserverPolicy.FullscreenRecentInputSeconds * 1000);
     private readonly IInputProbe _burst;
     private readonly Func<Task<int?>> _read;
-    private int _last, _reading; // _last < 0: no compositor idle source
+    private readonly object _gate = new();
+    private int _last = -1, _generation; // _last < 0: idle age is unknown
+    private bool _reading;
+    private Task? _pending;
+    internal Task? PendingRead { get { lock (_gate) return _pending; } }
 
     internal WaylandAwarenessInputProbe(IInputProbe burst, Func<Task<int?>>? read = null)
     {
@@ -32,30 +36,52 @@ internal sealed class WaylandAwarenessInputProbe : IInputProbe
     {
         get
         {
-            if (Interlocked.Exchange(ref _reading, 1) == 0)
-                Task.Run(_read).ContinueWith(t =>
+            lock (_gate)
+            {
+                if (!_reading)
                 {
-                    Volatile.Write(ref _last, t.IsCompletedSuccessfully && t.Result is int s ? Math.Max(0, s) : -1);
-                    Volatile.Write(ref _reading, 0);
-                }, TaskScheduler.Default);
-            int last = Volatile.Read(ref _last);
-            return last < 0 ? AwarenessObserver.AfkSuspendSeconds : last;
+                    _reading = true;
+                    int generation = _generation;
+                    _pending = Task.Run(_read).ContinueWith(t =>
+                    {
+                        lock (_gate)
+                        {
+                            if (generation != _generation) return;
+                            _last = t.IsCompletedSuccessfully && t.Result is int s ? Math.Max(0, s) : -1;
+                            _reading = false;
+                        }
+                    }, TaskScheduler.Default);
+                }
+                return _last < 0 ? AwarenessObserver.AfkSuspendSeconds : _last;
+            }
         }
     }
 
     public bool IsTypingBurst => _burst.IsTypingBurst;
-    public void Start() => _burst.Start();
-    public void Stop() => _burst.Stop();
-    public void Dispose() => _burst.Dispose();
+    private void ResetIdle()
+    {
+        lock (_gate) { _generation++; _last = -1; _reading = false; }
+    }
+    public void Start() { ResetIdle(); _burst.Start(); }
+    public void Stop() { ResetIdle(); _burst.Stop(); }
+    public void Dispose() { ResetIdle(); _burst.Dispose(); }
 
-    // ext-idle-notify (KDE, wlroots), else Mutter (GNOME). Connecting reads as active so start-up
-    // never fakes an away stretch; tests never read the real desktop.
+    // ext-idle-notify (KDE, wlroots), else Mutter (GNOME). A new notification cannot report
+    // pre-existing idle age; wait for real activity before trusting its relative clock.
     private static Task<int?> ReadCompositor()
     {
         if (X11ActiveWindow.Disabled) return Task.FromResult<int?>(null);
         Notify.Start();
-        if (Notify.Live) return Task.FromResult<int?>(Notify.Seconds);
-        if (!Notify.Done) return Task.FromResult<int?>(0);
-        return DesktopIdle.ReadWaylandAsync(DesktopIdle.ReadMutterMillisecondsAsync);
+        return ReadCompositor(Notify, static () => DesktopIdle.ReadWaylandAsync(DesktopIdle.ReadMutterMillisecondsAsync));
     }
+
+    internal static Task<int?> ReadCompositor(WaylandIdleNotify notify, Func<Task<int?>> fallback)
+    {
+        if (notify.Live) return Task.FromResult(ConfirmedIdle(notify));
+        if (!notify.Done) return Task.FromResult<int?>(null);
+        return fallback();
+    }
+
+    internal static int? ConfirmedIdle(WaylandIdleNotify notify) =>
+        notify.ActivityObserved ? notify.Seconds : null;
 }
