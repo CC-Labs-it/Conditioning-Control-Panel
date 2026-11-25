@@ -119,10 +119,15 @@ public sealed class LeashAskTests
             Assert.Equal(Color.Parse("#FFE3A0"), brush.GradientStops[0].Color);
             Assert.Equal(Color.Parse("#FFCF6B"), brush.GradientStops[1].Color);
             Assert.Equal(Color.Parse("#33FFFFFF"), Assert.IsAssignableFrom<ISolidColorBrush>(button.BorderBrush).Color);
-            var glow = Assert.IsType<DropShadowEffect>(button.Effect);
-            Assert.Equal(Color.Parse("#FFCF6B"), glow.Color);
-            Assert.Equal(12, glow.BlurRadius);
-            Assert.Equal(0.35, glow.Opacity);
+            var glow = Tagged<Border>(row, "leash-offer-look-glow");
+            Assert.Same(button.Parent, glow.Parent);
+            Assert.False(glow.IsHitTestVisible);
+            Assert.Null(button.Effect);
+            Assert.Equal(1, glow.BoxShadow.Count);
+            Assert.Equal(Color.FromArgb(89, 0xFF, 0xCF, 0x6B), glow.BoxShadow[0].Color);
+            Assert.Equal(12, glow.BoxShadow[0].Blur);
+            Assert.Equal(0, glow.BoxShadow[0].OffsetX);
+            Assert.Equal(0, glow.BoxShadow[0].OffsetY);
             // WPF reserves the disc for a supplied photo, even if it has not loaded.
             payload["offers"]![0]!["from"]!["avatar"] = "/picture.png";
             svc.ApplyBlock(payload);

@@ -141,14 +141,19 @@ public partial class LeashTabView : UserControl
             GradientStops = { new GradientStop(Color.Parse("#FFE3A0"), 0), new GradientStop(Color.Parse("#FFCF6B"), 1) },
         };
         var look = F.Pill(Loc.Get("leash_offer_look"), gold, LeashAskCard.Ink, "leash-offer-look", new SolidColorBrush(Color.Parse("#33FFFFFF")));
-        look.Margin = new Thickness(6, 0, 0, 0);
         look.Padding = new Thickness(8, 7);
         look.CornerRadius = new CornerRadius(11);
-        look.Effect = new DropShadowEffect { Color = Color.Parse("#FFCF6B"), BlurRadius = 12, Opacity = 0.35, OffsetX = 0, OffsetY = 0 };
         if (look.Content is TextBlock label) label.FontWeight = FontWeight.SemiBold;
         look.Click += (_, _) => LeashAskWindow.Open(o, () => _service, TopLevel.GetTopLevel(this) as Window);
-        Grid.SetColumn(look, 2);
-        g.Children.Add(look);
+        // A sibling shadow keeps the glow without re-blurring the button on every frame (P82).
+        var glow = new Border
+        {
+            Tag = "leash-offer-look-glow", IsHitTestVisible = false, Background = gold, CornerRadius = new CornerRadius(11),
+            BoxShadow = new BoxShadows(new BoxShadow { Blur = 12, Color = Color.FromArgb(89, 0xFF, 0xCF, 0x6B) }),
+        };
+        var lookHost = new Grid { Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Children = { glow, look } };
+        Grid.SetColumn(lookHost, 2);
+        g.Children.Add(lookHost);
         return new Border
         {
             Background = LeashAskCard.Card, BorderBrush = LeashAskCard.GoldDeep, BorderThickness = new Thickness(1),
