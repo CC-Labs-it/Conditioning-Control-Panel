@@ -125,11 +125,16 @@ internal sealed class WaylandIdleNotify
     internal const uint TimeoutMs = 300_000;
     internal Func<long> Now = () => Environment.TickCount64;
     private readonly uint _timeoutMs;
+    private readonly bool _observeInitialActivity;
     private long _idledAt = -1;
     private int _started, _activityObserved;
     internal volatile bool Live, Done;
 
-    internal WaylandIdleNotify(uint timeoutMs = TimeoutMs) => _timeoutMs = timeoutMs;
+    internal WaylandIdleNotify(uint timeoutMs = TimeoutMs, bool observeInitialActivity = false)
+    {
+        _timeoutMs = timeoutMs;
+        _observeInitialActivity = observeInitialActivity;
+    }
 
     // A newly created notification has no knowledge of activity before its creation.
     internal bool ActivityObserved => Volatile.Read(ref _activityObserved) != 0;
@@ -174,10 +179,27 @@ internal sealed class WaylandIdleNotify
         }
         if (seat == 0 || notifier == 0) return;
         // v2's input notification ignores idle inhibitors, as WPF's GetLastInputInfo does.
-        tx.Write(Message(2, 0, seat, "wl_seat", 1u, 4u).Concat(Message(2, 0, notifier, "ext_idle_notifier_v1", Math.Min(version, 2), 5u))
-            .Concat(Message(5, version >= 2 ? 2u : 1u, 6u, _timeoutMs, 4u)).ToArray());
+        uint request = version >= 2 ? 2u : 1u;
+        var bind = Message(2, 0, seat, "wl_seat", 1u, 4u).Concat(Message(2, 0, notifier, "ext_idle_notifier_v1", Math.Min(version, 2), 5u))
+            .Concat(Message(5, request, 6u, _timeoutMs, 4u));
+        // A zero timeout is valid: arm a one-shot witness, then destroy it after real activity.
+        // It must not be treated as activity merely because the new notification became idle.
+        bool witness = _observeInitialActivity, witnessIdle = false;
+        if (witness) bind = bind.Concat(Message(5, request, 7u, 0u, 4u));
+        tx.Write(bind.ToArray());
         Live = true;
-        while (Read(rx, out obj, out op, out _)) if (obj == 6) OnEvent(op);
+        while (Read(rx, out obj, out op, out _))
+        {
+            if (obj == 6) OnEvent(op);
+            else if (obj == 7 && witness)
+            {
+                if (op == 0) { witnessIdle = true; continue; }
+                if (op != 1 || !witnessIdle) continue;
+                OnEvent(1);
+            }
+            else continue;
+            if (witness && op == 1) { tx.Write(Message(7, 0)); witness = false; }
+        }
     }
 
     // Arguments are uint or string; strings carry length with NUL and pad to four bytes.

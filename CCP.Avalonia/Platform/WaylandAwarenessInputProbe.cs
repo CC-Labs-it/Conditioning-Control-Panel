@@ -11,7 +11,7 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 internal sealed class WaylandAwarenessInputProbe : IInputProbe
 {
     // Idle reads exact from this threshold and 0 below it; 30 s is the lowest gate the observer applies.
-    private static readonly WaylandIdleNotify Notify = new(AwarenessObserverPolicy.FullscreenRecentInputSeconds * 1000);
+    private static readonly WaylandIdleNotify Notify = new(AwarenessObserverPolicy.FullscreenRecentInputSeconds * 1000, observeInitialActivity: true);
     private readonly IInputProbe _burst;
     private readonly Func<Task<int?>> _read;
     private readonly object _gate = new();
@@ -67,7 +67,7 @@ internal sealed class WaylandAwarenessInputProbe : IInputProbe
     public void Dispose() { ResetIdle(); _burst.Dispose(); }
 
     // ext-idle-notify (KDE, wlroots), else Mutter (GNOME). A new notification cannot report
-    // pre-existing idle age; wait for real activity before trusting its relative clock.
+    // pre-existing idle age; a short-lived witness confirms real input without waiting 30 seconds.
     private static Task<int?> ReadCompositor()
     {
         if (X11ActiveWindow.Disabled) return Task.FromResult<int?>(null);
