@@ -633,6 +633,9 @@ namespace ConditioningControlPanel
                 // Nav rework (2026-10-06): the one-time "What moved" card, upgrades only.
                 OfferWhatMovedIfNeeded(freshInstall: false);
 
+                // The assets nudge (2026-11-25), upgrades only when the library is still empty.
+                OfferAssetsNudgeIfNeeded(freshInstall: false);
+
                 // Not first launch - check if we need to show "What's New" after an update.
                 // Both of these now END in an EnqueueStartupModal (priorities 30 and 40); their
                 // own predicates still decide synchronously, right here, whether there is anything
