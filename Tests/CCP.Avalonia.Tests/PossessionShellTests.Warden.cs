@@ -129,6 +129,11 @@ public sealed partial class PossessionShellTests
         using var warden = new Warden(rig.Lockdown);
         var previous = PossessionAvaloniaHead.Warden;
         var oldStarted = CoreEngine.StartedHook;
+        static void PanicStop()
+        {
+            if (CoreEngine.IsRunning) MainShellWindow.StopEngine();
+            PanicSurfaces.All.Single(s => s.Id == "possession").Stop(null);
+        }
         try
         {
             tube.Show(); AvatarTubeWindow.TestLive = tube; PossessionAvaloniaHead.Warden = warden;
@@ -139,6 +144,8 @@ public sealed partial class PossessionShellTests
             MainShellWindow.StopEngine();
             Assert.True(warden.IsAvailable); // WPF StopEngineCore never touches the warden
             MainShellWindow.StopSessionFromRemote();
+            Assert.True(warden.IsAvailable); // nor does WPF StopSessionFromRemote (MainWindow.RemoteControl.cs:1407)
+            PanicStop();
             Assert.False(warden.IsAvailable);
             CoreEngine.Start(systemInitiated: true);
             Assert.True(warden.IsAvailable);
@@ -149,10 +156,12 @@ public sealed partial class PossessionShellTests
             await warden.LeaveAsync(CancellationToken.None);
             Assert.True(tube.FindControl<Border>("PossessionNoteCard")!.IsVisible);
             MainShellWindow.StopSessionFromRemote();
+            Assert.True(tube.FindControl<Border>("PossessionNoteCard")!.IsVisible);
+            PanicStop();
             Assert.False(tube.FindControl<Border>("PossessionNoteCard")!.IsVisible);
             CoreEngine.Start(systemInitiated: true);
             Assert.False(warden.IsAvailable); // the appearance cooldown survives restart
-            MainShellWindow.StopSessionFromRemote();
+            PanicStop();
             rig.Lockdown.Deactivate();
             CoreEngine.Start(systemInitiated: true);
             Assert.False(warden.IsAvailable); // a start outside Lockdown cannot rearm it

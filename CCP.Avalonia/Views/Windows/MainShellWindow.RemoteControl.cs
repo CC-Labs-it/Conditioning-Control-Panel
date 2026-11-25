@@ -28,7 +28,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// Invalidate a start waiting on the Linux portal too, so it cannot undo the stop.</summary>
         internal static void StopSessionFromRemote()
         {
-            Possession.PossessionAvaloniaHead.Warden?.Stop();
             _engineGen++;
             // WPF SessionEngine.cs:384 and MainWindow.StartStop.cs:547 force all ducks off on stop.
             if (App.Sessions?.IsRunning == true || CoreEngine.IsRunning)

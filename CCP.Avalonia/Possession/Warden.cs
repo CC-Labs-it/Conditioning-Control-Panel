@@ -190,12 +190,14 @@ internal sealed class Warden : IPossessionWarden, IDisposable
         catch (Exception ex) { Serilog.Log.Debug("Warden reset note failed: {Error}", ex.Message); }
     }
 
-    // An engine restart after a panic or remote stop rearms the warden in the same Lockdown without
+    // An engine restart after a panic rearms the warden in the same Lockdown without
     // resetting cooldowns. A plain engine stop leaves her alone, as WPF StopEngineCore never touches her
     // (WPF MainWindow.StartStop.cs:452): the Dose keeper stops the engine at every Lockdown end.
     internal void ResumeForEngineStart() { if (_lockdown.IsActive) _stopped = false; }
 
-    // Panic, remote stop and exit restore immediately; Lockdown end and engine stop reassemble through the director.
+    // Panic and exit restore immediately; Lockdown end and engine stop reassemble through the director. A remote
+    // stop leaves her alone: WPF StopSessionFromRemote and StopAllRemoteEffects never touch the warden
+    // (MainWindow.RemoteControl.cs:1407, RemoteControlService.cs:953).
     internal void Stop()
     {
         _stopped = true;

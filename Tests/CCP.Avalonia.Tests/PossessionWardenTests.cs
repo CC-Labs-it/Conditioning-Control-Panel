@@ -277,14 +277,9 @@ public sealed class PossessionWardenTests
                 Assert.False(tube.FindControl<Border>("PossessionNoteCard")!.IsVisible);
                 return;
             }
-            else if (route == "engine")
-            {
-                MainShellWindow.StopEngine(); // WPF StopEngineCore (MainWindow.StartStop.cs:452) leaves the warden alone
-                Assert.NotEqual(home, tube.Position);
-                await move;
-                Assert.True(tube.FindControl<Border>("PossessionNoteCard")!.IsVisible);
-                return;
-            }
+            // WPF StopEngineCore (MainWindow.StartStop.cs:452), StopSessionFromRemote (MainWindow.RemoteControl.cs:1407)
+            // and StopAllRemoteEffects (RemoteControlService.cs:953) all leave the warden alone.
+            if (route == "engine") MainShellWindow.StopEngine();
             else if (route == "remote-session") MainShellWindow.StopSessionFromRemote();
             else
             {
@@ -293,10 +288,9 @@ public sealed class PossessionWardenTests
                 Dispatcher.UIThread.Post(() => dispatched.SetResult());
                 await dispatched.Task;
             }
-            Assert.Equal(home, tube.Position);
+            Assert.NotEqual(home, tube.Position);
             await move;
-            await Task.Delay(70);
-            Assert.Equal(home, tube.Position);
+            Assert.True(tube.FindControl<Border>("PossessionNoteCard")!.IsVisible);
         }
         finally { warden.Stop(); PossessionAvaloniaHead.Warden = previous; AvatarTubeWindow.TestLive = null; tube.Close(); lockdown.Dispose(); CoreSettings.ServiceProvider = null; }
     });
