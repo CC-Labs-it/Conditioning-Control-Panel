@@ -45,7 +45,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("emi-ring", _ => EmiDesk.EmiDeskService.Instance.Window?.CloseRing()), // stricter safety: fold on every panic route
             // Stricter than WPF MainWindow.Patreon.cs:1544: panic discards pending trigger edits.
             new("workshop-trigger-editor", _ => Controls.Companion.WorkshopAccordion.CloseTriggerEditorForPanic()),
-            new("awareness-companion", sh => { App.WindowAwareness.Stop(); sh?.Named<Tabs.AwarenessTabView>("AwarenessTab")?.StopCompanionPrivacyForPanic(); }), // hosted card clocks and armed wipe
+            new("awareness-companion", sh => sh?.Named<Tabs.AwarenessTabView>("AwarenessTab")?.StopCompanionPrivacyForPanic()), // hosted card clocks and armed wipe
             new("tour", _ => Tours.TutorialHead.OnPanic()),                // a guided tour ends by the abandon route (never latched as walked)
             new("nav-window-confirm", sh => sh?.PageStrip?.CloseConfirm()),
             // WPF GameSurfaces.cs:53-55 backroom/breakout: every web game window (Views/Games/GameWindow).

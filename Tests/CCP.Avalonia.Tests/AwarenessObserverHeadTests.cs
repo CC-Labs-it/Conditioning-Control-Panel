@@ -198,6 +198,11 @@ public sealed class AwarenessObserverHeadTests
             Assert.Null(AwarenessLive.LastFrame);
             var panic = PanicSurfaces.All.Single(surface => surface.Id == "awareness-companion");
             panic.Stop(null);
+            // WPF PanicStopEverySurface/RunPanicStopTail (MainWindow.xaml.cs:1897/:2044) leave awareness running.
+            Assert.True(observer.IsRunning);
+            Assert.True(AwarenessLive.ObserverEnabled);
+            Assert.Same(arbiter, AwarenessV2Routing.Arbiter);
+            AvApp.WindowAwareness.Stop();
             Assert.False(observer.IsRunning);
             Assert.False(media.IsAvailable);
             Assert.False(AwarenessLive.ObserverEnabled);
