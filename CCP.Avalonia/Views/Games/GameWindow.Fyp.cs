@@ -142,7 +142,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     // Warning so it lands in bug reports (the "black tiles" class, #562).
                     var id = (string?)o["id"];
                     Log.Warning("[FYP] media-error for {Id}: code={Code} {Message}", id, (int?)o["code"] ?? 0, (string?)o["message"] ?? "");
-                    if (!FypRules.IsRemoteId(id)) _fypMeta?.RecordFailure(id);
+                    // ccp-bugs#1703: a file this server refuses (404) is not a decode failure; striking it hid the clip for good.
+                    if (!FypRules.IsRemoteId(id) && id != null && _server?.ResolveFile(WebAssetServer.AssetPath(id)) != null)
+                        _fypMeta?.RecordFailure(id);
                     return true;
                 }
                 case "clip-viewed":

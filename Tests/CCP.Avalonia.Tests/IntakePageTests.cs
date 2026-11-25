@@ -177,8 +177,10 @@ public sealed class IntakePageTests
             Symlinks.RequireOrSkip();   // last, so a machine without link rights still runs everything above
             File.CreateSymbolicLink(Path.Combine(assets, "images", "link.png"), Path.Combine(outside, "secret.png"));
             Directory.CreateSymbolicLink(Path.Combine(assets, "images", "out"), outside);
-            Assert.Null(server.ResolveFile(P("images/link.png")));      // symlink escape
-            Assert.Null(server.ResolveFile(P("images/out/secret.png")));
+            // ccp-bugs#1703: linked media outside the library is served, as WPF's folder mapping follows links;
+            // non-media and profile targets stay refused (WebAssetServerTests.AssetsServeMediaThroughALinkedFolder...).
+            Assert.Equal(Path.Combine(assets, "images", "link.png"), server.ResolveFile(P("images/link.png")));
+            Assert.Equal(Path.Combine(assets, "images", "out", "secret.png"), server.ResolveFile(P("images/out/secret.png")));
         }
         finally
         {

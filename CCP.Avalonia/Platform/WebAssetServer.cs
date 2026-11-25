@@ -450,7 +450,7 @@ public sealed class WebAssetServer : IDisposable
             full = Path.GetFullPath(Path.Combine(root, rel));
             if (!Inside(full, root) || !File.Exists(full)) return null;
         }
-        if (!LinksStayInside(full, root)) return null;
+        if (!LinksStayInside(full, root) && !(asset && LinkedMediaAllowed(full))) return null;
         // Brain-drain whisper clips pass this too; GameWindow.PbpWhispers leaves unchecked ones out of the offer.
         if (asset && !IntakeRun.IsAssetActive(IntakeRun.DisabledAssetSet(DisabledAssets()), root, full)) return null;
         return full;
@@ -493,6 +493,37 @@ public sealed class WebAssetServer : IDisposable
                 return false;
         }
         return true;
+    }
+
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _linkRefusals = new();
+
+    /// <summary>ccp-bugs#1703: a library file reached through a link that leaves the assets folder, as WPF's WebView2
+    /// mapping follows (FypHostService.cs:96). Served only if its real file is media and not in the profile or a dot-folder.</summary>
+    bool LinkedMediaAllowed(string full)
+    {
+        string? why;
+        string real = full;
+        try { real = RealPath(full, 0); why = null; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { why = "unresolvable link"; }
+        var data = Path.GetFullPath(CorePaths.UserData).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        why ??= !File.Exists(real) ? "not a file"
+            : !MediaTypeSniffer.MediaExtensions.Contains(Path.GetExtension(real)) ? "not media"
+            : Inside(real, data) ? "profile folder"
+            : real.Split('/', '\\').Any(seg => seg.StartsWith('.')) ? "dot-folder" : null;
+        if (why != null && _linkRefusals.TryAdd(why, 0))
+            Log.Warning("WebAssetServer: refusing linked asset {Path}: {Why}", full, why);
+        return why == null;
+    }
+
+    /// <summary>The path with every link on the way resolved (no realpath in .NET).</summary>
+    static string RealPath(string path, int depth)
+    {
+        if (depth > 128) throw new IOException("link loop");
+        if (Path.GetDirectoryName(path) is not { } dir) return path;
+        var p = Path.Combine(RealPath(dir, depth + 1), Path.GetFileName(path));
+        FileSystemInfo info = Directory.Exists(p) ? new DirectoryInfo(p) : new FileInfo(p);
+        return info.LinkTarget != null && info.ResolveLinkTarget(returnFinalTarget: true) is { } t
+            ? RealPath(Path.GetFullPath(t.FullName), depth + 1) : p;
     }
 
     public void Dispose()
