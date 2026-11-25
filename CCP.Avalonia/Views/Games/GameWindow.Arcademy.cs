@@ -217,11 +217,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         }
 
         // WPF ArcademyHostService.cs:1474-1477 BuildSettingsBag: the saved bag plus the local image manifest.
-        private JObject ArcademySettingsBag(JObject bag, AppSettings s)
+        // Root-relative like DtRH (WebAssetServer.AssetPath): provider/inventory.js isLocalUrl rejects http://127.0.0.1.
+        private static JObject ArcademySettingsBag(JObject bag, AppSettings s)
         {
-            var server = _server;
             try { bag["localAssets"] = ArcademyLocalAssets.Build(CorePaths.EffectiveAssets, s.DisabledAssetPaths,
-                rel => server?.AssetUrl(rel) ?? ConditioningControlPanel.Avalonia.Platform.WebAssetServer.AssetPath(rel)); }
+                ConditioningControlPanel.Avalonia.Platform.WebAssetServer.AssetPath); }
             catch (Exception ex) { Log.Debug("[Arcademy] local assets manifest failed: {E}", ex.Message); }
             return bag;
         }

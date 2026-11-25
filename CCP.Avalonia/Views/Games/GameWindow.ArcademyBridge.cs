@@ -39,11 +39,10 @@ internal sealed partial class GameWindow
         var tag = ArcademyTag(o);
         var folders = (o["folders"] as JArray ?? new JArray()).Select(t => ((string?)t ?? "").Trim()).Where(f => f.Length > 0).ToList();
         var presetId = ((string?)o["presetId"] ?? "").Trim();
-        var server = _server;
         ArcademyLastLocalSample = Task.Run(() =>
         {
             List<object> rows;
-            try { rows = ArcademySampleLocal(reqId, count, kind, tag, folders, presetId, rel => server?.AssetUrl(rel) ?? WebAssetServer.AssetPath(rel)); }
+            try { rows = ArcademySampleLocal(reqId, count, kind, tag, folders, presetId, WebAssetServer.AssetPath); }
             catch (Exception ex) { Log.Warning("[Arcademy] local sample failed: {E}", ex.Message); rows = new(); }
             Dispatcher.UIThread.Post(() => { if (!_closing) Post(new { type = "assets", reqId, tag, urls = rows, done = true }); });
         });

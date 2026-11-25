@@ -74,6 +74,7 @@ export function toAssetUrl(entry) {
   if (!raw) return null;
   const s = String(raw);
   if (/^(https?:|data:|blob:)/i.test(s)) return s;
+  if (/^\/(?!\/)/.test(s)) return s;   // root-relative: the Avalonia head's same-origin /ccp.assets/ url
   const clean = s.replace(/^[./\\]+/, '').replace(/\\/g, '/');
   return ASSET_HOST + clean.split('/').map(encodeURIComponent).join('/');
 }

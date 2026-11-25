@@ -49,11 +49,11 @@ public sealed partial class GameWindowTests
             var still = frames.Last(f => (string?)f["reqId"] == "r1");
             Assert.Equal("assets", (string?)still["type"]); Assert.True((bool?)still["done"]); Assert.Equal("target", (string?)still["tag"]);
             var row = Assert.Single((JArray)still["urls"]!);
-            Assert.EndsWith("/ccp.assets/images/pile/a.png", (string?)row["url"]);
+            Assert.Equal("/ccp.assets/images/pile/a.png", (string?)row["url"]);
             Assert.Equal(("still", "image/png", "images/pile"), ((string?)row["kind"], (string?)row["mime"], (string?)row["src"]));
             w.HandleMessage("{\"type\":\"local-sample-request\",\"reqId\":\"r2\",\"kind\":\"loop\",\"folders\":[\"../..\",\"videos\"]}");
             Settle(w.ArcademyLastLocalSample);
-            Assert.EndsWith("/ccp.assets/videos/v.mp4", (string?)((JArray)frames.Last()["urls"]!).Single()["url"]);
+            Assert.Equal("/ccp.assets/videos/v.mp4", (string?)((JArray)frames.Last()["urls"]!).Single()["url"]);
             // A path that climbs out of the library is refused, so the default roots are used.
             w.HandleMessage("{\"type\":\"local-sample-request\",\"reqId\":\"r3\",\"kind\":\"still\",\"folders\":[\"../..\"]}");
             Settle(w.ArcademyLastLocalSample);
@@ -77,18 +77,42 @@ public sealed partial class GameWindowTests
             Directory.CreateDirectory(Path.Combine(lib, "images"));
             File.WriteAllBytes(Path.Combine(lib, "images", "a b.png"), new byte[] { 1 });
             File.WriteAllBytes(Path.Combine(lib, "images", "off.gif"), new byte[] { 1 });
+            var webp = new byte[21]; "RIFF"u8.CopyTo(webp); "WEBPVP8X"u8.CopyTo(webp.AsSpan(8)); webp[20] = 2;   // VP8X animation flag
+            File.WriteAllBytes(Path.Combine(lib, "images", "x.webp"), webp);
             CorePaths.EffectiveAssetsProvider = () => lib;
             s.DisabledAssetPaths = new() { "images/off.gif" };
             s.ArcademySettingsJson = "{\"dt_hard_mode\":true}";
             w.HandleMessage("{\"type\":\"ready\"}");
             var settings = (JObject)frames.Single(f => (string?)f["type"] == "init")["settings"]!;
             Assert.True((bool?)settings["dt_hard_mode"]);
-            Assert.Empty((JArray)settings["localAssets"]!["gifs"]!);
-            Assert.EndsWith("/ccp.assets/images/a%20b.png", ((JArray)settings["localAssets"]!["stills"]!).Values<string>().Single());
+            Assert.Equal("/ccp.assets/images/x.webp#.gif", ((JArray)settings["localAssets"]!["gifs"]!).Values<string>().Single());
+            Assert.Equal("/ccp.assets/images/a%20b.png", ((JArray)settings["localAssets"]!["stills"]!).Values<string>().Single());
             Assert.DoesNotContain("localAssets", s.ArcademySettingsJson);
+            // The page's own rule (provider resolveManifest + inventory buildLocalPools) must keep what the host sent.
+            Assert.Equal("{\"loop\":[\"/ccp.assets/images/x.webp#.gif\"],\"still\":[\"/ccp.assets/images/a%20b.png\"]}", ArcademyPagePools(settings));
         }
         finally { w.Close(); (CorePaths.EffectiveAssetsProvider, s.DisabledAssetPaths, s.ArcademySettingsJson) = old; Directory.Delete(lib, true); }
     });
+
+    // Runs Assets/web/arcademy/provider in node on an init.settings bag; returns the local pools as JSON.
+    private static string ArcademyPagePools(JObject settings)
+    {
+        var dir = new Uri(Path.Combine(ConditioningControlPanel.Tests.SourceRoots.RepoRoot, "Assets", "web", "arcademy", "provider") + Path.DirectorySeparatorChar).AbsoluteUri;
+        var js = $"import {{ resolveManifest }} from '{dir}index.js'; import {{ buildLocalPools }} from '{dir}inventory.js';"
+            + "let s = ''; process.stdin.on('data', d => s += d).on('end', () => process.stdout.write(JSON.stringify(buildLocalPools(resolveManifest({ settings: JSON.parse(s) }), {}))));";
+        var psi = new System.Diagnostics.ProcessStartInfo("node") { RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (var a in new[] { "--input-type=module", "-e", js }) psi.ArgumentList.Add(a);
+        System.Diagnostics.Process p;
+        try { p = System.Diagnostics.Process.Start(psi)!; }
+        catch (System.ComponentModel.Win32Exception) { Assert.Skip("node is not on PATH"); throw; }
+        using (p)
+        {
+            p.StandardInput.Write(settings.ToString(Newtonsoft.Json.Formatting.None)); p.StandardInput.Close();
+            var err = p.StandardError.ReadToEndAsync(); var output = p.StandardOutput.ReadToEnd();
+            Assert.True(p.WaitForExit(30_000)); Assert.True(p.ExitCode == 0, err.Result);
+            return output;
+        }
+    }
 
     // WPF ArcademyHostService.cs:5281-5376: one sub-probe per reqId; a found sub joins the library, never the feed.
     [Fact]
