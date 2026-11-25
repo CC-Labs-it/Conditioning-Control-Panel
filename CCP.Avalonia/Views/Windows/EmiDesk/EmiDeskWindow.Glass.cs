@@ -229,7 +229,7 @@ public partial class EmiDeskWindow
             if (!PongFeasible(AmbientFxCanvas.Env.Level)) { CloseGlass(); return; }
             _glassPong.Tick(elapsed);
         }
-        if (_glassMotion) _glassSpiral?.Tick(elapsed);
+        _glassSpiral?.Tick(elapsed); // WPF EmiDeskWindow.Glass.cs:421-427: every channel frame.
         _glassReruns?.Tick(elapsed);
         _glassShop?.Tick(elapsed);
         if (_glassMotion) _glassBrowsing?.Tick(elapsed); // the pages hold as a still below full motion
@@ -262,7 +262,6 @@ public partial class EmiDeskWindow
         if (_glassChannel == "spiral")
         {
             _glassLayer.Children.Clear();
-            _glassMotion = AmbientFxCanvas.Env.Level == MotionLevel.Full;
             _glassSpiral = new SpiralPainter(_glassLayer.Width, _glassLayer.Height);
             _glassSpiral.Attach(_glassLayer);
             _glassSpiral.Tick(0);
