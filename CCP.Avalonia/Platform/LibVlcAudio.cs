@@ -230,10 +230,19 @@ namespace ConditioningControlPanel.Avalonia.Platform
             player.EndReached += (_, _) => Finish();
             player.EncounteredError += (_, _) => Finish();
             player.Stopped += (_, _) => Finish();
+            // Pause/resume work items can run out of order, so each applies the latest request, not its own.
+            int wantPaused = 0;
+            void ApplyPause() => ThreadPool.QueueUserWorkItem(_ =>
+            {
+                try { lock (player) if (done == 0) player.SetPause(Volatile.Read(ref wantPaused) != 0); }
+                catch (Exception ex) { Log.Debug(ex, "[Audio] {Tag} pause", tag); }
+            });
+            // A rapid resume can precede completion of LibVLC's asynchronous pause (as Voice below).
+            player.Paused += (_, _) => { if (Volatile.Read(ref wantPaused) == 0) ApplyPause(); };
             if (!player.Play()) Finish();
             // Off the caller's thread: libvlc's Stop must never run inside one of its own events.
             Action stop = () => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) player.Stop(); });
-            Pausers.AddOrUpdate(stop, paused => ThreadPool.QueueUserWorkItem(_ => { lock (player) if (done == 0) player.SetPause(paused); }));
+            Pausers.AddOrUpdate(stop, paused => { Volatile.Write(ref wantPaused, paused ? 1 : 0); ApplyPause(); });
             return stop;
         }
 
