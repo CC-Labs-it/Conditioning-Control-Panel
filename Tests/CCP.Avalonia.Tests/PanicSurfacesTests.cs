@@ -177,6 +177,7 @@ public sealed class PanicSurfacesTests
         "event-fx",
         "perfect-week-bonus",
         "brain-drain-audio",
+        "undertow",
         "roster-personality",
         "intake",
         "leash-task",

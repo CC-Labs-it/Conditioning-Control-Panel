@@ -147,7 +147,8 @@ public sealed class SuperBox : Border
     /// the cards on the flash windows (Views/Overlays/FlashOverlay.Deck); InnerBloom (Froth): the ambient bubbles (Views/Overlays/BubbleOverlay);
     /// Vortex: the Whirlpool on the spiral windows (Views/Overlays/WhirlpoolOverlay); Scrawl: the stamps under the bouncing words
     /// (Views/Overlays/BouncingTextOverlay.Scrawl); LightsDown: the dim in and around the mandatory video windows
-    /// (Views/Overlays/LightsDownOverlay).</summary>
+    /// (Views/Overlays/LightsDownOverlay). Undertow stays out until a Brain Drain blur host lands
+    /// (Views/Overlays/UndertowOverlay: the lens is a hole in that blur, and this head has none yet).</summary>
     internal static readonly HashSet<SuperEffect> HostedOnThisHead = new() { SuperEffect.Creep, SuperEffect.Afterglow, SuperEffect.FlickerDeck, SuperEffect.InnerBloom, SuperEffect.Vortex, SuperEffect.Scrawl, SuperEffect.LightsDown };
 
     /// <summary>True when the star draws on: hosted, unlocked and switched on.</summary>
