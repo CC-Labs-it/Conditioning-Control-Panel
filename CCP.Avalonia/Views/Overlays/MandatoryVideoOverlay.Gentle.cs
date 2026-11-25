@@ -92,7 +92,7 @@ internal sealed partial class MandatoryVideoOverlay
         OpenQueuedCreditLink();   // WPF VideoService.Browser.cs:674-684: a full-screen press opens at the clip end
         // WPF FloatingInstances.cs:658: a floating clip's end closes only its own window while others play.
         if (_floaters.Count > 0) { RetirePrimary("clip ended"); return; }
-        Scheduler.Ended(renderedFrame: FirstFrameMs >= 0);
+        Scheduler.Ended(renderedFrame: FirstFrameMs >= 0, cutShort: CutShortAttentionBatches(Elapsed));
     }
 
     private void DropEntrance()

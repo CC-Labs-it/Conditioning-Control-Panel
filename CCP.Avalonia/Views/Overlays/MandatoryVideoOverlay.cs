@@ -74,6 +74,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private readonly List<Surface> _surfaces = new();
         private readonly List<Window> _messages = new();
         private readonly List<Target> _targets = new();
+        private readonly List<List<Target>> _attentionBatches = new();
         private readonly List<(List<Target> Targets, AttentionToyButtonBinding Binding)> _toyBatches = new();
         private List<double> _spawnTimes = new();
         private MediaPlayer? _player;
@@ -1020,7 +1021,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>Seconds on the spawn clock (WPF DateTime.Now - _startTime, the playback start).</summary>
-        private double Elapsed => _sinceShow.Elapsed.TotalSeconds;
+        internal double Elapsed => _sinceShow.Elapsed.TotalSeconds;
+
+        // One batch is one spawn even when it has a target on every screen.
+        internal int CutShortAttentionBatches(double elapsed) => _attentionBatches.Count(batch =>
+            batch.Count > 0 && batch[0].Due > elapsed && batch.Any(_targets.Contains));
 
         private TimeSpan? _lastFrame;
 
@@ -1048,11 +1053,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _spawnTimes.RemoveAt(0);
                 Spawn(elapsed);
             }
+            var expired = false;
             foreach (var t in _targets.ToList())
             {
-                if (elapsed >= t.Due) { t.Remove(); _targets.Remove(t); continue; }
+                if (elapsed >= t.Due) { t.Remove(); _targets.Remove(t); expired = true; continue; }
                 t.Move(dt);
             }
+            if (expired) _attentionBatches.RemoveAll(batch => !batch.Any(_targets.Contains));
             ReleaseToyBatches();
         }
 
@@ -1084,6 +1091,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 PlayPop();
                 Scheduler.NoteHit();
                 foreach (var o in batch) { _targets.Remove(o); if (o != t) o.Remove(); }
+                _attentionBatches.Remove(batch);
                 t.FadeOut();
                 ReleaseToyBatches();
                 Log.Information("ATTENTION: Hit {Hits}/{Spawned}", Scheduler.AttentionHits, Scheduler.AttentionSpawned);
@@ -1096,6 +1104,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 batch.Add(t);
                 _targets.Add(t);
             }
+            if (batch.Count > 0) _attentionBatches.Add(batch);
             var binding = AttentionToyButtonBinding.Arm(CoreHaptics.Service,
                 () => batch.Any(t => _targets.Contains(t)),
                 () => Hit(batch.First(t => _targets.Contains(t))));
@@ -1390,6 +1399,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _guard?.Stop();
                 _graceTimer = _guard = null;
                 _spawnTimes.Clear();
+                _attentionBatches.Clear();
                 _targets.Clear();
                 ReleaseToyBatches();
                 // Stop joins the decoder thread, so after it no callback touches the frame buffer.
