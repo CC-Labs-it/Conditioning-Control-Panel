@@ -79,6 +79,36 @@ public sealed partial class GameWindowTests
         }
         finally { w.Close(); (s.OfflineMode, s.RemoteMediaConsented, s.FypOnlineConsented, s.MediaSource) = old; }
     });
+    /// <summary>WPF ArcademyHostService.cs:4654-4663, 4934-4938: a batch's surplus rows serve the next ask of the same pile; new subs drop them.</summary>
+    [Fact]
+    public void Arcademy_RemoteAssetSurplusServesLaterRequests() => Run((_, _) =>
+    {
+        var s = CoreSettings.Current; var old = (s.OfflineMode, s.RemoteMediaConsented, s.MediaSource);
+        var w = new GameWindow(GameWindow.Games["arcademy"]); var frames = new List<JObject>(); int calls = 0; string pile = "cats";
+        w.Posted += json => frames.Add(JObject.Parse(json));
+        w.ArcademyFetchForTests = (_, _) => { calls++; return Task.FromResult(Enumerable.Range(1, 3).Select(i => new FypAssetManifest.Entry
+            { Id = "scrolller/" + pile + "/" + i, Url = $"https://example.com/{pile}{i}.jpg", Type = "image", Folder = "r/" + pile }).ToList()); };
+        JObject Final(string id)
+        {
+            Assert.True(SpinWait.SpinUntil(() => { Dispatcher.UIThread.RunJobs(); return frames.Any(f => (string?)f["reqId"] == id && (bool?)f["done"] == true); }, TimeSpan.FromSeconds(10)));
+            return frames.Last(f => (string?)f["reqId"] == id);
+        }
+        string[] Urls(JObject f) => ((JArray)f["urls"]!).Select(u => (string)u["url"]!).ToArray();
+        try
+        {
+            (s.OfflineMode, s.RemoteMediaConsented, s.MediaSource) = (false, true, "online");
+            w.HandleMessage("{\"type\":\"assets-request\",\"reqId\":\"a\",\"count\":1,\"subs\":[\"cats\"],\"tag\":\"target\"}");
+            Assert.Equal(new[] { "https://example.com/cats1.jpg" }, Urls(Final("a")));
+            w.HandleMessage("{\"type\":\"assets-request\",\"reqId\":\"b\",\"count\":1,\"subs\":[\"cats\"],\"tag\":\"target\"}");
+            var b = Final("b"); Assert.Equal(1, calls); Assert.Equal("r/cats", (string?)b["urls"]?[0]?["src"]); Assert.Equal("target", (string?)b["urls"]?[0]?["tag"]);
+            Assert.Equal(new[] { "https://example.com/cats2.jpg" }, Urls(b));
+            w.HandleMessage("{\"type\":\"assets-request\",\"reqId\":\"u\",\"count\":1}");
+            Assert.Equal(new[] { "https://example.com/cats1.jpg" }, Urls(Final("u"))); Assert.Equal(2, calls);   // the untagged pull keeps its own buffer
+            pile = "dogs"; w.HandleMessage("{\"type\":\"assets-request\",\"reqId\":\"d\",\"count\":1,\"subs\":[\"dogs\"],\"tag\":\"target\"}");
+            Assert.Equal(new[] { "https://example.com/dogs1.jpg" }, Urls(Final("d"))); Assert.Equal(3, calls);   // new subs drop cats3
+        }
+        finally { w.Close(); (s.OfflineMode, s.RemoteMediaConsented, s.MediaSource) = old; }
+    });
     [Theory]
     [InlineData("samples")]
     [InlineData("settings")]
