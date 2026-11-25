@@ -62,6 +62,34 @@ public sealed partial class GameWindowTests
         finally { w.Close(); (CorePaths.EffectiveAssetsProvider, s.DisabledAssetPaths, s.MediaSource) = old; Directory.Delete(lib, true); }
     });
 
+    // WPF ArcademyHostService.cs:1476,1617 and provider/index.js:229-232: init.settings.localAssets lists the
+    // active library through this head's asset URLs; the saved bag is never given it.
+    [Fact]
+    public void Arcademy_InitSettingsCarryTheLocalAssetsManifest() => Run((_, _) =>
+    {
+        var lib = Directory.CreateTempSubdirectory("arc-manifest-").FullName;
+        var s = CoreSettings.Current;
+        var old = (CorePaths.EffectiveAssetsProvider, s.DisabledAssetPaths.ToHashSet(), s.ArcademySettingsJson);
+        var w = new GameWindow(GameWindow.Games["arcademy"]);
+        var frames = new List<JObject>(); w.Posted += json => frames.Add(JObject.Parse(json));
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(lib, "images"));
+            File.WriteAllBytes(Path.Combine(lib, "images", "a b.png"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(lib, "images", "off.gif"), new byte[] { 1 });
+            CorePaths.EffectiveAssetsProvider = () => lib;
+            s.DisabledAssetPaths = new() { "images/off.gif" };
+            s.ArcademySettingsJson = "{\"dt_hard_mode\":true}";
+            w.HandleMessage("{\"type\":\"ready\"}");
+            var settings = (JObject)frames.Single(f => (string?)f["type"] == "init")["settings"]!;
+            Assert.True((bool?)settings["dt_hard_mode"]);
+            Assert.Empty((JArray)settings["localAssets"]!["gifs"]!);
+            Assert.EndsWith("/ccp.assets/images/a%20b.png", ((JArray)settings["localAssets"]!["stills"]!).Values<string>().Single());
+            Assert.DoesNotContain("localAssets", s.ArcademySettingsJson);
+        }
+        finally { w.Close(); (CorePaths.EffectiveAssetsProvider, s.DisabledAssetPaths, s.ArcademySettingsJson) = old; Directory.Delete(lib, true); }
+    });
+
     // WPF ArcademyHostService.cs:5281-5376: one sub-probe per reqId; a found sub joins the library, never the feed.
     [Fact]
     public void Arcademy_ProbeSubAnswersEveryRequestAndKeepsTheFeed() => Run((_, _) =>

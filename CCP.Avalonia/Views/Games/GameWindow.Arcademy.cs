@@ -210,10 +210,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 motionLevel = ArcademyMotion(), reducedMotion = ArcademyMotion() != 2,
                 utcDateSeed = DateTime.UtcNow.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
                 localDate = DateTime.Now.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
-                settings = Parse(s.ArcademySettingsJson), keybinds = Parse(s.ArcademyKeybindsJson),
+                settings = ArcademySettingsBag(Parse(s.ArcademySettingsJson), s), keybinds = Parse(s.ArcademyKeybindsJson),
                 hideTutorial = s.ArcademyHideTutorial, meta = _arcademyMeta?.Snapshot() ?? new JObject(),
                 panicKey = s.PanicKey, panicKeyEnabled = s.PanicKeyEnabled, profile = ArcademyProfile(s),
             };
+        }
+
+        // WPF ArcademyHostService.cs:1474-1477 BuildSettingsBag: the saved bag plus the local image manifest.
+        private JObject ArcademySettingsBag(JObject bag, AppSettings s)
+        {
+            var server = _server;
+            try { bag["localAssets"] = ArcademyLocalAssets.Build(CorePaths.EffectiveAssets, s.DisabledAssetPaths,
+                rel => server?.AssetUrl(rel) ?? ConditioningControlPanel.Avalonia.Platform.WebAssetServer.AssetPath(rel)); }
+            catch (Exception ex) { Log.Debug("[Arcademy] local assets manifest failed: {E}", ex.Message); }
+            return bag;
         }
 
         // WPF ArcademyHostService.cs:1209-1228: names of the bundled flat mp3 samples.
