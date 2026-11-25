@@ -228,6 +228,40 @@ public class TcHostRulesTests
     }
 
     [Fact]
+    public void Achievement_carries_only_a_fixed_sticker_id()
+    {
+        var r = Gate("{\"type\":\"achievement\",\"id\":\"ac_5k\",\"amount\":99999,\"tier\":\"rare\"}");
+        Assert.True(r.Accepted);
+        Assert.Equal("achievement", r.Frame!.Type);
+        Assert.Equal("ac_5k", r.Frame.Id);
+        Assert.Null(r.Frame.Ending);
+        Assert.Equal(new string('a', 40), Gate("{\"type\":\"achievement\",\"id\":\"" + new string('a', 40) + "\"}").Frame!.Id);
+        foreach (var bad in new[]
+        {
+            "{\"type\":\"achievement\"}",
+            "{\"type\":\"achievement\",\"id\":\"\"}",
+            "{\"type\":\"achievement\",\"id\":\"AC_5K\"}",
+            "{\"type\":\"achievement\",\"id\":\"ac 5k\"}",
+            "{\"type\":\"achievement\",\"id\":\"ac_5k\\n\"}",
+            "{\"type\":\"achievement\",\"id\":\"" + new string('a', 41) + "\"}",
+            "{\"type\":\"achievement\",\"id\":5}",
+            "{\"type\":\"achievement\",\"id\":[\"ac_5k\"]}",
+        })
+        {
+            var g = Gate(bad);
+            Assert.False(g.Accepted, bad);
+            Assert.Equal(TcFrameGate.RefuseField, g.Refusal);
+        }
+    }
+
+    [Fact]
+    public void A_fixed_id_never_matches_before_a_trailing_newline()
+    {
+        Assert.False(Gate("{\"type\":\"fuzz-ended\",\"minutes\":30,\"ending\":\"ll_end\\n\"}").Accepted);
+        Assert.Null(Gate("{\"type\":\"haptic\",\"level\":0.5,\"ms\":100,\"tag\":\"lucky\\n\"}").Frame!.Tag);
+    }
+
+    [Fact]
     public void Exit_reason_falls_back_to_back()
     {
         Assert.Equal("key", Gate("{\"type\":\"exit\",\"reason\":\"key\"}").Frame!.Reason);
