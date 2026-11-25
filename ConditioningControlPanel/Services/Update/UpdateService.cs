@@ -20,15 +20,15 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.4.0";
+        public const string AppVersion = "7.4.1";
 
         /// <summary>
         /// Patch notes for the current version - UPDATE THIS WHEN BUMPING VERSION
         /// These are shown in the update dialog and can be used when GitHub release notes are unavailable.
         /// </summary>
-        public const string CurrentPatchNotes = @"v7.4.0 - Terms & Conditioning
+        public const string CurrentPatchNotes = @"v7.4.1 - Terms & Conditioning
 
-NEW IN 7.4.0
+everything since 7.3.8, in one place.
 
 TERMS & CONDITIONING
 just your ordinary clicker game about accepting stuff - nothing sus about it :3
@@ -39,12 +39,18 @@ just your ordinary clicker game about accepting stuff - nothing sus about it :3
 - at some point the game may ask to download something, about 135 MB. it is not a virus. it is, at most, a commitment.
 - that is all there is to say about it. really.
 
+PRESETS AND SESSIONS
+- the Presets tab is now Presets and sessions. presets are pink and sessions are blue, and a line under Sessions says what starting one does: it turns on only its own effects and hands yours back when it ends.
+- an Import button sits beside Export, so a preset file someone sent you no longer has to be dragged onto the window to get in.
+
 READABLE ROWS
 - every option row in Studio and Settings got bigger text, a small picture that says what the option is about (a stopwatch for how often, dice for random, a stack for how many) and a number you can read from across the desk. the same meaning wears the same picture everywhere.
 - a switch that is off greys its picture, so a page shows at a glance what is on.
+- the Studio rack and the Settings list wear the same big tinted names, and the little row pictures got a dark outline so they stop melting into the panel.
 
 LIVE PREVIEW
 - each of the twelve effect pages now has a slice of a pretend desktop beside its options, where the effect plays as you change them. it wakes when you touch an option and settles again after a few seconds. it uses drawn stand-in pictures, never yours, and it changes nothing.
+- Takeover, Haptics and Voice swapped their side picture for a live preview of their own. the Haptics one never reaches your toy and the Voice one never opens your microphone.
 
 SUPER EFFECTS
 - Deck: Fewest flips and Most flips, so each card breaks after a random number of flips between the two.
@@ -61,6 +67,7 @@ COMFORT
 
 SMALL THINGS
 - a bell with your recent notifications, newest first.
+- Racing Thoughts 3D can play the pictures you ticked in your own library.
 - dropping a pack shows its progress while it unpacks.
 - the video quest says which videos count: the ones the app plays, not the browser.
 - the Mod Creator keeps a draft on this PC and offers it back when you open it again.
@@ -68,6 +75,8 @@ SMALL THINGS
 - your own AI (Ollama or another endpoint) keeps more of the chat in mind.
 
 FIXES
+- videos play through a newer LibVLC, which closes a security hole in the way some video files were read.
+- the file box in the Deeper player shows the file's name instead of a line of code.
 - attention checks no longer appear so close to the end of a video that you cannot answer them.
 - a lockdown of 20 minutes or more counts as a session for Daily and Weekly Devotion.
 - the ""prompt too long"" notice only shows when the cloud AI is the one answering.
@@ -78,8 +87,7 @@ FIXES
 - the Haptics tab no longer wears a lock for free accounts. toys are free.
 - a failed toy connection keeps its hint on screen until you try again.
 - dates on the invite card follow the app's language.
-
-this is a pre-release for testers. tell us what breaks.";
+- Terms & Conditioning: the spot where you could get stuck, look around and not move is fixed.";
 
         private const string GitHubOwner = "CC-Labs-it";
         private const string GitHubRepo = "Conditioning-Control-Panel";
