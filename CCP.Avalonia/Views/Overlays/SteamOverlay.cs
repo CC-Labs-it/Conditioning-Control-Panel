@@ -41,6 +41,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>The fog is what the tint windows draw right now.</summary>
         internal static bool On { get; private set; }
 
+        /// <summary>The Gentle visuals fade in, 0..1 (1 while Gentle is off): a fresh fog rises from
+        /// nothing over <see cref="GentleVisuals.FadeSeconds"/>, as WPF SteamLayer (GentleFades). Off and
+        /// panic cut, as the Whirlpool does here: the Core stage drops the fog field the moment Steam goes off.</summary>
+        internal static double ShowAlpha { get; private set; } = 1;
+
         /// <summary>The filter's own colour and strength, as of the last tick.</summary>
         internal static (byte R, byte G, byte B, double Opacity) Look { get; private set; }
 
@@ -100,6 +105,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 if (_timer != null) return;
                 _last = 0;
+                ShowAlpha = GentleVisuals.On ? 0 : 1;
                 ReadLook();
                 _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(33), DispatcherPriority.Render, Tick);
                 _timer.Start();
@@ -119,6 +125,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 double dt = _last == 0 ? 0 : Math.Min((now - _last) / (double)Stopwatch.Frequency, 0.1);
                 _last = now;
                 _poolAge += dt;
+                if (ShowAlpha < 1) ShowAlpha = GentleVisuals.On ? Math.Min(1, ShowAlpha + dt / GentleVisuals.FadeSeconds) : 1;
                 if (_poolAge > 50) ReadPool();
                 ReadLook();
                 lock (Gate)
@@ -218,7 +225,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
                 // The base filter's own colour and strength: thicker than the flat tint, never opaque.
                 var look = SteamOverlay.Look;
-                double strength = Math.Clamp(0.3 + look.Opacity * 1.6, 0.3, 0.82);
+                double strength = Math.Clamp(0.3 + look.Opacity * 1.6, 0.3, 0.82) * SteamOverlay.ShowAlpha;
                 var colour = new SKColor(look.R, look.G, look.B);
                 var bounds = new SKRect(rect.Left, rect.Top, rect.Right, rect.Bottom);
                 double t = SteamOverlay.T;
@@ -235,7 +242,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     // A finished Afterglow line, written across the middle where its band was remembered.
                     _words.Line = AfterglowLineOverlay.FogLine;
                     _words.Step(field, dt, GentleVisuals.On, set.SteamWordsInFog);
-                    _wordsDraw.Draw(canvas, bounds, field, _words, colour, Face);
+                    // WPF SteamLayer: the subliminal face (AfterglowLineLayer.FaceNow) and the worn word style.
+                    _wordsDraw.Draw(canvas, bounds, field, _words, colour, AfterglowLineDraw.FaceFor(CoreSettings.Current.SubliminalFont),
+                        ConditioningControlPanel.Services.Looks.WornWordStyle.Current, ConditioningControlPanel.Services.Looks.WornWordStyle.Motion);
                 }
                 finally { canvas.Restore(); }
                 field.ClearDirty();

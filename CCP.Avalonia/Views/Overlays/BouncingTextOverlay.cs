@@ -184,10 +184,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             for (var i = 0; i < Engine.Logos.Count; i++) UpdateText(i);
         }
 
+        /// <summary>The word and Scrawl stamp face: the picked font, then Segoe UI (Windows), then the bundled
+        /// CCP Sans (Selawik with Segoe UI's line height), so Linux never falls to whatever fontconfig picks.</summary>
         internal static FontFamily Family()
         {
             var f = CoreSettings.Current.BouncingTextFont;
-            return new FontFamily(string.IsNullOrWhiteSpace(f) ? "Segoe UI" : f + ", Segoe UI");
+            return new FontFamily(string.IsNullOrWhiteSpace(f) ? $"Segoe UI, {AppFonts.UiSans}" : $"{f}, Segoe UI, {AppFonts.UiSans}");
         }
 
         private static (double, double) Measure(string text, int size)
