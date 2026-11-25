@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
@@ -22,6 +23,24 @@ namespace CCP.Avalonia.Tests;
 /// (Speech.cs:1712-1834 + AvatarRandomBubble.cs) and fullscreen poll (Windowing.cs:211-357).</summary>
 public sealed class TubeGreetingBubbleTests
 {
+    private sealed class PrivateSettings : IDisposable
+    {
+        private readonly string _dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ccp-tube-" + Guid.NewGuid());
+        private readonly Func<ConditioningControlPanel.Services.SettingsService?>? _previous = CoreSettings.ServiceProvider;
+        private readonly ConditioningControlPanel.Services.SettingsService _service;
+        public PrivateSettings()
+        {
+            System.IO.Directory.CreateDirectory(_dir);
+            _service = new ConditioningControlPanel.Services.SettingsService(System.IO.Path.Combine(_dir, "settings.json")) { SaveDebounceDueTimeMilliseconds = System.Threading.Timeout.Infinite };
+            CoreSettings.ServiceProvider = () => _service;
+        }
+        public void Dispose()
+        {
+            _service.SealForReset(); CoreSettings.ServiceProvider = _previous;
+            System.IO.Directory.Delete(_dir, recursive: true);
+        }
+    }
+
     private static void EnsureApp()
     {
         if (Application.Current is null)
@@ -69,6 +88,7 @@ public sealed class TubeGreetingBubbleTests
     public Task GreetingRaisesAppOpenedFallsBackToTheAbsenceLineAndCallsTheStreak() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         EnsureApp();
+        using var settings = new PrivateSettings();
         var s = CoreSettings.Current;
         var saved = (s.LastSeenUtc, s.CurrentStreak, s.LastAnnouncedStreakMilestone, s.AvatarMuted, BarkHead.Engine, AvatarTubeWindow.AbsenceGreetingShownThisLaunch);
         var phrase = new CustomCompanionPhrase { Id = "test-startup", Text = "startup line", Category = "StartupGreeting" };
@@ -90,6 +110,7 @@ public sealed class TubeGreetingBubbleTests
             (s.CurrentStreak, s.LastAnnouncedStreakMilestone) = (8, 0);
             tube.ShowGreeting();
             Assert.Equal(new[] { "AppOpened:back", "StreakMilestone:7" }, said);
+            Assert.Contains("t_AppOpened", s.BarkVariantRotation.Keys);
             Assert.Equal(7, s.LastAnnouncedStreakMilestone);
             Assert.True(DateTime.UtcNow - s.LastSeenUtc!.Value < TimeSpan.FromMinutes(1));   // refreshed on open
 
@@ -153,7 +174,19 @@ public sealed class TubeGreetingBubbleTests
             bubble.Step();
             Assert.True(bubble.Window.Position.Y < y);       // floats up
 
-            bubble.Pop();
+            var grid = Assert.IsType<Grid>(bubble.Window.Content);
+            var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
+            PointerPressedEventArgs Press(PointerUpdateKind kind, RawInputModifiers buttons)
+            {
+                var e = new PointerPressedEventArgs(grid, pointer, bubble.Window, default, 0, new PointerPointProperties(buttons, kind), KeyModifiers.None);
+                grid.RaiseEvent(e); return e;
+            }
+            Assert.False(Press(PointerUpdateKind.RightButtonPressed, RawInputModifiers.RightMouseButton | RawInputModifiers.LeftMouseButton).Handled);
+            Assert.False(Press(PointerUpdateKind.MiddleButtonPressed, RawInputModifiers.MiddleMouseButton).Handled);
+            Assert.False(bubble.IsPopping);
+            Assert.Empty(xp);
+            Assert.True(Press(PointerUpdateKind.LeftButtonPressed, RawInputModifiers.LeftMouseButton).Handled);
+            Assert.True(bubble.IsPopping);
             Assert.Equal(new[] { (5.0, "AvatarInteraction") }, xp);
             Assert.Contains(sounds, x => x.StartsWith("avatar-bubble-pop:Pop", StringComparison.Ordinal));
             Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("avatar_bubble_pop_praise"), Said(tube, gaps));

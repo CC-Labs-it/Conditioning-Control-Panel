@@ -131,7 +131,11 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 _art.Cursor = new global::Avalonia.Input.Cursor(global::Avalonia.Input.StandardCursorType.Hand);
                 // Alpha 1, not transparent, so a click between the art's own gaps still lands (AvatarRandomBubble.cs:120).
                 var grid = new Grid { Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0)), Children = { _art } };
-                grid.PointerPressed += (_, e) => { e.Handled = true; Pop(); };
+                grid.PointerPressed += (_, e) =>
+                {
+                    if (e.GetCurrentPoint(grid).Properties.PointerUpdateKind != global::Avalonia.Input.PointerUpdateKind.LeftButtonPressed) return;
+                    e.Handled = true; Pop();
+                };
                 Window = new Window
                 {
                     WindowDecorations = WindowDecorations.None, TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent },
