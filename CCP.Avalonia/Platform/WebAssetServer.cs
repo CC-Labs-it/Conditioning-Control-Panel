@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using ConditioningControlPanel.Helpers;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.Fyp.Online;
+using ConditioningControlPanel.Services.GoonGame;
 using ConditioningControlPanel.Services.Quiz;
 using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services;
@@ -49,6 +50,12 @@ public sealed class WebAssetServer : IDisposable
                 return _shared;
             }
         }
+    }
+
+    // Do not start a server merely because a browser asks about its current page.
+    internal static bool SuppressSharedContextMenu(Uri? uri, bool homeBrowser)
+    {
+        lock (_sharedLock) return _shared != null && LocalPagePolicy.SuppressContextMenu(uri, _shared, homeBrowser);
     }
 
     readonly SemaphoreSlim _inFlight = new(16);
@@ -220,7 +227,8 @@ public sealed class WebAssetServer : IDisposable
         if (path == null) { ctx.Response.StatusCode = 404; return; }
         // A Scrolller copy (DtRH's .temp/ccp_temp_remote_*) is no-store: the engine's disk cache must never keep a
         // second copy that outlives the copy's 24 h or the off switch (licence 3.4).
-        SendFile(ctx, path, Types.GetValueOrDefault(Path.GetExtension(path), "application/octet-stream"), CacheControlFor(path));
+        SendFile(ctx, path, Types.GetValueOrDefault(Path.GetExtension(path), "application/octet-stream"),
+            Uri.UnescapeDataString(ctx.Request.Url!.AbsolutePath).TrimStart('/').StartsWith("__goon_recv__/", StringComparison.Ordinal) ? "no-store" : CacheControlFor(path));
     }
 
     /// <summary>The relay port's rule: its own Host, loopback only, GET / HEAD (and an OPTIONS preflight, answered 204),
@@ -375,6 +383,19 @@ public sealed class WebAssetServer : IDisposable
     {
         var rel = Uri.UnescapeDataString(urlPath).TrimStart('/');
         var root = _root;
+        // WPF maps ccp.cache/recv to the ephemeral inbox. Only flat hash-named media is exposed,
+        // under the same loopback/token gate as the page, never the profile or index.
+        if (rel.StartsWith("__goon_recv__/", StringComparison.Ordinal))
+        {
+            var name = rel["__goon_recv__/".Length..];
+            var dot = name.IndexOf('.');
+            if (dot != 64 || name[..dot].Any(c => !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')))
+                || name[(dot + 1)..] is not ("png" or "jpg" or "gif" or "webp" or "mp4" or "webm")) return null;
+            var folder = TransferInboxStore.Instance.RecvDir;
+            var file = Path.Combine(folder, name);
+            return Directory.Exists(folder) && new DirectoryInfo(folder).LinkTarget == null
+                && File.Exists(file) && new FileInfo(file).LinkTarget == null ? file : null;
+        }
         // WPF ccp.spirals mapping: only store-owned, flat GIF names; never sidecars or profile files.
         if (rel.StartsWith("__spirals__/", StringComparison.Ordinal))
         {

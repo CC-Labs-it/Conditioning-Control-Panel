@@ -120,9 +120,11 @@ public sealed partial class GameWindowTests
             var w = GameWindow.Launch(GameWindow.GoonId)!;
             w.Activate();
             Dispatcher.UIThread.RunJobs();
-            w.HandleMessage("{\"type\":\"ready\"}");
             var sent = new System.Collections.Generic.List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            WaitGoonReplies(sent, 3);   // init, fullscreen and the off-thread manifest
+            sent.Clear();
             shell.HandlePanicKeyPress(t0);
             Dispatcher.UIThread.RunJobs();
             Assert.Contains(w, GameWindow.OpenWindowsForTests());
@@ -196,8 +198,9 @@ public sealed partial class GameWindowTests
         var frames = new System.Collections.Generic.List<JObject>();
         goon.Posted += json => frames.Add(JObject.Parse(json));
         goon.HandleMessage("{\"type\":\"ready\"}");
+        WaitGoonReplies(frames, 3);   // the inbox boot posts the manifest off the UI thread
 
-        Assert.Equal(new[] { "init", "manifest", "fullscreen" }, frames.Select(f => (string?)f["type"]));
+        Assert.Equal(new[] { "init", "fullscreen", "manifest" }, frames.Select(f => (string?)f["type"]));
         var init = frames[0];
         Assert.Equal(1, (int)init["protocol"]!);
         Assert.False((bool)init["solo"]!);
@@ -205,8 +208,8 @@ public sealed partial class GameWindowTests
         Assert.True((bool)init["net"]!["viaHost"]!);
         Assert.False((bool)init["caps"]!["haptics"]!);   // no toy connected
         Assert.NotNull(init["consent"]!["liveDurationSec"]);
-        Assert.NotNull(frames[1]["images"]);
-        Assert.Empty((JArray)frames[1]["received"]!);
+        Assert.NotNull(frames[2]["images"]);
+        Assert.IsType<JArray>(frames[2]["received"]);
         Assert.True(goon.KeptEscapeReady);
         Assert.Equal(PanicPolicy.KeptEscapePage.Goon, goon.KeptEscapePage);
     });

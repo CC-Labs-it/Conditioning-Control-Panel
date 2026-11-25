@@ -304,14 +304,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             BuildModCards();
             _modCardsList.ItemsSource = _cards;
 
-            // A pack finishing while this window is open flips its card to Installed. Raised on the
-            // head's download thread, hence the hop. CoreReleaseContent.PackInstalled is a STATIC
-            // event, so the Closed handler below must detach or the window outlives its own close.
-            //
-            // ponytail: still needs App.ReleaseContent's PackProgressChanged (the per-percent
-            // MarkProgress) and App.Mods' ModAvailabilityChanged (extracted, not merely downloaded);
-            // neither has a Core seam yet, so a download shows nothing until it lands.
             CoreReleaseContent.PackInstalled += OnPackInstalled;
+            _releaseContent = App.ReleaseContent;
+            if (_releaseContent != null) _releaseContent.PackProgressChanged += OnPackProgressChanged;
+            CoreMods.ModAvailabilityChanged += OnModAvailabilityChanged;
 
             // Handlers live here rather than in markup, per the porting convention.
             this.FindControl<Border>("TitleBar")!.PointerPressed += TitleBar_PointerPressed;
@@ -1049,6 +1045,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         // ------------------------------------------------------------------ pack events
 
+        private readonly ReleaseContentService? _releaseContent;
+
+        private void OnPackProgressChanged(object? sender, PackProgressEventArgs e) =>
+            Dispatcher.UIThread.Post(() => { if (!_closed) FindCard(e.PackId)?.MarkProgress(e.Percent); });
+
+        private void OnModAvailabilityChanged(object? sender, string modOrPackId) =>
+            Dispatcher.UIThread.Post(() => { if (!_closed) FindCard(ModService.PackIdForMod(modOrPackId) ?? modOrPackId)?.MarkInstalled(); });
+
         private void OnPackInstalled(object? sender, string packId) =>
             Dispatcher.UIThread.Post(() => FindCard(packId)?.MarkInstalled());
 
@@ -1130,6 +1134,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Detached first and unconditionally: a static event holding a closed window is a leak
             // whatever the rest of this handler decides to do.
             CoreReleaseContent.PackInstalled -= OnPackInstalled;
+            if (_releaseContent != null) _releaseContent.PackProgressChanged -= OnPackProgressChanged;
+            CoreMods.ModAvailabilityChanged -= OnModAvailabilityChanged;
 
             if (_closed) return;
             _closed = true;

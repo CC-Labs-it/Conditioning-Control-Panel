@@ -67,6 +67,35 @@ public sealed class JustDropOwnerTests
             Assert.Equal(supported ? 2 : 0, operations);
         });
 
+    [Theory]
+    [InlineData(0x18, 0, 1, true)]
+    [InlineData(0x18, 1, 1, false)]
+    [InlineData(0x18, 0, 0, false)]
+    [InlineData(0x18, 0, 2, false)]
+    [InlineData(0x17, 0, 1, false)]
+    public void OnlyParentClosingHideIsVetoed(uint message, int wParam, int lParam, bool expected) =>
+        Assert.Equal(expected, GameWindow.IsOwnerCascadeHide(message, new IntPtr(wParam), new IntPtr(lParam)));
+
+    [Fact]
+    public Task CascadeHookUnlinksAndQueuesOneResync() => WithWindows((player, owner, _) =>
+    {
+        int unlinks = 0, resyncs = 0;
+        NativeWindowOwner.SetForTests = (_, target) => { if (target is null) unlinks++; return true; };
+        player.RenderVisibilityResyncForTests = () => resyncs++;
+        bool handled = false;
+        player.VetoOwnerCascade(IntPtr.Zero, 0x18, new IntPtr(1), new IntPtr(1), ref handled);
+        Assert.False(handled);
+        Assert.True(player.JustDropOwnerLinked);
+        Assert.Equal(0, unlinks);
+        player.VetoOwnerCascade(IntPtr.Zero, 0x18, IntPtr.Zero, new IntPtr(1), ref handled);
+        Assert.True(handled);
+        Assert.False(player.JustDropOwnerLinked);
+        Assert.Equal(1, unlinks);
+        Assert.Equal(0, resyncs);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, resyncs);
+    });
+
     private static Task WithWindows(Action<GameWindow, Window, System.Collections.Generic.List<Window>> body) =>
         AvaloniaTestDispatcher.RunAsync(() =>
         {

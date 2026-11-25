@@ -168,6 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     window.ShowRaceCard(room, failed: raceShell == false);
                 }
                 else window.Load(Server(), room);
+                if (spec.Id == JustDropId) window.CenterJustDrop(panel ?? Windows.MainShellWindow.Current ?? (global::Avalonia.Visual)window);
                 window.Show();
                 // WPF ChaosWebViewHost.cs:904-1013 AttachMainWindowGlue: the shop window is owned by the panel.
                 if (spec.Id == JustDropId && (panel ?? Windows.MainShellWindow.Current) is { } shell)
@@ -184,15 +185,53 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>--render-all's sample: the Breakout demo's frame with no page loaded.</summary>
         internal GameWindow() : this(Games[BreakoutDemoId]) { }
 
+        internal static void ConfigureHostedPageMotion(WebViewEnvironmentRequestedEventArgs args)
+        {
+            if (args is not global::Avalonia.Platform.WindowsWebView2EnvironmentRequestedEventArgs windows) return;
+            var level = CoreSettings.Current.MotionLevel;
+            windows.AdditionalBrowserArguments = HostedPageMotion.Merge(windows.AdditionalBrowserArguments, level);
+            // WebView2 refuses a user-data folder reopened with other arguments (Platform/WebViewProfile), so
+            // the motion switch never rides the shared profile; one folder per switch (WPF ChaosWebViewHost.cs:1475-1484).
+            if (windows.UserDataFolder == WebViewProfile.Folder)
+            {
+                var folder = System.IO.Path.Combine(CorePaths.UserData, level == ConditioningControlPanel.Models.MotionLevel.Off ? "browser_data_avalonia_hosted_reduce" : "browser_data_avalonia_hosted_motion");
+                try { System.IO.Directory.CreateDirectory(folder); } catch (Exception ex) { Diag.Swallowed(ex); }
+                windows.UserDataFolder = folder;
+            }
+        }
+
+        private WindowState? _pageWindowedState;
+
+        // WPF ChaosWebViewHost.cs:1661 routes page fullscreen through SetFullscreen: one window mode,
+        // so a page exit always leaves fullscreen, even one the host entered (then to a titled window).
+        private void SetPageFullscreen(bool on)
+        {
+            if (on == (WindowState == WindowState.FullScreen)) return;
+            var next = on ? WindowState.FullScreen : _pageWindowedState ?? WindowState.Normal;
+            _pageWindowedState = on ? WindowState : null;
+            WindowState = next;
+        }
+
         internal GameWindow(Game spec)
         {
             Spec = spec;
-            Web = new WebHost();
+            Web = new WebHost { HostedPageMotion = true };
+            if (spec.Id == DtrhId) Web.BrowserProcessFailed += () => RecoverDtrh("process-failed");
             if (spec.Id == GoonId) Web.InjectCarrier = true; // before the native view or first navigation
-            if (spec.Id == FypId) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
+            if (spec.Id == FypId || spec.Id == JustDropId || spec.Id == "loom" || IsRace || IsGlassroad) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
+            if (IsGlassroad) Web.BrowserProcessUnresponsive += () => _grUnresponsive = true;
+            // WPF ChaosWebViewHost.cs:1645: Just Drop owns its window mode.
+            if (spec.Id != JustDropId)
+            {
+                Web.NativeFullscreenEntered += () => SetPageFullscreen(true);
+                Web.NativeFullscreenExited += () => SetPageFullscreen(false);
+                // The remembered mode belongs to a page-entered fullscreen only; any other exit drops it.
+                PropertyChanged += (_, e) => { if (e.Property == WindowStateProperty && WindowState != WindowState.FullScreen) _pageWindowedState = null; };
+            }
             if (spec.Id == "loom") Web.EnvironmentRequested += ConfigureLoomEnvironment;
             // Before Load/Show can create the native environment (WPF Pbp host :200-215).
             if (spec.Id == PbpId) Web.EnvironmentRequested += ConfigurePbpEnvironment;
+            Web.EnvironmentRequested += ConfigureHostedPageMotion;
             Title = spec.Id == "loom" ? "The Loom" : Loc.Get(spec.TitleKey);
             Width = 1280;
             Height = 800;
@@ -213,10 +252,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 SizeChanged += (_, _) => CaptureDtrhWindowedFrame();
                 PropertyChanged += (_, e) => { if (e.Property == WindowStateProperty) OnDtrhWindowStateChanged(); };
             }
-            Opened += (_, _) => { lock (Open) { if (!Open.Contains(this)) Open.Add(this); } if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); StartBreakoutAccessWatch(); };
+            Opened += (_, _) => { lock (Open) { if (!Open.Contains(this)) Open.Add(this); } if (IsRace) StartRace(); if (IsDtrh) StartDtrh(); if (Spec.Id == "arcademy") StartArcademyWatch(); StartBreakoutAccessWatch(); };
             Activated += (_, _) => { FunnelPageMessage.OnAppActivated(); ResumeBreakoutAfterPanic(DateTime.Now); };   // WPF's Application.Activated covers every window
-            Closing += (_, _) => { _closing = true; _backRoomFx?.CancelAll(); CancelRaceFetch(); };
-            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); if (Spec.Id == FypId) { DisableFypEyes(); CloseFypVisit(); } StopBreakoutAccessWatch(); DisposeBreakoutMedia(); _raceRooms.Clear(); };
+            Closing += (_, _) => { _closing = true; _backRoomFx?.CancelAll(); if (IsBreakout) StopBreakoutHaptic(); CancelRaceFetch(); };
+            Closed += (_, _) => { lock (Open) Open.Remove(this); DisposeRace(); DisposeDtrh(); StopArcademyWatch(); if (Spec.Id == FypId) { DisableFypEyes(); CloseFypVisit(); } StopBreakoutAccessWatch(); DisposeBreakoutMedia(); _raceRooms.Clear(); };
             // WPF BackRoom/BackRoomHostService.cs:390,792: Breakout presence lasts until close.
             if (spec.Id == BreakoutDemoId || spec.Id == "breakout")
             {
@@ -227,7 +266,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 WireGoon();
                 Web.NavigationStarting += () => _goonEarlyReady = false;
-                Web.NavigationBeginning += () => { _goonNavigationConfirmed = false; IsReady = false; };
+                Web.NavigationBeginning += () => { _goonNavigationConfirmed = false; IsReady = false; System.Threading.Interlocked.Increment(ref _goonInboxGeneration); };
                 Web.NavigationFinished += (url, ok) =>
                 {
                     var ready = _goonEarlyReady;
@@ -237,11 +276,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         HandleMessage("{\"type\":\"ready\"}");
                 };
                 Opened += (_, _) => StartGoonWatch();
-                Closed += (_, _) => StopGoonWatch();
+                Closed += (_, _) => { StopGoonWatch(); CloseGoonInbox(); };
             }
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
             if (spec.Id == FypId)
             {
+                // WPF FypHostService.cs:99,108-112: own profile; the parked ghost source must keep rendering.
+                Web.WindowsBrowserArguments = "--autoplay-policy=no-user-gesture-required "
+                    + "--disable-features=CalculateNativeWinOcclusion --disable-backgrounding-occluded-windows";
+                Web.WindowsUserDataFolder = System.IO.Path.Combine(CorePaths.UserData, "browser_data_avalonia_fyp");
                 // WPF FypHostService.cs:720-748 heals a source hidden or minimized by the WM.
                 // Here the source IS the ghost: return it to normal rather than leave orphaned buttons.
                 PropertyChanged += (_, e) =>
@@ -252,6 +295,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         Dispatcher.UIThread.Post(() => { if (_fypGhosted && WindowState == WindowState.Minimized) ExitFypGhost(); });
                 };
                 Closed += (_, _) => ExitFypGhost();
+            }
+            if (spec.Id == JustDropId)
+            {
+                Opened += (_, _) => CaptureJustDropFrame();
+                PositionChanged += (_, _) => CaptureJustDropFrame();
+                SizeChanged += (_, _) => CaptureJustDropFrame();
             }
             if (spec.Id == JustDropId) Closed += (_, _) =>
             {
@@ -349,6 +398,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (IsGlassroad && HandleGlassroad(o)) return;
             switch ((string?)o["type"])
             {
+                case "haptic" when IsBreakout:
+                    HandleBreakoutHaptic(o);
+                    break;
                 case "room-option" when IsBreakout:
                     HandleBreakoutOption(o);   // #3921
                     break;
@@ -387,6 +439,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     break;
                 case "station-close" when IsBreakout:
                     _backRoomFx?.ReleaseStation((string?)o["station"] ?? "");
+                    if ((string?)o["station"] == "breakout") StopBreakoutHaptic();
                     break;
                 case "fx" when IsBreakout:
                     if (!_shellExiting && !_closing && !_roomMinimized) FireRoomFx(o);
@@ -410,6 +463,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 case "exit":
                     // The page winds down and answers exit-done; WPF's ArmExitWatchdog closes it anyway.
                     _backRoomFx?.CancelAll();
+                    if (IsBreakout) StopBreakoutHaptic();
                     _shellExiting = true;   // on its way out: it no longer keeps an Escape (GameWindow.Escape.cs)
                     DispatcherTimer.RunOnce(Close, TimeSpan.FromMilliseconds(1200));
                     break;

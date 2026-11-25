@@ -27,6 +27,33 @@ public sealed class MainWindowThemeParityTests
     }
 
     [Fact]
+    public Task SmallPinkButtonUsesPressAndReleaseMotion() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var button = new Button { Theme = (ControlTheme)Application.Current!.FindResource("SmallPinkButton")!, Content = "Test" };
+        var host = new Window { Width = 160, Height = 100, Content = button };
+        host.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var border = button.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "border");
+            var release = Application.Current.FindResource("PressReleaseTransitions");
+            var press = Application.Current.FindResource("PressDownTransitions");
+            Assert.Same(release, border.Transitions);
+            var point = button.TranslatePoint(new Point(20, 20), host)!.Value;
+            host.MouseMove(point);
+            host.MouseDown(point, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(press, border.Transitions);
+            host.MouseUp(point, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(release, border.Transitions);
+        }
+        finally { host.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task TreeChromeKeepsDefaultsAndCallerBrushes() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();

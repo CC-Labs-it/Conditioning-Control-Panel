@@ -58,11 +58,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public Func<Uri, bool>? AllowNavigation { get; set; }
         internal bool SuppressNewWindows { get; set; }
+        internal Action<Uri?>? PopupRequested { get; set; }
         internal event Action? BrowserProcessFailed;
+        internal event Action? BrowserStartupFailed;
+        internal event Action? BrowserProcessUnresponsive;
+        internal void OnBrowserProcessUnresponsive() => BrowserProcessUnresponsive?.Invoke();
         /// <summary>Per-host native settings, run on the UI thread once for every engine the view builds
         /// (Spiral's WebView2 chrome switches). A throwing hook is logged, never fatal.</summary>
         internal Action<IPlatformHandle?>? ConfigureNative { get; set; }
         private IDisposable? _failureWatch;
+        private IDisposable? _localContextMenu;
         internal void OnBrowserProcessFailed() => BrowserProcessFailed?.Invoke();
         /// <summary>The engine granted a page's fullscreen request (WPF ContainsFullScreenElementChanged).
         /// Native only: a page message can never raise it.</summary>
@@ -249,9 +254,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// <c>message</c> event in); WebKitGTK injects only <c>window.invokeCSharpAction</c> (strings).
         /// <see cref="CarrierShim"/> gives such a page a <c>chrome.webview</c> over that string
         /// channel (and <c>__ccpRnPush</c> back), and is a no-op where a real one exists (WebView2).
-        /// With <see cref="InjectCarrier"/> WebKitGTK installs it at document start, before the first navigation
+        /// With <see cref="InjectCarrier"/> WebKitGTK and WPE install it at document start, before the first navigation
         /// of each engine (<see cref="Platform.WebViewCarrier"/>); it also runs after every completed navigation
-        /// as the fallback on engines without that seam (WPE) or when the native install fails.
+        /// as the fallback when the native install fails.
         /// </summary>
         internal const string CarrierShim =
             "(function(){var w=window;if(w.chrome&&w.chrome.webview&&w.chrome.webview.postMessage)return;"
@@ -333,7 +338,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         // WPF MainWindow.Browser.cs:2740-2818 moves the existing page without reloading.
         internal IDisposable? BeginReparenting() => _web?.BeginReparenting();
 
-        public bool HasEngine => _web is not null || ScriptInvoker != null;
+        public bool HasEngine => (_web is not null && !_startupFailed) || ScriptInvoker != null;
 
         // WPF MainWindow.Browser.cs:249-280: localized initialization failure categories.
         internal string FailureStatusKey { get; private set; } = "label_not_installed";
@@ -374,8 +379,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// (a string result arrives quoted), WebKitGTK hands back the raw value. Callers that read
         /// the result must tolerate both — see <c>EnhancementPlayerWindow.Unquote</c>.
         ///
-        /// There is no equivalent of <c>AddScriptToExecuteOnDocumentCreatedAsync</c>, so anything
-        /// that must be present before the page's own scripts run has no seam here.
+        /// Document-start scripts use the opt-in native installation paths below.
         /// </summary>
         public async Task<string?> InvokeScriptAsync(string javaScript)
         {
@@ -393,17 +397,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         }
 
         /// <summary>
-        /// True when some adapter is both installed and able to host a native control. Probed once
-        /// per process: <see cref="WebViewAdapterInfo.GetAdapterInfo"/> shells out to the platform
-        /// (dlopen of libwebkit2gtk, a WebView2 registry lookup) and the answer cannot change while
-        /// the app runs.
+        /// True when some adapter is both installed and able to host a native control. The adapter scan
+        /// and the audio-sink probe run once per process: <see cref="WebViewAdapterInfo.GetAdapterInfo"/>
+        /// shells out to the platform (dlopen of libwebkit2gtk, a WebView2 registry lookup) and that answer
+        /// cannot change while the app runs. Whether this is the desktop app is read on every call, so the
+        /// first caller's lifetime (a test that installs a desktop lifetime) does not latch it for the process.
         /// </summary>
         public static bool IsAvailable => UnavailableReason is null;
 
-        private static readonly Lazy<string?> _reason = new(ProbeUnavailableReason);
-
         /// <summary>Null when a web view can be hosted; otherwise the platform's own explanation.</summary>
-        public static string? UnavailableReason => _reason.Value;
+        public static string? UnavailableReason => ProbeUnavailableReason();
 
         private static readonly Lazy<(string Text, string? Command)?> _linuxHint = new(() =>
             ConditioningControlPanel.Services.LinuxDependencies.Check(
@@ -412,12 +415,89 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         private readonly Panel _webSlot;
         private readonly Border _fallback;
         private readonly TextBlock _txtReason, _txtSource;
+        // WPF ChaosWebViewHost.cs:1102-1119,1169-1172: a native re-show can leave
+        // WebView2's controller hidden even though the window is visible.
+        internal Func<IntPtr>? WindowsRenderControllerForTests { get; set; }
+        internal void RepairWindowsRenderVisibility()
+        {
+            try
+            {
+                var controller = WindowsRenderControllerForTests?.Invoke() ??
+                    (OperatingSystem.IsWindows() && _web?.TryGetPlatformHandle() is IWindowsWebView2PlatformHandle win
+                        ? win.CoreWebView2Controller : IntPtr.Zero);
+                if (controller == IntPtr.Zero) return;
+                var vtable = System.Runtime.InteropServices.Marshal.ReadIntPtr(controller);
+                var setter = System.Runtime.InteropServices.Marshal.ReadIntPtr(vtable, 4 * IntPtr.Size);
+                System.Runtime.InteropServices.Marshal.ThrowExceptionForHR(
+                    System.Runtime.InteropServices.Marshal.GetDelegateForFunctionPointer<WindowsVisibleSetter>(setter)(controller, 1));
+            }
+            catch (Exception ex) { Log.Debug("WebHost: render visibility repair failed: {Error}", ex.Message); }
+        }
+
+        // ICoreWebView2Controller: IUnknown, get_IsVisible, put_IsVisible (BOOL).
+        [System.Runtime.InteropServices.UnmanagedFunctionPointer(System.Runtime.InteropServices.CallingConvention.StdCall)]
+        internal delegate int WindowsVisibleSetter(IntPtr controller, int visible);
+
         private NativeWebView? _web;
 
         // Per-instance factory seam for headless recovery tests.
         internal Func<NativeWebView>? NativeViewFactory { get; set; }
         internal NativeWebView? NativeView => _web;
         internal Func<NativeWebView, Action, IDisposable>? FailureWatchFactory { get; set; }
+        internal Action<Action>? StartupWatchScheduler { get; set; }
+        internal Func<NativeWebView, bool>? StartupReadyProbe { get; set; }
+        private bool _adapterCreated, _adapterReady, _startupFailed, _startupWatchPending, _startupWatchResumePage;
+        private int _startupWatchGeneration;
+
+        private bool StartupReady(NativeWebView native)
+        {
+            try { return StartupReadyProbe?.Invoke(native) ?? Platform.WebViewZoom.IsReady(native.TryGetPlatformHandle()); }
+            catch (Exception ex) { Log.Debug(ex, "Browser readiness probe failed"); return false; }
+        }
+
+        private void WatchStartup(NativeWebView native)
+        {
+            if (!RetryFailedConstruction || _adapterReady || _startupFailed || _startupWatchPending
+                || (BlockWhenOffline && CoreSettings.Current.OfflineMode)) return;
+            _startupWatchPending = true;
+            var generation = ++_startupWatchGeneration;
+            void Expired() => ExpireStartup(native, generation);
+            if (StartupWatchScheduler is { } schedule) schedule(Expired);
+            else global::Avalonia.Threading.DispatcherTimer.RunOnce(Expired, TimeSpan.FromSeconds(15));
+        }
+
+        internal void SetStartupWatchOffline(bool offline)
+        {
+            if (!RetryFailedConstruction || !BlockWhenOffline) return;
+            if (offline)
+            {
+                if (_startupWatchPending && Source is { IsAbsoluteUri: true, Scheme: not "about" })
+                    _startupWatchResumePage = true;
+                _startupWatchPending = false;
+                ++_startupWatchGeneration;
+                CancelPendingNavigation();
+            }
+            else
+            {
+                var resume = _startupWatchResumePage;
+                _startupWatchResumePage = false;
+                if (resume && Source != null && _web is { } native) WatchStartup(native);
+            }
+        }
+
+        private void ExpireStartup(NativeWebView native, int generation)
+        {
+            if (!ReferenceEquals(_web, native) || generation != _startupWatchGeneration || !_startupWatchPending || _adapterReady || _startupFailed) return;
+            // Offline may have been set before the shell has updated its controls.
+            if (BlockWhenOffline && CoreSettings.Current.OfflineMode) { SetStartupWatchOffline(true); return; }
+            _startupWatchPending = false;
+            if (_adapterCreated && StartupReady(native)) { _adapterReady = true; return; }
+            _startupFailed = true;
+            FailureStatusKey = "label_error_2";
+            CancelPendingNavigation();
+            NewScrolllerEngine();
+            BrowserStartupFailed?.Invoke();
+        }
 
         public WebHost()
         {
@@ -474,6 +554,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         // WPF BrowserService.cs:538-562: handled even when blocked, never a second OS window.
         internal bool OnBrowserPopup(Uri? target)
         {
+            if (PopupRequested is { } popup) { popup(target); return true; }
             if (!RouteBrowserPopups) return false;
             if (target is not { IsAbsoluteUri: true }) return true;
             if (ConditioningControlPanel.Services.Browser.BrowserPopupRule.ShouldBlock(
@@ -484,6 +565,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         private void ClearNativeWatches()
         {
+            try { _localContextMenu?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Context menu cleanup failed"); } finally { _localContextMenu = null; }
             try { _failureWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Browser failure cleanup failed"); } finally { _failureWatch = null; }
             try { _fullscreenWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Fullscreen signal cleanup failed"); } finally { _fullscreenWatch = null; }
             try { _keyWatch?.Dispose(); } catch (Exception ex) { Log.Debug(ex, "Key signal cleanup failed"); } finally { _keyWatch = null; }
@@ -491,8 +573,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         private void ApplyNativeSettings(NativeWebView native, IPlatformHandle? handle)
         {
-            if (!ReferenceEquals(_web, native) || ConfigureNative is not { } configure) return;
-            try { configure(handle ?? native.TryGetPlatformHandle()); }
+            if (!ReferenceEquals(_web, native)) return;
+            handle ??= native.TryGetPlatformHandle();
+            try { _localContextMenu ??= Platform.LocalPageContextMenu.Attach(handle, uri => Platform.WebAssetServer.SuppressSharedContextMenu(uri, !GateScrolller)); }
+            catch (Exception ex) { Log.Debug(ex, "Local context menu hook failed"); }
+            if (ConfigureNative is not { } configure) return;
+            try { configure(handle); }
             catch (Exception ex) { Log.Debug(ex, "Native browser settings failed"); }
         }
 
@@ -503,7 +589,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             {
                 void Failed() { if (ReferenceEquals(_web, native)) OnBrowserProcessFailed(); }
                 _failureWatch = FailureWatchFactory?.Invoke(native, Failed)
-                    ?? Platform.TrailerBrowserPolicy.Attach(native.TryGetPlatformHandle(), Failed);
+                    ?? Platform.TrailerBrowserPolicy.Attach(native.TryGetPlatformHandle(), Failed, BrowserProcessUnresponsive == null ? null : () => { if (ReferenceEquals(_web, native)) OnBrowserProcessUnresponsive(); });
             }
             catch (Exception ex)
             {
@@ -518,6 +604,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             try
             {
                 BrowserZoomAdapterDestroyed();
+                _startupWatchPending = false;
+                ++_startupWatchGeneration;
+                _adapterCreated = false;
+                _adapterReady = false;
+                _startupFailed = false;
                 ClearNativeWatches();
                 if (_web is { } old) _webSlot.Children.Remove(old);
                 _web = null;
@@ -557,15 +648,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 // gate has to be live for the FIRST navigation too, and a caller that assigns
                 // the predicate and the Source in that order would otherwise race the engine.
                 native.EnvironmentRequested += (_, e) => OnEnvironmentRequested(e);
-                native.AdapterDestroyed += (_, _) => { if (ReferenceEquals(_web, native)) { BrowserZoomAdapterDestroyed(); ClearNativeWatches(); } };
+                native.AdapterDestroyed += (_, _) => { if (ReferenceEquals(_web, native)) { _adapterCreated = false; _adapterReady = false; _startupWatchPending = false; ++_startupWatchGeneration; BrowserZoomAdapterDestroyed(); ClearNativeWatches(); } };
+                // A reattached native view may never raise AdapterCreated. Only watch a browser that
+                // already has work, leaving the initial load prompt and offline state alone.
+                native.AttachedToVisualTree += (_, _) =>
+                {
+                    if (ReferenceEquals(_web, native) && (Source != null || _pendingNavigation != null)
+                        && !(BlockWhenOffline && CoreSettings.Current.OfflineMode)) WatchStartup(native);
+                };
                 native.AdapterCreated += (_, e) =>
                 {
-                    if (global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess()) { ApplyNativeSettings(native, e.TryGetPlatformHandle()); AttachFailureWatch(native, false); ZoomAdapterCreated(native, () => e.TryGetPlatformHandle()); }
-                    else global::Avalonia.Threading.Dispatcher.UIThread.Post(() => { ApplyNativeSettings(native, null); AttachFailureWatch(native, false); if (ReferenceEquals(_web, native)) TryBrowserZoomAdapterReady(); });
+                    var onUiThread = global::Avalonia.Threading.Dispatcher.UIThread.CheckAccess();
+                    void Ready()
+                    {
+                        if (!ReferenceEquals(_web, native) || _startupFailed) return;
+                        _adapterCreated = true;
+                        if (StartupReady(native))
+                        {
+                            _adapterReady = true;
+                            _startupWatchPending = false;
+                            ++_startupWatchGeneration;
+                        }
+                        ApplyNativeSettings(native, onUiThread ? e.TryGetPlatformHandle() : null);
+                        AttachFailureWatch(native, false);
+                        if (onUiThread) ZoomAdapterCreated(native, () => e.TryGetPlatformHandle());
+                        else TryBrowserZoomAdapterReady();
+                        if ((Source != null || _pendingNavigation != null)
+                            && !(BlockWhenOffline && CoreSettings.Current.OfflineMode)) WatchStartup(native);
+                    }
+                    if (onUiThread) Ready();
+                    else global::Avalonia.Threading.Dispatcher.UIThread.Post(Ready);
                 };
-                native.NavigationStarted += (_, e) => { if (ReferenceEquals(_web, native)) OnNavigationStarted(native, e); else e.Cancel = true; };
+                native.NavigationStarted += (_, e) => { if (ReferenceEquals(_web, native) && !_startupFailed) OnNavigationStarted(native, e); else e.Cancel = true; };
                 native.NavigationCompleted += (_, e) => {
-                    if (!ReferenceEquals(_web, native)) return;
+                    if (!ReferenceEquals(_web, native) || _startupFailed) return;
                     // The native core exists now; subscribe before observers can reveal a scene.
                     AttachFailureWatch(native, true);
                     if (BrowserProcessFailed != null && _failureWatch == null) return;
@@ -582,7 +698,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 native.WebResourceRequested += (_, e) => StampRequestHeader(e);
                 // The Scrolller licence on pages that load Scrolller themselves (WPF ScrolllerWebGate on every core):
                 // the WebView2 gate on Windows, a WebKitGTK block filter on Linux. The first navigation waits for it.
-                Platform.ScrolllerWebHostGate.Attach(native, () => ReferenceEquals(_web, native) ? NewScrolllerEngine() : _ => { },
+                Platform.ScrolllerWebHostGate.Attach(native, () => ReferenceEquals(_web, native) && !_startupFailed ? NewScrolllerEngine() : _ => { },
                     () => BlockAds, ShouldBlockAdRequest);
                 _webSlot.Children.Add(native);
                 _fallback.IsVisible = false;
@@ -664,6 +780,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             if (RetryFailedConstruction && _web is null && NavigationInvoker is null && (IsAvailable || NativeViewFactory != null))
                 CreateNativeView();
             if (_web is null && NavigationInvoker is null) return false;
+            if (_web is { } startupView) WatchStartup(startupView);
             if (_scrolllerGate is null) return true; // held until the gate reports
             try
             {
@@ -693,14 +810,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         {
             CancelPendingNavigation();
             if (_web is null && NavigationInvoker is null) return false;
+            if (_web is { } startupView) WatchStartup(startupView);
+            if (_startupFailed) return null;
             while (_scrolllerGate is null)
             {
                 var pending = new TaskCompletionSource<bool?>(TaskCreationOptions.RunContinuationsAsynchronously);
                 _pendingNavigation = pending;
                 var completed = await Task.WhenAny(pending.Task, Task.Delay(TimeSpan.FromSeconds(15)));
                 if (_pendingNavigation != pending) return null;
+                if (completed != pending.Task)
+                {
+                    // The gate and startup deadlines can expire together. Resolve startup first so
+                    // a dead engine shows the retry prompt instead of opening a link externally.
+                    if (_web is { } native && _startupWatchPending) ExpireStartup(native, _startupWatchGeneration);
+                    if (_pendingNavigation != pending || _startupFailed) return null;
+                    _pendingNavigation = null;
+                    return false;
+                }
                 _pendingNavigation = null;
-                if (completed != pending.Task) return false;
                 var ready = await pending.Task;
                 if (ready is null) return null;
             }
@@ -732,9 +859,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         // Headless tests supply an engine without loading a native web view.
         internal Func<Uri, bool>? NavigationInvoker { get; set; }
 
-        // A caller sets this before the native adapter is attached. WebView2 installs it on each
-        // recreated core before the held first navigation; other engines retain the load fallback.
+        // Set before attachment. WebView2, WebKitGTK and WPE install before the held first navigation.
+        internal string? AllFramesDocumentStartScript { get; set; }
+        internal Func<string, Task<bool>>? AllFramesDocumentStartInstaller { get; set; }
+        private Task<bool>? _allFramesInstall;
+        // WebView2-only document-start hook; callers retain their own fallback on other engines.
         internal string? WindowsDocumentStartScript { get; set; }
+        internal bool HostedPageMotion { get; set; }
+        // WebKitGTK has no --force-prefers-reduced-motion (WPF ChaosWebViewHost.cs:1440): every
+        // prefers-reduced-motion feature in matchMedia and in style sheets (rules, @import, link/style
+        // media) is rewritten to an always-true (grid:0) or always-false (grid) feature.
+        // shortcut: sheets built with insertRule, adoptedStyleSheets or shadow roots keep the OS value; no shipped page uses them.
+        internal const string MotionScript = @"(()=>{const reduce=__REDUCE__;
+const re=/\(\s*prefers-reduced-motion\s*(?::\s*(reduce|no-preference)\s*)?\)/gi;
+const fix=t=>String(t).replace(re,(_,v)=>((v||'reduce').toLowerCase()==='reduce')===reduce?'(grid:0)':'(grid)');
+const media=m=>{if(m&&/prefers-reduced-motion/i.test(m.mediaText))m.mediaText=fix(m.mediaText);};
+const walk=rules=>{for(const r of rules){media(r.media);if(r.styleSheet)sheet(r.styleSheet);if(r.cssRules)walk(r.cssRules);}};
+const sheet=s=>{media(s.media);try{walk(s.cssRules);}catch(e){}};
+const scan=()=>{for(const s of document.styleSheets)sheet(s);};
+const mm=window.matchMedia.bind(window);
+window.matchMedia=function(q){return mm(fix(q));};
+const styled=n=>n&&(n.nodeName==='STYLE'||n.nodeName==='LINK');
+new MutationObserver(ms=>{if(ms.some(m=>styled(m.target)||styled(m.target.parentNode)||[...m.addedNodes].some(styled)))scan();}).observe(document,{childList:true,subtree:true,characterData:true});
+document.addEventListener('load',e=>{if(styled(e.target))scan();},true);
+document.addEventListener('DOMContentLoaded',scan);})();";
+        private Task<bool>? _motionInstall;
+        internal Func<string, Task<bool>>? MotionScriptInstaller { get; set; }
         internal Func<string, Task>? DocumentStartInstaller { get; set; }
 
         internal async Task PrepareScrolllerGate(int engine, bool gated)
@@ -748,11 +898,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 await BoundedNativeStep(SetEngineMutedAsync(muted), "native mute");
                 if (Stale()) return;
             }
-            // WebKitGTK: the opt-in carrier before the page's own scripts, once per engine.
+            // WebKitGTK and WPE: the opt-in carrier before the page's own scripts, once per engine.
             if (InjectCarrier)
             {
                 _carrierInstall ??= InstallCarrierAsync();
                 await BoundedNativeStep(_carrierInstall, "carrier install");
+                if (Stale()) return;
+            }
+            if (AllFramesDocumentStartScript is { } frameScript)
+            {
+                _allFramesInstall ??= InstallAllFramesAsync(frameScript);
+                await BoundedNativeStep(_allFramesInstall, "all-frame document-start script");
+                if (Stale()) return;
+            }
+            if (HostedPageMotion && OperatingSystem.IsLinux())
+            {
+                var reduce = ConditioningControlPanel.CoreSettings.Current.MotionLevel == ConditioningControlPanel.Models.MotionLevel.Off;
+                var motionScript = MotionScript.Replace("__REDUCE__", reduce ? "true" : "false");
+                _motionInstall ??= MotionScriptInstaller?.Invoke(motionScript) ?? Platform.WebViewCarrier.InstallAsync(_web?.TryGetPlatformHandle(), motionScript);
+                await BoundedNativeStep(_motionInstall, "motion install");
                 if (Stale()) return;
             }
             if (WindowsDocumentStartScript is { } script && (OperatingSystem.IsWindows() || DocumentStartInstaller != null))
@@ -765,6 +929,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 catch (Exception ex) { Log.Warning("WebHost: document-start script failed: {Error}", ex.Message); }
             }
             OnScrolllerGate(engine, gated);
+        }
+
+        private async Task<bool> InstallAllFramesAsync(string script)
+        {
+            try
+            {
+                if (AllFramesDocumentStartInstaller is { } install) return await install(script);
+                if (OperatingSystem.IsWindows()) { await InstallWindowsDocumentStart(script); return true; }
+                return await Platform.WebViewCarrier.InstallAsync(_web?.TryGetPlatformHandle(), script, allFrames: true);
+            }
+            catch (Exception ex) { Log.Debug("WebHost: all-frame script install failed: {E}", ex.Message); return false; }
         }
 
         private int _gateReport;
@@ -819,6 +994,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             ActiveNavigation = null;
             _loadedOnThisEngine = false;
             _carrierInstall = null;
+            _allFramesInstall = null;
+            _motionInstall = null;
             _gateReport = 0;
             if (_panicBlank) NavigatePanicBlank();
             var engine = ++_scrolllerEngine;
@@ -899,6 +1076,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         private static string? ProbeUnavailableReason()
         {
+            // Only the real desktop app (StartWithClassicDesktopLifetime) hosts an engine. Tests (bare dispatcher or
+            // headless session) and --render-all/--smoke (SetupWithoutStarting) have no desktop lifetime, so they
+            // always draw the fallback, even on a box with WPE/WebKitGTK installed.
+            var headless = Application.Current?.ApplicationLifetime is not global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
+            var linux = OperatingSystem.IsLinux();
+            var sink = headless || _audioSink.Value;
+            return DecideUnavailableReason(_adapters.Value, linux, headless, LinuxChoice, audioSink: sink);
+        }
+
+        // The desktop app's audio-sink answer (the headless branch of AudioSinkReady is always true), probed once.
+        private static readonly Lazy<bool> _audioSink = new(() => AudioSinkReady(OperatingSystem.IsLinux(), headless: false,
+            () => ConditioningControlPanel.Services.LinuxDependencies.GstPluginPresent("libgstautodetect.so"),
+            Environment.GetEnvironmentVariable("CCP_LINUX_WEBVIEW")));
+
+        private static readonly Lazy<IReadOnlyList<DetailedWebViewAdapterInfo>> _adapters = new(ScanAdapters);
+
+        private static IReadOnlyList<DetailedWebViewAdapterInfo> ScanAdapters()
+        {
             var adapters = new List<DetailedWebViewAdapterInfo>();
             foreach (WebViewAdapterType type in Enum.GetValues(typeof(WebViewAdapterType)))
             {
@@ -913,14 +1108,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     // cannot even be asked about is, for our purposes, not there.
                 }
             }
-            // Only the real desktop app (StartWithClassicDesktopLifetime) hosts an engine. Tests (bare dispatcher or
-            // headless session) and --render-all/--smoke (SetupWithoutStarting) have no desktop lifetime, so they
-            // always draw the fallback, even on a box with WPE/WebKitGTK installed.
-            var headless = Application.Current?.ApplicationLifetime is not global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
-            var linux = OperatingSystem.IsLinux();
-            var sink = AudioSinkReady(linux, headless, () => ConditioningControlPanel.Services.LinuxDependencies.GstPluginPresent("libgstautodetect.so"),
-                Environment.GetEnvironmentVariable("CCP_LINUX_WEBVIEW"));
-            return DecideUnavailableReason(adapters, linux, headless, LinuxChoice, audioSink: sink);
+            return adapters;
         }
 
         /// <summary>The audioSink input of <see cref="DecideUnavailableReason"/>: probed only on the real Linux desktop app,
