@@ -413,7 +413,7 @@ public sealed class WebAssetServer : IDisposable
             root = Path.GetFullPath(modRoot).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
             rel = rel["ccp.mod/".Length..];
             var parts = rel.Split('/');
-            if (parts.Length != 2 || parts[0] is not ("images" or "videos") || parts[1].StartsWith('.')
+            if (parts.Length != 2 || parts[0] is not ("images" or "videos") || parts[1].Contains('\\')
                 || !MediaTypeSniffer.MediaExtensions.Contains(Path.GetExtension(rel)) || HoldsUserData(root)) return null;
         }
         bool art = rel.StartsWith("__art__/", StringComparison.Ordinal);
