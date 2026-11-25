@@ -106,6 +106,45 @@ public sealed class DareSlipWindowTests
         return Task.CompletedTask;
     });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task OutcomeLinesShowTheirWpfMarkers(bool duel) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Init();
+        var window = new DareSlipWindow(new FakeService(), new DareFriend("friend", "  Zoe Star", null), Array.Empty<DareFriend>(), null, true, () => { });
+        try
+        {
+            Click(window, duel ? "dares-tile:duel" : "dares-tile:cant");
+            Click(window, duel ? "dares-tile:bubbles" : "dares-tile:dare");
+            Click(window, "dares-when:today");
+            Click(window, "dares-stake:sp");
+            Click(window, "dares-amount:" + DareGrammar.AmountsFor(DareStakeKind.Sp)[0]);
+            var kinds = duel ? new[] { DareMark.Me, DareMark.Them } : new[] { DareMark.Yes, DareMark.No };
+            foreach (var kind in kinds)
+            {
+                var mark = Assert.IsType<Grid>(Find(window, "dares-mark:" + kind));
+                Assert.Same(mark, Assert.IsType<WrapPanel>(mark.GetLogicalParent()).Children[0]);
+                Assert.Equal(26, mark.Width);
+                Assert.Equal(26, mark.Height);
+                var disc = Assert.IsType<Ellipse>(mark.Children[0]);
+                var expected = kind == DareMark.Yes ? 0x1FA877 : kind == DareMark.No ? 0xD2265F : 0x3A1D78;
+                Assert.Equal(Color.FromRgb((byte)(expected >> 16), (byte)(expected >> 8), (byte)expected), Assert.IsType<SolidColorBrush>(disc.Fill).Color);
+                if (kind is DareMark.Yes or DareMark.No)
+                    Assert.Equal(kind == DareMark.Yes ? IconKind.Checkmark : IconKind.Dismiss, Assert.IsType<IconGlyph>(mark.Children[1]).Kind);
+                else
+                {
+                    var text = Assert.IsType<TextBlock>(mark.Children[1]);
+                    Assert.Equal(kind == DareMark.Me ? Loc.Get("dares_mark_me") : "Z", text.Text);
+                    Assert.Equal(DareSlipLook.Hand, text.FontFamily);
+                    Assert.Equal(kind == DareMark.Me ? Loc.Get("dares_mark_me") : "  Zoe Star", AutomationProperties.GetName(mark));
+                }
+            }
+        }
+        finally { window.Close(); }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task HeaderNumbersHelpCanBePinned() => AvaloniaTestDispatcher.RunAsync(() =>
     {

@@ -4,6 +4,7 @@ using Avalonia.Animation;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Shapes;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
 using Avalonia.Input;
@@ -14,6 +15,7 @@ using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Dares;
 using ConditioningControlPanel.Controls.Dares;
+using ConditioningControlPanel.Controls.Friends;
 using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.Dialogs.Dares;
@@ -88,6 +90,24 @@ internal static class DareSlipLook
             Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { Icon(DareLook.ToneIcon(tone), 24, inverted ? White : color), Words(text, 29, inverted ? White : Ink, hand: true) } } };
         Control body = current ? new Border { Child = face, BorderBrush = Ink, BorderThickness = new Thickness(3), CornerRadius = new CornerRadius(11), Padding = new Thickness(1) } : face;
         return Hover(Bare(body, tag, text, onClick).Also(b => b.Margin = new Thickness(4, 0, 4, 0)), face, rest, inverted ? Brush(0x4A2A90) : White);
+    }
+
+    // WPF DareLook.cs:453-469: outcome discs precede the line and identify duel sides.
+    internal static Grid Mark(DareMark mark, string? friendName)
+    {
+        var disc = new Grid { Width = 26, Height = 26, Margin = new Thickness(0, 0, 8, 0),
+            VerticalAlignment = VerticalAlignment.Center, Tag = "dares-mark:" + mark };
+        disc.Children.Add(new Ellipse { Fill = mark == DareMark.Yes ? Brush(0x1FA877) : mark == DareMark.No ? StampRed : Ink });
+        if (mark is DareMark.Yes or DareMark.No)
+            disc.Children.Add(Icon(mark == DareMark.Yes ? IconKind.Checkmark : IconKind.Dismiss, 17, White));
+        else
+        {
+            var initials = FriendsDrawerRules.Initials(friendName);
+            var letter = mark == DareMark.Me ? Loc.Get("dares_mark_me") : string.IsNullOrEmpty(initials) ? "?" : initials[..1];
+            disc.Children.Add(Words(letter, letter.Length > 1 ? 15 : 20, White, hand: true).Also(t => t.HorizontalAlignment = HorizontalAlignment.Center));
+            AutomationProperties.SetName(disc, mark == DareMark.Me ? Loc.Get("dares_mark_me") : friendName ?? "");
+        }
+        return disc;
     }
 
     internal static Control Blank(string text, bool current) => new Border { Child = Words(text, 26, current ? Ink : Print, hand: true), Opacity = current ? 1 : 0.6,

@@ -88,6 +88,7 @@ public sealed class DareSlipWindow : Window
         foreach (var line in DareSlipRules.Sentence(_draft, Loc.Get))
         {
             var row = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+            if (line.Mark != DareMark.None) row.Children.Add(Mark(line.Mark, _draft.Who?.Name));
             foreach (var seg in line.Segs)
             {
                 if (seg.Kind == DareSegKind.Chip && seg.Step is { } step)
