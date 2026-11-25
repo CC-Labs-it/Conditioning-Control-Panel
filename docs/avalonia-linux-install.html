@@ -178,6 +178,16 @@ sed -i &quot;s|^Exec=.*|Exec=$HOME/.local/bin/conditioning-control-panel|&quot; 
 <p>Remove: delete <code>opt/conditioning-control-panel</code>, <code>bin/conditioning-control-panel</code> and the
 <code>io.github.CodeBambi.ConditioningControlPanel.*</code> files under <code>share/applications</code>, <code>share/icons/hicolor/*/apps</code>,
 <code>share/metainfo</code>.</p>
+<h2 id="data-locations">Where your data lives (moving from the Windows build)</h2>
+<p>The Linux build keeps its files in two places (ccp-bugs#1734):</p>
+<ul>
+<li><code>~/.config/ConditioningControlPanel/</code>: settings, achievements (<code>achievements.json</code>) and progress.</li>
+<li><code>~/.local/share/ConditioningControlPanel/</code>: caches, downloads and the bundled engines.</li>
+</ul>
+<p>If you ran the Windows build under Wine, its copy is in the Wine prefix under
+<code>drive_c/users/&lt;you&gt;/AppData/Roaming/ConditioningControlPanel/</code>. Signing in restores your level, XP,
+achievements, login streak and streak fixes from the cloud; to keep local-only data, copy that folder's files into
+<code>~/.config/ConditioningControlPanel/</code> before the first start of the Linux build.</p>
 <h2 id="installed-run-avalonia-portlinux-package-wired-715">Installed run (avalonia-port/linux-package-wired, 7.1.5)</h2>
 <p>Evidence: ~/ccp-port/evidence/linux-package-wired/ (scripts <code>install-run.sh</code>, <code>window-run.sh</code>, <code>wmclose.py</code> alongside).
 The CI tarball built locally, installed as above into a temp prefix, the <code>.desktop</code> <code>Exec</code> resolved through <code>PATH</code>, then:
