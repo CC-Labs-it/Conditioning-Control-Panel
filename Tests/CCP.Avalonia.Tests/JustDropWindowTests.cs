@@ -471,6 +471,61 @@ public sealed class JustDropWindowTests
         Assert.True(w.IsVisible);                         // and no game frame closes it
     });
 
+    /// <summary>WPF JustDropHostService.cs:268-321,422: an enveloped assets-request gets exactly one 'assets' answer of its
+    /// kind (empty where this engine cannot serve the urls); a bare frame gets none; the map goes with the window.</summary>
+    [Fact]
+    public void AssetsRequestIsAnsweredOncePerAsk_AndTheMapGoesOnClose() => Run(shell =>
+    {
+        JustDropService.SetServerEnabledForTests(true);
+        shell.ShowTab("justdrop");
+        Dispatcher.UIThread.RunJobs();
+        var w = Open()!;
+        Assert.NotNull(w.JustDropAssets);
+        var posted = new System.Collections.Generic.List<string>();
+        w.Posted += posted.Add;
+        w.HandleMessage("{\"type\":\"assets-request\",\"payload\":{\"kind\":\"image\",\"max\":5}}");
+        w.HandleMessage("{\"source\":\"justdrop\",\"v\":1,\"type\":\"assets-request\",\"payload\":{\"kind\":\"video\",\"max\":5}}");
+        for (var i = 0; i < 200 && posted.Count == 0; i++) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(10); }
+        Dispatcher.UIThread.RunJobs();
+        var answer = Assert.Single(posted);
+        var o = Newtonsoft.Json.Linq.JObject.Parse(answer);
+        Assert.Equal(("ccp-host", "assets", "video"), ((string?)o["source"], (string?)o["type"], (string?)o["payload"]!["kind"]));
+        Assert.IsType<Newtonsoft.Json.Linq.JArray>(o["payload"]!["items"]);
+        if (!OperatingSystem.IsWindows()) Assert.Empty((Newtonsoft.Json.Linq.JArray)o["payload"]!["items"]!);
+        w.Close();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Null(w.JustDropAssets);
+    });
+
+    /// <summary>WPF JustDropAssetHost.cs:158-237 on WebKitGTK: the scheme twin of a listed url is answered from the map
+    /// that handed it out (whole, ranged, CORS for the site); a foreign host or a closed window's id is a 404.</summary>
+    [Fact]
+    public void SchemeUrlsAreAnsweredByTheirOwnWindowOnly()
+    {
+        var file = Path.Combine(Path.GetTempPath(), $"jd-{Guid.NewGuid():N}.png");
+        File.WriteAllBytes(file, new byte[] { 1, 2, 3, 4, 5 });
+        var map = new JustDropAssetMap(video => video ? new() : new() { (file, new() { Ext = ".png", Video = false, DiskPath = file }) });
+        try
+        {
+            var url = JustDropAssetTransport.ToScheme(Assert.Single(map.List(false, 5)));
+            Assert.StartsWith("ccp-justdrop://justdrop-assets.ccp/", url);
+            Assert.Equal(404, JustDropAssetTransport.Answer("GET", url, null).Status);   // not attached yet
+            JustDropAssetTransport.Track(map);
+            var whole = JustDropAssetTransport.Answer("GET", url, null);
+            using (var body = new MemoryStream()) { whole.Body!.CopyTo(body); whole.Body.Dispose(); Assert.Equal(5, body.Length); }
+            Assert.Equal((200, "image/png"), (whole.Status, JustDropAssetTransport.ContentTypeOf(whole.Headers)));
+            Assert.Contains("Access-Control-Allow-Origin: " + JustDropBridge.SiteOrigin, whole.Headers);
+            var part = JustDropAssetTransport.Answer("GET", url, "bytes=1-2");
+            part.Body?.Dispose();
+            Assert.Contains("Content-Range: bytes 1-2/5", part.Headers);
+            Assert.Equal(404, JustDropAssetTransport.Answer("GET", url.Replace("justdrop-assets.ccp", "evil.test"), null).Status);
+            Assert.Equal(404, JustDropAssetTransport.Answer("GET", url.Replace("ccp-justdrop:", "https:"), null).Status);
+            JustDropAssetTransport.Detach(map);
+            Assert.Equal(404, JustDropAssetTransport.Answer("GET", url, null).Status);
+        }
+        finally { JustDropAssetTransport.Detach(map); File.Delete(file); }
+    }
+
     /// <summary>WPF JustDropHostService.cs:105-108,249-253 keeps the site bridge after auth redirects;
     /// ChaosWebViewHost.cs:238,1704 applies its document fence only to NavigatePage transfers.</summary>
     [Theory]

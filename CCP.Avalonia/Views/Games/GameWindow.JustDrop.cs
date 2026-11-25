@@ -142,6 +142,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Web.AllowNavigation = JustDropHandoff.IsSite;
             Web.RequestHeader = uri => JustDropHeaderFor(uri, JustDropHandoff.AuthToken());
             Web.InjectCarrier = true;   // the remote page speaks chrome.webview; WebKitGTK needs the shim
+            // WPF JustDropHostService.cs:111,143,422: one asset map per window life, served on its core, cleared on close.
+            var assets = JustDropAssets = new JustDropAssetMap();
+            Web.ConfigureNative = handle => Platform.JustDropAssetTransport.Attach(handle, assets);
+            Closed += (_, _) => { JustDropAssets = null; Platform.JustDropAssetTransport.Detach(assets); try { assets.Clear(); } catch (Exception ex) { Log.Debug(ex, "[Game] justdrop: asset cleanup failed"); } };
             // WPF ChaosWebViewHost.cs:1227-1231,1562-1578: register before the first document.
             Web.WindowsDocumentStartScript = JustDropEscapeScript;
             // Keep the fallback for WebKit and for a failed WebView2 registration.
@@ -276,6 +280,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             }
         }
 
+        internal JustDropAssetMap? JustDropAssets { get; private set; }
+
+        /// <summary>WPF OnHostAsk assets-request (JustDropHostService.cs:309-321): exactly one 'assets' answer per ask,
+        /// same kind, empty on a fault or where this engine cannot serve the urls.</summary>
+        private void AnswerJustDropAssets(JObject o)
+        {
+            // The sender is the site: HandleMessage only runs for a JustDropHandoff.IsSite page (WPF IsSiteSource).
+            if (!JustDropBridge.IsPageEnvelope(o) || JustDropBridge.ParseAssets(o["payload"] as JObject) is not { } ask) return;
+            var assets = JustDropAssets;
+            if (assets == null) return;
+            _ = System.Threading.Tasks.Task.Run(() => Platform.JustDropAssetTransport.Urls(assets, ask.Video, ask.Max))
+                .ContinueWith(t =>
+                {
+                    if (JustDropAssets != assets) return;
+                    var kind = ask.Video ? "video" : "image";
+                    var urls = t.IsFaulted ? new System.Collections.Generic.List<string>() : t.Result;
+                    Post(JustDropBridge.Envelope("assets", new { kind, items = urls.Select(url => new { url, kind }).ToArray() }));
+                }, System.Threading.Tasks.TaskScheduler.FromCurrentSynchronizationContext());
+        }
+
         /// <summary>WPF OnPageMessage (:227): the raw envelope to Core, so the source/version checks stay in one place.</summary>
         private void HandleJustDrop(JObject o)
         {
@@ -284,6 +308,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 SetJustDropFullscreen(false);
                 return;
             }
+            if ((string?)o["type"] == "assets-request") { AnswerJustDropAssets(o); return; }
             try { JustDropService.HandleWebMessage(o.ToString(Formatting.None)); }
             catch (Exception ex) { Log.Warning(ex, "[Game] justdrop: message handling failed"); }
         }
