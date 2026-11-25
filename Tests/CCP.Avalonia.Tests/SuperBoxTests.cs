@@ -77,6 +77,7 @@ public sealed class SuperBoxTests
     {
         Assert.Contains(SuperEffect.Creep, SuperBox.HostedOnThisHead);       // Steam on the tint windows
         Assert.Contains(SuperEffect.Afterglow, SuperBox.HostedOnThisHead);   // the Afterglow line
+        Assert.Contains(SuperEffect.FlickerDeck, SuperBox.HostedOnThisHead); // the cards on the flash windows
     }
 
     [Fact]

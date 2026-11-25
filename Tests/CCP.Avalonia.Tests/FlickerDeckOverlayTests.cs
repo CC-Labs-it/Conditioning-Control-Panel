@@ -20,7 +20,7 @@ namespace CCP.Avalonia.Tests;
 
 /// <summary>Super Flicker Deck on the Avalonia flash windows. WPF: FlashService.cs:2726-2965,
 /// FlashLayer.cs:516-646 and :929-1130; the rules are Core FlickerDeck/FlickerShatter.</summary>
-public sealed class FlickerDeckOverlayTests
+public sealed partial class FlickerDeckOverlayTests
 {
     private sealed class Clock : TimeProvider
     {
@@ -39,13 +39,13 @@ public sealed class FlickerDeckOverlayTests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
         var s = CoreSettings.Current;
         var saved = (s.FlashShatterEnabled, s.FlashDraggable, s.MotionLevel, s.GentleVisuals, s.CorruptionMode, s.FlashExitStyle);
-        var old = (FlashOverlay.Clock, FlashOverlay.DeckOn, FlashOverlay.DeckPicture, FlashOverlay.Rng, PrizeOwnership.IsGranted,
+        var old = (FlashOverlay.Clock, FlashOverlay.DeckOn, FlashOverlay.DeckPicture, FlashOverlay.DeckDecode, FlashOverlay.Rng, PrizeOwnership.IsGranted,
             UiMotionPreference.OsProbe, UiMotionPreference.CacheStamp);
         var (oldInput, oldAssets) = (FlashOverlay.DeckInput, CorePaths.EffectiveAssetsProvider);
         var clock = new Clock();
         FlashOverlay.Clock = clock;
         FlashOverlay.DeckOn = () => true;
-        FlashOverlay.DeckPicture = _ => Task.FromResult<(Bitmap, string)?>((Solid(0, 0, 255), "next.png"));
+        FlashOverlay.DeckPicture = (_, _) => Task.FromResult<(Bitmap, string)?>((Solid(0, 0, 255), "next.png"));
         FlashOverlay.Rng = new Random(73);
         PrizeOwnership.IsGranted = _ => false;
         UiMotionPreference.OsProbe = () => true;
@@ -57,7 +57,7 @@ public sealed class FlickerDeckOverlayTests
         {
             FlashOverlay.CloseAll(final: false);
             (s.FlashShatterEnabled, s.FlashDraggable, s.MotionLevel, s.GentleVisuals, s.CorruptionMode, s.FlashExitStyle) = saved;
-            (FlashOverlay.Clock, FlashOverlay.DeckOn, FlashOverlay.DeckPicture, FlashOverlay.Rng, PrizeOwnership.IsGranted,
+            (FlashOverlay.Clock, FlashOverlay.DeckOn, FlashOverlay.DeckPicture, FlashOverlay.DeckDecode, FlashOverlay.Rng, PrizeOwnership.IsGranted,
                 UiMotionPreference.OsProbe, UiMotionPreference.CacheStamp) = old;
             (FlashOverlay.DeckInput, CorePaths.EffectiveAssetsProvider) = (oldInput, oldAssets);
         }
@@ -292,7 +292,8 @@ public sealed class FlickerDeckOverlayTests
             var images = System.IO.Directory.CreateDirectory(System.IO.Path.Combine(dir, "images")).FullName;
             System.IO.File.Move(gif, System.IO.Path.Combine(images, "clip.gif"));
             CorePaths.EffectiveAssetsProvider = () => dir;
-            FlashOverlay.DeckPicture = w => Task.FromResult(FlashOverlay.LoadDeckPicture(w).Result);   // the real draw, finished in place
+            FlashOverlay.DeckPicture = (w, local) => Task.FromResult(FlashOverlay.LoadDeckPicture(w, local).Result);   // the real draw, finished in place
+            FlashOverlay.DeckDecode = (p, r) => Task.FromResult(FlashOverlay.DeckDecodeNow(p, r));   // a GIF kept by its path decodes on the click
             var (w, _) = Card();
             w.Deck!.BreakAt = 4;
             Assert.Null(w.GifFrameDelay);

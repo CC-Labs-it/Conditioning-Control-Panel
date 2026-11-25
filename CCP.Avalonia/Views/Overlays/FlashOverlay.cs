@@ -493,6 +493,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var entry = (w, rect);
             w.Closed += (_, _) => Active.RemoveAll(e => e.Window == w);
             Active.Add(entry);
+            EnsurePoolTick();
             w.ApplyCorners(CoreSettings.Current.FlashRoundedCorners, OwnsMotion, glow.HasGlow,
                 rect.Width / scaling, rect.Height / scaling);
             w.Show();
@@ -618,6 +619,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             _closed |= final;
             StopDeckTick();
+            StopPoolTick();
             foreach (var (w, _) in Active.ToList()) w.Close();
             foreach (var w in Exiting.ToList()) w.Close();
             PackImages.CleanupTemps();
@@ -696,6 +698,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static void Pop(FlashOverlayWindow w, bool fromGaze = false)
         {
             if (w.IsFadingOut || w.Exit != null || w.Shatter != null || w.DeckShatter != null || !Active.Any(e => e.Window == w)) return;
+            var rect = Active.Find(e => e.Window == w).Rect;
             Active.RemoveAll(e => e.Window == w);
             _ = CoreHaptics.Service?.FlashClickVibeAsync();   // WPF FlashService.cs:2945
             var s = CoreSettings.Current;
@@ -703,10 +706,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var n = FlashFxRules.HydraSpawnCount(s.CorruptionMode, s.HydraLimit, isRemix: w.IsRemix, fromGaze: fromGaze, w.HydraGeneration, Active.Count);
             if (n > 0) Multiply(w, n, ChildLifetime(w, s), w.HydraGeneration + 1);
             Clicked?.Invoke(); // WPF FlashService.cs:2986
+            Leave(w, rect, s);
+        }
+
+        /// <summary>A flash off the active list leaves: a card's break, the gentle fade, the owned shatter, the
+        /// exit picker or the plain cut (WPF SafeCloseFlashWindow :5300-5350). A pop and the pool's eye share it.</summary>
+        private static void Leave(FlashOverlayWindow w, PixelRect rect, AppSettings s)
+        {
             // WPF FlashService.cs:5225-5240: the click that reached BreakAt breaks the card, ahead of Gentle and the exit picker.
             if (w.DeckBreak)
             {
                 w.DeckBreak = false;
+                DeckBreakBlast(w, rect);
                 if (!w.TryBeginDeckShatter(FlashOverlayWindow.DeckLevel, Rng)) { w.Close(); return; }
                 Exiting.Add(w);
                 w.Closed += (_, _) => Exiting.Remove(w);

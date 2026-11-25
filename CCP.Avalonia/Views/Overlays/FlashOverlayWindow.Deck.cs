@@ -31,6 +31,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>The part of the grown window that takes the mouse (window px): the picture and its glow.</summary>
         internal PixelRect[]? DeckInputPx { get; set; }
         internal double DeckPeekDx, DeckPeekDy;
+        /// <summary>The picture rect at attach (device px): the width a face decodes at.</summary>
+        internal PixelRect DeckRect { get; set; }
+        /// <summary>WPF FlashWindow.DeckReady / DeckReadyPath / DeckReadyKey / DeckPrefetching (Core
+        /// <see cref="ConditioningControlPanel.Services.DeckPrefetch"/>): the next flip's picture got ready while the card rests, a still kept
+        /// decoded (<see cref="DeckReady"/>), an animated one by its path alone; its source identity, so no
+        /// other card readies the same picture.</summary>
+        internal Bitmap? DeckReady { get; private set; }
+        internal string? DeckReadyPath { get; private set; }
+        internal string? DeckReadyKey { get; private set; }
+        internal bool DeckPrefetching { get; set; }
+        internal bool HasDeckReady => DeckReadyPath != null;
+        /// <summary>The flip swapped the face (WPF item.OnDeckSwap): the host boosts the lifetime and readies the next.</summary>
+        internal Action? DeckSwapped { get; set; }
+        /// <summary>WPF FlashWindow.LastKnockTick: when a blast or the bouncing word last knocked this card.</summary>
+        internal long LastKnockTick { get; set; }
+        internal bool IsClosed => _closed;
         /// <summary>Test seams: the crack strokes, the sheen band, the puff and the break.</summary>
         internal Path? CrackLine { get; private set; }
         internal Rectangle? DeckSheen { get; private set; }
@@ -104,6 +120,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             ApplyDeckPose(FlickerDeck.Sample(deck, DeckLevel));
         }
 
+        /// <summary>--render-all only: the flash card art as a Deck card mid-lift on the flip before its break,
+        /// so the lift, shadow and hairline cracks draw (RenderProof "FlashDeckCard").</summary>
+        internal static FlashOverlayWindow DeckSample()
+        {
+            var w = new FlashOverlayWindow();
+            var deck = FlickerDeck.Create(0, new Random(7), 3, 3);
+            (deck.Flips, deck.LiftT, deck.SinceSwap) = (2, FlickerDeck.LiftSpanSec * 0.3, 99);
+            w.AttachDeck(deck, 48, 1);
+            (w.Width, w.Height) = (w.Width + 96, w.Height + 96);
+            return w;
+        }
+
         /// <summary>WPF FlashLayer.ClearDecks: the switch went off, the card is a plain flash where it is.</summary>
         internal void ClearDeck()
         {
@@ -111,6 +139,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Deck = null;
             DeckBreak = false;
             DropDeckPending();
+            TakeDeckReady().Still?.Dispose();
             ApplyDeckPose(new FlickerPose(1, 1, 0, 0, 0, 0, 0));
             if (DeckShadow != null) DeckShadow.IsVisible = false;
             if (_deckFx != null) _deckFx.IsVisible = false;
@@ -128,6 +157,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             DeckPending = picture;
             (_pendingPath, _pendingFrames, _pendingDelay) = (path, frames, frameDelay);
             return true;
+        }
+
+        /// <summary>Keep a picture for the next flip: <paramref name="still"/> decoded (ownership passes here),
+        /// or null to keep <paramref name="path"/> alone. Anything kept before is let go.</summary>
+        internal void StashDeckReady(Bitmap? still, string path, string key)
+        {
+            TakeDeckReady().Still?.Dispose();
+            (DeckReady, DeckReadyPath, DeckReadyKey) = (still, path, key);
+        }
+
+        /// <summary>Take the waiting picture: the decoded still (the caller owns it) or null, and its path.</summary>
+        internal (Bitmap? Still, string? Path) TakeDeckReady()
+        {
+            var got = (DeckReady, DeckReadyPath);
+            (DeckReady, DeckReadyPath, DeckReadyKey) = (null, null, null);
+            return got;
         }
 
         private void DropDeckPending()
@@ -151,6 +196,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _pendingFrames = null;
                 DeckSparks = SwapPuff(deck, level);
                 BuildSparkLayer();
+                DeckSwapped?.Invoke();
             }
             if ((ev & FlickerEvents.GaveUp) != 0) DropDeckPending();
             if (DeckSparks is { } puff && !FlickerShatter.StepSparks(puff, dt)) DropDeckSparks();
@@ -312,6 +358,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private void DropDeckPictures()
         {
             DropDeckPending();
+            TakeDeckReady().Still?.Dispose();
             _deckFace?.Dispose();
             _deckFace = null;
         }

@@ -17,16 +17,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <summary>
     /// Super Flicker Deck on this head (WPF FlashService.cs:2717-2965 + FlashLayer.cs:929): which
     /// flashes become cards, the press that flips or breaks one, the next picture, and one shared
-    /// tick that steps every card. Panic and Stop reach it through <see cref="CloseAll"/>.
-    /// The shared stage (break blasts, the Whirlpool's pull) and the click lifetime boost are s73-deck-b's.
+    /// tick that steps every card. Panic and Stop reach it through <see cref="CloseAll"/>. The next
+    /// picture is got ready while a card rests (WPF dfc1565889, Core <see cref="ConditioningControlPanel.Services.DeckPrefetch"/>); the
+    /// shared stage (break blasts, knocks, the Whirlpool) is FlashOverlay.Stage.cs.
     /// </summary>
     internal static partial class FlashOverlay
     {
         /// <summary>The Deck switch (tests swap it).</summary>
         internal static Func<bool> DeckOn = () => SuperAccess.IsOn(SuperEffect.FlickerDeck);
 
-        /// <summary>The next face for a flip (tests swap it): a picture decoded at the card's width, and its path.</summary>
-        internal static Func<FlashOverlayWindow, Task<(Bitmap Picture, string Path)?>> DeckPicture = LoadDeckPicture;
+        /// <summary>The next face for a card (tests swap it): a picture decoded at the card's width, and its
+        /// source path; the flag asks for local pictures only (a card's first prefetch).</summary>
+        internal static Func<FlashOverlayWindow, bool, Task<(Bitmap Picture, string Path)?>> DeckPicture = LoadDeckPicture;
+
+        /// <summary>Decodes a face kept by its path alone (an animated one) on the click (tests swap it).</summary>
+        internal static Func<string, PixelRect, Task<Bitmap?>> DeckDecode = (path, rect) => Task.Run(() => DeckDecodeNow(path, rect));
+
+        internal static Bitmap? DeckDecodeNow(string path, PixelRect rect)
+        {
+            try { return DecodeDeckFace(path, rect); }
+            catch (Exception ex) { Log.Debug("Flicker Deck: could not decode {Path}: {E}", path, ex.Message); return null; }
+        }
 
         /// <summary>Windows has no input shape: each tick tests the cursor against the card and toggles
         /// click-through, as the bubble field does (tests swap it). WPF's card window is the picture's
@@ -49,21 +60,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (!FlickerDeck.Applies(DeckOn(), usesLayer: true, clickable, previewV2: false, w.IsRemix, isNatasha: false,
                     dragOwnedOn: s.FlashDraggable && owned, shatterOwnedOn: s.FlashShatterEnabled && owned))
                 return 0;
-            var (min, max) = ConditioningControlPanel.SuperCore.DeckOptions.BreakRange(s.DeckFlips);
+            // Fewest / Most flips (ccp-bugs #1636): unset ends follow the older single slider (WPF :2744).
+            var (min, max) = ConditioningControlPanel.SuperCore.DeckOptions.BreakRange(s.DeckFlips, s.DeckFlipsFewest, s.DeckFlipsMost);
             // Room for the lift (x1.1 and 10% up), the wobble, the peek, the shadow and the puff.
             var pad = (int)Math.Ceiling(Math.Max(rect.Width, rect.Height) * 0.25) + 32;
             w.AttachDeck(FlickerDeck.Create(_deckIndex++ % 8, Rng, min, max), pad, scaling);
             var glow = w.GlowPadPx - pad;   // the picture and its glow keep the mouse, the grown margin does not
             w.DeckInputPx = new[] { new PixelRect(pad, pad, rect.Width + 2 * glow, rect.Height + 2 * glow) };
+            w.DeckRect = rect;
             w.PointerEntered += (_, _) => DeckHover(w, true);
             w.PointerExited += (_, _) => DeckHover(w, false);
+            // WPF ApplyDeckSwap (:3007): a new face deserves a full look, and the one after it is got ready.
+            w.DeckSwapped = () =>
+            {
+                w.BoostLifetime((int)w.Lifetime.TotalMilliseconds);
+                _ = PrefetchDeck(w, localOnly: false);
+            };
             HookDeckSwitch();
+            HookDeckStage();
             if (_deckTimer == null)
             {
                 _lastDeckTick = Clock.GetTimestamp();
                 _deckTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => DeckTick());
                 _deckTimer.Start();
             }
+            // The first flip's picture, now: local only, so a card nobody clicks never spends the Scrolller share.
+            _ = PrefetchDeck(w, localOnly: true);
             return pad;
         }
 
@@ -143,17 +165,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     Pop(w);
                     break;
                 case FlickerPress.Flip:
+                    // WPF :2853: keep the card alive through its lift and the longest edge-on wait.
+                    w.BoostLifetime((int)((FlickerDeck.LiftSpanSec + FlickerDeck.MaxHoldSec) * 1000) + 250);
                     _ = FetchDeckPicture(w, deck);
                     break;
             }
         }
 
-        /// <summary>WPF LoadDeckPictureAsync (:2853): the frames wait on the card until its flip reaches the
-        /// edge. No picture: the flip opens on the old face at once.</summary>
+        /// <summary>WPF LoadDeckPictureAsync (:2959): the picture the card got ready while it rested, else a
+        /// fresh draw; the frames wait on the card until its flip reaches the edge. No picture: the flip opens
+        /// on the old face at once. One that lands after the flip gave up is kept for the next click.</summary>
         private static async Task FetchDeckPicture(FlashOverlayWindow w, FlickerDeckState deck)
         {
             (Bitmap Picture, string Path)? next = null;
-            try { next = await DeckPicture(w); }
+            try { next = await TakeDeckReady(w) ?? await DeckPicture(w, false); }
             catch (Exception ex) { Log.Debug("Flicker Deck picture failed: {E}", ex.Message); }
             if (next is not { } got)
             {
@@ -162,42 +187,103 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             // WPF ApplyDeckSwap (FlashService.cs:2918-2930): an animated face plays at the GIF speed slider.
             GifFrames.TryGetValue(got.Picture, out var gif);
-            if (!w.OfferDeckPicture(deck, got.Picture, got.Path, gif?.Frames,
+            if (w.OfferDeckPicture(deck, got.Picture, got.Path, gif?.Frames,
                     gif is null ? default : GifFrameDelay(gif.Delay, CoreSettings.Current.FlashGifSpeedMultiplier, gentle: false)))
-                Drop(got.Picture);
-            else GifFrames.Remove(got.Picture);
+                GifFrames.Remove(got.Picture);
+            else if (ReferenceEquals(w.Deck, deck) && !w.IsClosed && !w.IsFadingOut && !w.HasDeckReady && !w.DeckPrefetching)
+                StashDeck(w, got);   // too late for this flip: kept for the next one
+            else Drop(got.Picture);
         }
 
-        /// <summary>Up to four draws from the flash pool, preferring a picture not up anywhere, then
-        /// anything but the card's own face (WPF :2866-2880), decoded off the UI thread at the card's width.</summary>
-        internal static Task<(Bitmap Picture, string Path)?> LoadDeckPicture(FlashOverlayWindow w)
+        /// <summary>WPF PrefetchDeckPictureAsync (:2900): get the card's NEXT picture ready while it rests, one
+        /// at a time per card. UI thread in, UI thread out.</summary>
+        internal static async Task PrefetchDeck(FlashOverlayWindow w, bool localOnly)
         {
-            // shortcut: compares raw paths, not WPF's SourceIdentityLocked pack identity; a pack picture may repeat on a small pool.
-            var up = new HashSet<string>(Active.Select(e => e.Window.SourcePath).OfType<string>(), StringComparer.OrdinalIgnoreCase);
-            var own = w.SourcePath;
-            var rect = Active.Find(e => e.Window == w).Rect;
+            if (w.DeckPrefetching || w.HasDeckReady || w.Deck is not { } deck) return;
+            w.DeckPrefetching = true;
+            try
+            {
+                if (await DeckPicture(w, localOnly) is not { } got) return;
+                if (ReferenceEquals(w.Deck, deck) && !w.IsClosed && !w.IsFadingOut && !w.HasDeckReady) StashDeck(w, got);
+                else Drop(got.Picture);
+            }
+            catch (Exception ex) { Log.Debug("Flicker Deck prefetch failed: {E}", ex.Message); }
+            finally { w.DeckPrefetching = false; }
+        }
+
+        /// <summary>WPF StashDeckPicture (:2921): a still is kept decoded, an animated face by its path only,
+        /// so up to 30 MB of frames never wait in memory (<see cref="ConditioningControlPanel.Services.DeckPrefetch.KeepDecoded"/>).</summary>
+        private static void StashDeck(FlashOverlayWindow w, (Bitmap Picture, string Path) got)
+        {
+            GifFrames.TryGetValue(got.Picture, out var gif);
+            var key = SourceIdentity(got.Path);
+            if (ConditioningControlPanel.Services.DeckPrefetch.KeepDecoded(gif?.Frames.Count ?? 1, hasClip: false)) w.StashDeckReady(got.Picture, got.Path, key);
+            else
+            {
+                Drop(got.Picture);
+                w.StashDeckReady(null, got.Path, key);
+            }
+        }
+
+        /// <summary>WPF TakeDeckReadyAsync (:2939): the waiting picture, decoded, or decoded again from its path.</summary>
+        private static async Task<(Bitmap Picture, string Path)?> TakeDeckReady(FlashOverlayWindow w)
+        {
+            var (still, path) = w.TakeDeckReady();
+            if (path == null) return null;
+            if (still != null) return (still, path);
+            return await DeckDecode(path, w.DeckRect) is { } decoded ? (decoded, path) : null;
+        }
+
+        /// <summary>WPF SourceIdentityLocked: a pack decrypt is a fresh temp file on every draw, so a pack
+        /// picture is known by its source key; anything else by its whole path (or url).</summary>
+        internal static string SourceIdentity(string? path)
+        {
+            if (string.IsNullOrEmpty(path)) return "";
+            if (path.Contains("://", StringComparison.Ordinal)) return path;
+            try { return ConditioningControlPanel.Services.ContentPackStore.Current is { } store && store.TryGetSourceKey(path, out var key) ? key : path; }
+            catch (Exception) { return path; }
+        }
+
+        /// <summary>WPF PickDeckPictureAsync (:2865): up to four draws from the flash pool (a remote one only
+        /// after the first flip, under the flash consent rule), preferring a picture not up on any card nor
+        /// waiting on one, then anything but the card's own face, decoded off the UI thread.</summary>
+        internal static Task<(Bitmap Picture, string Path)?> LoadDeckPicture(FlashOverlayWindow w, bool localOnly)
+        {
+            var up = new HashSet<string>(Active.SelectMany(e => new[] { SourceIdentity(e.Window.SourcePath), e.Window.DeckReadyKey })
+                .OfType<string>().Where(k => k.Length > 0), StringComparer.OrdinalIgnoreCase);
+            var own = SourceIdentity(w.SourcePath);
+            var rect = w.DeckRect;
             var s = CoreSettings.Current;
             return Task.Run<(Bitmap Picture, string Path)?>(() =>
             {
                 var files = FlashFiles(s);
-                var draws = new List<string>();
-                for (var i = 0; i < 4 && NextFlashPath(files) is { } p; i++) draws.Add(p);
-                var order = draws.Where(p => !up.Contains(p))
-                    .Concat(draws.Where(p => up.Contains(p) && !string.Equals(p, own, StringComparison.OrdinalIgnoreCase)));
-                foreach (var path in order)
+                var draws = new List<(string File, string Source, string Key)>();
+                for (var i = 0; i < 4; i++)
                 {
-                    try
-                    {
-                        // WPF LoadImageAsync: a GIF or WebP keeps its frames (decoded as a flash is).
-                        using (var codec = SkiaSharp.SKCodec.Create(path))
-                            if (codec is { FrameCount: > 1 } && DecodeAnimated(path, rect) is { } first) return (first, path);
-                        using var stream = File.OpenRead(path);
-                        return (Bitmap.DecodeToWidth(stream, Math.Max(1, rect.Width)), path);
-                    }
-                    catch (Exception ex) { Log.Debug("Flicker Deck: could not decode {Path}: {E}", path, ex.Message); }
+                    var remote = !localOnly && FlashSourceRules.ShouldDrawRemote(s, HasLocalImages(files.Count), Rng)
+                        ? RemoteFlashSource.TryTake(Rng) : null;
+                    if (remote is { PosterPath: { Length: > 0 } poster, Url: { Length: > 0 } url }) { draws.Add((poster, url, url)); continue; }
+                    if (NextFlashPath(files) is not { } p) break;
+                    draws.Add((p, p, SourceIdentity(p)));
+                }
+                var order = draws.Where(d => !up.Contains(d.Key))
+                    .Concat(draws.Where(d => up.Contains(d.Key) && !string.Equals(d.Key, own, StringComparison.OrdinalIgnoreCase)));
+                foreach (var d in order)
+                {
+                    try { if (DecodeDeckFace(d.File, rect) is { } face) return (face, d.Source); }
+                    catch (Exception ex) { Log.Debug("Flicker Deck: could not decode {Path}: {E}", d.File, ex.Message); }
                 }
                 return null;
             });
+        }
+
+        /// <summary>WPF LoadImageAsync: a GIF or WebP keeps its frames (decoded as a flash is), a still decodes at the card's width.</summary>
+        private static Bitmap? DecodeDeckFace(string file, PixelRect rect)
+        {
+            using (var codec = SkiaSharp.SKCodec.Create(file))
+                if (codec is { FrameCount: > 1 } && DecodeAnimated(file, rect) is { } first) return first;
+            using var stream = File.OpenRead(file);
+            return Bitmap.DecodeToWidth(stream, Math.Max(1, rect.Width));
         }
 
         /// <summary>WPF OnSuperChanged (:2948): the switch went off, every card is a plain flash again.</summary>
