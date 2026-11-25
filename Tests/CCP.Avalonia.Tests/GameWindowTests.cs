@@ -1029,6 +1029,37 @@ public sealed partial class GameWindowTests
         Assert.False(w.IsVisible);
     });
 
+    [Fact]
+    public void Race_CreatorModVisualsReachPageAndPanicCloses() => RunRace("rt.original.03", (_, _, _) =>
+    {
+        var old = CoreMods.ActiveModPackageProvider;
+        var dir = Directory.CreateTempSubdirectory("race-mod-").FullName;
+        try
+        {
+            var images = Directory.CreateDirectory(Path.Combine(dir, "resources", "dtrh", "images")).FullName;
+            var file = Path.Combine(images, "mod pic.png");
+            File.WriteAllText(file, "image");
+            CoreMods.ActiveModPackageProvider = () => new ModPackage(new ModManifest(), dir, false);
+            var w = OpenRetiredRace();
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            var manifest = sent.Single(x => (string?)x["type"] == "manifest");
+            var entry = Assert.Single(manifest["images"]!);
+            Assert.Equal("mod:mod pic.png", (string?)entry["name"]);
+            Assert.Equal("/ccp.mod/images/mod%20pic.png", (string?)entry["url"]);
+            var server = GameWindow.Server();
+            Assert.Equal(file, server.ResolveFile((string)entry["url"]!));
+            Assert.Null(server.ResolveFile("/ccp.mod/../dtrh.json"));
+            Assert.Null(server.ResolveFile("/ccp.mod/images/../dtrh.json"));
+            GameWindow.CloseAllForPanic();
+            w.HandleMessage("{\"type\":\"exit-done\"}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(w.IsVisible);
+        }
+        finally { CoreMods.ActiveModPackageProvider = old; Directory.Delete(dir, true); }
+    });
+
     /// <summary>WPF OnPageReady :255 (init with the race settings block, then manifest) and OnRunEnded :431:
     /// one payout per run, score / 5 under 250 XP a minute, Sparks banked on score / 5.</summary>
     [Fact]
