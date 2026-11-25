@@ -57,12 +57,12 @@ public class LaunchMigrationsTests
             Assert.False(settings.HasPendingSave);
             Assert.True(new SettingsService(file).Current.MigratedFlashClickableDecoupling);
 
-            // One-shot: existing progress is left alone.
+            // One-shot: existing progress is left alone, and a migrated profile's launch does not write.
             s.PlayerLevel = 200;
             s.CompanionProgressData[(int)CompanionId.OGBambiSprite].Level = 7;
             AvApp.RunLaunchMigrations(settings, assets, root.FullName);
             Assert.Equal(7, s.CompanionProgressData[(int)CompanionId.OGBambiSprite].Level);
-            Assert.True(settings.TrySaveImmediate());
+            Assert.False(settings.HasPendingSave);
         }
         finally { root.Delete(true); }
     }

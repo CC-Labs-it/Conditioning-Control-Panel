@@ -1904,6 +1904,9 @@ namespace ConditioningControlPanel.Avalonia
             try
             {
                 var s = settings.Current;
+                // WPF saves on every launch; here only a real migration writes, so a returning profile's
+                // startup leaves settings.json alone (LanguageSelectorTests' no-startup-save check).
+                bool changed = !s.MigratedFlashClickableDecoupling || s.CompanionProgressData.Count == 0;
                 s.RunFlashClickableDecouplingMigration();
                 if (s.CompanionProgressData.Count == 0)
                 {
@@ -1913,7 +1916,7 @@ namespace ConditioningControlPanel.Avalonia
                     s.CompanionProgressData[(int)og.CompanionId] = og;
                     s.ActiveCompanionId = (int)og.CompanionId;
                 }
-                settings.Save();
+                if (changed) settings.Save();
             }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Settings migration failed (non-fatal, defaults apply)"); }
         }
