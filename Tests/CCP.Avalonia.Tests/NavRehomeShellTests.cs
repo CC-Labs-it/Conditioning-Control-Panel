@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
@@ -19,6 +20,7 @@ using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.UI;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -26,8 +28,9 @@ namespace CCP.Avalonia.Tests;
 /// <summary>
 /// The nav rework's rehomed surfaces through the shell (WPF NavRehomeTests, 3fc1ae652; lane
 /// sync6-nav-rail-d): the Home System bubble opens Settings > Monitors, the one home of the monitor
-/// picker and the four video rows; Library > Folders paints the assets folder chip; every strip pill
-/// wears a "?" badge beside it (d0ec7aa8d); the rail medallions follow the active mod's art.
+/// picker and the four video rows; Library > Folders paints the assets folder chip; the strip's ONE
+/// help button shows the lit pill's help (declutter wave 1, WPF f04bd6a52e, replacing the per-pill
+/// badges of d0ec7aa8d); the rail medallions follow the active mod's art.
 /// </summary>
 public sealed class NavRehomeShellTests
 {
@@ -38,6 +41,63 @@ public sealed class NavRehomeShellTests
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         LocalizationManager.Instance.SetLanguage("en");
+    }
+
+    /// <summary>Twin of the WPF NavPillHelpTests.OneHelpButtonShowsTheLitPillsHelp width check: at the
+    /// default window's strip width (1469 px) the pill tray of EVERY section ends before the help
+    /// button (Companion's bar is the full one); on Settings, which draws no pills, the button is
+    /// hidden, and a section change that hides it while it holds focus moves the focus off it.</summary>
+    [Fact]
+    public async Task TheTrayEndsBeforeTheHelpButtonAt1469AndSettingsHidesIt()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup();
+            const double width = 1469;
+            var strip = new SectionTabStrip { MotionOverride = MotionLevel.Off, Width = width };
+            var w = new Window { Width = width + 40, Height = 300, Content = strip };
+            try
+            {
+                w.Show();
+                foreach (var s in NavSections.Order.Where(x => NavStripTable.ShowsPills(x.Key)))
+                {
+                    strip.Show(s.Key, s.DefaultTab);
+                    Dispatcher.UIThread.RunJobs();
+                    w.UpdateLayout();
+                    var help = strip.HelpButtonForTests;
+                    Assert.Equal(1, help.Opacity);
+                    // Measured from the last pill, not the track's bounds: a track squeezed by its
+                    // column reports the squeezed width, but its horizontal StackPanel still lays every
+                    // pill at full width, so the last pill's right edge (plus the track's padding and
+                    // border) is where the tray really ends.
+                    var track = strip.Track;
+                    var lastPill = (Control)strip.PillFor(strip.PillKeys[^1])!.Parent!;
+                    double trackRight = lastPill.TranslatePoint(new Point(lastPill.Bounds.Width, 0), strip)!.Value.X
+                        + track.Padding.Right + track.BorderThickness.Right;
+                    double helpLeft = help.TranslatePoint(default, strip)!.Value.X;
+                    Assert.True(trackRight <= helpLeft + 0.5,
+                        $"{s.Key}: the tray ({trackRight:0.#}) runs under the help button ({helpLeft:0.#})");
+                    Assert.True(helpLeft + help.Bounds.Width <= width + 0.5, $"{s.Key}: the help button leaves the strip");
+                }
+
+                // Focus on the help button, then a section with nothing to explain: the button hides
+                // and gives the keyboard focus up (never left on an invisible control).
+                strip.Show(NavSections.Companion, NavSections.Find(NavSections.Companion)!.DefaultTab);
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(strip.HelpButtonForTests.Focus(NavigationMethod.Tab));
+                Assert.True(strip.HelpButtonForTests.IsFocused);
+                strip.Show(NavSections.Settings, NavSections.Find(NavSections.Settings)!.DefaultTab);
+                Dispatcher.UIThread.RunJobs();
+                var hidden = strip.HelpButtonForTests;
+                Assert.Equal(0, hidden.Opacity);
+                Assert.False(hidden.IsHitTestVisible);
+                Assert.False(hidden.Focusable);
+                Assert.Null(strip.HelpShownFor);
+                Assert.False(hidden.IsFocused);
+            }
+            finally { w.Close(); }
+            return Task.CompletedTask;
+        });
     }
 
     [Fact]
@@ -107,7 +167,7 @@ public sealed class NavRehomeShellTests
     }
 
     [Fact]
-    public async Task FoldersPillLandsOnTheAssetsFolderChip_AndEveryPillWearsAHelpBadge()
+    public async Task FoldersPillLandsOnTheAssetsFolderChip_AndOneHelpButtonShowsTheLitPillsHelp()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
@@ -136,21 +196,45 @@ public sealed class NavRehomeShellTests
                 Assert.Equal(1, Glows(assets.FindControl<Control>("ZoneFolders")!));
                 Assert.Equal(1, Glows(assets.FindControl<Control>("CmbAssetPresets")!));
 
-                // Every pill has a "?" badge, a sibling of the pill (never inside it), saying what the page does.
+                // Declutter wave 1 (2026-11-15): no pill carries a "?" badge of its own (its host
+                // holds the pill and nothing else); every pill still says its line in its tooltip.
+                var helpButton = strip.HelpButtonForTests;
                 foreach (var key in strip.PillKeys)
                 {
                     var pill = strip.PillFor(key)!;
-                    var badge = strip.HelpBadgeFor(key);
-                    Assert.NotNull(badge);
-                    Assert.Same(pill.Parent, badge!.Parent);
-                    Assert.DoesNotContain(badge, pill.GetVisualDescendants());
-                    var help = Loc.Get("nav_help_" + key);
-                    var card = Assert.IsAssignableFrom<Panel>(ToolTip.GetTip(badge));
-                    Assert.Contains(card.Children.OfType<TextBlock>(), t => t.Text == help);
-                    Assert.Contains(help, (string)ToolTip.GetTip(pill)!);
+                    Assert.Single(((Panel)pill.Parent!).Children);
+                    Assert.DoesNotContain(helpButton, pill.GetVisualDescendants());
+                    Assert.Contains(Loc.Get("nav_help_" + key), (string)ToolTip.GetTip(pill)!);
                 }
 
-                // The host stays the pill's size: the badge pokes out with negative margins.
+                // ONE help button at the strip's right end shows the lit pill's help card.
+                w.UpdateLayout();
+                var lit = strip.ActivePillKey!;
+                Assert.Equal(lit, strip.HelpShownFor);
+                Assert.Equal(Loc.Get("nav_help_" + lit), strip.HelpLineShown);
+                Assert.Equal(1, helpButton.Opacity);
+                Assert.True(helpButton.IsHitTestVisible && helpButton.Focusable);
+                var card = Assert.IsAssignableFrom<Panel>(ToolTip.GetTip(helpButton));
+                Assert.Contains(card.Children.OfType<TextBlock>(), t => t.Text == strip.HelpLineShown);
+                var last = (Control)strip.PillFor(strip.PillKeys[^1])!.Parent!;
+                double lastRight = last.TranslatePoint(new Point(last.Bounds.Width, 0), strip)!.Value.X;
+                double at = helpButton.TranslatePoint(default, strip)!.Value.X;
+                Assert.True(at >= lastRight, "the help button overlaps the pills");
+                Assert.True(at + helpButton.Bounds.Width <= strip.Bounds.Width + 0.5, "the help button is clipped");
+
+                // It follows the lit pill.
+                var other = strip.PillKeys.FirstOrDefault(k => k != lit && NavStripTable.ActivePill(k) == k
+                    && NavSections.Find(strip.Section)!.Tabs.First(t => t.Key == k).Kind is NavTabKind.Tab or NavTabKind.Zone);
+                if (other != null)
+                {
+                    strip.PillFor(other)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    Dispatcher.UIThread.RunJobs();
+                    Assert.Equal(other, strip.ActivePillKey);
+                }
+                Assert.Equal(strip.ActivePillKey, strip.HelpShownFor);
+                Assert.Equal(Loc.Get("nav_help_" + strip.ActivePillKey), strip.HelpLineShown);
+
+                // The host stays the pill's size.
                 w.UpdateLayout();
                 var host = (Control)strip.PillFor("assets")!.Parent!;
                 Assert.Equal(strip.PillFor("assets")!.Bounds.Size, host.Bounds.Size);

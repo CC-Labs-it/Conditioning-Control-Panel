@@ -1,5 +1,6 @@
 // PORTED from ConditioningControlPanel/Controls/NavRail/SectionTabStrip.Help.cs (d0ec7aa8d, owner
-// 2026-10-07): help badges and the window pill confirmation card. Colour math through Core.
+// 2026-10-07; declutter wave 1, WPF f04bd6a52e): the strip's one help button for the lit pill and
+// the window pill confirmation card. Colour math through Core.
 // The window host is now available; window pills use the WPF ask-first card below.
 
 using System;
@@ -20,12 +21,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 {
     public sealed partial class SectionTabStrip
     {
-        /// <summary>The badge's diameter, and how far it pokes past the pill's top and right edges.</summary>
-        internal const double HelpBadgeSize = 17;
-        internal const double HelpBadgeOverTop = 5;
-        internal const double HelpBadgeOverRight = 4;
+        // Declutter wave 1 (2026-11-15, WPF f04bd6a52e): the per-pill "?" badges became ONE help
+        // button at the strip's right end. It shows the help card of the pill that is lit, on
+        // hover, on click and on keyboard focus + Enter. Every pill still says the same line in
+        // its own tooltip, so "hover before clicking" keeps working without a badge per pill.
+        internal const double HelpButtonSize = 22;
 
-        private readonly Dictionary<string, Control> _helpBadges = new(StringComparer.Ordinal);
+        private static readonly IBrush HelpHover = new SolidColorBrush(Color.FromArgb(0x14, 0xFF, 0xFF, 0xFF));
+        private Button _helpButton = null!;
+        private bool _helpShown;
+        private string? _helpKey;
+        private string _helpLine = string.Empty;
 
         /// <summary>The loc key of a pill's "what is this" line (WPF NavStripRules.HelpKey).</summary>
         internal static string HelpKey(NavTab tab) => "nav_help_" + tab.Key;
@@ -34,50 +40,78 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         internal static string HelpText(NavTab tab) =>
             SafeLoc(HelpKey(tab), SafeLoc(tab.LabelKey + "_tip", string.Empty));
 
-        /// <summary>The pill plus its "?" badge, in one host exactly the pill's size. The badge is a
-        /// SIBLING of the pill, so hovering or clicking it never presses or navigates.</summary>
-        private Control HostWithHelp(string section, NavTab tab, Button pill, string label, Color tint)
+        /// <summary>The strip's one help button (WPF HelpButton in SectionTabStrip.xaml): neutral
+        /// chrome, no hue, no border at rest. Avalonia has no Visibility.Hidden, so "hidden" is
+        /// clear, not hit-testable and not focusable: the row keeps its width.</summary>
+        private Button BuildHelpButton()
         {
-            var host = new Grid { VerticalAlignment = VerticalAlignment.Center };
-            host.Children.Add(pill);
-
-            var help = HelpText(tab);
-            if (string.IsNullOrEmpty(help)) return host;
-
-            var rest = new SolidColorBrush(NavStripRules.WithAlpha(NavStripRules.DarkInk, 0.92));
-            var lit = new SolidColorBrush(NavStripRules.Mix(tint, Colors.White, 0.15));
-            var ring = new SolidColorBrush(NavStripRules.WithAlpha(NavStripRules.Mix(tint, Colors.White, 0.25), 0.95));
-            var markInk = new SolidColorBrush(NavStripRules.DarkInk);
-            var mark = new TextBlock
+            var face = new Border
             {
-                Text = "?", FontSize = 11, FontWeight = FontWeight.Bold, Foreground = Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, -1, 0, 0),
+                Width = HelpButtonSize, Height = HelpButtonSize, CornerRadius = new CornerRadius(HelpButtonSize / 2),
+                Background = Brushes.Transparent, BorderThickness = new Thickness(2), BorderBrush = Brushes.Transparent,
+                Child = new TextBlock
+                {
+                    Text = "?", FontSize = 13, FontWeight = FontWeight.Bold, Margin = new Thickness(0, -1, 0, 0),
+                    Foreground = new SolidColorBrush(NavStripRules.TextLight),
+                    HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+                },
             };
-            var badge = new Border
+            var button = new Button
             {
-                Name = "NavPillHelp_" + tab.Key,
-                Width = HelpBadgeSize, Height = HelpBadgeSize, CornerRadius = new CornerRadius(HelpBadgeSize / 2),
-                Background = rest, BorderBrush = ring, BorderThickness = new Thickness(1),
-                HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(0, -HelpBadgeOverTop, -HelpBadgeOverRight, 0),
-                Cursor = new Cursor(StandardCursorType.Help), Child = mark,
+                Name = "NavStripHelp", Content = face, Padding = new Thickness(0), Margin = new Thickness(2, 0, 0, 0),
+                Background = Brushes.Transparent, BorderThickness = new Thickness(0),
+                VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Help),
+                Template = PlainTemplate(), Opacity = 0, IsHitTestVisible = false, Focusable = false,
             };
-            ToolTip.SetTip(badge, HelpCard(section, tab, label, help));
-            ToolTip.SetShowDelay(badge, 60);
-            ToolTip.SetPlacement(badge, PlacementMode.Bottom);
-            global::Avalonia.Automation.AutomationProperties.SetName(badge, "? " + label);
-            global::Avalonia.Automation.AutomationProperties.SetHelpText(badge, help);
-            global::Avalonia.Automation.AutomationProperties.SetAutomationId(badge, "NavPillHelp_" + tab.Key);
+            global::Avalonia.Automation.AutomationProperties.SetAutomationId(button, "NavStripHelp");
+            ToolTip.SetShowDelay(button, 60);
+            ToolTip.SetPlacement(button, PlacementMode.Bottom);
+            button.PointerEntered += (_, _) => face.Background = HelpHover;
+            // The card closes when the pointer or the focus leaves.
+            button.PointerExited += (_, _) => { face.Background = Brushes.Transparent; ToolTip.SetIsOpen(button, false); };
+            button.GotFocus += (_, e) => { if (e.NavigationMethod != NavigationMethod.Pointer) face.BorderBrush = FocusRing; };
+            button.LostFocus += (_, _) => { face.BorderBrush = Brushes.Transparent; ToolTip.SetIsOpen(button, false); };
+            // A click (or Enter / Space) is a request to read: open the card now.
+            button.Click += (_, e) => { e.Handled = true; if (_helpShown) ToolTip.SetIsOpen(button, true); };
+            return button;
+        }
 
-            badge.PointerEntered += (_, _) => { badge.Background = lit; mark.Foreground = markInk; };
-            badge.PointerExited += (_, _) => { badge.Background = rest; mark.Foreground = Brushes.White; };
-            // A click on the badge is a request to read, not to go: open the card, swallow the click.
-            badge.PointerPressed += (_, e) => { e.Handled = true; ToolTip.SetIsOpen(badge, true); };
+        /// <summary>Point the one help button at the lit pill: its card, its name for UIA. No lit
+        /// pill, or a pill with no help line, hides the button (the row keeps its width).</summary>
+        private void RefreshHelp()
+        {
+            ToolTip.SetIsOpen(_helpButton, false);
+            var part = _activePill == null ? null : Part(_activePill);
+            var help = part == null ? string.Empty : HelpText(part.Tab);
+            _helpShown = part != null && _section != null && !string.IsNullOrEmpty(help);
+            bool hadFocus = _helpButton.IsFocused;
+            _helpButton.Opacity = _helpShown ? 1 : 0;
+            _helpButton.IsHitTestVisible = _helpButton.Focusable = _helpShown;
+            if (!_helpShown)
+            {
+                // "Hidden" here is clear + not focusable, which does not take focus away: a
+                // section change that hides the button while it holds the keyboard hands focus to
+                // the lit pill (else the first pill), never to an invisible control.
+                if (hadFocus) MoveFocusOffHiddenHelp();
+                ToolTip.SetTip(_helpButton, null);
+                _helpKey = null;
+                _helpLine = string.Empty;
+                return;
+            }
+            var label = part!.Label.Text ?? string.Empty;
+            ToolTip.SetTip(_helpButton, HelpCard(_section!, part.Tab, label, help));
+            global::Avalonia.Automation.AutomationProperties.SetName(_helpButton, "? " + label);
+            global::Avalonia.Automation.AutomationProperties.SetHelpText(_helpButton, help);
+            _helpKey = part.Tab.Key;
+            _helpLine = help;
+        }
 
-            host.Children.Add(badge);
-            _helpBadges[tab.Key] = badge;
-            return host;
+        private void MoveFocusOffHiddenHelp()
+        {
+            var target = (_activePill == null ? null : PillFor(_activePill))
+                ?? (_pills.Count > 0 ? _pills[0].Pill : null);
+            if (target is { IsEffectivelyVisible: true, Focusable: true } && target.Focus(NavigationMethod.Directional)) return;
+            TopLevel.GetTopLevel(this)?.FocusManager?.Focus(null);   // no pill to take it: clear it
         }
 
         /// <summary>The hover card: the page name, what it does, and the tier line for a locked page.</summary>
@@ -228,7 +262,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
 
         // ---- test seams ---------------------------------------------------------------------
 
-        /// <summary>Test seam: the "?" badge drawn over a pill (null when the pill has no help line).</summary>
-        internal Control? HelpBadgeFor(string key) => _helpBadges.TryGetValue(key, out var b) ? b : null;
+        /// <summary>Test seam: the strip's one help button.</summary>
+        internal Button HelpButtonForTests => _helpButton;
+
+        /// <summary>Test seam: the pill whose help the button shows now (null = hidden), and its line.</summary>
+        internal string? HelpShownFor => _helpShown ? _helpKey : null;
+        internal string HelpLineShown => _helpShown ? _helpLine : string.Empty;
     }
 }
