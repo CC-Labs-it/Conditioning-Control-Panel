@@ -378,19 +378,41 @@ public sealed class WebAssetServer : IDisposable
     /// <summary>Downloaded audio-web mirror; read on every request so a pack installed during a run is available.</summary>
     public Func<string?>? ContentRoot { get; init; }
 
+    /// <summary>A flat &lt;sha256&gt;.&lt;media ext&gt; name, the only shape the Goon cache and inbox expose.</summary>
+    private static bool IsGoonMediaName(string name)
+    {
+        var dot = name.IndexOf('.');
+        return dot == 64 && name[..dot].All(c => (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))
+            && name[(dot + 1)..] is "png" or "jpg" or "gif" or "webp" or "mp4" or "webm";
+    }
+
+    /// <summary>Goon's transfer cache (WPF's https://ccp.cache/ art and preview folders); a seam for tests.</summary>
+    internal Func<string> GoonCacheRoot { get; init; } = () => ConditioningControlPanel.Services.Transfer.TransferCacheStore.Instance.Root;
+
     /// <summary>The file a URL path names, or null if it is missing or lies outside its root, symlinks followed.</summary>
     internal string? ResolveFile(string urlPath)
     {
         var rel = Uri.UnescapeDataString(urlPath).TrimStart('/');
         var root = _root;
+        // WPF maps ccp.cache art and preview folders. Only flat content-addressed files, under the same
+        // loopback/token gate as the page: never the cache index, temporary files or symlinks.
+        if (rel.StartsWith("__goon_cache__/", StringComparison.Ordinal))
+        {
+            var parts = rel["__goon_cache__/".Length..].Split('/');
+            if (parts.Length != 2 || parts[0] is not ("art" or "prv") || !IsGoonMediaName(parts[1])) return null;
+            var cache = GoonCacheRoot();
+            var folder = Path.Combine(cache, parts[0]);
+            var file = Path.Combine(folder, parts[1]);
+            return Directory.Exists(cache) && new DirectoryInfo(cache).LinkTarget == null
+                && Directory.Exists(folder) && new DirectoryInfo(folder).LinkTarget == null
+                && File.Exists(file) && new FileInfo(file).LinkTarget == null ? file : null;
+        }
         // WPF maps ccp.cache/recv to the ephemeral inbox. Only flat hash-named media is exposed,
         // under the same loopback/token gate as the page, never the profile or index.
         if (rel.StartsWith("__goon_recv__/", StringComparison.Ordinal))
         {
             var name = rel["__goon_recv__/".Length..];
-            var dot = name.IndexOf('.');
-            if (dot != 64 || name[..dot].Any(c => !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')))
-                || name[(dot + 1)..] is not ("png" or "jpg" or "gif" or "webp" or "mp4" or "webm")) return null;
+            if (!IsGoonMediaName(name)) return null;
             var folder = TransferInboxStore.Instance.RecvDir;
             var file = Path.Combine(folder, name);
             return Directory.Exists(folder) && new DirectoryInfo(folder).LinkTarget == null

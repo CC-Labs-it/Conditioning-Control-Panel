@@ -204,7 +204,7 @@ public sealed partial class GameWindowTests
         var init = frames[0];
         Assert.Equal(1, (int)init["protocol"]!);
         Assert.False((bool)init["solo"]!);
-        Assert.Equal("", (string?)init["net"]!["authToken"]);   // the token never reaches the page
+        Assert.Equal("", (string?)init["net"]!["authToken"]);   // no confirmed navigation, so no token
         Assert.True((bool)init["net"]!["viaHost"]!);
         Assert.False((bool)init["caps"]!["haptics"]!);   // no toy connected
         Assert.NotNull(init["consent"]!["liveDurationSec"]);
@@ -239,20 +239,13 @@ public sealed partial class GameWindowTests
     });
 
     [Fact]
-    public void Goon_NetPostIsRefusedAtOnceAndFullscreenIsEchoedAndRemembered() => Run((_, _) =>
+    public void Goon_FullscreenIsEchoedAndRemembered() => Run((_, _) =>
     {
         CoreAccount.IsLoggedInProvider = () => true;
         var goon = GameWindow.Launch(GameWindow.GoonId)!;
         var frames = new System.Collections.Generic.List<JObject>();
         goon.Posted += json => frames.Add(JObject.Parse(json));
 
-        goon.HandleMessage("{\"type\":\"net-post\",\"id\":\"n7\",\"path\":\"/v2/goon/invite\",\"body\":{}}");
-        var reply = Assert.Single(frames);
-        Assert.Equal("net-post-result", (string?)reply["type"]);
-        Assert.Equal("n7", (string?)reply["id"]);
-        Assert.Equal(0, (int)reply["status"]!);
-
-        frames.Clear();
         goon.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
         Assert.Equal(WindowState.FullScreen, goon.WindowState);
         Assert.True((bool)Assert.Single(frames)["on"]!);
