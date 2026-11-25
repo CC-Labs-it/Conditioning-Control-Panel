@@ -38,7 +38,12 @@ public class TakeoverModLabelsTests
             if (tooltip)
                 Assert.Equal(Loc.GetF("tooltip_start_stop_takeover", label), ToolTip.GetTip(view.FindControl<Button>("BtnAutonomyStartStop")!));
             else
-                Assert.Equal($"🤖 {label}", view.FindControl<ConditioningControlPanel.Avalonia.Controls.IconLabel>("TxtTakeoverLocked")!.Source);
+            {
+                var locked = view.FindControl<ConditioningControlPanel.Avalonia.Controls.IconLabel>("TxtTakeoverLocked")!;
+                Assert.Equal(label, locked.Label.Text);
+                var icon = Assert.IsType<ConditioningControlPanel.Avalonia.Controls.IconGlyph>(locked.Children[0]);
+                Assert.Equal(FluentIcons.Common.Symbol.Bot, icon.Kind);
+            }
         }
         var count = Count();
         var languageCount = LanguageCount(loc);

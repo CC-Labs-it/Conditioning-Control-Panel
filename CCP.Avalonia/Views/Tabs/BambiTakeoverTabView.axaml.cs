@@ -142,7 +142,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             var takeoverLabel = CoreMods.Service?.GetTakeoverLabel() ?? Loc.Get("tab_takeover");
             TxtBambiTakeoverHeader.Text = takeoverLabel;
-            TxtTakeoverLocked.Text = $"🤖 {takeoverLabel}";
+            TxtTakeoverLocked.Kind = IconKind.Bot;
+            TxtTakeoverLocked.Text = takeoverLabel;
             ToolTip.SetTip(BtnAutonomyStartStop, Loc.GetF("tooltip_start_stop_takeover", takeoverLabel));
             TxtAutoFlash.Text = Label("Flashes", "tab_flashes");
             TxtAutoVideo.Text = Label("Videos", "tab_videos");
