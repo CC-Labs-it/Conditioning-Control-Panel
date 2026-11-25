@@ -235,7 +235,9 @@ public class PreviewP1Tests
         scene.Click(new SKPoint(10, 10));
         Assert.True(scene.Typed >= Math.Min(scene.Word.Length, before + 1) || scene.RepeatsDone > 0);
 
-
+        var src = File.ReadAllText(Path.Combine(SourceRoots.RepoRoot, "CCP.Avalonia", "Controls", "Preview", "Scenes", "LockCardPreviewScene.cs"));
+        Assert.DoesNotContain("Good girl", src, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("LockCardPhrases", src, StringComparison.Ordinal);
     }
 
     [Fact]
