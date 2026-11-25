@@ -89,16 +89,17 @@ coverage is in <code>TabFirstShowWorkTests</code>; the directory test awaits art
 <p>No Windows median or p95 improvement is claimed from headless tests. Each must satisfy
 Avalonia ≤ WPF × 1.10 + 20 ms when measured on the same Windows runner (job <code>perf-bench-windows</code>).</p>
 <h2 id="results">Results</h2>
-<p>2026-11-15 re-measure (rgate <a href="https://github.com/CC-Labs-it/Conditioning-Control-Panel/actions/runs/43712013418">43712013418</a>, job <code>perf-bench-windows</code>, windows-latest, 5 back-to-back WPF/Avalonia pairs) on port/7.2 669eb1b72b plus #5199 (startup read at the same frame in both heads) and #5202 (tab entrance on compositor animations); these numbers hold once both land. All 51 rows pass the rule above; Avalonia is at or below WPF on 49 of 51. The two above WPF are startup: 3841.3 vs 3792.8 ms (+1.3%) and since-process 3924.0 vs 3910.6 ms (+0.3%), inside run-to-run noise and the rule.</p>
+<p>2026-11-24 re-measure (run <a href="https://github.com/CC-Labs-it/Conditioning-Control-Panel/actions/runs/45321626917">45321626917</a>, job <code>perf-bench-windows</code>, windows-latest, 5 back-to-back WPF/Avalonia pairs) on port/7.2 7db2f34ded (after the restack) plus #5199 (startup read at the same frame), #5723 (re-cut of #5202, tab entrance on compositor animations) and #5337 (startup); these numbers hold once those land. All 51 rows pass the rule above and Avalonia is below WPF on all 51, startup included (2743.9 vs 4709.4 ms).</p>
+<p>History: 2026-11-15 (rgate <a href="https://github.com/CC-Labs-it/Conditioning-Control-Panel/actions/runs/43712013418">43712013418</a>, port/7.2 669eb1b72b + #5199 + #5202): 51/51 pass, Avalonia at or below WPF on 49 of 51; startup 3841.3 vs 3792.8 ms and since-process 3924.0 vs 3910.6 ms, inside noise and the rule.</p>
 <table>
 <tr><th>metric</th><th>Linux Avalonia</th><th>Windows Avalonia</th><th>Windows WPF</th><th>verdict</th></tr>
-<tr><td>startup to first frame (ms)</td><td>see ledger</td><td>3841.3</td><td>3792.8</td><td>PASS (limit 4192.1)</td></tr>
-<tr><td>startup since process start (ms)</td><td>see ledger</td><td>3924.0</td><td>3910.6</td><td>PASS (limit 4321.7)</td></tr>
-<tr><td>tab switch median, worst tab (ms)</td><td>see ledger</td><td>83.0 (ExclusivesTab)</td><td>143.0 (AchievementsTab; ExclusivesTab 101.1)</td><td>PASS</td></tr>
-<tr><td>tab switch p95, worst tab (ms)</td><td>see ledger</td><td>111.8 (ExclusivesTab)</td><td>221.9 (AchievementsTab; ExclusivesTab 138.3)</td><td>PASS</td></tr>
-<tr><td>working set after GC (MB)</td><td>see ledger</td><td>858.2</td><td>1026.7</td><td>PASS (limit 1129.4)</td></tr>
-<tr><td>AvailableSubjectsTab switch median / p95 (ms)</td><td>see ledger</td><td>4.99 / 15.80</td><td>10.57 / 17.71</td><td>PASS</td></tr>
-<tr><td>ProgramsTab switch median / p95 (ms)</td><td>see ledger</td><td>5.30 / 7.94</td><td>27.68 / 45.49</td><td>PASS</td></tr>
+<tr><td>startup to first frame (ms)</td><td>see ledger</td><td>2743.9</td><td>4709.4</td><td>PASS (limit 5200.3)</td></tr>
+<tr><td>startup since process start (ms)</td><td>see ledger</td><td>2845.4</td><td>4847.8</td><td>PASS (limit 5352.6)</td></tr>
+<tr><td>tab switch median, worst tab (ms)</td><td>see ledger</td><td>85.0 (AchievementsTab; ExclusivesTab 77.0)</td><td>183.6 (AchievementsTab; ExclusivesTab 120.2)</td><td>PASS</td></tr>
+<tr><td>tab switch p95, worst tab (ms)</td><td>see ledger</td><td>117.3 (AchievementsTab; ExclusivesTab 86.6)</td><td>255.3 (AchievementsTab; ExclusivesTab 161.1)</td><td>PASS</td></tr>
+<tr><td>working set after GC (MB)</td><td>see ledger</td><td>853.2</td><td>1040.0</td><td>PASS (limit 1144.0)</td></tr>
+<tr><td>AvailableSubjectsTab switch median / p95 (ms)</td><td>see ledger</td><td>4.89 / 25.92</td><td>14.47 / 26.25</td><td>PASS</td></tr>
+<tr><td>ProgramsTab switch median / p95 (ms)</td><td>see ledger</td><td>4.88 / 19.75</td><td>33.88 / 62.19</td><td>PASS</td></tr>
 </table>
 <h2 id="render-path">Render path on a GPU-less Windows machine</h2>
 <p>When every DXGI adapter is the Microsoft Basic Render Driver (WARP: vendor <code>0x1414</code> device <code>0x8C</code>, or
