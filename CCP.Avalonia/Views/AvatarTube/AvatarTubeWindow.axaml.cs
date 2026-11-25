@@ -338,6 +338,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // target and method, which is what makes "is the sink still MINE?" answerable at all;
             // ReferenceEquals would be false every time because the conversion allocates.
             if (OpenChatSink == (Action)OpenChatInput) OpenChatSink = null;
+            StopAvatarGlow();
             _avatarSetsClosed = true;
             if (_rainSettings != null) _rainSettings.PropertyChanged -= RainSettingsChanged;
             StopRainPlayback();
