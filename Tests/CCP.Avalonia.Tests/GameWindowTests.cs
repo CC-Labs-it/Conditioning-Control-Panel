@@ -1066,6 +1066,7 @@ public sealed partial class GameWindowTests
     {
         var old = CoreMods.ActiveModPackageProvider;
         var dir = Directory.CreateTempSubdirectory("race-dot-mod-").FullName;
+        GameWindow? w = null;
         try
         {
             var root = Directory.CreateDirectory(Path.Combine(dir, "resources", "dtrh")).FullName;
@@ -1079,7 +1080,7 @@ public sealed partial class GameWindowTests
             CoreMods.ActiveModPackageProvider = () => new ModPackage(new ModManifest(), dir, false);
             var local = Directory.CreateDirectory(Path.Combine(CorePaths.EffectiveAssets, "images")).FullName;
             File.WriteAllText(Path.Combine(local, "local.png"), "local");
-            var w = OpenRetiredRace();
+            w = OpenRetiredRace();
             var sent = new List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));
             w.HandleMessage("{\"type\":\"ready\"}");
@@ -1104,7 +1105,15 @@ public sealed partial class GameWindowTests
             File.CreateSymbolicLink(Path.Combine(images, ".link.png"), outside);
             Assert.Null(server.ResolveFile("/ccp.mod/images/.link.png"));
         }
-        finally { CoreMods.ActiveModPackageProvider = old; Directory.Delete(dir, true); }
+        finally
+        {
+            try
+            {
+                w?.Close();
+                if (w != null) Assert.DoesNotContain(w, GameWindow.OpenWindowsForTests());
+            }
+            finally { CoreMods.ActiveModPackageProvider = old; Directory.Delete(dir, true); }
+        }
     });
 
     /// <summary>WPF OnPageReady :255 (init with the race settings block, then manifest) and OnRunEnded :431:
