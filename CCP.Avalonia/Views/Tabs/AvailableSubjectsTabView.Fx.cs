@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
@@ -29,6 +30,8 @@ public partial class AvailableSubjectsTabView
     private readonly List<Pop> _pops = new();
     private sealed record Hover(ScaleTransform Scale, double From, double To, long Start);
     private readonly List<Hover> _hovers = new();
+    private sealed class HoverFactor { public HoverFactor() { } public double Value = 1; }
+    private readonly ConditionalWeakTable<ScaleTransform, HoverFactor> _hoverFactors = new();
     private readonly HashSet<string> _seenRows = new();
 
     // WPF AvailableSubjectsTabView.xaml.cs:60-64 and MotionFx.HoverLift: 150 ms quadratic ease out.
@@ -41,9 +44,10 @@ public partial class AvailableSubjectsTabView
         var scale = card.RenderTransform as ScaleTransform ?? new ScaleTransform();
         card.RenderTransform = scale;
         _hovers.RemoveAll(h => h.Scale == scale);
+        var factor = _hoverFactors.GetOrCreateValue(scale);
         double target = on ? 1.02 : 1;
-        if (!Env.AllowTransitions) { scale.ScaleX = scale.ScaleY = target; return; }
-        _hovers.Add(new Hover(scale, scale.ScaleX, target, FxTime.GetTimestamp()));
+        if (!Env.AllowTransitions) { factor.Value = target; ApplyLobbyScale(scale); return; }
+        _hovers.Add(new Hover(scale, factor.Value, target, FxTime.GetTimestamp()));
         StartSubjectsFxClock();
     }
 
@@ -84,12 +88,19 @@ public partial class AvailableSubjectsTabView
         if (parts.FirstOrDefault(c => Equals(c.Tag, "lobby-card")) is not { } card) return;
         var scale = card.RenderTransform as ScaleTransform ?? new ScaleTransform();
         card.RenderTransform = scale;
-        scale.ScaleX = scale.ScaleY = 0.9;
+        scale.ScaleX = scale.ScaleY = 0.9 * _hoverFactors.GetOrCreateValue(scale).Value;
         var ring = Env.AllowParticles ? parts.OfType<Rectangle>().FirstOrDefault(c => Equals(c.Tag, "lobby-ring")) : null;
         ScaleTransform? spread = null;
         if (ring != null) { ring.RenderTransform = spread = new ScaleTransform(); ring.Opacity = 0.9; }
         _pops.RemoveAll(p => p.Card == scale);
         _pops.Add(new Pop(scale, ring, spread, start));
+    }
+
+    private void ApplyLobbyScale(ScaleTransform scale)
+    {
+        var pop = _pops.Find(p => p.Card == scale);
+        double grow = pop == null ? 1 : Math.Clamp(FxTime.GetElapsedTime(pop.Start).TotalMilliseconds / 320, 0, 1);
+        scale.ScaleX = scale.ScaleY = (0.9 + 0.1 * BackOut(grow)) * _hoverFactors.GetOrCreateValue(scale).Value;
     }
 
     // WPF BackEase { Amplitude = 0.5, EaseOut }.
@@ -178,7 +189,7 @@ public partial class AvailableSubjectsTabView
             var p = _pops[i];
             double ms = FxTime.GetElapsedTime(p.Start).TotalMilliseconds;
             double grow = Math.Clamp(ms / 320, 0, 1), spread = Math.Clamp(ms / 520, 0, 1);
-            p.Card.ScaleX = p.Card.ScaleY = 0.9 + 0.1 * BackOut(grow);
+            p.Card.ScaleX = p.Card.ScaleY = (0.9 + 0.1 * BackOut(grow)) * _hoverFactors.GetOrCreateValue(p.Card).Value;
             if (p.Ring != null)
             {
                 p.RingScale!.ScaleX = p.RingScale.ScaleY = 1 + 0.08 * (1 - (1 - spread) * (1 - spread));
@@ -190,7 +201,8 @@ public partial class AvailableSubjectsTabView
         {
             var h = _hovers[i];
             double t = Math.Clamp(FxTime.GetElapsedTime(h.Start).TotalMilliseconds / 150, 0, 1);
-            h.Scale.ScaleX = h.Scale.ScaleY = h.From + (h.To - h.From) * (1 - (1 - t) * (1 - t));
+            _hoverFactors.GetOrCreateValue(h.Scale).Value = h.From + (h.To - h.From) * (1 - (1 - t) * (1 - t));
+            ApplyLobbyScale(h.Scale);
             if (t == 1) _hovers.RemoveAt(i);
         }
         if (_entrances.Count == 0 && _pops.Count == 0 && _hovers.Count == 0) _subjectsFxBeat?.Stop();
@@ -204,8 +216,8 @@ public partial class AvailableSubjectsTabView
         _entrances.Clear();
         foreach (var p in _pops) { p.Card.ScaleX = p.Card.ScaleY = 1; if (p.Ring != null) p.Ring.Opacity = 0; }
         _pops.Clear();
-        foreach (var card in this.GetVisualDescendants().OfType<Control>().Where(c => Equals(c.Tag, "lobby-hover")))
-            if (card.RenderTransform is ScaleTransform scale) scale.ScaleX = scale.ScaleY = 1;
+        foreach (var card in this.GetVisualDescendants().OfType<Control>().Where(c => Equals(c.Tag, "lobby-card")))
+            if (card.RenderTransform is ScaleTransform scale) { scale.ScaleX = scale.ScaleY = 1; _hoverFactors.Remove(scale); }
         _hovers.Clear();
     }
 }

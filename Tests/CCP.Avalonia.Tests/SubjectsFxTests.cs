@@ -268,15 +268,13 @@ public sealed class SubjectsFxTests
             Step(view, clock, 600);
             var list = view.FindControl<ItemsControl>("AvailableSubjectsList")!;
             var item = list.ContainerFromIndex(0)!;
-            var hover = Tagged<Grid>(item, "lobby-hover");
             var card = Tagged<Grid>(item, "lobby-card");
             window.UpdateLayout();
             HeadlessInput.RenderLiveTree(window);
-            var at = card.TranslatePoint(new Point(15, 15), window)!.Value;
+            var at = card.TranslatePoint(new Point(card.Bounds.Width / 2, card.Bounds.Height / 2), window)!.Value;
             window.MouseMove(at);
             Dispatcher.UIThread.RunJobs();
-            var scale = Assert.IsType<ScaleTransform>(hover.RenderTransform);
-            Assert.Null(card.RenderTransform);
+            var scale = Assert.IsType<ScaleTransform>(card.RenderTransform);
             Step(view, clock, 75);
             Assert.InRange(scale.ScaleX, 1.014, 1.016);
             Step(view, clock, 75);
@@ -286,6 +284,25 @@ public sealed class SubjectsFxTests
             Step(view, clock, 150);
             Assert.Equal(1, scale.ScaleX, 6);
             Assert.False(view.SubjectsFxRunning);
+
+            // Hover and a newly arrived row both use the card scale without overriding each other.
+            view.LobbyEntrance(new System.Collections.Generic.HashSet<string> { ((LobbyCardView)list.Items[0]!).Id });
+            Assert.Equal(0.9, scale.ScaleX, 6);
+            window.UpdateLayout();
+            HeadlessInput.RenderLiveTree(window);
+            at = card.TranslatePoint(new Point(card.Bounds.Width / 2, card.Bounds.Height / 2), window)!.Value;
+            window.MouseMove(at);
+            Dispatcher.UIThread.RunJobs();
+            Step(view, clock, 75);
+            double u = 1 - 75.0 / 320;
+            double pop = 0.9 + 0.1 * (1 - (u * u * u - u * 0.5 * Math.Sin(Math.PI * u)));
+            Assert.Equal(pop * 1.015, scale.ScaleX, 6);
+            Step(view, clock, 500);
+            Assert.Equal(1.02, scale.ScaleX, 6);
+            window.MouseMove(new Point(1, 1));
+            Dispatcher.UIThread.RunJobs();
+            Step(view, clock, 150);
+            Assert.Equal(1, scale.ScaleX, 6);
 
             CoreSettings.Current.MotionLevel = MotionLevel.Off;
             window.MouseMove(at);
