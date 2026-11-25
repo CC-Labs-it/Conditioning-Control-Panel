@@ -128,7 +128,8 @@ public sealed class FlickerDeckOverlayTests
         Assert.Equal("next.png", w.SourcePath);
         Assert.True(puff, "the swap puffs");
         var angles = Enumerable.Range(0, 10).Select(_ => { Tick(clock, 0.03); return Wobble(w).Angle; }).ToArray();
-        Assert.True(angles.Max() - angles.Min() > 0.5, "a flipped card should sway");
+        // 7.3.1 owner note "far less wobble" (WobbleMaxRad 0.035): one flip of four sways a fraction of a degree.
+        Assert.True(angles.Max() - angles.Min() > 0.05, "a flipped card should sway");
         Assert.True(FlashOverlay.DeckTickRunning);
     });
 
@@ -224,17 +225,20 @@ public sealed class FlickerDeckOverlayTests
     });
 
     [Fact]
-    public Task Switching_deck_off_or_an_owned_shatter_leaves_flashes_plain() => OnUi((s, _) =>
+    public Task Switching_deck_off_leaves_flashes_plain_and_an_owned_shatter_keeps_the_deck() => OnUi((s, _) =>
     {
         var w = new FlashOverlayWindow(Solid(255, 0, 0));
         FlashOverlay.DeckOn = () => false;
         Assert.Equal(0, FlashOverlay.AttachDeck(w, new PixelRect(0, 0, W, H), 1, clickable: true));
         FlashOverlay.DeckOn = () => true;
         Assert.Equal(0, FlashOverlay.AttachDeck(w, new PixelRect(0, 0, W, H), 1, clickable: false));
+        Assert.Null(w.Deck);
+        // 7.3.1 (fix/73-v2-feedback): the Deck no longer stands down for an owned Shatter or Drag
+        // (Core FlickerDeck.Applies ignores both); it breaks cards its own way.
         s.FlashShatterEnabled = true;
         PrizeOwnership.IsGranted = _ => true;
-        Assert.Equal(0, FlashOverlay.AttachDeck(w, new PixelRect(0, 0, W, H), 1, clickable: true));
-        Assert.Null(w.Deck);
+        Assert.NotEqual(0, FlashOverlay.AttachDeck(w, new PixelRect(0, 0, W, H), 1, clickable: true));
+        Assert.NotNull(w.Deck);
         w.Close();
     });
 
