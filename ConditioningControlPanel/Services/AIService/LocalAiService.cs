@@ -1049,7 +1049,7 @@ namespace ConditioningControlPanel.Services.AIService
         internal static int ComputeNumCtx(int? maxTokens)
         {
             var reply = Math.Clamp(maxTokens ?? LocalMaxTokensHardCap, 1, LocalMaxTokensHardCap);
-            var needed = Companion.Brain.PromptAssembler.ContextFitTokenBudget + reply + ContextWindowMargin;
+            var needed = Companion.Brain.PromptAssembler.LocalContextFitTokenBudget + reply + ContextWindowMargin;
             return Math.Max(MinContextWindow, needed);
         }
 

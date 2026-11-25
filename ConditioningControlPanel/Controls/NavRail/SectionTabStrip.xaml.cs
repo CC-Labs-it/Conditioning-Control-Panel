@@ -657,6 +657,17 @@ namespace ConditioningControlPanel.Controls.NavRail
             SizeChanged += (_, _) => PositionFill(animate: false);
         }
 
+        /// <summary>
+        /// A language switch: forget the built pills and crumb, so the next <see cref="Show"/> writes
+        /// them again in the new language (they are set from code once per section).
+        /// </summary>
+        public void Relabel()
+        {
+            CrumbSep.Text = SafeLoc("nav_crumb_sep", "›");
+            _section = null;
+            _crumbKey = null;
+        }
+
         internal string? Section => _section;
         internal string? ActivePillKey => _activePill;
         internal IReadOnlyList<string> PillKeys => _pills.Select(p => p.Tab.Key).ToArray();

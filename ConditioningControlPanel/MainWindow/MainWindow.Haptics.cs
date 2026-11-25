@@ -145,10 +145,25 @@ namespace ConditioningControlPanel
                 App.Haptics.HapticTriggered += OnHapticActivity;
             }
 
+            // The status line, connect button, device line and temperament line are written from
+            // code, so a language switch writes them again (7.4 desk run: German kept "Disconnected").
+            LocalizationManager.Instance.LanguageChanged += (_, _) => HapticsRunOnUi(RefreshHapticLanguageText);
+
             // Phase F live status (suppression badge + loaded script) has no event to hang off, so
             // it is polled — but only while the tab is actually on screen.
             HapticsTab.IsVisibleChanged += OnHapticsTabVisibilityChanged;
             if (HapticsTab.IsVisible) StartHapticLiveStatusTimer();
+        }
+
+        /// <summary>Rewrites the code-set lines of the page in the current language. A connect in
+        /// flight keeps its "Connecting" button; its own result repaints the line when it lands.</summary>
+        internal void RefreshHapticLanguageText()
+        {
+            if (HapticsTab?.BtnHapticConnect == null) return;
+            if (HapticsTab.BtnHapticConnect.IsEnabled) RefreshHapticConnectionUi();
+            if (HapticsTab.TxtHapticTemperamentDesc != null)
+                HapticsTab.TxtHapticTemperamentDesc.Text =
+                    Loc.Get(HapticTemperament.FromKey(HapticCfg.V2.Temperament).DescriptionKey);
         }
 
         private void OnHapticRoutingRowChanged(object? sender, EventArgs e)
@@ -275,6 +290,23 @@ namespace ConditioningControlPanel
             return sb.ToString();
         }
 
+        /// <summary>The last connect press that failed, kept until a connect works or is pressed again, so
+        /// every repaint (the connect's own finally, a language switch) shows the failure and its hint in
+        /// the current language instead of a plain "Disconnected".</summary>
+        internal sealed record HapticConnectFailure(string StatusKey, string? DetailKey, string? Detail);
+
+        private HapticConnectFailure? _hapticConnectFailure;
+
+        /// <summary>The status line and the device line for a connection state, in the current language.</summary>
+        internal static (string Status, string Devices) HapticConnectionLines(bool connected, int deviceCount,
+            string providerName, HapticConnectFailure? failure)
+        {
+            if (!connected && failure != null)
+                return (Loc.Get(failure.StatusKey), failure.DetailKey != null ? Loc.Get(failure.DetailKey) : failure.Detail ?? "");
+            return (Loc.Get(connected ? "label_connected" : "label_disconnected"),
+                deviceCount == 0 ? Loc.Get("label_no_devices") : Loc.GetF("haptics_devices_merged", deviceCount, providerName));
+        }
+
         /// <summary>Status dot, status text, device summary, connect button and provider chips.</summary>
         internal void RefreshHapticConnectionUi()
         {
@@ -282,17 +314,16 @@ namespace ConditioningControlPanel
 
             var haptics = App.Haptics;
             var connected = haptics?.IsConnected == true;
+            if (connected) _hapticConnectFailure = null;
 
-            HapticsTab.TxtHapticStatus.Text = Loc.Get(connected ? "label_connected" : "label_disconnected");
+            var count = haptics?.DeviceManager.Devices.Count ?? 0;
+            var (statusText, devicesText) = HapticConnectionLines(connected, count, haptics?.ProviderName ?? "", _hapticConnectFailure);
+            HapticsTab.TxtHapticStatus.Text = statusText;
             var statusColor = connected ? Color.FromRgb(0x00, 0xE6, 0x76) : Color.FromRgb(0xFF, 0x6B, 0x6B);
             HapticsTab.TxtHapticStatus.Foreground = new SolidColorBrush(statusColor);
             HapticsTab.HapticStatusDot.Fill = new SolidColorBrush(statusColor);
             HapticsTab.BtnHapticConnect.Content = Loc.Get(connected ? "btn_disconnect" : "btn_connect");
-
-            var count = haptics?.DeviceManager.Devices.Count ?? 0;
-            HapticsTab.TxtHapticDevices.Text = count == 0
-                ? Loc.Get("label_no_devices")
-                : Loc.GetF("haptics_devices_merged", count, haptics?.ProviderName ?? "");
+            HapticsTab.TxtHapticDevices.Text = devicesText;
 
             var v2 = HapticCfg.V2;
             foreach (var chip in _hapticProviderChips)
@@ -530,7 +561,7 @@ namespace ConditioningControlPanel
 
         /// <summary>Sliders here are all "0-100 of a 0..1 setting"; sensitivity is the one that reads
         /// as a multiplier instead of a percentage.</summary>
-        private static void SetDspSlider(Slider? slider, TextBlock? label, double value100, string unit)
+        private static void SetDspSlider(Slider? slider, Controls.Rows.RowValue? label, double value100, string unit)
         {
             if (slider == null) return;
             var v = Math.Clamp(value100, slider.Minimum, slider.Maximum);
@@ -650,6 +681,11 @@ namespace ConditioningControlPanel
                 return;
             }
 
+            // A new press drops the kept failure first, so a press that stops below (no provider ticked,
+            // an unusable Intiface address) does not leave an old "Failed" and its hint up.
+            _hapticConnectFailure = null;
+            RefreshHapticConnectionUi();
+
             var anyProvider = new[] { "lovense", "buttplug", "mock" }
                 .Any(k => HapticCfg.V2.Provider(k).Enabled);
             if (!anyProvider)
@@ -688,18 +724,12 @@ namespace ConditioningControlPanel
             {
                 var success = await App.Haptics.ConnectAsync();
                 RefreshHapticToys();
-                if (!success)
-                {
-                    HapticsTab.TxtHapticStatus.Text = Loc.Get("label_failed");
-                    HapticsTab.TxtHapticStatus.Foreground =
-                        new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x6B));
-                    HapticsTab.TxtHapticDevices.Text = Loc.Get("haptics_connect_failed_hint");
-                }
+                // Kept, so the repaint below (and a later language switch) shows the failure, not "Disconnected".
+                if (!success) _hapticConnectFailure = new HapticConnectFailure("label_failed", "haptics_connect_failed_hint", null);
             }
             catch (Exception ex)
             {
-                HapticsTab.TxtHapticStatus.Text = Loc.Get("label_error");
-                HapticsTab.TxtHapticDevices.Text = ex.Message;
+                _hapticConnectFailure = new HapticConnectFailure("label_error", null, ex.Message);
             }
             finally
             {
@@ -999,7 +1029,7 @@ namespace ConditioningControlPanel
 
         /// <summary>Shared shape for all six: label first (so it tracks even during a load), then
         /// the settings write. AudioSyncSettings clamps every one of these itself.</summary>
-        private void OnDspSliderChanged(Slider? slider, TextBlock? label, string unit, Action<double> apply)
+        private void OnDspSliderChanged(Slider? slider, Controls.Rows.RowValue? label, string unit, Action<double> apply)
         {
             if (slider == null) return;
             if (label != null) label.Text = FormatDsp(slider.Value, unit);

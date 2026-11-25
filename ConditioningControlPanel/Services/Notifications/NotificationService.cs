@@ -26,6 +26,9 @@ namespace ConditioningControlPanel.Services
         private readonly List<(string message, NotificationType type, TimeSpan? duration, string? stickyKey, string? actionLabel, Action? action, string? secondaryActionLabel, Action? secondaryAction)> _pending = new();
         private readonly Dictionary<string, Border> _stickyByKey = new();
 
+        /// <summary>Every toast as it shows, for the title bar history (ccp-bugs #1688).</summary>
+        public NotificationHistory History { get; } = new();
+
         /// <summary>
         /// Space between toasts replayed after the host attaches (ccp-bugs #1688: everything raised
         /// before the window loaded landed at once and faded together, too fast to read).
@@ -117,6 +120,7 @@ namespace ConditioningControlPanel.Services
         private void ShowInternal(string message, NotificationType type, TimeSpan duration,
             string? actionLabel, Action? action, string? secondaryActionLabel = null, Action? secondaryAction = null)
         {
+            History.Record(DateTime.Now, type, message);
             var border = BuildToast(message, type, stickyKey: null, actionLabel, action, secondaryActionLabel, secondaryAction);
             _host?.Children.Add(border);
             AnimateIn(border);
@@ -138,6 +142,7 @@ namespace ConditioningControlPanel.Services
             string? actionLabel, Action? action)
         {
             if (_stickyByKey.ContainsKey(key)) return; // already showing
+            History.Record(DateTime.Now, type, message);
             var border = BuildToast(message, type, stickyKey: key, actionLabel, action);
             _stickyByKey[key] = border;
             _host?.Children.Add(border);

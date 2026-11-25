@@ -38,6 +38,7 @@ export function createWear({ bus = null, pieces = null, post = () => {}, onHost 
   let mode = 'menu';
   let seat = 'w';
   let server = null;                        // { w, b } from the match state or watch head
+  let later = new Map();                    // id -> 'YYYY-MM-DD', the Monday an away row is back (pbp:stock)
   const listeners = new Set();
   const off = [];
 
@@ -90,6 +91,10 @@ export function createWear({ bus = null, pieces = null, post = () => {}, onHost 
     if (!m || typeof m.type !== 'string') return;
     if (m.type === 'owned' && Array.isArray(m.grants)) { grants = m.grants.filter((g) => typeof g === 'string'); changed(); }
     else if (m.type === 'pbp:look') { picked = normalLook(m.look); writeSaved(storage, picked); changed(); }
+    else if (m.type === 'pbp:stock' && Array.isArray(m.later)) {
+      later = new Map(m.later.filter((x) => x && typeof x.id === 'string' && typeof x.from === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.from)).map((x) => [x.id, x.from]));
+      changed();
+    }
   }
 
   if (typeof onHost === 'function') { const u = onHost(onFrame); if (typeof u === 'function') off.push(u); }
@@ -119,6 +124,8 @@ export function createWear({ bus = null, pieces = null, post = () => {}, onHost 
     picked: () => normalLook(picked),
     owned: () => ownedIds(grants || []),
     known: () => grants !== null,
+    /** 'YYYY-MM-DD' (a UTC Monday) when an item away from this week's Prize Counter is back, else null. */
+    backOn: (id) => later.get(id) ?? null,
     choose,
     sides,
     apply,

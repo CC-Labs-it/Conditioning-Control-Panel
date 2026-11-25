@@ -506,7 +506,61 @@ public class OversizeNoticeTests : IDisposable
     public void Dispose()
     {
         PromptAssembler.NoticeDispatcherForTests = null;
+        PromptAssembler.ProviderForTests = null;
         PromptAssembler.ResetOversizeNoticeForTests();
+    }
+
+    /// <summary>
+    /// ccp-bugs #1726: the cap the notice names is the cloud proxy's. A player on Ollama or a
+    /// bring-your-own endpoint never hits it, so the notice stays quiet there and stays unspent
+    /// for a later switch to cloud.
+    /// </summary>
+    [Theory]
+    [InlineData(ConditioningControlPanel.Models.AiProviderType.Local)]
+    [InlineData(ConditioningControlPanel.Models.AiProviderType.OpenAiCompatible)]
+    public void OffTheCloud_AnOversizePromptRaisesNoNotice(ConditioningControlPanel.Models.AiProviderType provider)
+    {
+        var dispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
+        PromptAssembler.NoticeDispatcherForTests = () => dispatcher;
+        PromptAssembler.ProviderForTests = () => provider;
+
+        PromptAssembler.Compose(OverCapPrefix(), PromptAssembler.TailHeader + "\nAnswer in one short bubble.",
+            "Answer in one short bubble.");
+
+        Assert.False(PromptAssembler.OversizeNoticeRaised);
+        Assert.True(PromptAssembler.ClaimOversizeNotice());
+    }
+
+    /// <summary>
+    /// Companion chrome is gender neutral (AGENTS.md rule 7): the notice used to say "she" and
+    /// carried feminine nouns in several languages.
+    /// </summary>
+    [Fact]
+    public void TheNoticeCopy_IsGenderNeutralInEveryLanguage()
+    {
+        var files = Directory.GetFiles(SourceLanguagesDir(), "*.json");
+        Assert.Equal(10, files.Length);
+        var banned = new[] { " she ", "Begleiterin", "compañera", "compagne", " elle ", "companheira", " ela ", "компаньонк", " она ", "她" };
+        foreach (var file in files)
+        {
+            var map = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(file))!;
+            Assert.True(map.TryGetValue(PromptAssembler.OversizeNoticeLocKey, out var text), file);
+            foreach (var word in banned)
+                Assert.False((" " + text + " ").Contains(word, StringComparison.OrdinalIgnoreCase),
+                    $"{Path.GetFileName(file)} still says '{word.Trim()}'");
+        }
+    }
+
+    private static string SourceLanguagesDir()
+    {
+        var dir = AppContext.BaseDirectory;
+        for (int i = 0; i < 10 && !string.IsNullOrEmpty(dir); i++)
+        {
+            var candidate = Path.Combine(dir, "ConditioningControlPanel", "Localization", "Languages");
+            if (Directory.Exists(candidate)) return candidate;
+            dir = Path.GetDirectoryName(dir);
+        }
+        throw new DirectoryNotFoundException("Localization/Languages not found from " + AppContext.BaseDirectory);
     }
 
     private static string OverCapPrefix() =>

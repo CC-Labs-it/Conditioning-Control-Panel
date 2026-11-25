@@ -33,6 +33,25 @@ public class LauncherDoorCardRenderTests
         });
 
     [Fact]
+    public void Continue_pill_words_size_to_content_and_trim_only_past_the_room()
+        => WpfRenderHarness.OnStaThread(() =>
+        {
+            // Installed 7.4.0: "Continue: Terms & Conditioning" ran into the pill's right rim (the old horizontal
+            // StackPanel measured the words at infinite width, so they never trimmed and overflowed the cap).
+            const string line = "Continue: Terms & Conditioning";
+            var wide = LauncherWindow.ContinueLabel(line);
+            wide.Measure(new Size(LauncherWindow.ContinueMaxWidth, 46));
+            var full = wide.DesiredSize.Width;
+            Assert.True(full > 220 && full < LauncherWindow.ContinueMaxWidth, $"the whole line fits under the cap ({full})");
+            wide.Measure(new Size(double.PositiveInfinity, 46));
+            Assert.Equal(full, wide.DesiredSize.Width, 1);   // with room, nothing is trimmed
+
+            var narrow = LauncherWindow.ContinueLabel(line);
+            narrow.Measure(new Size(200, 46));
+            Assert.True(narrow.DesiredSize.Width <= 200, $"the words trim inside a narrow column ({narrow.DesiredSize.Width})");
+        });
+
+    [Fact]
     public void Door_card_lays_out_with_title_count_and_chevron()
         => WpfRenderHarness.OnStaThread(() =>
         {

@@ -115,7 +115,7 @@ public sealed class InvitePanel : Border
         foreach (var s in snap.Slots) if (s.State == InviteSlotState.Open) open++;
 
         var right = snap.ResetsAtUtc is DateTime r
-            ? Loc.GetF("invites_resets", r.ToLocalTime().ToString("d MMM"))
+            ? Loc.GetF("invites_resets", Loc.Date(r.ToLocalTime(), "d MMM"))
             : null;
         _body.Children.Add(Header(Loc.Get("invites_inviter_title"), right));
         _body.Children.Add(Para(Loc.Get("invites_inviter_body")));

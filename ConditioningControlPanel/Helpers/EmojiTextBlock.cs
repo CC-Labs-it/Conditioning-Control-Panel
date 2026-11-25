@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Media;
 
@@ -40,7 +41,47 @@ namespace ConditioningControlPanel.Helpers
                     OnFontSizeChanged));
         }
 
+        /// <summary>
+        /// Holds a binding that was set on Text (a <c>{loc:Str}</c> title). A TextBlock whose Inlines
+        /// change writes its Text back as a plain value, and after a laid-out rebuild that write threw
+        /// the language binding away: the Flash page hero kept "Flash-Bilder" in every later language
+        /// (7.4 desk run). Parked here the binding lives on and every new value rebuilds the inlines.
+        /// </summary>
+        private static readonly DependencyProperty BoundTextProperty =
+            DependencyProperty.Register("BoundText", typeof(string), typeof(EmojiTextBlock),
+                new PropertyMetadata(string.Empty, OnBoundTextChanged));
+
         private static void OnTextChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            var self = (EmojiTextBlock)d;
+            if (self._rebuilding) return;
+
+            var binding = BindingOperations.GetBindingBase(self, TextProperty);
+            if (binding != null)
+            {
+                // Move the binding off Text; the BoundText change callback rebuilds from its value.
+                self._rebuilding = true;
+                try
+                {
+                    BindingOperations.ClearBinding(self, TextProperty);
+                    BindingOperations.SetBinding(self, BoundTextProperty, binding);
+                }
+                finally { self._rebuilding = false; }
+                self.RebuildInlines((string?)self.GetValue(BoundTextProperty) ?? string.Empty);
+                return;
+            }
+
+            // A plain Text set from code replaces any parked binding, as it would on a TextBlock.
+            if (BindingOperations.IsDataBound(self, BoundTextProperty))
+            {
+                self._rebuilding = true;
+                try { BindingOperations.ClearBinding(self, BoundTextProperty); }
+                finally { self._rebuilding = false; }
+            }
+            self.RebuildInlines((string?)e.NewValue ?? string.Empty);
+        }
+
+        private static void OnBoundTextChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             var self = (EmojiTextBlock)d;
             if (self._rebuilding) return;

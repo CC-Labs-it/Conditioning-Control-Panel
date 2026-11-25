@@ -21,12 +21,12 @@ namespace ConditioningControlPanel.Views.Tabs
         internal Border    AudioSection                => SectionAudio.AudioSection;
         internal Button    HelpBtnAudio                => SectionAudio.HelpBtnAudio;
         internal Slider    SliderMaster                => SectionAudio.SliderMaster;
-        internal TextBlock TxtMaster                   => SectionAudio.TxtMaster;
+        internal ConditioningControlPanel.Controls.Rows.RowValue TxtMaster                   => SectionAudio.TxtMaster;
         internal Slider    SliderVideoVolume           => SectionAudio.SliderVideoVolume;
-        internal TextBlock TxtVideoVolume              => SectionAudio.TxtVideoVolume;
+        internal ConditioningControlPanel.Controls.Rows.RowValue TxtVideoVolume              => SectionAudio.TxtVideoVolume;
         internal CheckBox  ChkAudioDuck                => SectionAudio.ChkAudioDuck;
         internal Slider    SliderDuck                  => SectionAudio.SliderDuck;
-        internal TextBlock TxtDuck                     => SectionAudio.TxtDuck;
+        internal ConditioningControlPanel.Controls.Rows.RowValue TxtDuck                     => SectionAudio.TxtDuck;
         internal CheckBox  ChkExcludeBambiCloudDucking => SectionAudio.ChkExcludeBambiCloudDucking;
         internal ComboBox  CmbAudioOutputDevice        => SectionAudio.CmbAudioOutputDevice;
         internal Button    BtnAudioOutputRefresh       => SectionAudio.BtnAudioOutputRefresh;
@@ -39,8 +39,8 @@ namespace ConditioningControlPanel.Views.Tabs
         // SettingsTab.<Name>; they are AppSettingsTab.<Name> now.
         internal Border    AudioSyncLatencyPanel       => SectionAudio.AudioSyncLatencyPanel;
         internal Slider    SliderAudioSyncLatency      => SectionAudio.SliderAudioSyncLatency;
-        internal TextBlock TxtAudioSyncLatency         => SectionAudio.TxtAudioSyncLatency;
+        internal ConditioningControlPanel.Controls.Rows.RowValue TxtAudioSyncLatency         => SectionAudio.TxtAudioSyncLatency;
         internal Slider    SliderAudioSyncIntensity    => SectionAudio.SliderAudioSyncIntensity;
-        internal TextBlock TxtAudioSyncIntensity       => SectionAudio.TxtAudioSyncIntensity;
+        internal ConditioningControlPanel.Controls.Rows.RowValue TxtAudioSyncIntensity       => SectionAudio.TxtAudioSyncIntensity;
     }
 }

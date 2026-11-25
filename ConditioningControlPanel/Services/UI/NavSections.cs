@@ -65,7 +65,8 @@ namespace ConditioningControlPanel.Services.UI
             {
                 T("studio", "st4_nav_studio"),
                 T("presets", "tab_presets"),
-                Z("haptics", "tab_haptics", tier: 1),        // StudioTab.FocusRackEntry("haptics")
+                // Toys are free (owner 2026-11-11): the pill asks the same rule as every haptics door.
+                Z("haptics", "tab_haptics", tier: Services.Haptics.HapticsAccess.IsOpen ? 0 : 1), // StudioTab.FocusRackEntry("haptics")
                 Z("ramp", "nav_tab_ramp"),                   // StudioTab.FocusRackEntry("scheduler")
                 // Declutter wave 2 (2026-11-15): Just Drop left the strip for the launcher's Tools
                 // door. Still owned here and ShowTab("justdrop") still opens its window; no pill.

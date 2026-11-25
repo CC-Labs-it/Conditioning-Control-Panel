@@ -962,6 +962,7 @@ namespace ConditioningControlPanel.Services
             //    can be merged by DispatchMergedAsync. See Feature D in the plan.
             var matchedWords = new List<OcrWordHit>();
             var firedTriggers = new List<KeywordTrigger>();
+            var triggerHits = new List<(KeywordTrigger Trigger, List<OcrWordHit> Words)>();
 
             foreach (var trigger in OrderedByPresetPriority(triggers))
             {
@@ -978,6 +979,7 @@ namespace ConditioningControlPanel.Services
                 {
                     firedTriggers.Add(trigger);
                     matchedWords.AddRange(words);
+                    triggerHits.Add((trigger, words));
                 }
             }
 
@@ -1003,10 +1005,6 @@ namespace ConditioningControlPanel.Services
                 return;
             }
 
-            // effectTrigger is now a helper alias for logging/recording the primary
-            // trigger; the dispatch uses the full firedTriggers list.
-            var effectTrigger = firedTriggers[0];
-
             // 2. Build position set + word lookup (deduplicated).
             //    The position bucket deliberately spans a large area (~120 px) so
             //    existing highlighted words don't get re-flagged as "new instance"
@@ -1014,13 +1012,12 @@ namespace ConditioningControlPanel.Services
             //    word wrap or scrollbar reflow. Users who actually add a NEW copy
             //    of a trigger word at a totally different spot (>120 px away) get
             //    a fresh highlight, which matches expectations.
-            const int PositionBucket = 120;
             var currentPositions = new HashSet<string>();
             var wordsByKey = new Dictionary<string, OcrWordHit>();
 
             foreach (var word in matchedWords)
             {
-                var key = $"{word.Text.ToLowerInvariant()}_{word.ScreenRect.X / PositionBucket}_{word.ScreenRect.Y / PositionBucket}";
+                var key = OcrPositionKey(word);
                 if (currentPositions.Add(key))
                     wordsByKey[key] = word;
             }
@@ -1117,22 +1114,27 @@ namespace ConditioningControlPanel.Services
                     currentPositions.Count, newKeys.Count, currentPositions.Count - newKeys.Count);
             }
 
-            if (newWords.Count == 0 || effectTrigger == null) return;
+            // ccp-bugs #1669: only a trigger with a word in this scan's highlight fires. A keyword
+            // highlighted on an earlier scan, still waiting for confirmation, or left out of the
+            // random subset used to ride along with any other new word and play its sound with
+            // nothing new on screen.
+            var confirmedTriggers = TriggersWithNewHighlights(triggerHits, newKeys);
+            if (newWords.Count == 0 || confirmedTriggers.Count == 0) return;
 
             App.Logger?.Information("OCR keyword confirmed: [{Keywords}] — {Count} new words across {Triggers} trigger(s)",
-                string.Join(",", firedTriggers.Select(t => t.Keyword)), newWords.Count, firedTriggers.Count);
+                string.Join(",", confirmedTriggers.Select(t => t.Keyword)), newWords.Count, confirmedTriggers.Count);
 
             // 7. Record each fired trigger (each gets its own pulse-feed entry and
             //    its own per-keyword hard cooldown stamp) then dispatch merged once.
             var now = DateTime.Now;
-            foreach (var t in firedTriggers)
+            foreach (var t in confirmedTriggers)
             {
                 t.LastTriggeredAt = now;
                 RecordFire(t, "OCR");
                 TriggerFired?.Invoke(this, t);
             }
             _lastGlobalTriggerTime = now;
-            _ = DispatchMergedAsync(firedTriggers, newWords);
+            _ = DispatchMergedAsync(confirmedTriggers, newWords);
         }
 
         /// <summary>
@@ -1259,6 +1261,39 @@ namespace ConditioningControlPanel.Services
             }
 
             return results.Count > 0 ? results : null;
+        }
+
+        /// <summary>
+        /// OCR position bucket. Deliberately wide (~120 px) so a highlighted word nudged 20-40 px
+        /// by word wrap or scrollbar reflow keeps its key and is not re-flagged as a new instance.
+        /// </summary>
+        internal const int OcrPositionBucket = 120;
+
+        /// <summary>One OCR instance's identity: its text plus its bucketed screen position.</summary>
+        internal static string OcrPositionKey(OcrWordHit word) =>
+            $"{word.Text.ToLowerInvariant()}_{word.ScreenRect.X / OcrPositionBucket}_{word.ScreenRect.Y / OcrPositionBucket}";
+
+        /// <summary>
+        /// The triggers that own at least one word in this scan's NEW highlight (ccp-bugs #1669).
+        /// The sound, the pulse feed and the cooldown follow the highlight: a keyword already
+        /// highlighted, still unconfirmed, or not picked for the random subset stays quiet.
+        /// </summary>
+        internal static List<KeywordTrigger> TriggersWithNewHighlights(
+            IReadOnlyList<(KeywordTrigger Trigger, List<OcrWordHit> Words)> hits, ISet<string> newKeys)
+        {
+            var result = new List<KeywordTrigger>();
+            if (hits == null || newKeys == null || newKeys.Count == 0) return result;
+            foreach (var (trigger, words) in hits)
+            {
+                if (words == null) continue;
+                foreach (var w in words)
+                {
+                    if (!newKeys.Contains(OcrPositionKey(w))) continue;
+                    result.Add(trigger);
+                    break;
+                }
+            }
+            return result;
         }
 
         /// <summary>
