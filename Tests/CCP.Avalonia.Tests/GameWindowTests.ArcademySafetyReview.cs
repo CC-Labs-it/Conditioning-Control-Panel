@@ -18,14 +18,14 @@ public sealed partial class GameWindowTests
     [Fact]
     public void Arcademy_BootPanicCannotBeLost() => Run((_, _) =>
     {
-        var w = new GameWindow(GameWindow.Games["arcademy"]);
+        var w = new GameWindow(GameWindow.ArcademySpec);
         try { w.Show(); Assert.False(w.IsReady); Assert.True(GameWindow.HandleArcademyPanic(DateTime.Now)); Assert.Null(GameWindow.OpenForTests("arcademy")); }
         finally { w.Close(); }
     });
     [Fact]
     public void Arcademy_OtherWindowCloseKeepsBothSyncStores() => Run((_, _) =>
     {
-        var w = new GameWindow(GameWindow.Games["arcademy"]); var other = new GameWindow(GameWindow.Games["breakoutdemo"]);
+        var w = new GameWindow(GameWindow.ArcademySpec); var other = new GameWindow(GameWindow.Games["breakoutdemo"]);
         var cards = typeof(ArcademySyncService).GetField("_store", BindingFlags.NonPublic | BindingFlags.Static)!;
         var wallet = typeof(ArcademyWalletSyncService).GetField("_store", BindingFlags.NonPublic | BindingFlags.Static)!;
         try
@@ -40,7 +40,7 @@ public sealed partial class GameWindowTests
     public void Arcademy_CounterClosesBeforePanicHandoff() => Run((shell, launcher) =>
     {
         var s = CoreSettings.Current; var old = (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll);
-        var w = new GameWindow(GameWindow.Games["arcademy"]); string? reason = null;
+        var w = new GameWindow(GameWindow.ArcademySpec); string? reason = null;
         try
         {
             (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll) = ("F8", true, false);
