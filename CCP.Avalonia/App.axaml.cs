@@ -652,6 +652,7 @@ namespace ConditioningControlPanel.Avalonia
         {
             CoreSubliminal.ShowProvider = Views.Overlays.SubliminalWhisperShow.Phrase;
             Views.Overlays.SteamOverlay.Seed();   // the Super stage's seams for this head
+            Views.Overlays.WhirlpoolOverlay.Seed();   // its pool surface (rides the spiral windows)
             Views.Overlays.SubliminalOverlay.Displayed -= NoteSubliminalFeatureUse;
             Views.Overlays.SubliminalOverlay.Displayed += NoteSubliminalFeatureUse;
         }

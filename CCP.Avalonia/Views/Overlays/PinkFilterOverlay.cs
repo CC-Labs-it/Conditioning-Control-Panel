@@ -252,6 +252,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 try { RaiseWindow(w); }
                 catch (Exception ex) { Log.Debug("Pink filter: re-sort raise failed: {E}", ex.Message); }
             }
+            WhirlpoolOverlay.RaisePool();   // the Whirlpool reads through the fog in either order (WPF 72 over 70)
         }
 
         private static void HideAll()

@@ -53,13 +53,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static DispatcherTimer? _timer;
         private static long _last;
         private static double _poolAge = 1e9;
-        private static bool _seeded;
 
-        /// <summary>Called once at startup, before anything can light a Super effect.</summary>
+        /// <summary>Called once at startup, before anything can light a Super effect. No latch: every
+        /// call seeds again, so a seam put back by the test isolation never stays unseeded.</summary>
         internal static void Seed()
         {
-            if (_seeded) return;
-            _seeded = true;
             SuperStageHost.PostToUi = a =>
             {
                 if (Dispatcher.UIThread.CheckAccess()) a();
