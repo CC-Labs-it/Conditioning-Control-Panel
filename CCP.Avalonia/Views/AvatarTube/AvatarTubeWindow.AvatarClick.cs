@@ -5,7 +5,6 @@ using Avalonia.Data;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
-using ConditioningControlPanel.Services.Safety;
 
 namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 {
@@ -35,7 +34,6 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private void PulseAvatarGlow()
         {
             StopAvatarGlow();
-            if (PanicAftermath.TriggersSilenced()) return;
             var avatar = CurrentPortraitImage();
             if (avatar?.Effect is not DropShadowEffect original) return;
             _avatarGlow = new DropShadowEffect { Color = original.Color, BlurRadius = 20, Opacity = 0.6, OffsetX = original.OffsetX, OffsetY = original.OffsetY };
@@ -49,7 +47,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         internal void StepAvatarGlow(double milliseconds)
         {
             if (_avatarGlow == null) return;
-            if (PanicAftermath.TriggersSilenced() || milliseconds >= 400) { StopAvatarGlow(); return; }
+            if (milliseconds >= 400) { StopAvatarGlow(); return; }
             double amount = Math.Clamp(milliseconds <= 200 ? milliseconds / 200 : (400 - milliseconds) / 200, 0, 1);
             _avatarGlow.BlurRadius = 20 + 40 * amount;
             _avatarGlow.Opacity = 0.6 + 0.4 * amount;

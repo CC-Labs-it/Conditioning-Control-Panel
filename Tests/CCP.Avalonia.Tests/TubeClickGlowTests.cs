@@ -54,9 +54,27 @@ public sealed class TubeClickGlowTests
             Assert.Same(original, image.Effect);
             tube.StepAvatarGlow(200);
             Assert.Same(original, image.Effect);
+
+            // A new click is user initiated, so panic's trigger quiet must not suppress it.
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            Assert.True(ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced());
+            tube.HandleAvatarClick();
+            var afterPanic = Assert.IsType<DropShadowEffect>(image.Effect);
+            Assert.NotSame(original, afterPanic);
+            tube.StepAvatarGlow(200);
+            Assert.Equal(60, afterPanic.BlurRadius);
+            Assert.Equal(1, afterPanic.Opacity);
+            tube.StepAvatarGlow(400);
+            Assert.Same(original, image.Effect);
+
+            tube.HandleAvatarClick();
+            tube.StepAvatarGlow(200);
+            PanicSurfaces.All.Single(x => x.Id == "tube-speech").Stop(shell);
+            Assert.Same(original, image.Effect);
         }
         finally
         {
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
             shell.MarkExitRequestedForTest();
             shell.Close();
             settings.AvatarEnabled = enabled;
