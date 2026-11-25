@@ -8,8 +8,10 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Possession;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using ConditioningControlPanel.Services.Bark;
 using ConditioningControlPanel.Services.Possession;
 using Xunit;
 using AvApp = ConditioningControlPanel.Avalonia.App;
@@ -49,14 +51,26 @@ public sealed partial class PossessionShellTests
         }
         finally { warden.Stop(); AvatarTubeWindow.TestLive = null; tube.Close(); }
     });
-    [Fact]
-    public Task LockdownEndReassemblesBeforeWardenReturns() => RunAsync(async rig =>
+    // doseKeeper: the default Dose keeper starts the engine and stops it again at Lockdown end
+    // (WPF LockdownDoseKeeper.cs:385); that engine stop must not cut the reassembly short.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task LockdownEndReassemblesBeforeWardenReturns(bool doseKeeper) => RunAsync(async rig =>
     {
         CoreSettings.Current.AvatarEnabled = true;
         CoreSettings.Current.AvatarTubeDetached = true;
         CoreSettings.Current.LockdownWardenEnabled = true;
+        CoreSettings.Current.LockdownDoseKeeperEnabled = doseKeeper;
+        CoreSettings.Current.FlashEnabled = true;
+        CoreSettings.Current.BarkChatSuppressionMs = 0;
         var tube = new AvatarTubeWindow(null) { PossessionMoveSupportedOverride = true };
         using var warden = new Warden(rig.Lockdown);
+        var previous = PossessionAvaloniaHead.Warden; var oldBark = BarkHead.Engine;
+        var spoken = new List<string>();
+        var bark = new BarkEngine(() => new BarkRuleSet(new[] { new BarkRule { Id = "warden_test",
+            Trigger = PossessionBarkTriggers.Warden, VariantPool = new() { new BarkVariant("{verb}") } } }))
+            { Speak = line => spoken.Add(line.Text) };
         // App constructs the warden before the director, so its handlers precede the director's.
         var endMethod = typeof(PossessionDirector).GetMethod("OnLockdownDeactivated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
         var endDirector = (Action)Delegate.CreateDelegate(typeof(Action), rig.Director, endMethod);
@@ -64,10 +78,12 @@ public sealed partial class PossessionShellTests
         rig.Lockdown.LockdownDeactivated += endDirector;
         try
         {
-            tube.Show(); AvatarTubeWindow.TestLive = tube;
+            bark.Start(); BarkHead.Engine = bark;
+            tube.Show(); AvatarTubeWindow.TestLive = tube; PossessionAvaloniaHead.Warden = warden;
             var home = new PixelPoint(200, 250); tube.Position = home;
             rig.Director.Warden = warden; AvApp.Possession = rig.Director;
             rig.Lockdown.Activate(TimeSpan.FromMinutes(30));
+            if (doseKeeper) { rig.Shell.EnforceLockdownDoseEngine(atActivation: true); Assert.True(CoreEngine.IsRunning); }
             await warden.LeaveAsync(CancellationToken.None);
             Assert.True(tube.FindControl<Border>("PossessionNoteCard")!.IsVisible);
 
@@ -85,15 +101,22 @@ public sealed partial class PossessionShellTests
             Dispatcher.UIThread.RunJobs();
             Assert.True(PossessionLease.IsLeased(button));
             rig.Lockdown.Deactivate();
+            if (doseKeeper) Assert.False(CoreEngine.IsRunning); // the keeper gave its engine back
             Assert.True(PossessionLease.IsLeased(button)); // normal end eases; it must not snap
             Assert.True(tube.FindControl<Border>("PossessionNoteCard")!.IsVisible);
+            Assert.NotEqual(home, tube.Position);
             rig.Frames.Frame(TimeSpan.FromMilliseconds(2000)); rig.Frames.Frame(TimeSpan.FromMilliseconds(3000));
-            for (int i = 0; i < 200 && (PossessionLease.IsLeased(button) || tube.Position != home); i++) await Task.Delay(25);
+            for (int i = 0; i < 200 && (PossessionLease.IsLeased(button) || tube.Position != home || !spoken.Contains(WardenRules.Return)); i++) await Task.Delay(25);
             Assert.False(PossessionLease.IsLeased(button));
             Assert.Equal(home, tube.Position);
             Assert.False(tube.FindControl<Border>("PossessionNoteCard")!.IsVisible);
+            Assert.Equal(new[] { WardenRules.Leave, WardenRules.Return }, spoken);
         }
-        finally { warden.Stop(); AvatarTubeWindow.TestLive = null; tube.Close(); }
+        finally
+        {
+            warden.Stop(); CoreEngine.Stop(); BarkHead.Engine = oldBark;
+            PossessionAvaloniaHead.Warden = previous; AvatarTubeWindow.TestLive = null; tube.Close();
+        }
     });
 
     [Fact]
@@ -112,7 +135,10 @@ public sealed partial class PossessionShellTests
             CoreEngine.StartedHook = rig.Shell.OnEngineStarted;
             rig.Lockdown.Activate(TimeSpan.FromMinutes(30));
             Assert.True(warden.IsAvailable);
+            CoreEngine.Start(systemInitiated: true);
             MainShellWindow.StopEngine();
+            Assert.True(warden.IsAvailable); // WPF StopEngineCore never touches the warden
+            MainShellWindow.StopSessionFromRemote();
             Assert.False(warden.IsAvailable);
             CoreEngine.Start(systemInitiated: true);
             Assert.True(warden.IsAvailable);
@@ -122,11 +148,11 @@ public sealed partial class PossessionShellTests
             CoreSettings.Current.AvatarTubeDetached = true;
             await warden.LeaveAsync(CancellationToken.None);
             Assert.True(tube.FindControl<Border>("PossessionNoteCard")!.IsVisible);
-            MainShellWindow.StopEngine();
+            MainShellWindow.StopSessionFromRemote();
             Assert.False(tube.FindControl<Border>("PossessionNoteCard")!.IsVisible);
             CoreEngine.Start(systemInitiated: true);
             Assert.False(warden.IsAvailable); // the appearance cooldown survives restart
-            MainShellWindow.StopEngine();
+            MainShellWindow.StopSessionFromRemote();
             rig.Lockdown.Deactivate();
             CoreEngine.Start(systemInitiated: true);
             Assert.False(warden.IsAvailable); // a start outside Lockdown cannot rearm it

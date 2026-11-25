@@ -165,7 +165,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// A running session is paused first, not ended (panic, tray Stop): WPF MainWindow.xaml.cs:1726.</summary>
         internal static void StopEngine()
         {
-            Possession.PossessionAvaloniaHead.Warden?.Stop();
             _engineGen++;
             _pendingUserEngineGen = null;
             App.Sessions?.Pause();
@@ -175,7 +174,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary><see cref="CoreEngine.StoppedHook"/>: the head half of StopEngineCore.</summary>
         internal void OnEngineStopped()
         {
-            Possession.PossessionAvaloniaHead.Warden?.Stop();
             // Direct Core stops (a remote panic) also freeze the session clock. A session's own Stop
             // has already cleared IsRunning by the time it stops the engine, so this is a no-op there.
             App.Sessions?.Pause();

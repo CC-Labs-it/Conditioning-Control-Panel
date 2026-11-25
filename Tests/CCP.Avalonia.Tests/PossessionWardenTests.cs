@@ -243,7 +243,7 @@ public sealed class PossessionWardenTests
     [InlineData("engine")]
     [InlineData("remote")]
     [InlineData("remote-session")]
-    public Task StopRoutesCancelAnActiveGlide(string route) => AvaloniaTestDispatcher.RunAsync(async () =>
+    public Task StopRoutesSettleAnActiveGlide(string route) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var settings = new SettingsService(); CoreSettings.ServiceProvider = () => settings;
         CoreSettings.Current.AvatarEnabled = true;
@@ -277,7 +277,14 @@ public sealed class PossessionWardenTests
                 Assert.False(tube.FindControl<Border>("PossessionNoteCard")!.IsVisible);
                 return;
             }
-            else if (route == "engine") MainShellWindow.StopEngine();
+            else if (route == "engine")
+            {
+                MainShellWindow.StopEngine(); // WPF StopEngineCore (MainWindow.StartStop.cs:452) leaves the warden alone
+                Assert.NotEqual(home, tube.Position);
+                await move;
+                Assert.True(tube.FindControl<Border>("PossessionNoteCard")!.IsVisible);
+                return;
+            }
             else if (route == "remote-session") MainShellWindow.StopSessionFromRemote();
             else
             {

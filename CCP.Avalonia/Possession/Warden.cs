@@ -190,10 +190,12 @@ internal sealed class Warden : IPossessionWarden, IDisposable
         catch (Exception ex) { Serilog.Log.Debug("Warden reset note failed: {Error}", ex.Message); }
     }
 
-    // A real engine restart may rearm the warden in the same Lockdown without resetting cooldowns.
+    // An engine restart after a panic or remote stop rearms the warden in the same Lockdown without
+    // resetting cooldowns. A plain engine stop leaves her alone, as WPF StopEngineCore never touches her
+    // (WPF MainWindow.StartStop.cs:452): the Dose keeper stops the engine at every Lockdown end.
     internal void ResumeForEngineStart() { if (_lockdown.IsActive) _stopped = false; }
 
-    // Panic and explicit stop paths restore immediately; normal Lockdown end reassembles through the director.
+    // Panic, remote stop and exit restore immediately; Lockdown end and engine stop reassemble through the director.
     internal void Stop()
     {
         _stopped = true;
