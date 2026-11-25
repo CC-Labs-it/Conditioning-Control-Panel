@@ -7497,6 +7497,7 @@
   "launcher_game_dtrh_blurb": "La descente. Tombe dedans, le retour te change.",
   "launcher_game_arcademy_title": "L'Arcademy",
   "launcher_game_arcademy_blurb": "Des leçons qui se jouent comme un jeu.",
+  "arcademy_audio_only_refused": "Une session audio uniquement est en cours : l'Arcademy reste fermée jusqu'à sa fin. Ta série de présence est préservée.",
   "rf_play_zone_games": "JEUX",
   "launcher_game_breakoutdemo_title": "Démo Breakout",
   "launcher_game_breakoutdemo_blurb": "Les 3 premiers niveaux Histoire. Gratuit.",
