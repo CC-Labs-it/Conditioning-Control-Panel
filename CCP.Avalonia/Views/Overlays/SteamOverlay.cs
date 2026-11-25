@@ -67,16 +67,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             };
             // This head has no compositor engine: a Super surface is up when its base overlay is.
             SuperStageHost.EngineUp = () => PinkFilterOverlay.IsShowing || SpiralOverlay.IsShowing;
-            SuperStageHost.CursorProvider = () => X11Pointer.Read() is { } p ? (p.At.X, p.At.Y) : null;
+            // WPF SuperStageWpf.cs: the cursor and the restless pool's click, Win32 or X11.
+            SuperStageHost.CursorProvider = SuperPointer.Cursor;
+            SuperStageHost.ClickProvider = SuperPointer.Click;
             SuperStageHost.SteamSurface = Set;
-            SuperAccess.TierEventsHook = raiseAll =>
-            {
-                var patreon = AccountSeed.Patreon;
-                if (patreon == null) return false;
-                patreon.TierChanged += (_, _) => raiseAll();
-                if (AccountSeed.SubscribeStar is { } substar) substar.TierChanged += (_, _) => raiseAll();
-                return true;
-            };
+            // The tier-events hook (a lapse tears every Super effect down) is AccountSeed's: it binds
+            // the providers it creates and the identity change, and rebinds them on a re-seed.
         }
 
         /// <summary>The stage's Steam surface switch. UI thread. Idempotent: it also dresses tint
