@@ -18,14 +18,14 @@ public sealed partial class GameWindowTests
     [Fact]
     public void Arcademy_BootPanicCannotBeLost() => Run((_, _) =>
     {
-        var w = new GameWindow(GameWindow.Games["arcademy"]);
+        var w = new GameWindow(GameWindow.ArcademySpec);
         try { w.Show(); Assert.False(w.IsReady); Assert.True(GameWindow.HandleArcademyPanic(DateTime.Now)); Assert.Null(GameWindow.OpenForTests("arcademy")); }
         finally { w.Close(); }
     });
     [Fact]
     public void Arcademy_OtherWindowCloseKeepsBothSyncStores() => Run((_, _) =>
     {
-        var w = new GameWindow(GameWindow.Games["arcademy"]); var other = new GameWindow(GameWindow.Games["breakoutdemo"]);
+        var w = new GameWindow(GameWindow.ArcademySpec); var other = new GameWindow(GameWindow.Games["breakoutdemo"]);
         var cards = typeof(ArcademySyncService).GetField("_store", BindingFlags.NonPublic | BindingFlags.Static)!;
         var wallet = typeof(ArcademyWalletSyncService).GetField("_store", BindingFlags.NonPublic | BindingFlags.Static)!;
         try
@@ -40,7 +40,7 @@ public sealed partial class GameWindowTests
     public void Arcademy_CounterClosesBeforePanicHandoff() => Run((shell, launcher) =>
     {
         var s = CoreSettings.Current; var old = (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll);
-        var w = new GameWindow(GameWindow.Games["arcademy"]); string? reason = null;
+        var w = new GameWindow(GameWindow.ArcademySpec); string? reason = null;
         try
         {
             (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll) = ("F8", true, false);
@@ -56,7 +56,7 @@ public sealed partial class GameWindowTests
     public void Arcademy_RemoteAssetsRequireConsentAndPreserveTags() => Run((_, _) =>
     {
         var s = CoreSettings.Current; var old = (s.OfflineMode, s.RemoteMediaConsented, s.FypOnlineConsented, s.MediaSource);
-        var w = new GameWindow(GameWindow.Games["arcademy"]); var frames = new List<JObject>();
+        var w = new GameWindow(GameWindow.ArcademySpec); var frames = new List<JObject>();
         var pending = new TaskCompletionSource<List<FypAssetManifest.Entry>>(TaskCreationOptions.RunContinuationsAsynchronously); int calls = 0; w.Posted += json => frames.Add(JObject.Parse(json));
         w.ArcademyFetchForTests = (_, subs) => { calls++; Assert.Equal(new[] { "cats" }, subs); return pending.Task; };
         try
@@ -84,7 +84,7 @@ public sealed partial class GameWindowTests
     public void Arcademy_RemoteAssetSurplusServesLaterRequests() => Run((_, _) =>
     {
         var s = CoreSettings.Current; var old = (s.OfflineMode, s.RemoteMediaConsented, s.MediaSource);
-        var w = new GameWindow(GameWindow.Games["arcademy"]); var frames = new List<JObject>(); int calls = 0; string pile = "cats";
+        var w = new GameWindow(GameWindow.ArcademySpec); var frames = new List<JObject>(); int calls = 0; string pile = "cats";
         w.Posted += json => frames.Add(JObject.Parse(json));
         w.ArcademyFetchForTests = (_, _) => { calls++; return Task.FromResult(Enumerable.Range(1, 3).Select(i => new FypAssetManifest.Entry
             { Id = "scrolller/" + pile + "/" + i, Url = $"https://example.com/{pile}{i}.jpg", Type = "image", Folder = "r/" + pile }).ToList()); };
@@ -117,7 +117,7 @@ public sealed partial class GameWindowTests
     {
         var s = CoreSettings.Current; var old = (s.MasterVolume, s.ArcademyMasterIntensity, s.AudioOnlySession, s.ProtectBrowserVideoPlayback,
             SettingsTabView.InterruptingBrowserMedia, SettingsTabView.RemixMediaTick);
-        var w = new GameWindow(GameWindow.Games["arcademy"]); var frames = new List<JObject>();
+        var w = new GameWindow(GameWindow.ArcademySpec); var frames = new List<JObject>();
         w.Posted += json => frames.Add(JObject.Parse(json));
         try
         {
