@@ -1,4 +1,9 @@
 {
+  "mod_text_originals": "元のテキスト",
+  "mod_text_search": "元のテキストを検索",
+  "mod_text_export": "一覧をエクスポート",
+  "mod_text_count": "{1} 件中 {0} 件を表示",
+  "mod_text_export_error": "一覧をエクスポートできませんでした。",
   "chaos_sidebar_empty_toy": "空のおもちゃポケット",
   "chaos_sidebar_empty_accessory": "空のアクセサリーポケット",
   "chaos_sidebar_empty_desc": "クリックしてドールハウスで買い物。",

@@ -1,4 +1,9 @@
 {
+  "mod_text_originals": "Original texts",
+  "mod_text_search": "Search original texts",
+  "mod_text_export": "Export list",
+  "mod_text_count": "{0} of {1} shown",
+  "mod_text_export_error": "Could not export the list.",
   "chaos_sidebar_empty_toy": "empty toy pocket",
   "chaos_sidebar_empty_accessory": "empty accessory pocket",
   "chaos_sidebar_empty_desc": "click to go shopping in the dollhouse.",

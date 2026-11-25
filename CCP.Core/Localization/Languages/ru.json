@@ -1,4 +1,9 @@
 {
+  "mod_text_originals": "Исходные тексты",
+  "mod_text_search": "Поиск исходных текстов",
+  "mod_text_export": "Экспорт списка",
+  "mod_text_count": "Показано {0} из {1}",
+  "mod_text_export_error": "Не удалось экспортировать список.",
   "chaos_sidebar_empty_toy": "пустой карман для игрушки",
   "chaos_sidebar_empty_accessory": "пустой карман для аксессуара",
   "chaos_sidebar_empty_desc": "нажмите, чтобы посетить магазин в кукольном доме.",

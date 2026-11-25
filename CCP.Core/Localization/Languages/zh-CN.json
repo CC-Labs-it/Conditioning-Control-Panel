@@ -1,4 +1,9 @@
 {
+  "mod_text_originals": "原始文本",
+  "mod_text_search": "搜索原始文本",
+  "mod_text_export": "导出列表",
+  "mod_text_count": "显示 {0} 条，共 {1} 条",
+  "mod_text_export_error": "无法导出列表。",
   "chaos_sidebar_empty_toy": "空玩具口袋",
   "chaos_sidebar_empty_accessory": "空配饰口袋",
   "chaos_sidebar_empty_desc": "点击前往玩偶屋购物。",

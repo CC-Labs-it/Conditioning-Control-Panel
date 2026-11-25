@@ -1,4 +1,9 @@
 {
+  "mod_text_originals": "Testi originali",
+  "mod_text_search": "Cerca testi originali",
+  "mod_text_export": "Esporta elenco",
+  "mod_text_count": "{0} di {1} mostrati",
+  "mod_text_export_error": "Impossibile esportare l’elenco.",
   "chaos_sidebar_empty_toy": "tasca giocattolo vuota",
   "chaos_sidebar_empty_accessory": "tasca accessorio vuota",
   "chaos_sidebar_empty_desc": "clicca per fare acquisti nella casa delle bambole.",

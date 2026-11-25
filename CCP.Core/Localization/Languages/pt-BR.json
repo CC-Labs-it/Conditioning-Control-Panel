@@ -1,4 +1,9 @@
 {
+  "mod_text_originals": "Textos originais",
+  "mod_text_search": "Buscar textos originais",
+  "mod_text_export": "Exportar lista",
+  "mod_text_count": "{0} de {1} exibidos",
+  "mod_text_export_error": "Não foi possível exportar a lista.",
   "chaos_sidebar_empty_toy": "bolso de brinquedo vazio",
   "chaos_sidebar_empty_accessory": "bolso de acessório vazio",
   "chaos_sidebar_empty_desc": "clique para comprar na casa de bonecas.",

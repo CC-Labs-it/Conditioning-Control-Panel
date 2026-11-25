@@ -1,4 +1,9 @@
 {
+  "mod_text_originals": "Originaltexte",
+  "mod_text_search": "Originaltexte suchen",
+  "mod_text_export": "Liste exportieren",
+  "mod_text_count": "{0} von {1} angezeigt",
+  "mod_text_export_error": "Liste konnte nicht exportiert werden.",
   "chaos_sidebar_empty_toy": "leere Spielzeugtasche",
   "chaos_sidebar_empty_accessory": "leere Zubehörtasche",
   "chaos_sidebar_empty_desc": "zum Einkaufen im Puppenhaus klicken.",
