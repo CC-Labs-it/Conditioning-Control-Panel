@@ -1013,9 +1013,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (!_attention || !Scheduler.IsPlaying || _surfaces.Count == 0) return;
             var s = CoreSettings.Current;
             var total = MandatoryVideoScheduler.AttentionTargetCount(s.AttentionDensity, s.RandomizeAttentionTargets, _random);
-            _spawnTimes = MandatoryVideoScheduler.AttentionSpawnTimes(total, (_player?.Length ?? 0) / 1000.0, _random);
+            _spawnTimes = MandatoryVideoScheduler.AttentionSpawnTimes(total, (_player?.Length ?? 0) / 1000.0, _random, s.AttentionLifespan);
             _lastFrame = null;
-            Log.Information("Attention: {Count} targets over {Duration}s", total, (_player?.Length ?? 0) / 1000);
+            Log.Information("Attention: {Count} targets over {Duration}s", _spawnTimes.Count, (_player?.Length ?? 0) / 1000);
             NextFrame();
         }
 
