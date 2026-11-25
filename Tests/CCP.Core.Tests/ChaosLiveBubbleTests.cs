@@ -235,6 +235,18 @@ public class ChaosLiveBubbleTests
         Assert.Equal(ChaosRunEngine.BasePoints(spec.Strength) * 12 * s.TotalMult, pts2, 6);   // TotalMult after the combo/heat bump
     }
 
+    // WPF DefuseCostFor (ChaosModeService.cs:1922): a held Bound half costs DEFUSE_COST_BOUND.
+    [Fact]
+    public void A_held_bound_half_costs_half_a_defuse()
+    {
+        var s = State();
+        s.Focus = 100;
+        var (half, _) = ChaosBubbleVariants.BuildBoundPair(1);
+        ChaosFieldMath.ApplyDefuse(s, half, 3.0, viaChannel: true, free: false, 1.0, 1.0);
+        Assert.Equal(100 - ChaosTuning.DEFUSE_COST_BOUND, s.Focus);
+        Assert.Equal(ChaosTuning.DEFUSE_COST_BOUND, ChaosFieldMath.DefuseCost(half));
+    }
+
     [Fact]
     public void A_detonation_counts_then_the_cheapest_protection_pays()
     {
