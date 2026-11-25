@@ -26,13 +26,12 @@ internal static class DareLook
         _ => Color.FromRgb(0xA3, 0x95, 0xC4),
     };
 
-    public static string ToneGlyph(DareTone tone) => tone switch
+    public static IconKind ToneIcon(DareTone tone) => tone switch
     {
-        DareTone.Pics => "\uE8B9", DareTone.Minutes => "\uE823", DareTone.Video => "\uE714",
-        DareTone.Session => "\uE768", DareTone.Bubbles => "\uEA3A", DareTone.Dare => "\uE715",
-        DareTone.Sp => "\uE734", DareTone.Lock => "\uE72E", DareTone.Lockdown => "\uEA18",
-        DareTone.When => "\uE787", DareTone.CameraOn => "\uE7B3", DareTone.CameraOff => "\uED1A",
-        DareTone.Cant => "\uE711", DareTone.Duel => "\uE8AB", _ => "\uE77B",
+        DareTone.Pics => IconKind.Image, DareTone.Minutes or DareTone.When => IconKind.Clock, DareTone.Video => IconKind.Video,
+        DareTone.Session => IconKind.Play, DareTone.Bubbles => IconKind.BubbleMultiple, DareTone.Sp => IconKind.Star,
+        DareTone.Lock => IconKind.LockClosed, DareTone.Lockdown => IconKind.ShieldLock, DareTone.CameraOn => IconKind.Eye,
+        DareTone.CameraOff => IconKind.EyeOff, DareTone.Cant => IconKind.Dismiss, DareTone.Duel => IconKind.ArrowSwap, _ => IconKind.Mail,
     };
 
     // WPF 8d480c7d3f Controls/Dares/DareLook.cs:774-790: choices have a flat base edge.

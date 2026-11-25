@@ -5,14 +5,19 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Automation;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.LogicalTree;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Dialogs.Dares;
 using ConditioningControlPanel.Controls.Dares;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Dares;
 using Xunit;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
@@ -60,8 +65,46 @@ public sealed class DareSlipWindowTests
         finally { window.Close(); }
     });
 
+    [Fact]
+    public Task IntroDrawsBundledIconsNotAnIconFont() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Init();
+        var intro = DareIntro.Build(() => { });
+        Assert.Equal(new[] { IconKind.Mail, IconKind.ArrowRight, IconKind.ArrowSwap, IconKind.ArrowRight, IconKind.Clock, IconKind.ArrowRight, IconKind.Star },
+            intro.GetLogicalDescendants().OfType<IconGlyph>().Select(g => g.Kind));
+        Assert.DoesNotContain(intro.GetLogicalDescendants().OfType<TextBlock>(), t => t.FontFamily.Name.Contains("MDL2") || (t.Text ?? "").Any(c => c >= '\uE000' && c <= '\uF8FF'));
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ComposerDrawsTheSlipPressedTilesAndShortAmountReasons() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Init();
+        var window = new DareSlipWindow(new FakeService { Sparkles = 60 }, new DareFriend("friend", "Friend", null), Array.Empty<DareFriend>(), null, true, () => { });
+        try
+        {
+            Assert.Equal(DareSlipLook.SlipPaper, Assert.IsType<SolidColorBrush>(Assert.IsType<Border>(Find(window, "dares-slip")).Background).Color);
+            Click(window, "dares-tile:duel");
+            Assert.Contains(Find(window, "dares-chip:How")!.GetLogicalDescendants().OfType<TextBlock>(), t => t.FontFamily == DareSlipLook.Hand);
+            Click(window, "dares-chip:How");
+            Assert.Contains("on", Find(window, "dares-tile:duel")!.Classes);
+            Assert.DoesNotContain("on", Find(window, "dares-tile:cant")!.Classes);
+            foreach (var tag in new[] { "dares-tile:duel", "dares-tile:bubbles", "dares-when:today", "dares-stake:sp" }) Click(window, tag);
+            var shortChip = Assert.IsType<Button>(Find(window, "dares-amount:100:short"));
+            var have = Loc.GetF("dares_sp_have", 60);
+            Assert.False(shortChip.IsEnabled);
+            Assert.True(ToolTip.GetShowOnDisabled(shortChip));
+            Assert.Equal(have, ToolTip.GetTip(shortChip));
+            Assert.Equal(have, AutomationProperties.GetHelpText(shortChip));
+            Assert.True(Assert.IsType<Button>(Find(window, "dares-amount:50")).IsEnabled);
+        }
+        finally { window.Close(); }
+        return Task.CompletedTask;
+    });
+
     private sealed class FakeService : IDaresService
     {
+        public int? Sparkles { get; init; }
         public event Action? Changed { add { } remove { } }
         public DaresSnapshot Snapshot => new(true, new DaresMe(null, true, true, 0), Array.Empty<DareBet>());
         public bool IsPreview => false;
