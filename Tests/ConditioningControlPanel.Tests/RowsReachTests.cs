@@ -18,9 +18,9 @@ namespace ConditioningControlPanel.Tests;
 public class RowsReachTests
 {
     [Fact]
-    public void White_is_the_shipped_edge_and_draws_as_it_did()
+    public void DarkRim_is_the_shipped_edge_and_white_still_draws_as_it_did()
     {
-        Assert.Equal(EmblemEdge.White, EmblemPalette.ShippedEdge);
+        Assert.Equal(EmblemEdge.DarkRim, EmblemPalette.ShippedEdge); // owner 2026-11-25, ccp-bugs #1742
         var white = EmblemPalette.EdgePasses(EmblemEdge.White);
         Assert.Single(white);
         Assert.Equal(EmblemPalette.StickerEdge, white[0].Argb);

@@ -20,7 +20,7 @@ public static class EmblemPalette
     /// asks for a black outline) made the edge switchable; the owner picks from stills, white stays
     /// until then. A head reads <see cref="EdgePasses"/>, never these constants by hand.
     /// </summary>
-    public const EmblemEdge ShippedEdge = EmblemEdge.White;
+    public const EmblemEdge ShippedEdge = EmblemEdge.DarkRim;
 
     /// <summary>The dark edge: the panel's deepest ink, darker than any page ground it sits on.</summary>
     public const uint StickerEdgeDark = 0xFF0B0914;
