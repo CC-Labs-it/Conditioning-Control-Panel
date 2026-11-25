@@ -5,6 +5,8 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Localization;
+using Newtonsoft.Json;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
@@ -73,13 +75,41 @@ internal static class NativeBundleGuard
         catch (Exception ex) { Serilog.Log.Error(ex, "Could not launch native repair helper"); return false; }
     }
 
+    // SettingsService has not run yet. Read only the language and never migrate or save the profile here.
+    internal static string ReadStartupLanguage(string settingsPath, string legacyPath)
+    {
+        try
+        {
+            var path = File.Exists(settingsPath) ? settingsPath : legacyPath;
+            using var reader = new JsonTextReader(File.OpenText(path));
+            if (!reader.Read() || reader.TokenType != JsonToken.StartObject) return "en";
+            while (reader.Read() && reader.TokenType == JsonToken.PropertyName)
+            {
+                var name = reader.Value as string;
+                if (!reader.Read()) break;
+                if (string.Equals(name, "Language", StringComparison.OrdinalIgnoreCase) && reader.TokenType == JsonToken.String)
+                {
+                    var language = reader.Value as string;
+                    return Array.Exists(LocalizationManager.AvailableLanguages, item => item.Code == language) ? language! : "en";
+                }
+                reader.Skip();
+            }
+        }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "Could not read startup language"); }
+        return "en";
+    }
+
+    internal static (string Title, string Message) RecoveryText(string settingsPath, string legacyPath, string where, string details)
+    {
+        LocalizationManager.Instance.SetLanguage(ReadStartupLanguage(settingsPath, legacyPath));
+        return (Loc.Get("native_repair_title"), Loc.GetF("native_repair_message", where, details));
+    }
+
     private static void ShowGiveUp(string? root, Exception failure)
     {
         var where = root ?? Path.Combine(Path.GetTempPath(), ".net", Path.GetFileNameWithoutExtension(Environment.ProcessPath) ?? "ConditioningControlPanel");
-        MessageBox(IntPtr.Zero,
-            "Conditioning Control Panel could not load its graphics libraries, so it can't start.\n\n" +
-            "Close the app, delete this temporary folder, then launch again:\n\n" + where +
-            "\n\nIt is rebuilt automatically. If that does not help, check whether antivirus quarantined the app's files.\n\nDetails: " + failure.Message,
-            "Conditioning Control Panel - startup failed", 0x10);
+        var text = RecoveryText(Path.Combine(CorePaths.UserData, "settings.json"),
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json"), where, failure.Message);
+        MessageBox(IntPtr.Zero, text.Message, text.Title, 0x10);
     }
 }

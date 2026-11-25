@@ -8532,5 +8532,7 @@
   "remote_invalid_hypnotube_url": "недопустимый URL видео HypnoTube",
   "remote_browser_unavailable": "браузеру не удалось открыть страницу",
   "remote_browser_screen_busy": "{0} на экране",
-  "chaos_camgirl_tip": "чаевые +{0} золота"
+  "chaos_camgirl_tip": "чаевые +{0} золота",
+  "native_repair_title": "Conditioning Control Panel - ошибка запуска",
+  "native_repair_message": "Не удалось загрузить графические библиотеки, поэтому Conditioning Control Panel не может запуститься.\n\nЗакройте приложение, удалите эту временную папку и запустите его снова:\n\n{0}\n\nПапка будет создана автоматически. Если это не поможет, проверьте, не поместил ли антивирус файлы в карантин.\n\nПодробности: {1}"
 }

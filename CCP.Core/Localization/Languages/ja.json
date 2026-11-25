@@ -8532,5 +8532,7 @@
   "remote_invalid_hypnotube_url": "有効なHypnoTube動画のURLではありません",
   "remote_browser_unavailable": "ブラウザーで開けませんでした",
   "remote_browser_screen_busy": "{0}が画面に表示されています",
-  "chaos_camgirl_tip": "チップ +{0} ゴールド"
+  "chaos_camgirl_tip": "チップ +{0} ゴールド",
+  "native_repair_title": "Conditioning Control Panel - 起動に失敗しました",
+  "native_repair_message": "グラフィックライブラリを読み込めないため、Conditioning Control Panel を起動できません。\n\nアプリを閉じ、この一時フォルダーを削除してから、もう一度起動してください。\n\n{0}\n\nフォルダーは自動的に再作成されます。解決しない場合は、ウイルス対策ソフトがファイルを隔離していないか確認してください。\n\n詳細: {1}"
 }
