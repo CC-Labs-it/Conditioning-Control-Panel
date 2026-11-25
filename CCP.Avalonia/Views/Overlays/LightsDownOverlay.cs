@@ -9,11 +9,13 @@ using ConditioningControlPanel.Services.Super;
 namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 
 /// <summary>
-/// The safe window and dim layer for Lights Down. The video host does not start it yet.
+/// The safe window and dim layer for Lights Down. The video host does not start it yet:
+/// the pre-7.3.1 driver was dropped on the 7.4.1 fold; the dim and halos come from Core
+/// <c>LightsDownFullScreen</c> / <c>LightsDownFloating</c> / <c>LightsDownHoles</c> (lane L6).
 /// WPF: Services/Super/LightsDownOverlay.cs:14 and LightsDownService.cs:89.
 /// All calls are on the UI thread.
 /// </summary>
-internal static partial class LightsDownOverlay
+internal static class LightsDownOverlay
 {
     private static readonly List<Window> Windows = new();
     internal static int Count => Windows.Count;
@@ -64,15 +66,9 @@ internal static partial class LightsDownOverlay
         }
     }
 
-    /// <summary>Copy the shared frame's dim to every screen, without advancing its state.</summary>
-    internal static void Apply(LightsDownFrame frame)
-    {
-        foreach (var w in Windows) w.Opacity = Math.Clamp(frame.DimAlpha, 0, 1);
-    }
 
     internal static void CloseAll()
     {
-        StopVideo();
         foreach (var w in Windows.ToArray())
             try { w.Close(); } catch (Exception ex) { Serilog.Log.Debug(ex, "Lights Down close failed"); }
         Windows.Clear();
