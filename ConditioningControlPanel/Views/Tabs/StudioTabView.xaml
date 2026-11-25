@@ -71,7 +71,13 @@
              into it. The row's own Height setter below is what the code-behind
              overrides on Checked and ClearValue()s on Unchecked; the template's
              MinHeight is the floor that keeps every other row honest. A fixed
-             Height here would silently letterbox the tile instead. -->
+             Height here would silently letterbox the tile instead.
+
+             READABLE ROWS REACH (owner 2026-11-25): the caption is a DoorLabel (16 Bold Nunito,
+             tinted with the Studio hue, Controls/Rows/DoorLabel.cs) that WRAPS rather than trims,
+             so the resting row's 38 is a MinHeight here, not a Height: a label on two lines (long
+             languages) grows its row instead of being cut. The checked art row still writes its
+             56 into Height and clears it again. -->
         <Style x:Key="RackEntryStyle" TargetType="RadioButton">
             <Setter Property="GroupName" Value="StudioRack"/>
             <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
@@ -79,7 +85,7 @@
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Focusable" Value="True"/>
             <Setter Property="Margin" Value="0,1"/>
-            <Setter Property="Height" Value="38"/>
+            <Setter Property="MinHeight" Value="38"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <!-- Null, not the RadioButton default: TierRim below paints whatever sits in
                  BorderBrush, and only BuildRack's tiered rows put a brush there (gold =
