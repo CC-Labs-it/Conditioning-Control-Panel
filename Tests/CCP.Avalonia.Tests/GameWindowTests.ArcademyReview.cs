@@ -23,7 +23,7 @@ public sealed partial class GameWindowTests
     {
         var s = CoreSettings.Current;
         var old = (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll, s.AudioOnlySession);
-        var w = new GameWindow(GameWindow.Games["arcademy"]);
+        var w = new GameWindow(GameWindow.ArcademySpec);
         try
         {
             (s.PanicKey, s.PanicKeyEnabled, s.PanicOverridesAll, s.AudioOnlySession) = ("Escape", true, true, false);
@@ -53,7 +53,7 @@ public sealed partial class GameWindowTests
     [Fact]
     public void Arcademy_SettingWritesClampPersistAndEcho() => Run((_, _) =>
     {
-        var w = new GameWindow(GameWindow.Games["arcademy"]);
+        var w = new GameWindow(GameWindow.ArcademySpec);
         var settings = CoreSettings.Current;
         var old = (settings.ArcademySettingsJson, settings.ArcademyMasterIntensity, settings.ArcademyHideTutorial);
         var frames = new List<JObject>(); w.Posted += json => frames.Add(JObject.Parse(json));
@@ -93,7 +93,7 @@ public sealed partial class GameWindowTests
             CoreMods.ActiveModPackageProvider = () => new ModPackage(new ModManifest { Id = "test-mod" }, root.FullName, false);
             CoreMods.ActiveModIdProvider = () => "test-mod";
             s.SubliminalPool = new Dictionary<string, bool> { ["  violet  "] = true, ["off"] = false };
-            var w = new GameWindow(GameWindow.Games["arcademy"]);
+            var w = new GameWindow(GameWindow.ArcademySpec);
             try
             {
                 JObject? init = null; w.Posted += json => { var f = JObject.Parse(json); if ((string?)f["type"] == "init") init = f; };
@@ -121,7 +121,7 @@ public sealed partial class GameWindowTests
         wire.Reply.SetResult(new(HttpStatusCode.OK) { Content = new StringContent("{ok:true,receipt:{credited:1,result:{kind:'medal',medal:'silver'}}}") });
         using var http = new HttpClient(wire);
         SparklesHead.Service = new SparklesClaimService(http, () => ("account", "test-token"), "http://localhost");
-        var w = new GameWindow(GameWindow.Games["arcademy"]);
+        var w = new GameWindow(GameWindow.ArcademySpec);
         var frames = new List<JObject>(); w.Posted += json => frames.Add(JObject.Parse(json));
         var awards = new List<double>();
         try
