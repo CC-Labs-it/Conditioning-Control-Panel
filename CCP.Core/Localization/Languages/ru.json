@@ -1,4 +1,9 @@
 {
+  "mod_text_file_title": "Conditioning Control Panel - исходные тексты для замен в моде",
+  "mod_text_file_version": "Версия приложения: {0}",
+  "mod_text_file_count": "Текстов: {0}. Совпадение точное, с учётом регистра; длинные тексты заменяются первыми.",
+  "mod_text_file_howto": "Скопируйте строку целиком в левое поле замены в Mod Creator или используйте её как ключ в",
+  "mod_text_file_json": "\"textReplacements\" в mod.json. Другие тексты приложения также можно заменять.",
   "mod_text_meta_skills": "Навыки",
   "mod_text_meta_flavour": "Описание",
   "mod_text_meta_achievements": "Достижения",

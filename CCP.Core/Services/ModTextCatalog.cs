@@ -234,21 +234,24 @@ namespace ConditioningControlPanel.Services
         /// The "Export list" file: a short how-to, then one section per group with one original
         /// text per line, exactly as it must be typed into a replacement.
         /// </summary>
-        public static string ToExportText(IReadOnlyList<ModTextEntry> entries, string? appVersion)
+        public static string ToExportText(IReadOnlyList<ModTextEntry> entries, string? appVersion,
+            Func<string, string>? localize = null, Func<string, string>? groupName = null)
         {
+            string Caption(string key, string fallback) => localize?.Invoke(key) ?? fallback;
             var sb = new StringBuilder();
-            sb.AppendLine("Conditioning Control Panel - original texts for mod text replacements");
-            if (!string.IsNullOrWhiteSpace(appVersion)) sb.AppendLine("App version: " + appVersion);
-            sb.AppendLine($"{entries.Count} texts. Matching is exact and case-sensitive; longer texts are replaced first.");
-            sb.AppendLine("Copy a whole line into the left box of a replacement in the Mod Creator, or use it as a key in");
-            sb.AppendLine("\"textReplacements\" in mod.json. Any other text shown in the app can be matched too.");
+            sb.AppendLine(Caption("mod_text_file_title", "Conditioning Control Panel - original texts for mod text replacements"));
+            if (!string.IsNullOrWhiteSpace(appVersion))
+                sb.AppendLine(string.Format(Caption("mod_text_file_version", "App version: {0}"), appVersion));
+            sb.AppendLine(string.Format(Caption("mod_text_file_count", "{0} texts. Matching is exact and case-sensitive; longer texts are replaced first."), entries.Count));
+            sb.AppendLine(Caption("mod_text_file_howto", "Copy a whole line into the left box of a replacement in the Mod Creator, or use it as a key in"));
+            sb.AppendLine(Caption("mod_text_file_json", "\"textReplacements\" in mod.json. Any other text shown in the app can be matched too."));
 
             foreach (var group in Groups)
             {
                 var rows = entries.Where(e => e.Group == group).ToList();
                 if (rows.Count == 0) continue;
                 sb.AppendLine();
-                sb.AppendLine($"== {group} ({rows.Count}) ==");
+                sb.AppendLine($"== {groupName?.Invoke(group) ?? group} ({rows.Count}) ==");
                 foreach (var e in rows) sb.AppendLine(e.Text);
             }
             return sb.ToString();

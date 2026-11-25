@@ -117,7 +117,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             await using (var stream = await file.OpenWriteAsync())
             await using (var writer = new StreamWriter(stream))
-                await writer.WriteAsync(ModTextCatalog.ToExportText(entries, null));
+                await writer.WriteAsync(ModTextCatalog.ToExportText(entries, CoreReleaseContent.AppVersion, Loc.Get, LocalizeTextGroup));
             _txtStatus.Text = Loc.GetF("mod_text_export_success", entries.Count, file.Name);
         }
     }

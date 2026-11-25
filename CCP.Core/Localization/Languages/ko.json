@@ -1,4 +1,9 @@
 {
+  "mod_text_file_title": "Conditioning Control Panel - 모드 텍스트 교체용 원본 텍스트",
+  "mod_text_file_version": "앱 버전: {0}",
+  "mod_text_file_count": "텍스트 {0}개. 대소문자를 구분하여 정확히 일치시키며 긴 텍스트부터 교체합니다.",
+  "mod_text_file_howto": "전체 줄을 Mod Creator의 교체 항목 왼쪽 칸에 복사하거나 다음 키로 사용하세요.",
+  "mod_text_file_json": "mod.json의 \"textReplacements\". 앱에 표시되는 다른 텍스트도 일치시킬 수 있습니다.",
   "mod_text_meta_skills": "스킬",
   "mod_text_meta_flavour": "배경 설명",
   "mod_text_meta_achievements": "업적",

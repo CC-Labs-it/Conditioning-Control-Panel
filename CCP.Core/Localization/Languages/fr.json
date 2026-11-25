@@ -1,4 +1,9 @@
 {
+  "mod_text_file_title": "Conditioning Control Panel - textes originaux pour les remplacements",
+  "mod_text_file_version": "Version de l’application : {0}",
+  "mod_text_file_count": "{0} textes. La correspondance est exacte et sensible à la casse ; les textes les plus longs sont remplacés en premier.",
+  "mod_text_file_howto": "Copiez une ligne entière dans la case gauche d’un remplacement du Mod Creator, ou utilisez-la comme clé dans",
+  "mod_text_file_json": "\"textReplacements\" de mod.json. Tout autre texte affiché dans l’application peut aussi être remplacé.",
   "mod_text_meta_skills": "Compétences",
   "mod_text_meta_flavour": "Ambiance",
   "mod_text_meta_achievements": "Succès",

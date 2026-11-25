@@ -1,4 +1,9 @@
 {
+  "mod_text_file_title": "Conditioning Control Panel - testi originali per le sostituzioni",
+  "mod_text_file_version": "Versione app: {0}",
+  "mod_text_file_count": "{0} testi. La corrispondenza è esatta e distingue maiuscole e minuscole; i testi più lunghi vengono sostituiti per primi.",
+  "mod_text_file_howto": "Copia una riga intera nella casella sinistra di una sostituzione nel Mod Creator, oppure usala come chiave in",
+  "mod_text_file_json": "\"textReplacements\" in mod.json. Anche gli altri testi mostrati nell’app possono essere sostituiti.",
   "mod_text_meta_skills": "Abilità",
   "mod_text_meta_flavour": "Atmosfera",
   "mod_text_meta_achievements": "Obiettivi",

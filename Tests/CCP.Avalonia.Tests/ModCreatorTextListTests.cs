@@ -14,6 +14,9 @@ using Avalonia.Media;
 using Avalonia.LogicalTree;
 using Avalonia.Interactivity;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Tests;
+using Newtonsoft.Json.Linq;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -35,6 +38,15 @@ public sealed class ModCreatorTextListTests
         Assert.Contains(ModTextCatalog.Search(entries, "basic bimbo"), e => e.Text == "BASIC BIMBO");
         Assert.Empty(ModTextCatalog.Search(entries, "zzzz-not-a-text"));
         Assert.Contains("BASIC BIMBO", ModTextCatalog.ToExportText(entries, null));
+        Assert.Contains("App version: 7.2.3", ModTextCatalog.ToExportText(entries, "7.2.3"));
+        var sample = new[] { new ModTextEntry(ModTextCatalog.Other, "Flash Images", "feature label") };
+        var expected = string.Join(Environment.NewLine, new[] {
+            "Conditioning Control Panel - original texts for mod text replacements", "App version: 7.2.3",
+            "1 texts. Matching is exact and case-sensitive; longer texts are replaced first.",
+            "Copy a whole line into the left box of a replacement in the Mod Creator, or use it as a key in",
+            "\"textReplacements\" in mod.json. Any other text shown in the app can be matched too.",
+            "", "== Other (1) ==", "Flash Images", "" });
+        Assert.Equal(expected, ModTextCatalog.ToExportText(sample, "7.2.3"));
     }
 
     [Fact]
@@ -155,6 +167,10 @@ public sealed class ModCreatorTextListTests
         if (Application.Current == null)
             AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var previousLanguage = LocalizationManager.Instance.CurrentLanguage;
+        var previousVersion = CoreReleaseContent.AppVersionProvider;
+        LocalizationManager.Instance.SetLanguage("en");
+        CoreReleaseContent.AppVersionProvider = () => "9.8.7";
         var path = Path.Combine(Path.GetTempPath(), "ccp-text-" + Guid.NewGuid() + ".txt");
         var file = DispatchProxy.Create<IStorageFile, ExportFile>();
         ((ExportFile)(object)file).PathValue = path;
@@ -163,10 +179,49 @@ public sealed class ModCreatorTextListTests
         {
             var entries = new[] { new ModTextEntry(ModTextCatalog.Other, "Example", "feature label") };
             await window.WriteOriginalTexts(file, entries);
-            Assert.Contains("Example", File.ReadAllText(path));
+            var output = File.ReadAllText(path);
+            Assert.Contains("Example", output);
+            Assert.Contains("App version: 9.8.7", output);
             var status = (TextBlock)typeof(ModCreatorWindow).GetField("_txtStatus", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(window)!;
             Assert.Equal(Loc.GetF("mod_text_export_success", 1, Path.GetFileName(path)), status.Text);
         }
-        finally { window.Close(); if (File.Exists(path)) File.Delete(path); }
+        finally { window.Close(); if (File.Exists(path)) File.Delete(path); CoreReleaseContent.AppVersionProvider = previousVersion; LocalizationManager.Instance.SetLanguage(previousLanguage); }
+    });
+    [Fact]
+    public Task ExportLocalizesInstructionsAndKeepsOriginals() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current == null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia().WithInterFont()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var previous = LocalizationManager.Instance.CurrentLanguage;
+        var path = Path.Combine(Path.GetTempPath(), "ccp-text-" + Guid.NewGuid() + ".txt");
+        var file = DispatchProxy.Create<IStorageFile, ExportFile>();
+        ((ExportFile)(object)file).PathValue = path;
+        var window = new ModCreatorWindow();
+        try
+        {
+            var entries = new[] { new ModTextEntry(ModTextCatalog.Skills, "Flash Images", "skill name") };
+            var keys = new[] { "mod_text_file_title", "mod_text_file_version", "mod_text_file_count", "mod_text_file_howto", "mod_text_file_json" };
+            foreach (var (code, _, _) in LocalizationManager.AvailableLanguages)
+            {
+                var json = JObject.Parse(File.ReadAllText(Path.Combine(SourceRoots.RepoRoot, "CCP.Core", "Localization", "Languages", code + ".json")));
+                LocalizationManager.Instance.SetLanguage(code);
+                foreach (var key in keys) Assert.Equal((string?)json[key], Loc.Get(key));
+                var output = ModTextCatalog.ToExportText(entries, "9.8.7", Loc.Get, ModCreatorWindow.LocalizeTextGroup);
+                Assert.Contains(string.Format((string)json[keys[1]]!, "9.8.7"), output);
+                Assert.Contains(string.Format((string)json[keys[2]]!, 1), output);
+                Assert.Contains("textReplacements", output);
+                Assert.Contains("mod.json", output);
+                Assert.Contains("Flash Images", output);
+            }
+            LocalizationManager.Instance.SetLanguage("fr");
+            await window.WriteOriginalTexts(file, entries);
+            var exported = File.ReadAllText(path);
+            Assert.Contains("textes originaux pour les remplacements", exported);
+            Assert.Contains("== Compétences (1) ==", exported);
+            Assert.Contains("Flash Images", exported);
+            Assert.DoesNotContain("original texts for mod text replacements", exported);
+        }
+        finally { window.Close(); if (File.Exists(path)) File.Delete(path); LocalizationManager.Instance.SetLanguage(previous); }
     });
 }

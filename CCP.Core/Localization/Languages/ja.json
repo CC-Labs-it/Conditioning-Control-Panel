@@ -1,4 +1,9 @@
 {
+  "mod_text_file_title": "Conditioning Control Panel - modのテキスト置換用の元のテキスト",
+  "mod_text_file_version": "アプリのバージョン: {0}",
+  "mod_text_file_count": "{0} 件のテキスト。完全一致で大文字と小文字を区別し、長いテキストから先に置換します。",
+  "mod_text_file_howto": "行全体をMod Creatorの置換の左側の欄にコピーするか、次のキーとして使用してください。",
+  "mod_text_file_json": "mod.jsonの「textReplacements」。アプリに表示される他のテキストも対象にできます。",
   "mod_text_meta_skills": "スキル",
   "mod_text_meta_flavour": "フレーバー",
   "mod_text_meta_achievements": "実績",

@@ -1,4 +1,9 @@
 {
+  "mod_text_file_title": "Conditioning Control Panel - original texts for mod text replacements",
+  "mod_text_file_version": "App version: {0}",
+  "mod_text_file_count": "{0} texts. Matching is exact and case-sensitive; longer texts are replaced first.",
+  "mod_text_file_howto": "Copy a whole line into the left box of a replacement in the Mod Creator, or use it as a key in",
+  "mod_text_file_json": "\"textReplacements\" in mod.json. Any other text shown in the app can be matched too.",
   "mod_text_meta_skills": "Skills",
   "mod_text_meta_flavour": "Flavour",
   "mod_text_meta_achievements": "Achievements",

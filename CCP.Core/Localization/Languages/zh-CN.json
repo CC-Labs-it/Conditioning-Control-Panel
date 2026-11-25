@@ -1,4 +1,9 @@
 {
+  "mod_text_file_title": "Conditioning Control Panel - 模组文本替换的原始文本",
+  "mod_text_file_version": "应用版本：{0}",
+  "mod_text_file_count": "共 {0} 条文本。匹配区分大小写且必须完全一致，较长的文本优先替换。",
+  "mod_text_file_howto": "将整行复制到 Mod Creator 替换项的左侧输入框，或将其用作以下位置的键：",
+  "mod_text_file_json": "mod.json 中的“textReplacements”。应用中显示的其他文本也可用于匹配。",
   "mod_text_meta_skills": "技能",
   "mod_text_meta_flavour": "背景描述",
   "mod_text_meta_achievements": "成就",

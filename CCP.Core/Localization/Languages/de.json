@@ -1,4 +1,9 @@
 {
+  "mod_text_file_title": "Conditioning Control Panel - Originaltexte für Textersetzungen",
+  "mod_text_file_version": "App-Version: {0}",
+  "mod_text_file_count": "{0} Texte. Die Suche ist exakt und unterscheidet Groß- und Kleinschreibung; längere Texte werden zuerst ersetzt.",
+  "mod_text_file_howto": "Kopiere eine ganze Zeile in das linke Feld einer Ersetzung im Mod Creator oder verwende sie als Schlüssel in",
+  "mod_text_file_json": "\"textReplacements\" in mod.json. Andere Texte in der App können ebenfalls ersetzt werden.",
   "mod_text_meta_skills": "Fähigkeiten",
   "mod_text_meta_flavour": "Hintergrund",
   "mod_text_meta_achievements": "Erfolge",
