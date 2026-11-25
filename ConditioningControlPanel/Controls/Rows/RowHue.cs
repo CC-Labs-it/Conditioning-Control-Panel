@@ -63,6 +63,18 @@ namespace ConditioningControlPanel.Controls.Rows
         public static void SetSliderFill(DependencyObject d, Brush? value) => d.SetValue(SliderFillProperty, value);
 
         /// <summary>
+        /// The sticker edge every <see cref="OptionEmblem"/> below draws (inherited, ccp-bugs #1742).
+        /// Default <see cref="EmblemPalette.ShippedEdge"/>; set it on a page or window root to switch
+        /// a whole surface (stills, or a later user choice) without touching the emblems.
+        /// </summary>
+        public static readonly DependencyProperty EdgeProperty = DependencyProperty.RegisterAttached(
+            "Edge", typeof(EmblemEdge), typeof(RowHue),
+            new FrameworkPropertyMetadata(EmblemPalette.ShippedEdge, FrameworkPropertyMetadataOptions.Inherits));
+
+        public static EmblemEdge GetEdge(DependencyObject d) => (EmblemEdge)d.GetValue(EdgeProperty);
+        public static void SetEdge(DependencyObject d, EmblemEdge value) => d.SetValue(EdgeProperty, value);
+
+        /// <summary>
         /// The hue a row part draws in: its own <paramref name="own"/> when set, else the inherited
         /// <see cref="HueProperty"/>, else <paramref name="fallback"/> (PinkBrush), else the stock pink.
         /// </summary>
@@ -100,5 +112,7 @@ namespace ConditioningControlPanel.Controls.Rows
         public const double UnitSize = 11;
         /// <summary>Emblem box beside a label.</summary>
         public const double EmblemSize = 34;
+        /// <summary>A door list entry's caption (<see cref="DoorLabel"/>): the row label's size.</summary>
+        public const double DoorSize = LabelSize;
     }
 }

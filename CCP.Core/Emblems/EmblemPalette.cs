@@ -14,6 +14,36 @@ public static class EmblemPalette
     /// <summary>Sticker look: the white edge (CSS 1.1 px at a 34 px emblem), the dark offset below and the tilt.</summary>
     public const uint StickerEdge = White;
     public const double StickerEdgeDip = 1.1;
+
+    /// <summary>
+    /// The edge an emblem ships with. ccp-bugs #1742 (a tester: the emblems get lost on the dark panel,
+    /// asks for a black outline) made the edge switchable; the owner picks from stills, white stays
+    /// until then. A head reads <see cref="EdgePasses"/>, never these constants by hand.
+    /// </summary>
+    public const EmblemEdge ShippedEdge = EmblemEdge.White;
+
+    /// <summary>The dark edge: the panel's deepest ink, darker than any page ground it sits on.</summary>
+    public const uint StickerEdgeDark = 0xFF0B0914;
+    /// <summary>A dark edge is drawn a little wider than the white one: dark on dark needs the weight to read.</summary>
+    public const double StickerEdgeDarkDip = 1.4;
+    /// <summary>The thin light rim outside a dark edge (<see cref="EmblemEdge.DarkRim"/>): TextLight at 85%.</summary>
+    public const uint StickerRim = 0xD9F0F0F5;
+    public const double StickerRimDip = 0.7;
+
+    /// <summary>
+    /// The edge passes of <paramref name="edge"/>, OUTERMOST FIRST: each is a colour and the width
+    /// (DIP, at a 34 px emblem) it reaches beyond the shapes. A head strokes the silhouette once per
+    /// pass in this order, then draws the inks on top.
+    /// </summary>
+    public static IReadOnlyList<(uint Argb, double Dip)> EdgePasses(EmblemEdge edge) => edge switch
+    {
+        EmblemEdge.Dark => new[] { (StickerEdgeDark, StickerEdgeDarkDip) },
+        EmblemEdge.DarkRim => new[] { (StickerRim, StickerEdgeDarkDip + StickerRimDip), (StickerEdgeDark, StickerEdgeDarkDip) },
+        _ => new[] { (StickerEdge, StickerEdgeDip) },
+    };
+
+    /// <summary>How far the outermost pass of <paramref name="edge"/> reaches (the shadow's silhouette).</summary>
+    public static double EdgeReachDip(EmblemEdge edge) => EdgePasses(edge)[0].Dip;
     public const uint StickerShadow = 0xFF000000;
     public const double StickerShadowOpacity = 0.45;
     public const double StickerShadowDyDip = 2.0;
