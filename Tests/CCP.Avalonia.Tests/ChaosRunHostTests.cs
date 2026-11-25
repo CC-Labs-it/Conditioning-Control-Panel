@@ -383,13 +383,32 @@ public sealed class ChaosRunHostTests
     });
 
     [Fact]
+    public async Task Ripple_offer_test_restores_the_previous_meta_state()
+    {
+        var previous = ChaosMeta.State;
+        bool seen = previous.SeenRippleTeach;
+        try
+        {
+            await Ripple_offer_waits_for_ready_and_repeats_only_until_first_cast();
+            Assert.Same(previous, ChaosMeta.State);
+            Assert.Equal(seen, ChaosMeta.State.SeenRippleTeach);
+        }
+        finally
+        {
+            typeof(ChaosMeta).GetProperty(nameof(ChaosMeta.State))!.SetValue(null, previous);
+        }
+    }
+
+    [Fact]
     public async Task Ripple_offer_waits_for_ready_and_repeats_only_until_first_cast()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
         {
-            Setup(); FreshMeta();
+            Setup();
+            var previous = ChaosMeta.State;
             try
             {
+                FreshMeta();
                 ChaosRunHost.StartRun(Cfg());
                 ChaosRunHost.Overlay!.FinishCountdown();
                 ChaosRunHost.StopTimerForTests();
@@ -411,7 +430,11 @@ public sealed class ChaosRunHostTests
                 Ticks(25);
                 Assert.DoesNotContain(line, ChaosRunHost.State!.RecentEvents);
             }
-            finally { ChaosRunHost.ForceShutdown(); }
+            finally
+            {
+                try { ChaosRunHost.ForceShutdown(); }
+                finally { typeof(ChaosMeta).GetProperty(nameof(ChaosMeta.State))!.SetValue(null, previous); }
+            }
             return Task.CompletedTask;
         });
     }
