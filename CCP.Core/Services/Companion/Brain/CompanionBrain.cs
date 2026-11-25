@@ -632,13 +632,49 @@ namespace ConditioningControlPanel.Services.Companion.Brain
         {
             try
             {
-                if (ChatSession.TubeLineIsNew(Session.Turns, text, DateTime.UtcNow))
-                    Session.Append(TurnKind.TubeLine, text!.Trim());
+                if (!ChatSession.TubeLineIsNew(Session.Turns, text, DateTime.UtcNow)) return;
+                // A line asked for before a persona, identity, account or forget fence moved and
+                // shown after it is the old conversation's voice: it never reaches the prompt.
+                if (ChatSession.IssuedUnderAnotherStamp(IssuedLinesSnapshot(), text, LineStamp()))
+                {
+                    App.Logger?.Debug("CompanionBrain: tube line from before a fence kept out of history");
+                    return;
+                }
+                Session.Append(TurnKind.TubeLine, text!.Trim());
             }
             catch (Exception ex)
             {
                 Log.Debug("CompanionBrain: tube line failed: {Error}", ex.Message);
             }
+        }
+
+        private readonly object _issuedLock = new();
+        private readonly Queue<(string Text, string Stamp)> _issuedLines = new();
+        private const int IssuedLineMemory = 24;
+
+        /// <summary>The conversation stamp a line is asked for under: the revision (forget, account)
+        /// plus the context stamp (account id, persona identity and voice fences).</summary>
+        internal string LineStamp()
+        {
+            try { return System.Threading.Volatile.Read(ref _conversationRevision) + "|" + _contextStamp(); }
+            catch { return string.Empty; }
+        }
+
+        /// <summary>An AI line came back from a request started under <paramref name="stamp"/>
+        /// (<c>AiServiceStrategy</c> records every one). <see cref="NoteTubeLine"/> reads it back.</summary>
+        internal void NoteIssuedLine(string? text, string stamp)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return;
+            lock (_issuedLock)
+            {
+                _issuedLines.Enqueue((text!, stamp));
+                while (_issuedLines.Count > IssuedLineMemory) _issuedLines.Dequeue();
+            }
+        }
+
+        private IReadOnlyList<(string Text, string Stamp)> IssuedLinesSnapshot()
+        {
+            lock (_issuedLock) return _issuedLines.ToList();
         }
 
         /// <summary>The active companion's display name, or null when the mod stack isn't up (tests).</summary>

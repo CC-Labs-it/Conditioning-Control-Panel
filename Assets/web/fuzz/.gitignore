@@ -1,0 +1,7 @@
+dev/shots/
+
+# Machine-local music pack for the shared preview.
+/assets/lofi/audio/
+# Racing Thoughts clips carry burned-in Scrolller pictures: the licence allows no lasting copy, so never commit them
+/assets/race/*.mp4
+/assets/race/*.jpg

@@ -141,7 +141,29 @@ namespace ConditioningControlPanel.Services.AIService
 
         public Task<AiReplyResult> SendAsync(System.Collections.Generic.IReadOnlyList<ChatMessage> messages,
             AiCallOptions options, System.Threading.CancellationToken cancellationToken = default)
-            => Active.SendAsync(messages, options, cancellationToken);
+            => Stamped(() => Active.SendAsync(messages, options, cancellationToken));
+
+        // Every AI line is recorded with the conversation stamp its request started under, so a line
+        // that lands on the tube after a persona, identity, account or forget fence never reaches the
+        // prompt as history (CompanionBrain.NoteTubeLine).
+        private static async Task<string?> Stamped(Func<Task<string?>> call)
+        {
+            var brain = App.Brain;
+            var stamp = brain?.LineStamp();
+            var text = await call().ConfigureAwait(false);
+            if (brain != null && stamp != null) brain.NoteIssuedLine(text, stamp);
+            return text;
+        }
+
+        private static async Task<AiReplyResult> Stamped(Func<Task<AiReplyResult>> call)
+        {
+            var brain = App.Brain;
+            var stamp = brain?.LineStamp();
+            var result = await call().ConfigureAwait(false);
+            if (brain != null && stamp != null && result != null && result.IsAiGenerated)
+                brain.NoteIssuedLine(result.Text, stamp);
+            return result!;
+        }
 
         // ===================== Train 1 legacy adapters =====================
         //
@@ -174,7 +196,7 @@ namespace ConditioningControlPanel.Services.AIService
             if (BrainAdapter.ShouldRouteChat(brain, CompanionBrain.IsEnabled, isUserMessage))
                 return brain!.ChatAsync(userInput);
 
-            return Active.GetBambiReplyExAsync(userInput, isUserMessage);
+            return Stamped(() => Active.GetBambiReplyExAsync(userInput, isUserMessage));
         }
 
         [Obsolete(AiLegacyApi.OneShotObsolete)]
@@ -188,7 +210,7 @@ namespace ConditioningControlPanel.Services.AIService
                     FrameFormatter.AwarenessEvent(detectedName, category, serviceName, pageTitle, duration));
             }
 
-            return Active.GetAwarenessReactionAsync(detectedName, category, serviceName, pageTitle, duration);
+            return Stamped(() => Active.GetAwarenessReactionAsync(detectedName, category, serviceName, pageTitle, duration));
         }
 
         [Obsolete(AiLegacyApi.OneShotObsolete)]
@@ -198,7 +220,7 @@ namespace ConditioningControlPanel.Services.AIService
             if (BrainAdapter.ShouldRouteAmbient(brain, CompanionBrain.IsEnabled, IsAvailable, promptTemplate: null))
                 return BrainAdapter.ReactAsync(brain!, FrameFormatter.StillOnEvent(displayName, category, duration));
 
-            return Active.GetStillOnReactionAsync(displayName, category, duration);
+            return Stamped(() => Active.GetStillOnReactionAsync(displayName, category, duration));
         }
 
         [Obsolete(AiLegacyApi.OneShotObsolete)]
@@ -208,7 +230,7 @@ namespace ConditioningControlPanel.Services.AIService
             if (BrainAdapter.ShouldRouteAmbient(brain, CompanionBrain.IsEnabled, IsAvailable, promptTemplate))
                 return BrainAdapter.ReactAsync(brain!, FrameFormatter.KeywordEvent(keyword));
 
-            return Active.GetKeywordCommentAsync(keyword, promptTemplate);
+            return Stamped(() => Active.GetKeywordCommentAsync(keyword, promptTemplate));
         }
 
         [Obsolete(AiLegacyApi.OneShotObsolete)]
@@ -218,7 +240,7 @@ namespace ConditioningControlPanel.Services.AIService
             if (BrainAdapter.ShouldRouteAmbient(brain, CompanionBrain.IsEnabled, IsAvailable, promptTemplate))
                 return BrainAdapter.ReactAsync(brain!, FrameFormatter.LockScreenEvent(sentance, mistakes, amount));
 
-            return Active.GetLockScreenReaction(sentance, mistakes, amount, promptTemplate);
+            return Stamped(() => Active.GetLockScreenReaction(sentance, mistakes, amount, promptTemplate));
         }
 
         [Obsolete(AiLegacyApi.OneShotObsolete)]
@@ -228,7 +250,7 @@ namespace ConditioningControlPanel.Services.AIService
             if (BrainAdapter.ShouldRouteAmbient(brain, CompanionBrain.IsEnabled, IsAvailable, promptTemplate))
                 return BrainAdapter.ReactAsync(brain!, FrameFormatter.VideoDoneEvent(title));
 
-            return Active.GetVideoDoneReaction(title, promptTemplate);
+            return Stamped(() => Active.GetVideoDoneReaction(title, promptTemplate));
         }
 
 #pragma warning restore CS0618

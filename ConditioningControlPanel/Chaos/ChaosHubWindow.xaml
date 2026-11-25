@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
+        xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:skia="clr-namespace:SkiaSharp.Views.WPF;assembly=SkiaSharp.Views.WPF"
         Title="the Dollhouse"
@@ -342,13 +343,13 @@
                 <!-- SETTINGS: run setup -->
                 <ScrollViewer x:Name="PanelRun" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
                     <StackPanel>
-                        <StackPanel x:Name="SetupBody">
+                        <StackPanel x:Name="SetupBody" rows:RowHue.Hue="#FFE84393">
                         <Border Style="{StaticResource CardStyle}">
                             <StackPanel>
                                 <TextBlock Text="THE DESCENT" Style="{StaticResource SectionHdr}" Margin="0,0,0,2"/>
                                 <TextBlock Text="dress it up however you like. it ends the same way." Foreground="{StaticResource TextMut}" FontSize="11" Margin="0,0,0,10"/>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                    <TextBlock Text="Difficulty" Style="{StaticResource Lbl}"/>
+                                    <rows:RowLabel Text="Difficulty" Emblem="Much" MinWidth="150" Margin="0,0,10,0"/>
                                     <StackPanel x:Name="GrpDifficulty" Orientation="Horizontal">
                                         <ToggleButton Style="{StaticResource Seg}" Tag="Easy" Content="Gentle" Click="Segment_Click"/>
                                         <ToggleButton x:Name="SegMedium" Style="{StaticResource Seg}" Tag="Medium" Content="Teasing" Click="Segment_Click"/>
@@ -357,7 +358,7 @@
                                     </StackPanel>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                    <TextBlock Text="Length" Style="{StaticResource Lbl}"/>
+                                    <rows:RowLabel Text="Length" Emblem="Long" MinWidth="150" Margin="0,0,10,0"/>
                                     <StackPanel x:Name="GrpLength" Orientation="Horizontal">
                                         <ToggleButton Style="{StaticResource Seg}" Tag="120" Content="2 min" Click="Segment_Click"/>
                                         <ToggleButton Style="{StaticResource Seg}" Tag="180" Content="3 min" Click="Segment_Click"/>
@@ -365,7 +366,7 @@
                                     </StackPanel>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                    <TextBlock Text="Motion" Style="{StaticResource Lbl}"/>
+                                    <rows:RowLabel Text="Motion" Emblem="Motion" MinWidth="150" Margin="0,0,10,0"/>
                                     <StackPanel x:Name="GrpMotion" Orientation="Horizontal">
                                         <ToggleButton Style="{StaticResource Seg}" Tag="Mixed" Content="Mixed" Click="Segment_Click"/>
                                         <ToggleButton Style="{StaticResource Seg}" Tag="FloatUp" Content="Float" Click="Segment_Click"/>
@@ -381,27 +382,45 @@
                         <Border Style="{StaticResource CardStyle}">
                             <StackPanel>
                                 <TextBlock Text="SENSATION" Style="{StaticResource SectionHdr}"/>
-                                <CheckBox x:Name="ChkShake" Style="{StaticResource Chk}" Content="Screen shake"/>
+                                <CheckBox x:Name="ChkShake" Style="{StaticResource Chk}" VerticalContentAlignment="Center">
+                                    <rows:RowLabel Text="Screen shake" Emblem="Motion" IsOn="{Binding IsChecked, ElementName=ChkShake}"/>
+                                </CheckBox>
                                 <Slider x:Name="SldShake" Minimum="0" Maximum="1" Margin="0,0,0,6"/>
-                                <CheckBox x:Name="ChkFlashes" Style="{StaticResource Chk}" Content="Color flashes"/>
-                                <CheckBox x:Name="ChkSkiaFx" Style="{StaticResource Chk}" Content="Enhanced FX (bloom &amp; bursts)"
-                                          ToolTip="Additive Skia-rendered glow: rabbit trail, cursor halo, lightning, bubble pop bursts &amp; glassy shine. Off = the classic effects."/>
-                                <CheckBox x:Name="ChkPinTop" Style="{StaticResource Chk}" Content="Keep on top"
-                                          ToolTip="Pins the chaos layer above other windows. Off = other apps can come forward over the descent."/>
-                                <CheckBox x:Name="ChkSharedHost" Style="{StaticResource Chk}" Content="Smooth bubbles (experimental)"
-                                          ToolTip="Renders all bubbles on one shared layer instead of a window each, so clicks stay responsive when the screen is busy. Experimental — turn off if bubbles misbehave."/>
-                                <TextBlock Text="Effect intensity" Foreground="{StaticResource TextMut}" FontSize="11" Margin="0,6,0,0"/>
+                                <CheckBox x:Name="ChkFlashes" Style="{StaticResource Chk}" VerticalContentAlignment="Center">
+                                    <rows:RowLabel Text="Color flashes" Emblem="Colour" IsOn="{Binding IsChecked, ElementName=ChkFlashes}"/>
+                                </CheckBox>
+                                <CheckBox x:Name="ChkSkiaFx" Style="{StaticResource Chk}"
+                                          ToolTip="Additive Skia-rendered glow: rabbit trail, cursor halo, lightning, bubble pop bursts &amp; glassy shine. Off = the classic effects." VerticalContentAlignment="Center">
+                                    <rows:RowLabel Text="Enhanced FX (bloom &amp; bursts)" Emblem="Glow" IsOn="{Binding IsChecked, ElementName=ChkSkiaFx}"/>
+                                </CheckBox>
+                                <CheckBox x:Name="ChkPinTop" Style="{StaticResource Chk}"
+                                          ToolTip="Pins the chaos layer above other windows. Off = other apps can come forward over the descent." VerticalContentAlignment="Center">
+                                    <rows:RowLabel Text="Keep on top" Emblem="Layers" IsOn="{Binding IsChecked, ElementName=ChkPinTop}"/>
+                                </CheckBox>
+                                <CheckBox x:Name="ChkSharedHost" Style="{StaticResource Chk}"
+                                          ToolTip="Renders all bubbles on one shared layer instead of a window each, so clicks stay responsive when the screen is busy. Experimental — turn off if bubbles misbehave." VerticalContentAlignment="Center">
+                                    <rows:RowLabel Text="Smooth bubbles (experimental)" Emblem="Perf" IsOn="{Binding IsChecked, ElementName=ChkSharedHost}"/>
+                                </CheckBox>
+                                <rows:RowLabel Text="Effect intensity" Emblem="Much" HorizontalAlignment="Left" Margin="0,6,0,0"/>
                                 <Slider x:Name="SldEffect" Minimum="0.2" Maximum="1.5"/>
-                                <CheckBox x:Name="ChkAnnouncer" Style="{StaticResource Chk}" Content="Announcements" Margin="0,8,0,0"/>
+                                <CheckBox x:Name="ChkAnnouncer" Style="{StaticResource Chk}" Margin="0,8,0,0" VerticalContentAlignment="Center">
+                                    <rows:RowLabel Text="Announcements" Emblem="Bell" IsOn="{Binding IsChecked, ElementName=ChkAnnouncer}"/>
+                                </CheckBox>
                                 <TextBlock Text="THE MADAM" Style="{StaticResource SectionHdr}" Margin="0,12,0,0"/>
-                                <CheckBox x:Name="ChkNarrative" Style="{StaticResource Chk}" Content="Narrator (voiced reactions)"
-                                          ToolTip="A reactive narrator speaks voiced + text lines during a descent."/>
-                                <CheckBox x:Name="ChkBackdrop" Style="{StaticResource Chk}" Content="Zone backdrops" Margin="0,4,0,0"
-                                          ToolTip="Per-zone backdrop plates under the bubbles. Off = classic Chaos over your live desktop."/>
-                                <TextBlock Text="Backdrop opacity" Foreground="{StaticResource TextMut}" FontSize="11" Margin="0,6,0,0"/>
+                                <CheckBox x:Name="ChkNarrative" Style="{StaticResource Chk}"
+                                          ToolTip="A reactive narrator speaks voiced + text lines during a descent." VerticalContentAlignment="Center">
+                                    <rows:RowLabel Text="Narrator (voiced reactions)" Emblem="Mic" IsOn="{Binding IsChecked, ElementName=ChkNarrative}"/>
+                                </CheckBox>
+                                <CheckBox x:Name="ChkBackdrop" Style="{StaticResource Chk}" Margin="0,4,0,0"
+                                          ToolTip="Per-zone backdrop plates under the bubbles. Off = classic Chaos over your live desktop." VerticalContentAlignment="Center">
+                                    <rows:RowLabel Text="Zone backdrops" Emblem="Layers" IsOn="{Binding IsChecked, ElementName=ChkBackdrop}"/>
+                                </CheckBox>
+                                <rows:RowLabel Text="Backdrop opacity" Emblem="Clear" HorizontalAlignment="Left" Margin="0,6,0,0"/>
                                 <Slider x:Name="SldBackdropOpacity" Minimum="0" Maximum="1"/>
-                                <CheckBox x:Name="ChkTunnel" Style="{StaticResource Chk}" Content="3D rabbit-hole tunnel" Margin="0,10,0,0"
-                                          ToolTip="An endless procedurally-generated 3D tunnel rendered behind the game. Heavier on the GPU — default off."/>
+                                <CheckBox x:Name="ChkTunnel" Style="{StaticResource Chk}" Margin="0,10,0,0"
+                                          ToolTip="An endless procedurally-generated 3D tunnel rendered behind the game. Heavier on the GPU — default off." VerticalContentAlignment="Center">
+                                    <rows:RowLabel Text="3D rabbit-hole tunnel" Emblem="Spiral" IsOn="{Binding IsChecked, ElementName=ChkTunnel}"/>
+                                </CheckBox>
                             </StackPanel>
                         </Border>
 
@@ -411,11 +430,11 @@
                                 <TextBlock x:Name="TxtKeybindsSub" Text="your equipped toy fires on this, mid-descent. the second pocket isn't sewn yet."
                                            Foreground="{StaticResource TextMut}" FontSize="11" Margin="0,0,0,10"/>
                                 <StackPanel x:Name="RowToyKey1" Orientation="Horizontal" Margin="0,0,0,8">
-                                    <TextBlock Text="Toy 1" Style="{StaticResource Lbl}"/>
+                                    <rows:RowLabel Text="Toy 1" Emblem="Click" MinWidth="150" Margin="0,0,10,0"/>
                                     <ComboBox x:Name="CmbAccKey1" Width="70" SelectionChanged="AccKey_Changed"/>
                                 </StackPanel>
                                 <StackPanel x:Name="RowToyKey2" Orientation="Horizontal">
-                                    <TextBlock Text="Toy 2" Style="{StaticResource Lbl}"/>
+                                    <rows:RowLabel Text="Toy 2" Emblem="Click" MinWidth="150" Margin="0,0,10,0"/>
                                     <ComboBox x:Name="CmbAccKey2" Width="70" SelectionChanged="AccKey_Changed"/>
                                 </StackPanel>
                             </StackPanel>
@@ -447,17 +466,23 @@
                                         <Button Content="Tease" Tag="Tease" Click="Preset_Click" Style="{StaticResource Stepper}" Width="Auto" Padding="10,4" Margin="0,0,6,0"/>
                                         <Button Content="Flash-only" Tag="Flash-only" Click="Preset_Click" Style="{StaticResource Stepper}" Width="Auto" Padding="10,4"/>
                                     </StackPanel>
-                                    <CheckBox x:Name="ChkDarters" Style="{StaticResource Chk}" Content="White rabbits (fast bonus catch targets)" Margin="0,12,0,0"/>
+                                    <CheckBox x:Name="ChkDarters" Style="{StaticResource Chk}" Margin="0,12,0,0" VerticalContentAlignment="Center">
+                                        <rows:RowLabel Text="White rabbits (fast bonus catch targets)" Emblem="Fast" IsOn="{Binding IsChecked, ElementName=ChkDarters}"/>
+                                    </CheckBox>
                                 </StackPanel>
                             </Border>
 
                             <Border Style="{StaticResource CardStyle}">
                                 <StackPanel>
                                     <TextBlock Text="MANTRAS &amp; LOOPS" Style="{StaticResource SectionHdr}"/>
-                                    <CheckBox x:Name="ChkBoonDraft" Style="{StaticResource Chk}" Content="Mantra draft between loops"/>
-                                    <CheckBox x:Name="ChkCurses" Style="{StaticResource Chk}" Content="Allow sins"/>
+                                    <CheckBox x:Name="ChkBoonDraft" Style="{StaticResource Chk}" VerticalContentAlignment="Center">
+                                        <rows:RowLabel Text="Mantra draft between loops" Emblem="Loop" IsOn="{Binding IsChecked, ElementName=ChkBoonDraft}"/>
+                                    </CheckBox>
+                                    <CheckBox x:Name="ChkCurses" Style="{StaticResource Chk}" VerticalContentAlignment="Center">
+                                        <rows:RowLabel Text="Allow sins" Emblem="Much" IsOn="{Binding IsChecked, ElementName=ChkCurses}"/>
+                                    </CheckBox>
                                     <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                        <TextBlock Text="Loops" Foreground="{StaticResource TextDim}" FontSize="12" VerticalAlignment="Center" Width="50"/>
+                                        <rows:RowLabel Text="Loops" Emblem="Loop" Margin="0,0,10,0"/>
                                         <Button Style="{StaticResource Stepper}" Content="−" Tag="waves-" Click="Stepper_Click"/>
                                         <TextBlock x:Name="TxtWaves" Foreground="White" FontWeight="Bold" FontSize="14" Width="34" TextAlignment="Center" VerticalAlignment="Center"/>
                                         <Button Style="{StaticResource Stepper}" Content="+" Tag="waves+" Click="Stepper_Click"/>

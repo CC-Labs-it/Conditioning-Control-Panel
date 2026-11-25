@@ -162,6 +162,14 @@ namespace ConditioningControlPanel.Services.AIService
             return builder.Uri;
         }
 
+        /// <summary>The configured endpoint as a session key for <see cref="OwnEndpointContextFit"/>
+        /// (memory only, never logged: a bring-your-own URL can carry a key).</summary>
+        internal static string CurrentEndpointKey()
+        {
+            try { return GetConfiguredEndpointBaseUri().AbsoluteUri; }
+            catch { return string.Empty; }
+        }
+
         private static string GetConfiguredModel()
         {
             var model = Settings?.OpenAiCompatibleModel;
@@ -416,7 +424,8 @@ namespace ConditioningControlPanel.Services.AIService
         /// </summary>
         private async Task<string?> SendChatCoreAsync(List<MessageDto> messages, string? newestUserInput,
             bool returnRefusalSentinel, string purpose, CancellationToken cancellationToken = default,
-            AiCallOptions? options = null, Action<IReadOnlyList<AiCommandData>>? proposedCommands = null)
+            AiCallOptions? options = null, Action<IReadOnlyList<AiCommandData>>? proposedCommands = null,
+            int shedHead = -1)
         {
             if (CoreSettings.Service?.Current?.OfflineMode == true)
             {
@@ -477,7 +486,11 @@ namespace ConditioningControlPanel.Services.AIService
 
             BumpDailyCounter();
 
-            for (var attempt = 0; attempt < (options?.CompanionV2 == true ? 1 : 2); attempt++)
+            // A multi-turn window (shedHead >= 0) refused for context size sheds history to the
+            // cloud fit and is sent once more (OwnEndpointContextFit).
+            var maxAttempts = options?.CompanionV2 == true ? 1 : 2;
+            var contextRetried = false;
+            for (var attempt = 0; attempt < maxAttempts; attempt++)
             {
                 try
                 {
@@ -495,6 +508,14 @@ namespace ConditioningControlPanel.Services.AIService
                     if (!response.IsSuccessStatusCode)
                     {
                         var status = (int)response.StatusCode;
+                        if (shedHead >= 0 && OwnEndpointContextFit.TryShedForRetry(status, json, contextRetried,
+                                messages, shedHead, CurrentEndpointKey()))
+                        {
+                            contextRetried = true;
+                            maxAttempts++;
+                            meterInputChars = messages.Sum(m => m.Content?.Length ?? 0);
+                            continue;
+                        }
                         var retryableStatus = status == 429 || status >= 500;
 
                         if (options?.CompanionV2 != true && attempt == 0 && retryableStatus)
@@ -766,11 +787,16 @@ namespace ConditioningControlPanel.Services.AIService
 
             var newestUser = NewestUserText(list);
 
+            // Leading system message(s) and the effects block never shed on a context retry.
+            var shedHead = 0;
+            while (shedHead < list.Count && list[shedHead].Role == "system") shedHead++;
+            shedHead += dtos.Count - list.Count;
+
             IReadOnlyList<AiCommandData>? proposedCommands = null;
             var reply = await SendChatCoreAsync(dtos, newestUser,
                 returnRefusalSentinel: options.Interactive, purpose: options.MeterPurpose,
                 cancellationToken: cancellationToken, options: options,
-                proposedCommands: commands => proposedCommands = commands).ConfigureAwait(false);
+                proposedCommands: commands => proposedCommands = commands, shedHead: shedHead).ConfigureAwait(false);
 
             var refusalSource = ModerationRefusal.GetSource(reply);
             if (refusalSource.HasValue)

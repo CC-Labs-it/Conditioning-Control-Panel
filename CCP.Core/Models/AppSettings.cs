@@ -2915,6 +2915,22 @@ namespace ConditioningControlPanel.Models
             set { _deckFlips = SuperCore.DeckOptions.ClampFlips(value); OnPropertyChanged(); }
         }
 
+        private int _deckFlipsFewest, _deckFlipsMost;
+        /// <summary>Deck "Fewest flips" (ccp-bugs #1636): the low end of the break roll, 1..9. 0 (every
+        /// older settings file and preset) = follow <see cref="DeckFlips"/>, one either side.</summary>
+        public int DeckFlipsFewest
+        {
+            get => _deckFlipsFewest;
+            set { _deckFlipsFewest = SuperCore.DeckOptions.ClampEnd(value); OnPropertyChanged(); }
+        }
+
+        /// <summary>Deck "Most flips": the high end of the break roll, 1..9. 0 = follow <see cref="DeckFlips"/>.</summary>
+        public int DeckFlipsMost
+        {
+            get => _deckFlipsMost;
+            set { _deckFlipsMost = SuperCore.DeckOptions.ClampEnd(value); OnPropertyChanged(); }
+        }
+
         private int _deckBreakReach = SuperCore.DeckOptions.ReachDefault;
         /// <summary>Deck: how far a break knocks the cards and bubbles around it, percent of stock.</summary>
         public int DeckBreakReach
@@ -5700,6 +5716,22 @@ namespace ConditioningControlPanel.Models
             set { _whirlpoolStayCentred = value; OnPropertyChanged(); }
         }
 
+        // Whirlpool: percent of full growth it never shrinks below (ccp-bugs #1719). 0 = as shipped.
+        private int _whirlpoolSmallest = SuperCore.WhirlpoolOptions.SmallestDefault;
+        public int WhirlpoolSmallest
+        {
+            get => _whirlpoolSmallest;
+            set { _whirlpoolSmallest = SuperCore.WhirlpoolOptions.ClampSmallest(value); OnPropertyChanged(); }
+        }
+
+        // Whirlpool: grows while the mouse moves or clicks, calms at rest (ccp-bugs #1707). Off = as shipped.
+        private bool _whirlpoolRestless;
+        public bool WhirlpoolRestless
+        {
+            get => _whirlpoolRestless;
+            set { _whirlpoolRestless = value; OnPropertyChanged(); }
+        }
+
         // Whirlpool: seconds a Loom spiral holds before it melts into a new one ("Always new" only).
         private int _whirlpoolNewEvery = SuperCore.WhirlpoolOptions.HoldDefault;
         public int WhirlpoolNewEvery
@@ -5959,6 +5991,26 @@ namespace ConditioningControlPanel.Models
         {
             get => _gentleSpeed;
             set { _gentleSpeed = Services.Safety.GentleVisuals.ClampSpeed(value); OnPropertyChanged(); }
+        }
+
+        private bool _pinkComfortLimitOn;
+        /// <summary>
+        /// Accessibility, "Limit pink filter to" (2026-11-23): off by default. When on, the pink tint
+        /// and the V2 fog never paint stronger than <see cref="PinkComfortLimitPct"/>, whatever a
+        /// preset, session, mod or ramp asks for. A global preference like Gentle visuals: never in
+        /// SessionSettings, Preset or the remote generators. Read through Services/Safety/PinkComfortLimit.
+        /// </summary>
+        public bool PinkComfortLimitOn
+        {
+            get => _pinkComfortLimitOn;
+            set { _pinkComfortLimitOn = value; OnPropertyChanged(); }
+        }
+
+        private int _pinkComfortLimitPct = Looks.PinkComfort.DefaultPct;
+        public int PinkComfortLimitPct
+        {
+            get => _pinkComfortLimitPct;
+            set { _pinkComfortLimitPct = Looks.PinkComfort.ClampPct(value); OnPropertyChanged(); }
         }
 
         private Services.BackRoom.BackRoomFxIntensity _backRoomFxIntensity = Services.BackRoom.BackRoomFxIntensity.Normal;

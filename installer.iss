@@ -13,7 +13,7 @@
 ; - Store install path in registry for Velopack updates
 
 #define MyAppName "Conditioning Control Panel"
-#define MyAppVersion "7.3.8"
+#define MyAppVersion "7.4.1"
 #define MyAppPublisher "CodeBambi"
 #define MyAppURL "https://github.com/CC-Labs-it/Conditioning-Control-Panel"
 #define MyAppExeName "ConditioningControlPanel.exe"
@@ -188,6 +188,16 @@ Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 ; are user data and are deliberately left alone - phase C re-stamps them from the downloaded
 ; pack instead.
 #include "installer-content-deletions.iss"
+
+; LibVLC 3.0.21 -> 3.0.24 (7.4.1, CVE-2026-8461 bump): 3.0.24 no longer ships these two codec
+; plugins, and Inno never removes a file it did not install this time, so libvlc would keep
+; loading the 3.0.21 copies. Exact names only, in every place a libvlc folder can sit.
+Type: files;      Name: "{app}\libvlc\plugins\codec\libschroedinger_plugin.dll"
+Type: files;      Name: "{app}\libvlc\plugins\codec\libsdl_image_plugin.dll"
+Type: files;      Name: "{app}\libvlc\win-x64\plugins\codec\libschroedinger_plugin.dll"
+Type: files;      Name: "{app}\libvlc\win-x64\plugins\codec\libsdl_image_plugin.dll"
+Type: files;      Name: "{app}\libvlc\win-x86\plugins\codec\libschroedinger_plugin.dll"
+Type: files;      Name: "{app}\libvlc\win-x86\plugins\codec\libsdl_image_plugin.dll"
 
 ; RETIRED 2026-09-25 (not pack payload, so not in the generated list above): orphaned Bambi
 ; trigger clips from the Resources\sounds ROOT that no code read. Duplicates of Resources\sub_audio.

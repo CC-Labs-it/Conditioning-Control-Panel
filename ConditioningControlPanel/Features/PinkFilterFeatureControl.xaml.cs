@@ -69,6 +69,7 @@ namespace ConditioningControlPanel.Features
                 ChkEnable.IsChecked = s.PinkFilterEnabled;
                 SliderOpacity.Value = s.PinkFilterOpacity;
                 TxtOpacity.Text = $"{s.PinkFilterOpacity}%";
+                UpdateComfortClip(s.PinkFilterOpacity);
                 ChkUnderEffects.IsChecked = s.PinkFilterUnderEffects;
                 UpdateSwatch();
                 PopulateMonitors();
@@ -82,10 +83,22 @@ namespace ConditioningControlPanel.Features
                 e.PropertyName == nameof(Models.AppSettings.PinkFilterOpacity) ||
                 e.PropertyName == nameof(Models.AppSettings.PinkFilterColor) ||
                 e.PropertyName == nameof(Models.AppSettings.PinkFilterUnderEffects) ||
-                e.PropertyName == nameof(Models.AppSettings.PinkFilterTargetMonitor))
+                e.PropertyName == nameof(Models.AppSettings.PinkFilterTargetMonitor) ||
+                e.PropertyName == nameof(Models.AppSettings.PinkComfortLimitOn) ||
+                e.PropertyName == nameof(Models.AppSettings.PinkComfortLimitPct))
             {
                 Dispatcher.BeginInvoke(new Action(LoadFromSettings));
             }
+        }
+
+        /// <summary>The small note under the slider while the Accessibility limit holds it back.</summary>
+        private void UpdateComfortClip(int filterPct)
+        {
+            var s = App.Settings?.Current;
+            bool clips = s != null && Looks.PinkComfort.Clips(filterPct, s.PinkComfortLimitOn, s.PinkComfortLimitPct);
+            TxtComfortClip.Visibility = clips ? Visibility.Visible : Visibility.Collapsed;
+            if (clips)
+                TxtComfortClip.Text = string.Format(Loc.Get("hint_pink_comfort_clip"), Looks.PinkComfort.ClampPct(s!.PinkComfortLimitPct));
         }
 
         // #1546: tint under spirals, subliminals, bubbles and text. Re-sorts a live tint at once.
@@ -117,6 +130,7 @@ namespace ConditioningControlPanel.Features
             if (s == null) return;
             var v = (int)e.NewValue;
             TxtOpacity.Text = $"{v}%";
+            UpdateComfortClip(v);
             s.PinkFilterOpacity = v;
             App.Settings?.Save();
             try { App.Overlay?.RefreshOverlays(); }

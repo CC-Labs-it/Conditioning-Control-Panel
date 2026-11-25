@@ -3,10 +3,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
-             xmlns:feat="clr-namespace:ConditioningControlPanel.Features">
+             xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             xmlns:pv="clr-namespace:ConditioningControlPanel.Controls.Preview"
+             rows:RowHue.TintSliders="True">
 
     <Grid>
-        <StackPanel>
+        <StackPanel Grid.IsSharedSizeScope="True">
             <!-- HERO. The old Enable card is gone: its checkbox lives in the pill (same name,
                  same handlers, same SessionLock marker). That card carried no description of
                  its own, so the feature's existing blurb becomes the hero ToolTip instead of a
@@ -76,50 +79,50 @@
                             <StackPanel Margin="16,8,16,8">
 
                                 <!-- Frequency -->
-                                <Grid Height="36" ToolTip="{loc:Str tooltip_mind_wipe_frequency_1_180_per_hour}">
+                                <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_mind_wipe_frequency_1_180_per_hour}">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto" MinWidth="56"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_frequency}" FontSize="13" FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_frequency}" Emblem="Often">
+                                        <rows:RowLabel.Value>
+                                            <MultiBinding Converter="{x:Static rows:RowFraction.Instance}">
+                                                <Binding Path="Value" ElementName="SliderFreq"/>
+                                                <Binding Path="Maximum" ElementName="SliderFreq"/>
+                                            </MultiBinding>
+                                        </rows:RowLabel.Value>
+                                    </rows:RowLabel>
                                     <Slider Grid.Column="1" x:Name="SliderFreq" Minimum="1" Maximum="180" Value="6"
                                             feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="10,0"
                                             ValueChanged="SliderFreq_Changed"/>
-                                    <TextBlock Grid.Column="2" x:Name="TxtFreq" Text="6/h" HorizontalAlignment="Right"
-                                               VerticalAlignment="Center" FontSize="13" FontWeight="Bold"
-                                               Foreground="{DynamicResource PinkBrush}"/>
+                                    <rows:RowValue Grid.Column="2" x:Name="TxtFreq" Text="6" Unit="{loc:Str row_unit_an_hour}"/>
                                 </Grid>
 
                                 <!-- Volume -->
-                                <Grid Height="36" ToolTip="{loc:Str tooltip_volume_level_0_100}">
+                                <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_volume_level_0_100}">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto" MinWidth="56"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_volume}" FontSize="13" FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_volume}" Emblem="Loud"/>
                                     <Slider Grid.Column="1" x:Name="SliderVolume" Minimum="0" Maximum="100" Value="50"
                                             VerticalAlignment="Center" Margin="10,0"
                                             ValueChanged="SliderVolume_Changed"/>
-                                    <TextBlock Grid.Column="2" x:Name="TxtVolume" Text="50%" HorizontalAlignment="Right"
-                                               VerticalAlignment="Center" FontSize="13" FontWeight="Bold"
-                                               Foreground="{DynamicResource PinkBrush}"/>
+                                    <rows:RowValue Grid.Column="2" x:Name="TxtVolume" Text="50%"/>
                                 </Grid>
 
                                 <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
 
                                 <!-- Loop in background -->
-                                <Grid Height="34" ToolTip="{loc:Str tooltip_continuously_loop_a_single_track_instead_of_r}">
+                                <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_continuously_loop_a_single_track_instead_of_r}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <helpers:EmojiTextBlock Grid.Column="0" Text="{loc:Str setting_loop_in_background}"
-                                                            FontSize="13" FontWeight="SemiBold"
-                                                            Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_loop_in_background}" Emblem="Loop"
+                                                   IsOn="{Binding IsChecked, ElementName=ChkLoop}"/>
                                     <CheckBox Grid.Column="1" x:Name="ChkLoop"
                                               Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                               Checked="ChkLoop_Changed" Unchecked="ChkLoop_Changed"/>
@@ -171,29 +174,17 @@
                             Click="BtnTest_Click"/>
                 </StackPanel>
 
-                <!-- SIDE ART. The art is the Border's BACKGROUND, not a child Image: a Border clips its
-                     Background to CornerRadius but does NOT clip child content, so a child Image would
-                     square off the rounded corners (round-2 lesson). Same plate the hero uses. -->
+                <!-- SIDE ART -> LIVE PREVIEW (owner 2026-11-24): the card is a framed slice of a desktop where
+                     the effect plays with fake content (Controls/Preview/EffectPreview.cs). The mod art brush stays
+                     (ApplyFeatureArt writes it) but is parked in Tag, so nothing shows behind the preview; the card
+                     keeps its size and its AdaptiveSideArt collapse. -->
                 <Border Grid.Column="1" Margin="10,0,0,0" CornerRadius="14"
                         BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
-                        VerticalAlignment="Stretch" MinHeight="200">
-                    <Border.Background>
-                        <ImageBrush x:Name="SideArtBrush" Stretch="UniformToFill">
-                            <ImageBrush.ImageSource>
-                                <BitmapImage UriSource="pack://application:,,,/Resources/features/Mind_Wipers.png"
-                                             DecodePixelWidth="800"/>
-                            </ImageBrush.ImageSource>
-                        </ImageBrush>
-                    </Border.Background>
-                    <!-- Scrim so the plate sits under the page instead of fighting it. -->
-                    <Border CornerRadius="12">
-                        <Border.Background>
-                            <LinearGradientBrush StartPoint="0,1" EndPoint="0,0">
-                                <GradientStop Color="#66000000" Offset="0"/>
-                                <GradientStop Color="#00000000" Offset="0.45"/>
-                            </LinearGradientBrush>
-                        </Border.Background>
-                    </Border>
+                        Background="#06050D" VerticalAlignment="Stretch" MinHeight="200">
+                    <Border.Tag>
+                        <ImageBrush x:Name="SideArtBrush" Stretch="UniformToFill"/>
+                    </Border.Tag>
+                    <pv:EffectPreview Scene="mindwipe"/>
                 </Border>
             </Grid>
 

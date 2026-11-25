@@ -1,0 +1,89 @@
+{
+  "schema": 1,
+  "generator": {
+    "provider": "Google",
+    "model": "gemini-3.1-flash-image",
+    "workflow": "Nano Banana",
+    "date": "2026-11-10"
+  },
+  "notice": "These assets are AI-generated museum illustrations. Photographic styling does not represent an actual documented person or event.",
+  "assets": [
+    {
+      "file": "b-booth.webp",
+      "subject": "Narration budget desk with letter blocks and coins",
+      "style": "Ink and crayon on paper"
+    },
+    {
+      "file": "b-usernames.webp",
+      "subject": "Absurdly long visitor ledger on a lectern and steps",
+      "style": "Ink and crayon on paper"
+    },
+    {
+      "file": "l-patent.webp",
+      "subject": "Railway handcar pump patent study",
+      "style": "Ink and crayon on paper"
+    },
+    {
+      "file": "intro-subject.webp",
+      "subject": "Featureless androgynous adult proportional scan within a circle and square",
+      "style": "Electric-blue technical radiography-inspired diagram on pale cyan",
+      "revision": 2,
+      "provenance": {
+        "provider": "Google",
+        "model": "gemini-3.1-flash-image",
+        "workflow": "Nano Banana",
+        "date": "2026-11-10",
+        "operation": "New image replacing the previous parchment illustration"
+      }
+    },
+    {
+      "file": "pump-documentary.webp",
+      "subject": "Railway handcar pump mechanism in a workshop",
+      "style": "Documentary photography"
+    },
+    {
+      "file": "reflex-cheetah.webp",
+      "subject": "Running cheetah in dry grassland",
+      "style": "Wildlife photography"
+    },
+    {
+      "file": "reflex-shrimp.webp",
+      "subject": "Mantis shrimp and shell at an underwater strike",
+      "style": "Underwater macro photography"
+    },
+    {
+      "file": "subject-habitat.webp",
+      "subject": "Adult at a cluttered computer desk with two black censorship bands on each monitor",
+      "style": "Documentary photography with opaque display overlays",
+      "revision": 2,
+      "provenance": {
+        "provider": "Google",
+        "model": "gemini-3.1-flash-image",
+        "workflow": "Nano Banana",
+        "date": "2026-11-10",
+        "operation": "Image edit of the original generated room photograph"
+      }
+    },
+    {
+      "file": "floorboard-warning.webp",
+      "subject": "Raised wooden floorboard outside a closed room",
+      "style": "Documentary photography"
+    },
+    {
+      "file": "subject-spreadsheet.webp",
+      "subject": "The same adult and room with spreadsheet screens",
+      "style": "Documentary photography",
+      "continuity_reference": "subject-habitat.webp"
+    },
+    {
+      "file": "outside-daylight.webp",
+      "subject": "Green grass, trees and a path in daylight",
+      "style": "Location photography"
+    },
+    {
+      "file": "conversation-chairs.webp",
+      "subject": "Two empty chairs and a tissue box",
+      "style": "Documentary photography"
+    }
+  ]
+}
