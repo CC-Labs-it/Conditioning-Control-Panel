@@ -78,14 +78,14 @@ public sealed class BouncingTextScrawlTests
                 BouncingTextOverlay.Advance(0.016);
                 Assert.Null(BouncingTextOverlay.Scrawl);
                 on = true; SuperAccess.RaiseChanged(SuperEffect.Scrawl);
-                var scene = Assert.IsType<ScrawlScene>(BouncingTextOverlay.Scrawl);
+                var scene = Assert.IsType<ScrawlField>(BouncingTextOverlay.Scrawl);
                 for (int i = 0; i < 10; i++)
                 {
                     l.PosX = engine.MinX - 1; l.PosY = (engine.MinY + engine.MaxY) / 2; l.VelX = -100; l.VelY = 0;
                     BouncingTextOverlay.Advance(0.016);
                 }
                 Assert.Equal(6, scene.Stamps.Count);
-                scene.Tick(60, settings.ScrawlStampSeconds, settings.ScrawlStampCap);
+                scene.Tick(60, MotionLevel.Full);
                 Assert.Empty(scene.Stamps);
                 l.PosX = engine.MinX + 100; l.PosY = engine.MinY + 100;
                 BouncingTextOverlay.ClickOverOwnWindow = (_, _) => true;
@@ -105,17 +105,17 @@ public sealed class BouncingTextScrawlTests
                 on = false; SuperAccess.RaiseChanged(SuperEffect.Scrawl);
                 Assert.Null(BouncingTextOverlay.Scrawl); Assert.Empty(scene.Stamps); Assert.Equal(-1, l.SlamT);
                 on = true; SuperAccess.RaiseChanged(SuperEffect.Scrawl);
-                scene = Assert.IsType<ScrawlScene>(BouncingTextOverlay.Scrawl);
+                scene = Assert.IsType<ScrawlField>(BouncingTextOverlay.Scrawl);
                 on = false; BouncingTextOverlay.Advance(0.016); // tier event may be unavailable
                 Assert.Null(BouncingTextOverlay.Scrawl);
                 on = true; SuperAccess.RaiseChanged(SuperEffect.Scrawl);
-                scene = Assert.IsType<ScrawlScene>(BouncingTextOverlay.Scrawl);
+                scene = Assert.IsType<ScrawlField>(BouncingTextOverlay.Scrawl);
                 l.PosX = engine.MinX - 1; l.VelX = -100; BouncingTextOverlay.Advance(0.016);
                 Assert.NotEmpty(scene.Stamps);
                 BouncingTextOverlay.Stop();
                 Assert.Null(BouncingTextOverlay.Scrawl); Assert.Empty(scene.Stamps); Assert.False(BouncingTextOverlay.IsRunning);
                 BouncingTextOverlay.Start(host);
-                scene = Assert.IsType<ScrawlScene>(BouncingTextOverlay.Scrawl);
+                scene = Assert.IsType<ScrawlField>(BouncingTextOverlay.Scrawl);
                 l = engine.Logos[0]; l.PosX = engine.MinX - 1; l.VelX = -100;
                 BouncingTextOverlay.Advance(0.016); Assert.NotEmpty(scene.Stamps);
                 PanicSurfaces.All.Single(s => s.Id == "bouncing-text").Stop(null);

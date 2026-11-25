@@ -71,7 +71,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var right = (int)Math.Ceiling((l.PosX + l.TextWidth + pad) * _screenScale);
                 var bottom = (int)Math.Ceiling((l.PosY + l.TextHeight + pad) * _screenScale);
                 return new System.Drawing.Rectangle(left, top, right - left, bottom - top);
-            }).ToArray();
+            }).Concat(ScrawlRects()).ToArray();
         }
 
         /// <summary>Is a logo (engine DIPs) close enough to this screen to draw on it? Padded the way
@@ -253,13 +253,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var s = CoreSettings.Current;
             Engine.Tick(dt);
             if (_running) SyncScrawl(); // tier events may not be available in this head
-            TickScrawl(dt);
             var logos = Engine.Logos;
             for (var i = 0; i < logos.Count; i++)
             {
                 var l = logos[i];
                 if (StepScrawlSlam(l, dt)) continue;
                 RelaxScrawl(l, dt);
+                if (StepScrawlStage(l, dt)) continue;   // caught by the pool: it moves the word this frame
                 var step = Engine.Step(l, dt, s);
                 ScrawlBounce(l, step);
                 if (step.CornerHit) { CornerHit(); Platform.BarkHead.Engine?.Raise("BouncingTextCorner"); }   // WPF BarkService.cs:731
@@ -288,6 +288,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 foreach (var w in Windows) w.Move(i, l.PosX, l.PosY, sx, sy, angle, l.TextWidth, l.TextHeight);
             }
             foreach (var w in Windows) w.AgeBursts(dt);
+            TickScrawl(dt);   // WPF ticks the stamps after the words moved
         }
 
         private static void Sample(double dt)

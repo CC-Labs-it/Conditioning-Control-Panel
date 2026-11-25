@@ -145,8 +145,9 @@ public sealed class SuperBox : Border
     /// star and the weekly try stay off, so no free try is spent on nothing. Creep: the Steam fog on the
     /// tint windows (Views/Overlays/SteamOverlay); Afterglow: the line (Views/Overlays/AfterglowLineOverlay); FlickerDeck:
     /// the cards on the flash windows (Views/Overlays/FlashOverlay.Deck); InnerBloom (Froth): the ambient bubbles (Views/Overlays/BubbleOverlay);
-    /// Vortex: the Whirlpool on the spiral windows (Views/Overlays/WhirlpoolOverlay).</summary>
-    internal static readonly HashSet<SuperEffect> HostedOnThisHead = new() { SuperEffect.Creep, SuperEffect.Afterglow, SuperEffect.FlickerDeck, SuperEffect.InnerBloom, SuperEffect.Vortex };
+    /// Vortex: the Whirlpool on the spiral windows (Views/Overlays/WhirlpoolOverlay); Scrawl: the stamps under the bouncing words
+    /// (Views/Overlays/BouncingTextOverlay.Scrawl).</summary>
+    internal static readonly HashSet<SuperEffect> HostedOnThisHead = new() { SuperEffect.Creep, SuperEffect.Afterglow, SuperEffect.FlickerDeck, SuperEffect.InnerBloom, SuperEffect.Vortex, SuperEffect.Scrawl };
 
     /// <summary>True when the star draws on: hosted, unlocked and switched on.</summary>
     public bool StarLit { get; private set; }
