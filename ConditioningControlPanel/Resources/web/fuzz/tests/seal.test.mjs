@@ -39,6 +39,23 @@ test('a local preview is sealed only when it asks', () => {
   assert.equal(sealedFor(standalone, before, 'tc.cclabs.app', true), false, 'the switch cannot seal a public host');
 });
 
+test('a desktop host that sends caps.unsealed plays its small edition now; without it the app rule stands', () => {
+  const desk = (extra = {}) => ({ protocol: 1, caps: { platform: 'desktop', ...extra } });
+  const small = { edition: 'small', platform: 'desktop' }, full = { edition: 'full', platform: 'desktop' };
+  const host = 'tc.game';
+  assert.equal(sealedFor(desk({ edition: 'small', unsealed: true }), before, host, false, small), false, 'cap true: small plays');
+  assert.equal(sealedFor(desk({ edition: 'small', unsealed: true }), before, host, false, null), false, 'cap true: no reading still plays');
+  assert.equal(sealedFor(desk({ edition: 'small' }), before, host, false, small), true, 'cap missing: the app small edition is sealed as before');
+  assert.equal(sealedFor(desk({ edition: 'small' }), before, host, false, null), true, 'cap missing, no reading: sealed as before');
+  for (const unsealed of [false, 'true', 1]) {
+    assert.equal(sealedFor(desk({ edition: 'small', unsealed }), before, host, false, small), true, `only a real true opens it (${String(unsealed)})`);
+  }
+  for (const extra of [{}, { unsealed: true }]) {
+    assert.equal(sealedFor(desk({ edition: 'full', ...extra }), before, host, false, full), false, 'the full edition plays either way');
+    assert.equal(sealedFor(desk({ edition: 'small', ...extra }), SEAL_OPEN_AT_MS, host, false, small), false, 'the anniversary opens it either way');
+  }
+});
+
 test('the countdown splits what is left and stops at zero', () => {
   const ms = ((2 * 24 + 3) * 3600 + 4 * 60 + 5) * 1000;
   assert.deepEqual(sealCountdown(SEAL_OPEN_AT_MS - ms), { days: 2, hours: 3, minutes: 4, seconds: 5, done: false });
