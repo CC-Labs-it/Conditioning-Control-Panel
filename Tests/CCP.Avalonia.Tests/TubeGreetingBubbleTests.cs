@@ -243,8 +243,12 @@ public sealed class TubeGreetingBubbleTests
         Assert.False(Win32AwarenessForegroundProbe.TubeFullscreen(2, 1, "GameWindow", popup | 0x00c00000, 8, r, r));
         var small = new Win32AwarenessForegroundProbe.Rect { Left = 0, Top = 0, Right = 100, Bottom = 100 };
         Assert.False(Win32AwarenessForegroundProbe.TubeFullscreen(2, 1, "GameWindow", popup, 8, small, r));
-        Assert.False(X11ActiveWindow.TubeTopmost(new uint[] { 7 }, 9)); // covering borderless window, not above
-        Assert.True(X11ActiveWindow.TubeTopmost(new uint[] { 7, 9 }, 9));
+        // EWMH: ABOVE (9) and FULLSCREEN (5) are separate states; either marks an exclusive window.
+        Assert.False(X11ActiveWindow.TubeTopmost(new uint[] { 7 }, 9, 5)); // covering borderless window, neither state
+        Assert.False(X11ActiveWindow.TubeTopmost(System.Array.Empty<uint>(), 9, 5));
+        Assert.True(X11ActiveWindow.TubeTopmost(new uint[] { 7, 9 }, 9, 5));
+        Assert.True(X11ActiveWindow.TubeTopmost(new uint[] { 5 }, 9, 5)); // fullscreen-only game
+        Assert.False(X11ActiveWindow.TubeTopmost(new uint[] { 0 }, 0, 0)); // atoms unavailable
         Assert.True(AvatarTubeWindow.ReadOtherAppFullscreen(true, () => true, () => false));
         Assert.False(AvatarTubeWindow.ReadOtherAppFullscreen(false, () => true, () => false));
     }
