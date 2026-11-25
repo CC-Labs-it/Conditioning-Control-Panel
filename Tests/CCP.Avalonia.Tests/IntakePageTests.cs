@@ -71,7 +71,7 @@ public sealed class IntakePageTests
                     Assert.Equal("init", (string?)init["type"]);
                     Assert.Equal("default", (string?)init["config"]!["niche"]);   // no bank in this root
                     gifUrl = (string)init["config"]!["media"]!["gifs"]![0]!;
-                    Assert.Equal($"http://127.0.0.1:{server.Port}/{WebAssetServer.AssetsPrefix}images/a%20b.gif", gifUrl);
+                    Assert.Equal("/ccp.assets/images/a%20b.gif", gifUrl);   // root-relative: the page's LOCAL_URL_RE keeps it
                     // A sandbox never hands the page the real AI server.
                     Assert.True(SandboxNet.Active);
                     Assert.Equal(JTokenType.Null, init["ai"]!.Type);
@@ -80,9 +80,10 @@ public sealed class IntakePageTests
                 return Task.CompletedTask;
             });
 
-            Assert.Equal(gif, server.ResolveFile(new Uri(gifUrl).AbsolutePath));
+            Assert.Equal(gif, server.ResolveFile(gifUrl));
             Assert.Null(server.ResolveFile("/" + WebAssetServer.AssetsPrefix + "../" + Path.GetFileName(web) + "/intake/index.html"));
             using var http = new HttpClient();
+            gifUrl = $"http://127.0.0.1:{server.Port}{gifUrl}";   // the page resolves it against its own origin
             Assert.Equal(HttpStatusCode.Forbidden, (await http.GetAsync(gifUrl)).StatusCode);
             Assert.Equal(HttpStatusCode.OK, (await http.GetAsync(gifUrl + "?ccp_t=" + server.Token)).StatusCode);
         }
