@@ -32,6 +32,29 @@ public sealed partial class GameWindowTests
     });
 
     [Fact]
+    public void GoonInit_SendsOnlyTheLeaderboardNameNeverTheProviderName() => Run((_, launcher) =>
+    {
+        var oldProvider = CoreAccount.DisplayNameProvider;
+        var oldName = CoreSettings.Current.UserDisplayName;
+        try
+        {
+            CoreAccount.DisplayNameProvider = () => "Real Patreon Name";
+            launcher.Hide();
+            foreach (var (stored, expected) in new[] { ((string?)null, "Player"), ("  ", "Player"), ("Leader", "Leader") })
+            {
+                CoreSettings.Current.UserDisplayName = stored;
+                var w = GameWindow.Launch("goon")!;
+                var frames = new List<JObject>();
+                w.Posted += json => frames.Add(JObject.Parse(json));
+                w.HandleMessage("{\"type\":\"ready\"}");
+                Assert.Equal(expected, (string?)Assert.Single(frames, x => (string?)x["type"] == "init")["identity"]?["displayName"]);
+                w.Close();
+            }
+        }
+        finally { CoreAccount.DisplayNameProvider = oldProvider; CoreSettings.Current.UserDisplayName = oldName; }
+    });
+
+    [Fact]
     public void GoonTransfer_PaidAccountCanSend() => Run((_, launcher) =>
     {
         var old = CoreAccount.HasPremiumAccessProvider;

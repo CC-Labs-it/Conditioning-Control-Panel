@@ -97,7 +97,8 @@ internal sealed partial class GameWindow
                 var consent = new ConsentSheetMsg();
                 Post(new { type = "init", protocol = 1, lang = CoreSettings.Current.Language,
                     identity = new { unifiedId = CoreAccount.UnifiedUserId ?? "",
-                        displayName = CoreAccount.DisplayName ?? "", appVersion = CoreReleaseContent.AppVersion },
+                        // WPF GoonHostService.cs:1099 SafeDisplayName: only the leaderboard name reaches the opponent, never a provider name.
+                        displayName = string.IsNullOrWhiteSpace(CoreSettings.Current.UserDisplayName) ? "Player" : CoreSettings.Current.UserDisplayName, appVersion = CoreReleaseContent.AppVersion },
                     net = new { serverBase = GoonSignalingClient.ProxyBaseUrl, authToken = PbpAuthToken(), viaHost = true },
                     caps = new { haptics = GoonToyDirector.ReadyNow, brainDrain = true, spiral = true, camera = false,
                         video = true, mediaTransfer = GoonHostRules.TransferAllowed(), canHost = GoonHostRules.HostingAllowed(), canJoin = GoonHostRules.JoiningAllowed() },
