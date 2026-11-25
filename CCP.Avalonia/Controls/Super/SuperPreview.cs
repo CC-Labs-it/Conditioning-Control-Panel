@@ -38,8 +38,11 @@ public static class SuperPreview
     public static bool UsedThisWeek => SuperPreviewRule.UsedThisWeek(UsedWeek, Now);
     public static double SecondsLeft => Trying == null ? 0 : SuperPreviewRule.SecondsLeftAfter(Elapsed);
 
+    /// <summary>Only an effect this head hosts (<see cref="SuperBox.HostedOnThisHead"/>), so no door ever
+    /// spends the week's try on an effect that cannot draw here (owner call 2026-11-25: none for Undertow).</summary>
     public static bool CanTry(SuperEffect effect)
-        => Trying == null && !TierGate.HasPremium && SuperPreviewRule.CanTry(effect, UsedWeek, Now);
+        => Trying == null && !TierGate.HasPremium && SuperBox.HostedOnThisHead.Contains(effect)
+           && SuperPreviewRule.CanTry(effect, UsedWeek, Now);
 
     /// <summary>Start this week's try. False when the rule refuses (wrong effect, used, paid tier).</summary>
     public static bool TryStart(SuperEffect effect)
