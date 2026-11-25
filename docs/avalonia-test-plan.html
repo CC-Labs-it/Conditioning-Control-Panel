@@ -1019,6 +1019,7 @@ changes served unchanged from <code>Assets/web/dtrh</code> (automated-only: byte
 </ol>
 <h2 id="19-retained-lane-contract-rows">19. Retained lane contract rows</h2>
 <ol>
+<li><strong>[SAFETY]</strong> Start the engine with Creep or Vortex on, switch each off, then stop and use panic: WPF hides the corresponding stage and clears it on stop. WPF <code>ConditioningControlPanel/Services/Super/SuperStageHost.cs:44</code>, <code>ConditioningControlPanel/MainWindow/MainWindow.xaml.cs:2200</code>. Avalonia stage drawing is still missing. Rows: <code>super-stage</code>.</li>
 <li><code>blocked-migration-input</code> is resolved: test it through the profile migration step (section 15 step 10, row <code>settings-migration-test</code>). The real-profile run itself is automated-only and local (<code>Tests/CCP.Avalonia.Migration.Tests</code>). WPF <code>CCP.Core/Models/AppSettings.cs</code>. Rows: <code>blocked-migration-input</code>, <code>settings-migration-test</code>.</li>
 </ol>
 <h2 id="20-main-sync-19-main-sync-19-738">20. Main sync 19 (<code>main-sync-19</code>, 7.3.3-7.3.8 and main 7.4 work)</h2>

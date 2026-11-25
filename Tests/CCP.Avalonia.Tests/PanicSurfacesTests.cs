@@ -239,6 +239,7 @@ public sealed class PanicSurfacesTests
         "scheduler",
         "engine",
         "bubble-host",
+        "super-stage",
         "flash",
         "pink-rush",
         "corner-gif",
