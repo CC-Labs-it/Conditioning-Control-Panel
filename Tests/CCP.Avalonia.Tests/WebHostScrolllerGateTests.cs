@@ -127,6 +127,26 @@ public sealed class WebHostScrolllerGateTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task GateRefusal_KeepsTheExistingNavigationAndSource() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var web = new WebHost();
+        var page = new Uri("http://127.0.0.1:5555/page");
+        web.NewScrolllerEngine()(false);
+        web.AllowNavigation = _ => true;
+        web.NavigationInvoker = _ => true;
+        web.Source = page;
+        var start = new WebViewNavigationStartingEventArgs { Request = page };
+        web.OnNavigationStarted(null, start);
+        Assert.False(start.Cancel);
+        Assert.False(web.Navigate(new Uri("https://example.test/")));
+        Assert.Equal(page, web.Source);
+        Assert.Equal(page, web.ActiveNavigation);
+        web.OnNavigationCompleted(page);
+        Assert.Equal(page, web.CurrentUrl);
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(false, true)]

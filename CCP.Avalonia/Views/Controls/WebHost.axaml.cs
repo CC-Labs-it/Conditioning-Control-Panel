@@ -798,13 +798,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         /// </summary>
         public bool Navigate(Uri url)
         {
-            PrepareProgrammaticNavigation();
             _panicBlank = false;
             CancelPendingNavigation();
             NavigationRequests++;
             // Do not retain a request the reported gate refuses: a later gate report must not load it after fallback.
-            if (_scrolllerGate is not null && !ScrolllerGateAllows(_scrolllerGate, url)) { ClearActiveNavigation(); return false; }
+            if (_scrolllerGate is not null && !ScrolllerGateAllows(_scrolllerGate, url)) return false;
             var previous = Source;
+            PrepareProgrammaticNavigation();
             _explicitNavigate = true;
             try { Source = url; } finally { _explicitNavigate = false; }
             // Refused or engine-less requests stay named on the fallback panel; the caller learns nothing loaded.
