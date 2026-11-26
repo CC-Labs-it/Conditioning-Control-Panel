@@ -1886,6 +1886,23 @@ namespace ConditioningControlPanel.Avalonia
 
         internal static void ClearEngineCrashOnExit() => Services.EngineCrashSentinel.Clear();
 
+        private static volatile string _exitStep = "start";
+        /// <summary>ccp-bugs #1704: what the exit is doing now, for the backstop's log line.</summary>
+        internal static void ExitStep(string step) => _exitStep = step;
+
+        /// <summary>Covers the bounded waits below (about 10 s worst case) with margin.</summary>
+        internal const int ExitBackstopMs = 15000;
+
+        /// <summary>ccp-bugs #1704 (WPF App.xaml.cs:6740-6751 ends OnExit with TerminateProcess): a teardown step
+        /// or ProcessExit handler that hangs froze the app for good. Armed only after the toys are stopped; a
+        /// background thread, so a normal exit simply ends it.</summary>
+        internal static void ArmExitBackstop(Action<int>? terminate = null, int graceMs = ExitBackstopMs)
+            => global::ConditioningControlPanel.Services.Reset.UiThreadExit.Begin(0,
+                () => Serilog.Log.Warning("Exit still running after {Ms} ms at step {Step}; killing the process", graceMs, _exitStep),
+                exit: _ => { },   // the lifetime is already exiting; only the backstop is wanted
+                terminate: terminate ?? (_ => { Serilog.Log.CloseAndFlush(); System.Diagnostics.Process.GetCurrentProcess().Kill(); }),
+                graceMs: graceMs);
+
         private void OnDesktopExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
         {
             Views.Games.LinuxRaceHost.Current?.Dispose();
@@ -1899,6 +1916,14 @@ namespace ConditioningControlPanel.Avalonia
             Services.Haptics.Core.MockProviderV2.Toast = null;
             try { CoreHaptics.Service?.ShutdownStop(); } catch (Exception ex) { Serilog.Log.Warning(ex, "Haptics shutdown stop failed"); }
             try { Views.Overlays.HapticMockToast.Close(); } catch (Exception ex) { Serilog.Log.Debug(ex, "Mock haptics feedback close failed"); }
+
+            // #1704: save now, so a teardown step that hangs below cannot lose the session; the saves further
+            // down stay for what teardown still changes (quest minutes, a late achievement).
+            var shell = (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as Views.Windows.MainShellWindow;
+            SaveSettingsOnExit(shell, () => Settings?.SaveImmediate());
+            try { SaveAchievementsOnExit(_achievementSaveTimer, Achievements); } catch { /* the store logs write failures */ }
+            ArmExitBackstop();
+            ExitStep("media and libvlc teardown");
 
             try { Views.Windows.EmiDesk.EmiDeskService.Instance.UnwireAppEvents(); } catch { }
             try { (((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).MainWindow as Views.Windows.MainShellWindow)?.Tray?.Dispose(); } catch { }
@@ -1925,6 +1950,7 @@ namespace ConditioningControlPanel.Avalonia
             try { ReleaseContent?.Dispose(); } catch { }
             try { Platform.ChasterHead.Service?.Dispose(); } catch { }
 
+            ExitStep("final sync push and saves");
             // WPF App.OnExit: a best-effort final push, capped at 2 s (off the UI thread, as WPF's Task.Run).
             try { if (Platform.AccountSeed.Sync is { Loaded: true } sync) System.Threading.Tasks.Task.Run(() => sync.PushAsync("shutdown")).Wait(TimeSpan.FromSeconds(2)); }
             catch { /* never block exit */ }
@@ -1932,7 +1958,6 @@ namespace ConditioningControlPanel.Avalonia
 
             // Flush while the dispatcher is still usable. In particular, a serialize retry from a
             // background save must not see the shutdown-safe drop provider below.
-            var shell = (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as Views.Windows.MainShellWindow;
             SaveSettingsOnExit(shell, () => Settings?.SaveImmediate());
 
             // WPF AchievementService.Dispose always saves synchronously, including a queued autosave.
@@ -1942,6 +1967,7 @@ namespace ConditioningControlPanel.Avalonia
             try { FeatureDayLog?.Dispose(); } catch (Exception ex) { Serilog.Log.Debug(ex, "FeatureDayLog flush on shutdown failed"); } // WPF App.OnExit:6270
             try { Programs?.Dispose(); } catch { /* WPF App.OnExit:6309; flushes unsaved program state */ }
             try { MediaHistory?.Dispose(); } catch { /* WPF App.OnExit:6231; flushes the final entries */ }
+            ExitStep("service shutdown");
             try { StopDeeperLibrary(); } catch (Exception ex) { Serilog.Log.Debug(ex, "Deeper library shutdown failed"); } // WPF App.OnExit:6035
             Platform.ScrolllerHead.Stop();   // WPF App.OnExit:6284-6285: the share's ledger and the cache index
             try { Platform.ScrolllerAwayHost.Stop(); } catch { /* WPF App.OnExit:6308 */ }
@@ -1952,11 +1978,13 @@ namespace ConditioningControlPanel.Avalonia
             try { Platform.FriendsLanding.Stop(); } catch { /* WPF FriendsLanding.Stop on the panel's Closed: no card outlives the app */ }
             try { (Platform.FriendsHead.Service as IDisposable)?.Dispose(); } catch { /* WPF App.OnExit: the friends poll stops */ }
             ReleasePrivacyLedger();
+            ExitStep("companion, AI and Ollama");
             try { Brain?.Dispose(); } catch { /* WPF App.OnExit:6121; flushes the turn log */ }
             try { Ai?.Dispose(); } catch { /* WPF App.OnExit:6250 (#629): unloads the local Ollama model */ }
             // WPF App.OnExit:6336: only the `ollama serve` this app spawned; a user's own server is untouched.
             try { ConditioningControlPanel.Services.AIService.OllamaSetupService.StopSpawnedServer(); }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Failed to stop spawned Ollama server"); }
+            ExitStep("haptics, overlays, games and webcam");
             // WPF App.OnExit:6013/6173: zero the toys first (a Lovense level has no timeout), then dispose.
             try { CoreHaptics.Service?.Dispose(); } catch { }
             try { Views.Overlays.KeywordHighlightOverlay.CloseAll(); } catch { }
@@ -1982,6 +2010,7 @@ namespace ConditioningControlPanel.Avalonia
             DescentCountdown?.Dispose();   // its pool timer outlives the dispatcher otherwise
             ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.Instance.Stop();   // same
             _desktopDispatch?.Stop();
+            ExitStep("after OnDesktopExit (Program end, ProcessExit handlers)");
         }
     }
 }
