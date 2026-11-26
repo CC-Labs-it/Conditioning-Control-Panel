@@ -28,27 +28,33 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// auto-hide and the bubble in one pass. Nothing is drained afterwards, so nothing speaks
         /// after a panic. Idempotent and safe when idle; every step runs even if one throws.
         /// </summary>
-        public void PanicSilence() => RunOnAvatar(() =>
+        public void PanicSilence()
         {
-            _videoAnnouncementShowing = false;
-            // WPF Speech.cs:1881 leaves look-picker fades running; only settle pending roster paint.
-            try { if (_rosterAvatarSwitchPending) CancelAvatarSwitch(finishRoster: true); } catch { }
-            try { _stopSpoken(); } catch { }
-            _stopSpoken = static () => { };
-            // WPF KillAllAudio -> Subliminal.Stop (App.xaml.cs:1293): a trigger whisper plays while the
-            // subliminal scheduler, and so the engine stop, is idle, so it is cut here too.
-            try { Views.Overlays.SubliminalWhisperShow.StopAll(); } catch { }
-            try { StopThinkingAnimation(); } catch { }
-            try { _speechTimer?.Stop(); } catch { }
-            try { ClearSpeechQueue(); } catch { }   // WPF Speech.cs:1850-1851: nothing queued speaks after
-            try { _listeningDotsTimer?.Stop(); _listeningDotsTimer = null; } catch { }
-            _isWaitingForAi = false;
-            _isGiggling = false;
-            _isShowingAiBubble = false;
-            _isListeningBubble = false;
-            try { _speechBubble.IsVisible = false; } catch { }   // WPF CollapseSpeechBubble (Speech.cs:2962)
-            _lastSpeechEndTime = SpeechNow;
-            _isMouseOverSpeechBubble = false;
-        });
+            System.Threading.Interlocked.Increment(ref _levelReactionVersion);
+            RunOnAvatar(() =>
+            {
+                _videoAnnouncementShowing = false;
+                LockReactionGeneration++;
+                try { StopAvatarGlow(); } catch { }
+                // WPF Speech.cs:1881 leaves look-picker fades running; only settle pending roster paint.
+                try { if (_rosterAvatarSwitchPending) CancelAvatarSwitch(finishRoster: true); } catch { }
+                try { _stopSpoken(); } catch { }
+                _stopSpoken = static () => { };
+                // WPF KillAllAudio -> Subliminal.Stop (App.xaml.cs:1293): a trigger whisper plays while the
+                // subliminal scheduler, and so the engine stop, is idle, so it is cut here too.
+                try { Views.Overlays.SubliminalWhisperShow.StopAll(); } catch { }
+                try { StopThinkingAnimation(); } catch { }
+                try { _speechTimer?.Stop(); } catch { }
+                try { ClearSpeechQueue(); } catch { }   // WPF Speech.cs:1850-1851: nothing queued speaks after
+                try { _listeningDotsTimer?.Stop(); _listeningDotsTimer = null; } catch { }
+                _isWaitingForAi = false;
+                _isGiggling = false;
+                _isShowingAiBubble = false;
+                _isListeningBubble = false;
+                try { _speechBubble.IsVisible = false; } catch { }   // WPF CollapseSpeechBubble (Speech.cs:2962)
+                _lastSpeechEndTime = SpeechNow;
+                _isMouseOverSpeechBubble = false;
+            });
+        }
     }
 }

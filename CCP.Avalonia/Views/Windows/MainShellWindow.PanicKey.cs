@@ -40,7 +40,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _portalAllowed = true;
             SeedPanicAftermath();
             // WPF EscapeClaim surfaces (TAB-8 / DESK-3): the focus snapshot the hook thread reads.
-            EscapeClaim.MarkType(typeof(Views.Controls.FriendsDrawer));
             EscapeClaim.StartTracking();
             if (OperatingSystem.IsWindows()) return Win32Input.Start(() => HandlePanicKeyPress(DateTime.Now));   // WH_KEYBOARD_LL twin
             X11PanicKey.Unhearable = WarnUnhearable;

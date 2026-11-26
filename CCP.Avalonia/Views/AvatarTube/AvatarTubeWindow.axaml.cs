@@ -323,6 +323,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // chamber rather than on the stock one.
             RefreshTubeLayout();
 
+            AttachCompanionLevels();
             AttachServiceReactions(App.Achievements, global::ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance.Scheduler); // WPF xaml.cs:302-306
             AttachAwareness();   // WPF xaml.cs:317-322 (Reactions.cs)
             AttachTriggerSettings(); // WPF Speech.cs:1630-1675
@@ -338,7 +339,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // target and method, which is what makes "is the sink still MINE?" answerable at all;
             // ReferenceEquals would be false every time because the conversion allocates.
             if (OpenChatSink == (Action)OpenChatInput) OpenChatSink = null;
+            StopAvatarGlow();
             _avatarSetsClosed = true;
+            LockReactionGeneration++;
             if (_rainSettings != null) _rainSettings.PropertyChanged -= RainSettingsChanged;
             StopRainPlayback();
             _imgAvatar.Source = null;
@@ -348,6 +351,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             StopFloatingAnimation(); // WPF Windowing.cs:1507
             ReleaseWindowing();
             ReleaseSpeechWindow();   // WPF Speech.cs:1099: the bubble's window closes with the tube
+            DetachCompanionLevels();
             DetachServiceReactions();
             DetachAwareness();
             UnwireContentPolicyWarning();
