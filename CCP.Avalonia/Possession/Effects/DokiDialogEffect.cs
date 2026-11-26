@@ -10,7 +10,9 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Possession;
+using ConditioningControlPanel.Services.Possession.Effects;
 
 namespace ConditioningControlPanel.Avalonia.Possession;
 
@@ -26,6 +28,7 @@ internal sealed class DokiDialogEffect : PossessionEffectBase
     public override PossessionRung MinRung => PossessionRung.ItKnows;
     public override PossessionIntensity MinIntensity => PossessionIntensity.FullDoki;
     public override bool IsBig => true;
+    protected override string NameOverride => Loc.Get("possession_doki_window");
     public override double Weight => 2;
     public override TimeSpan HoldFor => TimeSpan.FromSeconds(4);
 
@@ -41,7 +44,10 @@ internal sealed class DokiDialogEffect : PossessionEffectBase
         var ink = new SolidColorBrush(Color.Parse("#FFE3DA"));
         var dim = new SolidColorBrush(Color.Parse("#C09A92"));
         var trackColor = new SolidColorBrush(Color.Parse("#2A1414"));
-        var title = Loc.Get(ctx.Rng.Next(2) == 0 ? "possession_doki_title_1" : "possession_doki_title_2");
+        bool bambi = string.Equals(RewritePools.ActiveModId, BuiltInMods.BambiSleepId, StringComparison.OrdinalIgnoreCase);
+        int choice = ctx.Rng.Next(bambi ? 3 : 2);
+        var title = Loc.Get(bambi && choice == 0 ? "possession_doki_title_bambi" :
+            choice == (bambi ? 1 : 0) ? "possession_doki_title_1" : "possession_doki_title_2");
         var caption = new Border { Background = crimson, Padding = new Thickness(10, 5),
             Child = new TextBlock { Text = title, Foreground = Brushes.White, FontWeight = FontWeight.SemiBold } };
         var face = new Image { Width = 76, Height = 110, Stretch = Stretch.Uniform,
