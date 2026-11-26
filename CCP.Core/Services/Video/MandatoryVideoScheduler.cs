@@ -20,6 +20,7 @@ namespace ConditioningControlPanel.Services
         /// <see cref="MandatoryVideoScheduler.End"/> at the clip's end or on Esc, and
         /// <see cref="MandatoryVideoScheduler.ForceCleanup"/> on the in-window panic key.</summary>
         void Show(string path, bool strict);
+        void Show(string path, bool strict, Action started) { Show(path, strict); started(); }
         /// <summary>WPF VideoService.cs:1982: visible, non-ghosted For You feed.</summary>
         bool FeedOwnsTheScreen => false;
         /// <summary>WPF VideoService.cs:2948: browser media or an active web-video takeover.</summary>
@@ -388,7 +389,7 @@ namespace ConditioningControlPanel.Services
                 var floatingJoin = _playing && _host.FloatingRunOpen && _host.FloatingUp > 0
                     && _host.IsFloating(IsStrict) && _host.IsFloating(CoreSettings.Current.StrictLockEnabled)
                     && !CoreSettings.Current.MandatoryVideoFloatingTogether && _host.FloatingLimit > 1;
-                if ((!_playing || floatingJoin) && _host.BrowserMediaBlocksScheduledVideo)
+                if ((!_playing || floatingJoin) && (_host.BrowserMediaBlocksScheduledVideo || Services.Browser.BrowserMediaSession.Shared.HoldsScreen))
                 {
                     ScheduleNext(SkipRetrySeconds);
                     return;
@@ -406,7 +407,7 @@ namespace ConditioningControlPanel.Services
                     return;
                 }
                 // WPF VideoService :3007: a do-not-disturb app in front reschedules, never drops.
-                if (!_playing && Services.UI.DndGuard.ShouldSuppressVideos())
+                else if (!_playing && Services.UI.DndGuard.ShouldSuppressVideos())
                 {
                     Services.UI.DndGuard.LogSuppressionThrottled("scheduled video");
                     ScheduleNext(SkipRetrySeconds);
@@ -646,8 +647,10 @@ namespace ConditioningControlPanel.Services
                 if (!_host.IsFloating(strict) && CoreFlash.IsRunning) CoreFlash.Stop();
                 var generation = _retryGeneration;
                 ShowingPath = path;   // the host keeps the source URL identity when it plays a cached file
-                try { _host.Show(playbackPath, strict); }
-                catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); if (_playing && generation == _retryGeneration) End(); return; }
+                try { _host.Show(playbackPath, strict, Started); }
+                catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); if (_playing && generation == _retryGeneration) End(); }
+                void Started()
+                {
                 // WPF VideoService.cs:3218-3225,3404-3410: a refused or replaced clip never starts its hooks.
                 if (!_playing || generation != _retryGeneration) return;
                 _floatingRun = _host.FloatingRunOpen && _host.IsFloating(strict);
@@ -662,6 +665,7 @@ namespace ConditioningControlPanel.Services
                 if (!_playing || generation != _retryGeneration) return;
                 try { CoreHaptics.Service?.FunScript.OnVideoStarted(path); }
                 catch (Exception ex) { Log.Debug("FunScript start hook failed: {Error}", ex.Message); }
+                }
             }
             _preroll = created;
             created.Change(freezeBeforePreroll ? FreezeLead : PreRoll, Timeout.InfiniteTimeSpan);

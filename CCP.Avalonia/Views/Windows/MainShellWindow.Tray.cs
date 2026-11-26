@@ -261,7 +261,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (TryShowExitBill(RequestExit)) return;
             _exitRequested = true;
             if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-                desktop.Shutdown();
+                App.RequestDesktopShutdown(desktop);
             else
                 Close();
         }

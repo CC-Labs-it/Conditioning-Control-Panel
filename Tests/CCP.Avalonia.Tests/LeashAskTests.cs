@@ -179,6 +179,7 @@ public sealed class LeashAskTests
     public void AnAnswerThatDidNotGoThroughKeepsTheCardOpenAndSaysWhy() =>
         Run((shell, page, wire, _) =>
         {
+            shell.RebindLeashAsks();
             CoreSettings.Current.LeashIntroSeenLeashed = true;
             LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
             var card = LeashAskWindow.Current!.Card;
@@ -220,7 +221,10 @@ public sealed class LeashAskTests
                 BeatLoop.Time = new FrozenClock();
                 settings.MotionLevel = motion; settings.AutoPerformanceMode = false; settings.GentleVisuals = false;
                 settings.PerformanceMode = false;
-                LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+                var look = Tagged<Button>(page, "leash-offer-look");
+                Assert.True(look.IsEffectivelyEnabled);
+                // Inspect the initial frame before the real-time thud reaches its overshoot.
+                look.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
                 var ask = LeashAskWindow.Current!;
                 var scale = ask.Card.RenderTransform as ScaleTransform;
                 Assert.Equal(motion != MotionLevel.Off, scale != null);   // the open started it; the clock is held at the first frame
@@ -268,6 +272,8 @@ public sealed class LeashAskTests
     public void EscapeClosesTheAskAndTheOfferStays() =>
         Run((shell, page, wire, _) =>
         {
+            // Bind before Look so the timer cannot enqueue this offer after the card opens.
+            shell.RebindLeashAsks();
             LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
             var previous = LeashAskWindow.Current!;
             LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
@@ -280,6 +286,31 @@ public sealed class LeashAskTests
             Assert.DoesNotContain(wire.Calls, c => c.Op == "answer");
             Tagged<Border>(page, "leash-offer-row:u_juno");
         });
+    // WPF consumes a shown offer: a rebind while it is open must not queue it again (Escape: #5368's
+    // ManualLookBeforeServiceRebindDoesNotReopenTheOffer).
+    [Fact]
+    public void RebindingWhileAnOfferIsOpenDoesNotReopenItAfterDecline() =>
+        Run((shell, page, wire, _) =>
+        {
+            var service = LeashHead.Service;
+            LeashHead.Service = null;
+            shell.RebindLeashAsks();
+            LeashHead.Service = service;
+            page.OnShown();
+            wire.Reply = new JObject { ["ok"] = true, ["status"] = "declined" };
+            var look = Tagged<Button>(page, "leash-offer-look");
+            Assert.True(look.IsEffectivelyEnabled);
+            look.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            var ask = LeashAskWindow.Current!;
+            shell.RebindLeashAsks();
+            LeashGateCardTests.Click(Tagged<Button>(ask.Card, "leash-ask-no"));
+            Assert.False(ask.IsVisible);
+            Assert.False((bool?)wire.Calls.Last().Body["accept"]);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
+            Assert.Single(wire.Calls.Where(c => c.Op == "answer"));
+        });
+
     // Look can open the offer before the shell's two-second rebind binds the service; that rebind (or a late
     // snapshot) must not queue the offer again, or it reopens as soon as Escape closes it.
     [Fact]
@@ -343,8 +374,9 @@ public sealed class LeashAskTests
 
     [Fact]
     public void NotNowDeclinesWithoutWaitingForTheReadClock() =>
-        Run((_, page, wire, _) =>
+        Run((shell, page, wire, _) =>
         {
+            shell.RebindLeashAsks();
             wire.Reply = new JObject { ["ok"] = true, ["status"] = "declined" };
             LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
             var card = LeashAskWindow.Current!.Card;
