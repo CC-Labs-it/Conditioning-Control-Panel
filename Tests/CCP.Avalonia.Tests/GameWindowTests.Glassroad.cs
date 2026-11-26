@@ -309,13 +309,13 @@ public sealed partial class GameWindowTests
         => Assert.False(GlassroadHostRules.TrySign(method, path, body, "u_1", out _, out _));
 
     [Fact]
-    public void Glassroad_OwnershipAndToys_KeepShopClosed()
+    public void Glassroad_OwnershipAndToys_AdvertiseShop()
     {
         var grants = new[] { "cos.kart.body.petal", "cos.other", "cos.kart.body.petal", "cos.kart." + new string('x', 65) };
         var init = GlassroadHostRules.InitFrame("u", "Kit", 2, false, 1, 1, grants: grants, toysConnected: true);
         Assert.Equal(new[] { "cos.kart.body.petal" }, init["identity"]!["grants"]!.Values<string>());
         Assert.True((bool)init["caps"]!["toysConnected"]!);
-        Assert.False((bool)init["caps"]!["prizeCounter"]!);
+        Assert.True((bool)init["caps"]!["prizeCounter"]!);
         Assert.Equal("owned", (string?)GlassroadHostRules.OwnedFrame(grants)["type"]);
         Assert.Equal(64, GlassroadHostRules.KartGrants(Enumerable.Range(0, 100).Select(i => "cos.kart." + i)).Count);
         Assert.Equal(JTokenType.Null, GlassroadHostRules.InitFrame(null, "Kit", 0, false, 1, 1, grants: grants)["identity"]!.Type);

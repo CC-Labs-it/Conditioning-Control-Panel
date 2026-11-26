@@ -69,6 +69,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             RemoteCommands.RefreshOverlays = refreshOverlays;
             Action stopSession = StopSessionFromRemote;   // the one remote session stop (trigger_panic calls it too)
             RemoteCommands.StopSession = stopSession;
+            var wallpaper = Platform.WallpaperHead.Service;
+            RemoteCommands.Wallpaper = wallpaper;
             Func<string, string?> playHypnotube = PlayHypnotubeFromRemote;
             Action stopBrowserVideo = StopBrowserVideoFromRemote;
             (RemoteCommands.PlayHypnotube, RemoteCommands.StopBrowserVideo) = (playHypnotube, stopBrowserVideo);
@@ -114,7 +116,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 r.ControllerIdleChanged -= idle;
                 r.SessionEnded -= ended;
                 r.CommandReceived -= command;
-                if (ReferenceEquals(RemoteCommandOwner, this)) RemoteCommandOwner = null;
+                if (ReferenceEquals(RemoteCommandOwner, this))
+                {
+                    RemoteCommandOwner = null;
+                    if (ReferenceEquals(RemoteCommands.Wallpaper, wallpaper)) RemoteCommands.Wallpaper = null;
+                }
                 _remoteOverlayTimer?.Stop();
                 CancelRemoteMoreConfirmation();
                 if (RemoteCommands.RefreshOverlays == refreshOverlays) RemoteCommands.RefreshOverlays = null;

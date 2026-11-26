@@ -28,6 +28,42 @@ namespace CCP.Avalonia.Tests;
 /// MainWindow.RemoteControl.cs overlay, toast, Start lock, big emotes and End Session.</summary>
 public sealed class RemoteControlShellTests
 {
+    private sealed class WallpaperPlatform : IWallpaperPlatform
+    {
+        public string? Capture() => "original";
+        public bool Apply(string path) => true;
+        public bool Restore(string snapshot) => true;
+    }
+
+    [Fact]
+    public void ShellSeedsAndReleasesRemoteWallpaperHost() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var oldHost = global::ConditioningControlPanel.Avalonia.Platform.WallpaperHead.Service;
+        var oldRemote = RemoteCommands.Wallpaper;
+        var host = new WallpaperHost(new WallpaperPlatform());
+        MainShellWindow? shell = null;
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.Platform.WallpaperHead.Service = host;
+            RemoteCommands.Wallpaper = null;
+            shell = new MainShellWindow();
+            shell.Show();
+            Assert.Same(host, RemoteCommands.Wallpaper);
+            shell.Close();
+            Assert.Null(RemoteCommands.Wallpaper);
+        }
+        finally
+        {
+            shell?.Close();
+            global::ConditioningControlPanel.Avalonia.Platform.WallpaperHead.Service = oldHost;
+            RemoteCommands.Wallpaper = oldRemote;
+        }
+    });
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

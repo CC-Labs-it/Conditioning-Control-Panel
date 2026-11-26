@@ -208,7 +208,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         }
 
         /// <summary>true = acked, false = connected but no ack in time, null = nobody listening.</summary>
-        static bool? RequestShow(string pipe, string? payload)
+        internal static bool? RequestShow(string pipe, string? payload)
         {
             var bytes = Encoding.UTF8.GetBytes(payload ?? "");
             if (bytes.Length > 65536) bytes = Array.Empty<byte>();   // unreadable reads as a bare relaunch
@@ -244,6 +244,12 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 if (c.ReadAsync(buf, cts.Token).AsTask().GetAwaiter().GetResult() != 1) return false;
                 // Older primaries may close immediately after the ack. It still proves liveness.
                 try { c.WriteByte(1); } catch (IOException) { } catch (ObjectDisposedException) { }
+                // Keep the send gate until the primary drops this connection. On Windows the next sender can
+                // connect only once the listener listens again, and its one connect second must not include
+                // the primary's hop from the receipt to Disconnect (a slow hop lost a queued launch in CI).
+                using var drained = new CancellationTokenSource(ShowAckTimeoutMs);
+                try { c.ReadAsync(buf, drained.Token).AsTask().GetAwaiter().GetResult(); }
+                catch (Exception e) when (e is IOException or OperationCanceledException or ObjectDisposedException) { }
                 return true;
             }
             catch (TimeoutException) { return null; }
