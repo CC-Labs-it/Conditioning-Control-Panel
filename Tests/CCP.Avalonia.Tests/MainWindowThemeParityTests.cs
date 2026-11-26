@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
@@ -223,6 +224,31 @@ public sealed class MainWindowThemeParityTests
             view.FindControl<Button>("BtnQuestSubRoadmap")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Same(inactive, view.FindControl<Button>("BtnQuestSubDaily")!.Theme);
             Assert.Same(active, view.FindControl<Button>("BtnQuestSubRoadmap")!.Theme);
+        }
+        finally { host.Close(); }
+        return Task.CompletedTask;
+    });
+    // WPF MainWindow.xaml:57,89 suppresses the keyboard focus visual on both quest tab styles.
+    [Theory]
+    [InlineData("BtnQuestSubDaily")]
+    [InlineData("BtnQuestSubRoadmap")]
+    public Task QuestTabHasNoKeyboardFocusAdorner(string name) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var view = new QuestsTabView();
+        var host = new Window { Width = 900, Height = 700, Content = view };
+        host.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var button = view.FindControl<Button>(name)!;
+            var layer = AdornerLayer.GetAdornerLayer(button)!;
+            Assert.NotNull(layer.DefaultFocusAdorner);
+            Assert.True(button.Focus(NavigationMethod.Tab));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(button.IsSet(Control.FocusAdornerProperty));
+            Assert.Null(button.FocusAdorner);
+            Assert.DoesNotContain(layer.Children, child => AdornerLayer.GetAdornedElement(child) == button);
         }
         finally { host.Close(); }
         return Task.CompletedTask;
