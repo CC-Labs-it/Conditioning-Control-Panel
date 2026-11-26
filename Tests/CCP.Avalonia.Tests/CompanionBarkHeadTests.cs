@@ -198,6 +198,30 @@ public sealed class CompanionBarkHeadTests
         }
     });
 
+    [Theory]
+    [InlineData("GameCompleted", "BubbleCountCompleted")]
+    [InlineData("GameFailed", "BubbleCountFailed")]
+    public void BubbleCountResultsReachBarkAndDetach(string source, string trigger) => WithSeamsRestored(_ =>
+    {
+        BarkHead.Stop();
+        var previous = CoreEngine.BubbleCount;
+        var game = new ConditioningControlPanel.Services.BubbleCountScheduler(new PanicSurfacesTests.CountHost());
+        CoreEngine.BubbleCount = game;
+        var rule = Rule(trigger, "reacted"); rule.ClassRaw = "safety";
+        var engine = Seeded(rule, out var spoken); int count = 0;
+        engine.BarkSpoken += (_, _) => count++;
+        try
+        {
+            BarkHead.WireSources(engine);
+            var field = game.GetType().GetField(source, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            ((System.Action?)field.GetValue(game))?.Invoke();
+            Assert.Equal("reacted", spoken()); Assert.Equal(1, count);
+            BarkHead.Stop();
+            Assert.Null(field.GetValue(game));
+        }
+        finally { BarkHead.Stop(); CoreEngine.BubbleCount = previous; game.Dispose(); }
+    });
+
     [Fact]
     public void BrainDrainTriggerReachesBarkAndStopDetaches() => WithSeamsRestored(_ =>
     {
