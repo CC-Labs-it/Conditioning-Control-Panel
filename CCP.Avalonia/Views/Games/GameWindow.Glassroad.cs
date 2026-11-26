@@ -293,6 +293,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>One 5 s watchdog tick (WPF StartWatch, GlassroadHostRules.Watch): before ready, 45 s with no page
         /// message at all closes it (the bridge beats every 2 s); after ready, silent past 20 s gets one ping, then the
         /// close. A page with a recent `loading` frame (a course build, #1543) gets up to 90 s of silence first.</summary>
+        internal void MarkGlassroadUnresponsive() => _grUnresponsive = true;   // the race shell's hang report
         internal string CheckGlassroadWatch(DateTime nowUtc)
         {
             if (!_grOpen || _closing) return "idle";
