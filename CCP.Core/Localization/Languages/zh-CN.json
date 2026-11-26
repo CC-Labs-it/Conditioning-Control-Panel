@@ -9036,5 +9036,7 @@
   "remote_invalid_hypnotube_url": "不是有效的 HypnoTube 视频链接",
   "remote_browser_unavailable": "浏览器无法打开",
   "remote_browser_screen_busy": "{0}正在屏幕上显示",
-  "chaos_camgirl_tip": "小费 +{0} 金币"
+  "chaos_camgirl_tip": "小费 +{0} 金币",
+  "native_repair_title": "Conditioning Control Panel - 启动失败",
+  "native_repair_message": "Conditioning Control Panel 无法加载图形库，因此无法启动。\n\n请关闭应用，删除此临时文件夹，然后重新启动：\n\n{0}\n\n文件夹会自动重建。如果仍无法启动，请检查杀毒软件是否隔离了应用文件。\n\n详情：{1}"
 }
