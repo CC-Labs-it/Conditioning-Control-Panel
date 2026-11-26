@@ -290,7 +290,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Log.Warning("OpenNavSection: no section {Section}", section);
                 return;
             }
-            ShowTab(section == NavSections.Settings ? "appsettings" : NavLastTabFor(section));
+            // WPF NavRailRules.TargetTab: Home is the way back from the hidden Premium page.
+            var tab = section == NavSections.Home ? NavSections.DefaultTab(section)!
+                : section == NavSections.Settings ? "appsettings" : NavLastTabFor(section);
+            ShowTab(tab);
         }
 
         /// <summary>WPF RegisterSectionShortcuts (:589): Ctrl+1..7 jump to the rail's sections.
