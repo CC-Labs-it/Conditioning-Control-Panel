@@ -51,6 +51,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF GameSurfaces.cs:53-55 backroom/breakout: every web game window (Views/Games/GameWindow).
             new("games", _ => { Platform.RaceEngineDownload.Cancel(); Games.GameWindow.CloseAllForPanic(); }, Games.GameWindow.IsAnyOpen),
             new("upgrade-intro", MainShellWindow.StopUpgradeIntroForPanic),
+            new("deeper-nudge", MainShellWindow.StopVideoEnhanceNudgeForPanic),
             new("online-licence", MainShellWindow.CloseOnlineLicenceCardForPanic),   // stricter, as upgrade-intro: closes unseen, owed next launch
             new("first-show", _ => WelcomeShow.FirstShowService.Stop()),   // WPF MainWindow.xaml.cs:1553, before CancelPendingAi
             // WPF KillAllAudio App.xaml.cs:1847 stops Flash; stamp dismissal is stricter.
@@ -91,6 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF :2000: non-Escape panic closes the palette without consuming its Escape rung.
             // WPF MainWindow.xaml.cs:2042-2055 stops media; retained previews are also cleared here.
             new("scrolller-web", _ => Controls.WebHost.StopScrolllerForPanic()),
+            new("browser-discovery", sh => sh?.Named<Tabs.SettingsTabView>("SettingsTab")?.StopBrowserDiscoveryForPanic()),
             new("settings-palette", _ => SettingsPaletteWindow.CloseIfOpen()),
             new("perfect-week-bonus", _ => App.StopPerfectWeekBonus()), // WPF SkillTreeService.cs:535-563; close every new popup on panic.
             // WPF PanicStopEverySurface (:2003): the toys go to zero, bypassing throttles and gates.
@@ -124,7 +126,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("programs-fx", sh => sh?.Named<Tabs.ProgramsTabView>("ProgramsTab")?.StopProgramFxForPanic()),
             // WPF b9368d963 (MainWindow.xaml.cs PanicStopEverySurface "web video" / "Deeper player"): page video and the
             // Deeper player kept playing after a panic. WPF :2045-2046 media block, before the tail's StopEngine.
-            new("browser-media", sh => (sh ?? MainShellWindow.Current)?.PanicPauseBrowserMedia()),
+            new("browser-media", sh =>
+            {
+                // WPF PanicEndBrowserMedia -> BrowserMedia.ForceEndCore("panic"): the session and its tick end too.
+                try { (sh ?? MainShellWindow.Current)?.PanicPauseBrowserMedia(); }
+                finally { ConditioningControlPanel.Services.Browser.BrowserMediaSession.Shared.OnMediaStopped("panic"); }
+            }),
             new("deeper-player", _ => Deeper.EnhancementPlayerWindow.PanicPauseAll()), // WPF MainWindow.xaml.cs:2067
             // WPF :1554 CancelPendingAi (right after FirstShowService.Stop :1553) runs long before StopEngine (:1838); :1721-1732 game
             // surfaces and Lab minigames (GameSurfaces.cs:50 'chaos') close before RunPanicStopTail (:1733); :1819 KillAllAudio

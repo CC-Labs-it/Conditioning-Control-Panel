@@ -17,10 +17,11 @@ public partial class SettingsTabView
 
     private void HookBrowserEnhance()
     {
-        BrowserWebHost.NavigationStarting += StopBrowserEnhancement;
+        BrowserWebHost.NavigationStarting += () => { _browserDiscoveryPanicStopped = false; StopBrowserDiscovery(); StopBrowserEnhancement(); };
         BrowserWebHost.NavigationCompleted += url => EvaluateBrowserEnhancement(url.ToString());
+        BrowserWebHost.NavigationFinished += (url, success) => { if (success) _ = DiscoverBrowserEnhancementAsync(url); };
         AttachedToVisualTree += (_, _) => EvaluateBrowserEnhancement(BrowserWebHost.CurrentUrl?.ToString());
-        DetachedFromVisualTree += (_, _) => StopBrowserEnhancement();
+        DetachedFromVisualTree += (_, _) => { StopBrowserDiscovery(); StopBrowserEnhancement(); };
         UpdateBrowserEnhanceStatus(null);
     }
 
@@ -32,6 +33,7 @@ public partial class SettingsTabView
         EvaluateBrowserEnhancement(BrowserWebHost.CurrentUrl?.ToString());
     }
 
+    // Library host only: a discovered enhancement runs on its own host (SettingsTabView.BrowserDiscovery.cs).
     internal void StopBrowserEnhancement()
     {
         _browserEnhanceHost.Unload();

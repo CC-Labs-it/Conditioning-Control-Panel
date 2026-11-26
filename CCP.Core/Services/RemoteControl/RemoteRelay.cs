@@ -596,6 +596,7 @@ namespace ConditioningControlPanel.Services
             if (LockCardScheduler.Instance.IsRunning) list.Add("lock_card");
             if (CoreMindWipe.IsRunning) list.Add("mind_wipe");
             if (CoreBouncingText.IsRunning) list.Add("bounce_text");   // WPF RemoteControlService.cs:928-929
+            if (RemoteCommands.Wallpaper?.IsActive == true) list.Add("wallpaper");
             return list;
         }
 

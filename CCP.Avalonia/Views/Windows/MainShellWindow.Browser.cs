@@ -3,14 +3,16 @@
 // escape hatch are live. WebHost also has a script channel and the card reapplies its mute script.
 // BrowserPopout.cs wires pop-out, focus and return without discarding the native page.
 // First load uses the mod default (WPF MainWindow.Browser.cs:225).
-// Native engine mute and construction retry are live (WebHost). Missing: asynchronous init retry, general
-// document-created scripts, media reporting, playlist autoplay and page fullscreen/mirroring.
+// Native engine mute and construction retry are live (WebHost). Media reporting: BrowserMedia.cs. Missing: asynchronous
+// init retry, general document-created scripts and page fullscreen/mirroring.
 // The remote controller's HypnoTube video (play_hypnotube) plays here with the same autoplay request. Watch links request video autoplay after navigation completes (#3961); WPF also has an
 // earlier DOM-ready signal that WebHost does not expose.
 // Profile account/art work belongs to its separate ledger rows. Site-radio mod sync lives on the card.
 
 using System;
 using System.Threading.Tasks;
+using System.Text.Json;
+using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using ConditioningControlPanel.Avalonia.Views.Controls;
@@ -86,9 +88,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return Loc.Get("remote_browser_unavailable");
             _remoteBrowserVideoActive = true;
             RevealBrowserForRemoteVideo(true);
+            // WPF :3209: the controller's video takes the media session over.
+            ConditioningControlPanel.Services.Browser.BrowserMediaSession.Shared.ReplaceSession(
+                ConditioningControlPanel.Services.Browser.BrowserMediaSession.MediaOwner.Remote, takeover: true);
             if (NavigateToUrlInBrowser(url, autoPlayFullscreen: true, userInitiated: false)) return null;
             _remoteBrowserVideoActive = false;
             RevealBrowserForRemoteVideo(false);
+            ConditioningControlPanel.Services.Browser.BrowserMediaSession.Shared.OnMediaStopped("remote-browser-unavailable");
             return Loc.Get("remote_browser_unavailable");
         }
 
@@ -96,7 +102,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// (:995): the page stops, back to the site home, then the blindfold goes back on.</summary>
         internal void StopBrowserVideoFromRemote()
         {
-            if (_remoteBrowserVideoActive) EndWebVideoTakeover();
+            if (!_remoteBrowserVideoActive) return;
+            // WPF :3234 ForceEndCore("remote-stop"): teardown first, then the session ends.
+            try { EndWebVideoTakeover(); }
+            finally { ConditioningControlPanel.Services.Browser.BrowserMediaSession.Shared.OnMediaStopped("remote-stop"); }
         }
 
         /// <summary>The remote branch of WPF EndWebVideoTakeover (:995); a no-op unless a controller's video is up.</summary>
@@ -111,6 +120,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private int _browserRequestGeneration;
         private Action<Uri, bool>? _pendingVideoAutoPlay;
         private WebHost? _pendingVideoHost;
+        private WebHost? _cutHost;
+        private Action<string>? _cutMessage;
+        private Action? _cutNavigation;
+
 
         // WPF MainWindow.Browser.cs:793-815 arms once before navigation, and :835-837
         // waits 1.5 seconds before injection. WebHost has completion but no DOM-ready event.
@@ -119,19 +132,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Any new navigation, panic or takeover stop drops a pending or delayed autoplay.</summary>
         private void CancelVideoAutoPlay()
         {
-            ++_browserRequestGeneration; LockCardWindow.CancelWebVideoTakeover();
+            ++_browserRequestGeneration;
+            LockCardWindow.CancelWebVideoTakeover();
+            if (_cutHost != null)
+            {
+                if (_cutMessage != null) _cutHost.WebMessage -= _cutMessage;
+                if (_cutNavigation != null) _cutHost.NavigationBeginning -= _cutNavigation;
+            }
+            _cutHost = null;
+            _cutMessage = null;
+            _cutNavigation = null;
             if (_pendingVideoHost != null && _pendingVideoAutoPlay != null)
                 _pendingVideoHost.NavigationFinished -= _pendingVideoAutoPlay;
             _pendingVideoHost = null;
             _pendingVideoAutoPlay = null;
         }
 
-        // Playlists are a separate WPF path (AutoPlayBambiCloudPlaylistAsync), not ported here.
-        private static bool WantsVideoAutoPlay(string url, WebHost host) => host.HasEngine
-            && !url.Contains("bambicloud.com/playlist/", StringComparison.OrdinalIgnoreCase);
+        private static bool WantsVideoAutoPlay(string url, WebHost host) => host.HasEngine;
+
+        private static bool IsBambiPlaylist(string url) =>
+            url.Contains("bambicloud.com/playlist/", StringComparison.OrdinalIgnoreCase);
 
         /// <summary>Runs the autoplay script once, after the next successful navigation completes.</summary>
-        private void ArmVideoAutoPlay(WebHost host)
+        private void ArmVideoAutoPlay(WebHost host, string url, bool appDriven = false)
         {
             var request = _browserRequestGeneration;
             void OnFinished(Uri completedUrl, bool success)
@@ -139,18 +162,67 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 host.NavigationFinished -= OnFinished;
                 _pendingVideoHost = null;
                 _pendingVideoAutoPlay = null;
-                if (success) _ = PlayVideoAfterLoadAsync(host, request);
+                if (success) _ = PlayVideoAfterLoadAsync(host, request, appDriven, IsBambiPlaylist(url));
             }
             _pendingVideoHost = host;
             _pendingVideoAutoPlay = OnFinished;
             host.NavigationFinished += OnFinished;
         }
 
-        private async Task PlayVideoAfterLoadAsync(WebHost host, int request)
+        // A random offset is only useful when the app can stop the capped slice.
+        // WPF BrowserMediaService.cs:304-321 force-ends it; that service is not ported yet.
+        private static bool BrowserPlaybackCapEnforced => false;
+
+        private async Task PlayVideoAfterLoadAsync(WebHost host, int request, bool appDriven, bool playlist)
         {
             await BrowserAutoPlayDelay();
             if (request != _browserRequestGeneration) return;
-            await host.InvokeScriptAsync(WebHostTakeover.VideoAutoPlayScript);
+            // BambiCloud playlists take their own autoplay script (WPF AutoPlayBambiCloudPlaylistAsync).
+            if (playlist)
+            {
+                await host.InvokeScriptAsync(WebHostTakeover.PlaylistAutoPlayScript);
+                return;
+            }
+            // User-requested watch links do not need the cut metadata channel.
+            if (!appDriven)
+            {
+                await host.InvokeScriptAsync(WebHostTakeover.VideoAutoPlayScript);
+                return;
+            }
+            var token = Guid.NewGuid().ToString("N");
+            if (appDriven && BrowserPlaybackCapEnforced)
+            {
+                void OnMessage(string body)
+                {
+                    try
+                    {
+                        using var json = JsonDocument.Parse(body);
+                        var root = json.RootElement;
+                        if (!root.TryGetProperty("type", out var type) || type.GetString() != "ccpCutMetadata"
+                            || !root.TryGetProperty("request", out var id) || id.GetString() != token
+                            || !root.TryGetProperty("dur", out var duration) || !duration.TryGetDouble(out var seconds)
+                            || !double.IsFinite(seconds) || seconds <= 0 || seconds > long.MaxValue / 1000d
+                            || request != _browserRequestGeneration) return;
+                        var settings = CoreSettings.Current;
+                        if (!settings.VideoCutRandomStart || settings.VideoMaxDurationSeconds <= 0) return;
+                        host.WebMessage -= OnMessage;
+                        _cutMessage = null;
+                        var offset = ConditioningControlPanel.Services.Video.VideoLengthCapRules.StartOffsetMs(
+                            settings.VideoMaxDurationSeconds, (long)(seconds * 1000), Random.Shared);
+                        _ = host.InvokeScriptAsync("if(window.__ccpCutRequest==='" + token
+                            + "') window.__ccpSetCutStart?.(" + (offset / 1000d).ToString(CultureInfo.InvariantCulture) + ");");
+                    }
+                    catch (JsonException) { }
+                    catch (InvalidOperationException) { }
+                }
+                void OnNavigation() => CancelVideoAutoPlay();
+                _cutHost = host;
+                _cutMessage = OnMessage;
+                _cutNavigation = OnNavigation;
+                host.WebMessage += OnMessage;
+                host.NavigationBeginning += OnNavigation;
+            }
+            await host.InvokeScriptAsync(WebHost.CarrierShim + WebHostTakeover.VideoAutoPlayScript.Replace("__CCP_CUT_REQUEST__", token));
         }
 
         /// <summary>Homepage of whichever site radio is selected. BambiCloud is the default, as on
@@ -179,7 +251,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Points the web view at a URL. A missing host (the tab is not in the tree, as in
         /// a single-view render) is a no-op that returns false, never a throw.</summary>
-        private bool NavigateBrowser(string url, bool linkNavigation = false, bool autoPlayFullscreen = false)
+        private bool NavigateBrowser(string url, bool linkNavigation = false, bool autoPlayFullscreen = false, bool appDriven = false)
         {
             CancelVideoAutoPlay();
             try
@@ -190,7 +262,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (BrowserPage?.PrepareBrowserNavigation() == false) return false;
                 // WPF MainWindow.Browser.cs:458,730: later links waiting for init use 50%.
                 host.SetBrowserZoom(host.BrowserZoomReady || (linkNavigation && host.BrowserZoom is not null) ? 0.5 : 0.75);
-                if (autoPlayFullscreen && WantsVideoAutoPlay(url, host)) { LockCardWindow.BeginWebVideoTakeover(); ArmVideoAutoPlay(host); }
+                if (autoPlayFullscreen && WantsVideoAutoPlay(url, host)) { LockCardWindow.BeginWebVideoTakeover(); ArmVideoAutoPlay(host, url, appDriven); }
                 if (!host.Navigate(target)) { CancelVideoAutoPlay(); return false; }   // even when equal: WPF #867, re-click goes home
                 Log.Information("Browser navigated to {Host}", ConditioningControlPanel.Services.Logging.UrlLog.Host(url));
                 return true;
@@ -256,14 +328,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Navigates the embedded browser and brings its tab forward. Public because
         /// the callers live elsewhere on WPF (speech-bubble links, the remote controller).</summary>
         /// <param name="autoPlayFullscreen">Requests video playback and fullscreen once the page has loaded.
-        /// Playlist autoplay and the browser media session are not ported.</param>
+        /// BambiCloud playlists take their own autoplay script.</param>
         public bool NavigateToUrlInBrowser(string url, bool autoPlayFullscreen = false, bool userInitiated = true)
         {
             if (!PrepareBrowserNavigation(url, autoPlayFullscreen, userInitiated)) { CancelVideoAutoPlay(); return false; }
             // WPF MainWindow/MainWindow.Browser.cs:487-498: HTTPS only, after the offline gate.
             // ponytail: an unavailable adapter is known immediately; no 12-second ready poll is needed.
             // The navigation may rebuild a failed adapter first (WebHost.RetryFailedConstruction).
-            var navigated = NavigateBrowser(url, linkNavigation: true, autoPlayFullscreen: autoPlayFullscreen);
+            var navigated = NavigateBrowser(url, linkNavigation: true, autoPlayFullscreen: autoPlayFullscreen, appDriven: !userInitiated);
             if (BrowserView is { HasEngine: false })
             {
                 // reports false with no engine; the fallback panel still names the URL
@@ -293,7 +365,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Armed only once this request was the one that loaded: panic or a newer navigation
             // during the gate wait bumps the generation, and a refused or cancelled wait plays nothing.
             if (result == true && request == _browserRequestGeneration && WantsVideoAutoPlay(url, host))
-                ArmVideoAutoPlay(host);
+                ArmVideoAutoPlay(host, url);
             return result;
         }
 
