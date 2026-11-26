@@ -269,8 +269,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal GameWindow(Game spec)
         {
             Spec = spec;
-            // WPF ChaosWebViewHost.cs:1584: local pages only; Just Drop is a remote site.
-            Web = new WebHost { HostedPageMotion = true, HostedPageSink = spec.Id != JustDropId };
+            // WPF ChaosWebViewHost.cs:1520-1527: suppress browser chrome in game windows;
+            // :1584: sink routing for local pages only (Just Drop is a remote site).
+            Web = new WebHost { HostedPageMotion = true, HostedPageSink = spec.Id != JustDropId, ConfigureNative = Platform.SpiralWebView2Policy.Attach };
             if (spec.Id == DtrhId) Web.BrowserProcessFailed += () => RecoverDtrh("process-failed");
             if (spec.Id == "goon") Web.InjectCarrier = true; // before the native view or first navigation
             if (spec.Id == FypId || spec.Id == JustDropId || spec.Id == "loom" || IsRace || IsGlassroad) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };

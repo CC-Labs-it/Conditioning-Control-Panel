@@ -581,6 +581,137 @@ public sealed partial class PossessionShellTests
         Assert.Null(effect.Dialog);
     });
 
+    private sealed class FirstDokiTitle : Random
+    {
+        public override int Next(int maxValue) => 0;
+    }
+
+    [Fact]
+    public void DokiDialog_UsesBambiTitleOnlyForBambiAndNamesTheWindow() => Run(rig =>
+    {
+        var oldProvider = CoreMods.ActiveModIdProvider;
+        try
+        {
+            foreach (var mod in new[] { BuiltInMods.BambiSleepId.ToUpperInvariant(), BuiltInMods.CCPDefaultId })
+            {
+                CoreMods.ActiveModIdProvider = () => mod;
+                string? named = null;
+                var ctx = new PossessionContext
+                {
+                    Host = rig.Shell, Attribution = new ImmediateAttribution(), Rung = PossessionRung.ItKnows,
+                    Intensity = PossessionIntensity.FullDoki, Photosafe = false, Rng = new FirstDokiTitle(),
+                    ElapsedFraction = .9, Remaining = TimeSpan.FromMinutes(1), Name = (_, name) => named = name
+                };
+                var effect = new DokiDialogEffect();
+                effect.ApplyAsync(ctx, null, CancellationToken.None).GetAwaiter().GetResult();
+                var dialog = Assert.IsType<Window>(effect.Dialog);
+                var expected = mod == BuiltInMods.CCPDefaultId ? "possession_doki_title_1" : "possession_doki_title_bambi";
+                Assert.NotEqual(expected, Loc.Get(expected));
+                Assert.Equal(Loc.Get(expected), dialog.Title);
+                Assert.Equal(Loc.Get("possession_doki_window"), named);
+                effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+                Assert.False(dialog.IsVisible);
+            }
+        }
+        finally { CoreMods.ActiveModIdProvider = oldProvider; }
+    });
+
+    [Fact]
+    public void DokiDialog_BarkNamesTheWindow() => Run(rig =>
+    {
+        string? named = null;
+        var ctx = new PossessionContext
+        {
+            Host = rig.Shell, Attribution = new ImmediateAttribution(), Rung = PossessionRung.ItKnows,
+            Intensity = PossessionIntensity.FullDoki, Photosafe = false, Rng = new Random(1),
+            ElapsedFraction = .9, Remaining = TimeSpan.FromMinutes(1), Name = (_, name) => named = name
+        };
+        var effect = new DokiDialogEffect();
+        effect.ApplyAsync(ctx, null, CancellationToken.None).GetAwaiter().GetResult();
+        Assert.NotEqual("possession_doki_window", Loc.Get("possession_doki_window"));
+        Assert.Equal(Loc.Get("possession_doki_window"), named);
+        effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+    });
+
+    [Fact]
+    public void DokiDialog_PanicSurfaceClosesTheLiveWindow() => Run(rig =>
+    {
+        rig.Lockdown.Activate(TimeSpan.FromMinutes(30));
+        Frame();
+        typeof(PossessionDirector).GetField("_nextDue", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(rig.Director, DateTime.MaxValue);
+        rig.Clock += TimeSpan.FromMinutes(27);
+        Tick(rig.Lockdown);
+        Frame();
+        var effect = new DokiDialogEffect();
+        var effects = (List<IPossessionEffect>)typeof(PossessionDirector).GetField("_effects", BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(rig.Director)!;
+        effects.Clear(); effects.Add(effect);
+        rig.Director.RequestReactive("dokidialog", null);
+        Dispatcher.UIThread.RunJobs();
+        rig.Frames.Frame(TimeSpan.FromMilliseconds(1000));
+        rig.Frames.Frame(TimeSpan.FromMilliseconds(1500));
+        Dispatcher.UIThread.RunJobs();
+        var dialog = Assert.IsType<Window>(effect.Dialog);
+        Assert.True(dialog.IsVisible);
+        AvApp.Possession = rig.Director;
+        PanicSurfaces.All.Single(s => s.Id == "possession").Stop(rig.Shell);
+        Assert.False(dialog.IsVisible);
+        Assert.Null(effect.Dialog);
+    }, s => s.LockdownPossessionIntensity = 2);
+
+    [Theory]
+    [InlineData(1, 120)]
+    [InlineData(200, 200)]
+    [InlineData(600, 320)]
+    public Task DokiDialog_UndoFadesAndCloses(int requestedMs, int actualMs) => RunAsync(async rig =>
+    {
+        var effect = new DokiDialogEffect();
+        try
+        {
+            await effect.ApplyAsync(DokiContext(rig, PossessionRung.ItKnows, PossessionIntensity.FullDoki), null, CancellationToken.None);
+            var dialog = Assert.IsType<Window>(effect.Dialog);
+            var undo = effect.UndoAsync(TimeSpan.FromMilliseconds(requestedMs));
+            Assert.True(dialog.IsVisible);
+            Assert.False(undo.IsCompleted);
+            rig.Frames.Frame(TimeSpan.FromMilliseconds(1000));
+            rig.Frames.Frame(TimeSpan.FromMilliseconds(1000 + actualMs / 2));
+            Assert.InRange(dialog.Opacity, 0.49, 0.51);
+            rig.Frames.Frame(TimeSpan.FromMilliseconds(1000 + actualMs));
+            await undo;
+            Assert.False(dialog.IsVisible);
+            Assert.Null(effect.Dialog);
+            Assert.False(effect.IsLive);
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); }
+    });
+
+    [Theory]
+    [InlineData("panic")]
+    [InlineData("director")]
+    [InlineData("detach")]
+    public Task DokiDialog_StopDuringFadeClosesImmediately(string stop) => RunAsync(async rig =>
+    {
+        rig.Shell.AttachPossessionHost();
+        var effect = new DokiDialogEffect();
+        try
+        {
+            await effect.ApplyAsync(DokiContext(rig, PossessionRung.ItKnows, PossessionIntensity.FullDoki), null, CancellationToken.None);
+            var dialog = Assert.IsType<Window>(effect.Dialog);
+            // The director has already released its live entry when an animated undo starts.
+            var undo = effect.UndoAsync(TimeSpan.FromMilliseconds(320));
+            rig.Frames.Frame(TimeSpan.FromMilliseconds(1000));
+            rig.Frames.Frame(TimeSpan.FromMilliseconds(1160));
+            Assert.InRange(dialog.Opacity, 0.49, 0.51);
+            if (stop == "panic") PanicSurfaces.All.Single(s => s.Id == "possession").Stop(null);
+            else if (stop == "director") rig.Director.UndoAll();
+            else rig.Director.DetachHost(rig.Shell);
+            Assert.False(dialog.IsVisible);
+            Assert.Null(effect.Dialog);
+            await undo;
+            Assert.False(effect.IsLive);
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); }
+    });
+
     [Fact]
     public void DokiDialog_ProgressAdmitsNothingHappened_AndFailsafeCloses() => Run(rig =>
     {
