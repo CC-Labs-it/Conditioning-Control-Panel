@@ -127,6 +127,8 @@ internal sealed class ChaosHubMenuFx : Control
     internal void Step()
     {
         if (!ChaosSkiaFxOverlay.Enabled) return;
+        // Motion off holds the authored glow, sheen, twinkles and fog still, as the menu zoom does.
+        if (global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level == global::ConditioningControlPanel.Models.MotionLevel.Off) return;
         _clock += Dt;
         float aspect = Bounds.Height > 0 ? (float)(Bounds.Width / Bounds.Height) : 1;
         foreach (var p in _fog)
