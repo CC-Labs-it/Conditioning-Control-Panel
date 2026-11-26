@@ -1,6 +1,8 @@
 {
   "chaos_no_focus_announce": "NICHT GENUG FOKUS ZUM ENTSCHÄRFEN",
   "chaos_unleashed_announce": "ENTFESSELT",
+  "mod_art_frame_surface_railChip": "Leistenkachel", "mod_art_frame_surface_railCard": "Leistenstarter", "mod_art_frame_surface_playCard": "Spielkartenkopf", "mod_art_frame_surface_playCardTall": "Spielkartenkopf (hoch)", "mod_art_frame_surface_loomStrip": "Loom-Streifen", "mod_art_frame_surface_playHero": "Spielbanner", "mod_art_frame_surface_pageHeader": "Seitenkopf", "mod_art_frame_surface_intakeStrip": "Intake-Streifen",
+  "mod_art_frame": "Rahmen", "mod_art_framed": "Gerahmt", "mod_art_frame_title": "Bild einrahmen", "mod_art_frame_help": "Ziehen zum Verschieben, Mausrad zum Zoomen, Doppelklick zum Zurücksetzen. Jede Fläche hat ihren eigenen Ausschnitt.", "mod_art_frame_reset": "Zurücksetzen", "mod_art_frame_reset_all": "Alle zurücksetzen", "mod_art_frame_fluid": "Die Breite folgt dem Fenster. Das Motiv sollte im gestrichelten Bereich bleiben.", "mod_art_frame_decode": "Das Bild konnte nicht gelesen werden.", "mod_art_frame_intro": "Bild wählen und Rahmen auswählen, um den Ausschnitt je Fläche festzulegen. Ziehen, Mausrad und Doppelklick steuern den Ausschnitt.",
   "chaos_sidebar_empty_toy": "leere Spielzeugtasche",
   "chaos_sidebar_empty_accessory": "leere Zubehörtasche",
   "chaos_sidebar_empty_desc": "zum Einkaufen im Puppenhaus klicken.",
