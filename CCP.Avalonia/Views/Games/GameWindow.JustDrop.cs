@@ -205,6 +205,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         }
 
         internal Action? JustDropActivatePanelForTests;
+        internal static Action<GameWindow>? JustDropFocusPageForTests;
+
+        // WPF ChaosWebViewHost.FocusWeb (:877-883): Activate, then hand the keyboard to the page.
+        private void FocusJustDropPage()
+        {
+            Activate();
+            JustDropFocusPageForTests?.Invoke(this);
+            Web.FocusPage();
+        }
 
         internal static GameWindow? LaunchJustDropReplay(string code, Windows.MainShellWindow shell)
         {
@@ -212,7 +221,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             lock (Open)
             {
                 var live = Open.Find(w => w.Spec.Id == JustDropId);
-                if (live is not null) { live.Activate(); return live; }
+                if (live is not null) { live.FocusJustDropPage(); return live; }
             }
             var window = new GameWindow(Games[JustDropId] with { Query = JustDropHandoff.ReplayPath(code) });
             window.LoadJustDrop();
@@ -230,7 +239,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 }
             };
             window.Show();
-            if (duck) { shell.WindowState = global::Avalonia.Controls.WindowState.Minimized; window.Activate(); }
+            if (duck) { shell.WindowState = global::Avalonia.Controls.WindowState.Minimized; window.FocusJustDropPage(); }
             // WPF ChaosWebViewHost.cs:919-972: ownership attaches after the duck, so a minimized panel
             // leaves the replay unowned until it comes back (GameWindow.JustDropOwner.cs).
             window.AttachJustDropOwner(shell);

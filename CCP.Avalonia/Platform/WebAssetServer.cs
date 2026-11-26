@@ -58,6 +58,12 @@ public sealed class WebAssetServer : IDisposable
         lock (_sharedLock) return _shared != null && LocalPagePolicy.SuppressContextMenu(uri, _shared, homeBrowser);
     }
 
+    // The sink-label microphone probe, for this server's own pages only (WPF ChaosWebViewHost.cs:1380-1384).
+    internal static bool AllowsSharedMicrophone(string? uri)
+    {
+        lock (_sharedLock) return _shared != null && LocalPagePolicy.AllowsMicrophone(uri, _shared);
+    }
+
     readonly SemaphoreSlim _inFlight = new(16);
 
     static readonly Dictionary<string, string> Types = new(StringComparer.OrdinalIgnoreCase)
