@@ -76,6 +76,54 @@ public sealed class LauncherFxTests
         });
     }
 
+    // WPF LauncherWindow.Fx.cs:437-469 and xaml:372.
+    [Fact]
+    public void WordmarkSheenPassesParksAndStopsOnPanic() => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        var sheen = w.FindControl<global::Avalonia.Controls.Shapes.Rectangle>("WordmarkSheen")!;
+        Assert.Equal(0, sheen.Opacity);
+        for (int i = 0; i < 240 && sheen.Opacity == 0; i++) w.StepFx(0.2);
+        Assert.InRange(sheen.Opacity, 0.001, 0.3);
+        var slide = (TranslateTransform)((TransformGroup)sheen.RenderTransform!).Children[1];
+        double left = slide.X;
+        w.StepFx(0.2);
+        Assert.True(slide.X > left);
+        PanicSurfaces.All.Single(x => x.Id == "launcher-wordmark-sheen").Stop(null);
+        Assert.Equal(0, sheen.Opacity);
+        for (int i = 0; i < 250; i++) { w.StepFx(0.2); Assert.Equal(0, sheen.Opacity); }
+        w.Hide();
+        Assert.Equal(0, sheen.Opacity);
+    });
+
+    // WPF LauncherWindow.Fx.cs:192-230: deactivation parks; activation starts a fresh gap.
+    [Fact]
+    public void WordmarkSheenParksOnFocusLossAndRestartsItsGap() => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        var sheen = w.FindControl<global::Avalonia.Controls.Shapes.Rectangle>("WordmarkSheen")!;
+        w.OnFxActivated(false);
+        w.OnFxActivated(true);
+        for (int i = 0; i < 210 && sheen.Opacity == 0; i++) w.StepFx(0.2);
+        Assert.True(sheen.Opacity > 0);
+        w.OnFxActivated(false);
+        Assert.Equal(0, sheen.Opacity);
+        for (int i = 0; i < 250; i++) { w.StepFx(0.2); Assert.Equal(0, sheen.Opacity); }
+        w.OnFxActivated(true);
+        for (int i = 0; i < 120; i++) { w.StepFx(0.2); Assert.Equal(0, sheen.Opacity); }
+        for (int i = 0; i < 90 && sheen.Opacity == 0; i++) w.StepFx(0.2);
+        Assert.True(sheen.Opacity > 0);
+        PanicSurfaces.All.Single(x => x.Id == "launcher-wordmark-sheen").Stop(null);
+        w.OnFxActivated(false);
+        w.OnFxActivated(true);
+        for (int i = 0; i < 250; i++) { w.StepFx(0.2); Assert.Equal(0, sheen.Opacity); }
+    });
+
+    [Fact]
+    public void WordmarkSheenStaysOffWithMotionOff() => Run(MotionLevel.Off, (_, w, _) =>
+    {
+        var sheen = w.FindControl<global::Avalonia.Controls.Shapes.Rectangle>("WordmarkSheen")!;
+        for (int i = 0; i < 250; i++) { w.StepFx(0.2); Assert.Equal(0, sheen.Opacity); }
+    });
+
     /// <summary>The intake tile: the last card (LauncherCards order); game cards sit before it.</summary>
     private static Border Tile(LauncherWindow w) => (Border)w.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
 
