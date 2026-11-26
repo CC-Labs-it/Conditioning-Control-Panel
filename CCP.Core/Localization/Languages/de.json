@@ -20,6 +20,9 @@
   "Chaos_EStim_Chain": "geladen - deine nächsten {0} Treffer lösen Ketten aus",
   "Chaos_EStim_Arc": "der Strom springt über (noch {0})",
   "Chaos_EStim_Spent": "die Ladung ist verbraucht",
+  "Chaos_Rabbit_Whistle": "die Pfeife hallt nach. dein nächster Klick ruft sie",
+  "Chaos_Rabbit_Answered": "{0} antworten an deiner Fingerspitze",
+  "Chaos_Rabbit_Storm": "{0} an deiner Fingerspitze, und der Bau leert sich",
   "deeper_editor_haptic_test_no_device": "Kein Haptikgerät verbunden. Verbinde zum Testen ein Gerät in den Einstellungen.",
   "deeper_editor_haptic_test_row_off": "Die Deeper-Zeile ist im Haptik-Tab ausgeschaltet. Schalte sie für den Test ein.",
   "deeper_editor_haptic_test_premium": "Für den Gerätetest ist Premium-Zugang erforderlich.",
@@ -85,6 +88,10 @@
   "chaos_pendulum_focus": "HIER FOKUSSIEREN. alles zahlt x3",
   "chaos_pendulum_focus_sub": "alles zahlt x3",
   "chaos_pendulum_banner": "Pendel",
+  "chaos_slowmo_banner": "Zeitlupe",
+  "chaos_darter_event": "weißes Kaninchen gefangen. die Zeit verlangsamt sich",
+  "chaos_darter_event_quick": "schneller Fang. die Zeit verlangsamt sich",
+  "chaos_darter_event_extended": "in der Zeitlupe gefangen. +0.8s",
   "chaos_toy_buzz": "es summt. halten und streichen",
   "chaos_toy_snap_all": "gelöst. alles.",
   "chaos_toy_snap_live": "gelöst. alle aktiven Blasen sind frei",
@@ -8533,5 +8540,7 @@
   "remote_invalid_hypnotube_url": "keine gültige HypnoTube-Video-URL",
   "remote_browser_unavailable": "der Browser konnte es nicht öffnen",
   "remote_browser_screen_busy": "{0} ist auf dem Bildschirm",
-  "chaos_camgirl_tip": "Trinkgeld +{0} Gold"
+  "chaos_camgirl_tip": "Trinkgeld +{0} Gold",
+  "native_repair_title": "Conditioning Control Panel - Start fehlgeschlagen",
+  "native_repair_message": "Conditioning Control Panel kann seine Grafikbibliotheken nicht laden und nicht starten.\n\nSchließe die App, lösche diesen temporären Ordner und starte sie erneut:\n\n{0}\n\nDer Ordner wird automatisch neu erstellt. Falls das nicht hilft, prüfe, ob dein Virenschutz Dateien in Quarantäne verschoben hat.\n\nDetails: {1}"
 }

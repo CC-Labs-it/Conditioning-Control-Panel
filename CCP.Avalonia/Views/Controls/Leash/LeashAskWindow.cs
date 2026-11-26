@@ -102,6 +102,7 @@ public sealed class LeashAskWindow : Window
             Current = null;
             CurrentClosed?.Invoke();
         };
+        Current = w; // WPF publishes the overlay before Show can pump the dispatcher.
         try
         {
             if (owner is { IsVisible: true }) w.Show(owner);
@@ -111,9 +112,9 @@ public sealed class LeashAskWindow : Window
         catch (Exception ex)
         {
             Serilog.Log.Debug("[Leash] overlay window failed: {E}", ex.Message);
+            if (ReferenceEquals(Current, w)) Current = null;
             return false;
         }
-        Current = w;
         w.PlayThud();
         return true;
     }

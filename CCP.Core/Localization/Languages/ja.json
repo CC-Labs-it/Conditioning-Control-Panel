@@ -20,6 +20,9 @@
   "Chaos_EStim_Chain": "チャージ済み - 次の{0}回は連鎖します",
   "Chaos_EStim_Arc": "電流が流れました（残り{0}回）",
   "Chaos_EStim_Spent": "チャージを使い切りました",
+  "Chaos_Rabbit_Whistle": "笛の音が残っている。次のクリックで呼び出す",
+  "Chaos_Rabbit_Answered": "{0}匹が指先に応えた",
+  "Chaos_Rabbit_Storm": "{0}匹が指先に。巣穴が空になっていく",
   "deeper_editor_haptic_test_no_device": "触覚デバイスが接続されていません。設定で接続してからテストしてください。",
   "deeper_editor_haptic_test_row_off": "触覚タブの Deeper 行がオフです。パターンを試すにはオンにしてください。",
   "deeper_editor_haptic_test_premium": "デバイスのテストには Premium が必要です。",
@@ -85,6 +88,10 @@
   "chaos_pendulum_focus": "ここに集中。すべての報酬が3倍",
   "chaos_pendulum_focus_sub": "すべての報酬が3倍",
   "chaos_pendulum_banner": "振り子",
+  "chaos_slowmo_banner": "スローモー",
+  "chaos_darter_event": "白うさぎを捕まえた。時間が遅くなる",
+  "chaos_darter_event_quick": "素早い捕獲。時間が遅くなる",
+  "chaos_darter_event_extended": "スロー中に捕獲。+0.8s",
   "chaos_toy_buzz": "振動中。押したままなぞる",
   "chaos_toy_snap_all": "解除。すべて。",
   "chaos_toy_snap_live": "解除。すべての活性バブルが解けた",
@@ -8533,5 +8540,7 @@
   "remote_invalid_hypnotube_url": "有効なHypnoTube動画のURLではありません",
   "remote_browser_unavailable": "ブラウザーで開けませんでした",
   "remote_browser_screen_busy": "{0}が画面に表示されています",
-  "chaos_camgirl_tip": "チップ +{0} ゴールド"
+  "chaos_camgirl_tip": "チップ +{0} ゴールド",
+  "native_repair_title": "Conditioning Control Panel - 起動に失敗しました",
+  "native_repair_message": "グラフィックライブラリを読み込めないため、Conditioning Control Panel を起動できません。\n\nアプリを閉じ、この一時フォルダーを削除してから、もう一度起動してください。\n\n{0}\n\nフォルダーは自動的に再作成されます。解決しない場合は、ウイルス対策ソフトがファイルを隔離していないか確認してください。\n\n詳細: {1}"
 }
