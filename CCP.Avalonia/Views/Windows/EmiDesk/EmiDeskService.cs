@@ -245,6 +245,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>True while the summon chord is grabbed (WPF HotkeyArmed).</summary>
         public bool HotkeyArmed { get; private set; }
 
+        private IDisposable? _winHotkey;
+        internal Func<bool> IsWindows = OperatingSystem.IsWindows;
+        internal Func<ChordMods, string, Action, IDisposable?> RegisterWindowsChord = (mods, key, pressed) =>
+            MainShellWindow.Current is { } shell ? Platform.Win32QuickRecalHotkey.RegisterEmi(shell, mods, key, pressed) : null;
+
         /// <summary>The OS grab. Seams so tests never touch the X server.</summary>
         internal Func<ChordMods, string, Action, bool> RegisterChord = Platform.X11SummonChord.Arm;
         internal Action UnregisterChord = Platform.X11SummonChord.Disarm;
@@ -285,7 +290,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     return;
                 }
                 // X delivers the press on the listener thread: marshal before touching UI.
-                HotkeyArmed = RegisterChord(parsed.Mods, parsed.Key, () => Dispatcher.UIThread.Post(() => Toggle("hotkey")));
+                if (IsWindows())
+                {
+                    _winHotkey?.Dispose();
+                    _winHotkey = RegisterWindowsChord(parsed.Mods, parsed.Key, () => Dispatcher.UIThread.Post(() => Toggle("hotkey")));
+                    HotkeyArmed = _winHotkey != null;
+                }
+                else
+                    HotkeyArmed = RegisterChord(parsed.Mods, parsed.Key, () => Dispatcher.UIThread.Post(() => Toggle("hotkey")));
                 if (HotkeyArmed) Log.Information("[EmiDesk] summon hotkey armed: {Chord}", chord);
                 else Log.Warning("[EmiDesk] summon hotkey {Chord} could not be grabbed: another client holds it. " +
                                  "The dock chip in the nav rail still summons her.", chord);
@@ -298,6 +310,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private void Disarm()
         {
+            _winHotkey?.Dispose();
+            _winHotkey = null;
             UnregisterChord();
             HotkeyArmed = false;
         }
