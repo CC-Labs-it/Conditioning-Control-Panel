@@ -37,7 +37,7 @@ public partial class EmiDeskWindow
                 int tail = 5 + _rng.Next(5);
                 var column = new TextBlock
                 {
-                    Text = Roll(tail), FontFamily = new FontFamily("Cascadia Mono, Noto Sans Mono, monospace"),
+                    Text = Roll(tail), FontFamily = new FontFamily("Cascadia Mono, Consolas, Noto Sans Mono, MS Gothic, Yu Gothic UI, Meiryo, Courier New, monospace"),
                     FontSize = _cell, LineHeight = _cell, TextAlignment = TextAlignment.Center,
                     Width = _cell * 2, Foreground = TailBrush(_rng.NextDouble() < .05 ? Color.Parse("#FF69B4") : Color.Parse("#00FF41"), tail),
                     IsHitTestVisible = false

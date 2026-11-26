@@ -14,7 +14,7 @@ public partial class EmiDeskWindow
         private readonly Path _path = new()
         {
             Stroke = Brush.Parse("#FF69B4"), StrokeThickness = Math.Max(1.5, w * .032),
-            StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round
+            StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round, IsHitTestVisible = false
         };
         internal void Attach(Canvas host)
         {
