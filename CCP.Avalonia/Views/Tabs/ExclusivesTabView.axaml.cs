@@ -604,14 +604,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>
         /// ponytail: "fyp" opens the feed and "justdrop" opens its GameWindow; Breakout and Down the Rabbit Hole open the
-        /// Play wall's doors and Focus Gaze shows its Play-wall switch (OpenExclusiveFeature). Goon hosting and Arcademy have no host on this head.
-        /// Back Room follows its host registration (PR #3553), as the Play wall door does (PlayTabView.SetGameDoor).
+        /// Play wall's doors and Focus Gaze shows its Play-wall switch (OpenExclusiveFeature). Back Room (PR #3553), Goon and
+        /// Arcademy follow their registered host (GameWindow.Games), as the Play wall door does (PlayTabView.SetGameDoor).
         /// Cards without a host stay visible but inert (no hand, honest tooltip) and never reach ShowTab or a bark.
         /// </summary>
         internal static bool IsOnThisBuild(string key) => key switch
         {
-            "backroom" => Games.GameWindow.Games.ContainsKey(key),
-            "goon" or "arcademy" => false,
+            "backroom" or "goon" or "arcademy" => Games.GameWindow.Games.ContainsKey(key),
             _ => true,
         };
 

@@ -1531,7 +1531,8 @@ namespace ConditioningControlPanel.Avalonia
                 // WPF App.xaml.cs:529 (main fbe161de2): "See tiers" opens the vault gate card at the tier this door needs.
                 CoreEntitlement.ShowDeniedHandler = verdict => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                     shell.ShowTierDenied(verdict, Notifications));
-                // WPF App.xaml.cs:509-511 (main 2e9080399). No Arcademy host here: unseeded, so its card stays hidden.
+                // WPF App.xaml.cs:618 (ArcademyHostService.DoorAvailable): the card shows once the Arcademy host is registered.
+                Models.ExclusiveFeature.ArcademyDoorProvider = () => Views.Games.GameWindow.Games.ContainsKey("arcademy");
                 // WPF App.xaml.cs:289: the palette row and the Premium card read the server door flag.
                 SettingsPaletteIndex.JustDropDoorAvailableProvider = () => Services.JustDrop.JustDropService.DoorAvailable;
                 Models.ExclusiveFeature.JustDropDoorProvider = SettingsPaletteIndex.JustDropDoorAvailable;

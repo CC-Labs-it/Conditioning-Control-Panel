@@ -79,7 +79,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 case "gazeminigame": Named<Tabs.PlayTabView>("PlayTab")?.OpenGazeMinigame(); break;
                 case "backroom": LaunchPlayBackRoom(); break;                          // WPF :204 BtnStartBackRoom_Click
                 case "breakout": LaunchPlayBreakout(); break;                          // WPF :205, the Play wall's door
+                case "goon": LaunchPlayGoon(); break;                                  // WPF :206, sign-in first
                 case "dtrh": LaunchPlayLauncherGame(Games.GameWindow.DtrhId); break;   // WPF :208 LaunchExclusiveGame
+                case "arcademy": LaunchPlayLauncherGame("arcademy"); break;            // WPF :209 LaunchExclusiveGame
                 case "focusgaze": OpenFocusGazeSwitch(); break;                       // WPF :242
                 default: ShowTab(key); break;
             }
