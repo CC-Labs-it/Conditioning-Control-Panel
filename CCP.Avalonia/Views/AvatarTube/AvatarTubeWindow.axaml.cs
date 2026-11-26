@@ -339,6 +339,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // ReferenceEquals would be false every time because the conversion allocates.
             if (OpenChatSink == (Action)OpenChatInput) OpenChatSink = null;
             _avatarSetsClosed = true;
+            LockReactionGeneration++;
             if (_rainSettings != null) _rainSettings.PropertyChanged -= RainSettingsChanged;
             StopRainPlayback();
             _imgAvatar.Source = null;

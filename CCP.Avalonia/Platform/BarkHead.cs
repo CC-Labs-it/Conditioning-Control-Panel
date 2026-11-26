@@ -96,6 +96,9 @@ internal static class BarkHead
         if (BrainDrainPlayer.Instance is { } brainDrain)
             Wire<EventHandler>(h => brainDrain.Triggered += h, h => brainDrain.Triggered -= h,
                 (_, _) => e.Raise("BrainDrainTriggered")); // WPF BarkService.cs:749-751
+        Wire<Action<string, int, int>>(h => Views.Windows.LockCardWindow.ReactionCompleted += h,
+            h => Views.Windows.LockCardWindow.ReactionCompleted -= h,
+            (phrase, mistakes, repeats) => _ = LockCardReactionAsync(e, phrase, mistakes, repeats, Random.Shared.Next(2) == 0));
         Wire<Action>(h => Views.Overlays.BubbleOverlay.Popped += h, h => Views.Overlays.BubbleOverlay.Popped -= h, () => e.Raise("BubblePopped"));
         // WPF AttachSessionEngine (BarkService.cs:956-1003, MainWindow.Presets.cs:1627). Stopped fuses WPF's
         // SessionStopped and SessionCompleted, which WPF raises in that order (SessionEngine.cs:395, :438).
@@ -120,6 +123,22 @@ internal static class BarkHead
         }
     }
 
+    // WPF BarkService.cs:1315-1368: one coin flip, with pool fallback when AI is silent.
+    internal static async System.Threading.Tasks.Task LockCardReactionAsync(BarkEngine e, string phrase, int mistakes, int repeats, bool heads)
+    {
+        if (ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
+        var tube = TubeProvider();
+        var generation = tube?.LockReactionGeneration ?? 0;
+        if (heads && tube != null && CoreSettings.Current.AiChatEnabled
+            && (tube.LockReactionRequest != null || App.Ai?.IsAvailable == true))
+        {
+            if (e.DryRun) return;
+            if (await tube.PlayLockCardAiReactionAsync(phrase, mistakes, repeats, generation)) return;
+            if (generation != tube.LockReactionGeneration || !ReferenceEquals(tube, TubeProvider())
+                || ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
+        }
+        e.Raise("LockCardCompleted", c => c.Set("phrase", phrase ?? "").Set("mistakes", mistakes).Set("repeats", repeats), guaranteed: true);
+    }
     // WPF BarkState.cs:139-143: the last announced phase, kept after the session ends, cleared on the next start.
     private static string _phaseName = "";
     private static bool PhaseIsDeepener => _phaseName.Contains("deep", StringComparison.OrdinalIgnoreCase);
