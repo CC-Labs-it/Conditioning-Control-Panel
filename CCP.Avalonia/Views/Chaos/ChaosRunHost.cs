@@ -40,7 +40,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// collar pay first, and a detonation makes the loop unclean (no doubled tip, no silk_touch).
     /// The run-end lessons go through Core ChaosRunLessons.</para>
     ///
-    /// <para>ponytail: still NOT here: darters, the Brittle,
+    /// <para>Darters spawn on WPF's own roll (:1204) and a catch slows time (OnDarterCaught :2351).
+    /// ponytail: their flare, bolt, bounce-out and 8 s life come with #3986 (Core StepDarter); until then
+    /// a darter roams like any RoamBounce bubble until caught or the field clears.</para>
+    ///
+    /// <para>ponytail: still NOT here: the Brittle,
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
     /// (Echo/Bound) - SpawnTick spawns treats, plain live variants, the Tease and the Chaperone; every
     /// motion other than FloatUp, RainDown and Chaperone roaming, chain reaction, cam-girl tips,
@@ -163,7 +167,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static double _freezeRemainingSec;
         // WPF ChaosModeService.cs:2406-2475, :2813-2817, :2958-2979: the Pendulum's slow-mo window
         // (hand-ported from #4303). Run clock, so it holds through pauses like the freeze.
-        internal const double SlowMoFactor = 0.12;
+        internal const double SlowMoFactor = 0.12, SlowMoDurationSec = 6.0;   // WPF :2399-2400
         private static double _slowMoRemainingSec, _pendulumFireAt;
         private static int _pendulumWave;
         private static bool _pendulumFired, _pendulumSlowActive, _slowMoCueOn;
@@ -400,9 +404,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                         treatOnly: _state.PrismTreatOnly), hitboxScale: cfg.HitboxScale, liveMagnet: _state.MagnetEnabled);
                 }
             }
+            // WPF :1202-1212: darters roll on their own, independent of the bubble cap.
+            if (cfg.DartersEnabled && RollDarter(effIntensity, _state.RabbitRateMult) is { } darter)
+            {
+                ChaosMeta.MarkDiscovered("bubble:darter");
+                BubbleOverlay.SpawnChaos(darter, motion: darter.Motion);
+            }
             if (_spawnTimer != null)
                 _spawnTimer.Interval = TimeSpan.FromMilliseconds(
                     ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult, SpawnSlowFactor));
+        }
+
+        /// <summary>The darter roll (Core ChaosBubbleVariants.RollDarter). Tests swap it.</summary>
+        internal static Func<double, double, EffectBubbleSpec?> RollDarter = (i, rate) => ChaosBubbleVariants.RollDarter(i, rate);
+
+        /// <summary>WPF OnDarterCaught (:2351-2375): score, focus, combo; time slows, or a catch while
+        /// slow-mo already runs tops it up by 0.8 s (and hands a pendulum swing back to normal pay).</summary>
+        internal static void OnDarterCaught(bool quick)
+        {
+            if (_state == null) return;
+            _state.Score += (ChaosBubbleVariants.DARTER_BASE_POINTS + (quick ? ChaosBubbleVariants.DARTER_QUICK_BONUS : 0)) * _state.TotalMult;
+            _state.Focus += ChaosTuning.FOCUS_PER_RABBIT;
+            _state.Combo++;
+            _state.Heat = Math.Min(1.0, _state.Heat + 0.05);
+            CreditPop();
+            ChaosLessons.Tick("rabbit_caller");   // WPF ChaosLessonHooks.OnRabbitCaught
+            bool extended = _slowMoRemainingSec > 0;
+            if (extended) { _slowMoRemainingSec += 0.8; _pendulumSlowActive = false; }
+            else ActivateSlowMo(SlowMoDurationSec + _state.SlowMoBonusSec, pendulum: false, Loc.Get("chaos_slowmo_banner"));
+            Pulse(Color.FromRgb(120, 200, 255), quick ? 0.32 : 0.24);
+            _state.PushEvent(Loc.Get(extended ? "chaos_darter_event_extended" : quick ? "chaos_darter_event_quick" : "chaos_darter_event"));
+            CheckComboMilestone();
         }
 
         internal static bool TrySpawnTease(ChaosRunConfig cfg, double intensity)
@@ -517,6 +549,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             var spec = b.Spec;
             if (_state == null || spec == null || _manualPaused || _lessonCardPaused || _draftPaused) return;
+            if (spec.IsDarter)   // WPF BubbleService.cs:4712-4716: the catch label, then the slow-mo
+            {
+                Label(b, Loc.Get("chaos_slowmo_banner").ToUpperInvariant(), Color.FromUInt32(spec.Tint));
+                // ponytail: the quick-catch bonus needs the darter's active clock (WPF BubbleService.cs:3875,
+                // :4714), part of the darter motion in #3986; until it lands every catch is a normal catch.
+                OnDarterCaught(quick: false);
+                return;
+            }
             EffectLabel(b);   // WPF BubbleService.cs:4710-4712: label before the pickup or treat callback
             if (spec.IsFreeze)
             {
@@ -1624,7 +1664,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
             if (_pendulumFired || _state.WaveProgress < _pendulumFireAt || _freezeRemainingSec > 0 || _slowMoRemainingSec > 0) return;
             _pendulumFired = true;
-            ActivateSlowMo(2.5, pendulum: true);
+            ActivateSlowMo(2.5, pendulum: true, Loc.Get("chaos_pendulum_banner"));
             ChaosOverlayWindow.ChaosSfx.Play("ticktock", 0.45f);   // silent until the asset ships, as WPF
             bool scoring = _state.PendulumPayMult > 1;
             ChaosAnnouncerOverlay.Announce(Loc.Get(scoring ? "chaos_pendulum_focus" : "chaos_pendulum_swing"),
@@ -1635,13 +1675,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         /// <summary>WPF ActivateSlowMo (:2414): the chaos field drifts and burns slower, spawns stretch,
         /// payloads linger. A refresh never replays the warp-in cue.</summary>
-        internal static void ActivateSlowMo(double durationSec, bool pendulum)
+        internal static void ActivateSlowMo(double durationSec, bool pendulum, string bannerLabel)
         {
             if (!_spawning) return;
             _slowMoRemainingSec = durationSec;
             _pendulumSlowActive = pendulum;
             BubbleOverlay.Field.ChaosTimeScale = SlowMoFactor;
-            ChaosEffectBannerOverlay.Show("slowmo", Loc.Get("chaos_pendulum_banner"), Color.FromRgb(0x7A, 0xE0, 0xFF),
+            ChaosEffectBannerOverlay.Show("slowmo", bannerLabel, Color.FromRgb(0x7A, 0xE0, 0xFF),
                 artKey: pendulum ? "pendulum" : "slowmo");
             EffectPayload.GlobalDurationMult = 1.0 / SlowMoFactor;
             if (!_slowMoCueOn) ChaosOverlayWindow.ChaosSfx.Play("time_slow_in", 0.5f);
@@ -1690,13 +1730,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void UseToy(ChaosToyState toy)
         {
             if (_state == null) return;
-            // The field cannot yet place or move a summoned darter. Do not spend the whistle.
-            if (toy.Id == "rabbit_caller")
-            {
-                if (_spawning && !_manualPaused && !_lessonCardPaused && !_draftPaused && _overlay is { IsVisible: true })
-                    ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
-                return;
-            }
             // WPF UseToy :2690: a wave draft holds the run (_paused), so toys wait for GO.
             if (!ToyEffectPorted(toy.Id)) return;   // #4225: an inert toy spends no charge or cooldown
             var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused && !_lessonCardPaused && !_draftPaused && _overlay is { IsVisible: true });

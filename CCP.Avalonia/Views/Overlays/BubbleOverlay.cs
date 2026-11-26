@@ -878,7 +878,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             ChaosSkiaFxOverlay.Burst(new Point(b.CenterX * scaling, b.CenterY * scaling),
                 b.Spec.IsLive ? Color.FromRgb(0x7A, 0xE0, 0xFF) : Color.FromUInt32(b.Spec.Tint),
                 b.Spec.IsLive ? 1.3 : 1.0);
-            PlayChaosCue(b.Spec.IsFreeze ? "freeze_catch" : null, b.Spec.IsFreeze ? 0.6f : 1f);
+            // WPF BubbleService.cs:1614-1616: the darter and freeze pickups have their own catch cue.
+            PlayChaosCue(b.Spec.IsFreeze ? "freeze_catch" : b.Spec.IsDarter ? "rabbit_catch" : null, b.Spec.IsFreeze || b.Spec.IsDarter ? 0.6f : 1f);
             _chaosPopped?.Invoke(b);
             RequestFrame();
         }
