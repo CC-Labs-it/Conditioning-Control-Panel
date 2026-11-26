@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CCP.Avalonia.Testing;
@@ -187,15 +188,18 @@ public class MandatoryVideoEnhancementTests
         var saved = (s.MandatoryVideosEnabled, s.SkipMandatoryVideoEnhanceNudge, s.VideoEnhanceIfPossible);
         var (shown, scan, dialog, lockdown) = (MainShellWindow.VideoEnhanceNudgeShown, MainShellWindow.VideoEnhanceScan,
             MainShellWindow.VideoEnhanceNudgeDialog, LockdownService.Current);
+        var queue = MainShellWindow.QueueVideoNudge;
+        Task queued = Task.CompletedTask;
         var asked = new System.Collections.Generic.List<(string Body, string Yes)>();
         (bool, bool) answer = default;
         var running = true;
         var webcamStarts = 0;
         var result = new MandatoryVideoEnhancementScanner.ScanResult(true, false);
-        Task Nudge() => MainShellWindow.MaybePromptMandatoryVideoEnhancement(null, () => running, () => false, () => webcamStarts++);
+        async Task Nudge() { await MainShellWindow.MaybePromptMandatoryVideoEnhancement(null, () => running, () => false, () => webcamStarts++); await queued; }
         void Reset(bool webcam) { MainShellWindow.VideoEnhanceNudgeShown = false; result = new(true, webcam); asked.Clear(); }
         try
         {
+            MainShellWindow.QueueVideoNudge = (_, _, show) => queued = show();
             MainShellWindow.VideoEnhanceScan = _ => result;
             MainShellWindow.VideoEnhanceNudgeDialog = (_, body, yes) => { asked.Add((body, yes)); return Task.FromResult(answer); };
             (s.MandatoryVideosEnabled, s.SkipMandatoryVideoEnhanceNudge, s.VideoEnhanceIfPossible) = (true, false, false);
@@ -240,9 +244,47 @@ public class MandatoryVideoEnhancementTests
         }
         finally
         {
+            MainShellWindow.QueueVideoNudge = queue;
             (s.MandatoryVideosEnabled, s.SkipMandatoryVideoEnhanceNudge, s.VideoEnhanceIfPossible) = saved;
             (MainShellWindow.VideoEnhanceNudgeShown, MainShellWindow.VideoEnhanceScan,
                 MainShellWindow.VideoEnhanceNudgeDialog, LockdownService.Current) = (shown, scan, dialog, lockdown);
+        }
+    });
+
+    [Fact]
+    public Task NudgeQueuesAtPriority70AndPanicInvalidatesIt() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var s = CoreSettings.Current;
+        var settings = (s.MandatoryVideosEnabled, s.SkipMandatoryVideoEnhanceNudge, s.VideoEnhanceIfPossible);
+        var shown = MainShellWindow.VideoEnhanceNudgeShown;
+        var scan = MainShellWindow.VideoEnhanceScan;
+        var dialog = MainShellWindow.VideoEnhanceNudgeDialog;
+        var queue = MainShellWindow.QueueVideoNudge;
+        Func<Task>? pending = null;
+        var calls = 0;
+        try
+        {
+            (s.MandatoryVideosEnabled, s.SkipMandatoryVideoEnhanceNudge, s.VideoEnhanceIfPossible) = (true, false, false);
+            MainShellWindow.VideoEnhanceNudgeShown = false;
+            MainShellWindow.VideoEnhanceScan = _ => new(true, false);
+            MainShellWindow.VideoEnhanceNudgeDialog = (_, _, _) => { calls++; return Task.FromResult((true, false)); };
+            MainShellWindow.QueueVideoNudge = (key, priority, show) => { Assert.Equal("deeper-enhance-nudge", key); Assert.Equal(70, priority); pending = show; };
+            await MainShellWindow.MaybePromptMandatoryVideoEnhancement(null, () => true, () => false, () => { });
+            Assert.NotNull(pending);
+            Assert.Equal(0, calls);
+            Assert.Contains(PanicSurfaces.All, x => x.Id == "deeper-nudge");
+            PanicSurfaces.All.Single(x => x.Id == "deeper-nudge").Stop(null);
+            await pending!();
+            Assert.Equal(0, calls);
+            Assert.False(s.VideoEnhanceIfPossible);
+        }
+        finally
+        {
+            (s.MandatoryVideosEnabled, s.SkipMandatoryVideoEnhanceNudge, s.VideoEnhanceIfPossible) = settings;
+            MainShellWindow.VideoEnhanceNudgeShown = shown;
+            MainShellWindow.VideoEnhanceScan = scan;
+            MainShellWindow.VideoEnhanceNudgeDialog = dialog;
+            MainShellWindow.QueueVideoNudge = queue;
         }
     });
 
