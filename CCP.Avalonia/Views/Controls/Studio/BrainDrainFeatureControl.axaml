@@ -311,7 +311,7 @@
                 </Border>
 
                 <!-- The gold V2 box (WPF Controls/SuperBox): Super switch, BASIC sign, weekly try. -->
-                <super:SuperBox x:Name="SuperBoxMain" Effect="Undertow"/>
+                <super:SuperBox x:Name="SuperBoxMain" Kind="Undertow"/>
             </StackPanel>
 
             <!-- SIDE ART. On WPF the art is the Border's BACKGROUND (an ImageBrush) so the rounded

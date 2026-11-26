@@ -352,7 +352,7 @@
                 </Button>
 
                 <!-- The gold V2 box (WPF Controls/SuperBox): Super switch, BASIC sign, weekly try. -->
-                <super:SuperBox x:Name="SuperBoxMain" Effect="LightsDown"/>
+                <super:SuperBox x:Name="SuperBoxMain" Kind="LightsDown"/>
             </StackPanel>
 
             <!-- Mod-aware side art. Scrim kept verbatim. -->

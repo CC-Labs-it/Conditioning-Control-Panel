@@ -307,7 +307,7 @@
                     </Button>
 
                     <!-- The gold V2 box (WPF Controls/SuperBox): Super switch, BASIC sign, weekly try. -->
-                    <super:SuperBox x:Name="SuperBoxMain" Effect="Scrawl"/>
+                    <super:SuperBox x:Name="SuperBoxMain" Kind="Scrawl"/>
                 </StackPanel>
 
                 <!-- SIDE ART. Background painted from code (ModArt.BindFeaturePlates); scrim kept verbatim. -->

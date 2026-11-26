@@ -135,7 +135,7 @@
                 </Border>
 
                 <!-- The gold V2 box (WPF Controls/SuperBox): Super switch, BASIC sign, weekly try. -->
-                <super:SuperBox x:Name="SuperBoxMain" Effect="Creep"/>
+                <super:SuperBox x:Name="SuperBoxMain" Kind="Creep"/>
             </StackPanel>
 
             <!-- SIDE ART. Background painted from code (ModArt.BindFeaturePlates); scrim kept verbatim. -->

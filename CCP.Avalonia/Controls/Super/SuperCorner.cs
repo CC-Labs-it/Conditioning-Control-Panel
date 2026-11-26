@@ -37,7 +37,7 @@ public sealed class SuperCorner : Control, ICustomHitTest
     private static readonly IPen Edge = new Pen(DimStar, 1.6);
     private static readonly IPen StarLine = new Pen(DimStar, 1.1, lineJoin: PenLineJoin.Round);
 
-    public SuperEffect Effect { get; }
+    public SuperEffect Kind { get; }
     public bool BottomRight { get; }
     /// <summary>Does the host's on/off click sit on the LEFT button right now (clicks inverted).</summary>
     public Func<bool> Inverted { get; set; } = () => false;
@@ -46,7 +46,7 @@ public sealed class SuperCorner : Control, ICustomHitTest
 
     public SuperCorner(SuperEffect effect, bool bottomRight)
     {
-        Effect = effect;
+        Kind = effect;
         BottomRight = bottomRight;
         Width = Height = Leg;
         HorizontalAlignment = bottomRight ? HorizontalAlignment.Right : HorizontalAlignment.Left;
@@ -61,10 +61,10 @@ public sealed class SuperCorner : Control, ICustomHitTest
         global::Avalonia.Automation.AutomationProperties.SetName(this, Loc.GetF("super_corner_title", Name()));
     }
 
-    private string Name() => Loc.Get("super_name_" + Effect.ToString().ToLowerInvariant());
+    private string Name() => Loc.Get("super_name_" + Kind.ToString().ToLowerInvariant());
 
     /// <summary>Is the V2 drawn as on: unlocked and switched on.</summary>
-    public bool Lit => SuperAccess.IsUnlocked(Effect) && SuperAccess.IsSwitchedOn(Effect);
+    public bool Lit => SuperAccess.IsUnlocked(Kind) && SuperAccess.IsSwitchedOn(Kind);
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
@@ -84,14 +84,14 @@ public sealed class SuperCorner : Control, ICustomHitTest
 
     private void OnChanged(SuperEffect e)
     {
-        if (e != Effect) return;
+        if (e != Kind) return;
         if (Dispatcher.UIThread.CheckAccess()) InvalidateVisual(); else Dispatcher.UIThread.Post(InvalidateVisual);
     }
 
     /// <summary>The on/off click landed on the corner (WPF SuperCorner.Press through SuperDoor).</summary>
     public void Press()
     {
-        SuperDoor.Press(Effect);
+        SuperDoor.Press(Kind);
         InvalidateVisual();
     }
 
@@ -150,7 +150,7 @@ public sealed class SuperCorner : Control, ICustomHitTest
         panel.Children.Add(new TextBlock { Text = Loc.GetF("super_corner_title", Name()), FontWeight = FontWeight.SemiBold, Foreground = GoldBrush, FontSize = 12.5 });
         panel.Children.Add(new TextBlock
         {
-            Text = SuperDoor.Twist(Effect), TextWrapping = TextWrapping.Wrap, Foreground = Brushes.White, Opacity = 0.85,
+            Text = SuperDoor.Twist(Kind), TextWrapping = TextWrapping.Wrap, Foreground = Brushes.White, Opacity = 0.85,
             FontSize = 11.5, Margin = new Thickness(0, 3, 0, 5),
         });
         panel.Children.Add(new TextBlock
@@ -158,7 +158,7 @@ public sealed class SuperCorner : Control, ICustomHitTest
             Text = Loc.Get(Inverted() ? "super_corner_tip_inverted" : "super_corner_tip"), TextWrapping = TextWrapping.Wrap,
             Foreground = Brushes.White, Opacity = 0.6, FontSize = 11,
         });
-        if (!SuperAccess.IsUnlocked(Effect))
+        if (!SuperAccess.IsUnlocked(Kind))
             panel.Children.Add(new TextBlock { Text = Loc.Get("super_for_supporters"), Foreground = GoldBrush, FontSize = 11, Margin = new Thickness(0, 4, 0, 0) });
         return panel;
     }

@@ -413,7 +413,7 @@
                 </Border>
 
                 <!-- The gold V2 box (WPF Controls/SuperBox): Super switch, BASIC sign, weekly try. -->
-                <super:SuperBox x:Name="SuperBoxMain" Effect="FlickerDeck"/>
+                <super:SuperBox x:Name="SuperBoxMain" Kind="FlickerDeck"/>
             </StackPanel>
 
             <!-- SIDE ART. Mod-aware image background; WPF scrim kept verbatim. -->

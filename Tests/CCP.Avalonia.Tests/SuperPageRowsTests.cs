@@ -77,7 +77,7 @@ public sealed class SuperPageRowsTests
         {
             var box = Assert.Single(page().GetLogicalDescendants().OfType<SuperBox>());
             var body = Assert.IsType<SuperOptionRows>(box.Body);
-            Assert.Equal(effect, body.Effect);
+            Assert.Equal(effect, body.Kind);
             body.Refresh();
             var keys = Keys(body);
             Assert.Equal(rows, keys.Length);
