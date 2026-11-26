@@ -1610,6 +1610,7 @@ namespace ConditioningControlPanel.Avalonia
                 shell.StartPanicKey();
                 shell.StartSchedulerClock();
                 shell.Opened += (_, _) => shell.StartQuickRecalHotkey();
+                shell.Opened += (_, _) => shell.StartPauseKeyPortal();
                 // EMI Desk summon chord (WPF MainWindow.xaml.cs:246 arms it from the shell's Loaded).
                 shell.Opened += (_, _) => Views.Windows.EmiDesk.EmiDeskService.Instance.ApplyHotkey();
                 Views.Windows.EmiDesk.EmiDeskService.Instance.WireAppEvents(shell.Autonomy, Platform.PulseMicSource.Speech, dailyFree);
