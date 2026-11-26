@@ -888,8 +888,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
         };
 
-        /// <summary>WPF xaml.cs:503. ponytail: reveal flashes are not on this head yet; the
-        /// purchase, its unlock card and the ui_denied cue are real.</summary>
+        /// <summary>WPF xaml.cs:503: purchase, refresh, reveal and show the unlock card.</summary>
         private void Buy_Click(object? sender, RoutedEventArgs e)
         {
             var id = (sender as Button)?.Tag?.ToString();
@@ -902,6 +901,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             RefreshStats();
             RevealService.Sync("purchase");
             ApplyReveals();   // WPF xaml.cs:516
+            RunRevealFlashes();
             UnlockCards.Show(ChaosUnlockCardRules.ForHabit(id!));
         }
 
