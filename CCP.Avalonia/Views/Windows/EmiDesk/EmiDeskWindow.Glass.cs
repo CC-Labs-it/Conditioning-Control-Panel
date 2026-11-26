@@ -22,7 +22,7 @@ public partial class EmiDeskWindow
 {
     private static readonly Random GlassRng = new();
     // WPF EmiChannels.All order, the channels this head can paint.
-    internal static readonly string[] GlassChannels = { "pong", "rain", "browsing", "shop", "reruns", "offair" };
+    internal static readonly string[] GlassChannels = { "pong", "rain", "browsing", "shop", "reruns", "coderain", "offair" };
     // Uniform over the feasible pool (WPF EmiChannels.Pick); tests swap it and restore it in finally.
     internal static Func<IReadOnlyList<string>, string> GlassPick = pool => pool[GlassRng.Next(pool.Count)];
     // Per-window test seam: always land this channel when it is feasible, else off-air.
@@ -37,6 +37,7 @@ public partial class EmiDeskWindow
     private BrowsingPainter? _glassBrowsing;
     private RerunsPainter? _glassReruns;
     private PongPainter? _glassPong;
+    private CodeRainPainter? _glassCodeRain;
     private Rectangle? _glassDim;
     private TextBlock? _glassSignal;
     private bool _glassLive, _glassLanded, _glassMotion, _glassOffering;
@@ -214,6 +215,11 @@ public partial class EmiDeskWindow
             if (!PongFeasible(AmbientFxCanvas.Env.Level)) { CloseGlass(); return; }
             _glassPong.Tick(elapsed);
         }
+        if (_glassCodeRain != null)
+        {
+            if (!PongFeasible(AmbientFxCanvas.Env.Level)) { CloseGlass(); return; }
+            _glassCodeRain.Tick(elapsed);
+        }
         _glassReruns?.Tick(elapsed);
         _glassShop?.Tick(elapsed);
         if (_glassMotion) _glassBrowsing?.Tick(elapsed); // the pages hold as a still below full motion
@@ -227,7 +233,7 @@ public partial class EmiDeskWindow
     // WPF EmiChannels.Feasible: a channel with nothing behind it is never offered.
     private static bool GlassFeasible(string id) => id switch
     {
-        "pong" => PongFeasible(AmbientFxCanvas.Env.Level),
+        "pong" or "coderain" => PongFeasible(AmbientFxCanvas.Env.Level),
         "reruns" => RerunsPainter.HasMaterial(),
         // Rain refuses in TryShowRainChannel when no picture decodes; PollGlass then draws again without it.
         _ => true,
@@ -243,6 +249,14 @@ public partial class EmiDeskWindow
     private void LandGlassChannel()
     {
         if (_glassLayer == null) return;
+        if (_glassChannel == "coderain" && PongFeasible(AmbientFxCanvas.Env.Level))
+        {
+            _glassLayer.Children.Clear();
+            _glassCodeRain = new CodeRainPainter(_glassLayer.Width, _glassLayer.Height, GlassRng);
+            _glassCodeRain.Attach(_glassLayer);
+            _glassCodeRain.Tick(0);
+            return;
+        }
         if (_glassChannel == "pong" && PongFeasible(AmbientFxCanvas.Env.Level))
         {
             _glassLayer.Children.Clear();
@@ -331,6 +345,12 @@ public partial class EmiDeskWindow
         Canvas.SetLeft(box, x); Canvas.SetTop(box, y); c.Children.Add(box); return box;
     }
 
+    internal void CloseGlassForPanic()
+    {
+        _glassOffering = false;
+        CloseGlass();
+    }
+
     private void CloseGlass()
     {
         if (_glassOffering) return; // WPF: the offer cannot close its own channel.
@@ -338,7 +358,7 @@ public partial class EmiDeskWindow
         _glassLive = _glassLanded = false;
         _glassFrames?.Stop(); _glassFrames = null;
         if (_glassLayer != null) GlassHost.Children.Remove(_glassLayer);
-        _glassShop = null; _glassReruns = null; _glassPong = null; _glassBrowsing = null; _glassWrong = null; _glassChannel = null;
+        _glassShop = null; _glassReruns = null; _glassPong = null; _glassCodeRain = null; _glassBrowsing = null; _glassWrong = null; _glassChannel = null;
         _glassLayer = null; _glassDim = null; _glassSignal = null;
         _glassActivity = DateTime.UtcNow;
         _glassIdle = NextGlassIdle();

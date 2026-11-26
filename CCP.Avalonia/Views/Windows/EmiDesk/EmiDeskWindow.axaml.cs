@@ -1016,6 +1016,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         /// <summary>P06: also invalidate an intro that has not reached its wake chain yet.</summary>
         internal void StopChainForPanic()
         {
+            CloseGlassForPanic();
             if (_dismissPending)
             {
                 // Panic must not strand her mid-goodbye: the wink is cut, the dismiss still lands.
