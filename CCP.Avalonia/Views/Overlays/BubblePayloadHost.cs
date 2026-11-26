@@ -56,8 +56,16 @@ internal static class BubblePayloadHost
             var w = new TintOverlayWindow();
             w.PlaceOn(screens[i]);
             w.SetTint(236, 228, 244, alpha);
+            // Gentle visuals: the veil rises over the Gentle fade instead of appearing at once (PinkFilterOverlay's rule).
+            var gentle = ConditioningControlPanel.Services.Safety.GentleVisuals.On;
+            if (gentle) w.Opacity = 0;
             w.Show();
             MeltWindows.Add(w);
+            if (gentle)
+            {
+                w.Transitions = new global::Avalonia.Animation.Transitions { new global::Avalonia.Animation.DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromSeconds(ConditioningControlPanel.Services.Safety.GentleVisuals.FadeSeconds) } };
+                Dispatcher.UIThread.Post(() => { if (MeltWindows.Contains(w)) w.Opacity = 1; });
+            }
             if (!SkipPlatformChecksForTests && (!Platform.X11Overlay.SetClickThrough(w, true)
                 || w.ActualTransparencyLevel == WindowTransparencyLevel.None)) { StopMelt(); return; }
         }
