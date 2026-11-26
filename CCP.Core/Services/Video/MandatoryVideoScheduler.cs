@@ -98,7 +98,6 @@ namespace ConditioningControlPanel.Services
         private bool _floatingRun, _cascadeJoinPending, _feedJoinPending;
         private bool _videoFreeze;   // this clip played a Freeze: its end finishes it (Reset or cancel)
         private int _retryGeneration, _noVideosShown;
-        internal int PlaybackGeneration => _retryGeneration;
         private int _chaosGeneration, _chaosToken, _playingChaosToken, _cascadeChaosToken, _bubbleChaosToken;
 
         /// <summary>The library came back empty for the first time this launch (WPF's "no videos"
