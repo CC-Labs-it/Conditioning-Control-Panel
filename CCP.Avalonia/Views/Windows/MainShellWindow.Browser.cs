@@ -11,6 +11,8 @@
 
 using System;
 using System.Threading.Tasks;
+using System.Text.Json;
+using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using ConditioningControlPanel.Avalonia.Views.Controls;
@@ -111,6 +113,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private int _browserRequestGeneration;
         private Action<Uri, bool>? _pendingVideoAutoPlay;
         private WebHost? _pendingVideoHost;
+        private WebHost? _cutHost;
+        private Action<string>? _cutMessage;
+        private Action? _cutNavigation;
+
 
         // WPF MainWindow.Browser.cs:793-815 arms once before navigation, and :835-837
         // waits 1.5 seconds before injection. WebHost has completion but no DOM-ready event.
@@ -119,7 +125,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Any new navigation, panic or takeover stop drops a pending or delayed autoplay.</summary>
         private void CancelVideoAutoPlay()
         {
-            ++_browserRequestGeneration; LockCardWindow.CancelWebVideoTakeover();
+            ++_browserRequestGeneration;
+            LockCardWindow.CancelWebVideoTakeover();
+            if (_cutHost != null)
+            {
+                if (_cutMessage != null) _cutHost.WebMessage -= _cutMessage;
+                if (_cutNavigation != null) _cutHost.NavigationBeginning -= _cutNavigation;
+            }
+            _cutHost = null;
+            _cutMessage = null;
+            _cutNavigation = null;
             if (_pendingVideoHost != null && _pendingVideoAutoPlay != null)
                 _pendingVideoHost.NavigationFinished -= _pendingVideoAutoPlay;
             _pendingVideoHost = null;
@@ -131,7 +146,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             && !url.Contains("bambicloud.com/playlist/", StringComparison.OrdinalIgnoreCase);
 
         /// <summary>Runs the autoplay script once, after the next successful navigation completes.</summary>
-        private void ArmVideoAutoPlay(WebHost host)
+        private void ArmVideoAutoPlay(WebHost host, bool appDriven = false)
         {
             var request = _browserRequestGeneration;
             void OnFinished(Uri completedUrl, bool success)
@@ -139,18 +154,61 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 host.NavigationFinished -= OnFinished;
                 _pendingVideoHost = null;
                 _pendingVideoAutoPlay = null;
-                if (success) _ = PlayVideoAfterLoadAsync(host, request);
+                if (success) _ = PlayVideoAfterLoadAsync(host, request, appDriven);
             }
             _pendingVideoHost = host;
             _pendingVideoAutoPlay = OnFinished;
             host.NavigationFinished += OnFinished;
         }
 
-        private async Task PlayVideoAfterLoadAsync(WebHost host, int request)
+        // A random offset is only useful when the app can stop the capped slice.
+        // WPF BrowserMediaService.cs:304-321 force-ends it; that service is not ported yet.
+        private static bool BrowserPlaybackCapEnforced => false;
+
+        private async Task PlayVideoAfterLoadAsync(WebHost host, int request, bool appDriven)
         {
             await BrowserAutoPlayDelay();
             if (request != _browserRequestGeneration) return;
-            await host.InvokeScriptAsync(WebHostTakeover.VideoAutoPlayScript);
+            // User-requested watch links do not need the cut metadata channel.
+            if (!appDriven)
+            {
+                await host.InvokeScriptAsync(WebHostTakeover.VideoAutoPlayScript);
+                return;
+            }
+            var token = Guid.NewGuid().ToString("N");
+            if (appDriven && BrowserPlaybackCapEnforced)
+            {
+                void OnMessage(string body)
+                {
+                    try
+                    {
+                        using var json = JsonDocument.Parse(body);
+                        var root = json.RootElement;
+                        if (!root.TryGetProperty("type", out var type) || type.GetString() != "ccpCutMetadata"
+                            || !root.TryGetProperty("request", out var id) || id.GetString() != token
+                            || !root.TryGetProperty("dur", out var duration) || !duration.TryGetDouble(out var seconds)
+                            || !double.IsFinite(seconds) || seconds <= 0 || seconds > long.MaxValue / 1000d
+                            || request != _browserRequestGeneration) return;
+                        var settings = CoreSettings.Current;
+                        if (!settings.VideoCutRandomStart || settings.VideoMaxDurationSeconds <= 0) return;
+                        host.WebMessage -= OnMessage;
+                        _cutMessage = null;
+                        var offset = ConditioningControlPanel.Services.Video.VideoLengthCapRules.StartOffsetMs(
+                            settings.VideoMaxDurationSeconds, (long)(seconds * 1000), Random.Shared);
+                        _ = host.InvokeScriptAsync("if(window.__ccpCutRequest==='" + token
+                            + "') window.__ccpSetCutStart?.(" + (offset / 1000d).ToString(CultureInfo.InvariantCulture) + ");");
+                    }
+                    catch (JsonException) { }
+                    catch (InvalidOperationException) { }
+                }
+                void OnNavigation() => CancelVideoAutoPlay();
+                _cutHost = host;
+                _cutMessage = OnMessage;
+                _cutNavigation = OnNavigation;
+                host.WebMessage += OnMessage;
+                host.NavigationBeginning += OnNavigation;
+            }
+            await host.InvokeScriptAsync(WebHost.CarrierShim + WebHostTakeover.VideoAutoPlayScript.Replace("__CCP_CUT_REQUEST__", token));
         }
 
         /// <summary>Homepage of whichever site radio is selected. BambiCloud is the default, as on
@@ -179,7 +237,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>Points the web view at a URL. A missing host (the tab is not in the tree, as in
         /// a single-view render) is a no-op that returns false, never a throw.</summary>
-        private bool NavigateBrowser(string url, bool linkNavigation = false, bool autoPlayFullscreen = false)
+        private bool NavigateBrowser(string url, bool linkNavigation = false, bool autoPlayFullscreen = false, bool appDriven = false)
         {
             CancelVideoAutoPlay();
             try
@@ -190,7 +248,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (BrowserPage?.PrepareBrowserNavigation() == false) return false;
                 // WPF MainWindow.Browser.cs:458,730: later links waiting for init use 50%.
                 host.SetBrowserZoom(host.BrowserZoomReady || (linkNavigation && host.BrowserZoom is not null) ? 0.5 : 0.75);
-                if (autoPlayFullscreen && WantsVideoAutoPlay(url, host)) { LockCardWindow.BeginWebVideoTakeover(); ArmVideoAutoPlay(host); }
+                if (autoPlayFullscreen && WantsVideoAutoPlay(url, host)) { LockCardWindow.BeginWebVideoTakeover(); ArmVideoAutoPlay(host, appDriven); }
                 if (!host.Navigate(target)) { CancelVideoAutoPlay(); return false; }   // even when equal: WPF #867, re-click goes home
                 Log.Information("Browser navigated to {Host}", ConditioningControlPanel.Services.Logging.UrlLog.Host(url));
                 return true;
@@ -263,7 +321,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow/MainWindow.Browser.cs:487-498: HTTPS only, after the offline gate.
             // ponytail: an unavailable adapter is known immediately; no 12-second ready poll is needed.
             // The navigation may rebuild a failed adapter first (WebHost.RetryFailedConstruction).
-            var navigated = NavigateBrowser(url, linkNavigation: true, autoPlayFullscreen: autoPlayFullscreen);
+            var navigated = NavigateBrowser(url, linkNavigation: true, autoPlayFullscreen: autoPlayFullscreen, appDriven: !userInitiated);
             if (BrowserView is { HasEngine: false })
             {
                 // reports false with no engine; the fallback panel still names the URL
