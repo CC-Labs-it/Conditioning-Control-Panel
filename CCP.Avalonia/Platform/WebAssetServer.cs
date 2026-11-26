@@ -450,7 +450,7 @@ public sealed class WebAssetServer : IDisposable
             full = Path.GetFullPath(Path.Combine(root, rel));
             if (!Inside(full, root) || !File.Exists(full)) return null;
         }
-        if (!LinksStayInside(full, root)) return null;
+        if (!LinksStayInside(full, root) && !(asset && LinkedMediaAllowed(full))) return null;
         // Brain-drain whisper clips pass this too; GameWindow.PbpWhispers leaves unchecked ones out of the offer.
         if (asset && !IntakeRun.IsAssetActive(IntakeRun.DisabledAssetSet(DisabledAssets()), root, full)) return null;
         return full;
@@ -481,18 +481,49 @@ public sealed class WebAssetServer : IDisposable
 
     static bool Inside(string full, string root) => full.StartsWith(root, StringComparison.Ordinal);
 
-    /// <summary>Every link on the way from the root down to the file must land inside the root.</summary>
+    /// <summary>The file, every link on the way resolved, must land inside the root (itself resolved).</summary>
     static bool LinksStayInside(string full, string root)
     {
-        for (var p = full; p.Length > root.Length; p = Path.GetDirectoryName(p)!)
+        try { return Inside(RealPath(full), RealPath(root.TrimEnd(Path.DirectorySeparatorChar)) + Path.DirectorySeparatorChar); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return false; }
+    }
+
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _linkRefusals = new();
+
+    /// <summary>ccp-bugs#1703: a library file reached through a link that leaves the assets folder, as WPF's WebView2
+    /// mapping follows (FypHostService.cs:96). Served only if its real file is media and not in the profile or a dot-folder.</summary>
+    bool LinkedMediaAllowed(string full)
+    {
+        string? why;
+        string real = full;
+        var data = Path.GetFullPath(CorePaths.UserData).TrimEnd(Path.DirectorySeparatorChar);
+        try { real = RealPath(full); data = RealPath(data); why = null; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { why = "unresolvable link"; }
+        data += Path.DirectorySeparatorChar;
+        why ??= !File.Exists(real) ? "not a file"
+            : !MediaTypeSniffer.MediaExtensions.Contains(Path.GetExtension(real)) ? "not media"
+            : Inside(real, data) ? "profile folder"
+            : real.Split('/', '\\').Any(seg => seg.StartsWith('.')) ? "dot-folder" : null;
+        if (why != null && _linkRefusals.TryAdd(why, 0))
+            Log.Warning("WebAssetServer: refusing linked asset {Path}: {Why}", full, why);
+        return why == null;
+    }
+
+    /// <summary>The path with every link resolved as the OS does (no realpath in .NET): a link target is read raw and
+    /// walked segment by segment, so a <c>..</c> after a folder link climbs from where that link really led.</summary>
+    static string RealPath(string path, int depth = 0)
+    {
+        if (depth > 64) throw new IOException("link loop");
+        var cur = Path.GetPathRoot(path) ?? "";
+        foreach (var seg in path[cur.Length..].Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries))
         {
-            FileSystemInfo info = Directory.Exists(p) ? new DirectoryInfo(p) : new FileInfo(p);
-            if (info.LinkTarget != null && info.ResolveLinkTarget(returnFinalTarget: true) is { } target
-                && !Inside(Path.GetFullPath(target.FullName), root)
-                && Path.GetFullPath(target.FullName) + Path.DirectorySeparatorChar != root)
-                return false;
+            if (seg == ".") continue;
+            if (seg == "..") { cur = Path.GetDirectoryName(cur) ?? cur; continue; }
+            var next = Path.Combine(cur, seg);
+            FileSystemInfo info = Directory.Exists(next) ? new DirectoryInfo(next) : new FileInfo(next);
+            cur = info.LinkTarget is { } target ? RealPath(Path.Combine(cur, target), depth + 1) : next;
         }
-        return true;
+        return cur;
     }
 
     public void Dispose()

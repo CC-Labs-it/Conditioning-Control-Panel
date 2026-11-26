@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
+using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using CCP.Testing;
 using Xunit;
@@ -137,6 +138,82 @@ public class WebAssetServerTests
             Assert.Null(s.ResolveFile("/leak.txt"));
             Assert.Null(s.ResolveFile("/up/secret.txt"));
             Assert.NotNull(s.ResolveFile("/ok.html"));
+        }
+    }
+
+    /// <summary>ccp-bugs#1703: a library folder linked from elsewhere (FypAssetManifest.Walk follows it) must play in
+    /// For You, as WPF's WebView2 folder mapping follows links (FypHostService.cs:96). Only media, never the profile
+    /// or a dot-folder, and still behind the token.</summary>
+    [Fact]
+    public async Task AssetsServeMediaThroughALinkedFolderOutsideTheRoot_ButNotSecrets()
+    {
+        Symlinks.RequireOrSkip();
+        var web = Directory.CreateTempSubdirectory("fyp-web-").FullName;
+        var assets = Directory.CreateTempSubdirectory("fyp-assets-").FullName;
+        var outside = Directory.CreateTempSubdirectory("fyp-outside-").FullName;
+        var profileClip = Path.Combine(CorePaths.UserData, "leak.mp4");
+        try
+        {
+            File.WriteAllText(Path.Combine(outside, "clip.mp4"), "clip");
+            File.WriteAllText(Path.Combine(outside, "notes.txt"), "secret");
+            Directory.CreateDirectory(Path.Combine(outside, ".hidden"));
+            File.WriteAllText(Path.Combine(outside, ".hidden", "h.mp4"), "secret");
+            Directory.CreateDirectory(CorePaths.UserData);
+            File.WriteAllText(profileClip, "secret");
+            Directory.CreateSymbolicLink(Path.Combine(assets, "videos"), outside);
+            File.CreateSymbolicLink(Path.Combine(outside, "notes.mp4"), Path.Combine(outside, "notes.txt"));
+            File.CreateSymbolicLink(Path.Combine(outside, "hidden.mp4"), Path.Combine(outside, ".hidden", "h.mp4"));
+            File.CreateSymbolicLink(Path.Combine(outside, "profile.mp4"), profileClip);
+
+            using var server = new WebAssetServer(web) { AssetsRoot = () => assets, DisabledAssets = () => null };
+            using var http = Client();
+            var url = server.AssetUrl("videos/clip.mp4");
+            using (var stranger = Client())
+                Assert.Equal(HttpStatusCode.Forbidden, (await stranger.GetAsync(url)).StatusCode);
+            var response = await http.GetAsync(url + "?ccp_t=" + server.Token);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Equal("clip", await response.Content.ReadAsStringAsync());
+            string P(string rel) => "/" + WebAssetServer.AssetsPrefix + rel;
+            Assert.Null(server.ResolveFile(P("videos/notes.txt")));     // not media
+            Assert.Null(server.ResolveFile(P("videos/notes.mp4")));     // media name, non-media target
+            Assert.Null(server.ResolveFile(P("videos/hidden.mp4")));    // target in a dot-folder
+            Assert.Null(server.ResolveFile(P("videos/profile.mp4")));   // target in the profile
+        }
+        finally
+        {
+            File.Delete(profileClip);
+            Directory.Delete(web, true);
+            Directory.Delete(assets, true);
+            Directory.Delete(outside, true);
+        }
+    }
+
+    /// <summary>A link target with <c>..</c> after a folder link: the OS follows the folder link first, so
+    /// <c>s/../secret.txt</c> leaves the root even though the text collapses to a path inside it.</summary>
+    [Fact]
+    public void AssetLinkWithDotDotAfterAFolderLink_DoesNotEscapeTheRoot()
+    {
+        Symlinks.RequireOrSkip();
+        var web = Directory.CreateTempSubdirectory("fyp-web-").FullName;
+        var assets = Directory.CreateTempSubdirectory("fyp-assets-").FullName;
+        var outside = Directory.CreateTempSubdirectory("fyp-outside-").FullName;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(outside, "inner"));
+            File.WriteAllText(Path.Combine(outside, "secret.txt"), "secret");
+            Directory.CreateDirectory(Path.Combine(assets, "videos"));
+            Directory.CreateSymbolicLink(Path.Combine(assets, "videos", "s"), Path.Combine(outside, "inner"));
+            File.CreateSymbolicLink(Path.Combine(assets, "videos", "a.mp4"), "s/../secret.txt");
+            Assert.Equal("secret", File.ReadAllText(Path.Combine(assets, "videos", "a.mp4")));   // the OS does escape
+
+            using var server = new WebAssetServer(web) { AssetsRoot = () => assets, DisabledAssets = () => null };
+            Assert.Null(server.ResolveFile("/" + WebAssetServer.AssetsPrefix + "videos/a.mp4"));
+        }
+        finally
+        {
+            Directory.Delete(web, true);
+            Directory.Delete(assets, true);
+            Directory.Delete(outside, true);
         }
     }
 
