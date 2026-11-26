@@ -382,7 +382,7 @@ public sealed partial class FriendsDrawer : Border
         bool open = _openId == f.Id;
         var table = TableFor(f);
         var top = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto") };
-        var avatar = Avatar(f.Name, 38, f.Online || table != null, f.Look);
+        var avatar = Avatar(f.Name, 38, f.Online || table != null, f.Look, f.AvatarUrl);   // WPF FriendsDrawer.cs:538
         if (!f.Online && table == null) avatar.Opacity = 0.55;
         var mid = new StackPanel { Margin = new Thickness(10, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
         var nameLine = new StackPanel { Orientation = Orientation.Horizontal };
@@ -664,7 +664,7 @@ public sealed partial class FriendsDrawer : Border
             Background = Brushes.Transparent, // WPF FriendsDrawer.cs:752: padding participates in hit testing.
             CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 1),
             Tag = (incoming ? "friends-request-in:" : "friends-request-out:") + r.Id,
-            Child = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto"), Children = { Avatar(r.Name, 38, null, r.Look), mid, buttons } },
+            Child = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto"), Children = { Avatar(r.Name, 38, null, r.Look, r.AvatarUrl), mid, buttons } },
         };
         AttachHover(row, false);
         return row;
@@ -991,8 +991,8 @@ public sealed partial class FriendsDrawer : Border
     }
 
     /// <summary>Initials on the roster's per-name gradient (WPF FriendsLook.Avatar), with a presence dot
-    /// (mint on, grey off, none for null).</summary>
-    internal static Control Avatar(string name, double size, bool? dot, ConditioningControlPanel.Services.PlayerLook? look = null)
+    /// (mint on, grey off, none for null). A proxy picture replaces the initials once it loads (Parity.cs).</summary>
+    internal static Control Avatar(string name, double size, bool? dot, ConditioningControlPanel.Services.PlayerLook? look = null, string? url = null)
     {
         var g = new Grid { Width = size, Height = size };
         g.Children.Add(new Border
@@ -1006,7 +1006,8 @@ public sealed partial class FriendsDrawer : Border
         });
         if (look is { IsEmpty: false })
         {
-            if (Helpers.ModArt.AvatarPreset(look.AvatarId) is { } art && g.Children[0] is Border disc)
+            // WPF FriendsLook.cs:204: the preset only stands in when there is no picture.
+            if (string.IsNullOrEmpty(url) && Helpers.ModArt.AvatarPreset(look.AvatarId) is { } art && g.Children[0] is Border disc)
             {
                 disc.Background = new ImageBrush(art) { Stretch = Stretch.UniformToFill };
                 disc.Child = null;
@@ -1024,6 +1025,7 @@ public sealed partial class FriendsDrawer : Border
                 Width = size * 0.3, Height = size * 0.3, Fill = on ? Mint : OfflineDot, Stroke = Foot, StrokeThickness = 2,
                 HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom,
             });
+        if (!string.IsNullOrEmpty(url) && g.Children[0] is Border face) _ = PaintPhotoAsync(face, url);
         return g;
     }
 
