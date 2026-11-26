@@ -203,8 +203,13 @@ public class WebAssetServerTests
             File.WriteAllText(Path.Combine(outside, "secret.txt"), "secret");
             Directory.CreateDirectory(Path.Combine(assets, "videos"));
             Directory.CreateSymbolicLink(Path.Combine(assets, "videos", "s"), Path.Combine(outside, "inner"));
-            File.CreateSymbolicLink(Path.Combine(assets, "videos", "a.mp4"), "s/../secret.txt");
-            Assert.Equal("secret", File.ReadAllText(Path.Combine(assets, "videos", "a.mp4")));   // the OS does escape
+            // The target uses the platform separator: Windows reads a '/' inside a link target as part of a
+            // name ("The filename, directory name, or volume label syntax is incorrect").
+            File.CreateSymbolicLink(Path.Combine(assets, "videos", "a.mp4"), Path.Combine("s", "..", "secret.txt"));
+            // POSIX follows s first, so the OS does escape. Windows may collapse the '..' in the target text
+            // before it follows s, so the escape itself is pinned on POSIX only; the server refuses it on both.
+            if (!OperatingSystem.IsWindows())
+                Assert.Equal("secret", File.ReadAllText(Path.Combine(assets, "videos", "a.mp4")));
 
             using var server = new WebAssetServer(web) { AssetsRoot = () => assets, DisabledAssets = () => null };
             Assert.Null(server.ResolveFile("/" + WebAssetServer.AssetsPrefix + "videos/a.mp4"));

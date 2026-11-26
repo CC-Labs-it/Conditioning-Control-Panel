@@ -30,6 +30,9 @@ public class ChaosRabbitTrailEmitTests
         var pulse = pulseField.GetValue(field);
         bool skiaSkip = ChaosSkiaFxOverlay.SkipPlatformChecksForTests;
         bool fallbackSkip = ChaosFieldFxOverlay.SkipPlatformChecksForTests;
+        // Core darter motion (#5722) retires a darter once LifetimeMs runs out (at least 1 ms), so every
+        // darter here lives long enough for the steps the test takes, as real darter specs always do.
+        const int Life = 60_000;
         static AmbientBubble Bubble(EffectBubbleSpec spec, double x)
         {
             var b = AmbientBubble.SpawnChaos(new Random(7), 0, 0, 0, 1000, 1000, 1, spec, ChaosMotion.RoamBounce);
@@ -49,7 +52,7 @@ public class ChaosRabbitTrailEmitTests
             // A newly enabled trail must wait until the frozen darter resumes.
             state.RabbitTrailSec = 0;
             field.FreezeChaos = true;
-            var frozenRabbit = Bubble(new EffectBubbleSpec { IsDarter = true }, 30);
+            var frozenRabbit = Bubble(new EffectBubbleSpec { LifetimeMs = Life, IsDarter = true }, 30);
             field.Bubbles.Add(frozenRabbit);
             BubbleOverlay.StepChaosField();
             state.RabbitTrailSec = 2;
@@ -60,7 +63,7 @@ public class ChaosRabbitTrailEmitTests
             Assert.NotNull(ChaosSkiaFxOverlay.Active);
             ChaosSkiaFxOverlay.CloseActive();
             field.Bubbles.Clear();
-            var rabbit = Bubble(new EffectBubbleSpec { IsDarter = true }, 0);
+            var rabbit = Bubble(new EffectBubbleSpec { LifetimeMs = Life, IsDarter = true }, 0);
             field.Bubbles.Add(rabbit);
             rabbit.X = 30;
             BubbleOverlay.StepChaosField();
@@ -77,7 +80,7 @@ public class ChaosRabbitTrailEmitTests
             ChaosSkiaFxOverlay.CloseActive();
             field.Bubbles.Clear();
             state.RabbitTrailSec = 0;
-            var sweeper = Bubble(new EffectBubbleSpec { IsDarter = true, IsSweeper = true }, 30);
+            var sweeper = Bubble(new EffectBubbleSpec { LifetimeMs = Life, IsDarter = true, IsSweeper = true }, 30);
             field.Bubbles.Add(sweeper);
             BubbleOverlay.StepChaosField();
             Assert.NotNull(ChaosSkiaFxOverlay.Active);
@@ -89,7 +92,7 @@ public class ChaosRabbitTrailEmitTests
             field.Bubbles.Clear();
             settings.ChaosSkiaFxEnabled = false;
             ChaosFieldFxOverlay.SkipPlatformChecksForTests = true;
-            field.Bubbles.Add(Bubble(new EffectBubbleSpec { IsDarter = true, IsSweeper = true }, 60));
+            field.Bubbles.Add(Bubble(new EffectBubbleSpec { LifetimeMs = Life, IsDarter = true, IsSweeper = true }, 60));
             BubbleOverlay.StepChaosField();
             var prims = new List<FieldFxPrim>();
             ChaosFieldFxOverlay.Active!.Model.Frame(ChaosFieldFxOverlay.NowMs(), prims);
@@ -97,7 +100,7 @@ public class ChaosRabbitTrailEmitTests
             ChaosFieldFxOverlay.CloseActive();
             field.Bubbles.Clear();
             settings.ChaosSkiaFxEnabled = true;
-            field.Bubbles.Add(new AmbientBubble { X = 60, Size = 0, Popping = true, Spec = new EffectBubbleSpec { IsDarter = true, IsSweeper = true } });
+            field.Bubbles.Add(new AmbientBubble { X = 60, Size = 0, Popping = true, Spec = new EffectBubbleSpec { LifetimeMs = Life, IsDarter = true, IsSweeper = true } });
             field.Bubbles.Add(Bubble(new EffectBubbleSpec { IsSweeper = true }, 60));
             BubbleOverlay.StepChaosField();
             Assert.Null(ChaosSkiaFxOverlay.Active);
