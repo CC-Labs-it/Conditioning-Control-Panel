@@ -527,6 +527,7 @@ compare text, order, layout, sound and timing with the same screen on Windows. R
 <li><strong>[SAFETY] developers re-check this before release.</strong> While any of step 27's effects or the wave pill, boon pill or announcer shows: panic, tray -&gt; Stop everything, and the safe word each close it at once with no window left behind. WPF <code>Chaos/ChaosWaveTimerOverlay.cs</code>, <code>Chaos/ChaosBoonBarOverlay.cs</code>, <code>Chaos/ChaosAnnouncerOverlay.cs</code>, <code>Chaos/ChaosFxWindow.cs</code>, <code>Chaos/ChaosToyButtonWindow.cs</code>. Rows: as step 27, plus <code>chaos-wave-timer</code>, <code>chaos-boon-bar</code>, <code>chaos-announcer</code>, <code>chaos-fx-window</code>, <code>chaos-toy-button</code>.</li>
 <li>Without a compositor (or on plain Wayland): those effects show nothing rather than a black or click-blocking sheet. Rows: as step 27.</li>
 <li>Click a bubble: it pops and the click does not reach the window below; empty space between bubbles stays clickable. WPF <code>Chaos/ChaosBubbleHostOverlay.cs:137</code>. Rows: <code>chaos-bubble-host</code>.</li>
+<li>Chaos settings: turn Pin on top off, enable Subliminal solid mode, FALL IN, then focus another app. Expect subliminal cards to stay behind that app, not over it. WPF <code>Chaos/ChaosWindowZ.cs:41</code>, <code>Chaos/ChaosBubbleHostOverlay.cs:183</code>. Rows: <code>chaos-bubble-host</code>.</li>
 </ol>
 <h3 id="other-controls">Other controls</h3>
 <ol start="31">
