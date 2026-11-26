@@ -41,6 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void PanicPauseBrowserMedia()
         {
             StopBrowserAudioSync();
+            BrowserPage?.StopBrowserEnhancementForPanic();
             LockCardWindow.EndWebVideo();
             ExitBrowserPopoutFullscreen();
             // Invalidate a delayed autoplay before the page is asked to stop (WPF MainWindow.Browser.cs:973-990).
@@ -49,7 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // A watch-chip request still waiting for the gate must not load after panic.
             host.CancelPendingNavigation();
             host.CancelBrowserZoom();
-            _ = host.InvokeScriptAsync(WebHostMedia.PanicPauseScript);
+            _ = host.InvokeScriptAsync(WebHostMedia.PanicPauseScript + (BrowserPage?.BrowserEnhanceResumeScript() ?? ""));
             // WPF PanicEndBrowserMedia -> EndWebVideoTakeover (Browser.cs:995): the controller's page goes too.
             EndRemoteBrowserVideo();
         }

@@ -81,7 +81,7 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
     // Do not claim a match is active when this head cannot run its effects.
     internal static bool Supports(Enhancement enhancement)
     {
-        static bool EffectSupported(string? type) => type is EffectTypes.Haptic or EffectTypes.Flash or EffectTypes.Subliminal or EffectTypes.Bubble;
+        static bool EffectSupported(string? type) => type is EffectTypes.Haptic or EffectTypes.Flash or EffectTypes.Subliminal or EffectTypes.Bubble or EffectTypes.Speak;
         static bool ActionSupported(EnhancementAction? action) => action is not TriggerEffectAction effect || EffectSupported(effect.EffectType);
         return enhancement.Rules.All(r => !r.Enabled || ActionSupported(r.Action))
             && enhancement.TimelineItems.All(i => !i.Enabled || (i.Kind == TimelineItemKind.Effect ? EffectSupported(i.EffectType) : ActionSupported(i.Action)));
