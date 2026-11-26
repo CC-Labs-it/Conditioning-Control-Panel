@@ -384,6 +384,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 // WPF ChaosModeService.cs:371, :378 samples the current boon/upgrade at spawn.
                 BubbleOverlay.SpawnChaos(spec, hitboxScale: cfg.HitboxScale, liveMagnet: _state.MagnetEnabled);
 
+                // WPF ChaosModeService.cs:1165: a bonus roll accompanies each ordinary spawn.
+                if (Rng.NextDouble() < _state.GoldenChance)
+                {
+                    ChaosMeta.MarkDiscovered("bubble:golden");
+                    var golden = ChaosBubbleVariants.BuildGolden();
+                    BubbleOverlay.SpawnChaos(golden, motion: golden.Motion);
+                    PlayChime(0.30f);   // WPF :1172
+                }
+
                 if (_state.PrismChance > 0 && Rng.NextDouble() < _state.PrismChance)
                 {
                     ChaosMeta.MarkDiscovered("bubble:prism");
@@ -522,6 +531,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 return;
             }
             CountRegenPop();   // WPF ChaosModeService :1768
+            // WPF ChaosModeService.cs:1786-1820: gold pickups bypass score and combo.
+            if (spec.IsGolden || spec.IsDroplet)
+            {
+                _state.Focus += spec.IsGolden ? ChaosTuning.FOCUS_PER_GOLDEN : ChaosTuning.FOCUS_PER_DROPLET;
+                int min, max;
+                if (spec.IsGolden)
+                {
+                    int level = ChaosMeta.IsBoonActive("rabbits_foot") ? ChaosMeta.BoonLevel("rabbits_foot") : 0;
+                    (min, max) = ChaosLifetimeBoons.GoldenPayRange(level);
+                }
+                else { min = 3; max = 7; }
+                int gold = ChaosRunEngine.GoldScaled(_state, Rng.Next(min, max + 1));
+                BankGold(gold);
+                PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY + 30,
+                    $"+{gold} {ChaosGlyphs.Gold}", Color.FromRgb(255, 215, 0));
+                _state.PushEvent(spec.IsGolden ? $"{ChaosGlyphs.Gold} lucky bubble +{gold} gold" : $"{ChaosGlyphs.Gold} droplet +{gold} gold");
+                if (spec.IsGolden) ChaosAnnouncerOverlay.Announce($"{ChaosGlyphs.Gold} +{gold} gold", ChaosAnnounceKind.PowerUp);
+                Pulse(Color.FromRgb(255, 215, 0), spec.IsGolden ? 0.35 : 0.12);
+                ChaosOverlayWindow.ChaosSfx.Play("golden_pop", spec.IsGolden ? 0.6f : 0.35f);
+                if (spec.IsGolden && _state.GoldDiggerEnabled)
+                {
+                    var center = BubbleOverlay.CenterPx(b);
+                    for (int i = 0; i < 3; i++)
+                        BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildGoldDroplet(
+                            center.X + Rng.Next(-50, 51), center.Y + Rng.Next(-20, 21)), motion: ChaosMotion.RainDown);
+                    _state.PushEvent("gold digger: it spills");   // WPF :1820 prefixes a pickaxe; no emoji in event lines
+                }
+                return;
+            }
             if (spec.IsPrism)
             {
                 FireScaledPayload(spec.Payload);
@@ -1280,15 +1318,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 BubbleOverlay.SpawnChaos(ChaosBubbleVariants.Build(variant, _state.RunIntensity, _state.FuseTimeMult,
                     ChaosMotion.RainDown, _state.Config.EffectIntensity, _state.BubbleScale), motion: ChaosMotion.RainDown);
             }
+            PlayChime(0.25f);
+            _state.PushEvent(Loc.Get("chaos_welcome_shower"));
+        }
+
+        /// <summary>WPF BubbleService.PlayChime (:2065): a random chime at (master x bubbles)^1.5 x scale.</summary>
+        private static void PlayChime(float scale)
+        {
             var chime = $"chime{Rng.Next(1, 4)}.mp3";
             var sound = CoreModArt.AudioOverridePath(chime) ?? ContentLocator.Resolve(System.IO.Path.Combine("Resources", "sounds", chime));
             if (System.IO.File.Exists(sound))
             {
                 var settings = CoreSettings.Current;
-                float volume = (float)Math.Pow(settings.MasterVolume / 100.0 * settings.BubblesVolume / 100.0, 1.5) * 0.25f;
+                float volume = (float)Math.Pow(settings.MasterVolume / 100.0 * settings.BubblesVolume / 100.0, 1.5) * scale;
                 CoreAudio.PlayOneShot(sound, volume, "bubble-chime");
             }
-            _state.PushEvent(Loc.Get("chaos_welcome_shower"));
         }
 
         /// <summary>WPF UpdateHeatTint (:3131): a warm edge tint that rises with run Heat,
