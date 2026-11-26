@@ -9,7 +9,8 @@ namespace ConditioningControlPanel.Tests;
 
 /// <summary>
 /// A preset carries each effect's V2 switch (owner, 2026-11-16). A save writes all eight; an apply
-/// sets only what the preset names; a preset saved before this (no map) leaves every switch alone.
+/// sets what the preset names and turns the rest off; a preset saved before this (no map) or a
+/// built-in loads every switch off, the look it had when it was made (ccp-bugs #1696).
 /// </summary>
 public class PresetSuperModesTests
 {
@@ -52,46 +53,80 @@ public class PresetSuperModesTests
     }
 
     [Fact]
-    public void Old_preset_without_the_map_keeps_the_current_switches()
+    public void Old_preset_without_the_map_loads_every_switch_off()
     {
+        // Live V2 as a 7.3 player has it: never touched, so every switch on by default.
         var live = new AppSettings();
-        live.SuperModes = SuperModeRule.With(live.SuperModes, SuperEffect.Creep, SuperMode.Classic);
-        var before = new Dictionary<string, int>(live.SuperModes);
+        foreach (var e in Enum.GetValues<SuperEffect>())
+            Assert.True(SuperModeRule.RunsSuper(Mode(live, e)), e + " should start on");
 
         // A preset as 7.3.0 and older wrote it: no SuperModes field at all.
         var old = JsonConvert.DeserializeObject<Preset>("{\"Name\":\"Old\",\"FlashEnabled\":true}")!;
         Assert.Null(old.SuperModes);
 
+        old.ApplyTo(live);
+
+        foreach (var e in Enum.GetValues<SuperEffect>())
+            Assert.Equal(SuperMode.Classic, Mode(live, e));
+    }
+
+    [Fact]
+    public void Old_preset_on_an_all_classic_player_raises_nothing()
+    {
+        var live = new AppSettings();
+        foreach (var e in Enum.GetValues<SuperEffect>())
+            live.SuperModes = SuperModeRule.With(live.SuperModes, e, SuperMode.Classic);
+        var old = JsonConvert.DeserializeObject<Preset>("{\"Name\":\"Old\"}")!;
         bool raised = false;
         live.PropertyChanged += (_, e) => raised |= e.PropertyName == nameof(AppSettings.SuperModes);
+
         old.ApplyTo(live);
 
         Assert.False(raised);
-        Assert.Equal(before, live.SuperModes);
-        Assert.Equal(SuperMode.Classic, Mode(live, SuperEffect.Creep));
     }
 
     [Fact]
-    public void Built_in_presets_leave_the_switches_alone()
+    public void Built_in_presets_load_every_switch_off()
     {
         foreach (var p in Preset.GetDefaultPresets())
+        {
             Assert.Null(p.SuperModes);
+            var live = new AppSettings();
+            p.ApplyTo(live);
+            foreach (var e in Enum.GetValues<SuperEffect>())
+                Assert.Equal(SuperMode.Classic, Mode(live, e));
+        }
     }
 
     [Fact]
-    public void Apply_touches_only_the_effects_the_preset_names()
+    public void Apply_turns_off_the_effects_the_preset_does_not_name()
     {
         var live = new AppSettings();
         live.SuperModes = SuperModeRule.With(live.SuperModes, SuperEffect.LightsDown, SuperMode.Classic);
-        var p = new Preset { SuperModes = new Dictionary<string, int> { ["Afterglow"] = (int)SuperMode.Classic, ["NotAnEffect"] = 0, ["3"] = 0 } };
+        var p = new Preset { SuperModes = new Dictionary<string, int> { ["Afterglow"] = (int)SuperMode.Both, ["NotAnEffect"] = 0, ["3"] = 0 } };
 
         p.ApplyTo(live);
 
-        Assert.Equal(SuperMode.Classic, Mode(live, SuperEffect.Afterglow));
+        Assert.True(SuperModeRule.RunsSuper(Mode(live, SuperEffect.Afterglow)));
         Assert.Equal(SuperMode.Classic, Mode(live, SuperEffect.LightsDown));
-        Assert.True(SuperModeRule.RunsSuper(Mode(live, SuperEffect.Vortex)));
+        Assert.Equal(SuperMode.Classic, Mode(live, SuperEffect.Vortex));
         Assert.False(live.SuperModes.ContainsKey("NotAnEffect"));
         Assert.False(live.SuperModes.ContainsKey("3"));
+    }
+
+    [Fact]
+    public void Loading_a_new_preset_then_an_old_one_does_not_keep_the_new_ones_v2()
+    {
+        var a = new AppSettings(); // every switch on
+        var presetA = Preset.FromSettings(a, "A");
+        var presetB = JsonConvert.DeserializeObject<Preset>("{\"Name\":\"B\"}")!;
+
+        var live = new AppSettings();
+        presetA.ApplyTo(live);
+        presetB.ApplyTo(live);
+
+        foreach (var e in Enum.GetValues<SuperEffect>())
+            Assert.Equal(SuperMode.Classic, Mode(live, e));
     }
 
     [Fact]

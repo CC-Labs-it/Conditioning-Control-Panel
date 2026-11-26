@@ -739,6 +739,7 @@ namespace ConditioningControlPanel
             }
             ApplyDeeperFilterAndSort();
             ProbeDeeperDurations();
+            RefreshDeeperPlayView();
         }
 
         // Scroll the list to the row for <paramref name="filePath"/> and flash it.

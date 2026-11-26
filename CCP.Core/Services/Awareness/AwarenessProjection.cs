@@ -147,7 +147,7 @@ namespace ConditioningControlPanel.Services.Awareness
                 foreach (var trend in frame.Trends)
                 {
                     if (trend == null) continue;
-                    w.WriteStringValue(trend.Label);
+                    w.WriteStringValue(trend.PromptLabel);
                 }
                 w.WriteEndArray();
 

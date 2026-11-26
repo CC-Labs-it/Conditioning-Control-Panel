@@ -28,6 +28,8 @@ public static class SuperStageHost
     public static Func<bool> EngineUp { get; set; } = () => false;
     /// <summary>Cursor in virtual-desktop device pixels, or null when the head cannot read it.</summary>
     public static Func<(int X, int Y)?> CursorProvider { get; set; } = () => null;
+    /// <summary>Left or right mouse button: held now, and pressed since the last read; null when the head cannot read it.</summary>
+    public static Func<(bool Down, bool Tapped)?> ClickProvider { get; set; } = () => null;
     /// <summary>Show (true) or hide (false) the head's Steam surface. UI thread.</summary>
     public static Action<bool> SteamSurface { get; set; } = _ => { };
     /// <summary>Show (true) or hide (false) the head's Whirlpool surface. UI thread.</summary>
@@ -39,6 +41,7 @@ public static class SuperStageHost
     private static int _lastX, _lastY;
     private static bool _haveCursor;
     private static double _speedPx;
+    private static bool _mouseWasDown, _pollingClicks;
     private static readonly List<(System.Drawing.Rectangle Bounds, double Dip)> Screens = new();
 
     /// <summary>Cursor in virtual-desktop device pixels, as of the last step.</summary>
@@ -95,6 +98,8 @@ public static class SuperStageHost
         Stage.Reset();
         _steamAge = 0;
         _haveCursor = false;
+        _mouseWasDown = false;
+        _pollingClicks = false;
     }
 
     /// <summary>A surface saw this monitor: remember its pixels-per-DIP for the pool's tuning.</summary>
@@ -134,18 +139,38 @@ public static class SuperStageHost
             _lastX = cur.X; _lastY = cur.Y; _haveCursor = true;
         }
 
-        double dip = 1, shortSide = 1080;
+        double dip = 1, shortSide = 1080, centreX = _lastX, centreY = _lastY;
         foreach (var s in Screens)
-            if (s.Bounds.Contains(_lastX, _lastY)) { dip = s.Dip; shortSide = Math.Min(s.Bounds.Width, s.Bounds.Height); break; }
+            if (s.Bounds.Contains(_lastX, _lastY))
+            {
+                dip = s.Dip; shortSide = Math.Min(s.Bounds.Width, s.Bounds.Height);
+                centreX = s.Bounds.Left + s.Bounds.Width / 2.0; centreY = s.Bounds.Top + s.Bounds.Height / 2.0;
+                break;
+            }
 
         bool gentle = Safety.GentleVisuals.On;
         // The gold-box options, read live so a slider moves the effect at once.
         var set = CoreSettings.Service?.Current;
         Stage.DragsFog = set?.WhirlpoolDragsFog != false;
+        Stage.MovingPops = set?.MovingEffectsPop == true;
         Stage.DragsPictures = set?.WhirlpoolDragsPictures != false;
         Stage.DragsBubbles = set?.WhirlpoolDragsBubbles != false;
+        Stage.DragsWords = set?.WhirlpoolDragsWords != false;
         Stage.Pool.ReachScale = WhirlpoolOptions.ReachScale(set?.WhirlpoolSize ?? WhirlpoolOptions.SizeDefault);
-        if (Stage.PoolOn) Stage.Pool.Step(dt, _lastX, _lastY, _speedPx, dip, shortSide, gentle);
+        bool centred = set?.WhirlpoolStayCentred == true;
+        bool restless = set?.WhirlpoolRestless == true;
+        Stage.Pool.Eats = !centred;   // a parked pool pulls but never pops on its own
+        Stage.Pool.Floor = WhirlpoolOptions.Floor(set?.WhirlpoolSmallest ?? WhirlpoolOptions.SmallestDefault);
+        Stage.Pool.Restless = restless;
+        // A restless pool feeds on clicks: one kick per press (left or right). Read only while it is on.
+        bool pressed = Stage.PoolOn && restless && PollClick();
+        if (!(Stage.PoolOn && restless)) { _mouseWasDown = false; _pollingClicks = false; }
+        if (Stage.PoolOn)
+        {
+            if (pressed) Stage.Pool.Kick();
+            var at = WhirlpoolOptions.Anchor(centred, restless, _lastX, _lastY, _speedPx, centreX, centreY);
+            Stage.Pool.Step(dt, at.X, at.Y, at.SpeedPx, dip, shortSide, gentle);
+        }
 
         if (Stage.SteamOn)
         {
@@ -171,4 +196,22 @@ public static class SuperStageHost
     /// the edges at first, the whole screen later. The live step reads the player's Creep speed.</summary>
     public static double SteamLevel(double ageSeconds)
         => SteamOptions.Level(ageSeconds, SteamOptions.CreepSeconds(SteamOptions.Normal));
+
+    /// <summary>One press since the last poll, left or right: the rising edge of the held bit, or the
+    /// "pressed since the last call" bit for a tap shorter than one step. The first poll after a pause
+    /// only clears that bit, so an old press never kicks.</summary>
+    private static bool PollClick()
+    {
+        // The head reads the buttons (WPF: GetAsyncKeyState); unseeded, no click ever kicks.
+        if (ClickProvider() is not { } b) return false;
+        bool first = !_pollingClicks;
+        _pollingClicks = true;
+        bool pressed = ClickPressed(b.Down, b.Tapped, _mouseWasDown, first);
+        _mouseWasDown = b.Down;
+        return pressed;
+    }
+
+    /// <summary>The click rule, pure for tests.</summary>
+    internal static bool ClickPressed(bool down, bool tappedSinceLastPoll, bool wasDown, bool firstPoll)
+        => !firstPoll && (tappedSinceLastPoll || (down && !wasDown));
 }

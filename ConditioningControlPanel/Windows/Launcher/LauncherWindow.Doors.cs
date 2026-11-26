@@ -311,28 +311,45 @@ public partial class LauncherWindow
         return view;
     }
 
-    /// <summary>Continue: a filled hue button (the depth law's raised face) that presses in.</summary>
-    private Button BuildContinueButton(LauncherEntry last, Color hue)
+    /// <summary>The Continue pill's sane cap; inside it the card's own text column decides where the name trims.</summary>
+    internal const double ContinueMaxWidth = 560;
+
+    /// <summary>
+    /// The Continue pill's words: a play glyph and the line. A DockPanel, not a horizontal StackPanel: the StackPanel
+    /// measured the line at infinite width, so it never trimmed and a long name ("Continue: Terms &amp; Conditioning")
+    /// ran past the pill's rim. Now the pill sizes to its words and they trim with an ellipsis only when the card's
+    /// text column is narrower than they are. The LauncherPlay template ignores Padding, so the inset sits here.
+    /// </summary>
+    internal static DockPanel ContinueLabel(string text)
     {
-        var label = new StackPanel { Orientation = Orientation.Horizontal };
-        label.Children.Add(new TextBlock
+        var label = new DockPanel { LastChildFill = true, Margin = new Thickness(18, 0, 20, 0) };
+        var glyph = new TextBlock
         {
             Text = "", FontFamily = new FontFamily("Segoe MDL2 Assets, Segoe UI Symbol, Segoe UI"),
             FontSize = 13, Margin = new Thickness(0, 1, 9, 0), VerticalAlignment = VerticalAlignment.Center,
-        });
-        var text = Loc.GetF("launcher_door_continue", last.Title);
+        };
+        DockPanel.SetDock(glyph, Dock.Left);
+        label.Children.Add(glyph);
         label.Children.Add(new TextBlock
         {
             Text = text,
             FontFamily = LauncherDoorCard.DisplayFont, FontSize = 16, FontWeight = FontWeights.SemiBold,
             TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
         });
+        return label;
+    }
+
+    /// <summary>Continue: a filled hue button (the depth law's raised face) that presses in.</summary>
+    private Button BuildContinueButton(LauncherEntry last, Color hue)
+    {
+        var text = Loc.GetF("launcher_door_continue", last.Title);
+        var label = ContinueLabel(text);
         var go = new Button
         {
             Content = label,
             Style = (Style)FindResource("LauncherPlay"),
-            Height = LauncherGridLayout.PlayHeight + 6, Padding = new Thickness(18, 0, 20, 0),
-            MinWidth = 220, MaxWidth = 380, HorizontalAlignment = HorizontalAlignment.Left,
+            Height = LauncherGridLayout.PlayHeight + 6,
+            MinWidth = 220, MaxWidth = ContinueMaxWidth, HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(0, 22, 0, 0),
             Background = new LinearGradientBrush(Lighten(hue, 0.15), Darken(hue, 0.7), 90),
             BorderBrush = new SolidColorBrush(Lighten(hue, 0.3)),
@@ -373,7 +390,7 @@ public partial class LauncherWindow
                 _doorHover = view;
                 _trailTint = view.Hue;
                 BleedGlow(view.Hue);
-                if (!_perfLow && !_fxParked && MotionFx.AllowAmbientLoops)
+                if (!_perfLow && !_fxParked && MotionFx.AmbientAllowedByLevel)
                     _doorSheen = AttachSheen(view.Card, LauncherDoorCard.Radius);
             }
             else
@@ -437,7 +454,7 @@ public partial class LauncherWindow
             if (!ReferenceEquals(_doorCards[i], chosen)) _doorCards[i].FallAway(i > chosenAt);
         if (chosen != null)
         {
-            if (MotionFx.AllowAmbientLoops && !GentleVisuals.On) Shockwave(chosen.Card, chosen.Hue);
+            if (MotionFx.AmbientAllowedByLevel && !GentleVisuals.On) Shockwave(chosen.Card, chosen.Hue);
             BurstAt(chosen.Card, chosen.Hue, 140);
         }
         Later(LauncherDoorCard.OpenMs - 30, then);

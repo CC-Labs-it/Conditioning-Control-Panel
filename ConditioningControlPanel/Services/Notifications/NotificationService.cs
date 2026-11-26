@@ -26,19 +26,46 @@ namespace ConditioningControlPanel.Services
         private readonly List<(string message, NotificationType type, TimeSpan? duration, string? stickyKey, string? actionLabel, Action? action, string? secondaryActionLabel, Action? secondaryAction)> _pending = new();
         private readonly Dictionary<string, Border> _stickyByKey = new();
 
+        /// <summary>Every toast as it shows, for the title bar history (ccp-bugs #1688).</summary>
+        public NotificationHistory History { get; } = new();
+
+        /// <summary>
+        /// Space between toasts replayed after the host attaches (ccp-bugs #1688: everything raised
+        /// before the window loaded landed at once and faded together, too fast to read).
+        /// </summary>
+        internal static readonly TimeSpan ReplayGap = TimeSpan.FromMilliseconds(900);
+        private DispatcherTimer? _replay;
+
+        /// <summary>True while queued toasts are still being replayed: new ones wait their turn.</summary>
+        private bool Queuing => _host == null || _replay != null;
+
         public void AttachHost(Panel host)
         {
             _host = host;
-            // Replay anything that fired before the host was attached.
-            if (_pending.Count > 0)
+            // Replay anything that fired before the host was attached, one at a time.
+            ShowNextPending();
+        }
+
+        private void ShowNextPending()
+        {
+            if (_host == null) return;
+            if (_pending.Count == 0)
             {
-                var queue = _pending.ToArray();
-                _pending.Clear();
-                foreach (var (msg, type, dur, key, actionLabel, action, secondaryLabel, secondaryAction) in queue)
-                {
-                    if (key != null) ShowStickyInternal(key, msg, type, actionLabel, action);
-                    else ShowInternal(msg, type, dur ?? TimeSpan.FromSeconds(5), actionLabel, action, secondaryLabel, secondaryAction);
-                }
+                _replay?.Stop();
+                _replay = null;
+                return;
+            }
+            var (msg, type, dur, key, actionLabel, action, secondaryLabel, secondaryAction) = _pending[0];
+            _pending.RemoveAt(0);
+            if (key != null) ShowStickyInternal(key, msg, type, actionLabel, action);
+            else ShowInternal(msg, type, dur ?? TimeSpan.FromSeconds(5), actionLabel, action, secondaryLabel, secondaryAction);
+
+            if (_pending.Count == 0) { _replay?.Stop(); _replay = null; return; }
+            if (_replay == null)
+            {
+                _replay = new DispatcherTimer { Interval = ReplayGap };
+                _replay.Tick += (_, _) => ShowNextPending();
+                _replay.Start();
             }
         }
 
@@ -46,7 +73,7 @@ namespace ConditioningControlPanel.Services
             string? actionLabel = null, Action? action = null,
             string? secondaryActionLabel = null, Action? secondaryAction = null)
         {
-            if (_host == null) { _pending.Add((message, type, duration, null, actionLabel, action, secondaryActionLabel, secondaryAction)); return; }
+            if (Queuing) { _pending.Add((message, type, duration, null, actionLabel, action, secondaryActionLabel, secondaryAction)); return; }
             ShowInternal(message, type, duration ?? TimeSpan.FromSeconds(5), actionLabel, action, secondaryActionLabel, secondaryAction);
         }
 
@@ -63,7 +90,12 @@ namespace ConditioningControlPanel.Services
             string? actionLabel = null, Action? action = null)
         {
             if (!NotificationDismissals.CanShow(key, App.Settings?.Current?.DismissedNotificationKeys)) return;
-            if (_host == null) { _pending.Add((message, type, null, key, actionLabel, action, null, null)); return; }
+            if (Queuing)
+            {
+                // A sticky already waiting with this key is not queued twice.
+                if (!_pending.Exists(p => p.stickyKey == key)) _pending.Add((message, type, null, key, actionLabel, action, null, null));
+                return;
+            }
             ShowStickyInternal(key, message, type, actionLabel, action);
         }
 
@@ -87,6 +119,7 @@ namespace ConditioningControlPanel.Services
         private void ShowInternal(string message, NotificationType type, TimeSpan duration,
             string? actionLabel, Action? action, string? secondaryActionLabel = null, Action? secondaryAction = null)
         {
+            History.Record(DateTime.Now, type, message);
             var border = BuildToast(message, type, stickyKey: null, actionLabel, action, secondaryActionLabel, secondaryAction);
             _host?.Children.Add(border);
             AnimateIn(border);
@@ -108,6 +141,7 @@ namespace ConditioningControlPanel.Services
             string? actionLabel, Action? action)
         {
             if (_stickyByKey.ContainsKey(key)) return; // already showing
+            History.Record(DateTime.Now, type, message);
             var border = BuildToast(message, type, stickyKey: key, actionLabel, action);
             _stickyByKey[key] = border;
             _host?.Children.Add(border);

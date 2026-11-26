@@ -110,7 +110,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             if (IsMuted) { ShowTriggerBubbleImmediate(trigger); return; }   // haptic only, below
             if (_isGiggling || !IsSpeechReady())
             {
-                _speechQueue.Enqueue((trigger, false, SpeechSource.Trigger));
+                _speechQueue.Enqueue((trigger, false, SpeechSource.Trigger, null, null));
                 if (!_isGiggling) { _isGiggling = true; ProcessNextSpeech(); }
                 return;
             }

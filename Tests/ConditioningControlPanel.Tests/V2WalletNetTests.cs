@@ -96,6 +96,54 @@ public class V2WalletNetTests
     }
 
     [Fact]
+    public void AnsweredSync_WithNoCreditSince_AdoptsTheBookedBalanceDownIncluded()
+    {
+        // ccp-bugs #1680: 362 on the PC, 312 booked. The request carried 362 and nothing moved
+        // while it was in flight, so the reply is the server's word.
+        var step = V2WalletNet.Decide(true, replyNet: -100, storedNet: -100, serverSp: 312, localSp: 362, sentSp: 362);
+        Assert.Equal(new V2WalletNet.Step(312, -100, false), step);
+        // Up works the same as before.
+        Assert.Equal(400, V2WalletNet.Decide(true, -100, -100, 400, 362, sentSp: 362).NextSp);
+    }
+
+    [Fact]
+    public void ACreditWhileTheReplyWasInFlight_StaysRaiseOnly()
+    {
+        // A level-up landed after the request left (360 -> 361): the reply cannot know it yet.
+        var step = V2WalletNet.Decide(true, replyNet: -100, storedNet: -100, serverSp: 312, localSp: 361, sentSp: 360);
+        Assert.Equal(new V2WalletNet.Step(361, -100, false), step);
+    }
+
+    [Fact]
+    public void AnsweredSync_WrongAccountOrBadBalance_StillMovesNothing()
+    {
+        Assert.Equal(new V2WalletNet.Step(362, -100, false), V2WalletNet.Decide(false, -100, -100, 312, 362, sentSp: 362));
+        Assert.Equal(new V2WalletNet.Step(362, -100, false), V2WalletNet.Decide(true, -100, -100, -1, 362, sentSp: 362));
+    }
+
+    [Fact]
+    public void ApplySyncWallet_TheHeaderDropsToTheBookedBalance_ThenClimbsAsTheServerBooks()
+    {
+        var s = Signed(A, 362, net: -100);
+        Assert.True(ProfileSyncService.ApplySyncWallet(s, A, serverSp: 312, replyNet: -100, sentSp: 362));
+        Assert.Equal(312, s.SkillPoints);
+        // The server's per-hour bubble cap walks up and books the rest on a later sync.
+        Assert.True(ProfileSyncService.ApplySyncWallet(s, A, serverSp: 340, replyNet: -100, sentSp: 312));
+        Assert.Equal(340, s.SkillPoints);
+        // Without the sent balance (a season reset reply) it stays raise-only.
+        Assert.False(ProfileSyncService.ApplySyncWallet(s, A, serverSp: 300, replyNet: -100));
+        Assert.Equal(340, s.SkillPoints);
+    }
+
+    [Fact]
+    public void TheSyncSendsTheBalanceItCarried_AndAResetReplyDoesNotLower()
+    {
+        var src = File.ReadAllText(Path.Combine(RepoRoot(), "ConditioningControlPanel", "Services", "Settings", "ProfileSyncService.cs"));
+        Assert.Contains("int sentSkillPoints = v2SyncData.SkillPoints;", src);
+        Assert.Contains("v2Result.LevelReset == true ? null : sentSkillPoints", src);
+    }
+
+    [Fact]
     public void ThisPCsOwnBuy_TakesNothingTwice()
     {
         var s = Signed(A, 100, net: -100);

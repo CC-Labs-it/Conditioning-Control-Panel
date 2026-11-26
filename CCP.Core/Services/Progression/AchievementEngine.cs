@@ -17,11 +17,13 @@ namespace ConditioningControlPanel.Services;
 internal sealed class AchievementEngine
 {
     private readonly AchievementStore _store;
+    private readonly Func<bool> _canUnlockExclusive;
     private volatile bool _isDirty;
 
-    public AchievementEngine(AchievementStore store)
+    public AchievementEngine(AchievementStore store, Func<bool>? canUnlockExclusive = null)
     {
         _store = store;
+        _canUnlockExclusive = canUnlockExclusive ?? (() => CanUnlockExclusive);
         Progress = store.Load();
         ResetContinuousSpiral(); // WPF AchievementService.cs:85-86: a saved run never resumes.
     }
@@ -179,6 +181,15 @@ internal sealed class AchievementEngine
     {
         foreach (var (id, milestone) in AchievementRules.LevelMilestones)
             if (level >= milestone) TryUnlock(id);
+    }
+
+    /// <summary>WPF AchievementService.cs:345-357: retroactive launch streak awards.</summary>
+    public void CheckDailyMaintenance()
+    {
+        if (Progress.ConsecutiveDays >= AchievementRules.DailyMaintenanceConsecutiveDays)
+            TryUnlock("daily_maintenance");
+        if (Progress.ConsecutiveDays >= AchievementRules.ThirtyDayDollConsecutiveDays)
+            TryUnlock("thirty_day_doll");
     }
 
     /// <summary>A bubble-count answer: the correct-answer streak (mathematicians_nightmare) and the totals.</summary>
@@ -489,7 +500,7 @@ internal sealed class AchievementEngine
     public bool TryUnlockExclusive(string achievementId)
     {
         if (Progress.IsUnlocked(achievementId)) return false;
-        if (!CanUnlockExclusive)
+        if (!_canUnlockExclusive())
         {
             Log.Debug("Exclusive achievement {Id} withheld — user not entitled", achievementId);
             return false;

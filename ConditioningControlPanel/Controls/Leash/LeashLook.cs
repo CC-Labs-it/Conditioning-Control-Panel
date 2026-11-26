@@ -119,6 +119,13 @@ internal static class LeashLook
         b.Width = 22;
         b.Height = 22;
         b.VerticalAlignment = VerticalAlignment.Center;
+        return WireHelp(b, role);
+    }
+
+    /// <summary>What makes any button the "?" for <paramref name="role"/>: its tooltip, its tag and
+    /// the explainer on click. The friend card dresses its own square (?) with this.</summary>
+    public static Button WireHelp(Button b, LeashExplainRole role)
+    {
         b.ToolTip = Loc.Get("leash_help");
         b.Tag = "leash-help:" + role.ToString().ToLowerInvariant();
         b.Click += (_, e) => { e.Handled = true; LeashExplainHost.Show(role); };
@@ -373,7 +380,7 @@ internal static class LeashLook
             Text = word,
             FontFamily = FriendsLook.Mono,
             FontWeight = FontWeights.Bold,
-            FontSize = word.Length > 1 ? size * 0.26 : size * 0.5,
+            FontSize = word.Length > 1 ? size * 0.3 : size * 0.5, // was 0.26 at 26-32 DIP: under 9 px, too small to read (ccp-bugs #1685)
             Foreground = InkBrush,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,

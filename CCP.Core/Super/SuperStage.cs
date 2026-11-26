@@ -34,8 +34,20 @@ public sealed class SuperStage
     /// </summary>
     public event Action<double, double, double, double>? Swept;
 
-    /// <summary>The bouncing word is here this frame. Cheap when nobody listens.</summary>
-    public void Sweep(double left, double top, double right, double bottom) => Swept?.Invoke(left, top, right, bottom);
+    /// <summary>
+    /// The player's "Moving effects pop bubbles and flash images" switch (owner, 2026-11-18). Off:
+    /// the bouncing word sweeps nothing and the pool still pulls and swirls but never eats, so a
+    /// moving effect never pops a bubble or breaks a flash on its own (with Hydra on, every pop it
+    /// made fed a cascade). The fog is not part of it. Off unless the host turns it on.
+    /// </summary>
+    public bool MovingPops { get; set; }
+
+    /// <summary>The bouncing word is here this frame. Cheap when nobody listens. Nothing while
+    /// <see cref="MovingPops"/> is off.</summary>
+    public void Sweep(double left, double top, double right, double bottom)
+    {
+        if (MovingPops) Swept?.Invoke(left, top, right, bottom);
+    }
 
     private sealed class Mon { public double X, Y, W, H; public SteamField Field = null!; }
     private readonly Dictionary<string, Mon> _mons = new(StringComparer.Ordinal);
@@ -47,6 +59,12 @@ public sealed class SuperStage
     public bool DragsFog { get; set; } = true;
     public bool DragsPictures { get; set; } = true;
     public bool DragsBubbles { get; set; } = true;
+    /// <summary>The pool catches the bouncing word, turns it and throws it (<see cref="TextFling"/>). Off = the
+    /// word bounces through the pool untouched (owner 2026-11-18: every interaction gets a switch).</summary>
+    public bool DragsWords { get; set; } = true;
+
+    /// <summary>True when the pool is live and the player lets it catch words.</summary>
+    public bool PoolTakesWords => PoolLive && DragsWords;
 
     /// <summary>What the pool does to a thing at a world point. Nothing while it is off. The kind is
     /// read from the mass (<see cref="WhirlpoolOptions.KindOf"/>) so a switched-off kind feels nothing.</summary>
@@ -54,9 +72,13 @@ public sealed class SuperStage
         => Pull(x, y, mass, WhirlpoolOptions.KindOf(mass));
 
     /// <summary>What the pool does to a thing of this kind at a world point. Nothing while it is
-    /// off or while the player switched that kind off.</summary>
+    /// off or while the player switched that kind off. Never eaten while <see cref="MovingPops"/> is off.</summary>
     public PoolPull Pull(double x, double y, double mass, PullKind kind)
-        => PoolLive && Drags(kind) ? Pool.Pull(x, y, mass) : new PoolPull(0, 0, 1, false, false);
+    {
+        if (!PoolLive || !Drags(kind)) return new PoolPull(0, 0, 1, false, false);
+        var p = Pool.Pull(x, y, mass);
+        return MovingPops ? p : p with { Eaten = false };
+    }
 
     /// <summary>True when the pool drags things of this kind.</summary>
     public bool Drags(PullKind kind) => kind == PullKind.Picture ? DragsPictures : DragsBubbles;

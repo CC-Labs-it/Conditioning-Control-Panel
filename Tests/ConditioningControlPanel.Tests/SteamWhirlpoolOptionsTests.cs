@@ -18,9 +18,10 @@ public class SteamWhirlpoolOptionsTests
     {
         foreach (var age in new[] { 0.0, 30, 120, 240, 1e6 })
             Assert.Equal(SteamOptions.Level(age, 240), SteamOptions.Level(age, 240, SteamOptions.ReachDefault), 9);
-        Assert.Equal(0.45, SteamOptions.Level(0, 240, 10), 9);                        // every reach starts at the rim
-        Assert.Equal(0.45 + 1.05 * 0.10, SteamOptions.Level(1e6, 240, 10), 9);        // the bottom stays at the edges
-        Assert.Equal(0.45 + 1.05 * 0.50, SteamOptions.Level(1e6, 240, 50), 9);
+        // The reach scales the whole level, the starting rim included (owner 2026-11-18).
+        Assert.Equal(0.045, SteamOptions.Level(0, 240, 10), 9);
+        Assert.Equal(0.15, SteamOptions.Level(1e6, 240, 10), 9);                      // the bottom is a thin line at the edges
+        Assert.Equal(0.75, SteamOptions.Level(1e6, 240, 50), 9);
         Assert.True(SteamOptions.Level(60, 240, 40) < SteamOptions.Level(60, 240, 80));
         Assert.Equal(SteamOptions.Level(1e6, 240, SteamOptions.ReachMin), SteamOptions.Level(1e6, 240, -50), 9);   // clamped
         var set = new Models.AppSettings();

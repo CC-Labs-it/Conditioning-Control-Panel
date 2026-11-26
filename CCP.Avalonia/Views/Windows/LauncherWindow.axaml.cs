@@ -407,7 +407,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF StopLink_Click.</summary>
         private void StopLink_Click(object? sender, RoutedEventArgs e)
         {
-            // ponytail: no LockdownVeil on this head yet; this refusal stands in for it.
             if (MainShellWindow.RefuseStopUnderLockdown()) return;
             try { MainShellWindow.StopEngine(); }
             catch (Exception ex) { Log.Warning(ex, "[Launcher] StopEngine failed"); }
@@ -590,7 +589,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF ModPill_Click: installed mods in stock order, the active one ticked, then Manage mods.</summary>
         private void ModPill_Click(object? sender, RoutedEventArgs e)
         {
-            // ponytail: no LockdownVeil on this head yet; this refusal stands in for it.
             if (MainShellWindow.LockdownActive) return;
             try
             {
@@ -879,7 +877,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             });
             var play = PlayButton(hue, locked, needsAccount);
             HookPress(play);
-            // ponytail: no LockdownVeil on this head yet (WPF's swallows every tile click); this refusal stands in for it.
             play.Click += (_, _) => { if (!MainShellWindow.LockdownActive) Play(card); };
             text.Children.Add(play);
             body.Children.Add(text);

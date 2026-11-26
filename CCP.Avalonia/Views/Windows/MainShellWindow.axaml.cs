@@ -89,6 +89,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public MainShellWindow()
         {
             AvaloniaXamlLoader.Load(this);
+            Title = $"Conditioning Control Panel v{CoreReleaseContent.AppVersion}";
+            this.FindControl<TextBlock>("TxtTitleBarVersion")!.Text = Title;
             if (Platform.AccountSeed.Sync is { } sync)
             {
                 sync.SyncHealthChanged += OnSyncHealthChanged;

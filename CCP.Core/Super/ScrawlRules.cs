@@ -44,6 +44,8 @@ namespace ConditioningControlPanel.Services.Super
         public const double WallInset = 0.85;           // x fs, stamp centre from the wall
         public const double AlongMargin = 1.6;          // x fs, kept clear of the corners
         public const double CornerTolerance = 1.4;      // x fs, both axes, for a corner hit
+        public const double CornerToleranceMaxDip = 110; // the zone stops growing here: at 300% text most side bounces counted as corners
+        public const double CornerLabelMaxDip = 72;      // the CORNER label never outgrows 100% text
         public const double CornerTilt = 0.35;          // rad
 
         // Press-in: scale 1 + amp, back to 1 at rate per second
@@ -85,7 +87,7 @@ namespace ConditioningControlPanel.Services.Super
         /// <summary>A corner hit: the word's box is within 1.4 fs of a wall on BOTH axes.</summary>
         public static bool IsCorner(double left, double top, double right, double bottom, ScrawlBounds b, double fs)
         {
-            double tol = CornerTolerance * fs;
+            double tol = Math.Min(CornerTolerance * fs, CornerToleranceMaxDip);
             double dx = Math.Min(left - b.MinX, b.MaxX - right);
             double dy = Math.Min(top - b.MinY, b.MaxY - bottom);
             return dx < tol && dy < tol;

@@ -1,3 +1,4 @@
+import { frameTime } from './board/frame-time.js';
 /* ============================================================================
  * boot.js - entry point for Piece by Piece.
  *
@@ -117,6 +118,7 @@ function main() {
     pieces,
     ornaments,
     anim,
+    settleMove() { anim.skip(); view.render(); },
     jiggle: pieces.jiggle,
     buzzCheck(square) { anim.buzz(pieces.pieceAt(square)); },
     setWobble(v) { pieces.setWobble(v); },
@@ -146,7 +148,9 @@ function main() {
   board.drag = drag;
   // The player's own arrows and circles (right drag / right click, lichess style). Local only:
   // never on the bus, the wire or a replay. A new game, a new seat or a take-back wipes them.
-  board.annotate = createAnnotate({ view, isBusy: () => drag.isSuspended() || !!window.PBP?.door?.isUp?.() });
+  // The HUD's "Arrows" button off: the press is never ours, so the camera orbits with it.
+  board.annotate = createAnnotate({ view, isBusy: () => !presentation().arrows || drag.isSuspended() || !!window.PBP?.door?.isUp?.() });
+  onPresentation((p) => { if (!p.arrows && (board.annotate.size() || board.annotate.isDrawing())) board.annotate.clear(); });
   for (const name of ['newgame', 'local', 'takeback']) bus.on(name, () => board.annotate.clear());
   { const dispose = view.dispose; view.dispose = () => { board.annotate.dispose(); dispose(); }; }
 
@@ -516,12 +520,13 @@ function main() {
 
   let last = performance.now();
   function frame(now) {
-    const dt = Math.min(0.1, (now - last) / 1000);
+    const { elapsed, dt } = frameTime(now, last);
+    view.measureFrame(elapsed, presentation().reducedMotion);
     last = now;
     setFinishTime(now / 1000, pausedGame || document.hidden ? 0 : finishMotion);
     view.update(dt);
     pieces.update(dt);
-    anim.update(dt);
+    anim.update(elapsed);
     if (!pausedGame) board.turnHandoff.update(dt);   // no turn card comes in under the pause card (CHESS-3)
     drag.update(dt);
     jiggle.update(dt);   // last: it reads what everything else just decided

@@ -6,6 +6,9 @@
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Controls"
              xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             xmlns:pv="clr-namespace:ConditioningControlPanel.Controls.Preview"
+             rows:RowHue.TintSliders="True"
              xmlns:hover="clr-namespace:ConditioningControlPanel.Behaviors"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              mc:Ignorable="d"
@@ -31,7 +34,8 @@
         <!-- Root grid exists so the premium gate can be the LAST sibling and therefore cover the
              whole page (hero + both columns), instead of the old overlay that only covered the
              settings sub-column and left the Start button of a locked feature looking live. -->
-        <Grid Margin="36,28,36,28" MaxWidth="1180" HorizontalAlignment="Center">
+        <Grid Margin="36,28,36,28" MaxWidth="1180" HorizontalAlignment="Center"
+              Grid.IsSharedSizeScope="True" rows:RowHue.Hue="#FF69B4">
             <StackPanel>
 
                 <!-- ============ HERO ============
@@ -178,14 +182,13 @@
                                                          came back?" now sits ON the state card, next to the ON/OFF
                                                          control, instead of buried in the mantra card further down. -->
                                                     <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,8,0,6"/>
-                                                    <Grid Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_resume_on_startup}">
+                                                    <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_resume_on_startup}">
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="*"/>
                                                             <ColumnDefinition Width="Auto"/>
                                                         </Grid.ColumnDefinitions>
-                                                        <TextBlock Grid.Column="0" Text="{loc:Str label_resume_takeover_on_startup}" FontSize="12.5" FontWeight="SemiBold"
-                                                                   TextWrapping="Wrap" Margin="0,0,10,0"
-                                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                                        <rows:RowLabel Grid.Column="0" Text="{loc:Str label_resume_takeover_on_startup}" Emblem="Power" Margin="0,0,10,0"
+                                                                       IsOn="{Binding IsChecked, ElementName=ChkAutonomyResumeOnStartup}"/>
                                                         <CheckBox Grid.Column="1" x:Name="ChkAutonomyResumeOnStartup" x:FieldModifier="internal" Style="{StaticResource ToggleStyle}"
                                                                   VerticalAlignment="Center" Checked="ChkAutonomyResume_Changed" Unchecked="ChkAutonomyResume_Changed"/>
                                                     </Grid>
@@ -245,74 +248,80 @@
                                                 <TextBlock Text="{loc:Str setting_interval}" Foreground="{StaticResource TabHueBrush}"
                                                            FontSize="10" FontWeight="Bold" Margin="0,2,0,4"/>
 
-                                                <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_interval}">
+                                                <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_interval}">
                                                     <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                                        <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto" MinWidth="56"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_interval}" FontSize="13" FontWeight="SemiBold"
-                                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_interval}" Emblem="Often">
+                                                        <rows:RowLabel.Value>
+                                                            <!-- A bigger number is LESS often: the period form of the fraction. -->
+                                                            <MultiBinding Converter="{x:Static rows:RowFraction.Inverse}">
+                                                                <Binding Path="Value" ElementName="SliderAutonomyInterval"/>
+                                                                <Binding Path="Maximum" ElementName="SliderAutonomyInterval"/>
+                                                                <Binding Path="Minimum" ElementName="SliderAutonomyInterval"/>
+                                                            </MultiBinding>
+                                                        </rows:RowLabel.Value>
+                                                    </rows:RowLabel>
                                                     <Slider Grid.Column="1" x:Name="SliderAutonomyInterval" x:FieldModifier="internal"
                                                             Minimum="30" Maximum="300" Value="60" VerticalAlignment="Center" Margin="14,0"
                                                             ValueChanged="SliderAutonomyInterval_Changed"/>
-                                                    <TextBlock Grid.Column="2" x:Name="TxtAutonomyInterval" x:FieldModifier="internal" Text="{loc:Str label_60s}"
-                                                               HorizontalAlignment="Right" VerticalAlignment="Center"
-                                                               Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="Bold"/>
+                                                    <rows:RowValue Grid.Column="2" x:Name="TxtAutonomyInterval" x:FieldModifier="internal" Text="{loc:Str label_60s}"/>
                                                 </Grid>
 
                                                 <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
-                                                <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_cooldown}">
+                                                <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_cooldown}">
                                                     <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                                        <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto" MinWidth="56"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Text="{loc:Str label_cooldown}" FontSize="13" FontWeight="SemiBold"
-                                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str label_cooldown}" Emblem="Often">
+                                                        <rows:RowLabel.Value>
+                                                            <!-- A bigger number is LESS often: the period form of the fraction. -->
+                                                            <MultiBinding Converter="{x:Static rows:RowFraction.Inverse}">
+                                                                <Binding Path="Value" ElementName="SliderAutonomyCooldown"/>
+                                                                <Binding Path="Maximum" ElementName="SliderAutonomyCooldown"/>
+                                                                <Binding Path="Minimum" ElementName="SliderAutonomyCooldown"/>
+                                                            </MultiBinding>
+                                                        </rows:RowLabel.Value>
+                                                    </rows:RowLabel>
                                                     <Slider Grid.Column="1" x:Name="SliderAutonomyCooldown" x:FieldModifier="internal"
                                                             Minimum="10" Maximum="300" Value="30" VerticalAlignment="Center" Margin="14,0"
                                                             ValueChanged="SliderAutonomyCooldown_Changed"/>
-                                                    <TextBlock Grid.Column="2" x:Name="TxtAutonomyCooldown" x:FieldModifier="internal" Text="{loc:Str label_30s}"
-                                                               HorizontalAlignment="Right" VerticalAlignment="Center"
-                                                               Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="Bold"/>
+                                                    <rows:RowValue Grid.Column="2" x:Name="TxtAutonomyCooldown" x:FieldModifier="internal" Text="{loc:Str label_30s}"/>
                                                 </Grid>
 
                                                 <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
-                                                <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_intensity}">
+                                                <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_intensity}">
                                                     <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                                        <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto" MinWidth="56"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Text="{loc:Str setting_intensity}" FontSize="13" FontWeight="SemiBold"
-                                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_intensity}" Emblem="Much"/>
                                                     <Slider Grid.Column="1" x:Name="SliderAutonomyIntensity" x:FieldModifier="internal"
                                                             Minimum="1" Maximum="10" Value="5" VerticalAlignment="Center" Margin="14,0"
                                                             ValueChanged="SliderAutonomyIntensity_Changed"/>
-                                                    <TextBlock Grid.Column="2" x:Name="TxtAutonomyIntensity" x:FieldModifier="internal" Text="5"
-                                                               HorizontalAlignment="Right" VerticalAlignment="Center"
-                                                               Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="Bold"/>
+                                                    <rows:RowValue Grid.Column="2" x:Name="TxtAutonomyIntensity" x:FieldModifier="internal" Text="5"/>
                                                 </Grid>
 
                                                 <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
-                                                <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_announce}">
+                                                <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_announce}">
                                                     <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                                        <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto" MinWidth="56"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Text="{loc:Str label_announce}" FontSize="13" FontWeight="SemiBold"
-                                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str label_announce}" Emblem="Bell"/>
                                                     <Slider Grid.Column="1" x:Name="SliderAutonomyAnnounce" x:FieldModifier="internal"
                                                             Minimum="0" Maximum="100" Value="50" VerticalAlignment="Center" Margin="14,0"
                                                             ValueChanged="SliderAutonomyAnnounce_Changed"/>
-                                                    <TextBlock Grid.Column="2" x:Name="TxtAutonomyAnnounce" x:FieldModifier="internal" Text="50%"
-                                                               HorizontalAlignment="Right" VerticalAlignment="Center"
-                                                               Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="Bold"/>
+                                                    <rows:RowValue Grid.Column="2" x:Name="TxtAutonomyAnnounce" x:FieldModifier="internal" Text="50%"/>
                                                 </Grid>
                                             </StackPanel>
                                         </Grid>
@@ -328,13 +337,13 @@
                                                 <TextBlock Text="{loc:Str label_triggers}" Foreground="{StaticResource TabHueBrush}"
                                                            FontSize="10" FontWeight="Bold" Margin="0,2,0,4"/>
 
-                                                <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_idle}">
+                                                <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_idle}">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Text="{loc:Str label_idle}" FontSize="13" FontWeight="SemiBold"
-                                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str label_idle}" Emblem="When"
+                                                                   IsOn="{Binding IsChecked, ElementName=ChkAutonomyIdle}"/>
                                                     <CheckBox Grid.Column="1" x:Name="ChkAutonomyIdle" x:FieldModifier="internal"
                                                               Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                               Checked="ChkAutonomyIdle_Changed" Unchecked="ChkAutonomyIdle_Changed"/>
@@ -342,13 +351,13 @@
 
                                                 <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
-                                                <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_random}">
+                                                <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_random}">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Text="{loc:Str label_random_2}" FontSize="13" FontWeight="SemiBold"
-                                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str label_random_2}" Emblem="Random"
+                                                                   IsOn="{Binding IsChecked, ElementName=ChkAutonomyRandom}"/>
                                                     <CheckBox Grid.Column="1" x:Name="ChkAutonomyRandom" x:FieldModifier="internal"
                                                               Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                               Checked="ChkAutonomyRandom_Changed" Unchecked="ChkAutonomyRandom_Changed"/>
@@ -356,13 +365,13 @@
 
                                                 <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
-                                                <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_time_aware}">
+                                                <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_time_aware}">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Text="{loc:Str label_time_aware}" FontSize="13" FontWeight="SemiBold"
-                                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str label_time_aware}" Emblem="When"
+                                                                   IsOn="{Binding IsChecked, ElementName=ChkAutonomyTimeAware}"/>
                                                     <CheckBox Grid.Column="1" x:Name="ChkAutonomyTimeAware" x:FieldModifier="internal"
                                                               Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                               Checked="ChkAutonomyTimeAware_Changed" Unchecked="ChkAutonomyTimeAware_Changed"/>
@@ -403,103 +412,115 @@
                                                         </Grid.ColumnDefinitions>
                                                         <!-- Basic column -->
                                                         <StackPanel Grid.Column="0">
-                                                            <Grid Height="30" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_flash}">
+                                                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_flash}">
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="*"/>
                                                                     <ColumnDefinition Width="Auto"/>
                                                                 </Grid.ColumnDefinitions>
-                                                                <TextBlock Grid.Column="0" x:Name="TxtAutoFlash" x:FieldModifier="internal" Text="{loc:Str tab_flashes}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str tab_flashes}" Emblem="Many" Subject="Image" x:Name="TxtAutoFlash" x:FieldModifier="internal"
+                                                                               IsOn="{Binding IsChecked, ElementName=ChkAutonomyFlash}"/>
                                                                 <CheckBox Grid.Column="1" x:Name="ChkAutonomyFlash" x:FieldModifier="internal" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center" Checked="ChkAutonomyBehavior_Changed" Unchecked="ChkAutonomyBehavior_Changed"/>
                                                             </Grid>
-                                                            <Grid Height="30" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_video}">
+                                                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_video}">
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="*"/>
                                                                     <ColumnDefinition Width="Auto"/>
                                                                 </Grid.ColumnDefinitions>
-                                                                <TextBlock Grid.Column="0" x:Name="TxtAutoVideo" x:FieldModifier="internal" Text="{loc:Str tab_videos}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str tab_videos}" Emblem="Many" Subject="Video" x:Name="TxtAutoVideo" x:FieldModifier="internal"
+                                                                               IsOn="{Binding IsChecked, ElementName=ChkAutonomyVideo}"/>
                                                                 <CheckBox Grid.Column="1" x:Name="ChkAutonomyVideo" x:FieldModifier="internal" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center" Checked="ChkAutonomyBehavior_Changed" Unchecked="ChkAutonomyBehavior_Changed"/>
                                                             </Grid>
-                                                            <Grid Height="30" Background="Transparent" ToolTip="{loc:Str tooltip_auto_plays_hypnotube_videos_fullscreen}">
+                                                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_auto_plays_hypnotube_videos_fullscreen}">
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="*"/>
                                                                     <ColumnDefinition Width="Auto"/>
                                                                 </Grid.ColumnDefinitions>
-                                                                <TextBlock Grid.Column="0" Text="{loc:Str label_web_videos}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str label_web_videos}" Emblem="Many" Subject="Video"
+                                                                               IsOn="{Binding IsChecked, ElementName=ChkAutonomyWebVideo}"/>
                                                                 <CheckBox Grid.Column="1" x:Name="ChkAutonomyWebVideo" x:FieldModifier="internal" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center" Checked="ChkAutonomyBehavior_Changed" Unchecked="ChkAutonomyBehavior_Changed"/>
                                                             </Grid>
-                                                            <Grid Height="30" Background="Transparent" ToolTip="{loc:Str tooltip_protect_browser_video}">
+                                                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_protect_browser_video}">
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="*"/>
                                                                     <ColumnDefinition Width="Auto"/>
                                                                 </Grid.ColumnDefinitions>
-                                                                <TextBlock Grid.Column="0" Text="{loc:Str label_protect_browser_video}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str label_protect_browser_video}" Emblem="Keepout"
+                                                                               IsOn="{Binding IsChecked, ElementName=ChkProtectBrowserVideo}"/>
                                                                 <CheckBox Grid.Column="1" x:Name="ChkProtectBrowserVideo" x:FieldModifier="internal" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center" Checked="ChkAutonomyBehavior_Changed" Unchecked="ChkAutonomyBehavior_Changed"/>
                                                             </Grid>
-                                                            <Grid Height="30" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_subliminal}">
+                                                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_subliminal}">
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="*"/>
                                                                     <ColumnDefinition Width="Auto"/>
                                                                 </Grid.ColumnDefinitions>
-                                                                <TextBlock Grid.Column="0" x:Name="TxtAutoSubliminal" x:FieldModifier="internal" Text="{loc:Str tab_subliminals}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str tab_subliminals}" Emblem="Words" x:Name="TxtAutoSubliminal" x:FieldModifier="internal"
+                                                                               IsOn="{Binding IsChecked, ElementName=ChkAutonomySubliminal}"/>
                                                                 <CheckBox Grid.Column="1" x:Name="ChkAutonomySubliminal" x:FieldModifier="internal" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center" Checked="ChkAutonomyBehavior_Changed" Unchecked="ChkAutonomyBehavior_Changed"/>
                                                             </Grid>
-                                                            <Grid Height="30" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_comment}">
+                                                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_comment}">
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="*"/>
                                                                     <ColumnDefinition Width="Auto"/>
                                                                 </Grid.ColumnDefinitions>
-                                                                <TextBlock Grid.Column="0" Text="{loc:Str label_comments}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str label_comments}" Emblem="Persona"
+                                                                               IsOn="{Binding IsChecked, ElementName=ChkAutonomyComment}"/>
                                                                 <CheckBox Grid.Column="1" x:Name="ChkAutonomyComment" x:FieldModifier="internal" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center" Checked="ChkAutonomyBehavior_Changed" Unchecked="ChkAutonomyBehavior_Changed"/>
                                                             </Grid>
                                                         </StackPanel>
                                                         <!-- Advanced column -->
                                                         <StackPanel Grid.Column="2">
-                                                            <Grid Height="30" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_bubbles}">
+                                                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_bubbles}">
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="*"/>
                                                                     <ColumnDefinition Width="Auto"/>
                                                                 </Grid.ColumnDefinitions>
-                                                                <TextBlock Grid.Column="0" x:Name="TxtAutoBubbles" x:FieldModifier="internal" Text="{loc:Str label_bubbles}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str label_bubbles}" Emblem="Many" Subject="Bubble" x:Name="TxtAutoBubbles" x:FieldModifier="internal"
+                                                                               IsOn="{Binding IsChecked, ElementName=ChkAutonomyBubbles}"/>
                                                                 <CheckBox Grid.Column="1" x:Name="ChkAutonomyBubbles" x:FieldModifier="internal" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center" Checked="ChkAutonomyBehavior_Changed" Unchecked="ChkAutonomyBehavior_Changed"/>
                                                             </Grid>
-                                                            <Grid Height="30" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_pink_filter}">
+                                                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_pink_filter}">
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="*"/>
                                                                     <ColumnDefinition Width="Auto"/>
                                                                 </Grid.ColumnDefinitions>
-                                                                <TextBlock Grid.Column="0" x:Name="TxtAutoPinkFilter" x:FieldModifier="internal" Text="{loc:Str label_pink_filter_2}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str label_pink_filter_2}" Emblem="Clear" x:Name="TxtAutoPinkFilter" x:FieldModifier="internal"
+                                                                               IsOn="{Binding IsChecked, ElementName=ChkAutonomyPinkFilter}"/>
                                                                 <CheckBox Grid.Column="1" x:Name="ChkAutonomyPinkFilter" x:FieldModifier="internal" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center" Checked="ChkAutonomyBehavior_Changed" Unchecked="ChkAutonomyBehavior_Changed"/>
                                                             </Grid>
-                                                            <Grid Height="30" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_lock_cards}">
+                                                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_lock_cards}">
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="*"/>
                                                                     <ColumnDefinition Width="Auto"/>
                                                                 </Grid.ColumnDefinitions>
-                                                                <TextBlock Grid.Column="0" x:Name="TxtAutoLockCards" x:FieldModifier="internal" Text="{loc:Str label_lock_cards}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str label_lock_cards}" Emblem="Card" x:Name="TxtAutoLockCards" x:FieldModifier="internal"
+                                                                               IsOn="{Binding IsChecked, ElementName=ChkAutonomyLockCard}"/>
                                                                 <CheckBox Grid.Column="1" x:Name="ChkAutonomyLockCard" x:FieldModifier="internal" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center" Checked="ChkAutonomyBehavior_Changed" Unchecked="ChkAutonomyBehavior_Changed"/>
                                                             </Grid>
-                                                            <Grid Height="30" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_bouncing_text}">
+                                                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_bouncing_text}">
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="*"/>
                                                                     <ColumnDefinition Width="Auto"/>
                                                                 </Grid.ColumnDefinitions>
-                                                                <TextBlock Grid.Column="0" x:Name="TxtAutoBouncing" x:FieldModifier="internal" Text="{loc:Str label_bouncing}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str label_bouncing}" Emblem="Words" x:Name="TxtAutoBouncing" x:FieldModifier="internal"
+                                                                               IsOn="{Binding IsChecked, ElementName=ChkAutonomyBouncingText}"/>
                                                                 <CheckBox Grid.Column="1" x:Name="ChkAutonomyBouncingText" x:FieldModifier="internal" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center" Checked="ChkAutonomyBehavior_Changed" Unchecked="ChkAutonomyBehavior_Changed"/>
                                                             </Grid>
-                                                            <Grid Height="30" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_mind_wipe}">
+                                                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_mind_wipe}">
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="*"/>
                                                                     <ColumnDefinition Width="Auto"/>
                                                                 </Grid.ColumnDefinitions>
-                                                                <TextBlock Grid.Column="0" x:Name="TxtAutoMindwipe" x:FieldModifier="internal" Text="{loc:Str label_mindwipe}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str label_mindwipe}" Emblem="Loud" x:Name="TxtAutoMindwipe" x:FieldModifier="internal"
+                                                                               IsOn="{Binding IsChecked, ElementName=ChkAutonomyMindWipe}"/>
                                                                 <CheckBox Grid.Column="1" x:Name="ChkAutonomyMindWipe" x:FieldModifier="internal" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center" Checked="ChkAutonomyBehavior_Changed" Unchecked="ChkAutonomyBehavior_Changed"/>
                                                             </Grid>
-                                                            <Grid Height="30" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_wallpaper}">
+                                                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_autonomy_wallpaper}">
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="*"/>
                                                                     <ColumnDefinition Width="Auto"/>
                                                                 </Grid.ColumnDefinitions>
-                                                                <TextBlock Grid.Column="0" Text="{loc:Str label_autonomy_wallpaper}" FontSize="12.5" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str label_autonomy_wallpaper}" Emblem="Colour"
+                                                                               IsOn="{Binding IsChecked, ElementName=ChkAutonomyWallpaper}"/>
                                                                 <CheckBox Grid.Column="1" x:Name="ChkAutonomyWallpaper" x:FieldModifier="internal" Style="{StaticResource ToggleStyle}" VerticalAlignment="Center" Checked="ChkAutonomyBehavior_Changed" Unchecked="ChkAutonomyBehavior_Changed"/>
                                                             </Grid>
                                                             <!-- Preconditions, on the face of the setting rather than in a tooltip.
@@ -545,13 +566,13 @@
                                                     <!-- Wallpaper persistence — every change used to snap back after a hardcoded
                                                          30s, so you barely ever saw it behind your windows (#694). Keep it, or
                                                          pick how long the pulse lasts. The second line moved into the ToolTip. -->
-                                                    <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_wallpaper_keep}">
+                                                    <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_wallpaper_keep}">
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="*"/>
                                                             <ColumnDefinition Width="Auto"/>
                                                         </Grid.ColumnDefinitions>
-                                                        <TextBlock Grid.Column="0" Text="{loc:Str label_wallpaper_keep}" FontSize="13" FontWeight="SemiBold"
-                                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                                        <rows:RowLabel Grid.Column="0" Text="{loc:Str label_wallpaper_keep}" Emblem="Stay"
+                                                                       IsOn="{Binding IsChecked, ElementName=ChkWallpaperKeep}"/>
                                                         <CheckBox Grid.Column="1" x:Name="ChkWallpaperKeep" x:FieldModifier="internal" Style="{StaticResource ToggleStyle}"
                                                                   VerticalAlignment="Center" Checked="ChkWallpaperKeep_Changed" Unchecked="ChkWallpaperKeep_Changed"/>
                                                     </Grid>
@@ -559,20 +580,17 @@
                                                     <!-- Panel, not a bare row: MainWindow.Autonomy.cs shows/hides the whole
                                                          duration control with the keep toggle, by this name and type. -->
                                                     <StackPanel x:Name="PanelWallpaperDuration" x:FieldModifier="internal">
-                                                        <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_wallpaper_duration}">
+                                                        <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_wallpaper_duration}">
                                                             <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                                                <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                                                 <ColumnDefinition Width="*"/>
                                                                 <ColumnDefinition Width="Auto" MinWidth="56"/>
                                                             </Grid.ColumnDefinitions>
-                                                            <TextBlock Grid.Column="0" Text="{loc:Str label_wallpaper_duration}" FontSize="13" FontWeight="SemiBold"
-                                                                       Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                                            <rows:RowLabel Grid.Column="0" Text="{loc:Str label_wallpaper_duration}" Emblem="Long"/>
                                                             <Slider Grid.Column="1" x:Name="SliderWallpaperDuration" x:FieldModifier="internal"
                                                                     Minimum="10" Maximum="600" Value="30" VerticalAlignment="Center" Margin="14,0"
                                                                     ValueChanged="SliderWallpaperDuration_Changed"/>
-                                                            <TextBlock Grid.Column="2" x:Name="TxtWallpaperDuration" x:FieldModifier="internal" Text="30s"
-                                                                       HorizontalAlignment="Right" VerticalAlignment="Center"
-                                                                       Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="Bold"/>
+                                                            <rows:RowValue Grid.Column="2" x:Name="TxtWallpaperDuration" x:FieldModifier="internal" Text="30s"/>
                                                         </Grid>
                                                     </StackPanel>
                                                 </StackPanel>
@@ -595,13 +613,14 @@
                                                      TxtAutonomyVoiceHint stays a VISIBLE second line rather than moving into the
                                                      ToolTip: MainWindow.Autonomy.cs rewrites it to explain why the mic is or is
                                                      not armed, and a warning nobody hovers is a warning nobody reads. -->
-                                                <Grid Background="Transparent" Margin="0,2" ToolTip="{loc:Str takeover_mantra_toggle_tooltip}">
+                                                <Grid Style="{StaticResource OptionRow}" Background="Transparent" Margin="0,2" ToolTip="{loc:Str takeover_mantra_toggle_tooltip}">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0">
-                                                        <helpers:EmojiTextBlock Text="🎤 Surprise me with mantras" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextLightBrush}"/>
+                                                        <rows:RowLabel Text="🎤 Surprise me with mantras" Emblem="Mic"
+                                                                       IsOn="{Binding IsChecked, ElementName=ChkAutonomyVoice}"/>
                                                         <TextBlock x:Name="TxtAutonomyVoiceHint" x:FieldModifier="internal" Text="{loc:Str takeover_voice_hint_off}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}"/>
                                                         <!-- Only up while the hint is about a MISSING or unloadable model
                                                              (MainWindow.Autonomy.cs owns that). The instruction used to be a
@@ -628,13 +647,13 @@
 
                                                 <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
 
-                                                <Grid Height="34" Background="Transparent" ToolTip="{loc:Str takeover_countdown_bar_tooltip}">
+                                                <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str takeover_countdown_bar_tooltip}">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Text="⏳ Show next-takeover countdown bar" FontSize="13" FontWeight="SemiBold"
-                                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                                    <rows:RowLabel Grid.Column="0" Text="⏳ Show next-takeover countdown bar" Emblem="When"
+                                                                   IsOn="{Binding IsChecked, ElementName=ChkShowTakeoverCountdown}"/>
                                                     <CheckBox Grid.Column="1" x:Name="ChkShowTakeoverCountdown" x:FieldModifier="internal" Style="{StaticResource ToggleStyle}"
                                                               VerticalAlignment="Center" Checked="ChkShowTakeoverCountdown_Changed" Unchecked="ChkShowTakeoverCountdown_Changed"/>
                                                 </Grid>
@@ -645,47 +664,44 @@
                                                      Self-contained here (no Takeover twin), so the handlers live in this tab's code-behind.
                                                      TxtMantraChantHint also stays visible - it is the "this mod has no voiced mantras"
                                                      line, rewritten from the code-behind on every tab show. -->
-                                                <Grid Background="Transparent" Margin="0,2" ToolTip="{loc:Str tooltip_mantra_chant}">
+                                                <Grid Style="{StaticResource OptionRow}" Background="Transparent" Margin="0,2" ToolTip="{loc:Str tooltip_mantra_chant}">
                                                     <Grid.ColumnDefinitions>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto"/>
                                                     </Grid.ColumnDefinitions>
                                                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0">
-                                                        <TextBlock Text="{loc:Str label_mantra_chant}" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextLightBrush}"/>
+                                                        <rows:RowLabel Text="{loc:Str label_mantra_chant}" Emblem="Loud"
+                                                                       IsOn="{Binding IsChecked, ElementName=ChkMantraChant}"/>
                                                         <TextBlock x:Name="TxtMantraChantHint" Text="{loc:Str desc_mantra_chant}" FontSize="11" TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}"/>
                                                     </StackPanel>
                                                     <CheckBox Grid.Column="1" x:Name="ChkMantraChant" Style="{StaticResource ToggleStyle}"
                                                               VerticalAlignment="Center" Checked="ChkMantraChant_Changed" Unchecked="ChkMantraChant_Changed"/>
                                                 </Grid>
 
-                                                <Grid Height="36" Background="Transparent">
+                                                <Grid Style="{StaticResource OptionRow}" Background="Transparent">
                                                     <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                                        <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto" MinWidth="56"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Text="{loc:Str label_mantra_chant_volume}" FontSize="13" FontWeight="SemiBold"
-                                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str label_mantra_chant_volume}" Emblem="Loud"/>
                                                     <Slider x:Name="SldMantraChantVolume" Grid.Column="1" VerticalAlignment="Center" Margin="14,0"
                                                             Minimum="0" Maximum="100" SmallChange="5" LargeChange="20" TickFrequency="10"
                                                             ValueChanged="SldMantraChantVolume_Changed"/>
-                                                    <TextBlock x:Name="TxtMantraChantVolume" Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right"
-                                                               FontSize="13" FontWeight="Bold" Foreground="{DynamicResource PinkBrush}" Text="—"/>
+                                                    <rows:RowValue Grid.Column="2" x:Name="TxtMantraChantVolume" Text="—"/>
                                                 </Grid>
 
-                                                <Grid Height="36" Background="Transparent">
+                                                <Grid Style="{StaticResource OptionRow}" Background="Transparent">
                                                     <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                                        <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                                         <ColumnDefinition Width="*"/>
                                                         <ColumnDefinition Width="Auto" MinWidth="56"/>
                                                     </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Text="{loc:Str label_mantra_chant_gap}" FontSize="13" FontWeight="SemiBold"
-                                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str label_mantra_chant_gap}" Emblem="Often"/>
                                                     <Slider x:Name="SldMantraChantGap" Grid.Column="1" VerticalAlignment="Center" Margin="14,0"
                                                             Minimum="0" Maximum="60" SmallChange="1" LargeChange="5" TickFrequency="5"
                                                             ValueChanged="SldMantraChantGap_Changed"/>
-                                                    <TextBlock x:Name="TxtMantraChantGap" Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right"
-                                                               FontSize="13" FontWeight="Bold" Foreground="{DynamicResource PinkBrush}" Text="—"/>
+                                                    <rows:RowValue Grid.Column="2" x:Name="TxtMantraChantGap" Text="—"/>
                                                 </Grid>
 
                                                 <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
@@ -770,25 +786,22 @@
                          Background to CornerRadius but does NOT clip child content, so a child
                          Image would square off the rounded corners (round-2 lesson). -->
                     <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                        <!-- Live Preview (lane P5, 2026-11-24): the card is a slice of a mock desktop where a
+                             compressed takeover plays (Controls/Preview/Scenes/TakeoverPreviewScene). The art
+                             brush stays (ApplyFeatureArt writes it) but is parked in Tag, so nothing shows
+                             behind the preview. The preview measures to zero, so the card gets a fixed height. -->
                         <Border CornerRadius="14" BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
-                                MinHeight="200" MaxHeight="300" Margin="0,0,0,10">
-                            <Border.Background>
+                                Background="#06050D" Height="300" MinHeight="200" MaxHeight="300" Margin="0,0,0,10">
+                            <Border.Tag>
+                                <!-- The authored fallback stays (ModAwarePremiumPlateTests pins it and its 800 px cap). -->
                                 <ImageBrush x:Name="TakeoverSideArtBrush" Stretch="UniformToFill">
                                     <ImageBrush.ImageSource>
                                         <BitmapImage UriSource="pack://application:,,,/Resources/features/takeover.png"
                                                      DecodePixelWidth="800"/>
                                     </ImageBrush.ImageSource>
                                 </ImageBrush>
-                            </Border.Background>
-                            <!-- Scrim so the plate sits under the page instead of fighting it. -->
-                            <Border CornerRadius="12">
-                                <Border.Background>
-                                    <LinearGradientBrush StartPoint="0,1" EndPoint="0,0">
-                                        <GradientStop Color="#66000000" Offset="0"/>
-                                        <GradientStop Color="#00000000" Offset="0.45"/>
-                                    </LinearGradientBrush>
-                                </Border.Background>
-                            </Border>
+                            </Border.Tag>
+                            <pv:EffectPreview Scene="takeover"/>
                         </Border>
 
                         <!-- Explanatory guide -->

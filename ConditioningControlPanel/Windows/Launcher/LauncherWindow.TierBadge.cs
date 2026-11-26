@@ -48,7 +48,7 @@ public partial class LauncherWindow
         try
         {
             if (_tierBadgeTilt == null || !IsVisible || TierBadge.Visibility != Visibility.Visible) return;
-            if (!MotionFx.AllowAmbientLoops || TierBadgePopup.IsOpen) return;
+            if (!MotionFx.AmbientAllowedByLevel || TierBadgePopup.IsOpen) return;
 
             // A damped shake: out, back past centre, a smaller echo, rest. About 0.7 s.
             var a = TierWobbleDegrees;

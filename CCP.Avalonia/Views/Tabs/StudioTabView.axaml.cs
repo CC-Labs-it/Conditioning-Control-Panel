@@ -1602,7 +1602,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         /// it.</summary>
         private void OnSettingsCurrentReplaced() => Dispatcher.UIThread.Post(() =>
         {
-            try { BindDotListener(); RefreshDots(); }
+            try
+            {
+                BindDotListener();
+                PanelBubbleCount.RebindToCurrentSettings();
+                PanelLockCard.RebindToCurrentSettings();
+                PanelMindWipe.RebindToCurrentSettings();
+                PanelSubliminal.RebindToCurrentSettings();
+                PanelRamp.Inner.RebindToCurrentSettings();
+                RefreshDots();
+            }
             catch { /* a rebind must never take the rack down */ }
         });
 

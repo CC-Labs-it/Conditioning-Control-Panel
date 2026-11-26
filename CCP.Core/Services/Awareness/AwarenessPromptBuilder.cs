@@ -410,7 +410,7 @@ Output only those lines: no quotes, no name label, no brackets, no stage directi
             RarityTier.Common =>
                 "TIER: Common. A small moment. One light beat, or [PASS] — this one is not worth reaching for.",
             RarityTier.Rare =>
-                "TIER: Rare. The numbers above are real history you have been keeping. Land the callback: say the number, let it be the punchline, and never explain how you know it.",
+                "TIER: Rare. The numbers above are real history you have been keeping. Land it: a sentence with the number as punchline. Never explain how you know.",
             RarityTier.Legendary =>
                 "TIER: Legendary. A running bit is paying off. Escalate it exactly once and then stop.",
             _ =>

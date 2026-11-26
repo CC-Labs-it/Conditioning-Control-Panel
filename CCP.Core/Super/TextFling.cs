@@ -47,7 +47,8 @@ public static class TextFling
         {
             case 1:
             {
-                if (!stage.PoolLive) { Throw(ref s, pool, x, y, ref vx, ref vy, cruise, 1.2); return true; }
+                // The pool went, or the player just switched words off: let it go at once.
+                if (!stage.PoolTakesWords) { Throw(ref s, pool, x, y, ref vx, ref vy, cruise, 1.2); return true; }
                 s.T += dt;
                 double u = Math.Clamp(s.T / OrbitSeconds, 0, 1), dip = Math.Sin(Math.PI * u);
                 s.Theta += dt * (2 * Math.PI * Turns / OrbitSeconds) * (0.6 + 0.8 * dip);
@@ -70,7 +71,7 @@ public static class TextFling
             default:
             {
                 s.Scale = 1;
-                if (!stage.PoolLive) return false;
+                if (!stage.PoolTakesWords) return false;
                 var p = pool.Pull(x, y);
                 if (!p.Inside) return false;
                 vx += p.Ax * Bend * dt; vy += p.Ay * Bend * dt;

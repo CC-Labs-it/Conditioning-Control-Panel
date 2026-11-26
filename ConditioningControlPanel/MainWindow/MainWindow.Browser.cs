@@ -923,7 +923,9 @@ namespace ConditioningControlPanel
                                 try {
                                     window.chrome.webview.postMessage(JSON.stringify({
                                         type: 'fsDenied',
-                                        reason: String((err && (err.name || err.message)) || err).slice(0, 60),
+                                        // Name AND message: Chromium says 'Permissions check failed'
+                                        // for no activation and 'not granted' for a browser refusal.
+                                        reason: String((err && ((err.name || '') + ': ' + (err.message || ''))) || err).slice(0, 90),
                                         connected: video.isConnected,
                                         visibility: document.visibilityState,
                                         activation: !!(navigator.userActivation && navigator.userActivation.isActive) }));
@@ -1173,12 +1175,18 @@ namespace ConditioningControlPanel
                     // The takeover script is asking for fullscreen now: its enter is app-started
                     // even when playback began long after the script went in (#1649).
                     var live = _browserFsGate.NoteTakeoverAsk(Environment.TickCount64);
+                    _takeoverFsGestureRetried = false;
                     App.Logger?.Information("Web takeover asks for fullscreen (armed = {Armed})", live);
                 }
                 else if (message.Contains("\"type\":\"fsDenied\""))
                 {
                     App.Logger?.Warning("Web takeover fullscreen refused by the page: {Detail}",
                         message.Length > 200 ? message[..200] : message);
+                    if (Services.Browser.TakeoverFullscreenRetry.ShouldRetryWithGesture(message, _takeoverFsGestureRetried))
+                    {
+                        _takeoverFsGestureRetried = true;
+                        RetryTakeoverFullscreenWithGesture();
+                    }
                 }
                 // The user left fullscreen but the page may still be playing. This ends the
                 // TAKEOVER only — conflating it with "media stopped" is what let a stray
@@ -2888,6 +2896,78 @@ namespace ConditioningControlPanel
             }
         }
 
+        private bool _takeoverFsGestureRetried;
+
+        /// <summary>
+        /// BUG-HG326JRX2V (7.3.2): a takeover the AI starts carries no user gesture, so a page like
+        /// Hypnotube refuses <c>requestFullscreen</c> ("TypeError", activation false). Ask once more
+        /// through the DevTools protocol with <c>userGesture</c>, which runs the same re-check script
+        /// as if the player had clicked. The re-check gives up on its own when the takeover was
+        /// stopped or the clip ended, and a second refusal is logged as "recheck" and never retried.
+        /// ccp-bugs #1699 #1710: the gesture alone was still refused. Chromium also refuses HTML
+        /// fullscreen from a view without keyboard focus (SuppressFullscreenFromUnfocusedView), and
+        /// an app-started takeover plays while the player is in another window. So the retry first
+        /// brings the panel forward (only when it is on screen and not minimised) and focuses the
+        /// WebView, the same foreground the takeover takes anyway once fullscreen is granted.
+        /// </summary>
+        private async void RetryTakeoverFullscreenWithGesture()
+        {
+            try
+            {
+                if (!_browserFsGate.TakeoverArmed(Environment.TickCount64)) return;
+                var web = _browser?.WebView;
+                if (web?.CoreWebView2 == null) return;
+                var host = Window.GetWindow(web);
+                bool raised = host != null && Services.Browser.TakeoverFullscreenRetry.ShouldRaiseHost(
+                    host.IsVisible, host.WindowState == WindowState.Minimized, host.IsActive);
+                if (raised) TakeForegroundForTakeover(host!);
+                try { web.Focus(); } catch (Exception ex) { App.Logger?.Debug("Takeover WebView focus failed: {Error}", ex.Message); }
+                App.Logger?.Information(
+                    "Web takeover fullscreen: one retry as a user gesture (raised = {Raised}, active = {Active}, focused = {Focused})",
+                    raised, host?.IsActive, web.IsKeyboardFocusWithin);
+                // Focus reaches the browser process asynchronously; the gesture is made after it.
+                await System.Threading.Tasks.Task.Delay(Services.Browser.TakeoverFullscreenRetry.FocusSettleMs);
+                if (!_browserFsGate.TakeoverArmed(Environment.TickCount64)) return;
+                var core = _browser?.WebView?.CoreWebView2;
+                if (core == null) return;
+                await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",
+                    Services.Browser.TakeoverFullscreenRetry.EvaluateParams(TakeoverFullscreenReassertScript));
+            }
+            catch (Exception ex) { App.Logger?.Debug("Takeover fullscreen gesture retry failed: {Error}", ex.Message); }
+        }
+
+        [DllImport("user32.dll", EntryPoint = "AttachThreadInput")]
+        private static extern bool AttachThreadInputForTakeover(uint idAttach, uint idAttachTo, bool fAttach);
+
+        [DllImport("kernel32.dll", EntryPoint = "GetCurrentThreadId")]
+        private static extern uint CurrentThreadIdForTakeover();
+
+        /// <summary>
+        /// Brings the window hosting the takeover's WebView to the foreground, borrowing the current
+        /// foreground thread's input state for one call when Windows' foreground lock refuses
+        /// (same move as <c>ChaosWebViewHost.BringToFront</c>). Never changes a Topmost claim.
+        /// </summary>
+        private static void TakeForegroundForTakeover(Window host)
+        {
+            try
+            {
+                var hwnd = new WindowInteropHelper(host).Handle;
+                if (hwnd == IntPtr.Zero) { host.Activate(); return; }
+                if (!SetForegroundWindow(hwnd) && GetForegroundWindow() != hwnd)
+                {
+                    uint fgThread = GetWindowThreadProcessId(GetForegroundWindow(), out _);
+                    uint ourThread = CurrentThreadIdForTakeover();
+                    if (fgThread != 0 && fgThread != ourThread && AttachThreadInputForTakeover(ourThread, fgThread, true))
+                    {
+                        try { SetForegroundWindow(hwnd); }
+                        finally { AttachThreadInputForTakeover(ourThread, fgThread, false); }
+                    }
+                }
+                host.Activate();
+            }
+            catch (Exception ex) { App.Logger?.Debug("Takeover foreground failed: {Error}", ex.Message); }
+        }
+
         private const string TakeoverFullscreenReassertScript = @"
             (function() {
                 if (window._ccpTakeoverStopped || document.fullscreenElement || document.webkitFullscreenElement) return;
@@ -2900,7 +2980,9 @@ namespace ConditioningControlPanel
                         try {
                             window.chrome.webview.postMessage(JSON.stringify({
                                 type: 'fsDenied',
-                                reason: 'recheck ' + String((err && (err.name || err.message)) || err).slice(0, 50) }));
+                                reason: 'recheck ' + String((err && ((err.name || '') + ': ' + (err.message || ''))) || err).slice(0, 80),
+                                activation: !!(navigator.userActivation && navigator.userActivation.isActive),
+                                focus: document.hasFocus() }));
                         } catch (_) {}
                     });
                 } catch (_) {}
@@ -3116,11 +3198,17 @@ namespace ConditioningControlPanel
 
                     // A takeover goes where the app's content goes ("Show content on", the screen
                     // the main video copy uses), not wherever the panel happens to sit (#1649).
-                    // One screen only: no display clone (#1565). A video the user maximized stays
-                    // on the panel's screen, where they are looking.
-                    var screen = (takeover ? App.GetPrimaryContentScreen() : null)
-                        ?? System.Windows.Forms.Screen.FromHandle(
-                            new System.Windows.Interop.WindowInteropHelper(this).Handle);
+                    // One screen only: no display clone (#1565). A video the user maximized goes
+                    // there too (owner 2026-11-22, ccp-bugs #1720): the effects follow the content
+                    // screen, so a hand fullscreen on the panel's screen left them drawing elsewhere.
+                    // When the panel's screen already shows content (e.g. "all monitors") it stays
+                    // there, where the player is looking.
+                    var panelScreen = System.Windows.Forms.Screen.FromHandle(
+                        new System.Windows.Interop.WindowInteropHelper(this).Handle);
+                    var screen = (!takeover && Services.Browser.BrowserFullscreenScreen.PanelShowsContent(
+                                        panelScreen.DeviceName, App.GetGlobalScreens().Select(s => s.DeviceName)))
+                        ? panelScreen
+                        : App.GetPrimaryContentScreen() ?? panelScreen;
                     // Screen bounds are pixels, Left/Top are DIPs (same as the video windows).
                     var hostDpi = BubbleCountWindow.GetDpiForScreen(screen);
                     if (!(hostDpi > 0)) hostDpi = 1.0;
@@ -3399,6 +3487,25 @@ namespace ConditioningControlPanel
                 return;
             }
             NavigateBrowserToCurrentSiteHome();
+        }
+
+        /// <summary>
+        /// Toolbar + / - (ccp-bugs #1694): 10% page zoom a press, the Deeper player's steps
+        /// (<see cref="Services.Browser.BrowserZoomStep"/>). Same zoom as Ctrl + scroll on the
+        /// page; a site switch still resets it to 50%. Silent while the browser is not up.
+        /// </summary>
+        internal void AdjustBrowserZoom(int direction)
+        {
+            try
+            {
+                if (_browser?.WebView?.CoreWebView2 == null) return;
+                _browser.ZoomFactor = Services.Browser.BrowserZoomStep.Next(_browser.ZoomFactor, direction);
+            }
+            catch (Exception ex)
+            {
+                // A crashed browser process throws from any WebView2 property.
+                App.Logger?.Debug("Browser zoom adjust failed: {Error}", ex.Message);
+            }
         }
 
         #endregion

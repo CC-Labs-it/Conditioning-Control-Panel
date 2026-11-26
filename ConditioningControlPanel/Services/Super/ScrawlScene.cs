@@ -66,13 +66,15 @@ namespace ConditioningControlPanel.Services.Super
         // The option box (SuperCore.ScrawlOptions), set by the service every frame. Defaults = as shipped.
         private double _life = ScrawlRules.StampLife, _slamShake = 1;
         private int _cap = ScrawlRules.StampCap;
+        private bool _cornerLabel = true;
 
         /// <summary>
         /// The option box, read live by the service: how long a wall stamp stays (s), how many
         /// stamps the walls hold, and the slam's shake multiplier. A lower cap drops the oldest at once.
         /// </summary>
-        public void Configure(double stampLife, int stampCap, double slamShake)
+        public void Configure(double stampLife, int stampCap, double slamShake, bool cornerLabel = true)
         {
+            _cornerLabel = cornerLabel;
             _life = Math.Max(0.5, stampLife);
             _slamShake = Math.Max(0, slamShake);
             int cap = Math.Max(1, stampCap);
@@ -130,8 +132,10 @@ namespace ConditioningControlPanel.Services.Super
                 Emit(sx, sy, ScrawlRules.CornerSparks, Gold, 280, 1.0);
                 Emit(sx, sy, ScrawlRules.CornerWhiteSparks, White, 200, 0.8);
                 _shake = Math.Max(_shake, ScrawlRules.ShakeCorner);
+                // "Corner flash" off: the gold stamp still lands, the word stays away (tier-2 report, 7.3.2).
+                if (!_cornerLabel) return;
                 var ft = new FormattedText(Localization.Loc.Get("super_scrawl_corner"), CultureInfo.CurrentUICulture,
-                    FlowDirection.LeftToRight, _typeface, _fs * 0.9, LabelBrush, _ppd);
+                    FlowDirection.LeftToRight, _typeface, Math.Min(_fs * 0.9, ScrawlRules.CornerLabelMaxDip), LabelBrush, _ppd);
                 _label = ft.BuildGeometry(new Point(-ft.Width / 2, -ft.Height / 2));
                 _label.Freeze();
                 _labelX = labelAt.X; _labelY = labelAt.Y; _labelAge = 0;

@@ -97,7 +97,7 @@ namespace ConditioningControlPanel
             // THE SNAPPED STATE. Ambient loops off (reduced motion, or a performance tier that
             // refuses ambient work) means a still flame at rest — not a missing one, and not a
             // slower flicker.
-            if (!MotionFx.AllowAmbientLoops)
+            if (!MotionFx.AmbientAllowedByLevel)
             {
                 if (FuseCandleHalo != null)
                 {

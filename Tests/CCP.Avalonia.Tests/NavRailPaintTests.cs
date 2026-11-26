@@ -199,7 +199,7 @@ public sealed class NavRailPaintTests
     [Fact]
     public void Title_NamesSectionAndPage_HomeDashboardNamesOnlyTheSection() => Run(MotionLevel.Off, w =>
     {
-        const string Base = "Conditioning Control Panel";
+        var Base = "Conditioning Control Panel v" + CoreReleaseContent.AppVersion;
         w.ShowTab("playsessions");
         Dispatcher.UIThread.RunJobs();
         Assert.Equal($"{Base} - {Loc.Get(NavSections.Find(NavSections.Play)!.LabelKey)} {Loc.Get("nav_crumb_sep")} {Loc.Get(NavStripTable.PageLabelKey("playsessions")!)}", w.Title);

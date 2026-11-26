@@ -9,6 +9,7 @@ import { createHud } from './hud/index.js';
 import { asHost } from './host.js';
 import { createPressGuard, keyName } from './state/press-guard.js';
 import { guideDue, markGuideSeen } from './state/guide.js';
+import { createLoading, settledWithin, LOADING_CAP_MS } from './hud/loading.js';
 
 const mintIdem = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
 const KEYS = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', q: 'tabPrev', e: 'tabNext',
@@ -16,7 +17,13 @@ const KEYS = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown:
 
 export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
   const host = typeof hostIn.ready === 'function' && hostIn.hosted !== undefined ? hostIn : asHost(hostIn);
+  // The loading card (hud/loading.js) is already on screen: index.html drew it. It leaves once the first shelf hangs.
+  const loading = createLoading(root.ownerDocument || document);
+  let hung = null;   // the first showTab: what the card waits for
+  try {
   const init = (await host.ready()) || {};
+  loading.gentle(!!init.gentle || !!init.reducedMotion);
+  loading.motion(init.motion);
   const t = makeT(init.lexicon, init.companion), motion = init.motion || 'full';
   root.classList.add('pc');
   root.dataset.motion = motion;
@@ -61,10 +68,13 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
     if (scene && (ch.tab || ch.effects || ch.status)) scene.setWallet(shop.sp(), tier());
     // showTab builds the shelves first; focus again once they hang, or the camera never leaves the wide shot.
     // Nothing focused (just opened): the wide shot, or the first bay on a portrait view.
-    if (ch.tab && scene) scene.showTab(ch.tab.id, ch.tab.shelves).then(() => {
+    if (ch.tab && scene) {
+      const p = scene.showTab(ch.tab.id, ch.tab.shelves).then(() => {
       const f = shop.focus();
       if (f) scene.focus(f.bay, f.slot); else if (canvas.clientWidth < canvas.clientHeight) scene.frameBay(0);
-    });
+      });
+      hung = hung || p;
+    }
     if (ch.focus && scene) scene.focus(ch.focus.bay, ch.focus.slot);
     if (ch.owned && scene && !ch.tab) scene.stamp?.(ch.owned);
     for (const e of ch.effects || []) if (e.type === 'wallet') { host.wallet(e.sp); hud.receipt(e.sp, itemPos()); }
@@ -76,8 +86,9 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
       root.classList.toggle('pc-signed-out', out);
       // Signed out: the art hangs as a window display (no prices) behind the sign-in button.
       // A portrait view frames one bay of it; the whole counter would be a strip across the middle.
-      if (out && scene) scene.showTab('window', windowShelves(scene.items, { rain: init.rainV2 === true }))
+      if (out && scene) { const p = scene.showTab('window', windowShelves(scene.items, { rain: init.rainV2 === true }))
         .then(() => { if (canvas.clientWidth < canvas.clientHeight) scene.frameBay(0); }).catch((e) => host.log(`prizecounter: no window display (${(e && e.message) || e})`));
+        hung = hung || p; }
     }
     if (ch.buy) ch.buy.then(apply);
     paint();
@@ -109,6 +120,9 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
   window.addEventListener('resize', onResize);
   paint();
   apply(await shop.load());
+  // The shelves are hanging (or there is no scene and the list is drawn): the card can go.
+  await settledWithin(hung, LOADING_CAP_MS);
+  loading.done();
   // First open on this account: the how-to card, once (state/guide.js). Its door stays in the HUD.
   let storage = null;
   try { storage = window.localStorage; } catch (e) { /* a blocked store reads as seen */ }
@@ -121,4 +135,5 @@ export async function mountPrizeCounter(hostIn, { root = document.body } = {}) {
       window.removeEventListener('focus', onFocus); window.removeEventListener('blur', onBlur);
       window.removeEventListener('resize', onResize); hud.dispose(); if (preview) preview.dispose(); if (scene) scene.dispose(); root.replaceChildren(); },
   };
+  } finally { loading.done(); }   // whatever went wrong above, the card never stays over the page
 }

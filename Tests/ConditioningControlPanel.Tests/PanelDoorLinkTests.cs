@@ -128,6 +128,39 @@ public class PanelDoorLinkTests
         }
     }
 
+    // ccp-bugs #1701: during Lockdown the Games pill asked "Open Games?" and then nothing opened.
+    // Blocking stays (the launcher is no way around the veil); the pill stops asking and says why.
+    [Fact]
+    public void DuringLockdownTheGamesPillSaysWhyInsteadOfAsking()
+    {
+        var locked = PanelDoorLink.IsLockedDown;
+        try
+        {
+            PanelDoorLink.IsLockedDown = () => true;
+            Assert.True(PanelDoorLink.RefusedNow("play"));
+            Assert.True(PanelDoorLink.RefusedNow("PLAY"));
+            Assert.False(PanelDoorLink.RefusedNow("playeyes"));   // a panel page is never refused here
+            Assert.False(PanelDoorLink.RefusedNow("justdrop"));   // other window pills keep asking
+            Assert.False(PanelDoorLink.RefusedNow(null));
+
+            PanelDoorLink.IsLockedDown = () => throw new InvalidOperationException();
+            Assert.True(PanelDoorLink.RefusedNow("play"));       // in doubt, locked
+
+            PanelDoorLink.IsLockedDown = () => false;
+            Assert.False(PanelDoorLink.RefusedNow("play"));
+        }
+        finally { PanelDoorLink.IsLockedDown = locked; }
+
+        // The strip skips its "Open it?" card for a refused door, and ShowTab says why every time
+        // in the launcher veil's existing words (no new loc key).
+        var strip = AppFile("Controls", "NavRail", "SectionTabStrip.xaml.cs");
+        Assert.Contains("NavStripRules.AsksBeforeOpening(tab) && !PanelDoorLink.RefusedNow(tab.Key)", strip, StringComparison.Ordinal);
+        var nav = AppFile("MainWindow", "MainWindow.TabNavigation.cs");
+        Assert.Contains("if (!Services.UI.PanelDoorLink.Open(launcherDoor))", nav, StringComparison.Ordinal);
+        Assert.Contains("new Action(ShowDoorLockedNote)", nav, StringComparison.Ordinal);
+        Assert.Equal("launcher_lockdown_veil", PanelDoorLink.LockdownLineKey);
+    }
+
     [Fact]
     public void PlayIsEyesSessionsDeeperAndAGamesDoorAndLandsOnEyes()
     {

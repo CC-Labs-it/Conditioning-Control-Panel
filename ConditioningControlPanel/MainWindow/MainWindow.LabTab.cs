@@ -482,6 +482,9 @@ namespace ConditioningControlPanel
                 if (svc != null) await svc.StopAsync();
             }
             catch (Exception ex) { App.Logger?.Debug("WebcamActivePill_Click stop failed: {Error}", ex.Message); }
+            // A stop by hand like the tracker button: the next launch leaves the camera off
+            // (BUG-A5UTB2J3V4, 7.3.3: the title-bar pill never saved it).
+            HoldCameraOff(true);
         }
 
         internal async void BtnWebcamDebugStart_Click(object sender, RoutedEventArgs e)
@@ -498,6 +501,7 @@ namespace ConditioningControlPanel
                 AppSettingsTab.BtnWebcamDebugStart.Content = "Start tracking";
                 AppendWebcamDebugLog("Stop requested.");
                 await StopWebcamOffUiThreadAsync(svc);
+                HoldCameraOff(true);
                 RefreshBlinkTrainerTrackerButton();
                 return;
             }
@@ -526,6 +530,7 @@ namespace ConditioningControlPanel
             var started = await StartWebcamOffUiThreadAsync(svc);
             if (started)
             {
+                HoldCameraOff(false);
                 AppSettingsTab.BtnWebcamDebugStart.Content = "Stop tracking";
                 AppendWebcamDebugLog("Start() returned true — capture thread launching.");
             }
@@ -866,6 +871,7 @@ namespace ConditioningControlPanel
             {
                 var webcam = App.Webcam;
                 if (webcam == null || webcam.IsRunning) return;
+                if (App.Settings?.Current?.CameraHeldOff == true) return;   // stopped by hand: it stays off until they start it
                 if (!TierGate.RequiresLab(Loc.Get("label_focus_gaze")).Allowed) return;
                 if (!WebcamTrackingService.IsConsentCurrent()) return;
                 if (App.Settings?.Current?.WebcamCalibrated != true) return;
@@ -927,6 +933,7 @@ namespace ConditioningControlPanel
             var on = PlayTab.ChkPlayFocusGaze.IsChecked == true;
             if (on)
             {
+                HoldCameraOff(false);   // switching it on by hand is asking for the camera again
                 // HARD TIER-2 GATE, and it belongs on the ON branch only.
                 //
                 // Until Phase 6 this toggle's ONLY barrier was geography: the LabSmokescreen draped

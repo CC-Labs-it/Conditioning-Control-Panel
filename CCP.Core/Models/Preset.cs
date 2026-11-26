@@ -163,9 +163,18 @@ namespace ConditioningControlPanel.Models
         /// Each effect's V2 switch, keyed by <c>SuperEffect</c> name, stored like
         /// <see cref="AppSettings.SuperModes"/> (0 classic, 1 and 2 V2 on). A save writes all eight
         /// explicitly. Null on presets saved before 7.3.1 and on the built-in ones: applying such a
-        /// preset leaves every V2 switch as it is; an effect missing from the map is left alone too.
+        /// preset turns every V2 switch OFF (classic), the look it had when it was made; an effect
+        /// missing from the map turns off too (ccp-bugs #1696: V2 defaults on, so an old preset
+        /// came back with the Whirlpool and Steam it never had).
         /// </summary>
         public Dictionary<string, int>? SuperModes { get; set; }
+
+        /// <summary>
+        /// The newer settings (Steam, floating videos, flash motion, V2 options, monitor targets) as
+        /// AppSettings name to value; see <see cref="PresetCarry"/>. Null on presets saved before 7.3.7
+        /// and on the built-ins: applying one puts the looks back to their defaults.
+        /// </summary>
+        public Dictionary<string, string>? Carried { get; set; }
 
         /// <summary>
         /// Creates the 5 default presets
@@ -445,10 +454,13 @@ namespace ConditioningControlPanel.Models
             settings.DualMonitorEnabled = DualMonitorEnabled;
             settings.PanicKeyEnabled = PanicKeyEnabled;
 
-            // V2 switches: only the effects the preset names; assigned only on a real change so
-            // a preset that matches the live state raises nothing.
-            var superModes = MergeSuperModes(settings.SuperModes, SuperModes);
+            // V2 switches: every effect, classic where the preset names none (ccp-bugs #1696);
+            // assigned only on a real change so a preset that matches the live state raises nothing.
+            var superModes = MergeSuperModes(settings.SuperModes, SuperModesOrClassic(SuperModes));
             if (superModes != null) settings.SuperModes = superModes;
+
+            // Steam, floating videos, flash motion, V2 options, monitors (ccp-bugs #1695 #1696).
+            PresetCarry.Apply(settings, Carried);
 
             // Update current preset name
             settings.CurrentPresetName = Name;
@@ -569,7 +581,8 @@ namespace ConditioningControlPanel.Models
                 PanicKeyEnabled = settings.PanicKeyEnabled,
 
                 // V2 switches
-                SuperModes = SnapshotSuperModes(settings.SuperModes)
+                SuperModes = SnapshotSuperModes(settings.SuperModes),
+                Carried = PresetCarry.Snapshot(settings)
             };
         }
 
@@ -579,6 +592,22 @@ namespace ConditioningControlPanel.Models
             var map = new Dictionary<string, int>();
             foreach (SuperEffect e in Enum.GetValues(typeof(SuperEffect)))
                 map[e.ToString()] = (int)SuperModeRule.Resolve(e, live);
+            return map;
+        }
+
+        /// <summary>
+        /// The preset's V2 switches with every effect present: what it names (exact names), classic for
+        /// the rest. A preset with no map (saved before 7.3.1, or a built-in) is all classic, the look
+        /// it had when it was made (ccp-bugs #1696).
+        /// </summary>
+        public static Dictionary<string, int> SuperModesOrClassic(IReadOnlyDictionary<string, int>? preset)
+        {
+            var map = new Dictionary<string, int>();
+            foreach (SuperEffect e in Enum.GetValues(typeof(SuperEffect)))
+            {
+                var name = e.ToString();
+                map[name] = preset != null && preset.TryGetValue(name, out var v) ? v : (int)SuperMode.Classic;
+            }
             return map;
         }
 

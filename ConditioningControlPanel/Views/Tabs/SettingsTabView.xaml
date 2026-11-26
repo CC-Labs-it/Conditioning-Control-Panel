@@ -7,6 +7,7 @@
              xmlns:fx="clr-namespace:ConditioningControlPanel.Controls"
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800">
     <UserControl.Resources>
@@ -490,9 +491,12 @@
                                                Foreground="{DynamicResource PinkBrush}" Margin="0,0,0,10"/>
                                     <TextBlock x:Name="ClickChoiceDescription" FontSize="13" LineHeight="20"
                                                Foreground="White" TextWrapping="Wrap" Margin="0,0,0,14"/>
-                                    <CheckBox x:Name="InvertDashboardClicks" Content="{loc:Str dash_click_invert}"
-                                              Foreground="White" FontSize="13" Cursor="Hand"
-                                              Checked="ClickChoiceChanged" Unchecked="ClickChoiceChanged"/>
+                                    <CheckBox x:Name="InvertDashboardClicks"
+                                              Foreground="White" FontSize="13" Cursor="Hand" VerticalContentAlignment="Center"
+                                              Checked="ClickChoiceChanged" Unchecked="ClickChoiceChanged">
+                                        <rows:RowLabel Text="{loc:Str dash_click_invert}" Emblem="Click"
+                                                       IsOn="{Binding IsChecked, ElementName=InvertDashboardClicks}"/>
+                                    </CheckBox>
                                     <TextBlock Text="{loc:Str dash_click_pages_pin}" FontSize="12" LineHeight="18"
                                                Foreground="#CCCCDF" TextWrapping="Wrap" Margin="0,14,0,0"/>
                                 </StackPanel>
@@ -1228,7 +1232,11 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <!-- The fold arrow's column. MinWidth = its MinWidth + margins: in a
+                                 short header a centred arrow in a narrower column spilled left over
+                                 the zoom buttons (#1694); now the overflow goes to the strip's end. -->
+                            <ColumnDefinition Width="*" MinWidth="136"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
@@ -1346,8 +1354,12 @@
                              Reloads the current site's homepage; gives a way out of a
                              stuck/blank page (e.g. after a remote video is stopped), since
                              re-clicking an already-selected site radio won't reload. -->
-                        <Button Grid.Column="2" x:Name="BtnReloadBrowser"
-                                HorizontalAlignment="Left" VerticalAlignment="Center"
+                        <!-- ccp-bugs #1694: reload and the + / - page zoom share an Auto column; with
+                             the fold arrow's column floored, a narrow (non-maximised) window never
+                             lays the arrow over them. -->
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="BtnReloadBrowser"
+                                VerticalAlignment="Center"
                                 Click="BtnReloadBrowser_Click"
                                 ToolTip="{loc:Str tooltip_reload_browser}"
                                 FontSize="11" Padding="6,3" Margin="8,0,0,0">
@@ -1379,10 +1391,58 @@
                             </Button.Style>
                             <helpers:EmojiTextBlock Text="🔄"/>
                         </Button>
+                        <!-- Page zoom + / - (ccp-bugs #1694), the Deeper player's BrowserZoomCluster
+                             (EnhancementPlayerWindow.xaml) in this strip's pink: magnifier, 22 px
+                             square buttons, 10% a press. The tooltips carry the Ctrl + scroll hint. -->
+                        <StackPanel x:Name="BrowserZoomCluster" x:FieldModifier="internal"
+                                    Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+                            <StackPanel.Resources>
+                                <Style TargetType="Button">
+                                    <Setter Property="Width" Value="22"/>
+                                    <Setter Property="Height" Value="22"/>
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="FontSize" Value="13"/>
+                                    <Setter Property="FontWeight" Value="Bold"/>
+                                    <Setter Property="Background" Value="{DynamicResource TransparentPinkBrush}"/>
+                                    <Setter Property="Foreground" Value="White"/>
+                                    <Setter Property="BorderBrush" Value="{DynamicResource PinkBrush}"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                    <Setter Property="Cursor" Value="Hand"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border Background="{TemplateBinding Background}"
+                                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                                        CornerRadius="4" Padding="{TemplateBinding Padding}">
+                                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Background" Value="{DynamicResource TransparentPink50Brush}"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </StackPanel.Resources>
+                            <Image Width="13" Height="13" VerticalAlignment="Center" Margin="0,0,4,0"
+                                   Source="{Binding Source='🔍', Converter={StaticResource EmojiToImageSource}}"/>
+                            <Button x:Name="BtnBrowserZoomOut" x:FieldModifier="internal" Content="−"
+                                    Click="BtnBrowserZoomOut_Click"
+                                    ToolTip="{loc:Str deeper_editor_tip_zoom_out}"
+                                    AutomationProperties.Name="{loc:Str deeper_editor_tip_zoom_out}"/>
+                            <Button x:Name="BtnBrowserZoomIn" x:FieldModifier="internal" Content="+"
+                                    Click="BtnBrowserZoomIn_Click" Margin="3,0,0,0"
+                                    ToolTip="{loc:Str deeper_editor_tip_zoom_in}"
+                                    AutomationProperties.Name="{loc:Str deeper_editor_tip_zoom_in}"/>
+                        </StackPanel>
+                        </StackPanel>
                         <!-- The fold arrow (owner, 2026-10-06: "put an unmissable dropdown arrow here on
                              top of the browser, the little grey icon we got is basically invisible").
-                             It lives in the header's empty middle, the star column the reload button
-                             only uses the left edge of; the left margin keeps it clear of that button.
+                             It lives in the header's empty middle, the star column right of the
+                             reload and zoom buttons (their own Auto column since #1694).
                              Down arrow + "Show browser" = the card is shut and this opens it, up arrow +
                              "Hide browser" = it is open and this shuts it. The hue, the label, the
                              tooltip and the breathing glow while folded are all painted by
@@ -1390,10 +1450,10 @@
                              setting (AppSettings.DashboardBrowserCollapsed), not this button, is the
                              truth. The values below are only the first paint: Home's lilac at 24% fill,
                              a 70% border, 40% fill on hover (Tag carries the hover brush). -->
-                        <Button Grid.Column="2" x:Name="BtnFoldBrowser" x:FieldModifier="internal"
+                        <Button Grid.Column="3" x:Name="BtnFoldBrowser" x:FieldModifier="internal"
                                 Click="BtnFoldBrowser_Click" Cursor="Hand"
                                 HorizontalAlignment="Center" VerticalAlignment="Center"
-                                MinWidth="120" Height="26" Padding="12,0" Margin="48,0,8,0"
+                                MinWidth="120" Height="26" Padding="12,0" Margin="8,0,8,0"
                                 Background="#3DB79CFF" BorderBrush="#B3B79CFF" BorderThickness="1.5"
                                 ToolTip="{loc:Str tooltip_browser_unfold}"
                                 AutomationProperties.Name="{loc:Str btn_browser_fold_show}">
@@ -1428,11 +1488,11 @@
                             </StackPanel>
                         </Button>
                         <!-- Status indicator -->
-                        <TextBlock Grid.Column="3" x:Name="TxtBrowserStatus" x:FieldModifier="internal" Text="{loc:Str label_loading}"
+                        <TextBlock Grid.Column="4" x:Name="TxtBrowserStatus" x:FieldModifier="internal" Text="{loc:Str label_loading}"
                                    Foreground="{DynamicResource PinkBrush}" FontSize="10"
                                    VerticalAlignment="Center" Margin="0,0,8,0"/>
                         <!-- Deeper auto-bind badge (Phase 9). Shows when an enhancement is active for the current page. -->
-                        <Border Grid.Column="3" x:Name="DeeperBrowserBadge" x:FieldModifier="internal" Visibility="Collapsed"
+                        <Border Grid.Column="4" x:Name="DeeperBrowserBadge" x:FieldModifier="internal" Visibility="Collapsed"
                                 Background="{DynamicResource DeeperAccentTransparent20Brush}"
                                 BorderBrush="{DynamicResource DeeperAccentBrush}" BorderThickness="1"
                                 CornerRadius="3" Padding="6,1" Margin="0,0,8,0"
@@ -1447,7 +1507,7 @@
                              Off: "📷 Webcam"  On: "📷 Webcam On" (label updated in code-behind
                              from OnTrackingStateChanged). Click runs the consent → calibrate →
                              start flow if needed; second click stops tracking. -->
-                        <Button Grid.Column="4" x:Name="BtnWebcamTracking" x:FieldModifier="internal"
+                        <Button Grid.Column="5" x:Name="BtnWebcamTracking" x:FieldModifier="internal"
                                 Click="BtnWebcamTracking_Click"
                                 ToolTip="{loc:Str tooltip_browser_webcam_tracking_off}"
                                 FontSize="9" Padding="6,3" Margin="0,0,6,0" VerticalAlignment="Center">
@@ -1481,7 +1541,7 @@
                             <helpers:EmojiTextBlock x:Name="TxtWebcamTracking" x:FieldModifier="internal" Text="{loc:Str btn_browser_webcam_tracking_off}"/>
                         </Button>
                         <!-- Mute browser audio toggle (BambiCloud / HypnoTube video) -->
-                        <Button Grid.Column="5" x:Name="BtnMuteBrowser" x:FieldModifier="internal"
+                        <Button Grid.Column="6" x:Name="BtnMuteBrowser" x:FieldModifier="internal"
                                 Click="BtnMuteBrowser_Click" Cursor="Hand"
                                 ToolTip="Mute / unmute browser audio (BambiCloud / HypnoTube)"
                                 Background="Transparent" BorderThickness="0" Padding="5,2" Margin="4,0,0,0"
@@ -1501,7 +1561,7 @@
                             <helpers:EmojiTextBlock x:Name="TxtBrowserMute" x:FieldModifier="internal" Text="🔊" FontSize="13"/>
                         </Button>
                         <!-- Pop Out button -->
-                        <Button Grid.Column="6" x:Name="BtnPopOutBrowser" x:FieldModifier="internal" Content="{loc:Str btn_pop_out}"
+                        <Button Grid.Column="7" x:Name="BtnPopOutBrowser" x:FieldModifier="internal" Content="{loc:Str btn_pop_out}"
                                 Click="BtnPopOutBrowser_Click"
                                 ToolTip="{loc:Str tooltip_pop_out_browser_to_resizable_window}"
                                 FontSize="9" Padding="6,3" VerticalAlignment="Center">

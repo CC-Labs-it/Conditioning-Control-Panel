@@ -244,6 +244,13 @@ public static class LauncherCatalogue
                 () => BackRoom.BackRoomHostService.Launch(),
                 () => BackRoom.BackRoomHostService.IsRoomActive, null),
 
+            // Terms & Conditioning (7.4.0): one card for everyone, never locked; a subscriber gets the
+            // full game and a free account the small one (Services/Tc/TcRules). Shown only when the
+            // game tree is on disk.
+            ["tc"] = (() => Tc.TcHostService.TreePresent, Never,
+                () => Tc.TcHostService.Launch(),
+                () => Tc.TcHostService.IsActive, null),
+
             // Breakout: one listed tile that opens the full game when the account has it and the
             // demo otherwise; the demo keeps its own unlisted id for --game and old shortcuts.
             ["breakoutdemo"] = (Always, Never,

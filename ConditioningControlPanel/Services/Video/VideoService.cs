@@ -1711,6 +1711,70 @@ namespace ConditioningControlPanel.Services
             }
         }
 
+        // The newest volume waiting for the LibVLC players (-1 = nothing waiting) and whether a
+        // worker is applying it. A volume ramp ticks many times a second: the worker always applies
+        // the LATEST value, so a burst collapses to one native call per player.
+        private int _pendingLibVlcVolume = -1;
+        private int _libVlcVolumeWorker;
+
+        /// <summary>
+        /// Sets Volume and Mute on every LibVLC player from a pool thread. Holds _mediaPlayersLock
+        /// across the native calls, the RetryBlurSurface rule: CloseAll copies and CLEARS the list
+        /// under that lock before it stops or disposes a player, so a player still in the list is
+        /// never mid-dispose here. A stuck native call now holds this worker, not the dispatcher.
+        /// </summary>
+        private void PushLibVlcVolume(int volume)
+        {
+            Volatile.Write(ref _pendingLibVlcVolume, Math.Max(0, volume));
+            if (Interlocked.CompareExchange(ref _libVlcVolumeWorker, 1, 0) != 0) return;
+            Task.Run(() =>
+            {
+                while (true)
+                {
+                    try
+                    {
+                        int want;
+                        while ((want = Interlocked.Exchange(ref _pendingLibVlcVolume, -1)) >= 0)
+                        {
+                            lock (_mediaPlayersLock)
+                            {
+                                if (_isCleaningUp) continue;
+                                foreach (var player in _mediaPlayers)
+                                {
+                                    try
+                                    {
+                                        // Set Volume on every player. The old `if (!player.Mute)` skip broke live
+                                        // drags: player.Mute reads true while no audio output exists yet (transient),
+                                        // so the primary player got skipped. Volume and Mute are independent in
+                                        // LibVLC - setting Volume never unmutes, and no-audio secondaries ignore it.
+                                        // Mute is driven from the same number (#1103): silence is the PLAYER's state
+                                        // now, so a drag back up has to clear it or the video stays silent for the rest
+                                        // of the clip. Secondaries carry :no-audio and ignore both.
+                                        player.Volume = want;
+                                        player.Mute = want <= 0;
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        App.Logger?.Debug("Failed to update LibVLC player volume: {Error}", ex.Message);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        App.Logger?.Debug("LibVLC volume worker: {Error}", ex.Message);
+                    }
+
+                    Volatile.Write(ref _libVlcVolumeWorker, 0);
+                    // A value that landed after the last read but before the flag dropped would wait
+                    // for the next change: take the worker back if one is there and nobody else has.
+                    if (Volatile.Read(ref _pendingLibVlcVolume) < 0
+                        || Interlocked.CompareExchange(ref _libVlcVolumeWorker, 1, 0) != 0) return;
+                }
+            });
+        }
+
         /// <summary>
         /// Apply current volume settings to all playing videos.
         /// </summary>
@@ -1723,32 +1787,9 @@ namespace ConditioningControlPanel.Services
             if (_browserActive) _browser?.SetVolume(effectiveVolume / 100.0, effectiveVolume <= 0);
             RefreshFloatingVolumes();
 
-            // Update LibVLC media players (thread-safe snapshot)
-            List<LibVLCSharp.Shared.MediaPlayer> playersCopy;
-            lock (_mediaPlayersLock)
-            {
-                playersCopy = _mediaPlayers.ToList();
-            }
-
-            foreach (var player in playersCopy)
-            {
-                try
-                {
-                    // Set Volume on every player. The old `if (!player.Mute)` skip broke live
-                    // drags: player.Mute reads true while no audio output exists yet (transient),
-                    // so the primary player got skipped. Volume and Mute are independent in
-                    // LibVLC - setting Volume never unmutes, and no-audio secondaries ignore it.
-                    // Mute is driven from the same number (#1103): silence is the PLAYER's state
-                    // now, so a drag back up has to clear it or the video stays silent for the rest
-                    // of the clip. Secondaries carry :no-audio and ignore both.
-                    player.Volume = effectiveVolume;
-                    player.Mute = effectiveVolume <= 0;
-                }
-                catch (Exception ex)
-                {
-                    App.Logger?.Debug("Failed to update LibVLC player volume: {Error}", ex.Message);
-                }
-            }
+            // LibVLC players: off the UI thread (ccp-bugs #1697, 7.3.6: the UI froze 15 s inside a
+            // native set-volume called from the master volume ramp, every tick on the dispatcher).
+            PushLibVlcVolume(effectiveVolume);
 
             // Update MediaElement players in active windows
             foreach (var win in _windows.ToList())
@@ -5563,9 +5604,19 @@ namespace ConditioningControlPanel.Services
 
                         _spawned = 0; // Reset spawned counter
                         var dur = Video.GentleWindowRules.WallSeconds(_duration > 0 ? _duration : 60, _playRate);
-                        _total = MandatoryVideoScheduler.AttentionTargetCount(App.Settings.Current.AttentionDensity,
+                        // Use setting directly as total count (not density)
+                        var wanted = MandatoryVideoScheduler.AttentionTargetCount(App.Settings.Current.AttentionDensity,
                             App.Settings.Current.RandomizeAttentionTargets, _random);
-                        _spawnTimes.AddRange(MandatoryVideoScheduler.AttentionSpawnTimes(_total, dur, _random));
+
+                        // No target spawns later than duration - lifespan - 1 s, so each one gets
+                        // the user's full lifespan; a clip too short for that gets none (#1736).
+                        var lifespan = App.Settings.Current.AttentionLifespan;
+                        var plan = Video.AttentionSchedule.Plan(dur, wanted, lifespan, _random.NextDouble);
+                        _spawnTimes.AddRange(plan);
+                        _total = plan.Count;
+                        if (plan.Count < wanted)
+                            App.Logger.Information("Attention: {Planned} of {Wanted} targets fit a {Duration}s clip with a {Lifespan}s lifespan",
+                                plan.Count, wanted, (int)dur, lifespan);
 
                         _attentionTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(20) };
                         _attentionTimer.Tick += CheckSpawnTargets;
@@ -5931,11 +5982,30 @@ namespace ConditioningControlPanel.Services
             var settings = App.Settings.Current;
             bool loop = false, troll = false;
 
-            if (Video.MandatoryVideoPresentation.AttentionChecksApply(settings.AttentionChecksEnabled, IsFloating) && _spawned > 0)
+            // A target still on screen with lifespan left when the video ended was cut short by
+            // the end, not missed by the user: it is not judged (#1736). Answered spawns have left
+            // _targets (the hit handler removes them), so "any copy still listed" = unanswered.
+            int cutShort = 0;
+            try
             {
-                var verdict = MandatoryVideoScheduler.Evaluate(true, _spawned, _hits, _random.NextDouble());
+                var endedElapsed = (DateTime.Now - _startTime).TotalSeconds;
+                lock (_targets)
+                {
+                    cutShort = Video.AttentionSchedule.CutShort(
+                        _spawnExpiries.Select(s => (s.DueElapsed, !s.Targets.Any(t => _targets.Contains(t)))),
+                        endedElapsed);
+                }
+            }
+            catch (Exception ex) { Diag.Swallowed(ex, "attention cut-short count"); }
+            var judged = Video.AttentionSchedule.Judged(_spawned, cutShort);
+
+            if (Video.MandatoryVideoPresentation.AttentionChecksApply(settings.AttentionChecksEnabled, IsFloating) && judged > 0)
+            {
+                // Core's verdict keeps the 1-in-10 surprise replay; a miss among the judged spawns fails.
+                var verdict = MandatoryVideoScheduler.Evaluate(true, judged, _hits, _random.NextDouble());
                 bool passed = verdict != AttentionVerdict.Fail;
-                App.Logger.Information("Attention result: {Hits}/{Spawned} (of {Total} scheduled) = {Result}", _hits, _spawned, _total, passed ? "PASS" : "FAIL");
+                App.Logger.Information("Attention result: {Hits}/{Judged} ({Spawned} spawned, {CutShort} cut short by the end, {Total} scheduled) = {Result}",
+                    _hits, judged, _spawned, cutShort, _total, passed ? "PASS" : "FAIL");
 
                 if (passed)
                 {

@@ -19,6 +19,7 @@ namespace ConditioningControlPanel.Views.Controls
         public string Icon { get; init; } = "";
         public string Name { get; init; } = "";
         public string Description { get; init; } = "";
+        public string? DescriptionTooltip { get; init; }
         public int Current { get; init; }
         public int Target { get; init; }
         public bool IsCompleted { get; init; }
@@ -134,6 +135,7 @@ namespace ConditioningControlPanel.Views.Controls
             TxtIcon.Text = m.Icon;
             TxtName.Text = m.Name;
             TxtDesc.Text = m.Description;
+            TxtDesc.ToolTip = m.DescriptionTooltip;
             TxtDesc.Visibility = string.IsNullOrWhiteSpace(m.Description) ? Visibility.Collapsed : Visibility.Visible;
 
             TxtXp.Text = m.XpText;
@@ -202,6 +204,7 @@ namespace ConditioningControlPanel.Views.Controls
             TxtIcon.Text = "";
             TxtName.Text = title;
             TxtDesc.Text = subtitle;
+            TxtDesc.ToolTip = null;
             TxtDesc.Visibility = Visibility.Visible;
             TxtXp.Text = "";
             TxtXpBonus.Visibility = Visibility.Collapsed;
@@ -269,6 +272,7 @@ namespace ConditioningControlPanel.Views.Controls
             {
                 if (!_canNavigate) return;
                 MotionFx.HoverLift(Root, true);
+                QuestGoHint.Set(GoHint, true);
 
                 if (!MotionFx.AllowTransitions) return;
                 _hoverGlow ??= new DropShadowEffect
@@ -292,6 +296,7 @@ namespace ConditioningControlPanel.Views.Controls
             try
             {
                 MotionFx.HoverLift(Root, false);
+                QuestGoHint.Set(GoHint, false);
 
                 if (_hoverGlow == null) { Root.Effect = null; return; }
 

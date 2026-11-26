@@ -4,111 +4,67 @@ namespace ConditioningControlPanel
     public static class ReleaseNotes
     {
         public const string Current =
-            "v7.3.2 - Back to the basics\n" +
+            "v7.4.1 - Terms & Conditioning\n" +
             "\n" +
-            "NEW IN 7.3.2\n" +
+            "everything since 7.3.8, in one place.\n" +
             "\n" +
-            "a small round after your first night with 7.3.1.\n" +
+            "TERMS & CONDITIONING\n" +
+            "just your ordinary clicker game about accepting stuff - nothing sus about it :3\n" +
             "\n" +
-            "- bubble skins under Circe's Lock: a skin you wear shows on a plain bubble now, with no lock drawn over it. with no skin worn, the lock bubbles stay as they were.\n" +
-            "- the picture that washes over the screen when a glitch bubble pops is sized for each monitor, not stretched across all of them.\n" +
-            "- takeover web videos: two more cases where fullscreen was lost are fixed. one was a video that starts late, the other a video started while someone holds your remote.\n" +
-            "- the shop shows Emi as the example face inside profile frames.\n" +
+            "- it has its own tile in the launcher now. there is a button, you press it, and sometimes it asks you to agree to something small. you can stop any time, probably.\n" +
+            "- free for everyone. subscribers get the full version, which is the same harmless clicker, only with more of it.\n" +
+            "- it can borrow your pictures and your toy if you say yes, and your save follows your account between the app and the website.\n" +
+            "- at some point the game may ask to download something, about 135 MB. it is not a virus. it is, at most, a commitment.\n" +
+            "- that is all there is to say about it. really.\n" +
             "\n" +
-            "FROM 7.3.1\n" +
+            "PRESETS AND SESSIONS\n" +
+            "- the Presets tab is now Presets and sessions. presets are pink and sessions are blue, and a line under Sessions says what starting one does: it turns on only its own effects and hands yours back when it ends.\n" +
+            "- an Import button sits beside Export, so a preset file someone sent you no longer has to be dragged onto the window to get in.\n" +
             "\n" +
-            "7.3.0 gave the basics a V2. this one gives them a wardrobe, and fixes what you told us about the V2s.\n" +
+            "READABLE ROWS\n" +
+            "- every option row in Studio and Settings got bigger text, a small picture that says what the option is about (a stopwatch for how often, dice for random, a stack for how many) and a number you can read from across the desk. the same meaning wears the same picture everywhere.\n" +
+            "- a switch that is off greys its picture, so a page shows at a glance what is on.\n" +
+            "- the Studio rack and the Settings list wear the same big tinted names, and the little row pictures got a dark outline so they stop melting into the panel.\n" +
             "\n" +
-            "THE SHOP\n" +
-            "the Prize Counter is rebuilt. it is a sheet that drops down from your wallet now, not a room you walk through. look for the gold SHOP tag on the launcher, the panel wallet, Studio and EMI's desk.\n" +
-            "\n" +
-            "- tabs with their own emblem: Featured, Karts, Chess, Bubbles and effects, Accessories, Prime only, Back Room, Owned.\n" +
-            "- every item has a picture, a short \"what it does\", and a try-on before you buy.\n" +
-            "- after you buy or wear something, the shop tells you where it shows and takes you there.\n" +
-            "- Sparkles are one gold star everywhere, and every credit flies to your wallet.\n" +
-            "- a weekly gift, a stamp card for your first two weeks, and a \"saving for\" bar you can pin to one item.\n" +
-            "\n" +
-            "LOOKS FOR YOUR EFFECTS\n" +
-            "- Bubbles: seven skins. Soap, Marble, Heart, Champagne, Spiral, Disco, Frost. each has its own movement inside, its own pop and its own sound. the old pop is still there as a switch.\n" +
-            "- Deck cards: backs in Ink, Check and Lace, and Whisper, which puts a spiral with words coming at you on the back of every flip.\n" +
-            "- Subliminals: word styles. Typed, Chalk, Drift, Echo, Marquee.\n" +
-            "- Pink Filter: Two-tone, a second colour blended into the first.\n" +
-            "- what you own is picked in the effect's own options, next to everything else.\n" +
-            "\n" +
-            "CHESS AND KARTS\n" +
-            "- Piece by Piece: five piece finishes (Candy lacquer, Mineral strata, Liquid ribbons, Oil slick, Gold faultlines), four boards (Midnight Observatory, Glasshouse, Velvet Theatre, After Hours Arcade), and Emi as a cheerleader at your table.\n" +
-            "- chess and kart items sit on their own shelves now, easy to tell apart.\n" +
-            "\n" +
-            "PROFILE\n" +
-            "- profile frames are redrawn and they move: Lace, Ink Stamp, Gilt, Polaroid.\n" +
-            "- your own picture wears the frame everywhere you see it.\n" +
-            "\n" +
-            "V2, AFTER YOUR FEEDBACK\n" +
-            "- every settings page has a plain V2 on/off switch, and presets remember which V2s are on.\n" +
-            "- the old Back Room \"Flashes v2\" and \"Bubbles v2\" are called Extra Flashes and Extra Bubbles now. the Super effects are the V2.\n" +
-            "- Deck: the card takes the shape of the picture, so tall pictures no longer sit in an empty frame. the flip is quicker and steadier.\n" +
-            "- Deck keeps its cards when you own Shatter.\n" +
-            "- Steam: a pause between fog phrases, and a Reach slider for how far in the fog comes, from the edges only to the centre.\n" +
-            "- Two-tone moved into Steam's gold box, with a colour of your own next to the palette.\n" +
-            "- the V2 subliminals and the words in the fog wear your word style.\n" +
-            "- Subliminals: with the V2 on, the normal cards rest. \"Also show the normal subliminals\" runs both.\n" +
-            "- Lights Down is reworked. fullscreen: a soft dim around the screen that pulls back when you move the mouse or look away. floating videos: the whole screen dims from the edges and the videos stay lit, with a glow in your mod's colour.\n" +
-            "- the attention target does not run with floating videos. the page says so now and switches it off.\n" +
-            "- fog and the Whirlpool are much lighter on the processor.\n" +
-            "- the V2 star and three other icons no longer show as empty boxes.\n" +
-            "\n" +
-            "STUDIO\n" +
-            "- option pages are split into named sections (Basics and so on) that fold, and each one says how many things you changed.\n" +
-            "\n" +
-            "FIXES\n" +
-            "- fixed a \"Collection was modified\" crash while popping bubbles with Froth on.\n" +
-            "- a Games pill on Play opens the launcher's Games page.\n" +
-            "- takeover web videos go fullscreen again.\n" +
-            "\n" +
-            "FROM 7.3.0\n" +
-            "\n" +
-            "most of you spend most of your time on the basics: flashes, bubbles, the spiral, subliminals. it has been almost a year since those arrived, so a V2 was owed. this one is their revamp.\n" +
+            "LIVE PREVIEW\n" +
+            "- each of the twelve effect pages now has a slice of a pretend desktop beside its options, where the effect plays as you change them. it wakes when you touch an option and settles again after a few seconds. it uses drawn stand-in pictures, never yours, and it changes nothing.\n" +
+            "- Takeover, Haptics and Voice swapped their side picture for a live preview of their own. the Haptics one never reaches your toy and the Voice one never opens your microphone.\n" +
             "\n" +
             "SUPER EFFECTS\n" +
-            "eight of the basics get a second version. look for the gold corner on a dashboard tile: click it and the V2 runs. each one has its own gold box of options in the feature's panel, and a \"See V2\" button in its help card shows what it does before you turn it on.\n" +
+            "- Deck: Fewest flips and Most flips, so each card breaks after a random number of flips between the two.\n" +
+            "- Whirlpool: Smallest size sets how far the pool can shrink, and Restless pool turns it around so it grows while you move and calms when you rest.\n" +
+            "- the Whirlpool box shows four rows and keeps the rest behind More options.\n" +
+            "- Brain Drain started from a bubble follows your Super switch, and the first picture of a bubble flash moves when flash motion is on.\n" +
             "\n" +
-            "- Deck (Flash Images): tap a flash and it flips. keep going and it cracks, then breaks, and a break knocks its neighbours.\n" +
-            "- Froth (Bubbles): bubbles merge, carry both pictures inside, and turn gold when ripe. pop one and the pop can chain. a merged bubble pays the sum of its parts.\n" +
-            "- Whirlpool (Spiral): a spiral under your cursor that grows while you rest and shrinks when you move. it drags pictures, bubbles and fog to the eye and pops them there.\n" +
-            "- Steam (Pink Filter): pink fog drifts in from the edges. wipe it with the mouse and it creeps back, with words in it.\n" +
-            "- Afterglow (Subliminals): words pop by the mouse and leave ghosts that build a line.\n" +
-            "- Scrawl (Bouncing Text): the bouncing word stamps itself on the screen and the stamps stay a while.\n" +
-            "- Lights Down (Mandatory Videos): the room dims around the video.\n" +
-            "- Undertow (Brain Drain): a clear lens in the blur that follows you and shrinks.\n" +
+            "FRIENDS\n" +
+            "- the drawer folds. the leash, What happened and Dares each sit under a header: folded you see the newest two lines and a bubble for what you have not read, opened you see everything. a leash offer opens its fold by itself.\n" +
+            "- a settled dare can be dismissed, and corner notices come two at a time at most.\n" +
             "\n" +
-            "they react to each other: the Whirlpool swallows flashes and bubbles, flings the bouncing word back out, and stirs the fog into a spiral.\n" +
+            "COMFORT\n" +
+            "- Settings > Performance has a pink filter limit for light-sensitive eyes. switched on, the pink filter and the Super fog never get stronger than the limit you set, whatever a preset, session or mod asks for.\n" +
             "\n" +
-            "Super effects come with Basic and up. without a plan the corner and the options stay visible, with a lock. Gentle visuals calms them, and panic stops all of them.\n" +
-            "\n" +
-            "A QUIETER PANEL\n" +
-            "- the launcher is three doors now: the Panel, Games and Tools. each door opens its own page, and Continue takes you back to the last thing you played.\n" +
-            "- the games moved out of Play and into the Games door. Play keeps Eyes, Sessions and Deeper. Just Drop and the Deeper editor moved to the launcher too.\n" +
-            "- Studio: every row shows on, off or selected at a glance, each group shows how many are on, and the page wears one colour.\n" +
-            "- the tab strip is quieter: only the tab you are on is filled, and there is one help button instead of one per tab.\n" +
-            "- Start has its own bar, and the header banner shows on Home only.\n" +
-            "\n" +
-            "WE TAKE BITCOIN NOW\n" +
-            "for those of you who are extra careful about privacy, or just prefer it: you can pay with Bitcoin. it buys a pass for Basic or Prime, paid once, for the months you pick. it never renews and nothing gets billed again. you get a code, and Settings > Account > \"Redeem a code\" turns it on.\n" +
-            "\n" +
-            "the card that compares Basic and Prime is redone as two tickets, and the Bitcoin pass is linked right on it.\n" +
-            "\n" +
-            "NEW\n" +
-            "- Mandatory videos: \"Fill the minimum with other videos\", off by default. on, a clip shorter than the minimum is followed by other clips until the minimum has played.\n" +
-            "- Mod Creator: searching a skill by name shows its effect and flavour texts with it.\n" +
-            "- Piece by Piece: a castling hint on the board, and you can castle by dropping the king on the rook. the board stays readable under the spiral, and a Board motion switch calms it.\n" +
+            "SMALL THINGS\n" +
+            "- a bell with your recent notifications, newest first.\n" +
+            "- Racing Thoughts 3D can play the pictures you ticked in your own library.\n" +
+            "- dropping a pack shows its progress while it unpacks.\n" +
+            "- the video quest says which videos count: the ones the app plays, not the browser.\n" +
+            "- the Mod Creator keeps a draft on this PC and offers it back when you open it again.\n" +
+            "- a video you put fullscreen by hand goes to your content screen, like Takeover does.\n" +
+            "- your own AI (Ollama or another endpoint) keeps more of the chat in mind.\n" +
             "\n" +
             "FIXES\n" +
-            "- a local AI host typed without http:// no longer stops the panel from opening.\n" +
-            "- the companion no longer giggles about once a minute with the engine off.\n" +
-            "- cutting your own leash is never blocked by an open \"Let go\" question.\n" +
-            "- Deeper: fixed a crash while a library file was being read.\n" +
-            "- Piece by Piece: a press that does not move is a click, the lit square is the one a click plays, and an arrow no longer stays stuck after a lost right release.\n" +
-            "\n" +
-            "this is a pre-release. it carries everything in 7.3.1, 7.3.0 and 7.2.4.";
+            "- videos play through a newer LibVLC, which closes a security hole in the way some video files were read.\n" +
+            "- the file box in the Deeper player shows the file's name instead of a line of code.\n" +
+            "- attention checks no longer appear so close to the end of a video that you cannot answer them.\n" +
+            "- a lockdown of 20 minutes or more counts as a session for Daily and Weekly Devotion.\n" +
+            "- the \"prompt too long\" notice only shows when the cloud AI is the one answering.\n" +
+            "- the companion remembers what the avatar said out loud, so you can answer it.\n" +
+            "- keyword sounds play only for words that were just highlighted.\n" +
+            "- closing CCP no longer waits on a camera that is stuck starting.\n" +
+            "- changing the language now reaches the page you have open: its title, its breadcrumb and the haptics status follow at once.\n" +
+            "- the Haptics tab no longer wears a lock for free accounts. toys are free.\n" +
+            "- a failed toy connection keeps its hint on screen until you try again.\n" +
+            "- dates on the invite card follow the app's language.\n" +
+            "- Terms & Conditioning: the spot where you could get stuck, look around and not move is fixed.";
     }
 }

@@ -301,6 +301,15 @@ namespace ConditioningControlPanel
                 BlinkTrainerTab.BlinkTrainerStageActions.IsEnabled = premium;
         }
 
+        /// <summary>Remember (or forget) that the player stopped the camera by hand, so a launch does not reopen it.</summary>
+        internal void HoldCameraOff(bool held)
+        {
+            var s = App.Settings?.Current;
+            if (s == null || s.CameraHeldOff == held) return;
+            s.CameraHeldOff = held;
+            App.Settings?.Save();
+        }
+
         internal async void BtnBlinkTrainerStartStopTracker_Click(object sender, RoutedEventArgs e)
             => await ToggleWebcamTrackingAsync();
 
@@ -323,6 +332,7 @@ namespace ConditioningControlPanel
                 // ONNX sessions, so it never runs on the UI thread (BUG-BRR252E2RM).
                 try { await svc.StopAsync(); }
                 catch (Exception ex) { App.Logger?.Warning(ex, "ToggleWebcamTrackingAsync: StopAsync threw"); }
+                HoldCameraOff(true);
                 RefreshBlinkTrainerTrackerButton();
                 if (announce)
                     App.Notifications?.Show(Loc.Get("camera_shortcut_toast_stopped"),
@@ -339,6 +349,7 @@ namespace ConditioningControlPanel
 
             EnsureWebcamDebugSubscribed();
             var started = await StartWebcamOffUiThreadAsync(svc);
+            if (started) HoldCameraOff(false);
             RefreshBlinkTrainerTrackerButton();
             if (announce && started)
                 App.Notifications?.Show(Loc.Get("camera_shortcut_toast_started"),

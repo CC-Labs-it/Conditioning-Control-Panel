@@ -43,8 +43,11 @@ namespace ConditioningControlPanel.Features
                 TxtScrawlLife.Text = Loc.GetF("super_opt_seconds", s.ScrawlStampSeconds);
                 SliderScrawlCap.Value = s.ScrawlStampCap;
                 TxtScrawlCap.Text = s.ScrawlStampCap.ToString();
+                SliderScrawlSize.Value = s.ScrawlStampSize;
+                TxtScrawlSize.Text = $"{s.ScrawlStampSize}%";
                 SliderScrawlSlam.Value = s.ScrawlSlam;
                 TxtScrawlSlam.Text = SlamText(s.ScrawlSlam);
+                ChkScrawlPops.IsChecked = s.MovingEffectsPop;
             }
             catch (Exception ex) { App.Logger?.Debug("Scrawl rows: {E}", ex.Message); }
             finally { _scrawlLoading = false; }
@@ -72,6 +75,16 @@ namespace ConditioningControlPanel.Features
             App.Settings?.Save();
         }
 
+        private void SliderScrawlSize_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (_scrawlLoading || TxtScrawlSize == null) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.ScrawlStampSize = ScrawlOptions.ClampStampSize((int)Math.Round(e.NewValue));
+            TxtScrawlSize.Text = $"{s.ScrawlStampSize}%";
+            App.Settings?.Save();
+        }
+
         private void SliderScrawlSlam_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             if (_scrawlLoading || TxtScrawlSlam == null) return;
@@ -79,6 +92,16 @@ namespace ConditioningControlPanel.Features
             if (s == null) return;
             s.ScrawlSlam = ScrawlOptions.ClampSlam((int)Math.Round(e.NewValue));
             TxtScrawlSlam.Text = SlamText(s.ScrawlSlam);
+            App.Settings?.Save();
+        }
+
+        // The bouncing word reads it every frame. Same setting as the Whirlpool box row.
+        private void ChkScrawlPops_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_scrawlLoading || ChkScrawlPops == null) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.MovingEffectsPop = ChkScrawlPops.IsChecked ?? false;
             App.Settings?.Save();
         }
     }

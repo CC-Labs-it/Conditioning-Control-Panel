@@ -493,6 +493,17 @@ namespace ConditioningControlPanel.Controls.NavRail
             SizeChanged += (_, _) => PositionFill(animate: false);
         }
 
+        /// <summary>
+        /// A language switch: forget the built pills and crumb, so the next <see cref="Show"/> writes
+        /// them again in the new language (they are set from code once per section).
+        /// </summary>
+        public void Relabel()
+        {
+            CrumbSep.Text = SafeLoc("nav_crumb_sep", "›");
+            _section = null;
+            _crumbKey = null;
+        }
+
         internal string? Section => _section;
         internal string? ActivePillKey => _activePill;
         internal IReadOnlyList<string> PillKeys => _pills.Select(p => p.Tab.Key).ToArray();
@@ -956,7 +967,9 @@ namespace ConditioningControlPanel.Controls.NavRail
             if (tab.Kind is NavTabKind.Tab or NavTabKind.Zone) SetActive(tab.Key, animate: true);
             if (focus) PillFor(tab.Key)?.Focus();
             // A pill that opens its own window asks first (owner, 2026-10-07: Just Drop).
-            if (NavStripRules.AsksBeforeOpening(tab)) { AskBeforeOpening(tab); return; }
+            // A launcher door Lockdown refuses (ccp-bugs #1701) never asks: the click goes straight
+            // to ShowTab, which keeps the panel and says why on the strip.
+            if (NavStripRules.AsksBeforeOpening(tab) && !PanelDoorLink.RefusedNow(tab.Key)) { AskBeforeOpening(tab); return; }
             TabRequested?.Invoke(tab);
         }
 

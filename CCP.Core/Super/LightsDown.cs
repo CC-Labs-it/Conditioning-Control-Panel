@@ -45,6 +45,14 @@ public static class LightsDownRules
     public static bool LookedAway(bool cameraRunning, bool faceLost, bool gazeLive, bool gazeOnVideo)
         => cameraRunning && (faceLost || (gazeLive && !gazeOnVideo));
 
+    /// <summary>
+    /// "Follow eyes or mouse" (owner, 2026-11-19, off by default): is a video being watched. The
+    /// calibrated gaze decides while it is fresh (camera already running, never switched on here),
+    /// else the mouse on a video. A lost face is never watching.
+    /// </summary>
+    public static bool Watched(bool faceLost, bool gazeLive, bool gazeOnVideo, bool cursorOnVideo)
+        => !faceLost && (gazeLive ? gazeOnVideo : cursorOnVideo);
+
     /// <summary>May Lights Down draw at all. A video that is not playing, or is mid teardown, ends it
     /// on the same tick: never more permissive than the video it rides (panic tears that down).</summary>
     public static bool ShouldRun(bool superOn, bool videoPlaying, bool videoCleaningUp, bool hasVideoWindows)
@@ -142,7 +150,9 @@ public sealed class LightsDownFloating
 
     public void BeginEnd() => Ending = true;
 
-    public void Step(double dt, LightsDownTuning t, double gentleFadeSeconds)
+    /// <param name="watched">False only with "Follow eyes or mouse" on and no video watched: the
+    /// dim then pulls back at the lights back speed instead of growing.</param>
+    public void Step(double dt, LightsDownTuning t, double gentleFadeSeconds, bool watched = true)
     {
         if (double.IsNaN(dt) || dt < 0) dt = 0;
         dt = Math.Min(dt, 0.25);
@@ -152,7 +162,9 @@ public sealed class LightsDownFloating
             Fade = Math.Max(0, Fade - dt / len);
             return;
         }
-        Grow = Math.Min(1, Grow + dt / LightsDownOptions.GrowSeconds(t));
+        Grow = watched
+            ? Math.Min(1, Grow + dt / LightsDownOptions.GrowSeconds(t))
+            : Math.Max(0, Grow - dt * LightsDownOptions.OutRateFor(t, gentleFadeSeconds));
     }
 
     /// <summary>

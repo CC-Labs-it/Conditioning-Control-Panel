@@ -27,10 +27,29 @@ public static class SteamOptions
     /// rim at the screen edges, 100 = the whole screen, as shipped.</summary>
     public const int ReachMin = 10, ReachMax = 100, ReachDefault = 100;
     public static int ClampReach(int pct) => Math.Clamp(pct, ReachMin, ReachMax);
-    /// <summary><see cref="Level(double,double)"/> held back by the reach: the creep covers the same share of
-    /// the shorter way in the same time, so a low reach is a slow rim, never a fog that stops dead.</summary>
+    /// <summary><see cref="Level(double,double)"/> scaled by the reach, the starting rim included (owner
+    /// 2026-11-18, tier-2 round: the old curve held only the creep back, so the bottom still kept the
+    /// 0.45 rim, a band a fifth of the screen deep). Now 10 percent is a thin faint line at the very
+    /// edges, 25 about a tenth of the height, 100 the fog as shipped. The creep still covers the same
+    /// share of the way in the same time, so a low reach is a slow rim, never a fog that stops dead.</summary>
     public static double Level(double ageSeconds, double creepSeconds, int reachPct)
-        => 0.45 + 1.05 * Math.Clamp(ageSeconds / Math.Max(1, creepSeconds), 0, 1) * ClampReach(reachPct) / 100.0;
+        => Level(ageSeconds, creepSeconds) * ClampReach(reachPct) / 100.0;
+
+    /// <summary>The filter opacity (0..1) at which the fog is as thick as it shipped (the filter's own default, 10 percent).</summary>
+    public const double StrengthPivot = 0.10;
+
+    /// <summary>
+    /// How thick the fog is drawn for the pink filter's opacity (0..1). From the default up it is the
+    /// shipped curve (thicker than the flat tint, never opaque). Below the default it thins in a
+    /// straight line to nothing (owner 2026-11-18, tier-2 round: the old 0.3 floor kept 5 percent
+    /// nearly as dense as 10), so the slider's bottom is half the default fog.
+    /// </summary>
+    public static double Strength(double filterOpacity)
+    {
+        double o = double.IsNaN(filterOpacity) ? StrengthPivot : Math.Clamp(filterOpacity, 0, 1);
+        double stock = Math.Clamp(0.3 + o * 1.6, 0.3, 0.82);
+        return o >= StrengthPivot ? stock : (0.3 + StrengthPivot * 1.6) * o / StrengthPivot;
+    }
 
     /// <summary>"Fog returns", percent of the stock heal speed. 100 = as shipped.</summary>
     public const int ReturnMin = 25, ReturnMax = 300, ReturnDefault = 100;

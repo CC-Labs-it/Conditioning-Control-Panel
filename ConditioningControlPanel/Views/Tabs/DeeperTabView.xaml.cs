@@ -143,6 +143,32 @@ namespace ConditioningControlPanel.Views.Tabs
             if (Window.GetWindow(this) is MainWindow mw)
                 mw.BtnDeeperOpenPlayer_Click(sender, e);
         }
+        // ---- Play-only view (MainWindow.DeeperPlayView.cs) ----
+        private void CmbDeeperPlayFile_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (Window.GetWindow(this) is MainWindow mw)
+                mw.CmbDeeperPlayFile_SelectionChanged(sender, e);
+        }
+        private void BtnDeeperPlayBrowse_Click(object sender, RoutedEventArgs e)
+        {
+            if (Window.GetWindow(this) is MainWindow mw)
+                mw.BtnDeeperPlayBrowse_Click(sender, e);
+        }
+        private void BtnDeeperPlayStart_Click(object sender, RoutedEventArgs e)
+        {
+            if (Window.GetWindow(this) is MainWindow mw)
+                mw.BtnDeeperPlayStart_Click(sender, e);
+        }
+        private void BtnDeeperOpenFullLayout_Click(object sender, RoutedEventArgs e)
+        {
+            if (Window.GetWindow(this) is MainWindow mw)
+                mw.BtnDeeperOpenFullLayout_Click(sender, e);
+        }
+        private void BtnDeeperBackToPlayView_Click(object sender, RoutedEventArgs e)
+        {
+            if (Window.GetWindow(this) is MainWindow mw)
+                mw.BtnDeeperBackToPlayView_Click(sender, e);
+        }
         private void BtnDeeperTutorial_Click(object sender, RoutedEventArgs e)
         {
             if (Window.GetWindow(this) is MainWindow mw)
