@@ -59,6 +59,22 @@ internal sealed class PossessionGhost : IDisposable
         if (disableHitTesting) _hitTest = _target.SetValue(InputElement.IsHitTestVisibleProperty, false, BindingPriority.Animation);
     }
 
+    // Re-render the live control so a stand-in keeps its current highlight and badges.
+    internal void Refresh()
+    {
+        if (_disposed) return;
+        var hold = _opacity; _opacity = null; hold?.Dispose();
+        // The bitmap draws the control in its own space; a lease's move would push it off the bitmap.
+        var still = _target.SetValue(global::Avalonia.Visual.RenderTransformProperty, null, BindingPriority.Animation);
+        try { _bitmap.Render(_target); }
+        finally
+        {
+            still?.Dispose();
+            if (hold != null) _opacity = _target.SetValue(global::Avalonia.Visual.OpacityProperty, 0d, BindingPriority.Animation);
+        }
+        Image.InvalidateVisual();
+    }
+
     internal void Restore() => Dispose();
 
     public void Dispose()

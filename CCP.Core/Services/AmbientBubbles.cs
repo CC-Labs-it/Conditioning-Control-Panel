@@ -116,6 +116,9 @@ namespace ConditioningControlPanel.Services
         // Ambient trigger bubbles fly their spec's chaos motion row; plain ambient bubbles use Motion (Bubbles v2).
         public Chaos.ChaosMotion TriggerMotion { get; private set; }
         private double _vx, _vy, _startY, _left, _right;
+        private double _darterTelegraphMs, _darterLifeMs, _darterPhase, _darterPunch;
+        private int _darterBounces;
+        private bool _darterEscaping;
 
         public enum Result { Alive, Missed, Done, Detonated, Defused, Shattered, TeaseDenied, TreatExpired }
 
@@ -295,6 +298,20 @@ namespace ConditioningControlPanel.Services
                 b.X = b._startX = px / scaling - b.Size / 2;
                 b.Y = py / scaling - b.Size / 2;
             }
+            if (spec.IsDarter)
+            {
+                b._darterTelegraphMs = Math.Max(0, spec.TelegraphMs);
+                b._darterLifeMs = Math.Max(1, spec.LifetimeMs);
+                if (motion != Chaos.ChaosMotion.RoamBounce)
+                {
+                    double a = r.NextDouble() * Math.PI * 2;
+                    b._vx = Math.Cos(a); b._vy = Math.Sin(a);
+                }
+                double magnitude = Math.Sqrt(b._vx * b._vx + b._vy * b._vy);
+                if (magnitude < 0.001) { b._vx = 1; b._vy = 0; magnitude = 1; }
+                b._vx = b._vx / magnitude * spec.DarterSpeed;
+                b._vy = b._vy / magnitude * spec.DarterSpeed;
+            }
             if (spec.IsTease)
             {
                 b.Y = (areaY + r.Next(50, (int)Math.Max(100, areaH - b.Size - 50))) / scaling;
@@ -356,6 +373,7 @@ namespace ConditioningControlPanel.Services
         {
             get
             {
+                if (Spec?.IsDarter == true) return Scale;
                 if (Spec?.IsTease == true) return Scale + 0.10 * Math.Sin(_timeAlive * 5.2);
                 double calm = Spec?.VariantId is "video" or "htlink" ? 0.4 : 1.0, d = DangerFactor;
                 return Scale + (0.06 + d * 0.0225 * calm) * Math.Sin(_timeAlive * (7.5 + d * 9.0 * calm) + _wobbleOffset);
@@ -504,6 +522,40 @@ namespace ConditioningControlPanel.Services
                 _teaseLifeMs -= FuseStepMs * Chaos.ChaosTuning.FIELD_PACE * ts;
                 if (_teaseLifeMs <= 0) { Popping = Deflating = true; return Result.TeaseDenied; }
                 return Result.Alive;
+            }
+            if (Spec is { IsDarter: true })
+            {
+                // WPF BubbleService.cs:3842-3918, 3956-3960.
+                _darterPhase += 0.5 * Math.Max(ts, 0.4);
+                _darterPunch = Math.Max(0, _darterPunch - 0.05);
+                Scale = 1 + 0.10 * Math.Sin(_darterPhase) + _darterPunch;
+                if (_darterTelegraphMs > 0) _darterTelegraphMs -= FuseStepMs;
+                else
+                {
+                    X += _vx * ts; Y += _vy * ts;
+                    double top = _top + Size + 50, bottom = _bottom - Size - 50;
+                    if (!_darterEscaping)
+                    {
+                        bool hit = false;
+                        if (X < _left) { X = _left; _vx = Math.Abs(_vx); hit = true; }
+                        else if (X > _right) { X = _right; _vx = -Math.Abs(_vx); hit = true; }
+                        if (Y < top) { Y = top; _vy = Math.Abs(_vy); hit = true; }
+                        else if (Y > bottom) { Y = bottom; _vy = -Math.Abs(_vy); hit = true; }
+                        if (hit)
+                        {
+                            _darterPunch = 0.22;
+                            _darterEscaping = ++_darterBounces >= Chaos.ChaosBubbleVariants.DARTER_MAX_BOUNCES;
+                        }
+                    }
+                    else
+                    {
+                        double pad = Size + 80;
+                        if (X < _left - pad || X > _right + pad || Y < top - pad || Y > bottom + pad)
+                            return Result.Done;
+                    }
+                }
+                _darterLifeMs -= FuseStepMs * Math.Max(ts, 0.15);
+                return _darterLifeMs <= 0 ? Result.Done : Result.Alive;
             }
             double offset = 0;
             switch (_animType)
