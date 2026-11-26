@@ -1,6 +1,8 @@
 {
   "chaos_no_focus_announce": "SEM FOCO PARA DESARMAR",
   "chaos_unleashed_announce": "LIBERADA",
+  "mod_art_frame_surface_railChip": "Bloco lateral", "mod_art_frame_surface_railCard": "Atalho lateral", "mod_art_frame_surface_playCard": "Cabeçalho do cartão", "mod_art_frame_surface_playCardTall": "Cabeçalho do cartão (alto)", "mod_art_frame_surface_loomStrip": "Faixa Loom", "mod_art_frame_surface_playHero": "Banner principal de jogo", "mod_art_frame_surface_pageHeader": "Cabeçalho da página", "mod_art_frame_surface_intakeStrip": "Faixa de entrada",
+  "mod_art_frame": "Enquadrar", "mod_art_framed": "Enquadrado", "mod_art_frame_title": "Enquadrar imagem", "mod_art_frame_help": "Arraste para mover, use a roda para ampliar ou clique duas vezes para restaurar. Cada superfície tem seu próprio recorte.", "mod_art_frame_reset": "Restaurar", "mod_art_frame_reset_all": "Restaurar tudo", "mod_art_frame_fluid": "A largura acompanha a janela. Mantenha o assunto dentro da faixa tracejada.", "mod_art_frame_decode": "Não foi possível ler a imagem.", "mod_art_frame_intro": "Escolha uma imagem e selecione Enquadrar para ajustar cada superfície. Arraste para mover, use a roda para ampliar e clique duas vezes para restaurar.",
   "chaos_sidebar_empty_toy": "bolso de brinquedo vazio",
   "chaos_sidebar_empty_accessory": "bolso de acessório vazio",
   "chaos_sidebar_empty_desc": "clique para comprar na casa de bonecas.",

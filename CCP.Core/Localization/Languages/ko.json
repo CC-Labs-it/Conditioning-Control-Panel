@@ -1,6 +1,8 @@
 {
   "chaos_no_focus_announce": "해제할 집중력이 부족합니다",
   "chaos_unleashed_announce": "해방",
+  "mod_art_frame_surface_railChip": "레일 칩", "mod_art_frame_surface_railCard": "레일 실행 버튼", "mod_art_frame_surface_playCard": "플레이 카드 머리글", "mod_art_frame_surface_playCardTall": "플레이 카드 머리글 (높음)", "mod_art_frame_surface_loomStrip": "Loom 띠", "mod_art_frame_surface_playHero": "플레이 메인 배너", "mod_art_frame_surface_pageHeader": "페이지 머리글", "mod_art_frame_surface_intakeStrip": "입장 띠",
+  "mod_art_frame": "프레임", "mod_art_framed": "설정됨", "mod_art_frame_title": "이미지 프레임", "mod_art_frame_help": "드래그하여 이동하고 휠로 확대하거나 두 번 클릭하여 초기화합니다. 각 화면의 자르기는 별도로 설정됩니다.", "mod_art_frame_reset": "초기화", "mod_art_frame_reset_all": "모두 초기화", "mod_art_frame_fluid": "너비는 창에 따라 바뀝니다. 피사체를 점선 안에 두세요.", "mod_art_frame_decode": "이미지를 읽을 수 없습니다.", "mod_art_frame_intro": "이미지를 고른 뒤 프레임을 선택해 각 화면의 자르기를 조정하세요. 드래그로 이동하고 휠로 확대하며 두 번 클릭으로 초기화합니다.",
   "chaos_sidebar_empty_toy": "빈 장난감 주머니",
   "chaos_sidebar_empty_accessory": "빈 액세서리 주머니",
   "chaos_sidebar_empty_desc": "클릭하여 인형의 집에서 쇼핑하세요.",

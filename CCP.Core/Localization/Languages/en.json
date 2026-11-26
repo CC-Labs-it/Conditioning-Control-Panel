@@ -1,6 +1,8 @@
 {
   "chaos_no_focus_announce": "NO FOCUS TO DEFUSE",
   "chaos_unleashed_announce": "UNLEASHED",
+  "mod_art_frame_surface_railChip": "Rail chip", "mod_art_frame_surface_railCard": "Rail launcher", "mod_art_frame_surface_playCard": "Play card header", "mod_art_frame_surface_playCardTall": "Play card header (tall)", "mod_art_frame_surface_loomStrip": "Loom strip", "mod_art_frame_surface_playHero": "Play hero banner", "mod_art_frame_surface_pageHeader": "Page header", "mod_art_frame_surface_intakeStrip": "Intake strip",
+  "mod_art_frame": "Frame", "mod_art_framed": "Framed", "mod_art_frame_title": "Frame art", "mod_art_frame_help": "Drag to move, use the wheel to zoom, or double-click to reset. Each surface has its own crop.", "mod_art_frame_reset": "Reset", "mod_art_frame_reset_all": "Reset all", "mod_art_frame_fluid": "Width changes with the window. Keep the subject inside the dashed band.", "mod_art_frame_decode": "Could not read this image.", "mod_art_frame_intro": "Pick an image, then select Frame to choose its crop for each surface. Drag to move, use the wheel to zoom, and double-click to reset.",
   "chaos_sidebar_empty_toy": "empty toy pocket",
   "chaos_sidebar_empty_accessory": "empty accessory pocket",
   "chaos_sidebar_empty_desc": "click to go shopping in the dollhouse.",

@@ -363,7 +363,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     if (!_fypGhosted) return;
                     if (e.Property == IsVisibleProperty && !IsVisible) ExitFypGhost();
                     else if (e.Property == WindowStateProperty && WindowState == WindowState.Minimized)
-                        Dispatcher.UIThread.Post(() => { if (_fypGhosted && WindowState == WindowState.Minimized) ExitFypGhost(); });
+                        Dispatcher.UIThread.Post(() =>
+                        {
+                            if (!_fypGhosted || WindowState != WindowState.Minimized) return;
+                            if (_fypMirrored) HealFypGhostSource(); else ExitFypGhost();
+                        });
+                };
+                // Windows mirror path: veto minimize and cascade hide on the parked source (WPF :695).
+                Opened += (_, _) =>
+                {
+                    if (OperatingSystem.IsWindows() && X11Overlay.BackendOf(TryGetPlatformHandle()) == OverlayBackend.Win32)
+                        Win32Properties.AddWndProcHookCallback(this, FypGhostWndProc);
                 };
                 Closed += (_, _) => ExitFypGhost();
             }
