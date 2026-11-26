@@ -1879,6 +1879,7 @@
   "bug_report_success_toast": "Thanks! Your report was filed as {0}.",
   "bug_report_saved_pending_toast": "Report saved ({0}). The maintainer will receive it shortly.",
   "bug_report_error_toast": "Could not send the report. Please try again later.",
+  "bug_report_clock_off": "Your PC clock looks off, so the server refused the report. Turn on automatic date and time in your system settings, then send it again.",
   "btn_suggestion": "Suggest a Feature",
   "suggestion_title": "Suggest a Feature",
   "suggestion_description_label": "What's your idea?",

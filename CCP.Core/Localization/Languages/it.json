@@ -1822,6 +1822,7 @@
   "bug_report_success_toast": "Grazie! Il tuo report è stato registrato come {0}.",
   "bug_report_saved_pending_toast": "Report salvato ({0}). Verrà inviato a breve.",
   "bug_report_error_toast": "Impossibile inviare il report. Riprova più tardi.",
+  "bug_report_clock_off": "L'orologio del PC sembra sbagliato, quindi il server ha rifiutato il report. Attiva data e ora automatiche nelle impostazioni di sistema, poi invialo di nuovo.",
   "btn_suggestion": "Suggerisci una funzione",
   "suggestion_title": "Suggerisci una funzione",
   "suggestion_description_label": "Qual è la tua idea?",

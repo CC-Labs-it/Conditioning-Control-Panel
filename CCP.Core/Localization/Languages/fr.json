@@ -4833,6 +4833,7 @@
   "bug_report_success_toast": "Merci ! Ton rapport a été enregistré sous {0}.",
   "bug_report_saved_pending_toast": "Rapport enregistré ({0}). Le mainteneur le recevra sous peu.",
   "bug_report_error_toast": "Impossible d'envoyer le rapport. Réessaie plus tard.",
+  "bug_report_clock_off": "L'horloge de ton PC semble décalée, le serveur a donc refusé le rapport. Active la date et l'heure automatiques dans les paramètres système, puis renvoie-le.",
   "btn_suggestion": "Proposer une Idée",
   "suggestion_title": "Proposer une Idée",
   "suggestion_description_label": "C'est quoi ton idée ?",
