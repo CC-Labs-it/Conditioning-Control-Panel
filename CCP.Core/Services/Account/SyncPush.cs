@@ -179,6 +179,8 @@ namespace ConditioningControlPanel.Services
         internal Func<TimeSpan, Task> PurchaseRetryDelay = Task.Delay;
         /// <summary>Called when recovery changes the level or XP displayed by the head.</summary>
         public Action? RecoveredProgressionChanged { get; set; }
+        /// <summary>Raised on the UI dispatcher when a sync reply changes level or XP.</summary>
+        public Action? SyncProgressionChanged { get; set; }
 
         /// <param name="localAchievements">This install's unlocked achievement ids.</param>
         /// <param name="inSession">The heartbeat's in_session.</param>
@@ -462,6 +464,8 @@ namespace ConditioningControlPanel.Services
                 if (clearing && cosmetics?.IsEmpty == true) _pendingCosmeticsClear = false;
                 Log.Information("V2 Profile synced successfully ({Bytes} bytes)", json.Length);
                 int? stageDue = null;
+                var replyStartLevel = s.PlayerLevel;
+                var replyStartXp = s.PlayerXP;
                 try
                 {
                     var reply = JObject.Parse(json);
@@ -496,6 +500,15 @@ namespace ConditioningControlPanel.Services
                     stageDue = Descent.DescentMigration.ReleaseStageCeremony(s, DateTime.Now);
                 }
                 catch (Exception ex) { Log.Debug("V2 Sync: Could not parse server flags: {Error}", ex.Message); }
+                // WPF ProfileSyncService.cs:2597: repaint even if later reply processing failed.
+                if (s.PlayerLevel != replyStartLevel || Math.Abs(s.PlayerXP - replyStartXp) >= 0.01)
+                    CoreDispatch.Post(() =>
+                    {
+                        if (session != Volatile.Read(ref _sessionVersion) || !ReferenceEquals(s, CoreSettings.Current)
+                            || !SignedIn(s) || s.UnifiedId != id) return;
+                        try { SyncProgressionChanged?.Invoke(); }
+                        catch (Exception ex) { Log.Warning(ex, "Sync progression notification failed"); }
+                    });
                 // THE FUSE's cache, off the RAW body (WPF ProfileSyncService.HandleDescentCountdown).
                 if (Countdown != null && Descent.DescentCountdownService.TryReadCeremonyAt(json, out var ceremonyAt))
                     Countdown.ApplyCeremonyAt(ceremonyAt);

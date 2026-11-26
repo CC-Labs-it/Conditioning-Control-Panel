@@ -34,6 +34,9 @@
     <!-- Which releases the Linux updater may offer (AppUpdater.BetaInstall, ccp-bugs #1627): "beta" also
          takes pre-releases. Every Linux build is a beta today; cut the first stable one with -p:CcpReleaseChannel=stable. -->
     <CcpReleaseChannel Condition="'$(CcpReleaseChannel)' == ''">beta</CcpReleaseChannel>
+    <!-- Hot ReadyToRun code goes straight to tier 1: with PGO it first ran instrumented, which put the tab switches
+         right after a fast startup ~30% behind (docs/avalonia-perf.html, 2026-11-15 startup ledger line). -->
+    <TieredPGO>false</TieredPGO>
   </PropertyGroup>
   <ItemGroup>
     <AssemblyMetadata Include="CcpReleaseChannel" Value="$(CcpReleaseChannel)" />
