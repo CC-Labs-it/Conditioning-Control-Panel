@@ -152,6 +152,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return changed;
         }
         internal static void Stop() { VoiceOpacity = null; FadeOut(); }
+        // WPF OverlayService.cs:1129,1189: a Deeper band shares the sustained hold at its own opacity.
+        internal static void SetSustained(Visual host, double? opacity) { VoiceOpacity = opacity is { } o ? Math.Clamp(o, 0, 1) : null; Refresh(host); }
 
         /// <summary>The painted alpha: the slider through WPF's #722 curve. A ramping session's value
         /// holds it instead (WPF _rampSpiralOpacity; SetSustainedOverlayOpacity clamps to 0..1).</summary>

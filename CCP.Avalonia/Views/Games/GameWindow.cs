@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Avalonia;
 using Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Features;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
@@ -137,7 +139,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 live.HandoffRaceRoom(room);
                 // #4286: a feed the WM hid (ghost restored on hide) comes back with its door.
                 if (live.Spec.Id == FypId && !live.IsVisible) live.Show();
-                if (live.RaceShell != null) live.RaceShell.Focus(); else live.Activate();   // the shell's window is never shown
+                // WPF JustDropHostService.cs:101: a live shop is refocused through FocusWeb.
+                if (live.RaceShell != null) live.RaceShell.Focus();
+                else if (live.Spec.Id == JustDropId) live.FocusJustDropPage();
+                else live.Activate();   // the shell's window is never shown
                 // WPF PieceByPieceHostService.cs:165: reopening a live board returns its keyboard too.
                 if (live.Spec.Id == PbpId)
                     Dispatcher.UIThread.Post(() => { if (!live._closing) live.Web.FocusPage(); }, DispatcherPriority.Loaded);
@@ -169,6 +174,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 }
                 else window.Load(Server(), room);
                 if (spec.Id == JustDropId) window.CenterJustDrop(panel ?? Windows.MainShellWindow.Current ?? (global::Avalonia.Visual)window);
+                else window.CenterDefaultFrame();
                 window.Show();
                 // WPF ChaosWebViewHost.cs:904-1013 AttachMainWindowGlue: the shop window is owned by the panel.
                 if (spec.Id == JustDropId && (panel ?? Windows.MainShellWindow.Current) is { } shell)
@@ -180,6 +186,54 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 if (spec.Id == FypId) CloseFypVisit();
                 throw;
             }
+        }
+
+        // WPF ChaosWebViewHost.cs:380-397: a windowed game starts on its launching screen.
+        internal void CenterDefaultFrame(bool onMain = false)
+        {
+            var main = Windows.MainShellWindow.Current;
+            var launcher = Windows.LauncherWindow.Instance;
+            Window source = launcher is { IsVisible: true } ? launcher
+                : main is { IsVisible: true } ? main : this;
+            var screens = ScreenList.Enumerate(source);
+            if (screens.Count == 0) return;
+            var size = source.FrameSize ?? source.ClientSize;
+            var sourceScale = source.RenderScaling > 0 ? source.RenderScaling : 1;
+            var x = source.Position.X + size.Width * sourceScale / 2;
+            var y = source.Position.Y + size.Height * sourceScale / 2;
+            global::Avalonia.Platform.Screen? screen = null;
+            if (ScreenList.QueryOverride == null && source.IsVisible)
+            {
+                try { screen = source.Screens.ScreenFromWindow(source); }
+                catch (Exception ex) { Log.Debug(ex, "[Game] screen lookup failed"); }
+            }
+            screen ??= screens.OrderBy(s =>
+            {
+                var b = s.Bounds;
+                var dx = Math.Max(0, Math.Max(b.X - x, x - b.Right));
+                var dy = Math.Max(0, Math.Max(b.Y - y, y - b.Bottom));
+                return dx * dx + dy * dy;
+            }).ThenByDescending(s => s.IsPrimary).First();
+            var scale = screen.Scaling > 0 ? screen.Scaling : 1;
+            var bounds = screen.Bounds;
+            Width = bounds.Width * .85 / scale;
+            Height = bounds.Height * .85 / scale;
+            double left = bounds.X + (bounds.Width - Width * scale) / 2;
+            double top = bounds.Y + (bounds.Height - Height * scale) / 2;
+            if (onMain && main is { IsVisible: true, WindowState: not WindowState.Minimized })
+            {
+                var mainSize = main.FrameSize ?? main.ClientSize;
+                if (mainSize.Width > 0 && mainSize.Height > 0)
+                {
+                    left = main.Position.X + (mainSize.Width * main.RenderScaling - Width * scale) / 2;
+                    top = main.Position.Y + (mainSize.Height * main.RenderScaling - Height * scale) / 2;
+                    var virtualBounds = screens.Select(s => s.Bounds).Aggregate((a, b) => a.Union(b));
+                    left = Math.Clamp(left, virtualBounds.X, Math.Max(virtualBounds.X, virtualBounds.Right - Width * scale));
+                    top = Math.Clamp(top, virtualBounds.Y, Math.Max(virtualBounds.Y, virtualBounds.Bottom - Height * scale));
+                }
+            }
+            Position = new PixelPoint((int)Math.Round(left), (int)Math.Round(top));
+            WindowStartupLocation = WindowStartupLocation.Manual;
         }
 
         /// <summary>--render-all's sample: the Breakout demo's frame with no page loaded.</summary>
@@ -215,8 +269,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal GameWindow(Game spec)
         {
             Spec = spec;
-            // WPF ChaosWebViewHost.cs:1520-1527: suppress browser chrome in game windows.
-            Web = new WebHost { HostedPageMotion = true, ConfigureNative = Platform.SpiralWebView2Policy.Attach };
+            // WPF ChaosWebViewHost.cs:1520-1527: suppress browser chrome in game windows;
+            // :1584: sink routing for local pages only (Just Drop is a remote site).
+            Web = new WebHost { HostedPageMotion = true, HostedPageSink = spec.Id != JustDropId, ConfigureNative = Platform.SpiralWebView2Policy.Attach };
             if (spec.Id == DtrhId) Web.BrowserProcessFailed += () => RecoverDtrh("process-failed");
             // Glassroad speaks only chrome.webview (WebView2 native); WebKitGTK gets it from the shim.
             if (spec.Id == "goon" || IsGlassroad) Web.InjectCarrier = true; // before the native view or first navigation

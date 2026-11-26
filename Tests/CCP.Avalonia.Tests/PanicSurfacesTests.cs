@@ -18,6 +18,14 @@ namespace CCP.Avalonia.Tests;
 public sealed class PanicSurfacesTests
 {
     [Fact]
+    public void Remote_haptics_panic_surface_invalidates_pending_remote_commands()
+    {
+        var generation = ConditioningControlPanel.Services.RemoteCommands.PanicGeneration;
+        PanicSurfaces.All.Single(s => s.Id == "remote-haptics").Stop(null);
+        Assert.NotEqual(generation, ConditioningControlPanel.Services.RemoteCommands.PanicGeneration);
+    }
+
+    [Fact]
     public void Bubble_surface_clears_variant_bubbles_on_panic() => AvaloniaTestDispatcher.Run(() =>
     {
         var overlay = typeof(ConditioningControlPanel.Avalonia.Views.Overlays.BubbleOverlay);
@@ -180,6 +188,7 @@ public sealed class PanicSurfacesTests
         "intake",
         "leash-task",
         "personality-studio",
+        "deeper-editor-error",
         "deeper-tutorial",
         "workshop-trigger-editor",
         "awareness-companion",

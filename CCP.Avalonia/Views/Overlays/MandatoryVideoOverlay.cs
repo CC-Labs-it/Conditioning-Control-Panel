@@ -596,7 +596,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 CanResize = false,
                 Background = Brushes.Black,
                 // The WPF browser player credits Scrolller during playback (VideoService.Browser.cs:158).
-                Content = new Panel { ClipToBounds = true, Children = { picture, layer, buttons.Row, CreditButton(inst?.Clip ?? _source) } },
+                Content = new Panel { ClipToBounds = true, Children = { picture, layer, buttons.Row, CreditButton(inst?.Clip ?? _source, inst) } },
             };
             var floating = Floating || inst != null;
             // A floating window can be smaller than the 360x200 card: its card opens in its own window (WPF VideoService.cs:6440).
