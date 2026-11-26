@@ -32,6 +32,7 @@ public partial class EnhancementPlayerWindow {
         if(k==='F'&&!e.repeat&&!any()&&enter()){e.preventDefault();return;}
         post('ccp_key:'+k+':'+(e.shiftKey?1:0)+':'+(e.repeat?1:0));if(k!=='Escape'&&document.querySelector('video')){e.preventDefault();e.stopImmediatePropagation();}},true);
     window.addEventListener('keyup',function(e){if(key(e)==='Escape')post('ccp_keyup:Escape');},true);
+    window.addEventListener('wheel',function(e){if(!e.ctrlKey)return;e.preventDefault();if(e.deltaY<0)post('ccp_zoom_in');else if(e.deltaY>0)post('ccp_zoom_out');},{capture:true,passive:false});
     window.addEventListener('mousemove',function(){if(window._ccpForcedFs)post('ccp_pointer');},true);
 })();";
     private static readonly HashSet<EnhancementPlayerWindow> FullscreenPlayers = new();
@@ -57,6 +58,8 @@ public partial class EnhancementPlayerWindow {
         if (message == "ccp_keyup:Escape") EscapeUp();
         if (message == "ccp_pointer") ArmCursor();
         switch (message) {
+            case "ccp_zoom_in": AdjustVideoZoom(0.10); break;
+            case "ccp_zoom_out": AdjustVideoZoom(-0.10); break;
             case BrowserFullscreenOffMessage:
                 if (!_videoTransition) ExitVideoFullscreen();
                 break;
