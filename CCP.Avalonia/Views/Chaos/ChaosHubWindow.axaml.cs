@@ -1150,8 +1150,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var id = (sender as Button)?.Tag?.ToString();
             if (string.IsNullOrEmpty(id)) return;
             Shelf.ToggleBoon(id!);
+            EquipCue(id!);   // WPF xaml.cs:827
             AfterBoonChange();
         }
+
+        private static void EquipCue(string id) => PlayCue(ChaosMeta.IsBoonActive(id) ? "ui_equip" : "ui_unequip", 0.45f);
 
         /// <summary>WPF xaml.cs:832/846 (unlock / deepen): cards, ui_denied and ui_deepen cues.</summary>
         private void BoonUnlock_Click(object? sender, RoutedEventArgs e)
@@ -1199,6 +1202,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             BuildLoadoutTiles();
             RefreshTopBar();
             RefreshStats();
+            RunRevealFlashes();   // WPF Bench.cs:231: the surface it just revealed flashes now
             UnlockCards.Show(card);   // pockets only; the card plays their cue (WPF Bench.cs:234)
         }
 
@@ -1208,6 +1212,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             BuildHabits();
             BuildLoadoutTiles();
             RefreshTopBar();
+            RefreshStats();   // WPF xaml.cs:918
         }
 
         /// <summary>The loadout sidebar pushes unequips back in through here.</summary>
@@ -1274,7 +1279,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (unlocked) trained++;
                 if (active) switchedOn++;
                 Action onClick = unlocked
-                    ? () => { Shelf.ToggleBoon(bid); BuildHabits(); BuildLoadoutTiles(); }
+                    ? () => { Shelf.ToggleBoon(bid); EquipCue(bid); BuildHabits(); BuildLoadoutTiles(); }   // WPF xaml.cs:1027
                     : () => JumpToTab("enhance");
                 _tilesHabits.Children.Add(LoadoutTile(charmRankLocked ? "?" : b.Glyph,
                     charmRankLocked ? "? ? ?" : unlocked ? $"{b.Name} · L{b.Level}" : b.Name,
@@ -1315,7 +1320,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 string id = b.Id;
                 var cell = LoadoutTile(b.Glyph, $"{b.Name} · L{b.Level}", b.Desc,
                     "click to unequip", BoonAccent, TileState.Equipped,
-                    () => { Shelf.ToggleBoon(id); AfterBoonChange(); },
+                    () => { Shelf.ToggleBoon(id); EquipCue(id); AfterBoonChange(); },   // WPF xaml.cs:1072
                     size: 114, flavor: b.Flavor);
                 cell.Margin = new Thickness(0, 0, 24, 0);
                 row.Children.Add(cell);
@@ -1344,8 +1349,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 string id = b.Id;
                 bool unlocked = b.Level >= 1, active = b.Active, rankLocked = b.RankLocked;
                 var state = active ? TileState.Equipped : unlocked ? TileState.Owned : TileState.Locked;
-                Action onClick = active ? () => { Shelf.ToggleBoon(id); AfterBoonChange(); }
-                    : unlocked ? () => { Shelf.EquipSwapping(id, category); AfterBoonChange(); }
+                Action onClick = active ? () => { Shelf.ToggleBoon(id); EquipCue(id); AfterBoonChange(); }   // WPF xaml.cs:1104
+                    // WPF xaml.cs:1136 plays ui_equip even when a pocketless category refuses the equip.
+                    : unlocked ? () => { Shelf.EquipSwapping(id, category); PlayCue("ui_equip", 0.45f); AfterBoonChange(); }
                     : () => JumpToTab("enhance");
                 // Rank-locked → mystery: "???" everywhere, the depth gate instead of a price.
                 string extra = active ? "click to unequip"
@@ -1593,6 +1599,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 CornerRadius = new CornerRadius(8),
                 Padding = new Thickness(10),
                 Margin = new Thickness(0, 0, 0, 6),
+                Opacity = rankShort ? 0.6 : 1.0,   // WPF Bench.cs:163
             };
         }
 
