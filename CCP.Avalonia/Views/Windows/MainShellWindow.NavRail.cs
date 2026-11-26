@@ -251,6 +251,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private static Color WithAlpha(Color c, byte a) => Color.FromArgb(a, c.R, c.G, c.B);
 
+        // WPF hooks every rail door's press (:532); a stand-in seat over a covered door routes it here too.
+        internal void RouteDoorPress(Control door, PointerPressedEventArgs e)
+        {
+            if (_navSectionRows.Exists(r => r.Button == door)) NavDoorPossessionReroute(door, e);
+        }
+
         // WPF NavDoor_PossessionReroute: the press stands if the hook fails or its door is not live.
         private void NavDoorPossessionReroute(object? sender, PointerPressedEventArgs e)
         {

@@ -1851,6 +1851,86 @@ public sealed class ChaosRunHostTests
             "ChaosTeaseDenied:5", "ChaosTeaseDeniedStreak:5", "ChaosTeaseDenied:6" }, barks);
     });
 
+    [Fact]
+    public async Task No_focus_announcement_is_throttled_and_panic_clears_it()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            bool enabled = CoreSettings.Current.ChaosAnnouncerEnabled;
+            string language = LocalizationManager.Instance.CurrentLanguage;
+            try
+            {
+                CoreSettings.Current.ChaosAnnouncerEnabled = true;
+                LocalizationManager.Instance.SetLanguage("en");
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                ChaosAnnouncerOverlay.CloseActive();
+                var now = DateTime.UtcNow;
+                BubbleOverlay.Field.Clock = () => now;
+                ChaosRunHost.State!.Focus = 0;
+                void Press() { var b = BubbleOverlay.SpawnChaos(LiveSpec()); BubbleOverlay.Press(b, b.CenterX, b.CenterY); }
+                Press();
+                Assert.Equal("NO FOCUS TO DEFUSE", ChaosAnnouncerOverlay.Active!.Current!.Text);
+                Assert.Equal(1300, ChaosAnnouncerOverlay.Active.Current.HoldMs);
+                Assert.Equal(ChaosAnnounceKind.Temptation, ChaosAnnouncerOverlay.Active.Current.Kind);
+                Press();
+                Assert.Equal(0, ChaosAnnouncerOverlay.QueuedCount);
+                now = now.AddMilliseconds(1500);
+                Press();
+                Assert.Equal(1, ChaosAnnouncerOverlay.QueuedCount);
+                PanicSurfaces.All.Single(x => x.Id == "chaos").Stop(null);
+                Assert.Null(ChaosAnnouncerOverlay.Active);
+                Assert.Equal(0, ChaosAnnouncerOverlay.QueuedCount);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown(); BubbleOverlay.Field.Clock = () => DateTime.UtcNow;
+                CoreSettings.Current.ChaosAnnouncerEnabled = enabled;
+                LocalizationManager.Instance.SetLanguage(language); FreshMeta();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Unleashed_collar_save_announces_and_panic_clears_it()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            bool enabled = CoreSettings.Current.ChaosAnnouncerEnabled;
+            string language = LocalizationManager.Instance.CurrentLanguage;
+            try
+            {
+                CoreSettings.Current.ChaosAnnouncerEnabled = true;
+                LocalizationManager.Instance.SetLanguage("en");
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                ChaosAnnouncerOverlay.CloseActive();
+                var state = ChaosRunHost.State!;
+                state.Focus = 100; state.Shields = 0; state.CollarSaves = 1; state.UnleashedEnabled = true;
+                var b = BubbleOverlay.SpawnChaos(LiveSpec());
+                ChaosRunHost.OnDetonated(b);
+                Assert.Equal("UNLEASHED", ChaosAnnouncerOverlay.Active!.Current!.Text);
+                Assert.Equal("unleashed", ChaosAnnouncerOverlay.Active.Current.ArtKey);
+                Assert.Equal(ChaosAnnounceKind.PowerUp, ChaosAnnouncerOverlay.Active.Current.Kind);
+                PanicSurfaces.All.Single(x => x.Id == "chaos").Stop(null);
+                Assert.Null(ChaosAnnouncerOverlay.Active);
+                ChaosRunHost.OnDetonated(b);
+                Assert.Null(ChaosAnnouncerOverlay.Active);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown(); CoreSettings.Current.ChaosAnnouncerEnabled = enabled;
+                LocalizationManager.Instance.SetLanguage(language); FreshMeta();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     private static EffectBubbleSpec LiveSpec() => new()
         { VariantId = "pink", IsLive = true, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() };
 

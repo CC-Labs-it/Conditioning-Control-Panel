@@ -215,7 +215,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal GameWindow(Game spec)
         {
             Spec = spec;
-            Web = new WebHost { HostedPageMotion = true };
+            // WPF ChaosWebViewHost.cs:1520-1527: suppress browser chrome in game windows.
+            Web = new WebHost { HostedPageMotion = true, ConfigureNative = Platform.SpiralWebView2Policy.Attach };
             if (spec.Id == DtrhId) Web.BrowserProcessFailed += () => RecoverDtrh("process-failed");
             // Glassroad speaks only chrome.webview (WebView2 native); WebKitGTK gets it from the shim.
             if (spec.Id == "goon" || IsGlassroad) Web.InjectCarrier = true; // before the native view or first navigation
