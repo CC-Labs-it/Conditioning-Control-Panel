@@ -218,7 +218,7 @@ compare text, order, layout, sound and timing with the same screen on Windows. R
 <li>[ ] <code>shell-audio-playback-devices</code> - WPF <code>Services/AudioService.cs</code></li>
 <li>[ ] <code>shell-video-playback</code> - With the avatar tube open, start a video and check its announcement appears before playback. Repeat with freeze, then panic during the announcement and check the bubble and video close. Start a video while another line is speaking and check its queued announcement remains after a normal end. Stop it instead and check that the other line continues. Change language and check the announcement text; a queued announcement drops its event audio. WPF <code>Services/Video/VideoService.cs:3124</code>, <code>AvatarTube/AvatarTubeWindow.Reactions.cs:355</code>.</li>
 <li>[ ] <code>shell-video-playback</code> - With EMI Desk visible and no lifetime video minutes, start a first video and check the first-video moment; panic stops its presentation. Repeat after video minutes are recorded. WPF <code>Services/Video/VideoService.cs:3174</code>.</li>
-<li>[ ] <code>shell-webcam</code> - WPF <code>Services/Webcam/WebcamTrackingService.cs</code></li>
+<li>[ ] <code>shell-webcam</code> - Start tracking, stop with a simulated blocked camera read and confirm the status changes to Error after five seconds; release the read and confirm the camera can start again. WPF <code>Services/Webcam/WebcamTrackingService.cs:956-962</code>.</li>
 <li>[ ] <code>shell-haptics-device</code> - WPF <code>CCP.Core/Services/Haptics/HapticService.cs</code></li>
 <li>[ ] <code>shell-notifications-toasts</code> - WPF <code>Services/Notifications/NotificationService.cs</code></li>
 <li>[ ] <code>shell-auto-updater</code> - WPF <code>App.xaml.cs:4858</code></li>
