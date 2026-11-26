@@ -274,7 +274,7 @@ public sealed class RemoteControlShellTests
                 await relay.PollOnceAsync();
             }
             if (interruption == "end") relay.EndSessionNow();
-            bind.SetResult("F8");
+            bind.SetResult(MainShellWindow.PortalKeyForTest);   // the desktop bound the asked key (#1752)
             // Both BindPortalAsync and StartEffect post to the UI dispatcher.
             await Task.Delay(150);
             Dispatcher.UIThread.RunJobs();
@@ -285,7 +285,7 @@ public sealed class RemoteControlShellTests
         }
         finally
         {
-            bind.TrySetResult("F8");
+            bind.TrySetResult(MainShellWindow.PortalKeyForTest);   // the desktop bound the asked key (#1752)
             global::ConditioningControlPanel.Avalonia.Platform.PortalPanicShortcut.BindForTests = null;
             runner.Stop(); CoreEngine.Stop();
             global::ConditioningControlPanel.Avalonia.Platform.PortalPanicShortcut.UnbindAsync().GetAwaiter().GetResult();

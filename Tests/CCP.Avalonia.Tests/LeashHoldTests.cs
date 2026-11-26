@@ -559,7 +559,8 @@ public sealed class LeashHoldTests
         {
             binds++;
             PortalPanicShortcut.SetSessionForTests("/test/leashed-effects", up);
-            return System.Threading.Tasks.Task.FromResult<string?>("F8");
+            // The desktop bound the asked key: a different trigger is the #1752 wrong-key path, which lets the grab go.
+            return System.Threading.Tasks.Task.FromResult<string?>(MainShellWindow.PortalKeyForTest);
         };
         void Disable()
         {

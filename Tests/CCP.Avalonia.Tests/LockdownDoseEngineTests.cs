@@ -127,7 +127,7 @@ public class LockdownDoseEngineTests
                 for (var i = 0; i < 5; i++) shell.EnforceLockdownDoseEngine(false);
                 Assert.False(CoreEngine.IsRunning);
                 if (exitBeforePortal) ld.Deactivate();   // the user's start is not the keeper's to take back
-                bound.TrySetResult("F8");
+                bound.TrySetResult(MainShellWindow.PortalKeyForTest);   // the desktop bound the asked key (#1752)
                 var until = System.Diagnostics.Stopwatch.StartNew();
                 while (!CoreEngine.IsRunning && until.Elapsed < TimeSpan.FromSeconds(5)) await Task.Delay(20);
                 Assert.True(CoreEngine.IsRunning);
@@ -137,7 +137,7 @@ public class LockdownDoseEngineTests
             }
             finally
             {
-                bound.TrySetResult("F8");
+                bound.TrySetResult(MainShellWindow.PortalKeyForTest);   // the desktop bound the asked key (#1752)
                 PortalPanicShortcut.BindForTests = null;
                 ld.Dispose(); MainShellWindow.StopEngine(); LockdownService.Current = null; shell.RequestExit();
                 MainShellWindow.ReleasePortalWhenUnused();
