@@ -20,6 +20,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.UI;
+using ConditioningControlPanel.Services.Compositor;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
@@ -29,7 +30,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// Core <see cref="AmbientBubbleField"/> moves and scores, this draws. WPF's default render is
     /// the shared host (one click-through surface, pops from a hook); here that is one override-
     /// redirect window per targeted screen whose X11 input region is exactly the live bubbles'
-    /// hit discs, so the desktop stays clickable everywhere else. Reached through
+    /// hit discs, so the desktop stays clickable everywhere else. With the unified host on, the
+    /// drawing moves to the shared stage (WPF BubbleService.cs:2353, :3544) and this window keeps
+    /// only the input region (WPF :3033 hook-pop contract). Reached through
     /// <see cref="CoreBubbles"/>, which App seeds.
     ///
     /// <para>Hot path is allocation-free: one cached frame delegate, one Render pass over the
@@ -171,7 +174,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>The ambient game is running (windows opened only for a Chaos run do not count).</summary>
         internal static void RaiseAll(Action<Window> raise)
         {
-            foreach (var window in Windows) if (window.IsVisible) raise(window);
+            foreach (var window in Windows)
+            {
+                if (window.StageWindow is { IsVisible: true } stage) raise(stage);   // drawing under its input window
+                if (window.IsVisible) raise(window);
+            }
         }
 
         // WPF BubbleService.cs:3428-3435: flash uses the base image; sweepers try their own art first.
@@ -224,6 +231,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     return;
                 }
                 w.Show();
+                w.TryHost(s.UnifiedOverlayHost, sc.Bounds);
                 Windows.Add(w);
                 Targets.Add(sc);
             }
@@ -1148,6 +1156,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal PixelRect[] Rects = new PixelRect[64];
         internal int InputRectCount { get; private set; }
         private int _lastCount = -1;
+        private readonly Layer _layer;
+        private SharedOverlayHost.Lease? _stage;
+        internal Window? StageWindow { get; private set; }
         /// <summary>Cached (no per-frame closure); a closed window's late frame is ignored.</summary>
         internal readonly Action<TimeSpan> FrameCallback;
 
@@ -1177,7 +1188,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             ShowInTaskbar = false;
             ShowActivated = false;
             CanResize = false;
-            Content = new Layer(this);
+            Content = _layer = new Layer(this);
+            Closed += (_, _) => ReleaseStage(restore: false);
             FrameCallback = now => { if (BubbleOverlay.IsFrameOwner(this)) BubbleOverlay.OnFrame(now); };
             PointerPressed += OnPressed;
             PointerEntered += (_, e) => UpdateHover(e);
@@ -1190,6 +1202,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 if (BubbleOverlay.Field.Held) BubbleOverlay.PointerHold(false, BubbleOverlay.Field.CursorX, BubbleOverlay.Field.CursorY);
             };
+        }
+
+        /// <summary>WPF BubbleService.cs:3544: under the unified host the drawing rides the shared stage at
+        /// <see cref="CompositorLayers.Bubbles"/>; this window keeps its native input region and pointer
+        /// capture. Off, a stage for another rect, a refused stage: the classic drawing stays here.</summary>
+        internal bool TryHost(bool enabled, PixelRect stageBounds)
+        {
+            if (!enabled || stageBounds != Bounds || _stage != null) return false;
+            var lease = SharedOverlayHost.Acquire(stageBounds);
+            if (lease == null) return false;
+            if (TopLevel.GetTopLevel(lease.Canvas) is not Window stage) { lease.Dispose(); return false; }
+            Content = null;
+            _layer.ZIndex = CompositorLayers.Bubbles;
+            lease.Canvas.Children.Add(_layer);
+            (_stage, StageWindow) = (lease, stage);
+            stage.Closed += StageClosed;
+            return true;
+        }
+
+        private void StageClosed(object? sender, EventArgs e) => ReleaseStage(restore: true);
+
+        /// <summary>Stage closed under a live run: draw classically again. Own close: drop only this lease.</summary>
+        private void ReleaseStage(bool restore)
+        {
+            if (_stage is not { } lease) return;
+            StageWindow!.Closed -= StageClosed;
+            (_stage, StageWindow) = (null, null);
+            lease.Canvas.Children.Remove(_layer);
+            if (restore) { Content = _layer; _layer.InvalidateVisual(); }
+            lease.Dispose();
         }
 
         /// <summary>Global bubble DIPs (screen px / scaling) to this window's DIPs.</summary>
@@ -1273,7 +1315,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var drawn = HasBubbles();
             if (!drawn && _lastCount == 0) return;   // stayed empty: region already empty, nothing to repaint
             X11Overlay.SetInputRects(this, Rects, InputRectCount);
-            (Content as Control)?.InvalidateVisual();
+            _layer.InvalidateVisual();
             _lastCount = drawn ? 1 : 0;
         }
 
