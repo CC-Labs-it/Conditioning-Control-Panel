@@ -98,7 +98,12 @@ public class BouncingTextService : IDisposable
                 int bottom = (int)Math.Ceiling((l.PosY + l.TextHeight + padY) * dpiScale);
                 rects[i] = new System.Drawing.Rectangle(left, top, right - left, bottom - top);
             }
-            return rects;
+            if (_scrawl == null) return rects;
+            // Super Scrawl: the wall stamps are the player's words too.
+            var stamps = new List<Rect>();
+            _scrawl.AppendRects(stamps);
+            return rects.Concat(stamps.Select(r => System.Drawing.Rectangle.FromLTRB((int)Math.Floor(r.Left * dpiScale),
+                (int)Math.Floor(r.Top * dpiScale), (int)Math.Ceiling(r.Right * dpiScale), (int)Math.Ceiling(r.Bottom * dpiScale)))).ToArray();
         }
         catch
         {

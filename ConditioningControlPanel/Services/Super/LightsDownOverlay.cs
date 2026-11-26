@@ -39,11 +39,11 @@ namespace ConditioningControlPanel.Services.Super
         public double Dpi => _dpi;
         public bool Floating => _ownerHwnd == IntPtr.Zero;
 
-        /// <summary>The short side of the screen in physical pixels (the look scales with it).</summary>
-        public double ShortSidePx => Math.Min(_bounds.Width, _bounds.Height);
+        /// <summary>This screen's geometry, holes and look, stepped by the shared Core <see cref="LightsDownRun"/>.</summary>
+        public LightsDownScreen Screen { get; }
 
         /// <summary>The holes this screen tracks (floating windows or attention targets on it).</summary>
-        public LightsDownHoles Holes { get; } = new();
+        public LightsDownHoles Holes => Screen.Holes;
 
         /// <summary>An unowned overlay for a screen at the origin, for the offscreen render test.</summary>
         internal static LightsDownOverlay ForTest(int widthPx, int heightPx, double dpi = 1)
@@ -60,6 +60,7 @@ namespace ConditioningControlPanel.Services.Super
             _ownerHwnd = ownerHwnd;
             _bounds = screenBoundsPx;
             _dpi = dpi is > 0.25 and < 8 ? dpi : 1;
+            Screen = new LightsDownScreen(screenBoundsPx.X, screenBoundsPx.Y, screenBoundsPx.Width, screenBoundsPx.Height, _dpi);
             double w = screenBoundsPx.Width / _dpi, h = screenBoundsPx.Height / _dpi;
 
             WindowStyle = WindowStyle.None;
@@ -147,23 +148,6 @@ namespace ConditioningControlPanel.Services.Super
             base.OnDpiChanged(oldDpi, newDpi);
             Dispatcher.BeginInvoke(new Action(Fit), System.Windows.Threading.DispatcherPriority.Normal);
         }
-
-        /// <summary>A physical-pixel rectangle in this overlay's own pixels.</summary>
-        public LightsDownRect ToLocal(System.Drawing.Rectangle px)
-            => new(px.X - _bounds.X, px.Y - _bounds.Y, px.Width, px.Height);
-
-        /// <summary>A desktop DIP rectangle (this screen's scale, the attention bounds) in this overlay's pixels.</summary>
-        public LightsDownRect DipToLocal(Rect dip)
-            => new(dip.X * _dpi - _bounds.X, dip.Y * _dpi - _bounds.Y, dip.Width * _dpi, dip.Height * _dpi);
-
-        /// <summary>Is a physical-pixel point on this overlay's screen.</summary>
-        public bool ContainsPx(double x, double y)
-            => x >= _bounds.Left && x < _bounds.Right && y >= _bounds.Top && y < _bounds.Bottom;
-
-        /// <summary>Does a physical-pixel rectangle come close enough to this screen for its hole or halo to show here.</summary>
-        public bool Touches(System.Drawing.Rectangle px, double marginPx)
-            => px.Right + marginPx > _bounds.Left && px.Left - marginPx < _bounds.Right
-            && px.Bottom + marginPx > _bounds.Top && px.Top - marginPx < _bounds.Bottom;
 
         /// <summary>Draw a frame if it differs visibly from the last one. Returns true when it wrote.</summary>
         public bool Render(in LightsDownLook look, IReadOnlyList<LightsDownHole> holes, bool holesChanged)
