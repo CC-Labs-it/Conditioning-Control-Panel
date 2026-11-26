@@ -95,7 +95,11 @@ public sealed partial class FriendsDrawer : Border
             catch { return false; }
         };
         if (asPage) (MaxWidth, CornerRadius) = (PageMaxWidth, new CornerRadius(16));
-        else (Width, MaxHeight, CornerRadius) = (DrawerWidth, DrawerMaxHeight, new CornerRadius(16));
+        else
+        {
+            (Width, MaxHeight, CornerRadius) = (DrawerWidth, DrawerMaxHeight, new CornerRadius(16));
+            EscapeClaim.Mark(this); // WPF FriendsDrawer.cs:163-175: only the popup folds on Escape.
+        }
         Background = new LinearGradientBrush
         {
             StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
@@ -368,11 +372,10 @@ public sealed partial class FriendsDrawer : Border
     }
     private void Section(string key, int count)
     {
-        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(8, 10, 8, 4) };
-        var t = Label(Loc.Get(key).ToUpperInvariant(), 10.5, Dim, Mono, FontWeight.SemiBold);
-        var n = Label(count.ToString(), 10.5, Dim, Mono);
-        n.Margin = new Thickness(6, 0, 0, 0);
-        Grid.SetColumn(n, 1);
+        var g = new Grid { Margin = new Thickness(8, 10, 8, 4) };
+        var t = Label(Loc.Get(key).ToUpperInvariant(), 10, Dim, Mono);
+        var n = Label(count.ToString(), 10, Dim, Mono);
+        n.HorizontalAlignment = HorizontalAlignment.Right;
         g.Children.Add(t);
         g.Children.Add(n);
         _list.Children.Add(g);
