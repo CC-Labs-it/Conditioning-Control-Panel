@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
 using Env = ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env;
@@ -36,9 +37,15 @@ public partial class LauncherWindow
     private readonly ScaleTransform _wordmarkScale = new(1, 1);
     private double _wordmarkTime, _wordmarkApplyIn;
 
-    // WPF Fx.cs:437-469: a 1.1 second pass after a random 25-40 second gap.
-    private double _wordmarkSheenWait, _wordmarkSheenElapsed = -1;
+    // WPF Fx.cs:437-469: a 1.1 second pass after a random 25-40 second gap. The gap is a
+    // DispatcherTimer as in WPF (StartWordmarkSheenTimer), so the frame clock can stop while it waits;
+    // the tick asks for the clock again (EnsureFxClock) only when the pass is due.
+    private double _wordmarkSheenElapsed = -1;
     private bool _wordmarkSheenStopped;
+    private DispatcherTimer? _wordmarkSheenTimer;
+
+    /// <summary>The armed gap until the next pass, or null while none is waiting (tests).</summary>
+    internal TimeSpan? WordmarkSheenGap => _wordmarkSheenTimer is { IsEnabled: true } t ? t.Interval : null;
 
     private void StartWordmarkSheen()
     {
@@ -48,8 +55,40 @@ public partial class LauncherWindow
 
     private void ResetWordmarkSheenGap()
     {
-        _wordmarkSheenWait = Random.Shared.Next(25, 41);
         ParkWordmarkSheen();
+        ArmWordmarkSheenGap();
+    }
+
+    private void ArmWordmarkSheenGap()
+    {
+        if (_wordmarkSheenTimer is null)
+        {
+            _wordmarkSheenTimer = new DispatcherTimer(DispatcherPriority.Background);
+            _wordmarkSheenTimer.Tick += (_, _) => ElapseWordmarkSheenGap();
+        }
+        _wordmarkSheenTimer.Stop();
+        if (_wordmarkSheenStopped) return;
+        _wordmarkSheenTimer.Interval = TimeSpan.FromSeconds(Random.Shared.Next(25, 41));
+        _wordmarkSheenTimer.Start();
+    }
+
+    /// <summary>Hidden, minimised, unfocused or panicked: the visual parks and no gap waits.</summary>
+    private void StopWordmarkSheen()
+    {
+        _wordmarkSheenTimer?.Stop();
+        ParkWordmarkSheen();
+    }
+
+    /// <summary>WPF OnWordmarkSheenTick: the next gap is armed at once, then the pass runs only while the
+    /// launcher is live, focused and ambient loops are allowed (a refused tick waits for the next gap).
+    /// Tests call it in place of waiting the 25-40 s.</summary>
+    internal void ElapseWordmarkSheenGap()
+    {
+        if (_wordmarkSheenStopped || _wordmarkSheenTimer is not { IsEnabled: true }) return;
+        ArmWordmarkSheenGap();
+        if (!FxLive || !_fxActive || !Env.AllowAmbientLoops || !Wordmark.IsVisible) return;
+        _wordmarkSheenElapsed = 0;
+        EnsureFxClock();
     }
 
     private void ParkWordmarkSheen()
@@ -62,31 +101,25 @@ public partial class LauncherWindow
     {
         if (_window is not { } w) return;
         w._wordmarkSheenStopped = true;
-        w.ParkWordmarkSheen();
+        w.StopWordmarkSheen();
     }
 
-    private bool StepWordmarkSheen(double dt)
+    /// <summary>One frame of the pass. Busy only while a pass runs: the gap never holds the clock.</summary>
+    internal bool StepWordmarkSheen(double dt)
     {
         if (_wordmarkSheenStopped || !_fxActive || !Env.AllowAmbientLoops || !Wordmark.IsVisible)
         {
             ParkWordmarkSheen();
             return false;
         }
-        if (_wordmarkSheenElapsed < 0)
-        {
-            _wordmarkSheenWait -= dt;
-            if (_wordmarkSheenWait > 0) return true;
-            _wordmarkSheenElapsed = 0;
-            _wordmarkSheenWait = Random.Shared.Next(25, 41);
-        }
-        _wordmarkSheenWait -= dt;
+        if (_wordmarkSheenElapsed < 0) return false;
         _wordmarkSheenElapsed += dt;
         var u = Math.Min(1, _wordmarkSheenElapsed / 1.1);
         var eased = (1 - Math.Cos(Math.PI * u)) / 2;
         ((TranslateTransform)((TransformGroup)WordmarkSheen.RenderTransform!).Children[1]).X =
             -90 + (Wordmark.Bounds.Width + 110) * eased;
         WordmarkSheen.Opacity = 0.3 * (u <= 0.45 ? u / 0.45 : (1 - u) / 0.55);
-        if (u >= 1) ParkWordmarkSheen();
+        if (u >= 1) { ParkWordmarkSheen(); return false; }
         return true;
     }
 

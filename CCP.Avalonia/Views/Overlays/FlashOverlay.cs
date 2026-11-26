@@ -754,6 +754,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (Dispatcher.UIThread.CheckAccess()) Close(); else Dispatcher.UIThread.Post(Close);
         }
 
+        /// <summary>Tests only: the shell's Closed handler latches <c>_closed</c> for the process, which
+        /// in the app is exiting (ShutdownMode.OnMainWindowClose; the tray X only hides). A test host
+        /// outlives its shells, so test isolation clears the latch before each test.</summary>
+        internal static void ResetClosedForTests() => _closed = false;
+
         private static void CloseWindows(bool final)
         {
             _closed |= final;

@@ -158,7 +158,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (e.Property == IsVisibleProperty) { if (IsVisible) FxOnShown(); else FxPark(); }
                 else if (e.Property == WindowStateProperty)
                 {
-                    if (FxLive) { EnsureFxClock(); QueuePanelComet(); } else FxPark();
+                    if (FxLive)
+                    {
+                        EnsureFxClock(); QueuePanelComet();
+                        if (_fxActive && WordmarkSheenGap is null) ArmWordmarkSheenGap();   // FxPark stopped the gap
+                    }
+                    else FxPark();
                     // The DWM squares a maximised window's corners; the frame's clip follows.
                     WindowFrame.CornerRadius = new CornerRadius(WindowState == WindowState.Normal ? 8 : 0);
                 }
@@ -223,7 +228,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             SettleEntrance();
             ParkComets();
-            ParkWordmarkSheen();
+            StopWordmarkSheen();
             _fxClock.Stop();
             StopSpTween();
             StopSheens();
@@ -358,7 +363,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (active != _fxActive)
             {
-                if (active) ResetWordmarkSheenGap(); else ParkWordmarkSheen();
+                if (active) ResetWordmarkSheenGap(); else StopWordmarkSheen();
             }
             _fxActive = active;
             if (!active) ClearHoverComet();
