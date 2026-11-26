@@ -109,6 +109,19 @@ namespace ConditioningControlPanel.Services
         public Action? LifetimeLifted { get; set; }
         public Action? ResetDailyQuest { get; set; }
         public Action? ResetWeeklyQuest { get; set; }
+        /// <summary>The head's lifetime stores for the stats block (WPF App.Achievements, App.Quests, App.FeatureDayLog).
+        /// Null engine: stats stay unknown and are neither merged nor sent.</summary>
+        internal Func<AchievementEngine?>? StatsEngine { get; set; }
+        internal Func<QuestService?>? StatsQuests { get; set; }
+        internal Func<FeatureDayLogService?>? StatsDayLog { get; set; }
+        /// <summary>WPF ProfileSyncService.cs:1574-1610 sends the stats block on every sync. Here it is sent once a reply's
+        /// stats were merged this session (read-before-write, as companion progress and minutes), with the override ack.</summary>
+        private Dictionary<string, object>? StatsPayload(AppSettings s)
+        {
+            if ((_knownProgress & SyncBody.Field.Stats) == 0 || StatsEngine?.Invoke()?.Progress is not { } progress) return null;
+            try { return SyncStats.Build(s, progress, StatsQuests?.Invoke()?.Progress, StatsDayLog?.Invoke()?.BuildWirePayload(400)); }
+            catch (Exception ex) { Log.Debug("V2 Sync: stats payload skipped: {Error}", ex.Message); return null; }
+        }
 
         /// <summary>WPF ProfileSyncService.PendingCosmeticsClear: set by an EMPTY Customize save (unequip everything),
         /// cleared once a sync carrying the clear succeeds. In memory, as WPF.</summary>
@@ -245,16 +258,19 @@ namespace ConditioningControlPanel.Services
         /// shrunk to local-only). Xp is the TOTAL, as WPF sends it.</summary>
         /// <param name="cosmetics">An explicit loadout save (WPF BuildCosmeticsPayload after a load: the sanitized
         /// loadout, the empty one included - that is the unequip-everything clear). Null leaves the key out.</param>
-        public static SyncBody Body(AppSettings s, IEnumerable<string>? achievements, ProfileCosmetics? cosmetics = null, SyncBody.Field consent = SyncBody.Field.None, bool adopted = false, SyncBody.Field knownProgress = SyncBody.Field.None) => new()
+        public static SyncBody Body(AppSettings s, IEnumerable<string>? achievements, ProfileCosmetics? cosmetics = null, SyncBody.Field consent = SyncBody.Field.None, bool adopted = false, SyncBody.Field knownProgress = SyncBody.Field.None, Dictionary<string, object>? stats = null) => new()
         {
             Known = (achievements == null ? Sent & ~SyncBody.Field.Achievements : Sent)
                     | (cosmetics == null ? SyncBody.Field.None : SyncBody.Field.Cosmetics) | (consent & Privacy)
                     | SyncBody.Field.ResetDailyQuest | SyncBody.Field.ResetWeeklyQuest
                     | (adopted ? AfterAdopt : SyncBody.Field.None)
                     | (knownProgress & (SyncBody.Field.CompanionProgress | SyncBody.Field.TotalConditioningMinutes))
+                    | (stats == null ? SyncBody.Field.None : SyncBody.Field.Stats | SyncBody.Field.ForceStreakOverride)
                     | (adopted && s.PendingSkillsResetAck ? SyncBody.Field.ForceSkillsReset : SyncBody.Field.None)
                     | (s.LastWebXpClaimId == null ? SyncBody.Field.None : SyncBody.Field.WebXpClaimAck),
             WebXpClaimAck = s.LastWebXpClaimId,
+            Stats = stats,
+            ForceStreakOverride = false,
             CompanionProgress = s.CompanionProgressData,
             TotalConditioningMinutes = s.TotalConditioningMinutes,
             UnlockedSkills = s.UnlockedSkills?.ToList() ?? new List<string>(),
@@ -370,7 +386,7 @@ namespace ConditioningControlPanel.Services
                         | SyncBody.Field.DescentEpoch | SyncBody.Field.DescentAuto;
                     body = JsonConvert.SerializeObject(recovery);
                 }
-                else body = SerializeBody(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics, ConsentFields(s), _adopted, _knownProgress);
+                else body = SerializeBody(s, server?.Concat(_localAchievements() ?? Array.Empty<string>()), cosmetics, ConsentFields(s), _adopted, _knownProgress, StatsPayload(s));
                 var tokenUsed = s.AuthToken;
                 HttpRequestMessage NewRequest()
                 {
@@ -471,6 +487,7 @@ namespace ConditioningControlPanel.Services
                     }
                     ClaimWebXp(s, reply, allowUnread, session, id);
                     ApplyQuestResets(s, id, session, reply);
+                    ApplyStats(s, id, session, reply, allowUnread);
                     // Then the level/XP adopt (held while a migration is pending) and WPF's migration handshake
                     // (ProfileSyncService.cs:1903-1904): the ack first, the offer second. A taken offer syncs again.
                     if (ApplyReply(s, reply, DescentReader?.Current?.Stage, UtcNow(), PersistMigration))
@@ -519,6 +536,46 @@ namespace ConditioningControlPanel.Services
             });
         }
 
+        // WPF ProfileSyncService.cs:1802-1807,2031-2051,2097: the force override, then the stats merge, its save and
+        // the day-log rebaseline, on the UI dispatcher for the request's account and session only.
+        private void ApplyStats(AppSettings s, string account, int session, JObject reply, bool allowUnread)
+        {
+            var stats = (reply["user"] as JObject)?["stats"] as JObject;
+            var force = reply["force_streak_override"]?.Type == JTokenType.Boolean && reply.Value<bool>("force_streak_override");
+            var streak = force ? reply["streak_stats"] as JObject : null;
+            if (stats == null && streak == null) return;
+            CoreDispatch.Post(() =>
+            {
+                if ((!Loaded && !allowUnread) || session != Volatile.Read(ref _sessionVersion) || !ReferenceEquals(s, CoreSettings.Current)
+                    || !SignedIn(s) || s.UnifiedId != account || StatsEngine?.Invoke() is not { } engine) return;
+                var quests = StatsQuests?.Invoke();
+                try
+                {
+                    if (streak != null)
+                    {
+                        Log.Information("V2 Sync: Force streak override - adopting server streak values");
+                        SyncStats.ApplyForceOverride(s, quests?.Progress, streak);
+                    }
+                    var lifted = stats != null && SyncStats.Merge(s, engine.Progress, quests?.Progress, () => quests?.RecalculateStreak(), stats, force);
+                    if (lifted)
+                    {
+                        // WPF AchievementProgressStreak.SyncCurrentStreak, before the save.
+                        s.CurrentStreak = engine.Progress.ConsecutiveDays;
+                        s.LastStreakDate = engine.Progress.LastLaunchDate;
+                    }
+                    if (lifted || streak != null)
+                    {
+                        CoreSettings.Save();
+                        engine.Save();
+                        quests?.Save();
+                    }
+                    if (lifted) StatsDayLog?.Invoke()?.Rebaseline("v2 cloud merge");
+                    if (Loaded) _knownProgress |= SyncBody.Field.Stats;
+                }
+                catch (Exception ex) { Log.Debug("V2 Sync: stats merge failed: {Error}", ex.Message); }
+            });
+        }
+
         private static void PersistMigration()
         {
             if (!CoreSettings.TrySaveImmediate()) throw new IOException("Migration checkpoint was not saved.");
@@ -526,9 +583,9 @@ namespace ConditioningControlPanel.Services
 
         internal static string SerializeBody(AppSettings s, IEnumerable<string>? achievements,
             ProfileCosmetics? cosmetics = null, SyncBody.Field consent = SyncBody.Field.None,
-            bool adopted = false, SyncBody.Field knownProgress = SyncBody.Field.None)
+            bool adopted = false, SyncBody.Field knownProgress = SyncBody.Field.None, Dictionary<string, object>? stats = null)
         {
-            var body = JsonConvert.SerializeObject(Body(s, achievements, cosmetics, consent, adopted, knownProgress));
+            var body = JsonConvert.SerializeObject(Body(s, achievements, cosmetics, consent, adopted, knownProgress, stats));
             if (!Descent.DescentMigrationChoices.IsValid(s.PendingDescentMigrationChoice)) return body;
             var payload = JObject.Parse(body);
             payload["descent_migration"] = new JObject { ["choice"] = s.PendingDescentMigrationChoice };
