@@ -382,7 +382,7 @@ namespace ConditioningControlPanel.Services
                 var floatingJoin = _playing && _host.FloatingRunOpen && _host.FloatingUp > 0
                     && _host.IsFloating(IsStrict) && _host.IsFloating(CoreSettings.Current.StrictLockEnabled)
                     && !CoreSettings.Current.MandatoryVideoFloatingTogether && _host.FloatingLimit > 1;
-                if ((!_playing || floatingJoin) && _host.BrowserMediaBlocksScheduledVideo)
+                if ((!_playing || floatingJoin) && (_host.BrowserMediaBlocksScheduledVideo || Services.Browser.BrowserMediaSession.Shared.HoldsScreen))
                 {
                     ScheduleNext(SkipRetrySeconds);
                     return;
@@ -400,7 +400,7 @@ namespace ConditioningControlPanel.Services
                     return;
                 }
                 // WPF VideoService :3007: a do-not-disturb app in front reschedules, never drops.
-                if (!_playing && Services.UI.DndGuard.ShouldSuppressVideos())
+                else if (!_playing && Services.UI.DndGuard.ShouldSuppressVideos())
                 {
                     Services.UI.DndGuard.LogSuppressionThrottled("scheduled video");
                     ScheduleNext(SkipRetrySeconds);

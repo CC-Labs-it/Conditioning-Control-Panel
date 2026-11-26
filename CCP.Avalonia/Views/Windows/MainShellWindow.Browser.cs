@@ -3,8 +3,8 @@
 // escape hatch are live. WebHost also has a script channel and the card reapplies its mute script.
 // BrowserPopout.cs wires pop-out, focus and return without discarding the native page.
 // First load uses the mod default (WPF MainWindow.Browser.cs:225).
-// Native engine mute and construction retry are live (WebHost). Missing: asynchronous init retry, general
-// document-created scripts, media reporting and page fullscreen/mirroring.
+// Native engine mute and construction retry are live (WebHost). Media reporting: BrowserMedia.cs. Missing: asynchronous
+// init retry, general document-created scripts and page fullscreen/mirroring.
 // The remote controller's HypnoTube video (play_hypnotube) plays here with the same autoplay request. Watch links request video autoplay after navigation completes (#3961); WPF also has an
 // earlier DOM-ready signal that WebHost does not expose.
 // Profile account/art work belongs to its separate ledger rows. Site-radio mod sync lives on the card.
@@ -88,9 +88,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return Loc.Get("remote_browser_unavailable");
             _remoteBrowserVideoActive = true;
             RevealBrowserForRemoteVideo(true);
+            // WPF :3209: the controller's video takes the media session over.
+            ConditioningControlPanel.Services.Browser.BrowserMediaSession.Shared.ReplaceSession(
+                ConditioningControlPanel.Services.Browser.BrowserMediaSession.MediaOwner.Remote, takeover: true);
             if (NavigateToUrlInBrowser(url, autoPlayFullscreen: true, userInitiated: false)) return null;
             _remoteBrowserVideoActive = false;
             RevealBrowserForRemoteVideo(false);
+            ConditioningControlPanel.Services.Browser.BrowserMediaSession.Shared.OnMediaStopped("remote-browser-unavailable");
             return Loc.Get("remote_browser_unavailable");
         }
 
@@ -98,7 +102,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// (:995): the page stops, back to the site home, then the blindfold goes back on.</summary>
         internal void StopBrowserVideoFromRemote()
         {
-            if (_remoteBrowserVideoActive) EndWebVideoTakeover();
+            if (!_remoteBrowserVideoActive) return;
+            // WPF :3234 ForceEndCore("remote-stop"): teardown first, then the session ends.
+            try { EndWebVideoTakeover(); }
+            finally { ConditioningControlPanel.Services.Browser.BrowserMediaSession.Shared.OnMediaStopped("remote-stop"); }
         }
 
         /// <summary>The remote branch of WPF EndWebVideoTakeover (:995); a no-op unless a controller's video is up.</summary>
@@ -321,7 +328,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>Navigates the embedded browser and brings its tab forward. Public because
         /// the callers live elsewhere on WPF (speech-bubble links, the remote controller).</summary>
         /// <param name="autoPlayFullscreen">Requests video playback and fullscreen once the page has loaded.
-        /// The browser media session is not ported.</param>
+        /// BambiCloud playlists take their own autoplay script.</param>
         public bool NavigateToUrlInBrowser(string url, bool autoPlayFullscreen = false, bool userInitiated = true)
         {
             if (!PrepareBrowserNavigation(url, autoPlayFullscreen, userInitiated)) { CancelVideoAutoPlay(); return false; }

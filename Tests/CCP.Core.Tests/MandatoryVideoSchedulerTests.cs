@@ -1473,6 +1473,26 @@ public sealed class MandatoryVideoSchedulerTests
         Assert.False(v.Trigger(path: "/ai/other.mp4"));      // one already playing
     });
 
+    [Fact]   // WPF VideoService.cs:2948: an open browser media session skips the tick and retries in SkipRetrySeconds
+    public void Browser_media_session_holds_the_scheduled_clip() => With(60, false, () =>
+    {
+        var media = ConditioningControlPanel.Services.Browser.BrowserMediaSession.Shared;
+        try
+        {
+            media.OnMediaPlaying(0);
+            var clock = new FakeClock(); var host = new Host();
+            var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+            v.Start();
+            clock.Advance(TimeSpan.FromHours(2));
+            Assert.Empty(host.Shown);
+            media.OnMediaStopped("ended");
+            clock.Advance(TimeSpan.FromSeconds(MandatoryVideoScheduler.SkipRetrySeconds + 5));
+            Assert.Single(host.Shown);
+            v.Stop();
+        }
+        finally { media.OnMediaStopped("test"); }
+    });
+
     [Fact]   // WPF VideoService :3007: a do-not-disturb app in front reschedules (SkipRetrySeconds), never drops
     public void Dnd_app_in_front_reschedules_the_scheduled_clip() => With(60, false, () =>
     {
