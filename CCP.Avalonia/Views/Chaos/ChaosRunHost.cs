@@ -51,8 +51,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// treat lessons, the announcer and the achievement credit; slow-mo,
     /// the perf backoff on the cadence; Gif Rain and bouncing text payloads fire; the
     /// first-time bonus pop text.
-    /// Defuse and detonation barks remain missing. NO FOCUS TO DEFUSE, last breath and UNLEASHED
-    /// announcer callers remain missing even though the announcer overlay is now present.
+    /// Defuse and detonation barks and the last breath announcer caller remain missing.
     /// The FX window receives pop, defuse, combo and detonation pulses plus heat tint (also
     /// mirrored to <see cref="PulseFx"/>); screen shake keeps WPF's values through the unseeded
     /// <see cref="ShakeFx"/> hook (chaos-payout-fallin-d). Periodic
@@ -164,6 +163,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static double _lastHeatTint = -1;
         private static bool _dvdBannerOn;
         private static int _lastComboBigFired;
+        private static DateTime _lastNoFocusAnnounceUtc = DateTime.MinValue;
         private static double _freezeRemainingSec;
         // WPF ChaosModeService.cs:2406-2475, :2813-2817, :2958-2979: the Pendulum's slow-mo window
         // (hand-ported from #4303). Run clock, so it holds through pauses like the freeze.
@@ -288,6 +288,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _waveDetonatedAt = _state.Detonated;
             _lastComboBigFired = 0;
             _runDetonations = 0; _focusLowAccumSec = 0; _focusLowBarkFired = false;   // WPF :391, :464
+            _lastNoFocusAnnounceUtc = DateTime.MinValue;
             _invulnUntilUtc = DateTime.MinValue;
             _regenPopCount = 0;
             ChaosRunLessons.OnRunStarted();   // WPF :399
@@ -762,6 +763,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     ChaosOverlayWindow.ChaosSfx.Play("focus_empty", 0.55f);
                     Pulse(Color.FromRgb(255, 80, 80), 0.22);
                     _hud?.FlashFocusBar();
+                    // WPF ChaosModeService.cs:1951-1956: do not queue a banner for every mis-grab.
+                    var now = BubbleOverlay.Field.Clock();
+                    if ((now - _lastNoFocusAnnounceUtc).TotalSeconds >= 1.5)
+                    {
+                        _lastNoFocusAnnounceUtc = now;
+                        ChaosAnnouncerOverlay.Announce(Loc.Get("chaos_no_focus_announce"), ChaosAnnounceKind.Temptation, holdMs: 1300);
+                    }
                     _state.PushEvent("✋ no focus — it triggers in your grip");
                     FirstBark(ChaosMeta.State.SeenBarkDefuseNoFocus, () => ChaosMeta.State.SeenBarkDefuseNoFocus = true, "ChaosDefuseNoFocus");   // WPF :1959-1963
                     break;
@@ -806,6 +814,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     if (_state.UnleashedEnabled)
                     {
                         BubbleOverlay.Field.DefuseAllLive(BubbleOverlay.BounceShield);
+                        ChaosAnnouncerOverlay.Announce(Loc.Get("chaos_unleashed_announce"), ChaosAnnounceKind.PowerUp, artKey: "unleashed");   // WPF :2114
                         _state.PushEvent("📿 unleashed — the field lets go");
                         Pulse(Color.FromRgb(255, 215, 0), 0.50);
                     }
