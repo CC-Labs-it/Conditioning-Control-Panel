@@ -69,6 +69,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return changed;
         }
         internal static void Stop() { VoiceOpacity = null; CloseAll(); }
+        // WPF OverlayService.cs:1129,1189: a Deeper band shares the sustained hold at its own opacity.
+        internal static void SetSustained(Visual host, double? opacity) { VoiceOpacity = opacity is { } o ? Math.Clamp(o, 0, 1) : null; Refresh(host); }
 
         private static bool _refused;
         internal static bool SkipPlatformChecksForTests;

@@ -18,6 +18,7 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
     private readonly object _audioGate = new();
     private readonly HashSet<Action> _audioStops = new();
     private volatile bool _retired;
+    private readonly Dictionary<string, string> _overlayBands = new(); // WPF RealActionDispatcher.cs:27
 
     // EnhancementEngine.Stop calls this on unbind and panic.
     public void ResetOverlayBands()
@@ -25,6 +26,13 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
         Action[] stops;
         lock (_audioGate) { _retired = true; stops = _audioStops.ToArray(); _audioStops.Clear(); }
         foreach (var stop in stops) { try { stop(); } catch { } }
+        // A band whose Stop was dropped must not keep its overlay hold (WPF OverlayService.cs:95 safety belt).
+        OnUi(() =>
+        {
+            string[] kinds;
+            lock (_overlayBands) { kinds = _overlayBands.Values.Distinct().ToArray(); _overlayBands.Clear(); }
+            foreach (var kind in kinds) if (Host is { } h) Sustain(h, kind, null);
+        });
     }
     public void StopOneShotFlashes() => Views.Overlays.FlashOverlay.StopOwned(FlashOwner);
     public void StopOneShotSubliminals() => Views.Overlays.SubliminalWhisperShow.StopOneShots();
@@ -81,10 +89,12 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
     // Do not claim a match is active when this head cannot run its effects.
     internal static bool Supports(Enhancement enhancement)
     {
-        static bool EffectSupported(string? type) => type is EffectTypes.Haptic or EffectTypes.Flash or EffectTypes.Subliminal or EffectTypes.Bubble or EffectTypes.Speak;
-        static bool ActionSupported(EnhancementAction? action) => action is not TriggerEffectAction effect || EffectSupported(effect.EffectType);
+        // Brain drain kinds need a desktop blur this head does not have yet.
+        static bool EffectSupported(string? type, string? overlay) => type is EffectTypes.Haptic or EffectTypes.Flash or EffectTypes.Subliminal or EffectTypes.Bubble or EffectTypes.Speak
+            || (type == EffectTypes.Overlay && overlay is null or OverlayKinds.PinkFilter or OverlayKinds.Spiral);
+        static bool ActionSupported(EnhancementAction? action) => action is not TriggerEffectAction effect || EffectSupported(effect.EffectType, effect.OverlayKind);
         return enhancement.Rules.All(r => !r.Enabled || ActionSupported(r.Action))
-            && enhancement.TimelineItems.All(i => !i.Enabled || (i.Kind == TimelineItemKind.Effect ? EffectSupported(i.EffectType) : ActionSupported(i.Action)));
+            && enhancement.TimelineItems.All(i => !i.Enabled || (i.Kind == TimelineItemKind.Effect ? EffectSupported(i.EffectType, i.EffectOverlayKind) : ActionSupported(i.Action)));
     }
     public async Task DispatchAsync(EnhancementAction action, EnhancementDispatchContext ctx, CancellationToken ct = default)
     {
@@ -116,6 +126,46 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
             case TriggerEffectAction effect when effect.EffectType == EffectTypes.Bubble: BubbleBurst(effect.DurationMs, ct); break;
             case TriggerEffectAction effect when effect.EffectType == EffectTypes.Subliminal && effect.Phase != EffectPhase.Stop && !string.IsNullOrWhiteSpace(effect.Text):
                 Views.Overlays.SubliminalWhisperShow.Custom(effect.Text, durationMs: effect.DurationMs, suppressHaptic: effect.SuppressHaptic); break;
+            case TriggerEffectAction effect when effect.EffectType == EffectTypes.Overlay: OnUi(() => Overlay(effect, ct)); break;
+        }
+    }
+
+    private static void OnUi(Action action) { if (Dispatcher.UIThread.CheckAccess()) action(); else Dispatcher.UIThread.Post(action); }
+    private static void Sustain(global::Avalonia.Visual host, string kind, double? opacity)
+    {
+        if (kind == OverlayKinds.PinkFilter) Views.Overlays.PinkFilterOverlay.SetSustained(host, opacity);
+        else if (kind == OverlayKinds.Spiral) Views.Overlays.SpiralOverlay.SetSustained(host, opacity);
+    }
+
+    // WPF RealActionDispatcher.cs:222-273 -> OverlayService.cs:924 (timed), :1129 (show), :1189 (hide), :1247 (ramp).
+    private void Overlay(TriggerEffectAction effect, CancellationToken ct)
+    {
+        var kind = effect.OverlayKind ?? OverlayKinds.PinkFilter;
+        var key = effect.EffectId ?? kind;
+        if (Host is not { } host) return;
+        if (effect.Phase == EffectPhase.Stop)
+        {
+            lock (_overlayBands) { if (_overlayBands.Remove(key, out var remembered)) kind = remembered; }
+            Sustain(host, kind, null);
+            return;
+        }
+        if (_retired || ct.IsCancellationRequested) return;
+        switch (effect.Phase)
+        {
+            case EffectPhase.Start:
+                lock (_overlayBands) _overlayBands[key] = kind;
+                Sustain(host, kind, effect.Opacity);
+                break;
+            case EffectPhase.Update:
+                if (kind == OverlayKinds.PinkFilter ? Views.Overlays.PinkFilterOverlay.ApplySessionOpacity(effect.Opacity * 100)
+                    : kind == OverlayKinds.Spiral && Views.Overlays.SpiralOverlay.ApplySessionOpacity(effect.Opacity * 100))
+                    Sustain(host, kind, effect.Opacity);
+                break;
+            case EffectPhase.Restart: break; // WPF :258 no remaining time to recompute
+            default:
+                if (kind == OverlayKinds.PinkFilter) Views.Overlays.PinkFilterOverlay.ShowTimed(host, effect.DurationMs, effect.Opacity);
+                else if (kind == OverlayKinds.Spiral) Views.Overlays.SpiralOverlay.ShowTimed(host, effect.DurationMs, effect.Opacity);
+                break;
         }
     }
     private static global::Avalonia.Visual? Host => (global::Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
