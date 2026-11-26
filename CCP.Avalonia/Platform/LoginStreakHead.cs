@@ -110,7 +110,7 @@ internal static class LoginStreakHead
         }
         else
         {
-            Emi(emi, "streakBroken", p.ConsecutiveDays);   // the streak she had, before the reset
+            Emi(emi, "streakBroken", p.ConsecutiveDays);   // the streak as it stood, before the reset
             p.ConsecutiveDays = 1;
         }
 
