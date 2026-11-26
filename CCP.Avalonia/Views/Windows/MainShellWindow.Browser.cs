@@ -4,7 +4,8 @@
 // BrowserPopout.cs wires pop-out, focus and return without discarding the native page.
 // First load uses the mod default (WPF MainWindow.Browser.cs:225).
 // Native engine mute and construction retry are live (WebHost). Media reporting: BrowserMedia.cs. Missing: asynchronous
-// init retry, general document-created scripts and page fullscreen/mirroring.
+// init retry and general document-created scripts. Page fullscreen, its zoom and mirroring live in
+// MainShellWindow.BrowserFullscreen.cs.
 // The remote controller's HypnoTube video (play_hypnotube) plays here with the same autoplay request. Watch links request video autoplay after navigation completes (#3961); WPF also has an
 // earlier DOM-ready signal that WebHost does not expose.
 // Profile account/art work belongs to its separate ledger rows. Site-radio mod sync lives on the card.
