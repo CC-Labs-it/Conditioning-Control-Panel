@@ -143,6 +143,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 if (live.RaceShell != null) live.RaceShell.Focus();
                 else if (live.Spec.Id == JustDropId) live.FocusJustDropPage();
                 else live.Activate();   // the shell's window is never shown
+                if (live.IsRace) live.QueueRaceFocus();
                 // WPF PieceByPieceHostService.cs:165: reopening a live board returns its keyboard too.
                 if (live.Spec.Id == PbpId)
                     Dispatcher.UIThread.Post(() => { if (!live._closing) live.Web.FocusPage(); }, DispatcherPriority.Loaded);
