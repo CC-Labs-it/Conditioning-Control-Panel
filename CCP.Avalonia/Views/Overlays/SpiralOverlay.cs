@@ -412,9 +412,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             () => App.Achievements?.ResetContinuousSpiral());
 
         /// <summary>Same gate as the pink tint (WPF RefreshOverlays returns early unless the engine runs):
-        /// a running engine or session, not paused. Unseeded (renders, tests) means the card owns it.</summary>
+        /// an AI overlay start, or an unpaused engine or session. Unseeded means the card owns it.</summary>
         private static bool ShouldShow()
-            => !RemoteCommands.OverlaysStopped && (RemoteCommands.OverlayRunning || (App.Sessions?.IsPaused != true
+            => !RemoteCommands.OverlaysStopped && (PinkFilterOverlay.AiHold || RemoteCommands.OverlayRunning || (App.Sessions?.IsPaused != true
                && (CoreSession.IsEngineRunningProvider is null || CoreSession.IsEngineRunning || App.Sessions?.IsRunning == true)));
 
         private static void BeginDecode(Visual host, string path)
