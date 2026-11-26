@@ -38,10 +38,10 @@ public sealed partial class PossessionShellTests
         public DateTime Clock = DateTime.UtcNow;
     }
 
-    private static void Run(Action<Rig> body, Action<AppSettings>? seed = null) =>
-        RunAsync(rig => { body(rig); return Task.CompletedTask; }, seed).GetAwaiter().GetResult();
+    private static void Run(Action<Rig> body, Action<AppSettings>? seed = null, Func<TimeSpan, CancellationToken, Task>? holdDelay = null) =>
+        RunAsync(rig => { body(rig); return Task.CompletedTask; }, seed, holdDelay: holdDelay).GetAwaiter().GetResult();
 
-    private static Task RunAsync(Func<Rig, Task> body, Action<AppSettings>? seed = null, IPossessionEffect[]? effects = null, PossessionDirectorHead? head = null)
+    private static Task RunAsync(Func<Rig, Task> body, Action<AppSettings>? seed = null, IPossessionEffect[]? effects = null, PossessionDirectorHead? head = null, Func<TimeSpan, CancellationToken, Task>? holdDelay = null)
     {
         return AvaloniaTestDispatcher.RunAsync(async () =>
         {
@@ -69,7 +69,7 @@ public sealed partial class PossessionShellTests
             var priorPost = CoreDispatch.PostProvider;
             CoreDispatch.PostProvider = a => Dispatcher.UIThread.Post(a);
             var ld = LockdownService.Current = new LockdownService();
-            var director = new PossessionDirector(ld, effects != null ? effects : PossessionAvaloniaHead.CreateEffects(), head ?? PossessionAvaloniaHead.CreateDirectorHead());
+            var director = new PossessionDirector(ld, effects != null ? effects : PossessionAvaloniaHead.CreateEffects(), head ?? PossessionAvaloniaHead.CreateDirectorHead(), holdDelay);
             var frames = new FakeFrames();
             var shell = new MainShellWindow { PossessionFramesOverride = frames, PossessionDirectorOverride = director };
             var rig = new Rig(shell, ld, director, frames);
@@ -434,7 +434,10 @@ public sealed partial class PossessionShellTests
     });
 
     [Fact]
-    public void TheDirectorHauntsTheShell_AndPanicGivesEverythingBack() => Run(rig =>
+    public void TheDirectorHauntsTheShell_AndPanicGivesEverythingBack()
+    {
+        var holds = new List<(TimeSpan Duration, CancellationToken Token)>();
+        Run(rig =>
     {
         AvApp.Possession = rig.Director;
         rig.Shell.ShowTab("settings");
@@ -465,6 +468,7 @@ public sealed partial class PossessionShellTests
         Assert.Contains(layer.Children, c => c is Border);   // the ember charge, before anything moves
 
         for (int ms = 0; ms <= 600; ms += 50) { rig.Frames.Frame(TimeSpan.FromMilliseconds(5000 + ms)); Dispatcher.UIThread.RunJobs(); }
+        Assert.True(Assert.Single(holds).Duration > TimeSpan.Zero);
         var leased = ((IPossessionHost)rig.Shell).Targets.Where(t => PossessionLease.IsLeased(t.Visual as Control)).ToList();
         var victimTexts = ((IPossessionHost)rig.Shell).Targets
             .Where(t => t.Key == key && t.Visual is Control)
@@ -488,7 +492,13 @@ public sealed partial class PossessionShellTests
         Assert.DoesNotContain(((IPossessionHost)rig.Shell).Targets, t => PossessionLease.IsLeased(t.Visual as Control));
         Assert.All(victimTexts, tb => Assert.Equal(textBefore[tb], tb.Text));   // every letter given back
         Assert.DoesNotContain(layer.Children, c => c is Border);   // outline and charge stripped
+        Assert.True(Assert.Single(holds).Token.IsCancellationRequested);
+    }, holdDelay: (duration, token) =>
+    {
+        holds.Add((duration, token));
+        return Task.Delay(Timeout.InfiniteTimeSpan, token);
     });
+    }
 
     [Fact]
     public void RulesCard_FirstLockdownOnly_FlagSpentWhenTheCardOpens() => Run(rig =>
