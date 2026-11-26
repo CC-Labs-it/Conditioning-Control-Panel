@@ -22,7 +22,7 @@ public partial class EmiDeskWindow
 {
     private static readonly Random GlassRng = new();
     // WPF EmiChannels.All order, the channels this head can paint.
-    internal static readonly string[] GlassChannels = { "pong", "rain", "browsing", "shop", "reruns", "coderain", "offair" };
+    internal static readonly string[] GlassChannels = { "pong", "spiral", "rain", "browsing", "shop", "reruns", "coderain", "offair" };
     // Uniform over the feasible pool (WPF EmiChannels.Pick); tests swap it and restore it in finally.
     internal static Func<IReadOnlyList<string>, string> GlassPick = pool => pool[GlassRng.Next(pool.Count)];
     // Per-window test seam: always land this channel when it is feasible, else off-air.
@@ -38,6 +38,7 @@ public partial class EmiDeskWindow
     private RerunsPainter? _glassReruns;
     private PongPainter? _glassPong;
     private CodeRainPainter? _glassCodeRain;
+    private SpiralPainter? _glassSpiral;
     private Rectangle? _glassDim;
     private TextBlock? _glassSignal;
     private bool _glassLive, _glassLanded, _glassMotion, _glassOffering;
@@ -51,18 +52,32 @@ public partial class EmiDeskWindow
     // The partial hooks live in EmiDeskWindow.Rain.cs (one implementation each) and call these.
     private void HookGlassActivity()
     {
-        PointerActivity += (_, _) => NoteGlassActivity();
+        PointerActivity += (_, _) => { if (!_rainGlassClick) NoteGlassActivity(); };
         Moved += (_, _) => NoteGlassActivity();
     }
 
-    private bool GlassClicked()
+    internal bool GlassClicked()
     {
         if (!_glassLive) return false;
         if (WrongInGrace) return true; // the release of the press it rode in on
-        CloseGlass(); // WPF EmiChannels.cs:50-56: a saver fires nothing.
+        bool spiral = _glassLanded && _glassChannel == "spiral";
+        CloseGlass();
+        if (spiral && !ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced())
+        {
+            GlassSpiralEffect(this);
+            EmiDeskService.Instance.Fire("effectFired", new { channel = "spiral", fromAsk = false });
+        }
         MaybeLandWrong();
         return true;
     }
+
+    // WPF EmiOffers.cs:414-430: six seconds at the user's opacity, with 85% as fallback.
+    internal static Action<EmiDeskWindow> GlassSpiralEffect = host =>
+    {
+        int percent = CoreSettings.Current.SpiralOpacity;
+        double opacity = percent > 0 ? Math.Clamp(percent / 100.0, .05, 1) : .85;
+        global::ConditioningControlPanel.Avalonia.Views.Overlays.SpiralOverlay.ShowTimed(host, 6000, opacity);
+    };
 
     private void StartGlassWatch()
     {
@@ -220,6 +235,7 @@ public partial class EmiDeskWindow
             if (!PongFeasible(AmbientFxCanvas.Env.Level)) { CloseGlass(); return; }
             _glassCodeRain.Tick(elapsed);
         }
+        _glassSpiral?.Tick(elapsed); // WPF EmiDeskWindow.Glass.cs:421-427: every channel frame.
         _glassReruns?.Tick(elapsed);
         _glassShop?.Tick(elapsed);
         if (_glassMotion) _glassBrowsing?.Tick(elapsed); // the pages hold as a still below full motion
@@ -255,6 +271,14 @@ public partial class EmiDeskWindow
             _glassCodeRain = new CodeRainPainter(_glassLayer.Width, _glassLayer.Height, GlassRng);
             _glassCodeRain.Attach(_glassLayer);
             _glassCodeRain.Tick(0);
+            return;
+        }
+        if (_glassChannel == "spiral")
+        {
+            _glassLayer.Children.Clear();
+            _glassSpiral = new SpiralPainter(_glassLayer.Width, _glassLayer.Height);
+            _glassSpiral.Attach(_glassLayer);
+            _glassSpiral.Tick(0);
             return;
         }
         if (_glassChannel == "pong" && PongFeasible(AmbientFxCanvas.Env.Level))
@@ -358,7 +382,7 @@ public partial class EmiDeskWindow
         _glassLive = _glassLanded = false;
         _glassFrames?.Stop(); _glassFrames = null;
         if (_glassLayer != null) GlassHost.Children.Remove(_glassLayer);
-        _glassShop = null; _glassReruns = null; _glassPong = null; _glassCodeRain = null; _glassBrowsing = null; _glassWrong = null; _glassChannel = null;
+        _glassShop = null; _glassReruns = null; _glassPong = null; _glassCodeRain = null; _glassSpiral = null; _glassBrowsing = null; _glassWrong = null; _glassChannel = null;
         _glassLayer = null; _glassDim = null; _glassSignal = null;
         _glassActivity = DateTime.UtcNow;
         _glassIdle = NextGlassIdle();
