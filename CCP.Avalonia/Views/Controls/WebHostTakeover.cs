@@ -54,6 +54,44 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             })();
             """;
 
+        // WPF MainWindow.Browser.cs:1017-1072. Panic also cancels polling and late callbacks.
+        internal const string PlaylistAutoPlayScript = """
+            (async function() {
+                window._ccpTakeoverStopped = false;
+                const post = message => {
+                    if (window._ccpTakeoverStopped) return;
+                    if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage(message);
+                    else if (window.invokeCSharpAction) window.invokeCSharpAction(JSON.stringify(message));
+                };
+                let button = document.querySelector('button.play-action');
+                for (let i = 0; i < 20 && !button; i++) {
+                    await new Promise(r => setTimeout(r, 250));
+                    if (window._ccpTakeoverStopped) return;
+                    button = document.querySelector('button.play-action');
+                }
+                if (window._ccpTakeoverStopped) return;
+                if (!button) { post({ type: 'videoEnded', reason: 'noPlayButton' }); return; }
+                let notified = false;
+                const started = () => {
+                    if (!notified && !window._ccpTakeoverStopped) {
+                        notified = true;
+                        post({ type: 'videoStarted' });
+                    }
+                };
+                const bind = audio => {
+                    if (!audio || audio.__bcBound) return;
+                    audio.__bcBound = true;
+                    audio.addEventListener('playing', started);
+                    audio.addEventListener('ended', () => post({ type: 'videoEnded', reason: 'ended' }));
+                };
+                const bindAll = () => document.querySelectorAll('audio').forEach(bind);
+                bindAll();
+                new MutationObserver(bindAll).observe(document.body, { childList: true, subtree: true });
+                button.click();
+                setTimeout(started, 3000);
+            })();
+            """;
+
         // WPF MainWindow.Browser.cs:981: latch before stopping media, so retries cannot resume it.
         internal const string StopScript = "window._ccpForcedFs = false; window._ccpTakeoverStopped = true;" +
             "document.querySelectorAll('video,audio').forEach(v => { try { v.pause(); } catch (e) {} });" +
