@@ -49,7 +49,7 @@ internal sealed class SpeakActionDispatcher : IActionDispatcher, IEnhancementRun
         }
     }
 
-    public void ResetOverlayBands() => (_other as IEnhancementRunCleanup)?.ResetOverlayBands();
+    public void ResetOverlayBands() { StopAll(); (_other as IEnhancementRunCleanup)?.ResetOverlayBands(); }
     public void StopOneShotFlashes() => (_other as IEnhancementRunCleanup)?.StopOneShotFlashes();
     public void StopOneShotSubliminals()
     {

@@ -59,7 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 w = new GameWindow(Games[PrizeCounterId]) { _counterFrom = string.IsNullOrWhiteSpace(from) ? "wallet" : from, _counterTab = tab };
                 if (onClosed != null) w._counterOnClosed.Add(onClosed);
-                w.Load(Server()); w.Show(); return w;
+                w.Load(Server()); w.CenterDefaultFrame(onMain: true); w.Show(); return w;
             }
             catch (Exception ex)
             {

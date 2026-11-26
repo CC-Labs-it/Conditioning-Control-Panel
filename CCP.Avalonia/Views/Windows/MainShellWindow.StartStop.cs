@@ -178,6 +178,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Direct Core stops (a remote panic) also freeze the session clock. A session's own Stop
             // has already cleared IsRunning by the time it stops the engine, so this is a no-op there.
             App.Sessions?.Pause();
+            CloseDeeperEditorErrors();
             if (Named<Views.Tabs.SettingsTabView>("SettingsTab") is { } settingsTab) { settingsTab.StopBrowserDiscovery(); settingsTab.StopBrowserEnhancement(); }
             // WPF StartStop.cs:577-580 ExitBrowserFullscreenForTeardown (#952): a topmost fullscreen browser
             // left up by a session's end hides the completion dialog behind it (#4423).

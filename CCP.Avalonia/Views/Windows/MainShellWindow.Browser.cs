@@ -4,7 +4,8 @@
 // BrowserPopout.cs wires pop-out, focus and return without discarding the native page.
 // First load uses the mod default (WPF MainWindow.Browser.cs:225).
 // Native engine mute and construction retry are live (WebHost). Media reporting: BrowserMedia.cs. Missing: asynchronous
-// init retry, general document-created scripts and page fullscreen/mirroring.
+// init retry and general document-created scripts. Page fullscreen, its zoom and mirroring live in
+// MainShellWindow.BrowserFullscreen.cs.
 // The remote controller's HypnoTube video (play_hypnotube) plays here with the same autoplay request. Watch links request video autoplay after navigation completes (#3961); WPF also has an
 // earlier DOM-ready signal that WebHost does not expose.
 // Profile account/art work belongs to its separate ledger rows. Site-radio mod sync lives on the card.
@@ -40,6 +41,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void PanicPauseBrowserMedia()
         {
             StopBrowserAudioSync();
+            BrowserPage?.StopBrowserEnhancementForPanic();
             LockCardWindow.EndWebVideo();
             ExitBrowserPopoutFullscreen();
             // Invalidate a delayed autoplay before the page is asked to stop (WPF MainWindow.Browser.cs:973-990).
@@ -48,7 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // A watch-chip request still waiting for the gate must not load after panic.
             host.CancelPendingNavigation();
             host.CancelBrowserZoom();
-            _ = host.InvokeScriptAsync(WebHostMedia.PanicPauseScript);
+            _ = host.InvokeScriptAsync(WebHostMedia.PanicPauseScript + (BrowserPage?.BrowserEnhanceResumeScript() ?? ""));
             // WPF PanicEndBrowserMedia -> EndWebVideoTakeover (Browser.cs:995): the controller's page goes too.
             EndRemoteBrowserVideo();
         }
@@ -113,7 +115,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (!_remoteBrowserVideoActive) return;
             _remoteBrowserVideoActive = false;
-            try { NavigateBrowserToCurrentSiteHome(); }
+            try
+            {
+                // WPF MainWindow.Browser.cs:993-1001 returns the host before the card covers it.
+                if (Named<Border>("RemoteControlOverlay")?.IsVisible == true)
+                    _browserPopoutWindow?.Close();
+                NavigateBrowserToCurrentSiteHome();
+            }
             finally { RevealBrowserForRemoteVideo(false); }
         }
 

@@ -553,10 +553,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             // WinForms' FolderBrowserDialog becomes the platform folder picker.
             try
             {
+                IStorageFolder? start = null;
+                try { start = await StorageProvider.TryGetFolderFromPathAsync(CorePaths.EffectiveAssets); }
+                catch (Exception ex) { Log.Debug(ex, "GazeMinigame: folder picker start location unavailable"); }
+                if (!IsVisible) return; // Panic or close may have ended the game during lookup.
                 var picked = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
                 {
                     Title = "Pick a folder of images and/or videos",
                     AllowMultiple = false,
+                    SuggestedStartLocation = start,
                 });
                 var folder = picked.Count > 0 ? picked[0].TryGetLocalPath() : null;
                 if (string.IsNullOrWhiteSpace(folder)) return;

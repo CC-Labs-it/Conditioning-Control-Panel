@@ -104,6 +104,9 @@ namespace ConditioningControlPanel.Services
         /// guidance dialog). Raised on the UI thread.</summary>
         public event Action? NoVideos;
 
+        /// <summary>WPF VideoService.cs:3124: announce 1.3 seconds before playback.</summary>
+        public event Action? VideoAboutToStart;
+
         /// <summary>A clip is on screen (WPF VideoService.VideoStarted, VideoService.cs:3370).</summary>
         public event Action? VideoStarted;
 
@@ -114,6 +117,9 @@ namespace ConditioningControlPanel.Services
         /// <summary>A playing clip has closed, including attention retries and forced cleanup.
         /// WPF VideoService.Cleanup:7950; fires once after the host closes and IsPlaying clears.</summary>
         public event Action? VideoEnded;
+
+        /// <summary>A force stop, including an idle stop after a natural end.</summary>
+        public event Action? VideoForceStopped;
 
         /// <summary>The clip <see cref="VideoStarted"/> announced (WPF VideoService.LastVideoPath).</summary>
         public string? LastVideoPath { get; private set; }
@@ -600,6 +606,11 @@ namespace ConditioningControlPanel.Services
             // WPF b6ff63fbd: only full-screen playback clears flashes, including a Test press.
             else if (!_host.IsFloating(IsStrict)) CoreFlash.Stop();
             var strict = IsStrict;
+            void Announce()
+            {
+                try { VideoAboutToStart?.Invoke(); }
+                catch (Exception ex) { Log.Debug("VideoAboutToStart handler failed: {Error}", ex.Message); }
+            }
             Dispose(ref _preroll);
             ITimer? created = null;
             created = _time.CreateTimer(_ => { var mine = created; CoreDispatch.Post(() =>
@@ -611,7 +622,8 @@ namespace ConditioningControlPanel.Services
                     freezeBeforePreroll = false;
                     // WPF PlayVideo prologue (VideoService.cs:3127): the floating rule holds after the freeze too.
                     if (!_host.IsFloating(strict)) CoreFlash.Stop();
-                    mine!.Change(PreRoll, Timeout.InfiniteTimeSpan);
+                    Announce();
+                    if (ReferenceEquals(mine, _preroll) && _playing) mine!.Change(PreRoll, Timeout.InfiniteTimeSpan);
                     return;
                 }
                 // Recheck preparation at the end of pre-roll, including settings changes while it ran.
@@ -668,7 +680,12 @@ namespace ConditioningControlPanel.Services
                 }
             }
             _preroll = created;
-            created.Change(freezeBeforePreroll ? FreezeLead : PreRoll, Timeout.InfiniteTimeSpan);
+            if (freezeBeforePreroll) created.Change(FreezeLead, Timeout.InfiniteTimeSpan);
+            else
+            {
+                Announce();
+                if (ReferenceEquals(created, _preroll) && _playing) created.Change(PreRoll, Timeout.InfiniteTimeSpan);
+            }
             Log.Information("VideoService: playing {File} (strict={Strict})", Path.GetFileName(path), strict);
             return true;
         }
@@ -817,10 +834,16 @@ namespace ConditioningControlPanel.Services
             _waitEndsRun = false;
             _bubbleChaosToken = 0;
             var heldReplay = DropDefer();
-            _retryGeneration++;
+            var generation = ++_retryGeneration;
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
             // fall-open panic force-stops the clip alone, and must not leave the field held forever.
-            if (!Finish(cancelled: true))
+            var finished = Finish(cancelled: true);
+            if (generation == _retryGeneration)
+            {
+                try { VideoForceStopped?.Invoke(); }
+                catch (Exception ex) { Log.Debug("VideoForceStopped handler failed: {Error}", ex.Message); }
+            }
+            if (!finished)
             {
                 // Also drop a fading curtain while idle; a host failure must not interrupt panic.
                 try { _host.CloseAll(); }
