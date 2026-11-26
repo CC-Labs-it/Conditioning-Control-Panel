@@ -54,8 +54,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             Helpers.ModArt.BindFeaturePlates(this, "features/Bubble_pop.png", HeroArt, SideArt);
             RowGetBubblesV2.RowChanged += (_, _) => RebuildMotionPicker();
             ChkBrainDrainBubble.IsCheckedChanged += ChkBrainDrainBubble_Changed;
-            // WPF includes the Brain Drain melt in this prize; keep the offer gated until it can fire here.
-            RowGetBubblesV2.Configure(Services.Prizes.V2PurchaseRule.BubblesPrizeId, "v2_get_bubble_blurb", "label_bubbles_v2_box", available: false);
+            // WPF BubblePopFeatureControl.xaml.cs: the purchase is offered (the melt fires via BubblePayloadHost).
+            RowGetBubblesV2.Configure(Services.Prizes.V2PurchaseRule.BubblesPrizeId, "v2_get_bubble_blurb", "label_bubbles_v2_box");
 
             InitFrothRows();
             LoadFromSettings();
@@ -193,8 +193,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             bool rain = Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.BubbleRain);
             bool spiral = Platform.PrizeOwnership.IsGranted(Platform.PrizeOwnership.BubbleSpiralIn);
             MotionRow.IsVisible = rain || spiral;
-            // The Brain Drain trigger and melt payload are not wired on this head yet.
-            ChkBrainDrainBubble.IsVisible = false;
+            // WPF BubblePopFeatureControl.xaml.cs:321: the Brain Drain bubble arrives with either v2 prize.
+            ChkBrainDrainBubble.IsVisible = rain || spiral;
             V2Box.IsVisible = rain || spiral || !RowGetBubblesV2.IsRowHidden;
             var wasLoading = _isLoading;
             _isLoading = true;

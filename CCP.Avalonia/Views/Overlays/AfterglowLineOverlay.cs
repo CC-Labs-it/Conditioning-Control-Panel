@@ -157,6 +157,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _lease = lease;
             _bounds = screen.Bounds;
             _canvas = new AfterglowLineCanvas(Line, screen.Bounds, screen.Scaling > 0 ? screen.Scaling : 1);
+            // The stage is shared per screen (cards, flashes, spirals): WPF AfterglowLineLayer.ZIndex = Subliminal + 1.
+            _canvas.ZIndex = ConditioningControlPanel.Services.Compositor.CompositorLayers.Subliminal + 1;
             lease.Canvas.Children.Add(_canvas);
             lease.Raise();
             _band = new[] { AfterglowLineRules.LineBand(Rect(_bounds)) };

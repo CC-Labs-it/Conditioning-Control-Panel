@@ -112,6 +112,22 @@ public sealed class BarkEngineTests : IDisposable
         finally { WindowAwarenessService.V2OwnsReactionsProvider = old; }
     }
 
+    [Fact]
+    public void FiredBarkReportsToAttachedRoutingArbiterWhenNoFieldSet()
+    {
+        // WPF BarkService.cs:1786-1793 reports through AwarenessV2Routing.Arbiter.
+        var old = WindowAwarenessService.V2OwnsReactionsProvider;
+        var arbiter = new RecordingArbiter();
+        try
+        {
+            WindowAwarenessService.V2OwnsReactionsProvider = () => true;
+            AwarenessV2Routing.Attach(arbiter);
+            Assert.True(Engine(Rule("Routed", "line")).Raise("Routed", guaranteed: true));
+            Assert.Equal(new[] { ReactionSource.Bark }, arbiter.Lines);
+        }
+        finally { AwarenessV2Routing.Detach(); WindowAwarenessService.V2OwnsReactionsProvider = old; }
+    }
+
     private sealed class DecisionSink : Serilog.Core.ILogEventSink
     {
         public readonly List<Serilog.Events.LogEvent> Events = new();

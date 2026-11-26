@@ -249,6 +249,32 @@ public sealed class JustDropWindowTests
         Assert.True(replay.IsVisible);
     });
 
+    // WPF JustDropHostService.cs:101,285 -> ChaosWebViewHost.FocusWeb (:877-883): the page gets the keyboard.
+    [Fact]
+    public void RefocusAndReplayDuckFocusThePage() => Run(shell =>
+    {
+        var focused = new System.Collections.Generic.List<GameWindow>();
+        GameWindow.JustDropFocusPageForTests = focused.Add;
+        try
+        {
+            JustDropService.SetServerEnabledForTests(true);
+            shell.ShowTab("justdrop");
+            var shop = Open()!;
+            focused.Clear();
+            shell.ShowTab("justdrop");
+            Assert.Same(shop, Assert.Single(focused));
+            focused.Clear();
+            Assert.Same(shop, GameWindow.LaunchJustDropReplay("kept-order", shell));
+            Assert.Same(shop, Assert.Single(focused));
+            shop.Close();
+            Dispatcher.UIThread.RunJobs();
+            focused.Clear();
+            var replay = GameWindow.LaunchJustDropReplay("kept-order", shell)!;
+            Assert.Same(replay, Assert.Single(focused));
+        }
+        finally { GameWindow.JustDropFocusPageForTests = null; }
+    });
+
     [Fact]
     public void BrowserFailureClosesShopAndReplayAndRestoresThePanel() => Run(shell =>
     {

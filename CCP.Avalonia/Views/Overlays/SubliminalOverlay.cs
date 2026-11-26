@@ -64,7 +64,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             var card = SubliminalOverlayWindow.Build(text, CoreSettings.Current);
             card.Opacity = 0;
-            card.ZIndex = 1200; // WPF: above hosted image flashes
+            // WPF: legacy host above hosted image flashes (1000); the compositor's SubliminalLayer sits under SpiralLayer.
+            card.ZIndex = CoreSettings.Current.UnifiedOverlayHost ? Services.Compositor.CompositorLayers.Subliminal : 1200;
             lease.Canvas.Children.Add(card);
             HostedCards.Add(card);
             lease.Raise();
@@ -167,7 +168,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             bool barkRaised = false;
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
-                if (UseSolidHost(s.SubliminalSolidMode, s.SubliminalStealsFocus, MandatoryVideoOverlay.Instance.Windows.Count) &&
+                // WPF SubliminalService.cs:659 UsesCompositorCard: the unified host takes every non-focus card.
+                if (UseSolidHost(s.SubliminalSolidMode || s.UnifiedOverlayHost, s.SubliminalStealsFocus, MandatoryVideoOverlay.Instance.Windows.Count) &&
                     ShowHosted(screens[i].Bounds, text, alpha, hold, null, fadeIn, fadeOut))
                 {
                     // WPF raises the bark and Displayed on every path; Present (which does it) is skipped here.

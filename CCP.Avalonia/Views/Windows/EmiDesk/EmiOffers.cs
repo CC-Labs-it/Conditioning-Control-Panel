@@ -19,7 +19,8 @@ internal static class EmiOffers
             var id = e.Substring(7);
             return desk.IsTargetAvailable(id) && !EmiState.Current.Pins.Contains(id, StringComparer.OrdinalIgnoreCase);
         }
-        return e.Equals("none", StringComparison.OrdinalIgnoreCase) ||
+        return (e.Equals("rain", StringComparison.OrdinalIgnoreCase) && EmiGifRain.Images().Count > 0) ||
+            e.Equals("none", StringComparison.OrdinalIgnoreCase) ||
             (e.Equals("bedtime", StringComparison.OrdinalIgnoreCase) && !EmiLineEngine.BedtimeSet);
     }
 
@@ -30,6 +31,10 @@ internal static class EmiOffers
         var desk = EmiDeskService.Instance;
         if (e.StartsWith("open:", StringComparison.OrdinalIgnoreCase)) desk.OpenTarget(e.Substring(5));
         else if (e.StartsWith("pinTop:", StringComparison.OrdinalIgnoreCase)) desk.PinTop(e.Substring(7));
+        else if (e.Equals("rain", StringComparison.OrdinalIgnoreCase))
+        {
+            if (EmiGifRain.Start(desk.Window)) desk.Fire("effectFired", new { channel = "rain", fromAsk });
+        }
         else if (e.Equals("bedtime", StringComparison.OrdinalIgnoreCase))
         {
             var now = DateTime.Now;
