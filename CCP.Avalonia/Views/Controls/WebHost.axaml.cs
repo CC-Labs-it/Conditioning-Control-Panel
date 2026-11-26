@@ -406,7 +406,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         public static bool IsAvailable => UnavailableReason is null;
 
         /// <summary>Null when a web view can be hosted; otherwise the platform's own explanation.</summary>
-        public static string? UnavailableReason => ProbeUnavailableReason();
+        public static string? UnavailableReason => ReasonForLifetime(
+            Application.Current?.ApplicationLifetime is global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime,
+            ProbeUnavailableReason);
+
+        internal static string? ReasonForLifetime(bool desktop, Func<string?> probe) => desktop ? probe() : NoEngineReason;
 
         private static readonly Lazy<(string Text, string? Command)?> _linuxHint = new(() =>
             ConditioningControlPanel.Services.LinuxDependencies.Check(
