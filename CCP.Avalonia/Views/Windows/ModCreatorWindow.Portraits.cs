@@ -16,15 +16,17 @@ public partial class ModCreatorWindow
         var dir = Path.Combine(resourcesDir, "sounds", "companion_audio");
         var path = Path.Combine(dir, "avatar_manifest.json");
         if (!File.Exists(path)) return;
-        var json = File.ReadAllText(path);
         try
         {
+            var json = File.ReadAllText(path);
             var manifest = JObject.Parse(json);
             if (manifest.GetValue("skins", StringComparison.OrdinalIgnoreCase) is not JArray skins || manifest.GetValue("emotions", StringComparison.OrdinalIgnoreCase) is not JObject emotions || skins.Count == 0 || !emotions.HasValues) return;
             _portraitManifestJson = json;
             _portraitBaseDir = dir;
         }
-        catch (Newtonsoft.Json.JsonException) { }
+        // WPF 7.4.1 ModCreatorWindow.Portraits.cs:564 catches every failure here, so an
+        // unreadable or malformed manifest skips the portraits and never fails the mod load.
+        catch (Exception) { }
     }
 
     private void WritePortraitsTo(string resourcesDir)
