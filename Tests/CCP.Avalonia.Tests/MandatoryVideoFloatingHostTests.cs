@@ -19,6 +19,8 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Video;
+using ConditioningControlPanel.Services.Fyp.Online;
+using Avalonia.Threading;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -96,6 +98,47 @@ public sealed class MandatoryVideoFloatingHostTests
         });
 
     private static List<Window> Up(MandatoryVideoOverlay o) => o.Windows.Where(w => w.IsVisible).ToList();
+
+    [Fact]
+    public async Task Joined_credit_test_does_not_change_global_scroller_index()
+    {
+        var paths = new[] { "/v/a.mp4", "/v/b.mp4", "/v/c.mp4", "/v/d.mp4", "/v/e.mp4" };
+        var before = paths.Select(ScrolllerItemIndex.MetaFor).ToArray();
+        await Joined_floating_credit_opens_its_own_link_and_panic_cancels_pending_open();
+        Assert.Equal(before, paths.Select(ScrolllerItemIndex.MetaFor).ToArray());
+    }
+
+    [Fact]
+    public Task Joined_floating_credit_opens_its_own_link_and_panic_cancels_pending_open() => Run((o, _) =>
+    {
+        var paths = new[] { "/v/a.mp4", "/v/b.mp4", "/v/c.mp4", "/v/d.mp4", "/v/e.mp4" };
+        o.CreditLookup = path => paths.Contains(path) ? new ScrolllerCacheMeta("clip", "joined_sub") : ScrolllerItemIndex.MetaFor(path);
+        var opener = MandatoryVideoOverlay.CreditOpener;
+        var previousVideo = CoreEngine.Video;
+        var opened = new List<string>();
+        try
+        {
+            MandatoryVideoOverlay.CreditOpener = link => { opened.Add(link); return true; };
+            CoreEngine.Video = o.Scheduler;
+            Assert.True(o.TryFloatingTrigger(userInitiated: true));
+            var joined = Assert.Single(o.Floaters);
+            var button = Assert.IsType<Button>(((Panel)((Border)joined.Window.Content!).Child!).Children.Last());
+            Assert.True(button.IsHitTestVisible);
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { "https://scrolller.com/r/joined_sub" }, opened);
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            PanicSurfaces.All.Single(s => s.Id == "engine").Stop(null);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Single(opened);
+            Assert.True(joined.Closed);
+        }
+        finally
+        {
+            CoreEngine.Video = previousVideo;
+            MandatoryVideoOverlay.CreditOpener = opener;
+        }
+    });
 
     /// <summary>Timers wait for <see cref="FireLast"/>: the most recently armed one fires.</summary>
     private sealed class Clock : TimeProvider
