@@ -183,6 +183,7 @@ public sealed class PanicSurfacesTests
         "deeper-tutorial",
         "workshop-trigger-editor",
         "awareness-companion",
+        "awareness-observer",
         "tour",
         "games",
         "upgrade-intro",
