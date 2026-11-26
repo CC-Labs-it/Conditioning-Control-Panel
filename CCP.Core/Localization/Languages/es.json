@@ -4833,6 +4833,7 @@
   "bug_report_success_toast": "¡Gracias! Tu reporte se registró como {0}.",
   "bug_report_saved_pending_toast": "Reporte guardado ({0}). La responsable lo recibirá en breve.",
   "bug_report_error_toast": "No se pudo enviar el reporte. Inténtalo de nuevo más tarde.",
+  "bug_report_clock_off": "El reloj de tu PC parece desajustado, así que el servidor rechazó el reporte. Activa la fecha y hora automáticas en la configuración del sistema y vuelve a enviarlo.",
   "btn_suggestion": "Sugerir una Función",
   "suggestion_title": "Sugerir una Función",
   "suggestion_description_label": "¿Cuál es tu idea?",

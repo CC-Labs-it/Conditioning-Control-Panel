@@ -4833,6 +4833,7 @@
   "bug_report_success_toast": "Danke! Dein Bericht wurde als {0} abgelegt.",
   "bug_report_saved_pending_toast": "Bericht gespeichert ({0}). Der Betreuer erhält ihn in Kürze.",
   "bug_report_error_toast": "Der Bericht konnte nicht gesendet werden. Bitte versuch es später erneut.",
+  "bug_report_clock_off": "Die Uhr deines PCs scheint falsch zu gehen, deshalb hat der Server den Bericht abgelehnt. Schalte in den Systemeinstellungen die automatische Uhrzeit ein und sende ihn dann erneut.",
   "btn_suggestion": "Funktion vorschlagen",
   "suggestion_title": "Funktion vorschlagen",
   "suggestion_description_label": "Was ist deine Idee?",

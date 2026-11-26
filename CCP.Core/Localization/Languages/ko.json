@@ -4833,6 +4833,7 @@
   "bug_report_success_toast": "고마워요! 신고가 {0}(으)로 접수됐어요.",
   "bug_report_saved_pending_toast": "신고를 저장했어요 ({0}). 관리자가 곧 받아볼 거예요.",
   "bug_report_error_toast": "신고를 보내지 못했어요. 나중에 다시 시도해 주세요.",
+  "bug_report_clock_off": "PC 시계가 맞지 않아 서버가 신고를 거부했어요. 시스템 설정에서 날짜와 시간 자동 설정을 켠 다음 다시 보내 주세요.",
   "btn_suggestion": "기능 제안",
   "suggestion_title": "기능 제안하기",
   "suggestion_description_label": "어떤 아이디어인가요?",

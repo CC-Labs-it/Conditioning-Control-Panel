@@ -310,13 +310,7 @@ namespace ConditioningControlPanel.Avalonia
             // SIGTERM (logout, systemd, kill) is not handled by Avalonia's X11 backend: the app ignored it and needed kill -9.
             // Shut down through the lifetime instead, so settings flush exactly as on tray Exit.
             using var term = System.Runtime.InteropServices.PosixSignalRegistration.Create(
-                System.Runtime.InteropServices.PosixSignal.SIGTERM, ctx =>
-                {
-                    ctx.Cancel = true;
-                    global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                        (global::Avalonia.Application.Current?.ApplicationLifetime
-                            as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.Shutdown());
-                });
+                System.Runtime.InteropServices.PosixSignal.SIGTERM, OnSigterm);
             // A cold WSLg / on-demand Xwayland first reports a 640x480 placeholder screen; Avalonia would keep it all run.
             Platform.X11ScreenSettle.WaitForRealMonitors();
             App.SplashOnStartup = true;
@@ -324,6 +318,20 @@ namespace ConditioningControlPanel.Avalonia
             app.StartWithClassicDesktopLifetime(args);
             App.StartupFailure?.Throw();   // a failed startup crashes non-zero, as it did before the splash
             return Views.Windows.MainShellWindow.TrayCheck ? Views.Windows.MainShellWindow.TrayCheckExit : 0;
+        }
+
+        private static int _sigterms;
+        internal static void ResetSigterm() => _sigterms = 0;
+
+        /// <summary>ccp-bugs #1704: the first SIGTERM shuts down through the lifetime; a second one (that exit is
+        /// stuck) is left to the runtime's default termination, so "terminate" works without kill -9.</summary>
+        internal static void OnSigterm(System.Runtime.InteropServices.PosixSignalContext ctx)
+        {
+            if (System.Threading.Interlocked.Increment(ref _sigterms) > 1) return;
+            ctx.Cancel = true;
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                (global::Avalonia.Application.Current?.ApplicationLifetime
+                    as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.Shutdown());
         }
 
         public static AppBuilder BuildAvaloniaApp()

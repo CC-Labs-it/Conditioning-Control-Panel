@@ -88,6 +88,16 @@ internal sealed class FypMetaStore
         Save();
     }
 
+    /// <summary>Drop every failure strike (ccp-bugs#1703: Avalonia beta 2 struck clips its server refused). A clip
+    /// that truly fails earns them back within <see cref="FailStrikeLimit"/> sessions.</summary>
+    internal void ClearStrikes()
+    {
+        lock (_lock)
+            foreach (var m in _byId.Values)
+                if (m.FailStrikes != null) { m.FailStrikes = null; _dirty = true; }
+        Save();
+    }
+
     public void Save()
     {
         lock (_lock)
