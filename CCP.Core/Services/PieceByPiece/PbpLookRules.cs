@@ -83,6 +83,10 @@ internal static class PbpLookRules
         return tab is "chess" or "prime" ? tab : CounterTab;
     }
 
+    public static bool CounterHandsFocusBack(string reason)
+        => reason != PrizeCounter.PrizeCounterRules.ClosePanic && reason != PrizeCounter.PrizeCounterRules.CloseAppExit
+           && reason != PrizeCounter.PrizeCounterRules.CloseFailed;
+
     // ---------------------------------------------------------------- the stored copy
 
     /// <summary>The saved pick and when it was made (unix ms), as AppSettings.ChessLook holds it.</summary>

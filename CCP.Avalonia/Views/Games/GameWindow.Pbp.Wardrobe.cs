@@ -14,7 +14,7 @@ using Serilog;
 namespace ConditioningControlPanel.Avalonia.Views.Games;
 internal sealed partial class GameWindow
 {
-    // WPF PieceByPieceHostService.Wardrobe.cs:61-78, 154-208. The counter door is excluded by B3.
+    // WPF PieceByPieceHostService.Wardrobe.cs:61-78, 154-208. The counter door is in GameWindow.Pbp.cs.
     private readonly CancellationTokenSource _pbpEquipLifetime = new();
     private readonly SemaphoreSlim _pbpEquipWrites = new(1, 1);
     internal Task PbpEquipPending { get; private set; } = Task.CompletedTask;
