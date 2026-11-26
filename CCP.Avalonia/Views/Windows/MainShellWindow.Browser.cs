@@ -114,7 +114,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (!_remoteBrowserVideoActive) return;
             _remoteBrowserVideoActive = false;
-            try { NavigateBrowserToCurrentSiteHome(); }
+            try
+            {
+                // WPF MainWindow.Browser.cs:993-1001 returns the host before the card covers it.
+                if (Named<Border>("RemoteControlOverlay")?.IsVisible == true)
+                    _browserPopoutWindow?.Close();
+                NavigateBrowserToCurrentSiteHome();
+            }
             finally { RevealBrowserForRemoteVideo(false); }
         }
 
