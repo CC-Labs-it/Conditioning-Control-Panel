@@ -51,7 +51,7 @@ public static class SuperRows
 /// </summary>
 public sealed class SuperOptionRows : StackPanel
 {
-    public SuperEffect Effect { get; }
+    public SuperEffect Kind { get; }
     private readonly List<Action> _refresh = new();
     private bool _loading;
 
@@ -60,7 +60,7 @@ public sealed class SuperOptionRows : StackPanel
 
     public SuperOptionRows(SuperEffect effect, string name)
     {
-        Effect = effect;
+        Kind = effect;
         Name = name;
         IsVisible = false;
         Children.Add(new Border { Height = 1, Background = new SolidColorBrush(Color.Parse("#33FFE08A")), Margin = new Thickness(0, 2, 0, 6) });
@@ -83,7 +83,7 @@ public sealed class SuperOptionRows : StackPanel
         base.OnDetachedFromVisualTree(e);
     }
 
-    private void OnAccessChanged(SuperEffect effect) { if (effect == Effect) Ui(Refresh); }
+    private void OnAccessChanged(SuperEffect effect) { if (effect == Kind) Ui(Refresh); }
     private void OnLanguageChanged(object? sender, EventArgs e) => Ui(Refresh);
     private void OnReplaced() => Ui(Refresh);
 
@@ -96,7 +96,7 @@ public sealed class SuperOptionRows : StackPanel
     /// <summary>Show state, every value and every string, read again.</summary>
     public void Refresh()
     {
-        SuperRows.Apply(this, Effect);
+        SuperRows.Apply(this, Kind);
         _loading = true;
         try { foreach (var r in _refresh) r(); }
         catch { /* see SuperRows.Apply */ }

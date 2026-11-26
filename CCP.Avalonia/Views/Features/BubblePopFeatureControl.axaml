@@ -281,7 +281,7 @@
                 </StackPanel>
 
                 <!-- The gold V2 box (WPF Controls/SuperBox): Super switch, BASIC sign, weekly try. -->
-                <super:SuperBox x:Name="SuperBoxMain" Effect="InnerBloom"/>
+                <super:SuperBox x:Name="SuperBoxMain" Kind="InnerBloom"/>
             </StackPanel>
 
             <!-- SIDE ART. Background painted from code (ModArt.BindFeaturePlates); scrim kept verbatim. -->

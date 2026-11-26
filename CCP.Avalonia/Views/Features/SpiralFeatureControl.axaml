@@ -222,7 +222,7 @@
                 </DockPanel>
 
                 <!-- The gold V2 box (WPF Controls/SuperBox): Super switch, BASIC sign, weekly try. -->
-                <super:SuperBox x:Name="SuperBoxMain" Effect="Vortex"/>
+                <super:SuperBox x:Name="SuperBoxMain" Kind="Vortex"/>
             </StackPanel>
 
             <!-- WPF background art, clipped by the Border's rounded corners. -->

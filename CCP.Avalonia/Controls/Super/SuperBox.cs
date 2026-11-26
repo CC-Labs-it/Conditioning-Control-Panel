@@ -35,10 +35,10 @@ public sealed class SuperBox : Border
     private const double RingR = 9;
     private const double DimOpacity = 0.5;
 
-    public static readonly StyledProperty<SuperEffect> EffectProperty =
-        AvaloniaProperty.Register<SuperBox, SuperEffect>(nameof(Effect), SuperEffect.FlickerDeck);
+    public static readonly StyledProperty<SuperEffect> KindProperty =
+        AvaloniaProperty.Register<SuperBox, SuperEffect>(nameof(Kind), SuperEffect.FlickerDeck);
 
-    public SuperEffect Effect { get => GetValue(EffectProperty); set => SetValue(EffectProperty, value); }
+    public SuperEffect Kind { get => GetValue(KindProperty); set => SetValue(KindProperty, value); }
 
     public static readonly StyledProperty<object?> BodyProperty =
         AvaloniaProperty.Register<SuperBox, object?>(nameof(Body));
@@ -164,15 +164,15 @@ public sealed class SuperBox : Border
     /// <summary>WPF :268: a locked tier shakes the sign and gets the tier refusal (SuperDoor), others flip.</summary>
     internal void OnStarPressed()
     {
-        if (!HostedOnThisHead.Contains(Effect)) return;
-        if (!SuperDoor.Press(Effect)) Shake(_signHost);
+        if (!HostedOnThisHead.Contains(Kind)) return;
+        if (!SuperDoor.Press(Kind)) Shake(_signHost);
         Refresh();
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == EffectProperty) Refresh();
+        if (change.Property == KindProperty) Refresh();
         else if (change.Property == BodyProperty) OnBodyChanged(change.NewValue);
     }
 
@@ -182,7 +182,7 @@ public sealed class SuperBox : Border
         _body.IsVisible = body != null;
     }
 
-    private void OnAccessChanged(SuperEffect e) { if (e == Effect) Ui(Refresh); }
+    private void OnAccessChanged(SuperEffect e) { if (e == Kind) Ui(Refresh); }
     private void OnPreviewChanged() => Ui(Refresh);
 
     private static void Ui(Action a)
@@ -251,7 +251,7 @@ public sealed class SuperBox : Border
     /// <summary>Repaint every part from <see cref="SuperAccess"/> and <see cref="SuperPreview"/> (WPF :390-452).</summary>
     public void Refresh()
     {
-        var effect = Effect;
+        var effect = Kind;
         string name = Loc.Get("super_name_" + effect.ToString().ToLowerInvariant());
         _title.Text = name;
         if (_helpFor != effect)

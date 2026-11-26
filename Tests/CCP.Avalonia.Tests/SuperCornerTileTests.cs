@@ -102,14 +102,14 @@ public sealed class SuperCornerTileTests
     {
         var card = new FeatureCard { Super = "FlickerDeck" };
         Assert.NotNull(card.SuperCornerControl);
-        Assert.Equal(SuperEffect.FlickerDeck, card.SuperCornerControl!.Effect);
+        Assert.Equal(SuperEffect.FlickerDeck, card.SuperCornerControl!.Kind);
         Assert.Equal(SuperCorner.Leg + 2, card.FindControl<StackPanel>("BadgeColumn")!.Margin.Left);
         card.Super = null;
         Assert.Null(card.SuperCornerControl);
         Assert.Equal(8, card.FindControl<StackPanel>("BadgeColumn")!.Margin.Left);
 
         var split = new SplitFeatureCard { SuperA = "Vortex", SuperB = "Creep" };
-        Assert.Equal(SuperEffect.Vortex, split.CornerA!.Effect);
+        Assert.Equal(SuperEffect.Vortex, split.CornerA!.Kind);
         Assert.True(split.CornerB!.BottomRight);
         Assert.Equal(SuperCorner.Leg + 2, split.FindControl<Border>("TitlePillA")!.Margin.Left);
         var drain = new SplitFeatureCard { SuperB = "Undertow" };

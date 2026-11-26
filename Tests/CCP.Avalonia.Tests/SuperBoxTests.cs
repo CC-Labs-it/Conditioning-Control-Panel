@@ -47,7 +47,7 @@ public sealed class SuperBoxTests
             SuperBox.HostedOnThisHead.Clear();
             if (hosted) SuperBox.HostedOnThisHead.Add(effect);
             typeof(AppSettings).GetProperty(SuperBase.SettingFor(effect))!.SetValue(service.Current, true);
-            var box = new SuperBox { Effect = effect };
+            var box = new SuperBox { Kind = effect };
             window = new Window { Content = box, Width = 600, Height = 300 };
             window.Show();
             Dispatcher.UIThread.RunJobs();
@@ -123,7 +123,7 @@ public sealed class SuperBoxTests
     [Fact]
     public void TryStartsOnceAWeekShowsCountdownAndPanicEndsIt() => WithBox(SuperPreview.ThisWeek, premium: false, (box, service, _) =>
     {
-        var effect = box.Effect;
+        var effect = box.Kind;
         var tryChip = Assert.Single(box.Corner.Children.OfType<Button>());
         Assert.Contains(Loc.Get("super_try"), CornerTexts(box));
         Click(tryChip);
@@ -152,7 +152,7 @@ public sealed class SuperBoxTests
         var shell = new MainShellWindow();
         try
         {
-            Assert.True(SuperPreview.TryStart(box.Effect));
+            Assert.True(SuperPreview.TryStart(box.Kind));
             LockCardWindow.ShowOnAllMonitors("good girl", 1, strictMode: true);
             Assert.True(LockCardWindow.IsAnyOpen());
             shell.HandlePanicKeyPress(new DateTime(2026, 1, 1, 12, 0, 0));
@@ -198,7 +198,7 @@ public sealed class SuperBoxTests
         {
             var control = page();
             var box = Assert.Single(control.GetLogicalDescendants().OfType<SuperBox>());
-            Assert.Equal(effect, box.Effect);
+            Assert.Equal(effect, box.Kind);
         }
     });
 }

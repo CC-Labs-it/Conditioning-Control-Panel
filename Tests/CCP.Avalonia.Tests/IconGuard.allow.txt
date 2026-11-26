@@ -11,6 +11,8 @@ Views/Windows/EmiDesk/EmiFace.cs :: "Noto Sans Symbols 2, Segoe UI Symbol, Segoe
 
 Views/Overlays/GazeRefineOverlay.cs :: new Path { Stroke = Brushes.HotPink :: path: animated gaze dwell progress ring, not an icon
 Views/Tabs/ChasterTabView.axaml :: <Path x:Name="SpiralPath" :: path: decorative rotating spiral watermark, not an icon (WPF ChasterTabView.xaml:276)
+Views/Overlays/FlashOverlayWindow.Deck.cs :: _crackUnder = new Path { :: path: the Deck card crack shadow line, drawn per break, not an icon (WPF Services/Super/Draw deck crack)
+Views/Overlays/FlashOverlayWindow.Deck.cs :: CrackLine = new Path { :: path: the Deck card crack line, drawn per break, not an icon (WPF Services/Super/Draw deck crack)
 # --- content (c).1: companion/chat text ---
 Views/Controls/Companion/ChatThresholdView.axaml.cs :: good. it should~ 💕 :: chat sample bubble, companion text (content (c).1)
 
