@@ -56,6 +56,7 @@ public class ChaosRabbitTrailTests
         var rabbit = new AmbientBubble { X = 100, Y = 100, Size = 20, Spec = ChaosBubbleVariants.BuildDarter(0.5) };
         var treat = new AmbientBubble { X = 300, Y = 330, Size = 20, Spec = new EffectBubbleSpec { Payload = new FlashPayload() } };
         BubbleOverlay.Field.Bubbles.AddRange(new[] { rabbit, treat });
+        BubbleOverlay.RabbitTrailSteps[rabbit] = 100;   // past the telegraph (no trail while it flares)
         StepTrails.Invoke(null, null);
         Assert.Single(BubbleOverlay.RabbitTrails[rabbit].Points);
         Assert.NotNull(ChaosFieldFxOverlay.Active);   // the point is mirrored as a pink trail spark
@@ -76,6 +77,7 @@ public class ChaosRabbitTrailTests
         var sweeper = new AmbientBubble { X = 100, Y = 100, Size = 20, Spec = ChaosBubbleVariants.BuildDarter(0.5, sweeper: true) };
         var treat = new AmbientBubble { X = 100, Y = 120, Size = 20, Spec = new EffectBubbleSpec { Payload = new FlashPayload() } };
         BubbleOverlay.Field.Bubbles.AddRange(new[] { sweeper, treat });
+        BubbleOverlay.RabbitTrailSteps[sweeper] = 100;   // past the telegraph (no trail while it flares)
         StepTrails.Invoke(null, null);
         Assert.Single(BubbleOverlay.RabbitTrails[sweeper].Points);
         Assert.False(treat.Popping);
