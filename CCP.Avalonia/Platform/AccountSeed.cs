@@ -261,6 +261,7 @@ internal static class AccountSeed
             Prizes = PrizeOwnership.Feed,
             // WPF ProfileSyncService.cs:2099-2118: cloud achievements are restored silently (restack b164, #3712).
             RestoreAchievements = ids => App.Achievements?.RestoreCloudAchievements(ids),
+            SyncProgressionChanged = () => ProfileLoaded?.Invoke(),
             ReceiptReceived = PrizeOwnership.SyncReceipt,
             Countdown = App.DescentCountdown,
             DescentReader = App.Descent,
