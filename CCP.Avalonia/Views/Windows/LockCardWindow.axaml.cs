@@ -1146,6 +1146,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
                 // Last, so the card that can be typed into owns the foreground.
                 primary.Activate();
+                // A refused activation leaves the card on top but never active, so Deactivated never reclaims it.
+                Platform.KeyboardReclaim.Start(primary, () => !primary._isCompleted && !primary._fadingOut,
+                    primary.FocusInput, "Lock Card");
                 Log.Information("Lock Card shown on {Count} window(s) - {Repeats} repeat(s), strict={Strict}, test={Test}",
                     _allWindows.Count, repeats, strictMode, isTest);
             }
