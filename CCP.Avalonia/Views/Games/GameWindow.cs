@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Avalonia;
 using Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Features;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
@@ -172,6 +174,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 }
                 else window.Load(Server(), room);
                 if (spec.Id == JustDropId) window.CenterJustDrop(panel ?? Windows.MainShellWindow.Current ?? (global::Avalonia.Visual)window);
+                else window.CenterDefaultFrame();
                 window.Show();
                 // WPF ChaosWebViewHost.cs:904-1013 AttachMainWindowGlue: the shop window is owned by the panel.
                 if (spec.Id == JustDropId && (panel ?? Windows.MainShellWindow.Current) is { } shell)
@@ -183,6 +186,54 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 if (spec.Id == FypId) CloseFypVisit();
                 throw;
             }
+        }
+
+        // WPF ChaosWebViewHost.cs:380-397: a windowed game starts on its launching screen.
+        internal void CenterDefaultFrame(bool onMain = false)
+        {
+            var main = Windows.MainShellWindow.Current;
+            var launcher = Windows.LauncherWindow.Instance;
+            Window source = launcher is { IsVisible: true } ? launcher
+                : main is { IsVisible: true } ? main : this;
+            var screens = ScreenList.Enumerate(source);
+            if (screens.Count == 0) return;
+            var size = source.FrameSize ?? source.ClientSize;
+            var sourceScale = source.RenderScaling > 0 ? source.RenderScaling : 1;
+            var x = source.Position.X + size.Width * sourceScale / 2;
+            var y = source.Position.Y + size.Height * sourceScale / 2;
+            global::Avalonia.Platform.Screen? screen = null;
+            if (ScreenList.QueryOverride == null && source.IsVisible)
+            {
+                try { screen = source.Screens.ScreenFromWindow(source); }
+                catch (Exception ex) { Log.Debug(ex, "[Game] screen lookup failed"); }
+            }
+            screen ??= screens.OrderBy(s =>
+            {
+                var b = s.Bounds;
+                var dx = Math.Max(0, Math.Max(b.X - x, x - b.Right));
+                var dy = Math.Max(0, Math.Max(b.Y - y, y - b.Bottom));
+                return dx * dx + dy * dy;
+            }).ThenByDescending(s => s.IsPrimary).First();
+            var scale = screen.Scaling > 0 ? screen.Scaling : 1;
+            var bounds = screen.Bounds;
+            Width = bounds.Width * .85 / scale;
+            Height = bounds.Height * .85 / scale;
+            double left = bounds.X + (bounds.Width - Width * scale) / 2;
+            double top = bounds.Y + (bounds.Height - Height * scale) / 2;
+            if (onMain && main is { IsVisible: true, WindowState: not WindowState.Minimized })
+            {
+                var mainSize = main.FrameSize ?? main.ClientSize;
+                if (mainSize.Width > 0 && mainSize.Height > 0)
+                {
+                    left = main.Position.X + (mainSize.Width * main.RenderScaling - Width * scale) / 2;
+                    top = main.Position.Y + (mainSize.Height * main.RenderScaling - Height * scale) / 2;
+                    var virtualBounds = screens.Select(s => s.Bounds).Aggregate((a, b) => a.Union(b));
+                    left = Math.Clamp(left, virtualBounds.X, Math.Max(virtualBounds.X, virtualBounds.Right - Width * scale));
+                    top = Math.Clamp(top, virtualBounds.Y, Math.Max(virtualBounds.Y, virtualBounds.Bottom - Height * scale));
+                }
+            }
+            Position = new PixelPoint((int)Math.Round(left), (int)Math.Round(top));
+            WindowStartupLocation = WindowStartupLocation.Manual;
         }
 
         /// <summary>--render-all's sample: the Breakout demo's frame with no page loaded.</summary>
