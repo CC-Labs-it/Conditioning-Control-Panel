@@ -137,7 +137,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("scheduler", sh => sh?.Scheduler.NoteManualStop(CoreSettings.Current, sh.SchedulerNow())),
             new("event-fx", sh => sh?.StopEventFx()), // release transient celebration surfaces
             new("engine", _ => MainShellWindow.StopEngine(),
-                After: ["companion-audio", "audio-playlist", "ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task", "browser-media", "deeper-player", "scheduler"]),
+                After: ["lights-down", "companion-audio", "audio-playlist", "ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task", "browser-media", "deeper-player", "scheduler"]),
             new("super-stage", _ => global::ConditioningControlPanel.Services.Super.SuperStageHost.Stop(), After: ["engine"]),
             new("undertow", _ => Overlays.UndertowOverlay.Stop()), // WPF BrainDrainLayer.ReleaseCaptures -> StopUndertow
             new("bouncing-text", _ => Overlays.BouncingTextOverlay.Stop()), // WPF BouncingTextService.cs:169-171; also standalone runs
