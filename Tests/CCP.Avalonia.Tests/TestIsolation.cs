@@ -98,6 +98,8 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
             ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance.ResetForTests();
             // A Ctrl+K a test pressed and never released would swallow the next test's press (P02).
             ConditioningControlPanel.Avalonia.Views.Windows.SettingsPaletteWindow.ChordReleased();
+            // A browser media session a test left open would hold every later bubble count and video.
+            ConditioningControlPanel.Services.Browser.BrowserMediaSession.Shared.OnMediaStopped("test-isolation");
             // The shell paints the section ink into the app resources (PaintSectionInk); drop the
             // overrides so the next test sees the authored (Home) ink (P02).
             if (global::Avalonia.Application.Current?.Resources is { } res)

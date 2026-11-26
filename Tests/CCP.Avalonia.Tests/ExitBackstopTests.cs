@@ -56,7 +56,7 @@ public sealed class ExitBackstopTests
     {
         var src = File.ReadAllText(Path.Combine(Root(), "CCP.Avalonia", "App.axaml.cs"));
         var exit = src[src.IndexOf("private void OnDesktopExit", StringComparison.Ordinal)..];
-        int stop = exit.IndexOf("ShutdownStop()", StringComparison.Ordinal);
+        int stop = exit.IndexOf("StopHapticsForExit()", StringComparison.Ordinal);   // #5174 moved CoreHaptics ShutdownStop() into this helper
         int save = exit.IndexOf("SaveSettingsOnExit(", StringComparison.Ordinal);
         int achievements = exit.IndexOf("SaveAchievementsOnExit(", StringComparison.Ordinal);
         int arm = exit.IndexOf("ArmExitBackstop()", StringComparison.Ordinal);

@@ -45,12 +45,15 @@ public sealed class LeashAskWindow : Window
         Title = Loc.Get("leash_title");
         Content = new Grid { Margin = new Thickness(40), Children = { card } };
         Closed += (_, _) => StopThud();
-        KeyDown += (_, e) =>
+        void HandleEscape(object? sender, KeyEventArgs e)
         {
             if (e.Key != Key.Escape) return;
             e.Handled = true;
             if (onEscape != null) onEscape(); else Close();
-        };
+        }
+        // The card can receive input before its visual route reaches the window.
+        card.KeyDown += HandleEscape;
+        KeyDown += HandleEscape;
     }
     /// <summary>WPF LeashSurfaces.ShowAsk: open the card, close it on an answer or a dismiss, and report
     /// the offer seen once it is up. An accept swaps the ask for the snap (holder left, this account right).</summary>
