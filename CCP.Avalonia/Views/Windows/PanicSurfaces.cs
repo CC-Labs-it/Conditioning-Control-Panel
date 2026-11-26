@@ -40,6 +40,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("leash-task", sh => { Platform.LeashSound.StopRefusal(); Platform.LeashTaskHost.OnPanicPress(sh); }),
             // Stricter than WPF: panic must not leave this modal or its delete confirmation open.
             new("personality-studio", _ => Dialogs.PersonalityStudio.CloseForPanic()),
+            new("deeper-editor-error", _ => MainShellWindow.CloseDeeperEditorErrors()),
             new("deeper-tutorial", _ => Deeper.DeeperEditorWindow.StopTutorialContinuationForPanic()),
             new("help-video", _ => HelpVideoWindow.CloseCurrent(forPanic: true)), // Stricter than WPF MainWindow.xaml.cs:2017: include tutorial media in stop-all.
             new("emi-ring", _ => EmiDesk.EmiDeskService.Instance.Window?.CloseRing()), // stricter safety: fold on every panic route
