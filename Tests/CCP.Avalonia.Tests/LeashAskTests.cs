@@ -249,6 +249,22 @@ public sealed class LeashAskTests
         });
 
     [Fact]
+    public void ManualLookBeforeServiceRebindDoesNotQueueTheSameOfferAgain() =>
+        Run((shell, page, _, _) =>
+        {
+            var service = LeashHead.Service;
+            LeashHead.Service = null;
+            shell.RebindLeashAsks();
+            LeashHead.Service = service;
+            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            var ask = LeashAskWindow.Current!;
+            shell.RebindLeashAsks();
+            ask.Card.Dismiss();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
+        });
+
+    [Fact]
     public void EscapeClosesTheAskAndTheOfferStays() =>
         Run((shell, page, wire, _) =>
         {
@@ -304,6 +320,25 @@ public sealed class LeashAskTests
             ask.Card.Dismiss();
             Dispatcher.UIThread.RunJobs();
             Assert.Null(LeashAskWindow.Current);
+        });
+
+    [Fact]
+    public void ManualAskIsNotRequeuedWhenServiceBindsAfterLook() =>
+        Run((shell, page, wire, _) =>
+        {
+            var service = LeashHead.Service;
+            LeashHead.Service = null;
+            shell.RebindLeashAsks();
+            LeashHead.Service = service;
+            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            var ask = LeashAskWindow.Current!;
+            shell.RebindLeashAsks(); // The timer binds the service after the manual Look.
+            ask.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(ask.IsVisible);
+            Assert.Null(LeashAskWindow.Current);
+            Assert.DoesNotContain(wire.Calls, c => c.Op == "answer");
+            Tagged<Border>(page, "leash-offer-row:u_juno");
         });
 
     [Fact]

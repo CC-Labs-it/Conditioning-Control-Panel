@@ -8540,5 +8540,7 @@
   "remote_invalid_hypnotube_url": "URL de vidéo HypnoTube non valide",
   "remote_browser_unavailable": "le navigateur n’a pas pu l’ouvrir",
   "remote_browser_screen_busy": "{0} est à l’écran",
-  "chaos_camgirl_tip": "pourboire +{0} or"
+  "chaos_camgirl_tip": "pourboire +{0} or",
+  "native_repair_title": "Conditioning Control Panel - échec du démarrage",
+  "native_repair_message": "Conditioning Control Panel ne peut pas charger ses bibliothèques graphiques et ne peut pas démarrer.\n\nFermez l'application, supprimez ce dossier temporaire, puis relancez-la :\n\n{0}\n\nIl sera recréé automatiquement. Si le problème persiste, vérifiez si votre antivirus a mis des fichiers en quarantaine.\n\nDétails : {1}"
 }

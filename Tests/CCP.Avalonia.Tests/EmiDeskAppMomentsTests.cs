@@ -201,6 +201,28 @@ public class EmiDeskAppMomentsTests
     }
 
     [Fact]
+    public void HapticsMomentCarriesContextAndUnwires() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var desk = new EmiDeskService();
+        var seen = new List<(string name, object? context)>();
+        desk.ClockMoment = (name, context) => seen.Add((name, context));
+        var context = new { target = "toy" };
+        try
+        {
+            desk.WireAppEvents(null, null, null);
+            Assert.NotNull(HapticService.EmiDeskFire);
+            HapticService.EmiDeskFire!("hapticsConnected", context);
+            var moment = Assert.Single(seen);
+            Assert.Equal("hapticsConnected", moment.name);
+            Assert.Same(context, moment.context);
+            Assert.Equal("toy", moment.context!.GetType().GetProperty("target")!.GetValue(moment.context));
+            desk.UnwireAppEvents();
+            Assert.Null(HapticService.EmiDeskFire);
+        }
+        finally { desk.UnwireAppEvents(); }
+    });
+
+    [Fact]
     public void CoreEventsCarryContextAndUnwire() => AvaloniaTestDispatcher.Run(() =>
     {
         var desk = new EmiDeskService();

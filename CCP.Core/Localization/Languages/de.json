@@ -8540,5 +8540,7 @@
   "remote_invalid_hypnotube_url": "keine gültige HypnoTube-Video-URL",
   "remote_browser_unavailable": "der Browser konnte es nicht öffnen",
   "remote_browser_screen_busy": "{0} ist auf dem Bildschirm",
-  "chaos_camgirl_tip": "Trinkgeld +{0} Gold"
+  "chaos_camgirl_tip": "Trinkgeld +{0} Gold",
+  "native_repair_title": "Conditioning Control Panel - Start fehlgeschlagen",
+  "native_repair_message": "Conditioning Control Panel kann seine Grafikbibliotheken nicht laden und nicht starten.\n\nSchließe die App, lösche diesen temporären Ordner und starte sie erneut:\n\n{0}\n\nDer Ordner wird automatisch neu erstellt. Falls das nicht hilft, prüfe, ob dein Virenschutz Dateien in Quarantäne verschoben hat.\n\nDetails: {1}"
 }

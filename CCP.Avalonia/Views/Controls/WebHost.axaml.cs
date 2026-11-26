@@ -406,7 +406,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
         public static bool IsAvailable => UnavailableReason is null;
 
         /// <summary>Null when a web view can be hosted; otherwise the platform's own explanation.</summary>
-        public static string? UnavailableReason => ProbeUnavailableReason();
+        public static string? UnavailableReason => ReasonForLifetime(
+            Application.Current?.ApplicationLifetime is global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime,
+            ProbeUnavailableReason);
+
+        internal static string? ReasonForLifetime(bool desktop, Func<string?> probe) => desktop ? probe() : NoEngineReason;
 
         private static readonly Lazy<(string Text, string? Command)?> _linuxHint = new(() =>
             ConditioningControlPanel.Services.LinuxDependencies.Check(
@@ -1082,8 +1086,11 @@ document.addEventListener('DOMContentLoaded',scan);})();";
             var headless = Application.Current?.ApplicationLifetime is not global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime;
             var linux = OperatingSystem.IsLinux();
             var sink = headless || _audioSink.Value;
-            return DecideUnavailableReason(_adapters.Value, linux, headless, LinuxChoice, audioSink: sink);
+            return ReasonForLifetime(headless, _adapters, linux, LinuxChoice, sink);
         }
+
+        internal static string? ReasonForLifetime(bool headless, Lazy<IReadOnlyList<DetailedWebViewAdapterInfo>> adapters, bool linux, string choice, bool sink) =>
+            DecideUnavailableReason(adapters.Value, linux, headless, choice, audioSink: sink);
 
         // The desktop app's audio-sink answer (the headless branch of AudioSinkReady is always true), probed once.
         private static readonly Lazy<bool> _audioSink = new(() => AudioSinkReady(OperatingSystem.IsLinux(), headless: false,

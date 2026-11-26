@@ -9281,5 +9281,7 @@
   "remote_invalid_hypnotube_url": "not an eligible HypnoTube URL",
   "remote_browser_unavailable": "the browser could not open it",
   "remote_browser_screen_busy": "{0} is on screen",
-  "chaos_camgirl_tip": "tipped +{0} gold"
+  "chaos_camgirl_tip": "tipped +{0} gold",
+  "native_repair_title": "Conditioning Control Panel - startup failed",
+  "native_repair_message": "Conditioning Control Panel could not load its graphics libraries, so it can't start.\n\nClose the app, delete this temporary folder, then launch again:\n\n{0}\n\nIt is rebuilt automatically. If that does not help, check whether antivirus quarantined the app's files.\n\nDetails: {1}"
 }

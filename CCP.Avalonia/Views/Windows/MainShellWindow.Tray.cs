@@ -99,6 +99,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Idempotent across tray recreation; detached with the window.
             global::Avalonia.Threading.Dispatcher.UIThread.UnhandledException -= SwallowDeniedBusName;
             global::Avalonia.Threading.Dispatcher.UIThread.UnhandledException += SwallowDeniedBusName;
+            Platform.CrashLog.RegisterDispatcherLast();
             Closed -= DetachTrayDenial;
             Closed += DetachTrayDenial;
             var tray = new TrayIcon
