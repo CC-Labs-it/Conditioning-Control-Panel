@@ -85,6 +85,9 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
             ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.MakeShowcase = () => SilentShowcase.Instance;
             // P52: no shell arms the real 2 s pending-registration check; PendingRegistrationTests arm it themselves.
             ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.PendingRegistrationDelay = null;
+            // A shell an earlier test closed ran StopDesktopOverlays(final: true), which refuses every later
+            // flash burst in the process; the real app exits there, a test host does not.
+            ConditioningControlPanel.Avalonia.Views.Overlays.FlashOverlay.ResetClosedForTests();
         });
     public override void After(MethodInfo methodUnderTest, IXunitTest test) =>
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
