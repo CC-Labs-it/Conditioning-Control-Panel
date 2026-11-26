@@ -10,6 +10,9 @@
 // A rebind applies while a portal session is open, as WPF's hook reads the key per press: the 2 s portal
 // watch closes the session and binds the new key (RebindPortalIfKeyChanged). A key X cannot hear warns the
 // user once (X11PanicKey.Unhearable) instead of going silently dead.
+// ccp-bugs #1752: each key binds its own portal shortcut id (PortalPanicShortcut.IdFor), a report for a key that
+// is no longer the setting is dropped (PortalReportIsCurrent), and a desktop that binds another key than the
+// chosen one has its grab released with a notice (panic_portal_wrong_key); XInput2 keeps the chosen key.
 
 using System;
 using System.ComponentModel;
@@ -431,15 +434,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static bool _portalRebinding;
         internal static string? PortalKeyForTest => _portalKey;
 
+        // #1752: the desktop bound another key than the chosen one, so this session's reports are not the panic key.
+        private static volatile bool _portalWrongKey;
+
+        /// <summary>A portal report counts only for the key the session was opened for while that key is still
+        /// the setting, and never for a session the desktop bound to another key (#1752). WPF's hook reads the
+        /// key per press, so a key the user replaced stops at once; the 2 s watch re-binds the new one.</summary>
+        internal static bool PortalReportIsCurrent(string? sessionKey) =>
+            !_portalWrongKey && string.Equals(sessionKey, CoreSettings.Current.PanicKey, StringComparison.Ordinal);
+
+        /// <summary>One portal Activated for the session opened for <paramref name="sessionKey"/> (D-Bus thread).</summary>
+        internal static void PortalActivated(string? sessionKey, MainShellWindow? shell)
+        {
+            if (!PortalReportIsCurrent(sessionKey))
+            {
+                Serilog.Log.Information("Panic: portal report for '{Key}' dropped, it is no longer the panic key", sessionKey);
+                return;
+            }
+            Serilog.Log.Information("Panic trigger: GlobalShortcuts portal Activated");
+            shell?.OnPortalPanicActivated();
+        }
+
         private static async Task BindPortalAsync()
         {
             var key = _portalKey = CoreSettings.Current.PanicKey;
+            _portalWrongKey = false;
             var trigger = await PortalPanicShortcut.BindAsync(key, Loc.Get("panic_portal_description"),
-                () =>
-                {
-                    Serilog.Log.Information("Panic trigger: GlobalShortcuts portal Activated");
-                    Current?.OnPortalPanicActivated();
-                },
+                () => PortalActivated(key, Current),
                 () => Dispatcher.UIThread.Post(() => Current?.OnPortalPanicReleased()));
             Dispatcher.UIThread.Post(() =>
             {
@@ -447,6 +468,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     _portalFailed = true;
                     App.Notifications.Show(Loc.Get("panic_portal_unavailable"), Helpers.NotificationType.Warning, TimeSpan.FromSeconds(10));
+                    return;
+                }
+                // #1752: the desktop kept or chose another key for the shortcut. Let the grab go so that key is
+                // neither consumed nor a panic, stay on XInput2 for this run (no second ask), and say so.
+                if (PortalPanicShortcut.MatchTrigger(key, trigger) == PortalPanicShortcut.TriggerMatch.Other)
+                {
+                    _portalWrongKey = true;
+                    _portalFailed = true;
+                    Serilog.Log.Warning("Panic key: the desktop bound '{Trigger}' for '{Key}'; portal grab released, XInput2 only", trigger, key);
+                    _portalWatch?.Stop();
+                    _portalWatch = null;
+                    _ = PortalPanicShortcut.UnbindAsync();
+                    Current?.PanicRoutes.Forget();
+                    App.Notifications.Show(Loc.GetF("panic_portal_wrong_key", trigger, key), Helpers.NotificationType.Warning, TimeSpan.FromSeconds(12));
                     return;
                 }
                 // trigger_description: what the compositor really bound, which the user may have changed.
