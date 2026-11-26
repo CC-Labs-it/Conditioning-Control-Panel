@@ -290,6 +290,8 @@ public sealed class RemoteControlShellTests
             runner.Stop(); CoreEngine.Stop();
             global::ConditioningControlPanel.Avalonia.Platform.PortalPanicShortcut.UnbindAsync().GetAwaiter().GetResult();
             MainShellWindow.ReleasePortalWhenUnused();
+            Dispatcher.UIThread.RunJobs();
+            MainShellWindow.ResetPortalForTests();   // no portal static outlives the test (#1752 CI)
             CoreSettings.Current.PanicKeyEnabled = oldPanic;
             global::ConditioningControlPanel.Avalonia.App.Sessions = oldSessions;
             shell.Close();

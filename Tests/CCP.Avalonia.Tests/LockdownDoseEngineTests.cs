@@ -143,6 +143,7 @@ public class LockdownDoseEngineTests
                 MainShellWindow.ReleasePortalWhenUnused();
                 await PortalPanicShortcut.UnbindAsync();
                 Dispatcher.UIThread.RunJobs();
+                MainShellWindow.ResetPortalForTests();   // no portal static outlives the test (#1752 CI)
             }
         });
     }

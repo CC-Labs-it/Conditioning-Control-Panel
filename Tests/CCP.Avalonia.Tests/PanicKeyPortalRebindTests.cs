@@ -300,6 +300,113 @@ public sealed class PanicKeyPortalRebindTests
         Assert.False(CoreFlash.IsRunning);
     });
 
+    // ---- #1752 review (Codex P2 x3) ----
+
+    // (ii) keypad operators are keys we know: a grab on one for another chosen key is released.
+    [Theory]
+    [InlineData("Escape", "KP_Add", "Other")]
+    [InlineData("NumLock", "KP Subtract", "Other")]
+    [InlineData("F8", "KP_Multiply", "Other")]
+    [InlineData("Escape", "KP_Divide", "Other")]
+    [InlineData("Escape", "kpadd", "Other")]
+    [InlineData("Add", "KP_Add", "Chosen")]
+    [InlineData("Subtract", "KP_Subtract", "Chosen")]
+    [InlineData("Divide", "KP Divide", "Chosen")]
+    public void KeypadOperatorsAreRecognised(string key, string trigger, string want) =>
+        Assert.Equal(Enum.Parse<PortalPanicShortcut.TriggerMatch>(want), PortalPanicShortcut.MatchTrigger(key, trigger));
+
+    // (i) the user picks another key while the desktop's dialog is open: the answer for the old ask is neither a
+    // wrong key nor a refusal, so the run is not failed and the key that is the setting now gets bound.
+    [Fact]
+    public void TheKeyChangesWhileTheDesktopAsks_TheNewKeyIsBound_AndTheRunIsNotFailed() => Run((shell, setClock) =>
+    {
+        var s = CoreSettings.Current;
+        s.PanicKey = "Escape";
+        var keys = new List<string>();
+        var first = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        PortalPanicShortcut.BindForTests = (_, up) =>
+        {
+            var key = MainShellWindow.PortalKeyForTest ?? "";
+            keys.Add(key);
+            PortalPanicShortcut.SetSessionForTests("/test/id-" + keys.Count, up, PortalPanicShortcut.IdFor(key));
+            return keys.Count == 1 ? first.Task : Task.FromResult<string?>(key);
+        };
+        CoreFlash.Start();
+        MainShellWindow.StartEffect(() => { });
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(new[] { "Escape" }, keys);
+
+        s.PanicKey = "F8";        // chosen in Settings while the desktop still asks about Escape
+        first.SetResult("F9");    // the desktop's answer for the old ask names neither key
+        Pump(() => keys.Count == 2 && PortalPanicShortcut.IsBound);
+        Assert.Equal(new[] { "Escape", "F8" }, keys);
+        Assert.Equal(PortalPanicShortcut.IdFor("F8"), PortalPanicShortcut.BoundId);
+
+        setClock(5000);
+        MainShellWindow.PortalActivated("Escape", shell);   // the old ask's session: never a panic
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(0, shell.PanicPressCountForTest);
+        MainShellWindow.PortalActivated("F8", shell);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, shell.PanicPressCountForTest);
+        Assert.False(CoreFlash.IsRunning);
+    });
+
+    // (iii) an Activated between BindShortcuts returning and the posted trigger check is held: a wrong key never
+    // panics before its grab is released, and the chosen key's press is replayed by the check, never lost.
+    [Theory]
+    [InlineData("Escape", true)]
+    [InlineData("Num Lock", false)]
+    public void AReportBeforeTheTriggerCheck_IsReplayedForTheChosenKey_AndDroppedForAnother(string trigger, bool chosen) => Run((shell, setClock) =>
+    {
+        var s = CoreSettings.Current;
+        s.PanicKey = "Escape";
+        var keys = new List<string>();
+        BindLikeTheDesktop(keys, _ => trigger);
+        CoreFlash.Start();
+        setClock(5000);
+        MainShellWindow.StartEffect(() => { });   // BindShortcuts has answered; its check is posted, not run
+        MainShellWindow.PortalActivated("Escape", shell);   // the D-Bus thread's report lands in that gap
+        Assert.Equal(0, shell.PanicPressCountForTest);
+        Assert.True(CoreFlash.IsRunning);
+
+        Dispatcher.UIThread.RunJobs();   // the check runs
+        Assert.Equal(chosen ? 1 : 0, shell.PanicPressCountForTest);
+        Assert.Equal(!chosen, CoreFlash.IsRunning);
+        Assert.Equal(chosen, PortalPanicShortcut.IsBound);
+        if (chosen) return;
+        shell.OnX11PanicPress();   // the wrong key's grab is gone; the chosen key still panics through XInput2
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, shell.PanicPressCountForTest);
+        Assert.False(CoreFlash.IsRunning);
+    });
+
+    // A check a bind posted runs after the test that started it reset the portal: it changes nothing (CI leak guard).
+    [Fact]
+    public void ACheckPostedBeforeAResetChangesNothing() => Run((shell, setClock) =>
+    {
+        CoreSettings.Current.PanicKey = "Escape";
+        var keys = new List<string>();
+        BindLikeTheDesktop(keys, _ => "F9");   // would be the wrong-key path: _portalFailed for the run
+        CoreFlash.Start();
+        MainShellWindow.StartEffect(() => { });
+        MainShellWindow.ResetPortalForTests();
+        Dispatcher.UIThread.RunJobs();
+        PortalPanicShortcut.BindForTests = (_, up) =>
+        {
+            keys.Add(MainShellWindow.PortalKeyForTest ?? "");
+            PortalPanicShortcut.SetSessionForTests("/test/after-reset", up, PortalPanicShortcut.IdFor("Escape"));
+            return Task.FromResult<string?>("Escape");
+        };
+        bool started = false;
+        MainShellWindow.StartEffect(() => started = true);
+        Assert.False(started);   // not failed: the next start still waits for a bind
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(started);
+        Assert.Equal(2, keys.Count);
+        Assert.True(PortalPanicShortcut.IsBound);
+    });
+
     // A portal stand-in: each bind opens a session that listens for that key's own id, and answers with the
     // trigger <paramref name="trigger"/> gives for the asked key (the desktop's trigger_description).
     private static void BindLikeTheDesktop(List<string> keys, Func<string, string> trigger)
@@ -359,17 +466,5 @@ public sealed class PanicKeyPortalRebindTests
     });
 
     // The portal bookkeeping is static (one session per process): start and end every test from a clean slate.
-    private static void ResetPortal()
-    {
-        const BindingFlags F = BindingFlags.Static | BindingFlags.NonPublic;
-        var t = typeof(MainShellWindow);
-        (t.GetField("_portalWatch", F)!.GetValue(null) as DispatcherTimer)?.Stop();
-        t.GetField("_portalWatch", F)!.SetValue(null, null);
-        t.GetField("_portalBind", F)!.SetValue(null, null);
-        t.GetField("_portalFailed", F)!.SetValue(null, false);
-        t.GetField("_portalKey", F)!.SetValue(null, null);
-        t.GetField("_portalRebinding", F)!.SetValue(null, false);
-        t.GetField("_portalWrongKey", F)!.SetValue(null, false);
-        PortalPanicShortcut.SetSessionForTests(null, null);
-    }
+    private static void ResetPortal() => MainShellWindow.ResetPortalForTests();
 }

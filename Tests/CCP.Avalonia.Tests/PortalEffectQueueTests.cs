@@ -37,6 +37,7 @@ public sealed class PortalEffectQueueTests
             MainShellWindow.ReleasePortalWhenUnused();
             await PortalPanicShortcut.UnbindAsync();
             Dispatcher.UIThread.RunJobs();
+            MainShellWindow.ResetPortalForTests();   // no portal static outlives the test (#1752 CI)
         }
     });
 
@@ -73,6 +74,7 @@ public sealed class PortalEffectQueueTests
             MainShellWindow.ReleasePortalWhenUnused();
             await PortalPanicShortcut.UnbindAsync();
             Dispatcher.UIThread.RunJobs();
+            MainShellWindow.ResetPortalForTests();   // no portal static outlives the test (#1752 CI)
         }
     });
 }

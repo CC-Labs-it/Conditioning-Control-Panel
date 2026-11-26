@@ -314,6 +314,11 @@ internal static class PortalPanicShortcut
     {
         "escape", "enter", "backspace", "delete", "insert", "pageup", "pagedown", "scrolllock", "capslock", "numlock",
         "print", "menu", "break", "pause", "space", "tab", "home", "end", "up", "down", "left", "right",
+        // Keypad keys as X keysyms ("KP_Add") or labels ("KP Add") write them (#1752 review): a grab on one of
+        // these for another chosen key is another key, so it is released.
+        "kpadd", "kpsubtract", "kpmultiply", "kpdivide", "kpdecimal", "kpseparator", "kpenter", "kpequal",
+        "kpdelete", "kpinsert", "kphome", "kpend", "kpprior", "kpnext", "kppageup", "kppagedown",
+        "kpup", "kpdown", "kpleft", "kpright", "kpbegin", "kpspace", "kptab",
     };
 
     private static string Norm(string s)

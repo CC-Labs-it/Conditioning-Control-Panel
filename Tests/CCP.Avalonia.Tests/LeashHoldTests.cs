@@ -598,6 +598,7 @@ public sealed class LeashHoldTests
             PortalPanicShortcut.BindForTests = null;
             ld.Deactivate();
             Dispatcher.UIThread.RunJobs();
+            MainShellWindow.ResetPortalForTests();   // no portal static outlives the test (#1752 CI)
         }
     });
 
