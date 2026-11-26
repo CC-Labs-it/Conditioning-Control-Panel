@@ -28,15 +28,17 @@ namespace ConditioningControlPanel.Services
         // and never held across the UI-thread serialize hop — both would deadlock the shutdown
         // path, where SaveImmediate runs ON the UI thread.
         private readonly object _saveLock = new();
+        // A second SettingsService can load while this instance is publishing. Recovery must not
+        // delete that live write's temp file, even after its write stream has been closed.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> ActiveTempFiles =
+            new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        internal Action<string>? BeforeAtomicPublishForTests { get; set; }
+        internal static FileStream OpenSettingsRead(string path) => new(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
         private readonly object _timerLock = new();
         // Instances with an armed debounce. Product code only adds/removes; the test isolation hook
         // disarms them after each test so a dead test's private service cannot write settings.json
         // into the next test (the 500 ms timer outlives the test that armed it).
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<SettingsService, byte> Armed = new();
-        // A second service may load the same path while a save is between flush and rename.
-        // Recovery must not promote or delete that live save as an abandoned temp file.
-        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> ActiveTempFiles =
-            new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
         internal bool HasPendingSave { get { lock (_timerLock) return _saveDebounceTimer != null; } }
         // Debounce callbacks between their first instruction and the end of their write. A callback
         // that already fired is no longer Armed (SaveImmediate disarms itself first), so without this
@@ -80,7 +82,6 @@ namespace ConditioningControlPanel.Services
 
         // Per-instance seam for deterministic lifecycle proofs; production keeps the 500ms default.
         internal int SaveDebounceDueTimeMilliseconds { get; set; } = 500;
-        internal Action? BeforeAtomicPublishForTests { get; set; }
         internal Action<bool>? DebouncedSaveCompletedForTest { get; set; }
 
         public AppSettings Current { get; private set; }
@@ -204,7 +205,9 @@ namespace ConditioningControlPanel.Services
 
                 if (File.Exists(_settingsPath))
                 {
-                    var json = File.ReadAllText(_settingsPath);
+                    using var stream = OpenSettingsRead(_settingsPath);
+                    using var reader = new StreamReader(stream);
+                    var json = reader.ReadToEnd();
 
                     // Use explicit settings to ensure lists are REPLACED, not merged with defaults.
                     // Error handler makes the load RESILIENT: a single unparseable member (e.g. an
@@ -1003,7 +1006,7 @@ namespace ConditioningControlPanel.Services
                             writer.Flush();
                             stream.Flush(true);
                         }
-                        BeforeAtomicPublishForTests?.Invoke();
+                        BeforeAtomicPublishForTests?.Invoke(tempPath);
                         PublishAtomicFile(tempPath);
                     }
                     catch

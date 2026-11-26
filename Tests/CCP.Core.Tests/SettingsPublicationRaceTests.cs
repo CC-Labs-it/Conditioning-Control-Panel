@@ -23,7 +23,7 @@ public class SettingsPublicationRaceTests
             writer.Current.DeeperEditorTimelineHeight = 160;
             Assert.True(writer.TrySaveImmediate(true));
             writer.Current.DeeperEditorTimelineHeight = 225;
-            writer.BeforeAtomicPublishForTests = () => { ready.Set(); release.Wait(TimeSpan.FromSeconds(10)); };
+            writer.BeforeAtomicPublishForTests = _ => { ready.Set(); release.Wait(TimeSpan.FromSeconds(10)); };
             var save = Task.Run(() => writer.TrySaveImmediate(true));
             Assert.True(ready.Wait(TimeSpan.FromSeconds(10)));
             var readerStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
