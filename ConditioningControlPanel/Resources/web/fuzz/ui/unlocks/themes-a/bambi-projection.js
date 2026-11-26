@@ -190,7 +190,7 @@ export function prewarmBambiProjection(ctx) {
 export function createBambiProjection(ctx,{creditHost,demoUrls=[],warmHost=null}) {
   const doc=creditHost.ownerDocument, pics=ctx.pictures;
   const W=doc.documentElement.clientWidth<700?1024:1536,H=W/2;
-  let canvas, g, serial=0, displayOnly=false, active=true, ended=false, currentTime=0, lastPaint=-Infinity;
+  let canvas, g, overlay=null, overlayContext=null, overlayRegions=[], serial=0, displayOnly=false, active=true, ended=false, currentTime=0, lastPaint=-Infinity;
   let warming=!!warmHost, stopWarm=null;
   const mask=surface(doc,320,224), mg=mask.getContext('2d');
   mg.scale(mask.width/2,mask.height/2);
@@ -209,7 +209,9 @@ export function createBambiProjection(ctx,{creditHost,demoUrls=[],warmHost=null}
   function resetCanvas() {
     // Assigning a fresh backing store drops tainted CDN pixels on revocation.
     canvas=surface(doc,W,H);g=canvas.getContext('2d',{alpha:false});
-    displayOnly=false;lastPaint=-Infinity;
+    displayOnly=false;lastPaint=-Infinity;overlayRegions=[];
+    if(overlay)overlay.width=overlay.height=1;
+    overlay=overlayContext=null;
     atmosphere(g,W,H,currentTime);soapFilm(g,W,H,currentTime);drawWords(g,W,H,currentTime);serial++;
   }
   function discard(art) {art?.dispose();art?.release();}
@@ -323,10 +325,20 @@ export function createBambiProjection(ctx,{creditHost,demoUrls=[],warmHost=null}
     const shots=exposures(t);
     atmosphere(g,W,H,t);
     if(!shots.length)soapFilm(g,W,H,t);
+    // Opaque remote tiles include their exact backdrop. This avoids doubling
+    // alpha along shared software-triangle edges while the clean atlas stays GPU-safe.
+    overlayRegions=shots.filter(({art})=>art.remote&&!(art.native&&!ctx.gentle&&!ctx.reduced)).flatMap(({site})=>{
+      const y=1-site.v-site.spanV/2;
+      return [-1,0,1].map(turn=>({x:site.u-site.spanU/2+turn,y,w:site.spanU,h:site.spanV})).filter(r=>r.x<1&&r.x+r.w>0);
+    });
+    if(overlayRegions.length) {
+      if(!overlay){overlay=surface(doc,W,H);overlayContext=overlay.getContext('2d',{alpha:false});}
+      overlayContext.drawImage(canvas,0,0);
+    }
     const painted=new Set();
     for(const {art,site,opacity} of shots) {
       if(art.native && !ctx.gentle && !ctx.reduced) continue;
-      if(art.remote)displayOnly=true;
+
       // A decoder is sampled once per atlas pass. Every repeat uses the small
       // feathered frame, including the copies on the other side of the seam.
       if(!painted.has(art)) {
@@ -334,14 +346,18 @@ export function createBambiProjection(ctx,{creditHost,demoUrls=[],warmHost=null}
         if(!framePatch(art,art.patch,mask,.46))continue;
         painted.add(art);
       }
-      g.globalAlpha=opacity;paintRegion(g,art.patch,site);
+      if(!art.remote){g.globalAlpha=opacity;paintRegion(g,art.patch,site);}
+      if(overlayRegions.length){overlayContext.globalAlpha=opacity;paintRegion(overlayContext,art.patch,site);}
     }
     g.globalAlpha=1;
     // Common rim and cap marry the offset exposures into one continuous dome.
-    const cap=g.createLinearGradient(0,0,0,H);
-    [[0,'#f5c9e3'],[.06,'#eabbdacc'],[.21,'#d99ec000'],[.84,'#d99ec000'],[1,'#edb7c6dc']].forEach(([p,c])=>cap.addColorStop(p,c));
-    g.fillStyle=cap;g.fillRect(0,0,W,H);
-    drawWords(g,W,H,t);credit.hidden=!shots.some(s=>s.art.credit);serial++;
+    for(const finish of overlayRegions.length?[g,overlayContext]:[g]) {
+      finish.globalAlpha=1;
+      const cap=finish.createLinearGradient(0,0,0,H);
+      [[0,'#f5c9e3'],[.06,'#eabbdacc'],[.21,'#d99ec000'],[.84,'#d99ec000'],[1,'#edb7c6dc']].forEach(([p,c])=>cap.addColorStop(p,c));
+      finish.fillStyle=cap;finish.fillRect(0,0,W,H);drawWords(finish,W,H,t);
+    }
+    credit.hidden=!shots.some(s=>s.art.credit);serial++;
     for(const {art} of shots) if(art.credit && !art.viewed) {art.viewed=true;pics?.noteView?.();}
   }
   function updateNativeGifs(sky) {
@@ -392,7 +408,7 @@ export function createBambiProjection(ctx,{creditHost,demoUrls=[],warmHost=null}
     clear();credit.remove();warmHost?.remove();canvas.width=canvas.height=1;
   }
   ctx.cleanup(dispose);
-  return {get canvas(){return canvas;},get revision(){return serial;},get displayOnly(){return displayOnly;},
+  return {get canvas(){return canvas;},get overlay(){return overlayRegions.length?overlay:null;},get overlayRegions(){return overlayRegions;},get revision(){return serial;},get displayOnly(){return displayOnly;},
     get readyForPop() {
       if (pics?.source === 'scrolller') return channels.some(c => c.art && c.art.kind !== 'picture');
       if (pics?.source === 'own' && pics.ownCount) return channels.some(c => c.art);

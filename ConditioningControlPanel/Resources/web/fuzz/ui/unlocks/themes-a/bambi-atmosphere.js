@@ -12,7 +12,7 @@ vec3 bambiRefractedRay(vec3 ray, vec3 eye,float t) {
   return refract(ray,-n,.961);
 }`;
 
-export function refractBambiRay(x,y,z,camera,inverse=false) {
+export function refractBambiRay(x,y,z,camera,inverse=false,out=[]) {
   const {x:ex,y:ey,z:ez,time=0}=camera;
   const b=ex*x+ey*y+ez*z;
   const s=-b+Math.sqrt(Math.max(.001,b*b+324.-ex*ex-ey*ey-ez*ez));
@@ -23,7 +23,8 @@ export function refractBambiRay(x,y,z,camera,inverse=false) {
   const length=Math.hypot(nx,ny,nz);nx/=length;ny/=length;nz/=length;
   const k=inverse?1/.961:.961;
   const a=nx*x+ny*y+nz*z, bend=Math.sqrt(Math.max(.0001,1.-k*k*(1.-a*a)))-k*a;
-  return [k*x+bend*nx,k*y+bend*ny,k*z+bend*nz];
+  out[0]=k*x+bend*nx;out[1]=k*y+bend*ny;out[2]=k*z+bend*nz;
+  return out;
 }
 
 const VERT = `
@@ -180,7 +181,7 @@ void main() {
   filmA = .83*(filmA*(1.-soap.a)+soap.a);
   vec3 medium = mix(cloud.rgb,film,filmA);
   float cover = cloud.a*(1.-filmA)+filmA;
-  gl_FragColor = vec4(medium/max(.0001,cover),cover);
+  gl_FragColor = vec4(medium*cover/max(.0001,cover),cover);
 }`;
 
 function compile(gl, type, src) {
@@ -319,7 +320,7 @@ export function createBambiAtmosphere(host,{gentle=false,reduced=false}={}) {
   canvas.className='bambi-volume';
   canvas.style.cssText='position:absolute;inset:0;width:100%;height:100%;pointer-events:none';
   host.append(canvas);
-  const gl=canvas.getContext('webgl',{alpha:true,premultipliedAlpha:false,antialias:false,depth:false,stencil:false});
+  const gl=canvas.getContext('webgl',{alpha:true,premultipliedAlpha:true,antialias:false,depth:false,stencil:false});
   if (!gl) return lowDetailVolume(canvas,reduced);
   let software;
   function switchToSoftware() {
