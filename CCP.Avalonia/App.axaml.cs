@@ -995,6 +995,9 @@ namespace ConditioningControlPanel.Avalonia
                 // the ledger starts when awareness turns on. No observer feeds it on this head yet.
                 InstallPrivacyLedger(new ConditioningControlPanel.Services.Awareness.ActivityLedger());
 
+                // WPF App.xaml.cs:2582-2624: scaffold and the Flash decoupling migration run before the heal
+                // below (2630), so the migration reads the profile's saved FlashClickable, not the journal's.
+                RunLaunchMigrations(Settings, DefaultAssetsRoot, CorePaths.UserData);
                 // Main 8a89eaeb0 / 36370021a: a session or intensity ramp that crashed or was killed before
                 // it handed the user's settings back gets them back now, before anything reads them.
                 try
@@ -1048,6 +1051,7 @@ namespace ConditioningControlPanel.Avalonia
                 // No event skin on this head yet (nothing arms LiveEventService on either head).
                 CoreModArt.OverridePathProvider = p => CoreModArt.ResolveOverride(p, null, CoreMods.ActiveModPackage?.InstalledPath);
                 CoreModArt.AudioOverridePathProvider = p => CoreModArt.ModAudioFile(p, CoreMods.ActiveModPackage?.InstalledPath);
+                SeedPortraitProbe();
 
                 // The lock-card surface seam. The schedule and the no-repeat phrase rotation are in
                 // Core now (LockCardScheduler); this is the half that draws, and on this head that
@@ -1885,6 +1889,54 @@ namespace ConditioningControlPanel.Avalonia
                 try { fire(); } catch (Exception ex) { Serilog.Log.Debug(ex, "EMI crash recovery failed"); }
         }
 
+        /// <summary>
+        /// WPF App.xaml.cs:2582-2589 (default assets scaffold), 2612-2624 (FlashClickable/gaze decoupling)
+        /// and 2787 (CompanionService.MigrateFromLegacy: an empty progress map starts OG Bambi Sprite at
+        /// min(50, PlayerLevel/2), made active). Runs before anything reads ActiveCompanionProgress,
+        /// which would otherwise create level-1 progress and skip the migration for good.
+        /// </summary>
+        internal static void RunLaunchMigrations(SettingsService settings, string assetsRoot, string userData)
+        {
+            try
+            {
+                foreach (var sub in new[] { "images", "videos", "audio", "wallpapers", "mindwipe" })
+                    Directory.CreateDirectory(Path.Combine(assetsRoot, sub));
+                Directory.CreateDirectory(Path.Combine(userData, "Spirals"));
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Default assets scaffold failed (non-fatal)"); }
+            try
+            {
+                var s = settings.Current;
+                // WPF saves on every launch; here only a real migration writes, so a returning profile's
+                // startup leaves settings.json alone (LanguageSelectorTests' no-startup-save check).
+                bool changed = !s.MigratedFlashClickableDecoupling || s.CompanionProgressData.Count == 0;
+                s.RunFlashClickableDecouplingMigration();
+                if (s.CompanionProgressData.Count == 0)
+                {
+                    var og = ConditioningControlPanel.Models.CompanionProgress.CreateNew(ConditioningControlPanel.Models.CompanionId.OGBambiSprite);
+                    og.Level = Math.Max(1, Math.Min(50, s.PlayerLevel / 2));
+                    og.FirstActivated = DateTime.Now;
+                    s.CompanionProgressData[(int)og.CompanionId] = og;
+                    s.ActiveCompanionId = (int)og.CompanionId;
+                }
+                if (changed) settings.Save();
+            }
+            catch (Exception ex) { Serilog.Log.Warning(ex, "Settings migration failed (non-fatal, defaults apply)"); }
+        }
+
+        /// <summary>WPF App.xaml.cs:333: TubeFitDialog's portrait mode asks whether the active mod's portraits are on disk.</summary>
+        internal static void SeedPortraitProbe() =>
+            CoreModArt.HasAvatarPortraitsProvider = () => Platform.AvatarPortraitLoader.Load() != null;
+
+        /// <summary>WPF App.OnExit:6480 fires the wordless appClosing flinch, then :6515 EmiDesk.Dispose
+        /// (EmiDeskService.cs:2121) writes emi-desk.json now so a pending debounced save is not lost.</summary>
+        internal static void FlushEmiDeskOnExit()
+        {
+            try { Views.Windows.EmiDesk.EmiDeskService.Instance.Fire("appClosing", null); } catch { }
+            try { Views.Windows.EmiDesk.EmiDeskService.Instance.UnwireAppEvents(); } catch { }
+            try { ConditioningControlPanel.Services.EmiDesk.EmiState.SaveNow(); } catch { }
+        }
+
         internal static void ClearEngineCrashOnExit() => Services.EngineCrashSentinel.Clear();
 
         private static volatile string _exitStep = "start";
@@ -1926,7 +1978,7 @@ namespace ConditioningControlPanel.Avalonia
             ArmExitBackstop();
             ExitStep("media and libvlc teardown");
 
-            try { Views.Windows.EmiDesk.EmiDeskService.Instance.UnwireAppEvents(); } catch { }
+            FlushEmiDeskOnExit();   // #5632: appClosing flinch, unwire, then save emi-desk.json now
             try { (((IClassicDesktopStyleApplicationLifetime)ApplicationLifetime!).MainWindow as Views.Windows.MainShellWindow)?.Tray?.Dispose(); } catch { }
 
             // Before libvlc goes: close the Mantra Lab (stops and disposes its drone), then its temp WAVs.
