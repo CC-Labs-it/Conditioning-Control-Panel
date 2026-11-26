@@ -92,6 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF :2000: non-Escape panic closes the palette without consuming its Escape rung.
             // WPF MainWindow.xaml.cs:2042-2055 stops media; retained previews are also cleared here.
             new("scrolller-web", _ => Controls.WebHost.StopScrolllerForPanic()),
+            new("browser-discovery", sh => sh?.Named<Tabs.SettingsTabView>("SettingsTab")?.StopBrowserDiscoveryForPanic()),
             new("settings-palette", _ => SettingsPaletteWindow.CloseIfOpen()),
             new("perfect-week-bonus", _ => App.StopPerfectWeekBonus()), // WPF SkillTreeService.cs:535-563; close every new popup on panic.
             // WPF PanicStopEverySurface (:2003): the toys go to zero, bypassing throttles and gates.
