@@ -923,6 +923,11 @@ document.addEventListener('DOMContentLoaded',scan);})();";
                 await BoundedNativeStep(_motionInstall, "motion install");
                 if (Stale()) return;
             }
+            if (SinkInstall() is { } sink)
+            {
+                await BoundedNativeStep(sink, "sink routing install");
+                if (Stale()) return;
+            }
             if (WindowsDocumentStartScript is { } script && (OperatingSystem.IsWindows() || DocumentStartInstaller != null))
             {
                 try
@@ -1000,6 +1005,7 @@ document.addEventListener('DOMContentLoaded',scan);})();";
             _carrierInstall = null;
             _allFramesInstall = null;
             _motionInstall = null;
+            _sinkInstall = null;
             _gateReport = 0;
             if (_panicBlank) NavigatePanicBlank();
             var engine = ++_scrolllerEngine;
