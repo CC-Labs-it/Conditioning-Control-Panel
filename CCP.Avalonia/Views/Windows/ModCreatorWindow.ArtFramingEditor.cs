@@ -63,7 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var working = BeginFramingEdit(slot, stored);
                 if (working.Count == 0) return;
                 var dialog = CreateFramingDialog(slot, bitmap, working);
-                if (await dialog.ShowDialog<bool>(this))
+                if (await dialog.ShowDialogSafe<bool>(this))
                 {
                     CommitFramingEdit(_artFraming, slot, working);
                     UpdateFrameButton(slot);
