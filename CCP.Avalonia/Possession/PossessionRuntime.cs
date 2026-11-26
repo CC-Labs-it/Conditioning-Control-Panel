@@ -242,6 +242,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
         internal static void UndoAllLive()
         {
             ReorderDoorsEffect.UndoAllLive();
+            DokiDialogEffect.StopFades();
             PossessionGhost.UndoAll();
             DropEffect.UndoAllLive();
             RoomWarpEffect.UndoAllLive();

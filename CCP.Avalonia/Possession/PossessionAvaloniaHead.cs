@@ -192,6 +192,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             Settings = () => CoreSettings.Service?.Current,
             MainHost = () => (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as IPossessionHost,
             Attribution = AttributionFor,
+            StopReleasedEffects = host => DokiDialogEffect.StopFades(host),
             Pointer = () => LastPointer(),
             BoundsOf = (host, el) => host is IAvaloniaPossessionHost h && el is Control c && h.BoundsOnGhostLayer(c) is { } r
                 ? (r.X, r.Y, r.Width, r.Height)
