@@ -100,6 +100,17 @@ public sealed class TubeCompanionLevelTests
             Dispatcher.UIThread.RunJobs();
             Assert.False(tube.HasBubbleUp);
             Assert.Contains("10", tube.FindControl<TextBlock>("TxtAvatarLevel")!.Text);
+            Assert.Contains("level 10", tube.ChatHistory.Last().Text);   // owner call A: kept silently in history
+            var sounds = new System.Collections.Generic.List<bool>();
+            tube.SpeechAudioPlayer = (playSound, _, _, spoken) => { sounds.Add(playSound); spoken?.Invoke(); };
+            PanicAftermath.ArmQuiet();
+            progress.Level = 29; progress.CurrentXP = 0;
+            CompanionCore.AddCompanionXP(CompanionProgress.GetXPForLevel(29), "test");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Contains("level 30", tube.ChatHistory.Last().Text);
+            Assert.False(tube.HasBubbleUp);
+            Assert.Empty(sounds);
+            PanicAftermath.EndQuiet();
             tube.Hide();   // WPF Speech.cs:365,481: a hidden tube still logs the line, only the bubble is skipped
             progress.Level = 19; progress.CurrentXP = 0;
             CompanionCore.AddCompanionXP(CompanionProgress.GetXPForLevel(19), "test");
