@@ -50,6 +50,60 @@ public sealed class MandatoryVideoSchedulerTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void VideoAnnouncementPrecedesEveryClipAndStopCancelsThePendingClip(bool freeze) => With(20, false, () =>
+    {
+        var saved = CoreSubliminal.BambiFreezeProvider;
+        var attention = CoreSettings.Current.AttentionChecksEnabled;
+        CoreSubliminal.BambiFreezeProvider = freeze ? () => { } : null;
+        CoreSettings.Current.AttentionChecksEnabled = false;
+        var clock = new FakeClock(); var host = new Host();
+        var video = new MandatoryVideoScheduler(host, clock, () => Clips);
+        var announced = 0;
+        video.VideoAboutToStart += () => announced++;
+        try
+        {
+            Assert.True(video.Trigger());
+            Assert.Equal(freeze ? 0 : 1, announced);
+            if (freeze) clock.Advance(MandatoryVideoScheduler.FreezeLead);
+            Assert.Equal(1, announced);
+            clock.Advance(MandatoryVideoScheduler.PreRoll - TimeSpan.FromMilliseconds(1));
+            Assert.Empty(host.Shown);
+            clock.Advance(TimeSpan.FromMilliseconds(1));
+            Assert.Single(host.Shown);
+            video.End();
+            Assert.True(video.Trigger());
+            if (freeze) clock.Advance(MandatoryVideoScheduler.FreezeLead);
+            Assert.Equal(2, announced);
+            video.ForceCleanup();
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Single(host.Shown);
+        }
+        finally { video.ForceCleanup(); CoreSubliminal.BambiFreezeProvider = saved; CoreSettings.Current.AttentionChecksEnabled = attention; }
+    });
+
+    [Fact]
+    public void StopDuringAnnouncementCannotRearmFrozenPreroll() => With(20, false, () =>
+    {
+        var saved = CoreSubliminal.BambiFreezeProvider;
+        var attention = CoreSettings.Current.AttentionChecksEnabled;
+        CoreSubliminal.BambiFreezeProvider = () => { };
+        CoreSettings.Current.AttentionChecksEnabled = false;
+        var clock = new FakeClock(); var host = new Host();
+        var video = new MandatoryVideoScheduler(host, clock, () => Clips);
+        video.VideoAboutToStart += video.ForceCleanup;
+        try
+        {
+            Assert.True(video.Trigger());
+            clock.Advance(MandatoryVideoScheduler.FreezeLead + MandatoryVideoScheduler.PreRoll);
+            Assert.False(video.IsPlaying);
+            Assert.Empty(host.Shown);
+        }
+        finally { video.ForceCleanup(); CoreSubliminal.BambiFreezeProvider = saved; CoreSettings.Current.AttentionChecksEnabled = attention; }
+    });
+
+    [Theory]
     [InlineData(true, false, false, 1)]
     [InlineData(false, false, false, 0)]
     [InlineData(true, true, false, 0)]
