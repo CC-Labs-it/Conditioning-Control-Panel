@@ -10,7 +10,7 @@ let seeks = [];
 const video = { duration: 120, readyState: 0, addEventListener: (name, fn) => listeners[name] = fn,
   set currentTime(value) { seeks.push(value); }, play: () => Promise.resolve() };
 const window = { chrome: { webview: { postMessage: m => messages.push(JSON.parse(m)) } } };
-vm.runInNewContext(script, { window, document: { querySelector: () => video }, Number, setTimeout });
+vm.runInNewContext(script, { window, document: { querySelector: () => video, addEventListener: () => {} }, Number, setTimeout });
 assert.equal(messages.length, 0);
 assert.deepEqual(seeks, []);
 listeners.loadedmetadata();
