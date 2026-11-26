@@ -43,6 +43,19 @@ internal sealed class CrashLog
     {
         Dispatcher.UIThread.UnhandledException -= OnDispatcher;
         Dispatcher.UIThread.UnhandledException += OnDispatcher;
+        _dispatcherAttached = true;
+    }
+
+    private static bool _dispatcherAttached;
+
+    /// <summary>Test seam: detach the shared dispatcher handler (a tray built by another test attaches it);
+    /// true when it was attached.</summary>
+    internal static bool DetachDispatcher()
+    {
+        var was = _dispatcherAttached;
+        Dispatcher.UIThread.UnhandledException -= OnDispatcher;
+        _dispatcherAttached = false;
+        return was;
     }
 
     private static void OnDispatcher(object? sender, DispatcherUnhandledExceptionEventArgs e) => Current?.DispatcherFault(sender, e);

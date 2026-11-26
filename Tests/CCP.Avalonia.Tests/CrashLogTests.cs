@@ -15,6 +15,15 @@ public class CrashLogTests
 {
     private static string NewDir() => Path.Combine(Path.GetTempPath(), "ccp-crash-" + Guid.NewGuid());
 
+    // A shell built by another test in this process attaches the shared CrashLog dispatcher handler;
+    // these cases install their own, so the shared one is detached while they run.
+    private static Task RunDetached(Func<Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var attached = CrashLog.DetachDispatcher();
+        try { await body(); }
+        finally { if (attached) CrashLog.RegisterDispatcherLast(); }
+    });
+
     [Fact]
     public async Task DispatcherFaultIsHandledRedactedAndShowsOnlyOneDialog()
     {
@@ -22,7 +31,7 @@ public class CrashLogTests
         var dialogs = 0;
         try
         {
-            await AvaloniaTestDispatcher.RunAsync(async () =>
+            await RunDetached(async () =>
             {
                 var log = new CrashLog(dir, "1", _ => dialogs++);
                 Dispatcher.UIThread.UnhandledException += log.DispatcherFault;
@@ -57,7 +66,7 @@ public class CrashLogTests
         var dir = NewDir();
         try
         {
-            await AvaloniaTestDispatcher.RunAsync(async () =>
+            await RunDetached(async () =>
             {
                 var dialogs = 0;
                 var log = new CrashLog(dir, "1", _ => dialogs++);
@@ -91,7 +100,7 @@ public class CrashLogTests
         var dir = NewDir();
         try
         {
-            await AvaloniaTestDispatcher.RunAsync(async () =>
+            await RunDetached(async () =>
             {
                 var previous = CrashLog.Current;
                 var dialogs = 0;
@@ -142,7 +151,7 @@ public class CrashLogTests
         var dir = NewDir();
         try
         {
-            await AvaloniaTestDispatcher.RunAsync(async () =>
+            await RunDetached(async () =>
             {
                 var exits = 0;
                 var dialogs = 0;
@@ -181,7 +190,7 @@ public class CrashLogTests
         var dir = NewDir();
         try
         {
-            await AvaloniaTestDispatcher.RunAsync(async () =>
+            await RunDetached(async () =>
             {
                 var dialogs = 0;
                 var exits = 0;
