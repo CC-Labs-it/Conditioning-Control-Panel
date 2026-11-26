@@ -1071,12 +1071,16 @@ public sealed partial class GameWindowTests
     [Fact]
     public void Race_BootAndOnePayoutPerRun() => RunRace("rt.original.03", (_, xp, sparks) =>
     {
+        Directory.CreateDirectory(Path.Combine(CorePaths.EffectiveAssets, "images"));
+        File.WriteAllBytes(Path.Combine(CorePaths.EffectiveAssets, "images", "pic.png"), new byte[] { 1 });
         var w = OpenRetiredRace();
         Assert.Contains("dtrh/race.html", w.PageUrl!.AbsolutePath);
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
         w.HandleMessage("{\"type\":\"ready\"}");
         Assert.Equal(new[] { "init", "manifest", "loom-list" }, sent.Select(o => (string?)o["type"]));
+        // Root-relative, the shape dtrh/hostMedia.js counts as local (WebGL draws it), as GameWindow.Dtrh sends.
+        Assert.Equal("/ccp.assets/images/pic.png", (string?)sent[1]["images"]!.Single()["url"]);
         // WPF 7.2.3: the door is open, so init hands every track, not just the one owned.
         Assert.Equal(Enumerable.Range(0, ConditioningControlPanel.Services.Prizes.PrizeGrants.RacingTrackMax + 1), sent[0]["settings"]!["racingTracks"]!.Values<int>());
         Assert.False((bool)sent[0]["settings"]!["cloud"]!);
