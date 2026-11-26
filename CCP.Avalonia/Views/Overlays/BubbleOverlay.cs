@@ -863,9 +863,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 AnchorPop(b);
                 // WPF BubbleService.cs:4686-4688: a live snap is a bigger release, in SnapColor at 1.3,
                 // burst before the defuse callback can clear the field.
-                var snapScale = b.Screen >= 0 && b.Screen < Windows.Count ? Windows[b.Screen].Scaling : 1;
-                ChaosSkiaFxOverlay.Burst(new Point(b.CenterX * snapScale, b.CenterY * snapScale),
-                    Color.FromRgb(0x7A, 0xE0, 0xFF), 1.3);
+                SnapBurst(b);
                 Field.ChaosDefused?.Invoke(b);
                 RequestFrame();
                 return;
@@ -899,10 +897,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (IsShielded(b)) { BounceShield(b); continue; }
                 if (b.IsLiveThreat)
                 {
-                    if (b.Snap()) { Field.ChaosDefused?.Invoke(b); RequestFrame(); }
+                    // WPF ChaosDvdOverlay.cs:390 -> BubbleService.cs:4696: a swept live snap bursts too.
+                    if (b.Snap()) { SnapBurst(b); Field.ChaosDefused?.Invoke(b); RequestFrame(); }
                 }
                 else PopChaos(b);
             }
+        }
+
+        /// <summary>WPF BubbleService.cs:4686-4696: live snap burst in SnapColor at 1.3.</summary>
+        static void SnapBurst(AmbientBubble b)
+        {
+            var snapScale = b.Screen >= 0 && b.Screen < Windows.Count ? Windows[b.Screen].Scaling : 1;
+            ChaosSkiaFxOverlay.Burst(new Point(b.CenterX * snapScale, b.CenterY * snapScale),
+                Color.FromRgb(0x7A, 0xE0, 0xFF), 1.3);
         }
 
         /// <summary>WPF BubbleService.AnyDarterIntersects (:1963): a live rabbit's box touches <paramref name="rect"/>
