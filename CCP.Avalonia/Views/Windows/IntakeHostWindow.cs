@@ -106,11 +106,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             RequestAudioPack(App.ReleaseContent);   // WPF Launch: kicked, never awaited
             PageUrl = new Uri(server.Url("intake/index.html"));
-            AssetsBase = $"{PageUrl.GetLeftPart(UriPartial.Authority)}/{WebAssetServer.AssetsPrefix}";
+            AssetsBase = "/" + WebAssetServer.AssetsPrefix;
             Web.Navigate(PageUrl);
         }
 
-        /// <summary>Where the media manifest points (WPF https://ccp.assets/).</summary>
+        /// <summary>Where the media manifest points (WPF https://ccp.assets/). Root-relative like DtRH
+        /// (WebAssetServer.AssetPath): core/mediaLog.js LOCAL_URL_RE treats http://127.0.0.1 as remote.</summary>
         internal string AssetsBase { get; private set; } = "";
 
         internal static bool SameOrigin(Uri a, Uri b) =>
