@@ -63,7 +63,7 @@
     <PackageReference Include="Avalonia.Controls.ColorPicker" Version="12.2.0" />
     <!-- Fluent UI System Icons (docs/avalonia-decisions.html, 2026-10-10). Only Controls/Icons/* may
          name FluentIcons.*: every view draws icons through fx:IconGlyph. Built against Avalonia 12.0;
-         IconGlyphRenderTests proves it draws on 12.1.6 headless. MIT: ThirdPartyNotices/FluentIcons.txt. -->
+         IconGlyphRenderTests proves it draws on 12.2.0 headless. MIT: ThirdPartyNotices/FluentIcons.txt. -->
     <PackageReference Include="FluentIcons.Avalonia" Version="2.1.343" />
     <Content Include="ThirdPartyNotices\FluentIcons.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!-- Audio (and later video) on both OSes; see docs/avalonia-decisions.html. Linux loads the
