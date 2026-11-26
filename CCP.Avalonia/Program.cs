@@ -330,8 +330,11 @@ namespace ConditioningControlPanel.Avalonia
             if (System.Threading.Interlocked.Increment(ref _sigterms) > 1) return;
             ctx.Cancel = true;
             global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                (global::Avalonia.Application.Current?.ApplicationLifetime
-                    as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.Shutdown());
+            {
+                // Gaze round videos stop off the dispatcher before the lifetime ends (#5174).
+                if (global::Avalonia.Application.Current?.ApplicationLifetime is global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+                    App.RequestDesktopShutdown(desktop);
+            });
         }
 
         public static AppBuilder BuildAvaloniaApp()
