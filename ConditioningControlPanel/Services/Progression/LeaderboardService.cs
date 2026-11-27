@@ -190,6 +190,9 @@ public class LeaderboardService : IDisposable
         }
     }
 
+    // The rank line is asked for every second; it is logged only when it changes (it filled the flight recorder, 7.4.2).
+    private readonly Diagnostics.LogOnChange _percentileLog = new();
+
     /// <summary>
     /// Get the current player's rank percentile.
     /// Returns 0 if not found or not enough data.
@@ -204,8 +207,9 @@ public class LeaderboardService : IDisposable
                 var percentile = (int)Math.Ceiling((double)YourRank.Value / YourTotal.Value * 100);
                 var clampedPercentile = Math.Min(99, Math.Max(1, percentile));
 
-                App.Logger?.Debug("GetPlayerPercentile: Server rank {Position}/{Total} = Top {Percentile}%",
-                    YourRank.Value, YourTotal.Value, clampedPercentile);
+                if (_percentileLog.Changed($"{YourRank.Value}/{YourTotal.Value}/{clampedPercentile}"))
+                    App.Logger?.Debug("GetPlayerPercentile: Server rank {Position}/{Total} = Top {Percentile}%",
+                        YourRank.Value, YourTotal.Value, clampedPercentile);
 
                 return clampedPercentile;
             }
@@ -213,7 +217,8 @@ public class LeaderboardService : IDisposable
             // Fallback: scan local entries (only works if player is within the fetched set)
             if (Entries.Count == 0 || TotalUsers == 0)
             {
-                App.Logger?.Debug("GetPlayerPercentile: No entries ({Count}) or users ({Total})", Entries.Count, TotalUsers);
+                if (_percentileLog.Changed($"none/{Entries.Count}/{TotalUsers}"))
+                    App.Logger?.Debug("GetPlayerPercentile: No entries ({Count}) or users ({Total})", Entries.Count, TotalUsers);
                 return 0;
             }
 
@@ -244,15 +249,17 @@ public class LeaderboardService : IDisposable
 
             if (position <= 0)
             {
-                App.Logger?.Debug("GetPlayerPercentile: Player not found in leaderboard");
+                if (_percentileLog.Changed("not-found"))
+                    App.Logger?.Debug("GetPlayerPercentile: Player not found in leaderboard");
                 return 0;
             }
 
             var fallbackPercentile = (int)Math.Ceiling((double)position / TotalUsers * 100);
             var clampedFallback = Math.Min(99, Math.Max(1, fallbackPercentile));
 
-            App.Logger?.Debug("GetPlayerPercentile: Fallback scan rank {Position}/{Total} = Top {Percentile}%",
-                position, TotalUsers, clampedFallback);
+            if (_percentileLog.Changed($"scan/{position}/{TotalUsers}/{clampedFallback}"))
+                App.Logger?.Debug("GetPlayerPercentile: Fallback scan rank {Position}/{Total} = Top {Percentile}%",
+                    position, TotalUsers, clampedFallback);
 
             return clampedFallback;
         }
