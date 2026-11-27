@@ -1298,9 +1298,11 @@ namespace ConditioningControlPanel
         /// </summary>
         public static void KillAllAudio()
         {
+            var trace = Services.Diagnostics.StopTrace.Begin("kill all audio");   // freeze hunt (StopTrace)
             // The audio player first and on its own: the pass below is one try/catch, and the
             // player's own files are the loudest thing a panic can leave running.
             StopAudioPlaylist();
+            trace.Mark("audio playlist");
             // A Goon toy cue is a sound-alike: a panic or stop-all never leaves it running (ccp-bugs #1429).
             try { Services.GoonGame.GoonToyDirector.Stop(); } catch { }
             // The one-shot clip (the companion's Audio effect, a Deeper play-audio action). Only a
@@ -1308,40 +1310,51 @@ namespace ConditioningControlPanel
             try { Audio?.StopSound(); } catch { }
             // Super Lights Down: no fade after a panic exit, in any mode.
             try { Services.Super.LightsDownService.Panic(); } catch { }
+            trace.Mark("toys + clip + lights down");
 
             try
             {
                 // Stop subliminal whispers
                 Subliminal?.Stop();
+                trace.Mark("subliminals");
 
                 // Stop flash sounds and images
                 Flash?.Stop();
+                trace.Mark("flash");
 
                 // Stop mind wipe audio
                 MindWipe?.Stop();
+                trace.Mark("mind wipe");
 
                 // Stop brain drain audio
                 BrainDrain?.Stop();
+                trace.Mark("brain drain");
 
                 // Stop video audio (closes video windows)
                 Video?.Stop();
+                trace.Mark("video");
 
                 // Stop bubble pop sounds and visuals
                 Bubbles?.Stop();
+                trace.Mark("bubbles");
 
                 // Stop bubble count game
                 BubbleCount?.Stop();
+                trace.Mark("bubble count");
 
                 // Stop bouncing text overlay
                 BouncingText?.Stop();
+                trace.Mark("bouncing text");
 
                 // Stop all visual overlays (spiral, pink filter, etc.)
                 Overlay?.Stop();
+                trace.Mark("overlays");
 
                 // Stop lock card and pop quiz if active. Kill-everything path (panic + exit), so the
                 // card on screen goes too — see LockCardService.Stop(dismissOpenCards).
                 LockCard?.Stop(dismissOpenCards: true);
                 PopQuiz?.Stop();
+                trace.Mark("lock card + pop quiz");
 
                 // Stop mantra lab audio
                 Mantra?.Dispose();
@@ -1349,20 +1362,25 @@ namespace ConditioningControlPanel
                 // Stop the ambient mantra chant loop — and clear its persisted flag, so panic ENDS
                 // the chant instead of pausing it until the next launch (#685).
                 MantraChant?.StopAndDisarm();
+                trace.Mark("mantra");
 
                 // Stop autonomy mode
                 Autonomy?.Stop();
+                trace.Mark("autonomy");
 
                 // Restore wallpaper. The collage first: Deactivate refuses while it runs, and every
                 // stop-everything gesture funnels through here (panic included), "Run with CCP" or not.
                 Wallpaper?.StopCollage();
                 Wallpaper?.Deactivate();
+                trace.Mark("wallpaper");
 
                 // Stop avatar voice lines
                 AvatarWindow?.StopVoiceLineAudio();
+                trace.Mark("avatar voice");
 
                 // Reset audio ducking - CRITICAL for clean exit
                 Audio?.ForceUnduck();
+                trace.Mark("unduck");
 
                 Logger?.Debug("KillAllAudio: All audio and effects stopped");
             }
@@ -1370,6 +1388,7 @@ namespace ConditioningControlPanel
             {
                 Logger?.Error(ex, "Error in KillAllAudio");
             }
+            trace.Finish();
         }
 
         // HANG HUNT stress driver — see the `--stress` call site in OnStartup. Runs entirely on the UI

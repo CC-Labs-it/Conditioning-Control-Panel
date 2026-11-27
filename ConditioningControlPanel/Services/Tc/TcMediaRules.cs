@@ -53,27 +53,29 @@ internal static class TcMediaRules
         return mix;
     }
 
-    /// <summary>The Scrolller gate: the app's online source on, the app's consent given, not offline, and
-    /// the player has not switched pictures off in this window.</summary>
-    public static bool PicturesOn(string? mediaSource, bool consent, bool offline, bool offInWindow)
+    /// <summary>The Scrolller gate: the app's consent given, not offline, the player has not switched pictures off
+    /// in this window, and either the app's online source is on or the player said yes in this game
+    /// (<paramref name="gameYes"/> = <c>AppSettings.TcPictures</c>, the Racing Thoughts pattern,
+    /// <c>GlassroadRules.PicturesOn</c>). The game's yes never changes the Library's own source.</summary>
+    public static bool PicturesOn(bool? gameYes, string? mediaSource, bool consent, bool offline, bool offInWindow)
         => consent && !offline && !offInWindow
-           && !string.Equals(mediaSource ?? "local", "local", StringComparison.OrdinalIgnoreCase);
+           && (gameYes == true || !string.Equals(mediaSource ?? "local", "local", StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>Why a player's YES on the picture card could not switch pictures on: <c>disabled</c> (offline mode
-    /// or the app's media source is local, checked first because no answer to the consent question can change it),
-    /// <c>declined</c> (no app consent), or null (on).</summary>
-    public static string? RefusalReason(string? mediaSource, bool consent, bool offline)
+    /// <summary>Why a player's YES on the picture card could not switch pictures on: <c>disabled</c> (offline mode,
+    /// which no answer to the consent question can change), <c>declined</c> (no app consent), or null (on).
+    /// 7.4.2: a local app source is no longer a refusal: the player's yes in the game turns the game's own
+    /// pictures on (<see cref="PicturesOn"/>).</summary>
+    public static string? RefusalReason(bool consent, bool offline)
     {
-        if (!ConsentAskMatters(mediaSource, offline)) return "disabled";
+        if (!ConsentAskMatters(offline)) return "disabled";
         if (!consent) return "declined";
         return null;
     }
 
-    /// <summary>Whether the app's consent question can change anything: not while Offline mode is on or the app's
-    /// media source is local (the default). Then the host answers <c>disabled</c> at once and never asks
-    /// (7.4 desk run: a fresh profile was asked, said Yes, and was told pictures are off anyway).</summary>
-    public static bool ConsentAskMatters(string? mediaSource, bool offline)
-        => !offline && !string.Equals(mediaSource ?? "local", "local", StringComparison.OrdinalIgnoreCase);
+    /// <summary>Whether the app's consent question can change anything: not while Offline mode is on (the host then
+    /// answers <c>disabled</c> at once and never asks). On a local app source it can: a yes is this game's choice
+    /// (7.4 desk run: a fresh profile on the default local source was asked, said Yes, and was refused anyway).</summary>
+    public static bool ConsentAskMatters(bool offline) => !offline;
 
     /// <summary>The <c>setting</c> echo for the consent key, with its reason code when it stayed off.</summary>
     public static JObject SettingEcho(bool on, string? reason)

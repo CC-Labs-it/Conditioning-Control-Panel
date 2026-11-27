@@ -347,6 +347,9 @@ namespace ConditioningControlPanel.Services
             // (ElapsedTime property returns Zero when not running)
             var finalElapsedTime = ElapsedTime;
 
+            // Freeze hunt (#1747 #1748 #1760 #1721): one line with each step's ms when the stop is slow.
+            var trace = Diagnostics.StopTrace.Begin("session stop");
+
             HangContext.Leave("session:" + (_currentSession?.Name ?? "?"));
             _isRunning = false;
             // Hand phrase-pool custody back to the user. Cleared here rather than at the end of
@@ -373,7 +376,12 @@ namespace ConditioningControlPanel.Services
             // ccp-bugs #1464: _isRunning is already false, so a teardown step that throws must not
             // skip SessionStopped below - that is what resets every session clock and stops the
             // engine. Each step is guarded on its own.
-            void Step(string name, Action step) => SessionClockRules.RunStep(step, ex => ReportStepFailure("stop:" + name, ex));
+            void Step(string name, Action step)
+            {
+                SessionClockRules.RunStep(step, ex => ReportStepFailure("stop:" + name, ex));
+                trace.Mark(name);
+            }
+            trace.Mark("timers");
 
             // Close corner GIF
             // CloseCornerGif also hands the corner back to any standalone slot that stood down
@@ -407,12 +415,14 @@ namespace ConditioningControlPanel.Services
             // Restore original settings
             Step("restore-settings", RestoreSettings);
 
-            // Fire events
-            SessionStopped?.Invoke(this, EventArgs.Empty);
+            // Fire events. Each handler is timed by name (the panel's handler stops the engine, which
+            // writes its own line); Each is exactly a plain Invoke, a throw still propagates.
+            trace.Each(SessionStopped, d => ((EventHandler)d)(this, EventArgs.Empty));
             App.Friends?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Session);
 
             // Update Discord presence back to idle
             App.DiscordRpc?.SetIdleActivity();
+            trace.Mark("friends + discord");
 
             // Track abandoned session if not completed
             if (!completed && !suppressAbandonTracking)
@@ -505,14 +515,17 @@ namespace ConditioningControlPanel.Services
             // Finalize media log AFTER XP is settled so the persisted log records the actual award.
             // Aborted sessions still get a log (xpForLog == 0) so the post-session dialog shows
             // what played even when the user cut things short.
+            trace.Mark("xp + completion");
             try { App.SessionLog?.EndSession(completed, finalElapsedTime, xpForLog); }
             catch (Exception ex) { App.Logger?.Error(ex, "SessionLog.EndSession failed"); }
+            trace.Mark("session log");
 
             // One line for the whole session; the first failure of each step is in crash.log.
             if (_stepFailures.Any)
                 App.Logger?.Warning("Session steps failed this session (first of each in crash.log): {Counts}", _stepFailures.Summary());
 
             _currentSession = null;
+            trace.Finish();
         }
 
         /// <summary>
