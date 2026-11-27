@@ -18,6 +18,45 @@ namespace ConditioningControlPanel.Views.Tabs
             // moment it is collapsed again.
             IsVisibleChanged += PresetsTabView_IsVisibleChanged;
             PaintInks();
+
+            // ccp-bugs #1466: anything that moves the room left for the chip rail refits it.
+            RackColumn.SizeChanged += (_, _) => FitChipRail();
+            PresetsZone.SizeChanged += (_, _) => FitChipRail();
+            TakeawayZone.SizeChanged += (_, _) => FitChipRail();
+            PresetCardsPanel.SizeChanged += (_, _) => FitChipRail();
+        }
+
+        /// <summary>One line of preset chips: a 38 px chip and its 7 px gap.</summary>
+        internal const double ChipLine = 45;
+
+        /// <summary>
+        /// The least the session list keeps: three rows (44 px and a 5 px gap each) and half of a
+        /// fourth peeking, so the list reads as one that scrolls.
+        /// </summary>
+        internal const double SessionListFloor = 3 * 49 + 24;
+
+        /// <summary>
+        /// The tallest the preset chip rail may be: what the rack column has left once the zones'
+        /// own furniture and <see cref="SessionListFloor"/> are paid for, but never under one line.
+        /// </summary>
+        internal static double ChipRailMax(double column, double presetChrome, double sessionChrome, double takeaway) =>
+            Math.Max(ChipLine, column - presetChrome - sessionChrome - takeaway - SessionListFloor);
+
+        /// <summary>
+        /// 7.4.2 (ccp-bugs #1466, a 7.4.1 regression): the chips wrapped onto every line they needed
+        /// and the session list took what was left, one row at three lines of presets. The rail now
+        /// scrolls inside a box capped by <see cref="ChipRailMax"/>; on a tall window nothing changes.
+        /// Furniture is read from DesiredSize, because a squeezed star row reports 0 in ActualHeight.
+        /// </summary>
+        internal void FitChipRail()
+        {
+            double column = RackColumn.ActualHeight;
+            if (column <= 0) return;
+            double max = ChipRailMax(column,
+                PresetsZone.DesiredSize.Height - PresetChipsScroller.DesiredSize.Height,
+                SessionsZone.DesiredSize.Height - SessionRackScroller.DesiredSize.Height,
+                TakeawayZone.DesiredSize.Height);
+            if (Math.Abs(PresetChipsScroller.MaxHeight - max) > 0.5) PresetChipsScroller.MaxHeight = max;
         }
 
         /// <summary>
