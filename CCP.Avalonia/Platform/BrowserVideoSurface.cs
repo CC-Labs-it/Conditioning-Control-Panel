@@ -10,6 +10,9 @@ internal sealed class BrowserVideoSurface : IDisposable
 {
     private static volatile object? _owner;
     internal static bool StoodDown;
+    internal static int ProcessFailures;
+    // WPF BrowserVideoEngine.cs:317-320,910-925: both video features share two primary failures.
+    internal static void RecordProcessFailure() => StoodDown |= ++ProcessFailures >= 2;
     internal static bool SessionActive => _owner != null;
     internal static Func<BrowserVideoSurface?> Create = () => {
         try {
@@ -45,6 +48,7 @@ internal sealed class BrowserVideoSurface : IDisposable
     internal event Action<JsonElement>? Message;
     internal event Action<bool>? Failed;
     internal bool Playing { get; private set; }
+    internal bool ProcessFailed { get; private set; }
     internal double Volume { get; private set; }
     private readonly Func<string, Task<string?>> _execute;
     private readonly string _id = Guid.NewGuid().ToString("N");
@@ -56,6 +60,7 @@ internal sealed class BrowserVideoSurface : IDisposable
         View.AllowNavigation = uri => uri.ToString() == "about:blank";
         View.NavigationCompleted += Navigated;
         View.WebMessage += Receive;
+        View.BrowserProcessFailed += OnProcessFailed;
     }
     internal void Start(string url, bool primary, int masterVolume) {
         _url = url;
@@ -94,6 +99,7 @@ internal sealed class BrowserVideoSurface : IDisposable
         catch (InvalidOperationException) { }
         catch (System.Collections.Generic.KeyNotFoundException) { }
     }
+    private void OnProcessFailed() { ProcessFailed = true; Fail(); }
     internal string SessionId => _id;
     internal bool StartupArmed => _startup?.IsEnabled == true;
     private void Fail(bool mediaFailure = false) => FailWithMessage(mediaFailure, null);
@@ -141,6 +147,7 @@ internal sealed class BrowserVideoSurface : IDisposable
         _startup = null;
         View.NavigationCompleted -= Navigated;
         View.WebMessage -= Receive;
+        View.BrowserProcessFailed -= OnProcessFailed;
         Message = null;
         Failed = null;
         View.Content = null;
