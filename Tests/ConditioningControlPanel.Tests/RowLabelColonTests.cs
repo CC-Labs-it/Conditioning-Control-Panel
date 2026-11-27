@@ -36,4 +36,18 @@ public class RowLabelColonTests
             .ToList();
         Assert.True(bad.Count == 0, string.Join(Environment.NewLine, bad));
     }
+
+    [Fact]
+    public void Bubble_pop_speed_row_reads_in_the_players_language()
+    {
+        // 7.4.2: the row said "Speed" in English in every language; it binds setting_speed, the key
+        // the other speed rows use.
+        var dir = AppContext.BaseDirectory;
+        while (dir != null && !Directory.Exists(Path.Combine(dir, "ConditioningControlPanel", "Features")))
+            dir = Path.GetDirectoryName(dir);
+        Assert.NotNull(dir);
+        var xaml = File.ReadAllText(Path.Combine(dir!, "ConditioningControlPanel", "Features", "BubblePopFeatureControl.xaml"));
+        Assert.DoesNotContain("Text=\"Speed\"", xaml);
+        Assert.Contains("<rows:RowLabel Grid.Column=\"0\" Text=\"{loc:Str setting_speed}\" Emblem=\"Fast\"/>", xaml);
+    }
 }
