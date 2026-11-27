@@ -3077,6 +3077,60 @@ namespace ConditioningControlPanel
             }));
         }
 
+        /// <summary>The live copies of the fullscreen video on the other content screens (#1639).</summary>
+        private Services.Browser.BrowserFullscreenMirrors? _browserFsMirrors;
+
+        /// <summary>
+        /// With more than one "Show content on" screen, every other one gets a live copy of the
+        /// fullscreen host (ccp-bugs #1639), as the display clone gave up to 7.2.3, but without
+        /// touching the display topology (#1565) and without a second player (sound stays on the
+        /// host). Queued at Background, after the maximize step, never inside the switch itself;
+        /// a newer enter or exit, or a closed host, makes it stand down.
+        /// </summary>
+        private void ShowBrowserFullscreenMirrorsLater(Window host, int transition)
+        {
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+            {
+                if (!_browserFsGate.IsCurrent(transition) || !_isBrowserFullscreen
+                    || !ReferenceEquals(host, _browserPopoutWindow)) return;
+                var hwnd = new WindowInteropHelper(host).Handle;
+                if (hwnd == IntPtr.Zero) return;
+                CloseBrowserFullscreenMirrors();
+                try
+                {
+                    var content = App.GetGlobalScreens();
+                    var extra = Services.Browser.BrowserFullscreenMirrorRule.ExtraScreens(
+                        System.Windows.Forms.Screen.FromHandle(hwnd).DeviceName, content.Select(s => s.DeviceName));
+                    if (extra.Count == 0) return;
+                    var mirrors = new Services.Browser.BrowserFullscreenMirrors(hwnd,
+                        focusHost: () => { try { if (_isBrowserFullscreen) host.Activate(); } catch { } },
+                        // A turn later: the copy that was double-clicked is closed by the exit.
+                        exitFullscreen: () => Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            try { if (_isBrowserFullscreen && ReferenceEquals(host, _browserPopoutWindow)) ExitBrowserFullscreen(); }
+                            catch { }
+                        })));
+                    _browserFsMirrors = mirrors;
+                    mirrors.Show(content.Where(s => extra.Contains(s.DeviceName, StringComparer.OrdinalIgnoreCase)), host.Topmost);
+                    App.Logger?.Information("Browser fullscreen copied to {Count} of {Asked} more screen(s): {Diag}",
+                        mirrors.Count, extra.Count, mirrors.Diag);
+                }
+                catch (Exception ex)
+                {
+                    App.Logger?.Warning("Browser fullscreen copies failed: {Error}", ex.Message);
+                    CloseBrowserFullscreenMirrors();
+                }
+            }));
+        }
+
+        private void CloseBrowserFullscreenMirrors()
+        {
+            var mirrors = _browserFsMirrors;
+            _browserFsMirrors = null;
+            try { mirrors?.Close(); }
+            catch (Exception ex) { App.Logger?.Debug("Browser fullscreen copies close failed: {Error}", ex.Message); }
+        }
+
         // ---- rented Topmost + escape hatch for the fullscreen browser (#952) -------------------
 
         /// <summary>Handlers armed on whichever window is carrying the fullscreen browser, so
@@ -3224,7 +3278,8 @@ namespace ConditioningControlPanel
 
                     // A takeover goes where the app's content goes ("Show content on", the screen
                     // the main video copy uses), not wherever the panel happens to sit (#1649).
-                    // One screen only: no display clone (#1565). A video the user maximized goes
+                    // One host only: no display clone (#1565); the other content screens get live
+                    // copies of it (#1639, ShowBrowserFullscreenMirrorsLater). A video the user maximized goes
                     // there too (owner 2026-11-22, ccp-bugs #1720): the effects follow the content
                     // screen, so a hand fullscreen on the panel's screen left them drawing elsewhere.
                     // When the panel's screen already shows content (e.g. "all monitors") it stays
@@ -3271,6 +3326,7 @@ namespace ConditioningControlPanel
 
                     _browserPopoutWindow.Closed += (s, args) =>
                     {
+                        CloseBrowserFullscreenMirrors();
                         if (_browser?.WebView != null && !SettingsTab.BrowserContainer.Children.Contains(_browser.WebView))
                         {
                             SettingsTab.BrowserContainer.Children.Add(_browser.WebView);
@@ -3285,6 +3341,9 @@ namespace ConditioningControlPanel
                     MaximizeBrowserFullscreenHostLater(_browserPopoutWindow, transition);
                     ArmFullscreenEscapes(_browserPopoutWindow);
                 }
+
+                // The other content screens get a live copy, after the maximize (#1639).
+                ShowBrowserFullscreenMirrorsLater(_browserPopoutWindow, transition);
 
                 // (Removed: ReRequestVideoFullscreenAsync.) That stacked a
                 // second HTML5 fullscreen entry on top of HT's wrapper-level
@@ -3318,6 +3377,8 @@ namespace ConditioningControlPanel
             // A queued enter from the page dies with any exit (panic, teardown, Esc), and a pending
             // maximize of the host stands down.
             _browserFsGate.Clear();
+            // The copies on the other screens go first, before the host they show (#1639).
+            CloseBrowserFullscreenMirrors();
             if (!_isBrowserFullscreen) return;
             _browserFsGate.BeginTransition();
 
