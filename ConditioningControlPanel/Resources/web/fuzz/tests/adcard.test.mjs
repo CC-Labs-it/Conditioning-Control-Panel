@@ -6,6 +6,7 @@ import { PORTRAITS, SPRITES } from '../ui/adcard/portraits.js';
 import { ADCARD_LINES, ADCARD_COPY } from '../data/content/adcard.js';
 import { THEME_IDS } from '../ui/palette.js';
 import { createLife, serialize, parse } from '../sim/save.js';
+import { statusLine } from '../ui/adcard/export.js';
 
 const asset = (name) => new URL('../assets/adcard/' + name, import.meta.url);
 
@@ -100,4 +101,20 @@ test('the card stylesheet stays scoped under .adc', () => {
   const css = readFileSync(new URL('../ui/adcard/card.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
   const selectors = [...css.matchAll(/(^|\})\s*([^{}@]+)\{/g)].map((m) => m[2].trim()).filter((s) => !/^(from|to|\d+%)/.test(s));
   for (const sel of selectors) for (const part of sel.split(',')) assert.match(part.trim(), /^\.adc/, `unscoped selector: ${part.trim()}`);
+});
+
+test('a saved card says where the file went; the share sheet, copy and cancel keep their own lines', () => {
+  assert.equal(statusLine('saved'), ADCARD_COPY.savedDownloads);
+  assert.match(ADCARD_COPY.savedDownloads, /Downloads/);
+  assert.equal(statusLine('shared'), ADCARD_COPY.saved);
+  assert.equal(statusLine('shared', 'Shared.'), 'Shared.');
+  assert.equal(statusLine('copied'), ADCARD_COPY.copied);
+  assert.equal(statusLine('nocopy'), ADCARD_COPY.noCopy);
+  assert.equal(statusLine('cancelled'), '');
+  assert.doesNotMatch(ADCARD_COPY.savedDownloads, /[–—!]/);
+  for (const file of ['../ui/adcard/ending.js', '../ui/recap/recap.js']) {
+    const src = readFileSync(new URL(file, import.meta.url), 'utf8');
+    assert.match(src, /statusLine\(/, file + ' words its save line through statusLine');
+    assert.doesNotMatch(src, /ADCARD_COPY\.saved\b/, file + ' never shows the bare Saved. for a download');
+  }
 });

@@ -153,6 +153,19 @@ export async function saveBlob(doc, blob, name) {
 }
 
 /**
+ * The line under the buttons once an export is out. A download says where it went: the Downloads folder is where a
+ * browser puts it by default, and the CCP app's WebView2 sets no folder of its own (no DownloadStarting handler, no
+ * DefaultDownloadFolderPath), so it lands there too. `shared` is the share sheet's own line, which each surface keeps.
+ */
+export function statusLine(status, shared = ADCARD_COPY.saved) {
+  if (status === 'saved') return ADCARD_COPY.savedDownloads;
+  if (status === 'shared') return shared;
+  if (status === 'copied') return ADCARD_COPY.copied;
+  if (status === 'nocopy') return ADCARD_COPY.noCopy;
+  return '';
+}
+
+/**
  * Runs one export. kind: 'gif' | 'video' | 'png' | 'copy'. progress(i, n, text). stop() -> true aborts between frames.
  * Resolves { status, blob } where status is 'saved' | 'shared' | 'copied' | 'cancelled'.
  */
