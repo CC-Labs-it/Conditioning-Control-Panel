@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
+using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Automation;
 using Avalonia.Media;
 using ConditioningControlPanel.Avalonia.Controls;
@@ -48,8 +49,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
     ///  - <c>Checked</c>/<c>Unchecked</c> -> one <c>IsCheckedChanged</c> handler.
     ///  - <c>ToolTip="…"</c> -> <c>ToolTip.SetTip(…)</c>; <c>FontStyles</c>/<c>FontWeights</c> ->
     ///    <c>FontStyle</c>/<c>FontWeight</c>; <c>Cursors.Hand</c> -> <c>new Cursor(StandardCursorType.Hand)</c>.
-    ///  - <c>MenuItem.InputGestureText</c> does not exist in Avalonia (only a KeyGesture), so the
-    ///    "(already added)" note is appended to the item header instead.
     ///  - The <c>DialogDarkComboBox</c> style is one FontSize setter, applied directly here.
     /// </summary>
     public partial class AwarenessPresetDetailDialog : Window
@@ -1179,9 +1178,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
         // Add-action menu (＋ button)
         // ============================================================
 
-        private void ShowAddActionMenu(Button anchor, KeywordTrigger trigger, Border parentBorder)
+        internal ContextMenu ShowAddActionMenu(Button anchor, KeywordTrigger trigger, Border parentBorder)
         {
             var menu = new ContextMenu();
+            Grid.SetIsSharedSizeScope(menu, true);
             var existing = new HashSet<string>();
             foreach (var a in trigger.Actions ?? new List<KeywordAction>())
             {
@@ -1217,13 +1217,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
 
             menu.PlacementTarget = anchor;
             menu.Open(anchor);
+            return menu;
         }
 
         private void AddMenuItem(ContextMenu menu, IconKind icon, string header, Action onClick, string? disabledReason = null)
         {
-            // Avalonia's MenuItem.InputGesture is a KeyGesture, not free text, so the WPF
-            // InputGestureText note is appended to the header instead.
-            var item = new MenuItem { Icon = new IconGlyph { Kind = icon, Size = 14 }, Header = disabledReason == null ? header : $"{header}   {disabledReason}" };
+            // WPF Inputs.xaml:509 uses a shared gesture column for this free-text note.
+            var content = new Grid();
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, SharedSizeGroup = "ActionHeader" });
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            content.Children.Add(new TextBlock { Text = header, VerticalAlignment = VerticalAlignment.Center });
+            var note = new TextBlock
+            {
+                Text = disabledReason,
+                IsVisible = !string.IsNullOrEmpty(disabledReason),
+                Margin = new Thickness(18, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                [!TextBlock.ForegroundProperty] = new DynamicResourceExtension("TextMutedBrush"),
+            };
+            Grid.SetColumn(note, 1);
+            content.Children.Add(note);
+            var item = new MenuItem { Icon = new IconGlyph { Kind = icon, Size = 14 }, Header = content };
             if (disabledReason != null)
             {
                 item.IsEnabled = false;
