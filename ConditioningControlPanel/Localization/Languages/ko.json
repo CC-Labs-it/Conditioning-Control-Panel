@@ -8474,7 +8474,7 @@
   "shop_item_rt_bundle_3_name": "Racing Thoughts 번들 3",
   "starthere_title": "Start here",
   "starthere_intro": "Four things worth knowing before you dive in. Help keeps this card if you want it back.",
-  "starthere_row_packs": "The app ships with CCP Default only. More pictures, videos and audio come as content packs, shared daily in #asset-packs on our Discord.",
+  "starthere_row_packs": "The app ships with CCP Default only. More pictures, videos and audio come as content packs, shared daily in #asset-packs on our Discord. Pictures also come from Scrolller by default (Library > Scrolller or Both), and the app asks once before it shows the first one.",
   "starthere_row_first": "Try Spiral Overlay in Studio first. The spirals are built in and it starts at 10% opacity, easy to turn up later.",
   "starthere_row_settings": "Settings is the gear near the bottom of the rail: account, audio, monitors, devices.",
   "starthere_row_panic": "Your panic key is {0}. Press it any time to stop everything. Change it in Settings > Devices.",

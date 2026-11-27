@@ -5072,6 +5072,14 @@ namespace ConditioningControlPanel.Models
         /// does not silently enable the premium feed.</summary>
         [JsonIgnore]
         public bool HasRemoteMediaConsent => _remoteMediaConsented || _fypOnlineConsented;
+
+        /// <summary>True when remote media is really being drawn: the source is not "local" AND
+        /// the user has said yes. A fresh install starts on "mixed" with no consent yet
+        /// (<c>FirstRunGate.ApplyFreshInstallMediaDefault</c>), so the source alone no longer
+        /// tells the new-user rescues whether the library is empty: read this instead.</summary>
+        [JsonIgnore]
+        public bool UsesRemoteMedia =>
+            !string.Equals(_mediaSource, "local", StringComparison.OrdinalIgnoreCase) && HasRemoteMediaConsent;
         #endregion
 
         #region Lock Card

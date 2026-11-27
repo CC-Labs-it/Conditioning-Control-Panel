@@ -238,10 +238,11 @@ namespace ConditioningControlPanel
 
         /// <summary>
         /// True only when the media pool really is the local folder. With Reddit media on
-        /// ("online" or "mixed") an empty folder is not a problem to report.
+        /// ("online" or "mixed") an empty folder is not a problem to report. "Mixed" without
+        /// consent (a fresh install before the yes) draws local only, so it still counts here.
         /// </summary>
         private static bool IsLocalOnlyMediaSource(AppSettings? s) =>
-            s != null && string.Equals(s.MediaSource, "local", StringComparison.OrdinalIgnoreCase);
+            s != null && !s.UsesRemoteMedia;
 
         /// <summary>The toast's one-tap way out: straight to the pack catalogue on Discord.</summary>
         private static void OpenPackCatalogue()
