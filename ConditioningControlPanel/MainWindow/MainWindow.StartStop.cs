@@ -648,8 +648,16 @@ namespace ConditioningControlPanel
             // Flash/overlay BitmapSources are large allocations (>85 KB) that fragment
             // the LOH during sessions. Compacting here returns memory to the OS.
             App.Flash.ClearImageCache();
+            var gcBefore = Services.Diagnostics.GcMark.Now();
+            var lohBefore = Services.Diagnostics.StopTrace.LohMb();
             System.Runtime.GCSettings.LargeObjectHeapCompactionMode = System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
             GC.Collect(2, GCCollectionMode.Optimized, blocking: false);
+            try
+            {
+                VideoDiag.Log("STOP", Services.Diagnostics.StopTrace.GcLine("engine stop", gcBefore,
+                    Services.Diagnostics.GcMark.Now(), lohBefore, Services.Diagnostics.StopTrace.LohMb()));
+            }
+            catch { }
             trace.Mark("image cache + GC");
 
             App.Logger?.Information("Engine stopped");

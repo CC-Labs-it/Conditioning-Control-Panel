@@ -889,6 +889,8 @@ namespace ConditioningControlPanel
         private static DateTime _screenCacheTime = DateTime.MinValue;
         private static readonly TimeSpan ScreenCacheDuration = TimeSpan.FromSeconds(5);
         private static readonly object _screenCacheLock = new();
+        // The 5 s re-enumeration logs only when the monitor list changes (it filled the flight recorder, 7.4.2).
+        private static readonly Services.Diagnostics.LogOnChange _screenListLog = new();
 
         /// <summary>
         /// Gets all screens with caching to reduce expensive Win32 calls.
@@ -905,9 +907,10 @@ namespace ConditioningControlPanel
                     {
                         _cachedScreens = System.Windows.Forms.Screen.AllScreens;
                         _screenCacheTime = DateTime.Now;
-                        Logger?.Debug("Screen enumeration: {Count} monitors detected: {Names}",
-                            _cachedScreens.Length,
-                            string.Join(", ", _cachedScreens.Select(s => $"{s.DeviceName} ({s.Bounds.Width}x{s.Bounds.Height})")));
+                        var screenNames = string.Join(", ", _cachedScreens.Select(s => $"{s.DeviceName} ({s.Bounds.Width}x{s.Bounds.Height})"));
+                        if (_screenListLog.Changed(screenNames))
+                            Logger?.Debug("Screen enumeration: {Count} monitors detected: {Names}",
+                                _cachedScreens.Length, screenNames);
                     }
                     catch (Exception ex)
                     {
