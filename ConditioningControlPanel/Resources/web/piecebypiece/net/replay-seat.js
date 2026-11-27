@@ -12,6 +12,12 @@
  *   and wait for the men to land and for a capture's panels to finish.
  *   `held()` (the pause card) stops everything.
  *
+ *   THE END WAITS ITS TURN. The last ply does not end the game on the spot: the
+ *   `gameover` (the losing king's fall, the result line) is owed until that ply
+ *   has landed and a short beat (PACE.end) has passed. Told at once, the fall
+ *   ran over the last move and the two read as one (cup helper, 2026-11-13).
+ *   A seek is no animation, so a seek to the end still ends at once.
+ *
  *   BOTH SIDES ARE GRADED, like the stands: `seats` is empty, `graded` is both.
  *
  * Whole game: play(), pause(), seek(n), step(+1 | -1). Reel: startReel() jumps
@@ -22,7 +28,7 @@ import { createRules } from '../game/rules.js';
 import { createClock } from '../game/clock.js';
 import { buildSteps, endOf, pickMoments, captionOf } from '../game/cup-replay.js';
 
-export const PACE = Object.freeze({ gap: 1.1, first: 0.9, cut: 0.9, hold: 2.2, reducedGap: 1.5 });
+export const PACE = Object.freeze({ gap: 1.1, first: 0.9, cut: 0.9, hold: 2.2, reducedGap: 1.5, end: 0.6 });
 
 export function createReplaySeat({ bus, board, record, held = () => false, reduced = () => false, onDone = () => {}, onChange = () => {} }) {
   const rules = createRules();
@@ -40,6 +46,8 @@ export function createReplaySeat({ bus, board, record, held = () => false, reduc
   let disposed = false;
   let reel = null;           // { moments, at, phase: 'play' | 'hold' }
   let caption = null;
+  let owed = false;          // the last ply is on its way; its gameover is told once it has landed
+  let endWait = 0;
 
   const settling = () => !!(board.anim?.busy?.() || board.director?.holding?.() || board.director?.active?.());
   const changed = () => { try { onChange(state()); } catch { /* the bar is optional */ } };
@@ -76,7 +84,7 @@ export function createReplaySeat({ bus, board, record, held = () => false, reduc
     if (played.promotion) pieces.setPosition(rules.position());
     if (played.captured) bus.emit('capture', { by: played.side, piece: played.captured, square: played.capturedSquare, victimSide: played.capturedSide });
     if (played.check) { board.buzzCheck?.(played.to); bus.emit('check', { side: played.turn }); }
-    if (i >= total) finish();
+    if (i >= total) { owed = true; endWait = reduced() ? 0 : PACE.end; }
     else bus.emit('turn', { side: played.turn, ply: i, clocks: clock.snapshot(), total: 0 });
     changed();
     return true;
@@ -87,6 +95,7 @@ export function createReplaySeat({ bus, board, record, held = () => false, reduc
     const next = Math.max(0, Math.min(total, Math.trunc(Number(n) || 0)));
     board.anim?.skip?.();
     board.director?.drop?.();
+    owed = false;
     if (record.start_fen) { try { rules.chess.load(record.start_fen); } catch { rules.chess.reset(); } } else rules.chess.reset();
     for (let k = 0; k < next; k++) rules.move(plays[k].from, plays[k].to, plays[k].promotion || 'q');
     i = next;
@@ -125,15 +134,27 @@ export function createReplaySeat({ bus, board, record, held = () => false, reduc
     wait = PACE.cut;
   }
 
+  /** The owed end: once the last ply has landed (and its capture panels are over), a beat, then gameover. */
+  function settleEnd(dt) {
+    if (settling()) return;
+    endWait -= dt;
+    if (endWait > 0) return;
+    owed = false;
+    finish();
+    changed();
+    if (!reel) fireDone();
+  }
+
   function update(dt) {
-    if (disposed || !playing || held()) return;
+    if (disposed || held()) return;
+    if (owed) { settleEnd(dt); return; }   // a step forward while paused owes it too
+    if (!playing) return;
     if (settling()) { wait = Math.max(wait, 0.25); return; }
     wait -= dt;
     if (wait > 0) return;
     if (reel) { reelTick(); return; }
     if (!playNext()) { playing = false; changed(); return; }
     wait = reduced() ? PACE.reducedGap : PACE.gap;
-    if (i >= total) fireDone();
   }
 
   function start() {
@@ -167,7 +188,7 @@ export function createReplaySeat({ bus, board, record, held = () => false, reduc
     dispose() { disposed = true; playing = false; },
 
     deal, play, pause, seek, startReel, state,
-    step(d) { pause(); if (d > 0 && i < total) { board.anim?.skip?.(); playNext(); if (i >= total) fireDone(); } else if (d < 0) seek(i - 1); },
+    step(d) { pause(); if (d > 0 && i < total) { board.anim?.skip?.(); playNext(); } else if (d < 0) seek(i - 1); },
     toggle() { if (playing) pause(); else play(); },
   };
 }
