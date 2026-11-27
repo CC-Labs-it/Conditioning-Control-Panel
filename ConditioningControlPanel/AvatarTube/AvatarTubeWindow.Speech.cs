@@ -1332,7 +1332,10 @@ namespace ConditioningControlPanel
             _builtInVideoLinks ??= new Dictionary<string, string>(KnownVideoLinks, StringComparer.OrdinalIgnoreCase);
 
             var modLinks = App.Mods?.GetVideoLinks();
-            if (modLinks != null && modLinks.Count > 0)
+            // An emptied user pool is a real "no videos" choice (ccp-bugs #1754): leave the table
+            // empty so autonomy and the chaos pool stop playing the shipped list. The linker still
+            // folds in the built-in catalogue, so names already said keep rendering as links.
+            if (modLinks != null && (modLinks.Count > 0 || App.Mods?.UserEmptiedVideoLinks() == true))
             {
                 // Filter to HTTPS-only at runtime (defense-in-depth)
                 var filtered = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
