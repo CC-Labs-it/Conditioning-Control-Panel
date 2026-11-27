@@ -10128,6 +10128,11 @@ namespace ConditioningControlPanel.Models
         /// once, after the first-run show; replay lives in Help and does not touch this).</summary>
         public bool StartHereShown { get; set; }
 
+        /// <summary>True once the assets nudge (three cards with an arrow: Library source, adding
+        /// your own, Start on Home) has opened. Offered once per profile; replay lives in Help and
+        /// does not touch this.</summary>
+        public bool AssetsNudgeShown { get; set; }
+
         /// <summary>Old tab keys followed to their new home. The "Moved: Section > Page" toast
         /// shows for the first three hits, then retires itself.</summary>
         public int NavMovedToastHits { get; set; }
