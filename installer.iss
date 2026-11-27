@@ -17,6 +17,8 @@
 #define MyAppPublisher "CodeBambi"
 #define MyAppURL "https://github.com/CC-Labs-it/Conditioning-Control-Panel"
 #define MyAppExeName "ConditioningControlPanel.exe"
+; The app's single-instance mutex: must equal App.xaml.cs MutexName (InstallerMutexTests).
+#define MyAppMutex "ConditioningControlPanel_SingleInstance_Mutex"
 #define MyAppDescription "A professional visual conditioning application with gamification features"
 
 ; Path to the published output (adjust if needed)
@@ -99,7 +101,7 @@ UninstallDisplayName={#MyAppName}
 ; Inno can detect the running app and cleanly close+restart it when files are in use during
 ; a silent auto-update. Without this, /CLOSEAPPLICATIONS has nothing registered to close and
 ; the in-app updater could race the still-locked exe (#499).
-AppMutex=ConditioningControlPanel_SingleInstance_Mutex
+AppMutex={#MyAppMutex}
 CloseApplications=yes
 RestartApplications=yes
 
@@ -643,7 +645,7 @@ begin
   // Check if already running. Use the app's REAL single-instance mutex name
   // (App.xaml.cs MutexName) — the old '{#MyAppName}_Mutex' string never matched, so this
   // guard was dead and never detected a running app (#499).
-  if CheckForMutexes('ConditioningControlPanel_SingleInstance_Mutex') then
+  if CheckForMutexes('{#MyAppMutex}') then
   begin
     if MsgBox('{#MyAppName} is currently running.' + #13#10 + #13#10 +
               'Please close it before continuing installation.' + #13#10 + #13#10 +
@@ -654,8 +656,10 @@ begin
       ShellExec('', 'taskkill', '/IM {#MyAppExeName}', '', SW_HIDE, ewWaitUntilTerminated, ErrorCode);
       Sleep(2000);
 
-      // Force kill if still running
-      if CheckForMutexes('{#MyAppName}_Mutex') then
+      // Force kill if still running. Same real mutex as above: the old '{#MyAppName}_Mutex'
+      // re-check never matched, so a hidden running app (no window for the plain taskkill
+      // to close) was never force-killed and setup then failed on the locked exe.
+      if CheckForMutexes('{#MyAppMutex}') then
       begin
         ShellExec('', 'taskkill', '/F /IM {#MyAppExeName}', '', SW_HIDE, ewWaitUntilTerminated, ErrorCode);
         Sleep(1000);
