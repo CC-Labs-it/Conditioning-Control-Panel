@@ -248,7 +248,7 @@ namespace ConditioningControlPanel.Features
             App.Settings?.Save();
         }
 
-        private static string FormatDuration(int seconds)
+        internal static string FormatDuration(int seconds)
         {
             if (seconds <= 0) return "off";
             if (seconds < 60) return $"{seconds}s";
