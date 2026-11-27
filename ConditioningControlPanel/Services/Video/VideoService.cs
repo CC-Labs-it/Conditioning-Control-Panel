@@ -339,7 +339,8 @@ namespace ConditioningControlPanel.Services
         // 1:1 with the Duck in PlayVideo by an Unduck in CloseAll — every teardown path (natural end,
         // attention retry / troll "watch again" loop, engine Stop, ForceCleanup) runs through CloseAll,
         // so the duck can never leak the ref count and pin other apps at the ducked level (#526).
-        private bool _didDuck;
+        // volatile: the duck watchdog reads it from its timer thread (HoldsAudioDuck, #1762).
+        private volatile bool _didDuck;
         private string? _retryPath;
         private DateTime _startTime;
         private double _duration;
@@ -701,6 +702,11 @@ namespace ConditioningControlPanel.Services
         /// Whether a video is currently playing
         /// </summary>
         public bool IsPlaying => _videoPlaying;
+
+        /// <summary>True while a playing video (one window or a floating run) holds its audio-duck
+        /// ref. The duck watchdog keeps the duck for it instead of force-unducking at 5 minutes
+        /// (ccp-bugs #1762). Read from a timer thread: both fields are volatile.</summary>
+        public bool HoldsAudioDuck => _didDuck && _videoPlaying;
 
         /// <summary>
         /// True while the current video is held by a grace pause (#735). The run has NOT ended —
