@@ -2462,13 +2462,8 @@ namespace ConditioningControlPanel
         private bool AskRemoteMediaConsent(Models.AppSettings settings)
         {
             var answer = MessageBox.Show(this,
-                LocOr("msg_remote_media_consent",
-                    "Pull media from Reddit?\n\n" +
-                    "The app will stream images and clips from the subreddits you pick, straight from your own machine. " +
-                    "Nothing is saved to your disk, nothing is uploaded, and none of it goes through our servers.\n\n" +
-                    "It is adult content and it is not curated by us - you choose the niches and subreddits, and only those are ever fetched.\n\n" +
-                    "Turn it on?"),
-                LocOr("title_remote_media_consent", "Use Reddit media?"),
+                LocOr(Services.Fyp.Online.RemoteMediaConsentCopy.MessageKey, Services.Fyp.Online.RemoteMediaConsentCopy.Message),
+                LocOr(Services.Fyp.Online.RemoteMediaConsentCopy.TitleKey, Services.Fyp.Online.RemoteMediaConsentCopy.Title),
                 MessageBoxButton.YesNo, MessageBoxImage.Question);
 
             if (answer != MessageBoxResult.Yes) return false;
