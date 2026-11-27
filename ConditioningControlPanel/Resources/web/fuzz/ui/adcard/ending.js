@@ -6,7 +6,7 @@
 
 import { cardModel } from './model.js';
 import { createAdCard, loadCardCss } from './card.js';
-import { exportCard } from './export.js';
+import { exportCard, statusLine } from './export.js';
 import { createStage, loadStageCss, stageLook, cue, beatCue } from './stage.js';
 import { ADCARD_COPY } from '../../data/content/adcard.js';
 
@@ -62,7 +62,7 @@ export function livingAdEnding(ctx) {
           progress: (i, n, text) => { bar.style.width = (i / n * 100) + '%'; status.textContent = text; },
         });
         if (gone) return;
-        status.textContent = out.status === 'copied' ? ADCARD_COPY.copied : out.status === 'nocopy' ? ADCARD_COPY.noCopy : out.status === 'cancelled' ? '' : ADCARD_COPY.saved;
+        status.textContent = statusLine(out.status);
       } catch (e) {
         if (!gone) { console.error(e); status.textContent = ADCARD_COPY.failed; }
       } finally {

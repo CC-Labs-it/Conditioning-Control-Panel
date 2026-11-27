@@ -79,12 +79,12 @@ test('the caption names the round, the board, both players and the move', () => 
   assert.equal(captionOf(rec(SCHOLAR, { round: 'Final', board: '' }), 1).seat, 'Final');
 });
 
-function stage(moves, extra) {
+function stage(moves, extra, anim = null) {
   const bus = createBus(), events = [], done = [], calls = [];
   for (const name of ['local', 'players', 'turn', 'capture', 'check', 'gameover', 'resync']) bus.on(name, (p) => events.push([name, p]));
   const pieces = { setPosition: (p) => calls.push(['set', Object.keys(p).length]), move: (a, b) => calls.push(['move', a, b]), remove: (s) => calls.push(['remove', s]) };
   let paused = false;
-  const seat = createReplaySeat({ bus, board: { pieces, setSide() {} }, record: rec(moves, extra), held: () => paused, onDone: (id) => done.push(id) });
+  const seat = createReplaySeat({ bus, board: { pieces, setSide() {}, anim }, record: rec(moves, extra), held: () => paused, onDone: (id) => done.push(id) });
   const run = (seconds, dt = 0.1) => { for (let t = 0; t < seconds; t += dt) seat.update(dt); };
   return { seat, events, done, calls, run, pause: (p) => { paused = p; }, names: () => events.map((e) => e[0]) };
 }
@@ -108,6 +108,8 @@ test('the whole game plays off update(dt), pauses, and says done once', () => {
   s.seat.step(-1);
   assert.ok(!s.seat.isOver() && s.seat.plies() === SCHOLAR.length - 1);
   s.seat.step(1);
+  assert.ok(!s.seat.isOver(), 'a step onto the last move lets that move land first');
+  s.run(PACE.end + 0.2);
   assert.ok(s.seat.isOver());
   s.seat.seek(3);
   assert.equal(s.seat.rules.chess.history().length, 3);
@@ -135,6 +137,63 @@ test('a resigned game ends on the record, and the reel holds its last frame', ()
   s.seat.play(); s.seat.toggle(); s.run(5);
   assert.equal(s.events.length, before, 'a reel has no controls');
   assert.ok(s.seat.state().caption.move.startsWith('Move '));
+});
+
+// The cup helper's report (2026-11-13): the resign fall finished before the last move had. A move is
+// "landing" for `slide` seconds after pieces.move; gameover must come after it, a PACE.end beat later.
+function landing(slide) {
+  let left = 0;
+  return { anim: { busy: () => left > 0, skip() { left = 0; } }, moved() { left = slide; }, tick(dt) { left = Math.max(0, left - dt); } };
+}
+function stageLanding(moves, extra, slide) {
+  const l = landing(slide);
+  const s = stage(moves, extra, l.anim);
+  s.seat.start();
+  const log = [];   // [time, what]
+  let now = 0;
+  const step = (dt = 0.05) => {
+    const before = s.calls.length, ev = s.events.length;
+    s.seat.update(dt); l.tick(dt); now += dt;
+    for (const c of s.calls.slice(before)) if (c[0] === 'move') { l.moved(); log.push([now, 'move']); }
+    for (const e of s.events.slice(ev)) if (e[0] === 'gameover') log.push([now, 'gameover']);
+  };
+  return { ...s, log, step, run: (sec) => { for (let t = 0; t < sec; t += 0.05) step(); }, landing: l };
+}
+
+test('the end waits for the last move to land: whole game, resigned', () => {
+  const slide = 2.5;   // longer than PACE.gap, like a capture's signature move
+  const s = stageLanding(LEGAL.slice(0, 10), { result: '0-1', reason: 'resign' }, slide);
+  s.seat.deal(); s.seat.play();
+  s.run(10 * (PACE.gap + slide) + 5);
+  assert.ok(s.seat.isOver());
+  const moves = s.log.filter((e) => e[1] === 'move'), over = s.log.filter((e) => e[1] === 'gameover');
+  assert.equal(moves.length, 10);
+  assert.equal(over.length, 1);
+  for (let k = 1; k < moves.length; k++) assert.ok(moves[k][0] - moves[k - 1][0] >= slide, 'each move waits for the one before it to land');
+  assert.ok(over[0][0] - moves[9][0] >= slide + PACE.end - 0.06, 'the resign comes after the last move has landed, a beat later');
+  assert.deepEqual(s.done, ['m1'], 'done is said after the end, once');
+});
+
+test('the end waits for the last move to land: highlights reel', () => {
+  const slide = 2.5;
+  const s = stageLanding(LEGAL.slice(0, 10), { result: '0-1', reason: 'resign', reel: true }, slide);
+  s.seat.deal(); s.seat.startReel();
+  let doneAt = null;
+  for (let t = 0; t < 80 && doneAt == null; t += 0.05) { s.step(); if (s.done.length) doneAt = t; }
+  const moves = s.log.filter((e) => e[1] === 'move'), over = s.log.filter((e) => e[1] === 'gameover');
+  assert.equal(over.length, 1);
+  const last = moves[moves.length - 1][0];
+  assert.ok(over[0][0] - last >= slide + PACE.end - 0.06, 'the resign comes after the last move has landed');
+  assert.ok(doneAt != null && doneAt + 0.05 - over[0][0] >= PACE.hold - 0.06, 'the reel holds the fallen king before it is done');
+});
+
+test('a seek to the end ends at once: nothing is animating', () => {
+  const s = stage(SCHOLAR);
+  s.seat.start(); s.seat.seek(SCHOLAR.length);
+  assert.ok(s.seat.isOver());
+  s.seat.seek(2);
+  s.run(5);
+  assert.ok(!s.seat.isOver(), 'a seek back clears an owed end');
 });
 
 test('no PBP_REPLAY: the boot path is the one it always was', () => {

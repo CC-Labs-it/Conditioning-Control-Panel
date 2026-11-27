@@ -80,7 +80,8 @@ export const ADCARD_COPY = Object.freeze({
   buttons: Object.freeze({ gif: 'Save GIF', video: 'Save video', png: 'Save picture', copy: 'Copy picture', replay: 'Replay', next: 'Continue' }),
   working: 'Drawing frame {i} of {n}',
   encoding: 'Putting it together',
-  saved: 'Saved.',
+  saved: 'Saved.',                                    // the phone share sheet on the ending card
+  savedDownloads: 'Saved to your Downloads folder.',  // a download (DRAFT 7.4.2, the owner's word is owed)
   copied: 'Copied. Paste it anywhere.',
   noCopy: 'This browser cannot copy pictures. Use Save picture.',
   failed: 'That did not work here. Try Save picture.',

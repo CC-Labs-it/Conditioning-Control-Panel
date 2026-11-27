@@ -59,15 +59,19 @@ async function drawPhotograph(image, width) {
   return canvas;
 }
 
-async function frames(ad, fps, width, progress, stop) {
-  if (ad.photograph) return [await drawPhotograph(ad.photograph, width)];
+/** Captures the card's frames. With `each(canvas, last)` every frame is handed over as it is drawn and none is kept
+ *  (the GIF encodes as it goes); without it the frames come back as a list (the video replays them on a clock). */
+async function frames(ad, fps, width, progress, stop, each = null) {
+  const out = [];
+  const take = async (canvas, last) => { if (each) await each(canvas, last); else out.push(canvas); };
+  if (ad.photograph) { await take(await drawPhotograph(ad.photograph, width), true); return out; }
   const s = ad.build(true), END = s.end + (s.tail || 0);
-  const total = Math.ceil(END / 1000 * fps) + 1, out = [];
+  const total = Math.ceil(END / 1000 * fps) + 1;
   try {
     for (let f = 0; f < total; f++) {
       if (stop()) throw new Error('stopped');
-      out.push(await snap(ad, s, Math.min(END, 250 + f * 1000 / fps), width));
-      progress(f + 1, total * 2, fill(ADCARD_COPY.working, { i: f + 1, n: total }));
+      await take(await snap(ad, s, Math.min(END, 250 + f * 1000 / fps), width), f === total - 1);
+      progress(f + 1, each ? total : total * 2, fill(ADCARD_COPY.working, { i: f + 1, n: total }));
     }
   } finally { ad.play({ quiet: true }); }
   return out;
@@ -81,19 +85,24 @@ function even(list, doc) {
   });
 }
 
-async function gif(list, fps, doc, progress) {
+/** A GIF that takes its frames as they are captured: each one is quantised and written at once, then the page gets a
+ *  turn, so there is no long encode at the end (the page used to stall on "Putting it together"). Sizes follow
+ *  even(): the first frame's size rounded down to even, any other size drawn to it. Same palette per frame as before. */
+export async function gifWriter(doc, fps) {
   const { GIFEncoder, quantize, applyPalette } = await import(VENDOR + 'gifenc.esm.js');
-  list = even(list, doc);
-  const w = list[0].width, h = list[0].height, enc = GIFEncoder();
-  for (let i = 0; i < list.length; i++) {
-    const data = list[i].getContext('2d').getImageData(0, 0, w, h).data;
-    const palette = quantize(data, 256), index = applyPalette(data, palette);
-    enc.writeFrame(index, w, h, { palette, delay: i === list.length - 1 ? 2500 : Math.round(1000 / fps) });
-    progress(list.length + i + 1, list.length * 2, ADCARD_COPY.encoding);
-    if (i % 3 === 0) await sleep(0);
-  }
-  enc.finish();
-  return new Blob([enc.bytes()], { type: 'image/gif' });
+  const enc = GIFEncoder();
+  let w = 0, h = 0;
+  return {
+    async add(c, last) {
+      if (!w) { w = c.width & ~1; h = c.height & ~1; }
+      if (c.width !== w || c.height !== h) { const n = doc.createElement('canvas'); n.width = w; n.height = h; n.getContext('2d').drawImage(c, 0, 0, w, h); c = n; }
+      const data = c.getContext('2d').getImageData(0, 0, w, h).data;
+      const palette = quantize(data, 256), index = applyPalette(data, palette);
+      enc.writeFrame(index, w, h, { palette, delay: last ? 2500 : Math.round(1000 / fps) });
+      await sleep(0);
+    },
+    finish() { enc.finish(); return new Blob([enc.bytes()], { type: 'image/gif' }); },
+  };
 }
 
 async function video(list, fps, doc, progress) {
@@ -153,6 +162,19 @@ export async function saveBlob(doc, blob, name) {
 }
 
 /**
+ * The line under the buttons once an export is out. A download says where it went: the Downloads folder is where a
+ * browser puts it by default, and the CCP app's WebView2 sets no folder of its own (no DownloadStarting handler, no
+ * DefaultDownloadFolderPath), so it lands there too. `shared` is the share sheet's own line, which each surface keeps.
+ */
+export function statusLine(status, shared = ADCARD_COPY.saved) {
+  if (status === 'saved') return ADCARD_COPY.savedDownloads;
+  if (status === 'shared') return shared;
+  if (status === 'copied') return ADCARD_COPY.copied;
+  if (status === 'nocopy') return ADCARD_COPY.noCopy;
+  return '';
+}
+
+/**
  * Runs one export. kind: 'gif' | 'video' | 'png' | 'copy'. progress(i, n, text). stop() -> true aborts between frames.
  * Resolves { status, blob } where status is 'saved' | 'shared' | 'copied' | 'cancelled'.
  */
@@ -171,12 +193,19 @@ export async function exportCard(ad, kind, { progress = () => {}, stop = () => f
     if (stop()) return { status: 'cancelled' };
     return { status: await saveBlob(doc, blob, filename + '.png'), blob };
   }
-  const fps = kind === 'gif' ? 12 : 15, width = kind === 'gif' ? 432 : 640;
-  const list = await frames(ad, fps, width, progress, stop);
+  if (kind === 'gif') {
+    const out = await gifWriter(doc, 12);
+    await frames(ad, 12, 432, progress, stop, out.add);
+    if (stop()) return { status: 'cancelled' };
+    progress(1, 1, ADCARD_COPY.encoding);
+    const blob = out.finish();
+    return { status: await saveBlob(doc, blob, filename + '.gif'), blob };
+  }
+  const fps = 15, list = await frames(ad, fps, 640, progress, stop);
   // MediaRecorder timestamps a canvas on each draw. Keep the still visible for the usual poster hold.
-  const videoFrames = ad.photograph && kind === 'video' ? Array(Math.ceil(2.5 * fps)).fill(list[0]) : list;
-  const blob = kind === 'gif' ? await gif(list, fps, doc, progress) : await video(videoFrames, fps, doc, progress);
+  const videoFrames = ad.photograph ? Array(Math.ceil(2.5 * fps)).fill(list[0]) : list;
+  const blob = await video(videoFrames, fps, doc, progress);
   if (stop()) return { status: 'cancelled' };
-  const ext = kind === 'gif' ? 'gif' : blob.type.includes('mp4') ? 'mp4' : 'webm';
+  const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
   return { status: await saveBlob(doc, blob, filename + '.' + ext), blob };
 }
