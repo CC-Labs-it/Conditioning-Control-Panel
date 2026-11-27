@@ -709,7 +709,7 @@
             </Grid.ColumnDefinitions>
 
             <!-- ============================ LEFT: the rack ============================ -->
-            <Grid Grid.Column="0">
+            <Grid Grid.Column="0" x:Name="RackColumn" x:FieldModifier="internal">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <!-- The rack takes every pixel the other two do not. It gained the whole
@@ -766,7 +766,13 @@
                              wrap with the chips, and a sibling panel would strand it on the first
                              line. That makes RefreshPresetsList's rebuild surgical - it removes
                              only the Borders it tagged with a preset id and inserts ahead of this
-                             one. Do NOT "simplify" that back to Children.Clear(). -->
+                             one. Do NOT "simplify" that back to Children.Clear().
+
+                             7.4.2 (ccp-bugs #1466): the rail sits in a scroller whose MaxHeight
+                             FitChipRail sets from the room left over, so a long preset list
+                             scrolls here instead of squeezing the session list to one row. -->
+                        <ScrollViewer x:Name="PresetChipsScroller" x:FieldModifier="internal"
+                                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <WrapPanel x:Name="PresetCardsPanel" x:FieldModifier="internal" Orientation="Horizontal">
                             <!-- Chips are built by MainWindow.Presets.CreatePresetCard against the
                                  SdPresetChip styles above and inserted before this one. -->
@@ -783,6 +789,7 @@
                                 </StackPanel>
                             </Border>
                         </WrapPanel>
+                        </ScrollViewer>
                     </StackPanel>
                 </Border>
 
@@ -931,7 +938,8 @@
                             </Grid>
                         </Grid>
 
-                        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto">
+                        <ScrollViewer Grid.Row="3" x:Name="SessionRackScroller" x:FieldModifier="internal"
+                                      VerticalScrollBarVisibility="Auto">
                             <!-- ONE panel. RepaintSessionRack clears and refills it; nothing else
                                  may add a child, or the FX sweep in
                                  MainWindow.TabFxPresetsQuestsAchievements (which walks Borders

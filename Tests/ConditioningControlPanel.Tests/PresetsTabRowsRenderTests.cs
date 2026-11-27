@@ -57,6 +57,46 @@ public class PresetsTabRowsRenderTests
     }
 
     [Fact]
+    public void Many_presets_never_squeeze_the_sessions_list()
+    {
+        // ccp-bugs #1466 (7.4.1): the preset chips wrapped onto as many lines as they needed and the
+        // session list got what was left, one row at three lines of presets, none at five. The chip
+        // rail now scrolls inside a capped box, so the list keeps its floor however many presets
+        // there are. A session row is 44 px plus a 5 px gap; three must always fit at the panel's
+        // default size, two at a short one (600 px tab, about an 810 px window).
+        WpfRenderHarness.OnStaThread(() =>
+        {
+            foreach (var (height, rowsWanted) in new[] { (TabHeight, 3), (600.0, 2) })
+            {
+                double capped = -1;
+                foreach (int extra in new[] { 0, 10, 25, 45 })
+                {
+                    var (view, host) = Paint(1200, 430, sessionView: false, reveal: false, extraPresets: extra, tabHeight: height);
+                    var list = view.SessionRackScroller;
+                    var rail = view.PresetChipsScroller;
+                    RowsRender.Dump(host, $"session-door-squeeze-{height:0}-{extra}");
+                    Assert.True(list.ViewportHeight >= rowsWanted * 49 - 5,
+                        $"{extra} extra presets at {height:0} px: the session list is {list.ViewportHeight:0} px tall (want {rowsWanted} rows)");
+                    // The chip rail scrolls instead of pushing: every chip is still in it, and never
+                    // less than one whole line of chips shows.
+                    Assert.True(view.PresetCardsPanel.Children.OfType<Border>().Count(b => b.Tag is string) >= 5 + extra);
+                    Assert.True(rail.ViewportHeight >= PresetsTabView.ChipLine - 0.5, $"chip rail is {rail.ViewportHeight:0} px");
+                    // The seven presets a player starts with fit whole at the default size: no scroll.
+                    if (extra == 0 && height == TabHeight) Assert.Equal(0, rail.ScrollableHeight);
+                    // Once the rail scrolls, more presets cost the list nothing at all.
+                    if (rail.ScrollableHeight > 0)
+                    {
+                        if (capped < 0) capped = list.ViewportHeight;
+                        else Assert.Equal(capped, list.ViewportHeight, 0.5);
+                    }
+                    RowsRender.AssertSilent("session-door-squeeze");
+                }
+                Assert.True(capped > 0, $"the chip rail never scrolled at {height:0} px");
+            }
+        });
+    }
+
+    [Fact]
     public void Import_feeds_the_drop_path()
     {
         // One path for a picked file and a dropped file (#1743): the button's handler ends in
@@ -144,10 +184,11 @@ public class PresetsTabRowsRenderTests
     }
 
     /// <summary>The tab with seeded presets and sessions, laid out at <paramref name="width"/> x 790.</summary>
-    private static (PresetsTabView View, FrameworkElement Host) Paint(double width, double detailWidth, bool sessionView, bool reveal)
+    private static (PresetsTabView View, FrameworkElement Host) Paint(double width, double detailWidth, bool sessionView, bool reveal,
+        int extraPresets = 0, double tabHeight = TabHeight)
     {
         var view = new PresetsTabView();
-        var host = new Grid { Width = width, Height = TabHeight, Background = new SolidColorBrush(RowsRender.PageBack) };
+        var host = new Grid { Width = width, Height = tabHeight, Background = new SolidColorBrush(RowsRender.PageBack) };
         host.Children.Add(view);
 
         var mw = (MainWindow)RuntimeHelpers.GetUninitializedObject(typeof(MainWindow));
@@ -166,7 +207,10 @@ public class PresetsTabRowsRenderTests
         var presets = Preset.GetDefaultPresets();
         presets.Add(new Preset { Id = "seed-late", Name = "Late night drift", IsDefault = false, MandatoryVideosEnabled = true, SpiralEnabled = true });
         presets.Add(new Preset { Id = "seed-desk", Name = "Desk hours", IsDefault = false, FlashEnabled = true, SubliminalEnabled = true });
-        Field("_selectedPreset").SetValue(mw, presets[^1]);
+        var selected = presets[^1];
+        for (int i = 0; i < extraPresets; i++)
+            presets.Add(new Preset { Id = $"seed-extra-{i}", Name = $"Evening mix {i + 1}", IsDefault = false, FlashEnabled = true });
+        Field("_selectedPreset").SetValue(mw, selected);
         var card = Method("CreatePresetCard");
         int at = 0;
         foreach (var p in presets)
@@ -191,7 +235,7 @@ public class PresetsTabRowsRenderTests
         // The detail panel as SelectPreset / SelectSession leave it (they need the whole window).
         if (!sessionView)
         {
-            var sel = presets[^1];
+            var sel = selected;
             view.TxtDetailTitle.Text = sel.Name;
             view.TxtDetailSubtitle.Text = "Your own preset.";
             view.TxtDetailFlash.Text = "On, 2 an hour, 5 at once";

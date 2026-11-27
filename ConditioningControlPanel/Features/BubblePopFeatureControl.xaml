@@ -106,7 +106,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto" MinWidth="56"/>
                                 </Grid.ColumnDefinitions>
-                                <rows:RowLabel Grid.Column="0" Text="Speed" Emblem="Fast"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_speed}" Emblem="Fast"/>
                                 <Slider Grid.Column="1" x:Name="SliderSpeed" feat:OptionSection.Setting="BubbleSpeedBoost" Minimum="0" Maximum="500" Value="0"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderSpeed_Changed"/>
