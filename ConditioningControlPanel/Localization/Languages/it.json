@@ -9238,7 +9238,7 @@
   "assetsnudge_inbox_title": "Far entrare le immagini",
   "assetsnudge_inbox_summary": "Tre schede veloci su da dove arrivano le immagini e su come attivarle.",
   "assetsnudge_source_title": "Da dove arrivano le immagini",
-  "assetsnudge_source_text": "Scegli qui la fonte: My own assets usa la tua cartella, Scrolller mostra in tutta l'app immagini con licenza che non vengono mai salvate sul disco, e Both mescola le due (l'app chiede una volta prima della prima immagine di Scrolller).",
+  "assetsnudge_source_text": "Scegli qui la fonte: My own assets usa la tua cartella, Scrolller mostra in tutta l'app immagini con licenza che restano sul disco solo per poco, e Both mescola le due (l'app chiede una volta prima della prima immagine di Scrolller).",
   "assetsnudge_add_title": "Aggiungere i tuoi file",
   "assetsnudge_add_text": "Scegli una cartella qui, oppure trascina sulla finestra file, cartelle o lo .zip di un pacchetto e l'app li ordina per te.",
   "assetsnudge_enable_title": "Accenderle",
