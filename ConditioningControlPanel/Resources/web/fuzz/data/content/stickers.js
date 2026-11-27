@@ -139,5 +139,19 @@ const RAW = [
 export const STICKERS = Object.freeze(RAW.map((s) => Object.freeze({ ...s, hidden: !!s.hidden, legacy: RETIRED.has(s.id), scope: scopeOf(s.when) })));
 export const STICKER_BY_ID = Object.freeze(Object.fromEntries(STICKERS.map((s) => [s.id, s])));
 export const STICKER_IDS = Object.freeze(STICKERS.map((s) => s.id));
+/* The corner card for a sticker earned while playing (owner 2026-11-25; ui/unlocks/basics/sticker-toast.js,
+ * sim/sticker-notes.js). DRAFT strings, every one of them in this one place. {n} = a count. */
+export const STICKER_NOTE_COPY = Object.freeze({
+  kicker: 'New sticker',
+  kickerMany: 'Sticker Book',
+  moreName: '+{n} more',
+  moreLine: 'The rest went in the book.',
+  waitingOne: '1 sticker was waiting',
+  waitingMany: '{n} stickers were waiting',
+  waitingLineOne: 'It is already in your book.',
+  waitingLineMany: 'They are already in your book.',
+  close: 'Dismiss',
+});
+
 /* Lifetime counters the book reads (life.tally). Anything else in a save is dropped. */
 export const LIFE_TALLIES = Object.freeze(['golden', 'terms', 'wakeRuns']);

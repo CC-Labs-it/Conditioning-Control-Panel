@@ -211,7 +211,9 @@ body.gentle .dk-chip.dk-new .dk-i { animation: none; }
 #pause.backdrop { z-index: 95; }
 #cards.over-pause { z-index: 96; }   /* ui/cards.js overPause: a card the pause card asked for shows over it, like .tc.above */
 .backdrop.clear { background: transparent; }
-.backdrop.corner { pointer-events: none; place-items: end; }
+/* A quiet corner note (ui/save-sleep.js) sits bottom LEFT above the dock (owner 2026-11-25): the bottom right is the
+   sticker card's (ui/unlocks/basics/sticker-toast.js), which steps up over the note when the two would meet. */
+.backdrop.corner { pointer-events: none; place-items: end start; padding-bottom: calc(var(--dock-h) + env(safe-area-inset-bottom, 0px) + 14px); }
 .backdrop.corner .card { max-width: 320px; pointer-events: auto; }
 @keyframes fadein { from { opacity: 0; } }
 .card { width: 100%; max-width: 440px; max-height: 100%; overflow-y: auto; padding: 16px; background: #d4d0c8; color: #000; font: 16px/1.3 "Times New Roman", Times, serif; border: 2px outset #fff; box-shadow: 2px 2px 0 rgba(0, 0, 0, .35); }

@@ -44,7 +44,9 @@ async function snap(ad, s, t, width) {
   const doc = ad.card.ownerDocument, h2c = await loadHtml2canvas(doc);
   const restore = paintAt(ad, s, t);
   try {
-    return await h2c(ad.card, { scale: width / ad.card.offsetWidth, backgroundColor: doc.defaultView.getComputedStyle(ad.card).backgroundColor, logging: false });
+    // html2canvas copies the whole document for every frame: leave out everything that is not the card, its ancestors or a stylesheet.
+    const card = ad.card, aside = (el) => !(el === card || el.contains(card) || card.contains(el) || el.tagName === 'STYLE' || el.tagName === 'LINK' || el.closest('head'));
+    return await h2c(card, { scale: width / card.offsetWidth, backgroundColor: doc.defaultView.getComputedStyle(card).backgroundColor, logging: false, ignoreElements: aside });
   } finally { restore(); }
 }
 

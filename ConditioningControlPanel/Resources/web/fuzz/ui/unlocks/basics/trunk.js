@@ -9,7 +9,7 @@ import { runThemes, themed } from '../../theme-text.js';
 import { FORKS } from '../../../data/items.js';
 import { SECOND_THEME } from './copy.js';
 import { THEME_PALETTES } from '../../palette.js';
-import { burst, btnCenter, chip, docOf, fresh, play, pop, sfx, spawn, spiralCanvas, squish } from './fx.js';
+import { burst, btnCenter, chip, docOf, fresh, pop, sfx, spiralCanvas, squish } from './fx.js';
 import { THEME_TASTES } from '../theme-skins.js';
 import { buttonImpulse, contactSparks } from './tap-feel.js';
 import { setIconSet } from '../../icons.js';
@@ -19,6 +19,7 @@ import { createTunnelGL, cssRgb, mixRgb } from './warp-tunnel.js';
 import { BURST_HOLD_MS, burstTiers, createTapWindow } from '../../../sim/tap-rate.js';
 import { dueThisRun, meterMult, METER_CELLS } from '../../../sim/stickers.js';
 import { STICKER_BY_ID } from '../../../data/content/stickers.js';
+import { createStickerToasts } from './sticker-toast.js';   // the corner card for a sticker earned while playing
 import { sellAllJoke, SELL_ALL_AD } from '../../sell-all.js';
 
 /* A fork lands like a stamp: the choice crosses the middle of the screen. */
@@ -117,38 +118,29 @@ export default {
       ctx.mod({ fps: (v) => v * mult(), click: (v) => v * mult() });
       paint();
 
-      const queue = [];
-      let showing = false;
-      const card = (a) => {
-        showing = true;
-        const c = spawn(ctx, 'left:max(8px,calc(50vw - 165px));top:0;width:min(330px,calc(100vw - 108px));padding:4px 10px;text-align:center;background:var(--toast-bg);color:var(--toast-ink);border-radius:6px;font-size:15px;line-height:1.2;box-shadow:0 3px 10px rgba(0,0,0,.35);', `★ ${a.name}`);
-        const sub = docOf(ctx).createElement('div');
-        sub.style.cssText = 'font-size:13px;opacity:.8;';
-        sub.textContent = ctx.brand.text(a.line);
-        c.appendChild(sub);
-        const y = -38;
-        const an = play(ctx, c, [{ transform: `translateY(${y - 40}px)`, opacity: 0 }, { transform: `translateY(${y + 40}px)`, opacity: 1, offset: 0.1 }, { transform: `translateY(${y + 40}px)`, opacity: 1, offset: 0.9 }, { transform: `translateY(${y + 26}px)`, opacity: 0 }], { duration: 2300, easing: 'ease-out' });
-        const done = () => { showing = false; pump(); };
-        an.finished?.then(done, done);
-      };
-      const pump = () => {
-        if (showing || !queue.length) return;
-        const a = queue.shift();
-        card(a);
-        if (ctx.stickers.earn(a.id) || a.scope === 'life') hop();   // a lifetime sticker was written by sync() already
-        const r = row.getBoundingClientRect();
-        ctx.float(r.left + r.width / 2, r.top, '★', 'color:var(--stamp);font-size:20px;');
-        sfx(ctx, 'sfx/chime2.mp3', 0.4);
-        if (a.scope !== 'run') return;   // a lifetime sticker goes in the book, not on this run's meter
+      /* The corner card (sticker-toast.js, owner 2026-11-25). Only a sticker earned NOW gets a card, a chime and the
+         host's `achievement` frame. The old queue replayed every sticker the run already had when the row was bought
+         ("about 15 sec of pings"): those now go on the meter and in the book quietly, with one silent summary card. */
+      const toasts = createStickerToasts(ctx, {
+        onShow: () => {
+          hop();
+          const r = row.getBoundingClientRect();
+          ctx.float(r.left + r.width / 2, r.top, '★', 'color:var(--stamp);font-size:20px;');
+        },
+      });
+      /** Puts run stickers on this run's meter; answers true when a meter filled (+10%). */
+      const onMeter = (list) => {
         const before = mult();
-        earned.add(a.id);
+        for (const a of list) earned.add(a.id);
         ctx.store.set('earned', [...earned]);
         paint();
-        if (mult() > before) {
-          sfx(ctx, 'sfx/rank_up.mp3', 0.6);
-          pop(ctx, r.left + r.width / 2, r.bottom + 24, '+10%', { size: 30, ms: 1400 });
-          burst(ctx, r.left + r.width / 2, r.top, { n: 18, reach: 90 });
-        }
+        return mult() > before;
+      };
+      const snap = () => { const st = ctx.state; return { taps: st.taps, buys: st.buys, total: st.total, clock: st.clock, picks: st.picks, owned: st.owned, tally }; };
+      /* A first-ever sticker in this save tells the host, once, so it can reward it later (CONTRACT.md 1). */
+      const earnedNow = (a, newInBook) => {
+        if (newInBook) ctx.host?.('achievement', { id: a.id });
+        toasts.add(a);
       };
       ctx.on('wall', ({ corner, hits = 1 }) => { if (corner) note('corner', hits); });   // hits: a capped phone copy's whole hits
       ctx.on('golden', () => { note('golden'); ctx.stickers.note('golden'); });
@@ -171,16 +163,30 @@ export default {
         const st = ctx.state;
         if (st.taps !== lastTaps) { lastTaps = st.taps; idle = 0; }
         else { idle += 1; if (idle >= 30 && !tally.rest) { tally.rest = 30; } if (idle >= 120) tally.rest = 120; }
-        for (const a of dueThisRun({ taps: st.taps, buys: st.buys, total: st.total, clock: st.clock, picks: st.picks, owned: st.owned, tally }, ctx.life, earned)) {
-          if (!queue.includes(a)) queue.push(a);
+        const due = dueThisRun(snap(), ctx.life, earned);
+        if (due.length) {
+          const filled = onMeter(due);
+          for (const a of due) earnedNow(a, ctx.stickers.earn(a.id));
+          if (filled) {
+            const r = row.getBoundingClientRect();
+            sfx(ctx, 'sfx/rank_up.mp3', 0.6);
+            pop(ctx, r.left + r.width / 2, r.bottom + 24, '+10%', { size: 30, ms: 1400 });
+            burst(ctx, r.left + r.width / 2, r.top, { n: 18, reach: 90 });
+          }
         }
-        for (const id of ctx.stickers.sync()) queue.push(STICKER_BY_ID[id]);
-        pump();
+        for (const id of ctx.stickers.sync()) if (STICKER_BY_ID[id]) earnedNow(STICKER_BY_ID[id], true);   // a lifetime sticker: sync() wrote the book
+        toasts.pump();
       };
-      /* Quietly, once: this run's stickers and what the save already earns (endings seen before the book existed)
-         go in the book without a card each. Cards are for what happens while playing. */
+      /* Quietly, once, on every mount (the purchase, a reload, a loaded save): this run's stickers, what was already
+         true when the row arrived, and what the save already earns (endings seen before the book existed) go on the
+         meter and in the book without a card, a sound or a host frame each. Cards are for what happens while playing.
+         Only the purchase itself says how many were waiting, on one silent card. */
       for (const id of earned) ctx.stickers.earn(id);
-      ctx.stickers.sync();
+      const backlog = dueThisRun(snap(), ctx.life, earned);
+      onMeter(backlog);
+      for (const a of backlog) ctx.stickers.earn(a.id);
+      const waiting = backlog.length + ctx.stickers.sync().length;
+      if (waiting && fresh(ctx)) toasts.waiting(waiting);
       check();
       ctx.every(1000, check);
       return {};
