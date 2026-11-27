@@ -98,15 +98,19 @@
                                  Owned despite being an asset-eligibility filter rather than a rate: total
                                  exposure is rate x length, so clamping max length to 10s guts a locked
                                  "2 videos per hour" prescription by ~90% without touching the locked rate.
-                                 That is the opt-out this lock exists to stop. -->
+                                 That is the opt-out this lock exists to stop.
+                                 The two values grow like every other row's value (Auto). MinWidth 80 holds
+                                 the widest text, "29m 59s" (about 77 px in 19 ExtraBold Nunito), so the
+                                 sliders keep their width while dragging. A fixed 56 cut the first digit
+                                 off in 7.4.1 (ccp-bugs #1761; VideoLengthSlotTests). -->
                             <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_duration_filter}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="56"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="80"/>
                                     <ColumnDefinition Width="24"/>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="56"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="80"/>
                                 </Grid.ColumnDefinitions>
                                 <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_duration_filter}" Emblem="Long"/>
                                 <Slider Grid.Column="1" x:Name="SliderVideoMinDur" feat:OptionSection.Setting="VideoMinDurationSeconds" Minimum="0" Maximum="600" Value="0"
