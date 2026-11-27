@@ -9343,6 +9343,18 @@ namespace ConditioningControlPanel.Models
             set { _glassroadPictures = value; OnPropertyChanged(); }
         }
 
+        private bool? _tcPictures;
+        /// <summary>Terms &amp; Conditioning's own Scrolller yes, like <see cref="GlassroadPictures"/>: true once the
+        /// player pressed "Use Scrolller" in the game and the app consent is given, so the game fetches pictures
+        /// although the app-wide source is local. Never false: an off clears it back to null (follow the app).
+        /// The Library's own <see cref="MediaSource"/> is never changed (<c>TcMediaRules.PicturesOn</c>).</summary>
+        [JsonProperty("tcPictures")]
+        public bool? TcPictures
+        {
+            get => _tcPictures;
+            set { _tcPictures = value; OnPropertyChanged(); }
+        }
+
         private string _pbpMediaFlavour = "";
         /// <summary>
         /// Piece by Piece's picture flavour (trance, pink, frills, shiny, censored, mine), or ""
