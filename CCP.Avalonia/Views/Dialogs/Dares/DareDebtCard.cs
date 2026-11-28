@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Layout;
-using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Dares;
@@ -99,17 +98,13 @@ public sealed class DareDebtCard : Window
         _body.Children.Add(_slip);
     }
 
-    /// <summary>WPF :106-113: "You lost to Moth. You owe" and the stake in handwriting.</summary>
+    /// <summary>WPF :100-107: "You lost to Moth. You owe" and the stake in its fill.</summary>
     private void OweLine()
     {
         var stake = _bet.MyStake;
-        var owed = DareSlipRules.StakeText(stake, stake.Kind == DareStakeKind.Dare ? stake.DareNumber : 0, Loc.Get);
-        var line = new WrapPanel();
-        var lost = DareLook.Words(Loc.GetF("dares_debt_lost", _bet.Friend.Name) + " ", 21, DareLook.CardInkBrush);
-        lost.Margin = default;
-        line.Children.Add(lost);
-        line.Children.Add(DareLook.Hand(owed, 28, new SolidColorBrush(DareLook.ToneColor(DareSlipRules.ToneOf(stake.Kind)))));
-        _inner.Children.Add(line);
+        var seg = new DareSeg(DareSegKind.Chip, DareSlipRules.StakeText(stake, stake.Kind == DareStakeKind.Dare ? stake.DareNumber : 0, Loc.Get),
+            DareStep.Mine, DareSlipRules.ToneOf(stake.Kind), DareSlipRules.TipOf(stake.Kind));
+        _inner.Children.Add(DareLook.Line(Loc.GetF("dares_debt_lost", _bet.Friend.Name), DareLook.Fill(seg), 21, DareLook.CardInkBrush, 44));
     }
 
     private void BuildCard()

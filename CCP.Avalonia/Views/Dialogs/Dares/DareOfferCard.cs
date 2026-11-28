@@ -68,18 +68,17 @@ public sealed class DareOfferCard : Window, IPassiveStartupSurface
     private void Build(DareBet bet)
     {
         _body.Children.Clear();
-        var sentence = new StackPanel();
-        foreach (var line in DareSlipRules.Sentence(bet, Loc.Get)) sentence.Children.Add(DareLook.Words(line.Plain, 21, DareLook.PrintBrush));
+        var sentence = DareLook.Sentence(DareSlipRules.Sentence(bet, Loc.Get), bet.Friend.Name);
         _body.Children.Add(DareLook.Slip(DareLook.SlipHead(Loc.GetF("dares_offer_title", bet.Friend.Name), "dares_help_numbers", Leave),
             sentence, out _paper));
         if (DareCardRules.OfferNeedsConsent(bet))
         {
             // WPF 13fe8883df :83-85: panic is off only when the player's own Lockdown setting says so.
             var panicOff = CoreSettings.Current.LockdownDisablePanicKey;
-            _body.Children.Add(Note("ldn", Loc.GetF(panicOff ? "dares_offer_consent" : "dares_offer_consent_panic", bet.MyStake.Amount),
+            _body.Children.Add(Note(IconKind.LockClosed, Loc.GetF(panicOff ? "dares_offer_consent" : "dares_offer_consent_panic", bet.MyStake.Amount),
                 "dares_help_lockdown", "dares-offer-consent", 16));
         }
-        if (bet.Camera) _body.Children.Add(Note("eye", Loc.Get("dares_offer_camera"), "dares_help_camera", null, 10));
+        if (bet.Camera) _body.Children.Add(Note(IconKind.Eye, Loc.Get("dares_offer_camera"), "dares_help_camera", null, 10));
         var buttons = new WrapPanel { Margin = new(0, 18, 0, 0), Tag = "dares-offer-buttons" };
         buttons.Children.Add(DareLook.Act(Loc.Get("dares_accept"), null, true, () => _ = AnswerAsync(DareOp.Accept), "dares-accept"));
         buttons.Children.Add(DareLook.Act(Loc.Get("dares_pass"), null, false, () => _ = AnswerAsync(DareOp.Pass), "dares-pass"));
@@ -87,7 +86,7 @@ public sealed class DareOfferCard : Window, IPassiveStartupSurface
     }
 
     /// <summary>WPF :110-128: a line on the desk under the slip, an icon, the words, its (?).</summary>
-    private static Control Note(string icon, string text, string helpKey, string? tag, double top)
+    private static Control Note(IconKind icon, string text, string helpKey, string? tag, double top)
     {
         var g = new Grid { ColumnDefinitions = new("Auto,*,Auto"), Margin = new(0, top, 0, 0) };
         var i = DareLook.Icon(icon, 24, DareLook.ChalkBrush);

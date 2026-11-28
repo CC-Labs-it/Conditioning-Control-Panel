@@ -58,7 +58,7 @@ internal static class DareIntro
             DareLook.CardIn(cell);
             if (i < Steps.Length - 1)
             {
-                var arrow = DareLook.Icon("arrow", 22, DareLook.PrintBrush);
+                var arrow = DareLook.Icon(IconKind.ArrowRight, 22, DareLook.PrintBrush);
                 arrow.Opacity = 0.55;
                 arrow.VerticalAlignment = VerticalAlignment.Top;
                 arrow.Margin = new Thickness(2, 12, 2, 0);

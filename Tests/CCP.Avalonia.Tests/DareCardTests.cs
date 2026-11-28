@@ -9,6 +9,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Dialogs.Dares;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -135,6 +136,23 @@ public sealed class DareCardTests
         Assert.True(Has(debt, "dares-help:dares_help_renounce"));   // WPF DareDebtCard.cs:127-131
         Press(debt, "dares-pay");
         Assert.True(Has(debt, "dares-help:dares_help_lockdown"));   // WPF :166
+        return Task.CompletedTask;
+    });
+
+    // WPF Dialogs/Dares/DareOfferCard.cs:76 and DareDebtCard.cs:100-106: the terms are read-only fill boxes.
+    [Fact]
+    public Task Offer_and_debt_show_their_terms_as_fill_boxes() => Run((_, _, service) =>
+    {
+        DareOfferCard.Present(null, "o1");
+        var offer = DareOfferCard.Open!;
+        Assert.True(Has(offer, "dares-sentence"));
+        foreach (var tag in new[] { "dares-chip:Who", "dares-chip:Mine", "dares-chip:Theirs" })
+            Assert.True(Has(offer, tag), tag);
+        Assert.NotEmpty(Tagged<Control>(offer, "dares-chip:Mine").GetLogicalDescendants().OfType<IconGlyph>());
+        var debt = OpenDebt(service);
+        var stake = Tagged<Control>(debt, "dares-chip:Mine");
+        Assert.NotEmpty(stake.GetLogicalDescendants().OfType<IconGlyph>());
+        Assert.Contains(stake.GetLogicalDescendants().OfType<TextBlock>(), t => t.Text!.Contains("10"));
         return Task.CompletedTask;
     });
 

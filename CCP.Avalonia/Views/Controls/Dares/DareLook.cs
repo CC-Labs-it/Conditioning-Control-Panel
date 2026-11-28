@@ -102,35 +102,156 @@ internal static class DareLook
     public static readonly FontFamily PrintFont = new("avares://CCP.Avalonia/Resources/fonts/dares#Barlow Condensed");
     public static readonly FontFamily HandFont = new("avares://CCP.Avalonia/Resources/fonts/dares#Caveat");
 
-    private static readonly System.Collections.Generic.Dictionary<string, string> Paths = new()
+    /// <summary>WPF :139: a line icon, here the Fluent one (IconGlyph).</summary>
+    public static Control Icon(IconKind kind, double size, IBrush fg) =>
+        new IconGlyph { Kind = kind, Size = size, Foreground = fg, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+
+    /// <summary>WPF :183 <see cref="ToneIcon"/> as a Fluent icon ("ldn" is a lock, as IconMap's lockdown).</summary>
+    public static IconKind ToneKind(DareTone tone) => ToneIcon(tone) switch
     {
-        ["envelope"] = "M3 6 H21 V19 H3 Z M3.5 7.5 L12 13.5 L20.5 7.5",
-        ["versus"] = "M4 8 H17 L14 5 M20 16 H7 L10 19",
-        ["clock"] = "M20.5 12 A8.5 8.5 0 1 1 3.5 12 A8.5 8.5 0 1 1 20.5 12 Z M12 7.5 V12 L15 14",
-        ["star"] = "M12 3.5 L14.6 8.9 L20.5 9.7 L16.2 13.8 L17.2 19.6 L12 16.9 L6.8 19.6 L7.8 13.8 L3.5 9.7 L9.4 8.9 Z",
-        ["ldn"] = "M3 4 H21 V17 H3 Z M9 21 H15 M12 17 V21 M9.5 10 H14.5 V14 H9.5 Z M10.5 10 V9 A1.5 1.5 0 0 1 13.5 9 V10",
-        ["eye"] = "M2.5 12 C2.5 12 6 5.5 12 5.5 C18 5.5 21.5 12 21.5 12 C21.5 12 18 18.5 12 18.5 C6 18.5 2.5 12 2.5 12 Z M14.8 12 A2.8 2.8 0 1 1 9.2 12 A2.8 2.8 0 1 1 14.8 12 Z",
-        ["cross"] = "M6 6 L18 18 M18 6 L6 18",
-        ["arrow"] = "M5 12 H18 M13 7 L18 12 L13 17",
+        "picture" => IconKind.Image, "clock" => IconKind.Clock, "video" => IconKind.Video, "play" => IconKind.Play,
+        "bubble" => IconKind.BubbleMultiple, "star" => IconKind.Star, "lock" or "ldn" => IconKind.LockClosed,
+        "eye" => IconKind.Eye, "eyeoff" => IconKind.EyeOff, "cross" => IconKind.Dismiss, "versus" => IconKind.ArrowSwap,
+        _ => IconKind.Mail,
     };
 
-    /// <summary>WPF :139: a line icon on a 24 px grid.</summary>
-    public static Control Icon(string name, double size, IBrush stroke, double thickness = 1.7) => new Viewbox
+    // WPF :200-212: a friend's own hue, stable by name.
+    private static readonly Color[] FriendHues =
     {
-        Width = size, Height = size,
-        Child = new global::Avalonia.Controls.Shapes.Path
-        {
-            Data = Geometry.Parse(Paths.TryGetValue(name, out var d) ? d : Paths["envelope"]), Width = 24, Height = 24,
-            Stroke = stroke, StrokeThickness = thickness, StrokeLineCap = PenLineCap.Round, StrokeJoin = PenLineJoin.Round,
-        },
+        Color.FromRgb(0x1F, 0x8A, 0x8A), Color.FromRgb(0xCC, 0x3D, 0x7A), Color.FromRgb(0xE0, 0x66, 0x3A),
+        Color.FromRgb(0x2F, 0x86, 0xC9), Color.FromRgb(0x8A, 0x3F, 0x8F), Color.FromRgb(0x2C, 0x8A, 0x57),
     };
+
+    public static Color FriendColor(string? name)
+    {
+        int h = 0;
+        foreach (var ch in name ?? "") h = unchecked(h * 31 + ch);
+        return FriendHues[(h & 0x7FFFFFFF) % FriendHues.Length];
+    }
+
+    private static string Initial(string? name)
+    {
+        var i = ConditioningControlPanel.Controls.Friends.FriendsDrawerRules.Initials(name ?? "");
+        return string.IsNullOrEmpty(i) ? "?" : i.Substring(0, 1);
+    }
+
+    /// <summary>WPF :221: a round initial disc in the friend's hue.</summary>
+    private static Control InitialDisc(string? name, double size, Color hue)
+    {
+        var g = new Grid { Width = size, Height = size, VerticalAlignment = VerticalAlignment.Center };
+        g.Children.Add(new global::Avalonia.Controls.Shapes.Ellipse { Fill = new SolidColorBrush(hue) });
+        g.Children.Add(Hand(Initial(name), size * 0.8, Brushes.White));
+        return g;
+    }
+
+    /// <summary>WPF :474-500, read only: sentence lines on the slip's 44 px line grid, print words and fills.</summary>
+    public static StackPanel Sentence(System.Collections.Generic.IReadOnlyList<DareLine> lines, string? friendName, double size = 23, double lineHeight = 44)
+    {
+        var host = new StackPanel { Tag = "dares-sentence" };
+        foreach (var line in lines)
+        {
+            var row = new WrapPanel { ItemHeight = lineHeight };
+            if (line.Mark != DareMark.None) row.Children.Add(Mark(line.Mark, friendName));
+            foreach (var seg in line.Segs)
+                if (seg.Kind == DareSegKind.Text) AddWords(row, seg.Text, size, PrintBrush);
+                else row.Children.Add(seg.Kind == DareSegKind.Chip ? Fill(seg) : Blank(seg));
+            host.Children.Add(row);
+        }
+        return host;
+    }
+
+    /// <summary>WPF :506: one line of words with a fill at its end (the debt card's "You owe ___").</summary>
+    public static WrapPanel Line(string text, Control fill, double size, IBrush fg, double lineHeight)
+    {
+        var row = new WrapPanel { ItemHeight = lineHeight };
+        AddWords(row, text, size, fg);
+        row.Children.Add(fill);
+        return row;
+    }
+
+    // WPF :280: words split at spaces, so a sentence wraps word by word.
+    private static void AddWords(Panel row, string text, double size, IBrush fg)
+    {
+        var parts = text.Split(' ');
+        for (int i = 0; i < parts.Length; i++)
+            if (parts[i].Length > 0)
+                row.Children.Add(new TextBlock { Text = parts[i], FontFamily = PrintFont, FontWeight = FontWeight.Medium, FontSize = size,
+                    Foreground = fg, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, i < parts.Length - 1 ? size * 0.24 : 0, 0) });
+    }
+
+    /// <summary>WPF :336-388, read only: a white handwritten box, its kind's colour on the border and the icon;
+    /// the friend shows a round initial; a Lockdown is ink inverted.</summary>
+    public static Control Fill(DareSeg seg)
+    {
+        bool inverted = seg.Tone == DareTone.Lockdown, who = seg.Tone == DareTone.Who;
+        var c = who ? FriendColor(seg.Text) : ToneColor(seg.Tone);
+        IBrush line = inverted ? Brushes.White : new SolidColorBrush(c);
+        var sp = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        if (who) sp.Children.Add(InitialDisc(seg.Text, 24, c));
+        else
+        {
+            var icon = new Grid { VerticalAlignment = VerticalAlignment.Center };
+            // WPF :346: Sparkles' star is filled gold under its outline.
+            if (seg.Tone == DareTone.Sp) icon.Children.Add(new IconGlyph { Kind = IconKind.Star, Variant = IconVariant.Filled, Size = 24, Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xD4, 0x5E)) });
+            icon.Children.Add(Icon(ToneKind(seg.Tone), 24, line));
+            sp.Children.Add(icon);
+        }
+        var words = Hand(seg.Text, 29, inverted ? Brushes.White : InkBrush);
+        words.Margin = new Thickness(6, 0, 0, 2);
+        words.VerticalAlignment = VerticalAlignment.Center;
+        sp.Children.Add(words);
+        var g = new Grid { Margin = new Thickness(4, 0), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left,
+            Tag = "dares-chip:" + seg.Step };
+        g.Children.Add(new Border { Background = new SolidColorBrush(Color.FromArgb(0x22, 0, 0, 0)), CornerRadius = new CornerRadius(8), Margin = new Thickness(1, 2, -1, -2) });
+        g.Children.Add(new Border
+        {
+            Child = sp, Background = inverted ? InkBrush : new SolidColorBrush(Color.FromRgb(0xFF, 0xFA, 0xF8)),
+            BorderBrush = inverted ? InkBrush : line, BorderThickness = new Thickness(seg.Tone == DareTone.When ? 1.5 : 2),
+            CornerRadius = new CornerRadius(8), Padding = new Thickness(7, 3, 10, 3),
+        });
+        if (seg.TipKey != null) ToolTip.SetTip(g, Loc.Get(seg.TipKey));
+        AutomationProperties.SetName(g, seg.Text);
+        return g;
+    }
+
+    /// <summary>WPF :413, read only: a blank not yet filled, a dashed underline with its small hint.</summary>
+    private static Control Blank(DareSeg seg)
+    {
+        var b = new Border
+        {
+            Child = Caps(seg.Text, 14, PrintBrush, FontWeight.Medium, 0.12), MinWidth = 92, Height = 28, Padding = new Thickness(6, 0),
+            Margin = new Thickness(4, 0), BorderThickness = new Thickness(0, 0, 0, 2), Opacity = 0.55, VerticalAlignment = VerticalAlignment.Center,
+            BorderBrush = PrintBrush, Tag = "dares-blank:" + seg.Step,
+        };
+        AutomationProperties.SetName(b, seg.Text);
+        return b;
+    }
+
+    /// <summary>WPF :453: the round mark at the head of an outcome line: tick, cross, or an ink disc with an initial.</summary>
+    private static Control Mark(DareMark m, string? themName)
+    {
+        var disc = new Grid { Width = 26, Height = 26, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center };
+        disc.Children.Add(new global::Avalonia.Controls.Shapes.Ellipse { Fill = new SolidColorBrush(m switch
+            { DareMark.Yes => Color.FromRgb(0x1F, 0xA8, 0x77), DareMark.No => StampRed, _ => Ink }) });
+        if (m is DareMark.Yes or DareMark.No)
+            disc.Children.Add(Icon(m == DareMark.Yes ? IconKind.Checkmark : IconKind.Dismiss, 17, Brushes.White));
+        else
+        {
+            var letter = m == DareMark.Me ? Loc.Get("dares_mark_me") : Initial(themName);
+            var t = Hand(letter, letter.Length > 1 ? 15 : 20, Brushes.White);
+            t.VerticalAlignment = VerticalAlignment.Center;
+            disc.Children.Add(t);
+        }
+        AutomationProperties.SetName(disc, m == DareMark.Me ? Loc.Get("dares_mark_me") : m == DareMark.Them ? themName ?? "" : "");
+        return disc;
+    }
 
     /// <summary>WPF :690: a kind's 46 px disc with its white icon.</summary>
     public static Control Disc(DareTone tone)
     {
         var g = new Grid { Width = 46, Height = 46 };
         g.Children.Add(new global::Avalonia.Controls.Shapes.Ellipse { Fill = new SolidColorBrush(ToneColor(tone)) });
-        g.Children.Add(Icon(ToneIcon(tone), 28, Brushes.White));
+        g.Children.Add(Icon(ToneKind(tone), 28, Brushes.White));
         return g;
     }
 
@@ -196,7 +317,7 @@ internal static class DareLook
         if (helpKey != null) right.Children.Add(Help(helpKey, PrintBrush));
         if (onClose != null)
         {
-            var x = Bare(Icon("cross", 18, PrintBrush, 2), "dares-close");
+            var x = Bare(Icon(IconKind.Dismiss, 18, PrintBrush), "dares-close");
             x.Margin = new Thickness(6, 0, -6, 0);
             AutomationProperties.SetName(x, Loc.Get("dares_close"));
             x.Click += (_, _) => onClose();
