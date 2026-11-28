@@ -28,6 +28,73 @@ public class TubeServiceReactionTests
         public void ShowMessage(AttentionVerdict verdict, int ms, Action then) { }
     }
 
+    private sealed class GameHost : IBubbleCountHost
+    {
+        public void Show(string path, int difficulty, bool strict, Action<bool> onComplete) { }
+        public void ShowMessage(string text, int ms, Action then) { }
+        public void CloseAll() { }
+        public double LastVideoDurationSeconds => 60;
+    }
+
+    [Fact]
+    public Task GameResultsReactAndPanicRetiresPostedReaction() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        using var game = new BubbleCountScheduler(new GameHost());
+        var lines = new List<string>();
+        var phrase = new CustomCompanionPhrase { Id = "test-game-failed", Category = "GameFailed", Text = "Try again" };
+        CoreSettings.Current.CustomCompanionPhrases.Add(phrase);
+        var tube = new AvatarTubeWindow(null) { GameReactionSink = lines.Add };
+        try
+        {
+            tube.Show();
+            tube.AttachServiceReactions(null, game: game);
+            Action Handler(string name) => (Action)typeof(BubbleCountScheduler)
+                .GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(game)!;
+            Handler("GameCompleted")();
+            Assert.Equal(Loc.Get("avatar_bubble_count_win"), Assert.Single(lines));
+            Handler("GameFailed")();
+            Assert.Equal(2, lines.Count);
+            Task.Run(Handler("GameCompleted")).GetAwaiter().GetResult();
+            game.ForceCleanup();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, lines.Count);
+            AvatarTubeWindow.TestLive = tube;
+            Task.Run(Handler("GameCompleted")).GetAwaiter().GetResult();
+            PanicSurfaces.All.Single(x => x.Id == "tube-speech").Stop(null!);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(2, lines.Count);
+            tube.Close();
+            Assert.Null(typeof(BubbleCountScheduler).GetField("GameCompleted", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(game));
+            Assert.Null(typeof(BubbleCountScheduler).GetField("GameFailed", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(game));
+        }
+        finally { AvatarTubeWindow.TestLive = null; tube.Close(); CoreSettings.Current.CustomCompanionPhrases.Remove(phrase); }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task GameReactionStopsWithEngineCleanup(bool queued) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        using var game = new BubbleCountScheduler(new GameHost());
+        var tube = new AvatarTubeWindow(null);
+        try
+        {
+            tube.Show();
+            tube.AttachServiceReactions(null, game: game);
+            if (queued) tube.Giggle("ordinary line");
+            var completed = (Action)typeof(BubbleCountScheduler).GetField("GameCompleted", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(game)!;
+            completed();
+            Assert.True(tube.HasBubbleUp);
+            Assert.Equal(queued ? 1 : 0, tube.QueuedSpeechCount);
+            game.ForceCleanup();
+            Assert.Equal(0, tube.QueuedSpeechCount);
+            Assert.Equal(queued, tube.HasBubbleUp);
+        }
+        finally { tube.Close(); }
+        return Task.CompletedTask;
+    });
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
