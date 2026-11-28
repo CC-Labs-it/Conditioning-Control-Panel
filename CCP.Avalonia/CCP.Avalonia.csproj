@@ -103,6 +103,8 @@
     <!-- OnnxRuntime's props copy the win-x64 onnxruntime.dll to the root on any AnyCPU build (11 MB of
          Windows native in the Linux tarball). -->
     <None Remove="$(NuGetPackageRoot)microsoft.ml.onnxruntime/1.20.1/runtimes/win-x64/native/*.dll" />
+    <!-- Program.HideType1Fonts points fontconfig at this. -->
+    <Content Include="Platform\fontconfig-no-type1.conf" Link="fontconfig-no-type1.conf" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
