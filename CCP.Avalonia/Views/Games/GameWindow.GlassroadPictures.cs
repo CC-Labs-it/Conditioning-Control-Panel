@@ -29,18 +29,18 @@ internal sealed partial class GameWindow
     private sealed class GlassroadPool : IGlassroadPictures
     {
         private readonly GoonOnlineMedia _pool;
-        public GlassroadPool(Action<GoonOnlineMedia.Snapshot> snapshot)
+        public GlassroadPool(GoonOnlineMedia pool)
         {
             // The Core pool owns these copies until Off or Dispose; the server serves this copy prefix only.
             GoonOnlineMedia.Materialize = DtrhRemoteMedia.AssetsTempCopier.Materialize;
             GoonOnlineMedia.ReleaseTempFile = DtrhRemoteMedia.AssetsTempCopier.Release;
-            _pool = GoonOnlineMedia.ForGameStills("race3d", snapshot);
+            _pool = pool;
         }
         public void Start(IReadOnlyList<string> channels) => _pool.Start(channels);
         public void Dispose() => _pool.Dispose();
     }
 
-    internal static Func<Action<GoonOnlineMedia.Snapshot>, IGlassroadPictures> GlassroadPoolFactory = callback => new GlassroadPool(callback);
+    internal static Func<Action<GoonOnlineMedia.Snapshot>, IGlassroadPictures> GlassroadPoolFactory = callback => new GlassroadPool(GoonOnlineMedia.ForGameStills("race3d", callback));
     internal Func<Task<bool>>? GlassroadAskConsent;
     private IGlassroadPictures? _grPictures;
     private DispatcherTimer? _grPicturesTimer;

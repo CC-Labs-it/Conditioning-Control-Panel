@@ -75,8 +75,9 @@ internal static class TcOwnMediaRules
     /// <c>ccp.assets</c> url), remote entries dropped, deduped on the whole path, sorted so the listing order cannot move
     /// the answer, and past <see cref="MaxRows"/> a random spread. Headers and sizes are read only for the rows kept.
     /// </summary>
+    /// <param name="urlFor">The head's url for a path under the root ("images/a.png"); null = <c>https://ccp.assets/</c>.</param>
     public static JArray Rows(IEnumerable<Source>? sources, string? assetsRoot, Func<string, bool> webpAnimates,
-        Func<string, Stat?> stat, Random rng)
+        Func<string, Stat?> stat, Random rng, Func<string, string>? urlFor = null)
     {
         var rows = new JArray();
         if (sources == null || string.IsNullOrWhiteSpace(assetsRoot)) return rows;
@@ -90,7 +91,7 @@ internal static class TcOwnMediaRules
             if (string.IsNullOrWhiteSpace(s.Path) || IsRemote(s.Path) || !Showable(s.Path, s.Video)) continue;
             string full;
             try { full = System.IO.Path.GetFullPath(s.Path); } catch { continue; }
-            var url = BackRoom.BackRoomMedia.ToAssetsUrl(rootFull, full);
+            var url = AssetsUrl(rootFull, full, urlFor);
             if (url == null || !seen.Add(full)) continue;
             pool.Add((full, s.Video, url));
         }
@@ -127,6 +128,16 @@ internal static class TcOwnMediaRules
     /// the answer to a pick (<c>asked:false</c>), so nothing changes source until the player presses Use local files.</summary>
     public static JObject Frame(JArray rows)
         => new() { ["type"] = "own-media", ["v"] = 1, ["path"] = "", ["rows"] = rows, ["asked"] = false };
+
+    /// <summary>WPF BackRoomMedia.ToAssetsUrl: null for anything outside the mapping.</summary>
+    private static string? AssetsUrl(string rootFull, string fileFull, Func<string, string>? urlFor)
+    {
+        var rel = System.IO.Path.GetRelativePath(rootFull, fileFull);
+        if (System.IO.Path.IsPathRooted(rel) || rel == ".." || rel.StartsWith(".." + System.IO.Path.DirectorySeparatorChar)
+            || rel.StartsWith("../")) return null;
+        rel = rel.Replace('\\', '/');
+        return urlFor != null ? urlFor(rel) : "https://ccp.assets/" + string.Join('/', rel.Split('/').Select(Uri.EscapeDataString));
+    }
 
     private static bool IsRemote(string path)
         => path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || path.StartsWith("https://", StringComparison.OrdinalIgnoreCase);

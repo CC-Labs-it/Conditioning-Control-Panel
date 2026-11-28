@@ -1008,7 +1008,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>The enabled images under the assets folder (WPF GetMediaFiles).</summary>
-        private static List<string> FlashFiles(AppSettings s)
+        internal static List<string> FlashFiles(AppSettings s)
         {
             var root = CorePaths.EffectiveAssets;
             var dir = Path.Combine(root, "images");

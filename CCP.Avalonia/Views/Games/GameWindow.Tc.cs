@@ -4,9 +4,9 @@
 // frame passes Core TcFrameGate first. Every ready gets a fresh init (the pause card's Main menu reloads the page and
 // waits for init with no timeout). Hard exits (panic, title-bar X, a dead page, the watchdog) close the window at once;
 // the page's own exit ends on its exit-done or at 800 ms. Escape is its pause (GameWindow.Escape.cs); panic closes it
-// with every other game (PanicSurfaces "games"). Not on this head yet, so the init does not offer them: pictures and
-// the Sparkles medal (s20-tc-media), toy pulses and live settings (s20-tc-feel), the save carry (s20-tc-save) and
-// the Llama Expo (s20-tc-expo). Their frames are refused here with a log line.
+// with every other game (PanicSurfaces "games"). Pictures, the library and the Sparkles medal: GameWindow.Tc.Media.cs.
+// Not on this head yet, so the init does not offer them: toy pulses and live settings (s20-tc-feel), the save carry
+// (s20-tc-save) and the Llama Expo (s20-tc-expo). Their frames are refused here with a log line.
 using System;
 using System.IO;
 using Avalonia.Threading;
@@ -98,6 +98,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _tcWatch = _tcCloseClock = null;
             _tcCloseAskedUtc = null;
             Activated -= OnTcActivated;
+            DisposeTcPictures();   // panic and every other close stop any picture fetch on this call
             // Post() drops frames once closing; this one goes straight to the page, as WPF posts it before Dispose.
             try
             {
@@ -116,8 +117,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 var s = CoreSettings.Current;
                 var caps = TcRules.Caps(_tcEdition, saveSlot: false);   // no save carry on this head yet (s20-tc-save)
-                Post(TcHostRules.InitFrame(LocalizationManager.Instance.CurrentLanguage, s.MotionLevel, GentleVisuals.On, CoreMods.ActiveModId, caps,
-                    picturesOn: false, sparkles: false, toys: false, toysConnected: false, ownMedia: false));
+                Post(TcMediaInit(TcHostRules.InitFrame(LocalizationManager.Instance.CurrentLanguage, s.MotionLevel, GentleVisuals.On, CoreMods.ActiveModId, caps,
+                    picturesOn: TcPicturesOnNow, sparkles: TcSparklesOn, toys: false, toysConnected: false)));
             }
             catch (Exception ex) { Log.Warning("Tc: init post failed: {E}", ex.Message); }
             try { Web.Focus(); } catch (Exception ex) { Diag.Swallowed(ex); }
@@ -165,6 +166,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         break;
                     case "nudge":
                         OpenTcTierCard();   // desktop: every nudge is the tier compare card (Contract v2)
+                        break;
+                    case "set-setting":
+                        _ = SetTcPicturesAsync(f);
+                        break;
+                    case "scrolller-niches":
+                        SetTcNiches(f);
+                        break;
+                    case "own-media-list":
+                        OnTcOwnMediaList();
+                        break;
+                    case "fuzz-ended":
+                        OnTcRunEnded(f);
                         break;
                     default:
                         Log.Debug("Tc: {Type} not handled by this head yet", f.Type);

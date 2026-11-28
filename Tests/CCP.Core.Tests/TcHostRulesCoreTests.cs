@@ -28,6 +28,23 @@ public class TcHostRulesCoreTests
     }
 
     [Fact]
+    public void Library_rows_take_the_heads_url_and_keep_the_containment_rule()
+    {
+        var root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ccp-tc-own-core", "assets");
+        var sources = new[]
+        {
+            new TcOwnMediaRules.Source(System.IO.Path.Combine(root, "images", "a b.jpg"), false),
+            new TcOwnMediaRules.Source(System.IO.Path.Combine(root, "..", "out.jpg"), false),
+        };
+        var rows = TcOwnMediaRules.Rows(sources, root, _ => false, _ => new TcOwnMediaRules.Stat(1, 1), new System.Random(1),
+            rel => "http://127.0.0.1:1/ccp.assets/" + rel);
+        var row = Assert.Single(rows);
+        Assert.Equal("http://127.0.0.1:1/ccp.assets/images/a b.jpg", (string?)row["url"]);
+        Assert.Equal("https://ccp.assets/images/a%20b.jpg",
+            (string?)Assert.Single(TcOwnMediaRules.Rows(sources, root, _ => false, _ => new TcOwnMediaRules.Stat(1, 1), new System.Random(1)))["url"]);
+    }
+
+    [Fact]
     public void Each_call_builds_a_fresh_cap()
         => Assert.NotSame(TcHostRules.OwnMediaCap(), TcHostRules.OwnMediaCap());
 }
