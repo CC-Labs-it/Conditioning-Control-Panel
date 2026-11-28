@@ -41,9 +41,10 @@ public sealed class TubePriorityTypewriterTests
         finally { CoreSettings.ServiceProvider = previous; }
     }
 
+    // WPF Speech.cs:373,515: every priority line is SpeechSource.AI, so canned ones type fast too.
     [Theory]
     [InlineData(true, 30, 2.3)]
-    [InlineData(false, 75, 2.75)]
+    [InlineData(false, 30, 2.3)]
     public Task PriorityLineTypesAndKeepsReadingTime(bool ai, int stepMs, double seconds) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         ChatThresholdLinksTests.Setup();
@@ -80,7 +81,7 @@ public sealed class TubePriorityTypewriterTests
     // WPF Speech.cs:373,587-598: every priority line uses the AI source's reading floor.
     [Theory]
     [InlineData(true, 20.96)]
-    [InlineData(false, 23.48)]
+    [InlineData(false, 20.96)]
     public Task LongPriorityLinesKeepTheReadingFloor(bool ai, double seconds) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         ChatThresholdLinksTests.Setup();

@@ -203,9 +203,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         private static int TypingMs(int length, bool slow) => length <= 0 ? 0 :
             TypewriterStepMs(length, slow) * (int)Math.Ceiling((double)length / Math.Max(1, length / 100));
         internal static int TriggerTypingMs(int length) => TypingMs(length, slow: true);
-        private static double PriorityDisplaySeconds(string text, bool aiGenerated) =>
+        private static double PriorityDisplaySeconds(string text) =>
             Math.Max(Math.Clamp(CoreSettings.Current.BubbleDurationSeconds, 1.0, 10.0), Math.Min(30.0, text.Length / 12.0))
-            + TypingMs(text.Length, slow: !aiGenerated) / 1000.0;
+            + TypingMs(text.Length, slow: false) / 1000.0;
         internal TimeSpan? SpeechHideDelay => _speechTimer?.Interval;
         internal static double TriggerDisplaySeconds(string trigger) =>
             Math.Clamp(5.0 + trigger.Length * 0.05, 5.0, 14.0) + TriggerTypingMs(trigger.Length) / 1000.0;

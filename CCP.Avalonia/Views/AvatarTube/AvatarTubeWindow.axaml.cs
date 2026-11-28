@@ -1421,8 +1421,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     }
 
                     SyncAskButtonsFor(text);
-                    // WPF Speech.cs:513,559: non-AI bubbles type slowly; triggers type after their lead-in.
-                    if (!trigger) TypeBubble(text, static () => true, slow: !aiGenerated);
+                    // WPF Speech.cs:515,559: only non-AI sources type slowly; priority lines are SpeechSource.AI
+                    // (Speech.cs:373) even when canned. Triggers type after their lead-in.
+                    if (!trigger) TypeBubble(text, static () => true, slow: preset);
                     else RenderSpeechLinks(_txtSpeech, text);
                     // WPF AdjustBubbleSize (Speech.cs:857-881): real DIPs now, 14 only for long replies.
                     _txtSpeech.FontSize = text.Length > 250 ? 14 : 15;
@@ -1434,7 +1435,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                     _currentSpeechSource = source;
                     _currentSpeechLength = text.Length;
 
-                    StartBubbleHideTimer(text, trigger ? TriggerDisplaySeconds(text) : preset ? PresetDisplaySeconds(text) : PriorityDisplaySeconds(text, aiGenerated));
+                    StartBubbleHideTimer(text, trigger ? TriggerDisplaySeconds(text) : preset ? PresetDisplaySeconds(text) : PriorityDisplaySeconds(text));
                     Log.Debug("Companion says ({Chars} chars, ai={Ai})", text.Length, aiGenerated);   // never the text
                     return handled;
                 }
