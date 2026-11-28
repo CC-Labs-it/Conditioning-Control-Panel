@@ -3651,12 +3651,12 @@ namespace ConditioningControlPanel
                 else
 #endif
                 {
-                    _daresService = Services.Dares.DaresService.CreateForApp(out dareMeter);
+                    _daresService = Services.Dares.DaresServiceApp.CreateForApp(out dareMeter);
                     Dares = _daresService;
                     _daresService.BetsRead += () => _dareHooks?.Wake();
                     _daresService.CameraProbe = () => _dareHooks?.CameraState ?? Services.Dares.DareCameraState.Idle;
                     if (ProfileSync != null) ProfileSync.ProfileLoaded += (_, _) => _daresService?.Kick();
-                    _daresService.Start();
+                    _daresService.Start(new Services.Friends.FriendsServiceApp.Timer());
                 }
                 _dareHooks = new Services.Dares.DareMeterHooks(dareMeter);
                 _dareHooks.Attach();

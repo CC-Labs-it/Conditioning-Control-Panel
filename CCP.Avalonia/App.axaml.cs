@@ -226,6 +226,7 @@ namespace ConditioningControlPanel.Avalonia
 
         /// <summary>The one session runner (WPF MainWindow._sessionEngine), or null on the headless render path.</summary>
         internal static SessionRunner? Sessions { get; set; }
+        internal static Services.Dares.IDaresService? Dares => Platform.DareHead.Service;
         /// <summary>The app-lifetime media recap (WPF App.MediaHistory), or null on the headless render path.</summary>
         internal static MediaHistoryService? MediaHistory { get; set; }
         /// <summary>The tube the countdown speaks through. Test seam: a headless app cannot swap its lifetime after init.</summary>
@@ -1422,6 +1423,8 @@ namespace ConditioningControlPanel.Avalonia
                     Environment.GetEnvironmentVariable("CCP_USERDATA_DIR"), Environment.GetEnvironmentVariable(Platform.FriendsHead.EnvVar));
                 // WPF App.xaml.cs:462 StakeAppHooks.Seed: the stakes' Chaster gate, loss row and wallet (the wire rides the invites door above).
                 Platform.StakeHead.Seed();
+                try { if (Sessions != null) Platform.DareHead.Start(); }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Dares startup failed"); Platform.DareHead.Shutdown(); }
                 CoreProgression.TrackBubbleCountResultProvider = correct => Achievements?.TrackBubbleCountResult(correct);
                 CoreProgression.TrackBubbleCountGameStartedProvider = () => Achievements?.TrackBubbleCountGameStarted();
                 CoreProgression.TrackBubbleCountCompletedProvider = () => Quests?.TrackBubbleCountCompleted();
@@ -1557,6 +1560,7 @@ namespace ConditioningControlPanel.Avalonia
                     Serilog.Log.Information("Shell closed: stopping the session and the engine");
                     CoreEngine.StartedHook = null;
                     CoreEngine.StoppedHook = null;   // the shell is gone; do not repaint it
+                    Platform.DareHead.StopForSafety();
                     Sessions.Ticked -= shell.OnSessionTick;
                     Sessions.SessionLog.LogReady -= shell.OnSessionLogReady;
                     Sessions.Stop();   // restores the pre-session settings before exit
@@ -1946,6 +1950,7 @@ namespace ConditioningControlPanel.Avalonia
             try { StopDeeperLibrary(); } catch (Exception ex) { Serilog.Log.Debug(ex, "Deeper library shutdown failed"); } // WPF App.OnExit:6035
             Platform.ScrolllerHead.Stop();   // WPF App.OnExit:6284-6285: the share's ledger and the cache index
             try { Platform.ScrolllerAwayHost.Stop(); } catch { /* WPF App.OnExit:6308 */ }
+            try { Platform.DareHead.Shutdown(); } catch { }
             try { Platform.LeashTaskHost.Stop(); } catch { /* WPF App.OnExit: the task and its window go first */ }
             try { Platform.LeashHead.Stop(); } catch { /* WPF App.OnExit:6289-6292, before the friends poll it rides */ }
             try { Platform.ScreenMirrorHead.Shutdown(); } catch { /* WPF App.OnExit:6505 */ }

@@ -5,6 +5,7 @@ using System.Linq;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Progression;
 using Newtonsoft.Json;
+using Serilog;
 
 namespace ConditioningControlPanel.Services.Dares;
 
@@ -64,6 +65,7 @@ public sealed class DareMeter
     }
 
     private readonly object _gate = new();
+    private readonly object _saveGate = new();
     private readonly IDareMeterStore _store;
     private FileShape _data = new();
     private bool _dirty;
@@ -76,7 +78,7 @@ public sealed class DareMeter
             var text = _store.Read();
             if (!string.IsNullOrWhiteSpace(text)) _data = JsonConvert.DeserializeObject<FileShape>(text!) ?? new FileShape();
         }
-        catch (Exception ex) { App.Logger?.Debug("Dares meter unreadable: {E}", ex.Message); _data = new FileShape(); }
+        catch (Exception ex) { Log.Debug("Dares meter unreadable: {E}", ex.Message); _data = new FileShape(); }
         _data.Bets ??= new();
     }
 
@@ -217,15 +219,23 @@ public sealed class DareMeter
     /// <summary>Writes the numbers when anything moved since the last save.</summary>
     public void Save()
     {
-        string text;
-        lock (_gate)
+        // One writer at a time, so an older snapshot can never land after a newer one (same temp file).
+        lock (_saveGate)
         {
-            if (!_dirty) return;
-            text = JsonConvert.SerializeObject(_data);
-            _dirty = false;
+            string text;
+            lock (_gate)
+            {
+                if (!_dirty) return;
+                text = JsonConvert.SerializeObject(_data);
+                _dirty = false;
+            }
+            try { _store.Write(text); }
+            catch (Exception ex)
+            {
+                lock (_gate) _dirty = true;   // the counts are still unsaved; the next Save retries
+                Log.Debug("Dares meter save failed: {E}", ex.Message);
+            }
         }
-        try { _store.Write(text); }
-        catch (Exception ex) { App.Logger?.Debug("Dares meter save failed: {E}", ex.Message); }
     }
 
     private void Add(DareKind kind, int n, DateTimeOffset now)
