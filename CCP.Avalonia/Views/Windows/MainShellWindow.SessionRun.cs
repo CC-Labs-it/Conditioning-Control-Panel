@@ -49,7 +49,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var startText = LocalizationManager.Instance.GetEnglish("btn_start_session");
             var yes = dialog.FindControl<Button>("BtnOk")!;
             yes.Content = new IconLabel { Text = startText ?? "Start Session", Kind = startText == null ? IconKind.Play : null };
-            yes.IsDefault = false;
+            dialog.UseStyledYesNoOrder();
             if (await dialog.ShowDialogSafe<bool?>(this) == true) StartSession(selected);
         }
 
@@ -85,7 +85,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     Platform.ProgramEngineBridge.RaiseSessionChanged();   // the Programs session row (WPF OnSessionStarted)
                     PinkRushHost.Start();          // WPF: a session starts through StartEngine -> SkillTree.Start()
                     StartConditioningTimeTracker();   // ... and StartEngine :423
-                    PinkFilterOverlay.Refresh(this);
+                    PinkFilterOverlay.Refresh(this); BrainDrainOverlay.Start(this);
                     SpiralOverlay.Refresh(this);
                     Log.Information("Started session: {Name} ({Difficulty}, +{XP} XP)", session.Name, session.Difficulty, session.BonusXP);
                 }
@@ -124,14 +124,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     $"{(int)remaining.TotalMinutes:D2}:{remaining.Seconds:D2}",
                     potentialXP, penaltyText),
                 showCancel: true, okText: Loc.Get(yesKey), cancelText: Loc.Get(noKey));
-            var yes = dialog.FindControl<Button>("BtnOk")!;
-            yes.IsDefault = false;
-            // WPF ShowStyledDialog (MainWindow.Presets.cs:772-806) puts Yes before No.
-            var no = dialog.FindControl<Button>("BtnCancel")!;
-            Grid.SetColumn(yes, 1);
-            Grid.SetColumn(no, 3);
-            yes.Margin = new global::Avalonia.Thickness(0, 0, 10, 0);
-            no.Margin = default;
+            dialog.UseStyledYesNoOrder();
             var confirmed = await dialog.ShowDialogSafe<bool?>(this) == true;
             if (!confirmed || !ReferenceEquals(runner.CurrentSession, session)) return;
             Log.Information("Session stop confirmed by the user");
@@ -163,7 +156,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     if (App.Sessions is not { IsPaused: true } r) return;
                     if (SessionClockSafety.ResumeStartsEngine(CoreEngine.IsRunning, RemoteControllerConnected)) StartEngineFromUser();
                     else r.Resume();
-                    PinkFilterOverlay.Refresh(this);
+                    PinkFilterOverlay.Refresh(this); BrainDrainOverlay.Start(this);
                     SpiralOverlay.Refresh(this);
                     SetPauseButton(false);
                     OnSessionTick();
@@ -178,7 +171,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var checkbox = dialog.FindControl<CheckBox>("DontAskAgain")!;
                 checkbox.Content = new TextBlock { Text = Loc.Get("chk_dont_ask_again") };
                 checkbox.IsVisible = true;
-                dialog.FindControl<Button>("BtnOk")!.IsDefault = false;
+                dialog.UseStyledYesNoOrder();
                 var confirmed = await dialog.ShowDialogSafe<bool?>(this) == true;
                 if (!confirmed || !runner.IsRunning) return;
                 if (checkbox.IsChecked == true)
@@ -191,7 +184,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF SessionEngine.cs:530 -> OverlayService.Stop:471: pause drops sustained holds too.
             SpiralOverlay.Stop();
             PinkFilterOverlay.Stop();
-            PinkFilterOverlay.Refresh(this);   // WPF App.Overlay.Stop()
+            PinkFilterOverlay.Refresh(this); BrainDrainOverlay.Start(this);   // WPF App.Overlay.Stop()
             SpiralOverlay.Refresh(this);
             SetPauseButton(true);
             OnSessionTick();
@@ -275,7 +268,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF Session/SessionEngine.cs:799,814: ramps reclaim opacity after a voice command.
             PinkFilterOverlay.ApplySessionOpacity(runner.PinkOpacity);
             var voiceSpiralChanged = SpiralOverlay.ApplySessionOpacity(runner.SpiralOpacity);
-            PinkFilterOverlay.Refresh(this);   // the delayed start and the ramp (SessionRunner.PinkOpacity)
+            PinkFilterOverlay.Refresh(this); BrainDrainOverlay.Start(this);   // the delayed start and the ramp (SessionRunner.PinkOpacity)
             // The same for SessionRunner.SpiralOpacity (SessionEngine.cs:731, 823), only when the start or the
             // ramp moved it: a Refresh enumerates screens and probes the file. A landing decode refreshes itself.
             var spiralKey = (CoreSettings.Current.SpiralEnabled, runner.SpiralOpacity);

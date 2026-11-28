@@ -19,16 +19,9 @@ public sealed class AfterglowLineLayer : BaseLayer
     private static bool _hooked;
     private readonly AfterglowLine _line = new();
     private readonly AfterglowLineDraw _draw = new();
-    private static readonly SKTypeface Face = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Bold) ?? SKTypeface.Default;
 
-    /// <summary>The face V2 subliminal words are drawn in: the player's Subliminal Font once they picked one
-    /// (tier-2 report, 7.3.2: the setting did not reach V2), the stock Segoe UI Bold while it is on its default.</summary>
-    internal static SKTypeface FaceNow()
-    {
-        var name = App.Settings?.Current?.SubliminalFont?.Trim();
-        if (string.IsNullOrEmpty(name) || string.Equals(name, "Arial", StringComparison.OrdinalIgnoreCase)) return Face;
-        return SubliminalLayer.ResolveFace(name);
-    }
+    /// <summary>The face V2 subliminal words are drawn in (rule: Core <see cref="AfterglowLineDraw.FaceFor"/>).</summary>
+    internal static SKTypeface FaceNow() => AfterglowLineDraw.FaceFor(App.Settings?.Current?.SubliminalFont);
 
     /// <summary>
     /// Where the line sits while it is up, in physical px, for "Ignore CCP's own windows" (the screen
@@ -44,9 +37,8 @@ public sealed class AfterglowLineLayer : BaseLayer
         return new[] { LineBand(b) };
     }
 
-    /// <summary>The band the line is drawn in: baseline at 11 percent from the bottom, words up to 8 percent tall.</summary>
-    internal static System.Drawing.Rectangle LineBand(System.Drawing.Rectangle b)
-        => new(b.X + (int)(b.Width * 0.03), b.Bottom - (int)(b.Height * 0.25), (int)(b.Width * 0.94), (int)(b.Height * 0.23));
+    /// <summary>The band the line is drawn in (rule: Core <see cref="AfterglowLineRules.LineBand"/>).</summary>
+    internal static System.Drawing.Rectangle LineBand(System.Drawing.Rectangle b) => AfterglowLineRules.LineBand(b);
     private bool _dirty = true;
     private double _sinceFrame;
     private int _drawnStyle = -1;
@@ -110,15 +102,10 @@ public sealed class AfterglowLineLayer : BaseLayer
         l.SetActive(false);
     }
 
-    /// <summary>The option box, read live: words per line, how long the line stays lit, ghost strength.</summary>
+    /// <summary>The option box, read live (rule: Core <see cref="AfterglowLineRules.Apply"/>).</summary>
     private void ApplyOptions()
     {
-        var s = App.Settings?.Current;
-        if (s == null) return;
-        _line.Words = AfterglowLineOptions.ClampWords(s.AfterglowLineWords);
-        _line.HoldSeconds = AfterglowLineOptions.ClampHold(s.AfterglowLineHold);
-        double ghost = AfterglowLineOptions.GhostAlpha(s.AfterglowGhostOpacity);
-        if (ghost != _line.Ghost) { _line.Ghost = ghost; _dirty = true; }
+        if (AfterglowLineRules.Apply(_line, App.Settings?.Current)) _dirty = true;
     }
 
     public override void Update(TimeSpan delta)
@@ -132,24 +119,23 @@ public sealed class AfterglowLineLayer : BaseLayer
             SteamLayer.Line = done;
             var b = _lastBounds;
             if (!b.IsEmpty)
-                SuperStageHost.Stage.Remember(b.X + b.Width * 0.06, b.Y + b.Height * 0.38, b.X + b.Width * 0.94, b.Y + b.Height * 0.66);
+            {
+                var f = AfterglowLineRules.FogBand(b);
+                SuperStageHost.Stage.Remember(f.Left, f.Top, f.Right, f.Bottom);
+            }
         }
         if (_line.Count == 0) { _lastBounds = default; _dirty = true; SetActive(false); return; }
         _sinceFrame += dt;
-        if (_line.Animating && _sinceFrame >= 1 / 30.0) { _sinceFrame = 0; _dirty = true; }
+        if (_line.Animating && _sinceFrame >= AfterglowLineRules.RepaintSeconds) { _sinceFrame = 0; _dirty = true; }
         // A new worn word style (shop Wear) repaints the waiting line at once.
         if ((int)Looks.WornWordStyle.Current != _drawnStyle) _dirty = true;
     }
 
     public override void Render(SKCanvas canvas, SKRectI boundsPx, double dpiScale, TimeSpan elapsed)
     {
-        var stage = SuperStageHost.Stage;
-        float fromX = boundsPx.MidX, fromY = boundsPx.Top + boundsPx.Height * 0.46f;
         // With the pool up on this monitor, words surface from its eye (unless the pool's "Words" switch is off).
-        if (stage.PoolTakesWords && stage.Pool.Size > 0.3 && boundsPx.Contains((int)stage.Pool.X, (int)stage.Pool.Y))
-        {
-            fromX = (float)stage.Pool.X; fromY = (float)stage.Pool.Y;
-        }
+        var (fx, fy) = AfterglowLineRules.WordsFrom(SuperStageHost.Stage, boundsPx.Left, boundsPx.Top, boundsPx.Width, boundsPx.Height);
+        float fromX = (float)fx, fromY = (float)fy;
         var look = PinkTintLayer.LastLook;
         // The worn word style: its face and colour, and its way in as each ghost rises (Still
         // under Gentle visuals or motion Off). The style's motion is settled by the time a ghost
