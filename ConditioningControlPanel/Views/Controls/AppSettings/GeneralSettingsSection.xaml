@@ -4,6 +4,8 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.TintSliders="True"
              xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
              mc:Ignorable="d" d:DesignWidth="620">
 
@@ -84,7 +86,7 @@
 
         <!-- ============================= language ============================= -->
         <Border Style="{StaticResource SectionPanel}" Padding="0" Margin="0,0,0,10"
-                BorderBrush="{StaticResource SectionHueGeneralBorderBrush}">
+                BorderBrush="{StaticResource SectionHueGeneralBorderBrush}" rows:RowHue.Hue="{StaticResource SectionHueGeneral}">
             <Grid>
                 <Border CornerRadius="11" Background="{StaticResource SectionHueGeneralWashBrush}"/>
                 <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
@@ -94,19 +96,18 @@
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                         <Image Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"
                                Source="{Binding Source='🌍', Converter={StaticResource EmojiToImageSource}}"/>
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="{loc:Str set2_general_language_title}"
+                        <TextBlock Style="{StaticResource SettingsCardTitle}" Text="{loc:Str set2_general_language_title}"
                                    Foreground="{StaticResource SectionHueGeneralBrush}" VerticalAlignment="Center" Margin="0"/>
                     </StackPanel>
 
-                    <Grid MinHeight="34" ToolTip="{loc:Str set2_general_language_hint}">
+                    <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str set2_general_language_hint}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}" Text="{loc:Str label_language}"
-                                   Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str label_language}" Emblem="Words" Margin="0,0,14,0"/>
                         <ComboBox Grid.Column="1" x:Name="CmbLanguageSetting" x:FieldModifier="internal"
-                                  Style="{StaticResource DarkComboBoxStyle}" FontSize="11"
+                                  Style="{DynamicResource RowComboBoxStyle}"
                                   Width="190" MinHeight="28" VerticalAlignment="Center"
                                   ToolTip="{loc:Str set2_general_language_hint}"
                                   SelectionChanged="CmbLanguageSetting_SelectionChanged"/>
@@ -122,7 +123,7 @@
              lists is the WEBCAM's calibration screen, which does not move content. This row is the
              app-wide picker; the same control is embedded in the System popup so the two agree. -->
         <Border x:Name="DisplayGeneralCard" Style="{StaticResource SectionPanel}" Padding="0" Margin="0,0,0,10"
-                BorderBrush="{StaticResource SectionHueGeneralBorderBrush}">
+                BorderBrush="{StaticResource SectionHueGeneralBorderBrush}" rows:RowHue.Hue="{StaticResource SectionHueGeneral}">
             <Grid>
                 <Border CornerRadius="11" Background="{StaticResource SectionHueGeneralWashBrush}"/>
                 <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
@@ -132,7 +133,7 @@
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                         <Image Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"
                                Source="{Binding Source='🖥', Converter={StaticResource EmojiToImageSource}}"/>
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="{loc:Str set2_general_display_title}"
+                        <TextBlock Style="{StaticResource SettingsCardTitle}" Text="{loc:Str set2_general_display_title}"
                                    Foreground="{StaticResource SectionHueGeneralBrush}" VerticalAlignment="Center" Margin="0"/>
                     </StackPanel>
 
@@ -141,29 +142,23 @@
                     <!-- The START button's MM:SS while a session runs. It sits here because the
                          button is title-bar chrome on every tab, and this card is where the rest of
                          "how the window looks" lives. Default on; AppSettings.ShowSessionCountdown. -->
-                    <Border Style="{StaticResource SettingChip}" Margin="0,8,0,0"
-                            ToolTip="{loc:Str set2_general_show_countdown_tip}">
-                        <Grid MinHeight="22">
+                    <Grid Style="{StaticResource OptionRow}" Background="Transparent" Margin="0,8,0,0" ToolTip="{loc:Str set2_general_show_countdown_tip}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{loc:Str set2_general_show_countdown}"
-                                       Foreground="{DynamicResource TextLightBrush}"
-                                       FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap"
-                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <rows:RowLabel Grid.Column="0" Text="{loc:Str set2_general_show_countdown}" Emblem="Long" IsOn="{Binding IsChecked, ElementName=ChkShowSessionCountdown}" Margin="0,0,10,0"/>
                             <CheckBox Grid.Column="1" x:Name="ChkShowSessionCountdown" x:FieldModifier="internal"
                                       Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                       Checked="ChkShowSessionCountdown_Changed" Unchecked="ChkShowSessionCountdown_Changed"/>
                         </Grid>
-                    </Border>
                 </StackPanel>
             </Grid>
         </Border>
 
         <!-- ============================== startup ============================= -->
         <Border Style="{StaticResource SectionPanel}" Padding="0" Margin="0,0,0,10"
-                BorderBrush="{StaticResource SectionHueStartupBorderBrush}">
+                BorderBrush="{StaticResource SectionHueStartupBorderBrush}" rows:RowHue.Hue="{StaticResource SectionHueStartup}">
             <Grid>
                 <Border CornerRadius="11" Background="{StaticResource SectionHueStartupWashBrush}"/>
                 <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
@@ -173,7 +168,7 @@
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                         <Image Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"
                                Source="{Binding Source='🚀', Converter={StaticResource EmojiToImageSource}}"/>
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="{loc:Str set2_general_startup_title}"
+                        <TextBlock Style="{StaticResource SettingsCardTitle}" Text="{loc:Str set2_general_startup_title}"
                                    Foreground="{StaticResource SectionHueStartupBrush}" VerticalAlignment="Center" Margin="0"/>
                     </StackPanel>
 
@@ -184,90 +179,57 @@
                          handler registers an OS shortcut and may revert the box, and a Click
                          handler does not re-fire when it does.
                          MainWindow.RequestToggleWindowsStartup relies on that. -->
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="6"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
+                    <StackPanel>
 
-                        <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource SettingChip}"
-                                ToolTip="{loc:Str tooltip_launch_automatically_when_windows_starts}">
-                            <Grid MinHeight="22">
+                        <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_launch_automatically_when_windows_starts}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str setting_win_start}"
-                                           Foreground="{DynamicResource TextLightBrush}"
-                                           FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap"
-                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_win_start}" Emblem="Power" IsOn="{Binding IsChecked, ElementName=ChkWinStart}" Margin="0,0,10,0"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkWinStart" x:FieldModifier="internal"
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Click="ChkWinStart_Click"/>
                             </Grid>
-                        </Border>
 
-                        <Border Grid.Row="0" Grid.Column="2" Style="{StaticResource SettingChip}"
-                                ToolTip="{loc:Str tooltip_start_minimized_to_system_tray}">
-                            <Grid MinHeight="22">
+                        <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_start_minimized_to_system_tray}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str setting_start_hidden}"
-                                           Foreground="{DynamicResource TextLightBrush}"
-                                           FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap"
-                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_start_hidden}" Emblem="Power" IsOn="{Binding IsChecked, ElementName=ChkStartHidden}" Margin="0,0,10,0"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkStartHidden" x:FieldModifier="internal"
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Click="ChkStartHidden_Click"/>
                             </Grid>
-                        </Border>
 
-                        <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource SettingChip}"
-                                ToolTip="{loc:Str tooltip_start_the_engine_automatically_on_launch}">
-                            <Grid MinHeight="22">
+                        <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_start_the_engine_automatically_on_launch}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str setting_auto_run}"
-                                           Foreground="{DynamicResource TextLightBrush}"
-                                           FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap"
-                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_auto_run}" Emblem="Power" IsOn="{Binding IsChecked, ElementName=ChkAutoRun}" Margin="0,0,10,0"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkAutoRun" x:FieldModifier="internal"
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkAutoRun_Changed" Unchecked="ChkAutoRun_Changed"/>
                             </Grid>
-                        </Border>
 
-                        <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource SettingChip}"
-                                ToolTip="{loc:Str tooltip_play_a_mandatory_video_when_app_opens}">
-                            <Grid MinHeight="22">
+                        <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_play_a_mandatory_video_when_app_opens}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str setting_vid_launch}"
-                                           Foreground="{DynamicResource TextLightBrush}"
-                                           FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap"
-                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_vid_launch}" Emblem="Many" Subject="Video" IsOn="{Binding IsChecked, ElementName=ChkVidLaunch}" Margin="0,0,10,0"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkVidLaunch" x:FieldModifier="internal"
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkVidLaunch_Changed" Unchecked="ChkVidLaunch_Changed"/>
                             </Grid>
-                        </Border>
-                    </Grid>
+                    </StackPanel>
 
                     <!-- Startup video picker, one line. TxtStartupVideo is written by
                          MainWindow.Settings.cs (LoadSettings) and by both buttons' MainWindow
                          handlers, so the name matters. -->
-                    <Grid MinHeight="34" Margin="0,2,0,0"
+                    <Grid Style="{StaticResource OptionRow}" Margin="0,2,0,0"
                           ToolTip="{loc:Str tooltip_select_a_specific_video_to_play_on_startup_wh}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
@@ -275,8 +237,7 @@
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}"
-                                   Text="{loc:Str label_startup_video}" Margin="0,0,10,0"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str label_startup_video}" Emblem="Folder" Margin="0,0,10,0"/>
                         <TextBlock Grid.Column="1" x:Name="TxtStartupVideo" x:FieldModifier="internal"
                                    Text="{loc:Str label_random}" TextTrimming="CharacterEllipsis"
                                    Foreground="{DynamicResource PinkBrush}" FontSize="11"
@@ -301,7 +262,7 @@
              here is the fix for "the app won't close" - it is the app's most-reported
              non-bug, which is exactly why this description stays VISIBLE. -->
         <Border Style="{StaticResource SectionPanel}" Padding="0" Margin="0,0,0,10"
-                BorderBrush="{StaticResource SectionHueGeneralBorderBrush}">
+                BorderBrush="{StaticResource SectionHueGeneralBorderBrush}" rows:RowHue.Hue="{StaticResource SectionHueGeneral}">
             <Grid>
                 <Border CornerRadius="11" Background="{StaticResource SectionHueGeneralWashBrush}"/>
                 <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
@@ -310,7 +271,7 @@
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                         <Image Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"
                                Source="{Binding Source='🪟', Converter={StaticResource EmojiToImageSource}}"/>
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="{loc:Str set2_general_tray_title}"
+                        <TextBlock Style="{StaticResource SettingsCardTitle}" Text="{loc:Str set2_general_tray_title}"
                                    Foreground="{StaticResource SectionHueGeneralBrush}" VerticalAlignment="Center" Margin="0"/>
                     </StackPanel>
                     <TextBlock Text="{loc:Str set2_general_tray_body}" TextWrapping="Wrap"
@@ -322,7 +283,7 @@
         <!-- ============================== Deeper ============================= -->
         <Border x:Name="DeeperGeneralCard" CornerRadius="12" Padding="0" Margin="0,0,0,10"
                 Background="{DynamicResource ElevatedSurfaceBrush}"
-                BorderBrush="{StaticResource SectionHueGeneralBorderBrush}" BorderThickness="1">
+                BorderBrush="{StaticResource SectionHueGeneralBorderBrush}" BorderThickness="1" rows:RowHue.Hue="{StaticResource SectionHueGeneral}">
             <Grid>
                 <Border CornerRadius="11" Background="{StaticResource SectionHueGeneralWashBrush}"/>
                 <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
@@ -331,17 +292,15 @@
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                         <Image Width="16" Height="16" Margin="0,0,6,0" VerticalAlignment="Center"
                                Source="{Binding Source='🌊', Converter={StaticResource EmojiToImageSource}}"/>
-                        <TextBlock Style="{StaticResource SectionHeader}" Text="{loc:Str section_deeper}"
+                        <TextBlock Style="{StaticResource SettingsCardTitle}" Text="{loc:Str section_deeper}"
                                    Foreground="{DynamicResource DeeperAccentBrush}" VerticalAlignment="Center" Margin="0"/>
                     </StackPanel>
-                    <Grid MinHeight="34" ToolTip="{loc:Str tooltip_deeper_enable}">
+                    <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_deeper_enable}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Style="{StaticResource SettingLabel}"
-                                   Text="{loc:Str setting_deeper_enable}"
-                                   Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_deeper_enable}" Emblem="Link" IsOn="{Binding IsChecked, ElementName=ChkEnableDeeper}" Margin="0,0,14,0"/>
                         <CheckBox Grid.Column="1" x:Name="ChkEnableDeeper" x:FieldModifier="internal"
                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center" IsChecked="True"
                                   Checked="ChkEnableDeeper_Changed" Unchecked="ChkEnableDeeper_Changed"/>

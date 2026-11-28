@@ -801,151 +801,14 @@ namespace ConditioningControlPanel.Services
         }
 
         /// <summary>
-        /// Ranged/resumable download loop with backoff, modelled on ContentPackService's transport:
-        /// the <c>.partial</c> file is never deleted on a transient failure, so a killed app (or a
-        /// dropped connection) resumes where it left off. GitHub redirects release-asset URLs to
-        /// objects.githubusercontent.com, which honours Range on the redirected request.
+        /// The ranged, resumable download into the <c>.partial</c> file (lifted to <see cref="ResumableDownload"/>,
+        /// a pure move, so the T&amp;C Expo shares it). Progress keeps reaching <see cref="ReportProgress"/>.
         /// </summary>
-        private async Task<bool> DownloadToPartialAsync(
+        private Task<bool> DownloadToPartialAsync(
             ContentPackInfo info, string url, string partialPath, IProgress<double>? progress, CancellationToken ct)
-        {
-            var totalBytes = info.SizeBytes;
-            var retryDelay = TimeSpan.FromSeconds(3);
-
-            for (var attempt = 1; attempt <= MaxDownloadAttempts; attempt++)
-            {
-                ct.ThrowIfCancellationRequested();
-                try
-                {
-                    long resumeFrom = 0;
-                    if (File.Exists(partialPath))
-                    {
-                        resumeFrom = new FileInfo(partialPath).Length;
-                        if (totalBytes > 0 && resumeFrom > totalBytes)
-                        {
-                            // Longer than advertised — the asset changed under us. Start clean.
-                            Log.Warning("ReleaseContentService: partial for {Pack} is larger than the manifest size — restarting",
-                                info.Id);
-                            TryDeleteFile(partialPath);
-                            resumeFrom = 0;
-                        }
-                        else if (totalBytes > 0 && resumeFrom == totalBytes)
-                        {
-                            // Already complete from a previous session; let the caller verify it.
-                            ReportProgress(info.Id, 100, resumeFrom, totalBytes, progress);
-                            return true;
-                        }
-                        else if (resumeFrom > 0)
-                        {
-                            Log.Information("ReleaseContentService: resuming {Pack} from byte {Byte} (attempt {Attempt})",
-                                info.Id, resumeFrom, attempt);
-                        }
-                    }
-
-                    using var request = new HttpRequestMessage(HttpMethod.Get, url);
-                    if (resumeFrom > 0)
-                    {
-                        request.Headers.Range = new RangeHeaderValue(resumeFrom, null);
-                    }
-
-                    using var response = await _httpClient
-                        .SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
-                        .ConfigureAwait(false);
-
-                    if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
-                    {
-                        // The server thinks we already hold the whole file. Verify upstream.
-                        Log.Information("ReleaseContentService: server reports {Pack} range complete", info.Id);
-                        return true;
-                    }
-                    if (response.StatusCode == HttpStatusCode.NotFound)
-                    {
-                        Log.Warning("ReleaseContentService: pack asset 404 for {Pack} at {Host}", info.Id, Logging.UrlLog.Host(url));
-                        return false;
-                    }
-                    if (response.StatusCode != HttpStatusCode.OK && response.StatusCode != HttpStatusCode.PartialContent)
-                    {
-                        response.EnsureSuccessStatusCode();
-                    }
-
-                    // A 200 to a ranged request means the server ignored Range — rewrite from zero.
-                    var serverHonouredRange = response.StatusCode == HttpStatusCode.PartialContent;
-                    if (resumeFrom > 0 && !serverHonouredRange)
-                    {
-                        Log.Information("ReleaseContentService: server ignored Range for {Pack} — restarting download", info.Id);
-                        resumeFrom = 0;
-                    }
-
-                    var contentRangeLength = response.Content.Headers.ContentRange?.Length;
-                    var contentLength = response.Content.Headers.ContentLength;
-                    if (contentRangeLength.HasValue)
-                        totalBytes = contentRangeLength.Value;
-                    else if (contentLength.HasValue)
-                        totalBytes = resumeFrom + contentLength.Value;
-
-                    var fileMode = resumeFrom > 0 ? FileMode.Append : FileMode.Create;
-                    var received = resumeFrom;
-
-                    using (var contentStream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false))
-                    using (var fileStream = new FileStream(partialPath, fileMode, FileAccess.Write, FileShare.None, 65536, useAsync: true))
-                    {
-                        var buffer = new byte[65536];
-                        int read;
-                        var lastReported = -1.0;
-                        while ((read = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct).ConfigureAwait(false)) > 0)
-                        {
-                            await fileStream.WriteAsync(buffer, 0, read, ct).ConfigureAwait(false);
-                            received += read;
-
-                            if (totalBytes > 0)
-                            {
-                                var pct = Math.Min(100.0, received * 100.0 / totalBytes);
-                                // Throttle to whole-percent steps — these events can reach the UI thread.
-                                if (pct - lastReported >= 1.0 || pct >= 100.0)
-                                {
-                                    lastReported = pct;
-                                    ReportProgress(info.Id, pct, received, totalBytes, progress);
-                                }
-                            }
-                        }
-                    }
-
-                    var finalSize = new FileInfo(partialPath).Length;
-                    if (totalBytes > 0 && finalSize < totalBytes)
-                    {
-                        throw new IOException($"Download incomplete: received {finalSize} of {totalBytes} bytes");
-                    }
-
-                    ReportProgress(info.Id, 100, finalSize, totalBytes > 0 ? totalBytes : finalSize, progress);
-                    Log.Information("ReleaseContentService: downloaded {Pack} ({Bytes} bytes)", info.Id, finalSize);
-                    return true;
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception ex) when (attempt < MaxDownloadAttempts
-                                           && (ex is HttpRequestException || ex is TaskCanceledException || ex is IOException))
-                {
-                    var currentSize = File.Exists(partialPath) ? new FileInfo(partialPath).Length : 0;
-                    Log.Warning(
-                        "ReleaseContentService: {Pack} attempt {Attempt}/{Max} failed at {Bytes} bytes: {Error}",
-                        info.Id, attempt, MaxDownloadAttempts, currentSize, ex.Message);
-
-                    // Keep the partial — the next attempt resumes from it.
-                    await Task.Delay(retryDelay, ct).ConfigureAwait(false);
-                    retryDelay = TimeSpan.FromSeconds(Math.Min(retryDelay.TotalSeconds * 1.5, 30));
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(ex, "ReleaseContentService: {Pack} download failed permanently", info.Id);
-                    return false;
-                }
-            }
-
-            Log.Warning("ReleaseContentService: {Pack} exhausted {Max} download attempts", info.Id, MaxDownloadAttempts);
-            return false;
-        }
+            => new ResumableDownload(_httpClient, "ReleaseContentService", MaxDownloadAttempts)
+                .ToPartialAsync(info.Id, url, info.SizeBytes, partialPath,
+                    (pct, received, total) => ReportProgress(info.Id, pct, received, total, progress), ct);
 
         private void ReportProgress(string packId, double percent, long received, long total, IProgress<double>? progress)
         {
@@ -965,16 +828,8 @@ namespace ConditioningControlPanel.Services
             catch { }
         }
 
-        private static async Task<string> ComputeSha256Async(string path, CancellationToken ct)
-        {
-            return await Task.Run(() =>
-            {
-                using var sha = SHA256.Create();
-                using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 20);
-                var hash = sha.ComputeHash(stream);
-                return Convert.ToHexString(hash).ToLowerInvariant();
-            }, ct).ConfigureAwait(false);
-        }
+        private static Task<string> ComputeSha256Async(string path, CancellationToken ct)
+            => ResumableDownload.Sha256Async(path, ct);
 
         // ---------------------------------------------------------------- filesystem helpers
 

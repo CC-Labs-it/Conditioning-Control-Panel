@@ -56,6 +56,35 @@ public class MergedAccountRecoveryHeadTests
         Assert.Equal("u_canon123", stamped);
     });
 
+    // WPF App.xaml.cs:428,450: goon signaling and the Arcademy doors hand their merged 409 to contract D.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GoonAndArcademyRepliesReachRecovery(bool arcademy) => AvaloniaTestDispatcher.Run(() =>
+    {
+        using var saved = new MergedRecoveryState();
+        string? token = "old";
+        CoreSecrets.RetrieveProvider = _ => token;
+        CoreSecrets.StoreProvider = (_, value) => token = value;
+        var settings = CoreSettings.Current;
+        (settings.UnifiedId, settings.OfflineMode, settings.AuthToken) = ("u_tombstone2", false, "old");
+        var sync = new SyncPush(() => null, () => false);
+        sync.MarkLoaded(null);
+        AccountSeed.Sync = sync;
+        MergedAccountRecovery.ResetForTest();
+        MergedAccountRecovery.SettingsForTest = () => settings;
+        ConditioningControlPanel.Services.GoonGame.GoonSignalingClient.MergedAccountHook = null;
+        ConditioningControlPanel.Services.Arcademy.ArcademySyncService.MergedRecovery = null;
+        MergedAccountRecoveryHead.Seed();
+        MergedAccountRecovery.StampQuests = _ => { };
+        var hook = arcademy ? ConditioningControlPanel.Services.Arcademy.ArcademySyncService.MergedRecovery
+            : ConditioningControlPanel.Services.GoonGame.GoonSignalingClient.MergedAccountHook;
+        Assert.True(hook!(409, "{\"error\":\"merged\",\"canonical_unified_id\":\"u_canon456\"}"));
+        MergedAccountRecovery.LastSwap.GetAwaiter().GetResult();
+        Assert.Equal("u_canon456", settings.UnifiedId);
+        Assert.False(sync.Loaded);
+    });
+
     [Fact]
     public void FinishedRefreshesAccountSection() => AvaloniaTestDispatcher.Run(() =>
     {
@@ -140,7 +169,8 @@ internal sealed class MergedRecoveryState : IDisposable
     // Seed mutates these statics through methods, so the suite's assignment scanner cannot find them.
     private readonly (FieldInfo Field, object? Value)[] _statics = new[]
         { typeof(AccountSeed), typeof(MergedAccountRecovery), typeof(V2AuthService), typeof(AiService),
-          typeof(ConditioningControlPanel.Services.BackRoom.BackRoomApi), typeof(AuthRecovery) }
+          typeof(ConditioningControlPanel.Services.BackRoom.BackRoomApi), typeof(AuthRecovery),
+          typeof(ConditioningControlPanel.Services.GoonGame.GoonSignalingClient), typeof(ConditioningControlPanel.Services.Arcademy.ArcademySyncService) }
         .SelectMany(t => t.GetFields(StaticFields)).Where(f => !f.IsInitOnly && !f.IsLiteral)
         .Select(f => (f, f.GetValue(null))).ToArray();
     private readonly (FieldInfo Field, object? Value)[] _intake = App.IntakePass.GetType().GetFields(InstanceFields)

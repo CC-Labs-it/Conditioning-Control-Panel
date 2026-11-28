@@ -95,8 +95,11 @@ namespace ConditioningControlPanel.Features
                 RenderTransform = _chevronTurn,
             };
 
-            _title.FontSize = 17;   // rows are 13: the section name leads (owner 2026-11-17, "bigger compared to the options so we got hierarchy")
-            _title.FontWeight = FontWeights.ExtraBold;
+            // The section name leads the rows (owner 2026-11-17, "bigger compared to the options so we got
+            // hierarchy"): Readable Rows (owner 2026-11-24) sets rows at 16 Bold Nunito, so the name is 22 SemiBold Fredoka.
+            _title.FontFamily = Controls.Rows.RowFonts.Fredoka;
+            _title.FontSize = 22;
+            _title.FontWeight = FontWeights.SemiBold;
             _title.VerticalAlignment = VerticalAlignment.Center;
             _title.TextTrimming = TextTrimming.CharacterEllipsis;
 
@@ -175,11 +178,40 @@ namespace ConditioningControlPanel.Features
             _ => "SectionHueStudioBrush",
         };
 
+        /// <summary>The theme hue brush, held by resource reference so a mod retheme reaches the rows' <see cref="Controls.Rows.RowHue"/>.</summary>
+        private static readonly DependencyProperty SectionHueBrushProperty = DependencyProperty.Register(
+            "SectionHueBrush", typeof(Brush), typeof(OptionSection),
+            new PropertyMetadata(null, (d, e) => ((OptionSection)d).OnSectionHueBrush(e.NewValue as Brush)));
+
         private void ApplyHue()
         {
             var key = HueKey(Theme);
             _title.SetResourceReference(TextBlock.ForegroundProperty, key);
             _chevron.SetResourceReference(Shape.StrokeProperty, key);
+            SetResourceReference(SectionHueBrushProperty, key);
+        }
+
+        /// <summary>Readable Rows: the rows inside wear the section hue (inherited <see cref="Controls.Rows.RowHue"/>).</summary>
+        private void OnSectionHueBrush(Brush? brush)
+        {
+            if (brush is SolidColorBrush solid) Controls.Rows.RowHue.SetHue(_body, solid.Color);
+            else _body.ClearValue(Controls.Rows.RowHue.HueProperty);
+            ApplySliderFill();
+        }
+
+        static OptionSection()
+        {
+            Controls.Rows.RowHue.TintSlidersProperty.OverrideMetadata(typeof(OptionSection), new FrameworkPropertyMetadata(
+                false, FrameworkPropertyMetadataOptions.Inherits, (d, _) => ((OptionSection)d).ApplySliderFill()));
+        }
+
+        /// <summary>Readable Rows: on a page that opts in (<see cref="Controls.Rows.RowHue.TintSlidersProperty"/>) the sliders fill in the section hue.</summary>
+        private void ApplySliderFill()
+        {
+            if (_body == null) return;
+            if (Controls.Rows.RowHue.GetTintSliders(this) && GetValue(SectionHueBrushProperty) is Brush b)
+                Controls.Rows.RowHue.SetSliderFill(_body, b);
+            else _body.ClearValue(Controls.Rows.RowHue.SliderFillProperty);
         }
 
         private void OnTitleChanged()

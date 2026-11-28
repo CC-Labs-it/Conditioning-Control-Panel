@@ -11,6 +11,8 @@ namespace ConditioningControlPanel.Services.Race;
 public static class RaceShellProtocol
 {
     public const string Loaded = "shell-loaded", Focus = "shell-focus", Escape = "shell-escape", EscapeUp = "shell-escape-up";
+    /// <summary>Electron reported the page unresponsive: the watchdog waits as for a course build (WPF GlassroadHostService.cs:222).</summary>
+    public const string Unresponsive = "shell-unresponsive";
     /// <summary>A new press of the shell's Escape (repeat deliveries keep their sequence), dropped when X11 is the panic source.</summary>
     public static bool AcceptEscape(ref long last, long sequence, bool x11Source)
         { if (sequence <= last) return false; last = sequence; return !x11Source; }

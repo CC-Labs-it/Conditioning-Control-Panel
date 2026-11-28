@@ -154,18 +154,100 @@ public class ChatSessionWindowTests
         Assert.DoesNotContain(window, t => t.Kind == TurnKind.SystemNote);
     }
 
+    /// <summary>
+    /// ccp-bugs #1717: an app-started AI line (awareness v2, a finished video or lock card) that
+    /// only the tube recorded has to reach the next prompt, or the player's answer to it reads as
+    /// a non sequitur. It goes in as the companion's own line, and it is still never persisted.
+    /// </summary>
     [Fact]
-    public void TubeLines_AreDisplayOnly_NeverInAWindowOrOnTheWire()
+    public void TubeLines_ReachTheWindow_AsTheCompanionsOwnLine()
     {
         var s = SessionWith(
             (TurnKind.UserChat, "hi"),
-            (TurnKind.TubeLine, "you went quiet"),
-            (TurnKind.AssistantChat, "hi you~"));
+            (TurnKind.AssistantChat, "hi you~"),
+            (TurnKind.TubeLine, "that video got you good"),
+            (TurnKind.UserChat, "it really did"));
 
-        Assert.DoesNotContain(s.BuildWindow(ChatWindowSpec.Chat), t => t.Kind == TurnKind.TubeLine);
-        Assert.DoesNotContain(s.BuildWindow(ChatWindowSpec.Ambient), t => t.Kind == TurnKind.TubeLine);
-        Assert.Equal(2, ChatSession.ToMessages(s.Turns).Count);
+        var chat = s.BuildWindow(ChatWindowSpec.Chat);
+        Assert.Equal(4, chat.Count);
+        Assert.Equal(TurnKind.TubeLine, chat[2].Kind);
+        Assert.Contains(s.BuildWindow(ChatWindowSpec.Ambient), t => t.Kind == TurnKind.TubeLine);
+
+        var wire = ChatSession.ToMessages(chat);
+        Assert.Equal(ChatMessage.RoleAssistant, wire[2].Role);
+        Assert.Equal("that video got you good", wire[2].Content);
         Assert.False(s.Turns.Single(t => t.Kind == TurnKind.TubeLine).IsDialogue); // never persisted
+    }
+
+    /// <summary>The history caps still hold: tube lines count under the ambient cap, so a long
+    /// browse cannot push the typed conversation out of the window.</summary>
+    [Fact]
+    public void TubeLines_CountUnderTheAmbientCap()
+    {
+        var s = new ChatSession();
+        s.Append(TurnKind.UserChat, "the real conversation", utc: T0);
+        for (int i = 0; i < 20; i++)
+            s.Append(TurnKind.TubeLine, "line " + i, utc: T0.AddSeconds(1 + i));
+        s.Append(TurnKind.UserChat, "and now", utc: T0.AddSeconds(30));
+
+        var window = s.BuildWindow(ChatWindowSpec.Chat);
+
+        Assert.Equal(ChatSession.MaxAmbientTurnsInChatWindow, window.Count(t => t.Kind == TurnKind.TubeLine));
+        Assert.Equal("the real conversation", window[0].Text);
+        Assert.Equal("line 19", window[^2].Text);
+    }
+
+    /// <summary>An odd number of tube lines under the shared ambient cap must never split an
+    /// event/reply pair: a reply without its event reads as the companion talking to nothing.</summary>
+    [Fact]
+    public void An_odd_tube_line_count_never_splits_an_ambient_pair()
+    {
+        var s = SessionWith(
+            (TurnKind.UserChat, "hi"),
+            (TurnKind.AmbientEvent, "event A"),
+            (TurnKind.AmbientReply, "reply A"),
+            (TurnKind.AmbientEvent, "event B"),
+            (TurnKind.AmbientReply, "reply B"),
+            (TurnKind.AmbientEvent, "event C"),
+            (TurnKind.TubeLine, "tube between"),
+            (TurnKind.AmbientReply, "reply C"),
+            (TurnKind.UserChat, "now"));
+
+        var window = s.BuildWindow(ChatWindowSpec.Chat);
+
+        Assert.DoesNotContain(window, t => t.Text == "reply A");
+        Assert.DoesNotContain(window, t => t.Text == "event A");
+        Assert.Contains(window, t => t.Text == "reply C");
+        Assert.Contains(window, t => t.Text == "event C");
+        Assert.True(window.Count(t => t.Kind is TurnKind.AmbientEvent or TurnKind.AmbientReply or TurnKind.TubeLine)
+                    <= ChatSession.MaxAmbientTurnsInChatWindow);
+        for (int i = 0; i < window.Count; i++)
+        {
+            if (window[i].Kind != TurnKind.AmbientReply) continue;
+            Assert.Contains(window.Take(i), t => t.Kind == TurnKind.AmbientEvent);
+        }
+    }
+
+    [Fact]
+    public void A_message_cap_cut_drops_the_reply_it_orphaned()
+    {
+        var s = SessionWith(
+            (TurnKind.AmbientEvent, "old event"),
+            (TurnKind.AmbientReply, "old reply"),
+            (TurnKind.UserChat, "a"),
+            (TurnKind.AssistantChat, "b"));
+
+        var window = s.BuildWindow(ChatWindowSpec.Chat with { MaxMessages = 3 });
+
+        Assert.Equal(new[] { "a", "b" }, window.Select(t => t.Text));
+    }
+
+    /// <summary>The event being reacted to has no reply yet and is always kept.</summary>
+    [Fact]
+    public void An_event_still_waiting_for_its_reply_stays()
+    {
+        var s = SessionWith((TurnKind.UserChat, "hi"), (TurnKind.AmbientEvent, "fresh event"));
+        Assert.Equal("fresh event", s.BuildWindow(ChatWindowSpec.Ambient)[^1].Text);
     }
 
     [Fact]

@@ -149,7 +149,9 @@
     <!-- Embedded Browser -->
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2535.41" />
 
-    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.21">
+    <!-- 3.0.24 bundles FFmpeg 8.1.2 (Lavc62.28.102), which carries the MagicYUV fix for
+         CVE-2026-8461 "PixelSmash"; 3.0.21 had FFmpeg 4.4 (Lavc58.134.100), unpatched. -->
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.24">
       <IncludeAssets>all</IncludeAssets>
     </PackageReference>
 
@@ -267,8 +269,16 @@
     <!-- Rounded display font (Fredoka, OFL) for the Chaos multiplier hero number. Embedded as a
          Resource so the pack:// font URI (/Fonts/#Fredoka) resolves in the single-file build. -->
     <Resource Include="Fonts\Fredoka.ttf" />
+    <!-- Readable Rows (owner 2026-11-24): Nunito static cuts (OFL, licence OFL-Nunito.txt beside them),
+         Google Fonts' own instances of the variable font. WPF picks weights only from static files:
+         family string /Fonts/#Nunito, Segoe UI, Bold = row labels, ExtraBold = row numbers. -->
+    <Resource Include="Fonts\Nunito-Bold.ttf" />
+    <Resource Include="Fonts\Nunito-ExtraBold.ttf" />
     <!-- Dares slip fonts (OFL, licences beside them): Barlow Condensed prints the slip, Caveat writes the fills. -->
     <Resource Include="Fonts\Dares\*.ttf" />
+    <!-- Promo card fonts (OFL, licences beside them): static Fredoka 600/500 and Courier Prime Bold,
+         the Terms & Conditioning title screen's own faces. -->
+    <Resource Include="Fonts\Promo\*.ttf" />
   </ItemGroup>
 
   <ItemGroup>
@@ -578,6 +588,9 @@
     <!-- Racing Thoughts 3D (Glassroad, 7.2) ships. Only its node tests, the node dev tools
          (dev\*.mjs; dev\hook.js and dev\uploadCensus.js are page modules and stay) and its notes
          are left out. -->
+    <!-- Terms & Conditioning (fuzz, 7.4.0) ships without its node tests, dev tools, notes and
+         package.json, and WITHOUT the Llama Expo (assets\expo, about 380 MB): the Expo is a download
+         the player accepts inside the game (Services\Tc), never in the build output or the installer. -->
     <ArcademyHarnessExclude>
       ..\Assets\web\arcademy\annex\demo.html;
       ..\Assets\web\arcademy\vn\demo.html;
@@ -606,7 +619,12 @@
       ..\Assets\web\prizecounter\tests\**\*;
       ..\Assets\web\prizecounter\mock\**\*;
       ..\Assets\web\prizecounter\dev.html;
-      ..\Assets\web\prizecounter\**\*.md
+      ..\Assets\web\prizecounter\**\*.md;
+      ..\Assets\web\fuzz\assets\expo\**\*;
+      ..\Assets\web\fuzz\tests\**\*;
+      ..\Assets\web\fuzz\dev\**\*;
+      ..\Assets\web\fuzz\**\*.md;
+      ..\Assets\web\fuzz\package.json
     </ArcademyHarnessExclude>
     <!-- Remix engine (Resources\web\remix, vendored from cclabs-site/remix for the Jackpot Remix
          flash): its node tests ride along so the vendored copy stays checkable, but they are
@@ -645,7 +663,12 @@
       $(MSBuildProjectDirectory)\..\Assets\web\prizecounter\tests\**\*;
       $(MSBuildProjectDirectory)\..\Assets\web\prizecounter\mock\**\*;
       $(MSBuildProjectDirectory)\..\Assets\web\prizecounter\dev.html;
-      $(MSBuildProjectDirectory)\..\Assets\web\prizecounter\**\*.md
+      $(MSBuildProjectDirectory)\..\Assets\web\prizecounter\**\*.md;
+      $(MSBuildProjectDirectory)\..\Assets\web\fuzz\assets\expo\**\*;
+      $(MSBuildProjectDirectory)\..\Assets\web\fuzz\tests\**\*;
+      $(MSBuildProjectDirectory)\..\Assets\web\fuzz\dev\**\*;
+      $(MSBuildProjectDirectory)\..\Assets\web\fuzz\**\*.md;
+      $(MSBuildProjectDirectory)\..\Assets\web\fuzz\package.json
     </ArcademyHarnessExcludeAbs>
   </PropertyGroup>
 
@@ -977,7 +1000,7 @@
   <!-- Copy LibVLC native libraries after publish (required for video playback on Windows N/KN) -->
   <Target Name="CopyLibVLCAfterPublish" AfterTargets="Publish">
     <PropertyGroup>
-      <LibVLCPath>$(NuGetPackageRoot)videolan.libvlc.windows\3.0.21\build\x64\</LibVLCPath>
+      <LibVLCPath>$(NuGetPackageRoot)videolan.libvlc.windows\3.0.24\build\x64\</LibVLCPath>
     </PropertyGroup>
     <ItemGroup>
       <LibVLCFiles Include="$(LibVLCPath)**\*" />

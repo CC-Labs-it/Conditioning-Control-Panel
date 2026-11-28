@@ -91,13 +91,18 @@ internal static class Win32Input
             || MainShellWindow.CapturingPanicKey || MainShellWindow.LockdownActive
             || Views.Controls.AppSettings.DevicesSettingsSection.CapturingPauseKey)
             return false;
-        Log.Information("Pause key {Key} received - queueing the video grace pause", s.PauseKey);
+        QueuePause();
+        return true;
+    }
+
+    internal static void QueuePause()
+    {
+        Log.Information("Pause key {Key} received - queueing the video grace pause", CoreSettings.Current.PauseKey);
         Dispatcher.UIThread.Post(() =>
         {
             try { MandatoryVideoOverlay.Instance.TryGracePause(fromPanicKey: false); }
             catch (Exception ex) { Log.Warning(ex, "Pause key: grace pause failed"); }
         });
-        return true;
     }
 
     /// <summary>Test seam: forget a held pause key.</summary>

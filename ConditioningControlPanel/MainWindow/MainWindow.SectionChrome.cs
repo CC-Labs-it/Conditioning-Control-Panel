@@ -136,6 +136,29 @@ namespace ConditioningControlPanel
             }
         }
 
+        /// <summary>
+        /// A language switch with a page open: the crumb, the pills and the window title are written
+        /// from code on navigation only, so write them again for the tab on screen (7.4 desk run: the
+        /// Settings crumb stayed German under a Japanese page). Nothing else of a navigation runs.
+        /// </summary>
+        private void RelabelSectionChrome()
+        {
+            try
+            {
+                if (SectionStrip == null || string.IsNullOrEmpty(_navCurrentTab)) return;
+                var tab = _navCurrentTab!;
+                var section = NavSections.SectionForTab(tab);
+                string? pageLabel = section == NavSections.Settings ? CurrentSettingsSectionLabel() : null;
+                SectionStrip.Relabel();
+                SectionStrip.Show(section, tab, pageLabel);
+                UpdateNavTitle(section, tab, pageLabel);
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Debug("RelabelSectionChrome failed: {E}", ex.Message);
+            }
+        }
+
         /// <summary>The page wash's top-left alpha (about 14%) and its hue line's (about 35%).</summary>
         internal const byte SectionWashAlpha = 0x24, SectionWashLineAlpha = 0x59;
 
@@ -219,6 +242,9 @@ namespace ConditioningControlPanel
             if (_sectionStripWired || SectionStrip == null) return;
             _sectionStripWired = true;
 
+            // MainWindow lives as long as the app, so one subscription for its life.
+            LocalizationManager.Instance.LanguageChanged += (_, _) =>
+                Dispatcher.BeginInvoke(new Action(RelabelSectionChrome));
             SectionStrip.TabRequested += OnSectionPillChosen;
             // Right-click on a pill pins or unpins it to the Home Favourites column, as the rail
             // rows always did. Only pills with a Ctrl+K row are pinnable (a chip opens a row).

@@ -47,6 +47,7 @@ public partial class FriendsDrawerTests
         Outside.Clear();
         FriendsDrawer.Outside = (text, _) => Outside.Add(text);
         ResetDrawerExtras();
+        FriendsFold.UseMemory();
         var d = new FriendsDrawer(svc) { MeName = () => "cb", MeTier = () => 0 };
         d.Render();
         return d;

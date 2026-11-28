@@ -1,7 +1,9 @@
 <UserControl x:Class="ConditioningControlPanel.Features.SchedulerFeatureControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:loc="clr-namespace:ConditioningControlPanel.Localization">
+             xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.TintSliders="True">
 
     <!-- ONE dense controls card for all nine scheduler settings. The hero for this feature
          lives on Views/Controls/Studio/SchedulerRackPanel.xaml, but the ENABLE SWITCH stays
@@ -9,7 +11,7 @@
          button on the Presets surface), and a hero-mounted pill would exist on the rack only,
          leaving that path with no way to arm the feature. So the standalone Enable card
          becomes the card's first row instead. -->
-    <StackPanel>
+    <StackPanel Grid.IsSharedSizeScope="True">
         <Border Style="{StaticResource SettingCardStyle}">
             <Grid>
                 <Border Background="{StaticResource SectionHueStudioWashBrush}" CornerRadius="11"/>
@@ -33,13 +35,12 @@
                     <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
 
                     <!-- Time range -->
-                    <Grid Height="36">
+                    <Grid Style="{StaticResource OptionRow}">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" MinWidth="120"/>
+                            <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{loc:Str st4_scheduler_time_range}" FontSize="13" FontWeight="SemiBold"
-                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str st4_scheduler_time_range}" Emblem="When"/>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right"
                                     VerticalAlignment="Center">
                             <TextBox x:Name="TxtStart" Text="16:00" Width="74"
@@ -58,13 +59,12 @@
                     </Grid>
 
                     <!-- Active days -->
-                    <Grid Height="36">
+                    <Grid Style="{StaticResource OptionRow}">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" MinWidth="120"/>
+                            <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{loc:Str st4_scheduler_active_days}" FontSize="13" FontWeight="SemiBold"
-                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str st4_scheduler_active_days}" Emblem="When"/>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right"
                                     VerticalAlignment="Center">
                             <CheckBox x:Name="DayMon" Content="M" Foreground="White" Margin="0,0,10,0" IsChecked="True"

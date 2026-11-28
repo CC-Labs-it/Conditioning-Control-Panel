@@ -514,7 +514,8 @@ namespace ConditioningControlPanel.Services.Deeper
             return new EnhancementLibraryEntry
             {
                 FilePath = path,
-                Name = enhancement.Metadata?.Name ?? Path.GetFileNameWithoutExtension(path),
+                // A file saved with an empty name ("") showed a blank row and closed box (7.4.1 desk check).
+                Name = string.IsNullOrWhiteSpace(enhancement.Metadata?.Name) ? FallbackName(path) : enhancement.Metadata!.Name,
                 Creator = enhancement.Metadata?.Creator ?? "",
                 MediaType = enhancement.MediaType,
                 MediaSource = enhancement.MediaSource,
@@ -522,6 +523,13 @@ namespace ConditioningControlPanel.Services.Deeper
                 AutoTags = enhancement.Metadata?.AutoTags ?? new List<string>(),
                 DurationSeconds = duration
             };
+        }
+
+        /// <summary>The file name without ".json" and without the ".ccpenh" before it ("Untitled.ccpenh.json" -> "Untitled").</summary>
+        internal static string FallbackName(string path)
+        {
+            var name = Path.GetFileNameWithoutExtension(path);
+            return name.EndsWith(".ccpenh", StringComparison.OrdinalIgnoreCase) ? name[..^".ccpenh".Length] : name;
         }
     }
 }

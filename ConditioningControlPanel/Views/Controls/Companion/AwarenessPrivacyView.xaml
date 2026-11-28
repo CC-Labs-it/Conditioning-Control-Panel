@@ -5,6 +5,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:ConditioningControlPanel.Views.Controls.Companion"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
              mc:Ignorable="d"
              d:DesignWidth="430" d:DesignHeight="620"
              d:DataContext="{d:DesignInstance Type=local:MockAwarenessPrivacyVm, IsDesignTimeCreatable=True}">
@@ -199,7 +200,7 @@
                  everything", pressed it, and was handed an app-picking dialog that made no sense
                  against that reading. The caption names the axis, the stop labels name their own
                  content, and DialHint carries the consequence of whichever one is selected. -->
-            <TextBlock Text="{loc:Str companion_awareness_dial_head}" Style="{StaticResource CmpFaintTextStyle}"
+            <rows:RowLabel Text="{loc:Str companion_awareness_dial_head}" Emblem="Safe"
                        Margin="2,13,0,5"/>
             <Border Style="{StaticResource CmpSegmentStripStyle}" Margin="0,0,0,6">
                 <Grid>
@@ -425,7 +426,7 @@
                     </StackPanel>
 
                     <!-- retention: two stops, because a slider implies a precision nobody wants here -->
-                    <TextBlock Text="{Binding RetentionLabel}" Style="{StaticResource CmpFaintTextStyle}"
+                    <rows:RowLabel Text="{Binding RetentionLabel}" Emblem="Long"
                                Margin="0,0,0,4"/>
                     <Border Style="{StaticResource CmpSegmentStripStyle}" HorizontalAlignment="Left"
                             Margin="0,0,0,9">

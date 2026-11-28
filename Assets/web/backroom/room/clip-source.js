@@ -63,8 +63,9 @@ export const canPlayClips = () => {
  * `maxEdge` (optional) caps the long side of the canvas; the wall's MAX_EDGE by default.
  * @returns {Promise<{canvas, byteLength, animated, clip, frames, index, tick(now, still), dispose()} | null>}
  */
-export async function clipSource(url, { signal, onFrame, maxEdge = MAX_EDGE } = {}) {
-  if (!isClip(url) || !canPlayClips()) return null;
+export async function clipSource(url, { signal, onFrame, maxEdge = MAX_EDGE, kind } = {}) {
+  // Local object URLs and metered device URLs carry the verified media kind separately.
+  if ((kind !== 'clip' && !isClip(url)) || !canPlayClips()) return null;
 
   const video = document.createElement('video');
   // muted is not a preference: an unmuted video will not autoplay, and the room's sound is the

@@ -113,6 +113,8 @@ public sealed class CompanionShellEventsTests
         OsNotifications.Sink = (title, body) => notices.Add((title, body));
         CoreAudio.PlayStoppableProvider = (path, volume, tag, _, _) =>
         {
+            // The tube's milestone giggle (WPF Reactions.cs:557,561) is its own sound; TubeCompanionLevelTests covers it.
+            if (tag != "level-up") return static () => { };
             played.Add((path, volume, tag));
             return () => stops++;
         };

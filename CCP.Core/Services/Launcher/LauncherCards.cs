@@ -41,6 +41,9 @@ public static class LauncherCards
     public static readonly IReadOnlyList<LauncherCard> All = new LauncherCard[]
     {
         new("backroom", "features/backroom.png", "♦", 0xB95CD8),
+        // Terms & Conditioning (WPF 7.4.0): one card for everyone, never locked; the edition is read
+        // off the account, so signed out it asks for one. Art is real gameplay (features/tc.png).
+        new("tc", "features/tc.png", "§", 0xFF6FB5, IsNew: true),
         // Breakout is ONE card (declutter 2026-11-15): the full game for whoever holds it, the free
         // demo for everyone else, so it never asks for an account. The demo keeps its id for --game
         // and old shortcuts, off every page.
