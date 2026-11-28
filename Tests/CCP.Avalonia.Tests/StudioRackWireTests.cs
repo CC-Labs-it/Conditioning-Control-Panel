@@ -19,7 +19,7 @@ using AvApp = global::ConditioningControlPanel.Avalonia.App;
 namespace CCP.Avalonia.Tests;
 
 /// <summary>WPF StudioTabView.xaml.cs + .Haptics.cs: the Haptics row's right-click flips the
-/// page's own master box (premium gate included) and its dot follows the box live; the flash and
+/// page's own master box (open to free accounts since toys went free) and its dot follows the box live; the flash and
 /// bubbles rows wear the v2 pill from prize ownership, beside the dot, never under it.</summary>
 public sealed class StudioRackWireTests
 {
@@ -51,11 +51,11 @@ public sealed class StudioRackWireTests
             Assert.False(s.Enabled);
             Assert.True(IsRing(dot));
 
-            CoreEntitlement.HasPremiumProvider = () => false;   // the page's premium gate refuses
+            CoreEntitlement.HasPremiumProvider = () => false;   // toys are free (HapticsAccess.IsOpen, 2026-11-11)
             RightClick(shell, rack, "haptics");
-            Assert.False(s.Enabled);
-            Assert.False(box.IsChecked);
-            Assert.True(IsRing(dot));
+            Assert.True(s.Enabled);
+            Assert.True(box.IsChecked);
+            Assert.False(IsRing(dot));
         }
         finally
         {
