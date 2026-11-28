@@ -16,7 +16,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 {
     /// <summary>
     /// A soft pink-gold halo that rides the cursor from the moment the whistle is pressed until the
-    /// next click summons the rabbits there. Click-through, never activated, topmost: the click lands
+    /// next click summons the rabbits there. Click-through, never activated: the click lands
     /// on whatever is underneath, exactly like WPF's WS_EX_TRANSPARENT | WS_EX_NOACTIVATE.
     ///
     /// <para>One static seam like WPF (Arm / Disarm / MoveToPx / CloseActive). The difference: WPF's
@@ -113,7 +113,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             WindowDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Background = Brushes.Transparent;
-            Topmost = true;
+            Topmost = CoreSettings.Current.ChaosPinOnTop;
             ShowInTaskbar = false;
             ShowActivated = false;
             CanResize = false;

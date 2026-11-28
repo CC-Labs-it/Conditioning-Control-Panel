@@ -50,6 +50,23 @@ public sealed class ChaosCursorGlowOverlayTests
             return Task.CompletedTask;
         });
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task Halo_is_born_with_the_hub_pin_setting(bool pin) => WithSeams(() => true, (_, _) =>
+    {
+        var settings = global::ConditioningControlPanel.CoreSettings.Current;
+        var oldPin = settings.ChaosPinOnTop;
+        try
+        {
+            settings.ChaosPinOnTop = pin;
+            ChaosCursorGlowOverlay.Arm();
+            Assert.NotNull(ChaosCursorGlowOverlay.Active);
+            Assert.Equal(pin, ChaosCursorGlowOverlay.Active!.Topmost);
+        }
+        finally { settings.ChaosPinOnTop = oldPin; }
+    });
+
     [Fact]
     public Task Arm_follows_and_breathes_disarm_stops_tracking_panic_closes() => WithSeams(() => true, (clock, point) =>
     {
