@@ -7,6 +7,8 @@ using System.Linq;
 using ConditioningControlPanel.Services;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia.Layout;
+using ConditioningControlPanel.Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
@@ -34,6 +36,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             _timer.Interval = TimeSpan.FromMilliseconds(Math.Max(280, (holdFor.TotalMilliseconds - 900) / names.Length));
             _failsafe.Interval = holdFor + TimeSpan.FromSeconds(3);
             InitializeComponent();
+            // WPF DeleteDialogEffect.cs:306-328: use the companion portrait, or the trash icon.
+            var source = ConditioningControlPanel.Avalonia.Views.AvatarTube.AvatarTubeWindow.Live
+                ?.FindControl<Image>("ImgAvatar")?.Source;
+            this.FindControl<ContentControl>("Face")!.Content = source != null
+                ? new Image { Source = source, Stretch = Stretch.Uniform, VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false }
+                : new IconGlyph { Kind = IconKind.Delete, Size = 48, Foreground = Brush.Parse("#DC143C"), IsHitTestVisible = false };
             this.FindControl<TextBlock>("Caption")!.Text = Loc.Get(CaptionKeys[(rng ?? Random.Shared).Next(CaptionKeys.Length)]);
             var list = this.FindControl<StackPanel>("Names")!;
             _rows = new TextBlock[_names.Length];

@@ -12,6 +12,8 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Controls.Fx;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.AvatarTube;
 using ConditioningControlPanel.Avalonia.Possession;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
 using ConditioningControlPanel.Services;
@@ -71,6 +73,26 @@ public class PossessionDeleteDialogTests
     });
 
     [Fact]
+    public void PortraitUsesLiveCompanionAndFallsBackToTrash() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var previous = AvatarTubeWindow.TestLive;
+        var tube = new AvatarTubeWindow(null);
+        try
+        {
+            var source = new DrawingImage();
+            tube.FindControl<Image>("ImgAvatar")!.Source = source;
+            AvatarTubeWindow.TestLive = tube;
+            var withFace = new DeleteDialogWindow();
+            var face = Assert.IsType<Image>(withFace.FindControl<ContentControl>("Face")!.Content);
+            Assert.Same(source, face.Source);
+            AvatarTubeWindow.TestLive = null;
+            var fallback = new DeleteDialogWindow();
+            Assert.Equal(FluentIcons.Common.Symbol.Delete, Assert.IsType<IconGlyph>(fallback.FindControl<ContentControl>("Face")!.Content).Kind);
+        }
+        finally { AvatarTubeWindow.TestLive = previous; tube.Close(); }
+    });
+
+    [Fact]
     public Task OpeningNamesSessionsAndUndoClosesDialog() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var host = new Host();
@@ -112,6 +134,7 @@ public class PossessionDeleteDialogTests
             var starting = (Task)start.Invoke(director, new object[] { hosts[0]!, PossessionRung.ItKnows, TimeSpan.FromMinutes(1), 0.9 })!;
             var dialog = (DeleteDialogWindow)typeof(DeleteDialogEffect).GetField("_dialog", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(effect)!;
             Assert.True(dialog.IsVisible);
+            Assert.NotNull(dialog.FindControl<ContentControl>("Face")!.Content);
             ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(s => s.Id == "possession").Stop(null);
             Assert.False(dialog.IsVisible);
             Assert.False(effect.IsLive);
