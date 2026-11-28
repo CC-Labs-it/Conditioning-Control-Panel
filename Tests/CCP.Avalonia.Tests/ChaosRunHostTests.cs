@@ -774,6 +774,27 @@ public sealed class ChaosRunHostTests
         finally { BarkHead.Engine = previous; settings.AvatarEnabled = avatar; settings.MasterVolume = volume; }
     });
 
+    [Fact]
+    public Task Last_breath_announces_and_panic_clears_it() => WithFreshRun(() =>
+    {
+        bool enabled = CoreSettings.Current.ChaosAnnouncerEnabled;
+        try
+        {
+            CoreSettings.Current.ChaosAnnouncerEnabled = true;
+            ChaosRunHost.StartRun(Cfg()); ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+            var state = ChaosRunHost.State!;
+            state.LastBreathWindowSec = 1; state.LastBreathPayMult = 3;
+            ChaosAnnouncerOverlay.CloseActive();
+            var b = BubbleOverlay.SpawnChaos(LiveSpec()); b.FuseRemainingMs = 500;
+            ChaosRunHost.OnDefused(b);
+            Assert.Equal("⏱ last breath x3", ChaosAnnouncerOverlay.Active!.Current!.Text);
+            ChaosRunHost.ForceShutdown();
+            Assert.Null(ChaosAnnouncerOverlay.Active);
+            Assert.Equal(0, ChaosAnnouncerOverlay.QueuedCount);
+        }
+        finally { ChaosRunHost.ForceShutdown(); ChaosAnnouncerOverlay.CloseActive(); CoreSettings.Current.ChaosAnnouncerEnabled = enabled; }
+    });
+
     private sealed class LeapClock : TimeProvider
     {
         private DateTimeOffset _now = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
