@@ -288,7 +288,7 @@ public sealed class BubbleCountQueueTests
     });
 
     /// <summary>Stepped clock: timers fire only on <see cref="Advance"/>.</summary>
-    private sealed class Clock : TimeProvider
+    internal sealed class Clock : TimeProvider
     {
         private DateTimeOffset _now = DateTimeOffset.UnixEpoch;
         private readonly List<T> _timers = new();

@@ -23,7 +23,8 @@ internal static class EmiOffers
         }
         if (e.StartsWith("tour:", StringComparison.OrdinalIgnoreCase))
             return TourFeasible(e.Substring(5));
-        return e.Equals("none", StringComparison.OrdinalIgnoreCase) ||
+        return (e.Equals("rain", StringComparison.OrdinalIgnoreCase) && EmiGifRain.Images().Count > 0) ||
+            e.Equals("none", StringComparison.OrdinalIgnoreCase) ||
             (e.Equals("bedtime", StringComparison.OrdinalIgnoreCase) && !EmiLineEngine.BedtimeSet);
     }
 
@@ -66,6 +67,11 @@ internal static class EmiOffers
                 EmiTargets.Moment("effectFired", new { channel = "tour", fromAsk });
             }
             catch (Exception ex) { Log.Warning(ex, "[EmiDesk] tour offer failed"); }
+        }
+        else if (e.Equals("rain", StringComparison.OrdinalIgnoreCase))
+        {
+            if (EmiGifRain.Start(desk.Window)) desk.Fire("effectFired", new { channel = "rain", fromAsk });
+
         }
         else if (e.Equals("bedtime", StringComparison.OrdinalIgnoreCase))
         {
