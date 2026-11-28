@@ -15,10 +15,11 @@ namespace ConditioningControlPanel.Controls.Friends;
 /// <summary>
 /// "WHAT HAPPENED": the friends feed (<see cref="FriendsFeed"/>) at the top of the list, right
 /// under the leash. RenderList calls <see cref="AddFeed"/> right after the leash section. Newest
-/// first, one short line each, with how long ago. Folded it shows a few lines and every new one (up
-/// to <see cref="FriendsFeedRules.FoldMax"/>); "more" shows further lines. A line shown in the open
-/// drawer is read: it keeps its pink dot until the drawer folds, and the badges on the chips and
-/// the tray drop it at once. Nothing to tell, no section at all.
+/// first, one short line each, with how long ago. The section folds (owner 2026-11-22): folded it
+/// shows at most two recent lines (a read line leaves after a day, the header's x hides them now),
+/// open it shows the whole list in pages. Opening the drawer reads every line: a new one keeps its
+/// pink dot until the drawer folds, and the badges on the chips and the tray drop at once. Nothing
+/// to tell, no section at all.
 ///
 /// <para>The section is one persistent panel, re-added on every render like the leash section, and
 /// refilled on its own when a line lands while the drawer is open, so a feed line never rebuilds
@@ -133,7 +134,39 @@ public sealed partial class FriendsDrawer
 
     private bool IsNew(FeedEntry l) => !l.Read || _feedFresh.Contains(l.Key);
 
-    /// <summary>Draws the section from the feed as it is now, and reads what it shows.</summary>
+    /// <summary>"What happened" folded or open. Internal for the suite.</summary>
+    internal bool FeedOpen => FriendsFold.State.FeedOpen;
+
+    /// <summary>Opens or folds the section (the header, and "N more" under a folded preview).</summary>
+    internal void ToggleFeed()
+    {
+        FriendsFold.Update(s => s.FeedOpen = !s.FeedOpen);
+        _feedExtra = 0;
+        SafeFillFeed();
+        if (FeedOpen) RiseIn(FeedRows());
+    }
+
+    /// <summary>The header's x: the preview empties now (the open list still has every line).</summary>
+    internal void ClearFeedPreview(bool animate = true)
+    {
+        var feed = CurrentFeed();
+        var lines = feed?.Lines ?? Array.Empty<FeedEntry>();
+        if (lines.Count == 0) return;
+        var newest = lines.Max(l => l.Event.AtUtc);
+        FadeAway(animate ? FeedRows() : new List<FrameworkElement>(), () =>
+        {
+            FriendsFold.Update(s => s.FeedClearedUtc = newest);
+            SafeFillFeed();
+        });
+    }
+
+    private List<FrameworkElement> FeedRows() => _feedBox.Children.OfType<FrameworkElement>()
+        .Where(e => e.Tag is string t && t.StartsWith("friends-feed-line:", StringComparison.Ordinal)).ToList();
+
+    /// <summary>Draws the section from the feed as it is now. Folded: a header and at most
+    /// <see cref="FriendsFold.FeedPreview"/> recent lines; open: every line, newest first, in pages.
+    /// An open drawer reads every line at once (the chip's bubble drops), and the new ones keep
+    /// their dot until the drawer folds.</summary>
     private void FillFeed()
     {
         _feedBox.Children.Clear();
@@ -147,38 +180,54 @@ public sealed partial class FriendsDrawer
         }
         _feedBox.Visibility = Visibility.Visible;
 
-        var fresh = lines.Count(IsNew);
-        var show = Math.Min(lines.Count, FriendsFeedRules.FoldCount(lines.Count, fresh) + _feedExtra);
-        _feedBox.Children.Add(FeedHead(fresh));
-
+        var fold = FriendsFold.State;
+        bool open = fold.FeedOpen;
         var now = DateTime.UtcNow;
-        var friends = _last.Friends;
-        var shownUnread = new List<string>();
-        for (var i = 0; i < show; i++)
+        var fresh = lines.Count(IsNew);
+        IReadOnlyList<FeedEntry> shown = open
+            ? lines.Take(Math.Min(lines.Count, FriendsFeedRules.MoreStep + _feedExtra)).ToList()
+            : FriendsFold.FeedPreviewLines(lines, IsNew, now, fold.FeedClearedUtc);
+
+        Button? clear = null;
+        if (!open && shown.Count > 0)
         {
-            var l = lines[i];
+            clear = XButton("friends-feed-clear", Loc.Get("friends_feed_clear"));
+            clear.Click += (_, _) => { FriendsSfx.Click(); ClearFeedPreview(); };
+        }
+        var count = fresh > 0
+            ? FriendsLook.Label(Loc.GetF("friends_feed_new", fresh), 10, FriendsLook.PinkBrush, FriendsLook.Mono)
+            : FriendsLook.Label(lines.Count.ToString(), 10, FriendsLook.DimBrush, FriendsLook.Mono);
+        count.Tag = fresh > 0 ? "friends-feed-count" : "friends-feed-total";
+        _feedBox.Children.Add(FoldHead("feed", Loc.Get("friends_feed_title"), "friends-feed-title", open, ToggleFeed,
+            right: count, extra: clear));
+
+        var friends = _last.Friends;
+        for (var i = 0; i < shown.Count; i++)
+        {
+            var l = shown[i];
             var row = FeedRow(l.Event, IsNew(l), friends, now);
             if (friends.Any(f => f.Id == l.Event.FriendId)) MakeOpener(row, l.Event.FriendId);
             _feedBox.Children.Add(row);
-            if (!l.Read) shownUnread.Add(l.Key);
-            if (i == 0 && _isOpen && _feedTop != null && _feedTop != l.Key) LandLine(row);
+            if (i == 0 && l.Key == lines[0].Key && _isOpen && _feedTop != null && _feedTop != l.Key) LandLine(row);
         }
         _feedTop = lines[0].Key;
 
-        var hidden = lines.Count - show;
-        if (hidden > 0 || _feedExtra > 0)
+        var rest = lines.Count - shown.Count;
+        if (rest > 0 || (open && _feedExtra > 0))
         {
             var foot = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(14, 0, 8, 2) };
-            if (hidden > 0)
+            if (rest > 0)
             {
-                var hiddenNew = lines.Skip(show).Count(IsNew);
-                var more = FeedLink(hiddenNew > 0
-                    ? Loc.GetF("friends_feed_more_new", hidden, hiddenNew)
-                    : Loc.GetF("friends_feed_more", hidden), "friends-feed-more");
-                more.Click += (_, _) => { FriendsSfx.Click(); ShowMoreFeed(); };
+                var shownKeys = new HashSet<string>(shown.Select(l => l.Key), StringComparer.Ordinal);
+                var restNew = lines.Count(l => !shownKeys.Contains(l.Key) && IsNew(l));
+                var more = FeedLink(restNew > 0
+                    ? Loc.GetF("friends_feed_more_new", rest, restNew)
+                    : Loc.GetF("friends_feed_more", rest), "friends-feed-more");
+                // Folded, "more" opens the whole list; open, it pages further down it.
+                more.Click += (_, _) => { FriendsSfx.Click(); if (open) ShowMoreFeed(); else ToggleFeed(); };
                 foot.Children.Add(more);
             }
-            if (_feedExtra > 0)
+            if (open && _feedExtra > 0)
             {
                 var less = FeedLink(Loc.Get("friends_feed_less"), "friends-feed-less");
                 less.Click += (_, _) => { FriendsSfx.Click(); ShowLessFeed(); };
@@ -187,30 +236,15 @@ public sealed partial class FriendsDrawer
             _feedBox.Children.Add(foot);
         }
 
-        // Shown in an open drawer = read. A drawer built but never opened reads nothing.
-        if (_isOpen && feed != null && shownUnread.Count > 0)
+        // An open drawer = read. A drawer built but never opened reads nothing.
+        var unread = lines.Where(l => !l.Read).Select(l => l.Key).ToList();
+        if (_isOpen && feed != null && unread.Count > 0)
         {
-            foreach (var k in shownUnread) _feedFresh.Add(k);
+            foreach (var k in unread) _feedFresh.Add(k);
             _feedMarking = true;
-            try { feed.MarkRead(shownUnread); }
+            try { feed.MarkRead(unread); }
             finally { _feedMarking = false; }
         }
-    }
-
-    private static FrameworkElement FeedHead(int fresh)
-    {
-        var g = new Grid { Margin = new Thickness(8, 10, 8, 4), Tag = "friends-feed-head" };
-        var t = FriendsLook.Label(Loc.Get("friends_feed_title"), 10, FriendsLook.DimBrush, FriendsLook.Mono);
-        t.Tag = "friends-feed-title";
-        g.Children.Add(t);
-        if (fresh > 0)
-        {
-            var n = FriendsLook.Label(Loc.GetF("friends_feed_new", fresh), 10, FriendsLook.PinkBrush, FriendsLook.Mono);
-            n.HorizontalAlignment = HorizontalAlignment.Right;
-            n.Tag = "friends-feed-count";
-            g.Children.Add(n);
-        }
-        return g;
     }
 
     private static Border FeedRow(FriendEvent e, bool isNew, IReadOnlyList<Friend> friends, DateTime nowUtc)

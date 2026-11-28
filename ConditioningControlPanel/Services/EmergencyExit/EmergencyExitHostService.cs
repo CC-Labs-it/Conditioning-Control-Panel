@@ -316,7 +316,8 @@ internal static class EmergencyExitHostService
             var imagesRoot = Path.Combine(assetsRoot, "images");
             if (!Directory.Exists(imagesRoot)) return Array.Empty<string>();
 
-            var pool = Directory.EnumerateFiles(imagesRoot, "*.gif", SearchOption.AllDirectories).ToList();
+            var pool = ActiveGifs(Directory.EnumerateFiles(imagesRoot, "*.gif", SearchOption.AllDirectories),
+                assetsRoot, App.Settings?.Current?.DisabledAssetPaths);
             // Partial Fisher-Yates: a random slice without shuffling a folder that may hold thousands.
             for (int i = 0; i < Math.Min(MaxGifs, pool.Count); i++)
             {
@@ -330,6 +331,14 @@ internal static class EmergencyExitHostService
             App.Logger?.Debug("EmergencyExit: gif scan failed: {E}", ex.Message);
             return Array.Empty<string>();
         }
+    }
+
+    /// <summary>The gifs the games may show: the ones still ticked in the Assets tree, by the same rule Arcademy and
+    /// Intake use (<see cref="Quiz.IntakeHostService.IsAssetActive"/>, paths relative to the assets root).</summary>
+    internal static List<string> ActiveGifs(IEnumerable<string> files, string assetsRoot, IEnumerable<string>? disabledPaths)
+    {
+        var disabled = Quiz.IntakeHostService.BuildDisabledAssetSet(disabledPaths);
+        return files.Where(f => Quiz.IntakeHostService.IsAssetActive(disabled, assetsRoot, f)).ToList();
     }
 
     private static string ToAssetsUrl(string assetsRoot, string file)

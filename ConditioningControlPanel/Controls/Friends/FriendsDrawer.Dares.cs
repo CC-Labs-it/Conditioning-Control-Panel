@@ -16,8 +16,9 @@ namespace ConditioningControlPanel.Controls.Friends;
 
 /// <summary>
 /// DARES in the drawer: the door ("Dare" at the top of a friend's menu, right-click or "more") and
-/// the strip under the feed that lists open bets (offers, debts, running with their bars and time
-/// left, sent) and the last few settled ones. The strip is one persistent panel refilled when
+/// the strip under the feed. Folded (owner 2026-11-22) it shows the one row on top (the most
+/// pressing open bet, else the newest settled one); open it lists every bet, newest first. A settled
+/// row with nothing left to press wears an x that dismisses it. The strip is one persistent panel refilled when
 /// <c>App.Dares</c> changes, so a count ticking up never rebuilds the friend list under the pointer.
 /// While Dares is dark (flag off, old server, signed out) neither shows.
 /// </summary>
@@ -88,19 +89,48 @@ public sealed partial class FriendsDrawer
 
     internal FrameworkElement DaresStrip => _daresBox;
 
+    /// <summary>The strip folded (one row) or open (every bet, newest first). Internal for the suite.</summary>
+    internal bool DaresListOpen => FriendsFold.State.DaresOpen;
+
+    /// <summary>Opens or folds the strip (the header, and "N more" under the folded row).</summary>
+    internal void ToggleDares()
+    {
+        FriendsFold.Update(s => s.DaresOpen = !s.DaresOpen);
+        FillDares();
+        if (DaresListOpen)
+            RiseIn(_daresBox.Children.OfType<FrameworkElement>().Where(e => e.Tag is string t && t.StartsWith("dares-row:", StringComparison.Ordinal)));
+    }
+
+    /// <summary>A settled bet leaves the strip for good on this PC. Internal for the suite.</summary>
+    internal void DismissDare(string betId, FrameworkElement? row = null)
+    {
+        void Go()
+        {
+            FriendsFold.Update(s => { if (!s.DaresDismissed.Contains(betId)) s.DaresDismissed.Add(betId); });
+            FillDares();
+        }
+        if (row == null) Go();
+        else FadeAway(new[] { row }, Go);
+    }
+
     private void FillDares()
     {
         _daresBox.Children.Clear();
         var snap = DaresSnap();
-        var bets = DareCardRules.StripOrder(snap);
+        var fold = FriendsFold.State;
+        var dismissed = new HashSet<string>(fold.DaresDismissed, StringComparer.Ordinal);
+        var all = FriendsFold.DaresChrono(snap, dismissed);
         bool banned = snap.Me.BannedUntil is DateTimeOffset until && until > ServerClock.UtcNow;
-        if (!snap.Available || (bets.Count == 0 && !banned)) { _daresBox.Visibility = Visibility.Collapsed; return; }
+        if (!snap.Available || (all.Count == 0 && !banned)) { _daresBox.Visibility = Visibility.Collapsed; return; }
         _daresBox.Visibility = Visibility.Visible;
 
-        int open = bets.Count(b => DareCardRules.RowState(b) is DareRowState.Offer or DareRowState.IOwe or DareRowState.TheyOwe
-            or DareRowState.Running or DareRowState.Writing or DareRowState.Waiting);
-        var head = FriendsLook.SectionHead(Loc.Get("dares_section"), open);
-        _daresBox.Children.Add(head);
+        bool listOpen = fold.DaresOpen;
+        IReadOnlyList<DareBet> bets = listOpen
+            ? all
+            : FriendsFold.DareFolded(snap, dismissed) is { } top ? new[] { top } : Array.Empty<DareBet>();
+        int open = all.Count(b => !FriendsFold.CanDismiss(b));
+        var count = FriendsLook.Label(open.ToString(), 10, FriendsLook.DimBrush, FriendsLook.Mono);
+        _daresBox.Children.Add(FoldHead("dares", Loc.Get("dares_section"), "friends-section", listOpen, ToggleDares, right: count));
         if (banned)
         {
             var b = FriendsLook.Label(Loc.GetF("dares_banned_until", snap.Me.BannedUntil!.Value.ToLocalTime().ToString("ddd d MMM HH:mm")),
@@ -114,6 +144,16 @@ public sealed partial class FriendsDrawer
         bool preview = false;
         try { preview = DaresSource()?.IsPreview == true; } catch { }
         foreach (var bet in bets) _daresBox.Children.Add(DareRow(bet, preview));
+
+        var rest = all.Count - bets.Count;
+        if (!listOpen && rest > 0)
+        {
+            var more = FeedLink(Loc.GetF("friends_feed_more", rest), "dares-more");
+            more.Margin = new Thickness(8, 0, 0, 2);
+            more.HorizontalAlignment = HorizontalAlignment.Left;
+            more.Click += (_, _) => { FriendsSfx.Click(); ToggleDares(); };
+            _daresBox.Children.Add(more);
+        }
     }
 
     private FrameworkElement DareRow(DareBet bet, bool preview)
@@ -190,6 +230,13 @@ public sealed partial class FriendsDrawer
             Add("dares_cancel", FriendsLook.RaisedBrush, FriendsLook.TextBrush, () => _ = DareActAsync(bet.Id, DareOp.Cancel), "dares-cancel");
         if (DareCardRules.ShowsSettleNow(bet, preview))
             Add("dares_settle_now", FriendsLook.GoldBrush, FriendsLook.Frozen(FriendsLook.Rgb(0x2A, 0x1C, 0x04)), () => _ = SettleNowAsync(bet.Id), "dares-settle-now", "dares_settle_now_tip");
+        if (buttons.Children.Count == 0 && FriendsFold.CanDismiss(bet))
+        {
+            var x = XButton("dares-dismiss", Loc.Get("dares_dismiss"));
+            x.Click += (_, _) => { FriendsSfx.Click(); DismissDare(bet.Id, row); };
+            buttons.Children.Add(x);
+            buttons.VerticalAlignment = VerticalAlignment.Top;
+        }
         Grid.SetColumn(buttons, 2);
         g.Children.Add(buttons);
         row.Child = g;

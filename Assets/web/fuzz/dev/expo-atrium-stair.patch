@@ -1,0 +1,18 @@
+--- a/zone_atrium.py
++++ b/zone_atrium.py
+@@ -187,10 +187,11 @@
+                 safe_rail("Upper promenade rail",pos(-8.72,z,6.8),pos(-5.42,z,6.8))
+                 safe_rail("Upper promenade rail",pos(-3.72,z,6.8),pos(8.72,z,6.8))
+             else:safe_rail("Upper promenade rail",pos(-8.72,z,6.8),pos(8.72,z,6.8))
+-    # The stair begins beside the monument. A tangential landing joins the west gallery.
+-    arc_stair("Grand stair",-3.10,34.07,4.05,2.12,0,pi/2,0,20)
+-    deck("Grand stair landing",-8.74,-3.08,28.94,31.10,3.4)
+-    for z in (28.94,31.10):safe_rail("Landing rails",pos(-8.69,z,3.4),pos(-3.13,z,3.4))
++    # Approach the west mezzanine from the monument aisle. The top meets the
++    # existing opening at z=30.02 and the entry plaza stays on level ground.
++    arc_stair("Grand stair",-7.15,17.92,12.10,2.12,-pi/3,-pi/6,0,20)
++    deck("Grand stair landing",-8.74,-7.13,28.94,31.10,3.4)
++    for z in (28.94,31.10):safe_rail("Landing rails",pos(-8.69,z,3.4),pos(-7.18,z,3.4))
+     # The spiral sweeps one and a quarter turns around a supporting column.
+     arc_stair("Conservatory spiral",-6.5,21.68,1.94,1.38,-pi/2,2.5*pi,3.40,20)
+     k.rod("Spiral mast","green",pos(-6.5,21.68,0),pos(-6.5,21.68,10.95),.18,n=18)
