@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
@@ -10,33 +9,38 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Media.Transformation;
-using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Services.Safety;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     /// <summary>PORTED from ConditioningControlPanel/Windows/PromoCardWindow.Art.cs (759f40d621): the die-cut stickers,
-    /// the game's crayon spiral, the sparkles and the slow ambient loop that turns and drifts them. Deviation: the loop
-    /// re-reads AllowAmbientLoops each tick (no MotionFx.AmbientChanged here).</summary>
+    /// the game's crayon spiral, the sparkles and the slow ambient loop that turns and drifts them, on the house BeatLoop (WPF FrameClock).</summary>
     public partial class PromoCardWindow
     {
         private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(10) };
         private const int MaxStickerBytes = 3 * 1024 * 1024;
-        private readonly DispatcherTimer _ambient = new() { Interval = TimeSpan.FromMilliseconds(33) };
-        private readonly Stopwatch _ambientWatch = new();
+        private BeatLoop? _ambient;
         private readonly RotateTransform _spin = new(), _driftTurn = new();
         private readonly TranslateTransform _driftShift = new();
-        private double _ambientSeconds;
+        private double _ambientSeconds, _lastBeat;
 
-        partial void StartArt() { _ambientWatch.Restart(); _ambient.Start(); }
+        partial void StartArt() { AmbientFxCanvas.Env.MotionGateChanged += ApplyAmbient; ApplyAmbient(); }
 
-        partial void StopArt() => _ambient.Stop();
+        partial void StopArt() { AmbientFxCanvas.Env.MotionGateChanged -= ApplyAmbient; _ambient?.Stop(); }
+
+        /// <summary>WPF ApplyAmbient: the loop runs only while ambient loops are allowed and Gentle visuals is off;
+        /// otherwise it stops and the art holds still where it is.</summary>
+        private void ApplyAmbient()
+        {
+            if (!_leaving && AmbientFxCanvas.Env.AllowAmbientLoops && !GentleVisuals.On) (_ambient ??= new BeatLoop(SpiralImage, StepAmbient)).Start();
+            else _ambient?.Stop();
+        }
 
         partial void BuildArt(IReadOnlyList<IImage?>? stickers)
         {
-            _ambient.Tick += (_, _) => StepAmbient();
             SpiralImage.Source = Spiral.Value;
             SpiralImage.RenderTransform = _spin;
             HeroBox.RenderTransform = new TransformGroup { Children = { _driftTurn, _driftShift } };
@@ -48,13 +52,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             else if (_promo.Stickers.Count > 0) _ = LoadStickersAsync();
         }
 
-        /// <summary>The spiral turns (one turn per 140 s) and the stickers drift (6 s) only while ambient loops are
-        /// allowed and Gentle visuals is off; otherwise they hold still where they are.</summary>
-        private void StepAmbient()
+        /// <summary>The spiral turns (one turn per 140 s) and the stickers drift (6 s). <paramref name="t"/> restarts
+        /// at 0 on every Start, so a stop and a restart resume from where the art held.</summary>
+        private void StepAmbient(double t)
         {
-            var step = _ambientWatch.Elapsed.TotalSeconds;
-            _ambientWatch.Restart();
-            if (_leaving || !AmbientFxCanvas.Env.AllowAmbientLoops || GentleVisuals.On) return;
+            var step = Math.Max(0, t - _lastBeat);
+            _lastBeat = t;
+            if (_leaving) return;
             _ambientSeconds += step;
             _spin.Angle = _ambientSeconds * 360 / 140 % 360;
             var phase = Math.Cos(_ambientSeconds * 2 * Math.PI / 6);
