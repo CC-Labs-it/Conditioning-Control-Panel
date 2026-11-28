@@ -70,7 +70,7 @@
    <Setter Property="Margin" Value="4,6,6,0"/><Setter Property="TextWrapping" Value="Wrap"/>
   </ControlTheme>
   <DataTemplate x:Key="LobbyRowTemplate" x:DataType="tabs:LobbyCardView">
-   <Grid Margin="0,0,6,8" Tag="lobby-card" Classes="lobby-row">
+   <Grid Margin="0,0,6,8" Tag="lobby-card" Classes="lobby-row" RenderTransformOrigin="50%,50%" PointerEntered="LobbyCard_Entered" PointerExited="LobbyCard_Exited">
     <Grid.Styles>
      <Style Selector="Grid.lobby-row > Border.card"><Setter Property="BorderBrush" Value="{Binding CardRim}"/></Style>
      <Style Selector="Grid.lobby-row:pointerover > Border.card"><Setter Property="BorderBrush" Value="#66FF8CC0"/></Style>

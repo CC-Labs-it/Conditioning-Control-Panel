@@ -28,13 +28,14 @@ internal static class OverlayPulse
         var pink = s.PinkFilterEnabled && PinkFilterOverlay.IsShowing;
         var spiral = s.SpiralEnabled && SpiralOverlay.IsShowing;
         if (!pink && !spiral) return;
+        global::Avalonia.Controls.Window? owner = pink ? PinkFilterOverlay.Shown[0] : SpiralOverlay.PulseOwner;
+        if (owner == null) return;
         Cancel();
         (_pink, _spiral) = (pink, spiral);
         _gentle = GentleVisuals.On;
         _fadeMs = GentleVisuals.FadeMs(0);
         _riseMs = GentleVisuals.RiseMs((int)_fadeMs);
         _started = Clock.GetUtcNow();
-        global::Avalonia.Controls.Window owner = pink ? PinkFilterOverlay.Shown[0] : SpiralOverlay.Shown[0];
         var loop = _timer = new BeatLoop(owner, _ => Tick()) { OnParked = Cancel };
         _owner = owner;
         _closed = (_, _) => { if (_timer == loop) Cancel(); };

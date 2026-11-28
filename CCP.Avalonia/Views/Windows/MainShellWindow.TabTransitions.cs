@@ -10,6 +10,7 @@ using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Rendering.Composition;
+using Avalonia.Rendering.Composition.Animations;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
@@ -22,15 +23,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 {
     public partial class MainShellWindow
     {
-        private FrameClock? _tabTransitionTimer; // frame-locked like WPF's compositor, not a 16 ms timer
+        // The entrance runs on the compositor, like WPF's storyboards (ChromeFx.cs:235-252) run on its render
+        // thread: a UI-thread clock committed a batch every frame, and on a CPU-only renderer (~110 ms a frame)
+        // the next tab click waited behind that batch (perf-bench handoff p95, 2026-11-15). This timer only
+        // fires the 100 ms and 620 ms cleanups; it draws nothing.
+        private DispatcherTimer? _tabTransitionTimer;
         private long _tabTransitionStart;
         private Control? _enteringTab;
-        private TranslateTransform? _tabSlide;
-        private (double X, double Y) _tabOffset;
-        private readonly List<(Control Card, TranslateTransform? Slide)> _tabCards = new();
+        private int _entranceRun;
         internal Control? EnteringTab => _enteringTab;
 
-        /// <summary>P08/P40 seam: the entrance reads real elapsed time from this clock; tests step it.</summary>
+        /// <summary>One compositor animation of the entrance: <paramref name="Property"/> runs from
+        /// (<paramref name="FromX"/>, <paramref name="FromY"/>) to rest (Opacity 1, Translation 0) with WPF's
+        /// QuadraticEase EaseOut, after <paramref name="DelayMs"/> at rest (WPF BeginTime).</summary>
+        internal readonly record struct EntranceTrack(Control Target, string Property, double FromX, double FromY, int DelayMs, int DurationMs)
+        {
+            /// <summary>The value this track draws <paramref name="ms"/> after the switch (tests).</summary>
+            internal double At(double ms, bool y = false)
+            {
+                var from = y ? FromY : FromX;
+                var rest = Property == "Opacity" ? 1 : 0;
+                if (ms < DelayMs) return rest;
+                return from + (rest - from) * new QuadraticEaseOut().Ease(Math.Clamp((ms - DelayMs) / DurationMs, 0, 1));
+            }
+        }
+
+        /// <summary>The animations the current entrance handed to the compositor (tests read them).</summary>
+        internal List<EntranceTrack> EntranceTracks { get; } = new();
+
+        /// <summary>P08/P40 seam: the cleanup milestones read elapsed time from this clock; tests step it.</summary>
         internal TimeProvider TabClock { get; set; } = TimeProvider.System;
 
         private void AnimateTabIn(Control? tab, string key)
@@ -40,19 +61,98 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             tab.Opacity = 1;
             if (!AmbientFxCanvas.Env.AllowTransitions) return;
             _enteringTab = tab;
+            EntranceTracks.Clear();
+            // WPF ChromeFx.cs:235-239: a 200 ms fade at every level but Off.
+            EntranceTracks.Add(new(tab, "Opacity", 0, 0, 0, 200));
             if (AmbientFxCanvas.Env.Level == MotionLevel.Full && !ChromeFxNav.IsAirspaceTab(key))
             {
-                _tabSlide = EnsureTabTranslate(tab);
-                _tabOffset = ChromeFxNav.EntranceOffset(CurrentTab, key, 12);
-                foreach (var card in FindStaggerTargets(tab)) _tabCards.Add((card, EnsureTabTranslate(card)));
+                // WPF ChromeFx.cs:267-291: 12 px along the rail's direction, 200 ms; an authored transform is left alone.
+                var (x, y) = ChromeFxNav.EntranceOffset(CurrentTab, key, 12);
+                if (Slides(tab)) EntranceTracks.Add(new(tab, "Translation", x, y, 0, 200));
+                // WPF MotionFx.cs:106-138 StaggerIn: 40 ms slots capped at 6, 220 ms fade, 10 px 260 ms rise.
+                var cards = FindStaggerTargets(tab);
+                for (var i = 0; i < cards.Count; i++)
+                {
+                    var delay = 40 * Math.Min(i, 6);
+                    EntranceTracks.Add(new(cards[i], "Opacity", 0, 0, delay, 220));
+                    if (Slides(cards[i])) EntranceTracks.Add(new(cards[i], "Translation", 0, 10, delay, 260));
+                }
             }
-            StepTabTransition(0);
+            var run = ++_entranceRun;
+            var tracks = EntranceTracks.ToArray();
+            // Same commit as the renderer's sync of the newly visible tab (see StartLeavingTabFade).
+            ElementComposition.GetElementVisual(tab)?.Compositor.RequestCompositionUpdate(() =>
+            {
+                if (run != _entranceRun) return;
+                foreach (var t in tracks) StartTrack(t);
+            });
             _tabTransitionStart = TabClock.GetTimestamp();
+            ArmTabTransition(_leavingTab != null ? 100 : 620);
+        }
+
+        private static bool Slides(Control c) => c.RenderTransform is null or TranslateTransform;
+
+        private static void StartTrack(EntranceTrack t)
+        {
+            if (ElementComposition.GetElementVisual(t.Target) is not { } visual) return;
+            var compositor = visual.Compositor;
+            KeyFrameAnimation animation;
+            // WPF BeginTime holds the base value through the delay. Avalonia's SetInitialValueAfterDelay holds the
+            // animation's own empty cache instead (opacity 0), so a delayed track leads with a rest key frame that
+            // SetInitialValueBeforeDelay draws until the delay ends, then jumps to the start value.
+            var held = t.DelayMs > 0;
+            if (t.Property == "Opacity")
+            {
+                var fade = compositor.CreateScalarKeyFrameAnimation();
+                if (held) fade.InsertKeyFrame(0, 1);
+                fade.InsertKeyFrame(0, (float)t.FromX);
+                fade.InsertKeyFrame(1, 1, new QuadraticEaseOut());
+                animation = fade;
+            }
+            else
+            {
+                var slide = compositor.CreateVector3DKeyFrameAnimation();
+                if (held) slide.InsertKeyFrame(0, default);
+                slide.InsertKeyFrame(0, new Vector3D(t.FromX, t.FromY, 0));
+                slide.InsertKeyFrame(1, default, new QuadraticEaseOut());
+                animation = slide;
+            }
+            animation.Duration = TimeSpan.FromMilliseconds(t.DurationMs);
+            // The frame that starts an animation samples it at exactly 0 ms, where Avalonia 12.1 keeps the current
+            // value: one tick of delay makes that frame draw key frame 0, not a flash of the tab at rest.
+            animation.DelayTime = TimeSpan.FromMilliseconds(t.DelayMs) + TimeSpan.FromTicks(1);
+            animation.DelayBehavior = AnimationDelayBehavior.SetInitialValueBeforeDelay;
+            visual.StartAnimation(t.Property, animation);
+        }
+
+        private static void SettleTrack(EntranceTrack t)
+        {
+            if (ElementComposition.GetElementVisual(t.Target) is not { } visual) return;
+            if (t.Property == "Opacity") SetOpacityNow(visual, (float)t.Target.Opacity);
+            else
+            {
+                visual.Translation = new Vector3D(1, 0, 0);
+                visual.Translation = default;
+            }
+        }
+
+        // A direct value ends a compositor animation where it is, but the client skips a write of the value it
+        // already holds (an animation never changes the client copy), so write another value first.
+        private static void SetOpacityNow(CompositionVisual visual, float opacity)
+        {
+            visual.Opacity = opacity == 0 ? 1 : 0;
+            visual.Opacity = opacity;
+        }
+
+        private void ArmTabTransition(double ms)
+        {
             if (_tabTransitionTimer == null)
             {
-                _tabTransitionTimer = new FrameClock(this) { Interval = TimeSpan.FromSeconds(1.0 / 60) };
+                _tabTransitionTimer = new DispatcherTimer();
                 _tabTransitionTimer.Tick += (_, _) => TickTabTransition();
             }
+            _tabTransitionTimer.Stop();
+            _tabTransitionTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(1, ms));
             _tabTransitionTimer.Start();
         }
 
@@ -84,6 +184,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (_leavingTab != old) return;
                 var visible = visual.Compositor.CreateBooleanKeyFrameAnimation();
                 visible.Duration = TimeSpan.FromMilliseconds(100);
+                // At exactly zero Avalonia samples the hidden base value. Hold the first
+                // key frame through a one-tick delay so the outgoing tab draws immediately.
+                visible.DelayTime = TimeSpan.FromTicks(1);
+                visible.DelayBehavior = AnimationDelayBehavior.SetInitialValueBeforeDelay;
                 visible.InsertKeyFrame(0, true);
                 visible.InsertKeyFrame(1, false);
                 var opacity = visual.Compositor.CreateScalarKeyFrameAnimation();
@@ -108,54 +212,41 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (_leavingTab == old) return;
                 visual.StopAnimation("Visible");
                 visual.StopAnimation("Opacity");
+                visual.Visible = !old.IsVisible; // stopped mid-fade, the server keeps the fade's value (SetOpacityNow)
                 visual.Visible = old.IsVisible;
-                visual.Opacity = (float)old.Opacity;
+                SetOpacityNow(visual, (float)old.Opacity);
             });
         }
 
         // P08: pointer tests settle the actual entrance before reading hit geometry. No wall-clock sleeps.
         internal void CompleteTabTransition() => StepTabTransition(620);
 
-        /// <summary>One frame of the entrance at the clock's real elapsed time (the timer's tick).</summary>
-        internal void TickTabTransition() => StepTabTransition(TabClock.GetElapsedTime(_tabTransitionStart).TotalMilliseconds);
+        /// <summary>The cleanup timer: the leaving tab at 100 ms, the entrance bookkeeping at 620 ms, at the clock's
+        /// real elapsed time. The compositor has already landed every value, so nothing is written here.</summary>
+        internal void TickTabTransition()
+        {
+            _tabTransitionTimer?.Stop();
+            var ms = TabClock.GetElapsedTime(_tabTransitionStart).TotalMilliseconds;
+            if (ms >= 100) CompleteLeavingTab();
+            if (ms >= 620) { EndEntrance(settle: false); return; }
+            if (_enteringTab != null || _leavingTab != null) ArmTabTransition((_leavingTab != null && ms < 100 ? 100 : 620) - ms);
+        }
 
+        /// <summary>Jumps the transition to <paramref name="ms"/>: 100 ends the leaving fade, 620 lands the entrance
+        /// at rest now (a new switch, Close, a render proof, pointer tests).</summary>
         internal void StepTabTransition(double ms)
         {
             if (ms >= 100) CompleteLeavingTab();
-            static double Ease(double elapsed, double duration)
-            {
-                var t = Math.Clamp(elapsed / duration, 0, 1);
-                return 1 - (1 - t) * (1 - t);
-            }
-            if (_enteringTab != null) _enteringTab.Opacity = Ease(ms, 200);
-            if (_tabSlide != null)
-            {
-                var remaining = 1 - Ease(ms, 200);
-                _tabSlide.X = _tabOffset.X * remaining;
-                _tabSlide.Y = _tabOffset.Y * remaining;
-            }
-            for (var i = 0; i < _tabCards.Count; i++)
-            {
-                var (card, slide) = _tabCards[i];
-                var elapsed = ms - 40 * Math.Min(i, 6);
-                // WPF's delayed animation leaves the card at its base value until BeginTime.
-                card.Opacity = elapsed < 0 ? 1 : Ease(elapsed, 220);
-                if (slide != null) slide.Y = elapsed < 0 ? 0 : 10 * (1 - Ease(elapsed, 260));
-            }
-            if (ms < 620) return; // WPF cleanup: 6*40 + 260 + 120 ms
-            _tabTransitionTimer?.Stop();
-            _tabCards.Clear();
-            _tabSlide = null;
-            _enteringTab = null;
+            if (ms >= 620) EndEntrance(settle: true);
         }
 
-        private static TranslateTransform? EnsureTabTranslate(Control control)
+        private void EndEntrance(bool settle)
         {
-            if (control.RenderTransform is TranslateTransform existing) return existing;
-            if (control.RenderTransform != null) return null; // preserve authored transforms
-            var slide = new TranslateTransform();
-            control.RenderTransform = slide;
-            return slide;
+            _tabTransitionTimer?.Stop();
+            _entranceRun++; // a start still waiting for its commit is void
+            if (settle) foreach (var t in EntranceTracks) SettleTrack(t);
+            EntranceTracks.Clear();
+            _enteringTab = null;
         }
 
         internal static List<Control> FindStaggerTargets(Control? node)

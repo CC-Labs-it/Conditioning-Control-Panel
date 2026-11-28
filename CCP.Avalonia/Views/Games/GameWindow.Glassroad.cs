@@ -17,6 +17,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.Haptics;
 using ConditioningControlPanel.Services.PieceByPiece;
+using ConditioningControlPanel.Services.PrizeCounter;
 using ConditioningControlPanel.Services.Safety;
 using Newtonsoft.Json.Linq;
 using Serilog;
@@ -41,7 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         private bool IsGlassroad => string.Equals(Spec.Id, GlassroadId, StringComparison.OrdinalIgnoreCase);
         internal static Func<int, string?, bool> GlassroadMergedRecovery = ConditioningControlPanel.Services.MergedAccountRecovery.TryHandle;
         internal bool GlassroadWatchRunning => _grWatch?.IsEnabled == true;
-        private bool _grOpen, _grEarlyInitSent, _grPinged, _grUnresponsive;
+        private bool _grOpen, _grEarlyInitSent, _grPinged, _grUnresponsive, _grCounterOpen;
         private DateTime _grLastBeatUtc = DateTime.UtcNow, _grLastProgressUtc = DateTime.UtcNow;
         private DateTime? _grLastLoadingUtc;   // #1543: the page's last `loading` frame (a course build may follow)
         private DispatcherTimer? _grWatch;
@@ -179,7 +180,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         GlassroadHapticDirector.OnPageMessage(o);
                         return true;
                     case "open-prize-counter":
-                        return true; // B3: no shop on this head.
+                        Dispatcher.UIThread.Post(OpenGlassroadCounter);
+                        return true;
                     case "set-setting":
                         _ = SetGlassroadPicturesAsync(o);
                         return true;
@@ -213,6 +215,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 return true;
             }
             return false;
+        }
+
+        // WPF GlassroadHostService.cs:321-345: pause the race and keep one close hook.
+        private void OpenGlassroadCounter()
+        {
+            if (!_grOpen || _closing) return;
+            Post(new { type = "pause", on = true });
+            if (_grCounterOpen) { LaunchPrizeCounter(); return; }
+            _grCounterOpen = true;
+            LaunchPrizeCounter("glassroad", "kart", OnGlassroadCounterClosed);
+        }
+
+        private void OnGlassroadCounterClosed(string reason)
+        {
+            if (!_grCounterOpen) return;
+            _grCounterOpen = false;
+            if (!_grOpen || _closing || reason == PrizeCounterRules.ClosePanic || reason == PrizeCounterRules.CloseAppExit) return;
+            try
+            {
+                Post(GlassroadHostRules.OwnedFrame(PrizeOwnership.Grants));
+                // Wear without a kart hands focus to the other wardrobe (WPF GlassroadRules.cs:119).
+                if (reason != PrizeCounterRules.CloseWear)
+                {
+                    if (RaceShell != null) RaceShell.Focus();
+                    else { Activate(); Web.Focus(); }
+                }
+            }
+            catch (Exception ex) { Log.Debug("Glassroad: counter return failed: {E}", ex.Message); }
         }
 
         private async Task OnGlassroadInviteAsync(JObject frame)
@@ -293,6 +323,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>One 5 s watchdog tick (WPF StartWatch, GlassroadHostRules.Watch): before ready, 45 s with no page
         /// message at all closes it (the bridge beats every 2 s); after ready, silent past 20 s gets one ping, then the
         /// close. A page with a recent `loading` frame (a course build, #1543) gets up to 90 s of silence first.</summary>
+        internal void MarkGlassroadUnresponsive() => _grUnresponsive = true;   // the race shell's hang report
         internal string CheckGlassroadWatch(DateTime nowUtc)
         {
             if (!_grOpen || _closing) return "idle";

@@ -17,8 +17,13 @@ using CCP.Avalonia.Testing;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
-public class FlashVoiceTests
+public class FlashVoiceTests : IDisposable
 {
+    // A ducked voice schedules a real Task.Delay release of CoreAudio.Unduck(generation 0); left live it fired
+    // seconds later inside KeywordAudioRuntimeTests' counting provider ("unduck:0:-1", windows shard 1).
+    private readonly Action<int, Action> _afterVoice = FlashOverlay.AfterVoice;
+    public FlashVoiceTests() => FlashOverlay.AfterVoice = (_, _) => { };
+    public void Dispose() => FlashOverlay.AfterVoice = _afterVoice;
     private sealed class VoiceClock : TimeProvider
     {
         public long Ticks;

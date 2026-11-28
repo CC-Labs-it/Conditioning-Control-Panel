@@ -760,6 +760,56 @@ public sealed class RemoteRelayTests
         Assert.Equal("the panic key stays on", (string?)status["reason"]);   // WPF 719ed9ca5
     }
 
+    // WPF RemoteControlService.cs:1235: a refusal is also sent to the controller as a custom emote.
+    [Theory]
+    [InlineData("disable_panic", "ignored", "Not allowed: the panic key stays on")]
+    [InlineData("resume_session", "panic", "Not allowed: panic")]
+    [InlineData("trigger_haptic", "no_device", "Can't open that: no_device")]
+    [InlineData("play_hypnotube", "browser unavailable", "Can't open that: browser unavailable")]
+    public async Task Refused_commands_send_an_emote(string action, string reason, string expected)
+    {
+        var f = new FakeRelay();
+        using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", (_, _) => reason, _ => { }, f) { AutoPoll = false };
+        r.ResumeSession = _ => reason;
+        await r.StartAsync("full");
+        Poll(f, Cmd("1", action, "{\"url\":\"https://hypnotube.com/video/video-123.html\"}"));
+        await r.PollOnceAsync();
+        var emote = Assert.Single(f.Seen.Where(x => x.Path == "/v2/remote/emote")).Body;
+        Assert.Equal(expected, (string?)emote["text"]);
+        Assert.Equal("🚫", (string?)emote["icon"]);
+        Assert.Equal("custom", (string?)emote["kind"]);
+        Assert.Equal("uid-1", (string?)emote["unified_id"]);
+    }
+
+    [Fact]
+    public async Task Refusal_emote_is_limited_to_60_characters()
+    {
+        var f = new FakeRelay();
+        using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", (_, _) => new string('x', 100), _ => { }, f) { AutoPoll = false };
+        await r.StartAsync("full");
+        Poll(f, Cmd("1", "play_hypnotube", "{\"url\":\"https://hypnotube.com/video/video-123.html\"}"));
+        await r.PollOnceAsync();
+        var emote = Assert.Single(f.Seen.Where(x => x.Path == "/v2/remote/emote")).Body;
+        Assert.Equal(("Can't open that: " + new string('x', 100)).Substring(0, 60), (string?)emote["text"]);
+    }
+
+    [Fact]
+    public async Task Panic_during_dispatch_drops_the_refusal_emote()
+    {
+        var previous = CoreDispatch.InvokeProvider;
+        try
+        {
+            var f = new FakeRelay();
+            using var r = Relay(f);
+            await r.StartAsync("full");
+            CoreDispatch.InvokeProvider = (fn, _) => { RemoteCommands.StopHaptics(); return (true, "panic"); };
+            Poll(f, Cmd("1", "resume_session"));
+            await r.PollOnceAsync();
+            Assert.DoesNotContain(f.Seen, x => x.Path == "/v2/remote/emote");
+        }
+        finally { CoreDispatch.InvokeProvider = previous; }
+    }
+
     [Fact]
     public async Task Resume_routes_to_head_and_reports_panic()
     {
@@ -823,6 +873,7 @@ public sealed class RemoteRelayTests
             Poll(f, "{\"controller_connected\":true,\"commands\":[{\"id\":\"1\",\"action\":\"enable_strict_lock\"},{\"id\":\"2\",\"action\":\"start_flash\"}]}");
             await r.PollOnceAsync();
             Assert.Equal(new[] { "start_flash" }, _ran);
+            Assert.Equal("Can't open that: not while on a leash", (string?)f.Seen.Single(x => x.Path == "/v2/remote/emote").Body["text"]);
             var status = f.Seen.Last(s => s.Path == "/v2/remote/status").Body["last_executed"]!;
             Assert.Equal("start_flash", (string?)status["action"]);
         }

@@ -91,7 +91,8 @@ function start({ app, BrowserWindow, ipcMain, session }, io = process) {
   async function open(url) {
     await app.whenReady();
     if (ended) return;
-    const ses = session.fromPartition('glassroad-race', { cache: false });
+    // Persistent, as WPF's browser_data_glassroad profile: page storage survives between races.
+    const ses = session.fromPartition('persist:glassroad-race', { cache: false });
     ses.setPermissionRequestHandler((contents, permission, callback, details) =>
       callback(contents === win?.webContents && allowedPermission(permission, origin, details?.requestingUrl || contents.getURL())));
     ses.setPermissionCheckHandler((contents, permission, requestingOrigin) =>
@@ -106,6 +107,8 @@ function start({ app, BrowserWindow, ipcMain, session }, io = process) {
       web.on(event, e => e.preventDefault());
     web.on('will-attach-webview', e => e.preventDefault());
     web.on('render-process-gone', stop);
+    // A hung page only waits (#1543): the host marks it busy, as WPF does on WebView2's report.
+    web.on('unresponsive', () => send({ type: 'shell-unresponsive' }));
     web.on('before-input-event', (e, input) => {
       if (input.key !== 'Escape') return;
       e.preventDefault();
