@@ -1,5 +1,15 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
+using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Headless;
+using Avalonia.Threading;
+using Newtonsoft.Json.Linq;
+using ConditioningControlPanel;
+using ConditioningControlPanel.Services;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk;
 using ConditioningControlPanel.Services.EmiDesk;
@@ -9,6 +19,91 @@ namespace CCP.Avalonia.Tests;
 
 public class EmiOffersTests
 {
+    private static async Task DrainEmiSave()
+    {
+        var field = typeof(EmiState).GetField("_saveTimer", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var timer = (Timer?)field.GetValue(null);
+        field.SetValue(null, null);
+        if (timer != null) await timer.DisposeAsync();
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    [Fact]
+    public Task ShrinkOfferResizesAndPersists() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                .SetupWithoutStarting();
+        var previous = CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var desk = EmiDeskService.Instance;
+        await DrainEmiSave();
+        var state = EmiState.Current;
+        var placement = (state.WinLeftPx, state.WinTopPx, state.Monitor);
+        try
+        {
+            var win = desk.BeginPresentation()!;
+            win.ApplyBodyWidth(EmiDeskWindow.MinBodyWidth + 50);
+            Assert.True(EmiOffers.EffectFeasible("shrink"));
+            EmiOffers.Run("shrink", true);
+            Assert.Equal(EmiDeskWindow.MinBodyWidth, win.BodyWidth);
+            Assert.Equal(EmiDeskWindow.MinBodyWidth, CoreSettings.Current.EmiDeskWidth);
+            Assert.False(EmiOffers.EffectFeasible("shrink"));
+        }
+        finally
+        {
+            desk.Window?.ShutDown();
+            await DrainEmiSave();
+            (state.WinLeftPx, state.WinTopPx, state.Monitor) = placement;
+            EmiState.SaveNow();
+            CoreSettings.ServiceProvider = previous;
+        }
+    });
+
+    [Fact]
+    public async Task ShrinkOfferTestRestoresPlacementAndDrainsPendingSave()
+    {
+        var state = EmiState.Current;
+        var before = (state.WinLeftPx, state.WinTopPx, state.Monitor);
+        try
+        {
+            await AvaloniaTestDispatcher.RunAsync(() =>
+            {
+                (state.WinLeftPx, state.WinTopPx, state.Monitor) = (417, 263, "shrink-isolation");
+                EmiState.SaveNow();
+                return Task.CompletedTask;
+            });
+            await ShrinkOfferResizesAndPersists();
+            await AvaloniaTestDispatcher.RunAsync(() =>
+            {
+                Assert.Equal((417d, 263d, "shrink-isolation"), (state.WinLeftPx, state.WinTopPx, state.Monitor));
+                state.WinLeftPx = 999; // A stale timer must not persist the next test's memory.
+                return Task.CompletedTask;
+            });
+            await Task.Delay(900);
+            await AvaloniaTestDispatcher.RunAsync(() =>
+            {
+                Dispatcher.UIThread.RunJobs();
+                var saved = JObject.Parse(File.ReadAllText(EmiState.FilePath));
+                Assert.Equal(417d, (double)saved["winLeftPx"]!);
+                Assert.Equal(263d, (double)saved["winTopPx"]!);
+                Assert.Equal("shrink-isolation", (string?)saved["monitor"]);
+                return Task.CompletedTask;
+            });
+        }
+        finally
+        {
+            await AvaloniaTestDispatcher.RunAsync(async () =>
+            {
+                await DrainEmiSave();
+                (state.WinLeftPx, state.WinTopPx, state.Monitor) = before;
+                EmiState.SaveNow();
+            });
+        }
+    }
+
     [Fact]
     public void OfferFeasibilityChecksTargetsAndBedtime()
     {
