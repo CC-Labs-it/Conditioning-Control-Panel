@@ -141,6 +141,14 @@ public sealed class ScrolllerWebGateTests
     }
 
     [Fact]
+    public void Home_waits_for_its_core_past_the_startup_watch_so_it_never_loads_without_the_ad_filter()
+    {
+        Assert.Equal(ScrolllerWebHostGate.CoreRetries, ScrolllerWebHostGate.CoreTries(blockAds: false));
+        // WebHost.WatchStartup gives a dead engine 15 s; an ad-blocking host must not report "no gate" before that.
+        Assert.True(ScrolllerWebHostGate.CoreRetry * ScrolllerWebHostGate.CoreTries(blockAds: true) > TimeSpan.FromSeconds(15));
+    }
+
+    [Fact]
     public void A_zero_core_is_not_attached()
     {
         if (!OperatingSystem.IsWindows()) return;

@@ -21,6 +21,12 @@ internal static class ScrolllerWebHostGate
     internal static readonly TimeSpan CoreRetry = TimeSpan.FromMilliseconds(100);
     internal const int CoreRetries = 50;
 
+    /// <summary>An ad-blocking host (Home) holds its page until its core exists, as WPF adds the filter at core init
+    /// (BrowserService.cs:523-539): no 5 s give-up, so Home never loads unfiltered. Its own 15 s startup watch
+    /// (WebHost.ExpireStartup) reports a dead engine meanwhile.</summary>
+    // shortcut: polling stops after 5 min of no core, then Home is released unfiltered; hook core creation if that shows up.
+    internal static int CoreTries(bool blockAds) => blockAds ? 3000 : CoreRetries;
+
     /// <summary>How long a Linux view waits for the WebKit filter (store load / compile on the GLib thread) before it is
     /// reported "no gate" (remote pages refused, local ones load) rather than left blank.</summary>
     internal static readonly TimeSpan LinuxGateWait = TimeSpan.FromSeconds(5);
@@ -63,7 +69,7 @@ internal static class ScrolllerWebHostGate
             switch (handle)
             {
                 case IWindowsWebView2PlatformHandle when OperatingSystem.IsWindows():
-                    AttachWindows(handle, handleAgain, ready, CoreRetries, blockAds, shouldBlockAds);
+                    AttachWindows(handle, handleAgain, ready, CoreTries(blockAds), blockAds, shouldBlockAds);
                     return;
                 case IGtkWebViewPlatformHandle g:
                     var deadline = new Deadline(ready);
@@ -107,10 +113,10 @@ internal static class ScrolllerWebHostGate
         var core = handle is IWindowsWebView2PlatformHandle w ? w.CoreWebView2 : IntPtr.Zero;
         // Not &&: a failed Scrolller hook must not leave the Home browser without its ad filter.
         if (core != IntPtr.Zero) { ready(AttachWebView2(core) & (!blockAds || AttachAdWebView2(core, shouldBlockAds!))); return; }
-        if (left == CoreRetries) Log.Warning("ScrolllerWebHostGate: the adapter has no CoreWebView2 yet; waiting for it");
+        if (left == CoreTries(blockAds)) Log.Warning("ScrolllerWebHostGate: the adapter has no CoreWebView2 yet; waiting for it");
         if (left <= 0)
         {
-            Log.Warning("ScrolllerWebHostGate: no CoreWebView2 after {N} tries; only this head's own pages load in this web view", CoreRetries);
+            Log.Warning("ScrolllerWebHostGate: no CoreWebView2 after {N} tries; only this head's own pages load in this web view", CoreTries(blockAds));
             ready(false);
             return;
         }
