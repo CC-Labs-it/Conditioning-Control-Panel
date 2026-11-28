@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -17,6 +18,7 @@ using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Dialogs.Dares;
+using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Controls.Dares;
 using ConditioningControlPanel.Localization;
@@ -262,11 +264,61 @@ public sealed class DareSlipWindowTests
         return Task.CompletedTask;
     });
 
+    [Fact]
+    public Task FriendsMenuOpensSlipOnlyWhenDaresAreAvailable() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Init();
+        var (friends, _) = FriendsDrawerTests.Service();
+        var service = new FakeService();
+        var drawer = new FriendsDrawer(friends);
+        var source = typeof(FriendsDrawer).GetProperty("DaresSource", BindingFlags.Instance | BindingFlags.NonPublic);
+        var openField = typeof(DareSlipWindow).GetField("_open", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var before = (DareSlipWindow?)openField.GetValue(null);
+        DareSlipWindow? opened = null;
+        try
+        {
+            Assert.Null(before);
+            Assert.NotNull(source);
+            source!.SetValue(drawer, (Func<IDaresService?>)(() => service));
+            await friends.RefreshAsync();
+            drawer.Render();
+            MenuItem? Dare() => Assert.IsType<Border>(Find(drawer, "friends-row:u_on")).ContextMenu!.ItemsSource!
+                .OfType<MenuItem>().FirstOrDefault(item => Equals(item.Tag, "friends-menu-item:dare"));
+            var item = Assert.IsType<MenuItem>(Dare());
+            Assert.Equal(Loc.Get("dares_menu_dare"), item.Header);
+            Assert.Equal(IconKind.Mail, Assert.IsType<IconGlyph>(item.Icon).Kind);
+            Assert.True(item.IsEnabled);
+            item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            opened = (DareSlipWindow?)openField.GetValue(null);
+            Assert.NotNull(opened);
+            Assert.Equal("u_on", opened!.Draft.Who!.Id);
+            // Skip the intro without writing its marker file in the test profile.
+            typeof(DareSlipWindow).GetMethod("ShowComposer", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(opened, null);
+            foreach (var tag in new[] { "dares-tile:duel", "dares-tile:bubbles", "dares-when:today", "dares-stake:sp", "dares-amount:50", "dares-stake:sp", "dares-amount:50" }) Click(opened, tag);
+            Assert.Equal(DareCreateStatus.Writing, (await opened.SendAsync())!.Status);
+            Assert.Equal("u_on", service.To);
+            Assert.Equal(DareKind.Bubbles, service.Slip!.What.Kind);
+            opened.Close(); opened = null;
+            service.Available = false; drawer.Render();
+            Assert.Null(Dare());
+            service.Available = true; service.BannedUntil = DateTimeOffset.UtcNow.AddDays(1); drawer.Render();
+            Assert.False(Assert.IsType<MenuItem>(Dare()).IsEnabled);
+        }
+        finally
+        {
+            opened?.Close();
+            if (before == null) (openField.GetValue(null) as DareSlipWindow)?.Close();
+            drawer.Unsubscribe(); friends.Dispose();
+        }
+    });
+
     private sealed class FakeService : IDaresService
     {
         public int? Sparkles { get; init; }
+        public bool Available { get; set; } = true;
+        public DateTimeOffset? BannedUntil { get; set; }
         public event Action? Changed { add { } remove { } }
-        public DaresSnapshot Snapshot => new(true, new DaresMe(null, true, true, 0), Array.Empty<DareBet>());
+        public DaresSnapshot Snapshot => new(Available, new DaresMe(BannedUntil, true, true, 0), Array.Empty<DareBet>());
         public bool IsPreview => false;
         public string? To { get; private set; }
         public DareSlip? Slip { get; private set; }

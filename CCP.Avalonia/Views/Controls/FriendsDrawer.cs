@@ -31,6 +31,9 @@ using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Controls.Friends;
+using ConditioningControlPanel.Controls.Dares;
+using ConditioningControlPanel.Services.Dares;
+using ConditioningControlPanel.Avalonia.Views.Dialogs.Dares;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Friends;
 
@@ -55,6 +58,32 @@ public sealed partial class FriendsDrawer : Border
     internal bool AsPage { get; }
 
     internal static Cursor? Hand() { try { return new Cursor(StandardCursorType.Hand); } catch { return null; } }
+    // WPF FriendsDrawer.Dares.cs:27-65. The host remains null until its port starts.
+    internal Func<IDaresService?> DaresSource { get; set; } = () => DaresHead.Service;
+    private IDaresService? _daresLive;
+    private DaresSnapshot DaresSnap() { try { return DaresSource()?.Snapshot ?? DaresSnapshot.Dark; } catch { return DaresSnapshot.Dark; } }
+    private void RebindDares()
+    {
+        IDaresService? next; try { next = DaresSource(); } catch { next = null; }
+        if (ReferenceEquals(next, _daresLive)) return;
+        if (_daresLive != null) _daresLive.Changed -= OnDaresChanged;
+        _daresLive = next;
+        if (_daresLive != null) _daresLive.Changed += OnDaresChanged;
+    }
+    private void OnDaresChanged() { if (_isOpen) Render(); }
+    private void OpenDare(Friend friend)
+    {
+        IDaresService? service; DaresSnapshot snapshot;
+        try { service = DaresSource(); snapshot = service?.Snapshot ?? DaresSnapshot.Dark; } catch { return; }
+        if (service == null || !DareCardRules.CanDare(snapshot, ConditioningControlPanel.Services.ServerClock.UtcNow)) return;
+        var friends = _svc?.Snapshot?.Friends ?? Array.Empty<Friend>();
+        var people = friends.Select(f => new DareFriend(f.Id, f.Name, f.AvatarUrl)).ToList();
+        var tiers = friends.GroupBy(f => f.Id).ToDictionary(g => g.Key, g => g.First().Tier);
+        FriendsSfx.Click();
+        DareSlipWindow.Open(OwnerWindow(), service, new DareFriend(friend.Id, friend.Name, friend.AvatarUrl), people, tiers);
+        CloseRequested?.Invoke();
+    }
+
     private readonly Func<IFriendsService?> _resolve;
     private IFriendsService? _svc;
     private bool _subscribed, _isOpen, _showBlocked;
@@ -189,6 +218,7 @@ public sealed partial class FriendsDrawer : Border
         _isOpen = true;
         LeashSection?.SetDrawerOpen(true);
         Rebind();
+        RebindDares();
         try { _svc?.SetDrawerOpen(true); } catch { }
         if (_svc?.Available == true) _ = SafeRefreshAsync();
         try { if (_svc?.Available == true) StartTables(); } catch { }
@@ -216,6 +246,8 @@ public sealed partial class FriendsDrawer : Border
     {
         if (_subscribed && _svc != null) { _svc.SnapshotChanged -= OnSnapshot; _svc.SentTrailsChanged -= OnTrailsChanged; }
         _subscribed = false;
+        if (_daresLive != null) _daresLive.Changed -= OnDaresChanged;
+        _daresLive = null;
         StopTables();
     }
     private void OnSnapshot(FriendsSnapshot _) => Render();
@@ -514,11 +546,21 @@ public sealed partial class FriendsDrawer : Border
     private ContextMenu Menu(Friend f)
     {
         var items = new List<Control>();
-        foreach (var id in FriendsDrawerRules.MenuItems(f.Squelched))
+        var dares = DaresSnap();
+        foreach (var id in FriendsDrawerRules.MenuItems(f.Squelched, dares.Available))
         {
             if (id == null) { items.Add(new Separator()); continue; }
-            var mi = MenuItem(id);
-            if (id == "report")
+            var mi = id == "dare" ? new MenuItem { Tag = "friends-menu-item:dare" } : MenuItem(id);
+            if (id == "dare")
+            {
+                mi.Header = Loc.Get("dares_menu_dare"); mi.Foreground = Pink; mi.FontWeight = FontWeight.SemiBold;
+                mi.Icon = new IconGlyph { Kind = IconKind.Mail, Size = 18, Foreground = Pink };
+                mi.IsEnabled = DareCardRules.CanDare(dares, ConditioningControlPanel.Services.ServerClock.UtcNow);
+                ToolTip.SetTip(mi, mi.IsEnabled ? Loc.Get("dares_menu_tip") : Loc.GetF("dares_banned_until", dares.Me.BannedUntil!.Value.ToLocalTime().ToString("ddd d MMM HH:mm")));
+                ToolTip.SetShowOnDisabled(mi, true);
+                mi.Click += (_, _) => OpenDare(f);
+            }
+            else if (id == "report")
             {
                 var subs = new List<MenuItem>();
                 foreach (var reason in ReportReason.All)
