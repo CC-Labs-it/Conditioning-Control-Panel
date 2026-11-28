@@ -609,6 +609,36 @@ public sealed class GazeMinigameTests
     });
 
     [Fact]
+    public Task GifFrames_AnimateWithoutRoundTicker_AndStopOnDispose() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsureApp();
+        var dir = Directory.CreateTempSubdirectory("gaze-gif-clock-");
+        var oldClock = GazeMinigameWindow.Clock;
+        var clock = new SteppedClock();
+        GazeMinigameWindow.Clock = clock;
+        try
+        {
+            var path = Path.Combine(dir.FullName, "round.gif");
+            File.WriteAllBytes(path, Convert.FromBase64String(Gif));
+            using var image = new GazeRoundImage(path);
+            await image.Decoding;
+            var first = image.Source;
+            clock.Now += TimeSpan.FromMilliseconds(30);
+            await Task.Delay(150);
+            Assert.NotSame(first, image.Source);
+            image.Dispose();
+            clock.Now += TimeSpan.FromMilliseconds(30);
+            await Task.Delay(150);
+            Assert.Null(image.Source);
+        }
+        finally
+        {
+            GazeMinigameWindow.Clock = oldClock;
+            dir.Delete(true);
+        }
+    });
+
+    [Fact]
     public Task GifFrames_DisposedDuringDecode_NeverPublishLateFrames() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         EnsureApp();
@@ -812,7 +842,7 @@ public sealed class GazeMinigameTests
     [Theory]
     [InlineData(1, 3)]
     [InlineData(1, 0)]
-    [InlineData(41, 3)] // 123 source frames: the shared budget samples every second frame
+    [InlineData(41, 3)] // 123 source frames
     public Task GifFrames_PreserveUnequalDelays_LongHolds_AndLoopBoundary(int repeats, int firstDelayCs) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         EnsureApp();
@@ -834,15 +864,7 @@ public sealed class GazeMinigameTests
                     bytes[i + 5] = 0;
                 }
             Assert.Equal(3, frame);
-            if (repeats > 1)
-            {
-                // Skip the NETSCAPE loop extension; repeat just the three image/control blocks.
-                var firstFrame = Enumerable.Range(0, bytes.Length - 2).First(i =>
-                    bytes[i] == 0x21 && bytes[i + 1] == 0xF9 && bytes[i + 2] == 4);
-                bytes = bytes.Take(firstFrame).Concat(Enumerable.Range(0, repeats)
-                    .SelectMany(_ => bytes.Skip(firstFrame).Take(bytes.Length - firstFrame - 1)))
-                    .Append((byte)0x3B).ToArray();
-            }
+            if (repeats > 1) bytes = RepeatGif(bytes, repeats);
             var path = Path.Combine(dir.FullName, "timed.gif");
             File.WriteAllBytes(path, bytes);
             using var image = new GazeRoundImage(path);
@@ -850,14 +872,16 @@ public sealed class GazeMinigameTests
             var first = image.Source;
             if (repeats > 1)
             {
-                image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(firstMs + 69));
-                Assert.Same(first, image.Source); // sampled frame holds for 30 + 70ms
-                image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(firstMs + 70));
+                image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(firstMs - 1));
+                Assert.Same(first, image.Source);
+                image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(firstMs));
                 Assert.NotSame(first, image.Source);
+                image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(40 * loopMs));
+                Assert.NotSame(first, image.Source); // frame 120 is retained
                 image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(repeats * loopMs - 1));
                 Assert.NotSame(first, image.Source);
                 image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(repeats * loopMs));
-                Assert.Same(first, image.Source); // final sampled frame includes the full tail hold
+                Assert.Same(first, image.Source); // all frames reach the loop boundary
                 return;
             }
             image.AdvanceFrame(clock.Now + TimeSpan.FromMilliseconds(firstMs));
@@ -881,6 +905,95 @@ public sealed class GazeMinigameTests
             GazeMinigameWindow.Clock = oldClock;
             dir.Delete(true);
         }
+    });
+
+    // Skip the NETSCAPE loop extension; repeat just the three image/control blocks.
+    private static byte[] RepeatGif(byte[] bytes, int repeats)
+    {
+        var firstFrame = Enumerable.Range(0, bytes.Length - 2).First(i =>
+            bytes[i] == 0x21 && bytes[i + 1] == 0xF9 && bytes[i + 2] == 4);
+        return bytes.Take(firstFrame).Concat(Enumerable.Range(0, repeats)
+            .SelectMany(_ => bytes.Skip(firstFrame).Take(bytes.Length - firstFrame - 1)))
+            .Append((byte)0x3B).ToArray();
+    }
+
+    [Fact]
+    public Task GifFrames_OverBudget_DecodeEveryFrameAndStopOnDispose() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        EnsureApp();
+        var dir = Directory.CreateTempSubdirectory("gaze-gif-stream-");
+        var clock = new SteppedClock();
+        var oldClock = GazeMinigameWindow.Clock;
+        GazeMinigameWindow.Clock = clock;
+        var expected = new List<global::Avalonia.Media.Imaging.Bitmap>();
+        try
+        {
+            var path = Path.Combine(dir.FullName, "long.gif");
+            File.WriteAllBytes(path, RepeatGif(Convert.FromBase64String(Gif), 41));
+            var durations = new List<TimeSpan>();
+            (expected, _) = SpiralOverlay.Decode(path, frameDurations: durations, allFramesBudgetBytes: 123 * 64);
+            Assert.Equal(123, expected.Count);
+            using var image = new GazeRoundImage(path, cacheBudget: 123 * 64 - 1);
+            await image.Decoding;
+            Assert.Equal(0, image.CachedFrameCount);
+            static SkiaSharp.SKColor[] Pixels(global::Avalonia.Media.Imaging.Bitmap bitmap)
+            {
+                using var data = new MemoryStream();
+                bitmap.Save(data);
+                using var decoded = SkiaSharp.SKBitmap.Decode(data.ToArray());
+                return decoded.Pixels;
+            }
+            for (int i = 1; i <= 123; i++)
+            {
+                clock.Now += TimeSpan.FromMilliseconds(30);
+                image.AdvanceFrame(clock.Now);
+                await image.FrameDecoding;
+                Assert.Equal(Pixels(expected[i % 123]), Pixels(Assert.IsType<global::Avalonia.Media.Imaging.Bitmap>(image.Source)));
+            }
+            var published = 0;
+            image.PropertyChanged += (_, e) => { if (e.Property == Image.SourceProperty) published++; };
+            clock.Now += TimeSpan.FromMilliseconds(127 * 30); // a delayed worker must also catch up across loops
+            image.AdvanceFrame(clock.Now);
+            await image.FrameDecoding;
+            Assert.Equal(127, published);
+            Assert.Equal(Pixels(expected[4]), Pixels(Assert.IsType<global::Avalonia.Media.Imaging.Bitmap>(image.Source)));
+            clock.Now += TimeSpan.FromMilliseconds(30);
+            image.AdvanceFrame(clock.Now);
+            var pending = image.FrameDecoding;
+            image.Dispose();
+            await pending;
+            Assert.Null(image.Source);
+        }
+        finally
+        {
+            foreach (var bitmap in expected) bitmap.Dispose();
+            GazeMinigameWindow.Clock = oldClock;
+            dir.Delete(true);
+        }
+    });
+
+    [Fact]
+    public Task GifFrames_OverTheMemoryBudget_FallBackToStride_KeepingLoopTime() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var dir = Directory.CreateTempSubdirectory("gaze-gif-budget-");
+        try
+        {
+            var path = Path.Combine(dir.FullName, "long.gif");
+            File.WriteAllBytes(path, RepeatGif(Convert.FromBase64String(Gif), 41)); // 123 frames, 4x4, 30 ms
+            var fits = new List<TimeSpan>();
+            var (all, _) = SpiralOverlay.Decode(path, frameDurations: fits, allFramesBudgetBytes: 123 * 64);
+            Assert.Equal(123, all.Count);
+            var over = new List<TimeSpan>();
+            var (strided, _) = SpiralOverlay.Decode(path, frameDurations: over, allFramesBudgetBytes: 123 * 64 - 1);
+            Assert.Equal(62, strided.Count); // the 120-frame plan's stride of two
+            Assert.Equal(over.Count, strided.Count);
+            Assert.Equal(TimeSpan.FromMilliseconds(123 * 30), over.Aggregate(TimeSpan.Zero, (a, b) => a + b));
+            Assert.Equal(fits.Aggregate(TimeSpan.Zero, (a, b) => a + b), over.Aggregate(TimeSpan.Zero, (a, b) => a + b));
+            foreach (var frame in all.Concat(strided)) frame.Dispose();
+        }
+        finally { dir.Delete(true); }
+        return Task.CompletedTask;
     });
 
 
