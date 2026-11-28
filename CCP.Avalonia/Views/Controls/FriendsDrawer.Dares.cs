@@ -150,7 +150,7 @@ public sealed partial class FriendsDrawer
             Add("dares_answer", Mint, MintInk, () => DareOfferCard.Present(OwnerWindow(), bet.Id), "dares-answer");
         // Pay opens the debt card: a Lockdown stake starts only after its consent there (WPF DareDebtCard.cs:173-213).
         if (state == DareRowState.IOwe && bet.Debt?.State == DareDebtState.Owed)
-            Add(DareCardRules.PayKey(bet.MyStake.Kind), Mint, MintInk, () => _ = DareDebtCard.ShowModal(OwnerWindow(), bet), "dares-pay");
+            Add(DareCardRules.PayKey(bet.MyStake.Kind), Mint, MintInk, () => DareDebtCard.Present(OwnerWindow(), bet), "dares-pay");
         if (DareCardRules.ShowsTick(bet))
             Add("dares_tick", Mint, MintInk, () => _ = DareActAsync(bet.Id, DareOp.Tick), "dares-tick", "dares_tick_tip");
         if (DareCardRules.ShowsDidIt(bet))

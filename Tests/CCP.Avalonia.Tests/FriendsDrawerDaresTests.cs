@@ -94,6 +94,48 @@ public sealed class FriendsDrawerDaresTests
     });
 
     [Fact]
+    public Task Pay_in_the_strip_opens_the_debt_card_beside_the_main_window_not_over_it() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        PanicSurfacesTests.EnsureApp();
+        var host = new DarePanicTests.Host();
+        using var dares = new DaresService(new Api(), host, new DareMeter(), new DareLockdownKeeper(host, new DareLockdownKeeper.MemoryStore()));
+        var saved = (DareDebtCard.RunsAtStartup, DareIntro.Seen, DareIntro.MarkSeen);
+        var (svc, _) = FriendsDrawerTests.Service();
+        var main = new Window { Width = 400, Height = 600 };
+        try
+        {
+            DareDebtCard.RunsAtStartup = () => false;
+            (DareIntro.Seen, DareIntro.MarkSeen) = (() => true, () => { });
+            await svc.RefreshAsync();
+            var d = new FriendsDrawer(svc) { OwnerWindow = () => main };
+            main.Show();
+            DareHead.Service = dares;
+            await dares.RefreshAsync();
+            d.Render();
+
+            Press(d, "dares-pay");   // WPF FriendsDrawer.Dares: DareDebtCard.Present, never ShowDialog
+            var card = Assert.IsType<DareDebtCard>(DareDebtCard.Open);
+            Assert.Same(main, card.Owner);
+            Assert.False((bool)typeof(Window).GetField("_showingAsDialog",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(card)!);
+            Assert.True(main.IsEnabled);
+
+            PanicSurfaces.All.Single(s => s.Id == "dares-cards").Stop(null!);
+            Assert.Null(DareDebtCard.Open);
+            Assert.False(card.IsVisible);
+        }
+        finally
+        {
+            DareDebtCard.CloseForPanic();
+            DareHead.Service = null;
+            DareHead.Resume();
+            (DareDebtCard.RunsAtStartup, DareIntro.Seen, DareIntro.MarkSeen) = saved;
+            main.Close();
+            svc.Dispose();
+        }
+    });
+
+    [Fact]
     public Task Card_wears_the_dares_look_and_the_row_says_what_a_right_click_holds() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var (svc, _) = FriendsDrawerTests.Service();

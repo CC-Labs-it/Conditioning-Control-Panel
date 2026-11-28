@@ -79,6 +79,15 @@ public sealed class DareDebtCard : Window
         return done.Task;
     }
 
+    /// <summary>WPF DareDebtCard.Present: the strip's Pay opens the card beside the panel, not over it.</summary>
+    public static void Present(Window? owner, DareBet bet)
+    {
+        var w = Make(bet);
+        if (w == null) return;
+        try { if (owner is { IsVisible: true }) w.Show(owner); else w.Show(); }
+        catch (InvalidOperationException) { w.Show(); }
+    }
+
     private static DareDebtCard? Make(DareBet bet)
     {
         if (App.Dares is not { } svc) return null;
