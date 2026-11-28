@@ -83,7 +83,7 @@ public partial class MainShellWindow
     }
     private void BrowserFullscreenMessage(string message)
     {
-        if (message.Trim().Trim('"') == "ccp_browser_fullscreen_off") ExitBrowserPopoutFullscreen();
+        if (message.Trim().Trim('"') == "ccp_browser_fullscreen_off") ExitBrowserFullscreenByUser();
     }
 
     private void EnterBrowserFullscreen()
@@ -170,7 +170,7 @@ public partial class MainShellWindow
     {
         if (sender != _browserTakeoverWindow) return;
         _browserTakeoverClosing = true;
-        try { ExitBrowserPopoutFullscreen(); }
+        try { ExitBrowserFullscreenByUser(); }
         finally { _browserTakeoverClosing = false; }
     }
 
@@ -186,7 +186,7 @@ public partial class MainShellWindow
     {
         if (e.Key != Key.Escape && e.Key != Key.F11) return;
         e.Handled = true;
-        ExitBrowserPopoutFullscreen();
+        ExitBrowserFullscreenByUser();
     }
 
     internal void ExitBrowserPopoutFullscreen()

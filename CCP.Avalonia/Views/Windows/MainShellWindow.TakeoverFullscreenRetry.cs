@@ -12,7 +12,7 @@ public partial class MainShellWindow
     private WebHost? _takeoverRetryHost;
     private int _takeoverRetryGeneration;
     private bool _takeoverAsked, _takeoverRetried;
-    private long _takeoverAskUntil;
+    private long _takeoverAskUntil, _takeoverFallbackSession;
     internal Func<Task> TakeoverFocusDelay = () => Task.Delay(TakeoverFullscreenRetry.FocusSettleMs);
     internal Action<WebHost>? TakeoverFocusForTest;
 
@@ -82,7 +82,17 @@ public partial class MainShellWindow
             }
             EnterBrowserFullscreen();
             if (_browserFullscreenWindow == null) await host.InvokeScriptAsync(WebHostTakeover.FullscreenFallbackCleanupScript);
+            else _takeoverFallbackSession = _browserFullscreenSession;
         }
         catch (Exception ex) { Log.Debug("Takeover fullscreen gesture retry failed: {Error}", ex.Message); }
+    }
+
+    // WPF MainWindow.Browser.cs:906-912 posts fsExit on Esc, F11 or double-click. The fallback never enters page
+    // fullscreen, so the page cannot; report it here once, so the takeover hard stop is released (:1199).
+    private void ExitBrowserFullscreenByUser()
+    {
+        bool fallback = _browserFullscreenWindow != null && _takeoverFallbackSession == _browserFullscreenSession;
+        ExitBrowserPopoutFullscreen();
+        if (fallback) BrowserMediaSession.Shared.OnFullscreenExited();
     }
 }
