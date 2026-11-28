@@ -360,6 +360,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             AddHandler(KeyDownEvent, OnVideoHostKeyDown, global::Avalonia.Interactivity.RoutingStrategies.Tunnel); Deactivated += (_, _) => _pressed.Clear();
             AddHandler(KeyUpEvent, OnPlayerKeyUp, global::Avalonia.Interactivity.RoutingStrategies.Tunnel);
             _videoBrowser.NavigationCompleted += OnVideoNavigationCompleted;
+            _videoBrowser.NavigationFinished += OnVideoNavigationFinished;
             _videoBrowser.WebMessage += OnVideoWebMessage;
             _videoBrowser.NativeFullscreenEntered += EnterVideoFullscreen;
             _btnPictureInPicture.Click += (_, _) => BtnPictureInPicture_Click();
@@ -963,6 +964,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
                 Log.Warning(ex, "EnhancementPlayer: local video load failed");
                 _txtVideoStatus.Text = Loc.Get("deeper_player_video_no_video");
             }
+        }
+
+        // WPF EnhancementPlayerWindow.xaml.cs:1825-1835. WebHost exposes an outcome but no native error code.
+        private void OnVideoNavigationFinished(Uri uri, bool success)
+        {
+            if (success || _closing || !_isVideoMode || !_videoNavigated || _videoBrowser.AllowNavigation?.Invoke(uri) != true) return;
+            ++_videoLoad; // Ignore in-flight play and poll results from the failed page.
+            _videoNavigated = false;
+            _isPlaying = false;
+            StopDeeper();
+            var message = Loc.GetF("deeper_player_video_nav_failed_fmt", uri.IsFile ? uri.Scheme : uri.Host);
+            _txtVideoStatus.Text = _txtStatus.Text = message;
+            _txtVideoStatus.IsVisible = true;
+            _txtPlayPauseGlyph.Kind = IconKind.Play;
+            IngestErrorLine(message);
+            UpdateStatusPill();
         }
 
         private void LoadVideoUrl(string url)
@@ -2006,6 +2023,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
             _videoClosing = true; CancelEscHold();
             ExitVideoFullscreen();
             _videoBrowser.NavigationCompleted -= OnVideoNavigationCompleted;
+            _videoBrowser.NavigationFinished -= OnVideoNavigationFinished;
             _videoBrowser.WebMessage -= OnVideoWebMessage;
             _closing = true; ++_videoLoad;
             EndVideoWatch();
