@@ -131,7 +131,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void OnLockChanged() => Dispatcher.UIThread.Post(RepaintForLock);
 
         // WPF :173: stamps repaint when the lock changes, not on the 30 s tick (P07).
-        internal void RepaintForLock() { RefreshHero(); RefreshDay(false); PaintStamps(); }
+        internal void RepaintForLock() { RefreshHero(); RefreshDay(false); if (ChasterHead.Service?.IsLinked == true) RefreshNumbers(animate: false); PaintStamps(); }
 
         // WPF xaml.cs:93: the page tick also refreshes today and its cap.
         internal void PageTick() { RefreshHero(); RefreshDay(false); }

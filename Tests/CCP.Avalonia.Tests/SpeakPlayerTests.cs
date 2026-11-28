@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Linq;
+using System.Collections.ObjectModel;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Threading;
@@ -12,6 +14,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Haptics.Core;
 using ConditioningControlPanel.Services.Speech;
+using ConditioningControlPanel.Services.Deeper;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -51,6 +54,79 @@ public class SpeakPlayerTests
         Func<TimeSpan, Action, Action>? startCueTimer = null) =>
         new(() => true, () => true, () => Task.FromResult(true), () => false, () => { }, () => { }, () => false,
             listen, stopListening ?? (() => { }), show ?? (_ => { }), hide ?? (() => { }), flash, startCueTimer);
+
+    private sealed class Actions : IActionDispatcher, IEnhancementRunCleanup
+    {
+        public int Calls, Resets;
+        public Task DispatchAsync(EnhancementAction action, EnhancementDispatchContext context, CancellationToken token = default)
+        { Calls++; return Task.CompletedTask; }
+        public void ResetOverlayBands() => Resets++;
+        public void StopOneShotFlashes() { }
+        public void StopOneShotSubliminals() { }
+    }
+
+    [Fact]
+    public Task PlayerDispatchesSupportedRulesAndRetiresOnReplacement() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        using var media = new Media();
+        var actions = new Actions();
+        var player = new EnhancementPlayerWindow(null, null) { PlayerDispatcherFactory = () => actions };
+        try
+        {
+            player.Show(); player.OpenLocalMediaFile(media.Path);
+            for (int i = 0; i < 500 && !media.Audio.Playing; i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
+            Assert.True(media.Audio.Playing);
+            player.LoadEnhancementFromMemory(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*", Rules = {
+                new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 1 }, Action = new ConditioningControlPanel.Models.Deeper.PlayAudioAction { Path = "test" } },
+                new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 1 }, Action = new TriggerEffectAction { EffectType = EffectTypes.Overlay, OverlayKind = OverlayKinds.PinkFilter } }
+            } }, "test");
+            Tick(player); media.Audio.PositionSeconds = 1.2; Tick(player);
+            Assert.Equal(1, actions.Calls);
+            Tick(player); Assert.Equal(1, actions.Calls);
+            player.LoadEnhancementFromMemory(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*" }, "replacement");
+            Assert.Equal(1, actions.Resets);
+            media.Audio.PositionSeconds = 2; Tick(player);
+            Assert.Equal(1, actions.Calls);
+        }
+        finally { player.Close(); }
+    });
+
+    private sealed class Camera : IEnhancementWebcam
+    {
+        public event Action? OnBlink, OnMouthOpen, OnFaceLost, OnFaceFound;
+        public event Action<double, double>? OnGazeMove;
+        public void Blink() => OnBlink?.Invoke();
+    }
+
+    [Fact]
+    public Task PlayerFeedsWebcamAndEventLog() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var old = EnhancementHostService.WebcamProvider;
+        var camera = new Camera();
+        EnhancementHostService.WebcamProvider = () => camera;
+        using var media = new Media();
+        var actions = new Actions();
+        var player = new EnhancementPlayerWindow(null, null) { PlayerDispatcherFactory = () => actions };
+        try
+        {
+            player.Show(); player.OpenLocalMediaFile(media.Path);
+            for (int i = 0; i < 500 && !media.Audio.Playing; i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
+            Assert.True(media.Audio.Playing);
+            player.LoadEnhancementFromMemory(new Enhancement { MediaType = MediaTypes.Video, MediaSource = "*", Rules = {
+                new EnhancementRule { Trigger = new BlinkDetectedTrigger(), Action = new ConditioningControlPanel.Models.Deeper.PlayAudioAction { Path = "test" } }
+            } }, "test");
+            player.GetType().GetField("_isVideoMode", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.SetValue(player, false);
+            Tick(player); camera.Blink(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, actions.Calls);
+            var entries = (ObservableCollection<EventLogEntry>)player.GetType().GetField("_logEntries", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(player)!;
+            Assert.Contains(entries, e => e.Category == EventLogEntry.EventLogCategory.Action);
+            Assert.Contains(entries, e => e.Category == EventLogEntry.EventLogCategory.Engine && e.Description.Contains("blink"));
+            player.LoadEnhancementFromMemory(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*" }, "replacement");
+            camera.Blink(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, actions.Calls);
+        }
+        finally { player.Close(); EnhancementHostService.WebcamProvider = old; }
+    });
 
     [Fact]
     public Task ReplacementRetiresQueuedAndDisplayedSpeakCards() => AvaloniaTestDispatcher.RunAsync(async () =>

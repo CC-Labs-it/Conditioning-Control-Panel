@@ -31,6 +31,7 @@ public partial class App
                 media ?? CreateAwarenessMediaWatcher(OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763), OperatingSystem.IsLinux(), SandboxNet.Active),
                 state, null, attachAppState: state.Attach);
             _awarenessObserver = observer;
+            InstallPrivacyLedger(ledger, observer);
             AwarenessObserver.EntitlementProvider = () => WindowAwarenessService.HasEntitlement;
             AwarenessObserver.PostToUi = action => Dispatcher.UIThread.Post(action);
             AwarenessLive.Memory = memory;
@@ -44,12 +45,14 @@ public partial class App
                     observer.Start();
                     AwarenessLive.ObserverEnabled = observer.IsRunning;
                     if (observer.IsRunning) AwarenessV2Routing.Attach(arbiter);
+                    else if (System.IO.File.Exists(ledger.LedgerPath)) ledger.Start();
                 }
                 else
                 {
                     AwarenessV2Routing.Detach();
                     AwarenessLive.ObserverEnabled = false;
                     observer.Stop();
+                    ledger.Stop();
                     AwarenessLive.Clear();
                 }
             };
@@ -90,6 +93,7 @@ public partial class App
         AwarenessLive.ObserverEnabled = false;
         _awarenessObserver?.Dispose();
         _awarenessObserver = null;
+        AwarenessObserverHost = null;
         AwarenessLive.Clear();
         AwarenessLive.Memory = null;
         AwarenessLive.ResetObserverState = null;

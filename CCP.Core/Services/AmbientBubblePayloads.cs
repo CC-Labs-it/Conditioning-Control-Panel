@@ -19,9 +19,9 @@ public static class AmbientBubblePayloads
         if (ids.Length == 0 || random.Next(100) >= Math.Clamp(s.BubbleTriggerChance, 0, 100)) return null;
         // WPF BuildTriggerSpec: the dashboard Motion setting; "Mixed" does not parse -> FloatUp.
         ChaosMotion? motion = Enum.TryParse<ChaosMotion>(s.ChaosMotionMode, out var m) ? m : null;
-        return Build(ids[random.Next(ids.Length)], motion);
+        return Build(ids[random.Next(ids.Length)], motion, random);
     }
-    public static EffectBubbleSpec? Build(string id, ChaosMotion? motion = null)
+    public static EffectBubbleSpec? Build(string id, ChaosMotion? motion = null, Random? random = null)
     {
         // WPF BubbleService.cs:1202: benign, deep violet, breathes (AmbientBubble.DisplayFade).
         if (id == BrainDrainBubble.VariantId) return new EffectBubbleSpec
@@ -38,7 +38,7 @@ public static class AmbientBubblePayloads
         };
         var variant = ChaosBubbleVariants.All.FirstOrDefault(v => v.Id == id);
         if (variant == null) return null;
-        var spec = ChaosBubbleVariants.Build(variant, 0.3, motionOverride: motion, ambient: true);
+        var spec = ChaosBubbleVariants.Build(variant, 0.3, motionOverride: motion, ambient: true, random: random);
         spec.Payload.DurationMult = 2.5;
         return spec;
     }
