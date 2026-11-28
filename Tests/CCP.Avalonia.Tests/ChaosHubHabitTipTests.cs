@@ -3,6 +3,7 @@ using System.Reflection;
 using Avalonia.Controls;
 using Avalonia.Media;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Avalonia.Views.Chaos;
 using Xunit;
 
@@ -13,6 +14,8 @@ public class ChaosHubHabitTipTests
     [Fact]
     public void Habit_icon_has_a_card_with_name_description_and_flavour() => AvaloniaTestDispatcher.Run(() =>
     {
+        // The hub reloads ChaosMeta.State via Init(); put the shared instance back for later tests.
+        var oldState = ChaosMeta.State;
         var hub = new ChaosHubWindow();
         try
         {
@@ -31,6 +34,11 @@ public class ChaosHubHabitTipTests
             Assert.Equal(new[] { Get("Name"), Get("Desc"), Get("Flavor") }, texts.Select(t => t.Text));
             Assert.Equal(FontStyle.Italic, texts[2].FontStyle);
         }
-        finally { hub.Close(); }
+        finally
+        {
+            hub.Close();
+            typeof(ChaosMeta).GetProperty(nameof(ChaosMeta.State))!.SetValue(null, oldState);
+        }
+        Assert.Same(oldState, ChaosMeta.State);
     });
 }
