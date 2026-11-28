@@ -32,7 +32,7 @@ internal static class SharedOverlayHost
     // (OverlayService.cs:3071,3389, #497). Here they are separate windows, so restore both orders by hand.
     // With a video up, stack the stage under it, then an "over" tint directly under it too: the order is
     // video > tint > stage, so the tint still covers the stage once the video closes.
-    private static void Seat(Window stage, bool raise)
+    private static void Seat(Window stage, bool raise, bool syncTint = true)
     {
         var videos = LiveVideos();
         if (videos.Count > 0)
@@ -43,7 +43,7 @@ internal static class SharedOverlayHost
             return;
         }
         if (raise) Raise(stage);
-        if (!CoreSettings.Current.PinkFilterUnderEffects) PinkFilterOverlay.SyncOrder();
+        if (syncTint && !CoreSettings.Current.PinkFilterUnderEffects) PinkFilterOverlay.SyncOrder();
     }
 
     // WPF compositor: one host per screen, so consumers' ZIndex orders them (SpiralLayer above SubliminalLayer,
@@ -56,11 +56,11 @@ internal static class SharedOverlayHost
         private Stage? _stage;
         internal Grid Canvas { get; }
         internal Lease(Stage stage) => (_stage, Canvas) = (stage, stage.Canvas);
-        internal void Raise()
+        internal void Raise(bool syncTint = true)
         {
             if (_stage == null) return;
             if (!Pinned) { _stage.Window.Topmost = false; return; }
-            Seat(_stage.Window, raise: true);
+            Seat(_stage.Window, raise: true, syncTint: syncTint);
         }
         public void Dispose()
         {
@@ -69,7 +69,7 @@ internal static class SharedOverlayHost
         }
     }
 
-    internal static Lease? Acquire(PixelRect bounds)
+    internal static Lease? Acquire(PixelRect bounds, bool syncTint = true)
     {
         if (Stages.TryGetValue(bounds, out var live)) { live.Leases++; return new Lease(live); }
         var canvas = new Grid { IsHitTestVisible = false };
@@ -91,7 +91,7 @@ internal static class SharedOverlayHost
         Stages[bounds] = stage;
         // A panic sweep may close it under live leases: forget it so the next Acquire builds a new one.
         window.Closed += (_, _) => { if (Stages.TryGetValue(bounds, out var s) && s == stage) Stages.Remove(bounds); };
-        Seat(window, raise: false);   // a fresh stage maps on top: also when a spiral starts mid-video
+        Seat(window, raise: false, syncTint: syncTint);   // a fresh stage maps on top: also when a spiral starts mid-video
         return new Lease(stage);
     }
 }

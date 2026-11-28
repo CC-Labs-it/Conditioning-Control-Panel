@@ -63,12 +63,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             schedule ??= (action, delay) => DispatcherTimer.RunOnce(action, delay);
             if (!Hosts.TryGetValue(bounds, out var lease))
             {
-                lease = SharedOverlayHost.Acquire(bounds);
+                lease = SharedOverlayHost.Acquire(bounds, syncTint: false);
                 if (lease == null) return false;
                 Hosts.Add(bounds, lease);
             }
             var card = SubliminalOverlayWindow.Build(text, CoreSettings.Current);
             card.Opacity = 0;
+            // WPF SubliminalService.cs:820-821: legacy solid cards sit above hosted flashes (1000).
             card.ZIndex = CoreSettings.Current.UnifiedOverlayHost ? Services.Compositor.CompositorLayers.Subliminal : 1200;
             lease.Canvas.Children.Add(card);
             HostedCards.Add(card);
@@ -119,7 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF draws every effect family on one compositor in <see cref="global::ConditioningControlPanel.Services.Compositor.CompositorLayers"/>
         /// order (Flash 30 &lt; Subliminal 40 &lt; Bubbles 45 &lt; BouncingText 50 &lt; Spiral 60 &lt; PinkTint 70). Here each family
-        /// owns its topmost windows, so the card's ZIndex orders nothing outside the stage: raise the stage, then
+        /// may own separate topmost windows: raise the stage, then
         /// re-raise every later family in that order. Flashes call this after they map (they sit under the card).</summary>
         internal static void RestackStages()
         {
@@ -128,7 +129,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             if (HostedCards.Count == 0 || VideoWindowCount() > 0) return;
             // PinkFilterUnderEffects puts the tint at PinkTintUnder (35): over a flash (30), under the stage (40).
             if (CoreSettings.Current.PinkFilterUnderEffects) RaiseAll(PinkFilterOverlay.Shown);
-            foreach (var lease in Hosts.Values) lease.Raise();
+            foreach (var lease in Hosts.Values) lease.Raise(syncTint: false);
             IEnumerable<Window> above = PinkFilterOverlay.EffectWindows()
                 .Where(w => w is BubbleOverlayWindow or BouncingTextOverlayWindow or SpiralOverlayWindow)
                 .OrderBy(w => w is BubbleOverlayWindow ? 0 : w is BouncingTextOverlayWindow ? 1 : 2);

@@ -23,6 +23,8 @@ public sealed class SubliminalCardFadeTests
     {
         SubliminalSilentHintTests.EnsureAvalonia();
         var configure = SharedOverlayHost.Configure;
+        var requestFrame = SubliminalOverlayWindow.RequestFrame;
+        SubliminalOverlayWindow.RequestFrame = (_, frame) => frame(TimeSpan.Zero);
         var settingsProvider = CoreSettings.ServiceProvider;
         CoreSettings.ServiceProvider = null;   // Gentle Visuals off: the authored fades as they are
         Window? stage = null;
@@ -32,6 +34,7 @@ public sealed class SubliminalCardFadeTests
         {
             SubliminalOverlay.CloseAll();
             SharedOverlayHost.Configure = configure;
+            SubliminalOverlayWindow.RequestFrame = requestFrame;
             CoreSettings.ServiceProvider = settingsProvider;
         }
     });
@@ -77,6 +80,7 @@ public sealed class SubliminalCardFadeTests
                 (fire, at) => scheduled.Add((at, fire)), SubliminalOverlayWindow.Fade(80), SubliminalOverlayWindow.Fade(350)));
             var card = Assert.Single(canvas().Children);
             Advance(scheduled, TimeSpan.FromMilliseconds(40));
+            Assert.InRange(card.Opacity, 0.01, 0.79);
             PanicSurfaces.All.Single(s => s.Id == "engine").Stop(null);
             Assert.Empty(canvas().Children);
             var opacity = card.Opacity;

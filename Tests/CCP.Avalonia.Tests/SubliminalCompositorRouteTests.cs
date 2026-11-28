@@ -93,7 +93,7 @@ public sealed class SubliminalCompositorRouteTests
             var stage = Assert.Single(env.Stages);
             Assert.True(stage.IsVisible);
             var card = Assert.IsType<Grid>(Assert.Single(Assert.IsType<Grid>(stage.Content).Children));
-            Assert.Equal(CompositorLayers.Subliminal, card.ZIndex);
+            Assert.Equal(unified ? CompositorLayers.Subliminal : 1200, card.ZIndex);
             Assert.Equal(0, card.Opacity); // waits for the stage's first frame
             Assert.Single(env.Frames);
         }
@@ -190,7 +190,7 @@ public sealed class SubliminalCompositorRouteTests
             Assert.True(FlashOverlay.Show(new global::Avalonia.Media.Imaging.Bitmap(global::Avalonia.Platform.AssetLoader.Open(
                     new Uri("avares://CCP.Avalonia/Resources/features/flash.png"))),
                 new PixelRect(10, 10, 50, 50), "flash.png", env.Owner.Screens.All[0], 1, TimeSpan.Zero,
-                TimeSpan.FromSeconds(6), false, false, 0));
+                TimeSpan.FromSeconds(6), true, false, 0));
             Assert.Equal(expected(stage), raised);
 
             env.Videos = 1; // a video starts between the card and a flash: the stage, spiral and tint stay under it (WPF #497)
@@ -198,7 +198,7 @@ public sealed class SubliminalCompositorRouteTests
             Assert.True(FlashOverlay.Show(new global::Avalonia.Media.Imaging.Bitmap(global::Avalonia.Platform.AssetLoader.Open(
                     new Uri("avares://CCP.Avalonia/Resources/features/flash.png"))),
                 new PixelRect(10, 10, 50, 50), "flash-video.png", env.Owner.Screens.All[0], 1, TimeSpan.Zero,
-                TimeSpan.FromSeconds(6), false, false, 0));
+                TimeSpan.FromSeconds(6), true, false, 0));
             Assert.Empty(raised);
             env.Videos = 0;
 
@@ -207,7 +207,7 @@ public sealed class SubliminalCompositorRouteTests
             Assert.True(FlashOverlay.Show(new global::Avalonia.Media.Imaging.Bitmap(global::Avalonia.Platform.AssetLoader.Open(
                     new Uri("avares://CCP.Avalonia/Resources/features/flash.png"))),
                 new PixelRect(10, 10, 50, 50), "flash2.png", env.Owner.Screens.All[0], 1, TimeSpan.Zero,
-                TimeSpan.FromSeconds(6), false, false, 0));
+                TimeSpan.FromSeconds(6), true, false, 0));
             Assert.Empty(raised);
         }
         finally
