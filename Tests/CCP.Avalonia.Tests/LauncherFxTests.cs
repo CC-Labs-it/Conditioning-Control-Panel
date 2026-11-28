@@ -456,7 +456,7 @@ public sealed class LauncherFxTests
     public void TileDepth_SlidesArtAgainstPointer_TintsTitle_AndReturnsHome() => Run(MotionLevel.Full, (_, w, _) =>
     {
         Step(w, 1); // Measure hover after the show entrance has settled.
-        var tile = Tile(w);
+        var tile = (Border)w.FindControl<UniformGrid>("GamesGrid")!.Children[0];
         var title = tile.GetVisualDescendants().OfType<TextBlock>().Single(t => t.FontSize == 19);
         var brush = (SolidColorBrush)title.Foreground!;
         var rest = brush.Color;
@@ -717,7 +717,7 @@ public sealed class LauncherFxTests
         LauncherWindow.LauncherSfx.Clock = clock;
         try
         {
-            var tile = Tile(launcher);
+            var tile = (Border)launcher.FindControl<UniformGrid>("GamesGrid")!.Children[0];
             var scale = ((TransformGroup)tile.RenderTransform!).Children.OfType<ScaleTransform>().Single();
             var centre = tile.TranslatePoint(new Point(tile.Bounds.Width / 2, tile.Bounds.Height / 2), launcher)!.Value;
             cues.Clear();

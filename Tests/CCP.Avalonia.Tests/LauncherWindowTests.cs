@@ -682,9 +682,9 @@ public sealed class LauncherWindowTests
         Assert.True(launcher.IsVisible);
         Assert.False(shell.IsVisible);
 
-        // Only the destinations this head has: the Breakout demo, Piece by Piece, Racing Thoughts and Down the Rabbit Hole game hosts,
+        // Only the destinations this head has: Breakout, Piece by Piece, Racing Thoughts and Down the Rabbit Hole game hosts,
         // then the intake tab.
-        Assert.Equal(new[] { "breakoutdemo", "piecebypiece", "race", "raceclassic", "dtrh", "intake" }, Tiles(launcher));
+        Assert.Equal(new[] { "breakoutdemo", "breakout", "piecebypiece", "race", "raceclassic", "dtrh", "intake" }, Tiles(launcher));
         var tile = launcher.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
         Assert.Contains(Loc.Get("launcher_game_intake_title"), Texts(tile));
         Assert.Contains(Loc.Get("launcher_play"), Texts(tile));
@@ -730,8 +730,16 @@ public sealed class LauncherWindowTests
     public void OverflowingTiles_GrowTheWindowOnce_WithinTheWorkArea() => Run(shell =>
     {
         CoreAccount.IsLoggedInProvider = () => true;
-        LauncherWindow.BackToLauncher(shell);
-        Dispatcher.UIThread.RunJobs();
+        // Start with a fitting grid so this test can trigger the first growth itself.
+        var destinations = (IDictionary<string, (Func<bool> Locked, Action<MainShellWindow> Open)>)LauncherWindow.Destinations;
+        var breakout = destinations["breakout"];
+        try
+        {
+            destinations.Remove("breakout");
+            LauncherWindow.BackToLauncher(shell);
+            Dispatcher.UIThread.RunJobs();
+        }
+        finally { destinations["breakout"] = breakout; }
         var w = LauncherWindow.Instance!;
         var grid = w.FindControl<UniformGrid>("GamesGrid")!;
         // One tile fits: the block sits centred (WPF FitTiles).
@@ -1210,6 +1218,52 @@ public sealed class LauncherWindowTests
             Assert.Equal(Loc.Get("launcher_panel_launch"), Text(w, "PanelCtaText"));
         }
         finally { CoreEngine.StoppedHook = oldHook; CoreEngine.Stop(); }
+    });
+
+    [Fact]
+    public void FullBreakoutTile_GatesAndLaunches() => Run(shell =>
+    {
+        var oldDenied = CoreEntitlement.ShowDeniedHandler;
+        var oldServer = ConditioningControlPanel.Avalonia.Views.Games.GameWindow.Server;
+        var root = System.IO.Directory.CreateTempSubdirectory("launcher-breakout-").FullName;
+        using var server = new ConditioningControlPanel.Avalonia.Platform.WebAssetServer(root);
+        try
+        {
+            ConditioningControlPanel.Avalonia.Views.Games.GameWindow.Server = () => server;
+            CoreAccount.IsLoggedInProvider = () => true;
+            CoreEntitlement.HasLabProvider = () => false;
+            string? denied = null;
+            CoreEntitlement.ShowDeniedHandler = verdict => denied = verdict.Feature;
+            LauncherWindow.BackToLauncher(shell);
+            var w = LauncherWindow.Instance!;
+            var tile = (Border)w.FindControl<UniformGrid>("GamesGrid")!.Children.Single(c => (string?)c.Tag == "breakout");
+            Assert.True(LauncherWindow.CanStartGame("breakout"));
+            Assert.Contains(Loc.Get("launcher_prime_pill"), Texts(tile));
+            Assert.Contains(Loc.Get("launcher_locked"), Texts(tile));
+            Assert.Same(ConditioningControlPanel.Avalonia.Helpers.BreakoutCardArt.Full,
+                Assert.Single(global::Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(tile).OfType<Image>()).Source);
+            ClickPlay(tile);
+            Assert.Equal(Loc.Get("launcher_game_breakout_title"), denied);
+            Assert.False(ConditioningControlPanel.Avalonia.Views.Games.GameWindow.IsAnyOpen());
+            Assert.True(w.IsVisible);
+
+            CoreEntitlement.HasLabProvider = () => true;
+            ClickPlay(tile);
+            var game = ConditioningControlPanel.Avalonia.Views.Games.GameWindow.Launch("breakout");
+            Assert.NotNull(game);
+            Assert.Equal("breakout", game.Spec.Id);
+            Assert.True(game.IsVisible);
+            Assert.False(w.IsVisible);
+            game.Close();
+            Assert.True(LauncherWindow.LaunchGame(shell, "breakout"));
+        }
+        finally
+        {
+            ConditioningControlPanel.Avalonia.Views.Games.GameWindow.CloseAllForPanic();
+            ConditioningControlPanel.Avalonia.Views.Games.GameWindow.Server = oldServer;
+            CoreEntitlement.ShowDeniedHandler = oldDenied;
+            System.IO.Directory.Delete(root, true);
+        }
     });
 
     [Fact]

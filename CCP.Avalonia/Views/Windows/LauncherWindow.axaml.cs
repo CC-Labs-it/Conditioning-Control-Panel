@@ -17,6 +17,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Launcher;
 using ConditioningControlPanel.Services.Prizes;
 using Serilog;
@@ -36,6 +37,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                               panel => panel.ShowTab("gradedintake")),
                 // WPF BreakoutHostService.LaunchDemo: free, no account; Play opens it via LaunchGameWindow.
                 ["breakoutdemo"] = (() => false, _ => Games.GameWindow.Launch("breakoutdemo")),
+                // WPF LauncherCatalogue.cs:226: Lab lock; the game gate paints the refusal.
+                ["breakout"] = (() => !TierGate.RequiresLab(Loc.Get("launcher_game_breakout_title")).Allowed, _ => Games.GameWindow.Launch("breakout")),
                 // WPF PieceByPieceHostService.Launch: free, no account (LauncherCards RequiresAccount: false).
                 [Games.GameWindow.PbpId] = (() => false, _ => Games.GameWindow.Launch(Games.GameWindow.PbpId)),
                 // WPF 7.2 LauncherCatalogue: always revealed, Prime padlock; Launch paints the refusal.
@@ -769,11 +772,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             var artHost = new Panel { RenderTransform = artSlide, Margin = new Thickness(-7) };
             Image? artImage = null;
             var plate = new Panel { ClipToBounds = true, MinHeight = LauncherGridLayout.MinArtHeight, Background = new SolidColorBrush(hue, 0.35) };
-            // WPF LauncherWindow.Tiles.cs:104-115: the Breakout demo has a built-in vector cover.
+            // WPF LauncherWindow.Tiles.cs:104-115: both Breakout cards have built-in vector covers.
             IImage? art = ModArt.TryLoad(card.ArtPath, 640);
             art ??= card.Id switch
             {
                 "breakoutdemo" => BreakoutCardArt.Demo,
+                "breakout" => BreakoutCardArt.Full,
                 _ => null,
             };
             if (art != null)
