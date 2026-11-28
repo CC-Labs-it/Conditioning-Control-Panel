@@ -40,16 +40,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// collar pay first, and a detonation makes the loop unclean (no doubled tip, no silk_touch).
     /// The run-end lessons go through Core ChaosRunLessons.</para>
     ///
-    /// <para>ponytail: still NOT here: darters, the Brittle,
+    /// <para>Darters spawn on WPF's own roll (:1204) and a catch slows time (OnDarterCaught :2351).
+    /// ponytail: their flare, bolt, bounce-out and 8 s life come with #3986 (Core StepDarter); until then
+    /// a darter roams like any RoamBounce bubble until caught or the field clears.</para>
+    ///
+    /// <para>ponytail: still NOT here: the Brittle,
     /// the lucky golden (and its gold/Gold Digger droplets), the heart and the behavioral bubbles
     /// (Echo/Bound) - SpawnTick spawns treats, plain live variants, the Tease and the Chaperone; every
     /// motion other than FloatUp, RainDown and Chaperone roaming, chain reaction, cam-girl tips,
     /// treat lessons, the announcer and the achievement credit; slow-mo,
     /// the perf backoff on the cadence; Gif Rain and bouncing text payloads fire; the
     /// first-time bonus pop text.
-    /// chaos barks (run started/completed, gold-first, defuse/detonate) still need their callers
-    /// wired to CoreBark (chaos-payout-barks). NO FOCUS TO DEFUSE, last breath and UNLEASHED
-    /// announcer callers remain missing even though the announcer overlay is now present.
+    /// Defuse and detonation barks and the last breath announcer caller remain missing.
     /// The FX window receives pop, defuse, combo and detonation pulses plus heat tint (also
     /// mirrored to <see cref="PulseFx"/>); screen shake keeps WPF's values through the unseeded
     /// <see cref="ShakeFx"/> hook (chaos-payout-fallin-d). Periodic
@@ -161,10 +163,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static double _lastHeatTint = -1;
         private static bool _dvdBannerOn;
         private static int _lastComboBigFired;
+        private static DateTime _lastNoFocusAnnounceUtc = DateTime.MinValue;
         private static double _freezeRemainingSec;
         // WPF ChaosModeService.cs:2406-2475, :2813-2817, :2958-2979: the Pendulum's slow-mo window
         // (hand-ported from #4303). Run clock, so it holds through pauses like the freeze.
-        internal const double SlowMoFactor = 0.12;
+        internal const double SlowMoFactor = 0.12, SlowMoDurationSec = 6.0;   // WPF :2399-2400
         private static double _slowMoRemainingSec, _pendulumFireAt;
         private static int _pendulumWave;
         private static bool _pendulumFired, _pendulumSlowActive, _slowMoCueOn;
@@ -204,6 +207,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         public static void StartRun(ChaosRunConfig? config = null, bool isRestart = false)
         {
             if (_active) return;
+            CloseLoadoutSidebar();
             if (!isRestart) SeasonFeatureTracking.Track(CoreSettings.Current, ConditioningControlPanel.Models.SeasonFeatureKeys.ChaosMode, ev => App.FeatureDayLog?.Note(ev), DateTime.UtcNow);
             try
             {
@@ -216,12 +220,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _lastHeatTint = -1;
                 _hud = new ChaosHudWindow(_state);
                 _hud.Show();
+                RefreshSidebarLoadout();   // WPF ChaosModeService.cs:342, countdown loadout
                 _overlay = ChaosOverlayWindow.ForRun();
                 _overlay.OnRunAgain = RunAgain;
                 _overlay.OnDismissed = OnOverlayClosed;
                 _overlay.Show();
                 ChaosEffectBannerOverlay.EnsureCreated();   // WPF :410 birth the banner window NOW, not mid-chaos
                 Overlays.ChaosFieldFxOverlay.EnsureCreated();   // WPF ChaosModeService.cs:411
+                ChaosTunnelWindow.Open(preload: true);   // WPF ChaosModeService.cs:348
                 _overlay.ShowCountdown(BeginRun, shortFlash: isRestart);   // 1s flash on RunAgain
             }
             catch (Exception ex)
@@ -242,7 +248,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // With a panic already queued, start only after it has run: it usually ends the run, and
             // then nothing (boons, HUD, StartToys) ever starts. Background runs after the panic's Default.
             if (PanicWatchdog.PanicPending) { Dispatcher.UIThread.Post(BeginRun, DispatcherPriority.Background); return; }
+            ChaosTunnelWindow.Open();   // WPF ChaosModeService.cs:519-523
+            _state.PropertyChanged += OnTunnelStateChanged;
+            OnTunnelStateChanged(_state, new System.ComponentModel.PropertyChangedEventArgs(nameof(ChaosRunState.Combo)));
+            OnTunnelStateChanged(_state, new System.ComponentModel.PropertyChangedEventArgs(nameof(ChaosRunState.ActIndex)));
             _heavyUntilUtc = DateTime.MinValue;   // WPF ChaosModeService.cs:405
+            ChaosBackdropWindow.ShowForRun(ActiveMode, _state.ActIndex); // WPF ChaosModeService.cs:518
             HookRunVideo();   // WPF ChaosModeService.cs:504
             _runsAtStart = ChaosMeta.State.RunsCompleted; _draftsThisRun = 0;
             _scriptThreat = _scriptSnapped = _scriptDraft = _sinRigged = _sinPending = false;
@@ -263,6 +274,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ChaosAnnouncerOverlay.Announce(boon.Name, ChaosAnnounceKind.Mantra, artKey: boon.Id);
             }
             ChaosRunEffects.ApplyLifetimeBoons(_state);
+            RefreshSidebarLoadout();   // WPF :445, lock in the loadout at SINK
             ChaosSkiaFxOverlay.EnsureCreated();   // WPF ChaosModeService.cs:412, idle run-start prewarm
             _hud?.SetPreRunExpanded(false);
             _hud?.SetClockVisible(_state.ShowWaveTimer);
@@ -275,10 +287,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (ChaosMeta.IsBoonActive("vibe_popping")) ChaosVibeTrailOverlay.EnsureCreated();   // WPF :454-455 (#3506)
             _waveDetonatedAt = _state.Detonated;
             _lastComboBigFired = 0;
+            _runDetonations = 0; _focusLowAccumSec = 0; _focusLowBarkFired = false;   // WPF :391, :464
+            _lastNoFocusAnnounceUtc = DateTime.MinValue;
             _invulnUntilUtc = DateTime.MinValue;
             _regenPopCount = 0;
             ChaosRunLessons.OnRunStarted();   // WPF :399
-            // ponytail: NotifyChaosRunStarted bark (WPF :389) -> chaos-payout-barks.
+            BarkHead.Engine?.Raise("ChaosRunStarted", c => c.Set("difficulty", _state.Config.Difficulty.ToString()));
             _spawning = true;
             _chromeTicks = 0;
             _fx = ChaosFxWindow.Open();   // WPF BeginRun :500, one impact-vignette window per run
@@ -288,7 +302,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             _spawnSerial = _ordinarySpawns = _teaseDenied = 0; _teaseStreakBarked = false;   // WPF :466
             _pendulumWave = 0;   // WPF :402: the swing re-rolls its beat for wave 1
-            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse, OnTeaseTouched, OnTeaseDenied, OnTreatExpired);
+            if (_overlay != null) BubbleOverlay.BeginChaos(_overlay, OnBubblePopped, OnDefused, OnDetonated, CanChannelDefuse, OnTeaseTouched, OnTeaseDenied, OnTreatExpired, OnBoundEnraged);
             RefreshRippleInput();
             _ripplePointer?.Dispose();   // never two grabs if a run restarts without EndField
             _ripplePointer = RipplePointer.Start(OnRippleRightDown);
@@ -314,7 +328,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 double waveLen = (double)_state.RunDurationSec / _state.WaveCount;
                 double waveLeft = waveLen - (_state.ElapsedSec % waveLen);
                 double runLeft = _state.RunDurationSec - _state.ElapsedSec;
-                if (enabled.Contains("video") && (waveLeft < 14 || runLeft < 18))
+                if (enabled.Contains("video") && (HeavyEffectActive || waveLeft < 14 || runLeft < 18))
                     enabled = enabled.Where(id => id != "video").ToList();
 
                 if (!cfg.ScriptedFirstRun && ChaosMeta.AtLeast(ChaosRank.Tempted)
@@ -323,6 +337,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     SpawnChaperone(effIntensity);
                     if (_spawnTimer != null)
                         _spawnTimer.Interval = TimeSpan.FromMilliseconds(ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult, SpawnSlowFactor));
+                    return;
+                }
+                // WPF ChaosModeService.cs:1281-1298: Bound replaces the ordinary slot.
+                if (!cfg.ScriptedFirstRun && (cfg.Difficulty >= ChaosDifficulty.Hard || ChaosMeta.AtLeast(ChaosRank.Entranced))
+                    && Rng.NextDouble() < ChaosTuning.BOUND_SPAWN_CHANCE * (cfg.Difficulty == ChaosDifficulty.Easy ? 0.5 : 1.0))
+                {
+                    bool debut = !ChaosMeta.State.SeenBound;
+                    if (debut)
+                    {
+                        ChaosMeta.State.SeenBound = true;
+                        ChaosMeta.Save();
+                        ChaosAnnouncerOverlay.Announce($"{IconMap.Bound} {Loc.Get("chaos_bound_title")}: {Loc.Get("chaos_bound_hint")}", ChaosAnnounceKind.Item,
+                            artKey: "bound", subText: Loc.Get("chaos_bound_hint"));
+                        _state.PushEvent($"{IconMap.Bound} {Loc.Get("chaos_bound_event")}");
+                    }
+                    var (a, b) = ChaosBubbleVariants.BuildBoundPair(effIntensity, _state.FuseTimeMult,
+                        cfg.EffectIntensity, _state.BubbleScale, debut ? ChaosTuning.DEBUT_FUSE_MULT : 1.0);
+                    ChaosMeta.MarkDiscovered("bubble:bound");
+                    BubbleOverlay.SpawnBoundPair(a, b, cfg.HitboxScale, _state.MagnetEnabled);
+                    if (_spawnTimer != null) _spawnTimer.Interval = TimeSpan.FromMilliseconds(
+                        ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult, SpawnSlowFactor));
                     return;
                 }
                 // WPF :1301 (after the Chaperone roll at :1264): a Tease replaces the ordinary slot, never the scripted first run.
@@ -355,6 +390,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 // WPF ChaosModeService.cs:371, :378 samples the current boon/upgrade at spawn.
                 BubbleOverlay.SpawnChaos(spec, hitboxScale: cfg.HitboxScale, liveMagnet: _state.MagnetEnabled);
 
+                // WPF ChaosModeService.cs:1165: a bonus roll accompanies each ordinary spawn.
+                if (Rng.NextDouble() < _state.GoldenChance)
+                {
+                    ChaosMeta.MarkDiscovered("bubble:golden");
+                    var golden = ChaosBubbleVariants.BuildGolden();
+                    BubbleOverlay.SpawnChaos(golden, motion: golden.Motion);
+                    PlayChime(0.30f);   // WPF :1172
+                }
+
                 if (_state.PrismChance > 0 && Rng.NextDouble() < _state.PrismChance)
                 {
                     ChaosMeta.MarkDiscovered("bubble:prism");
@@ -362,9 +406,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                         treatOnly: _state.PrismTreatOnly), hitboxScale: cfg.HitboxScale, liveMagnet: _state.MagnetEnabled);
                 }
             }
+            // WPF :1202-1212: darters roll on their own, independent of the bubble cap.
+            if (cfg.DartersEnabled && RollDarter(effIntensity, _state.RabbitRateMult) is { } darter)
+            {
+                ChaosMeta.MarkDiscovered("bubble:darter");
+                BubbleOverlay.SpawnChaos(darter, motion: darter.Motion);
+            }
             if (_spawnTimer != null)
                 _spawnTimer.Interval = TimeSpan.FromMilliseconds(
                     ChaosFieldMath.SpawnIntervalMs(intensity, cfg.DifficultyMult, cfg.SpawnRateMult, SpawnSlowFactor));
+        }
+
+        /// <summary>The darter roll (Core ChaosBubbleVariants.RollDarter). Tests swap it.</summary>
+        internal static Func<double, double, EffectBubbleSpec?> RollDarter = (i, rate) => ChaosBubbleVariants.RollDarter(i, rate);
+
+        /// <summary>WPF OnDarterCaught (:2351-2375): score, focus, combo; time slows, or a catch while
+        /// slow-mo already runs tops it up by 0.8 s (and hands a pendulum swing back to normal pay).</summary>
+        internal static void OnDarterCaught(bool quick)
+        {
+            if (_state == null) return;
+            _state.Score += (ChaosBubbleVariants.DARTER_BASE_POINTS + (quick ? ChaosBubbleVariants.DARTER_QUICK_BONUS : 0)) * _state.TotalMult;
+            _state.Focus += ChaosTuning.FOCUS_PER_RABBIT;
+            _state.Combo++;
+            _state.Heat = Math.Min(1.0, _state.Heat + 0.05);
+            CreditPop();
+            ChaosLessons.Tick("rabbit_caller");   // WPF ChaosLessonHooks.OnRabbitCaught
+            bool extended = _slowMoRemainingSec > 0;
+            if (extended) { _slowMoRemainingSec += 0.8; _pendulumSlowActive = false; }
+            else ActivateSlowMo(SlowMoDurationSec + _state.SlowMoBonusSec, pendulum: false, Loc.Get("chaos_slowmo_banner"));
+            Pulse(Color.FromRgb(120, 200, 255), quick ? 0.32 : 0.24);
+            _state.PushEvent(Loc.Get(extended ? "chaos_darter_event_extended" : quick ? "chaos_darter_event_quick" : "chaos_darter_event"));
+            CheckComboMilestone();
         }
 
         internal static bool TrySpawnTease(ChaosRunConfig cfg, double intensity)
@@ -389,6 +461,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var spec = b.Spec;
             if (_state == null || spec == null || _manualPaused || _lessonCardPaused || _draftPaused) return;
             _state.Detonated++;
+            _runDetonations++;   // WPF :1333
             ChaosRunLessons.OnDetonation();
             Label(b, "✖", Color.FromRgb(0xFF, 0x3D, 0x5A));
             if (_state.Shields > 0)
@@ -415,6 +488,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static Action<string, int?> TeaseBark = (t, n) => BarkHead.Engine?.Raise(t, n is int d ? c => c.Set("denied_count", (double)d) : null);
         private static int _teaseDenied;
         private static bool _teaseStreakBarked;
+        // WPF BarkService.cs:488-552: the run barks (WPF ChaosModeService call sites cited at each use).
+        internal static Action<string, Action<ConditioningControlPanel.Services.Bark.BarkContext>?> RunBark = (t, f) => BarkHead.Engine?.Raise(t, f);
+        private static int _runDetonations;          // WPF :84, absorbed and bare
+        private static double _focusLowAccumSec;     // WPF :1029-1040, once per run
+        private static bool _focusLowBarkFired;
+        private static void FirstBark(bool seen, Action mark, string trigger)
+        {
+            if (seen) return;
+            mark(); ChaosMeta.Save();
+            RunBark(trigger, null);
+        }
 
         // WPF ChaosModeService.cs:1403: restraint pays gold, score and focus once.
         internal static void OnTeaseDenied(AmbientBubble b)
@@ -434,6 +518,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             TeaseBark("ChaosTeaseDenied", ++_teaseDenied);   // WPF :1416-1421
             if (_teaseDenied >= ChaosTuning.TEASE_DENIED_STREAK_COUNT && !_teaseStreakBarked)
             { _teaseStreakBarked = true; TeaseBark("ChaosTeaseDeniedStreak", _teaseDenied); }
+        }
+
+        // WPF ChaosModeService.cs:1394 with Bubble.Enrage's label (BubbleService.cs:2760).
+        internal static void OnBoundEnraged(AmbientBubble b)
+        {
+            if (_state == null) return;
+            Label(b, Loc.Get("chaos_bound_enraged"), Color.FromRgb(0xFF, 0x5A, 0x5A));
+            ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.5f);
+            Pulse(Color.FromRgb(0xFF, 0x4A, 0x4A), 0.30);
+            _state.PushEvent($"{IconMap.Bound} {Loc.Get("chaos_bound_enraged_event")}");
         }
 
         internal static AmbientBubble SpawnChaperone(double intensity)
@@ -469,6 +563,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             var spec = b.Spec;
             if (_state == null || spec == null || _manualPaused || _lessonCardPaused || _draftPaused) return;
+            if (spec.IsDarter)   // WPF BubbleService.cs:4712-4716: the catch label, then the slow-mo
+            {
+                Label(b, Loc.Get("chaos_slowmo_banner").ToUpperInvariant(), Color.FromUInt32(spec.Tint));
+                // ponytail: the quick-catch bonus needs the darter's active clock (WPF BubbleService.cs:3875,
+                // :4714), part of the darter motion in #3986; until it lands every catch is a normal catch.
+                OnDarterCaught(quick: false);
+                return;
+            }
             EffectLabel(b);   // WPF BubbleService.cs:4710-4712: label before the pickup or treat callback
             if (spec.IsFreeze)
             {
@@ -477,12 +579,42 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state.Heat = Math.Min(1.0, _state.Heat + 0.05);
                 CreditPop();
                 ChaosLessons.Tick("freeze_trigger");
-                _state.PushEvent(Loc.Get("chaos_freeze_event"));   // WPF :2391 prefixes a snowflake; no emoji in event lines
-                CheckComboMilestone();
                 ActivateFreeze();
+                RunBark("ChaosFreezeCaught", c => c.Set("points", 140 * _state.TotalMult).Set("combo", (double)_state.Combo));   // WPF :2391, before the milestone so it wins the 60 s bark gap
+                _state.PushEvent(Loc.Get("chaos_freeze_event"));   // WPF :2392 prefixes a snowflake; no emoji in event lines
+                CheckComboMilestone();
                 return;
             }
             CountRegenPop();   // WPF ChaosModeService :1768
+            // WPF ChaosModeService.cs:1786-1820: gold pickups bypass score and combo.
+            if (spec.IsGolden || spec.IsDroplet)
+            {
+                _state.Focus += spec.IsGolden ? ChaosTuning.FOCUS_PER_GOLDEN : ChaosTuning.FOCUS_PER_DROPLET;
+                int min, max;
+                if (spec.IsGolden)
+                {
+                    int level = ChaosMeta.IsBoonActive("rabbits_foot") ? ChaosMeta.BoonLevel("rabbits_foot") : 0;
+                    (min, max) = ChaosLifetimeBoons.GoldenPayRange(level);
+                }
+                else { min = 3; max = 7; }
+                int gold = ChaosRunEngine.GoldScaled(_state, Rng.Next(min, max + 1));
+                BankGold(gold);
+                PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY + 30,
+                    $"+{gold} {ChaosGlyphs.Gold}", Color.FromRgb(255, 215, 0));
+                _state.PushEvent(spec.IsGolden ? $"{ChaosGlyphs.Gold} lucky bubble +{gold} gold" : $"{ChaosGlyphs.Gold} droplet +{gold} gold");
+                if (spec.IsGolden) ChaosAnnouncerOverlay.Announce($"{ChaosGlyphs.Gold} +{gold} gold", ChaosAnnounceKind.PowerUp);
+                Pulse(Color.FromRgb(255, 215, 0), spec.IsGolden ? 0.35 : 0.12);
+                ChaosOverlayWindow.ChaosSfx.Play("golden_pop", spec.IsGolden ? 0.6f : 0.35f);
+                if (spec.IsGolden && _state.GoldDiggerEnabled)
+                {
+                    var center = BubbleOverlay.CenterPx(b);
+                    for (int i = 0; i < 3; i++)
+                        BubbleOverlay.SpawnChaos(ChaosBubbleVariants.BuildGoldDroplet(
+                            center.X + Rng.Next(-50, 51), center.Y + Rng.Next(-20, 21)), motion: ChaosMotion.RainDown);
+                    _state.PushEvent("gold digger: it spills");   // WPF :1820 prefixes a pickaxe; no emoji in event lines
+                }
+                return;
+            }
             if (spec.IsPrism)
             {
                 FireScaledPayload(spec.Payload);
@@ -492,6 +624,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state.PushEvent($"🔮 prism! 10x · {spec.Payload.DisplayName} fires");
                 Pulse(Color.FromRgb(0xC8, 0xA8, 0xFF), 0.40);
                 CreditPop();   // WPF ChaosModeService.cs:1844
+                RollCamGirlTip();
                 CheckComboMilestone();
                 return;
             }
@@ -507,7 +640,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             CreditPop();   // WPF ChaosModeService.cs:1873
             Pulse(Color.FromRgb(255, 200, 235), 0.10);
             if (spec.PayMult > 1) _state.PushEvent("🪨 heavy drop! x3");
+            RollCamGirlTip();
             BodyBuzz(b);
+            // ponytail: GG make more GG (WPF ChaosModeService.cs:1879-1888) waits for darter spawn and movement (lane s10-chaos-darters); spawning now would give catchable, paying floaters.
+            RunBark("ChaosBenignPopped", c => c.Set("variant_id", spec.VariantId).Set("payload", spec.Payload.DisplayName).Set("combo", (double)_state.Combo));   // WPF :1890
             CheckComboMilestone();
         }
 
@@ -548,8 +684,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         /// <summary>WPF CanChannelDefuse (:1927): the focus must cover the snap's cost (paid on completion).</summary>
-        private static bool CanChannelDefuse(AmbientBubble b) =>
-            _state != null && (_freezeRemainingSec > 0 || _state.Focus >= ChaosTuning.DEFUSE_COST);
+        internal static bool CanChannelDefuse(AmbientBubble b)
+        {
+            if (b.Popping || b.Channeling || !b.IsLiveThreat) return false;
+            bool approved = _state != null && (_freezeRemainingSec > 0 || b.Spec is not { } spec || _state.Focus >= ChaosFieldMath.DefuseCost(spec));
+            if (approved) ChaosRunLessons.OnChannelStarted(BubbleOverlay.Field.Clock());
+            return approved;
+        }
 
         /// <summary>WPF OnDefused (:1984): the core snap (cost, counts, score, Drip Feed), the Snap
         /// Chain window, Playing with Fire's brink gold and the Pendulum's scoring window.</summary>
@@ -568,6 +709,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (_state.DefuseInvulnMs > 0) _invulnUntilUtc = BubbleOverlay.Field.Clock().AddMilliseconds(_state.DefuseInvulnMs);   // WPF :2000
             CountRegenPop();   // WPF ChaosModeService :2001
             FirstTime(ChaosFirstTimes.Snap);
+            if (b.DefusedViaChannel) ChaosRunLessons.OnChannelEnded(BubbleOverlay.Field.Clock());
+            if (b.DefusedViaChannel) FirstBark(ChaosMeta.State.SeenBarkDefuseFirst, () => ChaosMeta.State.SeenBarkDefuseFirst = true, "ChaosDefuseFirst");   // WPF :1990-1996
             ChaosRunLessons.OnDefuseCompleted(fuseSecLeft, b.DefusedViaChannel);
             var (pts, lastBreath, slowburn) = ChaosFieldMath.ApplyDefuse(_state, spec, fuseSecLeft,
                 b.DefusedViaChannel, free: _freezeRemainingSec > 0, pendulum: PendulumMultiplier, ChaosFieldMath.ChanceFlip(_state, Rng));
@@ -575,12 +718,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (ChaosGifCascadeOverlay.IsRaining) ChaosLessons.Tick("blindfold");
             ShowPopScore(pts);
             CreditPop();   // WPF ChaosModeService.cs:2025
+            RollCamGirlTip();
             if (_state.LastSecondGoldEnabled && fuseSecLeft <= 1.0)
             {
                 int gold = ChaosRunEngine.GoldScaled(_state, Rng.Next(5, 10));
-                BankGold(gold);
-                PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY + 30,
-                    $"+{gold} {ChaosGlyphs.Gold}", Color.FromRgb(0xFF, 0xD7, 0x00));
+                BankGold(gold, floatAtPop: true);
                 _state.PushEvent($"{ChaosGlyphs.Gold} playing with fire +{gold} gold");
                 Pulse(Color.FromRgb(255, 140, 60), 0.30);
             }
@@ -592,6 +734,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
             // WPF ChaosModeService.cs:2041-2043: every snap emits Size Queen.
             if (_state.RippleEnabled) BubbleOverlay.TriggerChaosRipple(b);
+            RunBark("ChaosBubbleDefused", c => c.Set("combo", (double)_state.Combo).Set("payload", spec.VariantId).Set("difficulty", _state.Config.Difficulty.ToString()));   // WPF :2037
             if (lastBreath > 1)
             {
                 _state.PushEvent($"⏱ last breath! x{lastBreath:0}");
@@ -601,8 +744,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (slowburn > 1) _state.PushEvent("🐌 slow burn! x3");
             _state.PushEvent($"✔ snapped {spec.Payload.DisplayName}");
             CheckComboMilestone();
-            // ponytail: slow_fuses/blindfold lessons and
-            // the brink narrative -> chaos-payout-fallin-d; the defuse barks -> chaos-payout-barks.
+            // ponytail: blindfold lesson and
+            // the brink narrative -> chaos-payout-fallin-d.
         }
 
         /// <summary>WPF OnDetonated (:2055) + OnChannelBroken's feed line: the payload fires, the loop
@@ -611,6 +754,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             var spec = b.Spec;
             if (_state == null || spec == null || _manualPaused || _lessonCardPaused) return;
+            if (b.BrokenReason is "click" or "release" or "nofocus")
+                ChaosRunLessons.OnChannelEnded(BubbleOverlay.Field.Clock());
             switch (b.BrokenReason)
             {
                 case "nofocus":   // WPF OnPlayerPress :4502 + OnChannelBroken :1943
@@ -618,10 +763,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     ChaosOverlayWindow.ChaosSfx.Play("focus_empty", 0.55f);
                     Pulse(Color.FromRgb(255, 80, 80), 0.22);
                     _hud?.FlashFocusBar();
+                    // WPF ChaosModeService.cs:1951-1956: do not queue a banner for every mis-grab.
+                    var now = BubbleOverlay.Field.Clock();
+                    if ((now - _lastNoFocusAnnounceUtc).TotalSeconds >= 1.5)
+                    {
+                        _lastNoFocusAnnounceUtc = now;
+                        ChaosAnnouncerOverlay.Announce(Loc.Get("chaos_no_focus_announce"), ChaosAnnounceKind.Temptation, holdMs: 1300);
+                    }
                     _state.PushEvent("✋ no focus — it triggers in your grip");
+                    FirstBark(ChaosMeta.State.SeenBarkDefuseNoFocus, () => ChaosMeta.State.SeenBarkDefuseNoFocus = true, "ChaosDefuseNoFocus");   // WPF :1959-1963
                     break;
-                case "click": _state.PushEvent("💥 a tap isn't a hold"); break;
-                case "release": _state.PushEvent("💥 you let go"); break;
+                case "click":
+                    _state.PushEvent("💥 a tap isn't a hold");
+                    FirstBark(ChaosMeta.State.SeenBarkClickDetonate, () => ChaosMeta.State.SeenBarkClickDetonate = true, "ChaosClickDetonate");   // WPF :1967-1971
+                    break;
+                case "release":
+                    _state.PushEvent("💥 you let go");
+                    FirstBark(ChaosMeta.State.SeenBarkDefuseRelease, () => ChaosMeta.State.SeenBarkDefuseRelease = true, "ChaosDefuseRelease");   // WPF :1975-1979
+                    break;
             }
             // Other payload families still need their runners.
             EffectLabel(b);   // WPF Detonate :4862
@@ -629,7 +788,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosRunLessons.OnDetonation();   // silk_touch: the loop is no longer clean
             string name = spec.Payload.DisplayName;
             double s = spec.Strength / 100.0;
-            switch (ChaosFieldMath.ApplyDetonation(_state, BubbleOverlay.Field.Clock() < _invulnUntilUtc))
+            _runDetonations++;   // WPF :2068
+            int comboBeforeBreak = _state.Combo;   // WPF :2122
+            var outcome = ChaosFieldMath.ApplyDetonation(_state, BubbleOverlay.Field.Clock() < _invulnUntilUtc);
+            string diff = _state.Config.Difficulty.ToString();
+            bool bare = outcome is not (ChaosFieldMath.Detonation.SnapChainHeld or ChaosFieldMath.Detonation.ShieldAbsorbed or ChaosFieldMath.Detonation.CollarHeld);
+            switch (outcome)
             {
                 case ChaosFieldMath.Detonation.SnapChainHeld:   // WPF :2081
                     _state.PushEvent($"⛓ snap chain holds ({name})");
@@ -650,6 +814,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     if (_state.UnleashedEnabled)
                     {
                         BubbleOverlay.Field.DefuseAllLive(BubbleOverlay.BounceShield);
+                        ChaosAnnouncerOverlay.Announce(Loc.Get("chaos_unleashed_announce"), ChaosAnnounceKind.PowerUp, artKey: "unleashed");   // WPF :2114
                         _state.PushEvent("📿 unleashed — the field lets go");
                         Pulse(Color.FromRgb(255, 215, 0), 0.50);
                     }
@@ -663,7 +828,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     Shake(0.4 + s * 0.5, 380);
                     break;
             }
-            // ponytail: the first-bare-detonation narrative -> chaos-payout-fallin-d; the detonation barks -> chaos-payout-barks.
+            // WPF :2083, :2098, :2118 (absorbed) and :2132 (bare, combo captured before the break):
+            // each WPF branch barks last, so Unleashed defuse barks speak first and the combo includes them.
+            RunBark(bare ? "ChaosBubbleDetonated" : "ChaosBubbleDetonatedAbsorbed", c =>
+            {
+                c.Set("payload", spec.VariantId).Set("strength", spec.Strength).Set("shield_absorbed", !bare)
+                 .Set("run_detonations", (double)_runDetonations).Set("combo", (double)(bare ? comboBeforeBreak : _state.Combo)).Set("difficulty", diff);
+                if (!bare) c.Set("shields_left", (double)_state.Shields);
+            });
+            // ponytail: the first-bare-detonation narrative -> chaos-payout-fallin-d.
         }
 
         /// <summary>WPF SnapColor (BubbleService.cs:4869): the cool "safe" accent of a snap.</summary>
@@ -702,7 +875,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         // WPF CheckComboMilestone: preserve call order, including the micro/×10 pulse that
         // replaces a big-threshold pulse on the same layer in the same callback.
-        // ponytail: combo barks (WPF :3080/:3090 NotifyChaosComboBig/Milestone) wait on chaos-payout-barks.
         private static readonly int[] ComboBigThresholds = { 25, 50, 100 };
 
         private static void CheckComboMilestone()
@@ -714,6 +886,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (combo < t || _lastComboBigFired >= t) continue;
                 _lastComboBigFired = t;
                 _state!.PushEvent($"{ConditioningControlPanel.Localization.Loc.Get("label_streak")} x{combo}");
+                RunBark("ChaosComboBig", c => c.Set("combo", (double)combo).Set("threshold", (double)t));   // WPF :3080
                 ChaosOverlayWindow.ChaosSfx.Play("streak_milestone", 0.5f);   // WPF :3081
                 ChaosAnnouncerOverlay.Announce($"{ConditioningControlPanel.Localization.Loc.Get("label_streak")} ×{t}", ChaosAnnounceKind.Streak,
                     artKey: "streak", subText: $"×{t}");                       // WPF :3082
@@ -722,6 +895,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (combo % 10 == 0)
             {
                 _state!.PushEvent($"{ConditioningControlPanel.Localization.Loc.Get("label_streak")} x{combo}");
+                RunBark("ChaosComboMilestone", c => c.Set("combo", (double)combo).Set("difficulty", _state.Config.Difficulty.ToString()));   // WPF :3091
                 Pulse(Color.FromRgb(255, 200, 60), 0.4);
             }
             else Pulse(Color.FromRgb(255, 170, 80), 0.04 + 0.08 * ((combo % 10) / 10.0));
@@ -778,8 +952,22 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 "+" + ((long)pts).ToString("N0"), Color.FromRgb(0xFF, 0xE9, 0xA0));
         }
 
+        private static void OnTunnelStateChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            var state = _state;
+            var tunnel = ChaosTunnelWindow.Active;
+            if (state == null || tunnel == null) return;
+            if (e.PropertyName == nameof(ChaosRunState.Combo))
+                tunnel.Post(new { type = "streak", combo = state.Combo, mult = state.ComboMult });
+            else if (e.PropertyName == nameof(ChaosRunState.ActIndex))
+                tunnel.Post(new { type = "zone-hint", depth = state.ActIndex, intensity = Math.Min(1.0, (state.ActIndex - 1) / 5.0) });
+        }
+
         private static DateTime _heavyUntilUtc = DateTime.MinValue;
+        private static DateTime _videoQuarantineUntilUtc = DateTime.MinValue;
         private static MandatoryVideoScheduler? _runVideo;
+        internal static MandatoryVideoScheduler? RunVideo => _runVideo;
+        private static ChaosVideoGuard? _videoGuard;
 
         // WPF ChaosModeService.cs:503-504,2164-2174,2260: a mandatory video that ends mid-run keeps
         // the heavy gate shut 3 s more (never shortening an existing floor).
@@ -787,25 +975,61 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             UnhookRunVideo();
             _runVideo = CoreEngine.Video;
-            if (_runVideo != null) _runVideo.VideoEnded += OnVideoEndedDuringRun;
+            if (_runVideo != null)
+            {
+                _videoGuard = new ChaosVideoGuard(_runVideo, () => BubbleOverlay.Field.Clock(), () =>
+                {
+                    try { ChaosLessons.Tick("porn_dvd"); }
+                    catch (Exception ex) { Log.Debug(ex, "Chaos video lesson failed"); }
+                });
+                _runVideo.VideoStarted += OnVideoStartedDuringRun;
+                _runVideo.VideoEnded += OnVideoEndedDuringRun;
+            }
+        }
+
+        private static void OnVideoStartedDuringRun()
+        {
+            _videoGuard?.Started();
+            TunnelVideo(true);
+        }
+
+        internal static void TunnelVideo(bool on)
+        {
+            var tunnel = ChaosTunnelWindow.Active;
+            if (Dispatcher.UIThread.CheckAccess()) tunnel?.SetVideoPlaying(on);
+            else Dispatcher.UIThread.Post(() => { if (ChaosTunnelWindow.Active == tunnel) tunnel?.SetVideoPlaying(on); });
         }
 
         internal static void OnVideoEndedDuringRun()
         {
+            _videoGuard?.Ended();
+            TunnelVideo(false);
             var until = BubbleOverlay.Field.Clock().AddSeconds(3);
             if (until > _heavyUntilUtc) _heavyUntilUtc = until;
+            if (until > _videoQuarantineUntilUtc) _videoQuarantineUntilUtc = until;
         }
 
         private static void UnhookRunVideo()
         {
             // Unsubscribe the captured publisher even if CoreEngine.Video has since changed.
-            if (_runVideo != null) _runVideo.VideoEnded -= OnVideoEndedDuringRun;
+            if (_videoGuard?.Stop() == true)
+            {
+                var until = BubbleOverlay.Field.Clock().AddSeconds(3);
+                if (until > _videoQuarantineUntilUtc) _videoQuarantineUntilUtc = until;
+            }
+            _videoGuard = null;
+            if (_runVideo != null)
+            {
+                _runVideo.VideoStarted -= OnVideoStartedDuringRun;
+                _runVideo.VideoEnded -= OnVideoEndedDuringRun;
+            }
             _runVideo = null;
         }
 
         internal static Random AmbientRng = new();
         private static bool HeavyEffectActive => CoreEngine.Video?.IsPlaying == true
-            || ChaosGifCascadeOverlay.IsRaining || BubbleOverlay.Field.Clock() < _heavyUntilUtc;
+            || _videoGuard?.Armed == true || ChaosGifCascadeOverlay.IsRaining
+            || BubbleOverlay.Field.Clock() < _heavyUntilUtc || BubbleOverlay.Field.Clock() < _videoQuarantineUntilUtc;
 
         // WPF ChaosModeService.cs:2155-2156,2295-2322: drop overlapping heavy
         // detonations, including during the off-thread pool pick, without queuing.
@@ -832,6 +1056,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 Log.Information("Chaos: dropped {Kind} detonation: a heavy effect is already running", payload.Kind);
                 _state?.PushEvent(Loc.GetF("chaos_heavy_fizzle", payload.DisplayName));
                 return;
+            }
+            if (payload is VideoPayload video && _spawning)
+            {
+                // A missing run-owned service must not fall back to an unowned dashboard tape.
+                video.ChaosToken = _videoGuard?.Arm() ?? -1;
+                if (_videoGuard != null) _heavyUntilUtc = now.AddSeconds(VideoPayload.SEGMENT_SEC + 3);
             }
             if (payload.Kind == EffectBubblePayloadKind.GifCascade)
                 _heavyUntilUtc = now.AddSeconds(GifCascadePayload.DURATION_SEC + 5);
@@ -925,6 +1155,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 else KeepChromeTopmost();
             }
             double elapsed = ChaosRunEngine.Advance(_state);
+            if (_videoGuard?.Tick(_state.RunDurationSec - elapsed <= 3) == true)
+                _state.PushEvent(Loc.Get("chaos_tape_snaps"));
             if (_state.Config.ScriptedFirstRun && TickScriptedDraft()) return;
             UpdateHeatTint();
             if (_freezeRemainingSec > 0)
@@ -946,6 +1178,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (_state.RippleReady) RippleCue("toy_ready", 0.3f);
             }
             TickToys();
+            // WPF :1029-1040: focus below a defuse's price for 8 s while a live hangs on screen, once per run; checked before the
+            // T-10s warning as WPF does, so it can take the shared bark gap.
+            if (!_focusLowBarkFired)
+            {
+                if (_state.FocusLow && BubbleOverlay.Field.Bubbles.Any(x => x.IsLiveThreat && !x.Popping))
+                {
+                    _focusLowAccumSec += ChaosRunEngine.TICK_SEC;
+                    if (_focusLowAccumSec >= ChaosTuning.FOCUS_LOW_BARK_SEC) { _focusLowBarkFired = true; RunBark("ChaosFocusLow", null); }
+                }
+                else _focusLowAccumSec = 0;
+            }
             // WPF :1068 T-10s, once per run (a Relapse extension does not re-arm it).
             if (!_endingSoonFired && ChaosRunEngine.IsEndingSoon(_state, elapsed))
             {
@@ -953,6 +1196,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ChaosAnnouncerOverlay.Announce("the hole is closing…", ChaosAnnounceKind.Depth,
                     artKey: "ending_soon", subText: "ten seconds");
                 _state.PushEvent("⏳ ten seconds. make them count.");
+                RunBark("ChaosEndingSoon", null);   // WPF :1074
             }
             var end = ChaosRunEngine.CheckEnd(_state, elapsed);
             if (end == ChaosRunEngine.EndCheck.RunOver) { EndRun(); return; }
@@ -961,6 +1205,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 ChaosAnnouncerOverlay.Announce("☠ RELAPSE — one more loop", ChaosAnnounceKind.Temptation,
                     artKey: "relapse", subText: "one more loop");   // WPF :1083
                 _state.PushEvent("☠ relapse. one more loop — everything drips double");
+                BarkHead.Engine?.Raise("ChaosWaveEscalated", c => c.Set("wave", (double)(_state.WaveIndex + 1)));   // WPF :1087
             }
             var (newWave, waveLen) = ChaosRunEngine.WaveAt(_state, elapsed);
             // WPF :1094 Pocket Watch: the wave countdown (+ a live score line).
@@ -983,6 +1228,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     // WPF ChaosModeService.cs:1464-1467: one burst cue and a soft pulse as the field clears.
                     ChaosOverlayWindow.ChaosSfx.PlayWaveClear();
                     Pulse(WaveClearColor, WaveClearPulse);
+                    RunBark("ChaosWaveCleared", c => c.Set("wave", (double)_state.WaveIndex));   // WPF :1468
+                    RunBark("ChaosWaveEscalated", c => c.Set("wave", (double)newWave));   // WPF :1474, after cleared (60 s bark gap)
                     var options = DealDraft(rig: true);
                     _overlay!.ShowBoonDraft(_state.WaveIndex, options, ChooseBoon,
                         _state.Config.DraftAutoResumeSec, _state.RerollsLeft, RerollDraft);
@@ -990,7 +1237,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 else
                 {
                     _state.WaveIndex = newWave;
+                    int previousAct = _state.ActIndex;
                     _state.ActIndex = ChaosRunEngine.ActFor(newWave);
+                    ChaosBackdropWindow.Active?.SetDepth(_state.ActIndex);
+                    RunBark("ChaosWaveEscalated", c => c.Set("wave", (double)newWave));   // WPF :1453
+                    AnnounceDepthIfCrossed(previousAct);
                     AnnounceFinalLoopIfEntering();   // WPF ChaosModeService.cs:1460
                 }
             }
@@ -1074,6 +1325,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _state.PushEvent(Loc.Get("chaos_event_skip"));
                 Pulse(ShieldGainColor, ShieldGainPulse);
                 ChaosAnnouncerOverlay.Announce(Loc.Get("chaos_announce_resist"), ChaosAnnounceKind.Willpower, artKey: "resistance");
+                RunBark("ChaosBoonSkipped", c => c.Set("shields_now", (double)_state.Shields));   // WPF :1582
             }
             else
             {
@@ -1103,14 +1355,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                         Pulse(ShieldGainColor, ShieldGainPulse);
                     }
                     ChaosOverlayWindow.ChaosSfx.Play("sin_accept", 0.6f);
+                    RunBark("ChaosCursePicked", c => c.Set("boon", boon.Name).Set("rarity", boon.Rarity.ToString()).Set("run_mult_bonus", boon.RunMultBonus));   // WPF :1564
                     ChaosAnnouncerOverlay.Announce(boon.Name, ChaosAnnounceKind.Temptation, artKey: boon.Id);   // WPF prefixes a skull; IconGuard keeps emoji out, the Temptation colour carries it
                 }
-                else ChaosAnnouncerOverlay.Announce(boon.Name, ChaosAnnounceKind.Mantra, artKey: boon.Id);
+                else
+                {
+                    ChaosAnnouncerOverlay.Announce(boon.Name, ChaosAnnounceKind.Mantra, artKey: boon.Id);
+                    RunBark("ChaosBoonPicked", c => c.Set("boon", boon.Name));   // WPF :1573
+                }
             }
             _state.WaveIndex = _pendingWave;
+            int previousAct = _state.ActIndex;
             _state.ActIndex = ChaosRunEngine.ActFor(_pendingWave);
+            ChaosBackdropWindow.Active?.SetDepth(_state.ActIndex);
+            AnnounceDepthIfCrossed(previousAct);
             _pendingWave = 0;
             _overlay?.ShowReadyGo(ResumeAfterDraft);
+        }
+
+        // WPF ChaosModeService.cs:3104-3113: one depth cue when a wave commit crosses an act.
+        private static void AnnounceDepthIfCrossed(int previousAct)
+        {
+            if (_state == null || _state.ActIndex <= previousAct) return;
+            RunBark("ChaosActChanged", c => c.Set("act", (double)_state.ActIndex).Set("wave", (double)_state.WaveIndex));   // WPF :3110
+            ChaosOverlayWindow.ChaosSfx.Play("depth_change", 0.55f);
+            ChaosAnnouncerOverlay.Announce(Loc.GetF("chaos_announce_depth", _state.ActIndex), ChaosAnnounceKind.Depth,
+                artKey: "depth", subText: $"{_state.ActIndex}");
         }
 
         private static void ResumeAfterDraft()
@@ -1157,15 +1427,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 BubbleOverlay.SpawnChaos(ChaosBubbleVariants.Build(variant, _state.RunIntensity, _state.FuseTimeMult,
                     ChaosMotion.RainDown, _state.Config.EffectIntensity, _state.BubbleScale), motion: ChaosMotion.RainDown);
             }
+            PlayChime(0.25f);
+            _state.PushEvent(Loc.Get("chaos_welcome_shower"));
+        }
+
+        /// <summary>WPF BubbleService.PlayChime (:2065): a random chime at (master x bubbles)^1.5 x scale.</summary>
+        private static void PlayChime(float scale)
+        {
             var chime = $"chime{Rng.Next(1, 4)}.mp3";
             var sound = CoreModArt.AudioOverridePath(chime) ?? ContentLocator.Resolve(System.IO.Path.Combine("Resources", "sounds", chime));
             if (System.IO.File.Exists(sound))
             {
                 var settings = CoreSettings.Current;
-                float volume = (float)Math.Pow(settings.MasterVolume / 100.0 * settings.BubblesVolume / 100.0, 1.5) * 0.25f;
+                float volume = (float)Math.Pow(settings.MasterVolume / 100.0 * settings.BubblesVolume / 100.0, 1.5) * scale;
                 CoreAudio.PlayOneShot(sound, volume, "bubble-chime");
             }
-            _state.PushEvent(Loc.Get("chaos_welcome_shower"));
         }
 
         /// <summary>WPF UpdateHeatTint (:3131): a warm edge tint that rises with run Heat,
@@ -1249,6 +1525,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Panic / app exit: close everything, no recap, no payout. Safe when idle.</summary>
         public static void ForceShutdown()
         {
+            ChaosBackdropWindow.CloseActive();
+            CloseLoadoutSidebar();
+            ChaosTunnelWindow.CloseActive();
             ChaosUnlockCardOverlay.CloseActive();
             ChaosAnnouncerOverlay.CloseActive();   // WPF :3177; also clears a queue left by an idle caller
             ChaosCursorGlowOverlay.CloseActive();   // WPF ForceShutdown :3183
@@ -1287,15 +1566,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 : $"{ChaosGlyphs.Gold} loop done — she tips +{tip} gold");
         }
 
+        /// <summary>WPF RollCamGirlTip (:1756): chance per treat, prism or snap.</summary>
+        private static void RollCamGirlTip()
+        {
+            if (_state == null || _state.CamGirlTipChance <= 0 || Rng.NextDouble() >= _state.CamGirlTipChance) return;
+            int tip = ChaosRunEngine.GoldScaled(_state, Rng.Next(2, 5));
+            BankGold(tip, floatAtPop: true);
+            _state.PushEvent($"{ChaosGlyphs.Gold} {Loc.GetF("chaos_camgirl_tip", tip)}");
+        }
+
         /// <summary>WPF BankGold (:1709): persists at once; the very first gold gets its feed line.</summary>
-        private static void BankGold(int gold)
+        private static void BankGold(int gold, bool floatAtPop = false)
         {
             if (gold <= 0 || _state == null) return;
             bool first = !ChaosMeta.State.SeenGoldFirst;
             if (first) ChaosMeta.State.SeenGoldFirst = true;
             ChaosMeta.AddGold(gold);   // persists
-            if (first) _state.PushEvent($"{ChaosGlyphs.Gold} gold. she takes it at her bench.");
-            // ponytail: NotifyChaosGoldFirst bark (WPF :1721) -> chaos-payout-barks.
+            if (floatAtPop)
+                PopText?.Invoke(BubbleOverlay.ChaosLastPopX, BubbleOverlay.ChaosLastPopY + 30,
+                    $"+{gold} {ChaosGlyphs.Gold}", Color.FromRgb(0xFF, 0xD7, 0x00));
+            if (first)
+            {
+                _state.PushEvent($"{ChaosGlyphs.Gold} gold. she takes it at her bench.");
+                BarkHead.Engine?.Raise("ChaosGoldFirst");
+            }
         }
 
         /// <summary>WPF EndRun (:3199): the loop tip on a full course, then XP, Sparks, reveals,
@@ -1331,7 +1625,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             ChaosRank? rankUp = null;
             try { rankUp = ChaosPayout.RankUp(ChaosMeta.State.RunsCompleted, ChaosMeta.State.LastRankSeen); }
             catch (Exception ex) { Log.Debug("Chaos rank-up: {E}", ex.Message); }
-            // ponytail: NotifyChaosRunCompleted((int)finalXp, difficulty) bark (WPF :3269) -> chaos-payout-barks.
+            BarkHead.Engine?.Raise("ChaosRunCompleted", c => c.Set("xp", (double)(int)finalXp)
+                .Set("difficulty", _state.Config.Difficulty.ToString())
+                .Set("runs_completed", (double)ChaosMeta.State.RunsCompleted)
+                .Set("rank", ChaosRanks.NameLower(ChaosMeta.RankIndex)));
 
             try { _hud?.Close(); } catch (Exception ex) { Log.Debug("Chaos HUD close: {E}", ex.Message); }
             _hud = null;
@@ -1436,7 +1733,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             }
             if (_pendulumFired || _state.WaveProgress < _pendulumFireAt || _freezeRemainingSec > 0 || _slowMoRemainingSec > 0) return;
             _pendulumFired = true;
-            ActivateSlowMo(2.5, pendulum: true);
+            ActivateSlowMo(2.5, pendulum: true, Loc.Get("chaos_pendulum_banner"));
             ChaosOverlayWindow.ChaosSfx.Play("ticktock", 0.45f);   // silent until the asset ships, as WPF
             bool scoring = _state.PendulumPayMult > 1;
             ChaosAnnouncerOverlay.Announce(Loc.Get(scoring ? "chaos_pendulum_focus" : "chaos_pendulum_swing"),
@@ -1447,13 +1744,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         /// <summary>WPF ActivateSlowMo (:2414): the chaos field drifts and burns slower, spawns stretch,
         /// payloads linger. A refresh never replays the warp-in cue.</summary>
-        internal static void ActivateSlowMo(double durationSec, bool pendulum)
+        internal static void ActivateSlowMo(double durationSec, bool pendulum, string bannerLabel)
         {
             if (!_spawning) return;
             _slowMoRemainingSec = durationSec;
             _pendulumSlowActive = pendulum;
             BubbleOverlay.Field.ChaosTimeScale = SlowMoFactor;
-            ChaosEffectBannerOverlay.Show("slowmo", Loc.Get("chaos_pendulum_banner"), Color.FromRgb(0x7A, 0xE0, 0xFF),
+            ChaosEffectBannerOverlay.Show("slowmo", bannerLabel, Color.FromRgb(0x7A, 0xE0, 0xFF),
                 artKey: pendulum ? "pendulum" : "slowmo");
             EffectPayload.GlobalDurationMult = 1.0 / SlowMoFactor;
             if (!_slowMoCueOn) ChaosOverlayWindow.ChaosSfx.Play("time_slow_in", 0.5f);
@@ -1502,13 +1799,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void UseToy(ChaosToyState toy)
         {
             if (_state == null) return;
-            // The field cannot yet place or move a summoned darter. Do not spend the whistle.
-            if (toy.Id == "rabbit_caller")
-            {
-                if (_spawning && !_manualPaused && !_lessonCardPaused && !_draftPaused && _overlay is { IsVisible: true })
-                    ChaosOverlayWindow.ChaosSfx.Play("toy_denied", 0.4f);
-                return;
-            }
             // WPF UseToy :2690: a wave draft holds the run (_paused), so toys wait for GO.
             if (!ToyEffectPorted(toy.Id)) return;   // #4225: an inert toy spends no charge or cooldown
             var r = ChaosToyRules.Use(_state, toy, _spawning && !_manualPaused && !_lessonCardPaused && !_draftPaused && _overlay is { IsVisible: true });
@@ -1520,7 +1810,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void RunAgain()
         {
             _overlay?.Close();   // OnOverlayClosed -> CleanupAfterRun
-            Dispatcher.UIThread.Post(() => StartRun(isRestart: true));
+            _active = true;   // pending restart; panic clears it before the posted callback
+            Dispatcher.UIThread.Post(() => { if (_active && _state == null) { _active = false; StartRun(isRestart: true); } });
         }
 
         private static void OnOverlayClosed()
@@ -1543,6 +1834,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         private static void CleanupAfterRun()
         {
             ChaosHubWindow.SetCompanionActive(false);
+            ChaosBackdropWindow.CloseActive();   // WPF CleanupAfterRun :3321; EndRun keeps the plate under the recap
             ChaosUnlockCardOverlay.CloseActive();
             _lessonCardPaused = false;
             StopToys();
@@ -1561,6 +1853,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _runTimer = null;
             _hud = null;
             _overlay = null;
+            if (_state != null) _state.PropertyChanged -= OnTunnelStateChanged;
+            ChaosTunnelWindow.EndActive();
             _state = null;
             UnhookRunVideo();   // WPF CleanupAfterRun :3318
             _heavyUntilUtc = DateTime.MinValue;

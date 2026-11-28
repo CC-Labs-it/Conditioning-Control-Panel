@@ -64,6 +64,33 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 TxtFloatingSize.Text = CoreSettings.Current.MandatoryVideoFloatingSizePercent + "%";
                 CoreSettings.Save();
             };
+            for (int n = 1; n <= ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.MaxWindows; n++)
+                CmbFloatingCount.Items.Add(new ComboBoxItem { Content = n.ToString(), Tag = n });
+            SliderFloatingSpeed.ValueChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.MandatoryVideoFloatingSpeedPercent = (int)Math.Round(SliderFloatingSpeed.Value);
+                TxtFloatingSpeed.Text = CoreSettings.Current.MandatoryVideoFloatingSpeedPercent + "%";
+                CoreSettings.Save();
+            };
+            CmbFloatingCount.SelectionChanged += (_, _) =>
+            {
+                if (_isLoading || CmbFloatingCount.SelectedItem is not ComboBoxItem { Tag: int count }) return;
+                CoreSettings.Current.MandatoryVideoFloatingCount = count;
+                CoreSettings.Save();
+            };
+            ChkFloatingTogether.IsCheckedChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.MandatoryVideoFloatingTogether = ChkFloatingTogether.IsChecked == true;
+                CoreSettings.Save();
+            };
+            ChkFloatingKeepSound.IsCheckedChanged += (_, _) =>
+            {
+                if (_isLoading) return;
+                CoreSettings.Current.MandatoryVideoFloatingKeepSound = ChkFloatingKeepSound.IsChecked == true;
+                CoreSettings.Save();
+            };
             // WPF Lab.cs:640-647 / 726-732: greyed while a Lockdown forces Strict Lock, given back on exit.
             Windows.MainShellWindow.HoldWhileLockdown(ChkStrict, () => ConditioningControlPanel.Services.LockdownStrictHold.HoldsNow);
             SliderVideoMinDur.ValueChanged += SliderVideoMinDur_Changed;
@@ -219,7 +246,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 CmbAppearance.Items.Add(new ComboBoxItem { Content = Loc.Get("video_appearance_floating"), Tag = true });
                 CmbAppearance.SelectedIndex = s.MandatoryVideoFloating ? 1 : 0;
                 TxtAppearanceNote.IsVisible = s.MandatoryVideoFloating;
-                FloatingSizeRow.IsVisible = TxtFloatingNoChecks.IsVisible = s.MandatoryVideoFloating;
+                FloatingExtraRows.IsVisible = FloatingSizeRow.IsVisible = TxtFloatingNoChecks.IsVisible = s.MandatoryVideoFloating;
+                SliderFloatingSpeed.Value = s.MandatoryVideoFloatingSpeedPercent;
+                TxtFloatingSpeed.Text = s.MandatoryVideoFloatingSpeedPercent + "%";
+                CmbFloatingCount.SelectedIndex = s.MandatoryVideoFloatingCount - 1;
+                ChkFloatingTogether.IsChecked = s.MandatoryVideoFloatingTogether;
+                ChkFloatingKeepSound.IsChecked = s.MandatoryVideoFloatingKeepSound;
                 SliderFloatingSize.Value = s.MandatoryVideoFloatingSizePercent;
                 TxtFloatingSize.Text = s.MandatoryVideoFloatingSizePercent + "%";
                 ChkMercy.IsChecked = s.MercySystemEnabled;
@@ -259,6 +291,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
                 e.PropertyName == nameof(AppSettings.AttentionSize) ||
                 e.PropertyName == nameof(AppSettings.VideoGazeClickEnabled) ||
                 e.PropertyName == nameof(AppSettings.MandatoryVideoFloatingSizePercent) ||
+                e.PropertyName == nameof(AppSettings.MandatoryVideoFloatingSpeedPercent) ||
+                e.PropertyName == nameof(AppSettings.MandatoryVideoFloatingCount) ||
+                e.PropertyName == nameof(AppSettings.MandatoryVideoFloatingTogether) ||
+                e.PropertyName == nameof(AppSettings.MandatoryVideoFloatingKeepSound) ||
                 e.PropertyName == nameof(AppSettings.MandatoryVideoReplayAfterFailedCheck) ||
                 e.PropertyName == nameof(AppSettings.MandatoryVideoFloating) ||
                 e.PropertyName == nameof(AppSettings.VideoTargetMonitor) ||
@@ -276,7 +312,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             var s = CoreSettings.Current;
             if (s.MandatoryVideoFloating == floating) return;
             s.MandatoryVideoFloating = floating;
-            FloatingSizeRow.IsVisible = TxtFloatingNoChecks.IsVisible = TxtAppearanceNote.IsVisible = floating;
+            FloatingExtraRows.IsVisible = FloatingSizeRow.IsVisible = TxtFloatingNoChecks.IsVisible = TxtAppearanceNote.IsVisible = floating;
             CoreSettings.Save();
         }
 

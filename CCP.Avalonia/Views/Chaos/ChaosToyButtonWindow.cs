@@ -24,8 +24,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// WPF's WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE is ShowInTaskbar=false + ShowActivated=false; the
     /// DropShadowEffect glow is a BoxShadow on a layer behind the disc (P82: no Effect), its flash a
     /// FrameClock (P82: no infinite Animation) that runs only while ready or mid-press.
-    /// <para>ponytail: RaiseToTopmost (WPF :178) is not here: the only WPF callers re-raise over a
-    /// mid-run mandatory video, which this head's run does not play.</para>
     /// </summary>
     internal sealed class ChaosToyButtonWindow : Window
     {
