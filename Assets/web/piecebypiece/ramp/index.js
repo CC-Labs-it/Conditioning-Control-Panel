@@ -39,7 +39,7 @@ import { createSchedule, videoHoldMs, sustainedFor } from './schedule.js';
 import { createLayerStack } from './layers/index.js';
 import { createFixtureMedia } from './media.js';
 import { createAmbient } from './ambient.js';
-import { presentation, onPresentation } from '../game/preferences.js';
+import { presentation, onPresentation, boardMotionScale } from '../game/preferences.js';
 
 const TICK_MS = 90;            // scheduling cadence; layers animate on their own
 const BOARD_PUSH_MS = 200;     // how often we hand the meter to A's board
@@ -314,7 +314,8 @@ export function attachRamp(opts = {}) {
         || (typeof window !== 'undefined' && window.PBP && window.PBP.board) || null;
       if (!board) return;
       if (typeof board.setWobble === 'function') board.setWobble(clamp01(m * tuning.wobbleScale));
-      if (typeof board.setCameraSway === 'function') board.setCameraSway(clamp01(m * tuning.swayScale));
+      // Options > Effects > Board motion: Full keeps the sway, Calm a third of it, Still none
+      if (typeof board.setCameraSway === 'function') board.setCameraSway(clamp01(m * tuning.swayScale * boardMotionScale()));
       if (typeof board.setMeter === 'function') board.setMeter(clamp01(m));
     } catch { /* A's board is optional and may change under us */ }
   }

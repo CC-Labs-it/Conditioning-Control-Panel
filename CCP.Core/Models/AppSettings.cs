@@ -1571,6 +1571,27 @@ namespace ConditioningControlPanel.Models
             set { _videoMinDurationSeconds = Math.Max(0, value); OnPropertyChanged(); }
         }
 
+        // On: a clip shorter than the minimum is kept and replayed in place until the minimum has
+        // played, then ends once (Services/Video/VideoMinLoop). Off (default, and for every older
+        // settings file, which has no such key): the minimum only skips shorter clips, as before.
+        private bool _mandatoryVideoLoopShortClips = false;
+        public bool MandatoryVideoLoopShortClips
+        {
+            get => _mandatoryVideoLoopShortClips;
+            set { _mandatoryVideoLoopShortClips = value; OnPropertyChanged(); }
+        }
+
+        // On: a clip shorter than the minimum is kept and followed by other random clips from the
+        // pool until the minimum has played, then the run ends once (Services/Video/VideoMinFill).
+        // A pool of one, or LibVLC, loops the clip instead. Off (default, and for every older
+        // settings file): the loop option above, or the plain skip, decides as before.
+        private bool _mandatoryVideoFillShortWithOthers = false;
+        public bool MandatoryVideoFillShortWithOthers
+        {
+            get => _mandatoryVideoFillShortWithOthers;
+            set { _mandatoryVideoFillShortWithOthers = value; OnPropertyChanged(); }
+        }
+
         private int _videoMaxDurationSeconds = 0;
         public int VideoMaxDurationSeconds
         {
@@ -3557,6 +3578,16 @@ namespace ConditioningControlPanel.Models
         {
             get => _serverPaidUntil;
             set { _serverPaidUntil = value; OnPropertyChanged(); }
+        }
+
+        private DateTime? _passEndsUtc;
+        /// <summary>When the account's prepaid pass (a redeemed code) ends, from the server's
+        /// <c>crypto_pass.ends_at</c>. Feeds the "pass ends in N days" inbox row, never a gate.</summary>
+        [JsonProperty("pass_ends_utc")]
+        public DateTime? PassEndsUtc
+        {
+            get => _passEndsUtc;
+            set { _passEndsUtc = value; OnPropertyChanged(); }
         }
 
         #endregion

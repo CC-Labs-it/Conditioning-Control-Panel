@@ -8,18 +8,34 @@ using ConditioningControlPanel.Services.GoonGame;
 namespace ConditioningControlPanel.Services.Lobby;
 
 /// <summary>When the next poll runs. Pure: a good answer polls at <see cref="Base"/>, a failed
-/// one doubles the wait up to <see cref="Max"/>.</summary>
+/// one doubles the wait up to <see cref="Max"/>. With only the rail badge watching (nobody
+/// looking at the Lobby itself) every round waits <see cref="Badge"/>.</summary>
 public static class LobbyPollPlan
 {
     public static readonly TimeSpan Base = TimeSpan.FromSeconds(10);
     public static readonly TimeSpan Max = TimeSpan.FromSeconds(60);
 
-    public static TimeSpan Next(TimeSpan current, bool ok)
+    /// <summary>The badge-only pace. The rail badge ("3 open") was holding the 10 s poll for
+    /// as long as the panel sat on screen, four server calls a round: about 60% of every
+    /// request the proxy served (Nov 2026 bill). A count on a badge can be two minutes old.</summary>
+    public static readonly TimeSpan Badge = TimeSpan.FromMinutes(2);
+
+    /// <summary>How long a tier refusal on the race list stands before it is asked again.
+    /// Opening the Lobby page or the launcher drop asks again at once.</summary>
+    public static readonly TimeSpan TierLockHold = TimeSpan.FromMinutes(30);
+
+    public static TimeSpan Next(TimeSpan current, bool ok, bool badgeOnly = false)
     {
+        if (badgeOnly) return Badge;
         if (ok) return Base;
         var doubled = TimeSpan.FromTicks(Math.Max(Base.Ticks, current.Ticks) * 2);
         return doubled > Max ? Max : doubled;
     }
+
+    /// <summary>A badge lease taken (the panel came back on screen) asks for a round at once
+    /// only when the last one is older than the badge pace.</summary>
+    public static bool BadgeWantsRoundNow(long nowMs, long lastRoundMs) =>
+        lastRoundMs <= 0 || nowMs - lastRoundMs >= (long)Badge.TotalMilliseconds;
 }
 
 /// <summary>The games the Lobby lists. One row shape for all of them; Race is Racing Thoughts 3D

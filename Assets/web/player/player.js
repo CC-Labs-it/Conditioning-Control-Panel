@@ -261,6 +261,14 @@
   /** Report once per load and stop the clip. C# owns what happens next. */
   function fail(code, message) {
     if (!cur || cur.errored) return;
+    // "Fill the minimum": a fill clip that will not load or stalls ends the run as played
+    // so far, instead of sending the host back to replay the first clip on LibVLC. A pause
+    // loop is not forgiven this way: it keeps its normal error path.
+    if (cur.fillIndex >= 0 && !cur.ended && code !== ERR_PAUSE_LOOP) {
+      log('fill clip ' + cur.fillIndex + ' failed (' + String(message) + ') - ending the run');
+      endRun();
+      return;
+    }
     cur.errored = true;
     stopTicker();
     try { fg.pause(); } catch (e) { /* ignore */ }
@@ -393,6 +401,15 @@
       startApplied: false,
       lastDurationMs: -1,
       credit: d.credit && typeof d.credit === 'object' ? d.credit : null,
+      // "Loop short videos until the minimum time": replay in place until this much has
+      // played, then end once (C# VideoMinLoop.ReplayAfterPass). 0 / absent = play once.
+      loopUntilMs: Number.isFinite(d.loopUntilMs) && d.loopUntilMs > 0 ? d.loopUntilMs : 0,
+      loopPlayedMs: 0,
+      // "Fill the minimum with other videos": clips played after this one, in order, up to
+      // loopUntilMs (C# VideoMinFill.NextAfterClip). Empty = loop instead. fillIndex -1 = the
+      // first clip is on screen, otherwise the index into fillUrls.
+      fillUrls: Array.isArray(d.fillUrls) ? d.fillUrls.filter((u) => typeof u === 'string' && u.length > 0) : [],
+      fillIndex: -1,
     };
 
     document.body.classList.toggle('has-bg', cur.blur);
@@ -426,6 +443,8 @@
 
   function postMeta() {
     if (!cur) return;
+    // A fill clip is not the run's clip: the host keeps the first clip's length and seeks.
+    if (cur.fillIndex >= 0) return;
     const d = fg.duration;
     // Some webm/fragmented mp4 report Infinity at loadedmetadata and settle on a
     // real number at durationchange, so meta can be posted more than once per
@@ -455,9 +474,16 @@
     // the host paused, which broke Deeper's speak-holds. hostPaused covers a host-requested
     // hold; fg.paused also covers a pause the page itself is sitting in. (#874)
     // The played ranges exclude seeks and pauses; a random start is not watch time.
+    // A looped short clip: the played ranges are already full after the first pass, so the
+    // later passes count by position on top of what the finished passes played.
+    const playedMs = cur.loopPlayedMs > 0 ? cur.loopPlayedMs + ms : playedRangesMs();
+    post({ type: 'time', ms: ms, playedMs: playedMs, paused: !!(cur.hostPaused || fg.paused) });
+  }
+
+  function playedRangesMs() {
     let played = 0;
     for (let i = 0; i < fg.played.length; i++) played += fg.played.end(i) - fg.played.start(i);
-    post({ type: 'time', ms: ms, playedMs: Math.round(played * 1000), paused: !!(cur.hostPaused || fg.paused) });
+    return Math.round(played * 1000);
   }
 
   // ---------- ticker: 10 Hz time + stall watchdogs ----------
@@ -580,6 +606,36 @@
 
   fg.addEventListener('ended', () => {
     if (!cur || cur.ended || cur.errored) return;
+    // "Loop short videos": a pass that leaves the run short of the minimum replays from
+    // the top without telling the host, so the host sees one video and one end.
+    if (cur.loopUntilMs > 0 && !cur.credit) {
+      const pass = cur.loopPlayedMs > 0 ? Math.round((fg.currentTime || 0) * 1000) : playedRangesMs();
+      if (cur.fillUrls.length > 0) {
+        // "Fill the minimum with other videos": the next planned clip, same rule as
+        // VideoMinFill.NextAfterClip. A plan that runs out ends the run (the host's
+        // safety timer allows for exactly the planned clips).
+        const next = cur.fillIndex + 1;
+        if (pass > 0 && cur.loopPlayedMs + pass < cur.loopUntilMs && next < cur.fillUrls.length) {
+          cur.loopPlayedMs += pass;
+          cur.fillIndex = next;
+          cur.lastProgressAt = performance.now();
+          fg.src = cur.fillUrls[next];
+          playEl(fg, 'fg');
+          return;
+        }
+      } else if (pass > 0 && cur.loopPlayedMs + pass < cur.loopUntilMs) {
+        cur.loopPlayedMs += pass;
+        cur.lastProgressAt = performance.now();
+        try { fg.currentTime = 0; } catch (e) { /* the play below restarts an ended clip anyway */ }
+        playEl(fg, 'fg');
+        return;
+      }
+    }
+    endRun();
+  });
+
+  /** The run is over: one end for the host, whatever played before it. */
+  function endRun() {
     cur.ended = true;
     postTime(true);
     // Nothing is supposed to move after the end, and the host keeps the surface
@@ -607,7 +663,7 @@
       return;
     }
     post({ type: 'ended' });
-  });
+  }
 
   fg.addEventListener('error', () => {
     if (!cur) return;

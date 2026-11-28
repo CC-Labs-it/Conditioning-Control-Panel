@@ -167,10 +167,9 @@ namespace ConditioningControlPanel
                     });
                 };
 
-                _browser.FullscreenChanged += (s, isFullscreen) =>
-                {
-                    Dispatcher.Invoke(() => HandleBrowserFullscreenChanged(isFullscreen));
-                };
+                // Never switch inside the WebView2 callback itself (#1565 #1596): record the wish
+                // and let the dispatcher apply it once the event has returned.
+                _browser.FullscreenChanged += (s, isFullscreen) => RequestBrowserFullscreen(isFullscreen);
 
                 // Chromium render/browser process crash. Tear down so the next
                 // BrowserSiteToggle click lazy-reinits instead of throwing
@@ -1120,7 +1119,7 @@ namespace ConditioningControlPanel
                 if (message == "ccp_exit_fullscreen")
                 {
                     App.Logger?.Information("MainWindow: ccp_exit_fullscreen received (forced FS active = {Active})", _isBrowserFullscreen);
-                    if (_isBrowserFullscreen) ExitBrowserFullscreen();
+                    if (_isBrowserFullscreen) RequestBrowserFullscreen(false);
                     return;
                 }
 
@@ -1145,7 +1144,7 @@ namespace ConditioningControlPanel
                 {
                     App.Logger?.Information("Web video playback ended (takeover injection)");
                     App.BrowserMedia?.OnMediaStopped("takeover-injection");
-                    ExitBrowserFullscreen();
+                    RequestBrowserFullscreen(false);
                 }
                 else if (message.Contains("\"type\":\"videoDuration\""))
                 {
@@ -1170,7 +1169,7 @@ namespace ConditioningControlPanel
                 else if (message.Contains("\"type\":\"fsExit\""))
                 {
                     App.BrowserMedia?.OnFullscreenExited();
-                    ExitBrowserFullscreen();
+                    RequestBrowserFullscreen(false);
                 }
                 // Audio sync messages
                 else if (message.Contains("\"type\":\"audioSyncVideoDetected\""))
@@ -2813,6 +2812,32 @@ namespace ConditioningControlPanel
             }
         }
 
+        private readonly Services.Browser.BrowserFullscreenGate _browserFsGate = new();
+
+        /// <summary>
+        /// The ONLY way a WebView2 event asks for a fullscreen change (#1565 #1570 #1585 #1589 #1596).
+        /// It records the wish and posts one drain at Normal priority, so the reparent, the Show and
+        /// the resize renders run after the WebView2 callback has returned, never nested inside it.
+        /// </summary>
+        private void RequestBrowserFullscreen(bool isFullscreen)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() => RequestBrowserFullscreen(isFullscreen)));
+                return;
+            }
+            if (!_browserFsGate.Request(isFullscreen)) return;
+            Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(DrainBrowserFullscreenRequest));
+        }
+
+        private void DrainBrowserFullscreenRequest()
+        {
+            var wish = _browserFsGate.Take();
+            if (!Services.Browser.BrowserFullscreenGate.ShouldApply(wish, _isBrowserFullscreen)) return;
+            try { HandleBrowserFullscreenChanged(wish!.Value); }
+            catch (Exception ex) { App.Logger?.Error(ex, "Browser fullscreen change failed"); }
+        }
+
         private void HandleBrowserFullscreenChanged(bool isFullscreen)
         {
             if (_browser?.WebView == null) return;
@@ -2828,38 +2853,42 @@ namespace ConditioningControlPanel
 
             if (isFullscreen)
             {
-                // Mirror only when the "Show content on" picker actually covers more than one
-                // screen - pinning content to a single monitor must not clone it onto the others.
-                var useDualMonitor = App.GetGlobalScreens().Length > 1;
-
-                if (useDualMonitor)
-                {
-                    _isDualMonitorPlaybackActive = App.ScreenMirror.EnableMirror();
-                    if (_isDualMonitorPlaybackActive)
-                    {
-                        App.Logger?.Information("Screen mirroring enabled for fullscreen video");
-                    }
-                }
-
-                // Always reparent — single-monitor users still need real
-                // full-monitor fullscreen, otherwise HT's HTML5 fullscreen
-                // just renders inside the dashboard cell. The dblclick exit
-                // works via the JS click-pair detector + ccp_exit_fullscreen
-                // WebMessage path (window._ccpForcedFs flag covers the case
-                // where the page lost HTML5 fullscreen during reparent).
+                // No display CLONE here any more (#1565 #1570 #1585). Flipping the Windows display
+                // topology (SetDisplayConfig) on every fullscreen reset every monitor and GPU device
+                // while this window was being shown and maximized; WPF's render thread died
+                // (UCEERR_RENDERTHREADFAILURE) or stopped answering, and a session that died in clone
+                // mode left the player's monitors cloned at the smallest resolution. The video now
+                // fills the monitor the app is on.
+                //
+                // Always reparent - single-monitor users still need real full-monitor fullscreen,
+                // otherwise HT's HTML5 fullscreen just renders inside the dashboard cell. The
+                // dblclick exit works via the JS click-pair detector + ccp_exit_fullscreen
+                // WebMessage path (window._ccpForcedFs flag covers the case where the page lost
+                // HTML5 fullscreen during reparent).
                 EnterBrowserFullscreen();
             }
             else
             {
-                if (_isDualMonitorPlaybackActive)
-                {
-                    App.ScreenMirror.DisableMirror();
-                    _isDualMonitorPlaybackActive = false;
-                    App.Logger?.Information("Screen mirroring disabled");
-                }
-
                 ExitBrowserFullscreen();
             }
+        }
+
+        /// <summary>
+        /// Maximizes the fullscreen host one dispatcher turn after it was shown or restyled, in place
+        /// of the old nested <c>Dispatcher.Invoke(() =&gt; { }, Render)</c> pump. That pump ran every
+        /// queued Normal job (a chat scroll calling UpdateLayout, a SizeToContent window resizing)
+        /// in the middle of the switch, which is where every hang report stops. A newer enter or
+        /// exit, or a closed window, makes the step stand down.
+        /// </summary>
+        private void MaximizeBrowserFullscreenHostLater(Window host, int transition)
+        {
+            Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() =>
+            {
+                if (!_browserFsGate.IsCurrent(transition) || !_isBrowserFullscreen
+                    || !ReferenceEquals(host, _browserPopoutWindow) || new System.Windows.Interop.WindowInteropHelper(host).Handle == IntPtr.Zero) return;
+                try { host.WindowState = WindowState.Maximized; }
+                catch (Exception ex) { App.Logger?.Debug("Browser fullscreen maximize failed: {Error}", ex.Message); }
+            }));
         }
 
         // ---- rented Topmost + escape hatch for the fullscreen browser (#952) -------------------
@@ -2963,6 +2992,7 @@ namespace ConditioningControlPanel
                 _browserPreFullscreenZoom = _browser.ZoomFactor;
                 _browser.ZoomFactor = 1.0;
                 _isBrowserFullscreen = true;
+                var transition = _browserFsGate.BeginTransition();
 
                 if (_browserPopoutWindow != null)
                 {
@@ -2986,8 +3016,7 @@ namespace ConditioningControlPanel
                     _browserPopoutWindow.WindowStyle = WindowStyle.None;
                     _browserPopoutWindow.ResizeMode = ResizeMode.NoResize;
                     _browserPopoutWindow.Topmost = true;
-                    _browserPopoutWindow.Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
-                    _browserPopoutWindow.WindowState = WindowState.Maximized;
+                    MaximizeBrowserFullscreenHostLater(_browserPopoutWindow, transition);
                     ArmFullscreenEscapes(_browserPopoutWindow);
                 }
                 else
@@ -3048,10 +3077,10 @@ namespace ConditioningControlPanel
                         _browserPopoutWindow = null;
                     };
 
-                    // Show small first, pump render queue, then maximize — exactly like video windows
+                    // Show small first, then maximize on the next dispatcher turn. No nested pump
+                    // in between (#1565 #1596): see MaximizeBrowserFullscreenHostLater.
                     _browserPopoutWindow.Show();
-                    _browserPopoutWindow.Dispatcher.Invoke(() => { }, DispatcherPriority.Render);
-                    _browserPopoutWindow.WindowState = WindowState.Maximized;
+                    MaximizeBrowserFullscreenHostLater(_browserPopoutWindow, transition);
                     ArmFullscreenEscapes(_browserPopoutWindow);
                 }
 
@@ -3082,12 +3111,11 @@ namespace ConditioningControlPanel
 
         private void ExitBrowserFullscreen()
         {
-            if (_isDualMonitorPlaybackActive)
-            {
-                App.ScreenMirror.DisableMirror();
-                _isDualMonitorPlaybackActive = false;
-            }
+            // A queued enter from the page dies with any exit (panic, teardown, Esc), and a pending
+            // maximize of the host stands down.
+            _browserFsGate.Clear();
             if (!_isBrowserFullscreen) return;
+            _browserFsGate.BeginTransition();
 
             // Off FIRST, and off the same window they went on (#952). The popout branch below
             // hands a window the user owns back to them, and a surviving Activated handler would

@@ -20,7 +20,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>
         /// Current application version - UPDATE THIS WHEN BUMPING VERSION
         /// </summary>
-        public const string AppVersion = "7.2.3";
+        public const string AppVersion = "7.2.4";
 
         /// <summary>
         /// Patch notes for the current version: an alias of CCP.Core ReleaseNotes.Current, edit them there when bumping.

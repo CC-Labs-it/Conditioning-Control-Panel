@@ -10,7 +10,14 @@ namespace ConditioningControlPanel.Services.Startup.Conversion
     /// <summary>The additive <c>/v2/user/profile</c> fields this lane reads (brief C2, C6). A null
     /// member means "the server did not say" (older server): keep what is stored.</summary>
     public sealed record ProfileExtrasReading(bool? PatreonMember, bool PaidUntilSent, DateTime? PaidUntilUtc,
-        Dictionary<string, string>? PostGrants);
+        Dictionary<string, string>? PostGrants)
+    {
+        /// <summary>True when the server sent <c>crypto_pass</c> at all (a null counts: no pass).</summary>
+        public bool PassSent { get; init; }
+
+        /// <summary>When the account's prepaid pass (a redeemed code) ends; null when it holds none.</summary>
+        public DateTime? PassEndsUtc { get; init; }
+    }
 
     /// <summary>
     /// Pure reading of the profile's conversion fields, and the two questions the Daily Gift asks of
@@ -40,7 +47,9 @@ namespace ConditioningControlPanel.Services.Startup.Conversion
                     grants[key] = until.ToString("o", CultureInfo.InvariantCulture);
                 }
             }
-            return new ProfileExtrasReading(member, paidSent, paid, grants);
+            var passSent = user.ContainsKey("crypto_pass");
+            var passEnds = user["crypto_pass"] is JObject pass ? ParseUtc(pass["ends_at"]) : null;
+            return new ProfileExtrasReading(member, paidSent, paid, grants) { PassSent = passSent, PassEndsUtc = passEnds };
         }
 
         /// <summary>Writes a reading onto settings. Only what the server actually sent moves.
@@ -59,12 +68,32 @@ namespace ConditioningControlPanel.Services.Startup.Conversion
                 settings.ServerPaidUntil = reading.PaidUntilUtc;
                 changed = true;
             }
+            if (reading.PassSent && reading.PassEndsUtc != settings.PassEndsUtc)
+            {
+                settings.PassEndsUtc = reading.PassEndsUtc;
+                changed = true;
+            }
             if (reading.PostGrants != null && !SameGrants(settings.PostGrants, reading.PostGrants))
             {
                 settings.PostGrants = new Dictionary<string, string>(reading.PostGrants, StringComparer.OrdinalIgnoreCase);
                 changed = true;
             }
             return changed;
+        }
+
+        /// <summary>
+        /// Days left (1 to 3) when a prepaid pass ends within three days AND nothing outlasts it, else 0.
+        /// A pass never renews, so its holder is told. <paramref name="paidUntilUtc"/> is the server's
+        /// paid_until: null means a subscription with no end date holds the tier, a later date means
+        /// one that runs past the pass. Either way the pass ending changes nothing and nothing is said.
+        /// </summary>
+        public static int PassEndingDays(DateTime? passEndsUtc, DateTime? paidUntilUtc, DateTime nowUtc)
+        {
+            if (passEndsUtc is not DateTime ends || paidUntilUtc is not DateTime paid) return 0;
+            if (paid > ends.AddMinutes(1)) return 0;
+            var left = ends - nowUtc;
+            if (left <= TimeSpan.Zero || left > TimeSpan.FromDays(3)) return 0;
+            return Math.Max(1, (int)Math.Ceiling(left.TotalDays));
         }
 
         /// <summary>True while a post grant for <paramref name="key"/> has not ended.</summary>

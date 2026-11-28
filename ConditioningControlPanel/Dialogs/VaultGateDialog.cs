@@ -484,7 +484,8 @@ public sealed class VaultGateDialog : Window
     /// account reads the full list.</summary>
     private static readonly string[] BasicPerks =
     {
-        "vaultgate_basic_1", "vaultgate_basic_10", "vaultgate_basic_2", "vaultgate_basic_3", "vaultgate_basic_4",
+        // vaultgate_basic_4 ("Haptics synced to your toys") left 2026-11-11: toys are free now.
+        "vaultgate_basic_1", "vaultgate_basic_10", "vaultgate_basic_2", "vaultgate_basic_3",
         "vaultgate_basic_5", "vaultgate_basic_6", "vaultgate_basic_7", "vaultgate_basic_8",
         "vaultgate_basic_9",
     };
