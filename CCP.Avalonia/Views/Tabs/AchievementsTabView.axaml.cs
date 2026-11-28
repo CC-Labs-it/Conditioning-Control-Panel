@@ -100,12 +100,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     {
                         _artWarmed = true;
                         var tiles = _tiles.Values.ToArray();
-                        Platform.AfterFirstFrame.Schedule(w, () => ArtWarm = System.Threading.Tasks.Task.Run(() => WarmArt(tiles)));
+                        var stop = _warmStop.Token;
+                        Platform.AfterFirstFrame.Schedule(w, () => ArtWarm = System.Threading.Tasks.Task.Run(() => WarmArt(tiles, stop)));
                     }
                 }
             };
             DetachedFromVisualTree += (_, _) =>
             {
+                _warmStop.Cancel(); // a closed view's warm would keep reading the process-wide art resolver
                 engine.Unlocked -= OnUnlocked;
                 CoreMods.ModChanged -= OnModChanged;
                 LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
@@ -145,13 +147,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal IEnumerable<ToggleButton> Cards => _tiles.Values.Select(t => t.Card);
 
         private bool _artWarmed;
+        private readonly System.Threading.CancellationTokenSource _warmStop = new();
         /// <summary>The after-first-frame art decode, once it has started. Test seam.</summary>
         internal System.Threading.Tasks.Task? ArtWarm { get; private set; }
 
-        private static void WarmArt(Tile[] tiles)
+        private static void WarmArt(Tile[] tiles, System.Threading.CancellationToken stop)
         {
             foreach (var t in tiles)
             {
+                if (stop.IsCancellationRequested) return;
                 Art(t.A.ImageName);
                 if (t.Reward != null) Helpers.ModArt.Wardrobe(t.Reward.Id);
             }
