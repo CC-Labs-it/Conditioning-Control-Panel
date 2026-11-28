@@ -21,6 +21,25 @@ namespace CCP.Avalonia.Tests;
 public sealed class PerformanceSettingsMotionTests
 {
     [Fact]
+    public async Task MotionIsFirstPerformanceSetting()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+
+            var section = new PerformanceSettingsSection();
+            var motion = section.FindControl<ComboBox>("CmbMotionLevel")!;
+            var row = Assert.IsType<Grid>(motion.Parent);
+            var settings = Assert.IsType<StackPanel>(row.Parent);
+            Assert.Same(row, settings.Children[2]); // header and description precede the settings
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task MotionComboStopsAndReArmsLoadedAmbientLoops_AndBackRoomComboRoundTrips()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>

@@ -67,6 +67,22 @@
                 <TextBlock Text="{loc:Str set2_section_performance_hint}" TextWrapping="Wrap"
                            Foreground="{DynamicResource TextMutedBrush}" FontSize="11" Margin="0,0,0,8"/>
 
+                <!-- Motion (accessibility). The three items ARE the enum ordinals - never reorder. -->
+                <Grid MinHeight="34" Margin="0,2,0,0" ColumnDefinitions="*,Auto"
+                      ToolTip.Tip="{loc:Str tooltip_motion_level}">
+                    <TextBlock Grid.Column="0" Theme="{StaticResource SettingLabel}"
+                               Text="{loc:Str setting_motion_level}"
+                               Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                    <ComboBox Grid.Column="1" x:Name="CmbMotionLevel"
+                              Theme="{StaticResource DarkComboBoxStyle}" FontSize="11"
+                              Width="110" MinHeight="28" VerticalAlignment="Center" SelectedIndex="0"
+                              SelectionChanged="CmbMotionLevel_SelectionChanged">
+                        <ComboBoxItem Content="{loc:Str label_motion_full}"/>
+                        <ComboBoxItem Content="{loc:Str label_motion_reduced}"/>
+                        <ComboBoxItem Content="{loc:Str label_motion_off}"/>
+                    </ComboBox>
+                </Grid>
+
                 <!-- Four related switches = one 2-column chip grid (contract). Every
                      description became its chip's ToolTip; not one loc key changed. -->
                 <Grid ColumnDefinitions="*,6,*" RowDefinitions="Auto,Auto">
@@ -201,22 +217,6 @@
                     <TextBlock Grid.Column="2" x:Name="TxtPinkComfortLimit" Text="10%" MinWidth="44"
                                HorizontalAlignment="Right" VerticalAlignment="Center" Margin="10,0,0,0"
                                Foreground="{DynamicResource PinkBrush}" FontSize="12.5" FontWeight="Bold"/>
-                </Grid>
-
-                <!-- Motion (accessibility). The three items ARE the enum ordinals — never reorder. -->
-                <Grid MinHeight="34" Margin="0,2,0,0" ColumnDefinitions="*,Auto"
-                      ToolTip.Tip="{loc:Str tooltip_motion_level}">
-                    <TextBlock Grid.Column="0" Theme="{StaticResource SettingLabel}"
-                               Text="{loc:Str setting_motion_level}"
-                               Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
-                    <ComboBox Grid.Column="1" x:Name="CmbMotionLevel"
-                              Theme="{StaticResource DarkComboBoxStyle}" FontSize="11"
-                              Width="110" MinHeight="28" VerticalAlignment="Center" SelectedIndex="0"
-                              SelectionChanged="CmbMotionLevel_SelectionChanged">
-                        <ComboBoxItem Content="{loc:Str label_motion_full}"/>
-                        <ComboBoxItem Content="{loc:Str label_motion_reduced}"/>
-                        <ComboBoxItem Content="{loc:Str label_motion_off}"/>
-                    </ComboBox>
                 </Grid>
 
                 <!-- Lighter effects (Avalonia head only, lane perf 2026-11-06; WPF has no software tier).
