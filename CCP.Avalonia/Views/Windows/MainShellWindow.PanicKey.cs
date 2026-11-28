@@ -159,6 +159,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // WPF MainWindow.xaml.cs:1734: a live Chaos descent outranks both game handoffs.
             if (rung == PanicPolicy.Rung.RunLadder && Chaos.ChaosRunHost.IsDescending)
             {
+                // WPF :1726 closes the Counter before a game consumes the ladder press.
+                try { Games.GameWindow.CloseCounterForPanic(); }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "Panic: closing the Prize Counter failed"); }
                 Chaos.ChaosRunHost.OnPanicKeyDuringRun();
                 StopCameraForPanic();
                 return;

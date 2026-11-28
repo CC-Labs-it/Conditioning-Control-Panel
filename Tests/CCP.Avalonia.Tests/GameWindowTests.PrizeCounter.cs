@@ -246,6 +246,39 @@ public sealed partial class GameWindowTests
         Assert.False(GameWindow.IsAnyOpen());
     });
 
+    [Fact]
+    public void PrizeCounter_ClosesBeforeChaosPanicHandoff() => RunCounter((shell, _, sent) =>
+    {
+        var s = CoreSettings.Current;
+        var oldOverride = s.PanicOverridesAll;
+        var heard = new List<(string reason, bool held)>();
+        try
+        {
+            s.PanicKey = "F8"; s.PanicKeyEnabled = true; s.PanicOverridesAll = false;
+            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.StartRun(new() { DurationSec = 60, WaveCount = 3, BoonDraftEnabled = false });
+            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.Overlay!.FinishCountdown();
+            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.StopTimerForTests();
+            void OpenShop() => OpenCounter(sent, reason => heard.Add((reason, ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsManuallyPaused)));
+            OpenShop();
+            shell.HandlePanicKeyPress(DateTime.UtcNow);
+            Assert.Equal(("panic", false), Assert.Single(heard));
+            Assert.Null(GameWindow.OpenForTests(GameWindow.PrizeCounterId));
+            Assert.True(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsManuallyPaused);
+            OpenShop();
+            shell.HandlePanicKeyPress(DateTime.UtcNow);
+            Assert.Equal(("panic", true), heard[1]);
+            Assert.Equal(2, heard.Count);
+            Assert.Null(GameWindow.OpenForTests(GameWindow.PrizeCounterId));
+            Assert.False(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsDescending);
+            Assert.True(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.IsActive);
+        }
+        finally
+        {
+            ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost.ForceShutdown();
+            s.PanicOverridesAll = oldOverride;
+        }
+    });
+
     /// <summary>WPF TryRacePauseOnEscape: a first Escape is the counter's back, a second inside 2 s a full panic.</summary>
     [Fact]
     public void PrizeCounter_EscapeIsItsBack_ASecondEscapeIsAPanic() => RunCounter((shell, _, sent) =>

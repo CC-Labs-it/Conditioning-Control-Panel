@@ -72,6 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>WPF App.OnExit (:6433) CloseFor(CloseAppExit).</summary>
         internal static void CloseCounterForExit() => OpenCounterWindow()?.CloseFor(PrizeCounterRules.CloseAppExit);
+        internal static void CloseCounterForPanic() => OpenCounterWindow()?.CloseFor(PrizeCounterRules.ClosePanic);
         private static GameWindow? OpenCounterWindow() { lock (Open) return Open.Find(x => x.Spec.Id == PrizeCounterId); }
 
         /// <summary>WPF CloseFor (:412): the first reason named wins.</summary>
