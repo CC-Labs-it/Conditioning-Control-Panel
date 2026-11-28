@@ -991,10 +991,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         {
             if (chain == null || (PresentationActive && !(PresentationArriving && chain.Id == "wake"))) return;
             if (!AskLive) StopAskTimer();
-            // ponytail: voice mood, prop teardown and pixel/art rendering still need their hosts.
+            // ponytail: voice mood and pixel/art rendering still need their hosts.
             // #3329: the goodbye wink owns her until the dismissal lands, and any other chain during the
             // wake completes the summon first (WPF React.cs:132-138 order), so its done hook still runs once.
             if (_dismissPending && chain.Id != "wink") return;
+            if (PropUp && chain.Id != "prop") HideProp();
             if (_summonChainLive && chain.Id != "wake") FinishSummon();
             StopPatFeedback();
             StopIdleBeats();
@@ -2689,7 +2690,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private void StartAlive() { _patPokes.Reset(); StartGaze(); }
 
         /// <summary>ponytail: EmiDeskWindow.Alive.cs - stops the poll when she goes.</summary>
-        private void StopAlive() { StopPatFeedback(); _patPokes.Reset(); StopGaze(); }
+        private void StopAlive() { HideProp(false); StopPatFeedback(); _patPokes.Reset(); StopGaze(); }
 
         /// <summary>WPF React.cs:119: the click pat shares the hover cooldown and books each poke.</summary>
         internal void PetFromClick()
@@ -2739,23 +2740,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
             catch (Exception ex) { Log.Debug(ex, "[EmiDesk] pat bookkeeping failed"); }
         }
 
-
-        /// <summary>
-        /// ponytail: EmiDeskWindow.Props.cs, and the note this used to carry was wrong about where
-        /// the blocker is. <c>EmiProps</c> - the anchor, the three plates, their sizes, the hold and
-        /// the rise - is ALREADY IN CORE (CCP.Core/Services/EmiDesk/EmiProps.cs) and is pure, so
-        /// LayoutProp / ShowProp / HideProp / the rise port arithmetic for arithmetic. What stops
-        /// them is the ART: <c>EmiProps.Path</c> probes
-        /// <c>Resources/web/arcademy/art/emi/props/*.png</c> beside the exe, and CCP.Avalonia.csproj
-        /// links no <c>Assets/web/</c> tree at all, so every lookup returns null and the whole beat
-        /// is a silent no-op by the WPF original's own design. Take the csproj link and the port in
-        /// ONE layer, or the port draws nothing and says nothing about why. The beat that starts it
-        /// (RunPropBeat) additionally needs a chain, so it is two blockers, not one.
-        /// </summary>
-        private void LayoutProp() { }
-
-        /// <inheritdoc cref="LayoutProp"/>
-        private void HideProp() { }
 
         /// <summary>ponytail: EmiDeskWindow.Bubble.cs - drops the voice hooks.</summary>
         private void TearDownVox() { }
