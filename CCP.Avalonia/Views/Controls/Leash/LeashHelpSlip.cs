@@ -2,9 +2,9 @@
 // "ink slip" card and its "?" button). Catalog and words are Core (LeashHelpCatalog).
 // Flat on this head (P82): the WPF DropShadowEffect is a BoxShadow on the card. The popup sits on the
 // window's overlay layer where the platform allows it and is never Topmost (WPF DropTopmost).
-// ponytail: LeashHelpButton.Badged (row icon as its own "?") is not ported. AsToolTip (the Let go row) is built
-// inline in LeashHolderCard.MoreButton.
+// AsToolTip (the Let go row) is built inline in LeashHolderCard.MoreButton.
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Collections;
@@ -476,6 +476,37 @@ public static class LeashHelpButton
         return b;
     }
 
+    // WPF LeashHelpSlip.cs:515: the row icon opens the slip and carries its small corner badge.
+    internal static Button Badged(Control face, LeashHelpEntry entry, Func<string> theirName)
+    {
+        var b = Create(entry, theirName);
+        Controllers.GetValue(b, _ => throw new InvalidOperationException()).StopOnPanic = true;
+        var cell = new Grid { Background = Brushes.Transparent, Children = { face } };
+        cell.Children.Add(new Border
+        {
+            Tag = "leash-slip-badge", Width = 11, Height = 11, CornerRadius = new CornerRadius(5.5),
+            Background = Badge, BorderBrush = BadgeLine, BorderThickness = new Thickness(1),
+            HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, -6.6, -3.3, 0), IsHitTestVisible = false,
+            Child = new TextBlock { Text = "?", FontFamily = F.Display, FontWeight = FontWeight.Bold,
+                FontSize = 8, Foreground = F.Lilac, HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center },
+        });
+        b.Content = cell; b.Background = Brushes.Transparent; b.BorderThickness = new Thickness(0);
+        b.VerticalAlignment = VerticalAlignment.Center;
+        return b;
+    }
+
+    private static readonly HashSet<Controller> OpenBadges = new();
+    internal static void CloseBadgedForPanic()
+    {
+        foreach (var controller in new List<Controller>(OpenBadges))
+        {
+            try { controller.Close(); }
+            catch (Exception ex) { Log.Debug("[Leash] help slip close failed: {E}", ex.Message); }
+        }
+    }
+
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Button, Controller> Controllers = new();
 
     /// <summary>Opens the slip pinned, and leaves it open when it already is. A "?" made elsewhere is ignored.</summary>
@@ -496,6 +527,7 @@ public static class LeashHelpButton
         private TopLevel? _root;
         private readonly DispatcherTimer _leave;
         internal bool Pinned;
+        internal bool StopOnPanic;
         internal Border? Holder;
 
         public Controller(Button b, Func<Control> slip)
@@ -549,12 +581,14 @@ public static class LeashHelpButton
                 _root = top;
                 _root.AddHandler(InputElement.PointerPressedEvent, OnRootDown, RoutingStrategies.Tunnel, handledEventsToo: true);
                 _popup.IsOpen = true;
+                if (StopOnPanic) OpenBadges.Add(this);
             }
-            catch (Exception ex) { Log.Debug("[Leash] help slip open failed: {E}", ex.Message); }
+            catch (Exception ex) { Close(); Log.Debug("[Leash] help slip open failed: {E}", ex.Message); }
         }
 
-        private void Close()
+        internal void Close()
         {
+            OpenBadges.Remove(this);
             _leave.Stop();
             Pinned = false;
             _root?.RemoveHandler(InputElement.PointerPressedEvent, OnRootDown);

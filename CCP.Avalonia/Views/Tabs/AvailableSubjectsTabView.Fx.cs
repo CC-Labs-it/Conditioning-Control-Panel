@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Media;
+using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Helpers;
@@ -24,8 +25,31 @@ public partial class AvailableSubjectsTabView
     internal bool SubjectsFxRunning => _subjectsFxBeat?.IsRunning == true;
 
     private sealed record Entrance(Control Container, TranslateTransform Slide, long Start, int Delay);
-    private sealed record Pop(ScaleTransform Card, Rectangle? Ring, ScaleTransform? RingScale, long Start);
+    private sealed record Pop(ScaleTransform Card, Rectangle? Ring, ScaleTransform? RingScale, long Start, bool AnimateCard = true);
     private readonly List<Pop> _pops = new();
+    private sealed record Lift(ScaleTransform Scale, double From, double To, long Start);
+    private readonly List<Lift> _lifts = new();
+
+    private void LobbyCard_Entered(object? sender, PointerEventArgs e) => LiftCard((Control)sender!, true);
+    private void LobbyCard_Exited(object? sender, PointerEventArgs e) => LiftCard((Control)sender!, false);
+
+    private void LiftCard(Control card, bool hovered)
+    {
+        var scale = card.RenderTransform as ScaleTransform ?? new ScaleTransform();
+        card.RenderTransform = scale;
+        // Hover takes the card scale; the ring keeps its independent 520 ms pop.
+        for (int i = _pops.Count - 1; i >= 0; i--)
+            if (_pops[i].Card == scale)
+            {
+                if (_pops[i].Ring == null) _pops.RemoveAt(i);
+                else _pops[i] = _pops[i] with { AnimateCard = false };
+            }
+        _lifts.RemoveAll(l => l.Scale == scale);
+        double target = hovered ? 1.02 : 1;
+        if (!Env.AllowTransitions) { scale.ScaleX = scale.ScaleY = target; return; }
+        _lifts.Add(new Lift(scale, scale.ScaleX, target, FxTime.GetTimestamp()));
+        StartSubjectsFxClock();
+    }
     private readonly HashSet<string> _seenRows = new();
 
     // WPF MainWindow.Lobby.cs:146-155: the first fill staggers every column in; after that only a new table pops.
@@ -65,6 +89,7 @@ public partial class AvailableSubjectsTabView
         if (parts.FirstOrDefault(c => Equals(c.Tag, "lobby-card")) is not { } card) return;
         var scale = card.RenderTransform as ScaleTransform ?? new ScaleTransform();
         card.RenderTransform = scale;
+        _lifts.RemoveAll(l => l.Scale == scale);
         scale.ScaleX = scale.ScaleY = 0.9;
         var ring = Env.AllowParticles ? parts.OfType<Rectangle>().FirstOrDefault(c => Equals(c.Tag, "lobby-ring")) : null;
         ScaleTransform? spread = null;
@@ -159,7 +184,8 @@ public partial class AvailableSubjectsTabView
             var p = _pops[i];
             double ms = FxTime.GetElapsedTime(p.Start).TotalMilliseconds;
             double grow = Math.Clamp(ms / 320, 0, 1), spread = Math.Clamp(ms / 520, 0, 1);
-            p.Card.ScaleX = p.Card.ScaleY = 0.9 + 0.1 * BackOut(grow);
+            if (p.AnimateCard)
+                p.Card.ScaleX = p.Card.ScaleY = 0.9 + 0.1 * BackOut(grow);
             if (p.Ring != null)
             {
                 p.RingScale!.ScaleX = p.RingScale.ScaleY = 1 + 0.08 * (1 - (1 - spread) * (1 - spread));
@@ -167,7 +193,14 @@ public partial class AvailableSubjectsTabView
             }
             if (p.Ring == null ? grow == 1 : spread == 1) _pops.RemoveAt(i);
         }
-        if (_entrances.Count == 0 && _pops.Count == 0) _subjectsFxBeat?.Stop();
+        for (int i = _lifts.Count - 1; i >= 0; i--)
+        {
+            var l = _lifts[i];
+            double t = Math.Clamp(FxTime.GetElapsedTime(l.Start).TotalMilliseconds / 150, 0, 1);
+            l.Scale.ScaleX = l.Scale.ScaleY = l.From + (l.To - l.From) * (1 - (1 - t) * (1 - t));
+            if (t == 1) _lifts.RemoveAt(i);
+        }
+        if (_entrances.Count == 0 && _pops.Count == 0 && _lifts.Count == 0) _subjectsFxBeat?.Stop();
     }
 
     private void FinishSubjectsFx()
@@ -176,7 +209,9 @@ public partial class AvailableSubjectsTabView
         _subjectsFxBeat?.Stop();
         foreach (var e in _entrances) { e.Container.Opacity = 1; e.Slide.Y = 0; }
         _entrances.Clear();
-        foreach (var p in _pops) { p.Card.ScaleX = p.Card.ScaleY = 1; if (p.Ring != null) p.Ring.Opacity = 0; }
+        foreach (var p in _pops) { if (p.AnimateCard) p.Card.ScaleX = p.Card.ScaleY = 1; if (p.Ring != null) p.Ring.Opacity = 0; }
         _pops.Clear();
+        foreach (var l in _lifts) l.Scale.ScaleX = l.Scale.ScaleY = l.To;
+        _lifts.Clear();
     }
 }

@@ -25,7 +25,7 @@ public sealed class EnhancementScreenMirrorTests {
         public Action<bool>? OnApply { get; set; }
         public int Apply(bool clone) { Calls.Add(clone); OnApply?.Invoke(clone); return Result; }
     }
-    private static Screen MakeScreen(int x, bool primary) {
+    internal static Screen MakeScreen(int x, bool primary) {
         var screen = (Screen)Activator.CreateInstance(typeof(PlatformScreen),
             new object[] { new PlatformHandle(new IntPtr(x + 1), "headless-test") })!;
         var bounds = new PixelRect(x, 0, 1920, 1080);

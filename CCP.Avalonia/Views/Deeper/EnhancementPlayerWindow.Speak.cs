@@ -11,6 +11,7 @@ public partial class EnhancementPlayerWindow
 {
     private static readonly SpeakPromptRuntime SpeakRuntime = SpeakPromptRuntime.CreateProduction(() => MainShellWindow.Current);
     internal Func<TriggerEffectAction, IPlaybackTimeSource, SpeakPromptSession>? SpeakSessionFactory;
+    internal Func<IActionDispatcher>? PlayerDispatcherFactory;
     private EnhancementEngine? _deeperEngine;
     private PlayerTimeSource? _deeperSource;
 
@@ -20,21 +21,30 @@ public partial class EnhancementPlayerWindow
         if (_deeperEngine == null)
         {
             _deeperSource = new PlayerTimeSource(this);
-            var dispatcher = new SpeakActionDispatcher(SpeakSessionFactory ?? SpeakRuntime.CreateSession);
-            // Other effects are not dispatched on this head. Exclude them from the engine too:
-            // its stop cleanup must not silence haptics belonging to another feature.
-            var speakOnly = new Enhancement
+            var dispatcher = new SpeakActionDispatcher(SpeakSessionFactory ?? SpeakRuntime.CreateSession,
+                PlayerDispatcherFactory?.Invoke() ?? new BrowserEnhancementDispatcher());
+            var recorder = new RecordingActionDispatcher(dispatcher);
+            recorder.ActionLogged += line => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (!_closing) IngestActionLine(line);
+            });
+            // Preserve rule regions while excluding overlays and haptics until cleanup can isolate their layer.
+            static bool Unsupported(EnhancementAction? action) => action is TriggerHapticAction or TriggerEffectAction { EffectType: EffectTypes.Overlay or EffectTypes.Haptic };
+            var supported = new Enhancement
             {
                 Metadata = _loadedEnhancement.Metadata, MediaType = _loadedEnhancement.MediaType,
                 MediaSource = _loadedEnhancement.MediaSource, Regions = _loadedEnhancement.Regions,
                 TimelineItems = _loadedEnhancement.TimelineItems.Where(item => item != null &&
-                    (item.Kind == TimelineItemKind.Rule || item.Kind == TimelineItemKind.Effect && item.EffectType == EffectTypes.Speak))
-                    .Select(item => item.Kind == TimelineItemKind.Rule && item.Action is not TriggerEffectAction { EffectType: EffectTypes.Speak }
+                    !(item.Kind == TimelineItemKind.Effect && item.EffectType is EffectTypes.Overlay or EffectTypes.Haptic))
+                    .Select(item => item.Kind == TimelineItemKind.Rule && Unsupported(item.Action)
                         ? new TimelineItem { Id = item.Id, Kind = item.Kind, Start = item.Start, Duration = item.Duration, Enabled = false } : item).ToList(),
-                Rules = _loadedEnhancement.Rules.Where(rule => rule != null &&
-                    rule.Action is TriggerEffectAction { EffectType: EffectTypes.Speak }).ToList()
+                Rules = _loadedEnhancement.Rules.Where(rule => rule != null && !Unsupported(rule.Action)).ToList()
             };
-            _deeperEngine = new EnhancementEngine(speakOnly, _deeperSource, dispatcher);
+            _deeperEngine = new EnhancementEngine(supported, _deeperSource, recorder,
+                EnhancementHostService.WebcamProvider?.Invoke(), line => global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    if (!_closing) IngestDiagnosticLine(line);
+                }));
             _deeperEngine.Start();
         }
         if (!bindVideo) _deeperSource?.Tick(_currentSec);
