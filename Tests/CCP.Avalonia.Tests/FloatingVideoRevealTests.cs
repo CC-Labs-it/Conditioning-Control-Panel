@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Avalonia;
@@ -5,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media;
 using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Xunit;
 
@@ -31,6 +33,9 @@ public class FloatingVideoRevealTests
             var settings = ConditioningControlPanel.CoreSettings.Current;
             var saved = (settings.MotionLevel, settings.GentleVisuals);
             var probe = ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe;
+            var savedTime = BeatLoop.Time;
+            var time = new SteppedTime();
+            BeatLoop.Time = time;
             settings.MotionLevel = level;
             settings.GentleVisuals = false;
             ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = () => true;
@@ -60,7 +65,10 @@ public class FloatingVideoRevealTests
                     Assert.True(requests[0].BeforeShow);
                     Assert.True(requests[0].Sync);
                     Assert.Equal(new PixelRect(60, 30, 280, 140), Assert.Single(requests[0].Rects!));
-                    reveal.RevealAt(130);
+                    // The reveal runs on the shared beat (AmbientBeatLoopsTests ratchet), not its own timer.
+                    Assert.Contains(BeatLoop.Running, b => ReferenceEquals(b.Owner, frame));
+                    time.Advance(TimeSpan.FromMilliseconds(130));
+                    BeatLoop.StepAll();
                     window.UpdateLayout();
                     var midway = Assert.IsType<RectangleGeometry>(frame.Clip).Rect;
                     Assert.Equal(7.5, midway.X, 3);
@@ -73,8 +81,10 @@ public class FloatingVideoRevealTests
                     Assert.Equal(400, window.Width, 3);
                     Assert.Equal(200, window.Height, 3);
                     Assert.Equal(new PixelPoint(100, 200), window.Position);
-                    reveal.RevealAt(260);
+                    time.Advance(TimeSpan.FromMilliseconds(130));
+                    BeatLoop.StepAll();
                     Assert.Null(frame.Clip);
+                    Assert.DoesNotContain(BeatLoop.Running, b => ReferenceEquals(b.Owner, frame));
                     Assert.Null(requests[^1].Rects);
                     Assert.Equal(pictureBounds, picture.Bounds);
                     Assert.False(reveal.IsAnimating);
@@ -84,6 +94,7 @@ public class FloatingVideoRevealTests
             finally
             {
                 reveal.Close();
+                BeatLoop.Time = savedTime;
                 (settings.MotionLevel, settings.GentleVisuals) = saved;
                 ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = probe;
                 ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;

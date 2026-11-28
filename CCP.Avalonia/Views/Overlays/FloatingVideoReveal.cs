@@ -1,10 +1,9 @@
 using System;
-using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
-using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Models;
 
@@ -18,9 +17,8 @@ internal sealed class FloatingVideoReveal
     private readonly Action<bool>? _holdAudio;
     private bool _presented, _closed;
     private readonly bool _animate;
-    private DispatcherTimer? _timer;
-    private readonly Stopwatch _clock = new();
-    internal bool IsAnimating => _timer != null;
+    private BeatLoop? _loop;
+    internal bool IsAnimating => _loop != null;
     internal Func<Window, PixelRect[]?, bool, bool> InputRegionWriter { get; set; } =
         (window, rects, sync) => X11Overlay.SetWindowInputRegion(window, rects, sync);
     private bool _inputRegionChanged;
@@ -55,10 +53,9 @@ internal sealed class FloatingVideoReveal
             RevealAt(0);
             if (_clip != null)
             {
-                _clock.Restart();
-                _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
-                _timer.Tick += (_, _) => RevealAt(_clock.Elapsed.TotalMilliseconds);
-                _timer.Start();
+                // Shared frame beat; parked until Show. Start re-steps t = 0, already written above.
+                _loop = new BeatLoop(frame, t => { if (t > 0) RevealAt(t * 1000); });
+                _loop.Start();
             }
         }
         _window.Show();
@@ -104,9 +101,8 @@ internal sealed class FloatingVideoReveal
 
     private void StopAnimation()
     {
-        _timer?.Stop();
-        _timer = null;
-        _clock.Stop();
+        _loop?.Stop();
+        _loop = null;
         if (_inputRegionChanged)
         {
             _inputRegionChanged = false;
