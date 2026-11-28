@@ -115,6 +115,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static readonly global::Avalonia.Media.Color LockdownCrimson = global::Avalonia.Media.Color.Parse("#DC143C");
         private static readonly string[] LockdownThemeKeys = { "PinkBrush", "DarkPinkBrush", "TransparentPinkBrush", "PinkButtonHoveredBrush" };
         private readonly System.Collections.Generic.List<System.IDisposable> _lockdownThemeHolds = new();
+        // WPF RefreshThemeAwareElements (MainWindow.xaml.cs:2628/2632/2636) repaints these with the mod accent mid-run.
+        private readonly System.Collections.Generic.List<System.IDisposable> _lockdownAccentHolds = new();
+
+        private void ReleaseLockdownAccentHolds()
+        {
+            foreach (var d in _lockdownAccentHolds) d.Dispose();
+            _lockdownAccentHolds.Clear();
+        }
         private System.Collections.Generic.Dictionary<string, object?>? _preLockdownBrushes;
 
         internal bool LockdownThemed => _preLockdownBrushes != null;
@@ -130,19 +138,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     _preLockdownBrushes = new();
                     foreach (var k in LockdownThemeKeys)
                         _preLockdownBrushes[k] = res.TryGetValue(k, out var v) ? v : null;
+                    var holds = _lockdownThemeHolds;
                     void Hold<T>(global::Avalonia.AvaloniaObject? o, global::Avalonia.StyledProperty<T> p, T v)
                     {
-                        if (o?.SetValue(p, v, global::Avalonia.Data.BindingPriority.Animation) is { } d) _lockdownThemeHolds.Add(d);
+                        if (o?.SetValue(p, v, global::Avalonia.Data.BindingPriority.Animation) is { } d) holds.Add(d);
                     }
                     Hold(this, BackgroundProperty, (global::Avalonia.Media.IBrush?)new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.Parse("#100505")));
                     Hold(Named<global::Avalonia.Controls.Border>("TitleBarBorder"), global::Avalonia.Controls.Border.BackgroundProperty,
                         (global::Avalonia.Media.IBrush?)new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.Parse("#8B0000")));
+                    holds = _lockdownAccentHolds;
                     Hold(Named<global::Avalonia.Controls.TextBlock>("TxtPlayerTitle")?.Effect as global::Avalonia.Media.DropShadowEffect,
                         global::Avalonia.Media.DropShadowEffect.ColorProperty, LockdownCrimson);
                     // WPF PaintLevelChip: its fill follows PinkBrush, but the glow follows PinkColor.
                     Hold(Named<global::Avalonia.Controls.Border>("LevelChip")?.Effect as global::Avalonia.Media.DropShadowEffect,
                         global::Avalonia.Media.DropShadowEffect.ColorProperty, LockdownCrimson);
-                    // PinkBrush also repaints TxtPlayerTitle, XPBar (TxtHeaderVersion is gone, eac44ef9f) and both banner lines.
+                    // The XP fill uses AccentGradientBrush; hold crimson until its dynamic binding is restored.
+                    Hold(Named<global::Avalonia.Controls.Border>("XPBar"), global::Avalonia.Controls.Border.BackgroundProperty,
+                        (global::Avalonia.Media.IBrush?)new global::Avalonia.Media.SolidColorBrush(LockdownCrimson));
+                    // PinkBrush also repaints TxtPlayerTitle (TxtHeaderVersion is gone, eac44ef9f) and both banner lines.
                     res["PinkBrush"] = new global::Avalonia.Media.SolidColorBrush(LockdownCrimson);
                     res["DarkPinkBrush"] = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.Parse("#8B0000"));
                     res["TransparentPinkBrush"] = new global::Avalonia.Media.SolidColorBrush(global::Avalonia.Media.Color.FromArgb(0x30, 0xDC, 0x14, 0x3C));
@@ -152,6 +165,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 {
                     foreach (var d in _lockdownThemeHolds) d.Dispose();
                     _lockdownThemeHolds.Clear();
+                    ReleaseLockdownAccentHolds();
                     foreach (var (k, v) in _preLockdownBrushes!)
                         if (v != null) res[k] = v; else res.Remove(k);
                     _preLockdownBrushes = null;

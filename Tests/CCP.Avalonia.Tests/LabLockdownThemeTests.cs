@@ -97,6 +97,41 @@ public sealed class LabLockdownThemeTests
     });
 
     [Fact]
+    public void XpFillIsCrimsonDuringLockdownAndRestoresTheCurrentAccent() => Run((shell, ld) =>
+    {
+        var xp = shell.Named<Border>("XPBar")!;
+        var resources = Application.Current!.Resources;
+        var previous = resources["AccentGradientBrush"];
+        try
+        {
+            var initial = new LinearGradientBrush();
+            var changed = new SolidColorBrush(Color.Parse("#3C88CC"));
+            resources["AccentGradientBrush"] = initial;
+            Assert.Same(initial, xp.Background);
+            ld.Activate(TimeSpan.FromMinutes(30));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(Color.Parse("#DC143C"), Assert.IsType<SolidColorBrush>(xp.Background).Color);
+            resources["AccentGradientBrush"] = changed;
+            Assert.Equal(Color.Parse("#DC143C"), Assert.IsType<SolidColorBrush>(xp.Background).Color);
+            ld.Deactivate();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(resources["AccentGradientBrush"], xp.Background);
+            ld.Activate(TimeSpan.FromMinutes(30));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(Color.Parse("#DC143C"), Assert.IsType<SolidColorBrush>(xp.Background).Color);
+            ld.Deactivate();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(resources["AccentGradientBrush"], xp.Background);
+        }
+        finally
+        {
+            ld.Deactivate();
+            Dispatcher.UIThread.RunJobs();
+            resources["AccentGradientBrush"] = previous;
+        }
+    });
+
+    [Fact]
     public void QueuedActivationCannotCreateAFlashAfterTheShellCloses() => Run((shell, ld) =>
     {
         ld.Activate(TimeSpan.FromMinutes(30));

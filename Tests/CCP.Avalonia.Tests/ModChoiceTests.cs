@@ -134,6 +134,56 @@ public sealed class ModChoiceTests
     });
 
     [Fact]
+    public Task ShellAccentControlsTrackModChanges() => Run(async (shell, svc, server) =>
+    {
+        var xp = shell.FindControl<Border>("XPBar")!;
+        var primary = shell.FindControl<TextBlock>("TxtBannerPrimary")!;
+        var secondary = shell.FindControl<TextBlock>("TxtBannerSecondary")!;
+        // The visible lead words sit in an inner TextBlock inside the InlineUIContainer.
+        var lead = primary.GetLogicalDescendants().OfType<TextBlock>().Single(t => t.Name == "TxtBannerPrimaryLead");
+        foreach (var id in new[] { BuiltInMods.CCPDefaultId, BuiltInMods.DronificationId, BuiltInMods.CCPDefaultId })
+        {
+            AvApp.Mods!.ActivateMod(id);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(Application.Current!.Resources["AccentGradientBrush"], xp.Background);
+            Assert.Equal(((ISolidColorBrush)Application.Current.Resources["PinkBrush"]!).Color, ((ISolidColorBrush)primary.Foreground!).Color);
+            Assert.Equal(((ISolidColorBrush)Application.Current.Resources["PinkBrush"]!).Color, ((ISolidColorBrush)secondary.Foreground!).Color);
+            Assert.Equal(((ISolidColorBrush)Application.Current.Resources["PinkBrush"]!).Color, ((ISolidColorBrush)lead.Foreground!).Color);
+        }
+        await Task.CompletedTask;
+    });
+
+    // WPF MainWindow.xaml.cs:2628-2636: a mod switch mid-Lockdown repaints the XP fill, title glow and LVL glow.
+    [Fact]
+    public Task ModSwitchDuringLockdownRepaintsTheXpFillAndGlows() => Run(async (shell, svc, server) =>
+    {
+        var s = CoreSettings.Current;
+        s.LockdownDoseKeeperEnabled = s.LockdownPossessionEnabled = false;
+        s.LockdownForceStrictLock = s.LockdownDisablePanicKey = s.LockdownBlockSystemKeys = false;
+        var xp = shell.FindControl<Border>("XPBar")!;
+        var chipGlow = Assert.IsType<DropShadowEffect>(shell.FindControl<Border>("LevelChip")!.Effect);
+        var titleGlow = Assert.IsType<DropShadowEffect>(shell.FindControl<TextBlock>("TxtPlayerTitle")!.Effect);
+        var crimson = Color.Parse("#DC143C");
+        LockdownService.Current!.Activate(TimeSpan.FromMinutes(30));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(crimson, Assert.IsType<SolidColorBrush>(xp.Background).Color);
+        Assert.Equal(crimson, chipGlow.Color);
+        AvApp.Mods!.ActivateMod(BuiltInMods.DronificationId);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(shell.LockdownThemed);
+        var accent = (Color)Application.Current!.Resources["PinkColor"]!;
+        Assert.NotEqual(crimson, accent);
+        Assert.Same(Application.Current.Resources["AccentGradientBrush"], xp.Background);
+        Assert.Equal(accent, chipGlow.Color);
+        Assert.Equal(accent, titleGlow.Color);
+        LockdownService.Current.Deactivate();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Same(Application.Current.Resources["AccentGradientBrush"], xp.Background);
+        Assert.Equal(accent, chipGlow.Color);
+        await Task.CompletedTask;
+    }, withLockdown: true);
+
+    [Fact]
     public Task HeaderComboSwitchesTheModSavesAndRethemes() => Run(async (shell, svc, server) =>
     {
         var combo = shell.FindControl<ComboBox>("ModSelectorCombo")!;
@@ -669,7 +719,7 @@ public sealed class ModChoiceTests
         return ms.ToArray();
     }
 
-    private static Task Run(Func<MainShellWindow, ReleaseContentService, FakeServer, Task> body) => AvaloniaTestDispatcher.RunAsync(async () =>
+    private static Task Run(Func<MainShellWindow, ReleaseContentService, FakeServer, Task> body, bool withLockdown = false) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         Assert.Equal(TestUserDataProfile.Root, CorePaths.UserData);   // never the real profile
         if (Application.Current is null)
@@ -700,6 +750,9 @@ public sealed class ModChoiceTests
         CoreReleaseContent.AppVersionProvider = () => "6.6.3";   // cycle v6.6.0
         using var svc = new ReleaseContentService(server.Prefix + "{0}/", handler);
         var oldResources = Application.Current!.Resources.ToDictionary(x => x.Key, x => x.Value);
+        var oldLockdown = LockdownService.Current;
+        using var lockdown = withLockdown ? new LockdownService() : null;
+        if (lockdown != null) LockdownService.Current = lockdown;   // before the shell subscribes
         MainShellWindow? shell = null;
         try
         {
@@ -721,9 +774,12 @@ public sealed class ModChoiceTests
         }
         finally
         {
+            lockdown?.Deactivate();
+            Dispatcher.UIThread.RunJobs();
             foreach (var w in shell?.OwnedWindows.ToList() ?? new()) w.Close();
             shell?.RequestExit();
             Dispatcher.UIThread.RunJobs();
+            LockdownService.Current = oldLockdown;
             foreach (var key in Application.Current.Resources.Keys.Where(k => !oldResources.ContainsKey(k)).ToList())
                 Application.Current.Resources.Remove(key);   // the palette must not leak into later tests
             foreach (var entry in oldResources) Application.Current.Resources[entry.Key] = entry.Value;   // nor overwrite an earlier value
