@@ -19,7 +19,7 @@ namespace CCP.Avalonia.Tests;
 
 public sealed class DarePanicTests
 {
-    private sealed class Host : IDareHost
+    internal sealed class Host : IDareHost
     {
         internal bool Active;
         public string? Account() => "u_me";

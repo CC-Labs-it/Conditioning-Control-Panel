@@ -70,7 +70,7 @@ internal static class DaresLanding
         if (_svc is not { } svc) return;
         DaresSnapshot snap;
         try { snap = svc.Snapshot; } catch { return; }
-        var (post, gone, _) = DareCardRules.LandingPlan(snap, Posted, DebtShown, Holding());
+        var (post, gone, debt) = DareCardRules.LandingPlan(snap, Posted, DebtShown, Holding() || DareDebtCard.IsUp);
         foreach (var id in gone)
         {
             Posted.Remove(id);
@@ -89,6 +89,14 @@ internal static class DaresLanding
                 Open = () => DareOfferCard.Present(MainShellWindow.Current, id),
             });
         }
+        if (debt == null) return;
+        DebtShown.Add(debt.Id);
+        var debtId = debt.Id;
+        // Read again at its turn: it may have been paid while it waited.
+        StartupLadder.EnqueueModal("dares-debt:" + debtId, DebtPriority, () =>
+            DareOfferCard.Find(App.Dares, debtId) is { IOwe: true, Debt.State: DareDebtState.Owed } now
+                ? DareDebtCard.ShowModal(MainShellWindow.Current, now)
+                : System.Threading.Tasks.Task.CompletedTask);
     }
 
     /// <summary>Test seam: forget what was posted and shown.</summary>
