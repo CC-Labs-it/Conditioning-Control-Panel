@@ -166,7 +166,8 @@ internal sealed partial class GameWindow
             var rowKind = animated ? "loop" : kind;
             var rel = Path.GetRelativePath(root, file).Replace('\\', '/');
             // WPF AnimatedImageHint (:1678): the page's gif budgets read "#.gif"; the fetch drops the fragment.
-            var url = assetUrl(rel) + (animated ? "#.gif" : "");
+            // A preset's sample may name files the current selection leaves out; the query lets the server serve them.
+            var url = assetUrl(rel) + (presetSrc != null ? "?" + WebAssetServer.PresetQuery + "=" + Uri.EscapeDataString(presetId) : "") + (animated ? "#.gif" : "");
             var mime = ext switch
             {
                 ".mp4" => "video/mp4", ".webm" => "video/webm", ".gif" => "image/gif",
