@@ -1265,7 +1265,7 @@
                                     <TextBlock Text="Praise (on correct)" Theme="{StaticResource EditorLabel}"/>
                                     <TextBox x:Name="TxtSpeakCorrect" Theme="{StaticResource EditorTextBox}"
                                              MaxLength="40"
-                                             ToolTip.Tip="Flashed after each correct rep, e.g. 'good girl'."/>
+                                             />
                                     <TextBlock Text="Scold (on miss)" Theme="{StaticResource EditorLabel}"/>
                                     <TextBox x:Name="TxtSpeakIncorrect" Theme="{StaticResource EditorTextBox}"
                                              MaxLength="40"

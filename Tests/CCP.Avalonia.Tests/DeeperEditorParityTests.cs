@@ -36,6 +36,39 @@ public sealed class DeeperEditorParityTests
     private static void Click(MenuItem item) => item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
 
     [Fact]
+    public Task SpeakPraiseUsesActivePetName() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var oldToken = CoreMods.ActiveModTokenProvider;
+        var oldName = CoreMods.PetNameOverrideProvider;
+        var token = new object();
+        CoreMods.ActiveModTokenProvider = () => token;
+        CoreMods.PetNameOverrideProvider = () => "starlight";
+        global::ConditioningControlPanel.Localization.VocabTokens.Invalidate();
+        var editor = new DeeperEditorWindow(new Enhancement { MediaSource = "*" }, null);
+        try
+        {
+            editor.Show();
+            Assert.Contains("that's it, starlight", (string)ToolTip.GetTip(editor.TxtSpeakCorrect)!);
+            Click(editor.HeroEffectSpeak);
+            Assert.Equal("that's it, starlight", Model(editor).TimelineItems.Single().EffectSpeakCorrectMessage);
+            var action = new TriggerEffectAction();
+            typeof(DeeperEditorWindow).GetMethod("AddTriggerEffectActionFields", Private)!.Invoke(editor, new object[] { action });
+            var combo = editor.ActionFields.Children.OfType<ComboBox>().Last();
+            combo.SelectedIndex = 5;
+            Assert.Equal("that's it, starlight", action.SpeakCorrectMessage);
+        }
+        finally
+        {
+            editor.ForceClose();
+            CoreMods.ActiveModTokenProvider = oldToken;
+            CoreMods.PetNameOverrideProvider = oldName;
+            global::ConditioningControlPanel.Localization.VocabTokens.Invalidate();
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task HelpButtonsOpenAnchoredDismissibleReference() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();

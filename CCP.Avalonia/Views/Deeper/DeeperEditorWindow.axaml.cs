@@ -292,6 +292,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         public DeeperEditorWindow(Enhancement enhancement, string? filePath)
         {
             InitializeComponent(); // generated: loads the XAML and fills the x:Name fields
+            ToolTip.SetTip(TxtSpeakCorrect, $"Flashed after each correct rep, e.g. 'that's it, {(global::ConditioningControlPanel.Localization.VocabTokens.PetName)}'.");
             BrowserPreview.EnvironmentRequested += ConfigurePreviewEnvironment;
 
             Opened += (_, _) => ApplyDarkTitleBar(TitleBarWindowsOverride ?? OperatingSystem.IsWindows(),
