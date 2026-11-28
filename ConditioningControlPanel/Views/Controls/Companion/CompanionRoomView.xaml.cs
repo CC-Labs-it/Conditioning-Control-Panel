@@ -151,7 +151,7 @@ namespace ConditioningControlPanel.Views.Controls.Companion
         internal Border EffectPermsPanel => PermissionsZone.EffectPermsPanel;
 
         internal Slider SliderMaxHapticIntensity => PermissionsZone.SliderMaxHapticIntensity;
-        internal TextBlock TxtMaxHapticIntensity => PermissionsZone.TxtMaxHapticIntensity;
+        internal global::ConditioningControlPanel.Controls.Rows.RowValue TxtMaxHapticIntensity => PermissionsZone.TxtMaxHapticIntensity;
 
         internal CheckBox ChkAllowFlash => PermissionsZone.ChkAllowFlash;
         internal CheckBox ChkAllowVideo => PermissionsZone.ChkAllowVideo;

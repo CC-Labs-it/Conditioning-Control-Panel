@@ -42,7 +42,7 @@ public class QuestHoverCueTests
     [Fact]
     public void The_click_reuses_a_shipped_ui_sound()
     {
-        var file = Path.Combine(RepoRoot(), "ConditioningControlPanel", "Resources", "sounds",
+        var file = Path.Combine(RepoRoot(), "Assets", "sounds",
             QuestSfx.OpenCue.Replace('/', Path.DirectorySeparatorChar));
         Assert.True(File.Exists(file), $"{QuestSfx.OpenCue} is not in Resources/sounds");
     }

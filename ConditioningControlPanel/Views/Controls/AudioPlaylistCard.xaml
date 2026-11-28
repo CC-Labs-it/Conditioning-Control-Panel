@@ -2,7 +2,9 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
-             xmlns:loc="clr-namespace:ConditioningControlPanel.Localization">
+             xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.Hue="{DynamicResource DeeperAccent}">
 
     <!-- The playlist player (ccp-bugs suggestion "a simple audio player"). One card on the Deeper
          page, where the player's own audio files already live. Wears that page's card skin: the
@@ -110,20 +112,17 @@
                     </Grid>
 
                     <!-- Volume -->
-                    <Grid MinHeight="30" Margin="0,0,0,6">
+                    <Grid Style="{StaticResource OptionRow}" Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" MinWidth="46"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="46"/>
+                            <ColumnDefinition Width="Auto" MinWidth="46"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="{loc:Str audio_player_volume}" VerticalAlignment="Center"
-                                   Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"/>
+                        <rows:RowLabel Text="{loc:Str audio_player_volume}" Emblem="Loud"/>
                         <Slider Grid.Column="1" x:Name="SliderVolume" Margin="6,0" VerticalAlignment="Center"
                                 Minimum="0" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True"
                                 Value="{Binding Volume, Mode=TwoWay}"/>
-                        <TextBlock Grid.Column="2" Text="{Binding VolumeText}" VerticalAlignment="Center"
-                                   HorizontalAlignment="Right"
-                                   Foreground="{DynamicResource TextDimBrush}" FontSize="11"/>
+                        <rows:RowValue Grid.Column="2" Text="{Binding VolumeText}"/>
                     </Grid>
 
                     <!-- The list. Click a name to play it; the row tools show on hover. -->
@@ -206,9 +205,8 @@
                             <Button x:Name="BtnLoop" Style="{StaticResource PlayerTextButton}"
                                     VerticalAlignment="Center" Click="BtnLoop_Click"/>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
-                                <TextBlock Text="{loc:Str audio_player_shuffle}" VerticalAlignment="Center"
-                                           Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
-                                           Margin="0,0,10,0"/>
+                                <rows:RowLabel Text="{loc:Str audio_player_shuffle}" Emblem="Random" Margin="0,0,10,0"
+                                               IsOn="{Binding IsChecked, ElementName=ChkShuffle}"/>
                                 <CheckBox x:Name="ChkShuffle" Style="{StaticResource ToggleStyle}"
                                           VerticalAlignment="Center"
                                           IsChecked="{Binding Shuffle, Mode=TwoWay}"/>
@@ -219,14 +217,13 @@
                                     Content="{loc:Str audio_player_clear}" Click="BtnClear_Click"/>
                         </Grid>
                         <!-- A track with a Deeper enhancement runs it. On by default (owner, 7.1.8). -->
-                        <DockPanel MinHeight="34" LastChildFill="True"
+                        <DockPanel MinHeight="46" LastChildFill="True"
                                    ToolTip="{loc:Str audio_player_enhancements_tip}">
                             <CheckBox x:Name="ChkEnhancements" DockPanel.Dock="Right"
                                       Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                       IsChecked="{Binding Enhancements, Mode=TwoWay}"/>
-                            <TextBlock Text="{loc:Str audio_player_enhancements}" VerticalAlignment="Center"
-                                       Foreground="{DynamicResource TextSecondaryBrush}" FontSize="12"
-                                       TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
+                            <rows:RowLabel Text="{loc:Str audio_player_enhancements}" Emblem="Link" Margin="0,0,10,0"
+                                           IsOn="{Binding IsChecked, ElementName=ChkEnhancements}"/>
                         </DockPanel>
                     </feat:MoreFold>
                 </StackPanel>

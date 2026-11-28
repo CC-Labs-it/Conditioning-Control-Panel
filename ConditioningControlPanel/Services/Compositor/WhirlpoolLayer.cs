@@ -15,7 +15,6 @@ public sealed class WhirlpoolLayer : BaseLayer
 {
     private readonly WhirlpoolDraw _draw = new();
     private bool _dirty = true;
-    private double _sinceFrame;
 
     public WhirlpoolLayer(CompositorEngine engine) : base(engine.Wake) { }
 
@@ -29,35 +28,8 @@ public sealed class WhirlpoolLayer : BaseLayer
     public override bool Dirty => _dirty;
     public override void ClearDirty() => _dirty = false;
 
-    // The pool wears Loom spirals (owner, 2026-11-15): a newly rolled one every so often, each
-    // melting into the next, or the one saved Loom spiral the user pinned.
-    private readonly ConditioningControlPanel.SuperCore.LoomMorph _morph = new(new Random());
-    private double _phase;
-    private string _pinKey = "";
-
-    private void StepSpiral(double dt, bool showing)
-    {
-        try
-        {
-            var key = App.Settings?.Current?.WhirlpoolSpiral ?? "";
-            if (key != _pinKey)
-            {
-                _pinKey = key;
-                ConditioningControlPanel.SuperCore.LoomSpec? pin = null;
-                if (key.Length > 0)
-                    foreach (var (slug, _, json) in Services.Chaos.DtrhLoomStore.List())
-                        if (slug == key) { pin = LoomSpecJson.Parse(json); break; }
-                _morph.Pin(pin);
-            }
-        }
-        catch (Exception ex) { App.Logger?.Debug("Whirlpool spiral pick: {E}", ex.Message); }
-        if (!showing) return;                 // a pool nobody sees does not burn through spirals
-        bool gentle = Safety.GentleVisuals.On;
-        _morph.Hold = ConditioningControlPanel.SuperCore.WhirlpoolOptions.ClampHold(
-            App.Settings?.Current?.WhirlpoolNewEvery ?? ConditioningControlPanel.SuperCore.WhirlpoolOptions.HoldDefault);
-        _phase += dt * (gentle ? 0.06 : 0.12);
-        _morph.Step(gentle ? dt * 0.6 : dt);
-    }
+    // The pool wears Loom spirals (owner, 2026-11-15); what it wears and when it repaints is Core's.
+    private readonly ConditioningControlPanel.SuperCore.WhirlpoolLook _look = new(new Random());
 
     public void Show() { _dirty = true; SetActive(true); }
     public void Hide() { if (IsActive) { SetActive(false); _dirty = true; } }
@@ -68,12 +40,13 @@ public sealed class WhirlpoolLayer : BaseLayer
     public override void Update(TimeSpan delta)
     {
         SuperStageHost.Step();
-        _sinceFrame += Math.Min(delta.TotalSeconds, 0.1);
+        double dt = Math.Min(delta.TotalSeconds, 0.1);
         var pool = SuperStageHost.Stage.Pool;
-        StepSpiral(Math.Min(delta.TotalSeconds, 0.1), pool.Size > 0.004);
-        // Nothing to draw while the mouse keeps the pool at nothing: no repaint either.
-        if (pool.Size <= 0.004) { if (_sinceFrame > 0.5) { _sinceFrame = 0; _dirty = true; } return; }
-        if (_sinceFrame >= 1 / 30.0) { _sinceFrame = 0; _dirty = true; }
+        var set = App.Settings?.Current;
+        _look.Step(dt, pool.Size > ConditioningControlPanel.SuperCore.WhirlpoolLook.NothingSize, Safety.GentleVisuals.On,
+            set?.WhirlpoolSpiral, set?.WhirlpoolNewEvery ?? ConditioningControlPanel.SuperCore.WhirlpoolOptions.HoldDefault,
+            ConditioningControlPanel.SuperCore.WhirlpoolLook.FindSaved);
+        if (_look.Due(dt, pool.Size)) _dirty = true;
     }
 
     public override void Render(SKCanvas canvas, SKRectI boundsPx, double dpiScale, TimeSpan elapsed)
@@ -82,10 +55,8 @@ public sealed class WhirlpoolLayer : BaseLayer
         var stage = SuperStageHost.Stage;
         if (!stage.PoolOn) return;
         // A monitor the pool does not reach has nothing to draw.
-        var pool = stage.Pool;
-        double reach = pool.Radius + 2;
-        if (pool.X + reach < boundsPx.Left || pool.X - reach > boundsPx.Right || pool.Y + reach < boundsPx.Top || pool.Y - reach > boundsPx.Bottom) return;
-        double strength = Math.Clamp((App.Settings?.Current?.SpiralOpacity ?? 10) / 100.0, 0, 1);
-        _draw.Draw(canvas, stage.Pool, strength, _morph.From, _morph.To, _morph.Mix, _phase);
+        if (!ConditioningControlPanel.SuperCore.WhirlpoolLook.Reaches(stage.Pool, boundsPx.Left, boundsPx.Top, boundsPx.Right, boundsPx.Bottom)) return;
+        double strength = ConditioningControlPanel.SuperCore.WhirlpoolLook.Strength(App.Settings?.Current?.SpiralOpacity ?? 10);
+        _draw.Draw(canvas, stage.Pool, strength, _look.Morph.From, _look.Morph.To, _look.Morph.Mix, _look.Phase);
     }
 }

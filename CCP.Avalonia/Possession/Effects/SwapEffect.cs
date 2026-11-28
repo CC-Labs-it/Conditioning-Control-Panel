@@ -120,14 +120,19 @@ internal sealed class SwapEffect : IPossessionEffect
     }
 
     // With nothing clipping, a later card or panel over the seat would still cover the landing's drawing and input.
-    private static bool OnTop(Canvas layer, Control mover, Control seat, Rect landing)
+    internal static bool OnTop(Canvas layer, Control mover, Control seat, Rect landing)
     {
         if (TopLevel.GetTopLevel(layer) is not { } top || layer.TranslatePoint(landing.Center, top) is not { } p) return true;
-        var hit = global::Avalonia.Input.InputExtensions.InputHitTest(top, p, v => v != seat && v != layer, false) as Visual;
-        return hit == null || hit == mover || hit.IsVisualAncestorOf(mover) || mover.IsVisualAncestorOf(hit);
+        // A shared parent moves neither seat out of its own input region. Across parents, the
+        // destination's container remains and must not cover the incoming control.
+        bool sharedParent = mover.GetVisualParent() == seat.GetVisualParent();
+        var hit = global::Avalonia.Input.InputExtensions.InputHitTest(top, p,
+            v => v != layer && (sharedParent || (v != seat && !seat.IsVisualAncestorOf(v))), false) as Visual;
+        return hit == null || hit == mover || (sharedParent && (hit == seat || seat.IsVisualAncestorOf(hit))) ||
+               hit.IsVisualAncestorOf(mover) || mover.IsVisualAncestorOf(hit);
     }
 
-    private static bool MoveFor(Control element, Canvas layer, Rect landing, Vector delta, out Vector move, List<Visual>? unclip)
+    internal static bool MoveFor(Control element, Canvas layer, Rect landing, Vector delta, out Vector move, List<Visual>? unclip)
     {
         move = default;
         var parent = element.GetVisualParent();

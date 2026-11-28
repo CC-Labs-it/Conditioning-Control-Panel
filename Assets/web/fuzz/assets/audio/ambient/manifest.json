@@ -1,0 +1,46 @@
+{
+  "origin": "Original offline nonverbal synthesis, no speech or external samples",
+  "sampleRate": 32000,
+  "binaural": {
+    "leftHz": 220,
+    "rightHz": 226,
+    "differenceHz": 6
+  },
+  "files": [
+    {
+      "file": "hum.wav",
+      "seconds": 4.0,
+      "channels": 1,
+      "peak": 0.18,
+      "rms": 0.12482
+    },
+    {
+      "file": "hum-left.wav",
+      "seconds": 4.0,
+      "channels": 1,
+      "peak": 0.22,
+      "rms": 0.15556
+    },
+    {
+      "file": "hum-right.wav",
+      "seconds": 4.0,
+      "channels": 1,
+      "peak": 0.22,
+      "rms": 0.15556
+    },
+    {
+      "file": "rain.wav",
+      "seconds": 24.0,
+      "channels": 2,
+      "peak": 0.45,
+      "rms": 0.12359
+    },
+    {
+      "file": "radio.wav",
+      "seconds": 8.0,
+      "channels": 1,
+      "peak": 0.24,
+      "rms": 0.06139
+    }
+  ]
+}

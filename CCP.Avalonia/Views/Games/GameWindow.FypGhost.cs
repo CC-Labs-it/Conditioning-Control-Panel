@@ -52,8 +52,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal static Func<TopLevel, PixelRect, double, (IDisposable? Mirror, string? Why)>? FypGhostMirror =
             OperatingSystem.IsWindows() ? Win32GhostMirror.Open : null;
         internal static Action<IDisposable, double> FypGhostMirrorOpacity = (m, a) => (m as Win32GhostMirror)?.SetOpacity(a);
+        // WPF :797-803 watchdog + :828 topmost: false = colour key lost. :748 fresh thumbnail after a heal.
+        internal static Func<IDisposable, bool> FypGhostMirrorTick = m => (m as Win32GhostMirror)?.Tick() ?? true;
+        internal static Action<IDisposable> FypGhostMirrorRefresh = m => (m as Win32GhostMirror)?.Refresh();
         private IDisposable? _fypMirror;
         private bool _fypMirrored;
+        private PixelPoint _fypPark;
         private static double ClampFypGhostOpacity(double value) =>
             double.IsFinite(value) ? Math.Clamp(value, 0.01, 1.0) : 1.0;
 
@@ -97,10 +101,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         // WPF :503-525: park the real window past every monitor's right edge, still shown, so
                         // DWM keeps composing it. Never alpha or click-through on the feed: WebView2 goes black.
                         _fypMirrored = true;
-                        Position = new PixelPoint(Screens.All.Select(s => s.Bounds.Right).Append(home.Right).Max() + 200, home.Y);
+                        Position = _fypPark = new PixelPoint(Screens.All.Select(s => s.Bounds.Right).Append(home.Right).Max() + 200, home.Y);
                         (_fypMirror, why) = open(this, home, ClampFypGhostOpacity(CoreSettings.Current.FypWindowOpacity));
                         if (why == null && _fypMirror == null) why = "mirror-failed";
-                        if (why == null) ShowFypGhostButtons(home, screen?.Scaling ?? 1);
+                        if (why == null)
+                        {
+                            ShowFypGhostButtons(home, screen?.Scaling ?? 1);
+                            _fypGhostTimer = FypGhostStartTick(ReassertFypGhost) ?? throw new InvalidOperationException("ghost timer failed to start");
+                        }
                     }
                     else if (!FypGhostOpacity(this, ClampFypGhostOpacity(CoreSettings.Current.FypWindowOpacity)) || !FypGhostClickThrough(this, true))
                         why = "mirror-failed";
@@ -164,9 +172,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal void ReassertFypGhost()
         {
             if (!_fypGhosted) return;
+            if (_fypMirror != null && !FypGhostMirrorTick(_fypMirror))
+            {
+                // WPF :797-803: take the ghost down rather than leave a black sheet over the monitor.
+                Log.Information("[Game] fyp: ghost colour key stopped applying, dropping ghost mode");
+                ExitFypGhost();
+                Post(new { type = "ghost-unavailable", reason = "colorkey-lost" });
+                return;
+            }
             try
             {
-                FypGhostRaiseManaged(this);
+                if (!_fypMirrored) FypGhostRaiseManaged(this);   // Windows: the feed stays parked, the mirror was raised
                 RaiseFypGhostButtons(_fypGhostButtons);
             }
             catch (Exception ex) { Log.Debug("[Game] fyp: ghost raise: {E}", ex.Message); }
@@ -179,6 +195,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (!_fypGhosted) return;
             try { RaiseFypGhostButtons(_fypGhostButtons); }
             catch (Exception ex) { Log.Debug("[Game] fyp: ghost button raise: {E}", ex.Message); }
+        }
+
+        /// <summary>WPF OnGhostWindowStateChanged (:748): a minimized parked source goes back to Normal, back to
+        /// its parking spot, with a fresh thumbnail, and the ghost keeps running.</summary>
+        internal void HealFypGhostSource()
+        {
+            if (!_fypGhosted || !_fypMirrored || _closing) return;
+            if (WindowState == WindowState.Minimized) { WindowState = WindowState.Normal; Position = _fypPark; }
+            if (_fypMirror != null) FypGhostMirrorRefresh(_fypMirror);
+            Log.Information("[Game] fyp: parked ghost source healed");
+        }
+
+        /// <summary>WPF GhostWndProc (:695): while mirrored, veto SC_MINIMIZE (Show Desktop, Win+D, Win+M) and
+        /// the owner cascade hide, then heal (:721). Never swallows anything otherwise.</summary>
+        internal IntPtr FypGhostWndProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (!_fypGhosted || !_fypMirrored) return IntPtr.Zero;
+            if (msg == 0x0112 /* WM_SYSCOMMAND */ && ((long)wParam & 0xFFF0) == 0xF020 /* SC_MINIMIZE */) handled = true;
+            else if (msg == 0x0018 /* WM_SHOWWINDOW */ && wParam == IntPtr.Zero)
+            {
+                if (lParam != IntPtr.Zero) handled = true;
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (!_fypGhosted) return;
+                    if (OperatingSystem.IsWindows() && hwnd != IntPtr.Zero && !Win32GhostMirror.IsWindowVisible(hwnd))
+                        Win32GhostMirror.ShowNative(hwnd, 8 /* SW_SHOWNA */);
+                    HealFypGhostSource();
+                });
+            }
+            return IntPtr.Zero;
         }
 
         internal static void RaiseFypGhostButtons(IReadOnlyList<Window> buttons)

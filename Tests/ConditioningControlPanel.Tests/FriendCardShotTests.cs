@@ -31,7 +31,6 @@ public partial class FriendsDrawerTests
         Directory.CreateDirectory(dir);
         var loc = LocalizationManager.Instance;
         var previous = loc.CurrentLanguage;
-        var service = LeashLocator.Service;
         var goon = InviteCodes.GoonCode;
         var canHost = InviteCodes.CanHostGoon;
         try
@@ -71,7 +70,7 @@ public partial class FriendsDrawerTests
         finally
         {
             loc.SetLanguage(previous);
-            LeashLocator.Service = service;
+            LeashLocator.Service = () => null;   // never the saved getter: it reads itself (stack overflow)
             InviteCodes.GoonCode = goon;
             InviteCodes.CanHostGoon = canHost;
         }
