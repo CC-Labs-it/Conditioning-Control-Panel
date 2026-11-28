@@ -182,6 +182,7 @@ public class LockdownDoseEngineTests
             runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
             shell = new MainShellWindow();
             shell.Show();
+            MainShellWindow.ResetPortalForTests();
             PortalPanicShortcut.BindForTests = (_, _) => bound.Task;
             MainShellWindow.PostPortalStart = action => posted.TrySetResult(action);
             ld.Activate(TimeSpan.FromMinutes(20));
@@ -222,6 +223,7 @@ public class LockdownDoseEngineTests
                 shell?.RequestExit();
                 MainShellWindow.ReleasePortalWhenUnused();
                 await PortalPanicShortcut.UnbindAsync();
+                MainShellWindow.ResetPortalForTests();
             }
             finally
             {
