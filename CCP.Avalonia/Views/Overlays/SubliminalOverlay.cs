@@ -28,7 +28,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     ///
     /// <para>Whisper audio, ducking, XP and the Bambi Freeze/Reset pair: <see cref="SubliminalWhisperShow"/>.
     /// SubliminalStealsFocus opts into activation after a passive show, still click-through.
-    /// Solid mode uses the shared passive host; focus requests stay on classic cards.</para>
+    /// Solid mode, or any card with UnifiedOverlayHost on, uses the shared passive host; focus requests
+    /// and a live video stay on classic cards.</para>
     /// </summary>
     internal static class SubliminalOverlay
     {
@@ -46,6 +47,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static readonly Dictionary<PixelRect, SharedOverlayHost.Lease> Hosts = new();
         private static readonly List<Action> RetireHosted = new();
         private static readonly List<Grid> HostedCards = new();
+        // Test seams for the native checks Show makes.
+        internal static Func<bool> IsAvailable = () => X11Overlay.IsAvailable;
+        internal static Func<int> VideoWindowCount = () => MandatoryVideoOverlay.Instance.Windows.Count;
+        internal static Func<Window, PixelRect, bool> ConfigureClassic = (w, bounds) =>
+            X11Overlay.SetClickThrough(w, true) && X11Overlay.SetOpacity(w, 0) && X11Overlay.SetOverrideRedirect(w, bounds);
 
         /// <summary>Solid mode goes to the shared stage unless focus is requested or a mandatory video owns the screen.</summary>
         internal static bool UseSolidHost(bool solidMode, bool stealsFocus, int liveVideoWindows) =>
@@ -57,17 +63,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             schedule ??= (action, delay) => DispatcherTimer.RunOnce(action, delay);
             if (!Hosts.TryGetValue(bounds, out var lease))
             {
-                lease = SharedOverlayHost.Acquire(bounds);
+                lease = SharedOverlayHost.Acquire(bounds, syncTint: false);
                 if (lease == null) return false;
                 Hosts.Add(bounds, lease);
             }
             var card = SubliminalOverlayWindow.Build(text, CoreSettings.Current);
             card.Opacity = 0;
-            // WPF: legacy host above hosted image flashes (1000); the compositor's SubliminalLayer sits under SpiralLayer.
+            // WPF SubliminalService.cs:820-821: legacy solid cards sit above hosted flashes (1000).
             card.ZIndex = CoreSettings.Current.UnifiedOverlayHost ? Services.Compositor.CompositorLayers.Subliminal : 1200;
             lease.Canvas.Children.Add(card);
             HostedCards.Add(card);
-            lease.Raise();
+            RestackStages();
             var retired = false;
             Action retire = () =>
             {
@@ -77,26 +83,67 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 HostedCards.Remove(card);
             };
             RetireHosted.Add(retire);
-            void Step(double value, TimeSpan at) => schedule(() =>
+            void Finish()
             {
-                if (!retired) card.Opacity = Math.Clamp(value, 0, 1);
-            }, at);
-            // Gentle Visuals scales the fade here as on the classic path (FadeDuration/Ramp) and WPF
-            // SubliminalService.cs:636-637, which scales it before choosing host or classic.
-            // WPF SubliminalService.cs:843-863: a custom card carries its own fade in and fade out.
-            var fade = fadeIn ?? SubliminalOverlayWindow.FadeDuration;
-            var fadeOutSpan = fadeOut ?? SubliminalOverlayWindow.FadeDuration;
-            var steps = SubliminalOverlayWindow.FadeSteps(fade);
-            for (var i = 1; i <= steps; i++) Step(alpha * i / steps, fade * i / steps);
-            var outSteps = SubliminalOverlayWindow.FadeSteps(fadeOutSpan);
-            for (var i = 1; i <= outSteps; i++) Step(alpha * (1 - (double)i / outSteps), fade + hold + fadeOutSpan * i / outSteps);
-            schedule(() =>
-            {
+                if (retired) return;
                 retire();
                 RetireHosted.Remove(retire);
                 if (!CoreSubliminal.IsRunning && RetireHosted.Count == 0) ReleaseHosts();
-            }, fade + hold + fadeOutSpan);
+            }
+            // Gentle Visuals scales the fade here as on the classic path (FadeDuration/Ramp) and WPF
+            // SubliminalService.cs:636-637, which scales it before choosing host or classic.
+            var fade = fadeIn ?? SubliminalOverlayWindow.FadeDuration;
+            var fadeOutSpan = fadeOut ?? SubliminalOverlayWindow.FadeDuration;
+            var started = false;
+            // As on the classic card, the envelope starts at the stage's first frame; one that never comes retires the card.
+            schedule(() => { if (!started) Finish(); }, TimeSpan.FromSeconds(3));
+            try
+            {
+                SubliminalOverlayWindow.RequestFrame(TopLevel.GetTopLevel(lease.Canvas)!, _ =>
+                {
+                    if (retired || started) return;
+                    started = true;
+                    void Step(double value, TimeSpan at) => schedule(() =>
+                    {
+                        if (!retired) card.Opacity = Math.Clamp(value, 0, 1);
+                    }, at);
+                    var steps = SubliminalOverlayWindow.FadeSteps(fade);
+                    for (var i = 1; i <= steps; i++) Step(alpha * i / steps, fade * i / steps);
+                    var outSteps = SubliminalOverlayWindow.FadeSteps(fadeOutSpan);
+                    for (var i = 1; i <= outSteps; i++) Step(alpha * (1 - (double)i / outSteps), fade + hold + fadeOutSpan * i / outSteps);
+                    schedule(Finish, fade + hold + fadeOutSpan);
+                });
+            }
+            catch { Finish(); return false; }
             return true;
+        }
+
+        /// <summary>WPF draws every effect family on one compositor in <see cref="global::ConditioningControlPanel.Services.Compositor.CompositorLayers"/>
+        /// order (Flash 30 &lt; Subliminal 40 &lt; Bubbles 45 &lt; BouncingText 50 &lt; Spiral 60 &lt; PinkTint 70). Here each family
+        /// may own separate topmost windows: raise the stage, then
+        /// re-raise every later family in that order. Flashes call this after they map (they sit under the card).</summary>
+        internal static void RestackStages()
+        {
+            // WPF OverlayService.ReassertZOrder (#497, SubliminalOverVideo.cs:9-12) pins the compositor, spiral and tint
+            // below a playing video: with one up, raising anything here would bury the clip.
+            if (HostedCards.Count == 0 || VideoWindowCount() > 0) return;
+            // PinkFilterUnderEffects puts the tint at PinkTintUnder (35): over a flash (30), under the stage (40).
+            if (CoreSettings.Current.PinkFilterUnderEffects) RaiseAll(PinkFilterOverlay.Shown);
+            foreach (var lease in Hosts.Values) lease.Raise(syncTint: false);
+            IEnumerable<Window> above = PinkFilterOverlay.EffectWindows()
+                .Where(w => w is BubbleOverlayWindow or BouncingTextOverlayWindow or SpiralOverlayWindow)
+                .OrderBy(w => w is BubbleOverlayWindow ? 0 : w is BouncingTextOverlayWindow ? 1 : 2);
+            if (!CoreSettings.Current.PinkFilterUnderEffects) above = above.Concat(PinkFilterOverlay.Shown);
+            RaiseAll(above);
+        }
+
+        private static void RaiseAll(IEnumerable<Window> windows)
+        {
+            foreach (var w in windows.ToArray())
+            {
+                try { PinkFilterOverlay.RaiseWindow(w); }
+                catch (Exception ex) { Log.Debug("Subliminal: compositor-order raise failed: {E}", ex.Message); }
+            }
         }
 
         private static void ClearCards()
@@ -147,7 +194,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         public static void Show(Visual host, string text, int? opacity = null, int? durationMs = null,
             int? fadeInMs = null, int? fadeOutMs = null)
         {
-            if (!X11Overlay.IsAvailable)
+            if (!IsAvailable())
             {
                 if (!_warnedUnavailable) Log.Warning("Subliminal: this platform cannot show click-through overlays, so subliminals are skipped");
                 _warnedUnavailable = true;
@@ -166,8 +213,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             bool barkRaised = false;
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
-                // WPF SubliminalService.cs:659 UsesCompositorCard: the unified host takes every non-focus card.
-                if (UseSolidHost(s.SubliminalSolidMode || s.UnifiedOverlayHost, s.SubliminalStealsFocus, MandatoryVideoOverlay.Instance.Windows.Count) &&
+                // WPF SubliminalService.cs:651-659 (SubliminalOverVideo.cs:29): the unified host takes ordinary cards too.
+                if (UseSolidHost(s.SubliminalSolidMode || s.UnifiedOverlayHost, s.SubliminalStealsFocus, VideoWindowCount()) &&
                     ShowHosted(screens[i].Bounds, text, alpha, hold, null, fadeIn, fadeOut))
                 {
                     // WPF raises the bark and Displayed on every path; Present (which does it) is skipped here.
@@ -181,17 +228,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     continue;
                 }
                 var w = new SubliminalOverlayWindow(text);
-                if (!X11Overlay.SetClickThrough(w, true) || !X11Overlay.SetOpacity(w, 0) || !X11Overlay.SetOverrideRedirect(w, screens[i].Bounds))
+                if (!ConfigureClassic(w, screens[i].Bounds))
                 {
                     if (!_warnedUnavailable) Log.Warning("Subliminal: the platform refused a click-through topmost overlay window; skipped");
                     _warnedUnavailable = true;
                     w.Close();
-                    return;
+                    break;
                 }
                 Present(w, raiseBark: !barkRaised);
                 barkRaised = true;
                 w.Run(alpha, hold, fadeIn, fadeOut);
             }
+            // WPF SubliminalService.cs:865-871: a one-shot never strands an idle stage after a classic fallback or refusal.
+            if (!CoreSubliminal.IsRunning && RetireHosted.Count == 0) ReleaseHosts();
         }
 
         internal static TimeSpan Hold(int frames, int? durationMs) => TimeSpan.FromMilliseconds(SubliminalCard.HoldMs(frames, durationMs));

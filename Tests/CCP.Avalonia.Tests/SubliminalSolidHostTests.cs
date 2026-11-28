@@ -23,6 +23,8 @@ public sealed class SubliminalSolidHostTests
         ConditioningControlPanel.CoreSettings.ServiceProvider = null;
         Window? stage = null;
         SharedOverlayHost.Configure = (w, _) => { stage = w; w.Width = 300; w.Height = 200; return true; };
+        var requestFrame = SubliminalOverlayWindow.RequestFrame;
+        SubliminalOverlayWindow.RequestFrame = (_, frame) => frame(TimeSpan.Zero); // the envelope starts on the first frame
         var scheduled = new List<(TimeSpan At, Action Fire)>();
         void Advance(TimeSpan at)
         {
@@ -59,6 +61,7 @@ public sealed class SubliminalSolidHostTests
         {
             SubliminalOverlay.CloseAll();
             SharedOverlayHost.Configure = configure;
+            SubliminalOverlayWindow.RequestFrame = requestFrame;
             ConditioningControlPanel.CoreSettings.ServiceProvider = settingsProvider;
         }
     });
