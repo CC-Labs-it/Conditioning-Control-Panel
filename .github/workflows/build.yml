@@ -418,7 +418,7 @@ jobs:
           $ok = Check 'real' @()
           if ($ok -ne 0) { throw "--webview-check exited $ok" }
           $neg = Check 'blocked' @('--expect-blocked')
-          if ($neg -ne 0) { throw "--webview-check --expect-blocked exited $neg: the check cannot fail" }
+          if ($neg -ne 0) { throw "--webview-check --expect-blocked exited ${neg}: the check cannot fail" }
 
       # Separate Avalonia installer; workflow artifact only, never a release.
       - name: Compile standalone Avalonia installer (ISCC)
