@@ -237,6 +237,40 @@ public sealed class GradedIntakeGateTests
         }
     });
 
+    [Fact]
+    public void OpeningGradedIntakeRechecksTheWeeklyPass() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var service = new SettingsService();
+        var previousSettings = CoreSettings.ServiceProvider;
+        var previousLogin = CoreAccount.IsLoggedInProvider;
+        var previousPaid = CoreAccount.HasPremiumAccessProvider;
+        CoreSettings.ServiceProvider = () => service;
+        CoreAccount.IsLoggedInProvider = () => true;
+        CoreAccount.HasPremiumAccessProvider = () => false;
+        service.Current.IntakePassSpentWeek = IntakePassService.CurrentWeekKey();
+        var shell = new MainShellWindow();
+        try
+        {
+            shell.Show();
+            shell.ShowTab("gradedintake");
+            var view = shell.Named<GradedIntakeTabView>("GradedIntakeTab")!;
+            var gate = view.FindControl<Border>("GradedIntakeGate")!;
+            Assert.True(gate.IsVisible);
+            // Simulate a new week without sending PassStateChanged.
+            service.Current.IntakePassSpentWeek = "old-week";
+            shell.ShowTab("gradedintake");
+            Assert.False(gate.IsVisible);
+            Assert.True(view.FindControl<Border>("GradedIntakePassBanner")!.IsVisible);
+        }
+        finally
+        {
+            shell.Close();
+            CoreSettings.ServiceProvider = previousSettings;
+            CoreAccount.IsLoggedInProvider = previousLogin;
+            CoreAccount.HasPremiumAccessProvider = previousPaid;
+        }
+    });
+
     private static void EnsureAvalonia()
     {
         if (Application.Current is not null) return;

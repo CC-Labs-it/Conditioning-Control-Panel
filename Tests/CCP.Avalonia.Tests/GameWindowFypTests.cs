@@ -233,6 +233,77 @@ public sealed class GameWindowFypTests
         Assert.Equal(new[] { 5.0, 15.0 }, xp);
     });
 
+    /// <summary>ccp-bugs#1703: only a file the server actually served earns a decode strike (FypMetaStore #562); a
+    /// refused or missing one must not, or two failed sessions drop every library clip for good.</summary>
+    [Fact]
+    public void MediaError_StrikesOnlyServedFiles() => Run((_, lib) =>
+    {
+        CoreEntitlement.HasPremiumProvider = () => true;
+        Directory.CreateDirectory(Path.Combine(lib, "videos"));
+        File.WriteAllBytes(Path.Combine(lib, "videos", "bad.mp4"), new byte[] { 1 });
+        var meta = Path.Combine(CorePaths.UserData, "fyp_meta.json");
+        var oldMeta = File.Exists(meta) ? File.ReadAllText(meta) : null;
+        var oldServer = GameWindow.Server;
+        using var server = new WebAssetServer(Path.GetDirectoryName(lib)!) { AssetsRoot = () => lib, DisabledAssets = () => null };
+        GameWindow.Server = () => server;
+        try
+        {
+            File.Delete(meta);
+            var w = GameWindow.Launch(GameWindow.FypId)!;
+            w.HandleMessage("{\"type\":\"ready\"}");
+            w.HandleMessage("{\"type\":\"media-error\",\"id\":\"videos/bad.mp4\",\"code\":4}");
+            w.HandleMessage("{\"type\":\"media-error\",\"id\":\"videos/refused.mp4\",\"code\":4}");
+            var store = new ConditioningControlPanel.Services.Fyp.FypMetaStore();
+            Assert.Equal(1, store.Get("videos/bad.mp4")?.FailStrikes);
+            Assert.Null(store.Get("videos/refused.mp4"));
+        }
+        finally
+        {
+            GameWindow.CloseAllForPanic();
+            GameWindow.Server = oldServer;
+            if (oldMeta == null) File.Delete(meta); else File.WriteAllText(meta, oldMeta);
+        }
+    });
+
+    /// <summary>ccp-bugs#1703: beta 2 struck every linked library clip on a 404; the first feed open clears those
+    /// strikes once so the clips come back, and a later strike still counts.</summary>
+    [Fact]
+    public void StaleBeta2Strikes_AreClearedOnce() => Run((_, lib) =>
+    {
+        CoreEntitlement.HasPremiumProvider = () => true;
+        Directory.CreateDirectory(Path.Combine(lib, "videos"));
+        File.WriteAllBytes(Path.Combine(lib, "videos", "struck.mp4"), new byte[] { 1 });
+        var meta = Path.Combine(CorePaths.UserData, "fyp_meta.json");
+        var marker = Path.Combine(CorePaths.UserData, GameWindow.FypStrikesClearedMarker);
+        var oldMeta = File.Exists(meta) ? File.ReadAllText(meta) : null;
+        var hadMarker = File.Exists(marker);
+        try
+        {
+            Directory.CreateDirectory(CorePaths.UserData);
+            File.Delete(marker);
+            File.WriteAllText(meta, "{\"videos/struck.mp4\":{\"FailStrikes\":2}}");
+            List<string?> Ids()
+            {
+                var w = GameWindow.Launch(GameWindow.FypId)!;
+                var sent = new List<JObject>();
+                w.Posted += json => sent.Add(JObject.Parse(json));
+                w.HandleMessage("{\"type\":\"ready\"}");
+                GameWindow.CloseAllForPanic();
+                return sent.First(o => (string?)o["type"] == "init")["assets"]!.Select(a => (string?)a["id"]).ToList();
+            }
+            Assert.Equal(new[] { "videos/struck.mp4" }, Ids());
+            Assert.True(File.Exists(marker));
+            File.WriteAllText(meta, "{\"videos/struck.mp4\":{\"FailStrikes\":2}}");   // a real strike-out after the reset
+            Assert.Empty(Ids());
+        }
+        finally
+        {
+            GameWindow.CloseAllForPanic();
+            if (oldMeta == null) File.Delete(meta); else File.WriteAllText(meta, oldMeta);
+            if (!hadMarker) File.Delete(marker);
+        }
+    });
+
     /// <summary>WPF ServeRemoteBatch / ProbeCustomSub: no media without consent; a found sub is committed.</summary>
     [Fact]
     public void RemoteBatchNeedsConsent_ProbeCommits() => Run((_, _) =>

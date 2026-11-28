@@ -95,6 +95,68 @@ public sealed class ChaosRunHostTests
         });
     }
 
+    [Fact]
+    public async Task Golden_spawn_payout_and_panic_clear_the_field()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            var (rng, art, audio, announcer) = (ChaosRunHost.Rng, CoreModArt.AudioOverridePathProvider, CoreAudio.PlayOneShotProvider, CoreSettings.Current.ChaosAnnouncerEnabled);
+            var chime = System.IO.Path.GetTempFileName();
+            var played = new List<string>();
+            try
+            {
+                ChaosRunHost.Rng = new TeaseDice();
+                CoreModArt.AudioOverridePathProvider = key => key.StartsWith("chime", StringComparison.Ordinal) ? chime : null;
+                CoreAudio.PlayOneShotProvider = (_, _, tag, _, done) => { played.Add(tag); done?.Invoke(); };
+                CoreSettings.Current.ChaosAnnouncerEnabled = true; ChaosAnnouncerOverlay.CloseActive();
+                var cfg = Cfg(); cfg.ScriptedFirstRun = true; cfg.HitboxScale = 2;
+                ChaosRunHost.StartRun(cfg);
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                BubbleOverlay.Field.Bubbles.Clear();
+                var state = ChaosRunHost.State!;
+                state.GoldenChance = 1;
+                state.GoldDiggerEnabled = true;
+                played.Clear();
+                ChaosRunHost.SpawnTick();
+                var golden = Assert.Single(BubbleOverlay.Field.Bubbles.Where(b => b.Spec?.IsGolden == true));
+                Assert.Equal(golden.Size, golden.HitSize);   // WPF BubbleService.cs:3285: pickups keep their natural hitbox
+                Assert.Contains("bubble-chime", played);
+                int before = ChaosMeta.State.Gold;
+                double score = state.Score, focus = state.Focus;
+                BubbleOverlay.PopChaos(golden);
+                int paid = ChaosMeta.State.Gold - before;
+                Assert.True(paid > 0);
+                Assert.Equal("gold digger: it spills", state.RecentEvents[0]);
+                Assert.Equal($"{ChaosGlyphs.Gold} lucky bubble +{paid} gold", state.RecentEvents[1]);
+                Assert.Equal($"{ChaosGlyphs.Gold} +{paid} gold", ChaosAnnouncerOverlay.Active!.Current!.Text);
+                Assert.Equal(score, state.Score);
+                Assert.Equal(focus + ChaosTuning.FOCUS_PER_GOLDEN, state.Focus);
+                var droplets = BubbleOverlay.Field.Bubbles.Where(b => b.Spec?.IsDroplet == true).ToList();
+                Assert.Equal(3, droplets.Count);
+                Assert.All(droplets, d => Assert.Equal(d.Size, d.HitSize));
+                before = ChaosMeta.State.Gold;
+                BubbleOverlay.PopChaos(droplets[0]);
+                Assert.True(ChaosMeta.State.Gold > before);
+                Assert.Equal($"{ChaosGlyphs.Gold} droplet +{ChaosMeta.State.Gold - before} gold", state.RecentEvents[0]);
+                Assert.Equal(score, state.Score);
+                PanicSurfaces.StopAll("test");
+                Assert.Empty(BubbleOverlay.Field.Bubbles);
+                Assert.False(ChaosRunHost.IsActive);
+                ChaosRunHost.SpawnTick();
+                Assert.Empty(BubbleOverlay.Field.Bubbles);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown(); ChaosAnnouncerOverlay.CloseActive(); ChaosRunHost.Rng = rng; FreshMeta();
+                (CoreModArt.AudioOverridePathProvider, CoreAudio.PlayOneShotProvider, CoreSettings.Current.ChaosAnnouncerEnabled) = (art, audio, announcer);
+                System.IO.File.Delete(chime);
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     private static void Ticks(int n) { for (int i = 0; i < n; i++) ChaosRunHost.Tick(); }
 
     /// <summary>A fresh in-memory save (TestIsolation puts the files back afterwards).</summary>
@@ -924,6 +986,8 @@ public sealed class ChaosRunHostTests
     [InlineData(true, true), InlineData(false, true), InlineData(false, false)]
     public Task Fourth_descent_rigs_first_sin_and_spends_demo_on_pick_or_skip(bool pick, bool allow) => WithFreshRun(() =>
     {
+        // Keep the ripple tutorial from occupying the announcer in this scenario.
+        ChaosMeta.State.SeenRippleTeach = true;
         var meta = ChaosMeta.State; meta.RunsCompleted = 3; meta.LessonsComplete.Add("silk_touch");
         CoreSettings.Current.ChaosAnnouncerEnabled = true;
         var cfg = Cfg(); cfg.BoonDraftEnabled = true; cfg.AllowCurses = allow; cfg.SinChance = 0;
@@ -945,6 +1009,8 @@ public sealed class ChaosRunHostTests
     [Fact]
     public Task Eligible_loadout_deals_the_duo_demo_once() => WithFreshRun(() =>
     {
+        // Keep the ripple tutorial from occupying the announcer in this scenario.
+        ChaosMeta.State.SeenRippleTeach = true;
         var oldEngine = BarkHead.Engine; var settings = CoreSettings.Current;
         var oldAvatar = settings.AvatarEnabled; var oldVolume = settings.MasterVolume;
         int spoken = 0;
@@ -1005,6 +1071,8 @@ public sealed class ChaosRunHostTests
     [Fact]
     public Task Draft_choices_report_resistance_and_sins() => WithFreshRun(() =>
     {
+        // Keep the ripple tutorial from occupying the announcer in this scenario.
+        ChaosMeta.State.SeenRippleTeach = true;
         var loc = ConditioningControlPanel.Localization.LocalizationManager.Instance;
         ChaosMeta.State.LessonsComplete.Add("silk_touch");
         CoreSettings.Current.ChaosAnnouncerEnabled = true;
@@ -1845,6 +1913,86 @@ public sealed class ChaosRunHostTests
         Assert.Equal(new[] { "ChaosTeaseDenied:1", "ChaosTeaseDenied:2", "ChaosTeaseDenied:3", "ChaosTeaseDenied:4",
             "ChaosTeaseDenied:5", "ChaosTeaseDeniedStreak:5", "ChaosTeaseDenied:6" }, barks);
     });
+
+    [Fact]
+    public async Task No_focus_announcement_is_throttled_and_panic_clears_it()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            bool enabled = CoreSettings.Current.ChaosAnnouncerEnabled;
+            string language = LocalizationManager.Instance.CurrentLanguage;
+            try
+            {
+                CoreSettings.Current.ChaosAnnouncerEnabled = true;
+                LocalizationManager.Instance.SetLanguage("en");
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                ChaosAnnouncerOverlay.CloseActive();
+                var now = DateTime.UtcNow;
+                BubbleOverlay.Field.Clock = () => now;
+                ChaosRunHost.State!.Focus = 0;
+                void Press() { var b = BubbleOverlay.SpawnChaos(LiveSpec()); BubbleOverlay.Press(b, b.CenterX, b.CenterY); }
+                Press();
+                Assert.Equal("NO FOCUS TO DEFUSE", ChaosAnnouncerOverlay.Active!.Current!.Text);
+                Assert.Equal(1300, ChaosAnnouncerOverlay.Active.Current.HoldMs);
+                Assert.Equal(ChaosAnnounceKind.Temptation, ChaosAnnouncerOverlay.Active.Current.Kind);
+                Press();
+                Assert.Equal(0, ChaosAnnouncerOverlay.QueuedCount);
+                now = now.AddMilliseconds(1500);
+                Press();
+                Assert.Equal(1, ChaosAnnouncerOverlay.QueuedCount);
+                PanicSurfaces.All.Single(x => x.Id == "chaos").Stop(null);
+                Assert.Null(ChaosAnnouncerOverlay.Active);
+                Assert.Equal(0, ChaosAnnouncerOverlay.QueuedCount);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown(); BubbleOverlay.Field.Clock = () => DateTime.UtcNow;
+                CoreSettings.Current.ChaosAnnouncerEnabled = enabled;
+                LocalizationManager.Instance.SetLanguage(language); FreshMeta();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Unleashed_collar_save_announces_and_panic_clears_it()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            bool enabled = CoreSettings.Current.ChaosAnnouncerEnabled;
+            string language = LocalizationManager.Instance.CurrentLanguage;
+            try
+            {
+                CoreSettings.Current.ChaosAnnouncerEnabled = true;
+                LocalizationManager.Instance.SetLanguage("en");
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                ChaosAnnouncerOverlay.CloseActive();
+                var state = ChaosRunHost.State!;
+                state.Focus = 100; state.Shields = 0; state.CollarSaves = 1; state.UnleashedEnabled = true;
+                var b = BubbleOverlay.SpawnChaos(LiveSpec());
+                ChaosRunHost.OnDetonated(b);
+                Assert.Equal("UNLEASHED", ChaosAnnouncerOverlay.Active!.Current!.Text);
+                Assert.Equal("unleashed", ChaosAnnouncerOverlay.Active.Current.ArtKey);
+                Assert.Equal(ChaosAnnounceKind.PowerUp, ChaosAnnouncerOverlay.Active.Current.Kind);
+                PanicSurfaces.All.Single(x => x.Id == "chaos").Stop(null);
+                Assert.Null(ChaosAnnouncerOverlay.Active);
+                ChaosRunHost.OnDetonated(b);
+                Assert.Null(ChaosAnnouncerOverlay.Active);
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown(); CoreSettings.Current.ChaosAnnouncerEnabled = enabled;
+                LocalizationManager.Instance.SetLanguage(language); FreshMeta();
+            }
+            return Task.CompletedTask;
+        });
+    }
 
     private static EffectBubbleSpec LiveSpec() => new()
         { VariantId = "pink", IsLive = true, FuseMs = 5000, SizePx = 200, Payload = new FlashPayload() };
