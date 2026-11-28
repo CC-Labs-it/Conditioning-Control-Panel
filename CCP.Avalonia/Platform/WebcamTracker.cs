@@ -325,6 +325,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// <summary>Bumped by every Stop (and so by panic). A start that began before it never publishes
         /// its camera: it releases it instead. Guarded by <see cref="_gate"/> with the publish.</summary>
         private int _gen;
+        private bool _disposed; // guarded by _gate
         private readonly object _gate = new();
 
         /// <summary>Off the UI thread, as WPF StartWebcamOffUiThreadAsync: model load and camera
@@ -347,6 +348,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         private bool Start(int gen)
         {
+            lock (_gate) { if (_disposed) return false; }
             if (IsRunning) return true;
             if (Interlocked.Exchange(ref _busy, 1) != 0) return false;
             var run = new Run();
@@ -459,8 +461,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 bool stale;
                 lock (_gate)
                 {
-                    stale = gen != _gen;
-                    if (!stale) _run = run;
+                    stale = _disposed || gen != _gen;
+                    if (!stale) { _run = run; run.Thread.Start(); }
                 }
                 if (stale)
                 {
@@ -471,7 +473,6 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 }
                 Progress(0.92, "Starting capture…");
                 SetTrackingState(WebcamTrackingState.Tracking);
-                run.Thread.Start();
                 Progress(1.0, "Ready");
                 Log.Information("[Webcam] tracking started");
                 return true;
@@ -505,10 +506,15 @@ namespace ConditioningControlPanel.Avalonia.Platform
             CoreSettings.Save();
         }
 
-        public void Stop()
+        public void Stop() => StopCore(false);
+
+        // WPF WebcamTrackingService.Dispose: invalidate a pending open and reject later starts.
+        internal void Shutdown() => StopCore(true);
+
+        private void StopCore(bool shutdown)
         {
             Run? run;
-            lock (_gate) { _gen++; run = Interlocked.Exchange(ref _run, null); }
+            lock (_gate) { if (shutdown) _disposed = true; _gen++; run = Interlocked.Exchange(ref _run, null); }
             SetTrackingState(WebcamTrackingState.Stopped);
             if (run == null) return;
             run.Stop = true;
