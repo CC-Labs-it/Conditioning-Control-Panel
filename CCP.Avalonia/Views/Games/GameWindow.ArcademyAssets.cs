@@ -25,6 +25,8 @@ internal sealed partial class GameWindow
     // WPF TaggedFetchesInFlight/TaggedWaiters (:4803-4828): a pile ask that finds its fetch in the air waits for that batch.
     // Waiters ride with the fetch they queued behind, so a pile that changes subs mid-fetch never answers them from the new batch.
     private readonly Dictionary<string, (string[] Subs, List<(int Want, Action<object[], bool> Reply)> Waiters)> _arcademyPileFetching = new(StringComparer.Ordinal);
+    // Cancelled on close (StopArcademyWatch): a fetch still queued behind the tenant gate never starts.
+    private readonly CancellationTokenSource _arcademyAssetsClosed = new();
     private static bool ArcademyRemoteAllowed() => !CoreSettings.Current.OfflineMode
         && CoreSettings.Current.MediaSource != "local" && CoreSettings.Current.HasRemoteMediaConsent;
 
@@ -67,6 +69,7 @@ internal sealed partial class GameWindow
         }
         var waiters = new List<(int Want, Action<object[], bool> Reply)>();
         if (tagged) _arcademyPileFetching[key] = (subs, waiters);
+        var closed = _arcademyAssetsClosed.Token;
         _ = Task.Run(async () =>
         {
             var mediaKind = kind == "loop" ? FeedMediaKind.Video : FeedMediaKind.Image;
@@ -78,9 +81,11 @@ internal sealed partial class GameWindow
                 string tenant = tagged ? "arcademy:sort:" + tag : "arcademy";
                 SemaphoreSlim gate;
                 lock (ArcademyTaggedSubs) if (!ArcademyFetchGates.TryGetValue(tenant, out gate!)) ArcademyFetchGates[tenant] = gate = new SemaphoreSlim(1, 1);
-                await gate.WaitAsync();
+                await gate.WaitAsync(closed);
                 try
                 {
+                    // WPF never queues (TaggedFetchesInFlight, _remoteFetchInFlight): a fetch that waited here asks consent again.
+                    if (_closing || !ArcademyRemoteAllowed()) throw new OperationCanceledException();
                     bool changed;
                     lock (ArcademyTaggedSubs)
                     {
@@ -92,7 +97,7 @@ internal sealed partial class GameWindow
                     {
                         var coordinator = FypOnlineCoordinator.For(tenant, () => ArcademyChannels(tenant), FeedMediaKind.Any);
                         if (changed) coordinator.ResetChannels();
-                        (entries, _) = await coordinator.FetchBatchAsync(mediaKind, CancellationToken.None);
+                        (entries, _) = await coordinator.FetchBatchAsync(mediaKind, closed);
                     }
                 }
                 finally { gate.Release(); }

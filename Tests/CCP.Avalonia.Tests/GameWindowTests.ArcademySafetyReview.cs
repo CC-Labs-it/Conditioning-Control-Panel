@@ -171,6 +171,36 @@ public sealed partial class GameWindowTests
         }
         finally { w.Close(); (s.OfflineMode, s.RemoteMediaConsented, s.MediaSource) = old; }
     });
+    /// <summary>A fetch queued behind the tenant gate asks consent again, and a close drops it (WPF :4697, :4971 never queue one).</summary>
+    [Fact]
+    public void Arcademy_QueuedFetchStopsOnRevokeOrClose() => Run((_, _) =>
+    {
+        var s = CoreSettings.Current; var old = (s.OfflineMode, s.RemoteMediaConsented, s.MediaSource);
+        var w = new GameWindow(GameWindow.ArcademySpec); var frames = new List<JObject>(); int calls = 0;
+        var pending = new TaskCompletionSource<List<FypAssetManifest.Entry>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        w.Posted += json => frames.Add(JObject.Parse(json));
+        w.ArcademyFetchForTests = (_, _) => { Interlocked.Increment(ref calls); return pending.Task; };
+        bool Done(string id) => SpinWait.SpinUntil(() => { Dispatcher.UIThread.RunJobs(); return frames.Any(f => (string?)f["reqId"] == id && (bool?)f["done"] == true); }, TimeSpan.FromSeconds(10));
+        try
+        {
+            (s.OfflineMode, s.RemoteMediaConsented, s.MediaSource) = (false, true, "online");
+            w.HandleMessage("{\"type\":\"assets-request\",\"reqId\":\"a\",\"count\":1}");
+            Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref calls) == 1, TimeSpan.FromSeconds(10)));
+            w.HandleMessage("{\"type\":\"assets-request\",\"reqId\":\"b\",\"count\":1}");
+            s.RemoteMediaConsented = false;
+            pending.SetResult(new());
+            Assert.True(Done("a")); Assert.True(Done("b"));
+            Assert.Equal(1, Volatile.Read(ref calls));
+            Assert.Empty((JArray)frames.Last(f => (string?)f["reqId"] == "b")["urls"]!);
+            s.RemoteMediaConsented = true; pending = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            w.HandleMessage("{\"type\":\"assets-request\",\"reqId\":\"c\",\"count\":1}");
+            Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref calls) == 2, TimeSpan.FromSeconds(10)));
+            w.HandleMessage("{\"type\":\"assets-request\",\"reqId\":\"d\",\"count\":1}");
+            w.Close(); pending.SetResult(new());
+            Assert.False(SpinWait.SpinUntil(() => Volatile.Read(ref calls) > 2, TimeSpan.FromMilliseconds(500)));
+        }
+        finally { w.Close(); pending.TrySetResult(new()); (s.OfflineMode, s.RemoteMediaConsented, s.MediaSource) = old; }
+    });
     [Theory]
     [InlineData("samples")]
     [InlineData("settings")]
