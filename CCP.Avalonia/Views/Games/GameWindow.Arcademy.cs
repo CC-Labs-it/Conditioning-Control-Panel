@@ -93,6 +93,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             void Changed() => Dispatcher.UIThread.Post(() => { if (!_closing && _arcademyMeta != null) Post(_arcademyMeta.SnapshotMessage()); });
             ArcademySyncService.Attach(_arcademyMeta, Changed);
             ArcademyWalletSyncService.Attach(_arcademyMeta, Changed);
+            // WPF ArcademyHostService.cs:262,4361: emitter gated on rung and sign-in, snapshot on online only.
+            ArcademyPresenceService.Attach((self, snapshot) => Dispatcher.UIThread.Post(() =>
+            {
+                if (!_closing) Post(new { type = "presence", self, snapshot });
+            }));
             _arcademySettingsService = CoreSettings.Service;
             if (_arcademySettingsService != null) _arcademySettingsService.CurrentReplaced += ArcademySettingsReplaced;
             BindArcademySettings();
@@ -362,6 +367,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             ArcademyClassLeft();
             ArcademySyncService.Detach();
             ArcademyWalletSyncService.Detach();
+            ArcademyPresenceService.Detach();   // WPF ArcademyHostService.cs:6106
             _arcademyMeta?.FlushSave();
         }
 
@@ -469,6 +475,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     break;
                 case "class-started":
                     ArcademyClassStarted(message);
+                    ArcademyPresenceService.NoteRoomEnter((string?)message["gameKey"]);   // WPF ArcademyHostService.cs:618
                     _arcademyClassActive = true;
                     handled = true;
                     break;
