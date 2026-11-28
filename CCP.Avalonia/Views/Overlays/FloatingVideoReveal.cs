@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Models;
@@ -19,9 +20,10 @@ internal sealed class FloatingVideoReveal
     private DispatcherTimer? _timer;
     private readonly Stopwatch _clock = new();
     internal bool IsAnimating => _timer != null;
-    internal PixelPoint TargetPosition => IsAnimating ? _origin : _window.Position;
-    private double _width, _height, _scaling;
-    private PixelPoint _origin;
+    private double _width, _height;
+    private Control? _frame;
+    private Geometry? _previousClip;
+    private RectangleGeometry? _clip;
 
     public FloatingVideoReveal(Window window, Action<bool>? holdAudio = null, bool animate = false)
     {
@@ -36,13 +38,16 @@ internal sealed class FloatingVideoReveal
         if (_closed || _presented) return;
         _presented = true;
         if (_animate && AmbientFxCanvas.Env.Level == MotionLevel.Full
+            && _window.Content is Control frame
             && double.IsFinite(_window.Width) && _window.Width > 0
             && double.IsFinite(_window.Height) && _window.Height > 0)
         {
             _width = _window.Width;
             _height = _window.Height;
-            _origin = _window.Position;
-            _scaling = _window.RenderScaling;
+            _frame = frame;
+            _previousClip = frame.Clip;
+            _clip = new RectangleGeometry();
+            frame.Clip = _clip;
             RevealAt(0);
             _clock.Restart();
             _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
@@ -53,16 +58,15 @@ internal sealed class FloatingVideoReveal
         if (!_closed) _holdAudio?.Invoke(false);
     }
 
-    // WPF FloatingSpawnLook: the window grows from its centre using cubic ease-out.
+    // WPF FloatingSpawnLook: reveal the centre without resizing the window or its picture.
     internal void RevealAt(double elapsedMs)
     {
-        if (_closed || _width <= 0) return;
+        if (_closed || _clip == null) return;
         var t = Math.Clamp(elapsedMs / 260, 0, 1);
         var scale = 0.7 + 0.3 * (1 - Math.Pow(1 - t, 3));
-        _window.Width = _width * scale;
-        _window.Height = _height * scale;
-        _window.Position = new PixelPoint(_origin.X + (int)Math.Round((_width - _window.Width) * _scaling / 2),
-            _origin.Y + (int)Math.Round((_height - _window.Height) * _scaling / 2));
+        var width = _width * scale;
+        var height = _height * scale;
+        _clip.Rect = new Rect((_width - width) / 2, (_height - height) / 2, width, height);
         if (t >= 1) StopAnimation();
     }
 
@@ -71,6 +75,10 @@ internal sealed class FloatingVideoReveal
         _timer?.Stop();
         _timer = null;
         _clock.Stop();
+        if (_frame != null) _frame.Clip = _previousClip;
+        _frame = null;
+        _clip = null;
+        _previousClip = null;
     }
 
     /// <summary>The clip ended: never present, keep the audio held; the overlay closes the window its own way.</summary>

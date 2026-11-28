@@ -2,6 +2,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.Media;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using Xunit;
@@ -33,24 +34,40 @@ public class FloatingVideoRevealTests
             settings.GentleVisuals = false;
             ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = () => true;
             ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
-            var window = new Window { Width = 400, Height = 200, Position = new PixelPoint(100, 200), ShowActivated = false };
+            var picture = new Border { Background = Brushes.Black };
+            var frame = new Border { Child = picture };
+            var window = new Window { Width = 400, Height = 200, Position = new PixelPoint(100, 200), ShowActivated = false, Content = frame };
             var reveal = new FloatingVideoReveal(window, animate: true);
             try
             {
                 reveal.Present();
                 Assert.Equal(animates, reveal.IsAnimating);
-                Assert.Equal(animates ? 280 : 400, window.Width, 3);
-                Assert.Equal(animates ? 140 : 200, window.Height, 3);
+                window.UpdateLayout();
+                Assert.Equal(400, window.Width, 3);
+                Assert.Equal(200, window.Height, 3);
+                Assert.Equal(new PixelPoint(100, 200), window.Position);
+                var pictureBounds = picture.Bounds;
+                Assert.Equal(new Size(400, 200), pictureBounds.Size);
                 if (animates)
                 {
-                    Assert.Equal(new PixelPoint(160, 230), window.Position);
+                    Assert.Equal(new Rect(60, 30, 280, 140), Assert.IsType<RectangleGeometry>(frame.Clip).Rect);
                     reveal.RevealAt(130);
-                    Assert.Equal(385, window.Width, 3);
-                    reveal.RevealAt(260);
+                    window.UpdateLayout();
+                    var midway = Assert.IsType<RectangleGeometry>(frame.Clip).Rect;
+                    Assert.Equal(7.5, midway.X, 3);
+                    Assert.Equal(3.75, midway.Y, 3);
+                    Assert.Equal(385, midway.Width, 3);
+                    Assert.Equal(192.5, midway.Height, 3);
+                    Assert.Equal(pictureBounds, picture.Bounds);
                     Assert.Equal(400, window.Width, 3);
+                    Assert.Equal(200, window.Height, 3);
                     Assert.Equal(new PixelPoint(100, 200), window.Position);
+                    reveal.RevealAt(260);
+                    Assert.Null(frame.Clip);
+                    Assert.Equal(pictureBounds, picture.Bounds);
                     Assert.False(reveal.IsAnimating);
                 }
+                else Assert.Null(frame.Clip);
             }
             finally
             {
