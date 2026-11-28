@@ -30,6 +30,15 @@ namespace ConditioningControlPanel.Avalonia
             setenv(name, value, 0);
         }
 
+        // Avalonia 12.2.0 throws on any Type 1 face fontconfig matches (SkiaTypeface.ReadTableDirectory -> GetTableTags):
+        // on Fedora the fallback for U+2715 is urw-base35's D050000L.t1, which aborted startup (distro-check fedora).
+        // shortcut: hides Type 1 fonts from the whole process, drop once Avalonia ships AvaloniaUI/Avalonia#22973 (after 12.2.0).
+        private static void HideType1Fonts()
+        {
+            var conf = System.IO.Path.Combine(AppContext.BaseDirectory, "fontconfig-no-type1.conf");
+            if (System.IO.File.Exists(conf)) setenv("FONTCONFIG_FILE", conf, 0);
+        }
+
         /// <summary>Remembers the log file the sink has open, for the bug report.</summary>
         internal sealed class ReportLogFile : Serilog.Sinks.File.FileLifecycleHooks
         {
@@ -51,6 +60,7 @@ namespace ConditioningControlPanel.Avalonia
             if (OperatingSystem.IsLinux())
             {
                 ApplyWebKitEnv();   // before any thread or WebKitGTK init (LinuxWebKitEnv)
+                HideType1Fonts();   // before Skia or GTK first reads fontconfig
                 // --webkit-env-check prints the value WebKitGTK's own getenv sees, then exits (WebKitEnvStartupTests).
                 if (Array.IndexOf(args, "--webkit-env-check") >= 0)
                 {
