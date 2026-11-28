@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel;
@@ -41,6 +43,7 @@ public sealed partial class AccountSeedTests : IDisposable
     {
         CoreAccount.IsLoggedInProvider = CoreAccount.HasPremiumAccessProvider = CoreAccount.HasLabAccessProvider = CoreAccount.IsWhitelistedProvider = null;
         CoreAccount.DisplayNameProvider = null;
+        CoreAccount.PatreonAccessTokenProvider = null;
         CoreAccount.ChangeDisplayNameProvider = null;
         CoreAccount.DeleteAccountProvider = null;
         CoreAccount.UnifiedUserId = null;
@@ -87,6 +90,50 @@ public sealed partial class AccountSeedTests : IDisposable
         Assert.False(CoreAccount.HasLabAccess);
         Assert.False(CoreEntitlement.HasPremium); // TierGate's seam
         Assert.False(CoreEntitlement.HasLab);
+    }
+
+    [Fact]
+    public void PatreonTokenTracksStoredTokensAndFailsClosed()
+    {
+        Assert.True(AccountSeed.Seed(Make));
+        var patreon = AccountSeed.Patreon!;
+        patreon.StoreTokens("token", "refresh", DateTime.UtcNow.AddDays(1));
+        Assert.Equal("token", CoreAccount.PatreonAccessToken);
+        patreon.ClearTokens();
+        Assert.Null(CoreAccount.PatreonAccessToken);
+        CoreSecrets.RetrieveProvider = _ => throw new InvalidOperationException("keyring gone");
+        Assert.Null(CoreAccount.PatreonAccessToken);
+    }
+
+    [Fact]
+    public async Task LegacyChatSendsTheSeededPatreonBearer()
+    {
+        Assert.True(AccountSeed.Seed(Make));
+        AccountSeed.Patreon!.StoreTokens("token", "refresh", DateTime.UtcNow.AddDays(1));
+        CoreAccount.HasPremiumAccessProvider = () => true;
+        CoreAccount.UnifiedUserId = null;
+        var probe = new TcpListener(IPAddress.Loopback, 0);
+        probe.Start();
+        var port = ((IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+        var url = $"http://127.0.0.1:{port}";
+        using var listener = new HttpListener();
+        listener.Prefixes.Add(url + "/");
+        listener.Start();
+        using var ai = new AiService(url);
+#pragma warning disable CS0618
+        var reply = ai.GetBambiReplyExAsync("hello there");
+#pragma warning restore CS0618
+        var incoming = listener.GetContextAsync();
+        Assert.Same(incoming, await Task.WhenAny(incoming, Task.Delay(TimeSpan.FromSeconds(10))));
+        var ctx = await incoming;
+        Assert.Equal("POST", ctx.Request.HttpMethod);
+        Assert.Equal("/ai/chat", ctx.Request.Url!.AbsolutePath);
+        Assert.Equal("Bearer token", ctx.Request.Headers["Authorization"]);
+        var body = Encoding.UTF8.GetBytes("{\"content\":\"hello\"}");
+        await ctx.Response.OutputStream.WriteAsync(body);
+        ctx.Response.Close();
+        Assert.True((await reply).IsAiGenerated);
     }
 
     [Fact]
