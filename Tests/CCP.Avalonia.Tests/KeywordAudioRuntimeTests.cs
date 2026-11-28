@@ -71,6 +71,30 @@ public sealed class KeywordAudioRuntimeTests
     });
 
     [Fact]
+    public void OcrFiresOnlyTriggersWithNewHighlights() => Run((engine, s, played) =>
+    {
+        var saved = (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll);
+        try
+        {
+            s.ScreenOcrEnabled = true; s.OcrConfirmationScans = 2; s.OcrHighlightAll = true;
+            var sit = new KeywordTrigger { Keyword = "sit", CooldownSeconds = 0 };
+            var stay = new KeywordTrigger { Keyword = "stay", CooldownSeconds = 0 };
+            s.KeywordTriggers = [sit, stay];
+            var fired = new List<KeywordTrigger>();
+            engine.TriggerFired += fired.Add;
+            var first = new ScreenOcrService.Word("sit", new(20, 20, 20, 20));
+            var second = new ScreenOcrService.Word("stay", new(300, 20, 20, 20));
+            engine.CheckOcrWords([first]);
+            engine.CheckOcrWords([first, second]);
+            Assert.Equal(new[] { sit }, fired);
+            engine.Now = () => new DateTime(2026, 10, 14, 12, 0, 2);
+            engine.CheckOcrWords([first, second]);
+            Assert.Equal(new[] { sit, stay }, fired);
+        }
+        finally { (s.ScreenOcrEnabled, s.OcrConfirmationScans, s.OcrHighlightAll) = saved; }
+    });
+
+    [Fact]
     public void OcrHighlightAllDispatchesEveryConfirmedWordAndSubsetDispatchesSome() => Run((engine, s, played) =>
     {
         var screens = ConditioningControlPanel.Avalonia.Views.Overlays.KeywordHighlightOverlay.Screens;

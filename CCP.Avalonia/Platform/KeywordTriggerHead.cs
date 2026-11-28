@@ -429,7 +429,7 @@ internal sealed class KeywordAudioRuntime
         var now = Now();
         if ((now - _cooldowns.LastGlobal).TotalSeconds < s.KeywordGlobalCooldownSeconds) return false;
         var matched = new List<ScreenOcrService.Word>();
-        var fired = new List<KeywordTrigger>();
+        var triggerHits = new List<(KeywordTrigger Trigger, List<ScreenOcrService.Word> Words)>();
         foreach (var trigger in KeywordMatchRules.Ordered(s.KeywordTriggers))
         {
             if (trigger == null || !trigger.Enabled || string.IsNullOrEmpty(trigger.Keyword) ||
@@ -437,14 +437,14 @@ internal sealed class KeywordAudioRuntime
                 _cooldowns.IsMuted(trigger.Keyword, now.ToUniversalTime())) continue;
             var hits = FindOcrMatches(trigger, words);
             if (hits.Count == 0) continue;
-            fired.Add(trigger);
+            triggerHits.Add((trigger, hits));
             matched.AddRange(hits);
         }
         if (matched.Count == 0) { ClearOcr(); return false; }
 
         var positions = new HashSet<string>();
         foreach (var word in matched)
-            positions.Add($"{word.Text.ToLowerInvariant()}_{word.Bounds.X / 120}_{word.Bounds.Y / 120}");
+            positions.Add(OcrPositionKey(word));
         _ocrFired.IntersectWith(positions);
         var seen = new Dictionary<string, int>();
         var confirmed = new List<string>();
@@ -469,10 +469,17 @@ internal sealed class KeywordAudioRuntime
             confirmed.RemoveRange(count, confirmed.Count - count);
         }
         _ocrFired.UnionWith(confirmed);
-        // Fire holds the response during a panic's quiet, the same as a keyboard match (WPF DispatchMergedAsync).
-        Fire(fired, "OCR", now, confirmed.Select(key => matched.First(w => $"{w.Text.ToLowerInvariant()}_{w.Bounds.X / 120}_{w.Bounds.Y / 120}" == key)).ToArray());
+        // WPF KeywordTriggerService.cs:1117-1136: only owners of new highlights fire.
+        var keys = confirmed.ToHashSet();
+        var fired = triggerHits.Where(hit => hit.Words.Any(word => keys.Contains(OcrPositionKey(word))))
+            .Select(hit => hit.Trigger).ToList();
+        if (fired.Count == 0) return NeedsOcrConfirmation;
+        Fire(fired, "OCR", now, confirmed.Select(key => matched.First(w => OcrPositionKey(w) == key)).ToArray());
         return NeedsOcrConfirmation;
     }
+
+    private static string OcrPositionKey(ScreenOcrService.Word word) =>
+        $"{word.Text.ToLowerInvariant()}_{word.Bounds.X / 120}_{word.Bounds.Y / 120}";
 
     internal static List<ScreenOcrService.Word> FindOcrMatches(KeywordTrigger trigger, IReadOnlyList<ScreenOcrService.Word> words)
     {
