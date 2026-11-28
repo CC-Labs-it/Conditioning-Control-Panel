@@ -217,6 +217,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             RbBambiCloud.Click += BrowserSiteToggle_Click;
             RbHypnoTube.Click += BrowserSiteToggle_Click;
             BtnReloadBrowser.Click += BtnReloadBrowser_Click;
+            BtnBrowserZoomOut.Click += (_, _) => AdjustBrowserZoom(-1);
+            BtnBrowserZoomIn.Click += (_, _) => AdjustBrowserZoom(1);
             BrowserWebHost.NavigationCompleted += url => Shell?.OnBrowserNavigationCompleted(url);
             // WPF BrowserService.cs:337 always-on media reporter, and its messages (MainWindow.Browser.cs:1127).
             BrowserWebHost.NavigationFinished += (_, ok) => { if (ok) BrowserWebHost.InvokeScriptAsync(Windows.MainShellWindow.BrowserMediaReporterScript); };
@@ -403,6 +405,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void BrowserLoadingText_Click(object? sender, PointerPressedEventArgs e) => OnBrowserPromptClick();   // SettingsTabView.BrowserCard.cs
         private void BrowserSiteToggle_Click(object? sender, RoutedEventArgs e) => Shell?.BrowserSiteToggle_Click(sender, e);
         private void BtnReloadBrowser_Click(object? sender, RoutedEventArgs e) => Shell?.BtnReloadBrowser_Click(sender, e);
+
+        // WPF MainWindow.Browser.cs AdjustBrowserZoom: only an available browser receives a step.
+        private void AdjustBrowserZoom(int direction)
+        {
+            if (!BrowserWebHost.HasEngine) return;
+            var current = BrowserWebHost.BrowserZoom ?? 1.0;
+            if (!double.IsFinite(current) || current <= 0) current = 1.0;
+            BrowserWebHost.SetBrowserZoom(Math.Round(Math.Clamp(current + direction * 0.10, 0.25, 5.0), 2));
+        }
         // Webcam, Mute, Pop out, Enhance and the BambiCloud override: SettingsTabView.BrowserCard.cs.
 
         // -- home audio card ------------------------------------------------------------

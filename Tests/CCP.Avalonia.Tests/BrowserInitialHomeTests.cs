@@ -133,6 +133,36 @@ public sealed class BrowserInitialHomeTests
         Assert.Equal(0, Seeks());
     }));
 
+    [Fact]
+    public Task BrowserToolbarZoomStepsClampsAndPanicCancelsPendingWork() => Run((shell, page, host, mod) =>
+    {
+        var minus = page.FindControl<Button>("BtnBrowserZoomOut")!;
+        var plus = page.FindControl<Button>("BtnBrowserZoomIn")!;
+        void Click(Button button) => button.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        var before = host.BrowserZoom;
+        Click(plus);
+        Assert.Equal(before, host.BrowserZoom); // no engine
+        host.ScriptInvoker = _ => Task.FromResult<string?>(null);
+        System.Threading.CancellationToken pending = default;
+        host.ZoomInvoker = (_, token) => pending = token;
+        host.BrowserZoomAdapterReady();
+        host.SetBrowserZoom(0.5);
+        Click(plus);
+        Assert.Equal(0.6, host.BrowserZoom);
+        Click(minus);
+        Assert.Equal(0.5, host.BrowserZoom);
+        host.SetBrowserZoom(0.25);
+        Click(minus);
+        Assert.Equal(0.25, host.BrowserZoom);
+        host.SetBrowserZoom(5.0);
+        Click(plus);
+        Assert.Equal(5.0, host.BrowserZoom);
+        Assert.False(pending.IsCancellationRequested);
+        foreach (var surface in PanicSurfaces.All)
+            if (surface.Id == "browser-media") surface.Stop(shell);
+        Assert.True(pending.IsCancellationRequested);
+    });
+
     private static void WithVideoSettings(Action check)
     {
         var settings = CoreSettings.Current;
