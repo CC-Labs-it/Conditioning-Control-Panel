@@ -15,6 +15,9 @@ internal static class TcFeelRules
     public const string KeyMotion = "motion";
     public const string KeyConsent = TcMediaRules.SettingKey;
 
+    /// <summary>The Avalonia host's station on the shared Back Room pulse director.</summary>
+    public const string Station = "tc";
+
     /// <summary>The <c>setting</c> key an <see cref="AppSettings"/> property change moves, or null for every
     /// other property. The picture gate reads four of them, so each of those re-sends the consent key.</summary>
     public static string? KeyFor(string? propertyName) => propertyName switch

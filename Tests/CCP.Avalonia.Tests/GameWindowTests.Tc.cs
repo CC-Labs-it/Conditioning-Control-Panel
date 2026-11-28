@@ -6,6 +6,7 @@ using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.BackRoom;
 using ConditioningControlPanel.Services.Launcher;
 using ConditioningControlPanel.Services.Safety;
 using ConditioningControlPanel.Services.Tc;
@@ -77,7 +78,8 @@ public sealed partial class GameWindowTests
         Assert.False((bool)caps["saveSlot"]!);
         Assert.Null(caps["expo"]);
         Assert.Null(caps["ownMedia"]);   // this head cannot answer own-media-list yet (s20-tc-media)
-        Assert.False((bool)caps["toys"]!);
+        Assert.True((bool)caps["toys"]!);   // toy pulses (s20-tc-feel)
+        Assert.False((bool)caps["toysConnected"]!);   // no toy in tests
         Assert.False((bool)caps["sparkles"]!);
         Assert.True(w.IsReady);
         Assert.True(w.KeptEscapeReady);
@@ -182,9 +184,13 @@ public sealed partial class GameWindowTests
             Dispatcher.UIThread.RunJobs();
             Assert.True(GameWindow.IsAnyOpen());
             Assert.Equal("kept-escape", (string?)Assert.Single(sent)["type"]);
+            var pulses = new List<BackRoomHaptic>();
+            w.TcHaptic = pulses.Add;
+            w.HandleMessage(TcPulse);
             shell.HandlePanicKeyPress(t.AddSeconds(1));
             Dispatcher.UIThread.RunJobs();
-            Assert.False(GameWindow.IsAnyOpen());
+            Assert.False(GameWindow.IsAnyOpen());   // the second Escape closes it, and the pulse stops on that call
+            Assert.True(pulses[^1].IsStop);
         }
         finally { (s.PanicKey, s.PanicKeyEnabled) = (oldKey, oldEnabled); }
     });
@@ -203,5 +209,52 @@ public sealed partial class GameWindowTests
             Assert.True(GameWindow.IsAnyOpen());
         }
         finally { ld.Deactivate(); LockdownService.Current = old; }
+    });
+
+    private const string TcPulse = "{\"type\":\"haptic\",\"level\":0.6,\"ms\":2000}";
+
+    // WPF TcHostService.cs:168: panic (key, tray, safe word, leash gate all run StopAll) stops our pulse on the same call.
+    [Fact]
+    public void Tc_PanicSurfacesStopAllStopsThePulseInTheSameTick() => RunTc("small", (shell, w, _) =>
+    {
+        var pulses = new List<BackRoomHaptic>();
+        w.TcHaptic = pulses.Add;
+        w.HandleMessage("{\"type\":\"ready\"}");
+        w.HandleMessage(TcPulse);
+        w.HandleMessage("{\"type\":\"haptic\",\"level\":0,\"ms\":200}");   // no level: not a pulse, not a stop (WPF Plays)
+        var p = Assert.Single(pulses);
+        Assert.Equal((TcFeelRules.Station, 0.6, 2000), (p.Station, p.Level, p.Ms));
+        PanicSurfaces.StopAll("tc safe word test", shell);
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.Equal(2, pulses.Count);
+        Assert.True(pulses[^1].IsStop);
+        Assert.Equal(TcFeelRules.Station, pulses[^1].Station);
+        w.HandleMessage(TcPulse);   // a late frame plays nothing
+        Assert.Equal(2, pulses.Count);
+    });
+
+    // WPF TcHostService.Feel.cs:75-111: gentle and motion follow the app while the window is up; close lets go.
+    [Fact]
+    public void Tc_LiveSettingsReachThePageUntilClose() => RunTc("small", (_, w, sent) =>
+    {
+        var s = CoreSettings.Current;
+        var old = s.MotionLevel;
+        try
+        {
+            w.HandleMessage("{\"type\":\"ready\"}");
+            sent.Clear();
+            Assert.Same(s, w.TcWatchedSettings);
+            s.MotionLevel = old == ConditioningControlPanel.Models.MotionLevel.Off ? ConditioningControlPanel.Models.MotionLevel.Reduced : ConditioningControlPanel.Models.MotionLevel.Off;
+            var f = Assert.Single(sent);
+            Assert.Equal("setting", (string?)f["type"]);
+            Assert.Equal(TcFeelRules.KeyMotion, (string?)f["key"]);
+            Assert.Equal(TcHostRules.MotionWire(s.MotionLevel), (string?)f["value"]);
+            w.Close();
+            Assert.Null(w.TcWatchedSettings);
+            sent.Clear();
+            s.MotionLevel = old;
+            Assert.DoesNotContain(sent, x => (string?)x["type"] == "setting");
+        }
+        finally { s.MotionLevel = old; }
     });
 }

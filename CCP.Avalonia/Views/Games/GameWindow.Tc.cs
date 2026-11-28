@@ -4,9 +4,9 @@
 // frame passes Core TcFrameGate first. Every ready gets a fresh init (the pause card's Main menu reloads the page and
 // waits for init with no timeout). Hard exits (panic, title-bar X, a dead page, the watchdog) close the window at once;
 // the page's own exit ends on its exit-done or at 800 ms. Escape is its pause (GameWindow.Escape.cs); panic closes it
-// with every other game (PanicSurfaces "games"). Not on this head yet, so the init does not offer them: pictures and
-// the Sparkles medal (s20-tc-media), toy pulses and live settings (s20-tc-feel), the save carry (s20-tc-save) and
-// the Llama Expo (s20-tc-expo). Their frames are refused here with a log line.
+// with every other game (PanicSurfaces "games"). Toy pulses and live settings: GameWindow.Tc.Feel.cs. Not on this head
+// yet, so the init does not offer them: pictures and the Sparkles medal (s20-tc-media), the save carry (s20-tc-save)
+// and the Llama Expo (s20-tc-expo). Their frames are refused here with a log line.
 using System;
 using System.IO;
 using Avalonia.Threading;
@@ -84,6 +84,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             _tcWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
             _tcWatch.Tick += (_, _) => CheckTcWatch(DateTime.UtcNow);
             _tcWatch.Start();
+            WatchTcFeel(true);
             Log.Information("TcHost: launched ({Edition})", _tcEdition);
         }
 
@@ -93,6 +94,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (!_tcOpen) return;
             _tcOpen = false;
+            StopTcPulse();   // at once, before anything else can fail (WPF TcHostService.cs:168)
+            WatchTcFeel(false);
             try { _tcWatch?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             try { _tcCloseClock?.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
             _tcWatch = _tcCloseClock = null;
@@ -117,7 +120,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 var s = CoreSettings.Current;
                 var caps = TcRules.Caps(_tcEdition, saveSlot: false);   // no save carry on this head yet (s20-tc-save)
                 Post(TcHostRules.InitFrame(LocalizationManager.Instance.CurrentLanguage, s.MotionLevel, GentleVisuals.On, CoreMods.ActiveModId, caps,
-                    picturesOn: false, sparkles: false, toys: false, toysConnected: false, ownMedia: false));
+                    picturesOn: false, sparkles: false, toys: true, toysConnected: TcToysReady, ownMedia: false));
             }
             catch (Exception ex) { Log.Warning("Tc: init post failed: {E}", ex.Message); }
             try { Web.Focus(); } catch (Exception ex) { Diag.Swallowed(ex); }
@@ -163,6 +166,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     case "open-url":
                         if (!TcOpenUrl(f.Url!)) Log.Debug("Tc: open-url not opened");
                         break;
+                    case "haptic":
+                        OnTcHaptic(f);
+                        break;
                     case "nudge":
                         OpenTcTierCard();   // desktop: every nudge is the tier compare card (Contract v2)
                         break;
@@ -192,6 +198,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (MainShellWindow.Current is not { } shell) return;
             Post(TcHostRules.Suspend(true, TcHostRules.ReasonFocus));
             _tcFocusHeld = true;
+            StopTcPulse();   // the run is held: the toy goes quiet with it (WPF TcHostService.cs:317)
             shell.OpenPricedCard(null, 1);
         }
 

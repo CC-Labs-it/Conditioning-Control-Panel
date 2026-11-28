@@ -75,7 +75,8 @@ namespace ConditioningControlPanel.Services.Haptics
                 try { _playing?.Cancel(); } catch { }
                 cts = _playing = new CancellationTokenSource();
             }
-            var ms = DurationFor(h.Ms, haptics.IsButtplugProvider);
+            // T&C pulses run to its gate's 3 s ceiling (WPF TcHostService.Feel.cs:46, TcFeelRules.DurationFor).
+            var ms = h.Station == Tc.TcFeelRules.Station ? Tc.TcFeelRules.DurationFor(h.Ms, haptics.IsButtplugProvider) : DurationFor(h.Ms, haptics.IsButtplugProvider);
             Log.Debug("BackRoomHaptics: {Station}/{Tag} {Pct}% {Ms}ms", h.Station, h.Tag, (int)(h.Level * 100), ms);
             _ = PlayAsync(haptics, h.Level, ms, cts);
         }
