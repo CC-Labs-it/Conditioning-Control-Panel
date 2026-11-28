@@ -555,7 +555,7 @@ public sealed class RemoteControlShellTests
             Assert.False(bind.Task.IsCompleted);
             if (leave) { fake.Poll = "{\"controller_connected\":false}"; await relay.PollOnceAsync(); }
             else relay.EndSessionNow();
-            bind.SetResult("F8");
+            bind.SetResult(MainShellWindow.PortalKeyForTest);   // the desktop bound the asked key (#1752)
             await Task.Delay(150);
             Dispatcher.UIThread.RunJobs();
             Assert.True(runner.IsRunning);
@@ -565,12 +565,14 @@ public sealed class RemoteControlShellTests
         {
             try
             {
-                bind.TrySetResult("F8");
+                bind.TrySetResult(MainShellWindow.PortalKeyForTest);
                 global::ConditioningControlPanel.Avalonia.Platform.PortalPanicShortcut.BindForTests = null;
                 if (relay.IsActive) await relay.StopAsync();
                 runner?.Stop(); CoreEngine.Stop();
                 global::ConditioningControlPanel.Avalonia.Platform.PortalPanicShortcut.UnbindAsync().GetAwaiter().GetResult();
                 MainShellWindow.ReleasePortalWhenUnused();
+                Dispatcher.UIThread.RunJobs();
+                MainShellWindow.ResetPortalForTests();   // no portal static outlives the test (#1752 CI)
                 CoreSettings.Current.PanicKeyEnabled = oldPanic;
                 shell?.Close();
                 global::ConditioningControlPanel.Avalonia.App.Sessions = oldRunner;
