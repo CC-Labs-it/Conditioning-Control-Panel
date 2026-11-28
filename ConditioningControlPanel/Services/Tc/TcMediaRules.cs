@@ -61,19 +61,21 @@ internal static class TcMediaRules
         => consent && !offline && !offInWindow
            && (gameYes == true || !string.Equals(mediaSource ?? "local", "local", StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>Why a player's YES on the picture card could not switch pictures on: <c>disabled</c> (offline mode,
+    /// <summary>Why a player's YES on the picture card could not switch pictures on: <c>offline</c> (the app's Offline Mode,
     /// which no answer to the consent question can change), <c>declined</c> (no app consent), or null (on).
     /// 7.4.2: a local app source is no longer a refusal: the player's yes in the game turns the game's own
-    /// pictures on (<see cref="PicturesOn"/>).</summary>
+    /// pictures on (<see cref="PicturesOn"/>). 7.4.3: Offline Mode answers <c>offline</c>, not <c>disabled</c>, so the card
+    /// names Offline Mode and where to switch it (ccp-bugs 1771: "off in your CC Labs profile" sent players looking for a
+    /// profile setting that does not exist).</summary>
     public static string? RefusalReason(bool consent, bool offline)
     {
-        if (!ConsentAskMatters(offline)) return "disabled";
+        if (!ConsentAskMatters(offline)) return "offline";
         if (!consent) return "declined";
         return null;
     }
 
     /// <summary>Whether the app's consent question can change anything: not while Offline mode is on (the host then
-    /// answers <c>disabled</c> at once and never asks). On a local app source it can: a yes is this game's choice
+    /// answers <c>offline</c> at once and never asks). On a local app source it can: a yes is this game's choice
     /// (7.4 desk run: a fresh profile on the default local source was asked, said Yes, and was refused anyway).</summary>
     public static bool ConsentAskMatters(bool offline) => !offline;
 

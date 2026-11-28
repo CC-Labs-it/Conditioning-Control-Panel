@@ -211,6 +211,7 @@ export const PICTURE_CARD = Object.freeze({
   refused: Object.freeze({
     'sign-in': 'Sign in to your CC Labs account, then try Scrolller again.',
     'allowance-used': 'You have used today\'s Scrolller allowance. You can still play with local files.',
+    'offline': 'Offline Mode is on, so Scrolller cannot load. Turn it off in Settings > Data > Offline Mode, then try again.',
     'disabled': 'Online pictures are off in your CC Labs profile. Turn them on, then try again.',
     'declined': 'Online pictures stayed off. You can still play with local files.',
   }),
