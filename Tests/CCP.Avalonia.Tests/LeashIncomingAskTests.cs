@@ -249,6 +249,64 @@ public sealed class LeashIncomingAskTests
         });
 
     [Fact]
+    public void LookBeforeServiceRebindDoesNotRequeueTheShownOffer()
+        => LeashGateCardTests.Run(false, (shell, _, _) =>
+        {
+            shell.Show();
+            shell.RebindLeashAsks(); // Still bound to the old service.
+            var replacement = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            replacement.ApplyBlock(Block((First, "juno"), (Second, "vex")));
+            LeashHead.Service = replacement;
+            try
+            {
+                var offer = replacement.Snapshot.Offers.Single(o => o.From.Id == "juno");
+                var manual = LeashAskWindow.Open(offer, () => replacement, shell)!;
+                shell.RebindLeashAsks(); // The timer sees the new snapshot while Look is open.
+                manual.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal("leash-ask:vex", LeashAskWindow.Current!.Card.Tag);
+                LeashAskWindow.Current.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                shell.RebindLeashAsks();
+                Assert.Null(LeashAskWindow.Current);
+            }
+            finally
+            {
+                LeashHead.Service = null;
+                shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent();
+                Dispatcher.UIThread.RunJobs();
+            }
+        });
+
+    [Fact]
+    public void LookBeforeSnapshotDoesNotRequeueTheShownOffer()
+        => LeashGateCardTests.Run(false, (shell, _, service) =>
+        {
+            shell.Show();
+            shell.RebindLeashAsks();
+            var source = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            source.ApplyBlock(Block((First, "juno")));
+            try
+            {
+                var manual = LeashAskWindow.Open(source.Snapshot.Offers.Single(), () => service, shell)!;
+                service.ApplyBlock(Block((First, "juno"), (Second, "vex")));
+                manual.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal("leash-ask:vex", LeashAskWindow.Current!.Card.Tag);
+                LeashAskWindow.Current.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current);
+            }
+            finally
+            {
+                service.ApplyBlock(Block());
+                LeashAskWindow.CloseCurrent();
+                Dispatcher.UIThread.RunJobs();
+            }
+        });
+
+    [Fact]
     public void LookConsumesItsQueuedOfferAndEscapeAdvancesToTheOtherOffer() =>
         LeashGateCardTests.Run(false, (shell, _, service) =>
         {
