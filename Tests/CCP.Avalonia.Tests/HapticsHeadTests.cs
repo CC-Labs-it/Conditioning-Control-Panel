@@ -22,6 +22,28 @@ namespace CCP.Avalonia.Tests;
 /// (MockProviderV2, an Intiface address nobody listens on) - never a real toy.</summary>
 public sealed class HapticsHeadTests
 {
+    [Fact]
+    public void ConnectionFailureSurvivesRepaint() => AvaloniaTestDispatcher.Run(() =>
+    {
+        EnsureApplication();
+        WithHaptics(premium: true, mock: true, (h, _) =>
+        {
+            var tab = new HapticsTabView();
+            tab._hapticConnectFailure = new("label_failed", "haptics_connect_failed_hint", null);
+            tab.RefreshHapticConnectionUi();
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("label_failed"), tab.TxtHapticStatus.Text);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("haptics_connect_failed_hint"), tab.TxtHapticDevices.Text);
+            tab.RefreshHapticConnectionUi();
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("label_failed"), tab.TxtHapticStatus.Text);
+            tab._hapticConnectFailure = new("label_error", null, "device error");
+            tab.RefreshHapticConnectionUi();
+            Assert.Equal("device error", tab.TxtHapticDevices.Text);
+            CoreSettings.Current.Haptics.V2.Provider("mock").Enabled = false;
+            tab.BtnHapticConnect.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Null(tab._hapticConnectFailure);
+        });
+    });
+
     private static void EnsureApplication()
     {
         if (Application.Current is null)
@@ -379,11 +401,10 @@ public sealed class HapticsHeadTests
         });
     });
 
-    /// <summary>The page loads real settings, lets a free account Enable (toys are free since 2026-11-11,
-    /// HapticsAccess.IsOpen; WPF #1917 gated it before), and a connect
-    /// with Intiface not running ends "Disconnected" with the button usable again.</summary>
+    /// <summary>The page loads real settings, lets a free account Enable (HapticsAccess.IsOpen),
+    /// and keeps the failure visible when Intiface is not running, with the button usable again.</summary>
     [Fact]
-    public void TabLoadsSettingsGatesEnableAndFailsConnectGracefully()
+    public void TabLoadsSettingsAllowsFreeEnableAndFailsConnectGracefully()
     {
         AvaloniaTestDispatcher.Run(() =>
         {
@@ -413,7 +434,8 @@ public sealed class HapticsHeadTests
                     Dispatcher.UIThread.RunJobs();
                     Assert.True(tab.BtnHapticConnect.IsEnabled);
                     Assert.False(h.IsConnected, $"{h.ProviderName} {h.DeviceManager.Devices.Count} {string.Join(",", h.DeviceManager.Providers.Select(p => p.Key + p.IsConnected))}");
-                    Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("label_disconnected"), tab.TxtHapticStatus.Text);
+                    Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("label_failed"), tab.TxtHapticStatus.Text);
+                    Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("haptics_connect_failed_hint"), tab.TxtHapticDevices.Text);
                 }
                 finally
                 {
