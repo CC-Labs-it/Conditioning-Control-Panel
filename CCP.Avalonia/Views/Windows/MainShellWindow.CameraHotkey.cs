@@ -144,6 +144,7 @@ public partial class MainShellWindow
             if (tracker.IsRunning)
             {
                 await tracker.StopAsync();
+                Platform.WebcamTracker.HoldCameraOff(true);
                 App.Notifications.Show(Loc.Get("camera_shortcut_toast_stopped"), Helpers.NotificationType.Info, TimeSpan.FromSeconds(2));
                 return;
             }
@@ -156,7 +157,10 @@ public partial class MainShellWindow
                 if (!WebcamConsent.IsCurrent(CoreSettings.Current)) return;
             }
             if (await tracker.StartAsync())
+            {
+                Platform.WebcamTracker.HoldCameraOff(false);
                 App.Notifications.Show(Loc.Get("camera_shortcut_toast_started"), Helpers.NotificationType.Info, TimeSpan.FromSeconds(2));
+            }
         }
         catch (Exception ex) { Log.Warning(ex, "Camera hotkey toggle failed"); }
         finally { _cameraHotkeyBusy = false; }

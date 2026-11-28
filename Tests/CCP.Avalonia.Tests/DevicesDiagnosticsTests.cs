@@ -122,6 +122,36 @@ public sealed class DevicesDiagnosticsTests
         });
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ManualStartClearsHoldOnlyOnSuccess(bool started)
+    {
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            var settings = CoreSettings.Current;
+            var old = (settings.WebcamConsentGiven, settings.WebcamConsentVersion, settings.CameraHeldOff);
+            var section = new DevicesSettingsSection();
+            var window = new Window { Content = section };
+            try
+            {
+                WebcamTracker.Instance.Stop();
+                (settings.WebcamConsentGiven, settings.WebcamConsentVersion, settings.CameraHeldOff) = (true, WebcamConsent.ConsentVersion, true);
+                section.StartWebcamDebug = () => Task.FromResult(started);
+                window.Show();
+                section.FindControl<Button>("BtnWebcamDebugStart")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                await Assert.IsAssignableFrom<Task>(section.WebcamDebugStartTask);
+                Assert.Equal(!started, settings.CameraHeldOff);
+            }
+            finally
+            {
+                window.Close();
+                (settings.WebcamConsentGiven, settings.WebcamConsentVersion, settings.CameraHeldOff) = old;
+                CoreSettings.Save();
+            }
+        });
+    }
+
     [Fact]
     public Task MouthDiagnosticsRestoresConsent() =>
         AssertConsentRestored(MouthCountsResetAndSubscriptionsEndWithTheSection, false, "prior-denied");

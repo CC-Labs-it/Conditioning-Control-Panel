@@ -509,6 +509,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 {
                     AppendWebcamDebugLog("Stop requested.");
                     await tracker.StopAsync();
+                    Platform.WebcamTracker.HoldCameraOff(true);
                     RefreshWebcamStartLabel();
                     return;
                 }
@@ -526,6 +527,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 bool started;
                 try { started = await StartWebcamDebug(); }
                 finally { BtnWebcamDebugStart.IsEnabled = true; RefreshWebcamStartLabel(); }
+                if (started) Platform.WebcamTracker.HoldCameraOff(false);
                 AppendWebcamDebugLog(started ? "Start() returned true — capture thread launching." : $"Start() returned false. {tracker.LastError}");
             }
             catch (Exception ex) { Log.Warning(ex, "Webcam debug start failed"); }

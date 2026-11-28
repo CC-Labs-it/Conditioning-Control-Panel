@@ -340,6 +340,13 @@ namespace ConditioningControlPanel.Avalonia.Platform
         /// camera even if it finishes before the queued Stop runs.</summary>
         public Task StopAsync() { lock (_gate) _gen++; return Task.Run(Stop); }
 
+        internal static void HoldCameraOff(bool held)
+        {
+            if (CoreSettings.Current.CameraHeldOff == held) return;
+            CoreSettings.Current.CameraHeldOff = held;
+            CoreSettings.Save();
+        }
+
         /// <summary>A Start is between its consent check and publishing (camera open / model load).</summary>
         internal bool IsStarting => Volatile.Read(ref _busy) != 0 || Volatile.Read(ref _queued) != 0;
 

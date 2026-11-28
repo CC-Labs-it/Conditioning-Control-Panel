@@ -50,6 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try { Overlays.BlinkTrainerSession.Stop(); } catch (Exception ex) { Log.Debug(ex, "Webcam pill: blink trainer stop failed"); }
             try { await WebcamTracker.Instance.StopAsync(); }
             catch (Exception ex) { Log.Debug(ex, "Webcam pill: stop failed"); }
+            WebcamTracker.HoldCameraOff(true);
             UpdateWebcamPill();
         }
     }
