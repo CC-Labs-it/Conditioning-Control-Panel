@@ -78,6 +78,55 @@ public sealed class LeashHoldTests
     }
 
     [Fact]
+    public void LeashOff_EndsRepeatHold_AndCloseUnsubscribes() => AvaloniaTestDispatcher.Run(() =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>()
+                .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var oldSettings = CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        var (oldSvc, oldClock, oldInterval) = (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldClockInterval);
+        var clock = new Clock();
+        var svc = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+        svc.ApplyBlock(LeashHeadTests.BlockWithPunishment());
+        (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldClockInterval) = (svc, clock, Parked);
+        var field = typeof(LeashHead).GetField("LeashedChanged", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var before = (Action<bool>?)field.GetValue(null);
+        MainShellWindow? shell = null;
+        try
+        {
+            shell = new MainShellWindow();
+            shell.Show();
+            Dispatcher.UIThread.RunJobs();
+            shell.LeashHoldPressed();
+            clock.Now += TimeSpan.FromMilliseconds(250);
+            shell.LeashHoldPressed();
+            Assert.True(shell.LeashHoldHeld);
+            Assert.True(LeashHoldRing.IsShown);
+            LeashHead.Service = null;
+            ((Action<bool>?)field.GetValue(null))?.Invoke(false);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(shell.LeashHoldHeld);
+            Assert.False(LeashHoldRing.IsShown);
+            clock.Now += TimeSpan.FromMilliseconds(250);
+            shell.LeashHoldPressed();
+            Assert.False(LeashHoldRing.IsShown);
+            Assert.Null(LeashCutConfirmWindow.Current);
+            shell.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(before, (Action<bool>?)field.GetValue(null));
+        }
+        finally
+        {
+            shell?.Close();
+            LeashHoldRing.Dismiss();
+            (LeashHead.Service, MainShellWindow.LeashHoldTime, MainShellWindow.LeashHoldClockInterval) = (oldSvc, oldClock, oldInterval);
+            CoreSettings.ServiceProvider = oldSettings;
+        }
+    });
+
+    [Fact]
     public void HeldPanicKey_ReleaseEarlyNeverAsks_FiveSecondsAsks_OnlyYesCuts() => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
@@ -510,7 +559,8 @@ public sealed class LeashHoldTests
         {
             binds++;
             PortalPanicShortcut.SetSessionForTests("/test/leashed-effects", up);
-            return System.Threading.Tasks.Task.FromResult<string?>("F8");
+            // The desktop bound the asked key: a different trigger is the #1752 wrong-key path, which lets the grab go.
+            return System.Threading.Tasks.Task.FromResult<string?>(MainShellWindow.PortalKeyForTest);
         };
         void Disable()
         {
@@ -548,6 +598,7 @@ public sealed class LeashHoldTests
             PortalPanicShortcut.BindForTests = null;
             ld.Deactivate();
             Dispatcher.UIThread.RunJobs();
+            MainShellWindow.ResetPortalForTests();   // no portal static outlives the test (#1752 CI)
         }
     });
 

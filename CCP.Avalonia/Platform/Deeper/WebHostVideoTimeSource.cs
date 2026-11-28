@@ -15,24 +15,33 @@ namespace ConditioningControlPanel.Avalonia.Platform.Deeper;
 internal sealed class WebHostVideoTimeSource : IPlaybackTimeSource, IDisposable
 {
     private readonly WebHost _host;
+    private readonly bool _automaticPolling;
+    private readonly Func<bool>? _playbackAllowed;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(100) };
-    private bool _attached, _polling;
+    private bool _attached, _polling, _playbackRetired;
     private int _generation;
     private double _time, _duration, _lastTime = -1, _lastDuration = -1;
     private double _x, _y, _width = 1, _height = 1;
     private bool _playing;
     private const string PollScript = "(function(){var v=document.querySelector('video');if(!v)return null;var r=v.getBoundingClientRect(),w=window.innerWidth||1,h=window.innerHeight||1;return JSON.stringify({t:v.currentTime||0,d:isFinite(v.duration)?v.duration:0,paused:!!v.paused,rx:r.left/w,ry:r.top/h,rw:r.width/w,rh:r.height/h});})();";
 
-    public WebHostVideoTimeSource(WebHost host)
+    // startTime primes the engine cursor (EnhancementEngine.Start reads it) before the first poll.
+    public WebHostVideoTimeSource(WebHost host, bool automaticPolling = true, double startTime = 0, Func<bool>? playbackAllowed = null)
     {
         _host = host;
+        _automaticPolling = automaticPolling;
+        _playbackAllowed = playbackAllowed;
+        _time = startTime;
         _timer.Tick += async (_, _) => await PollAsync();
     }
 
     public event Action<double>? PlaybackTimeChanged;
-    public void Attach() { if (_attached) return; _attached = true; _generation++; _timer.Start(); }
+    public void Attach() { if (_attached) return; _attached = true; _generation++; if (_automaticPolling) _timer.Start(); }
     public void Detach() { _attached = false; _generation++; _timer.Stop(); }
     public void Dispose() => Detach();
+
+    // Panic must win over a Speak session releasing its hold after cancellation.
+    internal void RetirePlayback() => _playbackRetired = true;
 
     internal async Task PollAsync()
     {
@@ -70,7 +79,7 @@ internal sealed class WebHostVideoTimeSource : IPlaybackTimeSource, IDisposable
         "(function(){{var v=document.querySelector('video');if(v)v.currentTime={0:0.###};}})();", Math.Max(0, seconds)));
     public void Pause() => Send("(function(){var v=document.querySelector('video');if(v)v.pause();})();");
     public void Play() => Send("(function(){var v=document.querySelector('video');if(v)v.play();})();");
-    private void Send(string script) { _ = _host.InvokeScriptAsync(script); }
+    private void Send(string script) { if (!_playbackRetired && (_playbackAllowed?.Invoke() ?? true)) _ = _host.InvokeScriptAsync(script); }
     public PlaybackRect GetVideoRect()
     {
         if (TopLevel.GetTopLevel(_host) is not { } top || _host.Bounds.Width <= 0 || _host.Bounds.Height <= 0)

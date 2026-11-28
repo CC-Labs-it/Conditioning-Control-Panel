@@ -69,11 +69,40 @@ public sealed class BlinkStopTests
         // Exactly WPF StopAllForRecalibration's set, in registry order: the engine stop PAUSES the session
         // (StopEngine -> Sessions.Pause), lock cards close (App.xaml.cs:1778), the tube is silenced.
         // Plus keyword-triggers (hard rule 6, restack fixkwstop): the panic pass switches them off, so this stop does too.
-        Assert.Equal(new[] { "blink-trainer", "mantra-chant", "audio-playlist", "companion-audio", "mantra", "keyword-triggers", "takeover", "engine", "pink-rush", "tube-speech", "lock-cards" }, stopped);
+        Assert.Equal(new[] { "leash-task", "blink-trainer", "mantra-chant", "audio-playlist", "companion-audio", "mantra", "keyword-triggers", "takeover", "engine", "pink-rush", "tube-speech", "lock-cards", "gaze-refine" }, stopped);
         // A recalibration stop, not a panic: today's program run is paused by the engine stop, never ended,
         // and the camera, mic, AI and toys are left alone.
         foreach (var kept in new[] { "program-session", "camera", "voice-capture", "ai-followups", "haptics", "remote-haptics", "intake", "chaos" })
             Assert.DoesNotContain(kept, stopped);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task BlinkStopStopsFocusGazeThroughThePanicSurface() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var gaze = GazeFocus.Instance;
+        var previous = PanicSurfaces.All;
+        var oldCanRun = gaze.CanRun;
+        var oldMaster = gaze.MasterEnabled;
+        try
+        {
+            gaze.Stop();
+            gaze.CanRun = () => true;
+            gaze.MasterEnabled = true;
+            gaze.EvaluateDesiredState();
+            Assert.True(gaze.IsActive);
+            PanicSurfaces.All = previous.Where(x => x.Id == "gaze-refine").ToArray();
+            MainShellWindow.StopAllForRecalibration(null);
+            Assert.False(gaze.IsActive);
+        }
+        finally
+        {
+            gaze.Stop();
+            gaze.CanRun = oldCanRun;
+            gaze.MasterEnabled = oldMaster;
+            PanicSurfaces.All = previous;
+        }
         return Task.CompletedTask;
     });
 

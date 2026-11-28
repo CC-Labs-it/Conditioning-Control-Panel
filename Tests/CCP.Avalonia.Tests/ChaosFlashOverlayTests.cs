@@ -86,6 +86,78 @@ public sealed class ChaosFlashOverlayTests
     }
 
     [Fact]
+    public async Task WashRespectsFreeDesktopAndRepinsOutsideRun()
+    {
+        var gif = WriteGif(out var dir);
+        await AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            Setup();
+            var pin = CoreSettings.Current.ChaosPinOnTop;
+            var schedule = ChaosFlashOverlay.Schedule;
+            var configure = ChaosFlashOverlay.ConfigureWindow;
+            var oldRaise = X11Overlay.RaiseRequestedForTests;
+            var spawning = typeof(ChaosRunHost).GetField("_spawning", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+            var wasSpawning = (bool)spawning.GetValue(null)!;
+            var bands = new List<bool>();
+            var raises = new List<global::Avalonia.Controls.TopLevel>();
+            try
+            {
+                ChaosFlashOverlay.SkipPlatformChecksForTests = true;
+                ChaosFlashOverlay.Schedule = (_, _) => { };
+                ChaosFlashOverlay.ConfigureWindow = (_, _, _, topmost) => { bands.Add(topmost); return true; };
+                X11Overlay.RaiseRequestedForTests = raises.Add;
+                CoreSettings.Current.ChaosPinOnTop = false;
+                spawning.SetValue(null, true);
+                await ChaosFlashOverlay.ShowPath(TwoScreens, gif, 600, .1);
+                Assert.Equal(new[] { false, false }, bands);
+                Assert.False(Assert.Single(ChaosFlashOverlay.Shown).Topmost);
+                Assert.Empty(raises);
+                bands.Clear();
+                ChaosFlashOverlay.RaiseActive();
+                Assert.Equal(new[] { false }, bands);
+                Assert.Empty(raises);
+                bands.Clear();
+                spawning.SetValue(null, false);
+                await ChaosFlashOverlay.ShowPath(TwoScreens, gif, 600, .1);
+                Assert.Equal(new[] { true }, bands);
+                Assert.True(Assert.Single(ChaosFlashOverlay.Shown).Topmost);
+                Assert.Single(raises);
+                bands.Clear(); raises.Clear();
+                spawning.SetValue(null, true);
+                CoreSettings.Current.ChaosPinOnTop = true;
+                await ChaosFlashOverlay.ShowPath(TwoScreens, gif, 600, .1);
+                Assert.Equal(new[] { true }, bands);
+                Assert.True(Assert.Single(ChaosFlashOverlay.Shown).Topmost);
+                Assert.Single(raises);
+                // A dashboard wash whose pick is still running when an unpinned run starts follows the run (WPF :74).
+                ChaosFlashOverlay.CloseActive();
+                bands.Clear(); raises.Clear();
+                CoreSettings.Current.ChaosPinOnTop = false;
+                spawning.SetValue(null, false);
+                using var picking = new System.Threading.ManualResetEventSlim();
+                var delayed = ChaosFlashOverlay.ShowPick(TwoScreens, () => { picking.Wait(5000); return (gif, false); }, 600, .1);
+                spawning.SetValue(null, true);
+                picking.Set();
+                await delayed;
+                Assert.Equal(new[] { false, false }, bands);
+                Assert.False(Assert.Single(ChaosFlashOverlay.Shown).Topmost);
+                Assert.Empty(raises);
+            }
+            finally
+            {
+                ChaosFlashOverlay.CloseActive();
+                ChaosFlashOverlay.SkipPlatformChecksForTests = false;
+                ChaosFlashOverlay.Schedule = schedule;
+                ChaosFlashOverlay.ConfigureWindow = configure;
+                X11Overlay.RaiseRequestedForTests = oldRaise;
+                CoreSettings.Current.ChaosPinOnTop = pin;
+                spawning.SetValue(null, wasSpawning);
+                Directory.Delete(dir, true);
+            }
+        });
+    }
+
+    [Fact]
     public async Task WashFadesOnTheCurveLoopsTheGifAndPanicClosesIt()
     {
         var gif = WriteGif(out var dir);
@@ -160,6 +232,7 @@ public sealed class ChaosFlashOverlayTests
             {
                 X11Overlay.RaiseRequestedForTests = w =>
                 {
+                    if (!ChaosFlashOverlay.Shown.Any(flash => ReferenceEquals(flash, w))) return;
                     Assert.True(Assert.IsAssignableFrom<global::Avalonia.Controls.Window>(w).IsVisible);
                     raised.Add(w);
                 };
@@ -180,6 +253,11 @@ public sealed class ChaosFlashOverlayTests
                 hide();
                 Assert.False(window.IsVisible);
                 steps.Clear();
+                // Other overlays can request a raise while the async decode yields to the dispatcher.
+                var unrelated = new Window();
+                try { unrelated.Show(); X11Overlay.Raise(unrelated); }
+                finally { unrelated.Close(); }
+                Assert.Single(raised);
                 await ChaosFlashOverlay.ShowPath(TwoScreens, path, 600, .1);
                 Assert.Same(window, Assert.Single(ChaosFlashOverlay.Shown));
                 Assert.Equal(2, raised.Count); // retained window raised again after Show

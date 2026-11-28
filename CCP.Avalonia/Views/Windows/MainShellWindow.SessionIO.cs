@@ -86,6 +86,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void SetDropOverlay(bool visible)
         {
             if (Named<Border>("GlobalDropOverlay") is { } overlay) overlay.IsVisible = visible;
+            if (visible)
+            {
+                if (LeashBrowser is { } browser) browser.IsVisible = false;
+            }
+            else RestoreBrowser();
         }
 
         /// <summary>WPF Window_DragEnter (SessionIO.cs:1072): an unrecognised drop is accepted
