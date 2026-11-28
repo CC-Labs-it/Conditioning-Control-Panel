@@ -104,7 +104,7 @@ public sealed partial class FriendsDrawer
         };
         ToolTip.SetTip(row, string.Join("\n", DareSlipRules.Sentence(bet, Loc.Get).Select(l => l.Plain)));
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("30,*,Auto") };
-        var av = Avatar(bet.Friend.Name, 28, null);
+        var av = Overlays.KnockCard.BuildAvatar(bet.Friend.Name, bet.Friend.AvatarUrl, 28);   // WPF :135
         av.VerticalAlignment = VerticalAlignment.Top;
         g.Children.Add(av);
 
@@ -125,6 +125,8 @@ public sealed partial class FriendsDrawer
         mid.Children.Add(what);
 
         if (state == DareRowState.Running) mid.Children.Add(Progress(bet));
+        else if (DareCardRules.CameraSettled(bet) is { } final)   // WPF :157
+            mid.Children.Add(CameraLine(Loc.GetF(final.Key, final.Args), final.Below, null));
         if (state is DareRowState.IOwe or DareRowState.TheyOwe)
         {
             var stake = state == DareRowState.IOwe ? bet.MyStake : bet.TheirStake;
@@ -200,7 +202,30 @@ public sealed partial class FriendsDrawer
             left.Children.Add(eye);
         }
         sp.Children.Add(left);
+        // WPF :267: my own camera share under the bar, amber with one hint below the pass bar.
+        if (DareCardRules.CameraRunning(bet) is { } cam)
+            sp.Children.Add(CameraLine(Loc.GetF(cam.Key, cam.Args), cam.Below, cam.Below ? Loc.Get(DareCardRules.CameraHintKey) : null));
         return sp;
+    }
+
+    /// <summary>WPF :273: "camera 41% (needs 60%)" in the strip's mono, and the hint under it when there is one.</summary>
+    private static Control CameraLine(string text, bool below, string? hint)
+    {
+        var brush = below ? Gold : Mint;
+        var box = new StackPanel { Margin = new Thickness(0, 3, 0, 0), Tag = below ? "dares-camera-seen:below" : "dares-camera-seen:ok" };
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        var eye = DareLook.Icon(DareLook.ToneKind(below ? DareTone.CameraOff : DareTone.CameraOn), 15, brush);
+        eye.Margin = new Thickness(0, 0, 4, 0);
+        row.Children.Add(eye);
+        row.Children.Add(Label(text, 10.5, brush, Mono));
+        box.Children.Add(row);
+        if (hint != null)
+        {
+            var h = Wrap(Label(hint, 11, Text, Display));
+            h.Margin = new Thickness(19, 1, 0, 0);
+            box.Children.Add(h);
+        }
+        return box;
     }
 
     private static Control BarRow(string? label, double fraction, string count, Color c)

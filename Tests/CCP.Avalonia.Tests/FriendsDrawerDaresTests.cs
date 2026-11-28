@@ -36,10 +36,11 @@ public sealed class FriendsDrawerDaresTests
     private sealed class Api : IDaresApi
     {
         internal readonly List<string> Ops = new();
+        internal string Bets = Owed + "," + Offer;
         public Task<JObject?> CallAsync(string op, JObject body, CancellationToken ct = default)
         {
             Ops.Add(op);
-            return Task.FromResult<JObject?>(JObject.Parse("{\"ok\":true,\"me\":{},\"bets\":[" + Owed + "," + Offer + "]}"));
+            return Task.FromResult<JObject?>(JObject.Parse("{\"ok\":true,\"me\":{},\"bets\":[" + Bets + "]}"));
         }
     }
 
@@ -182,5 +183,50 @@ public sealed class FriendsDrawerDaresTests
             foreach (var v in boxes) Assert.True(v.Child!.DesiredSize.Width <= v.Bounds.Width + 0.5, ((TextBlock)v.Child).Text);
         }
         finally { host.Close(); LocalizationManager.Instance.SetLanguage(oldLanguage); svc.Dispose(); }
+    });
+
+    // WPF FriendsDrawer.Dares.cs:135 (the friend's photo), :157-158 (settled share), :267-268 (running share and hint).
+    [Fact]
+    public Task Rows_show_my_camera_share_and_the_friends_photo() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        PanicSurfacesTests.EnsureApp();
+        var running = Owed.Replace("\"b1\"", "\"r1\"").Replace("\"settled\"", "\"running\"").Replace("\"camera\":false", "\"camera\":true,\"camera_seen\":{\"from\":90,\"to\":41}")
+            .Replace("\"winner\":\"from\"", "\"winner\":null").Replace("\"debt\":{\"state\":\"owed\"}", "\"debt\":null")
+            .Replace("\"name\":\"Fen\"", "\"name\":\"Fen\",\"avatar\":\"/av/fen.png\"").Replace("2026-11-18T13:00:00Z", "2099-01-01T00:00:00Z");
+        var settled = Owed.Replace("\"camera\":false", "\"camera\":true,\"camera_seen\":{\"from\":10,\"to\":72}");
+        var api = new Api { Bets = running + "," + settled };
+        var host = new DarePanicTests.Host();
+        using var dares = new DaresService(api, host, new DareMeter(), new DareLockdownKeeper(host, new DareLockdownKeeper.MemoryStore()));
+        var (svc, _) = FriendsDrawerTests.Service();
+        var oldFetch = global::ConditioningControlPanel.Avalonia.Views.Overlays.KnockCard.FetchPicture;
+        var fetched = new List<string>();
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.Views.Overlays.KnockCard.FetchPicture = url => { fetched.Add(url); return Task.FromException<byte[]>(new InvalidOperationException("no network in tests")); };
+            await svc.RefreshAsync();
+            var d = new FriendsDrawer(svc);
+            DareHead.Service = dares;
+            await dares.RefreshAsync();
+            d.Render();
+
+            var run = Tagged<Border>(d, "dares-row:r1");
+            var below = Tagged<Control>(run, "dares-camera-seen:below");
+            var words = below.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
+            Assert.Contains(Loc.GetF("dares_cam_seen", 41, 60), words);
+            Assert.Contains(Loc.Get(ConditioningControlPanel.Controls.Dares.DareCardRules.CameraHintKey), words);
+            Assert.Contains(ConditioningControlPanel.Services.ProviderSubscription.ProxyBaseUrl + "/av/fen.png", fetched);
+
+            var done = Tagged<Border>(d, "dares-row:b1");
+            var ok = Tagged<Control>(done, "dares-camera-seen:ok");
+            words = ok.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
+            Assert.Equal(new[] { Loc.GetF("dares_cam_seen_final", 72, 60) }, words);
+        }
+        finally
+        {
+            global::ConditioningControlPanel.Avalonia.Views.Overlays.KnockCard.FetchPicture = oldFetch;
+            DareHead.Service = null;
+            DareHead.Resume();
+            svc.Dispose();
+        }
     });
 }
