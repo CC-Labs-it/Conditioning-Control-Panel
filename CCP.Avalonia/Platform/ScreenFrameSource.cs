@@ -87,18 +87,23 @@ internal sealed class PortalScreenFrames : IScreenFrameSource
 {
     internal delegate Task<(uint Code, Dictionary<string, VariantValue> Results)> Requester(CancellationToken cancellation);
 
-    // Response 1 (cancelled) or 2 (other) ends capture for the session: a scan loop must never re-prompt.
-    // The Awareness tab reads this to say why OCR sees nothing.
+    // Response 1 (the user cancelled) ends capture for the session: a scan loop must never re-prompt.
     internal static volatile bool Refused;
+    // Response 2 (other) is a generic failure, like a failed WPF capture (ScreenOcrService.cs:215-221) it costs scans,
+    // not the session. A denied permission also answers 2, but it is stored, so a retry answers 2 again without a dialog.
+    private readonly TimeSpan _retryAfter;
+    private long _retryAt;
 
     private readonly Requester _request;
     private readonly Func<Task<IReadOnlyList<CaptureMonitor>>> _monitors;
     private readonly TimeSpan _timeout;
     private readonly object _gate = new();
     private Task<(int Width, int Height, byte[] Pixels)?>? _pending;
+    private CancellationToken _pendingStop;
 
-    internal PortalScreenFrames(Requester? request = null, Func<Task<IReadOnlyList<CaptureMonitor>>>? monitors = null, TimeSpan? timeout = null)
+    internal PortalScreenFrames(Requester? request = null, Func<Task<IReadOnlyList<CaptureMonitor>>>? monitors = null, TimeSpan? timeout = null, TimeSpan? retryAfter = null)
     {
+        _retryAfter = retryAfter ?? TimeSpan.FromMinutes(1);
         _request = request ?? ScreenshotAsync;
         _monitors = monitors ?? DesktopScreenFrames.AvaloniaMonitors;
         _timeout = timeout ?? TimeSpan.FromSeconds(5);
@@ -106,13 +111,17 @@ internal sealed class PortalScreenFrames : IScreenFrameSource
 
     public async Task<ScreenFrameResult> CaptureAsync(CancellationToken cancellationToken)
     {
-        if (Refused) return ScreenFrameResult.Unavailable;
+        if (Refused || Environment.TickCount64 < Interlocked.Read(ref _retryAt)) return ScreenFrameResult.Unavailable;
         Task<(int Width, int Height, byte[] Pixels)?> call;
         lock (_gate)
         {
-            // A call still pending (even past an earlier scan's timeout) skips this scan rather than stacking requests.
-            if (_pending is { IsCompleted: false }) return ScreenFrameResult.Unavailable;
-            call = _pending = ShootAsync();
+            // A live call (even past an earlier scan's timeout) skips this scan rather than stacking requests. Once its
+            // scan stopped or its 2-minute bound passed it is only observed for cleanup (Close may have failed), so it no longer blocks.
+            if (_pending is { IsCompleted: false } && !_pendingStop.IsCancellationRequested) return ScreenFrameResult.Unavailable;
+            var bound = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            bound.CancelAfter(TimeSpan.FromMinutes(2));
+            _pendingStop = bound.Token;
+            call = _pending = ShootAsync(bound);
         }
         try
         {
@@ -125,25 +134,34 @@ internal sealed class PortalScreenFrames : IScreenFrameSource
         catch (Exception ex) { Serilog.Log.Debug(ex, "Screen capture unavailable"); return ScreenFrameResult.Unavailable; }
     }
 
-    // Not cancelled by the scan: a late answer must still have its file deleted.
-    private async Task<(int, int, byte[])?> ShootAsync()
+    // Stopping the scan closes the portal request (WPF captures only inside the active scan, ScreenOcrService.cs:128,212);
+    // the per-scan timeout does not, and any answer that still arrives has its file deleted here.
+    private async Task<(int, int, byte[])?> ShootAsync(CancellationTokenSource bound)
     {
+        using var _ = bound;
         try
         {
-            var (code, results) = await _request(CancellationToken.None).ConfigureAwait(false);
+            var (code, results) = await _request(bound.Token).ConfigureAwait(false);
             var path = FilePath(results);
             try
             {
-                if (code != 0)
+                if (code == 1)
                 {
                     Refused = true;
-                    Serilog.Log.Warning("Screen OCR: the screenshot portal answered {Code}; screen capture stays off until restart", code);
+                    Serilog.Log.Warning("Screen OCR: the screenshot portal request was cancelled; screen capture stays off until restart");
+                    return null;
+                }
+                if (code != 0)
+                {
+                    Interlocked.Exchange(ref _retryAt, Environment.TickCount64 + (long)_retryAfter.TotalMilliseconds);
+                    Serilog.Log.Debug("Screen OCR: the screenshot portal answered {Code}; retrying after {Delay}", code, _retryAfter);
                     return null;
                 }
                 return path == null ? null : Decode(path);
             }
             finally { if (path != null) try { File.Delete(path); } catch { } }
         }
+        catch (OperationCanceledException) { return null; }
         catch (Exception ex)
         {
             Serilog.Log.Debug("Screen OCR: screenshot portal call failed ({Type})", ex.GetType().Name);
@@ -193,12 +211,10 @@ internal sealed class PortalScreenFrames : IScreenFrameSource
 
     // Own connection (UniqueName throws on the shared autoconnect one); one call at a time, so lazy init is safe.
     private static DBusConnection? _bus;
-    // Waits for the Response however late (the shared 30 s helper timeout lost late files); after 2 minutes
-    // the request is closed instead, so no Response and no file can follow.
+    // Waits for the Response however late (the shared 30 s helper timeout lost late files); after the 2-minute
+    // bound in CaptureAsync the request is closed instead, so no Response and no file can follow.
     private static async Task<(uint, Dictionary<string, VariantValue>)> ScreenshotAsync(CancellationToken cancellation)
     {
-        using var bound = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
-        bound.CancelAfter(TimeSpan.FromMinutes(2));
         var bus = _bus;
         if (bus == null)
         {
@@ -211,7 +227,7 @@ internal sealed class PortalScreenFrames : IScreenFrameSource
         {
             w.WriteString(""); // parent_window: none
             w.WriteDictionary(new Dictionary<string, VariantValue> { ["handle_token"] = token, ["interactive"] = false });
-        }, bound.Token, "org.freedesktop.portal.Screenshot", untilAnswered: true).ConfigureAwait(false);
+        }, cancellation, "org.freedesktop.portal.Screenshot", untilAnswered: true).ConfigureAwait(false);
     }
 }
 

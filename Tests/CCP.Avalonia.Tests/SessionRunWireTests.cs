@@ -28,6 +28,105 @@ namespace CCP.Avalonia.Tests;
 /// and opens the Ended Early recap by itself.</summary>
 public sealed class SessionRunWireTests
 {
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public Task SessionAudioRepaintsBothSurfacesOnStartAndStop(int stopKind) => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var settings = CoreSettings.Current;
+        var oldDuck = settings.DuckingLevel;
+        var oldEnabled = settings.AudioDuckingEnabled;
+        var oldRamp = settings.IntensityRampEnabled;
+        var oldRunner = AvApp.Sessions;
+        var oldRunning = CoreSession.IsSessionRunningProvider;
+        var oldPaused = CoreSession.IsSessionPausedProvider;
+        var oldHook = CoreEngine.StoppedHook;
+        var oldTask = CoreProgram.TaskAvailableProvider;
+        var dir = System.IO.Directory.CreateTempSubdirectory("ccp-audio-program-").FullName;
+        using var program = new ConditioningControlPanel.Services.Program.ProgramService(System.IO.Path.Combine(dir, "programs.json"), readOnly: false);
+        var shell = new MainShellWindow();
+        var runner = AvApp.Sessions = new SessionRunner(new SessionLogService());
+        try
+        {
+            settings.DuckingLevel = 20;
+            settings.AudioDuckingEnabled = false;
+            settings.IntensityRampEnabled = false;
+            CoreEngine.StoppedHook = shell.OnEngineStopped;
+            shell.Show();
+            shell.ShowTab("appsettings");
+            Dispatcher.UIThread.RunJobs();
+            var audio = shell.AppSettingsPage!.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.AppSettings.AudioSettingsSection>("SectionAudio")!;
+            var home = shell.Named<SettingsTabView>("SettingsTab")!;
+            void Check(int level, bool enabled)
+            {
+                Assert.Equal(level, audio.FindControl<Slider>("SliderDuck")!.Value);
+                Assert.Equal(level, home.FindControl<Slider>("HomeSliderDuck")!.Value);
+                Assert.Equal(enabled, audio.FindControl<CheckBox>("ChkAudioDuck")!.IsChecked);
+                Assert.Equal(enabled, home.FindControl<CheckBox>("HomeChkAudioDuck")!.IsChecked);
+                Assert.Equal($"{level}%", audio.FindControl<TextBlock>("TxtDuck")!.Text);
+                Assert.Equal($"{level}%", home.FindControl<TextBlock>("HomeTxtDuck")!.Text);
+            }
+            Check(20, false);
+            var session = Session.MorningDrift;
+            if (stopKind == 2)
+            {
+                CoreProgram.TaskAvailableProvider = ConditioningControlPanel.Avalonia.Platform.ProgramCapabilities.IsAvailable;
+                program.AttachEngine(() => runner.IsRunning, () => runner.CurrentSession?.Id, _ => runner.Stop(false));
+                Assert.NotNull(program.Enroll(program.Library.First(p => p.Id == "first_week")));
+                session.Id = program.BuildTodaySession()!.Id;
+            }
+            shell.StartSession(session);
+            Assert.True(runner.IsRunning);
+            Check(40, true);
+            if (stopKind == 2) program.Withdraw();
+            else runner.Stop(stopKind == 1);
+            Assert.False(runner.IsRunning);
+            Check(20, false);
+        }
+        finally
+        {
+            runner.Stop();
+            CoreEngine.Stop();
+            CoreEngine.StoppedHook = oldHook;
+            CoreProgram.TaskAvailableProvider = oldTask;
+            AvApp.Sessions = oldRunner;
+            CoreSession.IsSessionRunningProvider = oldRunning;
+            CoreSession.IsSessionPausedProvider = oldPaused;
+            settings.DuckingLevel = oldDuck;
+            settings.AudioDuckingEnabled = oldEnabled;
+            settings.IntensityRampEnabled = oldRamp;
+            shell.Close();
+            System.IO.Directory.Delete(dir, true);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public Task SessionAudioTestRestoresCallerProviders(int stopKind) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var oldRunning = CoreSession.IsSessionRunningProvider;
+        var oldPaused = CoreSession.IsSessionPausedProvider;
+        Func<bool> running = () => true;
+        Func<bool> paused = () => true;
+        try
+        {
+            CoreSession.IsSessionRunningProvider = running;
+            CoreSession.IsSessionPausedProvider = paused;
+            await SessionAudioRepaintsBothSurfacesOnStartAndStop(stopKind);
+            Assert.Same(running, CoreSession.IsSessionRunningProvider);
+            Assert.Same(paused, CoreSession.IsSessionPausedProvider);
+        }
+        finally
+        {
+            CoreSession.IsSessionRunningProvider = oldRunning;
+            CoreSession.IsSessionPausedProvider = oldPaused;
+        }
+    });
+
     [Fact]
     public Task Remote_resume_refuses_local_panic_and_resumes_other_pauses() => AvaloniaTestDispatcher.RunAsync(() =>
     {
@@ -86,6 +185,7 @@ public sealed class SessionRunWireTests
                 Assert.Equal(IconVariant.Filled, startGlyph.Variant);
                 Assert.False(startGlyph.IsFallback);
                 Assert.Equal("Not yet", Assert.IsType<TextBlock>(start.FindControl<Button>("BtnCancel")!.Content).Text);
+                Assert.True(Grid.GetColumn(start.FindControl<Button>("BtnOk")!) < Grid.GetColumn(start.FindControl<Button>("BtnCancel")!));
                 // WPF ShowStyledDialog has no default button or initial button focus.
                 foreach (var key in new[] { Key.Enter, Key.Space })
                 {
@@ -110,6 +210,7 @@ public sealed class SessionRunWireTests
                 {
                     pause.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
                     var dialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
+                    Assert.True(Grid.GetColumn(dialog.FindControl<Button>("BtnOk")!) < Grid.GetColumn(dialog.FindControl<Button>("BtnCancel")!));
                     Assert.Equal(Loc.Get("btn_yes_pause"), Assert.IsType<TextBlock>(dialog.FindControl<Button>("BtnOk")!.Content).Text);
                     Assert.Equal(Loc.Get("btn_keep_going"), Assert.IsType<TextBlock>(dialog.FindControl<Button>("BtnCancel")!.Content).Text);
                     var box = dialog.FindControl<CheckBox>("DontAskAgain")!;
@@ -574,6 +675,7 @@ public sealed class SessionRunWireTests
 
     private sealed class NoVideoHost : IMandatoryVideoHost
     {
+        public int FloatingLimit => 1; public int FloatingUp => 0;
         public void Show(string path, bool strict) { }
         public double CloseAll() => 0;
         public void ShowMessage(AttentionVerdict verdict, int ms, System.Action then) { }

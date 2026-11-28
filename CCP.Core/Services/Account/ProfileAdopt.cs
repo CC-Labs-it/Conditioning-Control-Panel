@@ -182,8 +182,7 @@ namespace ConditioningControlPanel.Services
         /// (ProfileSyncService.SyncProfileAsync): curve epoch, season forward, then <c>level_reset</c> (with the
         /// Descent refusal) or the server-ahead adopt, then the agreed watermark. Everything else is ignored.
         /// An accepted level_reset sets SeasonResetPending and raises <see cref="SeasonAdvanced"/> so the shell runs
-        /// its silent bookkeeping (WPF ProfileSyncService.cs:2469). ponytail: no anti-cheat clamp (a downward
-        /// write; skipping it errs safe). Does not save.
+        /// its silent bookkeeping (WPF ProfileSyncService.cs:2469). Does not save.
         /// </summary>
         public static void ApplySyncResponse(AppSettings settings, JObject response, DateTime nowUtc)
         {
@@ -225,6 +224,14 @@ namespace ConditioningControlPanel.Services
                 {
                     Log.Information("V2 Sync: Server XP higher — adopting Level {ServerLevel} XP {ServerXp} (local was {LocalXp})",
                         user.Level, user.Xp, (int)localTotalXp);
+                    settings.PlayerLevel = user.Level;
+                    settings.PlayerXP = XpCurve.GetCurrentLevelXP(user.Level, user.Xp, Epoch(settings));
+                }
+                // WPF ProfileSyncService.cs:2314-2357: level 1 is too empty to trust, even with XP.
+                else if (localTotalXp > user.Xp + 75000 && user.Level > 1)
+                {
+                    Log.Warning("[Anti-cheat] V2 Sync: Server clamped XP to Level {Level}, XP {Xp} (local {Local})",
+                        user.Level, user.Xp, localTotalXp);
                     settings.PlayerLevel = user.Level;
                     settings.PlayerXP = XpCurve.GetCurrentLevelXP(user.Level, user.Xp, Epoch(settings));
                 }

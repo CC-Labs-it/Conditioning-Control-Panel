@@ -73,6 +73,7 @@ internal static class AccountSeed
         var sandbox = SandboxWhitelisted;
         CoreAccount.IsWhitelistedProvider = () => sandbox || patreon.IsWhitelisted;
         CoreAccount.CurrentTierProvider = () => patreon.CurrentTier;
+        CoreAccount.PatreonAccessTokenProvider = () => patreon.GetAccessToken(); // WPF App.xaml.cs:671
         CoreAccount.HasPremiumAccessProvider = () => sandbox || ProviderSubscription.HasPremiumAccess(patreon, substar, CoreSettings.Current);
         CoreAccount.HasLabAccessProvider = () => sandbox || ProviderSubscription.HasLabAccess(patreon, substar, CoreSettings.Current);
         // WPF App.xaml.cs:487-488: TierGate's seam reads the same gates (Patreon.HasPremiumAccess there).
@@ -253,9 +254,14 @@ internal static class AccountSeed
             // (RebaselineDayLogAfterCloudMerge), for the profile read and the sync reply alike.
             ResetDailyQuest = () => App.Quests?.ForceRegenerateDailyQuest(),
             ResetWeeklyQuest = () => App.Quests?.ForceRegenerateWeeklyQuest(),
+            // WPF ProfileSyncService.cs:1574-1610,2031-2051: the lifetime stats block both ways.
+            StatsEngine = () => App.Achievements,
+            StatsQuests = () => App.Quests,
+            StatsDayLog = () => App.FeatureDayLog,
             Prizes = PrizeOwnership.Feed,
             // WPF ProfileSyncService.cs:2099-2118: cloud achievements are restored silently (restack b164, #3712).
             RestoreAchievements = ids => App.Achievements?.RestoreCloudAchievements(ids),
+            SyncProgressionChanged = () => ProfileLoaded?.Invoke(),
             ReceiptReceived = PrizeOwnership.SyncReceipt,
             Countdown = App.DescentCountdown,
             DescentReader = App.Descent,

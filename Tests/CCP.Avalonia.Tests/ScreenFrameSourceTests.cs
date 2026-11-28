@@ -154,20 +154,42 @@ public class ScreenFrameSourceTests
         Assert.Null(PortalScreenFrames.FilePath(new()));
     }
 
-    [Theory]
-    [InlineData(1u)]
-    [InlineData(2u)]
-    public async Task APortalRefusalIsUnavailableForTheSessionAndNeverAsksAgain(uint code)
+    [Fact]
+    public async Task ACancelledPortalRequestIsUnavailableForTheSessionAndNeverAsksAgain()
     {
         PortalScreenFrames.Refused = false;
         var calls = 0;
-        var source = new PortalScreenFrames(_ => { calls++; return Task.FromResult((code, new Dictionary<string, VariantValue>())); }, TwoMonitors);
+        var source = new PortalScreenFrames(_ => { calls++; return Task.FromResult((1u, new Dictionary<string, VariantValue>())); }, TwoMonitors);
         Assert.Equal(ScreenFrameStatus.Unavailable, (await source.CaptureAsync(CancellationToken.None)).Status);
         Assert.True(PortalScreenFrames.Refused);
         Assert.Equal(ScreenFrameStatus.Unavailable, (await new PortalScreenFrames(_ => { calls++; return Task.FromResult((0u, new Dictionary<string, VariantValue>())); }, TwoMonitors)
             .CaptureAsync(CancellationToken.None)).Status);
         Assert.Equal(1, calls);
         PortalScreenFrames.Refused = false;
+    }
+
+    [Fact]
+    public async Task AFailedPortalResponseCostsScansUntilTheRetryDelayThenRecovers()
+    {
+        PortalScreenFrames.Refused = false;
+        var codes = new Queue<uint>([2u, 0u]);
+        var calls = 0;
+        string? path = null;
+        Task<(uint, Dictionary<string, VariantValue>)> Answer()
+        {
+            calls++;
+            var code = codes.Dequeue();
+            return Task.FromResult((code, code == 0 ? Uri(path = WritePng()) : new Dictionary<string, VariantValue>()));
+        }
+        var source = new PortalScreenFrames(_ => Answer(), TwoMonitors, retryAfter: TimeSpan.FromMilliseconds(200));
+        Assert.Equal(ScreenFrameStatus.Unavailable, (await source.CaptureAsync(CancellationToken.None)).Status);
+        Assert.False(PortalScreenFrames.Refused);
+        Assert.Equal(ScreenFrameStatus.Unavailable, (await source.CaptureAsync(CancellationToken.None)).Status); // within the delay: no request
+        Assert.Equal(1, calls);
+        await Task.Delay(300);
+        Assert.Equal(ScreenFrameStatus.Available, (await source.CaptureAsync(CancellationToken.None)).Status);
+        Assert.Equal(2, calls);
+        Assert.False(File.Exists(path));
     }
 
     [Fact]
@@ -223,5 +245,62 @@ public class ScreenFrameSourceTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             PortalPanicShortcut.AwaitOrCloseAsync(new TaskCompletionSource<int>().Task, new CancellationToken(true), () => { closes++; return Task.CompletedTask; }));
         Assert.Equal(1, closes);
+    }
+
+    [Fact]
+    public async Task StoppingTheScanClosesThePortalRequestAndAnInFlightFileIsDeleted()
+    {
+        PortalScreenFrames.Refused = false;
+        var answer = new TaskCompletionSource<(uint, Dictionary<string, VariantValue>)>();
+        var path = WritePng();
+        var closes = 0;
+        var source = new PortalScreenFrames(ct => PortalPanicShortcut.AwaitOrCloseAsync(answer.Task, ct,
+            () => { closes++; answer.SetResult((0u, Uri(path))); return Task.CompletedTask; }), TwoMonitors);
+        using var stop = new CancellationTokenSource();
+        var scan = source.CaptureAsync(stop.Token);
+        stop.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => scan);
+        for (int i = 0; i < 100 && File.Exists(path); i++) await Task.Delay(20);
+        Assert.Equal(1, closes);
+        Assert.False(File.Exists(path));
+        Assert.False(PortalScreenFrames.Refused);
+    }
+
+    [Fact]
+    public async Task AFailedRequestCloseKeepsObservingAndALateFileIsStillDeleted()
+    {
+        PortalScreenFrames.Refused = false;
+        var answer = new TaskCompletionSource<(uint, Dictionary<string, VariantValue>)>();
+        var source = new PortalScreenFrames(ct => PortalPanicShortcut.AwaitOrCloseAsync(answer.Task, ct,
+            () => Task.FromException(new InvalidOperationException("close failed"))), TwoMonitors);
+        using var stop = new CancellationTokenSource();
+        var scan = source.CaptureAsync(stop.Token);
+        stop.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => scan);
+        await Task.Delay(1500); // past the one-second in-flight window that follows a successful Close
+        var path = WritePng();
+        answer.SetResult((0u, Uri(path)));
+        for (int i = 0; i < 100 && File.Exists(path); i++) await Task.Delay(20);
+        Assert.False(File.Exists(path));
+    }
+
+    [Fact]
+    public async Task AFailedCloseWithNoResponseDoesNotBlockTheNextScanAfterARestart()
+    {
+        PortalScreenFrames.Refused = false;
+        var never = new TaskCompletionSource<(uint, Dictionary<string, VariantValue>)>();
+        var path = WritePng();
+        var calls = 0;
+        var source = new PortalScreenFrames(ct => ++calls == 1
+            ? PortalPanicShortcut.AwaitOrCloseAsync(never.Task, ct, () => Task.FromException(new InvalidOperationException("close failed")))
+            : Task.FromResult((0u, Uri(path))), TwoMonitors);
+        using var stop = new CancellationTokenSource();
+        var scan = source.CaptureAsync(stop.Token);
+        stop.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => scan);
+        var restarted = await source.CaptureAsync(CancellationToken.None);
+        Assert.Equal(2, calls);
+        Assert.Equal(ScreenFrameStatus.Available, restarted.Status);
+        Assert.False(File.Exists(path));
     }
 }

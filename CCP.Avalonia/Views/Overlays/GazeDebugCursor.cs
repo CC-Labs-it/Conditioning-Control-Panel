@@ -11,7 +11,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 namespace ConditioningControlPanel.Avalonia.Views.Overlays;
 
 // WPF Services/Tracking/GazeDebugCursorService.cs:159, 203, 270, 332, 423: overlay, feed, face loss, trail, dot.
-// ponytail: this row has one requester; Focus Gaze's shared requester/gold lock tint is not ported.
+// ponytail: this row has one requester; Focus Gaze's shared requester is not ported.
 // Draw with Avalonia primitives instead of mutable cross-thread Skia resources.
 internal sealed class GazeDebugCursor : Window
 {
@@ -79,6 +79,11 @@ internal sealed class GazeDebugCursor : Window
         Tracker.StateChanged += w.StateChanged;
     }
 
+    internal bool Locked => _drawing.Locked;
+    internal Color BodyColor => _drawing.BodyColor;
+    internal Color TrailColor => _drawing.TrailColor;
+    internal Color BloomColor => _drawing.BloomColor;
+    internal void SetLocked(bool locked) { _drawing.Locked = locked; _drawing.InvalidateVisual(); }
     internal bool HasGaze => _drawing.HasGaze;
     internal bool ClockRunning => _clock.IsEnabled;
     internal int TrailCount => _drawing.History.Count;
@@ -116,16 +121,27 @@ internal sealed class GazeDebugCursor : Window
     {
         private Point? _position;
         internal bool HasGaze => _position != null;
-        private static readonly IBrush Pink = new SolidColorBrush(Color.FromRgb(0xFF, 0x69, 0xB4));
+        private static readonly Color PinkColor = Color.FromRgb(0xFF, 0x69, 0xB4), GoldColor = Color.FromRgb(0xFF, 0xD0, 0x80);
+        private static readonly IBrush Pink = new SolidColorBrush(PinkColor), Gold = new SolidColorBrush(GoldColor);
+        internal Color BodyColor => ((ISolidColorBrush)(Locked ? Gold : Pink)).Color;
+        internal Color BloomColor
+        {
+            get
+            {
+                var color = ((RadialGradientBrush)(Locked ? GoldBloom : PinkBloom)).GradientStops[0].Color;
+                return Color.FromRgb(color.R, color.G, color.B);
+            }
+        }
         private static readonly IPen Rim = new Pen(Brushes.White, 1.6);
-        private static readonly IBrush Bloom = new RadialGradientBrush
+        private static IBrush MakeBloom(Color color) => new RadialGradientBrush
         {
             GradientStops = new GradientStops
             {
-                new(Color.FromArgb(190, 0xFF, 0x69, 0xB4), 0),
+                new(Color.FromArgb(190, color.R, color.G, color.B), 0),
                 new(Colors.Transparent, 1),
             },
         };
+        private static readonly IBrush PinkBloom = MakeBloom(PinkColor), GoldBloom = MakeBloom(GoldColor);
         internal void Move(Point point)
         {
             _position = point;
@@ -137,8 +153,8 @@ internal sealed class GazeDebugCursor : Window
         {
             base.Render(context);
             if (_position is not { } p) return;
-            context.DrawEllipse(Bloom, null, p, 26, 26);
-            context.DrawEllipse(Pink, Rim, p, 8, 8);
+            context.DrawEllipse(Locked ? GoldBloom : PinkBloom, null, p, 26, 26);
+            context.DrawEllipse(Locked ? Gold : Pink, Rim, p, 8, 8);
             context.DrawEllipse(Brushes.White, null, p, 3, 3);
         }
     }

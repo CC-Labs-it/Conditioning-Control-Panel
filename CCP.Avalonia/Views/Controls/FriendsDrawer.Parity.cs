@@ -1,12 +1,18 @@
-// Adapted from WPF FriendsDrawer.cs:310,550,566-587,872-897 and FriendsLook.cs:260-275.
+// Adapted from WPF FriendsDrawer.cs:310,550,566-587,872-897 and FriendsLook.cs:174-275.
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Threading.Tasks;
 using ConditioningControlPanel.Avalonia.Platform;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Friends;
 
@@ -59,4 +65,28 @@ public sealed partial class FriendsDrawer
         return bell;
     }
 
+    // WPF FriendsLook.cs:174-282: the proxy picture over the initials, one decode per URL for the process.
+    private static readonly Dictionary<string, Bitmap> PhotoCache = new();
+
+    private static async Task PaintPhotoAsync(Border disc, string url)
+    {
+        try
+        {
+            var full = url.StartsWith('/') ? ProviderSubscription.ProxyBaseUrl + url : url;
+            if (!full.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) return;
+            if (!PhotoCache.TryGetValue(full, out var img))
+            {
+                var bytes = await KnockCard.FetchPicture(full);   // the friends picture seam (no network in tests)
+                using var ms = new MemoryStream(bytes);
+                img = Bitmap.DecodeToWidth(ms, 96);
+                PhotoCache[full] = img;
+            }
+            disc.Background = new ImageBrush(img) { Stretch = Stretch.UniformToFill };
+            disc.Child = null;
+        }
+        catch
+        {
+            // A missing picture keeps the initials (WPF FriendsLook.cs:278).
+        }
+    }
 }

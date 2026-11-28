@@ -131,6 +131,25 @@ public sealed partial class AccountSeedTests
         });
 
     [Fact]
+    public Task PendingRegistration_WelcomeIsTopmostUntilActivated() =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            var (wire, shell) = await PendingPatron();
+            try
+            {
+                wire.Answer("/auth/lookup", (HttpStatusCode.OK, "{\"exists\":false}"));
+                var check = shell.CheckPendingRegistrationAsync(TimeSpan.Zero);
+                var dialog = await Welcome(shell);
+                Assert.True(dialog.Topmost);
+                typeof(WindowBase).GetMethod("HandleActivated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(dialog, null);
+                Assert.False(dialog.Topmost);
+                dialog.Close();
+                await Until(() => check.IsCompleted);
+            }
+            finally { CloseAll(shell); }
+        });
+
+    [Fact]
     public Task PendingRegistration_IsArmedByTheShellOpening() =>
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
