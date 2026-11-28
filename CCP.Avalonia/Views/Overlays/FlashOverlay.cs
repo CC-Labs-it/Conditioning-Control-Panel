@@ -373,7 +373,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var glow = FlashFxRules.ResolveGlow(s.FlashGlowEnabled, ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier,
                 multiplier > 1 && perkFx, perkFx ? SkillTreeRules.GetSparkleBoostTier(s) : 0, natasha: false);
             // An owned burst (Deeper one-shot) stays a window so StopOwned can close it; hosted items carry no owner.
-            if (owner == null && CanHost(s, clickable, glow.HasGlow, inheritMotion, path, GazeFocus.Instance.IsActive) && !GifFrames.TryGetValue(bmp, out _)
+            // A lit Whirlpool drags every still flash (FlashOverlay.Stage rides the windows): those stay windows too.
+            if (owner == null && !PoolOn() && CanHost(s, clickable, glow.HasGlow, inheritMotion, path, GazeFocus.Instance.IsActive) && !GifFrames.TryGetValue(bmp, out _)
                 && ShowHosted(bmp, rect, screen, lifetime, timing))
             {
                 if (!suppressHaptic)
@@ -529,14 +530,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>WPF FlashService.ScaleFrameDelay (:119-126) then the gentle-visuals slow-down
-        /// (:1775-1776): 2x plays twice as fast, never under 10 ms a frame.</summary>
-        internal static TimeSpan GifFrameDelay(TimeSpan sourceDelay, double multiplier)
+        /// (:1775-1776): 2x plays twice as fast, never under 10 ms a frame. A deck face skips the
+        /// slow-down, as WPF ApplyDeckSwap (:2930) does.</summary>
+        internal static TimeSpan GifFrameDelay(TimeSpan sourceDelay, double multiplier, bool gentle = true)
         {
             var ms = sourceDelay.TotalMilliseconds;
             if (double.IsNaN(ms) || double.IsInfinity(ms) || ms <= 0) ms = 100.0;
             if (double.IsNaN(multiplier) || double.IsInfinity(multiplier) || multiplier <= 0) multiplier = 1.0;
             ms = Math.Max(10.0, ms / Math.Clamp(multiplier, 0.25, 4.0));
-            if (ConditioningControlPanel.Services.Safety.GentleVisuals.On)
+            if (gentle && ConditioningControlPanel.Services.Safety.GentleVisuals.On)
                 ms = ConditioningControlPanel.Services.Safety.GentleVisuals.ScaleDelayMs(ms);
             return TimeSpan.FromMilliseconds(ms);
         }
@@ -600,10 +602,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var pad = w.ApplyGlow(glow, scaling);
             w.ApplyCorners(FlashCorners.Resolve(CoreSettings.Current.FlashRoundedCorners, PrizeOwnership.OwnsFlashV2(), glow.HasGlow,
                 Math.Min(rect.Width, rect.Height) / (scaling > 0 ? scaling : 1), dpiScale: 1.0));
-            var winRect = new PixelRect(rect.X - pad, rect.Y - pad, rect.Width + 2 * pad, rect.Height + 2 * pad);
             // Click on (WPF FlashService.cs:1765): the window keeps its input and never takes focus
             // (passive); off: exactly the click-through recipe above.
-            if (clickable) w.MakeClickable(() => Pop(w));
+            if (clickable) w.MakeClickable(() => Pop(w), () => DeckPress(w));
+            AttachDeck(w, rect, scaling, clickable);
+            pad = w.GlowPadPx;
+            var winRect = new PixelRect(rect.X - pad, rect.Y - pad, rect.Width + 2 * pad, rect.Height + 2 * pad);
             if (!Present(w, winRect, clickable))
             {
                 if (!_warnedUnavailable) Log.Warning("Flash: the platform refused a click-through topmost overlay window; flashes skipped");
@@ -611,9 +615,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.Close();
                 return false;
             }
+            // A card's grown margin stays click-through: only the picture and its glow take the mouse.
+            // Windows: polled by the deck tick (DeckInput).
+            if (w.DeckInputPx is { } input) X11Overlay.SetInputRect(w, input[0]);
             var entry = (w, rect);
             w.Closed += (_, _) => Active.RemoveAll(e => e.Window == w);
             Active.Add(entry);
+            EnsurePoolTick();
             w.ApplyCorners(CoreSettings.Current.FlashRoundedCorners, OwnsMotion, glow.HasGlow,
                 rect.Width / scaling, rect.Height / scaling);
             w.Show();
@@ -704,6 +712,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _lastDriftTick = now;
             foreach (var (w, m) in Drifting)
                 if (w is not FlashOverlayWindow { Exit: not null } && w is not FlashOverlayWindow { Shatter: not null }
+                    && w is not FlashOverlayWindow { DeckShatter: not null }
                     && FlashMotion.Step(m, dt))   // a leaving flash holds still
                 {
                     var p = new PixelPoint((int)Math.Round(m.X), (int)Math.Round(m.Y));
@@ -762,6 +771,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static void CloseWindows(bool final)
         {
             _closed |= final;
+            StopDeckTick();
+            StopPoolTick();
             foreach (var (_, _, stop) in Hosted.ToList()) stop();
             foreach (var (w, _) in Active.ToList()) w.Close();
             foreach (var w in Exiting.ToList()) w.Close();
@@ -840,7 +851,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// (BuildExit, FlashService.cs:2334) or the plain cut for None.</summary>
         internal static void Pop(FlashOverlayWindow w, bool fromGaze = false)
         {
-            if (w.IsFadingOut || w.Exit != null || w.Shatter != null || !Active.Any(e => e.Window == w)) return;
+            if (w.IsFadingOut || w.Exit != null || w.Shatter != null || w.DeckShatter != null || !Active.Any(e => e.Window == w)) return;
+            var rect = Active.Find(e => e.Window == w).Rect;
             Active.RemoveAll(e => e.Window == w);
             _ = CoreHaptics.Service?.FlashClickVibeAsync();   // WPF FlashService.cs:2945
             var s = CoreSettings.Current;
@@ -848,6 +860,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var n = FlashFxRules.HydraSpawnCount(s.CorruptionMode, s.HydraLimit, isRemix: w.IsRemix, fromGaze: fromGaze, w.HydraGeneration, OnScreen);
             if (n > 0) Multiply(w, n, ChildLifetime(w, s), w.HydraGeneration + 1);
             Clicked?.Invoke(); // WPF FlashService.cs:2986
+            Leave(w, rect, s);
+        }
+
+        /// <summary>A flash off the active list leaves: a card's break, the gentle fade, the owned shatter, the
+        /// exit picker or the plain cut (WPF SafeCloseFlashWindow :5300-5350). A pop and the pool's eye share it.</summary>
+        private static void Leave(FlashOverlayWindow w, PixelRect rect, AppSettings s)
+        {
+            // WPF FlashService.cs:5225-5240: the click that reached BreakAt breaks the card, ahead of Gentle and the exit picker.
+            if (w.DeckBreak)
+            {
+                w.DeckBreak = false;
+                DeckBreakBlast(w, rect);
+                if (!w.TryBeginDeckShatter(FlashOverlayWindow.DeckLevel, Rng)) { w.Close(); return; }
+                Exiting.Add(w);
+                w.Closed += (_, _) => Exiting.Remove(w);
+                return;
+            }
             if (s.GentleVisuals)
             {
                 Exiting.Add(w);
@@ -940,16 +969,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> LoadPictures(int count, IReadOnlyList<Screen> screens,
             int[] targets, AppSettings s, List<PixelRect> occupied, int? size)
         {
-            var root = CorePaths.EffectiveAssets;
-            var dir = Path.Combine(root, "images");
             var result = new List<(Bitmap, PixelRect, string, Screen)>(count);
             if (targets.Length == 0) return result;
-
-            var files = Directory.Exists(dir)
-                ? AssetFolderExclusion.Enabled(Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
-                    .Where(f => FlashPlacement.ImageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
-                    .ToList(), root, s)
-                : new List<string>();
+            var files = FlashFiles(s);
 
             for (var tries = Math.Max(count * 5, 20); result.Count < count && tries > 0; tries--)
             {
@@ -983,6 +1005,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 catch (Exception ex) { Log.Debug("Flash: could not decode {Path}: {E}", path, ex.Message); }
             }
             return result;
+        }
+
+        /// <summary>The enabled images under the assets folder (WPF GetMediaFiles).</summary>
+        private static List<string> FlashFiles(AppSettings s)
+        {
+            var root = CorePaths.EffectiveAssets;
+            var dir = Path.Combine(root, "images");
+            return Directory.Exists(dir)
+                ? AssetFolderExclusion.Enabled(Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
+                    .Where(f => FlashPlacement.ImageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                    .ToList(), root, s)
+                : new List<string>();
         }
 
         /// <summary>An animated GIF/WebP decoded at its display size (at most 2048 px), under WPF's flash

@@ -35,6 +35,27 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
         public GeneralSettingsSection()
         {
             InitializeComponent();
+            // The startup-video line is written from code, so a language switch with this page open
+            // writes it again (7.4 desk run: "(Zufällig)" stayed under a Japanese page).
+            EventHandler relabel = (_, _) => Dispatcher.BeginInvoke(new Action(RelabelStartupVideo));
+            Loaded += (_, _) =>
+            {
+                Localization.LocalizationManager.Instance.LanguageChanged -= relabel;
+                Localization.LocalizationManager.Instance.LanguageChanged += relabel;
+            };
+            Unloaded += (_, _) => Localization.LocalizationManager.Instance.LanguageChanged -= relabel;
+        }
+
+        /// <summary>The startup-video line in the current language: the file's name, or "(random)".</summary>
+        internal static string StartupVideoText(string? path)
+            => string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)
+                ? Localization.Loc.Get("label_random")
+                : System.IO.Path.GetFileName(path);
+
+        internal void RelabelStartupVideo()
+        {
+            try { TxtStartupVideo.Text = StartupVideoText(App.Settings?.Current?.StartupVideoPath); }
+            catch (Exception ex) { App.Logger?.Debug("GeneralSettingsSection.RelabelStartupVideo: {E}", ex.Message); }
         }
 
         private MainWindow? Main => Window.GetWindow(this) as MainWindow

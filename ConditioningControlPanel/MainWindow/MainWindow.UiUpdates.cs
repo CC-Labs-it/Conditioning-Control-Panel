@@ -69,13 +69,7 @@ namespace ConditioningControlPanel
             AnimateXpDisplay(xp, xpNeeded, level);
 
             // Update title based on level
-            var rankTitle = level switch
-            {
-                < 20 => "BASIC BIMBO",
-                < 50 => "DUMB AIRHEAD",
-                < 100 => "SYNTHETIC BLOWDOLL",
-                _ => "PERFECT FUCKPUPPET"
-            };
+            var rankTitle = Models.RankTitles.ForLevel(level);
             TxtPlayerTitle.Text = App.Mods?.MakeModAware(rankTitle) ?? rankTitle;
 
             // Update unlockables visibility based on level
@@ -2343,6 +2337,7 @@ namespace ConditioningControlPanel
             if (chk == null) return;
             App.Settings.Current.PerformanceMode = chk.IsChecked ?? false;
             App.Logger?.Information("Performance mode set to {Enabled}", App.Settings.Current.PerformanceMode);
+            Services.MotionFx.RaiseAmbientChanged();
         }
 
         internal void ChkAutoPerformance_Changed(object sender, RoutedEventArgs e)
@@ -2352,6 +2347,7 @@ namespace ConditioningControlPanel
             if (chk == null) return;
             App.Settings.Current.AutoPerformanceMode = chk.IsChecked ?? true;
             App.Logger?.Information("Auto performance mode set to {Enabled}", App.Settings.Current.AutoPerformanceMode);
+            Services.MotionFx.RaiseAmbientChanged();
         }
 
         internal void CmbMotionLevel_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -2366,6 +2362,14 @@ namespace ConditioningControlPanel
             };
             App.Settings.Current.MotionLevel = level;
             App.Logger?.Information("Motion level set to {Level}", level);
+            Services.MotionFx.RaiseAmbientChanged();
+        }
+
+        /// <summary>Every ambient loop the panel owns re-reads its gate: the motion level moved, a performance
+        /// switch moved, or the engine or a session started or stopped (<see cref="Services.MotionFx.PanelQuiet"/>).
+        /// Subscribed to <see cref="Services.MotionFx.AmbientChanged"/> in InitializeChromeFx.</summary>
+        internal void RefreshAmbientMotion()
+        {
             // Polish wave 9: the window edge (travelling lift, ember strips) follows the level
             // now, not at the next section change.
             try { PaintSectionEdge(_edgeHue, 0); SectionEdgeParticles?.Refresh(); }

@@ -3,7 +3,9 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
-             xmlns:feat="clr-namespace:ConditioningControlPanel.Features">
+             xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.TintSliders="True">
 
     <!-- ONE dense controls card plus the links card. The hero for this feature lives on
          Views/Controls/Studio/RampRackPanel.xaml, but the ENABLE SWITCH stays here: this
@@ -11,7 +13,7 @@
          the Presets surface), and a hero-mounted pill would exist on the rack only, leaving
          that path with no way to arm the feature. So the standalone Enable card becomes this
          card's first row. -->
-    <StackPanel>
+    <StackPanel Grid.IsSharedSizeScope="True">
 
         <Border Style="{StaticResource SettingCardStyle}">
             <Grid>
@@ -19,6 +21,8 @@
                 <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
                         Background="{StaticResource SectionHueStudioBrush}"/>
                 <StackPanel Margin="16,8,16,8">
+
+                    <feat:OptionSection Key="ramp.basics" Title="{loc:Str studio_section_basics}" Theme="Main">
 
                     <!-- Enable -->
                     <Grid Height="34">
@@ -36,20 +40,17 @@
                     <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
 
                     <!-- Duration -->
-                    <Grid Height="36">
+                    <Grid Style="{StaticResource OptionRow}">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" MinWidth="120"/>
+                            <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto" MinWidth="56"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{loc:Str setting_duration}" FontSize="13" FontWeight="SemiBold"
-                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                        <Slider Grid.Column="1" x:Name="SliderDuration" Minimum="10" Maximum="180" Value="60"
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_duration}" Emblem="Long"/>
+                        <Slider Grid.Column="1" x:Name="SliderDuration" feat:OptionSection.Setting="RampDurationMinutes" Minimum="10" Maximum="180" Value="60"
                                 VerticalAlignment="Center" Margin="10,0"
                                 ValueChanged="SliderDuration_Changed"/>
-                        <TextBlock Grid.Column="2" x:Name="TxtDuration" Text="60 min" HorizontalAlignment="Right"
-                                   VerticalAlignment="Center" FontSize="13" FontWeight="Bold"
-                                   Foreground="{DynamicResource PinkBrush}"/>
+                        <rows:RowValue Grid.Column="2" x:Name="TxtDuration" Text="60 min"/>
                     </Grid>
 
                     <!-- Ramp mode. Multiplier is the legacy behaviour and the default; Range
@@ -58,14 +59,13 @@
                          of sliders able to drive spiral opacity, flash rate and volume at once -
                          and what makes end below start (the wind-down) possible at all. The runtime
                          difference is one formula in Helpers/RampMath.cs; nothing per-feature. -->
-                    <Grid Height="36" ToolTip="{loc:Str tooltip_ramp_mode}">
+                    <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_ramp_mode}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" MinWidth="120"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{loc:Str label_ramp_mode}" FontSize="13" FontWeight="SemiBold"
-                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                        <ComboBox Grid.Column="1" x:Name="CmbRampMode"
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str label_ramp_mode}" Emblem="Ramp"/>
+                        <ComboBox Grid.Column="1" x:Name="CmbRampMode" Style="{DynamicResource RowComboBoxStyle}" feat:OptionSection.Setting="RampMode"
                                   Height="26" MaxWidth="220" HorizontalAlignment="Right" VerticalAlignment="Center"
                                   SelectionChanged="CmbRampMode_Changed">
                             <ComboBoxItem Content="{loc:Str ramp_mode_multiplier}" Tag="Multiplier"/>
@@ -74,63 +74,56 @@
                     </Grid>
 
                     <!-- Multiplier (Multiplier mode only) -->
-                    <Grid x:Name="RowMultiplier" Height="36">
+                    <Grid x:Name="RowMultiplier" Style="{StaticResource OptionRow}">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" MinWidth="120"/>
+                            <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto" MinWidth="56"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{loc:Str setting_multiplier}" FontSize="13" FontWeight="SemiBold"
-                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                        <Slider Grid.Column="1" x:Name="SliderMultiplier" Minimum="1" Maximum="3" Value="1.5"
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_multiplier}" Emblem="Much"/>
+                        <Slider Grid.Column="1" x:Name="SliderMultiplier" feat:OptionSection.Setting="SchedulerMultiplier" Minimum="1" Maximum="3" Value="1.5"
                                 SmallChange="0.1" LargeChange="0.5"
                                 VerticalAlignment="Center" Margin="10,0"
                                 ValueChanged="SliderMultiplier_Changed"/>
-                        <TextBlock Grid.Column="2" x:Name="TxtMultiplier" Text="1.5x" HorizontalAlignment="Right"
-                                   VerticalAlignment="Center" FontSize="13" FontWeight="Bold"
-                                   Foreground="{DynamicResource PinkBrush}"/>
+                        <rows:RowValue Grid.Column="2" x:Name="TxtMultiplier" Text="1.5x"/>
                     </Grid>
 
                     <!-- Range start/end (Range mode only). 0..300% of the feature's own value;
                          100 to 100 is the default and a deliberate no-op, so flipping the mode
                          alone never changes what the user already had. -->
-                    <Grid x:Name="RowRangeStart" Height="36" Visibility="Collapsed"
+                    <Grid x:Name="RowRangeStart" Style="{StaticResource OptionRow}" Visibility="Collapsed"
                           ToolTip="{loc:Str tooltip_ramp_range}">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" MinWidth="120"/>
+                            <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto" MinWidth="56"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{loc:Str label_ramp_start}" FontSize="13" FontWeight="SemiBold"
-                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                        <Slider Grid.Column="1" x:Name="SliderRangeStart" Minimum="0" Maximum="300" Value="100"
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str label_ramp_start}" Emblem="Much"/>
+                        <Slider Grid.Column="1" x:Name="SliderRangeStart" feat:OptionSection.Setting="RampStartPercent" Minimum="0" Maximum="300" Value="100"
                                 SmallChange="5" LargeChange="25" TickFrequency="5" IsSnapToTickEnabled="True"
                                 VerticalAlignment="Center" Margin="10,0"
                                 ValueChanged="SliderRangeStart_Changed"/>
-                        <TextBlock Grid.Column="2" x:Name="TxtRangeStart" Text="100%" HorizontalAlignment="Right"
-                                   VerticalAlignment="Center" FontSize="13" FontWeight="Bold"
-                                   Foreground="{DynamicResource PinkBrush}"/>
+                        <rows:RowValue Grid.Column="2" x:Name="TxtRangeStart" Text="100%"/>
                     </Grid>
 
-                    <Grid x:Name="RowRangeEnd" Height="36" Visibility="Collapsed"
+                    <Grid x:Name="RowRangeEnd" Style="{StaticResource OptionRow}" Visibility="Collapsed"
                           ToolTip="{loc:Str tooltip_ramp_range}">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" MinWidth="120"/>
+                            <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto" MinWidth="56"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{loc:Str label_ramp_end}" FontSize="13" FontWeight="SemiBold"
-                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                        <Slider Grid.Column="1" x:Name="SliderRangeEnd" Minimum="0" Maximum="300" Value="100"
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str label_ramp_end}" Emblem="Much"/>
+                        <Slider Grid.Column="1" x:Name="SliderRangeEnd" feat:OptionSection.Setting="RampEndPercent" Minimum="0" Maximum="300" Value="100"
                                 SmallChange="5" LargeChange="25" TickFrequency="5" IsSnapToTickEnabled="True"
                                 VerticalAlignment="Center" Margin="10,0"
                                 ValueChanged="SliderRangeEnd_Changed"/>
-                        <TextBlock Grid.Column="2" x:Name="TxtRangeEnd" Text="100%" HorizontalAlignment="Right"
-                                   VerticalAlignment="Center" FontSize="13" FontWeight="Bold"
-                                   Foreground="{DynamicResource PinkBrush}"/>
+                        <rows:RowValue Grid.Column="2" x:Name="TxtRangeEnd" Text="100%"/>
                     </Grid>
 
-                    <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
+                    </feat:OptionSection>
+
+                    <feat:OptionSection Key="ramp.options" Title="{loc:Str studio_section_options}" Theme="Timing">
 
                     <!-- Ramp curve.
                          THE ONLY OWNED CONTROL IN THIS POPUP, and it is not obvious why.
@@ -144,14 +137,13 @@
                          `settings.RampCurve ?? App.Settings.Current.RampCurve` (SessionEngine.cs:526)
                          on EVERY tick, and per-session RampCurve is nullable and usually unset - so
                          for most sessions this dropdown reshapes the running session's own ramp. -->
-                    <Grid Height="36" ToolTip="{loc:Str tooltip_ramp_curve}">
+                    <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_ramp_curve}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" MinWidth="120"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{loc:Str label_ramp_curve}" FontSize="13" FontWeight="SemiBold"
-                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                        <ComboBox Grid.Column="1" x:Name="CmbRampCurve" feat:SessionLock.Owned="True"
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str label_ramp_curve}" Emblem="Ramp"/>
+                        <ComboBox Grid.Column="1" x:Name="CmbRampCurve" Style="{DynamicResource RowComboBoxStyle}" feat:OptionSection.Setting="RampCurve" feat:SessionLock.Owned="True"
                                   Height="26" MaxWidth="220" HorizontalAlignment="Right" VerticalAlignment="Center"
                                   SelectionChanged="CmbRampCurve_Changed">
                             <ComboBoxItem Content="{loc:Str ramp_curve_linear}" Tag="Linear"/>
@@ -194,17 +186,19 @@
                                TextWrapping="Wrap" Margin="0,2,0,4"/>
 
                     <!-- End at ramp -->
-                    <Grid Height="34">
+                    <Grid Style="{StaticResource OptionRow}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{loc:Str setting_end_at_complete}" FontSize="13" FontWeight="SemiBold"
-                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_end_at_complete}" Emblem="After"
+                                       IsOn="{Binding IsChecked, ElementName=ChkEndAt}"/>
                         <CheckBox Grid.Column="1" x:Name="ChkEndAt"
                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                   Checked="ChkEndAt_Changed" Unchecked="ChkEndAt_Changed"/>
                     </Grid>
+
+                    </feat:OptionSection>
 
                 </StackPanel>
             </Grid>
@@ -217,9 +211,7 @@
                 <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
                         Background="{StaticResource SectionHueStudioBrush}"/>
                 <StackPanel Margin="16,8,16,8">
-                    <helpers:EmojiTextBlock Text="{loc:Str label_link_to_ramp}"
-                                            Foreground="{DynamicResource PinkBrush}" FontSize="13" FontWeight="SemiBold"
-                                            Margin="0,0,0,6"/>
+                    <feat:OptionSection Key="ramp.links" Title="{loc:Str label_link_to_ramp}" Theme="Interaction">
                     <!-- Every chip carries a tooltip naming the dial it moves. "Master" and "Sub"
                          read as two mystery words sitting next to four visual effects (general
                          chat 2026-09-16), and a ramp quietly pulling the master volume down is the
@@ -230,36 +222,31 @@
                                     ToolTip="{loc:Str tooltip_ramp_link_flash}">
                             <CheckBox x:Name="ChkLinkFlash" Style="{StaticResource ToggleStyle}"
                                       Checked="Link_Changed" Unchecked="Link_Changed"/>
-                            <TextBlock Text="{loc:Str label_flash}" Foreground="{StaticResource TextLightBrush}"
-                                       FontSize="12" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <rows:RowLabel Text="{loc:Str label_flash}" Emblem="Many" Subject="Image" Margin="6,0,0,0" IsOn="{Binding IsChecked, ElementName=ChkLinkFlash}"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,14,6"
                                     ToolTip="{loc:Str tooltip_ramp_link_spiral}">
                             <CheckBox x:Name="ChkLinkSpiral" Style="{StaticResource ToggleStyle}"
                                       Checked="Link_Changed" Unchecked="Link_Changed"/>
-                            <TextBlock Text="{loc:Str label_spiral}" Foreground="{StaticResource TextLightBrush}"
-                                       FontSize="12" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <rows:RowLabel Text="{loc:Str label_spiral}" Emblem="Spiral" Margin="6,0,0,0" IsOn="{Binding IsChecked, ElementName=ChkLinkSpiral}"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,14,6"
                                     ToolTip="{loc:Str tooltip_ramp_link_pink}">
                             <CheckBox x:Name="ChkLinkPink" Style="{StaticResource ToggleStyle}"
                                       Checked="Link_Changed" Unchecked="Link_Changed"/>
-                            <TextBlock Text="{loc:Str label_pink}" Foreground="{StaticResource TextLightBrush}"
-                                       FontSize="12" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <rows:RowLabel Text="{loc:Str label_pink}" Emblem="Clear" Margin="6,0,0,0" IsOn="{Binding IsChecked, ElementName=ChkLinkPink}"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,14,6"
                                     ToolTip="{loc:Str tooltip_ramp_link_master}">
                             <CheckBox x:Name="ChkLinkMaster" Style="{StaticResource ToggleStyle}"
                                       Checked="Link_Changed" Unchecked="Link_Changed"/>
-                            <TextBlock Text="{loc:Str label_ramp_link_master}" Foreground="{StaticResource TextLightBrush}"
-                                       FontSize="12" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <rows:RowLabel Text="{loc:Str label_ramp_link_master}" Emblem="Loud" Margin="6,0,0,0" IsOn="{Binding IsChecked, ElementName=ChkLinkMaster}"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,14,6"
                                     ToolTip="{loc:Str tooltip_ramp_link_sub}">
                             <CheckBox x:Name="ChkLinkSub" Style="{StaticResource ToggleStyle}"
                                       Checked="Link_Changed" Unchecked="Link_Changed"/>
-                            <TextBlock Text="{loc:Str label_ramp_link_sub}" Foreground="{StaticResource TextLightBrush}"
-                                       FontSize="12" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <rows:RowLabel Text="{loc:Str label_ramp_link_sub}" Emblem="Loud" Margin="6,0,0,0" IsOn="{Binding IsChecked, ElementName=ChkLinkSub}"/>
                         </StackPanel>
                         <!-- Brain Drain rides the ramp like the spiral does. The BLUR strength, not
                              the audio trigger rate - see RampLinkBrainDrain. -->
@@ -267,10 +254,10 @@
                                     ToolTip="{loc:Str tooltip_ramp_link_braindrain}">
                             <CheckBox x:Name="ChkLinkBrainDrain" Style="{StaticResource ToggleStyle}"
                                       Checked="Link_Changed" Unchecked="Link_Changed"/>
-                            <TextBlock Text="{loc:Str label_braindrain}" Foreground="{StaticResource TextLightBrush}"
-                                       FontSize="12" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <rows:RowLabel Text="{loc:Str label_braindrain}" Emblem="Fog" Margin="6,0,0,0" IsOn="{Binding IsChecked, ElementName=ChkLinkBrainDrain}"/>
                         </StackPanel>
                     </WrapPanel>
+                    </feat:OptionSection>
                 </StackPanel>
             </Grid>
         </Border>

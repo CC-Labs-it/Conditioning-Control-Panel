@@ -1668,6 +1668,10 @@ namespace ConditioningControlPanel.Services
                         ForceSkillsReset = settings.PendingSkillsResetAck ? (bool?)false : null
                     };
 
+                    // The balance this request carries, captured with its level and bubble count:
+                    // the reply handler compares it with the wallet then (V2WalletNet sentSp).
+                    int sentSkillPoints = v2SyncData.SkillPoints;
+
                     var v2Request = new HttpRequestMessage(HttpMethod.Post, $"{ProxyBaseUrl}/v2/user/sync");
                     AddAuthHeader(v2Request);
                     var v2Body = JsonConvert.SerializeObject(v2SyncData);
@@ -1828,8 +1832,12 @@ namespace ConditioningControlPanel.Services
                             // the balance (policy: it is permanent, and since the Descent so is the tree it
                             // buys); the raise-only side also shields it from an older server that still
                             // zeroes skill_points at rollover.
+                            // sentSp: the balance this request carried. Equal to the wallet now = no
+                            // credit since, so the reply is the booked balance (ccp-bugs #1680). A
+                            // season reset reply keeps raise-only.
                             if (ApplySyncWallet(App.Settings?.Current, unifiedId!, v2Result.SkillPoints.Value,
-                                    V2WalletNet.ParseNet(v2Result.WalletNet)))
+                                    V2WalletNet.ParseNet(v2Result.WalletNet),
+                                    v2Result.LevelReset == true ? null : sentSkillPoints))
                                 App.Settings?.Save();
                         }
 
@@ -3167,7 +3175,7 @@ namespace ConditioningControlPanel.Services
                 {
                     App.Logger?.Information("Skill tree sync: Skill points server={Server}, local={Local} — taking max ({Max})",
                         cloudProfile.SkillPoints.Value, settings.SkillPoints, maxPoints);
-                    settings.SkillPoints = maxPoints;
+                    Services.Prizes.SparklesLedger.Write(settings, maxPoints, Services.Prizes.SparkleSource.Synced);
                     needsSave = true;
                 }
             }
@@ -3777,18 +3785,18 @@ namespace ConditioningControlPanel.Services
         /// request left. The setter's PropertyChanged is what repaints the wallet. Returns true when
         /// anything changed and needs saving.
         /// </summary>
-        internal static bool ApplySyncWallet(AppSettings? live, string syncAccount, int serverSp, int? replyNet)
+        internal static bool ApplySyncWallet(AppSettings? live, string syncAccount, int serverSp, int? replyNet, int? sentSp = null)
         {
             if (live == null) return false;
             var same = string.Equals(live.UnifiedId, syncAccount, StringComparison.Ordinal);
             int? seen = live.WalletNetSeen.TryGetValue(syncAccount, out var stored) ? stored : null;
-            var step = V2WalletNet.Decide(same, replyNet, seen, serverSp, live.SkillPoints);
+            var step = V2WalletNet.Decide(same, replyNet, seen, serverSp, live.SkillPoints, sentSp);
             var changed = false;
             if (step.NextSp != live.SkillPoints)
             {
                 App.Logger?.Information("V2 Sync: Skill points server={Server}, local={Local}, net={Net}, stored net={Seen} -> {Next}",
                     serverSp, live.SkillPoints, replyNet, seen, step.NextSp);
-                live.SkillPoints = step.NextSp;
+                Services.Prizes.SparklesLedger.Write(live, step.NextSp, Services.Prizes.SparkleSource.Synced);
                 changed = true;
             }
             if (same && step.StoreNet is { } net && seen != net)
@@ -3813,7 +3821,7 @@ namespace ConditioningControlPanel.Services
                 settings.UnlockedSkills?.Count ?? 0, refundedPoints);
 
             settings.UnlockedSkills = new List<string>();
-            settings.SkillPoints = refundedPoints;
+            Services.Prizes.SparklesLedger.Write(settings, refundedPoints, Services.Prizes.SparkleSource.SkillTree);
             App.Settings?.Save();
         }
 
@@ -3878,7 +3886,7 @@ namespace ConditioningControlPanel.Services
         internal static void ApplyPurchaseResult(AppSettings settings, int? serverSkillPoints, List<string>? serverSkills)
         {
             if (serverSkillPoints.HasValue)
-                settings.SkillPoints = serverSkillPoints.Value;
+                Services.Prizes.SparklesLedger.Write(settings, serverSkillPoints.Value, Services.Prizes.SparkleSource.SkillTree);
             if (serverSkills != null)
             {
                 // Merge: take union to never lose skills
@@ -4029,7 +4037,7 @@ namespace ConditioningControlPanel.Services
                         {
                             App.Logger?.Information("Skill purchase: adopting server balance {Server} over local {Local} after a balance refusal",
                                 adopted.Value, settings.SkillPoints);
-                            settings.SkillPoints = adopted.Value;
+                            Services.Prizes.SparklesLedger.Write(settings, adopted.Value, Services.Prizes.SparkleSource.SkillTree);
                             App.Settings?.Save();
                         }
                     }
@@ -4366,6 +4374,7 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.PatreonMember),
             nameof(AppSettings.PostGrants),
             nameof(AppSettings.ServerPaidUntil),
+            nameof(AppSettings.PassEndsUtc),
             // Names a baked Rain clip pack folder on this PC; another PC has no such folder.
             nameof(AppSettings.RainPackHash),
             // Frame and avatar equip state: what THIS PC owes the server and last saw of it.
@@ -4379,6 +4388,10 @@ namespace ConditioningControlPanel.Services
             nameof(AppSettings.WalletNetSeen),
             // The one-time "online media is official" note: this PC saw it, not the account.
             nameof(AppSettings.ScrolllerOfficialNoteSeen),
+            // The weekly free Super try is machine-wide: a restore must not hand back a spent week.
+            nameof(AppSettings.SuperPreviewUsedWeek),
+            // Which Studio option sections are open: how this PC's screen looks, nobody's setting.
+            nameof(AppSettings.StudioSectionsOpen),
         };
 
         /// <summary>
@@ -4439,6 +4452,7 @@ namespace ConditioningControlPanel.Services
             restored.PatreonMember = current.PatreonMember;
             restored.PostGrants = current.PostGrants;
             restored.ServerPaidUntil = current.ServerPaidUntil;
+            restored.PassEndsUtc = current.PassEndsUtc;
             restored.ModPersonalityPreset = current.ModPersonalityPreset; // the setter copies
             restored.ScrolllerOfficialNoteSeen = current.ScrolllerOfficialNoteSeen;
             restored.RainPackHash = current.RainPackHash;
@@ -4448,6 +4462,8 @@ namespace ConditioningControlPanel.Services
             restored.RainLookPushOwed = current.RainLookPushOwed;
             restored.RainLookAgreedUtc = current.RainLookAgreedUtc;
             restored.WalletNetSeen = current.WalletNetSeen;
+            restored.SuperPreviewUsedWeek = current.SuperPreviewUsedWeek;
+            restored.StudioSectionsOpen = new Dictionary<string, bool>(current.StudioSectionsOpen);
             // A backup over budget leaves out the per-file asset lists (SettingsBackupBudget), so
             // an empty list in the restore may just mean "not carried": keep this PC's own.
             if (restored.DisabledAssetPaths.Count == 0 && current.DisabledAssetPaths.Count > 0)

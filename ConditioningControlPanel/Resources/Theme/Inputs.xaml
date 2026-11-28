@@ -105,11 +105,15 @@
                         </ToggleButton>
 
                         <!-- Selection box. Sits in column 0 only so long text stops at
-                             the arrow instead of running under it. -->
+                             the arrow instead of running under it. ContentTemplateSelector
+                             carries DisplayMemberPath into the closed box (WPF implements it
+                             as an internal ItemTemplateSelector, the stock template binds it
+                             the same way); without it the box shows ToString(), ccp-bugs #1741. -->
                         <ContentPresenter x:Name="ContentSite" Grid.Column="0"
                                           IsHitTestVisible="False"
                                           Content="{TemplateBinding SelectionBoxItem}"
                                           ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                          ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
                                           ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
                                           Margin="{TemplateBinding Padding}"
                                           HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"

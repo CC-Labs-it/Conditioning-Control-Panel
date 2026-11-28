@@ -42,6 +42,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("personality-studio", _ => Dialogs.PersonalityStudio.CloseForPanic()),
             new("deeper-editor-error", _ => MainShellWindow.CloseDeeperEditorErrors()),
             new("deeper-tutorial", _ => Deeper.DeeperEditorWindow.StopTutorialContinuationForPanic()),
+            new("lights-down", _ => Overlays.LightsDownOverlay.CloseAll()), // WPF LightsDownService.cs:89
             new("help-video", _ => HelpVideoWindow.CloseCurrent(forPanic: true)), // Stricter than WPF MainWindow.xaml.cs:2017: include tutorial media in stop-all.
             new("emi-ring", _ => EmiDesk.EmiDeskService.Instance.Window?.CloseRing()), // stricter safety: fold on every panic route
             // Stricter than WPF MainWindow.Patreon.cs:1544: panic discards pending trigger edits.
@@ -56,6 +57,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("deeper-nudge", MainShellWindow.StopVideoEnhanceNudgeForPanic),
             new("online-licence", MainShellWindow.CloseOnlineLicenceCardForPanic),   // stricter, as upgrade-intro: closes unseen, owed next launch
             new("first-show", _ => WelcomeShow.FirstShowService.Stop()),   // WPF MainWindow.xaml.cs:1553, before CancelPendingAi
+            new("super-preview", _ => global::ConditioningControlPanel.Avalonia.Controls.Super.SuperPreview.End(panic: true)),   // WPF MainWindow.xaml.cs:1635: the weekly try is cut
             // WPF KillAllAudio App.xaml.cs:1847 stops Flash; stamp dismissal is stricter.
             new("quest-stamps", sh => sh?.StopQuestStampsForPanic()),   // #3235 HideStampPopup, then the stamped pop (flash, scale) resets
             new("quest-voice", _ => ConditioningControlPanel.Services.Flash.FlashCelebrationVoice.Stop()),
@@ -144,9 +146,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("scheduler", sh => sh?.Scheduler.NoteManualStop(CoreSettings.Current, sh.SchedulerNow())),
             new("event-fx", sh => sh?.StopEventFx()), // release transient celebration surfaces
             new("engine", _ => MainShellWindow.StopEngine(),
-                After: ["companion-audio", "audio-playlist", "ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task", "browser-media", "deeper-player", "scheduler"]),
+                After: ["lights-down", "companion-audio", "audio-playlist", "ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task", "browser-media", "deeper-player", "scheduler"]),
+            new("super-stage", _ => global::ConditioningControlPanel.Services.Super.SuperStageHost.Stop(), After: ["engine"]),
+            new("undertow", _ => Overlays.UndertowOverlay.Stop()), // WPF BrainDrainLayer.ReleaseCaptures -> StopUndertow
+            new("brain-drain", _ => Overlays.BrainDrainOverlay.CloseAll()), // WPF StartStop.cs:531
+            new("bouncing-text", _ => Overlays.BouncingTextOverlay.Stop()), // WPF BouncingTextService.cs:169-171; also standalone runs
             new("bank-fx", sh => sh?.StopBankFx()), // WPF BankFx.cs:635 abort contract; P06
-            new("bubble-host", _ => { Overlays.BubblePayloadHost.Stop(); Overlays.BubbleOverlay.Stop();
+            new("bubble-host", _ => { Overlays.BubblePayloadHost.Stop(); Overlays.BubbleOverlay.EndChaos(); Overlays.BubbleOverlay.Stop();
                 Overlays.PinkFilterOverlay.CloseAll(); Overlays.SpiralOverlay.CloseAll(); }),
             new("chaster-trailer", _ => Tabs.ChasterTabView.StopTrailersForPanic()),
             new("voice-overlays", _ => { Overlays.SpiralOverlay.Stop(); Overlays.SpiralOverlay.CloseAll(); Overlays.PinkFilterOverlay.Stop(); }, After: ["engine"]),

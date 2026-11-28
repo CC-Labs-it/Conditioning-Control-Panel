@@ -281,7 +281,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
             // to "play" when Phase 6 retired the Lab page into the Play door's card wall.
             // ("lab" would still resolve - ExpandDoorForTab canonicalises the alias - but a door
             // map that names a deleted view is how the next reader learns the wrong thing.)
-            ["BtnLab"] = "play",
+            ["BtnLab"] = "playeyes",   // declutter wave 2: "play" opens the launcher now
             ["BtnPatreonExclusives"] = "exclusives",
 
             // The rest of the rail, backfilled. Every key below is a live x:Name in
@@ -810,7 +810,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
                                   "Locked cards stay visible on purpose - the card tells you what it is before you " +
                                   "ever decide whether you want it.",
                     TargetElementName = "DoorPlay",
-                    RequiresTab = "play",
+                    RequiresTab = "playeyes",
                     TextPosition = TutorialStepPosition.Right
                 },
                 new TutorialStep
@@ -1152,7 +1152,7 @@ namespace ConditioningControlPanel.Avalonia.Tours
                                   "Locked cards stay visible on purpose, so you can see what a thing is before " +
                                   "you decide whether you want it.",
                     TargetElementName = "DoorPlay",
-                    RequiresTab = "play",
+                    RequiresTab = "playeyes",
                     TextPosition = TutorialStepPosition.Right
                 },
                 new TutorialStep

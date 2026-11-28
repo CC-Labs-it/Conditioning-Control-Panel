@@ -39,7 +39,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var previous = _drawingOwner;
             try { _drawingOwner = owner; draw(); } finally { _drawingOwner = previous; }
         }
-        internal static void CloseOwned(object owner) { if (ReferenceEquals(_visibleOwner, owner)) CloseAll(); }
+        // A retired one-shot only blanks the cards (WPF BlankCards); the Afterglow line stays.
+        internal static void CloseOwned(object owner) { if (ReferenceEquals(_visibleOwner, owner)) { ClearCards(); ReleaseHosts(); } }
         // WPF SubliminalService.cs:609-629: notify only after the delayed show is admitted.
         internal static event Action? Displayed;
         private static bool _warnedUnavailable;
@@ -122,6 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (w.IsVisible && w.IsFlashing && w.Content is Grid grid) AddText(rects, grid);
             foreach (var card in HostedCards)
                 if (card.Opacity > 0.01) AddText(rects, card);
+            rects.AddRange(AfterglowLineOverlay.ActiveTextRects());   // the Afterglow line is drawn text too
             return rects;
         }
 
@@ -253,11 +255,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static Action<Window> StackOverVideo = card =>
             X11Overlay.SlotAboveVideo(card, MandatoryVideoOverlay.Instance.Windows);
 
-        /// <summary>Take every card off screen now (WPF <c>TearDownSurfaces</c> on Stop).</summary>
+        /// <summary>Take every card off screen now (WPF <c>TearDownSurfaces</c> on Stop); every Afterglow ghost goes with them.</summary>
         public static void CloseAll()
         {
             ClearCards();
             ReleaseHosts();
+            AfterglowLineOverlay.StopAll();
+        }
+
+        /// <summary>WPF ShowSubliminalVisuals with restCard: Afterglow runs alone and the word is up as its
+        /// ghost, so no card is drawn; the show still counts (bark, Displayed, the remote screen feed).</summary>
+        internal static void Rested()
+        {
+            Platform.BarkHead.Engine?.Raise("SubliminalDisplayed");
+            Displayed?.Invoke();
+            ConditioningControlPanel.Services.Remote.RemoteScreenFeed.Word();
         }
     }
 

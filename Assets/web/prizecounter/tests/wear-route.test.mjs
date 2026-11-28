@@ -13,7 +13,7 @@ const GARAGE = [...DESKTOP, 'kart'];
 test('wearFamily: every shop family by id prefix, Back Room prizes none', () => {
   const want = {
     'rain.dress.rose-flare': 'rain', 'desk.hat.party': 'desk', 'desk.toy.rubber-duck': 'desk',
-    'chess.set.royal-capes': 'chess', 'chess.insignia.star': 'chess', 'prime.banner.arena': 'chess',
+    'chess.set.royal-capes': 'chess', 'chess.insignia.star': 'chess', 'prime.banner.arena': 'chess', 'chess.finish.marble': 'chess',
     'profile.frame.lace': 'profile', 'profile.avatar.emi-pixel': 'profile', 'prime.frame.room-host': 'profile',
     'kart.outfit.pit-crew': 'kart', 'kart.umbrella.lace': 'kart', 'prime.paint.host-gold': 'kart', 'prime.trail.podium': 'kart',
     jackpot_remix: null, rt_demo: null, '': null,

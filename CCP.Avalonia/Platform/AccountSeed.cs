@@ -7,6 +7,8 @@ using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Startup;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services;
+using ConditioningControlPanel.Services.Super;
+using ConditioningControlPanel.Models;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
@@ -56,6 +58,7 @@ internal static class AccountSeed
             return false;
         }
         (Patreon, SubscribeStar, Discord) = (patreon, substar, discord);
+        BindSuperTierEvents(patreon, substar);
         // New providers, new reading state: no lower reading waiting for its second look, no focus read throttled.
         (Readings, FocusRefresh, _lastLowerLogged) = (new EntitlementReadings(), new EntitlementTierMonitor(), null);
         patreon.PeerDisplayName = () => discord.CustomDisplayName; // WPF PatreonService
@@ -101,6 +104,44 @@ internal static class AccountSeed
             h => { patreon.TierChanged += h; substar.TierChanged += h; },
             h => { patreon.TierChanged -= h; substar.TierChanged -= h; });
         return true;
+    }
+
+    private static Action? _attachSuperTierEvents, _detachSuperTierEvents;
+
+    private static void BindSuperTierEvents(ProviderSubscription patreon, ProviderSubscription substar)
+    {
+        _detachSuperTierEvents?.Invoke();
+        _attachSuperTierEvents = _detachSuperTierEvents = null;
+        SuperAccess.TierEventsHooked = false;
+        // WPF App.xaml.cs:560: a tier or identity change refreshes every Super lane.
+        SuperAccess.TierEventsHook = raiseAll =>
+        {
+            EventHandler<PatreonTier> tier = (_, _) => raiseAll();
+            EventHandler identity = (_, _) => raiseAll();
+            _attachSuperTierEvents = () => { patreon.TierChanged += tier; substar.TierChanged += tier; CoreAccount.UnifiedIdentityChanged += identity; };
+            _detachSuperTierEvents = () => { patreon.TierChanged -= tier; substar.TierChanged -= tier; CoreAccount.UnifiedIdentityChanged -= identity; };
+            _attachSuperTierEvents();
+            return true;
+        };
+        SuperAccess.HookTierEvents();
+    }
+
+    // A test can borrow the account seed without leaving its subscriptions or latch behind.
+    internal static Action CaptureSuperTierEvents()
+    {
+        var attach = _attachSuperTierEvents;
+        var detach = _detachSuperTierEvents;
+        var hook = SuperAccess.TierEventsHook;
+        var hooked = SuperAccess.TierEventsHooked;
+        return () =>
+        {
+            _detachSuperTierEvents?.Invoke();
+            attach?.Invoke();
+            _attachSuperTierEvents = attach;
+            _detachSuperTierEvents = detach;
+            SuperAccess.TierEventsHook = hook;
+            SuperAccess.TierEventsHooked = hooked;
+        };
     }
 
     /// <summary>WPF App.ReauthenticateAfterMergedSwapAsync: mint a fresh token from an existing provider.</summary>

@@ -648,7 +648,7 @@ namespace ConditioningControlPanel.Services
                 var refunded = points ?? s.PlayerLevel * PointsPerLevel;
                 Log.Information("V2 Sync: Force skills reset - clearing {Count} skills, setting points to {Points}", s.UnlockedSkills?.Count ?? 0, refunded);
                 s.UnlockedSkills = new List<string>();
-                s.SkillPoints = refunded;
+                global::ConditioningControlPanel.Services.Prizes.SparklesLedger.Write(s, refunded, global::ConditioningControlPanel.Services.Prizes.SparkleSource.SkillTree);
                 s.PendingSkillsResetAck = true;
             }
             else if (s.PendingSkillsResetAck && !forceReset)
@@ -665,7 +665,7 @@ namespace ConditioningControlPanel.Services
                     if (step.NextSp != live.SkillPoints)
                     {
                         Log.Information("V2 Sync: Skill points server={Server}, local={Local} - now {Next}", p, live.SkillPoints, step.NextSp);
-                        live.SkillPoints = step.NextSp;
+                        global::ConditioningControlPanel.Services.Prizes.SparklesLedger.Write(live, step.NextSp, global::ConditioningControlPanel.Services.Prizes.SparkleSource.Synced);
                     }
                     if (same && step.StoreNet is { } net && seen != net)
                         live.WalletNetSeen = new Dictionary<string, int>(live.WalletNetSeen) { [account] = net };

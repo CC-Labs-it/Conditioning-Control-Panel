@@ -1,11 +1,15 @@
 <UserControl x:Class="ConditioningControlPanel.Views.Controls.Studio.BrainDrainFeatureControl"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="clr-namespace:ConditioningControlPanel.Controls"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
              xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             xmlns:pv="clr-namespace:ConditioningControlPanel.Controls.Preview"
+             rows:RowHue.TintSliders="True"
              mc:Ignorable="d" d:DesignWidth="488">
 
     <!-- ================================================================
@@ -53,7 +57,7 @@
          from the mod repaint map (MainWindow.xaml.cs:1612-1622).
          ================================================================ -->
 
-    <StackPanel>
+    <StackPanel Grid.IsSharedSizeScope="True">
 
         <!-- HERO. Absorbs the old master-enable card: the checkbox moved into the pill
              verbatim (same name, same FieldModifier, same SessionLock marker) and its hint
@@ -143,6 +147,7 @@
                                 Background="{StaticResource SectionHueStudioBrush}"/>
                         <StackPanel Margin="16,8,16,8">
 
+                            <feat:OptionSection Key="braindrain.basics" Title="{loc:Str studio_section_basics}" Theme="Main">
                             <!-- AUDIO trigger rate, NOT the blur (#1 support cost, two suggestion
                                  threads). This row used to be labelled with the generic
                                  setting_intensity, so everyone read it as the strength of the screen
@@ -150,25 +155,27 @@
                                  BrainDrainIntensity: how often an audio clip fires. The visual dial
                                  is the next row down. Its own key now, deliberately not the shared
                                  one - other features still mean plain "Intensity" by it. -->
-                            <Grid Height="36" ToolTip="{loc:Str st4_braindrain_intensity_hint}">
+                            <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str st4_braindrain_intensity_hint}">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto" MinWidth="56"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str st4_braindrain_audio_rate}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderIntensity" x:FieldModifier="internal"
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str st4_braindrain_audio_rate}" Emblem="Often">
+                                    <rows:RowLabel.Value>
+                                        <MultiBinding Converter="{x:Static rows:RowFraction.Instance}">
+                                            <Binding Path="Value" ElementName="SliderIntensity"/>
+                                            <Binding Path="Maximum" ElementName="SliderIntensity"/>
+                                        </MultiBinding>
+                                    </rows:RowLabel.Value>
+                                </rows:RowLabel>
+                                <Slider Grid.Column="1" x:Name="SliderIntensity" feat:OptionSection.Setting="BrainDrainIntensity" x:FieldModifier="internal"
                                         feat:SessionLock.Owned="True"
                                         Minimum="0" Maximum="100" Value="50"
                                         VerticalAlignment="Center" Margin="10,0"
                                         ValueChanged="SliderIntensity_Changed"/>
-                                <TextBlock Grid.Column="2" x:Name="TxtIntensity" x:FieldModifier="internal" Text="50%"
-                                           HorizontalAlignment="Right" VerticalAlignment="Center"
-                                           FontSize="13" FontWeight="Bold" Foreground="{DynamicResource PinkBrush}"/>
+                                <rows:RowValue Grid.Column="2" x:Name="TxtIntensity" x:FieldModifier="internal" Text="50%"/>
                             </Grid>
-
-                            <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
 
                             <!-- Blur strength. The VISUAL half's dial (BrainDrainBlurStrength) - the
                                  dial above is the AUDIO trigger probability, this one is how hard the
@@ -177,75 +184,66 @@
                                  The floor is 0, not 1: 1 still drew the alpha curve's own floor, so
                                  the quietest setting was a visible haze and there was no way to keep
                                  the audio without the picture (accessibility, 2026-09-20). -->
-                            <Grid Height="36" ToolTip="{loc:Str st4_braindrain_blur_strength_hint}">
+                            <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str st4_braindrain_blur_strength_hint}">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto" MinWidth="56"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str st4_braindrain_blur_strength}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderBlurStrength" x:FieldModifier="internal"
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str st4_braindrain_blur_strength}" Emblem="Much"/>
+                                <Slider Grid.Column="1" x:Name="SliderBlurStrength" feat:OptionSection.Setting="BrainDrainBlurStrength" x:FieldModifier="internal"
                                         feat:SessionLock.Owned="True"
                                         Minimum="0" Maximum="100" Value="50"
                                         VerticalAlignment="Center" Margin="10,0"
                                         ValueChanged="SliderBlurStrength_Changed"/>
-                                <TextBlock Grid.Column="2" x:Name="TxtBlurStrength" x:FieldModifier="internal" Text="50%"
-                                           HorizontalAlignment="Right" VerticalAlignment="Center"
-                                           FontSize="13" FontWeight="Bold" Foreground="{DynamicResource PinkBrush}"/>
+                                <rows:RowValue Grid.Column="2" x:Name="TxtBlurStrength" x:FieldModifier="internal" Text="50%"/>
                             </Grid>
-
-                            <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
 
                             <!-- Melting mode. Same overlay, melt variant (BrainDrainMeltEnabled):
                                  blur + slow Perlin displacement warp. Prescribed dose. -->
-                            <Grid Height="34" ToolTip="{loc:Str st4_braindrain_melt_hint}">
+                            <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str st4_braindrain_melt_hint}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str st4_braindrain_melt}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str st4_braindrain_melt}" Emblem="Motion"
+                                               IsOn="{Binding IsChecked, ElementName=ChkMelt}"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkMelt" x:FieldModifier="internal"
                                           feat:SessionLock.Owned="True"
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkMelt_Changed" Unchecked="ChkMelt_Changed"/>
                             </Grid>
+                            </feat:OptionSection>
 
-                            <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
-
+                            <feat:OptionSection Key="braindrain.extras" Title="{loc:Str studio_section_extras}" Theme="Advanced" DefaultOpen="False">
                             <!-- Keep pictures clear (BrainDrainKeepPicturesClear): the blur tucks under
                                  CCP's own windows, so flashes, videos, lock cards and words stay sharp.
                                  Comfort knob, editable mid-session. -->
-                            <Grid Height="34" ToolTip="{loc:Str st4_braindrain_keep_clear_hint}">
+                            <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str st4_braindrain_keep_clear_hint}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str st4_braindrain_keep_clear}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str st4_braindrain_keep_clear}" Emblem="Layers"
+                                               IsOn="{Binding IsChecked, ElementName=ChkKeepClear}"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkKeepClear" x:FieldModifier="internal"
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkKeepClear_Changed" Unchecked="ChkKeepClear_Changed"/>
                             </Grid>
 
-                            <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
-
                             <!-- High refresh. Comfort/perf knob, NOT prescribed dose: deliberately
                                  unmarked so it stays editable mid-session, exactly as in the dead XAML. -->
-                            <Grid Height="34" ToolTip="{loc:Str st4_braindrain_high_refresh_hint}">
+                            <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str st4_braindrain_high_refresh_hint}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str st4_braindrain_high_refresh}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str st4_braindrain_high_refresh}" Emblem="Perf"
+                                               IsOn="{Binding IsChecked, ElementName=ChkHighRefresh}"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkHighRefresh" x:FieldModifier="internal"
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkHighRefresh_Changed" Unchecked="ChkHighRefresh_Changed"/>
                             </Grid>
-
-                            <Border Height="1" Margin="0,6" Background="{DynamicResource GlassBorderBrush}"/>
 
                             <!-- Show in screenshots (AllowOverlayCapture). The brain-drain surface
                                  is the app's ONLY capture-excluded overlay, so screenshots and OBS
@@ -253,13 +251,13 @@
                                  off. Privacy stays the default (unchecked); this is the opt-out.
                                  Comfort/privacy knob, NOT prescribed dose - deliberately unmarked
                                  so it stays editable mid-session, like High refresh above. -->
-                            <Grid Height="34" ToolTip="{loc:Str st4_braindrain_allow_capture_hint}">
+                            <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str st4_braindrain_allow_capture_hint}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str st4_braindrain_allow_capture}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str st4_braindrain_allow_capture}" Emblem="Safe"
+                                               IsOn="{Binding IsChecked, ElementName=ChkAllowCapture}"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkAllowCapture" x:FieldModifier="internal"
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkAllowCapture_Changed" Unchecked="ChkAllowCapture_Changed"/>
@@ -270,23 +268,21 @@
                                 <!-- Brain Drain's own clip volume (BrainDrainVolume, ccp-bugs #1104),
                                      multiplied with the master volume. A comfort setting, so NOT
                                      SessionLock-owned. Explicit 0-100 range (Slider defaults to Maximum=10). -->
-                                <Grid Height="36" ToolTip="{loc:Str st4_braindrain_volume_hint}">
+                                <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str st4_braindrain_volume_hint}">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto" MinWidth="56"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="{loc:Str st4_braindrain_volume}" FontSize="13" FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                    <Slider Grid.Column="1" x:Name="SliderVolume" x:FieldModifier="internal"
+                                    <rows:RowLabel Grid.Column="0" Text="{loc:Str st4_braindrain_volume}" Emblem="Loud"/>
+                                    <Slider Grid.Column="1" x:Name="SliderVolume" feat:OptionSection.Setting="BrainDrainVolume" x:FieldModifier="internal"
                                             Minimum="0" Maximum="100" Value="100"
                                             VerticalAlignment="Center" Margin="10,0"
                                             ValueChanged="SliderVolume_Changed"/>
-                                    <TextBlock Grid.Column="2" x:Name="TxtVolume" x:FieldModifier="internal" Text="100%"
-                                               HorizontalAlignment="Right" VerticalAlignment="Center"
-                                               FontSize="13" FontWeight="Bold" Foreground="{DynamicResource PinkBrush}"/>
+                                    <rows:RowValue Grid.Column="2" x:Name="TxtVolume" x:FieldModifier="internal" Text="100%"/>
                                 </Grid>
                             </feat:MoreFold>
+                            </feat:OptionSection>
 
                         </StackPanel>
                     </Grid>
@@ -404,31 +400,64 @@
                                 Click="BtnOpenAudioFolder_Click"/>
                     </Grid>
                 </Border>
+
+                <!-- The gold V2 box (Controls/SuperBox): Super switch, BASIC sign, weekly try. -->
+                <ctl:SuperBox x:Name="SuperBoxMain" Effect="Undertow">
+                    <!-- Undertow's options, shown while Undertow is the pick (BrainDrainFeatureControl.Undertow.cs). Every default is the stock lens (CCP.Core/Super/UndertowOptions). -->
+                    <StackPanel x:Name="UndertowRows" Visibility="Collapsed" rows:RowHue.Hue="#FFE08A"
+                                Loaded="UndertowRows_Loaded" Unloaded="UndertowRows_Unloaded">
+                        <Border Height="1" Background="#33FFE08A" Margin="0,2,0,6"/>
+                        <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_super_undertow_size}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto" MinWidth="56"/>
+                            </Grid.ColumnDefinitions>
+                            <rows:RowLabel Grid.Column="0" Text="{loc:Str super_undertow_size}" Emblem="Big"/>
+                            <Slider Grid.Column="1" x:Name="SliderUndertowSize" Minimum="50" Maximum="150" Value="100"
+                                    feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="10,0"
+                                    ValueChanged="SliderUndertowSize_Changed"/>
+                            <rows:RowValue Grid.Column="2" x:Name="TxtUndertowSize" Text="100%"/>
+                        </Grid>
+                        <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_super_undertow_shrink}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto" MinWidth="56"/>
+                            </Grid.ColumnDefinitions>
+                            <rows:RowLabel Grid.Column="0" Text="{loc:Str super_undertow_shrink}" Emblem="Fast"/>
+                            <Slider Grid.Column="1" x:Name="SliderUndertowShrink" Minimum="0" Maximum="200" Value="100"
+                                    feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="10,0"
+                                    ValueChanged="SliderUndertowShrink_Changed"/>
+                            <rows:RowValue Grid.Column="2" x:Name="TxtUndertowShrink" Text="100%"/>
+                        </Grid>
+                        <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_super_undertow_widen}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto" MinWidth="56"/>
+                            </Grid.ColumnDefinitions>
+                            <rows:RowLabel Grid.Column="0" Text="{loc:Str super_undertow_widen}" Emblem="Click"/>
+                            <Slider Grid.Column="1" x:Name="SliderUndertowWiden" Minimum="0" Maximum="200" Value="100"
+                                    feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="10,0"
+                                    ValueChanged="SliderUndertowWiden_Changed"/>
+                            <rows:RowValue Grid.Column="2" x:Name="TxtUndertowWiden" Text="100%"/>
+                        </Grid>
+                    </StackPanel>
+                </ctl:SuperBox>
             </StackPanel>
 
-            <!-- SIDE ART. The art is the Border's BACKGROUND, not a child Image: a Border clips its
-                 Background to CornerRadius but does NOT clip child content, so a child Image would
-                 square off the rounded corners (round-2 lesson). Same plate the hero uses. -->
+            <!-- SIDE ART -> LIVE PREVIEW (owner 2026-11-24): the card is a framed slice of a desktop where
+                 the effect plays with fake content (Controls/Preview/EffectPreview.cs). The mod art brush stays
+                 (ApplyFeatureArt writes it) but is parked in Tag, so nothing shows behind the preview; the card
+                 keeps its size and its AdaptiveSideArt collapse. -->
             <Border Grid.Column="1" Margin="10,0,0,0" CornerRadius="14"
                     BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
-                    VerticalAlignment="Stretch" MinHeight="200">
-                <Border.Background>
-                    <ImageBrush x:Name="SideArtBrush" Stretch="UniformToFill">
-                        <ImageBrush.ImageSource>
-                            <BitmapImage UriSource="pack://application:,,,/Resources/features/brain_drain.png"
-                                         DecodePixelWidth="800"/>
-                        </ImageBrush.ImageSource>
-                    </ImageBrush>
-                </Border.Background>
-                <!-- Scrim so the plate sits under the page instead of fighting it. -->
-                <Border CornerRadius="12">
-                    <Border.Background>
-                        <LinearGradientBrush StartPoint="0,1" EndPoint="0,0">
-                            <GradientStop Color="#66000000" Offset="0"/>
-                            <GradientStop Color="#00000000" Offset="0.45"/>
-                        </LinearGradientBrush>
-                    </Border.Background>
-                </Border>
+                    Background="#06050D" VerticalAlignment="Stretch" MinHeight="200">
+                <Border.Tag>
+                    <ImageBrush x:Name="SideArtBrush" Stretch="UniformToFill"/>
+                </Border.Tag>
+                <pv:EffectPreview Scene="braindrain"/>
             </Border>
         </Grid>
 

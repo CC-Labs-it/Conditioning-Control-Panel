@@ -127,7 +127,7 @@ namespace ConditioningControlPanel.Controls.Header
             var level = MotionFx.Level;
             var perf = PerformanceProfile.CurrentTier;
             var motion = PremiumSparkRules.MotionFrom(level, PerformanceProfile.AllowAmbientMotion(perf));
-            if (Services.Diagnostics.FxBisect.Off("spark")) motion = SparkMotion.Off;
+            if (Services.Diagnostics.FxBisect.Off("spark") || MotionFx.PanelQuiet) motion = SparkMotion.Off;
             Apply(tier, motion, MotionFx.AllowParticles);
         }
 

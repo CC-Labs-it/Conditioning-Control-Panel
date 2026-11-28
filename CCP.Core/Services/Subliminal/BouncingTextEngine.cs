@@ -16,7 +16,8 @@ public readonly record struct BounceStep(
     bool BouncedX,
     bool CornerHit,
     bool TextChanged,
-    (byte R, byte G, byte B) ColorBeforeBounce);
+    (byte R, byte G, byte B) ColorBeforeBounce,
+    bool BouncedY = false);
 
 /// <summary>
 /// The portable half of <c>BouncingTextService</c>: DVD-screensaver motion, wall and corner
@@ -65,6 +66,23 @@ public sealed class BouncingTextEngine
         public bool SquashAxisX;        // true = hit a vertical wall (X velocity reversed)
         public double BurstTimer = -1;  // seconds since last corner hit; <0 = idle
         public double OverX, OverY;     // drawn reach past the measured box (last frame's transform)
+        // Super Scrawl state. The engine only keeps Cruise current; the head's Scrawl code drives the rest.
+        public double Cruise;           // the speed this logo bounces at (Scrawl relaxes back to it)
+        public double SlamT = -1;       // seconds into a click slam; <0 = idle
+        public double SlamX, SlamY, SlamW; // where the slam lands (centre of the word's monitor) and that monitor's width
+        public bool SlamLanded;
+        public ConditioningControlPanel.SuperCore.FlingState Fling; // against the Whirlpool: free, caught or thrown
+    }
+
+    /// <summary>
+    /// The speed slider (1-10) as a multiplier on the 180-300 DIP/s base. 1-5 is the old 0.1-0.5;
+    /// 6-10 climb to 2.0 (owner: double the top end), so the default 5 and everything below it keep
+    /// their feel and only the fast end moves.
+    /// </summary>
+    public static double SpeedMultiplier(int slider)
+    {
+        int s = Math.Clamp(slider, 1, 10);
+        return s <= 5 ? s / 10.0 : 0.5 + (s - 5) * 0.3;
     }
 
     private readonly Random _random;
@@ -142,10 +160,11 @@ public sealed class BouncingTextEngine
             // Random velocity in DIP/second (speed based on setting). The base is the old
             // 3-5 px/tick value scaled by 60 so the on-screen feel is unchanged at 60 FPS, but
             // motion is delta-time driven so it stays correct at any rate.
-            var speed = settings.BouncingTextSpeed / 10.0 * Safety.GentleVisuals.Speed; // 1-10 maps to 0.1-1.0 multiplier (x gentle speed, 1 when off)
+            var speed = SpeedMultiplier(settings.BouncingTextSpeed) * Safety.GentleVisuals.Speed; // x gentle speed, 1 when off
             var baseSpeed = (3.0 + _random.NextDouble() * 2.0) * 60.0; // 180-300 DIP/sec
             logo.VelX = baseSpeed * speed * (_random.Next(2) == 0 ? 1 : -1);
             logo.VelY = baseSpeed * speed * (_random.Next(2) == 0 ? 1 : -1);
+            logo.Cruise = Math.Sqrt(logo.VelX * logo.VelX + logo.VelY * logo.VelY);
 
             logo.Color = NextColor(logo, settings);
             _logos.Add(logo);
@@ -266,7 +285,7 @@ public sealed class BouncingTextEngine
             }
         }
 
-        return new BounceStep(bounced, bouncedX, cornerHit, textChanged, colorBefore);
+        return new BounceStep(bounced, bouncedX, cornerHit, textChanged, colorBefore, bouncedY);
     }
 
     /// <summary>15 XP a bounce, at most one award per 2s and 150 XP a minute across every logo.
@@ -371,7 +390,7 @@ public sealed class BouncingTextEngine
     /// <summary>Re-roll every logo's speed to the current setting, keeping its direction.</summary>
     public void RefreshSpeed(AppSettings settings)
     {
-        var speed = settings.BouncingTextSpeed / 10.0 * Safety.GentleVisuals.Speed;
+        var speed = SpeedMultiplier(settings.BouncingTextSpeed) * Safety.GentleVisuals.Speed;
         foreach (var l in _logos)
         {
             var currentSpeed = Math.Sqrt(l.VelX * l.VelX + l.VelY * l.VelY);
@@ -379,6 +398,7 @@ public sealed class BouncingTextEngine
             var scale = targetSpeed / Math.Max(0.1, currentSpeed);
             l.VelX *= scale;
             l.VelY *= scale;
+            l.Cruise = targetSpeed;
         }
     }
 

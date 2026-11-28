@@ -993,7 +993,7 @@ public sealed partial class GameWindowTests
     [Fact]
     public void ClassicDoor_OpensThe2DHostAndLauncherTile() => RunRace("rt.original.03", (launcher, _, _) =>
     {
-        launcher.BuildTiles();
+        launcher.SeatDoorPage(LauncherDoor.Games);   // declutter: the tiles live behind the Games door
         Assert.Contains(launcher.FindControl<global::Avalonia.Controls.Primitives.UniformGrid>("GamesGrid")!.Children,
             c => Equals(c.Tag, "raceclassic"));
         var w = Assert.IsType<GameWindow>(GameWindow.Launch("raceclassic"));
@@ -1109,7 +1109,7 @@ public sealed partial class GameWindowTests
     {
         var tracks = new HashSet<string> { "rt.original.03" };
         RacingAccess.IsGrantedProvider = tracks.Contains;
-        launcher.BuildTiles();
+        launcher.SeatDoorPage(LauncherDoor.Games);   // declutter: the tiles live behind the Games door
         var w = OpenRetiredRace();
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
@@ -1873,7 +1873,7 @@ public sealed partial class GameWindowTests
             // DtRH is a Basic door now (DtrhGate demands premium), so a lapse drops Basic too.
             CoreEntitlement.HasLabProvider = () => false;   // RunDtrh restores it
             CoreEntitlement.HasPremiumProvider = () => false;   // RunDtrh restores it
-            shell.ShowTab("play");
+            shell.ShowTab("playeyes");
             Dispatcher.UIThread.RunJobs();
             shell.Named<global::Avalonia.Controls.Control>("PlayTab")!
                 .FindControl<global::Avalonia.Controls.Button>("BtnPlayDtrh")!
@@ -1895,7 +1895,7 @@ public sealed partial class GameWindowTests
         CoreEntitlement.HasPremiumProvider = () => premium;
         CoreEntitlement.IsFreeTodayProvider = key => key == freeKey;
         shell.Show();
-        shell.ShowTab("play");
+        shell.ShowTab("playeyes");
         Dispatcher.UIThread.RunJobs();
         var play = shell.Named<global::ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView>("PlayTab")!;
         var band = play.FindControl<global::Avalonia.Controls.Border>("PlayLockDtrh")!;

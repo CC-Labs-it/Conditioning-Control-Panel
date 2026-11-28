@@ -16,29 +16,60 @@ namespace ConditioningControlPanel.Controls.Leash;
 /// </summary>
 internal sealed class LeashCutConfirmWindow : Window
 {
+    internal const string CutTag = "leash-cut-confirm";
+
     private static LeashCutConfirmWindow? _open;
+
+    /// <summary>The prompt on screen, if any.</summary>
+    internal static LeashCutConfirmWindow? Current => _open;
+
+    /// <summary>Tests only: replaces Show/Activate (isNew = a fresh window) so nothing takes the foreground.</summary>
+    internal static Action<LeashCutConfirmWindow, bool>? PresentForTests;
+
+    internal string ConfirmTag { get; }
+    internal Button YesButton { get; }
 
     public static void Ask(string? holderName, Action onYes) => Show(
         Loc.Get("leash_cut_confirm_title"),
         string.IsNullOrWhiteSpace(holderName) ? Loc.Get("leash_cut_confirm_body_anon") : Loc.GetF("leash_cut_confirm_body", holderName!.Trim()),
-        Loc.Get("leash_cut_confirm_yes"), Loc.Get("leash_cut_confirm_no"), "leash-cut-confirm", onYes);
+        Loc.Get("leash_cut_confirm_yes"), Loc.Get("leash_cut_confirm_no"), CutTag, onYes);
 
     /// <summary>Any other leash yes/no (the holder letting go).</summary>
     public static void Confirm(string title, string body, string yes, string no, string tag, Action onYes)
         => Show(title, body, yes, no, tag, onYes);
 
+    /// <summary>One prompt at a time, but the user's own cut always wins: the sub cuts the leash any
+    /// time. An open Let go confirm (the user holding a friend) is closed first, so it can never block
+    /// the cut, and its Yes can never stand in for it. Any other request while a prompt is up only
+    /// brings that prompt forward, so a Let go never replaces an open cut prompt.</summary>
+    internal static bool ReplacesOpen(string? openTag, string newTag) =>
+        openTag != null && newTag == CutTag && openTag != CutTag;
+
     private static void Show(string title, string body, string yes, string no, string tag, Action onYes)
     {
-        if (_open != null) { try { _open.Activate(); } catch { } return; }
+        if (_open is { } open)
+        {
+            if (!ReplacesOpen(open.ConfirmTag, tag)) { Present(open, isNew: false); return; }
+            _open = null;
+            try { open.Close(); } catch { }
+        }
         var w = new LeashCutConfirmWindow(title, body, yes, no, tag, onYes);
         _open = w;
-        w.Closed += (_, _) => _open = null;
+        w.Closed += (_, _) => { if (ReferenceEquals(_open, w)) _open = null; };
+        Present(w, isNew: true);
+    }
+
+    private static void Present(LeashCutConfirmWindow w, bool isNew)
+    {
+        if (PresentForTests is { } t) { t(w, isNew); return; }
+        if (!isNew) { try { w.Activate(); } catch { } return; }
         w.Show();
         w.Activate();
     }
 
     private LeashCutConfirmWindow(string titleText, string bodyText, string yesText, string noText, string tag, Action onYes)
     {
+        ConfirmTag = tag;
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
@@ -71,6 +102,7 @@ internal sealed class LeashCutConfirmWindow : Window
         yes.Focusable = false;
         yes.Margin = new Thickness(10, 0, 0, 0);
         yes.Tag = tag + ":yes";
+        YesButton = yes;
         yes.Click += (_, _) =>
         {
             Close();

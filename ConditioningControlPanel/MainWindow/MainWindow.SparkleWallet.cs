@@ -6,16 +6,31 @@ using ConditioningControlPanel.Services;
 
 namespace ConditioningControlPanel;
 
-public partial class MainWindow
+public partial class MainWindow : Services.PrizeCounter.ICounterSheetDoor
 {
+    // The counter sheet slides down under the header bar the wallet sits in (the wallet's Grid, inside
+    // the row-1 header Border; render tests pin that Border's text, so it carries no name). It lives on
+    // the root grid, outside the Viewbox, so the page gets native pixels; under the toasts and the edge.
+    private Controls.CounterSheetView? _counterSheet;
+    Controls.CounterSheetView? Services.PrizeCounter.ICounterSheetDoor.CounterSheet => _counterSheet;
+
+    private void MountCounterSheet()
+    {
+        if (_counterSheet != null || (HeaderSparkleWallet.Parent as FrameworkElement)?.Parent is not FrameworkElement bar) return;
+        _counterSheet = Controls.CounterSheetView.Mount(this, RootGrid, bar,
+            Services.PrizeCounter.CounterSheetRules.FromWallet, zIndex: 9990, walletChip: () => HeaderSparkleWallet);
+    }
+
     private AppSettings? _sparkleWalletSettings;
     private bool _sparkleWalletActive;
 
     private void InitializeSparkleWallet()
     {
         _sparkleWalletActive = true;
+        MountCounterSheet();
         App.Settings.CurrentReplaced += ReplaceSparkleWalletSettings;
         SparklePointRewards.Awarded += OnSparklePointAwarded;
+        InitializeSparkleFly();
         HeaderSparkleWallet.VisitRequested += VisitFromSparkleWallet;
         HeaderSparkleWallet.CounterRequested += OpenCounterFromSparkleWallet;
         Closed += (_, _) => ShutdownSparkleWallet();
@@ -77,7 +92,18 @@ public partial class MainWindow
     private void RefreshSparkleWalletBalance()
     {
         if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(new Action(RefreshSparkleWalletBalance)); return; }
-        if (_sparkleWalletActive) HeaderSparkleWallet.SetBalance(App.Settings.Current.SkillPoints);
+        if (_sparkleWalletActive) HeaderSparkleWallet.SetBalance(HeaderWalletValue(App.Settings.Current.SkillPoints).Value);
+    }
+
+    /// <summary>What a header wallet shows (<see cref="Services.PrizeCounter.SheetHostRules.HeaderWallet"/>): the
+    /// real balance, or in the DEBUG shop preview the preview's own wallet.</summary>
+    internal static (bool Show, int Value, bool PreviewMark) HeaderWalletValue(int real)
+    {
+        bool preview = false; int previewSp = 0;
+#if DEBUG
+        if (Services.PrizeCounter.ShopPreviewBackend.Enabled) { preview = true; previewSp = Services.PrizeCounter.ShopPreviewBackend.Shared.Sp; }
+#endif
+        return Services.PrizeCounter.SheetHostRules.HeaderWallet(preview, App.IsLoggedIn, real, previewSp);
     }
 
     private void OnSparklePointAwarded(object? sender, SparklePointAward award)
@@ -88,7 +114,9 @@ public partial class MainWindow
             if (!_sparkleWalletActive || !ReferenceEquals(App.Settings.Current, creditedSettings)) return;
             // Read the current ledger: another purchase or award may have occurred while queued.
             RefreshSparkleWalletBalance();
-            if (IsVisible && WindowState != WindowState.Minimized) HeaderSparkleWallet.ShowReward(award.Amount);
+            // One cue per credit: when stars fly (or will fly on return) for it, the badge stays quiet.
+            if (IsVisible && WindowState != WindowState.Minimized && !Services.Prizes.SparkleFlightDirector.Covers(award.Balance))
+                HeaderSparkleWallet.ShowReward(award.Amount);
         }
         if (Dispatcher.CheckAccess()) Present();
         else Dispatcher.BeginInvoke(new Action(Present));
@@ -104,6 +132,7 @@ public partial class MainWindow
         _sparkleWalletActive = false;
         App.Settings.CurrentReplaced -= ReplaceSparkleWalletSettings;
         SparklePointRewards.Awarded -= OnSparklePointAwarded;
+        ShutdownSparkleFly();
         if (App.ProfileSync != null) App.ProfileSync.ProfileLoaded -= OnSparkleWalletProfileLoaded;
         if (_sparkleWalletSettings != null) _sparkleWalletSettings.PropertyChanged -= OnSparkleWalletSettingChanged;
         _sparkleWalletSettings = null;

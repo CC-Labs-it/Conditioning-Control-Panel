@@ -6,6 +6,8 @@
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              xmlns:ctrl="clr-namespace:ConditioningControlPanel.Controls"
              xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.TintSliders="True"
              mc:Ignorable="d"
              d:DesignHeight="1400" d:DesignWidth="1000">
     <!-- CIRCE'S TAB, the lock-themed page (owner-approved mockup, 2026-09-22, "the mockup is
@@ -936,7 +938,7 @@
                                                FontWeight="SemiBold" Foreground="#FF8FA3" Margin="2,0,0,10"/>
                                     <UniformGrid x:Name="CostRows" Columns="2"/>
                                     <!-- Natasha's favourite on flashes: off = only bubbles are ever red. -->
-                                    <Grid x:Name="FlashDodgeRow" Margin="2,6,8,6" ToolTip="{loc:Str chaster_flash_dodge_hint}">
+                                    <Grid Style="{StaticResource OptionRow}" x:Name="FlashDodgeRow" Margin="2,6,8,6" ToolTip="{loc:Str chaster_flash_dodge_hint}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="*"/>
@@ -944,8 +946,8 @@
                                         <CheckBox x:Name="ChkFlashDodge" Style="{StaticResource ToggleStyle}" VerticalAlignment="Top" Margin="0,1,0,0"
                                                   Checked="ChkFlashDodge_Changed" Unchecked="ChkFlashDodge_Changed"/>
                                         <StackPanel Grid.Column="1" Margin="10,0,0,0">
-                                            <TextBlock Text="{loc:Str chaster_flash_dodge}" FontSize="12.5"
-                                                       Foreground="{DynamicResource TextLightBrush}"/>
+                                            <rows:RowLabel Text="{loc:Str chaster_flash_dodge}" Emblem="Many" Subject="Image"
+                                                           IsOn="{Binding IsChecked, ElementName=ChkFlashDodge}"/>
                                             <TextBlock x:Name="TxtFlashDodgeSub" FontSize="11.5" TextWrapping="Wrap" Margin="0,2,0,0"
                                                        Foreground="{DynamicResource TextSecondaryBrush}"/>
                                         </StackPanel>
@@ -953,19 +955,17 @@
                                     <!-- ccp-bugs #1566: red lands on trigger bubbles more often. Folded:
                                          opens by itself when the weight is off its default of 1. -->
                                     <feat:MoreFold x:Name="NatashaFold" Margin="2,0,8,4">
-                                        <Grid Margin="0,2,0,2" ToolTip="{loc:Str chaster_natasha_trigger_weight_hint}">
+                                        <Grid Style="{StaticResource OptionRow}" Margin="0,2,0,2" ToolTip="{loc:Str chaster_natasha_trigger_weight_hint}">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Text="{loc:Str chaster_natasha_trigger_weight}" FontSize="12.5" VerticalAlignment="Center"
-                                                       Foreground="{DynamicResource TextLightBrush}"/>
+                                            <rows:RowLabel Text="{loc:Str chaster_natasha_trigger_weight}" Emblem="Often"/>
                                             <Slider Grid.Column="1" x:Name="SliderNatashaTriggerWeight" Minimum="1" Maximum="10" Value="1"
                                                     IsSnapToTickEnabled="True" TickFrequency="1" VerticalAlignment="Center" Margin="10,0"
                                                     ValueChanged="SliderNatashaTriggerWeight_Changed"/>
-                                            <TextBlock Grid.Column="2" x:Name="TxtNatashaTriggerWeight" Text="1x" MinWidth="28" FontSize="12.5"
-                                                       FontWeight="Bold" Foreground="#FF8FA3" VerticalAlignment="Center" TextAlignment="Right"/>
+                                            <rows:RowValue Grid.Column="2" x:Name="TxtNatashaTriggerWeight" Text="1x"/>
                                         </Grid>
                                     </feat:MoreFold>
                                 </StackPanel>
@@ -1036,7 +1036,7 @@
                                     HorizontalAlignment="Left" Click="BtnLimits_Click"/>
                         </Grid>
                         <Border x:Name="LimitsCard" Visibility="Collapsed" Style="{StaticResource CirceCard}" Margin="0,10,0,0">
-                            <Grid>
+                            <Grid Style="{StaticResource OptionRow}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
@@ -1047,33 +1047,34 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
-                                <TextBlock Text="{loc:Str chaster_limit_day}" FontSize="13" Foreground="{DynamicResource TextLightBrush}"
-                                           VerticalAlignment="Center" Margin="0,0,16,0"/>
+                                <rows:RowLabel Text="{loc:Str chaster_limit_day}" Emblem="Most" Margin="0,0,16,0"
+                                               Value="{Binding Value, ElementName=SliderDayLimit}"/>
                                 <Slider x:Name="SliderDayLimit" Grid.Column="1" Minimum="15" Maximum="1440" TickFrequency="15"
                                         IsSnapToTickEnabled="True" SmallChange="15" LargeChange="60" VerticalAlignment="Center"
                                         ValueChanged="LimitSlider_ValueChanged"/>
                                 <StackPanel Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,0,0,0">
-                                    <TextBlock x:Name="TxtDayLimit" FontFamily="Consolas, Courier New" FontSize="15" FontWeight="Bold"
-                                               Foreground="#FF6B8A" HorizontalAlignment="Right"/>
+                                    <rows:RowValue x:Name="TxtDayLimit" HorizontalAlignment="Right" Unit="{loc:Str row_unit_at_most}"/>
                                     <!-- a raise waits a day: the figure it goes to, and when -->
                                     <TextBlock x:Name="TxtDayPending" FontFamily="Consolas, Courier New" FontSize="10.5" HorizontalAlignment="Right"
                                                Foreground="#E0B052" Visibility="Collapsed" ToolTip="{loc:Str chaster_limit_pending_tip}"/>
                                 </StackPanel>
-                                <TextBlock Grid.Row="1" Text="{loc:Str chaster_limit_backlog}" FontSize="13" Foreground="{DynamicResource TextLightBrush}"
-                                           VerticalAlignment="Center" Margin="0,12,16,0" ToolTip="{loc:Str chaster_limit_backlog_hint}"/>
+                                <rows:RowLabel Grid.Row="1" Text="{loc:Str chaster_limit_backlog}" Emblem="Most" Margin="0,12,16,0"
+                                               ToolTip="{loc:Str chaster_limit_backlog_hint}"
+                                               Value="{Binding Value, ElementName=SliderBacklogLimit}"/>
                                 <Slider x:Name="SliderBacklogLimit" Grid.Row="1" Grid.Column="1" Minimum="60" Maximum="2880" TickFrequency="60"
                                         IsSnapToTickEnabled="True" SmallChange="60" LargeChange="360" VerticalAlignment="Center" Margin="0,12,0,0"
                                         ValueChanged="LimitSlider_ValueChanged" ToolTip="{loc:Str chaster_limit_backlog_hint}"/>
                                 <StackPanel Grid.Row="1" Grid.Column="2" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="12,12,0,0">
-                                    <TextBlock x:Name="TxtBacklogLimit" FontFamily="Consolas, Courier New" FontSize="15"
-                                               FontWeight="Bold" Foreground="#FF6B8A" HorizontalAlignment="Right"/>
+                                    <rows:RowValue x:Name="TxtBacklogLimit" HorizontalAlignment="Right" Unit="{loc:Str row_unit_at_most}"/>
                                     <TextBlock x:Name="TxtBacklogPending" FontFamily="Consolas, Courier New" FontSize="10.5" HorizontalAlignment="Right"
                                                Foreground="#E0B052" Visibility="Collapsed" ToolTip="{loc:Str chaster_limit_pending_tip}"/>
                                 </StackPanel>
-                                <CheckBox x:Name="ChkRelock" Grid.Row="2" Grid.ColumnSpan="3" Margin="0,14,0,0"
-                                          Content="{loc:Str chaster_relock}" ToolTip="{loc:Str chaster_relock_hint}"
+                                <CheckBox x:Name="ChkRelock" Grid.Row="2" Grid.ColumnSpan="3" Margin="0,14,0,0" ToolTip="{loc:Str chaster_relock_hint}"
                                           Foreground="{DynamicResource TextLightBrush}" FontSize="13"
-                                          Checked="ChkRelock_Changed" Unchecked="ChkRelock_Changed"/>
+                                          Checked="ChkRelock_Changed" Unchecked="ChkRelock_Changed" VerticalContentAlignment="Center">
+                                    <rows:RowLabel Text="{loc:Str chaster_relock}" Emblem="Lock"
+                                                   IsOn="{Binding IsChecked, ElementName=ChkRelock}"/>
+                                </CheckBox>
                             </Grid>
                         </Border>
                     </StackPanel>

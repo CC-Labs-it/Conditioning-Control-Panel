@@ -172,14 +172,23 @@ namespace ConditioningControlPanel.Services.Awareness
                 var text = Unquote(rawLine.Trim());
                 if (text.Length == 0) continue;
 
-                if (text.StartsWith(CallbackPrefix, StringComparison.OrdinalIgnoreCase))
+                // The marker anywhere in the line, not only at its start: a small model writes
+                // "135 backslides today~ CALLBACK: 135" on one line, and the token reached the
+                // bubble raw (ccp-bugs #1666). Left of it is the line, right of it the callback.
+                int at = text.IndexOf(CallbackPrefix, StringComparison.OrdinalIgnoreCase);
+                if (at >= 0)
                 {
-                    callback ??= Clamp(Unquote(text.Substring(CallbackPrefix.Length).Trim()));
-                    continue;
+                    callback ??= Clamp(Unquote(text.Substring(at + CallbackPrefix.Length).Trim()));
+                    text = Unquote(text.Substring(0, at).Trim());
+                    if (text.Length == 0) continue;
                 }
 
                 line ??= text;
             }
+
+            // A line with no words in it ("26~", "135") is a bare number, never something she says.
+            if (line != null && !HasWords(line)) line = null;
+            if (callback != null && !HasWords(callback)) callback = null;
 
             // Per-field rather than over the whole reply, so the LINE:/CALLBACK: structure survives:
             // the strip drops the whole sentence carrying an unsanctioned URL, which over the raw
@@ -240,6 +249,14 @@ namespace ConditioningControlPanel.Services.Awareness
             int lastSpace = cut.LastIndexOf(' ');
             if (lastSpace > MaxLineLength / 2) cut = cut.Substring(0, lastSpace);
             return cut.TrimEnd() + "…";
+        }
+
+        /// <summary>True when the text carries a letter (any script), so a bare number is not a line.</summary>
+        internal static bool HasWords(string text)
+        {
+            foreach (var c in text)
+                if (char.IsLetter(c)) return true;
+            return false;
         }
 
         /// <summary>Sheds one symmetric layer of wrapping quotes, which models add despite being told not to.</summary>

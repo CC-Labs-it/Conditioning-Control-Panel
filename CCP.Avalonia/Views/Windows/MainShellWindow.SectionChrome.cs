@@ -75,6 +75,48 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             return true;
         }
 
+        /// <summary>Set by the strip's pill click around its ShowTab: an explicit zone pill scrolls
+        /// (declutter wave 2, WPF MainWindow.TabNavigation.cs _playZoneFromPill).</summary>
+        private bool _playZoneFromPill;
+
+        /// <summary>Set by the Play rail door when the remembered tab was the old Games pill.</summary>
+        private bool _playCameForGames;
+
+        /// <summary>Declutter wave 2: the Games pill left Play for the launcher's Games door. The
+        /// strip's "Moved" note says so ("Moved: CC Labs › Games"), on the redirect note's
+        /// three-hit budget so it never nags. Existing keys only.</summary>
+        internal void ShowGamesMovedNote()
+        {
+            try
+            {
+                var s = CoreSettings.Current;
+                if (s.NavMovedToastHits >= NavMovedNoteLimit) return;
+                s.NavMovedToastHits++;
+                CoreSettings.Save();
+                PageStrip?.ShowMovedNote(string.Format(Loc.Get("nav_moved_toast"),
+                    Loc.Get("launcher_window_title"), Loc.Get("nav_tab_games")));
+            }
+            catch (Exception ex) { Serilog.Log.Debug("Games moved note failed: {E}", ex.Message); }
+        }
+
+        /// <summary>The head's half of Core <see cref="PanelDoorLink"/>: the Lockdown check and the
+        /// fallback, which is exactly the title bar's "Back to CC Labs" button (BtnBackToLauncher:
+        /// same handler, same Lockdown refusal, a disabled button stays a no-op). The launcher's own
+        /// door API is wired into <see cref="PanelDoorLink.OpenLauncherDoor"/> by the merge, not here.</summary>
+        private void WirePanelDoorLink()
+        {
+            PanelDoorLink.IsLockedDown = () => LockdownActive;
+            // Static on purpose: a lambda that captured this shell rooted every closed shell in Core
+            // (ShellMemoryTests). The live shell is the one the button belongs to.
+            PanelDoorLink.Fallback = static () => { if (Current is { } shell) PressBackToCcLabs(shell); };
+        }
+
+        internal static void PressBackToCcLabs(MainShellWindow shell)
+        {
+            if (shell.Named<Button>("BtnBackToLauncher") is not { IsEnabled: true }) return;
+            LauncherWindow.BackToLauncher(shell);
+        }
+
         /// <summary>The tab a section returns to (its remembered tab, else its default). WPF :97.</summary>
         internal static string NavLastTabFor(string section) =>
             NavStripTable.LastTabFor(CoreSettings.Current.NavLastTabBySection, section)
@@ -336,12 +378,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void OnSectionPillChosen(NavTab tab)
         {
             if (tab.Kind == NavTabKind.Launcher) { OpenLibraryLauncher(tab.Key); return; }
-            var before = CurrentTab;
-            ShowTab(tab.Key);
-            // WPF :263: the Games pill scrolls to the top from anywhere (the active pill while
-            // scrolled down included); from another zone ShowTab already did.
-            if (tab.Key == "play" && before is not ("playsessions" or "playeyes"))
-                Named<Views.Tabs.PlayTabView>("PlayTab")?.ScrollToZone("games");
+            // Pages, zones and the Just Drop window all go through ShowTab. A zone pill click
+            // scrolls to its zone (Eyes included, though it is Play's landing). WPF :258.
+            _playZoneFromPill = true;
+            try { ShowTab(tab.Key); }
+            finally { _playZoneFromPill = false; }
         }
 
         /// <summary>WPF OpenLibraryLauncher (:274): the handlers the Library's rail rows call.</summary>

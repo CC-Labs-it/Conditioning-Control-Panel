@@ -1,0 +1,139 @@
+/* sheet-juice.css - the sheet's movement (Lane MOTION), loaded after sheet.css. It only moves things: transitions and
+ * keyframes on transform-family properties (translate, rotate, scale, transform-origin) and opacity, plus the juice's own
+ * small pieces (idle bubbles, ink rings, confetti, the wipe, the wallet's rolling digits). Colours, borders, fonts and
+ * sizes of the page's parts are sheet.css's; the juice's own pieces borrow its tokens. sheet/juice.js plays the one-shot
+ * beats through Web Animations. --j-amp scales every distance: full 1, less (and OS reduced motion) .5, Gentle 0; motion
+ * off is cut by sheet.css's own rule (no transition, no animation) and the script plays nothing. */
+
+.shroot { --j-amp: 1; --j-spring: cubic-bezier(.3, 1.6, .45, 1); }
+.shroot[data-motion="less"] { --j-amp: .5; }
+.shroot[data-gentle="on"] { --j-amp: 0; }
+@media (prefers-reduced-motion: reduce) { .shroot { --j-amp: .5; } }
+
+/* ---------- cards: lift and lean on hover with a springy settle, squash on press ---------- */
+.it .stand { transform-origin: 50% 100%; transition: translate .34s var(--j-spring), rotate .34s var(--j-spring), scale .12s ease-out; }
+.it:hover .stand { translate: 0 calc(-3px * var(--j-amp)); rotate: calc(-1.1deg * var(--j-amp)); }
+.it[data-v="1"]:hover .stand, .it[data-v="3"]:hover .stand { rotate: calc(1.1deg * var(--j-amp)); }
+.it:active .stand { scale: calc(1 + .04 * var(--j-amp)) calc(1 - .06 * var(--j-amp)); transition-duration: .34s, .34s, .06s; }
+.tg { transform-origin: 9px 50%; }
+.tg.big { transform-origin: 13px 50%; }
+.mini { transition: translate .3s var(--j-spring), scale .1s ease-out; }
+.mini:hover { translate: 0 calc(-2px * var(--j-amp)); }
+.mini:active { scale: calc(1 - .04 * var(--j-amp)); }
+
+/* ---------- buttons and tabs: a squash on press, a small spring on the tab you point at ---------- */
+.btn:active:not([disabled]) { scale: calc(1 + .03 * var(--j-amp)) calc(1 - .05 * var(--j-amp)); }
+.s-tab { transform-origin: 50% 100%; transition: translate .3s var(--j-spring); }
+.s-tab[aria-selected="false"]:hover { translate: 0 calc(-2px * var(--j-amp)); }
+
+/* ---------- spotlight: the headline picture bobs (canvas items bob on their own); bulbs chase slowly if drawn ---------- */
+.spot .stage .lit { animation: j-bob 3.6s ease-in-out infinite; }
+@keyframes j-bob { 50% { translate: 0 calc(-5px * var(--j-amp)); } }
+.bulb { animation: j-bulb 2.4s ease-in-out infinite; }
+.bulb:nth-child(3n + 2) { animation-delay: -.8s; }
+.bulb:nth-child(3n) { animation-delay: -1.6s; }
+@keyframes j-bulb { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+
+/* ---------- gift: the box hops now and then while it waits (the lid's own wobble is sheet.css's) ---------- */
+.gbox { transform-origin: 50% 100%; }
+.gift:not(.opened) .gbox { animation: j-hop 3.4s ease-in-out infinite; }
+.shroot[data-gentle="on"] .gift .gbox, .shroot[data-gentle="on"] .spot .stage .lit { animation: none; }
+@keyframes j-hop {
+  0%, 70%, 100% { translate: 0 0; scale: 1; }
+  74% { translate: 0 0; scale: calc(1 + .06 * var(--j-amp)) calc(1 - .08 * var(--j-amp)); }
+  80% { translate: 0 calc(-9px * var(--j-amp)); scale: calc(1 - .04 * var(--j-amp)) calc(1 + .06 * var(--j-amp)); }
+  86% { translate: 0 0; scale: calc(1 + .05 * var(--j-amp)) calc(1 - .06 * var(--j-amp)); }
+  91% { translate: 0 calc(-2px * var(--j-amp)); scale: 1; }
+}
+
+/* ---------- the OWNED stamp: sheet/juice.js plays its hit (squash, ink, confetti); Gentle keeps sheet.css's fade ---------- */
+.shroot:not([data-gentle="on"]):not([data-motion="off"]) .sold { animation: none; }
+@media (prefers-reduced-motion: reduce) { .shroot:not([data-gentle="on"]) .sold { animation: none; } }
+
+/* ---------- the saving-for bar: a shine runs along it when it grows ---------- */
+.meter i.j-shine { position: relative; overflow: hidden; }
+.meter i.j-shine::after { content: ""; position: absolute; inset: 0; width: 40%; background: linear-gradient(90deg, #fff0, #fff9 50%, #fff0); animation: j-shine .9s .5s ease-in-out both; }
+@keyframes j-shine { from { transform: translateX(-110%); opacity: 1; } 90% { opacity: 1; } to { transform: translateX(260%); opacity: 0; } }
+
+/* ---------- the juice's own pieces ---------- */
+.j-dg { display: inline-block; }
+.j-ink { position: absolute; z-index: 9; width: 60px; height: 60px; margin: -30px 0 0 -30px; border-radius: 50%; border: 4px solid var(--stamp, #a3262f); pointer-events: none; opacity: 0; }
+.j-ink.small { width: 34px; height: 34px; margin: -17px 0 0 -17px; border-width: 3px; }
+.j-conf { position: absolute; z-index: 9; width: 6px; height: 3px; margin: -1.5px 0 0 -3px; border-radius: 1px; background: var(--c, var(--gold, #ffd24a)); pointer-events: none; opacity: 0; }
+.j-conf.alt { background: var(--gold, #ffd24a); width: 4px; height: 4px; border-radius: 50%; }
+.j-wipe { position: absolute; inset: 0; z-index: 3; background: var(--paper, #ece6d8); pointer-events: none; transform: scaleX(0); }
+
+/* the idle bubbles: a few, slow, behind the content; paused while the page is hidden; none under Gentle or motion off */
+.sheet { isolation: isolate; }
+.j-idle { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.j-bub { position: absolute; left: var(--x); bottom: 0; width: var(--s); height: var(--s); border-radius: 50%; opacity: 0;
+  border: 1.5px solid #ffffff33; background: radial-gradient(circle at 32% 30%, #ffffff40 0 14%, #fff0 15%), radial-gradient(circle, #fff0 58%, #ffffff12 100%);
+  animation: j-rise var(--d) linear var(--w) infinite; will-change: transform, opacity; }
+@keyframes j-rise {
+  0% { transform: translate(0, 40px); opacity: 0; }
+  10% { opacity: .9; }
+  50% { transform: translate(calc(14px * var(--j-amp)), -48vh); }
+  85% { opacity: .7; }
+  100% { transform: translate(calc(-8px * var(--j-amp)), -104vh); opacity: 0; }
+}
+.j-idle[data-paused="1"] .j-bub { animation-play-state: paused; }
+.shroot[data-gentle="on"] .j-idle, .shroot[data-motion="off"] .j-idle { display: none; }
+@media (prefers-reduced-motion: reduce) { .j-bub { animation-duration: calc(var(--d) * 2); } }
+/* ---------- the game shelves' emblems (sheet/section-art.js): a small idle life, and a reaction while the head is
+   pointed at (a transition, so it eases in and back out). Gentle stills them, motion off cuts them (sheet.css). ---------- */
+.emb svg { transition: translate .45s var(--j-spring), rotate .45s var(--j-spring); }
+.emb .emb-body { transform-box: fill-box; }
+.emb-chess .emb-body { transform-origin: 50% 100%; animation: j-knight 4.4s ease-in-out infinite; }
+@keyframes j-knight {
+  0%, 56%, 100% { rotate: 0deg; translate: 0 0; }
+  64% { rotate: calc(-7deg * var(--j-amp)); translate: 0 calc(-2px * var(--j-amp)); }
+  72% { rotate: calc(3deg * var(--j-amp)); translate: 0 0; }
+  79% { rotate: calc(-1.4deg * var(--j-amp)); }
+  86% { rotate: 0deg; }
+}
+.emb-spark { opacity: 0; scale: .4; transform-box: fill-box; transform-origin: 50% 50%; transition: opacity .25s ease, scale .45s var(--j-spring); }
+.sh:hover .emb-chess svg { translate: 0 calc(-6px * var(--j-amp)); rotate: calc(-8deg * var(--j-amp)); }
+.sh:hover .emb-spark { opacity: 1; scale: 1; }
+.emb-kart svg { transform-origin: 30% 92%; }
+.emb-kart .emb-body { transform-origin: 20% 100%; animation: j-rumble 2.8s ease-in-out infinite; }
+@keyframes j-rumble {
+  0%, 62%, 100% { translate: 0 0; }
+  66% { translate: 0 calc(-1.6px * var(--j-amp)); }
+  70% { translate: 0 0; }
+  74% { translate: 0 calc(-1.1px * var(--j-amp)); }
+  78% { translate: 0 0; }
+}
+.emb-wheel { transition: rotate .8s cubic-bezier(.2, .7, .3, 1); animation: j-wheel 2.8s ease-in-out infinite; }
+@keyframes j-wheel {
+  0%, 62%, 100% { scale: 1; }
+  67% { scale: calc(1 + .05 * var(--j-amp)) calc(1 - .07 * var(--j-amp)); }
+  72% { scale: 1; }
+}
+.emb-puff { opacity: 0; transform-box: fill-box; transform-origin: 50% 50%; animation: j-puff 2.8s ease-out infinite; }
+.emb-puff.p2 { animation-delay: -.95s; } .emb-puff.p3 { animation-delay: -1.85s; }
+@keyframes j-puff {
+  0% { opacity: 0; scale: .3; translate: 0 0; }
+  14% { opacity: .95; }
+  100% { opacity: 0; scale: 1.25; translate: calc(-9px * var(--j-amp)) calc(-7px * var(--j-amp)); }
+}
+.sh:hover .emb-kart svg { translate: calc(5px * var(--j-amp)) 0; rotate: calc(-4deg * var(--j-amp)); }
+.sh:hover .emb-wheel { rotate: calc(360deg * var(--j-amp)); }
+.shroot[data-gentle="on"] .emb-puff { animation: none; }
+.shroot[data-gentle="on"] .emb-spark { scale: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .emb-chess .emb-body, .emb-kart .emb-body, .emb-wheel, .emb-puff { animation-duration: 5.6s; }
+  .emb-chess .emb-body { animation-duration: 8.8s; }
+}
+/* ---------- the tab emblems (sheet/tab-art.js): pointing at a tab makes its emblem react, easing in and back out (a
+   transition, so leaving is the OUT); the open tab's emblem stands a little bigger and pops with the tab (sheet/juice.js).
+   No idle loop: eight tabs stay calm. Gentle stills them (amp 0), motion off cuts them (sheet.css). ---------- */
+.tab-emb svg { transition: translate .4s var(--j-spring), rotate .4s var(--j-spring), scale .4s var(--j-spring); }
+.tab-emb .te-body, .tab-emb .te-wheel, .tab-emb .te-spin { transform-box: view-box; transition: rotate .7s cubic-bezier(.2, .7, .3, 1), translate .4s var(--j-spring); }
+.s-tab[aria-selected="true"] .tab-emb svg { scale: calc(1 + .1 * var(--j-amp)); }
+.s-tab:hover .te-kart svg { translate: calc(2px * var(--j-amp)) 0; rotate: calc(-6deg * var(--j-amp)); }
+.s-tab:hover .te-kart .te-wheel { rotate: calc(360deg * var(--j-amp)); }
+.s-tab:hover .te-chess svg { translate: 0 calc(-2px * var(--j-amp)); rotate: calc(-10deg * var(--j-amp)); }
+.s-tab:hover .te-effects svg { translate: 0 calc(-2.5px * var(--j-amp)); }
+.s-tab:hover .te-effects .te-spin { rotate: calc(-300deg * var(--j-amp)); }
+.s-tab:hover .te-accessories svg { rotate: calc(-12deg * var(--j-amp)); translate: 0 calc(-1.5px * var(--j-amp)); }
+.s-tab:hover .te-accessories .te-body { translate: 0 calc(-1px * var(--j-amp)); }

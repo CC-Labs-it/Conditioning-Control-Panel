@@ -19,6 +19,8 @@ public partial class SparkleWallet : UserControl
     private readonly DispatcherTimer _gainTimer;
     private readonly System.Windows.Shapes.Polygon[] _sparkles = new System.Windows.Shapes.Polygon[4];
     private int _balance;
+    /// <summary>While stars are landing, the number they have delivered so far (the balance is already the truth).</summary>
+    private int? _held;
     private long _rewardShown;
     private bool _listening;
     private bool _dismissedByWalletPress;
@@ -111,8 +113,55 @@ public partial class SparkleWallet : UserControl
     {
         if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(new Action(() => SetBalance(balance))); return; }
         _balance = Math.Max(0, balance);
-        BalanceText.Text = _balance.ToString("N0", CultureInfo.CurrentCulture);
-        AutomationProperties.SetName(WalletButton, Loc.GetF("sparkle_wallet_balance", BalanceText.Text));
+        BalanceText.Text = (_held ?? _balance).ToString("N0", CultureInfo.CurrentCulture);
+        // The accessible name always reads the balance, never a number mid-flight.
+        AutomationProperties.SetName(WalletButton, Loc.GetF("sparkle_wallet_balance", _balance.ToString("N0", CultureInfo.CurrentCulture)));
+    }
+
+    /// <summary>The Sparkles flight: show <paramref name="value"/> until <see cref="ReleaseShown"/>.</summary>
+    internal void HoldShown(int value) { _held = Math.Max(0, value); SetBalance(_balance); }
+
+    internal void ReleaseShown() { _held = null; SetBalance(_balance); }
+
+    /// <summary>ON IS PRESSED IN: while the counter sheet it opened is down the wallet sits in a well (house depth
+    /// brushes, no Effect); it pops back as the sheet goes up (<see cref="CounterSheetView.PressChip"/>).</summary>
+    internal void SetPressedIn(bool on)
+    {
+        if (WalletButton.Template?.FindName("Outline", WalletButton) is not Border outline) return;
+        if (on)
+        {
+            if (CounterSheetView.PressedFill(outline, outline.Background) is { } fill) outline.Background = fill;
+            outline.SetResourceReference(Border.BorderBrushProperty, "DepthPressedBevel");
+            outline.BorderThickness = new Thickness(2);
+        }
+        else { outline.ClearValue(Border.BackgroundProperty); outline.ClearValue(Border.BorderBrushProperty); outline.ClearValue(Border.BorderThicknessProperty); }
+    }
+
+    /// <summary>The star the flight lands on.</summary>
+    internal FrameworkElement? Star => FindStar(this);
+
+    internal static SparkleStar? FindStar(DependencyObject root)
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is SparkleStar star) return star;
+            if (FindStar(child) is { } found) return found;
+        }
+        return null;
+    }
+
+    /// <summary>A star landed: the balance kicks (bigger on the last one), out fast and settling.</summary>
+    internal void Kick(bool settle)
+    {
+        if (!AnimateInteractions) return;
+        var peak = (settle ? 0.14 : 0.06) * (MotionFx.Level == MotionLevel.Reduced ? 0.5 : 1);
+        var kick = new DoubleAnimationUsingKeyFrames { Duration = TimeSpan.FromMilliseconds(settle ? 340 : 160), FillBehavior = FillBehavior.Stop };
+        kick.KeyFrames.Add(new EasingDoubleKeyFrame(1 + peak, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(settle ? 90 : 50)), new QuadraticEase { EasingMode = EasingMode.EaseOut }));
+        kick.KeyFrames.Add(new EasingDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(settle ? 340 : 160)),
+            new BackEase { EasingMode = EasingMode.EaseOut, Amplitude = settle ? 0.8 : 0.3 }));
+        BalancePulse.BeginAnimation(ScaleTransform.ScaleXProperty, kick);
+        BalancePulse.BeginAnimation(ScaleTransform.ScaleYProperty, kick);
     }
 
     /// <summary>Call only after a real local SP award. Never call from balance/property-change handlers.</summary>
@@ -143,6 +192,11 @@ public partial class SparkleWallet : UserControl
         // One line on hover for both the count and the help circle; the card carries the rest.
         var hint = Loc.Get("sparkle_help_tooltip");
         WalletButton.ToolTip = hint;
+#if DEBUG
+        // DEBUG shop preview: the number is the preview's pretend wallet. The label line shows the SHOP door (owner:
+        // SHOP instead of preview); the mark moves to the hover line (plain literal, DEBUG chrome only).
+        if (Services.PrizeCounter.ShopPreviewBackend.Enabled) WalletButton.ToolTip = "Preview wallet. " + hint;
+#endif
         HelpButton.ToolTip = hint;
         AutomationProperties.SetName(HelpButton, Loc.Get("sparkle_help_title"));
         HelpTitle.Text = Loc.Get("sparkle_help_title");

@@ -262,11 +262,10 @@ namespace ConditioningControlPanel
             // Before repainting the padlocks: a feature left ON without entitlement is switched
             // off, so a veil can never trap a running feature behind an unreachable toggle.
             EnforceEntitlementLapse();
-            // Haptics content grid - the dim-and-disable half of that page's gate. It has to ask
-            // the same question HapticsGate does, or the free day lifts the veil and leaves an
-            // inert page underneath.
-            var hasHapticsAccess = App.Patreon?.HasPremiumAccess == true
-                                   || App.DailyFree?.IsFreeToday("haptics") == true;
+            // Haptics content grid - the dim-and-disable half of that page's gate. It asks the
+            // same question as the HapticsGate veil below (HapticsAccess, free for everyone since
+            // 2026-11-11), or the veil lifts and leaves an inert page underneath.
+            var hasHapticsAccess = Services.Haptics.HapticsAccess.IsOpen;
             if (HapticsTab?.HapticsContentGrid != null)
             {
                 HapticsTab.HapticsContentGrid.Opacity = hasHapticsAccess ? 1.0 : 0.3;
@@ -276,7 +275,9 @@ namespace ConditioningControlPanel
             if (HapticsTab?.HapticsFeatureBox != null) HapticsTab.HapticsFeatureBox.IsEnabled = hasHapticsAccess;
 
             RefreshPremiumGate(BambiTakeoverTab?.BambiTakeoverGate, "takeover");
-            RefreshPremiumGate(HapticsTab?.HapticsGate, "haptics");
+            // Toys are free: the padlock veil is never drawn, whatever the tier.
+            if (HapticsTab?.HapticsGate != null)
+                HapticsTab.HapticsGate.Visibility = hasHapticsAccess ? Visibility.Collapsed : Visibility.Visible;
             RefreshPremiumGate(RemoteControlTab?.RemoteControlGate, "remote");
             RefreshPremiumGate(AwarenessTab?.AwarenessGate, "awareness");
             // Lockdown is not in the rotation and has no DailyFreeKey.
@@ -415,25 +416,35 @@ namespace ConditioningControlPanel
             // attention gauge draws the same remaining-requests number as a meter. One difference
             // worth stating: the custom-provider error hint is kept, because "AI initializing"
             // forever is exactly the wrong thing to tell someone with a typo in their endpoint.
+            // #5197: this runs inside the MainWindow constructor. A broken AI setting must never stop
+            // the window from being built, so the whole status block is guarded.
             var engine = CompanionRoom?.EngineVm;
             if (engine != null)
             {
-                var provider = App.Settings?.Current?.CompanionPrompt?.AiProvider ?? Models.AiProviderType.Cloud;
-                if (App.Ai?.IsAvailable == true)
+                try
                 {
-                    var remaining = App.Ai.DailyRequestsRemaining;
-                    engine.SetStatus(remaining < 0
-                        ? Loc.Get("companion_engine_status_ready")
-                        : Loc.GetF("companion_engine_status_ready_fmt", remaining),
-                        healthy: true);
+                    var provider = App.Settings?.Current?.CompanionPrompt?.AiProvider ?? Models.AiProviderType.Cloud;
+                    if (App.Ai?.IsAvailable == true)
+                    {
+                        var remaining = App.Ai.DailyRequestsRemaining;
+                        engine.SetStatus(remaining < 0
+                            ? Loc.Get("companion_engine_status_ready")
+                            : Loc.GetF("companion_engine_status_ready_fmt", remaining),
+                            healthy: true);
+                    }
+                    else if (provider == Models.AiProviderType.OpenAiCompatible)
+                    {
+                        engine.SetStatus(Loc.Get("label_ai_custom_error"), healthy: false);
+                    }
+                    else
+                    {
+                        engine.SetStatus(Loc.Get("label_ai_initializing"), healthy: false);
+                    }
                 }
-                else if (provider == Models.AiProviderType.OpenAiCompatible)
+                catch (Exception ex)
                 {
-                    engine.SetStatus(Loc.Get("label_ai_custom_error"), healthy: false);
-                }
-                else
-                {
-                    engine.SetStatus(Loc.Get("label_ai_initializing"), healthy: false);
+                    App.Logger?.Warning(ex, "UpdatePatreonUI: AI status read failed");
+                    try { engine.SetStatus(Loc.Get("label_ai_initializing"), healthy: false); } catch { }
                 }
             }
 

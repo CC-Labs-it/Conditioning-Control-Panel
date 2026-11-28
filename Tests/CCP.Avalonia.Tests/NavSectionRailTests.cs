@@ -151,7 +151,7 @@ public sealed class NavSectionRailTests
     });
 
     [Fact]
-    public void PlayZonePillsScrollToTheirZone_GamesBackToTop() => Run(w =>
+    public void PlayZonePillsScrollToTheirZone_NoGamesPill() => Run(w =>
     {
         // The Full-motion section entrance rises sections 10 px through RenderTransform, which
         // TranslatePoint reads; this test measures scroll targets, so it runs without motion.
@@ -181,9 +181,8 @@ public sealed class NavSectionRailTests
                 $"{pill}: header at {headerY}, offset {scroll.Offset.Y}");
         }
 
-        Click(w.PageStrip!.PillFor("play")!);   // Games: back to the top
-        Dispatcher.UIThread.RunJobs();
-        Assert.Equal(0, scroll.Offset.Y);
+        // Declutter wave 2: the Games pill left for the launcher's Games door (PanelDoorLinkShellTests).
+        Assert.Null(w.PageStrip!.PillFor("play"));
     }
 
     [Fact]

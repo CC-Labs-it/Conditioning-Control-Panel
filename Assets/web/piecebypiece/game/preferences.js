@@ -22,6 +22,10 @@ const osMotion = globalThis.window?.matchMedia?.('(prefers-reduced-motion: reduc
 const clamp = value => Math.max(0, Math.min(1, value));
 const AMOUNTS = ['less', 'normal', 'more'];
 const SPEEDS = ['slow', 'normal', 'fast'];
+// Board motion in Distraction (a cup player, 2026-11-13: "the spinning of the board is more distracting
+// for me"): how much the camera sways and how fast the board's Loom turns. Full is the old feel and the default.
+export const BOARD_MOTION = Object.freeze({ full: 1, calm: .35, still: 0 });
+const MOTIONS = Object.keys(BOARD_MOTION);
 const strength = value => Math.round(Math.max(0.1, Math.min(2, value)) * 20) / 20;
 export function presentation() {
   const volume = Number.isFinite(saved.volume) ? clamp(saved.volume) : hostVolume;
@@ -50,10 +54,14 @@ export function presentation() {
     // Camera drag direction (ccp-bugs #1329), off by default.
     invertX: saved.invertX === true,
     invertY: saved.invertY === true,
+    // Right-click arrows and circles (board/annotations.js, the HUD's "Arrows" button), on by default. Off: every right drag is the
+    // camera's again (owner, 2026-11-18: reaching to turn the board drew lines instead).
+    arrows: saved.arrows !== false,
     // Distraction dials (owner, 2026-10-02): how many pictures, how strong, how fast it climbs.
     amount: AMOUNTS.includes(saved.amount) ? saved.amount : 'normal',
     strength: Number.isFinite(saved.strength) ? strength(saved.strength) : 1,
     rampSpeed: SPEEDS.includes(saved.rampSpeed) ? saved.rampSpeed : 'normal',
+    boardMotion: MOTIONS.includes(saved.boardMotion) ? saved.boardMotion : 'full',
     soundLocked: hostVolume === 0,
     // Spectators (owner, 2026-10-05): on by default; off sends watchable:false when a public game is made.
     letPeopleWatch: hostWatch !== null ? hostWatch : saved.letPeopleWatch !== false,
@@ -84,9 +92,11 @@ export function setPresentation(patch) {
   if (['slam', 'ribbon', 'tag'].includes(patch.turnCard)) saved.turnCard = patch.turnCard;
   if (typeof patch.invertX === 'boolean') saved.invertX = patch.invertX;
   if (typeof patch.invertY === 'boolean') saved.invertY = patch.invertY;
+  if (typeof patch.arrows === 'boolean') saved.arrows = patch.arrows;
   if (AMOUNTS.includes(patch.amount)) saved.amount = patch.amount;
   if (Number.isFinite(patch.strength)) saved.strength = strength(patch.strength);
   if (SPEEDS.includes(patch.rampSpeed)) saved.rampSpeed = patch.rampSpeed;
+  if (MOTIONS.includes(patch.boardMotion)) saved.boardMotion = patch.boardMotion;
   if (typeof patch.letPeopleWatch === 'boolean') {
     saved.letPeopleWatch = patch.letPeopleWatch;
     if (hostWatch !== null) hostWatch = patch.letPeopleWatch;
@@ -107,6 +117,11 @@ export function setPresentation(patch) {
   }
   try { globalThis.localStorage?.setItem(KEY, JSON.stringify(saved)); } catch { /* session only */ }
   return apply();
+}
+/** 0..1: how much of Distraction's board motion the player keeps (BOARD_MOTION). */
+export function boardMotionScale(p = presentation()) {
+  const v = BOARD_MOTION[p && p.boardMotion];
+  return Number.isFinite(v) ? v : 1;
 }
 // The camera's orbit drag, flipped per axis when the player asked for it.
 export function invertDrag(dx, dy, p = presentation()) {

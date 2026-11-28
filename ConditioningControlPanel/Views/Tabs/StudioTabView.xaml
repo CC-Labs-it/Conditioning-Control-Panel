@@ -71,7 +71,13 @@
              into it. The row's own Height setter below is what the code-behind
              overrides on Checked and ClearValue()s on Unchecked; the template's
              MinHeight is the floor that keeps every other row honest. A fixed
-             Height here would silently letterbox the tile instead. -->
+             Height here would silently letterbox the tile instead.
+
+             READABLE ROWS REACH (owner 2026-11-25): the caption is a DoorLabel (16 Bold Nunito,
+             tinted with the Studio hue, Controls/Rows/DoorLabel.cs) that WRAPS rather than trims,
+             so the resting row's 38 is a MinHeight here, not a Height: a label on two lines (long
+             languages) grows its row instead of being cut. The checked art row still writes its
+             56 into Height and clears it again. -->
         <Style x:Key="RackEntryStyle" TargetType="RadioButton">
             <Setter Property="GroupName" Value="StudioRack"/>
             <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
@@ -79,7 +85,7 @@
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Focusable" Value="True"/>
             <Setter Property="Margin" Value="0,1"/>
-            <Setter Property="Height" Value="38"/>
+            <Setter Property="MinHeight" Value="38"/>
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <!-- Null, not the RadioButton default: TierRim below paints whatever sits in
                  BorderBrush, and only BuildRack's tiered rows put a brush there (gold =
@@ -90,8 +96,11 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
                         <Grid Background="Transparent" MinHeight="38">
+                            <!-- Selected = the detail pane's own surface (StudioRackRules), so the
+                                 row and the pane beside it read as one object. Not a hue tint:
+                                 the hue is spent on the bar and on the dots. -->
                             <Border x:Name="RowFill" CornerRadius="8" Opacity="0"
-                                    Background="{DynamicResource TransparentPink20Brush}"/>
+                                    Background="{DynamicResource SurfaceBgBrush}"/>
                             <!-- The tier rim. A stroke, never a fill, and hit-test invisible so
                                  it is pure livery: selection (RowFill/RowBar) and hover keep
                                  their existing grammar underneath it. -->
@@ -100,7 +109,7 @@
                                     IsHitTestVisible="False"/>
                             <Border x:Name="RowBar" Width="3" CornerRadius="2" Margin="0,5"
                                     HorizontalAlignment="Left" Visibility="Collapsed"
-                                    Background="{DynamicResource PinkBrush}"/>
+                                    Background="{DynamicResource SectionHueStudioBrush}"/>
                             <ContentPresenter Margin="12,0,10,0" VerticalAlignment="Center"/>
                         </Grid>
                         <ControlTemplate.Triggers>
@@ -177,7 +186,7 @@
                  code from the single RackEntries table so the key, the icon, the label, the
                  state dot, the panel and the NotifyFeatureOpened key can never drift apart. -->
             <Border Grid.Column="0" Width="230" Margin="0,0,14,0"
-                    Background="{DynamicResource SurfaceBgBrush}" BorderBrush="#2A2A46"
+                    Background="{DynamicResource DarkerBgBrush}" BorderBrush="#2A2A46"
                     BorderThickness="1" CornerRadius="12" Padding="8,10">
                 <Grid>
                     <Grid.RowDefinitions>

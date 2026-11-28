@@ -59,6 +59,7 @@ public class NavStripPolishGlyphTests
     public void TheGlyphTableOnlyNamesRealTabsAndAnUnknownKeyHasNoGlyph()
     {
         var keys = NavSections.AllTabs.Select(t => t.Key).ToHashSet();
+        keys.UnionWith(NavSections.LauncherDoors.Keys);   // "play" left for the launcher, its glyph stays
         foreach (var key in NavStripRules.Glyphs.Keys)
             Assert.Contains(key, keys);
         Assert.Null(NavStripRules.Glyph("no-such-tab"));

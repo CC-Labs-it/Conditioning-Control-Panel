@@ -51,7 +51,7 @@ namespace ConditioningControlPanel.Services
     /// <see cref="Step"/>. Positions are WPF's: DIPs of the bubble's own screen (screen px / scaling),
     /// top-left of the <see cref="Size"/> box. The head only draws and hit-tests.
     /// </summary>
-    public sealed class AmbientBubble
+    public sealed partial class AmbientBubble
     {
         public int Screen;
         public double X, Y, Size, Angle, Scale = 1, Fade = 1;
@@ -232,6 +232,8 @@ namespace ConditioningControlPanel.Services
             b.Angle = r.Next(360);
             b._top = areaY / scaling - b.Size - 50;
             b.X = b._startX = (areaX + r.Next(50, (int)Math.Max(100, areaW - b.Size - 50))) / scaling;
+            b._left = areaX / scaling;   // WPF _screenLeft/_screenRight: Froth never pushes it off its screen
+            b._right = (areaX + areaW) / scaling - b.Size;
             b._bottom = (areaY + areaH) / scaling + 50;
             b.Y = motion == BubbleMotionStyle.Rain
                 ? areaY / scaling - b.Size          // Rain: start just above the top
@@ -438,7 +440,7 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF ContainsPx: inside the hit disc (the sprite's own size for a plain bubble).</summary>
         public bool Contains(double x, double y)
         {
-            double dx = x - CenterX, dy = y - CenterY, r = HitSize / 2;
+            double dx = x - CenterX, dy = y - CenterY, r = HitSize / 2 * _frothShown;   // WPF :3177: a merged bubble is hit at its grown size
             return dx * dx + dy * dy <= r * r;
         }
 
@@ -578,7 +580,7 @@ namespace ConditioningControlPanel.Services
             switch (TriggerMotion)
             {
                 case Chaos.ChaosMotion.RainDown:
-                    Y += _speed * ts; X = _startX + offset; exited = Y > _bottom; break;
+                    Y += _speed * ts * _frothDrift; X = _startX + offset; exited = Y > _bottom; break;
                 case Chaos.ChaosMotion.RoamBounce:
                     X += _vx * ts; Y += _vy * ts;
                     if (X < _left) { X = _left; _vx = Math.Abs(_vx); }
@@ -588,7 +590,7 @@ namespace ConditioningControlPanel.Services
                     else if (Y > botB) { Y = botB; _vy = -Math.Abs(_vy); }
                     exited = false; break;
                 case Chaos.ChaosMotion.SideDrift:
-                    X += _vx * ts; Y = _startY + offset;
+                    X += _vx * ts * _frothDrift; Y = _startY + offset;
                     exited = _vx > 0 ? X > _right + Size : X < _left - Size; break;
                 default:
                     switch (Motion)
@@ -600,11 +602,11 @@ namespace ConditioningControlPanel.Services
                             MotionFade = _spiral.Fade;
                             return _spiral.Done ? Result.Missed : Result.Alive;
                         case BubbleMotionStyle.Rain:
-                            Y += _speed;
+                            Y += _speed * _frothDrift;
                             X = _startX + offset;
                             return Y > _bottom ? Result.Missed : Result.Alive;
                         default:
-                            Y -= _speed * ts; X = _startX + offset; exited = Y < _top; break;
+                            Y -= _speed * ts * _frothDrift; X = _startX + offset; exited = Y < _top; break;
                     }
                     break;
             }
@@ -624,7 +626,7 @@ namespace ConditioningControlPanel.Services
     /// pop reward (lucky roll, daily XP bucket) and one logical step for every bubble. Not a
     /// singleton on purpose: the head owns one per run. UI-thread only.
     /// </summary>
-    public sealed class AmbientBubbleField
+    public sealed partial class AmbientBubbleField
     {
         /// <summary>WPF MAX_BUBBLES_HOST: the shared-host cap, which is how every bubble renders here.
         /// Solid mode off is WPF's per-window path, capped at 3 (MAX_BUBBLES).</summary>

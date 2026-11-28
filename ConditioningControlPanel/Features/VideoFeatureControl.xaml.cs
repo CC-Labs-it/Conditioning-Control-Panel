@@ -42,6 +42,7 @@ namespace ConditioningControlPanel.Features
         /// <inheritdoc/>
         public void RebindToCurrentSettings()
         {
+            LoadLightsDown();     // the gold box's rows show the new settings too
             (_settingsHook ??= new SettingsHook(OnSettingsPropertyChanged)).Rebind();
             LoadFromSettings();
             MercyRow.Rebind();
@@ -63,8 +64,18 @@ namespace ConditioningControlPanel.Features
                 SliderVideoMaxDur.Value = s.VideoMaxDurationSeconds;
                 TxtVideoMaxDur.Text = FormatDuration(s.VideoMaxDurationSeconds);
                 ChkVideoCutRandomStart.IsChecked = s.VideoCutRandomStart;
+                ChkVideoLoopShort.IsChecked = s.MandatoryVideoLoopShortClips;
+                ChkVideoFillShort.IsChecked = s.MandatoryVideoFillShortWithOthers;
                 ChkVideoCutRandomStart.IsEnabled = s.VideoMaxDurationSeconds > 0;
-                ChkMiniGame.IsChecked = s.AttentionChecksEnabled;
+                // Floating videos have no mini game (owner, 2026-11-17): it reads as off and its rows
+                // grey out while Floating is the pick. Only the view changes, never the saved setting.
+                ChkMiniGame.IsChecked = VideoShow.MiniGameShownOn(s.AttentionChecksEnabled, s.MandatoryVideoFloating);
+                bool miniGameEditable = VideoShow.MiniGameEditable(s.MandatoryVideoFloating);
+                // The parents carry the grey-out: SessionLock owns the toggle's own IsEnabled.
+                RowMiniGame.IsEnabled = miniGameEditable;
+                SectionMiniGame.IsEnabled = miniGameEditable;
+                RowMiniGame.Opacity = SectionMiniGame.Opacity = miniGameEditable ? 1.0 : 0.5;
+                TxtMiniGameFloatNote.Visibility = miniGameEditable ? Visibility.Collapsed : Visibility.Visible;
                 SliderTargets.Value = s.AttentionDensity;
                 TxtTargets.Text = s.AttentionDensity.ToString();
                 ChkRandomize.IsChecked = s.RandomizeAttentionTargets;
@@ -254,6 +265,8 @@ namespace ConditioningControlPanel.Features
                 e.PropertyName == nameof(Models.AppSettings.VideoMinDurationSeconds) ||
                 e.PropertyName == nameof(Models.AppSettings.VideoMaxDurationSeconds) ||
                 e.PropertyName == nameof(Models.AppSettings.VideoCutRandomStart) ||
+                e.PropertyName == nameof(Models.AppSettings.MandatoryVideoLoopShortClips) ||
+                e.PropertyName == nameof(Models.AppSettings.MandatoryVideoFillShortWithOthers) ||
                 e.PropertyName == nameof(Models.AppSettings.AttentionChecksEnabled) ||
                 e.PropertyName == nameof(Models.AppSettings.AttentionDensity) ||
                 e.PropertyName == nameof(Models.AppSettings.RandomizeAttentionTargets) ||
@@ -322,6 +335,24 @@ namespace ConditioningControlPanel.Features
             var s = App.Settings?.Current;
             if (s == null) return;
             s.VideoCutRandomStart = ChkVideoCutRandomStart.IsChecked ?? true;
+            App.Settings?.Save();
+        }
+
+        private void ChkVideoLoopShort_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.MandatoryVideoLoopShortClips = ChkVideoLoopShort.IsChecked ?? false;
+            App.Settings?.Save();
+        }
+
+        private void ChkVideoFillShort_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.MandatoryVideoFillShortWithOthers = ChkVideoFillShort.IsChecked ?? false;
             App.Settings?.Save();
         }
 

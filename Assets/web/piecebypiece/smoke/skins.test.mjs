@@ -10,10 +10,10 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { SLOTS, CATALOG, normalLook, clampLook, ownedIds, wireLook, counterFrame, lookIds, grantOf } from '../skins/look.js';
 import { createWear } from '../skins/wear.js';
-import { readPick, wardrobeHtml, LOCKED_NOTE } from '../door/wardrobe.js';
+import { FINISH_IDS, FINISH_NAMES, finishKey } from '../skins/finish-ids.js';
+import { readPick, wardrobeHtml, LOCKED_NOTE, lockNote } from '../door/wardrobe.js';
 import * as api from '../net/api.js';
 
-const ALL = [...SLOTS.flatMap((s) => CATALOG[s])];
 const grantsFor = (...ids) => ids.map(grantOf);
 
 function fakeBus() {
@@ -29,10 +29,11 @@ function hostPipe() {
   return { onHost: (fn) => { fns.add(fn); return () => fns.delete(fn); }, send: (m) => { for (const fn of fns) fn(m); } };
 }
 
-test('the catalog is every item Astra drew, one slot each', () => {
+test('every attachment item has its six sculpted models', () => {
   const reg = JSON.parse(readFileSync(fileURLToPath(new URL('../assets/skins/registry.json', import.meta.url)), 'utf8'));
   const ids = [...new Set(reg.items.map((i) => i.id))].sort();
-  assert.deepEqual(ids, [...ALL].sort());
+  const attachments = ['set', 'banner', 'insignia'].flatMap((s) => CATALOG[s]);
+  assert.deepEqual(ids, attachments.sort());
   for (const id of ids) {
     const pieces = reg.items.filter((i) => i.id === id).map((i) => i.piece).sort();
     assert.deepEqual(pieces, ['bishop', 'king', 'knight', 'pawn', 'queen', 'rook'], id + ' has all six');
@@ -56,6 +57,57 @@ test('clampLook drops what the grants do not own; Prime items count when held', 
 test('wireLook sends nothing for a bare look', () => {
   assert.equal(wireLook({}), null);
   assert.deepEqual(wireLook({ banner: 'chess.banner.crest' }), { set: null, banner: 'chess.banner.crest', insignia: null });
+});
+
+test('finishes use stable account ids and no attachment GLB', () => {
+  assert.deepEqual(FINISH_IDS.map(finishKey), ['polka', 'marble', 'contour', 'opal', 'kintsugi']);
+  for (const id of FINISH_IDS) {
+    assert.deepEqual(lookIds({ finish: id, insignia: 'chess.insignia.star' }), ['chess.insignia.star']);
+    assert.equal(wireLook({ finish: id }).finish, id);
+    assert.equal(clampLook({ finish: id }, grantsFor(id)).finish, id);
+    assert.deepEqual(clampLook({ finish: id }, []), normalLook(null));
+  }
+  for (const id of [null, 'polka', 'chess.finish.nope', 'constructor', 'chess.banner.crest']) {
+    assert.equal(finishKey(id), null);
+    assert.equal(wireLook({ finish: id }), null);
+  }
+});
+
+test('finish picks restore, clear explicitly, and keep the other wardrobe slots', () => {
+  const pipe = hostPipe(), storage = fakeStorage(), posted = [];
+  const w = createWear({ onHost: pipe.onHost, storage, hosted: true, post: (m) => posted.push(m) });
+  const finish = 'chess.finish.marble', banner = 'chess.banner.crest';
+  pipe.send({ type: 'pbp:look', look: { banner } });
+  pipe.send({ type: 'owned', grants: grantsFor(banner) });
+  assert.equal(w.choose('finish', finish), false);
+  const kit = { esc: String, bar: () => '', bigBtn: () => '' };
+  assert.doesNotMatch(wardrobeHtml(w, kit), /Piece finish/);
+  pipe.send({ type: 'owned', grants: grantsFor(finish, banner) });
+  assert.equal(w.choose('finish', finish), true);
+  assert.equal(posted.at(-1).look.banner, banner);
+  assert.equal(posted.at(-1).look.finish, finish);
+  assert.equal(createWear({ storage }).picked().finish, finish);
+  const shelf = wardrobeHtml(w, kit);
+  assert.ok(shelf.includes(FINISH_NAMES[finish]));
+  assert.ok(!shelf.includes(FINISH_NAMES['chess.finish.polka']));
+  assert.deepEqual(readPick('finish:' + finish), ['finish', finish]);
+  pipe.send({ type: 'owned', grants: grantsFor(banner) });
+  assert.equal(w.mine().finish, undefined, 'grant revocation removes the worn finish');
+  assert.equal(w.choose('finish', null), true);
+  assert.deepEqual(posted.at(-1).look, { ...normalLook({ banner }), finish: null });
+  assert.deepEqual(JSON.parse(storage.getItem('pbp.look.v1')), normalLook({ banner }));
+});
+
+test('server seats show independent finishes including legacy seats and spectators', () => {
+  const bus = fakeBus();
+  const w = createWear({ bus });
+  bus.emit('local', { mode: 'watch' });
+  bus.emit('looks', { white: { finish: 'chess.finish.polka' }, black: { finish: 'chess.finish.opal' } });
+  assert.equal(finishKey(w.sides().w.finish), 'polka');
+  assert.equal(finishKey(w.sides().b.finish), 'opal');
+  bus.emit('looks', { white: { finish: 'chess.finish.polka' }, black: { set: 'chess.set.royal-capes' } });
+  assert.equal(w.sides().b.finish, undefined);
+  assert.equal(w.sides().b.set, 'chess.set.royal-capes');
 });
 
 test('the counter frame is contract 1', () => {
@@ -143,6 +195,32 @@ test('wardrobe: owned pills pick, the rest stay visible and locked', () => {
   assert.deepEqual(readPick('banner:'), ['banner', null]);
   assert.equal(readPick('banner:chess.set.royal-capes'), null);
   assert.equal(readPick('hat:x'), null);
+});
+
+test('wardrobe: an item away from this week\'s counter says when it is back (ccp-bugs #1738)', () => {
+  const TUE = Date.UTC(2026, 10, 24, 10);
+  assert.equal(lockNote('2026-11-30', TUE), 'Back in the Prize Counter on Mon 30 Nov');
+  assert.equal(lockNote('2026-11-30', Date.UTC(2026, 10, 30)), LOCKED_NOTE, 'the day has come: plain note');
+  assert.equal(lockNote(null, TUE), LOCKED_NOTE);
+  assert.equal(lockNote('30 Nov', TUE), LOCKED_NOTE);
+  const pipe = hostPipe();
+  const w = createWear({ onHost: pipe.onHost, storage: fakeStorage(), hosted: true });
+  let changes = 0;
+  w.onChange(() => { changes++; });
+  pipe.send({ type: 'owned', grants: grantsFor('chess.set.velvet-court') });
+  pipe.send({ type: 'pbp:stock', later: [{ id: 'chess.banner.crest', from: '2026-11-30' }, { id: 'chess.banner.house-pink', from: 'soon' }, null] });
+  assert.equal(changes, 2);
+  assert.equal(w.backOn('chess.banner.crest'), '2026-11-30');
+  assert.equal(w.backOn('chess.banner.house-pink'), null, 'junk dates are dropped');
+  const kit = { esc: (s) => String(s), bar: () => '', bigBtn: () => '', hosted: true, now: TUE };
+  const crest = (html) => html.match(/<button[^>]*>Crest Banner<span class="ward-lock">([^<]*)<\/span>/);
+  const html = wardrobeHtml(w, kit);
+  assert.ok(crest(html), 'the Crest Banner pill is drawn locked');
+  assert.equal(crest(html)[1], 'Back in the Prize Counter on Mon 30 Nov');
+  assert.match(html, /House Banner<span class="ward-lock">In the Prize Counter</, 'in stock: today\'s text');
+  // A later frame without the row takes the date away.
+  pipe.send({ type: 'pbp:stock', later: [] });
+  assert.equal(crest(wardrobeHtml(w, kit))[1], LOCKED_NOTE);
 });
 
 test('api: every seat and join carries the look, a bare look carries nothing', async () => {

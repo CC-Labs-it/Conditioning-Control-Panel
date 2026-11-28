@@ -66,7 +66,8 @@ namespace ConditioningControlPanel.Services
             // "lab" is a legacy alias that lands on the Play door's card wall (Phase 6). Without
             // it every caller still passing "lab" would score -1 and get the fallback "rise"
             // entrance instead of the horizontal slide its neighbours get.
-            if (string.Equals(tab, "lab", StringComparison.OrdinalIgnoreCase)) tab = "play";
+            if (string.Equals(tab, "lab", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(tab, "play", StringComparison.OrdinalIgnoreCase)) tab = "playeyes";   // declutter wave 2: Play lands on Eyes
             return Array.FindIndex(NavOrder, k => string.Equals(k, tab, StringComparison.OrdinalIgnoreCase));
         }
 

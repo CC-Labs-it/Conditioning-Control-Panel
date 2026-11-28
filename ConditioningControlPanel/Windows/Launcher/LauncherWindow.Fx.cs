@@ -22,8 +22,8 @@ namespace ConditioningControlPanel.Launcher;
 /// the Back Room tile. The event beats (Play, the CTA, the return, the running engine, the
 /// wandering sheen, the veil) live in the Choreo partial and hang off the seams here.
 ///
-/// <para>Rails, all of them: every loop is gated on <see cref="MotionFx.AllowAmbientLoops"/> or
-/// <see cref="MotionFx.AllowParticles"/>, everything parks on Deactivated and on minimize, ambient
+/// <para>Rails, all of them: every loop is gated on <see cref="MotionFx.AmbientAllowedByLevel"/> or
+/// <see cref="MotionFx.ParticlesAllowedByLevel"/>, everything parks on Deactivated and on minimize, ambient
 /// timelines run at 24 fps or lower, <c>element.BeginAnimation</c> only, and every callback is
 /// wrapped: decoration is never why the launcher throws. The Performance tier keeps the fog and
 /// the bursts and loses the trail and the comet.</para>
@@ -106,7 +106,7 @@ public partial class LauncherWindow
         try
         {
             ChoreoEngineState(running);
-            bool breathe = running && MotionFx.AllowAmbientLoops && !_fxParked;
+            bool breathe = running && MotionFx.AmbientAllowedByLevel && !_fxParked;
             if (breathe == _dotBreathing) return;
             _dotBreathing = breathe;
             if (breathe) MotionFx.GlowBreath(RunningDot, 0.55, 1.0, 2.6);
@@ -137,7 +137,7 @@ public partial class LauncherWindow
         {
             PerimeterCometAdorner.Detach(_comet);
             _comet = null;
-            if (on && !_perfLow && !_fxParked && MotionFx.AllowAmbientLoops)
+            if (on && !_perfLow && !_fxParked && MotionFx.AmbientAllowedByLevel)
                 _comet = PerimeterCometAdorner.Attach(tile, TileRadius, 7.0);
 
             ChoreoTileHover(tile, entry, on);
@@ -228,7 +228,7 @@ public partial class LauncherWindow
             Ambient.Resume();
             StartWordmarkDrift();
             StartWordmarkSheenTimer();
-            if (MotionFx.AllowAmbientLoops) _ctaSheen?.Start();
+            if (MotionFx.AmbientAllowedByLevel) _ctaSheen?.Start();
             BackdropUnpark();
             ChoreoUnpark();
             FxOnEngineState(App.IsEngineRunning);
@@ -257,7 +257,7 @@ public partial class LauncherWindow
 
     private void StartAmbient()
     {
-        if (!MotionFx.AllowAmbientLoops) { Ambient.Stop(); return; }
+        if (!MotionFx.AmbientAllowedByLevel) { Ambient.Stop(); return; }
         Ambient.StartLayers(new AmbientFxConfig
         {
             Layers = AmbientFxLayers.FogDrift | AmbientFxLayers.DustField | AmbientFxLayers.AuroraWash
@@ -265,6 +265,7 @@ public partial class LauncherWindow
             Intensity = 0.95,
             FogPuffs = 4,
             DustDensity = 1.4,
+            RunDuringShow = true,
         });
     }
 
@@ -277,7 +278,7 @@ public partial class LauncherWindow
     {
         try
         {
-            if (anchor == null || !MotionFx.AllowParticles) return;
+            if (anchor == null || !MotionFx.ParticlesAllowedByLevel) return;
             if (!anchor.IsVisible || anchor.ActualWidth <= 0 || anchor.ActualHeight <= 0) return;
             var bounds = anchor.TransformToVisual(BurstLayer)
                                .TransformBounds(new Rect(0, 0, anchor.ActualWidth, anchor.ActualHeight));
@@ -313,7 +314,7 @@ public partial class LauncherWindow
         try
         {
             ClearStaleHover();
-            if (_perfLow || _fxParked || _transitionBusy || !MotionFx.AllowParticles) return;
+            if (_perfLow || _fxParked || _transitionBusy || !MotionFx.ParticlesAllowedByLevel) return;
             if (LockdownVeil.Visibility == Visibility.Visible) return;
             var now = DateTime.UtcNow;
             if ((now - _lastTrail).TotalMilliseconds < TrailMinGapMs) return;
@@ -377,7 +378,7 @@ public partial class LauncherWindow
         {
             DetachSheen(ref _ctaSheen);
             StopWanderingSheen();
-            if (!MotionFx.AllowAmbientLoops || _fxParked) return;
+            if (!MotionFx.AmbientAllowedByLevel || _fxParked) return;
             _ctaSheen = AttachSheen(PanelCta, 12);
             StartWanderingSheen();
         }
@@ -413,7 +414,7 @@ public partial class LauncherWindow
     {
         try
         {
-            if (!MotionFx.AllowAmbientLoops) { StopWordmarkDrift(); return; }
+            if (!MotionFx.AmbientAllowedByLevel) { StopWordmarkDrift(); return; }
             var drift = new DoubleAnimation(1.0, WordmarkDriftTo, TimeSpan.FromSeconds(WordmarkDriftSeconds))
             {
                 AutoReverse = true,
@@ -436,7 +437,7 @@ public partial class LauncherWindow
 
     private void StartWordmarkSheenTimer()
     {
-        if (!MotionFx.AllowAmbientLoops) return;
+        if (!MotionFx.AmbientAllowedByLevel) return;
         _wordmarkSheenTimer ??= new DispatcherTimer(DispatcherPriority.Background);
         _wordmarkSheenTimer.Tick -= OnWordmarkSheenTick;
         _wordmarkSheenTimer.Tick += OnWordmarkSheenTick;
@@ -452,7 +453,7 @@ public partial class LauncherWindow
         try
         {
             if (_wordmarkSheenTimer != null) _wordmarkSheenTimer.Interval = NextWordmarkSheenGap();
-            if (_fxParked || !MotionFx.AllowAmbientLoops || !Wordmark.IsVisible) return;
+            if (_fxParked || !MotionFx.AmbientAllowedByLevel || !Wordmark.IsVisible) return;
 
             var travel = TimeSpan.FromSeconds(WordmarkSheenSeconds);
             var slide = new DoubleAnimation(-WordmarkSheen.Width - 20, Wordmark.ActualWidth + 20, travel)

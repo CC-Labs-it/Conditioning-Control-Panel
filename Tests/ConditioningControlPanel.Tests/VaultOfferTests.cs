@@ -153,6 +153,7 @@ public class VaultOfferTests
     public void EveryKeyTheCardsReadIsInEveryLanguageWithTheSamePlaceholders()
     {
         var src = File.ReadAllText(Path.Combine(AppDir(), "Dialogs", "VaultGateDialog.cs"))
+                  + File.ReadAllText(Path.Combine(AppDir(), "Dialogs", "VaultGateDialog.Compare.cs"))
                   + File.ReadAllText(Path.Combine(AppDir(), "MainWindow", "MainWindow.Patreon.cs"));
         var keys = Regex.Matches(src, "\"(vaultgate_[a-z_0-9]+)\"").Select(m => m.Groups[1].Value).Distinct().ToList();
         Assert.Contains("vaultgate_open_vault", keys);

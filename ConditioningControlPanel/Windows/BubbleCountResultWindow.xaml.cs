@@ -143,7 +143,23 @@ namespace ConditioningControlPanel
             // Create primary window
             var primaryWindow = new BubbleCountResultWindow(correctAnswer, strictMode, onComplete, primary, true);
             primaryWindow.Show();
-            primaryWindow.Activate();
+            primaryWindow.TakeKeyboard();
+        }
+
+        /// <summary>
+        /// #1698 (second occurrence): a plain Activate() fails silently while another app (Discord) holds
+        /// the keyboard, so the topmost answer box looked focused and the typed answer landed in that app.
+        /// Take the real foreground, then check again once the show has settled.
+        /// </summary>
+        private void TakeKeyboard()
+        {
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+            ConditioningControlPanel.Services.UI.ForegroundGrab.Take(hwnd);
+            Activate();
+            ConditioningControlPanel.Services.UI.ForegroundGrab.RecheckSoon(this,
+                () => new System.Windows.Interop.WindowInteropHelper(this).Handle,
+                () => !_isCompleted && IsVisible,
+                () => TxtAnswer.Focus(), "BubbleCountResultWindow");
         }
 
         private void OnTextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)

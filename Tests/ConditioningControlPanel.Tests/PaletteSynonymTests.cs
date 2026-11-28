@@ -28,7 +28,7 @@ public class PaletteSynonymTests
     [InlineData("exclusives", "tab.premium")]
     [InlineData("velvet vault", "tab.premium")]
     [InlineData("plans", "section.account")]
-    [InlineData("lab", "tab.play")]
+    [InlineData("lab", "door.play")]
     [InlineData("effects rack", "tab.studio")]
     [InlineData("available subjects", "tab.availablesubjects")]
     [InlineData("together", "tab.availablesubjects")]

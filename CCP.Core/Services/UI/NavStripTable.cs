@@ -24,6 +24,48 @@ namespace ConditioningControlPanel.Services.UI
         /// <summary>A pill that opens its own window asks before raising a navigation request.</summary>
         public static bool AsksBeforeOpening(NavTab tab) => tab.Kind == NavTabKind.Window;
 
+        // ---- declutter wave 1 (2026-11-15, WPF f04bd6a52e) ----------------------------------
+        // The strip holds ONE filled object, the pill of the page on screen. Every other pill is
+        // icon + label on the tray until the pointer (or a press) asks for its face.
+
+        /// <summary>Does a pill draw its face (plate, outline, drop band) in this state? The lit
+        /// pill always does; a resting one only under the pointer or a press.</summary>
+        public static bool ShowsFace(bool active, bool hovered, bool pressed) => active || hovered || pressed;
+
+        /// <summary>The crumb's section word is the room title: larger than the page word.</summary>
+        public const double CrumbTitleSize = 17;
+
+        /// <summary>The page word's size next to it.</summary>
+        public const double CrumbPageSize = 12.5;
+
+        /// <summary>The longest text a pill's count badge shows ("5 on", "12").</summary>
+        public const int BadgeTextMax = 8;
+
+        public const double CountBadgeFontSize = 11;
+
+        /// <summary>The count badge seam: tab key to short text ("5 on") or null for no badge.
+        /// A page sets it once and calls <see cref="NotifyBadgesChanged"/> when its number moves;
+        /// the strip never reaches into a page.</summary>
+        public static Func<string, string?>? BadgeProvider { get; set; }
+
+        /// <summary>Raised by <see cref="NotifyBadgesChanged"/>; a mounted strip repaints its badges.</summary>
+        public static event Action? BadgesChanged;
+
+        public static void NotifyBadgesChanged() => BadgesChanged?.Invoke();
+
+        /// <summary>The badge text for a pill: the provider's answer, trimmed and capped at
+        /// <see cref="BadgeTextMax"/>; null for no provider, a blank answer or a provider that throws.</summary>
+        public static string? BadgeText(string? tabKey)
+        {
+            if (string.IsNullOrEmpty(tabKey)) return null;
+            string? text;
+            try { text = BadgeProvider?.Invoke(tabKey); }
+            catch { return null; }
+            text = text?.Trim();
+            if (string.IsNullOrEmpty(text)) return null;
+            return text.Length <= BadgeTextMax ? text : text.Substring(0, BadgeTextMax);
+        }
+
         /// <summary>The pills a section draws, in table order, hidden tabs skipped.</summary>
         public static IReadOnlyList<NavTab> Pills(string? section)
         {
@@ -33,8 +75,9 @@ namespace ConditioningControlPanel.Services.UI
 
         /// <summary>
         /// The pill a tab key lights. A pill key lights itself; the permanent alias "lab" lights
-        /// Games; pages that live inside a Play zone light that zone (Graded Intake and Lockdown
-        /// sit in Sessions, Blink Trainer in Eyes). Null when no pill owns the page (Spiral Room).
+        /// Eyes, where ShowTab lands it (declutter wave 2); pages that live inside a Play zone light
+        /// that zone (Graded Intake and Lockdown sit in Sessions, Blink Trainer in Eyes). Null when
+        /// no pill owns the page (Spiral Room).
         /// </summary>
         public static string? ActivePill(string? tab)
         {
@@ -42,7 +85,7 @@ namespace ConditioningControlPanel.Services.UI
             var key = tab.ToLowerInvariant();
             switch (key)
             {
-                case "lab": return "play";
+                case "lab": return "playeyes";
                 case "gradedintake":
                 case "lockdown": return "playsessions";
                 case "blinktrainer": return "playeyes";

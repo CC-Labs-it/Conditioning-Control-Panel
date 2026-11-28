@@ -62,9 +62,9 @@ internal static partial class PieceByPieceHostService
     private static void OnLookPicked(JObject o)
     {
         var settings = App.Settings?.Current;
-        if (settings == null) return;
-        var look = PbpLookRules.Clamp(PbpLookRules.Normal(o["look"]), App.Ownership?.Grants);
+        if (settings == null || o["look"] is not JObject pick) return;
         var (was, _) = PbpLookRules.Read(settings.ChessLook);
+        var look = PbpLookRules.PagePick(pick, was, App.Ownership?.Grants);
         if (was.Equals(look) && !string.IsNullOrEmpty(settings.ChessLook)) return;
         SaveAndPush(settings, look);
     }
@@ -78,18 +78,18 @@ internal static partial class PieceByPieceHostService
     }
 
     /// <summary>
-    /// The Prize Counter's Wear on an owned chess row (set, banner, insignia): the same write a pick on
+    /// The Prize Counter's Wear on an owned chess row uses the same write a pick on
     /// the board's wardrobe makes (clamped, saved, PUT), and an open board redraws. UI thread. False
     /// when the board does not draw that id or the account does not own it.
     /// </summary>
     internal static bool WearFromCounter(string itemId)
     {
         var settings = App.Settings?.Current;
-        if (settings == null || PbpLookRules.SlotOf(itemId) == null) return false;
+        if (settings == null || PbpLookRules.SlotOf(itemId) is not string slot) return false;
         var grants = App.Ownership?.Grants;
         var (was, _) = PbpLookRules.Read(settings.ChessLook);
         var look = PbpLookRules.Clamp(PbpLookRules.With(was, itemId), grants);
-        if (PbpLookRules.SlotOf(itemId) is { } slot && !Wears(look, slot, itemId)) return false;
+        if (!Wears(look, slot, itemId)) return false;
         if (!was.Equals(look) || string.IsNullOrEmpty(settings.ChessLook)) SaveAndPush(settings, look);
         if (_host != null) PostWardrobe();
         App.Logger?.Information("PieceByPiece: wearing {Id} from the counter", itemId);
@@ -100,10 +100,14 @@ internal static partial class PieceByPieceHostService
     {
         "set" => look.Set == id,
         "banner" => look.Banner == id,
-        _ => look.Insignia == id,
+        "insignia" => look.Insignia == id,
+        "finish" => look.Finish == id,
+        "board" => look.Board == id,
+        "companion" => look.Companion == id,
+        _ => false,
     };
 
-    /// <summary>Contract 1: the counter window over the board, on the chess tab.</summary>
+    /// <summary>Contract 1: the counter sheet inside the board window, on the chess tab.</summary>
     private static void OnOpenCounter(JObject o)
     {
         var tab = PbpLookRules.CounterTabOf(o);
@@ -127,7 +131,31 @@ internal static partial class PieceByPieceHostService
         _counterHooked = false;
         if (_host == null) return;
         PostWardrobe();
+        _ = PullStockAsync();
         if (CounterHandsFocusBack(reason)) _host.FocusWeb();
+    }
+
+    /// <summary>This week's away chess rows and when they are back (<see cref="PbpLookRules.StockFrame"/>), so the
+    /// Wardrobe can say "back on Mon 30 Nov" instead of "In the Prize Counter". Any failure says nothing: the
+    /// page keeps the plain note.</summary>
+    private static async Task PullStockAsync()
+    {
+        var uid = App.UnifiedUserId ?? "";
+        var token = SafeAuthToken();
+        if (string.IsNullOrEmpty(uid) || string.IsNullOrEmpty(token)) return;
+        try
+        {
+            using var req = PrizeCounterRelay.BuildRequest(PrizeCounterRelay.OpState, (uid, token), null, null);
+            using var res = await Http.SendAsync(req, CancellationToken.None).ConfigureAwait(false);
+            if (!res.IsSuccessStatusCode) { App.Logger?.Debug("PieceByPiece: shop state GET {Status}, no stock dates", (int)res.StatusCode); return; }
+            var frame = PbpLookRules.StockFrame(JToken.Parse(await res.Content.ReadAsStringAsync().ConfigureAwait(false)));
+            RunOnUi(() =>
+            {
+                try { _host?.Post(frame); }
+                catch (Exception ex) { Diag.Swallowed(ex); }
+            });
+        }
+        catch (Exception ex) { App.Logger?.Debug("PieceByPiece: stock pull failed: {E}", ex.Message); }
     }
 
     /// <summary>Only a plain back (or a Wear that stays on the board) gives the board the keyboard again.</summary>

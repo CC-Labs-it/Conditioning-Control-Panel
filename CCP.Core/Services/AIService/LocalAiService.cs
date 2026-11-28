@@ -27,7 +27,6 @@ namespace ConditioningControlPanel.Services.AIService
     /// </summary>
     public class LocalAiService : IAiService
     {
-        private const string DefaultHost = "http://localhost:11434/";
         private const string DefaultModel = "qwen3.5:latest";
 
         private readonly BambiSprite _bambiSprite;
@@ -318,10 +317,23 @@ namespace ConditioningControlPanel.Services.AIService
             }
         }
 
+        // #5197: a host saved without http:// (or half typed) used to reach new Uri(host) as is and
+        // throw from the constructor, which kept the main window from opening. LocalAiHost adds the
+        // scheme and falls back to the default for anything still unusable; this never throws.
         private static string NormalizeHost(string host)
         {
-            return host.EndsWith("/", StringComparison.Ordinal) ? host : host + "/";
+            var normalized = LocalAiHost.Normalize(host, out var fellBack);
+            // Once per session: EnsureHost runs this on every request.
+            if (fellBack && !_warnedBadHost)
+            {
+                _warnedBadHost = true;
+                Log.Warning("LocalAiService: saved Ollama host is not a usable address, using {Default}",
+                    LocalAiHost.Default);
+            }
+            return normalized;
         }
+
+        private static bool _warnedBadHost;
 
         private static HttpClient BuildHttpClient(string host)
         {
@@ -336,7 +348,7 @@ namespace ConditioningControlPanel.Services.AIService
         private static string GetConfiguredHost()
         {
             var host = CoreSettings.Service?.Current?.CompanionPrompt?.AiOllamaHost;
-            return string.IsNullOrWhiteSpace(host) ? DefaultHost : host;
+            return string.IsNullOrWhiteSpace(host) ? LocalAiHost.Default : host;
         }
 
         private static string GetConfiguredModel()
@@ -516,9 +528,13 @@ namespace ConditioningControlPanel.Services.AIService
                 // The caller's budget is honoured here, not silently dropped: a 60-token ambient quip
                 // that comes back as three paragraphs inflates every later window and costs seconds
                 // of local inference. LocalMaxTokensHardCap keeps a pathological request bounded.
+                // #1702: under Companion V2 the caller's number is the HOSTED cap (80 for a
+                // reaction); the player's own box gets the own-endpoint room instead.
                 var (status, body) = await SendChatAsync(model,
                     outgoing.Select(m => (m.Role, (string?)m.Content)), cancellationToken,
-                    maxTokens: Math.Clamp(options.MaxTokens, 1, LocalMaxTokensHardCap),
+                    maxTokens: options.CompanionV2
+                        ? Math.Min(AiCallOptions.OwnEndpointTokenLimit(options), LocalMaxTokensHardCap)
+                        : Math.Clamp(options.MaxTokens, 1, LocalMaxTokensHardCap),
                     temperature: options.Temperature).ConfigureAwait(false);
 
                 if (status != 200)
@@ -1034,7 +1050,7 @@ namespace ConditioningControlPanel.Services.AIService
         internal static int ComputeNumCtx(int? maxTokens)
         {
             var reply = Math.Clamp(maxTokens ?? LocalMaxTokensHardCap, 1, LocalMaxTokensHardCap);
-            var needed = Companion.Brain.PromptAssembler.ContextFitTokenBudget + reply + ContextWindowMargin;
+            var needed = Companion.Brain.PromptAssembler.LocalContextFitTokenBudget + reply + ContextWindowMargin;
             return Math.Max(MinContextWindow, needed);
         }
 

@@ -6,16 +6,23 @@ namespace ConditioningControlPanel.Services.Friends;
 
 /// <summary>
 /// The feed's pure half: which events it keeps, how each one reads, how old it looks, how many
-/// lines show folded, and what the badges and the tray say. No WPF, no disk, no loc lookups here:
+/// lines a page shows, and what the badges and the tray say. No WPF, no disk, no loc lookups here:
 /// every string comes back as a loc key plus its arguments, so the suite reads them bare.
 /// </summary>
 public static class FriendsFeedRules
 {
+    // shortcut: WPF 7.4 replaced this fold with FriendsFold (two recent lines); kept for the Avalonia
+    // drawer until lane s20-friends-fold ports it, then delete FoldMin/FoldMax/FoldCount.
     /// <summary>Folded, the feed shows at least this many lines...</summary>
     public const int FoldMin = 3;
 
     /// <summary>...and every new line up to this many, so opening the drawer usually clears the badge.</summary>
     public const int FoldMax = 8;
+
+    /// <summary>How many lines show before "more": every new line, never under
+    /// <see cref="FoldMin"/> nor over <see cref="FoldMax"/>, never more than there are.</summary>
+    public static int FoldCount(int total, int fresh)
+        => Math.Max(0, Math.Min(total, Math.Clamp(fresh, FoldMin, FoldMax)));
 
     /// <summary>Each "more" press shows this many further lines.</summary>
     public const int MoreStep = 10;
@@ -41,11 +48,6 @@ public static class FriendsFeedRules
         DateTimeKind.Local => t.ToUniversalTime(),
         _ => DateTime.SpecifyKind(t, DateTimeKind.Utc),
     };
-
-    /// <summary>How many lines show before "more": every new line, never under
-    /// <see cref="FoldMin"/> nor over <see cref="FoldMax"/>, never more than there are.</summary>
-    public static int FoldCount(int total, int fresh)
-        => Math.Max(0, Math.Min(total, Math.Clamp(fresh, FoldMin, FoldMax)));
 
     /// <summary>The unread badge: nothing at 0, the number up to 9, then 9+.</summary>
     public static string BadgeText(int unread) => unread <= 0 ? "" : unread > 9 ? "9+" : unread.ToString();

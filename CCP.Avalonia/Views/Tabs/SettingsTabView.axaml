@@ -570,22 +570,24 @@
       <!-- Row 1: flash, the video pair, subliminals, bouncing text -->
       <features:FeatureCard Grid.Row="0" Grid.Column="0" x:Name="CardFlash" DashboardDepth="True" DimWhenInactive="True" Icon="/Resources/features/flash.png"
                             Title="Flash Images"
-                            HelpSectionId="FlashImages"/>
+                            HelpSectionId="FlashImages" Super="FlickerDeck"/>
       <features:SplitFeatureCard Grid.Row="0" Grid.Column="1" x:Name="ComboVideoBubble" IconB="/Resources/features/Bubble_count.png" IconA="/Resources/features/mandatory_videos.png"
-                                 TitleA="Mandatory Video" TitleB="Bubble Count" DashboardDepth="True" HelpSectionIdA="Video" HelpSectionIdB="BubbleCount"/>
+                                 TitleA="Mandatory Video" TitleB="Bubble Count" DashboardDepth="True" HelpSectionIdA="Video" HelpSectionIdB="BubbleCount" SuperA="LightsDown"/>
       <features:FeatureCard Grid.Row="0" Grid.Column="2" x:Name="CardSubliminal" DashboardDepth="True" DimWhenInactive="True" Icon="/Resources/features/subliminal.png"
                             Title="Subliminals"
-                            HelpSectionId="Subliminals"/>
+                            HelpSectionId="Subliminals" Super="Afterglow"/>
       <features:FeatureCard Grid.Row="0" Grid.Column="3" x:Name="CardBouncingText" DashboardDepth="True" DimWhenInactive="True" Icon="/Resources/features/bouncing_text.png"
                             Title="Bouncing Text"
-                            HelpSectionId="BouncingText"/>
+                            HelpSectionId="BouncingText" Super="Scrawl"/>
 
       <!-- Row 2: the Deeper editor (far left) + centre logo + spiral pair -->
       <!-- THE DEEPER EDITOR TILE (WPF SettingsTabView.xaml:601-636). It replaced the retired
            nameless tease tile. A DOOR, not a feature: no ToggleRequested handler (an editor has
            no on/off), no DimWhenInactive, no price tag. The click is ShowTab("deeper") and
            nothing else - navigate, never launch (WPF MainWindow.Presets.cs:1121). -->
-      <features:FeatureCard Grid.Row="1" Grid.Column="0" x:Name="CardDeeperEditor" DashboardDepth="True"
+      <!-- Declutter wave 2 (2026-11-15): collapsed, not deleted (the Deeper editor is a launcher
+           Tools door now); the daily gift plate below spans its slot. -->
+      <features:FeatureCard Grid.Row="1" Grid.Column="0" x:Name="CardDeeperEditor" DashboardDepth="True" IsVisible="False"
                             Title="{loc:Str dash_deeper_editor_title}"
                             Icon="/Resources/features/deeper_editor.png">
         <ToolTip.Tip>
@@ -802,7 +804,7 @@
       </Border>
 
       <features:SplitFeatureCard Grid.Row="1" Grid.Column="3" x:Name="ComboSpiralPink" IconB="/Resources/features/Pink_filter.png" IconA="/Resources/features/spiral_overlay.png"
-                                 TitleA="Spiral Overlay" TitleB="Pink Filter" DashboardDepth="True" HelpSectionIdA="SpiralOverlay" HelpSectionIdB="PinkFilter"/>
+                                 TitleA="Spiral Overlay" TitleB="Pink Filter" DashboardDepth="True" HelpSectionIdA="SpiralOverlay" HelpSectionIdB="PinkFilter" SuperA="Vortex" SuperB="Creep"/>
 
       <!-- Row 3: the ? box + the immersion pair -->
       <!-- The ? BOX: today's premium feature, free for the day (DailyFreeService). The title is
@@ -813,7 +815,7 @@
            visibility mid-turn, so a handler on a face would see leaves the pointer never made),
            and the host stays untransformed: the flip lives on the inner MysteryPlate that both
            faces share, so an edge-on plate cannot manufacture a leave under a still pointer. -->
-      <Grid Grid.Row="2" Grid.Column="0" x:Name="MysteryFlipHost" Background="Transparent">
+      <Grid Grid.Row="1" Grid.RowSpan="2" Grid.Column="0" x:Name="MysteryFlipHost" Background="Transparent">
        <Grid x:Name="MysteryPlate" RenderTransformOrigin="50%,50%">
         <Grid.RenderTransform>
           <TransformGroup>
@@ -837,7 +839,9 @@
           <Grid>
             <Border CornerRadius="11" RenderOptions.BitmapInterpolationMode="HighQuality">
               <Border.Background>
-                <ImageBrush Stretch="UniformToFill"/>
+                <!-- Uniform: the plate is two rows tall since the declutter strip-out, and a
+                     filled picture lost its sides there. Show it whole. -->
+                <ImageBrush Stretch="Uniform"/>
               </Border.Background>
             </Border>
             <Border CornerRadius="0,0,11,11" VerticalAlignment="Bottom" IsHitTestVisible="False">
@@ -883,7 +887,7 @@
       <!-- The badge sits OUTSIDE the flip host so it stays legible while the plate is edge-on
            mid-turn. Top-right because the FREE TODAY price tag owns the card's top-left. -->
       <Border x:Name="MysteryBadge"
-              Grid.Row="2" Grid.Column="0" ZIndex="12" IsHitTestVisible="False"
+              Grid.Row="1" Grid.Column="0" ZIndex="12" IsHitTestVisible="False"
               BoxShadow="0 0 10 0 #D9FFD54A"
               HorizontalAlignment="Right" VerticalAlignment="Top"
               Margin="0,2,2,0" Padding="8,3,8,4" CornerRadius="8"
@@ -905,7 +909,7 @@
                    Foreground="#3A2A00" FontSize="10" FontWeight="Black"/>
       </Border>
       <features:SplitFeatureCard Grid.Row="2" Grid.Column="3" x:Name="ComboMindDrain" IconB="/Resources/features/brain_drain.png" IconA="/Resources/features/Mind_Wipers.png"
-                                 TitleA="Mind Wipe" TitleB="Brain Drain" DashboardDepth="True" HelpSectionIdA="MindWipe" HelpSectionIdB="BrainDrain"/>
+                                 TitleA="Mind Wipe" TitleB="Brain Drain" DashboardDepth="True" HelpSectionIdA="MindWipe" HelpSectionIdB="BrainDrain" SuperB="Undertow"/>
 
       <!-- Row 4: the vault (double-wide) + the two games -->
       <!-- THE VAULT: the Exclusives storefront (Velvet Vault + the premium T2 shelf).
@@ -937,7 +941,7 @@
       </TextBlock>
       <features:FeatureCard Grid.Row="3" Grid.Column="2" x:Name="CardBubblePop" DashboardDepth="True" DimWhenInactive="True" Icon="/Resources/features/Bubble_pop.png"
                             Title="Bubble Pop"
-                            HelpSectionId="BubblePop"/>
+                            HelpSectionId="BubblePop" Super="InnerBloom"/>
       <features:FeatureCard Grid.Row="3" Grid.Column="3" x:Name="CardLockCard" DashboardDepth="True" DimWhenInactive="True" Icon="/Resources/features/Phrase_Lock.png"
                             Title="Lock Card"
                             HelpSectionId="LockCard"/>

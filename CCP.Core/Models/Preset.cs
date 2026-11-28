@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using ConditioningControlPanel.Services.Super;
 
 namespace ConditioningControlPanel.Models
 {
@@ -68,6 +69,8 @@ namespace ConditioningControlPanel.Models
         public int VideoMinDurationSeconds { get; set; } = 0;
         public int VideoMaxDurationSeconds { get; set; } = 0;
         public bool VideoCutRandomStart { get; set; } = true;
+        public bool MandatoryVideoLoopShortClips { get; set; } = false;
+        public bool MandatoryVideoFillShortWithOthers { get; set; } = false;
 
         // Attention Check (Mini-Game) Settings
         public bool AttentionChecksEnabled { get; set; } = false;
@@ -155,6 +158,23 @@ namespace ConditioningControlPanel.Models
         // System Settings
         public bool DualMonitorEnabled { get; set; } = true;
         public bool PanicKeyEnabled { get; set; } = true;
+
+        /// <summary>
+        /// Each effect's V2 switch, keyed by <c>SuperEffect</c> name, stored like
+        /// <see cref="AppSettings.SuperModes"/> (0 classic, 1 and 2 V2 on). A save writes all eight
+        /// explicitly. Null on presets saved before 7.3.1 and on the built-in ones: applying such a
+        /// preset turns every V2 switch OFF (classic), the look it had when it was made; an effect
+        /// missing from the map turns off too (ccp-bugs #1696: V2 defaults on, so an old preset
+        /// came back with the Whirlpool and Steam it never had).
+        /// </summary>
+        public Dictionary<string, int>? SuperModes { get; set; }
+
+        /// <summary>
+        /// The newer settings (Steam, floating videos, flash motion, V2 options, monitor targets) as
+        /// AppSettings name to value; see <see cref="PresetCarry"/>. Null on presets saved before 7.3.7
+        /// and on the built-ins: applying one puts the looks back to their defaults.
+        /// </summary>
+        public Dictionary<string, string>? Carried { get; set; }
 
         /// <summary>
         /// Creates the 5 default presets
@@ -345,6 +365,8 @@ namespace ConditioningControlPanel.Models
             settings.VideoMinDurationSeconds = VideoMinDurationSeconds;
             settings.VideoMaxDurationSeconds = VideoMaxDurationSeconds;
             settings.VideoCutRandomStart = VideoCutRandomStart;
+            settings.MandatoryVideoLoopShortClips = MandatoryVideoLoopShortClips;
+            settings.MandatoryVideoFillShortWithOthers = MandatoryVideoFillShortWithOthers;
 
             // Attention Checks
             settings.AttentionChecksEnabled = AttentionChecksEnabled;
@@ -432,6 +454,14 @@ namespace ConditioningControlPanel.Models
             settings.DualMonitorEnabled = DualMonitorEnabled;
             settings.PanicKeyEnabled = PanicKeyEnabled;
 
+            // V2 switches: every effect, classic where the preset names none (ccp-bugs #1696);
+            // assigned only on a real change so a preset that matches the live state raises nothing.
+            var superModes = MergeSuperModes(settings.SuperModes, SuperModesOrClassic(SuperModes));
+            if (superModes != null) settings.SuperModes = superModes;
+
+            // Steam, floating videos, flash motion, V2 options, monitors (ccp-bugs #1695 #1696).
+            PresetCarry.Apply(settings, Carried);
+
             // Update current preset name
             settings.CurrentPresetName = Name;
         }
@@ -468,6 +498,8 @@ namespace ConditioningControlPanel.Models
                 VideoMinDurationSeconds = settings.VideoMinDurationSeconds,
                 VideoMaxDurationSeconds = settings.VideoMaxDurationSeconds,
                 VideoCutRandomStart = settings.VideoCutRandomStart,
+                MandatoryVideoLoopShortClips = settings.MandatoryVideoLoopShortClips,
+                MandatoryVideoFillShortWithOthers = settings.MandatoryVideoFillShortWithOthers,
 
                 // Attention Checks
                 AttentionChecksEnabled = settings.AttentionChecksEnabled,
@@ -546,8 +578,59 @@ namespace ConditioningControlPanel.Models
 
                 // System
                 DualMonitorEnabled = settings.DualMonitorEnabled,
-                PanicKeyEnabled = settings.PanicKeyEnabled
+                PanicKeyEnabled = settings.PanicKeyEnabled,
+
+                // V2 switches
+                SuperModes = SnapshotSuperModes(settings.SuperModes),
+                Carried = PresetCarry.Snapshot(settings)
             };
+        }
+
+        /// <summary>Every effect's V2 switch as the player has it now (absent = the default, written out).</summary>
+        public static Dictionary<string, int> SnapshotSuperModes(IReadOnlyDictionary<string, int>? live)
+        {
+            var map = new Dictionary<string, int>();
+            foreach (SuperEffect e in Enum.GetValues(typeof(SuperEffect)))
+                map[e.ToString()] = (int)SuperModeRule.Resolve(e, live);
+            return map;
+        }
+
+        /// <summary>
+        /// The preset's V2 switches with every effect present: what it names (exact names), classic for
+        /// the rest. A preset with no map (saved before 7.3.1, or a built-in) is all classic, the look
+        /// it had when it was made (ccp-bugs #1696).
+        /// </summary>
+        public static Dictionary<string, int> SuperModesOrClassic(IReadOnlyDictionary<string, int>? preset)
+        {
+            var map = new Dictionary<string, int>();
+            foreach (SuperEffect e in Enum.GetValues(typeof(SuperEffect)))
+            {
+                var name = e.ToString();
+                map[name] = preset != null && preset.TryGetValue(name, out var v) ? v : (int)SuperMode.Classic;
+            }
+            return map;
+        }
+
+        /// <summary>
+        /// The live map after applying a preset's V2 switches, or null when nothing changes (no map
+        /// in the preset, or every named effect already as the preset has it). Unknown names are
+        /// ignored; values are clamped to what the effect offers.
+        /// </summary>
+        public static Dictionary<string, int>? MergeSuperModes(IReadOnlyDictionary<string, int>? live, IReadOnlyDictionary<string, int>? preset)
+        {
+            if (preset == null || preset.Count == 0) return null;
+            Dictionary<string, int>? next = null;
+            foreach (var kv in preset)
+            {
+                // Exact names only: Enum.TryParse would also take "3" or "Vortex, Creep".
+                if (!Enum.TryParse<SuperEffect>(kv.Key, ignoreCase: false, out var effect)
+                    || effect.ToString() != kv.Key) continue;
+                var want = SuperModeRule.Clamp(effect, kv.Value);
+                if (SuperModeRule.Resolve(effect, next ?? live) == SuperModeRule.Resolve(effect, new Dictionary<string, int> { [kv.Key] = (int)want }))
+                    continue;
+                next = SuperModeRule.With(next ?? live, effect, want);
+            }
+            return next;
         }
     }
 }

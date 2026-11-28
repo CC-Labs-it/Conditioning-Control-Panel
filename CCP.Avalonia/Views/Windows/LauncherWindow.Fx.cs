@@ -151,7 +151,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             // Every button clicks (WPF LauncherSfx.Click in each handler); a tile's Play has its own cue.
             AddHandler(Button.ClickEvent, (_, e) =>
             {
-                if (e.Source is Visual v && !GamesGrid.IsVisualAncestorOf(v)) LauncherSfx.Click();
+                // A door has its own cue (Edge on open); Continue's is Play's (LauncherWindow.Doors.cs).
+                if (e.Source is Visual v && !GamesGrid.IsVisualAncestorOf(v) && !DoorsHost.IsVisualAncestorOf(v)) LauncherSfx.Click();
             }, RoutingStrategies.Bubble, handledEventsToo: true);
             PropertyChanged += (_, e) =>
             {
@@ -227,6 +228,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void FxPark()
         {
             SettleEntrance();
+            ParkDoors();
             ParkComets();
             StopWordmarkSheen();
             _fxClock.Stop();
@@ -280,6 +282,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     }
                 }
                 busy |= StepEntrance(dt);
+                busy |= StepDoors(dt);
                 busy |= StepWordmarkSheen(dt);
                 busy |= StepDepth(dt);
                 // WPF Edge.cs:124 gates the breath on transitions only. On the CPU path it repaints the whole

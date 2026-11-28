@@ -9,8 +9,11 @@
 # --- temporary (removed by L10 icons-shell-chrome) ---
 Views/Windows/EmiDesk/EmiFace.cs :: "Noto Sans Symbols 2, Segoe UI Symbol, Segoe UI Emoji, Nirmala UI, MS Gothic, Courier New, monospace" :: font: content - Emi's kaomoji mood text (chat content, not an icon); WPF EmiFace.cs fallback chain for its glyphs
 
+Controls/Rows/OptionEmblem.cs :: Geometry.Parse("F1 " + layers[i].PathData) :: path: Readable Rows emblem art from CCP.Core EmblemArt (a drawn sticker beside an option label, never an icon glyph)
 Views/Overlays/GazeRefineOverlay.cs :: new Path { Stroke = Brushes.HotPink :: path: animated gaze dwell progress ring, not an icon
 Views/Tabs/ChasterTabView.axaml :: <Path x:Name="SpiralPath" :: path: decorative rotating spiral watermark, not an icon (WPF ChasterTabView.xaml:276)
+Views/Overlays/FlashOverlayWindow.Deck.cs :: _crackUnder = new Path { :: path: the Deck card crack shadow line, drawn per break, not an icon (WPF Services/Super/Draw deck crack)
+Views/Overlays/FlashOverlayWindow.Deck.cs :: CrackLine = new Path { :: path: the Deck card crack line, drawn per break, not an icon (WPF Services/Super/Draw deck crack)
 # --- content (c).1: companion/chat text ---
 Views/Controls/Companion/ChatThresholdView.axaml.cs :: good. it should~ 💕 :: chat sample bubble, companion text (content (c).1)
 
@@ -38,6 +41,7 @@ Views/Windows/QuizWindow.axaml.cs :: (Companion → AI) :: arrow inside an error
 Views/Tabs/GradedIntakeTabView.axaml.cs :: TrendDirection.Up => "\u2191" :: trend arrow inside the "65% ↑5%" history line, typography (content (c).4)
 Views/Tabs/GradedIntakeTabView.axaml.cs :: TrendDirection.Down => "\u2193" :: trend arrow inside the "65% ↑5%" history line, typography (content (c).4)
 Views/Tabs/GradedIntakeTabView.axaml.cs :: TrendDirection.Flat => "\u2192" :: trend arrow inside the "65% ↑5%" history line, typography (content (c).4)
+Possession/GlyphRotHeadEffect.cs :: { '▯', '▮', '□', '▪', '◻', '▉', '▒' } :: the glyph rot effect rots label letters into these box characters, text content not an icon (content (c).4)
 
 # --- content (c).3: emoji inside head-authored sentences ---
 Views/Chaos/ChaosHudWindow.axaml.cs :: banks into emotes ✦. :: emoji at the end of a body sentence (content (c).3)

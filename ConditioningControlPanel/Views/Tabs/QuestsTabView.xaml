@@ -331,7 +331,7 @@
                                                         <Border CornerRadius="6" Margin="5" BorderBrush="#6600E676" BorderThickness="1"/>
                                                         <StackPanel Orientation="Horizontal" Margin="18,6,20,8">
                                                             <TextBlock Text="&#x2713;" Foreground="#00E676" FontSize="34"
-                                                                       FontFamily="Segoe MDL2 Assets, Segoe UI Symbol, Segoe UI"
+                                                                       FontFamily="Segoe UI Symbol, Segoe UI"
                                                                        FontWeight="Bold" VerticalAlignment="Center">
                                                                 <TextBlock.Effect>
                                                                     <DropShadowEffect Color="Black" BlurRadius="8" ShadowDepth="2"/>
@@ -373,6 +373,18 @@
                                                     </Grid>
                                                 </Border>
                                                 </Grid>
+
+                                                <!-- GO HINT (2026-11-18): the daily cards' disc, on hover
+                                                     while the weekly opens its feature. Hidden at rest,
+                                                     never hit-testable (QuestGoHint). -->
+                                                <Border x:Name="WeeklyGoHint" x:FieldModifier="internal" Width="40" Height="40" CornerRadius="20"
+                                                        Background="#D91A1A2E" BorderBrush="#FFD700" BorderThickness="1.5"
+                                                        HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0,0,38"
+                                                        Opacity="0" Visibility="Collapsed" IsHitTestVisible="False">
+                                                    <TextBlock Text="&#x2192;" Foreground="#FFD700" FontSize="22" FontWeight="Bold"
+                                                               FontFamily="Segoe UI Symbol, Segoe UI"
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-3,0,0"/>
+                                                </Border>
 
                                                 <!-- CAPTION -->
                                                 <StackPanel VerticalAlignment="Bottom" Margin="11,0,11,9" IsHitTestVisible="False">
@@ -433,6 +445,15 @@
                                                        Foreground="#9370DB" FontSize="12" FontWeight="Bold"
                                                        VerticalAlignment="Center"/>
                                         </Grid>
+
+                                        <!-- HOVER RIM (2026-11-18): a light gold line just inside the
+                                             card's own rim while the weekly opens its feature. An
+                                             overlay, not a new BorderBrush or an Effect: the float
+                                             rim stays the depth law's, and no shader pass runs over
+                                             the raised coin. Faded in code (QuestsTabView). -->
+                                        <Border x:Name="WeeklyHoverRim" x:FieldModifier="internal" Grid.RowSpan="2"
+                                                CornerRadius="9" BorderBrush="#99FFD700" BorderThickness="1.5"
+                                                Opacity="0" IsHitTestVisible="False"/>
                                     </Grid>
                                 </Border>
                                 </Grid>

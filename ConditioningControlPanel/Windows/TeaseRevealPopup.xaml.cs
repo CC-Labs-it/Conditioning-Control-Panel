@@ -102,7 +102,7 @@ namespace ConditioningControlPanel
             try
             {
                 if (!PerformanceProfile.AllowGlow(PerformanceProfile.CurrentTier)
-                    || !MotionFx.AllowAmbientLoops)
+                    || !MotionFx.AmbientAllowedByLevel)
                 {
                     ShimmerHost.Visibility = Visibility.Collapsed;
                     return;

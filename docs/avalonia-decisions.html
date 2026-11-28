@@ -1796,6 +1796,11 @@ const m=document.getElementById('ledger-meta');const s=document.querySelector('.
 <li>Why: WPF never calls <code>SeasonRecapService.SampleRank</code> (no caller on origin/main or port/7.2), so WPF's peak stays 0. Parity is the same 0 peak.</li>
 <li>Alternatives: wire sampling on this head only (a deviation WPF does not have).</li>
 </ul>
+<h2 id="2026-11-16-super-box-unhosted-effects">2026-11-16: The Super box offers no star or weekly try for an effect this head cannot show (routine; reviewer finding on #5360)</h2>
+<ul>
+<li>WPF shows the gold box with a working star and the weekly 10 s try for all eight Super effects. On this head an effect only runs once its host lane exists, so <code>SuperBox.HostedOnThisHead</code> lists the hosted effects. For any other effect the box shows, the star is disabled with the existing "Coming Soon" text and "Try it" never appears, so a player never spends the weekly try on an effect that draws nothing.</li>
+<li>Each effect lane adds its effect to <code>HostedOnThisHead</code> when it lands; the box then behaves exactly like WPF. The <code>super-box</code> ledger row stays stub until then.</li>
+</ul>
 <p>2026-11-24: Page boot retains early ready until a matching navigation succeeds; the carrier guard records remaining gaps. No parity decision was needed.</p>
 <h2 id="2026-11-24-bubble-brain-drain-veil">2026-11-24: Brain Drain bubble pop shows a milky veil, not a blurred desktop (feat-bubble-pop; worker)</h2>
 <ul>

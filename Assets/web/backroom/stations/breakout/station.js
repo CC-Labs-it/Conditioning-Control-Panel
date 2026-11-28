@@ -685,7 +685,10 @@ export async function mount(ctx) {
     media = createMedia({ ctx, still: reduced, count: 8 });
     el.querySelector('.bo-option-pace').value = String(num(q, 'speed', .55));
     makeGame();
-    renderer = createRenderer(canvas, { reduced, media, software: q.has('software') || prefersSoftwareCanvas() });
+    renderer = createRenderer(canvas, { reduced, media, software: q.has('software') || prefersSoftwareCanvas(),
+      // The worn bubble skin (init.bubbleSkin, CONTRACT 2.2), with Calm and live motion read on every frame.
+      look: () => ({ skin: ctx.bubbleSkin, calm: String(ctx.intensity || '').toLowerCase() === 'calm',
+        reduced: !!ctx.reduced || ['off', 'still'].includes(String(ctx.motion || '').toLowerCase()) }) });
     haptics = createHaptics({ ctx, reduced, enabled: !q.has('nohaptics') });
     gamepad = createGamepad();
     sawHit = typeof game.snapshot().combo === 'number';   // a v2 sim emits 'hit'; the raw names are then cosmetic only

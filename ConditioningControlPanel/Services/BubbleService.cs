@@ -22,7 +22,7 @@ namespace ConditioningControlPanel.Services;
 /// <summary>
 /// Bubble popping game - bubbles float up from bottom of screen, user pops them by clicking
 /// </summary>
-public class BubbleService : IDisposable
+public partial class BubbleService : IDisposable
 {
     private const int MAX_BUBBLES = 3;          // per-window fallback cap (SetWindowPos-bound — keep small)
     private const int MAX_BUBBLES_HOST = 40;    // shared-host cap: a dense ambient field is cheap on the Canvas
@@ -509,6 +509,9 @@ public class BubbleService : IDisposable
         // self-handles its own exceptions. (Throttle disabled by leaving the queue empty when not chaos.)
         for (int s = 0; s < MaxSpawnsPerFrame && _chaosActive && _spawnQueue.Count > 0; s++)
             _spawnQueue.Dequeue()();
+
+        StepBlooms();   // Super Inner Bloom: release kids whose bloom has finished squeezing
+        StepFroth();    // Super Froth: merge, pool, nudge, chained pops (one bool when the star is off)
 
         // NOTE: a freeze does NOT skip this loop — bubbles must keep rendering so the freeze aura
         // pulses, the shudder plays, and any in-flight pop finishes. Each bubble holds its own
@@ -1060,13 +1063,23 @@ public class BubbleService : IDisposable
         });
     }
 
-    private void OnPop(Bubble bubble) => AwardAmbientPop(bubble);
+    private void OnPop(Bubble bubble)
+    {
+        // Super Inner Bloom is visual only (owner call open: rewards). The bloom stands in for one
+        // ordinary spawn and pays one ordinary pop; the kids it releases pop and sound but pay no XP,
+        // count for no achievement, quest or leash task, and the companion does not react to them.
+        if (bubble.IsBloomKid) PopBloomKidQuietly(bubble);
+        else AwardAmbientPop(bubble);
+        OnBloomPopped(bubble);
+        OnFrothPopped(bubble);   // Super Froth: the parts it took in, then its ring
+    }
 
     /// <summary>Natasha's favourite: about one ambient bubble in ten wears red, and only while
     /// that price can actually land (tab on, linked, row on, no safety hold). Rolled per spawn
     /// so a field never carries a cue it cannot charge.</summary>
     private void MarkIfNatasha(Bubble bubble)
     {
+        if (bubble.BloomRoot != 0) return;   // a bloom draws its own film; no red cue on it
         try
         {
             if (App.Chaster?.CanBook(Chaster.NatashasFavourite.EventId) == true
@@ -1112,7 +1125,7 @@ public class BubbleService : IDisposable
         bubble.SetLucky(paidLucky && perkFx, hasSparkleBoost && perkFx);
 
         // Play appropriate sound (the avatar easter-egg pop comes through 50% louder)
-        PlayPopSound(paidLucky, bubble.AvatarPopVolumeMult);
+        PlayPopSound(paidLucky, bubble.AvatarPopVolumeMult, bubble.Skin);
 
         // Don't remove here - let the pop animation play, removal happens in OnDestroy
         OnBubblePopped?.Invoke();
@@ -1245,9 +1258,14 @@ public class BubbleService : IDisposable
         if (spec != null
             && _bubbles.Count(b => b.IsAmbientTriggerBubble || b.IsAmbientEffectBubble) >= MAX_TRIGGER_WINDOWS)
             spec = null;
+        // Super Froth took the bubbles' star from Inner Bloom (owner, 2026-11-15): no bloom is
+        // started here any more. The bloom code is parked in BubbleService.InnerBloom.cs.
+        var skin = BubbleCore.BubbleSkinChoice.Current();
+        var sprite = SpriteForNewBubble(skin);
         if (spec == null)
-            return new Bubble(screen, _bubbleImage, _random, OnPop, OnMiss, OnDestroy, isClickable,
-                              ambientMotion: AmbientBubbleMotion.RollForSpawn(_random));
+            return new Bubble(screen, sprite, _random, OnPop, OnMiss, OnDestroy, isClickable,
+                              ambientMotion: AmbientBubbleMotion.RollForSpawn(_random),
+                              skin: skin);
         // Trigger bubbles ride the shared ambient host like plain bubbles (hook-based pops via the
         // UsesHost/HostHitClickable snapshots). forceWindowMode was a relic of the host being
         // chaos-run-only: the per-pop layered-window Show/Close it forced was the residual "small
@@ -1257,14 +1275,45 @@ public class BubbleService : IDisposable
         bool hostUp = _ambientHost && ChaosBubbleHostOverlay.IsReady
             && ChaosBubbleHostOverlay.CoversPoint(screen.Bounds.X + screen.Bounds.Width / 2.0,
                                                   screen.Bounds.Y + screen.Bounds.Height / 2.0);
-        return new Bubble(screen, _bubbleImage, _random, onPop: null, onMiss: OnMiss, onDestroy: OnDestroy,
+        return new Bubble(screen, sprite, _random, onPop: null, onMiss: OnMiss, onDestroy: OnDestroy,
                           isClickable: isClickable, spec: spec,
                           onBenignPop: b =>
                           {
                               AwardAmbientPop(b);
                               FireAmbientPayload(b);
+                              OnFrothPopped(b);   // Super Froth: the parts it took in, then its ring
                           },
-                          forceWindowMode: !hostUp, ambientTrigger: true);
+                          forceWindowMode: !hostUp, ambientTrigger: true,
+                          skin: skin);
+    }
+
+    private BitmapImage? _plainBubbleImage;
+
+    /// <summary>The picture a new ambient bubble draws on. Under the Locked mod the bubble art carries a
+    /// lock; a worn skin never draws over it, it takes the plain bubble instead
+    /// (<see cref="BubbleCore.BubbleSkinChoice.SkinTakesPlainBubble"/>). No skin worn = the mod's bubble.</summary>
+    private BitmapImage? SpriteForNewBubble(string skin)
+    {
+        try
+        {
+            var modId = App.Mods?.ActiveModId;
+            bool carriesLock = BubbleCore.BubbleSkinChoice.CarriesLock(modId,
+                modId == BubbleCore.BubbleSkinChoice.LockModId && ModResourceResolver.HasActiveModOverride("bubble.png"));
+            if (!BubbleCore.BubbleSkinChoice.SkinTakesPlainBubble(skin, carriesLock)) return _bubbleImage;
+            if (_plainBubbleImage == null)
+            {
+                var plain = new BitmapImage();
+                plain.BeginInit();
+                plain.UriSource = new Uri("pack://application:,,,/Resources/bubble.png", UriKind.Absolute);
+                plain.CacheOption = BitmapCacheOption.OnLoad;
+                plain.EndInit();
+                plain.Freeze();
+                _plainBubbleImage = plain;
+            }
+            return _plainBubbleImage;
+        }
+        catch (Exception ex) { Diag.Swallowed(ex, "plain bubble under a skin"); }
+        return _bubbleImage;
     }
 
     /// <summary>
@@ -1283,9 +1332,10 @@ public class BubbleService : IDisposable
     /// keeps the avatar egg away from exactly these two kinds (#628) - but the user's own click
     /// reached the same Fire() unguarded.
     /// </summary>
-    private void FireAmbientPayload(Bubble b)
+    private void FireAmbientPayload(Bubble b) => FireAmbientPayload(b.Spec?.Payload);
+
+    private void FireAmbientPayload(EffectPayload? payload)
     {
-        var payload = b.Spec?.Payload;
         if (payload == null) return;
 
         var heavy = payload.Kind is EffectBubblePayloadKind.Video or EffectBubblePayloadKind.HtLink;
@@ -1372,7 +1422,8 @@ public class BubbleService : IDisposable
     {
         // Bubble floated off screen - remove immediately (no animation needed)
         _bubbles.Remove(bubble);
-        OnBubbleMissed?.Invoke();
+        NoteBloomLost(bubble);
+        if (!bubble.IsBloomKid) OnBubbleMissed?.Invoke();   // a kid drifting off is not the player's miss
         StopAnimationTimerIfIdle();
     }
 
@@ -2192,7 +2243,7 @@ public class BubbleService : IDisposable
         AnimateAllBubbles(sender, e);
     }
 
-    private void PlayPopSound(bool isLucky = false, float volumeMult = 1f)
+    private void PlayPopSound(bool isLucky = false, float volumeMult = 1f, string? skin = null)
     {
         try
         {
@@ -2217,10 +2268,16 @@ public class BubbleService : IDisposable
                 }
             }
 
-            // Normal pop sound
-            var popFiles = new[] { "Pop.mp3", "Pop2.mp3", "Pop3.mp3" };
-            var chosenPop = popFiles[_random.Next(popFiles.Length)];
-            var popPath = ModResourceResolver.ResolveAudioPath("bubbles/" + chosenPop);
+            // Normal pop sound. A skinned bubble plays one of its own three clips (BubbleSkinSounds);
+            // soap and unknown skins get today's pops, and a skin clip missing on disk falls back to them.
+            if (App.Settings?.Current?.BubbleClassicPop == true) skin = null;   // the opt-out: the original pop for every skin
+            var popFiles = BubbleCore.BubbleSkinSounds.PopClips(skin);
+            var popPath = ModResourceResolver.ResolveAudioPath(popFiles[_random.Next(popFiles.Count)]);
+            if (!File.Exists(popPath) && BubbleCore.BubbleSkinSounds.HasOwnPop(skin))
+            {
+                var soap = BubbleCore.BubbleSkinSounds.SoapPops;
+                popPath = ModResourceResolver.ResolveAudioPath(soap[_random.Next(soap.Count)]);
+            }
 
             if (File.Exists(popPath))
             {
@@ -2257,6 +2314,8 @@ public class BubbleService : IDisposable
         // Cancel any in-flight avatar easter egg first, so its claim is released and the claimed
         // bubble doesn't get stranded by the claim-pop guard during teardown.
         CancelAvatarEgg();
+        ClearBloomState();   // panic, Stop and pause all land here: Inner Bloom stops with the field
+        try { Bubble.Layer?.ClearSkinFx(); } catch (Exception ex) { Diag.Swallowed(ex); }   // and every skin pop burst
         try
         {
             // Safety check for shutdown scenarios
@@ -2304,6 +2363,8 @@ public class BubbleService : IDisposable
     public void Dispose()
     {
         Stop();
+        UnhookBlooms();
+        UnhookFroth();
 
         // Close pooled bubble window shells (static pool holds hidden HWNDs for the process life).
         try { DispatcherHelper.RunOnUI(Bubble.DrainWindowPool); } catch (Exception ex) { Diag.Swallowed(ex); }
@@ -2316,7 +2377,7 @@ public class BubbleService : IDisposable
 /// <summary>
 /// Individual bubble that floats upward and can be popped
 /// </summary>
-internal class Bubble
+internal partial class Bubble
 {
     // Bubble windows are POOLED, not created/closed per bubble. Each bubble used to be its own
     // AllowsTransparency layered Window that was Close()d on death; chaos spawns several per
@@ -2353,6 +2414,8 @@ internal class Bubble
     // compositor's BubbleLayer instead: same hook-pop input contract (UsesHost stays true, hit
     // discs are renderer-agnostic), just Skia draw calls in place of a WPF _grid on a Canvas.
     private static Compositor.BubbleLayer? s_layer;
+    /// <summary>The compositor bubble layer, when it is up (Super Inner Bloom draws its pops there).</summary>
+    internal static Compositor.BubbleLayer? Layer => s_layer;
     internal static bool UseCompositor => App.CompositorEnabled;
     /// <summary>Lazily create + register the shared BubbleLayer. Null if the compositor is off.</summary>
     private static Compositor.BubbleLayer? EnsureLayer()
@@ -2450,6 +2513,8 @@ internal class Bubble
     private readonly bool _useHost;     // AppSettings.ChaosBubbleSharedHost && chaos bubble — see the spawn block
     private readonly bool _useLayer;    // UnifiedOverlayHost: render on the compositor BubbleLayer (also window-less)
     private Compositor.BubbleLayer.BubbleItem? _layerItem;   // this bubble's draw-state on the layer (null off-layer)
+    private readonly string _skin = BubbleCore.BubbleSkinIds.Soap;   // bubble skin (soap = today's look); only the layer draws one
+    private static int s_skinSeq;
     private string? _flashFacePath;
     private FlashClipPlayer? _faceClip;
     private List<BitmapSource>? _faceFrames;
@@ -2790,6 +2855,81 @@ internal class Bubble
     /// <summary>Built as a dashboard trigger bubble (payload or not), alive or not: the spawn-time
     /// read for Natasha's trigger weight (ccp-bugs #1566).</summary>
     internal bool IsAmbientTrigger => _isAmbientTrigger;
+    // ---- Super Inner Bloom (Services/Super/InnerBloom.cs is the maths) ----
+    private Super.InnerBloom.Node? _bloom;   // this bubble carries kids: the big bloom or a carrier
+    private bool _bloomHidden;               // popped: the layer's burst draws it from here on
+    private double _bloomAngle;              // a released kid: the way it was thrown
+    private double _bloomAgeS = -1;          // a released kid: seconds since release (-1 = never released)
+    private double _bloomDx, _bloomDy;       // the release travel already applied (DIP)
+    private double _bloomAlpha = 1;          // an escaping small fades
+    private bool _bloomEscaper;
+    private Action<Bubble>? _onBloomEscaped;
+    internal Super.InnerBloom.Node? Bloom => _bloom;
+    /// <summary>A released kid: the hue it wore inside its bloom (its pop sparks wear it).</summary>
+    internal int BloomHue { get; private set; }
+    /// <summary>Non-zero: this bubble belongs to bloom number <c>BloomRoot</c> (the root, a carrier or a released kid).</summary>
+    internal int BloomRoot { get; private set; }
+    internal bool IsBloomKid => _bloomAgeS >= 0;
+    internal Point CenterDip => new(_posX + _size / 2.0, _posY + _size / 2.0);
+    internal double SizeDip => _size;
+    internal double DpiScale => _dpiScale;
+
+    internal void AttachBloom(Super.InnerBloom.Node node, int root)
+    {
+        _bloom = node;
+        BloomRoot = root;
+        if (_layerItem != null) _layerItem.Bloom = node;
+    }
+
+    /// <summary>Popped: stop drawing this body (the burst takes over in the layer).</summary>
+    internal void HideForBloomBurst()
+    {
+        _bloomHidden = true;
+        if (_layerItem != null) _layerItem.HideBody = true;
+    }
+
+    /// <summary>A kid leaves its bloom: centred on the given DIP point, thrown along <paramref name="angle"/>,
+    /// wearing <paramref name="picturePath"/> (null = pick from the pool) unless it carries kids of its own.</summary>
+    internal void ReleaseFromBloom(int root, int hue, Point centerDip, double angle, string? picturePath, bool escaper,
+                                   Action<Bubble> onEscaped)
+    {
+        BloomRoot = root;
+        BloomHue = hue;
+        _posX = _startX = centerDip.X - _size / 2.0;
+        _posY = centerDip.Y - _size / 2.0;
+        _bloomAngle = angle;
+        _bloomAgeS = 0;
+        _bloomEscaper = escaper;
+        _onBloomEscaped = onEscaped;
+        if (_bloom == null)
+        {
+            if (picturePath != null) { _flashFacePath = picturePath; BuildBubbleFace(picturePath); }
+            else PrepareFlashFace();
+        }
+        if (_layerItem != null)
+        {
+            _layerItem.CenterXPx = centerDip.X * _dpiScale;
+            _layerItem.CenterYPx = centerDip.Y * _dpiScale;
+        }
+    }
+
+    /// <summary>One step of a released kid: the outward throw, and a small's escape. True = it got away.</summary>
+    private bool StepBloomRelease(double ts)
+    {
+        _bloomAgeS += 0.032 * ts;
+        var m = Super.InnerBloom.Motion.For(MotionFx.Level);
+        var (dx, dy) = Super.InnerBloom.ReleaseOffset(_bloomAngle, _bloomAgeS, m);
+        if (_bloomEscaper)
+        {
+            var (ey, a) = Super.InnerBloom.Escape(_bloomAgeS, m);
+            dy += ey;
+            _bloomAlpha = a;
+        }
+        _posX += dx - _bloomDx; _startX += dx - _bloomDx;
+        _posY += dy - _bloomDy;
+        _bloomDx = dx; _bloomDy = dy;
+        return _bloomEscaper && _bloomAlpha <= 0;
+    }
 
     /// <summary>Who ended this red bubble; read by <see cref="BubbleService.NoteNatashaEnd"/>.</summary>
     internal Chaster.NatashasFavourite.PopCause NatashaCause => _natashaCause;
@@ -2973,6 +3113,8 @@ internal class Bubble
     internal string EffectKindId => _spec?.VariantId ?? "";
     /// <summary>Loudness multiplier the benign-pop path applies to the pop sound (1 for user pops).</summary>
     internal float AvatarPopVolumeMult => _avatarPopVolumeMult;
+    /// <summary>This bubble's skin id (soap = today's look); picks its pop sound.</summary>
+    internal string Skin => _skin;
 
     /// <summary>Companion claims this bubble: pause its treat-life + freeze its drift + ignore user pops.
     /// Also clears the death-telegraph ramp (a 5s treat is already fading at the 4s claim point) so the
@@ -3029,10 +3171,10 @@ internal class Bubble
 
     /// <summary>Hit disc in PHYSICAL px (centre + radius) for the immutable hook-thread snapshot.</summary>
     internal (double X, double Y, double R) HitDiscPx =>
-        ((_posX + _size / 2.0) * _dpiScale, (_posY + _size / 2.0) * _dpiScale, _hitSize / 2.0 * _dpiScale);
+        ((_posX + _size / 2.0) * _dpiScale, (_posY + _size / 2.0) * _dpiScale, _hitSize / 2.0 * _dpiScale * _frothShown);
 
     /// <summary>True if a PHYSICAL-px point lands inside this bubble's hitbox.</summary>
-    internal bool ContainsPx(Point px) => DistDipSqToPx(px.X, px.Y) <= (_hitSize / 2.0) * (_hitSize / 2.0);
+    internal bool ContainsPx(Point px) => DistDipSqToPx(px.X, px.Y) <= (_hitSize / 2.0 * _frothShown) * (_hitSize / 2.0 * _frothShown);
 
     /// <summary>Pop this bubble from a shared-host hook click (UI thread) — routes exactly like a
     /// real press (tease/brittle/channel/benign all handled by OnPlayerPress).</summary>
@@ -3113,6 +3255,9 @@ internal class Bubble
             HintText = (_hintEl?.Child as TextBlock)?.Text,
             HintYOffDip = (float)(_size / 2.0 + Math.Clamp(_winPad - 24.0, 2.0, 14.0)),
         };
+        // Bubble skin: only on the plain glass sprite (no variant art, no picture face). Soap never gets here.
+        if (_skin != BubbleCore.BubbleSkinIds.Soap && !_hasVariantSprite && !item.HasFace)
+            Compositor.BubbleLayer.ApplySkin(item, _skin, unchecked(Environment.TickCount * 31 + ++s_skinSeq * 7919));
         return item;
     }
 
@@ -3128,8 +3273,13 @@ internal class Bubble
         it.Scale = (float)currentScale;
         it.Angle = (float)_angle;
         it.Opacity = (float)opacity;
-        it.RedWash = _isNatasha && !_isPopping ? (float)Chaster.NatashasFavourite.BubbleWashAt(_timeAlive, MotionFx.AllowAmbientLoops) : 0f;
+        it.RedWash = _isNatasha && !_isPopping ? (float)Chaster.NatashasFavourite.BubbleWashAt(_timeAlive, MotionFx.AmbientAllowedByLevel) : 0f;
         it.HoldRing = _isResisting && !_isPopping ? (float)_resistProgress : 0f;
+        it.Bloom = _bloom;
+        it.HideBody = _bloomHidden;
+        if (_frothTouched) SyncFrothItem(it);   // Super Froth: size, wobble, rim, picture clock
+        // Bubble skin: a real pop hands its burst to the layer once (a defuse deflate or a treat dissolve does not).
+        if (it.Skin != null && _isPopping && !_isDeflating && !_isDissolving) s_layer?.AddSkinBurst(it);
 
         if (_fuseRing != null)
         {
@@ -3212,9 +3362,11 @@ internal class Bubble
                   Action<Bubble>? onTeaseTouched = null, Action<Bubble>? onTeaseDenied = null,
                   Action<Bubble>? onBrittleShattered = null, bool forceWindowMode = false,
                   bool ambientTrigger = false,
-                  BubbleMotionStyle ambientMotion = BubbleMotionStyle.FloatUp)
+                  BubbleMotionStyle ambientMotion = BubbleMotionStyle.FloatUp,
+                  double sizeMult = 1.0, int sizeDip = 0, string? skin = null)
     {
         _random = random;
+        _skin = BubbleCore.BubbleSkinChoice.Resolve(skin);   // null or unknown = soap
         _onPop = onPop;
         _onMiss = onMiss;
         _onDestroy = onDestroy;
@@ -3279,6 +3431,10 @@ internal class Bubble
                   random.Next(BubbleSizing.BaseMinDip, BubbleSizing.BaseMaxDip),
                   App.Settings?.Current?.BubblesSize ?? BubbleSizing.UserPercentDefault,
                   App.Mods?.ActiveMod?.Manifest?.BubbleScale);
+        // Super Inner Bloom: the big bloom is a grown ambient bubble, a released kid is sized to
+        // the bubble it was inside. Plain spawns pass neither and are untouched.
+        if (sizeDip > 0) _size = sizeDip;
+        else if (sizeMult != 1.0) _size = (int)Math.Round(_size * sizeMult);
         // Magic Wand boon / Mesmer Reach upgrade: enlarge the click target around the visual.
         // Darters/freeze pickups keep their natural hitbox (precision catches stay precision).
         // Blindfold: effect bubbles render translucent; pickups stay fully visible (they're rewards).
@@ -4101,13 +4257,13 @@ internal class Bubble
             else switch (motion)
             {
                 case ChaosMotion.RainDown:
-                    _posY += _speed * ts;
+                    _posY += _speed * ts * _frothDrift;
                     _posX = _startX + offset;
                     if (_posY > _screenBottom) exited = true;
                     break;
                 case ChaosMotion.RoamBounce:
-                    _posX += _vx * ts;
-                    _posY += _vy * ts;
+                    _posX += _vx * ts * _frothDrift;
+                    _posY += _vy * ts * _frothDrift;
                     if (_posX < _screenLeft) { _posX = _screenLeft; _vx = Math.Abs(_vx); }
                     else if (_posX > _screenRight) { _posX = _screenRight; _vx = -Math.Abs(_vx); }
                     double topB = _screenTop + _size + 50, botB = _screenBottom - _size - 50;
@@ -4115,15 +4271,24 @@ internal class Bubble
                     else if (_posY > botB) { _posY = botB; _vy = -Math.Abs(_vy); }
                     break;
                 case ChaosMotion.SideDrift:
-                    _posX += _vx * ts;
+                    _posX += _vx * ts * _frothDrift;
                     _posY = _startY + offset;   // the Float/Rain wobble reads vertical here
                     if (_vx > 0 ? _posX > _screenRight + _size : _posX < _screenLeft - _size) exited = true;
                     break;
                 default: // FloatUp
-                    _posY -= _speed * ts;
+                    _posY -= _speed * ts * _frothDrift;
                     _posX = _startX + offset;
                     if (_posY < _screenTop) exited = true;
                     break;
+            }
+
+            // Super Inner Bloom: a released kid rides its throw on top of the float; an unpopped
+            // small escapes and leaves quietly (no miss: it was never the player's to lose).
+            if (_bloomAgeS >= 0 && !_isPopping && StepBloomRelease(ts))
+            {
+                _onBloomEscaped?.Invoke(this);
+                Destroy();
+                return;
             }
 
             // The Pull: the whole field leans toward the cursor (chaos bubbles only; ambient
@@ -4349,7 +4514,7 @@ internal class Bubble
 
             // Blindfold: translucent effect bubbles. Magic Wand capstone: bubbles inside your
             // (enlarged) reach shimmer — cursor was sampled once for the whole tick.
-            double opacity = _fadeAlpha * _baseOpacity * _spiralFade;
+            double opacity = _fadeAlpha * _baseOpacity * _spiralFade * _bloomAlpha;
             if (BubbleService.WandShimmerOn && _spec != null && !_isDarter && !_isPopping)
             {
                 double cx = BubbleService.CursorPxX / _dpiScale, cy = BubbleService.CursorPxY / _dpiScale;
@@ -4374,9 +4539,9 @@ internal class Bubble
             // Natasha's favourite, per-window path: the halo itself flares on the blink (the
             // compositor path draws a wash over the body instead; same clock, same envelope).
             if (_natashaWash != null)
-                _natashaWash.Opacity = _isPopping ? 0 : Chaster.NatashasFavourite.BubbleWashAt(_timeAlive, MotionFx.AllowAmbientLoops);
+                _natashaWash.Opacity = _isPopping ? 0 : Chaster.NatashasFavourite.BubbleWashAt(_timeAlive, MotionFx.AmbientAllowedByLevel);
             if (_natashaGlow != null && !_isPopping)
-                _natashaGlow.Opacity = Chaster.NatashasFavourite.HaloOpacity + 2.0 * (MotionFx.AllowAmbientLoops ? Chaster.NatashasFavourite.WashAlphaAt(_timeAlive) : 0);
+                _natashaGlow.Opacity = Chaster.NatashasFavourite.HaloOpacity + 2.0 * (MotionFx.AmbientAllowedByLevel ? Chaster.NatashasFavourite.WashAlphaAt(_timeAlive) : 0);
             _fxTarget.Opacity = opacity;
             if (_useLayer)
             {
@@ -5213,7 +5378,7 @@ internal class Bubble
         if (_spec?.Payload is not FlashPayload flash || _bubbleFaceImg?.Source == null) return;
         flash.ImagePath = _flashFacePath;
         flash.OriginPx = (CenterPx.X, CenterPx.Y);
-        flash.FaceDiameterPx = FaceDiameter * _dpiScale;
+        flash.FaceDiameterPx = FaceDiameter * _dpiScale * _frothShown;
     }
 
     private void BuildBubbleFace(string? path)

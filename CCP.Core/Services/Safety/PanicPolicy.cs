@@ -102,7 +102,7 @@ namespace ConditioningControlPanel.Services.Safety
             => counterActive && handOffGameActive;
 
         /// <summary>Which game page an Escape the panel kept as its pause is handed to.</summary>
-        internal enum KeptEscapePage { None, Race, Board, Breakout, Dtrh, Arcademy, Goon, Room, Intake, Counter, Glassroad }
+        internal enum KeptEscapePage { None, Race, Board, Breakout, Dtrh, Arcademy, Goon, Room, Intake, Counter, Glassroad, Tc }
 
         /// <summary>
         /// Where an Escape a game kept as its pause is handed as well. Each of these games pauses on
@@ -124,9 +124,13 @@ namespace ConditioningControlPanel.Services.Safety
             bool roomInFront = false, bool roomReady = false,
             bool intakeInFront = false, bool intakeReady = false,
             bool counterInFront = false, bool counterReady = false,
-            bool glassroadInFront = false, bool glassroadReady = false)
+            bool glassroadInFront = false, bool glassroadReady = false,
+            bool tcInFront = false, bool tcReady = false)
         {
             if (!claimed) return KeptEscapePage.None;
+            // The Prize Counter keeps Escape as its back (confirm card, preview, leave), never a close. It
+            // comes first: its sheet now opens INSIDE a game window, so that game reads as in front too.
+            if (counterInFront) return counterReady ? KeptEscapePage.Counter : KeptEscapePage.None;
             if (raceInFront) return raceReady ? KeptEscapePage.Race : KeptEscapePage.None;
             if (boardInFront) return boardReady ? KeptEscapePage.Board : KeptEscapePage.None;
             if (breakoutInFront) return breakoutReady ? KeptEscapePage.Breakout : KeptEscapePage.None;
@@ -135,9 +139,8 @@ namespace ConditioningControlPanel.Services.Safety
             if (goonInFront) return goonReady ? KeptEscapePage.Goon : KeptEscapePage.None;
             if (roomInFront) return roomReady ? KeptEscapePage.Room : KeptEscapePage.None;
             if (intakeInFront) return intakeReady ? KeptEscapePage.Intake : KeptEscapePage.None;
-            // The Prize Counter keeps Escape as its back (confirm card, preview, leave), never a close.
-            if (counterInFront) return counterReady ? KeptEscapePage.Counter : KeptEscapePage.None;
             if (glassroadInFront) return glassroadReady ? KeptEscapePage.Glassroad : KeptEscapePage.None;
+            if (tcInFront) return tcReady ? KeptEscapePage.Tc : KeptEscapePage.None;
             return KeptEscapePage.None;
         }
 

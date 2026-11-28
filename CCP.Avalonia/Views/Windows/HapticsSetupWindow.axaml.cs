@@ -127,7 +127,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private async void BtnConnect_Click()
         {
             if (_connecting || CoreHaptics.Service is not { } haptics) return;
-            if (!CoreEntitlement.HasPremium && !CoreEntitlement.IsFreeToday("haptics"))
+            if (!ConditioningControlPanel.Services.Haptics.HapticsAccess.IsOpen)
             {
                 ShowResult(false, "gate_premium_locked", "msg_haptic_feedback_patreon_only", Array.Empty<string>());
                 return;

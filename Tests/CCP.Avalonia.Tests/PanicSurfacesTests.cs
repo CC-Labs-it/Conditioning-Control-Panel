@@ -85,6 +85,36 @@ public sealed class PanicSurfacesTests
         }
     });
 
+    /// <summary>Every Lights Down dim window is gone before the engine stops (folded from #5343): the dim
+    /// never outlives the video it sits under on a panic.</summary>
+    [Fact]
+    public void StopAllClosesEveryLightsDownWindowBeforeEngine() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var video = new global::Avalonia.Controls.Window();
+        var prev = PanicSurfaces.All;
+        var lights = prev.Single(s => s.Id == "lights-down");
+        var engine = prev.Single(s => s.Id == "engine");
+        try
+        {
+            Assert.Contains("lights-down", engine.After!);
+            for (var i = 0; i < 2; i++)
+                Assert.True(ConditioningControlPanel.Avalonia.Views.Overlays.LightsDownOverlay.TryOpen(video,
+                    new PixelRect(0, 0, 100, 100), 1, _ => true, _ => true, _ => true, (_, _) => true));
+            var countAtEngine = -1;
+            PanicSurfaces.All = new[] { lights, new PanicSurfaces.Surface("engine", _ =>
+                countAtEngine = ConditioningControlPanel.Avalonia.Views.Overlays.LightsDownOverlay.Count) };
+            PanicSurfaces.StopAll("test", aftermathArmed: true);
+            Assert.Equal(0, countAtEngine);
+            Assert.Equal(0, ConditioningControlPanel.Avalonia.Views.Overlays.LightsDownOverlay.Count);
+        }
+        finally
+        {
+            PanicSurfaces.All = prev;
+            ConditioningControlPanel.Avalonia.Views.Overlays.LightsDownOverlay.CloseAll();
+            video.Close();
+        }
+    });
+
     [Fact]
     public void EachPanicRouteCallsStopAllExactlyOnce() => AvaloniaTestDispatcher.Run(() =>
     {
@@ -202,6 +232,7 @@ public sealed class PanicSurfacesTests
     /// ordering pairs below retain both lanes' safety contracts.</summary>
     private static readonly string[] SafetyCritical =
     {
+        "lights-down",
         "emergency-exit",
         "companion-audio",
         "audio-playlist",
@@ -212,6 +243,7 @@ public sealed class PanicSurfacesTests
         "event-fx",
         "perfect-week-bonus",
         "brain-drain-audio",
+        "undertow",
         "roster-personality",
         "intake",
         "leash-task",
@@ -277,6 +309,8 @@ public sealed class PanicSurfacesTests
         "scheduler",
         "engine",
         "bubble-host",
+        "super-stage",
+        "brain-drain",
         "flash",
         "pink-rush",
         "corner-gif",
@@ -404,6 +438,7 @@ public sealed class PanicSurfacesTests
         "intake>voice-capture",
         "leash-task>engine",
         "leash-task>lock-cards",
+        "lights-down>engine",
         "mantra>engine",
         "remote-haptics>engine",
         "scheduler>engine",

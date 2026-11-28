@@ -61,6 +61,8 @@ public sealed class LauncherEntranceTests
                 shell.StepLauncherFade(1); // with motion on the door first fades the panel (WPF MainWindow.Launcher.cs)
                 Dispatcher.UIThread.RunJobs();
                 var launcher = LauncherWindow.Instance!;
+                // Declutter 2026-11-15: the launcher opens on its doors; these tests drive the Games page's tiles.
+                launcher.SeatDoorPage(global::ConditioningControlPanel.Services.Launcher.LauncherDoor.Games);
                 launcher.UpdateLayout();
                 body(shell, launcher, cues);
             }
@@ -118,7 +120,10 @@ public sealed class LauncherEntranceTests
         var play = tile.GetVisualDescendants().OfType<Button>().Last();
         foreach (var button in new[] { play, w.FindControl<Button>("PanelCta")! })
         {
-            w.UpdateLayout(); AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            // Seating the Games door page leaves dispatcher work queued: run it and render twice, or the
+            // hit test reads a stale scene and finds no tile under the Play button.
+            w.UpdateLayout(); Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+            Dispatcher.UIThread.RunJobs(); AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             var p = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), w)!.Value;
             var scale = (ScaleTransform)button.RenderTransform!;
             Assert.True(button.IsVisualAncestorOf((Visual)w.InputHitTest(p)!) || ReferenceEquals(button, w.InputHitTest(p)), $"hit: {w.InputHitTest(p)}, button: {button}, point: {p}");

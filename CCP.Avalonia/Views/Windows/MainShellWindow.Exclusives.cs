@@ -92,7 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// navigating never turns it on.</summary>
         private void OpenFocusGazeSwitch()
         {
-            ShowTab("play");
+            ShowTab("playeyes");   // "play" is the launcher's Games door now (declutter wave 2)
             var slot = Named<Tabs.PlayTabView>("PlayTab")?.FindControl<Control>("SlotFocusGaze");
             if (slot == null) return;
             global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>

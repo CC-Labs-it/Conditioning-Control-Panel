@@ -194,6 +194,10 @@ namespace ConditioningControlPanel.Controls
         /// still stop it. Never set it on a surface inside MainWindow (#550 idle parking).
         /// </summary>
         public bool RunWhileInactive { get; set; }
+
+        /// <summary>Keep running while the engine or a session runs (<see cref="MotionFx.PanelQuiet"/>).
+        /// Only for a surface that is never on screen with the panel: the launcher.</summary>
+        public bool RunDuringShow { get; set; }
     }
 
     /// <summary>
@@ -761,6 +765,8 @@ namespace ConditioningControlPanel.Controls
             {
                 HookWindow(Window.GetWindow(this));
                 if (App.Mods != null) App.Mods.ModChanged += OnModChanged;
+                MotionFx.AmbientChanged -= OnAmbientChanged;
+                MotionFx.AmbientChanged += OnAmbientChanged;
                 Evaluate();
             }
             catch (Exception ex) { App.Logger?.Debug("AmbientFxCanvas.OnLoaded: {E}", ex.Message); }
@@ -773,11 +779,20 @@ namespace ConditioningControlPanel.Controls
                 StopClock();
                 UnhookWindow();
                 if (App.Mods != null) App.Mods.ModChanged -= OnModChanged;
+                MotionFx.AmbientChanged -= OnAmbientChanged;
             }
             catch (Exception ex) { App.Logger?.Debug("AmbientFxCanvas.OnUnloaded: {E}", ex.Message); }
         }
 
         private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e) => Evaluate();
+
+        /// <summary>The gate moved (show start/stop, motion level). Raised on the main dispatcher; the tube's
+        /// canvas can live on its own thread.</summary>
+        private void OnAmbientChanged()
+        {
+            if (Dispatcher.CheckAccess()) Evaluate();
+            else Dispatcher.BeginInvoke(new Action(Evaluate));
+        }
 
         private void OnModChanged(object? sender, ModPackage mod)
         {
@@ -845,7 +860,8 @@ namespace ConditioningControlPanel.Controls
             if (!oneShotLive)
             {
                 if (_targetFps <= 0) return false;
-                if (!MotionFx.AllowAmbientLoops && !ReducedFogMayRun() && !ReducedVaultMayRun()) return false;
+                if (!_config.RunDuringShow && MotionFx.PanelQuiet) return false;
+                if (!MotionFx.AmbientAllowedByLevel && !ReducedFogMayRun() && !ReducedVaultMayRun()) return false;
             }
             var w = _window;
             if (w != null)

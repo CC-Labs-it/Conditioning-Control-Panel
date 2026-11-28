@@ -57,6 +57,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             // WPF BubblePopFeatureControl.xaml.cs: the purchase is offered (the melt fires via BubblePayloadHost).
             RowGetBubblesV2.Configure(Services.Prizes.V2PurchaseRule.BubblesPrizeId, "v2_get_bubble_blurb", "label_bubbles_v2_box");
 
+            InitFrothRows();
             LoadFromSettings();
         }
 
@@ -88,6 +89,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             CoreAccount.UnifiedIdentityChanged += OnIdentityChanged;
             Platform.WebcamTracker.Instance.StateChanged += OnWebcamStateChanged;
             RebindToCurrentSettings();
+            RefreshFrothRows();
             RebuildMotionPicker();   // grants may have changed while detached (WPF OnLoaded:30)
         }
 
@@ -112,6 +114,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             _hooked = CoreSettings.Current;
             _hooked.PropertyChanged += OnSettingsPropertyChanged;
             LoadFromSettings();
+            RefreshFrothRows();
         }
 
         private void Unhook()

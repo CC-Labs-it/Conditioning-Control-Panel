@@ -763,6 +763,8 @@ namespace ConditioningControlPanel.Avalonia
         internal static void SeedSubliminalFeatureUse()
         {
             CoreSubliminal.ShowProvider = Views.Overlays.SubliminalWhisperShow.Phrase;
+            Views.Overlays.SteamOverlay.Seed();   // the Super stage's seams for this head
+            Views.Overlays.WhirlpoolOverlay.Seed();   // its pool surface (rides the spiral windows)
             Views.Overlays.SubliminalOverlay.Displayed -= NoteSubliminalFeatureUse;
             Views.Overlays.SubliminalOverlay.Displayed += NoteSubliminalFeatureUse;
         }
@@ -908,6 +910,8 @@ namespace ConditioningControlPanel.Avalonia
                 version is null ? null : $"{version.Major}.{version.Minor}.{version.Build}";
             // WPF App.xaml.cs:4982-4985: notes for a returning account without a backup.
             CoreReleaseContent.PatchNotesProvider = () => ReleaseNotes.Current;
+            // WPF App.xaml.cs:558: this head says which weekly Super try runs.
+            ConditioningControlPanel.Services.Super.SuperAccess.TryingProvider = () => Controls.Super.SuperPreview.Trying;
 
             AvaloniaXamlLoader.Load(this);
             ConditioningControlPanel.Services.Chaos.ChaosRunState.IconResolver = Views.Chaos.ChaosBoonBarArt.Resolve;
@@ -1795,6 +1799,7 @@ namespace ConditioningControlPanel.Avalonia
             Views.Overlays.SpiralOverlay.Stop();
             if (final) Views.Overlays.SpiralOverlay.CloseAll();
             Views.Overlays.PinkFilterOverlay.Stop();   // WPF MainWindow.StartStop.cs:527 Overlay.Stop
+            Views.Overlays.BrainDrainOverlay.CloseAll(); // WPF OverlayService.StopBrainDrainBlur :2571
         }
 
         /// <summary>WPF App.OnAchievementUnlocked (App.xaml.cs:3815): one popup per unlock, shown at once.

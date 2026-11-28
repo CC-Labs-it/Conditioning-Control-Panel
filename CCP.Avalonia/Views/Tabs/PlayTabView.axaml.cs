@@ -193,6 +193,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _ => null,
         };
 
+        /// <summary>Declutter wave 2 (WPF MainWindow.PlayTab.cs ScrollPlayZone "top"): the page from
+        /// its subtitle, no glow. A rail door or the default landing on Eyes arrives here.</summary>
+        internal void ScrollToTop()
+        {
+            try { WallScroll.Offset = new Vector(WallScroll.Offset.X, 0); }
+            catch (Exception ex) { Log.Debug("Play ScrollToTop: {E}", ex.Message); }
+        }
+
         /// <summary>WPF PlayTabView.ScrollToZone (:51), after layout: Games goes to the top so the
         /// intro line shows too; any other zone's header lands ZoneTopGap under the strip, then the
         /// header glows once where the eye goes (WPF :73, ed48b817c).</summary>

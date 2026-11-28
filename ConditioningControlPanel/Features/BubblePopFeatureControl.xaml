@@ -4,12 +4,15 @@
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
              xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
-             xmlns:ctl="clr-namespace:ConditioningControlPanel.Controls">
+             xmlns:ctl="clr-namespace:ConditioningControlPanel.Controls"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             xmlns:pv="clr-namespace:ConditioningControlPanel.Controls.Preview"
+             rows:RowHue.TintSliders="True">
 
     <!-- Velvet Kit 2 density pass. The root IS the StackPanel (the old Grid wrapper is gone):
          MainWindow.SessionFeatureLock.cs inserts the session-lock banner at index 0 of
          content.Content, and into a Grid that banner would have overlapped the settings. -->
-    <StackPanel>
+    <StackPanel Grid.IsSharedSizeScope="True">
 
         <!-- HERO -->
         <Border Height="72" CornerRadius="16" Background="{DynamicResource SurfaceBgBrush}"
@@ -75,90 +78,107 @@
                                 Background="{StaticResource SectionHueStudioBrush}"/>
                         <StackPanel Margin="16,8,16,8">
 
-                            <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_bubble_spawn_rate}">
+                            <!-- Named sections (Features/OptionSection): the rows inside keep their names and handlers. -->
+                            <feat:OptionSection Key="bubblepop.basics" Title="{loc:Str studio_section_basics}" Theme="Main">
+                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_bubble_spawn_rate}">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto" MinWidth="56"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str label_per_min}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderFreq" Minimum="1" Maximum="60" Value="5"
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str label_per_min}" Emblem="Often">
+                                    <rows:RowLabel.Value>
+                                        <MultiBinding Converter="{x:Static rows:RowFraction.Instance}">
+                                            <Binding Path="Value" ElementName="SliderFreq"/>
+                                            <Binding Path="Maximum" ElementName="SliderFreq"/>
+                                        </MultiBinding>
+                                    </rows:RowLabel.Value>
+                                </rows:RowLabel>
+                                <Slider Grid.Column="1" x:Name="SliderFreq" feat:OptionSection.Setting="BubblesFrequency" Minimum="1" Maximum="60" Value="5"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderFreq_Changed"/>
-                                <TextBlock Grid.Column="2" x:Name="TxtFreq" Text="5" HorizontalAlignment="Right"
-                                           VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
-                                           FontSize="13" FontWeight="Bold"/>
+                                <rows:RowValue Grid.Column="2" x:Name="TxtFreq" Text="5" Unit="{loc:Str row_unit_a_minute}"/>
                             </Grid>
 
-                            <Grid Height="36" Background="Transparent" ToolTip="How fast bubbles travel across the screen">
+                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="How fast bubbles travel across the screen">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto" MinWidth="56"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="Speed" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderSpeed" Minimum="0" Maximum="500" Value="0"
+                                <rows:RowLabel Grid.Column="0" Text="Speed" Emblem="Fast"/>
+                                <Slider Grid.Column="1" x:Name="SliderSpeed" feat:OptionSection.Setting="BubbleSpeedBoost" Minimum="0" Maximum="500" Value="0"
                                         feat:SessionLock.Owned="True" VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderSpeed_Changed"/>
-                                <TextBlock Grid.Column="2" x:Name="TxtSpeed" Text="+0%" HorizontalAlignment="Right"
-                                           VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
-                                           FontSize="13" FontWeight="Bold"/>
+                                <rows:RowValue Grid.Column="2" x:Name="TxtSpeed" Text="+0%"/>
                             </Grid>
-
 
                             <!-- Size. Sits with Per Min / Speed rather than under an advanced
                                  header because "these are too big" is a first-minute reaction, and
                                  the row it belongs next to is the one the user is already dragging.
-                                 Reuses the existing label_size key for the label: no new key needed
-                                 in nine files for a word that is already there. The tooltip does
+                                 Reuses the existing setting_size key for the label, as the Bouncing Text,
+                                 Video and Visuals size rows do (label_size carries a colon for the
+                                 Presets tab, so it is not a row label): no new key. The tooltip does
                                  need one, though - every sibling row in this card is localised, so
                                  an English literal here reads as a bug in the other 8 languages. -->
-                            <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_bubble_size}">
+                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_bubble_size}">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto" MinWidth="56"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str label_size}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderSize" Minimum="50" Maximum="150" Value="100"
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_size}" Emblem="Big"/>
+                                <Slider Grid.Column="1" x:Name="SliderSize" feat:OptionSection.Setting="BubblesSize" Minimum="50" Maximum="150" Value="100"
                                         SmallChange="5" LargeChange="10" TickFrequency="5" IsSnapToTickEnabled="True"
                                         VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderSize_Changed"/>
-                                <TextBlock Grid.Column="2" x:Name="TxtSize" Text="100%" HorizontalAlignment="Right"
-                                           VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
-                                           FontSize="13" FontWeight="Bold"/>
+                                <rows:RowValue Grid.Column="2" x:Name="TxtSize" Text="100%"/>
                             </Grid>
+                            </feat:OptionSection>
 
-                            <Grid Height="36" Background="Transparent" ToolTip="{loc:Str tooltip_bubble_pop_sound_volume}">
+                            <feat:OptionSection Key="bubblepop.sound" Title="{loc:Str studio_section_sound}" Theme="Sound">
+                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_bubble_pop_sound_volume}">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                    <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto" MinWidth="56"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str setting_volume}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                <Slider Grid.Column="1" x:Name="SliderVolume" Minimum="0" Maximum="100" Value="50"
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_volume}" Emblem="Loud"/>
+                                <Slider Grid.Column="1" x:Name="SliderVolume" feat:OptionSection.Setting="BubblesVolume" Minimum="0" Maximum="100" Value="50"
                                         VerticalAlignment="Center" Margin="14,0"
                                         ValueChanged="SliderVolume_Changed"/>
-                                <TextBlock Grid.Column="2" x:Name="TxtVolume" Text="50%" HorizontalAlignment="Right"
-                                           VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
-                                           FontSize="13" FontWeight="Bold"/>
+                                <rows:RowValue Grid.Column="2" x:Name="TxtVolume" Text="50%"/>
                             </Grid>
 
-                            <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
-
-                            <!-- Solid mode: render all bubbles on one shared host (the DTRH/Chaos path) for
-                                 stability under a dense field (high spawn rate / many on screen at once). -->
-                            <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_bubble_solid_mode}">
+                            <!-- Classic pop sound: every bubble plays the original pop, whatever skin it wears. -->
+                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_bubble_classic_pop}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str setting_bubble_solid_mode}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_bubble_classic_pop}" Emblem="Loud"
+                                               IsOn="{Binding IsChecked, ElementName=ChkClassicPop}"/>
+                                <CheckBox Grid.Column="1" x:Name="ChkClassicPop"
+                                          Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
+                                          Checked="ChkClassicPop_Changed" Unchecked="ChkClassicPop_Changed"/>
+                            </Grid>
+                            </feat:OptionSection>
+
+                            <!-- Bubble skin: the looks the shop sells, worn here (Controls/LookRow, Services/Prizes/LookWardrobe). -->
+                            <feat:OptionSection Key="bubblepop.looks" Title="{loc:Str studio_section_shop_looks}" Theme="Shop">
+                            <ctl:LookRow Slot="bubble"/>
+                            </feat:OptionSection>
+
+                            <feat:OptionSection Key="bubblepop.extras" Title="{loc:Str studio_section_extras}" Theme="Advanced" DefaultOpen="False">
+                            <!-- Solid mode: render all bubbles on one shared host (the DTRH/Chaos path) for
+                                 stability under a dense field (high spawn rate / many on screen at once). -->
+                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_bubble_solid_mode}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_bubble_solid_mode}" Emblem="Perf"
+                                               IsOn="{Binding IsChecked, ElementName=ChkSolidMode}"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkSolidMode"
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkSolidMode_Changed" Unchecked="ChkSolidMode_Changed"/>
@@ -168,14 +188,14 @@
                                  The egg hint stays VISIBLE (and keeps its x:Name - the code-behind
                                  rewrites it with the active persona's name): it is the warning that this
                                  switch hands the wheel to Chaos, not a description of a dial. -->
-                            <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_trigger_bubbles}">
+                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_trigger_bubbles}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                                    <TextBlock Text="{loc:Str setting_trigger_bubbles}" FontSize="13" FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                    <rows:RowLabel Text="{loc:Str setting_trigger_bubbles}" Emblem="After"
+                                                   IsOn="{Binding IsChecked, ElementName=ChkTriggers}"/>
                                     <TextBlock x:Name="TxtTriggerEggHint"
                                                Text=""
                                                Foreground="{DynamicResource PinkBrush}" FontSize="10.5" FontStyle="Italic"
@@ -185,47 +205,7 @@
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkTriggers_Changed" Unchecked="ChkTriggers_Changed"/>
                             </Grid>
-
-                            <!-- Bubbles v2 (Back Room prizes): its own box, so what the prizes added
-                                 reads as a thing you bought and not as two more dials lost among the
-                                 sliders. The whole box collapses when no v2 grant is owned - the
-                                 code-behind drives V2Box.Visibility from PrizeGrants and refreshes it
-                                 on GrantsChanged. The champagne pill in the header is the same badge
-                                 the feature cards wear (FeatureCard.NewV2Badge), injected by code. -->
-                            <Border x:Name="V2Box" Visibility="Collapsed" Margin="0,8,0,2"
-                                    CornerRadius="10" Padding="12,8,12,8"
-                                    Background="#14FFE08A" BorderBrush="#33FFE08A" BorderThickness="1">
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
-                                        <TextBlock Text="{loc:Str label_bubbles_v2_box}" FontSize="12.5" FontWeight="SemiBold"
-                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                        <ContentControl x:Name="V2BoxBadge" Margin="7,0,0,0" VerticalAlignment="Center"/>
-                                    </StackPanel>
-
-                                    <!-- The standalone way in (owner decision, 2026-09-19): the same
-                                         counter prize at the same price, bought from here for the
-                                         people who never open the Back Room. It hides itself once the
-                                         prize lands and the rows below take over. -->
-                                    <ctl:V2GetItRow x:Name="RowGetBubblesV2"/>
-
-                                    <Grid x:Name="MotionRow" Height="36" Background="Transparent"
-                                          ToolTip="{loc:Str tooltip_bubble_motion}">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="{loc:Str setting_bubble_motion}" FontSize="13" FontWeight="SemiBold"
-                                                   Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                        <ComboBox Grid.Column="1" x:Name="CmbMotion" Width="150" feat:SessionLock.Owned="True"
-                                                  VerticalAlignment="Center"
-                                                  Style="{DynamicResource DarkComboBoxStyle}"
-                                                  SelectionChanged="CmbMotion_Changed"/>
-                                    </Grid>
-
-
-
-                                </StackPanel>
-                            </Border>
+                            </feat:OptionSection>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -241,16 +221,14 @@
                         <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
                                 Background="{StaticResource SectionHueStudioBrush}"/>
                         <StackPanel Margin="16,8,16,8">
-                            <TextBlock Text="{loc:Str label_gaze_interaction}" FontSize="13" FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextLightBrush}" Margin="0,2,0,4"/>
-
-                            <Grid Height="34" Background="Transparent" ToolTip="{loc:Str tooltip_bubble_gaze_pop}">
+                            <feat:OptionSection Key="bubblepop.gaze" Title="{loc:Str label_gaze_interaction}" Theme="Interaction" DefaultOpen="False">
+                            <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_bubble_gaze_pop}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{loc:Str label_stare_to_pop}" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
+                                <rows:RowLabel Grid.Column="0" Text="{loc:Str label_stare_to_pop}" Emblem="Eye"
+                                               IsOn="{Binding IsChecked, ElementName=ChkBubbleGazePop}"/>
                                 <CheckBox Grid.Column="1" x:Name="ChkBubbleGazePop"
                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                           Checked="ChkBubbleGazePop_Changed" Unchecked="ChkBubbleGazePop_Changed"/>
@@ -263,6 +241,7 @@
                                        Text="{loc:Str label_gaze_needs_calibration}"
                                        Foreground="{DynamicResource PinkBrush}" FontSize="11" FontStyle="Italic"
                                        TextWrapping="Wrap" Margin="0,2,0,4"/>
+                            </feat:OptionSection>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -276,20 +255,17 @@
                                     Background="{StaticResource SectionHueStudioBrush}"/>
                             <StackPanel Margin="16,8,16,10">
 
-                                <Grid Height="36" Background="Transparent" ToolTip="How often a spawned bubble carries an effect">
+                                <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="How often a spawned bubble carries an effect">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" MinWidth="120"/>
+                                        <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto" MinWidth="56"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="Trigger chance" FontSize="13" FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextLightBrush}" VerticalAlignment="Center"/>
-                                    <Slider Grid.Column="1" x:Name="SliderTriggerChance" Minimum="0" Maximum="50" Value="10"
+                                    <rows:RowLabel Grid.Column="0" Text="Trigger chance" Emblem="Random"/>
+                                    <Slider Grid.Column="1" x:Name="SliderTriggerChance" feat:OptionSection.Setting="BubbleTriggerChance" Minimum="0" Maximum="50" Value="10"
                                             VerticalAlignment="Center" Margin="14,0"
                                             ValueChanged="SliderTriggerChance_Changed"/>
-                                    <TextBlock Grid.Column="2" x:Name="TxtTriggerChance" Text="10%" HorizontalAlignment="Right"
-                                               VerticalAlignment="Center" Foreground="{DynamicResource PinkBrush}"
-                                               FontSize="13" FontWeight="Bold"/>
+                                    <rows:RowValue Grid.Column="2" x:Name="TxtTriggerChance" Text="10%"/>
                                 </Grid>
 
                                 <Border Height="1" Background="{DynamicResource GlassBorderBrush}" Margin="0,6"/>
@@ -297,47 +273,131 @@
                                 <TextBlock Text="Effect types" FontSize="13" FontWeight="SemiBold"
                                            Foreground="{StaticResource TextLightBrush}" Margin="0,2,0,8"/>
                                 <WrapPanel Background="Transparent" ToolTip="Each ticked effect has an equal chance">
-                                    <CheckBox x:Name="ChkTypeFlash"      Tag="flash"      Content="Flash"       Foreground="White" Margin="0,0,16,8" Checked="TriggerType_Changed" Unchecked="TriggerType_Changed"/>
-                                    <CheckBox x:Name="ChkTypeSubliminal" Tag="subliminal" Content="Subliminal"  Foreground="White" Margin="0,0,16,8" Checked="TriggerType_Changed" Unchecked="TriggerType_Changed"/>
-                                    <CheckBox x:Name="ChkTypePink"       Tag="pink"       Content="Pink Filter" Foreground="White" Margin="0,0,16,8" Checked="TriggerType_Changed" Unchecked="TriggerType_Changed"/>
-                                    <CheckBox x:Name="ChkTypeSpiral"     Tag="spiral"     Content="Spiral"      Foreground="White" Margin="0,0,16,8" Checked="TriggerType_Changed" Unchecked="TriggerType_Changed"/>
-                                    <CheckBox x:Name="ChkTypeGlitch"     Tag="glitch"     Content="Glitch"      Foreground="White" Margin="0,0,16,8" Checked="TriggerType_Changed" Unchecked="TriggerType_Changed"/>
-                                    <CheckBox x:Name="ChkTypeCascade"    Tag="htlink"     Content="Cascade"     Foreground="White" Margin="0,0,16,8" Checked="TriggerType_Changed" Unchecked="TriggerType_Changed"/>
-                                    <CheckBox x:Name="ChkTypeVideo"      Tag="video"      Content="Video"       Foreground="White" Margin="0,0,16,8" Checked="TriggerType_Changed" Unchecked="TriggerType_Changed"/>
-                                    <CheckBox x:Name="ChkBrainDrainBubble" Content="{loc:Str setting_bubble_braindrain}"
-                                              Foreground="White" Margin="0,0,16,8"
+                                    <!-- Readable Rows: a checklist, not label-left rows, so each CheckBox keeps its
+                                         place and only its text becomes a RowLabel wearing the effect's own picture. -->
+                                    <CheckBox x:Name="ChkTypeFlash"      Tag="flash"      Foreground="White" Margin="0,0,16,8" VerticalContentAlignment="Center" Checked="TriggerType_Changed" Unchecked="TriggerType_Changed">
+                                        <rows:RowLabel Text="Flash" Emblem="Many" Subject="Image" IsOn="{Binding IsChecked, ElementName=ChkTypeFlash}"/>
+                                    </CheckBox>
+                                    <CheckBox x:Name="ChkTypeSubliminal" Tag="subliminal" Foreground="White" Margin="0,0,16,8" VerticalContentAlignment="Center" Checked="TriggerType_Changed" Unchecked="TriggerType_Changed">
+                                        <rows:RowLabel Text="Subliminal" Emblem="Words" IsOn="{Binding IsChecked, ElementName=ChkTypeSubliminal}"/>
+                                    </CheckBox>
+                                    <CheckBox x:Name="ChkTypePink"       Tag="pink"       Foreground="White" Margin="0,0,16,8" VerticalContentAlignment="Center" Checked="TriggerType_Changed" Unchecked="TriggerType_Changed">
+                                        <rows:RowLabel Text="Pink Filter" Emblem="Clear" IsOn="{Binding IsChecked, ElementName=ChkTypePink}"/>
+                                    </CheckBox>
+                                    <CheckBox x:Name="ChkTypeSpiral"     Tag="spiral"     Foreground="White" Margin="0,0,16,8" VerticalContentAlignment="Center" Checked="TriggerType_Changed" Unchecked="TriggerType_Changed">
+                                        <rows:RowLabel Text="Spiral" Emblem="Spiral" IsOn="{Binding IsChecked, ElementName=ChkTypeSpiral}"/>
+                                    </CheckBox>
+                                    <CheckBox x:Name="ChkTypeGlitch"     Tag="glitch"     Foreground="White" Margin="0,0,16,8" VerticalContentAlignment="Center" Checked="TriggerType_Changed" Unchecked="TriggerType_Changed">
+                                        <rows:RowLabel Text="Glitch" Emblem="Shatter" IsOn="{Binding IsChecked, ElementName=ChkTypeGlitch}"/>
+                                    </CheckBox>
+                                    <CheckBox x:Name="ChkTypeCascade"    Tag="htlink"     Foreground="White" Margin="0,0,16,8" VerticalContentAlignment="Center" Checked="TriggerType_Changed" Unchecked="TriggerType_Changed">
+                                        <rows:RowLabel Text="Cascade" Emblem="Splits" IsOn="{Binding IsChecked, ElementName=ChkTypeCascade}"/>
+                                    </CheckBox>
+                                    <CheckBox x:Name="ChkTypeVideo"      Tag="video"      Foreground="White" Margin="0,0,16,8" VerticalContentAlignment="Center" Checked="TriggerType_Changed" Unchecked="TriggerType_Changed">
+                                        <rows:RowLabel Text="Video" Emblem="Many" Subject="Video" IsOn="{Binding IsChecked, ElementName=ChkTypeVideo}"/>
+                                    </CheckBox>
+                                    <CheckBox x:Name="ChkBrainDrainBubble"
+                                              Foreground="White" Margin="0,0,16,8" VerticalContentAlignment="Center"
                                               ToolTip="{loc:Str tooltip_bubble_braindrain}"
-                                              Checked="ChkBrainDrainBubble_Changed" Unchecked="ChkBrainDrainBubble_Changed"/>
+                                              Checked="ChkBrainDrainBubble_Changed" Unchecked="ChkBrainDrainBubble_Changed">
+                                        <rows:RowLabel Text="{loc:Str setting_bubble_braindrain}" Emblem="Fog" IsOn="{Binding IsChecked, ElementName=ChkBrainDrainBubble}"/>
+                                    </CheckBox>
                                 </WrapPanel>
                             </StackPanel>
                         </Grid>
                     </Border>
                 </StackPanel>
+
+                <!-- The gold V2 box (Controls/SuperBox): Super switch, BASIC sign, weekly try. -->
+                <ctl:SuperBox x:Name="SuperBoxMain" Effect="InnerBloom">
+                  <StackPanel rows:RowHue.Hue="#FFE08A">
+                    <!-- Froth's own rows, shown while Froth is lit: Features/BubblePopFeatureControl.Froth.cs.
+                         No row here changes pay: a merged bubble always pays the sum of its parts. -->
+                    <StackPanel x:Name="FrothRows" Visibility="Collapsed"
+                                Loaded="FrothRows_Loaded" Unloaded="FrothRows_Unloaded">
+                        <Border Height="1" Background="#33FFE08A" Margin="0,2,0,6"/>
+                        <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_super_froth_size}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto" MinWidth="56"/>
+                            </Grid.ColumnDefinitions>
+                            <rows:RowLabel Grid.Column="0" Text="{loc:Str super_froth_size}" Emblem="Big"/>
+                            <Slider Grid.Column="1" x:Name="SliderFrothSize" feat:OptionSection.Setting="FrothMaxSize" Minimum="2.5" Maximum="6" Value="4.5"
+                                    SmallChange="0.5" LargeChange="0.5" TickFrequency="0.5" IsSnapToTickEnabled="True"
+                                    VerticalAlignment="Center" Margin="14,0"
+                                    ValueChanged="SliderFrothSize_Changed"/>
+                            <rows:RowValue Grid.Column="2" x:Name="TxtFrothSize" Text="4.5x"/>
+                        </Grid>
+                        <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_super_froth_reach}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto" MinWidth="56"/>
+                            </Grid.ColumnDefinitions>
+                            <rows:RowLabel Grid.Column="0" Text="{loc:Str super_froth_reach}" Emblem="Reacts"/>
+                            <Slider Grid.Column="1" x:Name="SliderFrothReach" feat:OptionSection.Setting="FrothPopReach" Minimum="0" Maximum="200" Value="100"
+                                    SmallChange="10" LargeChange="10" TickFrequency="10" IsSnapToTickEnabled="True"
+                                    VerticalAlignment="Center" Margin="14,0"
+                                    ValueChanged="SliderFrothReach_Changed"/>
+                            <rows:RowValue Grid.Column="2" x:Name="TxtFrothReach" Text="100%"/>
+                        </Grid>
+                        <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_super_froth_push}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" MinWidth="120" SharedSizeGroup="RowLabel"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto" MinWidth="56"/>
+                            </Grid.ColumnDefinitions>
+                            <rows:RowLabel Grid.Column="0" Text="{loc:Str super_froth_push}" Emblem="Click"/>
+                            <Slider Grid.Column="1" x:Name="SliderFrothPush" feat:OptionSection.Setting="FrothCursorPush" Minimum="0" Maximum="200" Value="100"
+                                    SmallChange="10" LargeChange="10" TickFrequency="10" IsSnapToTickEnabled="True"
+                                    VerticalAlignment="Center" Margin="14,0"
+                                    ValueChanged="SliderFrothPush_Changed"/>
+                            <rows:RowValue Grid.Column="2" x:Name="TxtFrothPush" Text="100%"/>
+                        </Grid>
+                    </StackPanel>
+                    <!-- The Back Room v2 prize rows, merged into the gold box under the Super switch.
+                         Each row is lit by its own ownership (PrizeGrants), never by the tier; the
+                         section collapses while nothing in it applies. See RefreshV2Box / RebuildMotionPicker. -->
+                    <StackPanel x:Name="V2Box" Visibility="Collapsed">
+                        <Border Height="1" Background="#33FFE08A" Margin="0,2,0,6"/>
+                        <TextBlock Text="{loc:Str label_bubbles_v2_box}" FontSize="11.5" FontWeight="SemiBold"
+                                   Foreground="#FFE08A" Opacity="0.85" Margin="0,0,0,2"/>
+
+                        <!-- The standalone way in (owner decision, 2026-09-19): the same
+                             counter prize at the same price, bought from here for the
+                             people who never open the Back Room. It hides itself once the
+                             prize lands and the rows below take over. -->
+                        <ctl:V2GetItRow x:Name="RowGetBubblesV2"/>
+
+                        <Grid x:Name="MotionRow" Style="{StaticResource OptionRow}" Background="Transparent"
+                              ToolTip="{loc:Str tooltip_bubble_motion}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_bubble_motion}" Emblem="Motion"/>
+                            <ComboBox Grid.Column="1" x:Name="CmbMotion" feat:OptionSection.Setting="BubbleMotionStyle" Width="150" feat:SessionLock.Owned="True"
+                                      VerticalAlignment="Center"
+                                      Style="{DynamicResource RowComboBoxStyle}"
+                                      SelectionChanged="CmbMotion_Changed"/>
+                        </Grid>
+                    </StackPanel>
+                  </StackPanel>
+                </ctl:SuperBox>
             </StackPanel>
 
-            <!-- SIDE ART. The art is the Border's BACKGROUND, not a child Image: a Border clips its
-                 Background to CornerRadius but does NOT clip child content, so a child Image would
-                 square off the rounded corners (round-2 lesson). Same plate the hero uses. -->
+            <!-- SIDE ART -> LIVE PREVIEW (sweep lane P2, owner 2026-11-24): the card is a framed slice of a desktop
+                 where Bubbles plays with fake content (Controls/Preview/EffectPreview.cs). The mod art brush
+                 stays (ApplyFeatureArt writes it) but is parked in Tag, so nothing shows behind the preview;
+                 the card keeps its size and its AdaptiveSideArt collapse. -->
             <Border Grid.Column="1" Margin="10,0,0,0" CornerRadius="14"
                     BorderThickness="2" BorderBrush="{StaticResource VelvetCardBorderBrush}"
-                    VerticalAlignment="Stretch" MinHeight="200">
-                <Border.Background>
-                    <ImageBrush x:Name="SideArtBrush" Stretch="UniformToFill">
-                        <ImageBrush.ImageSource>
-                            <BitmapImage UriSource="pack://application:,,,/Resources/features/Bubble_pop.png"
-                                         DecodePixelWidth="800"/>
-                        </ImageBrush.ImageSource>
-                    </ImageBrush>
-                </Border.Background>
-                <!-- Scrim so the plate sits under the page instead of fighting it. -->
-                <Border CornerRadius="12">
-                    <Border.Background>
-                        <LinearGradientBrush StartPoint="0,1" EndPoint="0,0">
-                            <GradientStop Color="#66000000" Offset="0"/>
-                            <GradientStop Color="#00000000" Offset="0.45"/>
-                        </LinearGradientBrush>
-                    </Border.Background>
-                </Border>
+                    Background="#06050D" VerticalAlignment="Stretch" MinHeight="200">
+                <Border.Tag>
+                    <ImageBrush x:Name="SideArtBrush" Stretch="UniformToFill"/>
+                </Border.Tag>
+                <pv:EffectPreview Scene="bubbles"/>
             </Border>
         </Grid>
 

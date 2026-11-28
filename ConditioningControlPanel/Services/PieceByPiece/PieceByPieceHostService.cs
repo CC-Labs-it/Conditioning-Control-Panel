@@ -105,6 +105,9 @@ internal static partial class PieceByPieceHostService
     }
 
     private static ChaosWebViewHost? _host;
+
+    /// <summary>This game's window, for the Prize Counter sheet its door opens over it (PrizeCounterHostService.Sheet.cs).</summary>
+    internal static ChaosWebViewHost? CounterHost => _host;
     private static DispatcherTimer? _bootWatch;
     private static DispatcherTimer? _heartbeatWatch;
     private static DateTime _lastHeartbeatUtc;
@@ -295,6 +298,7 @@ internal static partial class PieceByPieceHostService
             // The wardrobe (PieceByPieceHostService.Wardrobe.cs): grants + saved look, then the synced copy.
             PostWardrobe();
             _ = PullEquipAsync();
+            _ = PullStockAsync();
         }
         catch (Exception ex) { App.Logger?.Warning("PieceByPieceHostService.OnPageReady: {E}", ex.Message); }
     }

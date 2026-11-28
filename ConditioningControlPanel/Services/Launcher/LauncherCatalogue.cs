@@ -36,6 +36,9 @@ namespace ConditioningControlPanel.Services.Launcher;
 /// <see cref="Launch"/>, which owns its own refusal.</param>
 /// <param name="RequiresAccount">False only for entries that explicitly allow signed-out play.</param>
 /// <param name="IsNew">Shows the existing NEW badge on the card.</param>
+/// <param name="Door">Which door's page the card sits on (<see cref="LauncherDoorRules"/>).</param>
+/// <param name="Listed">False keeps the card off every page; <c>Find</c>, <c>--game</c> and a
+/// shortcut still reach it.</param>
 public sealed record LauncherEntry(
     string Id,
     string TitleKey,
@@ -49,8 +52,13 @@ public sealed record LauncherEntry(
     Func<bool> IsActive,
     Func<bool>? IsRevealed = null,
     bool RequiresAccount = true,
-    bool IsNew = false)
+    bool IsNew = false,
+    LauncherDoor Door = LauncherDoor.Games,
+    bool Listed = true)
 {
+    /// <summary>The entry as the door rules see it: no delegates left, no UI types.</summary>
+    public LauncherDoorCard Card => new(Id, Door, Listed, Available, IsNew, Locked);
+
     public string Title
     {
         get { try { return Loc.Get(TitleKey); } catch { return Id; } }
@@ -146,18 +154,34 @@ public static class LauncherCatalogue
     }
 
     private static readonly Lazy<IReadOnlyList<LauncherEntry>> _games = new(Build);
+    private static readonly Lazy<IReadOnlyList<LauncherEntry>> _tools = new(BuildTools);
 
+    /// <summary>The Games door, in screen order. Holds the unlisted Breakout demo as well.</summary>
     public static IReadOnlyList<LauncherEntry> Games => _games.Value;
+
+    /// <summary>The Tools door: editors and makers. No desktop shortcuts, no panic surface of
+    /// their own (each opens the panel or a host that is already registered).</summary>
+    public static IReadOnlyList<LauncherEntry> Tools => _tools.Value;
+
+    /// <summary>Every entry behind either door, games first.</summary>
+    public static IEnumerable<LauncherEntry> All => Games.Concat(Tools);
+
+    /// <summary>The cards a door's page shows, in order: listed and available.</summary>
+    public static IReadOnlyList<LauncherEntry> Page(LauncherDoor door)
+    {
+        var ids = LauncherDoorRules.Page(All.Select(e => e.Card), door);
+        return ids.Select(id => Find(id)!).ToList();
+    }
 
     public static LauncherEntry? Find(string? id)
     {
         if (string.IsNullOrWhiteSpace(id)) return null;
         var key = id.Trim();
-        return Games.FirstOrDefault(g => string.Equals(g.Id, key, StringComparison.OrdinalIgnoreCase));
+        return All.FirstOrDefault(g => string.Equals(g.Id, key, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>True when any catalogued game currently has a window up.</summary>
-    public static bool AnyActive => Games.Any(g => g.Active);
+    public static bool AnyActive => All.Any(g => g.Active);
 
     /// <summary>
     /// Starts a game by id. False when the id is unknown, the tile is unavailable or nobody is
@@ -210,49 +234,56 @@ public static class LauncherCatalogue
 
     private static List<LauncherEntry> Build()
     {
-        // The face, the order and the account rule are Core's LauncherCards; this head adds how
-        // each one starts. A card this head has no host for is left out.
+        // The face, the order, the door and the account rule are Core's LauncherCards; this head
+        // adds how each one starts. A card this head has no host for is left out.
         var hosts = new Dictionary<string, (Func<bool> available, Func<bool> locked, Action launch,
             Func<bool> active, Func<bool>? revealed)>(StringComparer.OrdinalIgnoreCase)
         {
-            // The Back Room: free, no gate, no account needed (the SP relay just goes quiet signed out).
+            // The Back Room: free, no gate (the SP relay just goes quiet signed out).
             ["backroom"] = (Always, Never,
                 () => BackRoom.BackRoomHostService.Launch(),
                 () => BackRoom.BackRoomHostService.IsRoomActive, null),
 
+            // Terms & Conditioning (7.4.0): one card for everyone, never locked; a subscriber gets the
+            // full game and a free account the small one (Services/Tc/TcRules). Shown only when the
+            // game tree is on disk.
+            ["tc"] = (() => Tc.TcHostService.TreePresent, Never,
+                () => Tc.TcHostService.Launch(),
+                () => Tc.TcHostService.IsActive, null),
+
+            // Breakout: one listed tile that opens the full game when the account has it and the
+            // demo otherwise; the demo keeps its own unlisted id for --game and old shortcuts.
             ["breakoutdemo"] = (Always, Never,
                 () => BackRoom.BreakoutHostService.LaunchDemo(),
                 () => BackRoom.BackRoomHostService.IsBreakoutDemoActive, null),
-            ["breakout"] = (Always,
-                () => !BackRoom.BreakoutAccess.FullAllowed,
-                () => BackRoom.BreakoutHostService.LaunchFull(),
-                () => BackRoom.BackRoomHostService.IsBreakoutFullActive, null),
+            ["breakout"] = (Always, Never,
+                () =>
+                {
+                    if (BreakoutFull()) BackRoom.BreakoutHostService.LaunchFull();
+                    else BackRoom.BreakoutHostService.LaunchDemo();
+                },
+                () => BackRoom.BackRoomHostService.IsBreakoutFullActive || BackRoom.BackRoomHostService.IsBreakoutDemoActive,
+                null),
 
-            // Piece by Piece: free for everyone (owner, 2026-09-27), so no lock and no account: the
-            // computer plays anyone, and the board's own lobby asks a signed-out player to sign in.
+            // Piece by Piece: free for everyone (owner, 2026-09-27), no lock and no account.
             ["piecebypiece"] = (() => PieceByPieceAvailable, Never,
                 () => PieceByPiece.PieceByPieceHostService.Launch(),
                 () => PieceByPiece.PieceByPieceHostService.IsActive, null),
 
-            // Racing Thoughts is the 3D race (Glassroad), PRIME ONLY, solo included (owner, 2026-10-29:
-            // "THE whole feature is for primes"). Always revealed: below Prime the tile wears the
-            // padlock and the click goes to Launch, whose DemandPrime paints the refusal. The 2D race
-            // has its own tile since 2026-11-05 (raceclassic, below). Online is tier 2+ on the server too.
+            // Racing Thoughts is the 3D race, PRIME ONLY, solo included (owner, 2026-10-29). Below
+            // Prime the tile wears the padlock and the click goes to Launch, which paints the refusal.
             ["race"] = (Always,
                 () => !Glassroad.GlassroadHostService.PrimeAllowed,
                 () => Glassroad.GlassroadHostService.Launch(),
                 () => Glassroad.GlassroadHostService.IsActive, null),
 
-            // Racing Thoughts Classic: the original 2D race, back beside the 3D one (owner, 2026-11-05).
-            // Free for everyone with every track (RacingAccess.PurchaseDoorArmed is off), so no lock
-            // and no Prime badge. Its own key art: the pre-3D race picture.
+            // Racing Thoughts Classic: the original 2D race, free for everyone (owner, 2026-11-05).
             ["raceclassic"] = (Always, Never,
                 () => Chaos.CaucusHostService.Launch(),
                 () => Chaos.CaucusHostService.IsActive, null),
 
-            // Down the Rabbit Hole: Basic since 2026-10-31 (Racing Thoughts 3D is the Prime game now). The
-            // Play handler gates it; Launch does not, so the tile asks the gate itself and lets
-            // DemandPremium paint the refusal. A server drop day still opens it for free accounts.
+            // Down the Rabbit Hole: Basic since 2026-10-31. Launch does not gate, so the tile asks
+            // the gate itself; a server drop day still opens it for free accounts.
             ["dtrh"] = (Always,
                 () => !PremiumOk("launcher_game_dtrh_title", "dtrh"),
                 () =>
@@ -264,37 +295,61 @@ public static class LauncherCatalogue
                 () => Chaos.DtrhHostService.IsActive, null),
 
             // The Arcademy: Launch owns the build flag, the Lab gate and the audio-only refusal.
-            // The art is the Arcademy's own entrance-gates plate, copied into Resources/features/
-            // because the web tree is Content (copied to disk) and only a WPF Resource resolves
-            // through a pack:// uri - pointed at the web path the tile drew the glyph plate instead.
             ["arcademy"] = (() => Arcademy.ArcademyHostService.DoorAvailable,
                 () => !LabOk("launcher_game_arcademy_title", null),
                 () => Arcademy.ArcademyHostService.Launch(),
                 () => Arcademy.ArcademyHostService.IsActive, null),
 
-            // Goon Game: free to join. The launcher has already tucked the panel away, so the game
-            // must not duck it a second time.
+            // Goon Game: free to join. The launcher has already tucked the panel away.
             ["goon"] = (Always, Never,
                 () => GoonGame.GoonHostService.Launch(duckMainWindow: false),
                 () => GoonGame.GoonHostService.IsActive, null),
 
-            // Graded Intake: a panel tab, not a window, so Launch opens the panel on it and IsActive
-            // never reports a window (the launcher does not wait for the panel). Locked when the
-            // weekly free pass is spent and the account is below tier 2; the click still opens the
-            // tab, whose gate explains the pass, so the tile is never a dead end.
+            // Graded Intake: a panel tab, not a window. Locked when the weekly pass is spent and
+            // the account is below tier 2; the click still opens the tab, whose gate explains.
             ["intake"] = (Always,
                 () => !(App.IntakePass?.CanStartIntake ?? false),
                 () => LauncherHost.OpenPanelTab("gradedintake"),
                 Never, null),
         };
+        return FromCards(LauncherCards.All, hosts);
+    }
 
+    private static bool BreakoutFull()
+    {
+        try { return !NeedsAccount && BackRoom.BreakoutAccess.FullAllowed; }
+        catch (Exception ex) { Log.Debug(ex, "[Launcher] breakout gate probe failed"); return false; }
+    }
+
+    /// <summary>The Tools door (declutter wave 2): real tools only, never locked, no account.</summary>
+    private static List<LauncherEntry> BuildTools()
+    {
+        var hosts = new Dictionary<string, (Func<bool> available, Func<bool> locked, Action launch,
+            Func<bool> active, Func<bool>? revealed)>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["deepereditor"] = (Always, Never, () => LauncherHost.OpenPanelTab("deeper"), Never, null),
+            ["sessioneditor"] = (Always, Never, () => LauncherHost.OpenPanelTab("presets"), Never, null),
+            ["modcreator"] = (Always, Never, () => LauncherHost.OpenPanelModManager(), Never, null),
+            ["justdrop"] = (() => JustDrop.JustDropService.DoorAvailable, Never,
+                () => JustDrop.JustDropHostService.LaunchShop(),
+                () => JustDrop.JustDropHostService.IsActive, null),
+            ["loom"] = (Always, Never,
+                () => Chaos.LoomHostService.Launch(),
+                () => Chaos.LoomHostService.IsActive, null),
+        };
+        return FromCards(LauncherCards.Tools, hosts);
+    }
+
+    private static List<LauncherEntry> FromCards(IEnumerable<LauncherCard> cards,
+        Dictionary<string, (Func<bool> available, Func<bool> locked, Action launch, Func<bool> active, Func<bool>? revealed)> hosts)
+    {
         var list = new List<LauncherEntry>();
-        foreach (var c in LauncherCards.All)
+        foreach (var c in cards)
         {
             if (!hosts.TryGetValue(c.Id, out var h)) continue;
             list.Add(new LauncherEntry(c.Id, c.TitleKey, c.BlurbKey, c.ArtPath, c.Glyph,
                 Color.FromRgb(c.R, c.G, c.B), h.available, h.locked, h.launch, h.active, h.revealed,
-                c.RequiresAccount, c.IsNew));
+                c.RequiresAccount, c.IsNew, c.Door, c.Listed));
         }
         return list;
     }

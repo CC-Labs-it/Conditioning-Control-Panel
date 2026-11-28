@@ -123,7 +123,7 @@ public sealed class TabTransitionsTests
 
         // WPF :839: the section already lit gets no rail pulse.
         shell.StopNavDoorHeaderPulse("deeper");
-        shell.ShowTab("play");
+        shell.ShowTab("playeyes");
         Assert.False(shell.StartNavDoorHeaderPulse("deeper"));
 
         // WPF ProgramsTab.cs:54: the Programs announcement is an ambient loop, Reduced drops it.

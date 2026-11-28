@@ -126,6 +126,9 @@ public sealed class AmbientBeatLoopsTests
         "Controls/DescentFuseRailChip.cs", "Controls/Fx/FrameClock.cs",   // FrameClock: its own off-window fallback
         "Controls/HoverPop.cs", "Controls/PremiumSpark.cs", "Controls/TakeoverOrb.cs", "Controls/VatGlassCanvas.cs",
         "Views/Overlays/FlashOverlayWindow.cs",   // its own overlay window: no beat to share, and the exit must close it even unrendered
+        // Super effect overlays draw in their own topmost overlay windows, as FlashOverlayWindow does: no panel beat to share.
+        "Views/Overlays/AfterglowLineOverlay.cs", "Views/Overlays/FlashOverlay.Deck.cs", "Views/Overlays/FlashOverlay.Stage.cs",
+        "Views/Overlays/SteamOverlay.cs", "Views/Overlays/WhirlpoolOverlay.cs",
         "Views/AvatarTube/AvatarTubeWindow.Chat.cs", "Views/Chaos/ChaosHudWindow.axaml.cs", "Views/Chaos/ChaosOverlayWindow.axaml.cs",
         "Views/Controls/SeasonRecapCard.axaml.cs", "Views/Lab/GazeMinigame/GazeMinigameWindow.axaml.cs",
         "Views/Overlays/AttentionTestTarget.cs", "Views/Overlays/FlashOverlay.cs", "Views/Overlays/SpiralOverlay.cs",

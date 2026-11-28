@@ -88,7 +88,6 @@ namespace ConditioningControlPanel
         // to suppress. A flag that is only cleared by the handler is a trap once the handler
         // stops running - the next real click gets eaten instead.
         private Window? _browserPopoutWindow = null;
-        private bool _isDualMonitorPlaybackActive = false;
         private bool _isBrowserFullscreen = false;
         private bool _browserFullscreenWasPopout = false;
         private double _browserPreFullscreenZoom = 1.0;
@@ -221,6 +220,23 @@ namespace ConditioningControlPanel
         public MainWindow()
         {
             InitializeComponent();
+            // Declutter wave 2: a panel link to something that lives in the launcher now opens
+            // the launcher on that door (Games or Tools).
+            Services.UI.PanelDoorLink.OpenLauncherDoor = key =>
+            {
+                if (Services.Launcher.LauncherDoorRules.TryParse(key, out var door))
+                    Services.Launcher.LauncherHost.ShowDoor(door);
+            };
+            // The seam is Core's on the port: this head says when Lockdown runs (the door stays
+            // shut then, rule 6) and what the fallback is: the title-bar "Back to CC Labs" button,
+            // same handler, and a disabled button stays a no-op.
+            Services.UI.PanelDoorLink.IsLockedDown = () => App.Lockdown?.IsActive == true;
+            Services.UI.PanelDoorLink.Fallback = () =>
+            {
+                var button = App.MainWindowRef?.BtnBackToLauncher;
+                if (button == null || !button.IsEnabled) return;
+                button.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, button));
+            };
             Services.Diagnostics.FxBisect.Watch(this);
             // Nav rework: lane-owned pages register their ShowTab hosts (MainWindow.TabNavigation.cs).
             RegisterLaneNavTabs();
@@ -556,7 +572,8 @@ namespace ConditioningControlPanel
                                 && !Dispatcher.HasShutdownStarted)
                             {
                                 EnqueueStartupModal("first-show", 25,
-                                    _ => Services.FirstShow.FirstShowService.Open(this));
+                                    _ => Services.FirstShow.FirstShowService.Open(this,
+                                        onEnded: OfferStartHereIfNeeded));
                             }
                         }
                         finally
@@ -1540,15 +1557,18 @@ namespace ConditioningControlPanel
                 // Glassroad (3D race preview) pauses on Escape like every game here.
                 bool glassroadInFront = Services.Glassroad.GlassroadHostService.IsInFront;
                 bool glassroadReady = Services.Glassroad.GlassroadHostService.IsReady;
+                // Terms & Conditioning (7.4.0): Escape is its pause card (fuzz/host-escape.js).
+                bool tcInFront = Services.Tc.TcHostService.IsInFront;
+                bool tcReady = Services.Tc.TcHostService.IsReady;
                 // Only a game that is up can pause: a booting page that kept the press did nothing.
                 bool frontGameReady = Services.Safety.PanicPolicy.KeptEscapeGoesTo(true,
                     raceInFront, raceReady, boardInFront, boardReady, breakoutInFront, breakoutReady,
                     dtrhInFront, dtrhReady, arcademyInFront, arcademyReady, goonInFront, goonReady,
                     roomInFront, roomReady, intakeInFront, intakeReady, counterInFront, counterReady,
-                    glassroadInFront, glassroadReady) != Services.Safety.PanicPolicy.KeptEscapePage.None;
+                    glassroadInFront, glassroadReady, tcInFront, tcReady) != Services.Safety.PanicPolicy.KeptEscapePage.None;
                 bool claim = Services.Safety.PanicPolicy.GameClaimsEscapeAsPause(
                     App.Settings?.Current?.PanicKey,
-                    gameInFront: raceInFront || boardInFront || breakoutInFront || dtrhInFront
+                    gameInFront: raceInFront || boardInFront || breakoutInFront || dtrhInFront || tcInFront
                         || arcademyInFront || goonInFront || roomInFront || intakeInFront || glassroadInFront || counterInFront,
                     engineRunning: _isRunning,
                     lockCardOpen: LockCardWindow.IsAnyOpen(),
@@ -1561,7 +1581,8 @@ namespace ConditioningControlPanel
                 var gameName = raceInFront ? "Racing Thoughts" : boardInFront ? "Piece by Piece"
                     : breakoutInFront ? "Breakout" : dtrhInFront ? "Down the Rabbit Hole"
                     : arcademyInFront ? "Arcademy" : goonInFront ? "Goon"
-                    : roomInFront ? "Back Room" : intakeInFront ? "Intake" : counterInFront ? "Prize Counter" : "Glassroad";
+                    : roomInFront ? "Back Room" : intakeInFront ? "Intake" : counterInFront ? "Prize Counter"
+                    : glassroadInFront ? "Glassroad" : "Terms & Conditioning";
                 VideoDiag.Log("PANIC", $"Escape kept by {gameName} as its pause (again within 2 s = full panic)");
                 // Each game pauses on its own keydown, which never comes while its WebView2 is out of
                 // keyboard focus, so the game in front is handed the kept press too; the page drops it
@@ -1570,7 +1591,7 @@ namespace ConditioningControlPanel
                             raceInFront, raceReady, boardInFront, boardReady, breakoutInFront, breakoutReady,
                             dtrhInFront, dtrhReady, arcademyInFront, arcademyReady, goonInFront, goonReady,
                             roomInFront, roomReady, intakeInFront, intakeReady, counterInFront, counterReady,
-                            glassroadInFront, glassroadReady))
+                            glassroadInFront, glassroadReady, tcInFront, tcReady))
                 {
                     case Services.Safety.PanicPolicy.KeptEscapePage.Counter:
                         Services.PrizeCounter.PrizeCounterHostService.PostKeptEscape(); break;
@@ -1592,6 +1613,8 @@ namespace ConditioningControlPanel
                         Services.Quiz.IntakeHostService.PostKeptEscape(); break;
                     case Services.Safety.PanicPolicy.KeptEscapePage.Glassroad:
                         Services.Glassroad.GlassroadHostService.PostKeptEscape(); break;
+                    case Services.Safety.PanicPolicy.KeptEscapePage.Tc:
+                        Services.Tc.TcHostService.PostKeptEscape(); break;
                 }
                 return true;
             }
@@ -1620,11 +1643,20 @@ namespace ConditioningControlPanel
 
         private void HandlePanicKeyPress()
         {
+            // A promo card goes at once on every rung, a game's Escape pause included: it is topmost, so
+            // it must not stay up over a paused game (the stop pass closes it again; both are idempotent).
+            try { PromoCardWindow.CloseForPanic(); } catch (Exception ex) { Diag.Swallowed(ex); }
             // Racing Thoughts' pause, BEFORE everything below: a pause is not a panic, so it must not
             // arm EMI's silence, the Chaster safety hold or the stop pass.
             if (TryRacePauseOnEscape()) return;
             Services.FirstShow.FirstShowService.Stop();
             CancelPendingAi();
+            // The Sparkles flight and its bells stop, the wallet snaps to its balance, nothing stays owed.
+            try { Services.Prizes.SparkleFlightDirector.Stop(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            // The weekly free Super try ends with a cut, before any hand-off below can return early.
+            try { Services.Super.SuperPreview.End(panic: true); } catch (Exception ex) { Diag.Swallowed(ex); }
+            // Super Lights Down: the dim goes on this frame in every mode (a floating dim never fades out after a panic).
+            try { Services.Super.LightsDownService.Panic(); } catch (Exception ex) { Diag.Swallowed(ex); }
 
             // EMI Desk (MOMENTS 4.B): FIRST LINE, before any of the ladder below. panicPressed is a
             // HOLD with a five-minute silence tail, and it has to be armed even if something further
@@ -2108,6 +2140,7 @@ namespace ConditioningControlPanel
             Step("pop quiz windows", () => PopQuizWindow.ForceCloseAll());
             Step("bubble count windows", () => { BubbleCountWindow.ForceCloseAll(); BubbleCountResultWindow.ForceCloseAll(); });
             Step("help popover", () => Controls.HelpPopover.CloseActive());
+            Step("promo card", PromoCardWindow.CloseForPanic);
             // CloseIfOpen, NOT TryConsumeEscape: a press the palette claimed never reaches this
             // pass (it is its own rung and returns), so anything still open here is a palette that
             // did NOT claim the press - e.g. panic rebound to F8. Calling TryConsumeEscape here
@@ -2189,6 +2222,7 @@ namespace ConditioningControlPanel
                 App.Overlay?.Stop();
                 App.Overlay?.StopPinkFilter();
                 App.Overlay?.StopSpiral();
+                Services.Super.SuperStageHost.Stop();
             }
             catch (Exception ex)
             {
@@ -3637,6 +3671,7 @@ namespace ConditioningControlPanel
             // Wire the in-app notification surface. Anything App.Notifications.Show()'d
             // before this point is replayed on attach.
             App.Notifications?.AttachHost(NotificationHost);
+            WireNotificationHistory();
 
             // First-run picker: activate the mod the user chose there once its pack is on disk. Armed
             // here rather than in the ctor because the switch repaints this window's tabs, and the

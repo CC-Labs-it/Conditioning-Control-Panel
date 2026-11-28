@@ -8,11 +8,13 @@ internal static class FirstShowService
 {
     private static FirstShowDesktopWindow? _window;
     public static bool IsActive => _window != null;
-    public static void Open(Window? owner = null, bool preview = false)
+    /// <param name="onEnded">Runs once when this show closes, or at once when it could not start.
+    /// Not called when a show was already open (that one keeps its own).</param>
+    public static void Open(Window? owner = null, bool preview = false, Action? onEnded = null)
     {
         if (_window != null) { _window.Activate(); return; }
         var desk = App.EmiDesk?.BeginPresentation();
-        if (desk == null) return;
+        if (desk == null) { onEnded?.Invoke(); return; }
         var window = new FirstShowDesktopWindow(preview, desk, owner as MainWindow ?? Application.Current.MainWindow as MainWindow);
         _window = window;
         if (preview) Application.Current.MainWindow = window;

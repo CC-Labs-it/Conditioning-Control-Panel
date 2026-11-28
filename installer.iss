@@ -13,7 +13,7 @@
 ; - Store install path in registry for Velopack updates
 
 #define MyAppName "Conditioning Control Panel"
-#define MyAppVersion "7.2.3"
+#define MyAppVersion "7.4.1"
 #define MyAppPublisher "CodeBambi"
 #define MyAppURL "https://github.com/CC-Labs-it/Conditioning-Control-Panel"
 #define MyAppExeName "ConditioningControlPanel.exe"
@@ -67,6 +67,16 @@ UsePreviousPrivileges=yes
 OutputDir=.\installer-output
 OutputBaseFilename=ConditioningControlPanel-{#MyAppVersion}-Setup
 SetupIconFile=ConditioningControlPanel\Resources\app.ico
+
+; Code signing (ccp-bugs #1714). Signing Setup.exe after the compile left the temporary copy
+; Setup unpacks to %TEMP% and the uninstaller unsigned, and Smart App Control blocked the 7.3.7
+; update on that stage. A release cut passes /DSignRelease and defines the "ccpsign" Sign Tool
+; (/Sccpsign=... with $f); ISCC then signs Setup.exe, its temporary self-copies and unins000.exe.
+; Local test builds (build-installer.bat) pass neither and stay unsigned.
+#ifdef SignRelease
+SignTool=ccpsign
+SignedUninstaller=yes
+#endif
 
 ; Compression
 Compression=lzma2/ultra64
@@ -178,6 +188,16 @@ Source: "{#PublishDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 ; are user data and are deliberately left alone - phase C re-stamps them from the downloaded
 ; pack instead.
 #include "installer-content-deletions.iss"
+
+; LibVLC 3.0.21 -> 3.0.24 (7.4.1, CVE-2026-8461 bump): 3.0.24 no longer ships these two codec
+; plugins, and Inno never removes a file it did not install this time, so libvlc would keep
+; loading the 3.0.21 copies. Exact names only, in every place a libvlc folder can sit.
+Type: files;      Name: "{app}\libvlc\plugins\codec\libschroedinger_plugin.dll"
+Type: files;      Name: "{app}\libvlc\plugins\codec\libsdl_image_plugin.dll"
+Type: files;      Name: "{app}\libvlc\win-x64\plugins\codec\libschroedinger_plugin.dll"
+Type: files;      Name: "{app}\libvlc\win-x64\plugins\codec\libsdl_image_plugin.dll"
+Type: files;      Name: "{app}\libvlc\win-x86\plugins\codec\libschroedinger_plugin.dll"
+Type: files;      Name: "{app}\libvlc\win-x86\plugins\codec\libsdl_image_plugin.dll"
 
 ; RETIRED 2026-09-25 (not pack payload, so not in the generated list above): orphaned Bambi
 ; trigger clips from the Resources\sounds ROOT that no code read. Duplicates of Resources\sub_audio.

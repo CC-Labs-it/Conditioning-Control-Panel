@@ -18,6 +18,7 @@ using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services.UI;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Tabs
@@ -649,10 +650,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             cb.IsChecked = !(cb.IsChecked ?? false);
         }
 
+        /// <summary>One group header's count ("5 of 7 on") and the rows it counts. Filled by
+        /// RenderRackRows, repainted by RefreshDots, so the number moves whenever a dot does.</summary>
+        private readonly List<(TextBlock Count, List<StudioRackEntry> Rows)> _groupCounts = new();
+
+        /// <summary>The group header counts as shown, top to bottom ("" when hidden). Test seam.</summary>
+        internal IReadOnlyList<string> GroupCountTexts =>
+            _groupCounts.Select(g => g.Count.IsVisible ? g.Count.Text ?? string.Empty : string.Empty).ToList();
+        internal TextBlock? LabelFor(string key) => EntryFor(key)?.Label;
+
         private void RenderRackRows()
         {
             if (RackList == null) return;
             RackList.Children.Clear();
+            _groupCounts.Clear();
 
             foreach (var item in _layout)
             {
@@ -663,6 +674,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     var capRow = new Grid { Margin = new Thickness(13, 9, 10, 4) };
                     capRow.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
                     capRow.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
+                    capRow.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
 
                     var caption = new TextBlock
                     {
@@ -705,11 +717,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                     Grid.SetColumn(rule, 1);
                     capRow.Children.Add(rule);
 
+                    // The group's count at the right end. Neutral on purpose: the hue is spent
+                    // on the dots, the number only has to be findable.
+                    var count = new TextBlock
+                    {
+                        FontSize = 10,
+                        Margin = new Thickness(6, 0, 2, 0),
+                        VerticalAlignment = VerticalAlignment.Center,
+                        IsVisible = false,
+                    };
+                    count[!TextBlock.ForegroundProperty] = new DynamicResourceExtension("TextDimBrush");
+                    Grid.SetColumn(count, 2);
+                    capRow.Children.Add(count);
+                    _groupCounts.Add((count, new List<StudioRackEntry>()));
+
                     RackList.Children.Add(capRow);
                     continue;
                 }
 
                 if (item is not StudioRackEntry e) continue;
+                if (_groupCounts.Count > 0) _groupCounts[^1].Rows.Add(e);
 
                 // Two states, both built now, swapped by IsVisible. See ApplyRowState.
                 var content = new Grid();
@@ -792,10 +819,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _ => null,
         };
 
+        /// <summary>The row's V2 effect when this head hosts it (WPF SuperBase.EffectForRackKey).</summary>
+        private static ConditioningControlPanel.Services.Super.SuperEffect? HostedSuperFor(string? rackKey) =>
+            ConditioningControlPanel.Services.Super.SuperBase.EffectForRackKey(rackKey) is { } fx
+            && global::ConditioningControlPanel.Avalonia.Controls.Super.SuperBox.HostedOnThisHead.Contains(fx) ? fx : null;
+
+        /// <summary>WPF WearsV2Pill: a row fronting a v2 prize family or an effect with a V2 (hosted here).</summary>
+        private static bool WearsV2Pill(string? rackKey) => V2PillFamily(rackKey) != null || HostedSuperFor(rackKey) != null;
+
         /// <summary>
-        /// WPF RefreshV2Pills: lights or hides the v2 pill on the flash and bubbles rows from
-        /// ownership (<see cref="Platform.PrizeOwnership"/>, WPF V2Badges).
-        /// <para>Refreshed on attach and PrizeGrants.GrantsChanged while attached.</para>
+        /// WPF RefreshV2Pills: lights or hides the v2 pill on each row. Either reason is enough: the
+        /// account owns the row's Back Room v2 prize (flash and bubbles, <see cref="Platform.PrizeOwnership"/>),
+        /// or the row's V2 effect is switched on and unlocked (<see cref="ConditioningControlPanel.Services.Super.SuperAccess.IsSelected"/>).
+        /// <para>Refreshed on attach, PrizeGrants.GrantsChanged and SuperAccess.Changed while attached.</para>
         /// </summary>
         internal void RefreshV2Pills()
         {
@@ -804,9 +840,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             try { bubbles = Platform.PrizeOwnership.BubbleV2Owned(); } catch { bubbles = false; }
             foreach (var e in _entries)
             {
+                if (e.V2Pill == null && e.TileV2Pill == null) continue;
                 var fam = V2PillFamily(e.Key);
-                if (fam == null) continue;
-                bool worn = fam == "flash" ? flash : bubbles;
+                bool worn = fam == "flash" ? flash : fam == "bubbles" && bubbles;
+                if (!worn && HostedSuperFor(e.Key) is { } fx)
+                {
+                    try { worn = ConditioningControlPanel.Services.Super.SuperAccess.IsSelected(fx); } catch { worn = false; }
+                }
                 if (e.V2Pill != null) e.V2Pill.IsVisible = worn;
                 if (e.TileV2Pill != null)
                 {
@@ -915,7 +955,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             // The v2 pill (WPF StudioTabView.xaml.cs:864): a column of its own on THIS row only, so
             // the dot below still takes the last one and never draws over it. Built hidden;
             // RefreshV2Pills lights it from ownership.
-            if (V2PillFamily(e.Key) != null)
+            if (WearsV2Pill(e.Key))
             {
                 grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
                 e.V2Pill = Features.FlashFeatureControl.NewV2Badge(new Thickness(6, 0, 0, 0), compact: true);
@@ -1001,7 +1041,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             tile.Children.Add(e.TileLabel);
 
             // Same pill, right-anchored just inside the dot's slot (WPF :965).
-            if (V2PillFamily(e.Key) != null)
+            if (WearsV2Pill(e.Key))
             {
                 e.TileV2Pill = Features.FlashFeatureControl.NewV2Badge(new Thickness(0, 0, TilePillInset, 0), compact: true);
                 e.TileV2Pill.HorizontalAlignment = HorizontalAlignment.Right;
@@ -1416,12 +1456,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
                 // Unknown state reads as off rather than vanishing: the row's geometry must not
                 // jump around because a settings object happened to be null for a tick.
-                bool lit = state == true;
+                bool lit = StudioRackRules.IsOn(state);
                 var tip = Loc.Get(lit ? "st4_studio_dot_on" : "st4_studio_dot_off");
 
                 // Both states own a dot; the checked row is showing the tile's one.
                 Paint(e.DotShape);
                 Paint(e.TileDot);
+
+                // Off rows step back, on rows stay at full strength. Selection never touches
+                // this: the row surface says "selected", the label and dot say "on".
+                var strength = StudioRackRules.LabelOpacity(state);
+                if (e.Label != null) e.Label.Opacity = strength;
+                if (e.TileLabel != null) e.TileLabel.Opacity = strength;
 
                 // Same sentence on the whole row for the rows the right-click gesture can flip: the
                 // dot is 7px of hover target, and after a quick-toggle the row the cursor is
@@ -1433,8 +1479,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 void Paint(Ellipse? dot)
                 {
                     if (dot == null) return;
-                    dot.Fill = lit ? on : off;
-                    dot.Opacity = lit ? 1.0 : 0.35;
+                    // On = filled, off = a hollow ring in the same 7px box: the SHAPE carries
+                    // the state, so it survives a mod accent that sits close to the dim grey.
+                    bool filled = StudioRackRules.DotIsFilled(state);
+                    dot.Fill = filled ? on : Brushes.Transparent;
+                    dot.Stroke = filled ? null : off;
+                    dot.StrokeThickness = filled ? 0 : StudioRackRules.OffRingThickness;
+                    dot.Opacity = 1.0;
                     dot.Effect = lit
                         ? new DropShadowEffect
                         {
@@ -1447,6 +1498,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                         : null;
                     ToolTip.SetTip(dot, tip);
                 }
+            }
+
+            RefreshGroupCounts();
+        }
+
+        /// <summary>Repaints every group header's "5 of 7 on". Called from RefreshDots only, so
+        /// the number can never disagree with the dots under it.</summary>
+        private void RefreshGroupCounts()
+        {
+            var format = Loc.Get(StudioRackRules.GroupCountKey);
+            foreach (var (count, rows) in _groupCounts)
+            {
+                var (on, total) = StudioRackRules.Count(rows.Select(r =>
+                {
+                    if (r.Dot == null) return (false, (bool?)null);
+                    try { return (true, r.Dot()); } catch { return (true, (bool?)null); }
+                }));
+                var text = StudioRackRules.CountText(format, on, total);
+                count.Text = text ?? string.Empty;
+                count.IsVisible = text != null;
             }
         }
 
@@ -1496,6 +1567,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         {
             base.OnAttachedToVisualTree(e);
             ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged += OnPrizeGrantsChanged;
+            ConditioningControlPanel.Services.Super.SuperAccess.Changed += OnSuperChanged;
             RefreshV2Pills();
 
             // A cloud restore or a factory Reset SWAPS the settings instance out from under a rack
@@ -1520,11 +1592,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _modHooked = false;
 
             ConditioningControlPanel.Services.Prizes.PrizeGrants.GrantsChanged -= OnPrizeGrantsChanged;
+            ConditioningControlPanel.Services.Super.SuperAccess.Changed -= OnSuperChanged;
             base.OnDetachedFromVisualTree(e);
         }
 
         // WPF StudioTabView.xaml.cs:1526 refreshes both pills on ownership changes.
         private void OnPrizeGrantsChanged() => Dispatcher.UIThread.Post(RefreshV2Pills);
+        private void OnSuperChanged(ConditioningControlPanel.Services.Super.SuperEffect _) => OnPrizeGrantsChanged();
 
         private void BindDotListener()
         {

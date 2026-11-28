@@ -6,6 +6,7 @@
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
              xmlns:feat="clr-namespace:ConditioningControlPanel.Features"
              xmlns:ctl="clr-namespace:ConditioningControlPanel.Views.Controls"
+             xmlns:ctrls="clr-namespace:ConditioningControlPanel.Controls"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              mc:Ignorable="d"
              PreviewKeyDown="DeeperTab_PreviewKeyDown"
@@ -388,8 +389,18 @@
                     <!-- Action cluster. Glass fills (#8C131320) so the outline buttons stay
                          legible where they cross the art plate - same plate the enable pill uses
                          on the other premium tabs. -->
-                    <StackPanel Grid.Column="1" Orientation="Horizontal"
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" x:Name="DeeperHeroActions" x:FieldModifier="internal"
                                 VerticalAlignment="Center" Margin="0,0,16,0">
+                        <!-- Full layout only: back to the play-only view Play > Deeper opens on. -->
+                        <Button x:Name="BtnDeeperBackToPlayView" x:FieldModifier="internal"
+                                Content="{loc:Str deeper_playview_back}"
+                                ToolTip="{loc:Str deeper_playview_back_tooltip}"
+                                Click="BtnDeeperBackToPlayView_Click"
+                                Padding="12,7" FontSize="11.5" Cursor="Hand"
+                                Background="#8C131320"
+                                Foreground="{DynamicResource DeeperAccentBrush}"
+                                BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}" BorderThickness="1"
+                                Margin="0,0,8,0"/>
                         <Button x:Name="BtnDeeperTutorial"
                                 ToolTip="{loc:Str deeper_tab_tutorial_tooltip}"
                                 Click="BtnDeeperTutorial_Click"
@@ -449,7 +460,114 @@
                  library rows stop being a 1080px runway, and the width that buys back becomes one
                  art plate instead of dead margin. Below 1000px the art column goes to zero and the
                  hub retakes the full width (Features/AdaptiveSideArt.cs). -->
-            <Grid Grid.Row="1" feat:AdaptiveSideArt.CollapseBelow="1000">
+            <!-- ══ PLAY-ONLY VIEW ══════════════════════════════════════════════════════════
+                 Play > Deeper (tier 2 testers, 2026-11-16): "in the Play section it only really
+                 needs a choose file option and a player", "keep the effect heat map too",
+                 "a 1 click load/maximize/play". Choose a file, see where its effects land, press
+                 Play: the Deeper player opens maximised and starts. Everything that edits,
+                 imports or publishes stays in the full layout (DeeperFullBody), one link away.
+                 Shown/hidden by MainWindow.SetDeeperPlayOnly. -->
+            <Border Grid.Row="1" x:Name="DeeperPlayView" x:FieldModifier="internal" Visibility="Collapsed"
+                    Background="{DynamicResource SurfaceBgBrush}"
+                    BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}" BorderThickness="1"
+                    CornerRadius="14" Padding="20,18" MaxWidth="780" HorizontalAlignment="Stretch">
+                <StackPanel>
+                    <TextBlock Text="{loc:Str deeper_playview_kicker}"
+                               Foreground="{DynamicResource DeeperAccentSoftBrush}"
+                               FontSize="11" FontWeight="SemiBold" Margin="0,0,0,10"/>
+
+                    <!-- 1. Choose a file: the library, newest first, or any file on disk. -->
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <ComboBox Grid.Column="0" x:Name="CmbDeeperPlayFile" x:FieldModifier="internal"
+                                  DisplayMemberPath="Name" Height="34" FontSize="13"
+                                  VerticalContentAlignment="Center"
+                                  ToolTip="{loc:Str deeper_playview_choose_tooltip}"
+                                  SelectionChanged="CmbDeeperPlayFile_SelectionChanged"/>
+                        <Button Grid.Column="1" x:Name="BtnDeeperPlayBrowse" x:FieldModifier="internal"
+                                Content="{loc:Str deeper_playview_browse}"
+                                ToolTip="{loc:Str deeper_playview_browse_tooltip}"
+                                Click="BtnDeeperPlayBrowse_Click"
+                                Padding="14,7" FontSize="11.5" Cursor="Hand" Margin="8,0,0,0"
+                                Background="#8C131320"
+                                Foreground="{DynamicResource DeeperAccentBrush}"
+                                BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}" BorderThickness="1"/>
+                    </Grid>
+                    <TextBlock x:Name="TxtDeeperPlayMeta" x:FieldModifier="internal"
+                               Foreground="{DynamicResource TextMutedBrush}" FontSize="11.5"
+                               TextTrimming="CharacterEllipsis" Margin="2,0,0,14"/>
+
+                    <!-- 2. Effect heat map, read-only. -->
+                    <DockPanel LastChildFill="False" Margin="0,0,0,4">
+                        <TextBlock DockPanel.Dock="Left" Text="{loc:Str deeper_playview_heat_label}"
+                                   Foreground="{DynamicResource DeeperAccentSoftBrush}"
+                                   FontSize="10" FontWeight="SemiBold"/>
+                        <TextBlock DockPanel.Dock="Right" x:Name="TxtDeeperPlayHeatSpan" x:FieldModifier="internal"
+                                   Foreground="{DynamicResource TextMutedBrush}" FontSize="10"
+                                   FontFamily="Consolas, Courier New"/>
+                    </DockPanel>
+                    <ctrls:DeeperHeatStrip x:Name="DeeperPlayHeat" x:FieldModifier="internal"
+                                           Height="38" Margin="0,0,0,18"
+                                           Fill="{DynamicResource DeeperAccentBrush}"
+                                           ToolTip="{loc:Str deeper_playview_heat_tooltip}"/>
+
+                    <!-- 3. The player: one button loads, maximises and plays. -->
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="BtnDeeperPlayStart" x:FieldModifier="internal"
+                                Content="{loc:Str deeper_playview_play}"
+                                ToolTip="{loc:Str deeper_playview_play_tooltip}"
+                                Click="BtnDeeperPlayStart_Click"
+                                Padding="26,10" FontSize="14" FontWeight="SemiBold"
+                                Foreground="White" BorderThickness="0" Cursor="Hand"
+                                Background="{DynamicResource DeeperAccentBrush}">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="border" CornerRadius="10" Padding="{TemplateBinding Padding}"
+                                            Background="{TemplateBinding Background}">
+                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="border" Property="Background" Value="{DynamicResource DeeperAccentSoftBrush}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsEnabled" Value="False">
+                                            <Setter TargetName="border" Property="Opacity" Value="0.45"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+                        <Button Content="{loc:Str deeper_tab_open_player}"
+                                ToolTip="{loc:Str deeper_tab_open_player_tooltip}"
+                                Click="BtnDeeperOpenPlayer_Click"
+                                Padding="14,8" FontSize="11.5" Cursor="Hand" Margin="10,0,0,0"
+                                VerticalAlignment="Center"
+                                Background="#8C131320"
+                                Foreground="{DynamicResource DeeperAccentBrush}"
+                                BorderBrush="{DynamicResource DeeperAccentTransparent40Brush}" BorderThickness="1"/>
+                    </StackPanel>
+                    <TextBlock x:Name="TxtDeeperPlayEmpty" x:FieldModifier="internal" Visibility="Collapsed"
+                               Text="{loc:Str deeper_playview_empty}" TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextMutedBrush}" FontSize="11.5" Margin="0,10,0,0"/>
+
+                    <!-- The full layout: editing, import, publishing, library tools. -->
+                    <Separator Margin="0,18,0,10" Opacity="0.3"/>
+                    <Button x:Name="BtnDeeperOpenFullLayout" x:FieldModifier="internal"
+                            Click="BtnDeeperOpenFullLayout_Click"
+                            ToolTip="{loc:Str deeper_playview_editor_tooltip}"
+                            HorizontalAlignment="Left" Cursor="Hand"
+                            Background="Transparent" BorderThickness="0" Padding="0">
+                        <TextBlock Text="{loc:Str deeper_playview_editor_link}"
+                                   Foreground="{DynamicResource DeeperAccentBrush}"
+                                   FontSize="12" TextDecorations="Underline"/>
+                    </Button>
+                </StackPanel>
+            </Border>
+
+            <Grid Grid.Row="1" x:Name="DeeperFullBody" x:FieldModifier="internal" feat:AdaptiveSideArt.CollapseBelow="1000">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="3*" MaxWidth="780"/>
                     <ColumnDefinition Width="2*"/>

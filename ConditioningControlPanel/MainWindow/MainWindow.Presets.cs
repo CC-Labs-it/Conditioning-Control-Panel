@@ -1136,7 +1136,9 @@ namespace ConditioningControlPanel
         /// deeper page, not the editor". A tile that puts a modal dialog on screen from the front
         /// page is a tile you cannot browse past.</para>
         /// </summary>
-        internal void CardDeeperEditor_Click(object sender, RoutedEventArgs e) => ShowTab("deeper");
+        // Since Play > Deeper went play-only (2026-11-16) this tile is the Editor link: it opens
+        // the FULL layout, which Play > Deeper keeps one link away.
+        internal void CardDeeperEditor_Click(object sender, RoutedEventArgs e) => ShowDeeperEditorLayout();
 
         /// <summary>
         /// Paints the mosaic's price tags and the ? box's face. The FX tiles are all free and
@@ -1262,7 +1264,8 @@ namespace ConditioningControlPanel
         /// </summary>
         private static int MysteryFeatureTier(string? key) => key switch
         {
-            "dtrh" or "takeover" or "awareness" or "haptics" or "voice" or "fyp" or "remote" => 1,
+            // Haptics is free since 2026-11-11 and the server can no longer name it.
+            "dtrh" or "takeover" or "awareness" or "voice" or "fyp" or "remote" => 1,
             _ => 0,
         };
 

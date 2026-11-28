@@ -7,10 +7,9 @@ using Newtonsoft.Json.Linq;
 namespace ConditioningControlPanel.Services.PieceByPiece;
 
 /// <summary>
-/// The chess wardrobe's rules (7.2 shop, lane B3-C1), pure so they are tested. A look is three
-/// slots, each one Prize Counter item id or null: <c>{ set, banner, insignia }</c>. The page draws
-/// the art (piecebypiece/skins/look.js holds the same catalog); this side clamps every look to the
-/// account's grants before it reaches the page or the server, and words the frames.
+/// A chess look has independent slots for clothes, a banner, an insignia, a finish, a board and a
+/// cheerleader. Each stores a Prize Counter item id or null. The page draws the art and the host checks
+/// the account's grants before sending the player's choice to the page or server.
 ///
 /// <para>Frames (piecebypiece/skins/wear.js):
 /// <list type="bullet">
@@ -35,9 +34,12 @@ internal static class PbpLookRules
         ["set"] = new[] { "chess.set.royal-capes", "chess.set.velvet-court" },
         ["banner"] = new[] { "chess.banner.house-pink", "chess.banner.crest", "prime.banner.arena" },
         ["insignia"] = new[] { "chess.insignia.heart", "chess.insignia.star" },
+        ["finish"] = new[] { "chess.finish.polka", "chess.finish.marble", "chess.finish.contour", "chess.finish.opal", "chess.finish.kintsugi" },
+        ["board"] = new[] { "chess.board.observatory", "chess.board.conservatory", "chess.board.theatre", "chess.board.arcade" },
+        ["companion"] = new[] { "chess.companion.emi" },
     };
 
-    public static readonly string[] Slots = { "set", "banner", "insignia" };
+    public static readonly string[] Slots = { "set", "banner", "insignia", "finish", "board", "companion" };
 
     public static string GrantOf(string itemId) => "cos." + itemId;
 
@@ -54,6 +56,31 @@ internal static class PbpLookRules
     public static JObject OwnedFrame(IEnumerable<string>? grants)
         => new() { ["type"] = OwnedType, ["grants"] = ChessGrants(grants) };
 
+    public const string StockType = "pbp:stock";
+
+    /// <summary>host -&gt; page <c>{ type: 'pbp:stock', later: [{ id, from: 'YYYY-MM-DD' }] }</c>: the chess rows on
+    /// sale but out of this week's Prize Counter stock, with the Monday they are back, read from a
+    /// <c>/v2/shop/state</c> body's chess tab <c>later</c> (CCP-Server shop.js, ccp-bugs #1738). Anything that is
+    /// not a chess id with a plain date is dropped; an older server (no <c>later</c>) gives an empty list.</summary>
+    public static JObject StockFrame(JToken? shopState)
+    {
+        var later = new JArray();
+        var tabs = shopState is JObject s ? s["tabs"] as JArray : null;
+        var chess = tabs?.OfType<JObject>().FirstOrDefault(t => t["id"]?.Type == JTokenType.String && (string?)t["id"] == CounterTab);
+        if (chess?["later"] is JArray rows)
+        {
+            foreach (var row in rows.OfType<JObject>())
+            {
+                var id = row["id"]?.Type == JTokenType.String ? (string?)row["id"] : null;
+                var from = row["from"]?.Type == JTokenType.String ? (string?)row["from"] : null;
+                if (id == null || id.Length > 80 || !id.StartsWith("chess.", StringComparison.Ordinal)) continue;
+                if (from == null || !System.Text.RegularExpressions.Regex.IsMatch(from, @"^\d{4}-\d{2}-\d{2}$")) continue;
+                later.Add(new JObject { ["id"] = id, ["from"] = from });
+            }
+        }
+        return new JObject { ["type"] = StockType, ["later"] = later };
+    }
+
     /// <summary>Any token to a whole look: unknown ids, wrong slots and junk become null.</summary>
     public static ChessLook Normal(JToken? raw)
     {
@@ -62,7 +89,17 @@ internal static class PbpLookRules
             var v = raw is JObject o && o[slot]?.Type == JTokenType.String ? (string?)o[slot] : null;
             return v != null && Catalog[slot].Contains(v, StringComparer.Ordinal) ? v : null;
         }
-        return new ChessLook(Read("set"), Read("banner"), Read("insignia"));
+        return new ChessLook(Read("set"), Read("banner"), Read("insignia"), Read("finish"), Read("board"), Read("companion"));
+    }
+
+    /// <summary>An older page can change clothes without clearing a finish it cannot see.</summary>
+    public static ChessLook PagePick(JObject raw, ChessLook saved, IEnumerable<string>? grants)
+    {
+        var pick = Normal(raw);
+        if (!raw.ContainsKey("finish")) pick = pick with { Finish = saved.Finish };
+        if (!raw.ContainsKey("board")) pick = pick with { Board = saved.Board };
+        if (!raw.ContainsKey("companion")) pick = pick with { Companion = saved.Companion };
+        return Clamp(pick, grants);
     }
 
     /// <summary>The look with every slot the grants do not own taken off. Prime items stay usable
@@ -71,7 +108,7 @@ internal static class PbpLookRules
     {
         var held = new HashSet<string>(grants ?? Array.Empty<string>(), StringComparer.Ordinal);
         string? Keep(string? id) => id != null && held.Contains(GrantOf(id)) ? id : null;
-        return new ChessLook(Keep(look.Set), Keep(look.Banner), Keep(look.Insignia));
+        return new ChessLook(Keep(look.Set), Keep(look.Banner), Keep(look.Insignia), Keep(look.Finish), Keep(look.Board), Keep(look.Companion));
     }
 
     public static JObject LookFrame(ChessLook look) => new() { ["type"] = LookType, ["look"] = look.ToJObject() };
@@ -140,6 +177,9 @@ internal static class PbpLookRules
         "set" => look with { Set = itemId },
         "banner" => look with { Banner = itemId },
         "insignia" => look with { Insignia = itemId },
+        "finish" => look with { Finish = itemId },
+        "board" => look with { Board = itemId },
+        "companion" => look with { Companion = itemId },
         _ => look,
     };
 
@@ -185,7 +225,8 @@ internal static class PbpLookRules
 }
 
 /// <summary>One look: each slot an item id or null.</summary>
-internal readonly record struct ChessLook(string? Set, string? Banner, string? Insignia)
+internal readonly record struct ChessLook(string? Set, string? Banner, string? Insignia, string? Finish = null,
+    string? Board = null, string? Companion = null)
 {
     public static ChessLook Empty => new(null, null, null);
 
@@ -194,5 +235,8 @@ internal readonly record struct ChessLook(string? Set, string? Banner, string? I
         ["set"] = Set is null ? JValue.CreateNull() : Set,
         ["banner"] = Banner is null ? JValue.CreateNull() : Banner,
         ["insignia"] = Insignia is null ? JValue.CreateNull() : Insignia,
+        ["finish"] = Finish is null ? JValue.CreateNull() : Finish,
+        ["board"] = Board is null ? JValue.CreateNull() : Board,
+        ["companion"] = Companion is null ? JValue.CreateNull() : Companion,
     };
 }

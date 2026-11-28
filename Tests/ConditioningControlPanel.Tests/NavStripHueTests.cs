@@ -114,15 +114,22 @@ public class NavStripHueTests
                     else
                     {
                         Assert.Equal(NavStripRules.RestTextOn(hue, tint), ColorOf(text));
-                        // A bevelled outline in the tint: lit top, the tint at 75% in the middle, shaded foot.
-                        var bevel = Assert.IsType<LinearGradientBrush>(outline);
+                        // Declutter wave 1: at rest a pill has no face (no plate, no outline); the
+                        // lit pill is the only filled object in the strip.
+                        Assert.Equal(Colors.Transparent, ColorOf(outline));
+                        Assert.Equal(Colors.Transparent, ColorOf(strip.PillFill(key)));
+                        // Under the pointer the face comes back: a bevelled outline in the tint
+                        // (lit top, the tint at 75% in the middle, shaded foot) around a lit plate.
+                        strip.DepthHoverForTests(key, true);
+                        var bevel = Assert.IsType<LinearGradientBrush>(strip.PillPaint(key).Outline);
                         Assert.Equal(NavStripRules.WithAlpha(tint, NavStripRules.RestOutlineAlpha), bevel.GradientStops[1].Color);
                         Assert.True(NavStripRules.Luminance(Opaque(bevel.GradientStops[0].Color)) > NavStripRules.Luminance(Opaque(bevel.GradientStops[^1].Color)),
                             $"{s.Key}/{key}: the outline's top edge is not lighter than its foot");
-                        // Every inactive pill is a raised plate: the tint, lit at the top, centred on 24%.
                         var plate = Assert.IsType<LinearGradientBrush>(strip.PillFill(key));
-                        Assert.Equal(NavStripRules.WithAlpha(tint, NavStripRules.RestFillAlpha + NavStripRules.PlateLift), plate.GradientStops[0].Color);
-                        Assert.Equal(NavStripRules.WithAlpha(tint, NavStripRules.RestFillAlpha - NavStripRules.PlateLift), plate.GradientStops[^1].Color);
+                        Assert.Equal(NavStripRules.WithAlpha(tint, NavStripRules.HoverFillAlpha + NavStripRules.PlateLift), plate.GradientStops[0].Color);
+                        Assert.Equal(NavStripRules.WithAlpha(tint, NavStripRules.HoverFillAlpha - NavStripRules.PlateLift), plate.GradientStops[^1].Color);
+                        strip.DepthHoverForTests(key, false);
+                        Assert.Equal(Colors.Transparent, ColorOf(strip.PillFill(key)));
                         if (glyph != null) Assert.Equal(NavStripRules.RestGlyphOn(hue, tint), ColorOf(glyph));
                     }
                 }

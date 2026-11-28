@@ -88,6 +88,9 @@ namespace ConditioningControlPanel
             // the new key still announces itself with the old one. ShowTab("lab") keeps working as
             // a permanent alias and fires "lab" directly - it never round-trips through here.
             ["play"] = "lab",
+            // Declutter wave 2: Play lands on Eyes now ("play" opens the launcher's Games door and
+            // "lab" is rewritten to this key), so the door's landing keeps announcing as "lab".
+            ["playeyes"] = "lab",
             // Polish 12 (2026-10-07): the Velvet Vault is back as the Premium page. A rule keyed
             // `tab_eq: "exclusives"` (a .ccpmod on disk) still hears the vault opening.
             ["premium"] = "exclusives",
@@ -105,6 +108,37 @@ namespace ConditioningControlPanel
         /// </summary>
         private static string CanonicalTabKey(string tab) =>
             string.Equals(tab, "lab", StringComparison.OrdinalIgnoreCase) ? "play" : tab;
+
+        /// <summary>Declutter wave 2: the Games pill left Play for the launcher's Games door. The
+        /// strip's "Moved" note says so on arrival ("Moved: CC Labs › Games"), sharing the
+        /// redirect note's three-hit budget so it never nags. Existing keys only.</summary>
+        /// <summary>Set by the strip's pill click around its ShowTab: an explicit zone pill scrolls.</summary>
+        private bool _playZoneFromPill;
+
+        /// <summary>Set by the Play rail door when the remembered tab was the old Games pill.</summary>
+        private bool _playCameForGames;
+
+        private void ShowGamesMovedNote()
+        {
+            try
+            {
+                var s = App.Settings?.Current;
+                if (s == null || s.NavMovedToastHits >= NavMovedNoteLimit) return;
+                s.NavMovedToastHits++;
+                App.Settings?.Save();
+                SectionStrip?.ShowMovedNote(string.Format(Loc.Get("nav_moved_toast"),
+                    Loc.Get("launcher_window_title"), Loc.Get("nav_tab_games")));
+            }
+            catch (Exception ex) { App.Logger?.Debug("Games moved note failed: {E}", ex.Message); }
+        }
+
+        /// <summary>A launcher door refused by Lockdown: "Lockdown is on. The launcher waits."
+        /// Not budgeted, since it answers a click.</summary>
+        private void ShowDoorLockedNote()
+        {
+            try { SectionStrip?.ShowMovedNote(Loc.Get(Services.UI.PanelDoorLink.LockdownLineKey)); }
+            catch (Exception ex) { App.Logger?.Debug("Door locked note failed: {E}", ex.Message); }
+        }
 
         // ============================== lane tab registry ==============================
         // Nav rework 2026-10-06 (BRIEF contract 1). New section pages (Friends, Leash,
@@ -227,6 +261,23 @@ namespace ConditioningControlPanel
             // "together" -> Social > Lobby) land there and say "Moved" the first three times.
             if (TryRedirectSilentTab(tab)) return;
             if (TryRedirectMovedTab(tab)) return;
+
+            // Declutter wave 2 (2026-11-15): the games left the Play page for the launcher. A key
+            // whose page moved there ("play", the old Games pill) opens that launcher door through
+            // the one seam and leaves the tab on screen alone, like the window keys below.
+            if (Services.UI.NavSections.LauncherDoorFor(tab) is { } launcherDoor)
+            {
+                // Refused during Lockdown: the panel stays, and the strip says why in the launcher
+                // veil's own words, every time (ccp-bugs #1701: the budgeted "Moved" note went
+                // quiet after three hits, so the click looked dead).
+                if (!Services.UI.PanelDoorLink.Open(launcherDoor))
+                    Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(ShowDoorLockedNote));
+                return;
+            }
+            // "lab" (bark rules, tutorial steps, third-party deep links) was the Lab page: gaze,
+            // blink, lockdown. Those live on Play > Eyes and Sessions, so it lands on Play's first
+            // pill. The `case "lab": case "play":` arms below are kept but no longer reached.
+            if (tab == "lab") tab = "playeyes";
 
             // The dashboard's RECENT rail. At the door, before the three intercepts below, so a
             // window key (fyp, justdrop) counts as an open like any tab; the rule itself skips
@@ -478,6 +529,9 @@ namespace ConditioningControlPanel
                         // no empty state). Idempotent, and it does the first scan itself, so only a
                         // later show pays for a second one.
                         if (!InitializeDeeperHub()) RefreshDeeperLibraryUI();
+                        // Play > Deeper is play-only (choose a file, heat map, one Play button);
+                        // ShowDeeperEditorLayout asks for the full layout for this one visit.
+                        ApplyDeeperLayoutForVisit();
                         // Phase 2: the Deeper hub's device/monitor pickers moved to
                         // Settings → Devices, so there is nothing to populate here. The refresh
                         // below still fills the consent + calibration status cells, which are
@@ -545,17 +599,17 @@ namespace ConditioningControlPanel
                     // budget with the lockdown and blink-trainer cards.
                     MaybeShowFeatureIntro("play-wall", "play");
                     {
-                        // The Games pill scrolls back to the top only when the previous pill was
-                        // another Play zone; a plain return to Play keeps its scroll.
-                        string? zone = tab switch
-                        {
-                            "playsessions" => "sessions",
-                            "playeyes" => "eyes",
-                            _ => _navCurrentTab is "playsessions" or "playeyes" ? "games" : null,
-                        };
+                        // Eyes is the landing: only its pill scrolls to it, a rail door or default
+                        // landing shows the page from the top (NavSections.PlayLandingScroll).
+                        string? zone = Services.UI.NavSections.PlayLandingScroll(tab, _playZoneFromPill);
                         if (zone != null)
                             Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => ScrollPlayZone(zone)));
                     }
+                    // Declutter wave 2: someone who came for the games (Play's remembered tab was
+                    // the old Games pill) is told where it went ("Moved: CC Labs › Games"), on the
+                    // shared three-hit budget. Eyes and Sessions visits never spend it.
+                    if (_playCameForGames)
+                        Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(ShowGamesMovedNote));
                     break;
 
                 // Note: "patreon" case is handled at the top of ShowTab as a
@@ -771,6 +825,9 @@ namespace ConditioningControlPanel
             // Chrome FX: the section row that owns this tab stays lit. Last, so it runs whatever
             // the switch above did - and it never throws.
             ApplyNavActiveGlow(tab);
+
+            // Declutter wave 1: the header banner is Home's alone (BannerFxRules.ShowsOnTab).
+            ApplyHeaderBannerForTab(tab);
         }
 
         // ============================== nav rail: sections ==============================

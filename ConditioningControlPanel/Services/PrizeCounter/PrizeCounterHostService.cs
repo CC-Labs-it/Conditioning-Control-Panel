@@ -22,7 +22,7 @@ namespace ConditioningControlPanel.Services.PrizeCounter;
 /// confirm card, preview, leave); a second inside 2 s is a full panic (PanicPolicy). The window
 /// itself never fades, so Gentle visuals is only the page's to honour (<c>init.gentle</c>).</para>
 /// </summary>
-internal static class PrizeCounterHostService
+internal static partial class PrizeCounterHostService
 {
     public const string ProductName = "Prize Counter";
     public const string StartUrl = "https://ccp.game/prizecounter/index.html";
@@ -37,7 +37,8 @@ internal static class PrizeCounterHostService
     /// <summary>The page plays this as its own Escape unless the real key reached it too (host-escape.js).</summary>
     internal const string KeptEscapeType = "kept-escape";
 
-    private static ChaosWebViewHost? _host;
+    /// <summary>The page's surface: the counter window or the in-window sheet (CounterSurface.cs).</summary>
+    private static ICounterSurface? _host;
     private static PrizeCounterRelay? _relay;
     private static string _from = "wallet";
     private static string? _tab;
@@ -148,7 +149,7 @@ internal static class PrizeCounterHostService
         bool P(string prefix) => id.StartsWith(prefix, StringComparison.Ordinal);
         if (P("rain.")) return FamilyRain;
         if (P("desk.hat.") || P("desk.toy.")) return FamilyDesk;
-        if (P("chess.set.") || P("chess.banner.") || P("chess.insignia.") || P("prime.banner.")) return FamilyChess;
+        if (P("chess.set.") || P("chess.finish.") || P("chess.board.") || P("chess.companion.") || P("chess.banner.") || P("chess.insignia.") || P("prime.banner.")) return FamilyChess;
         if (P("profile.frame.") || P("profile.avatar.") || P("prime.frame.")) return FamilyProfile;
         if (P("kart.") || P("prime.paint.") || P("prime.trail.")) return FamilyKart;
         return null;
@@ -191,7 +192,7 @@ internal static class PrizeCounterHostService
     /// <summary>Each family's own picker write (local first, PUT behind). Settable for tests.</summary>
     internal static Func<string, bool> WearDesk { get; set; } = id => EmiDesk.DeskEquipSync.WearFromCounter(id);
     internal static Func<string, bool> WearChess { get; set; } = id => PieceByPiece.PieceByPieceHostService.WearFromCounter(id);
-    internal static Func<string, bool> WearProfile { get; set; } = id => App.MainWindowRef?.WearProfileItemFromCounter(id) == true;
+    internal static Func<string, bool> WearProfile { get; set; } = id => OwnProfileLook.WearFromCounter(id);
 
     /// <summary>
     /// The page's <c>wear {id}</c>, routed by family. Rain closes the counter for the dressing room; a
@@ -307,9 +308,31 @@ internal static class PrizeCounterHostService
     /// <paramref name="onClosed"/> is a game paused under it (contract 1): it hears the close once,
     /// with its reason (<see cref="CloseBack"/> and the rest), and re-reads its grants then.
     /// An open counter asked from another door on another tab reloads on that tab.</summary>
+    /// <summary>The item the next init opens on (<see cref="LaunchOn"/>); null = none.</summary>
+    private static string? _pick;
+
+    /// <summary>A Studio look row's door: the counter opens (from the panel's wallet door) on <paramref name="itemId"/>.
+    /// An open counter closes first, so the item always lands in a fresh open.</summary>
+    public static void LaunchOn(string itemId)
+    {
+        if (string.IsNullOrWhiteSpace(itemId)) return;
+        if (_host != null) CloseFor(CloseBack);
+        _pick = itemId.Trim();
+        Launch("wallet");
+    }
+
     public static void Launch(string from = "wallet", string? tab = null, Action<string>? onClosed = null)
     {
         tab = CounterTab(tab);
+        // A wallet door slides the 2D sheet down inside its window, a game door inside the game window
+        // (PrizeCounterHostService.Sheet.cs). A wallet's second press closes it; one counter at a time.
+        var want = CounterSheetRules.PickSurface(from, onClosed != null, Force3D);
+        if (want == CounterSheetRules.Surface.DoorSheet && SheetPressHandled()) return;
+        // A modal over the door: the sheet would open under it, so the press only nudges the chip (polish lane).
+        if (want == CounterSheetRules.Surface.DoorSheet && _host == null && SheetDoorView(from)?.NudgeIfBusy() == true) return;
+        var game = want == CounterSheetRules.Surface.GameSheet ? GameSheetFor(from) : null;
+        if (want == CounterSheetRules.Surface.GameSheet && game == null) want = CounterSheetRules.Surface.Window;
+        if (CounterSheetRules.ClosesOpenFirst(OpenSurface, want, game != null && ReferenceEquals(game.View, _sheetView))) CloseFor(CloseBack);
         if (_host == null) WornItem = null;
         if (onClosed != null) _onClosed.Add(onClosed);
         if (_host != null)
@@ -333,6 +356,13 @@ internal static class PrizeCounterHostService
             // the page's own "Sign in to shop" moves the pin (SignInFromPage), and it reloads the page.
             _opener = BackRoomApi.AppIdentity()?.UnifiedId;
             _relay = NewRelay();
+            // The sheet slides down inside the door window (PrizeCounterHostService.Sheet.cs); with no
+            // door on screen, or no room under its wallet bar, the window opens instead.
+            if (want == CounterSheetRules.Surface.DoorSheet && TryLaunchSheet(SheetDoorView(_from), generation, null)) return;
+            if (game != null && TryLaunchSheet(game.View, generation, game)) return;
+            if (game != null) App.Logger?.Warning("PrizeCounterHostService: no sheet over {From}, the counter window opens", _from);
+            _isSheet = false;
+            _startUrl = StartUrl;
 
             var webRoot = Path.Combine(AppContext.BaseDirectory, "Resources", "web");
             var mappings = new List<(string, string, CoreWebView2HostResourceAccessKind)>
@@ -341,9 +371,9 @@ internal static class PrizeCounterHostService
                 ("ccp.game", webRoot, CoreWebView2HostResourceAccessKind.Deny),
                 ChaosWebViewHost.ContentMapping(),
             };
-            _host = new ChaosWebViewHost(new ChaosWebViewHost.Options
+            var window = new ChaosWebViewHost(new ChaosWebViewHost.Options
             {
-                StartUrl = StartUrl,
+                StartUrl = _startUrl,
                 PrimaryHost = "ccp.game",
                 Mappings = mappings,
                 UserDataFolderName = "browser_data_prizecounter",
@@ -359,8 +389,9 @@ internal static class PrizeCounterHostService
                 OnMessage = m => OnPageMessage(m, generation),
                 OnProcessFailed = kind => { App.Logger?.Warning("PrizeCounter: process failed ({Kind}), closing", kind); OnUi(() => CloseFor(CloseFailed)); },
             });
-            _host.Show();
-            if (_host.Window != null) _host.Window.Closed += (_, _) => Close();
+            _host = new WindowCounterSurface(window);
+            window.Show();
+            if (window.Window != null) window.Window.Closed += (_, _) => Close();
             _host.FocusWeb();
             App.Logger?.Information("PrizeCounterHostService: launched from {From} on {Tab}", _from, _tab ?? "(first)");
         }
@@ -379,7 +410,7 @@ internal static class PrizeCounterHostService
         var generation = ++_generation;
         try
         {
-            _host.NavigatePage(StartUrl, () => Post(BuildInit()), m => OnPageMessage(m, generation));
+            _host.NavigatePage(_startUrl, () => Post(BuildInit()), m => OnPageMessage(m, generation));
             App.Logger?.Information("PrizeCounterHostService: reloaded ({Why})", why);
         }
         catch (Exception ex)
@@ -417,10 +448,15 @@ internal static class PrizeCounterHostService
         {
             ++_generation;
             bool had = _host != null;
-            try { _host?.Dispose(); } catch (Exception ex) { Diag.Swallowed(ex); }
+            // The sheet slides back up on a calm close; panic, app exit and a dead page cut.
+            try { _host?.Close(animate: reason == CloseBack || reason == CloseWear); } catch (Exception ex) { Diag.Swallowed(ex); }
             _host = null;
             _relay = null;
             _opener = null;
+            _isSheet = false;
+            _sheetView = null;
+            _inGame = false;
+            _startUrl = StartUrl;
             if (had) App.Logger?.Information("PrizeCounterHostService: closed ({Reason})", reason);
         }
         catch (Exception ex) { App.Logger?.Debug("PrizeCounterHostService.Close: {E}", ex.Message); }
@@ -463,6 +499,16 @@ internal static class PrizeCounterHostService
                     OnUi(() => { if (generation == _generation) _host?.Post(new { type = "reply", reqId, body = reply }); });
                 });
                 break;
+            case "wallet-land":
+                // The page's stars reached (a gain) or left (a spend) the host's wallet: it counts and kicks.
+                if (_isSheet && _sheetView?.DoorWindow is { } door && m["k"] is JValue { Type: JTokenType.Float or JTokenType.Integer } k)
+                    OnUi(() => Prizes.SparkleFlightDirector.PageLanded(door, k.Value<double>()));
+                break;
+            case "wallet-stars":
+                // The page's stars, whole paths (CONTRACT "Sheet additions"): the host draws them over its bar and counts.
+                if (_isSheet && generation == _generation && _sheetView is { HostFlies: true } starView)
+                    OnUi(() => Prizes.SparkleFlightDirector.PageStars(starView.DoorWindow, m, starView.PageOrigin));
+                break;
             case "wallet":
                 if (m["sp"] is JValue { Type: JTokenType.Integer } sp && _relay?.HandleWalletFrame(sp.Value<int>()) != true)
                     App.Logger?.Debug("PrizeCounter: wallet frame {Sp} names no receipt, ignored", sp);
@@ -478,12 +524,34 @@ internal static class PrizeCounterHostService
                 if (generation == _generation)
                 {
                     var wearId = m["id"]?.Type == JTokenType.String ? (string?)m["id"] : null;
+#if DEBUG
+                    // Preview: the real families (desk, chess, profile PUTs, Rain) never hear a preview Wear. A profile
+                    // frame or picture is worn in the preview file, and the own avatar surfaces show it (OwnProfileLook).
+                    if (ShopPreviewBackend.Enabled)
+                    {
+                        var worn = WearFamily(wearId) != FamilyProfile || ShopPreviewBackend.Shared.WearProfile(wearId);
+                        Post(new { type = "worn", id = wearId, ok = worn });
+                        break;
+                    }
+#endif
                     var from = _from;
                     Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
                     {
                         if (generation != _generation) return;
                         try { RouteWear(wearId, from); }
                         catch (Exception ex) { App.Logger?.Warning(ex, "PrizeCounter: wear failed"); }
+                    }));
+                }
+                break;
+            case "go":
+                // The fitting room's "take me there" (ShownPlaces). Queued: it closes the counter.
+                if (generation == _generation)
+                {
+                    var place = m["place"]?.Type == JTokenType.String ? (string?)m["place"] : null;
+                    Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        if (generation != _generation) return;
+                        GoTo(place);
                     }));
                 }
                 break;
@@ -515,7 +583,7 @@ internal static class PrizeCounterHostService
         var generation = ++_generation;
         try
         {
-            _host.NavigatePage(StartUrl, () => Post(BuildInit()), m => OnPageMessage(m, generation));
+            _host.NavigatePage(_startUrl, () => Post(BuildInit()), m => OnPageMessage(m, generation));
             _host.FocusWeb();
             App.Logger?.Information("PrizeCounterHostService: signed in, counter reloaded");
         }
@@ -526,20 +594,53 @@ internal static class PrizeCounterHostService
         }
     }
 
-    /// <summary>The <c>init</c> frame (CONTRACT "Host seam"). Never the token.</summary>
+    /// <summary>The <c>init</c> frame (CONTRACT "Host seam"). Never the token. The sheet adds one field,
+    /// <c>sheet: true</c> (the page draws no wallet line of its own); the window leaves it out.</summary>
     private static object BuildInit()
+    {
+        var init = JObject.FromObject(BuildInitBody());
+        // A Studio look row's locked chip (CONTRACT "Studio doors"): the page opens on that item, this open only.
+        if (_pick is { } pick) { init["pick"] = pick; _pick = null; }
+        if (_isSheet) init["sheet"] = true;
+        // Where the host's wallet star sits, in the page's CSS pixels (CONTRACT.md, sheet additions): the page's stars fly there.
+        if (_isSheet && _sheetView?.WalletAt() is { } at)
+        {
+            init["walletAt"] = new JObject { ["x"] = at.X, ["y"] = at.Y };
+            // The host draws the stars' last leg over its bar (wallet-stars) and counts its chip itself.
+            if (_sheetView.HostFlies) init["walletFly"] = true;
+        }
+        // The active mod's Disco hues (CONTRACT.md, sheet additions), the desktop ball's own palette.
+        try
+        {
+            var pal = Compositor.DiscoPaletteSource.Current();
+            var rgb = new uint[pal.Count];
+            for (int i = 0; i < rgb.Length; i++) rgb[i] = pal[i];
+            if (SheetHostRules.DiscoWire(rgb) is { } disco) init["disco"] = new JArray(disco);
+        }
+        catch (Exception ex) { Diag.Swallowed(ex); }
+        // The colour the pink filter draws (CONTRACT.md, sheet additions): the Two-tone preview's colour one.
+        try { init["fogColour"] = SheetHostRules.FogColourWire(App.Settings?.Current?.PinkFilterColor, App.Mods?.GetFilterColorRgb()); }
+        catch (Exception ex) { Diag.Swallowed(ex); }
+        return init;
+    }
+
+    private static object BuildInitBody()
     {
         var s = App.Settings?.Current;
         var id = BackRoomApi.AppIdentity();
         bool osAnim = true;
         try { osAnim = SystemParameters.ClientAreaAnimation; } catch { }
         bool gentle = Safety.GentleVisuals.On;
+        int sp = s?.SkillPoints ?? 0;
+#if DEBUG
+        if (ShopPreviewBackend.Enabled) sp = ShopPreviewBackend.Shared.Sp;   // the preview's own wallet, never the real one
+#endif
         return new
         {
             type = "init",
             protocol = 1,
             identity = id == null ? null : new { unifiedId = id.Value.UnifiedId },
-            sp = s?.SkillPoints ?? 0,
+            sp,
             locale = LocalizationManager.Instance.CurrentLanguage,
             lexicon = LocalizationManager.Instance.KeysWithPrefix(LexPrefix)
                 .Distinct(StringComparer.Ordinal).ToDictionary(k => k, k => Loc.Get(k), StringComparer.Ordinal),
@@ -549,11 +650,72 @@ internal static class PrizeCounterHostService
             tab = !Companion.RainV2Gate.On && IsRainId(_tab) ? null : _tab,
             from = _from,
             wears = WearsFor(_from),
+            // What the account wears now in the in-place families (the sheet's Wearing marks), and where the fitting
+            // room's "take me there" can go from this door (CONTRACT "Sheet additions": worn, goes, go).
+            worn = WornNow(),
+            goes = ShownPlaces.Goes(_from, s?.EmiDeskEnabled == true),
             platform = "desktop",
             // The V2 avatar's name for the active mod; the lexicon is already filled, this covers page-side copy.
             companion = Companion.CompanionName.ForActiveMod(),
             rainV2 = Companion.RainV2Gate.On,
         };
+    }
+
+    /// <summary><c>init.worn</c>: the ids worn now in the families the counter wears in place: the own profile frame
+    /// and picture (OwnProfileLook, so the DEBUG preview's own in preview), and EMI's desk hat and toy (the real
+    /// account only: a preview Wear never reaches the desk). Never throws.</summary>
+    internal static string[] WornNow()
+    {
+        var ids = new List<string>();
+        try { var own = OwnProfileLook.Current; if (own.FrameId != null) ids.Add(own.FrameId); if (own.AvatarId != null) ids.Add(own.AvatarId); }
+        catch (Exception ex) { Diag.Swallowed(ex); }
+#if DEBUG
+        if (ShopPreviewBackend.Enabled) return ids.ToArray();
+#endif
+        try
+        {
+            var desk = EmiDesk.EmiDeskItems.Clamp(EmiDesk.EmiDeskItems.Current(), EmiDesk.EmiDeskItems.KnownGrants());
+            if (desk.Hat != null) ids.Add(desk.Hat);
+            if (desk.Toy != null) ids.Add(desk.Toy);
+        }
+        catch (Exception ex) { Diag.Swallowed(ex); }
+        return ids.ToArray();
+    }
+
+    /// <summary>
+    /// The fitting room's "take me there" (<c>go {place, id}</c>): the sheet closes and the place opens. The profile
+    /// and the Studio pages open the panel on them (from the launcher the panel comes up first), and the profile
+    /// avatar gives one short pulse; chess and the race open their game; EMI's desk brings her out. A place this open
+    /// did not list in <c>init.goes</c> does nothing. UI thread.
+    /// </summary>
+    internal static void GoTo(string? place)
+    {
+        if (!ShownPlaces.IsKnown(place) || !ShownPlaces.Goes(_from, App.Settings?.Current?.EmiDeskEnabled == true).Contains(place))
+        {
+            App.Logger?.Information("PrizeCounter: go {Place} refused", place ?? "(none)");
+            return;
+        }
+        App.Logger?.Information("PrizeCounter: go {Place}", place);
+        CloseFor(CloseBack);
+        try
+        {
+            switch (place)
+            {
+                case ShownPlaces.Chess: PieceByPiece.PieceByPieceHostService.Launch(); return;
+                case ShownPlaces.Race: Glassroad.GlassroadHostService.Launch(); return;
+                case ShownPlaces.Desk: App.EmiDesk?.Summon("shop"); return;
+            }
+            var rack = ShownPlaces.RackKey(place);
+            void Open(MainWindow mw)
+            {
+                if (rack != null) mw.OpenStudioModule(rack);
+                else { mw.ShowTab(ShownPlaces.ProfileTab); mw.PulseOwnAvatarSoon(); }
+            }
+            // The panel on screen: straight there. Under the launcher or tucked away: the panel comes up first.
+            if (!Launcher.LauncherHost.IsShown && App.MainWindowRef is { IsVisible: true } mw) Open(mw);
+            else Launcher.LauncherHost.OpenPanelThen(() => { if (App.MainWindowRef is { } w) Open(w); });
+        }
+        catch (Exception ex) { App.Logger?.Warning(ex, "PrizeCounter: go {Place} failed", place); }
     }
 
     /// <summary>The page's three levels. Gentle visuals caps motion at less, as it does for UI motion.</summary>
@@ -566,7 +728,7 @@ internal static class PrizeCounterHostService
         if (App.Settings?.Current is not { } s) return;
         var same = string.Equals(BackRoomApi.AppIdentity()?.UnifiedId, account, StringComparison.Ordinal);
         if (!Prizes.V2WalletAdoption.Decide(same, fromBuy, sp, s.SkillPoints, out var next)) return;
-        s.SkillPoints = next;
+        Prizes.SparklesLedger.Write(s, next, fromBuy ? Prizes.SparkleSource.CounterBuy : Prizes.SparkleSource.Synced);
         App.Settings.Save();
     });
 

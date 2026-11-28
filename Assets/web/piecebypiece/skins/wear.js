@@ -38,6 +38,7 @@ export function createWear({ bus = null, pieces = null, post = () => {}, onHost 
   let mode = 'menu';
   let seat = 'w';
   let server = null;                        // { w, b } from the match state or watch head
+  let later = new Map();                    // id -> 'YYYY-MM-DD', the Monday an away row is back (pbp:stock)
   const listeners = new Set();
   const off = [];
 
@@ -54,11 +55,15 @@ export function createWear({ bus = null, pieces = null, post = () => {}, onHost 
   }
 
   let last = null;
+  let lastBoard;
+  const boardId = () => mode === 'watch' ? normalLook(server?.w).board ?? null : mine().board ?? null;
   function apply() {
     const s = sides();
-    if (last && sameLook(last.w, s.w) && sameLook(last.b, s.b)) return;
+    const board = boardId();
+    if (last && sameLook(last.w, s.w) && sameLook(last.b, s.b) && board === lastBoard) return;
     last = s;
-    try { if (pieces && pieces.setLooks) pieces.setLooks(s); } catch { /* the board keeps its men */ }
+    lastBoard = board;
+    try { if (pieces && pieces.setLooks) pieces.setLooks(s, board); } catch { /* the board keeps its men */ }
   }
 
   function changed() {
@@ -70,10 +75,14 @@ export function createWear({ bus = null, pieces = null, post = () => {}, onHost 
   function choose(slot, id) {
     if (!SLOTS.includes(slot)) return false;
     if (id !== null && !(CATALOG[slot].includes(id) && ownedIds(grants || []).has(id))) return false;
-    if (picked[slot] === id) return true;
-    picked = { ...picked, [slot]: id };
+    if ((picked[slot] ?? null) === id) return true;
+    picked = normalLook({ ...picked, [slot]: id });
     writeSaved(storage, picked);
-    if (hosted) post({ type: 'pbp:look', look: normalLook(picked) });
+    if (hosted) {
+      const look = { ...picked };
+      if (['finish', 'board', 'companion'].includes(slot) && id === null) look[slot] = null;
+      post({ type: 'pbp:look', look });
+    }
     changed();
     return true;
   }
@@ -82,6 +91,10 @@ export function createWear({ bus = null, pieces = null, post = () => {}, onHost 
     if (!m || typeof m.type !== 'string') return;
     if (m.type === 'owned' && Array.isArray(m.grants)) { grants = m.grants.filter((g) => typeof g === 'string'); changed(); }
     else if (m.type === 'pbp:look') { picked = normalLook(m.look); writeSaved(storage, picked); changed(); }
+    else if (m.type === 'pbp:stock' && Array.isArray(m.later)) {
+      later = new Map(m.later.filter((x) => x && typeof x.id === 'string' && typeof x.from === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.from)).map((x) => [x.id, x.from]));
+      changed();
+    }
   }
 
   if (typeof onHost === 'function') { const u = onHost(onFrame); if (typeof u === 'function') off.push(u); }
@@ -107,9 +120,12 @@ export function createWear({ bus = null, pieces = null, post = () => {}, onHost 
 
   return {
     mine,
+    boardId,
     picked: () => normalLook(picked),
     owned: () => ownedIds(grants || []),
     known: () => grants !== null,
+    /** 'YYYY-MM-DD' (a UTC Monday) when an item away from this week's Prize Counter is back, else null. */
+    backOn: (id) => later.get(id) ?? null,
     choose,
     sides,
     apply,

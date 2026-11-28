@@ -283,7 +283,7 @@ public sealed class LeashHolderCard : Border
         return g;
     }
 
-    private ContextMenu Menu()
+    internal ContextMenu Menu()
     {
         var m = new ContextMenu();
         var replay = new MenuItem { Header = Loc.Get("leash_menu_replay") };
@@ -611,14 +611,14 @@ public sealed class LeashHolderCard : Border
         var rows = Rows(sheet);
 
         // Stickers: the discs themselves are the buttons.
-        var stickers = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 6) };
+        var stickers = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 6) };
         int i = 0;
         foreach (var id in LeashUiRules.Stickers)
         {
             var sid = id;
-            var disc = LeashLook.StickerDisc(id, 32, i++);
+            var disc = LeashLook.StickerDisc(id, 36, i++);
             var b = FriendsLook.Pill(disc, Brushes.Transparent, FriendsLook.TextBrush, Brushes.Transparent, 18, new Thickness(2));
-            b.Margin = new Thickness(0, 0, 6, 0);
+            b.Margin = new Thickness(0, 0, 3, 0);
             b.Tag = "leash-reward:sticker:" + id;
             b.ToolTip = Loc.Get("leash_rew_sticker_" + id);
             b.Click += async (_, _) =>
