@@ -12,6 +12,8 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
+using Avalonia;
+using Avalonia.Headless;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Models;
 using Newtonsoft.Json;
@@ -85,7 +87,17 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
             ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.MakeShowcase = () => SilentShowcase.Instance;
             // P52: no shell arms the real 2 s pending-registration check; PendingRegistrationTests arm it themselves.
             ConditioningControlPanel.Avalonia.Views.Windows.MainShellWindow.PendingRegistrationDelay = null;
+            // A shell an earlier test closed ran StopDesktopOverlays(final: true), which refuses every later
+            // flash burst in the process; the real app exits there, a test host does not.
+            ConditioningControlPanel.Avalonia.Views.Overlays.FlashOverlay.ResetClosedForTests();
         });
+    internal static void EnsureInter()
+    {
+        if (global::Avalonia.Application.Current == null) return;
+        var fonts = global::Avalonia.Media.FontManager.Current;
+        var face = new global::Avalonia.Media.Typeface(new global::Avalonia.Media.FontFamily(ConditioningControlPanel.Avalonia.Platform.AppFonts.Inter), global::Avalonia.Media.FontStyle.Normal, global::Avalonia.Media.FontWeight.Bold);
+        if (!fonts.TryGetGlyphTypeface(face, out _)) fonts.AddFontCollection(new global::Avalonia.Fonts.Inter.InterFontCollection());
+    }
     public override void After(MethodInfo methodUnderTest, IXunitTest test) =>
         CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
         {
@@ -98,6 +110,8 @@ internal sealed class IsolateProcessStateAttribute : BeforeAfterTestAttribute
             ConditioningControlPanel.Services.EmiDesk.EmiLineEngine.Instance.ResetForTests();
             // A Ctrl+K a test pressed and never released would swallow the next test's press (P02).
             ConditioningControlPanel.Avalonia.Views.Windows.SettingsPaletteWindow.ChordReleased();
+            // A browser media session a test left open would hold every later bubble count and video.
+            ConditioningControlPanel.Services.Browser.BrowserMediaSession.Shared.OnMediaStopped("test-isolation");
             // The shell paints the section ink into the app resources (PaintSectionInk); drop the
             // overrides so the next test sees the authored (Home) ink (P02).
             if (global::Avalonia.Application.Current?.Resources is { } res)
@@ -198,6 +212,7 @@ internal sealed class ProcessStateSnapshot
         typeof(ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay).GetProperty("Time", AnyInstance)!,
     };
     private readonly Dictionary<string, byte[]> _files = new();
+    private Action? _restoreSuperTierEvents;
 
     private static readonly JsonSerializerSettings Json = new()
     {
@@ -209,6 +224,7 @@ internal sealed class ProcessStateSnapshot
     /// Reattach the intake pass to the original providers without reading the secret store.</summary>
     internal static Action CaptureAccountSeed()
     {
+        var restoreSuper = AccountSeed.CaptureSuperTierEvents();
         var p = ConditioningControlPanel.Avalonia.Platform.AccountSeed.Patreon;
         var ss = ConditioningControlPanel.Avalonia.Platform.AccountSeed.SubscribeStar;
         var discord = ConditioningControlPanel.Avalonia.Platform.AccountSeed.Discord;
@@ -222,6 +238,7 @@ internal sealed class ProcessStateSnapshot
         var recovery = (ConditioningControlPanel.Services.AuthRecovery.Recovered, ConditioningControlPanel.Services.AuthRecovery.ProviderRevalidate);
         return () =>
         {
+            restoreSuper();
             // Seed detached the intake listener from the old pair. Put it back on that pair.
             ConditioningControlPanel.Avalonia.App.IntakePass.AttachEntitlementSources(
                 h => { if (p != null) p.TierChanged += h; if (ss != null) ss.TierChanged += h; },
@@ -245,6 +262,7 @@ internal sealed class ProcessStateSnapshot
     internal static ProcessStateSnapshot Take(bool repairLateWrites = true)
     {
         var s = new ProcessStateSnapshot();
+        s._restoreSuperTierEvents = AccountSeed.CaptureSuperTierEvents();
         foreach (var m in Members.Value) s._statics.Add((m, Get(m)));
         var overlay = ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance;
         foreach (var m in OverlayMembers) s._overlay.Add((m, Get(m, overlay)));
@@ -259,6 +277,7 @@ internal sealed class ProcessStateSnapshot
 
     internal void Restore()
     {
+        _restoreSuperTierEvents?.Invoke();
         foreach (var (m, value) in _statics)
         {
             var now = Get(m);

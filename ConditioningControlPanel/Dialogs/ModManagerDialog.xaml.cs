@@ -837,6 +837,8 @@ namespace ConditioningControlPanel
 
         private void BtnCreate_Click(object sender, RoutedEventArgs e)
         {
+            // One Mod Creator at a time (they share the draft store): close this modal so the open one can take input.
+            if (ModCreatorWindow.BringOpenToFront()) { Close(); return; }
             var creator = new ModCreatorWindow { Owner = this };
             creator.ShowDialog();
         }

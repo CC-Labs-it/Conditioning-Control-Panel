@@ -4,7 +4,7 @@
 // Services/Launcher/LauncherSfx.cs (the cues; the melody is Core's LauncherMelody).
 // WPF runs one storyboard per tween; here ONE frame clock steps every tween, and only while the launcher is shown
 // and not minimised (P01) and something is moving. It stops the moment nothing is. No allocation per frame.
-// Not ported (docs/avalonia-parity.html win-launcher): sparkle trail, wordmark sheen, running-dot breath.
+// Not ported (docs/avalonia-parity.html win-launcher): sparkle trail, running-dot breath.
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -159,7 +159,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 if (e.Property == IsVisibleProperty) { if (IsVisible) FxOnShown(); else FxPark(); }
                 else if (e.Property == WindowStateProperty)
                 {
-                    if (FxLive) { EnsureFxClock(); QueuePanelComet(); } else FxPark();
+                    if (FxLive)
+                    {
+                        EnsureFxClock(); QueuePanelComet();
+                        if (_fxActive && WordmarkSheenGap is null) ArmWordmarkSheenGap();   // FxPark stopped the gap
+                    }
+                    else FxPark();
                     // The DWM squares a maximised window's corners; the frame's clip follows.
                     WindowFrame.CornerRadius = new CornerRadius(WindowState == WindowState.Normal ? 8 : 0);
                 }
@@ -211,6 +216,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     if (!first) WelcomeBack();
                     RefreshPanelComet();
                 }, DispatcherPriority.Loaded);
+                StartWordmarkSheen();
                 StartSheens();
                 EnsureFxClock();
             }
@@ -224,6 +230,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             SettleEntrance();
             ParkDoors();
             ParkComets();
+            StopWordmarkSheen();
             _fxClock.Stop();
             StopSpTween();
             StopSheens();
@@ -276,6 +283,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
                 busy |= StepEntrance(dt);
                 busy |= StepDoors(dt);
+                busy |= StepWordmarkSheen(dt);
                 busy |= StepDepth(dt);
                 // WPF Edge.cs:124 gates the breath on transitions only. On the CPU path it repaints the whole
                 // launcher 30 times a second (render thread pinned, lane perf): between flares and glints the
@@ -356,6 +364,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         internal void OnFxActivated(bool active)
         {
+            if (active != _fxActive)
+            {
+                if (active) ResetWordmarkSheenGap(); else StopWordmarkSheen();
+            }
             _fxActive = active;
             if (!active) ClearHoverComet();
             RefreshPanelComet();

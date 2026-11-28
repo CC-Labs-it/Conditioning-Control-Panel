@@ -45,6 +45,8 @@ internal static class GlassroadRules
                 ["prizeCounter"] = true,
                 // the race sends its toy plan here (host/raceToys.js); the Options row shows only with a toy connected
                 ["toys"] = true, ["toysConnected"] = toysConnected,
+                // "My files" shows the app's own ticked library from the media host (GlassroadOwnMediaRules, host/localLibrary.js)
+                ["ownMedia"] = GlassroadOwnMediaRules.Cap(),
                 // Scrolller stills as real textures, cached here and served from the media host (host/devicePictures.js)
                 ["scrolller"] = new JObject { ["consent"] = picturesOn, ["origin"] = "device", ["clips"] = true, ["mediaOrigin"] = PicturesMediaOrigin },
             },

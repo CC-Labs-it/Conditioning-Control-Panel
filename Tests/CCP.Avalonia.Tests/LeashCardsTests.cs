@@ -75,6 +75,21 @@ public sealed class LeashCardsTests
     });
     private static T Find<T>(Control root, string tag) where T : Control => root.GetLogicalDescendants().OfType<T>().Single(c => c.Tag as string == tag);
     private static IEnumerable<Control> Tagged(Control root, string tag) => root.GetLogicalDescendants().OfType<Control>().Where(c => c.Tag as string == tag);
+    [Fact] // WPF LeashHolderCard.cs:264-266: holder help opens the no-offer explainer.
+    public void HolderHelp_OpensExplainerWithGotIt() => Run(() =>
+    {
+        var card = new LeashHolderCard(Held(), () => new Service());
+        Assert.Equal(Loc.Get("leash_help"), ToolTip.GetTip(Find<Button>(card, "leash-holder-help")));
+        Click(card, "leash-holder-help");
+        var intro = Assert.IsType<LeashHolderIntro>(card.Intro);
+        try
+        {
+            Assert.Equal(Loc.Get("leash_explain_title"), intro.Title);
+            Assert.Equal(Loc.Get("leash_explain_got_it"), Assert.IsType<TextBlock>(Find<Button>(intro, "leash-explain-not-now").Content).Text);
+            Assert.Empty(Tagged(intro, "leash-explain-offer"));
+        }
+        finally { intro.Close(); }
+    });
     [Fact] // WPF LeashHolderCard.cs:307, 443-471, 566-645, LeashLook.cs:393: actions, rows and Let go carry a "?"; Today is an outlined ring.
     public void HolderHostsHelpOnActionsRowsAndLetGo_AndOutlinesToday() => Run(() =>
     {
@@ -267,6 +282,50 @@ public sealed class LeashCardsTests
         Click(card, "leash-btn:assign"); CheckRow("leash-row:assign:Minutes"); CheckRow("leash-row:assign:Video");
         Click(card, "leash-btn:punish"); CheckRow("leash-row:punish:Lines"); CheckRow("leash-row:punish:Video");
         Click(card, "leash-btn:reward"); CheckRow("leash-row:reward:praise"); CheckRow("leash-row:reward:pardon"); CheckRow("leash-row:reward:credit");
+    });
+    [Fact] // WPF LeashHolderCard.cs:505-519: the row icon itself carries its help badge.
+    public void HolderSheetRowsUseColoredBadgedIcons() => Run(() =>
+    {
+        var card = new LeashHolderCard(Held(LeashIntensity.Strict, true), () => new Service());
+        void Check(string rowTag, IconKind kind, global::Avalonia.Media.IBrush color)
+        {
+            var row = Find<Grid>(card, rowTag);
+            var help = row.GetLogicalDescendants().OfType<Button>().Single(b => (b.Tag as string)?.StartsWith("leash-slip-help:") == true);
+            var icon = Assert.Single(help.GetLogicalDescendants().OfType<IconGlyph>());
+            Assert.Equal(kind, icon.Kind); Assert.Equal(color, icon.Foreground);
+            Assert.Single(help.GetLogicalDescendants().OfType<Border>().Where(b => (string?)b.Tag == "leash-slip-badge"));
+            Assert.False(help.Focusable);
+        }
+        Click(card, "leash-btn:assign");
+        Check("leash-row:assign:Minutes", IconKind.Clock, FriendsDrawer.Gold);
+        Check("leash-row:assign:Quests", IconKind.TaskList, FriendsDrawer.Gold);
+        Check("leash-row:assign:Video", IconKind.Play, FriendsDrawer.Gold);
+        Click(card, "leash-btn:punish");
+        Check("leash-row:punish:Lines", IconKind.LockClosed, FriendsDrawer.Red);
+        Check("leash-row:punish:Pink", IconKind.Eye, FriendsDrawer.Red);
+        Check("leash-row:punish:Bubbles", IconKind.BubbleMultiple, FriendsDrawer.Red);
+        Check("leash-row:punish:Detention", IconKind.Clock, FriendsDrawer.Red);
+        Check("leash-row:punish:Video", IconKind.Play, FriendsDrawer.Red);
+        Check("leash-row:punish:Chaster", IconKind.Flash, FriendsDrawer.Red);
+        Click(card, "leash-btn:reward");
+        Check("leash-row:reward:praise", IconKind.Heart, FriendsDrawer.Pink);
+        Check("leash-row:reward:pardon", IconKind.Cut, FriendsDrawer.Lilac);
+        Check("leash-row:reward:credit", IconKind.LockClosed, FriendsDrawer.Mint);
+    });
+
+    [Fact] // A panic closes the new badge slip through the existing leash-task surface.
+    public void HolderRowHelpClosesOnPanic() => Run(() =>
+    {
+        var card = new LeashHolderCard(Held(), () => new Service());
+        var window = new Window { Content = card, Width = 600, Height = 700 };
+        using var cleanup = new WindowCleanup(window);
+        window.Show(); Click(card, "leash-btn:assign");
+        var row = Find<Grid>(card, "leash-row:assign:Minutes");
+        var help = row.GetLogicalDescendants().OfType<Button>().Single(b => (b.Tag as string)?.StartsWith("leash-slip-help:") == true);
+        help.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Assert.True(LeashHelpButton.IsPinned(help)); Assert.True(LeashHelpButton.IsOpen(help));
+        PanicSurfaces.All.Single(s => s.Id == "leash-task").Stop(null);
+        Assert.False(LeashHelpButton.IsOpen(help));
     });
     [Fact] // WPF LeashHolderCard.cs:790-794: feedback expires even if the card leaves the tree.
     public void DetachedAndReattachedHolderDoesNotKeepStaleFeedback() => Run(() =>

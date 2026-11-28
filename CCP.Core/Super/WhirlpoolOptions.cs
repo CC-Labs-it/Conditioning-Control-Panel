@@ -30,7 +30,25 @@ public static class WhirlpoolOptions
     /// </summary>
     public static (double X, double Y, double SpeedPx) Anchor(bool stayCentred, double cursorX, double cursorY,
         double cursorSpeedPx, double centreX, double centreY)
-        => stayCentred ? (centreX, centreY, 0) : (cursorX, cursorY, cursorSpeedPx);
+        => Anchor(stayCentred, false, cursorX, cursorY, cursorSpeedPx, centreX, centreY);
+
+    /// <summary>
+    /// As above with "Restless pool" (ccp-bugs #1707). Stay centred says WHERE the pool sits, Restless
+    /// says WHEN it grows: a centred restless pool keeps to the middle of the screen and still reads the
+    /// real mouse speed, so it swells while the mouse moves and calms at rest. A centred stock pool counts
+    /// the mouse as always resting, exactly as before.
+    /// </summary>
+    public static (double X, double Y, double SpeedPx) Anchor(bool stayCentred, bool restless, double cursorX, double cursorY,
+        double cursorSpeedPx, double centreX, double centreY)
+        => stayCentred ? (centreX, centreY, restless ? cursorSpeedPx : 0) : (cursorX, cursorY, cursorSpeedPx);
+
+    /// <summary>"Smallest size" (ccp-bugs #1719): percent of full growth the pool never shrinks below.
+    /// 0 = as shipped (it shrinks to nothing while the mouse moves). Steps of 5.</summary>
+    public const int SmallestMin = 0, SmallestMax = 50, SmallestDefault = 0;
+    public static int ClampSmallest(int pct) => Math.Clamp(pct, SmallestMin, SmallestMax);
+    public static int SnapSmallest(double sliderValue) => ClampSmallest((int)(Math.Round(sliderValue / 5) * 5));
+    /// <summary>The <see cref="Whirlpool.Floor"/> a "Smallest size" percent sets.</summary>
+    public static double Floor(int pct) => ClampSmallest(pct) / 100.0;
 
     /// <summary>"New spiral every", seconds a Loom spiral holds before it melts into the next.
     /// 18 = as shipped. Never shorter than the melt itself.</summary>

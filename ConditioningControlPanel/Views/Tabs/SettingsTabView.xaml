@@ -7,6 +7,7 @@
              xmlns:fx="clr-namespace:ConditioningControlPanel.Controls"
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
              mc:Ignorable="d"
              d:DesignHeight="450" d:DesignWidth="800">
     <UserControl.Resources>
@@ -490,9 +491,12 @@
                                                Foreground="{DynamicResource PinkBrush}" Margin="0,0,0,10"/>
                                     <TextBlock x:Name="ClickChoiceDescription" FontSize="13" LineHeight="20"
                                                Foreground="White" TextWrapping="Wrap" Margin="0,0,0,14"/>
-                                    <CheckBox x:Name="InvertDashboardClicks" Content="{loc:Str dash_click_invert}"
-                                              Foreground="White" FontSize="13" Cursor="Hand"
-                                              Checked="ClickChoiceChanged" Unchecked="ClickChoiceChanged"/>
+                                    <CheckBox x:Name="InvertDashboardClicks"
+                                              Foreground="White" FontSize="13" Cursor="Hand" VerticalContentAlignment="Center"
+                                              Checked="ClickChoiceChanged" Unchecked="ClickChoiceChanged">
+                                        <rows:RowLabel Text="{loc:Str dash_click_invert}" Emblem="Click"
+                                                       IsOn="{Binding IsChecked, ElementName=InvertDashboardClicks}"/>
+                                    </CheckBox>
                                     <TextBlock Text="{loc:Str dash_click_pages_pin}" FontSize="12" LineHeight="18"
                                                Foreground="#CCCCDF" TextWrapping="Wrap" Margin="0,14,0,0"/>
                                 </StackPanel>

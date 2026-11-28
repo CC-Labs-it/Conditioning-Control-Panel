@@ -288,6 +288,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         /// <summary>While one half fills the tile, the other half's "?" steps aside with its title.</summary>
         private void ApplyHelpForHover()
         {
+            ApplySuperHover();
             _btnHelpA.Opacity = _halfHover == false ? 0 : 1;
             _btnHelpA.IsHitTestVisible = _halfHover != false;
             _btnHelpB.Opacity = _halfHover == true ? 0 : 1;
@@ -589,6 +590,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
             bool right = e.InitialPressMouseButton == MouseButton.Right;
             bool toggle = DashboardDepthLaw.ToggleFor(DashboardDepth,
                 global::ConditioningControlPanel.CoreSettings.Current.DashboardInvertClicks, right);
+            if (PressedSuperCorner(e, toggle, ref halfA)) return;   // the V2 corners (SplitFeatureCard.Super.cs)
             if (right || toggle) e.Handled = true;
             var routed = toggle ? (halfA ? ToggleAEvent : ToggleBEvent) : (halfA ? ClickAEvent : ClickBEvent);
             RaiseEvent(new RoutedEventArgs(routed, this));

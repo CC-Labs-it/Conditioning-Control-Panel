@@ -1,5 +1,9 @@
 // WPF AvatarTubeWindow.ChatInput.cs:48-117 and Speech.cs:839-865.
 using System;
+using Avalonia;
+using Avalonia.Data;
+using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Localization;
 
 namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
@@ -11,6 +15,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
 
         internal void HandleAvatarClick()
         {
+            PulseAvatarGlow();
             App.Achievements?.TrackAvatarClick();
             var now = SpeechNow;
             if ((now - _avatarLastClick).TotalMilliseconds < 300)
@@ -19,6 +24,43 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
                 else if (CoreSettings.Current.AiChatEnabled && CoreAi.IsAvailable) OpenChatInput();
             }
             _avatarLastClick = now;
+        }
+
+        // WPF ChatInput.cs:116-142: pulse the active image shadow, then restore it.
+        private BeatLoop? _avatarGlowLoop;
+        private IDisposable? _avatarGlowHold;
+        private DropShadowEffect? _avatarGlow;
+
+        private void PulseAvatarGlow()
+        {
+            StopAvatarGlow();
+            var avatar = CurrentPortraitImage();
+            if (avatar?.Effect is not DropShadowEffect original) return;
+            _avatarGlow = new DropShadowEffect { Color = original.Color, BlurRadius = 20, Opacity = 0.6, OffsetX = original.OffsetX, OffsetY = original.OffsetY };
+            _avatarGlowHold = avatar.SetValue(Visual.EffectProperty, _avatarGlow, BindingPriority.Animation);
+            _avatarGlowLoop = new BeatLoop(avatar, seconds => StepAvatarGlow(seconds * 1000))
+            {
+                OnParked = StopAvatarGlow
+            };
+            _avatarGlowLoop.Start();
+        }
+
+        internal void StepAvatarGlow(double milliseconds)
+        {
+            if (_avatarGlow == null) return;
+            if (milliseconds >= 400) { StopAvatarGlow(); return; }
+            double amount = Math.Clamp(milliseconds <= 200 ? milliseconds / 200 : (400 - milliseconds) / 200, 0, 1);
+            _avatarGlow.BlurRadius = 20 + 40 * amount;
+            _avatarGlow.Opacity = 0.6 + 0.4 * amount;
+        }
+
+        private void StopAvatarGlow()
+        {
+            _avatarGlowLoop?.Stop();
+            _avatarGlowLoop = null;
+            _avatarGlowHold?.Dispose();
+            _avatarGlowHold = null;
+            _avatarGlow = null;
         }
 
         private void ShowAvatarMutedIndicator()

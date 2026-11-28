@@ -2,6 +2,9 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
+using ConditioningControlPanel.Controls.Rows;
+using ConditioningControlPanel.Emblems;
 
 namespace ConditioningControlPanel.Views.Tabs
 {
@@ -14,10 +17,26 @@ namespace ConditioningControlPanel.Views.Tabs
             // decoration: the card sheen starts when the tab appears and its clock is dropped the
             // moment it is collapsed again.
             IsVisibleChanged += PresetsTabView_IsVisibleChanged;
+            PaintInks();
+        }
+
+        /// <summary>
+        /// The two label inks of the 7.4.1 lift, the RowLabel mix (70% TextLight + 30% the zone hue):
+        /// <c>SdPresetInk</c> for preset chip names (Studio pink) and <c>SdSessionInk</c> for session
+        /// row names (SectionHueNotifications blue). Code-built chips and rows reach them through the
+        /// tab's styles by DynamicResource; re-mixed each time the tab is shown, so a mod retheme lands.
+        /// </summary>
+        internal void PaintInks()
+        {
+            uint light = TryFindResource("TextLightBrush") is SolidColorBrush l ? RowHue.ToArgb(l.Color) : EmblemPalette.TextLight;
+            uint Hue(string key) => TryFindResource(key) is Color c ? RowHue.ToArgb(c) : EmblemPalette.Pink;
+            Resources["SdPresetInk"] = RowHue.Frozen(EmblemPalette.LabelTint(light, Hue("SectionHueStudio")));
+            Resources["SdSessionInk"] = RowHue.Frozen(EmblemPalette.LabelTint(light, Hue("SectionHueNotifications")));
         }
 
         private void PresetsTabView_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
         {
+            if (IsVisible) PaintInks();
             if (Window.GetWindow(this) is MainWindow mw)
                 mw.OnPresetsTabVisibilityChanged(IsVisible);
         }
@@ -36,6 +55,11 @@ namespace ConditioningControlPanel.Views.Tabs
         {
             if (Window.GetWindow(this) is MainWindow mw)
                 mw.BtnExportPreset_Click(sender, e);
+        }
+        private void BtnImportPreset_Click(object sender, RoutedEventArgs e)
+        {
+            if (Window.GetWindow(this) is MainWindow mw)
+                mw.BtnImportPreset_Click(sender, e);
         }
         private void BtnSharePreset_Click(object sender, RoutedEventArgs e)
         {

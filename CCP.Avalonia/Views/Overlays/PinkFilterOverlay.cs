@@ -51,6 +51,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
         }
 
+        // WPF App.AiEffects.cs:139-149 starts the overlay service for AI commands.
+        internal static bool AiHold { get; set; }
+        internal static int AiStopGeneration { get; private set; }
+
         // WPF voice "go pink": a 40% floor, without dimming a stronger configured tint.
         internal static double? VoiceOpacity { get; private set; }
         internal static void SetVoiceHold(Visual host, bool on)
@@ -68,7 +72,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             VoiceOpacity = next;
             return changed;
         }
-        internal static void Stop() { VoiceOpacity = null; CloseAll(); }
+        internal static void Stop()
+        {
+            AiStopGeneration++;
+            // Stop the shared AI overlay immediately, including a gentle-fading spiral.
+            if (AiHold) { SpiralOverlay.Stop(); SpiralOverlay.CloseAll(); }
+            AiHold = false; VoiceOpacity = null; CloseAll();
+        }
+        // WPF OverlayService.cs:1129,1189: a Deeper band shares the sustained hold at its own opacity.
+        internal static void SetSustained(Visual host, double? opacity) { VoiceOpacity = opacity is { } o ? Math.Clamp(o, 0, 1) : null; Refresh(host); }
 
         /// <summary>Super Steam rides these windows (<see cref="SteamOverlay"/>): tell the shared
         /// stage whenever they come, go or change. Never throws into a tint refresh.</summary>
@@ -83,6 +95,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static IReadOnlyList<TintOverlayWindow> Shown => Windows;
         private static double? _pulseWeight;
         private static double _pulseBase, _pulsePeak;
+
+        /// <summary>THE one place this head paints the pink tint's strength (WPF PinkTintLayer.Render and
+        /// OverlayService.PinkAlpha): the Accessibility limit (<see cref="PinkComfortLimit"/>) clips here,
+        /// so no slider, preset, session, mod, ramp, pulse, voice hold or Deeper band upstream can paint
+        /// past it. Other TintOverlayWindow users (bubble payload wash, Pink Rush) are not the filter.</summary>
+        internal static void Paint(TintOverlayWindow w, byte r, byte g, byte b, double opacity)
+            => w.SetTint(r, g, b, PinkComfortLimit.Apply(opacity));
 
         // The voice hold (WPF "go pink" 40% floor) is the steady level while it lasts; a Takeover pulse
         // still interpolates from its captured endpoints.
@@ -106,7 +125,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             _pulseWeight = weight;
             var (r, g, b) = EffectiveColor();
-            foreach (var w in Windows) w.SetTint(r, g, b, PaintedOpacity);
+            foreach (var w in Windows) Paint(w, r, g, b, PaintedOpacity);
         }
 
         /// <summary>Whether a tint can actually reach the screen: X11 with click-through, a
@@ -133,7 +152,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>The tint is on screen now.</summary>
         internal static bool IsShowing => Windows.Count > 0;
-        private static int[] _shownOn = Array.Empty<int>();
+        private static (int Index, PixelRect Bounds, double Scaling)[] _shownOn = Array.Empty<(int, PixelRect, double)>();
         private static Window? _hookedOwner;
 
         /// <summary>The colour the tint renders: the user's pick if set, else the active mod's
@@ -164,6 +183,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// the owning window. A detached one enumerates no screens and hides the tint.</param>
         public static void Refresh(Visual host)
         {
+            if (RemoteCommands.OverlaysStopped && AiHold) Stop();
             var s = CoreSettings.Current;
             if (VoiceOpacity == null && !HasTimedPayload && (!s.PinkFilterEnabled || !ShouldShow())) { HideAll(); SyncSuper(); return; }
 
@@ -172,6 +192,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             for (var i = 0; i < screens.Count; i++) if (screens[i].IsPrimary) { primary = i; break; }
 
             var want = ResolveScreenIndices(s.PinkFilterTargetMonitor, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
+            var layout = want.Select(i => (i, screens[i].Bounds, screens[i].Scaling)).ToArray();
             var (r, g, b) = EffectiveColor();
             var opacity = PaintedOpacity;   // a session ramps it without writing it (#471)
             // WPF ResolveAdHocOverlayOpacity: an effect raises a live tint, never lowers it.
@@ -180,9 +201,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
             // Same monitors as last time: repaint the brushes and leave the windows alone. This is
             // the whole reason the slider does not tear down a full-screen window per tick.
-            if (Windows.Count > 0 && want.SequenceEqual(_shownOn))
+            if (Windows.Count > 0 && layout.SequenceEqual(_shownOn))
             {
-                foreach (var w in Windows) w.SetTint(r, g, b, opacity);
+                foreach (var w in Windows) Paint(w, r, g, b, opacity);
                 SyncSuper();
                 return;
             }
@@ -206,7 +227,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var w = new TintOverlayWindow();
                 w.PlaceOn(screens[i]);
-                w.SetTint(r, g, b, opacity);
+                Paint(w, r, g, b, opacity);
                 if (GentleWindows) w.Opacity = 0;
                 w.Show();                       // Position -> Show -> click-through, the order
                                                 // BubbleCountWindow uses; there is no XID before Show
@@ -221,7 +242,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     Dispatcher.UIThread.Post(() => { if (Windows.Contains(w)) w.Opacity = 1; });
                 }
             }
-            _shownOn = want;
+            _shownOn = layout;
             QuestMinutes.Follow(Windows.Count > 0);
             if (s.PinkFilterUnderEffects) SyncOrder();   // a fresh tint maps on top: put the effects back over it
             SyncSuper();
@@ -252,6 +273,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 try { RaiseWindow(w); }
                 catch (Exception ex) { Log.Debug("Pink filter: re-sort raise failed: {E}", ex.Message); }
             }
+            WhirlpoolOverlay.RaisePool();   // the Whirlpool reads through the fog in either order (WPF 72 over 70)
         }
 
         private static void HideAll()
@@ -261,7 +283,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _pulseWeight = null;
             var fading = Windows.ToArray();
             Windows.Clear();
-            _shownOn = Array.Empty<int>();
+            _shownOn = Array.Empty<(int, PixelRect, double)>();
             QuestMinutes.Follow(false);
             var duration = TimeSpan.FromSeconds(GentleVisuals.FadeSeconds);
             foreach (var w in fading)
@@ -294,10 +316,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 catch (Exception ex) { Log.Debug("Pink filter: failed to close a tint window: {E}", ex.Message); }
             }
             Windows.Clear();
-            _shownOn = Array.Empty<int>();
+            _shownOn = Array.Empty<(int, PixelRect, double)>();
             QuestMinutes.Follow(false);
             SyncSuper();
-            if (_hookedOwner is not null) { _hookedOwner.Closed -= OnOwnerClosed; _hookedOwner = null; }
+            if (_hookedOwner is not null) { _hookedOwner.Closed -= OnOwnerClosed; _hookedOwner.Screens.Changed -= OnScreensChanged; _hookedOwner = null; }
         }
 
         /// <summary>
@@ -334,7 +356,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <para>A session counts as running (WPF ResumeSession's App.Overlay.Start() after a panic) and a
         /// paused one hides the tint (PauseSession's App.Overlay.Stop()).</para>
         private static bool ShouldShow()
-            => PulseHold || (!RemoteCommands.OverlaysStopped && (RemoteCommands.OverlayRunning || App.Sessions?.IsPaused != true
+            => PulseHold || (!RemoteCommands.OverlaysStopped && (AiHold || RemoteCommands.OverlayRunning || App.Sessions?.IsPaused != true
                && (CoreSession.IsEngineRunningProvider is null || CoreSession.IsEngineRunning || App.Sessions?.IsRunning == true)));
 
         // Start (MainShellWindow.StartEngine) is what restores a tint left enabled - WPF OverlayService.Start().
@@ -374,9 +396,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static void HookOwner(Window? owner)
         {
             if (owner is null || ReferenceEquals(owner, _hookedOwner)) return;
-            if (_hookedOwner is not null) _hookedOwner.Closed -= OnOwnerClosed;
+            if (_hookedOwner is not null) { _hookedOwner.Closed -= OnOwnerClosed; _hookedOwner.Screens.Changed -= OnScreensChanged; }
             _hookedOwner = owner;
             owner.Closed += OnOwnerClosed;
+            owner.Screens.Changed += OnScreensChanged;
+        }
+
+        private static void OnScreensChanged(object? sender, EventArgs e)
+        {
+            if (_hookedOwner is { } owner) Refresh(owner);
         }
 
         private static void OnOwnerClosed(object? sender, EventArgs e) => CloseAll();

@@ -131,7 +131,31 @@ internal static partial class PieceByPieceHostService
         _counterHooked = false;
         if (_host == null) return;
         PostWardrobe();
+        _ = PullStockAsync();
         if (CounterHandsFocusBack(reason)) _host.FocusWeb();
+    }
+
+    /// <summary>This week's away chess rows and when they are back (<see cref="PbpLookRules.StockFrame"/>), so the
+    /// Wardrobe can say "back on Mon 30 Nov" instead of "In the Prize Counter". Any failure says nothing: the
+    /// page keeps the plain note.</summary>
+    private static async Task PullStockAsync()
+    {
+        var uid = App.UnifiedUserId ?? "";
+        var token = SafeAuthToken();
+        if (string.IsNullOrEmpty(uid) || string.IsNullOrEmpty(token)) return;
+        try
+        {
+            using var req = PrizeCounterRelay.BuildRequest(PrizeCounterRelay.OpState, (uid, token), null, null);
+            using var res = await Http.SendAsync(req, CancellationToken.None).ConfigureAwait(false);
+            if (!res.IsSuccessStatusCode) { App.Logger?.Debug("PieceByPiece: shop state GET {Status}, no stock dates", (int)res.StatusCode); return; }
+            var frame = PbpLookRules.StockFrame(JToken.Parse(await res.Content.ReadAsStringAsync().ConfigureAwait(false)));
+            RunOnUi(() =>
+            {
+                try { _host?.Post(frame); }
+                catch (Exception ex) { Diag.Swallowed(ex); }
+            });
+        }
+        catch (Exception ex) { App.Logger?.Debug("PieceByPiece: stock pull failed: {E}", ex.Message); }
     }
 
     /// <summary>Only a plain back (or a Wear that stays on the board) gives the board the keyboard again.</summary>

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Meadow | Go Outside scene</title>
+<link rel="icon" href="data:,">
+<!-- Try the Go Outside meadow alone: node dev/serve.mjs 8791, then http://localhost:8791/fuzz/dev/meadow.html
+     ?lite=1 phone budget, ?reduced=1 reduced motion, ?atlas=0 placeholder tiles, ?lock=6.5 lock after N s, ?auto=1 drift after the lock. -->
+<style>
+  html, body { margin:0; height:100%; background:#cfe8f7; overflow:hidden; font:14px/1.3 'Segoe UI',sans-serif }
+  #host { position:fixed; inset:0 }
+  #bar { position:fixed; left:8px; top:8px; display:flex; flex-wrap:wrap; gap:6px; z-index:2 }
+  #bar button { font:inherit; padding:4px 10px; border:1px solid #3a2e28; border-radius:6px; background:#fffdf6; cursor:pointer }
+  #info { position:fixed; left:8px; bottom:8px; background:#fffdf6cc; padding:4px 8px; border-radius:6px; z-index:2; white-space:pre }
+</style>
+<script type="importmap">{"imports":{"three":"../../vendor/three/three.module.min.js"}}</script>
+</head>
+<body>
+<div id="host"></div>
+<div id="bar">
+  <button id="lock">Lock</button><button id="auto">Autopilot</button><button id="still">Still</button><button id="stop">Stop</button>
+</div>
+<div id="info">loading</div>
+<script type="module">
+import { createMeadow } from '../ui/unlocks/extras/outside-meadow.js';
+const q = new URLSearchParams(location.search), $ = (id) => document.getElementById(id);
+const lite = q.get('lite') === '1', reduced = q.get('reduced') === '1', atlas = q.get('atlas') !== '0';
+try {
+  const m = await createMeadow($('host'), {
+    atlasUrl: atlas ? '../assets/outside/meadow-atlas.png' : null,
+    atlasJsonUrl: atlas ? '../assets/outside/meadow-atlas.json' : null,
+    lite, reduced,
+  });
+  window.__meadow = m;
+  m.start();
+  addEventListener('resize', () => m.resize());
+  let auto = false;
+  $('lock').onclick = () => m.lockControls();
+  $('auto').onclick = () => { auto = !auto; m.autopilot(auto); };
+  $('still').onclick = () => { const a = document.createElement('a'); a.href = m.still(0.8); a.download = 'meadow.jpg'; a.click(); };
+  $('stop').onclick = () => m.stop();
+  for (const b of document.querySelectorAll('#bar button')) b.addEventListener('pointerdown', (e) => e.stopPropagation());
+  if (q.has('lock')) setTimeout(() => { m.lockControls(); if (q.get('auto') === '1') m.autopilot(true); }, Number(q.get('lock')) * 1000);
+  let n0 = 0, t0 = performance.now();
+  setInterval(() => {
+    const d = m.debug(), now = performance.now(), fps = ((d.frames - n0) * 1000) / (now - t0);
+    n0 = d.frames; t0 = now;
+    $('info').textContent = `${fps.toFixed(0)} fps  calls ${d.calls}  quads ${d.quads}+${d.plants}  ${d.live ? 'live' : 'locked'}${d.auto ? ' auto' : ''}`
+      + `\nx ${d.x.toFixed(1)} z ${d.z.toFixed(1)} yaw ${d.yaw.toFixed(2)} pitch ${d.pitch.toFixed(2)}${d.placeholder.length ? `\nplaceholder: ${d.placeholder.join(' ')}` : ''}`
+      + `\nmouse looks, WASD/arrows or hold to walk; touch drag looks, hold walks`;
+  }, 500);
+} catch (e) {
+  $('info').textContent = `meadow failed: ${e.message}`;
+  window.__meadowError = String(e);
+}
+</script>
+</body>
+</html>

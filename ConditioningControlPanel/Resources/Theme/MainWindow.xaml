@@ -2,6 +2,7 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
                     xmlns:features="clr-namespace:ConditioningControlPanel.Features"
+                    xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
                     xmlns:loc="clr-namespace:ConditioningControlPanel.Localization">
         <!-- Note: BoolToVisibility and InverseBoolToVisibility converters are defined in
              Application.Resources (Converters.xaml) to ensure availability in all DataTemplates -->
@@ -287,10 +288,13 @@
                             <Border x:Name="TrackGroove" Height="3" Background="{DynamicResource PanelAccentBrush}" CornerRadius="1.5" VerticalAlignment="Center"/>
                             <Track x:Name="PART_Track">
                                 <Track.DecreaseRepeatButton>
-                                    <RepeatButton x:Name="TrackFill" Command="Slider.DecreaseLarge">
+                                    <!-- Readable Rows: the fill wears rows:RowHue.SliderFill (an opted-in
+                                         OptionSection's hue); unset = PinkBrush, see the trigger below. -->
+                                    <RepeatButton x:Name="TrackFill" Command="Slider.DecreaseLarge"
+                                                  Background="{Binding Path=(rows:RowHue.SliderFill), RelativeSource={RelativeSource TemplatedParent}}">
                                         <RepeatButton.Template>
                                             <ControlTemplate TargetType="RepeatButton">
-                                                <Border Height="3" Background="{DynamicResource PinkBrush}" CornerRadius="1.5"/>
+                                                <Border Height="3" Background="{TemplateBinding Background}" CornerRadius="1.5"/>
                                             </ControlTemplate>
                                         </RepeatButton.Template>
                                     </RepeatButton>
@@ -323,6 +327,9 @@
                              Dim the groove, the pink fill and the thumb; the thumb also drops
                              its hand cursor via IsEnabled on the Thumb itself. -->
                         <ControlTemplate.Triggers>
+                            <Trigger Property="rows:RowHue.SliderFill" Value="{x:Null}">
+                                <Setter TargetName="TrackFill" Property="Background" Value="{DynamicResource PinkBrush}"/>
+                            </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="TrackGroove" Property="Opacity" Value="0.35"/>
                                 <Setter TargetName="TrackFill" Property="Opacity" Value="0.28"/>
@@ -607,12 +614,30 @@
             <Setter Property="Margin" Value="0,0,0,8"/>
         </Style>
 
+        <!-- Readable Rows (integration 2026-11-24): the title of a Settings card wears the look of an
+             OptionSection fold header (22 SemiBold Fredoka, Features/OptionSection.cs) so it leads its
+             16 px Bold rows instead of sitting under them in 11 px Consolas. The card still sets its own
+             hue as Foreground. -->
+        <Style x:Key="SettingsCardTitle" TargetType="TextBlock" BasedOn="{StaticResource SectionHeader}">
+            <Setter Property="FontFamily" Value="/Fonts/#Fredoka, Segoe UI"/>
+            <Setter Property="FontSize" Value="22"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+
         <!-- Label Style. Polish 8: Type.Body's size, but the row title stays TextLight (it is
              the actionable line) and keeps NoWrap so no settings row changes height. -->
         <Style x:Key="SettingLabel" TargetType="TextBlock" BasedOn="{StaticResource Type.Body}">
             <Setter Property="Foreground" Value="{StaticResource TextLightBrush}"/>
             <Setter Property="TextWrapping" Value="NoWrap"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <!-- Readable Rows (owner 2026-11-24): the height of an option row Grid that holds a
+             Controls/Rows RowLabel (34 px emblem, 16 px label, 19 px number with a unit under it).
+             MinHeight, never a fixed Height, so a long label or a two-line value can still grow. -->
+        <Style x:Key="OptionRow" TargetType="Grid">
+            <Setter Property="MinHeight" Value="46"/>
         </Style>
 
         <!-- Value Label Style -->
@@ -1419,6 +1444,23 @@
                     </Style>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <!-- Readable Rows (7.4 desk run): the ComboBox of a rows-look option row shows its value in the
+             row's own face, 14 Bold Nunito in TextLight, beside the 16 Bold labels; the compact 11 px value
+             read small and faint there. Only rows opt in (Style="{DynamicResource RowComboBoxStyle}"), so
+             every other DarkComboBoxStyle in the app keeps its compact look. Never set a local FontSize on
+             a ComboBox wearing it: a local value beats the style. -->
+        <Style x:Key="RowComboBoxStyle" TargetType="ComboBox" BasedOn="{StaticResource DarkComboBoxStyle}">
+            <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
+            <Setter Property="FontFamily" Value="{x:Static rows:RowFonts.Nunito}"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="MinHeight" Value="28"/>
+            <!-- 7.4 review wave 6: the box grows to its longest value (any language, items from code too),
+                 at most 60% of its row; past that the value ends in an ellipsis with the whole value in
+                 the tool tip. Controls/Rows/RowComboFit.cs. -->
+            <Setter Property="rows:RowComboFit.Fit" Value="True"/>
         </Style>
 
         <!-- Exclusives Section Expander Style -->

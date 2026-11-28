@@ -326,6 +326,12 @@ My files (2026-10-28, `host/localLibrary.js`): the Options Pictures row picks Sc
 turns the race's Scrolller switch off (`set-setting` false, so the host fetches nothing) and shows the player's own
 pictures and clips as `blob:` urls on the same display-only screens and flash stills, with no credit. No new
 message: files never cross the bridge or the room. Only the choice is kept (`glassroad.mediaSource.v1`).
+Desktop library (2026-11-24, `libraryRows`): a host that sets `caps.ownMedia: { library: true, mediaOrigin }` (the
+desktop, `https://ccp.assets`) gets one page -> host `own-media-list` per page load and answers `own-media { v: 1,
+rows: [{ url, kind: 'image' | 'video' }] }` with the app's own ticked files. My files then shows those (at most 12,
+sampled) on the same display-only route; a course's hand pick still wins and an empty answer falls back to the picker.
+With no saved pick and no Scrolller consent a course starts on My files there. Rows off that one origin are refused.
+Nothing goes the other way: the ask carries no data. Hosts without the cap (web, phone) are unchanged.
 
 ## 8. Events (the 10 juice beats)
 
