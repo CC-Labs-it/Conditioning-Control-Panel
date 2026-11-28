@@ -199,9 +199,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             catch (Exception ex) { Log.Error(ex, "OpenProfileCustomizeDialog failed"); }
         }
 
-        /// <summary>WPF PersistOwnCosmetics: saves, repaints your card and pushes the loadout so other people see
-        /// it. <paramref name="chosen"/> must already be sanitized. The push carries it until one succeeds (an empty
-        /// loadout is WPF's explicit unequip-everything clear); fire-and-forget, as WPF.</summary>
+        /// <summary>WPF MainWindow.ProfileCosmetics.cs:385: apply an owned profile item from the counter.</summary>
+        internal bool WearProfileItemFromCounter(string itemId)
+        {
+            var item = ShopCosmeticsRegistry.Find(itemId);
+            if (item == null || (!item.IsFrame && !item.IsAvatar)) return false;
+            var next = (CoreSettings.Current.ProfileCosmetics ?? new ProfileCosmetics()).Clone();
+            if (item.IsFrame) next.FrameId = item.Id; else next.AvatarId = item.Id;
+            var clean = SanitizeOwnWardrobe(next);
+            if ((item.IsFrame ? clean.FrameId : clean.AvatarId) != item.Id) return false;
+            PersistOwnCosmetics(clean);
+            return true;
+        }
+
+        /// <summary>WPF PersistOwnCosmetics: save, repaint and push a sanitized loadout.</summary>
         internal void PersistOwnCosmetics(ProfileCosmetics chosen)
         {
             var slotsBefore = ConditioningControlPanel.Services.ProfileEquip.ProfileSlots.Of(SanitizeOwnWardrobe(CoreSettings.Current.ProfileCosmetics));

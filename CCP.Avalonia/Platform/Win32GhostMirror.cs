@@ -99,6 +99,26 @@ internal sealed class Win32GhostMirror : IDisposable
         DwmUpdateThumbnailProperties(_thumb, ref p);
     }
 
+    /// <summary>WPF watchdog tick (FypHostService.cs:797-803, FypGhostOverlay.cs:254): false only on a definite
+    /// verdict that the colour key is gone (the mirror would compose as a black sheet); else re-assert topmost (:828).</summary>
+    internal bool Tick()
+    {
+        if (_hwnd == IntPtr.Zero) return true;
+        if (GetLayeredWindowAttributes(_hwnd, out uint key, out _, out uint flags) && ((flags & LwaColorKey) == 0 || key != ColorKey))
+            return false;
+        SetWindowPos(_hwnd, new IntPtr(-1) /* HWND_TOPMOST */, 0, 0, 0, 0, 0x13 /* NOSIZE|NOMOVE|NOACTIVATE */);
+        return true;
+    }
+
+    /// <summary>WPF RefreshThumbnail (FypGhostOverlay.cs:192): a fresh registration, DWM does not reliably resume the old one.</summary>
+    internal void Refresh()
+    {
+        if (_hwnd == IntPtr.Zero) return;
+        if (_thumb != IntPtr.Zero) DwmUnregisterThumbnail(_thumb);
+        if (DwmRegisterThumbnail(_hwnd, _source, out _thumb) != 0) _thumb = IntPtr.Zero;
+        Update();
+    }
+
     /// <summary>WPF Close (:200): thumbnail dropped, window destroyed. Idempotent.</summary>
     public void Dispose()
     {
@@ -169,6 +189,9 @@ internal sealed class Win32GhostMirror : IDisposable
     private static extern ushort RegisterClassEx(ref WndClassEx wc);
     [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hwnd, int cmd);
     [DllImport("user32.dll")] private static extern bool UpdateWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int w, int h, uint flags);
+    [DllImport("user32.dll")] internal static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll", EntryPoint = "ShowWindow")] internal static extern bool ShowNative(IntPtr hwnd, int cmd);
     [DllImport("user32.dll")] private static extern bool DestroyWindow(IntPtr hwnd);
     [DllImport("gdi32.dll")] private static extern IntPtr CreateSolidBrush(uint color);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, EntryPoint = "GetModuleHandleW")] private static extern IntPtr GetModuleHandle(string? name);

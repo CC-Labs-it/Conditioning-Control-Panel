@@ -61,7 +61,7 @@ function fixture({ ready = Promise.resolve(), failLoad = false, autoDom = true, 
     destroy() { this.dead = true; this.emit('closed'); }
     async loadURL(value) { this.url = value; if (autoDom) this.webContents.emit('dom-ready'); await load; if (failLoad) throw new Error("load failed"); }
   }
-  start({ app, BrowserWindow: Window, ipcMain, session: { fromPartition: () => ses } }, { stdin, stdout });
+  start({ app, BrowserWindow: Window, ipcMain, session: { fromPartition: (name, opts) => { ses.partition = [name, opts]; return ses; } } }, { stdin, stdout });
   return { app, ipcMain, stdin, stdout, ses, windows, output: () => output.trim().split('\n').filter(Boolean).map(JSON.parse),
     input: m => stdin.write(JSON.stringify(m) + '\n') };
 }
@@ -107,6 +107,13 @@ test('one window, locked navigation, IPC, focus and Escape follow the real handl
   assert.deepEqual(f.output().at(-1), { type: 'shell-escape', sequence: 2, displayBackend: 'x11' });
   f.input({ type: 'launch', url }); assert.equal(f.windows.length, 1);
   f.input({ type: 'shell-close' }); assert.equal(w.dead, true); assert.equal(f.app.quits, 1);
+});
+
+test('page storage persists between races and a hung page is reported, not closed', async () => {
+  const f = fixture(); f.input({ type: 'launch', url }); await turn();
+  assert.deepEqual(f.ses.partition, ['persist:glassroad-race', { cache: false }]);
+  const w = f.windows[0]; w.webContents.emit('unresponsive');
+  assert.deepEqual(f.output().at(-1), { type: 'shell-unresponsive' }); assert.equal(w.dead, false);
 });
 
 test('page cannot forge shell control frames or suppress real Escape', async () => {
