@@ -774,10 +774,22 @@ public sealed class ChaosRunHostTests
         finally { BarkHead.Engine = previous; settings.AvatarEnabled = avatar; settings.MasterVolume = volume; }
     });
 
-    [Fact]
-    public Task Last_breath_announces_and_panic_clears_it() => WithFreshRun(() =>
+    [Theory]
+    [InlineData("en", "⏱ last breath x3")]
+    [InlineData("de", "⏱ letzter Atemzug x3")]
+    [InlineData("es", "⏱ último aliento x3")]
+    [InlineData("fr", "⏱ dernier souffle x3")]
+    [InlineData("it", "⏱ ultimo respiro x3")]
+    [InlineData("ja", "⏱ 最後のひと息 x3")]
+    [InlineData("ko", "⏱ 마지막 숨결 x3")]
+    [InlineData("pt-BR", "⏱ último suspiro x3")]
+    [InlineData("ru", "⏱ последнее дыхание x3")]
+    [InlineData("zh-CN", "⏱ 最后一息 x3")]
+    public Task Last_breath_announces_and_panic_clears_it(string language, string expected) => WithFreshRun(() =>
     {
         bool enabled = CoreSettings.Current.ChaosAnnouncerEnabled;
+        var loc = LocalizationManager.Instance;
+        string previousLanguage = loc.CurrentLanguage;
         try
         {
             CoreSettings.Current.ChaosAnnouncerEnabled = true;
@@ -785,14 +797,15 @@ public sealed class ChaosRunHostTests
             var state = ChaosRunHost.State!;
             state.LastBreathWindowSec = 1; state.LastBreathPayMult = 3;
             ChaosAnnouncerOverlay.CloseActive();
+            loc.SetLanguage(language);
             var b = BubbleOverlay.SpawnChaos(LiveSpec()); b.FuseRemainingMs = 500;
             ChaosRunHost.OnDefused(b);
-            Assert.Equal("⏱ last breath x3", ChaosAnnouncerOverlay.Active!.Current!.Text);
+            Assert.Equal(expected, ChaosAnnouncerOverlay.Active!.Current!.Text);
             ChaosRunHost.ForceShutdown();
             Assert.Null(ChaosAnnouncerOverlay.Active);
             Assert.Equal(0, ChaosAnnouncerOverlay.QueuedCount);
         }
-        finally { ChaosRunHost.ForceShutdown(); ChaosAnnouncerOverlay.CloseActive(); CoreSettings.Current.ChaosAnnouncerEnabled = enabled; }
+        finally { ChaosRunHost.ForceShutdown(); ChaosAnnouncerOverlay.CloseActive(); CoreSettings.Current.ChaosAnnouncerEnabled = enabled; loc.SetLanguage(previousLanguage); }
     });
 
     private sealed class LeapClock : TimeProvider

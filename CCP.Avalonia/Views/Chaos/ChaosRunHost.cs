@@ -738,7 +738,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (lastBreath > 1)
             {
                 _state.PushEvent($"⏱ last breath! x{lastBreath:0}");
-                ChaosAnnouncerOverlay.Announce($"⏱ last breath x{lastBreath:0}", ChaosAnnounceKind.PowerUp);
+                ChaosAnnouncerOverlay.Announce(Loc.GetF("chaos_last_breath_announce", lastBreath), ChaosAnnounceKind.PowerUp);
                 Pulse(Color.FromRgb(255, 215, 0), 0.40);   // gold flash (WPF :2045)
             }
             else Pulse(Color.FromRgb(90, 255, 150), 0.16);   // soft green confirm
