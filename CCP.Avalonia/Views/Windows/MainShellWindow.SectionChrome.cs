@@ -106,7 +106,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void WirePanelDoorLink()
         {
             PanelDoorLink.IsLockedDown = () => LockdownActive;
-            PanelDoorLink.Fallback = () => PressBackToCcLabs(Current ?? this);
+            // Weak: the static hook outlives this window, and a strong `this` kept every closed shell alive.
+            var self = new WeakReference<MainShellWindow>(this);
+            PanelDoorLink.Fallback = () =>
+            {
+                if ((Current ?? (self.TryGetTarget(out var shell) ? shell : null)) is { } target) PressBackToCcLabs(target);
+            };
         }
 
         internal static void PressBackToCcLabs(MainShellWindow shell)
