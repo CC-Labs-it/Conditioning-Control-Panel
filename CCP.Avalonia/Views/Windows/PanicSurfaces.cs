@@ -149,6 +149,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 After: ["lights-down", "companion-audio", "audio-playlist", "ai-followups", "blink-trainer", "gaze-minigame", "chaos", "mantra", "haptics", "remote-haptics", "takeover", "leash-task", "browser-media", "deeper-player", "scheduler"]),
             new("super-stage", _ => global::ConditioningControlPanel.Services.Super.SuperStageHost.Stop(), After: ["engine"]),
             new("undertow", _ => Overlays.UndertowOverlay.Stop()), // WPF BrainDrainLayer.ReleaseCaptures -> StopUndertow
+            new("brain-drain", _ => Overlays.BrainDrainOverlay.CloseAll()), // WPF StartStop.cs:531
             new("bouncing-text", _ => Overlays.BouncingTextOverlay.Stop()), // WPF BouncingTextService.cs:169-171; also standalone runs
             new("bank-fx", sh => sh?.StopBankFx()), // WPF BankFx.cs:635 abort contract; P06
             new("bubble-host", _ => { Overlays.BubblePayloadHost.Stop(); Overlays.BubbleOverlay.EndChaos(); Overlays.BubbleOverlay.Stop();
