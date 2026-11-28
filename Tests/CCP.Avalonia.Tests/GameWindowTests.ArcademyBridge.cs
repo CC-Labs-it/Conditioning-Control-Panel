@@ -62,6 +62,52 @@ public sealed partial class GameWindowTests
         finally { w.Close(); (CorePaths.EffectiveAssetsProvider, s.DisabledAssetPaths, s.MediaSource) = old; Directory.Delete(lib, true); }
     });
 
+    // WPF ArcademyHostService.cs:1498-1511, 1533-1604: init.settings carries the folders and presets SORT's setup
+    // door picks from, and the folder or preset it picks is what local-sample-request samples.
+    [Fact]
+    public void Arcademy_InitOffersLocalPilesThatSortCanSample() => Run((_, _) =>
+    {
+        var lib = Directory.CreateTempSubdirectory("arc-piles-").FullName;
+        var s = CoreSettings.Current;
+        var old = (CorePaths.EffectiveAssetsProvider, s.DisabledAssetPaths.ToHashSet(), s.AssetPresets.ToList());
+        var w = new GameWindow(GameWindow.Games["arcademy"]);
+        var frames = new List<JObject>(); w.Posted += json => frames.Add(JObject.Parse(json));
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(lib, "images", "pile", "deep"));
+            Directory.CreateDirectory(Path.Combine(lib, "videos"));
+            File.WriteAllBytes(Path.Combine(lib, "images", "pile", "a.png"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(lib, "images", "pile", "deep", "b.gif"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(lib, "images", "off.png"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(lib, "videos", "v.mp4"), new byte[] { 1 });
+            CorePaths.EffectiveAssetsProvider = () => lib;
+            s.DisabledAssetPaths = new() { "images/off.png" };
+            s.AssetPresets = new() { new ConditioningControlPanel.Models.AssetPreset { Id = "p1", Name = "Mine", DisabledAssetPaths = new() { "images/pile/a.png" } } };
+            w.HandleMessage("{\"type\":\"ready\"}");
+            var bag = (JObject)frames.Single(f => (string?)f["type"] == "init")["settings"]!;
+            var folders = ((JArray)bag["localFolders"]!).ToDictionary(f => (string)f["path"]!, f => ((int)f["gifs"]!, (int)f["stills"]!, (int)f["videos"]!));
+            Assert.Equal(new[] { "images", "images/pile", "images/pile/deep", "videos" }, folders.Keys);
+            Assert.Equal((1, 1, 0), folders["images"]);   // off.png is deselected, so it is not counted
+            Assert.Equal((1, 1, 0), folders["images/pile"]);
+            Assert.Equal((0, 0, 1), folders["videos"]);
+            var preset = Assert.Single((JArray)bag["assetPresets"]!);
+            Assert.Equal(("p1", "Mine"), ((string?)preset["id"], (string?)preset["name"]));
+            // games/sort/setup.js:174-178 opens the local door on a preset, or on a non-root media folder plus a second one.
+            Assert.Contains(folders, f => f.Key is not ("images" or "videos") && f.Value != (0, 0, 0));
+            Assert.True(folders.Count(f => f.Value != (0, 0, 0)) >= 2);
+            w.HandleMessage("{\"type\":\"local-sample-request\",\"reqId\":\"f\",\"kind\":\"still\",\"tag\":\"target\",\"folders\":[\"images/pile\"]}");
+            Settle(w.ArcademyLastLocalSample);
+            var row = Assert.Single((JArray)frames.Last(f => (string?)f["reqId"] == "f")["urls"]!);
+            // Root-relative, so the page's isLocalUrl (provider/inventory.js:37) counts it as local.
+            Assert.Equal(("/ccp.assets/images/pile/a.png", "images/pile"), ((string?)row["url"], (string?)row["src"]));
+            w.HandleMessage("{\"type\":\"local-sample-request\",\"reqId\":\"p\",\"kind\":\"loop\",\"tag\":\"noise\",\"presetId\":\"p1\"}");
+            Settle(w.ArcademyLastLocalSample);
+            var urls = ((JArray)frames.Last(f => (string?)f["reqId"] == "p")["urls"]!).Select(r => ((string?)r["url"], (string?)r["src"])).OrderBy(r => r.Item1).ToArray();
+            Assert.Equal(new[] { ("/ccp.assets/images/pile/deep/b.gif", "preset:p1"), ("/ccp.assets/videos/v.mp4", "preset:p1") }, urls);
+        }
+        finally { w.Close(); (CorePaths.EffectiveAssetsProvider, s.DisabledAssetPaths, s.AssetPresets) = old; Directory.Delete(lib, true); }
+    });
+
     // WPF ArcademyHostService.cs:5281-5376: one sub-probe per reqId; a found sub joins the library, never the feed.
     [Fact]
     public void Arcademy_ProbeSubAnswersEveryRequestAndKeepsTheFeed() => Run((_, _) =>
