@@ -1653,7 +1653,6 @@ namespace ConditioningControlPanel.Avalonia
                         duration));
                 // WPF App.xaml.cs:505: the Reconnect answer for gates (Core PatreonReconnectRule).
                 TierGate.ReconnectIsTheAnswerProvider = Views.Windows.MainShellWindow.ReconnectIsTheAnswerNow;
-                // Dropped: WPF's EmiDesk "premiumTeaseSeen" fire - no EmiDesk service on this head.
                 var shell = (Views.Windows.MainShellWindow)desktop.MainWindow;
                 Platform.AfterFirstFrame.Schedule(shell, StartRichPresence);
                 CoreEngine.StartedHook = shell.OnEngineStarted;

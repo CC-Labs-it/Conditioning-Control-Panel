@@ -184,6 +184,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// otherwise the refusal with "See tiers" opening the vault card at the tier this door needs.</summary>
         internal void ShowTierDenied(TierVerdict verdict, Helpers.NotificationService toasts)
         {
+            // WPF App.xaml.cs:650: the denial is the single premium tease moment.
+            // A queued denial must not start speech after panic has silenced the desk.
+            try
+            {
+                if (!ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced())
+                    EmiMoment("premiumTeaseSeen", new { target = verdict.Feature?.ToLowerInvariant() });
+            }
+            catch (System.Exception ex) { Serilog.Log.Debug(ex, "[EmiDesk] premium denial moment failed"); }
             if (TierGate.ReconnectIsTheAnswer())
                 toasts.Show(Loc.Get("tiergate_denied_reconnect"), Helpers.NotificationType.Warning, System.TimeSpan.FromSeconds(10),
                     Loc.Get("tiergate_reconnect_action"), () => { if (!LockdownActive) _ = ReconnectFromGate(); });
