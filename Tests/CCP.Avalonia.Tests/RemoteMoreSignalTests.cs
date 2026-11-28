@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
@@ -21,17 +23,19 @@ public sealed class RemoteMoreSignalTests
 {
     private sealed class FakeRelay : HttpMessageHandler
     {
-        public readonly List<JObject> Signals = new();
+        public readonly ConcurrentQueue<JObject> Signals = new();
         public TaskCompletionSource<bool>? NextSignalGate;
+        public TaskCompletionSource<bool>? NextArrivalGate;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             var path = request.RequestUri!.AbsolutePath;
             if (path == "/v2/remote/emote")
             {
-                Signals.Add(JObject.Parse(await request.Content!.ReadAsStringAsync(ct)));
-                var gate = NextSignalGate;
-                NextSignalGate = null;
-                if (gate != null) await gate.Task;
+                var arrival = Interlocked.Exchange(ref NextArrivalGate, null);
+                if (arrival != null) await arrival.Task.WaitAsync(ct);
+                Signals.Enqueue(JObject.Parse(await request.Content!.ReadAsStringAsync(ct)));
+                var gate = Interlocked.Exchange(ref NextSignalGate, null);
+                if (gate != null) await gate.Task.WaitAsync(ct);
             }
             var body = path == "/v2/remote/start" ? "{\"code\":\"ABC123\"}"
                 : path == "/v2/remote/poll" ? "{\"controller_connected\":true}" : "{}";
@@ -39,12 +43,15 @@ public sealed class RemoteMoreSignalTests
         }
     }
 
-    // The relay answers on the thread pool; a fixed count of yields ran out on a loaded CI runner.
-    private static async Task Until(Func<bool> done)
+    private static async Task WaitUntil(Func<bool> done)
     {
-        var deadline = Environment.TickCount64 + 10_000;
-        while (!done() && Environment.TickCount64 < deadline) { Dispatcher.UIThread.RunJobs(); await Task.Delay(1); }
-        Dispatcher.UIThread.RunJobs();
+        var clock = Stopwatch.StartNew();
+        while (!done() && clock.Elapsed < TimeSpan.FromSeconds(10))
+        {
+            Dispatcher.UIThread.RunJobs();
+            await Task.Delay(10);
+        }
+        Assert.True(done(), "Timed out waiting for the asynchronous UI action");
     }
 
     [Fact]
@@ -91,27 +98,29 @@ public sealed class RemoteMoreSignalTests
             async Task Click(Button button, int count)
             {
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                await Until(() => pending.Count >= count);
+                await WaitUntil(() => pending.Count >= count);
                 Assert.Equal(count, pending.Count);
                 Assert.Equal(TimeSpan.FromMilliseconds(1600), pending[count - 1].Duration);
             }
             async Task Clear(TextBlock status, int index)
             {
                 pending[index].Completion.TrySetResult(true);
-                await Until(() => status.Text == "");
+                await WaitUntil(() => status.Text == "");
                 Assert.Equal("", status.Text);
             }
 
             await Click(tabButton, 1);
             Assert.Equal(expected, tabStatus.Text);
             var gate = fake.NextSignalGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var arrival = fake.NextArrivalGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _ = Task.Run(async () => { await Task.Delay(250); arrival.TrySetResult(true); });
             tabButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            await Until(() => fake.Signals.Count >= 2);
+            await WaitUntil(() => fake.Signals.Count >= 2);
             Assert.Equal(2, fake.Signals.Count);
             Assert.Equal(expected, tabStatus.Text); // the first confirmation stays until the next response
             Assert.False(pending[0].Token.IsCancellationRequested);
             gate.SetResult(true);
-            await Until(() => pending.Count >= 2);
+            await WaitUntil(() => pending.Count >= 2);
             Assert.Equal(2, pending.Count);
             Assert.Equal(TimeSpan.FromMilliseconds(1600), pending[1].Duration);
             Assert.True(pending[0].Token.IsCancellationRequested);
@@ -167,10 +176,11 @@ public sealed class RemoteMoreSignalTests
             Dispatcher.UIThread.RunJobs();
             Assert.True(button.IsVisible);
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            await Until(() => fake.Signals.Count > 0);
+            await WaitUntil(() => !fake.Signals.IsEmpty);
             Assert.Single(fake.Signals);
-            Assert.Equal("more", (string?)fake.Signals[0]["text"]);
-            Assert.Equal("signal", (string?)fake.Signals[0]["kind"]);
+            Assert.True(fake.Signals.TryPeek(out var signal));
+            Assert.Equal("more", (string?)signal!["text"]);
+            Assert.Equal("signal", (string?)signal["kind"]);
             await relay.StopAsync();
             Dispatcher.UIThread.RunJobs();
             Assert.False(button.IsVisible);

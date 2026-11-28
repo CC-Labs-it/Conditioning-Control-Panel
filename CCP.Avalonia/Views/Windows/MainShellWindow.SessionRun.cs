@@ -55,14 +55,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF StartSession: the engine start (through the portal wrapper, so the panic key is
         /// bound first) and the runner start in one step - SessionRunner.Start starts CoreEngine itself.</summary>
-        internal void StartSession(Session session)
+        internal void StartSession(Session session, bool remote = false, Func<bool>? stillCurrent = null)
         {
             var gen = ++_engineGen;
             _pendingUserEngineGen = gen;
             StartEffect(() =>
             {
                 if (_pendingUserEngineGen == gen) _pendingUserEngineGen = null;
-                if (gen != _engineGen || App.Sessions is not { IsRunning: false } runner) return;
+                if (gen != _engineGen || (remote && (stillCurrent?.Invoke() == false || LocalPanicHoldsSession))
+                    || App.Sessions is not { } runner) return;
+                if (runner.IsRunning)
+                {
+                    if (!remote) return;
+                    runner.Stop(completed: false);
+                }
+                ClearRemoteStartedSession();
                 try
                 {
                     Named<Tabs.PresetsTabView>("PresetsTab")?.ApplyCornerGifOption(session);   // WPF StartSession :1588
@@ -73,7 +80,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     StartEngineRamp(); // WPF Presets.cs:1618: capture user values before session overrides.
                     _suppressSessionSummaryUntil = DateTime.MinValue;
                     bool engineWasRunning = CoreEngine.IsRunning;
+                    if (remote && !engineWasRunning)
+                    {
+                        CoreEngine.Start();
+                        PinkFilterOverlay.Stop();
+                        SpiralOverlay.Stop();
+                    }
                     runner.Start(session);
+                    if (remote)
+                    {
+                        _remoteStartedSession = session;
+                        _remoteStartedRunner = runner;
+                        _remoteStartedRun = runner.RunNumber;
+                        runner.Stopped += OnRemoteStartedSessionStopped;
+                    }
                     Views.Controls.AppSettings.AudioSettingsBinder.RaiseChanged(); // WPF ApplySessionSettings -> LoadSettings
                     if (!engineWasRunning && CoreEngine.IsRunning)
                     {

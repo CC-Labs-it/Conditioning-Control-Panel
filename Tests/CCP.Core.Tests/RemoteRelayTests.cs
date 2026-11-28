@@ -1457,6 +1457,65 @@ public sealed class RemoteRelayTests
         finally { (CoreSubliminal.ShowProvider, CoreSubliminal.CustomShowProvider) = old; }
     }
 
+    // WPF RemoteControlService.cs:1145-1171, 1191-1195: a controller leave stops Brain Drain
+    // when opted in, but a remote-started session and its engine continue.
+    [Theory]
+    [InlineData(true, true, false, false)]
+    [InlineData(true, true, false, true)]
+    [InlineData(true, false, true, false)]
+    [InlineData(false, true, true, false)]
+    public async Task Controller_leave_stops_session_owned_brain_drain_only_for_opted_in_remote_run(bool remote, bool stopOnDisconnect, bool remainsPlaying, bool remoteStoppedFirst)
+    {
+        var oldProvider = CoreSettings.ServiceProvider;
+        var old = (CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider,
+            CoreEngine.StartBrainDrain, CoreEngine.StopBrainDrain, RemoteCommands.IsSessionRemoteStarted, RemoteCommands.StopSession);
+        var dir = Directory.CreateTempSubdirectory("ccp-remote-brain-");
+        var settings = new SettingsService(Path.Combine(dir.FullName, "settings.json"));
+        var playing = false;
+        SessionRunner? runner = null;
+        try
+        {
+            CoreSettings.ServiceProvider = () => settings;
+            settings.Current.StopEffectsOnRemoteDisconnect = stopOnDisconnect;
+            CoreEngine.StartBrainDrain = () => playing = true;
+            CoreEngine.StopBrainDrain = () => playing = false;
+            runner = new SessionRunner(new SessionLogService());
+            var session = new Session { Id = "remote-brain", DurationMinutes = 30 };
+            session.Settings.BrainDrainEnabled = true;
+            runner.Start(session);
+            RemoteCommands.IsSessionRemoteStarted = () => remote && ReferenceEquals(runner.CurrentSession, session);
+            RemoteCommands.StopSession = () => runner.Stop();
+            Assert.True(playing);
+            var f = new FakeRelay();
+            using var r = new RemoteRelay(() => "tok", () => "uid-1", "9.9.9", RemoteCommands.Execute, RemoteCommands.StopEffects, f) { AutoPoll = false };
+            await r.StartAsync("full");
+            Poll(f, "{\"controller_connected\":true}"); await r.PollOnceAsync();
+            if (remoteStoppedFirst)
+            {
+                Poll(f, Cmd("1", "stop_brain_drain")); await r.PollOnceAsync();
+                Assert.False(playing);
+            }
+            Poll(f, "{\"controller_connected\":false}"); await r.PollOnceAsync();
+            Assert.True(settings.Current.BrainDrainEnabled); // the saved session setting is handed back
+            Assert.Equal(remainsPlaying, playing);
+            Assert.True(runner.IsRunning);
+            Assert.Same(session, runner.CurrentSession);
+            Assert.True(CoreEngine.IsRunning);
+        }
+        finally
+        {
+            try { runner?.Stop(); CoreEngine.Stop(); ConditioningControlPanel.Services.Remote.RemoteWearer.Drop(); }
+            finally
+            {
+                (CoreSession.IsSessionRunningProvider, CoreSession.IsSessionPausedProvider,
+                    CoreEngine.StartBrainDrain, CoreEngine.StopBrainDrain, RemoteCommands.IsSessionRemoteStarted, RemoteCommands.StopSession) = old;
+                settings.SealForReset();
+                CoreSettings.ServiceProvider = oldProvider;
+                dir.Delete(recursive: true);
+            }
+        }
+    }
+
     [Theory]
     [InlineData("end", false)]
     [InlineData("panic", false)]

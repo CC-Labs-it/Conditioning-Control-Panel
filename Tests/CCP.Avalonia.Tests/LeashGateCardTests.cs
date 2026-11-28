@@ -44,6 +44,7 @@ public sealed class LeashGateCardTests
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
         var settings = new SettingsService();
+        var oldSettings = CoreSettings.ServiceProvider;
         CoreSettings.ServiceProvider = () => settings;
         var s = CoreSettings.Current;
         (s.Welcomed, s.HasAcceptedAgeVerification, s.WhatMovedCardShown, s.LauncherSoundEnabled) = (true, true, 1, false);
@@ -80,7 +81,7 @@ public sealed class LeashGateCardTests
             (CoreAccount.IsLoggedInProvider, CoreEntitlement.HasLabProvider) = (oldIn, oldLab);
             (LeashHead.Service, MainShellWindow.LeashGateDueProvider, MainShellWindow.PresentLeashGateProvider) = (oldSvc, oldDue, oldPresent);
             shell.Close();
-            CoreSettings.ServiceProvider = null;
+            CoreSettings.ServiceProvider = oldSettings;
         }
     });
 

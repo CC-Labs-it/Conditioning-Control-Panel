@@ -50,6 +50,7 @@ namespace ConditioningControlPanel.Services
         /// (remote panic, the wearer's Stop signal) ends the running session. Core owns no session runner, so the
         /// shell sets this to its one MainShellWindow.StopSessionFromRemote.</summary>
         public static Action? StopSession;
+        public static Func<bool>? IsSessionRemoteStarted;
 
         /// <summary>The head's wallpaper host, absent on unsupported heads and in sandbox runs.</summary>
         public static WallpaperHost? Wallpaper;
@@ -156,10 +157,9 @@ namespace ConditioningControlPanel.Services
         public static Func<bool>? AutonomyRunning;
 
         /// <summary>WPF RemoteEndRule.LeavesLocalRun (RemoteControlService.cs:964, :1154): a leave or session end
-        /// over the wearer's own run hands back only what the controller holds. Remote session verbs are not
-        /// ported, so a running engine is always the wearer's own. Only a session end leaves it: a panic and a
+        /// over the wearer's own run hands back only what the controller holds. A panic and a
         /// leash cut keep the full teardown (RemoteEndRule.cs:26-27, EndSessionNow :344).</summary>
-        internal static bool LeavesLocalRun(bool force, bool leashCut = false) => !force && !leashCut && CoreEngine.IsRunning;
+        internal static bool LeavesLocalRun(bool force, bool leashCut = false) => !force && !leashCut && CoreEngine.IsRunning && IsSessionRemoteStarted?.Invoke() != true;
 
         /// <summary>WPF StopAllRemoteEffects (panic, session end; RemoteControlService.cs:980): pulses go and the
         /// runtime stops, then comes back when the wearer's own switch is on (#299). A controller leaving
@@ -295,8 +295,10 @@ namespace ConditioningControlPanel.Services
         /// <summary>WPF StopAllRemoteEffects: everything a controller could start stops and the wearer's own
         /// values come back (RemoteWearer: their strict lock, panic on unless a running Lockdown holds it off).
         /// Only <paramref name="force"/> (trigger_panic) takes the subject's own engine down (#878).
-        /// <paramref name="leashCut"/> keeps the full teardown over a local run (WPF RemoteEndRule.cs:26-27).</summary>
-        public static void StopEffects(bool force, bool leashCut = false)
+        /// <paramref name="leashCut"/> keeps the full teardown over a local run (WPF RemoteEndRule.cs:26-27).
+        /// <paramref name="controllerLeft"/> keeps a controller-started session running (WPF StopRemoteTriggeredEffects :1188-1192);
+        /// only the remote session's end stops it (StopAllRemoteEffects :1024-1029).</summary>
+        public static void StopEffects(bool force, bool leashCut = false, bool controllerLeft = false)
         {
             // A leave and the session end both arrive here unforced; RemoteRelay.Cleanup adds the session-end reset.
             if (LeavesLocalRun(force, leashCut))
@@ -312,6 +314,7 @@ namespace ConditioningControlPanel.Services
                     catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] overlay restore refresh failed"); }
                 return;
             }
+            var remoteSession = !controllerLeft && IsSessionRemoteStarted?.Invoke() == true;
             if (Wallpaper is { } wallpaper) _ = wallpaper.DeactivateAsync();
             if (force) ResetAutonomy();
             else try { CancelAutonomyPulses?.Invoke(); } catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] autonomy pulse cancel failed"); }
@@ -327,9 +330,9 @@ namespace ConditioningControlPanel.Services
             // WPF StopAllRemoteEffects (:1001, :1164): the controller's browser video stops too; a no-op unless one plays.
             try { StopBrowserVideo?.Invoke(); } catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] browser video stop failed"); }
             // Keep the base's wearer restoration; never clear the subject's saved switches.
-            if (force || !CoreEngine.IsRunning) StopOverlays();
-            var playerStopped = force || !CoreEngine.IsRunning;
-            if (force)
+            if (force || remoteSession || !CoreEngine.IsRunning) StopOverlays();
+            var playerStopped = force || remoteSession || !CoreEngine.IsRunning;
+            if (force || remoteSession)
             {
                 // Session, then engine, as WPF.
                 try { StopSession?.Invoke(); } catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] session stop failed"); }
@@ -339,15 +342,16 @@ namespace ConditioningControlPanel.Services
             {
                 CoreFlash.Stop(); CoreSubliminal.Stop(); CoreBubbles.Stop(); CoreBouncingText.Stop();
                 CoreEngine.Video?.Stop(); CoreEngine.BubbleCount?.Stop(); LockCardScheduler.Instance.Stop(); CoreMindWipe.Stop();
-                if (playerStopped)
-                    try { CoreEngine.StopBrainDrain?.Invoke(); }
-                    catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] Brain Drain stop failed"); }
+                // WPF StopRemoteTriggeredEffects stops Brain Drain even if the session keeps its engine.
+                try { CoreEngine.StopBrainDrain?.Invoke(); }
+                catch (Exception ex) { Serilog.Log.Warning(ex, "[RemoteControl] Brain Drain stop failed"); }
             }
             CoreLockCard.CloseAll();   // WPF LockCardWindow.ForceCloseAll (:1020, :1179), a card still posted included
             // WPF (main 4adc4c476, 2a712d9da): never a blanket strict-off. The strict lock goes back to the
             // wearer's own (a running Lockdown keeps the one it forced, its record corrected), the panic key
             // comes back on except while a running Lockdown holds it off; its own end restores it.
-            var restoredVisuals = Remote.RemoteWearer.HandBackAllButStrict(playerStopped);
+            // Restore the saved setting without restarting a player stopped for controller leave.
+            var restoredVisuals = Remote.RemoteWearer.HandBackAllButStrict(playerStopped || controllerLeft);
             Remote.RemoteWearer.ReleaseSafetyState(); // WPF RemoteControlService.cs:1036-1043: safety before head refresh
             if (restoredVisuals > 0)
                 try { RefreshOverlays?.Invoke(); }

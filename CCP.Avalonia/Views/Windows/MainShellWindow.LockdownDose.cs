@@ -69,7 +69,7 @@ public partial class MainShellWindow
     // WPF DoseKeeper:81-90,107-116 through the shared Core census (wall flags + the off-wall dose).
     private bool HasLockdownDose() => !LockdownDoseRules.DoseIsEmpty(CoreSettings.Current, Autonomy.IsEnabled);
 
-    // A pending user engine or session start owns the portal request until it runs or Stop invalidates it.
+    // A pending user start or remote session start owns the portal request until it runs or Stop invalidates it.
     private bool CanStartLockdownDoseEngine() => _doseEngineArmed && LockdownActive
         && _pendingUserEngineGen != _engineGen
         && CoreSettings.Current.LockdownDoseKeeperEnabled && !IsSessionFeatureLockActive

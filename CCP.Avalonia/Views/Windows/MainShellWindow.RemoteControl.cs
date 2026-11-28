@@ -4,8 +4,7 @@
 // "someone is controlling you" overlay (fade in/out, session code + PIN, idle subtitle, session info card,
 // big emote picker, End Session), the 2 s command toast, the controller-joined notice and the Start
 // button lock while a controller drives.
-// ponytail: still missing here - remote-driven session start, the directory opt-in chain and tray minimise
-// for remote.
+// ponytail: still missing here - tray minimise for remote.
 
 using System;
 using System.Linq;
@@ -55,6 +54,63 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private static bool RemoteControllerConnected => RemoteControlTabView.Relay.IsValueCreated && RemoteControlTabView.Relay.Value.ControllerConnected;
 
         internal static MainShellWindow? RemoteCommandOwner;
+        private ConditioningControlPanel.Models.Session? _remoteStartedSession;
+        private SessionRunner? _remoteStartedRunner;
+        private int _remoteStartedRun;
+        private void ClearRemoteStartedSession()
+        {
+            if (_remoteStartedRunner != null) _remoteStartedRunner.Stopped -= OnRemoteStartedSessionStopped;
+            _remoteStartedRunner = null;
+            _remoteStartedSession = null;
+        }
+        private void OnRemoteStartedSessionStopped(ConditioningControlPanel.Models.Session session, bool completed)
+        {
+            if (ReferenceEquals(_remoteStartedSession, session) && _remoteStartedRunner?.RunNumber == _remoteStartedRun)
+                ClearRemoteStartedSession();
+        }
+        internal bool IsSessionRemoteStarted => _remoteStartedSession != null
+            && App.Sessions is { IsRunning: true } runner && runner.RunNumber == _remoteStartedRun
+            && ReferenceEquals(runner.CurrentSession, _remoteStartedSession);
+
+        // WPF RemoteControlService.cs:1524-1584 and MainWindow.RemoteControl.cs:1293.
+        internal string? StartSessionFromRemote(Newtonsoft.Json.Linq.JObject? parameters, Func<bool> stillCurrent, bool leashed)
+        {
+            if (LocalPanicHoldsSession) return "panic";
+            if (App.Sessions == null) return RemoteCommands.NotOnThisBuild;
+            var id = parameters?["session_id"]?.ToString();
+            var relay = RemoteControlTabView.Relay.Value;
+            var session = string.IsNullOrEmpty(id) ? null : relay.SessionsProvider?.Invoke().FirstOrDefault(x => x.Id == id && x.IsAvailable);
+            var s = CoreSettings.Current;
+            session ??= new ConditioningControlPanel.Models.Session
+            {
+                Id = "remote_session", Name = "Remote Session", Icon = "🎮", DurationMinutes = 30,
+                Difficulty = ConditioningControlPanel.Models.SessionDifficulty.Medium, BonusXP = 200,
+                Settings = new ConditioningControlPanel.Models.SessionSettings
+                {
+                    FlashEnabled = s.FlashEnabled, FlashPerHour = s.FlashFrequency, FlashOpacity = s.FlashOpacity,
+                    FlashImages = s.SimultaneousImages, FlashClickable = s.FlashClickable, FlashAudioEnabled = s.FlashAudioEnabled,
+                    SubliminalEnabled = s.SubliminalEnabled, SubliminalPerMin = s.SubliminalFrequency,
+                    SubliminalOpacity = s.SubliminalOpacity, SubliminalFrames = s.SubliminalDuration,
+                    MandatoryVideosEnabled = s.MandatoryVideosEnabled, BubblesEnabled = s.BubblesEnabled
+                }
+            };
+            var asksStrict = ConditioningControlPanel.Services.Leash.LeashRemoteRule.AsksStrictLock(parameters);
+            var verdict = ConditioningControlPanel.Services.Leash.LeashRemoteRule.Screen("start_session", asksStrict, leashed);
+            StartSession(session, remote: true, stillCurrent);
+            // Escape integrity (docs/avalonia-decisions.html, 2026-09-30): no controller may switch Strict Lock on during Lockdown.
+            var lockdown = ConditioningControlPanel.Services.LockdownService.Current?.IsActive == true;
+            if (asksStrict && lockdown) Serilog.Log.Information("Remote start_session: strict_lock dropped during Lockdown");
+            // Only a Full-tier session may switch Strict Lock on (docs/avalonia-decisions.html, 2026-11-28; stricter than WPF).
+            var full = relay.Tier == "full";
+            if (asksStrict && !lockdown && !full) Serilog.Log.Information("Remote start_session: strict_lock dropped on tier {Tier}", relay.Tier);
+            if (asksStrict && !lockdown && full && verdict != ConditioningControlPanel.Services.Leash.LeashRemoteVerdict.StripStrict)
+            {
+                ConditioningControlPanel.Services.Remote.RemoteWearer.NoteWrite(ConditioningControlPanel.Services.Remote.RemoteHeld.StrictLock, 1);
+                s.StrictLockEnabled = true;
+                CoreSettings.Save();
+            }
+            return null;
+        }
 
         /// <summary>WPF wires these in ChkRemoteControlEnabled_Changed; the relay here is one per process, so
         /// the shell listens from startup and lets go on close.</summary>
@@ -69,6 +125,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             RemoteCommands.RefreshOverlays = refreshOverlays;
             Action stopSession = StopSessionFromRemote;   // the one remote session stop (trigger_panic calls it too)
             RemoteCommands.StopSession = stopSession;
+            Func<bool> isRemoteSession = () => IsSessionRemoteStarted;
+            RemoteCommands.IsSessionRemoteStarted = isRemoteSession;
             var wallpaper = Platform.WallpaperHead.Service;
             RemoteCommands.Wallpaper = wallpaper;
             Func<string, string?> playHypnotube = PlayHypnotubeFromRemote;
@@ -85,6 +143,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return null;
             }
             r.ResumeSession = ResumeRemoteSession;
+            r.StartSession = StartSessionFromRemote;
             EventHandler connected = (_, _) =>
             {
                 var joined = r.ControllerConnected;
@@ -109,9 +168,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Closed += (_, _) =>
             {
                 _remoteControlClosed = true;
+                ClearRemoteStartedSession();
                 r.SessionsProvider = null;
                 r.SessionRunnerProvider = null;
                 if (r.ResumeSession == ResumeRemoteSession) r.ResumeSession = null;
+                if (r.StartSession == StartSessionFromRemote) r.StartSession = null;
+                if (RemoteCommands.IsSessionRemoteStarted == isRemoteSession) RemoteCommands.IsSessionRemoteStarted = null;
                 r.ControllerConnectedChanged -= connected;
                 r.ControllerIdleChanged -= idle;
                 r.SessionEnded -= ended;

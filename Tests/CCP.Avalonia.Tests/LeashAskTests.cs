@@ -253,7 +253,7 @@ public sealed class LeashAskTests
         });
 
     [Fact]
-    public void ManualLookBeforeServiceRebindDoesNotQueueTheSameOfferAgain() =>
+    public void ManualLookBeforeServiceRebindDoesNotQueueTheSameOfferAfterDismissal() =>
         Run((shell, page, _, _) =>
         {
             var service = LeashHead.Service;
@@ -262,6 +262,25 @@ public sealed class LeashAskTests
             LeashHead.Service = service;
             LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
             var ask = LeashAskWindow.Current!;
+            shell.RebindLeashAsks();
+            ask.Card.Dismiss();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
+        });
+
+    [Fact]
+    public void ManualLookBeforeServiceRebindDoesNotQueueTheSameOfferAgain() =>
+        Run((shell, page, _, _) =>
+        {
+            var service = LeashHead.Service;
+            LeashHead.Service = null;
+            shell.RebindLeashAsks();
+            LeashAskWindow.CloseCurrent();
+            Dispatcher.UIThread.RunJobs();
+            LeashHead.Service = service;
+
+            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            var ask = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
             shell.RebindLeashAsks();
             ask.Card.Dismiss();
             Dispatcher.UIThread.RunJobs();
