@@ -109,6 +109,30 @@ public sealed partial class GameWindowTests
         }
         finally { w.Close(); (s.OfflineMode, s.RemoteMediaConsented, s.MediaSource) = old; }
     });
+    /// <summary>WPF ArcademyHostService.cs:4971-4981, 5034: a pile ask during its fetch waits and is served from that batch's surplus.</summary>
+    [Fact]
+    public void Arcademy_OverlappingPileRequestsShareOneFetch() => Run((_, _) =>
+    {
+        var s = CoreSettings.Current; var old = (s.OfflineMode, s.RemoteMediaConsented, s.MediaSource);
+        var w = new GameWindow(GameWindow.ArcademySpec); var frames = new List<JObject>(); int calls = 0;
+        var pending = new TaskCompletionSource<List<FypAssetManifest.Entry>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        w.Posted += json => frames.Add(JObject.Parse(json));
+        w.ArcademyFetchForTests = (_, _) => { calls++; return pending.Task; };
+        try
+        {
+            (s.OfflineMode, s.RemoteMediaConsented, s.MediaSource) = (false, true, "online");
+            w.HandleMessage("{\"type\":\"assets-request\",\"reqId\":\"a\",\"count\":1,\"subs\":[\"cats\"],\"tag\":\"target\"}");
+            w.HandleMessage("{\"type\":\"assets-request\",\"reqId\":\"b\",\"count\":2,\"subs\":[\"cats\"],\"tag\":\"target\"}");
+            Assert.DoesNotContain(frames, f => (string?)f["reqId"] == "b" && (bool?)f["done"] == true);
+            pending.SetResult(Enumerable.Range(1, 3).Select(i => new FypAssetManifest.Entry
+                { Id = "scrolller/cats/" + i, Url = $"https://example.com/cats{i}.jpg", Type = "image", Folder = "r/cats" }).ToList());
+            Assert.True(SpinWait.SpinUntil(() => { Dispatcher.UIThread.RunJobs(); return frames.Any(f => (string?)f["reqId"] == "b" && (bool?)f["done"] == true); }, TimeSpan.FromSeconds(10)));
+            Assert.Equal(1, calls);
+            Assert.Equal(new[] { "https://example.com/cats2.jpg", "https://example.com/cats3.jpg" },
+                ((JArray)frames.Last(f => (string?)f["reqId"] == "b")["urls"]!).Select(u => (string)u["url"]!).ToArray());
+        }
+        finally { w.Close(); (s.OfflineMode, s.RemoteMediaConsented, s.MediaSource) = old; }
+    });
     [Theory]
     [InlineData("samples")]
     [InlineData("settings")]

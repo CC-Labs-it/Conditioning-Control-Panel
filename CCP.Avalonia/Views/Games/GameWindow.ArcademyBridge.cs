@@ -42,10 +42,69 @@ internal sealed partial class GameWindow
         ArcademyLastLocalSample = Task.Run(() =>
         {
             List<object> rows;
+            // Root-relative: the page's isLocalUrl (provider/inventory.js:37) treats http://127.0.0.1 urls as remote.
             try { rows = ArcademySampleLocal(reqId, count, kind, tag, folders, presetId, WebAssetServer.AssetPath); }
             catch (Exception ex) { Log.Warning("[Arcademy] local sample failed: {E}", ex.Message); rows = new(); }
             Dispatcher.UIThread.Post(() => { if (!_closing) Post(new { type = "assets", reqId, tag, urls = rows, done = true }); });
         });
+    }
+
+    // WPF ArcademyHostService.cs:1498-1511: SORT's setup door (games/sort/setup.js:174) offers local piles
+    // only from the folders and presets init.settings carries; each list is wrapped on its own.
+    private static JObject ArcademySettingsBag(JObject bag)
+    {
+        try { bag["localAssets"] = ConditioningControlPanel.Services.Arcademy.ArcademyLocalAssets.Build(CorePaths.EffectiveAssets, CoreSettings.Current.DisabledAssetPaths, WebAssetServer.AssetPath); }
+        catch (Exception ex) { Log.Debug("[Arcademy] local assets manifest failed: {E}", ex.Message); }
+        try { bag["localFolders"] = ArcademyLocalFolders(); }
+        catch (Exception ex) { Log.Debug("[Arcademy] local folders unavailable: {E}", ex.Message); }
+        try
+        {
+            bag["assetPresets"] = new JArray((CoreSettings.Current.AssetPresets ?? new()).Where(p => p != null && !string.IsNullOrWhiteSpace(p.Id))
+                .Select(p => new JObject { ["id"] = p.Id, ["name"] = p.Name ?? "" }));
+        }
+        catch (Exception ex) { Log.Debug("[Arcademy] asset presets unavailable: {E}", ex.Message); }
+        return bag;
+    }
+
+    // WPF ArcademyHostService.cs:1533-1604: media folders under images/ and videos/ with recursive
+    // [gifs, stills, videos] counts, deselected files left out, at most 400 rows.
+    private static JArray ArcademyLocalFolders()
+    {
+        var arr = new JArray();
+        var root = CorePaths.EffectiveAssets;
+        if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) return arr;
+        var rootFull = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar);
+        var disabled = IntakeRun.DisabledAssetSet(CoreSettings.Current.DisabledAssetPaths);
+        var counts = new SortedDictionary<string, int[]>(StringComparer.OrdinalIgnoreCase);
+        int[] Slot(string rel) => counts.TryGetValue(rel, out var slot) ? slot : counts[rel] = new int[3];
+        foreach (var top in new[] { "images", "videos" })
+        {
+            var topAbs = Path.Combine(rootFull, top);
+            if (!Directory.Exists(topAbs)) continue;
+            Slot(top);   // an empty root is still a real choice ("all of my images")
+            IEnumerable<string> files;
+            try { files = Directory.EnumerateFiles(topAbs, "*", SearchOption.AllDirectories); }
+            catch (Exception ex) { Log.Debug("[Arcademy] local folders walk of {Top} failed: {E}", top, ex.Message); continue; }
+            foreach (var file in files)
+            {
+                int bucket = Path.GetExtension(file).ToLowerInvariant() switch
+                {
+                    ".gif" => 0, ".png" or ".jpg" or ".jpeg" or ".webp" => 1, ".mp4" or ".webm" => 2, _ => -1,
+                };
+                if (bucket < 0 || !IntakeRun.IsAssetActive(disabled, rootFull, file)) continue;
+                // Credit the file to its own folder and every folder above it up to the root.
+                for (var dir = Path.GetDirectoryName(file); !string.IsNullOrEmpty(dir); dir = Path.GetDirectoryName(dir))
+                {
+                    var rel = Path.GetRelativePath(rootFull, dir).Replace('\\', '/');
+                    if (rel.Length == 0 || rel == "." || rel.StartsWith("..", StringComparison.Ordinal)) break;
+                    Slot(rel)[bucket]++;
+                    if (string.Equals(rel, top, StringComparison.OrdinalIgnoreCase)) break;
+                }
+            }
+        }
+        foreach (var (rel, slot) in counts.Take(400))
+            arr.Add(new JObject { ["path"] = rel, ["gifs"] = slot[0], ["stills"] = slot[1], ["videos"] = slot[2] });
+        return arr;
     }
 
     private static List<object> ArcademySampleLocal(string reqId, int count, string kind, string tag,

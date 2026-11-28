@@ -19,21 +19,23 @@ internal sealed partial class GameWindow
     internal static TimeSpan ArcademyLinkDeadline = TimeSpan.FromSeconds(120);   // WPF :4359 LinkDeadline
     private CancellationTokenSource? _arcademyLink;
     internal Task? ArcademyLastLink { get; private set; }
+    internal Task? ArcademyLastAvatar { get; private set; }
 
-    // WPF :1047-1070. ponytail: avatarUrl is always null - ArcademyAvatarCache (WPF JPEG re-encode) is not in Core,
-    // so the card keeps its PHOTO PENDING plate and there is no KickAvatarRefresh (WPF :532, :4387-4401, :5860).
+    // WPF :1047-1070: the photo only at the discord rung with Discord linked, read from the cache, never fetched here.
     private static object ArcademyProfile(AppSettings s)
     {
         try
         {
             var name = CoreAccount.DisplayName;
             var share = (s.ArcademyPresenceShare ?? "").Trim().ToLowerInvariant();   // WPF :5902-5906 clamp
+            share = Array.IndexOf(AppSettings.ArcademyPresenceShares, share) >= 0 ? share : "off";
+            var linked = ArcademyDiscordLinked();
             return new
             {
                 name = string.IsNullOrWhiteSpace(name) ? null : name.Trim(),
-                avatarUrl = (string?)null,
-                discordLinked = ArcademyDiscordLinked(),
-                presenceShare = Array.IndexOf(AppSettings.ArcademyPresenceShares, share) >= 0 ? share : "off",
+                avatarUrl = linked && share == "discord" ? ArcademyAvatarCache.ReadDataUri() : null,
+                discordLinked = linked,
+                presenceShare = share,
             };
         }
         catch (Exception ex)
@@ -49,17 +51,23 @@ internal sealed partial class GameWindow
         if (!_closing) Post(new { type = "profile", profile = ArcademyProfile(CoreSettings.Current), result });
     }
 
+    // WPF :4387-4401: off the UI thread; a profile frame only when the bytes changed. A closed window drops it.
+    private void ArcademyKickAvatar() => ArcademyLastAvatar = Task.Run(async () =>
+    {
+        if (await ArcademyAvatarCache.EnsureCachedAsync().ConfigureAwait(false))
+            Dispatcher.UIThread.Post(() => ArcademyPushProfile());
+    });
+
     // WPF :4416-4492: one link in flight; an already-linked account takes the short path; exactly one reply.
     private void ArcademyLinkDiscord()
     {
         if (_arcademyLink != null) { Log.Debug("[Arcademy] link-discord ignored - a link is already open"); return; }
+        var cts = _arcademyLink = new CancellationTokenSource();
         if (ArcademyDiscordLinked())
         {
-            ArcademyDiscordRung();
-            ArcademyPushProfile("linked");
+            ArcademyLastLink = Linked();
             return;
         }
-        var cts = _arcademyLink = new CancellationTokenSource();
         cts.CancelAfter(ArcademyLinkDeadline);
         Action<string> open = url =>
         {
@@ -79,10 +87,24 @@ internal sealed partial class GameWindow
             // Core ends a cancelled or timed-out browser wait as a TimeoutException.
             catch (Exception ex) when (ex is OperationCanceledException || cts.IsCancellationRequested) { result = "cancelled"; }
             catch (Exception ex) { Log.Warning("[Arcademy] Discord link failed: {E}", ex.Message); result = "failed"; }
+            if (result == "linked") await Linked();
+            else Answer(result);
+        }
+
+        // WPF :4430-4436, :4484-4487: apply the rung, wait for the photo, then answer linked.
+        async Task Linked()
+        {
+            if (_arcademyLink != cts) { cts.Dispose(); return; }
+            ArcademyDiscordRung();
+            await ArcademyAvatarCache.EnsureCachedAsync();
+            Answer("linked");
+        }
+
+        void Answer(string result)
+        {
             if (_arcademyLink != cts) { cts.Dispose(); return; }   // panic or teardown already answered the page
             _arcademyLink = null;
             cts.Dispose();
-            if (result == "linked") ArcademyDiscordRung();
             ArcademyPushProfile(result);
         }
     }

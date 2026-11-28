@@ -149,7 +149,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             // WPF ArcademyHostService.cs:5857: the card follows the rung from every surface, the page's own write included.
             if (e.PropertyName == nameof(AppSettings.ArcademyPresenceShare))
-                Dispatcher.UIThread.Post(() => { if (IsReady) ArcademyPushProfile(); });
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (!IsReady || _closing) return;
+                    ArcademyPushProfile();
+                    if (string.Equals(CoreSettings.Current.ArcademyPresenceShare?.Trim(), "discord", StringComparison.OrdinalIgnoreCase))
+                        ArcademyKickAvatar();   // WPF :5858-5860
+                });
             if (_arcademyWriting) return;
             Dispatcher.UIThread.Post(() =>
             {
@@ -217,20 +223,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 motionLevel = ArcademyMotion(), reducedMotion = ArcademyMotion() != 2,
                 utcDateSeed = DateTime.UtcNow.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
                 localDate = DateTime.Now.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
-                settings = ArcademySettingsBag(Parse(s.ArcademySettingsJson), s), keybinds = Parse(s.ArcademyKeybindsJson),
+                settings = ArcademySettingsBag(Parse(s.ArcademySettingsJson)), keybinds = Parse(s.ArcademyKeybindsJson),
                 hideTutorial = s.ArcademyHideTutorial, meta = _arcademyMeta?.Snapshot() ?? new JObject(),
                 panicKey = s.PanicKey, panicKeyEnabled = s.PanicKeyEnabled, profile = ArcademyProfile(s),
             };
-        }
-
-        // WPF ArcademyHostService.cs:1474-1477 BuildSettingsBag: the saved bag plus the local image manifest.
-        // Root-relative like DtRH (WebAssetServer.AssetPath): provider/inventory.js isLocalUrl rejects http://127.0.0.1.
-        private static JObject ArcademySettingsBag(JObject bag, AppSettings s)
-        {
-            try { bag["localAssets"] = ArcademyLocalAssets.Build(CorePaths.EffectiveAssets, s.DisabledAssetPaths,
-                ConditioningControlPanel.Avalonia.Platform.WebAssetServer.AssetPath); }
-            catch (Exception ex) { Log.Debug("[Arcademy] local assets manifest failed: {E}", ex.Message); }
-            return bag;
         }
 
         // WPF ArcademyHostService.cs:1209-1228: names of the bundled flat mp3 samples.
@@ -437,6 +433,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     Post(new { type = "fullscreen", on = WindowState == WindowState.FullScreen });
                     ArcademyPushSuspension();
                     Web.FocusPage();
+                    ArcademyKickAvatar();   // WPF ArcademyHostService.cs:529-532
                     break;
                 case "resume-request":
                     ArcademyResume(message);
