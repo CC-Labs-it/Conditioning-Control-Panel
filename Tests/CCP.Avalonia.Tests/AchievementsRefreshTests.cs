@@ -104,6 +104,54 @@ public sealed class AchievementsRefreshTests
         }
     });
 
+    // A closed shell's art warm kept reading the process-wide art resolver for every tile, so a later test's
+    // resolver saw "achievements/mercy_beggar.png" (VideoFeatureCompletionTests on CI shard 4).
+    [Fact]
+    public Task ClosingTheWindowStopsTheArtWarm() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var dir = Directory.CreateTempSubdirectory("ccp-ach-warm-stop-");
+        var oldArt = CoreModArt.OverridePathProvider;
+        using var entered = new System.Threading.ManualResetEventSlim();
+        using var gate = new System.Threading.ManualResetEventSlim();
+        var offUi = 0;
+        Window? host = null;
+        try
+        {
+            // Off the UI thread only the warm resolves art; hold it inside its first tile.
+            CoreModArt.OverridePathProvider = _ =>
+            {
+                if (Dispatcher.UIThread.CheckAccess()) return null;
+                if (System.Threading.Interlocked.Increment(ref offUi) == 1) { entered.Set(); gate.Wait(TimeSpan.FromSeconds(30)); }
+                return null;
+            };
+            var view = new AchievementsTabView(new AchievementEngine(new AchievementStore(Path.Combine(dir.FullName, "achievements.json")))) { IsVisible = false };
+            host = new Window { Content = view };
+            host.Show();
+            for (var i = 0; i < 1000 && view.ArtWarm is null; i++)
+            {
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+            }
+            Assert.True(entered.Wait(TimeSpan.FromSeconds(30)));
+            host.Close();
+            gate.Set();
+            await view.ArtWarm!.WaitAsync(TimeSpan.FromSeconds(30));
+            // The tile in flight finishes (its key and its load); no other tile resolves.
+            Assert.InRange(offUi, 1, 2);
+            Assert.True(view.Cards.Count() > 2);
+        }
+        finally
+        {
+            gate.Set();
+            CoreModArt.OverridePathProvider = oldArt;
+            host?.Close();
+            dir.Delete(true);
+        }
+    });
+
     [Fact]
     public async Task ModAndLanguageRefreshVisibleTilesAndDetach()
     {
