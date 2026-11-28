@@ -392,6 +392,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             });
         }
 
+        // A recognized wake can be queued while Stop or window teardown cancels the loop.
+        internal void PostWakeWordHeard(string? heard, CancellationToken loopCt) =>
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!loopCt.IsCancellationRequested && !_windowClosed) OnWakeWordHeard(heard);
+            });
+
         private void StopWakeLoop()
         {
             try { _wakeWaitCts?.Cancel(); _wakeLoopCts?.Cancel(); } catch { }
@@ -438,7 +445,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                     if (loopCt.IsCancellationRequested) break;
                     if (string.IsNullOrWhiteSpace(heard)) continue;
                     Log.Information("Wake word heard ({Chars} chars of transcript)", heard.Length);
-                    Dispatcher.UIThread.Post(() => OnWakeWordHeard(heard));
+                    PostWakeWordHeard(heard, loopCt);
                     await Task.Delay(400, loopCt).ConfigureAwait(false);   // let the prompt claim the mic
                 }
             }

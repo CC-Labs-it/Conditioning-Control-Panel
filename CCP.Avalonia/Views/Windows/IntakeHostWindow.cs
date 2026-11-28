@@ -46,7 +46,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private DateTime _openedUtc;
         /// <summary>The intake claim's slip delivery (tests await it).</summary>
         internal System.Threading.Tasks.Task SparklesPending { get; private set; } = System.Threading.Tasks.Task.CompletedTask;
-        internal WebHost Web { get; } = new() { HostedPageMotion = true };
+        internal WebHost Web { get; } = new() { HostedPageMotion = true, HostedPageSink = true };
         internal string SessionsFolder { get; init; } = SessionFileService.CustomSessionsFolder;
 
         /// <summary>The page this host loaded; messages from any other document are dropped.</summary>
@@ -106,11 +106,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             RequestAudioPack(App.ReleaseContent);   // WPF Launch: kicked, never awaited
             PageUrl = new Uri(server.Url("intake/index.html"));
-            AssetsBase = $"{PageUrl.GetLeftPart(UriPartial.Authority)}/{WebAssetServer.AssetsPrefix}";
+            AssetsBase = "/" + WebAssetServer.AssetsPrefix;
             Web.Navigate(PageUrl);
         }
 
-        /// <summary>Where the media manifest points (WPF https://ccp.assets/).</summary>
+        /// <summary>Where the media manifest points (WPF https://ccp.assets/). Root-relative like DtRH
+        /// (WebAssetServer.AssetPath): core/mediaLog.js LOCAL_URL_RE treats http://127.0.0.1 as remote.</summary>
         internal string AssetsBase { get; private set; } = "";
 
         internal static bool SameOrigin(Uri a, Uri b) =>

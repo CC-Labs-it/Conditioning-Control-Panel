@@ -52,9 +52,9 @@ namespace ConditioningControlPanel.Services.Companion.Brain
 
         /// <summary>
         /// An AI line the avatar tube showed that no other turn records (awareness v2, autonomy
-        /// nudges, random thoughts, brain-off tube chat). Display only, for the Companion page
-        /// history (ccp-bugs #1443): never in a prompt window, never persisted, so prompts stay
-        /// exactly as they were.
+        /// nudges, random thoughts, brain-off tube chat). Shown on the Companion page (ccp-bugs #1443)
+        /// and, since ccp-bugs #1717, assistant-role in the prompt window under the ambient cap, so a
+        /// player who answers one is understood. Never persisted, like an ambient reply.
         /// </summary>
         TubeLine
     }
@@ -122,6 +122,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             TurnKind.AssistantChat => ChatMessage.RoleAssistant,
             TurnKind.AmbientReply => ChatMessage.RoleAssistant,
             TurnKind.BarkEcho => ChatMessage.RoleAssistant,
+            TurnKind.TubeLine => ChatMessage.RoleAssistant,
             _ => ChatMessage.RoleUser
         };
 

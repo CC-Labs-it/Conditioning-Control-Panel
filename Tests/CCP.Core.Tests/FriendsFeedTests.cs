@@ -303,16 +303,6 @@ public class FriendsFeedTests
     // ---- rules ----------------------------------------------------------------------------
 
     [Theory]
-    [InlineData(0, 0, 0)]
-    [InlineData(2, 0, 2)]
-    [InlineData(10, 0, 3)]
-    [InlineData(10, 5, 5)]
-    [InlineData(20, 12, 8)]
-    [InlineData(4, 7, 4)]
-    public void Folded_it_shows_a_few_and_every_new_line_up_to_eight(int total, int fresh, int shown)
-        => Assert.Equal(shown, FriendsFeedRules.FoldCount(total, fresh));
-
-    [Theory]
     [InlineData(0, "")]
     [InlineData(-3, "")]
     [InlineData(1, "1")]

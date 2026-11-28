@@ -197,6 +197,54 @@ public sealed class NavRailMisrouteTests
     });
 
     [Fact]
+    public void CoveredReorderedDoorPressStillMeetsTheMisrouteHook() => Run(w =>
+    {
+        var host = (IAvaloniaPossessionHost)w;
+        var root = (Grid)host.GhostLayer!.Parent!;
+        // A clear sheet over the rail makes ReorderDoors seat the doors as covered stand-ins.
+        var sheet = new Border { Background = Brushes.Transparent, ZIndex = 8000 };
+        Grid.SetRowSpan(sheet, Math.Max(1, root.RowDefinitions.Count)); Grid.SetColumnSpan(sheet, Math.Max(1, root.ColumnDefinitions.Count));
+        root.Children.Add(sheet);
+        var frames = new FakeFrames();
+        w.PossessionFramesOverride = frames;
+        var effect = new ReorderDoorsEffect();
+        try
+        {
+            foreach (var name in new[] { "DoorHome", "DoorCompanion", "DoorPlay", "DoorYou", "DoorLibrary" })
+                w.Named<Button>(name)!.IsVisible = false;
+            w.UpdateLayout(); HeadlessInput.RenderLiveTree(w); w.InvalidatePossessionTargets();
+            var studioButton = w.Named<Button>("DoorStudio")!;
+            var socialHome = host.BoundsOnGhostLayer(w.Named<Button>("DoorSocial")!)!.Value;
+            var studio = Assert.Single(((IPossessionHost)w).Targets, t => ReferenceEquals(t.Visual, studioButton));
+            var ctx = new PossessionContext
+            {
+                Host = w, Attribution = new Attribution(), Rung = PossessionRung.Collapse,
+                Intensity = PossessionIntensity.Eerie, Photosafe = false, Rng = new Random(1),
+                ElapsedFraction = 0, Remaining = TimeSpan.FromMinutes(1), Name = (_, _) => { }
+            };
+            var applying = effect.ApplyAsync(ctx, studio, CancellationToken.None);
+            frames.Frame(TimeSpan.Zero); frames.Frame(TimeSpan.FromMilliseconds(600));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(applying.IsCompleted);
+            Assert.Contains(root.Children, c => c is Canvas { ZIndex: 9001 } seats && seats.Children.Count == 2);
+            HeadlessInput.RenderLiveTree(w);
+            MainShellWindow.PossessionReroute = _ => { MainShellWindow.PossessionReroute = null; return "appsettings"; };
+            // Studio's stand-in now sits where Social was.
+            var at = host.GhostLayer!.TranslatePoint(socialHome.Center, w)!.Value;
+            w.MouseDown(at, MouseButton.Left); w.MouseUp(at, MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("appsettings", w.CurrentTab);
+            Assert.Null(MainShellWindow.PossessionReroute);
+        }
+        finally
+        {
+            effect.UndoAsync(TimeSpan.Zero).GetAwaiter().GetResult();
+            w.PossessionFramesOverride = null;
+            root.Children.Remove(sheet);
+        }
+    });
+
+    [Fact]
     public void MisrouteRejectsLockdownAsSourceAndDestination() => Run(w =>
     {
         var studioButton = w.Named<Button>("DoorStudio")!;

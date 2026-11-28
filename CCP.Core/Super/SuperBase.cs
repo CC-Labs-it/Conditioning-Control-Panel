@@ -80,5 +80,15 @@ namespace ConditioningControlPanel.Services.Super
         /// </summary>
         public static bool IsOn(bool baseOn, bool hasTier, bool switchedOn, SuperEffect effect, SuperEffect? trying)
             => baseOn && SuperPreviewRule.IsOn(hasTier, switchedOn, effect, trying);
+
+        /// <summary>
+        /// Undertow on a drain that is running right now (ccp-bugs #1718). A timed drain (the Brain
+        /// Drain bubble's pop, a Deeper point) only ever plays while the player's own Brain Drain is
+        /// OFF, because a running drain makes the pop pay XP only. Gating it on the base therefore
+        /// meant a bubble drain was always V1. A timed drain is its own base: it rides the player's
+        /// V2 pick (<paramref name="selected"/> = tier and switch, or this week's try).
+        /// </summary>
+        public static bool UndertowLit(bool baseOn, bool selected, bool timedDrain)
+            => selected && (baseOn || timedDrain);
     }
 }
