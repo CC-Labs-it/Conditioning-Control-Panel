@@ -114,6 +114,174 @@ public sealed class JustDropOwnerTests
         Assert.Equal(1, resyncs);
     });
 
+    [Theory]
+    [InlineData("dtrh", true)]
+    [InlineData("piecebypiece", true)]
+    [InlineData("breakoutdemo", false)]
+    public Task EligibleGameAttachesAndTracksOwner(string id, bool eligible) =>
+        AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var getHandle = NativeWindowOwner.HandleForTests;
+            var set = NativeWindowOwner.SetForTests;
+            NativeWindowOwner.HandleForTests = _ => new PlatformHandle(new IntPtr(42), "HWND");
+            NativeWindowOwner.SetForTests = (_, _) => true;
+            var owner = new Window();
+            var player = new GameWindow(GameWindow.Games[id]);
+            try
+            {
+                owner.Show(); player.Show();
+                player.AttachEligibleGameOwner(owner);
+                Assert.Equal(eligible, player.JustDropOwnerLinked);
+                owner.WindowState = WindowState.Minimized;
+                Assert.False(player.JustDropOwnerLinked);
+                owner.WindowState = WindowState.Normal;
+                Assert.Equal(eligible, player.JustDropOwnerLinked);
+            }
+            finally
+            {
+                player.Close(); owner.Close(); Dispatcher.UIThread.RunJobs();
+                NativeWindowOwner.HandleForTests = getHandle;
+                NativeWindowOwner.SetForTests = set;
+            }
+            return Task.CompletedTask;
+        });
+
+    [Theory]
+    [InlineData("dtrh")]
+    [InlineData("piecebypiece")]
+    public Task X11OwnerRestacksOnActivationAndRestoreWithoutMinimizingGame(string id) =>
+        AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var getHandle = NativeWindowOwner.HandleForTests;
+            var restack = GameWindow.RestackGameAboveOwner;
+            NativeWindowOwner.HandleForTests = _ => new PlatformHandle(new IntPtr(42), "XID");
+            var owner = new Window();
+            var player = new GameWindow(GameWindow.Games[id]);
+            int calls = 0;
+            GameWindow.RestackGameAboveOwner = (game, shell) =>
+            {
+                Assert.Same(player, game);
+                Assert.Same(owner, shell);
+                calls++;
+                return true;
+            };
+            try
+            {
+                owner.Show(); player.Show();
+                player.AttachEligibleGameOwner(owner);
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(calls > 0);
+                calls = 0;
+                player.Activate(); owner.Activate();
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(calls > 0);
+                owner.WindowState = WindowState.Minimized;
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(WindowState.Normal, player.WindowState);
+                calls = 0;
+                owner.WindowState = WindowState.Normal;
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(calls > 0);
+                player.WindowState = WindowState.Minimized;
+                calls = 0;
+                owner.WindowState = WindowState.Minimized;
+                owner.WindowState = WindowState.Normal;
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(WindowState.Minimized, player.WindowState);
+                Assert.Equal(0, calls);
+                player.Close();
+                owner.WindowState = WindowState.Minimized;
+                owner.WindowState = WindowState.Normal;
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(0, calls);
+            }
+            finally
+            {
+                player.Close(); owner.Close(); Dispatcher.UIThread.RunJobs();
+                NativeWindowOwner.HandleForTests = getHandle;
+                GameWindow.RestackGameAboveOwner = restack;
+            }
+            return Task.CompletedTask;
+        });
+
+    [Fact]
+    public void X11RestackOnlyMovesAGameBelowItsPanel()
+    {
+        var game = new IntPtr(1);
+        var panel = new IntPtr(2);
+        var other = new IntPtr(3);
+        int moves = 0;
+        bool Move() { moves++; return true; }
+        // An unrelated foreground app between panel and game must remain below the game.
+        Assert.True(X11Overlay.RestackAboveIfBelow(new[] { panel, other, game }, game, panel, Move));
+        Assert.Equal(0, moves);
+        Assert.True(X11Overlay.RestackAboveIfBelow(new[] { game, other, panel }, game, panel, Move));
+        Assert.Equal(1, moves);
+        Assert.False(X11Overlay.RestackAboveIfBelow(new[] { game, other }, game, panel, Move));
+        Assert.False(X11Overlay.RestackAboveIfBelow(new[] { panel, other }, game, panel, Move));
+        Assert.Equal(1, moves);
+    }
+
+    [Fact]
+    public void X11RestackFallsBackToConfigureRequestWithoutNetRestack()
+    {
+        var restack = new IntPtr(7);
+        Assert.True(X11Overlay.UsesNetRestack(new[] { new IntPtr(5), restack }, restack));   // KWin
+        Assert.False(X11Overlay.UsesNetRestack(new[] { new IntPtr(5), new IntPtr(6) }, restack)); // xfwm4
+        Assert.False(X11Overlay.UsesNetRestack(Array.Empty<IntPtr>(), restack));           // no EWMH list
+    }
+
+    [Fact]
+    public Task X11WatchCorrectsAnAlreadyActivePanelRaiseAndStopsOnClose() =>
+        AvaloniaTestDispatcher.RunAsync(async () =>
+        {
+            var getHandle = NativeWindowOwner.HandleForTests;
+            var restack = GameWindow.RestackGameAboveOwner;
+            NativeWindowOwner.HandleForTests = _ => new PlatformHandle(new IntPtr(42), "XID");
+            var owner = new Window();
+            var player = new GameWindow(GameWindow.Games[GameWindow.DtrhId]);
+            var gameId = new IntPtr(1); var panelId = new IntPtr(2); var otherId = new IntPtr(3);
+            var stacking = new[] { panelId, otherId, gameId };
+            var corrected = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            int moves = 0, checks = 0;
+            bool raised = false;
+            GameWindow.RestackGameAboveOwner = (_, _) =>
+            {
+                checks++;
+                if (!raised) return true;
+                return X11Overlay.RestackAboveIfBelow(stacking, gameId, panelId, () =>
+                {
+                    moves++;
+                    stacking = new[] { otherId, panelId, gameId };
+                    corrected.TrySetResult(true);
+                    return true;
+                });
+            };
+            try
+            {
+                owner.Show(); player.Show();
+                player.AttachEligibleGameOwner(owner);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(0, moves);
+                // Change stacking without activation or state events, as for an already-active raise.
+                stacking = new[] { gameId, otherId, panelId };
+                raised = true;
+                Assert.Same(corrected.Task, await Task.WhenAny(corrected.Task, Task.Delay(5000)));
+                Assert.Equal(1, moves);
+                player.Close();
+                Dispatcher.UIThread.RunJobs();
+                int afterClose = checks;
+                await Task.Delay(600);
+                Assert.Equal(afterClose, checks);
+            }
+            finally
+            {
+                player.Close(); owner.Close(); Dispatcher.UIThread.RunJobs();
+                NativeWindowOwner.HandleForTests = getHandle;
+                GameWindow.RestackGameAboveOwner = restack;
+            }
+        });
+
     private static Task WithWindows(Action<GameWindow, Window, System.Collections.Generic.List<Window>> body) =>
         AvaloniaTestDispatcher.RunAsync(() =>
         {
