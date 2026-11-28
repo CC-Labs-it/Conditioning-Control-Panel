@@ -243,6 +243,9 @@ namespace ConditioningControlPanel.Avalonia
             var wpc = Array.IndexOf(args, "--win-panic-check");
             if (wpc >= 0)
                 return Win32PanicCheck.Run(wpc + 1 < args.Length && !args[wpc + 1].StartsWith("--") ? args[wpc + 1] : "F24");
+            // --webview-check [--expect-blocked]: a real WebView2 Home host loads a loopback and an https page (WebViewCheck.cs).
+            if (Array.IndexOf(args, "--webview-check") >= 0)
+                return WebViewCheck.Run(args);
 
             // --audio-probe plays a clip through the REAL LibVLC output and ducks/unducks other
             // apps via CoreAudio, printing pactl's view of each step. Run with another stream

@@ -402,6 +402,23 @@ jobs:
           if ($ok -ne 0) { throw "--win-panic-check F24 exited $ok" }
           $neg = Check 'F23'
           if ($neg -eq 0) { throw '--win-panic-check F23 passed: the check cannot fail' }
+      # The real WebView2 path (--smoke is headless, so it never creates one): a Home-card WebHost loads a loopback
+      # page and https://example.com and needs a completed navigation, a document.title and a visible controller.
+      # --expect-blocked refuses the https page and MUST fail: proof the check can fail. No CCP_USERDATA_DIR: a
+      # sandbox refuses https. The runner profile is throwaway.
+      - name: Avalonia WebView2 check (Home browser host)
+        timeout-minutes: 5
+        run: |
+          $exe = 'CCP.Avalonia\bin\publish\win-x64\CCP.Avalonia.exe'
+          function Check($name, $extra) {
+            $p = Start-Process -FilePath $exe -ArgumentList (@('--webview-check') + $extra) -Wait -PassThru -NoNewWindow -RedirectStandardOutput "webview-$name.out" -RedirectStandardError "webview-$name.err"
+            Get-Content "webview-$name.out", "webview-$name.err" | Out-Host
+            return $p.ExitCode
+          }
+          $ok = Check 'real' @()
+          if ($ok -ne 0) { throw "--webview-check exited $ok" }
+          $neg = Check 'blocked' @('--expect-blocked')
+          if ($neg -ne 0) { throw "--webview-check --expect-blocked exited $neg: the check cannot fail" }
 
       # Separate Avalonia installer; workflow artifact only, never a release.
       - name: Compile standalone Avalonia installer (ISCC)
