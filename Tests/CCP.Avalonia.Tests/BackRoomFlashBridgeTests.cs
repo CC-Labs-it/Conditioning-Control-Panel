@@ -36,6 +36,21 @@ public class BackRoomFlashBridgeTests
     }
 
     [Fact]
+    public void LoopbackDealsUseOnlyTheRoomServerAndAllowedPaths()
+    {
+        var paths = new System.Collections.Generic.List<string>();
+        var bridge = new BackRoomFlashBridge((_, _) => { }, (path, _, _, _, _) => paths.Add(path),
+            () => { }, () => { }, () => false, () => 0, "/unused", "/unused", 12345,
+            path => path);
+        foreach (var url in new[] { "http://127.0.0.1:12345/ccp.assets/a.gif",
+            "http://127.0.0.1:12345/backroom/fallback.webp?ccp_t=token",
+            "http://127.0.0.1:12346/ccp.assets/a.gif", "http://127.0.0.1:12345/private/a.gif",
+            "http://example.com:12345/ccp.assets/a.gif" })
+            bridge.GifFull(new BackRoomGif("g0", url, 0, 0, ""), 100, .2, () => { });
+        Assert.Equal(new[] { "/ccp.assets/a.gif", "/backroom/fallback.webp" }, paths);
+    }
+
+    [Fact]
     public void RefusesRemoteAndEscapingPathsAndPreservesChaosWash()
     {
         int heroes = 0, closed = 0;

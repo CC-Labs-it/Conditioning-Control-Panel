@@ -32,7 +32,8 @@ internal sealed partial class GameWindow
 
     private BackRoomFx RoomFx => _backRoomFx ??= new BackRoomFx(new RainSink(RainBridgeFactory(), FlashBridgeFactory?.Invoke() ??
         new BackRoomFlashBridge(this, () => Chaos.ChaosRunHost.IsDescending, CorePaths.EffectiveAssets,
-            Path.Combine(AppContext.BaseDirectory, "Resources", "web")), RoomSubliminal, StopRoomSubliminal),
+            Path.Combine(AppContext.BaseDirectory, "Resources", "web"), _server?.Port ?? 0,
+            path => _server?.ResolveFile(path)), RoomSubliminal, StopRoomSubliminal),
         RoomFxSchedulerFactory(), () => new FxEnvironment(global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level,
             CoreSettings.Current.BackRoomFxIntensity), supports: p => p is FxPrim.GifRain or FxPrim.GlitchBubbles or FxPrim.GifFull or FxPrim.SubSingle or FxPrim.SubSeq or FxPrim.SubBurst9);
 
