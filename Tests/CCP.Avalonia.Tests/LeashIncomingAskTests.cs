@@ -74,6 +74,35 @@ public sealed class LeashIncomingAskTests
         });
 
     [Fact]
+    public void RebindingWhileAnOfferIsShownDoesNotQueueItAgain() =>
+        LeashGateCardTests.Run(false, (shell, launcher, _) =>
+        {
+            var svc = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            LeashHead.Service = svc;
+            try
+            {
+                svc.ApplyBlock(Block((First, "juno"), (Second, "vex")));
+                launcher.Show();
+                var first = Assert.IsType<LeashAskWindow>(LeashAskWindow.Open(svc.Snapshot.Offers[0], () => svc, launcher));
+                shell.RebindLeashAsks(); // timer binds after the manual Look showed juno
+                first.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                var second = Assert.IsType<LeashAskWindow>(LeashAskWindow.Current);
+                Assert.Equal("leash-ask:vex", second.Card.Tag);
+                second.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current);
+            }
+            finally
+            {
+                LeashHead.Service = null;
+                shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent();
+                Dispatcher.UIThread.RunJobs();
+            }
+        });
+
+    [Fact]
     public void UnopenedShellDoesNotQueueDuplicateIncomingOffers() =>
         LeashGateCardTests.Run(false, (shell, launcher, _) =>
         {
