@@ -970,10 +970,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Deeper
         private void OnVideoNavigationFinished(Uri uri, bool success)
         {
             if (success || _closing || !_isVideoMode || !_videoNavigated || _videoBrowser.AllowNavigation?.Invoke(uri) != true) return;
-            ++_videoLoad; // Ignore in-flight play and poll results from the failed page.
-            _videoNavigated = false;
+            ++_videoLoad; // Ignore in-flight play and poll results from the failed page; the source stays bound as in WPF.
             _isPlaying = false;
-            StopDeeper();
             var message = Loc.GetF("deeper_player_video_nav_failed_fmt", uri.IsFile ? uri.Scheme : uri.Host);
             _txtVideoStatus.Text = _txtStatus.Text = message;
             _txtVideoStatus.IsVisible = true;

@@ -53,4 +53,27 @@ public sealed class DeeperPlayerNavigationFailureTests
         }
         finally { player.Close(); }
     });
+
+    // WPF EnhancementPlayerWindow.xaml.cs:1825-1842 keeps the source bound after a failure.
+    [Fact]
+    public Task FailedNavigationLeavesPlayWorkingAfterTheNextSuccess() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var player = new EnhancementPlayerWindow(new Enhancement { MediaType = MediaTypes.Video }, "test");
+        var web = player.FindControl<WebHost>("VideoBrowser")!;
+        web.ScriptInvoker = script => Task.FromResult<string?>(script.Contains("l.play();") ? "ok" : "");
+        var uri = new Uri("https://hypnotube.com/video/test");
+        try
+        {
+            player.Show();
+            typeof(EnhancementPlayerWindow).GetMethod("LoadVideoUrl", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(player, new object[] { uri.ToString() });
+            web.OnNavigationCompleted(uri, success: false);
+            web.OnNavigationCompleted(uri, success: true);
+            player.FindControl<Button>("BtnPlayPause")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await Task.Yield();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(Symbol.Pause, player.FindControl<IconGlyph>("TxtPlayPauseGlyph")!.Kind);
+            Assert.Equal(Loc.Get("deeper_player_status_playing"), player.FindControl<TextBlock>("TxtStatus")!.Text);
+        }
+        finally { player.Close(); }
+    });
 }
