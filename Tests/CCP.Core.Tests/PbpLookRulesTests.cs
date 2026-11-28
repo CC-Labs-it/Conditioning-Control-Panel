@@ -11,6 +11,15 @@ namespace ConditioningControlPanel.Tests;
 /// <summary>The chess wardrobe (7.2 shop, lane B3-C1): grants, clamps, frames and the /v2/equip sync rule.</summary>
 public class PbpLookRulesTests
 {
+    [Theory]
+    [InlineData("back", true)]
+    [InlineData("wear", true)]
+    [InlineData("panic", false)]
+    [InlineData("app-exit", false)]
+    [InlineData("failed", false)]
+    public void CounterHandsFocusBack(string reason, bool expected)
+        => Assert.Equal(expected, PbpLookRules.CounterHandsFocusBack(reason));
+
     private static readonly string[] All =
     {
         "cos.chess.set.royal-capes", "cos.chess.set.velvet-court", "cos.chess.banner.house-pink", "cos.chess.banner.crest",

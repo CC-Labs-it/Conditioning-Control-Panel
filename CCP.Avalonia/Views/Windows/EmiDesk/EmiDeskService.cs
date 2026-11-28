@@ -43,6 +43,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private long _summonGen;
         private bool _muteAccepted;
         private bool _mutePromptShownThisSession;
+        private string? _pendingMuteMoment;
+        internal Func<bool> TakeoverTalking = () => MainShellWindow.Current?.Autonomy.IsEnabled == true;
+        internal Func<bool> RemoteTalking = () => Views.Tabs.RemoteControlTabView.Relay.IsValueCreated && Views.Tabs.RemoteControlTabView.Relay.Value.ControllerConnected;
 
         /// <summary>True while she is on screen (including her intro and outro).</summary>
         public bool IsOut { get; private set; }
@@ -133,6 +136,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 // Invalidate a summon parked behind the mute prompt before anything else.
                 _summonGen++;
                 CancelGreeting();
+                _pendingMuteMoment = null;
+                EmiMutePromptWindow.Cancel();
                 _window?.StopDeskEquipment();
                 // WPF EmiDeskService.cs:422: sending her away ends the welcome show she is presenting.
                 if (_window?.PresentationActive == true) _window.StopPresentation();
@@ -209,9 +214,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         /// <summary>
         /// Ask, at most once per session, whether the avatar should sit out while she is here.
-        /// Dismissing the dialog keeps the avatar. ponytail: WPF also skips when nothing talks
-        /// (AnyTalkingFeatureLive); both heads share its settings half, Core <c>EmiMuteRule.SettingsTalk</c>.
-        /// The live half (Autonomy, remote controller) has no service on this head.
+        /// Dismissing the dialog keeps the avatar. WPF EmiDeskService.cs:1633 also checks live talkers.
         /// </summary>
         private async Task MaybeAskAboutMuting()
         {
@@ -221,16 +224,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                 if (!s.EmiDeskMuteAvatar) { _muteAccepted = false; return; }
                 if (s.EmiDeskMuteDontAsk) { _muteAccepted = true; return; }
                 if (_mutePromptShownThisSession) return;
-                if (!ConditioningControlPanel.Services.EmiDesk.EmiMuteRule.SettingsTalk(s)) { _muteAccepted = false; return; }
+                if (!TakeoverTalking() && !EmiMuteRule.SettingsTalk(s) && !RemoteTalking()) { _muteAccepted = false; return; }
 
                 _mutePromptShownThisSession = true;
+                long gen = _summonGen;
                 var choice = await AskMute();
+                if (gen != _summonGen || !IsOut) return;
                 _muteAccepted = choice != EmiMuteChoice.Keep;
                 if (choice == EmiMuteChoice.DontAsk)
                 {
                     s.EmiDeskMuteDontAsk = true;
                     App.Settings?.Save();
                 }
+                _pendingMuteMoment = _muteAccepted ? "avatarMuted" : "avatarKept";
                 Log.Information("[EmiDesk] mute prompt answered: {Choice}", choice);
             }
             catch (Exception ex)
@@ -244,6 +250,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         /// <summary>True while the summon chord is grabbed (WPF HotkeyArmed).</summary>
         public bool HotkeyArmed { get; private set; }
+
+        private IDisposable? _winHotkey;
+        internal Func<bool> IsWindows = OperatingSystem.IsWindows;
+        internal Func<ChordMods, string, Action, IDisposable?> RegisterWindowsChord = (mods, key, pressed) =>
+            MainShellWindow.Current is { } shell ? Platform.Win32QuickRecalHotkey.RegisterEmi(shell, mods, key, pressed) : null;
 
         /// <summary>The OS grab. Seams so tests never touch the X server.</summary>
         internal Func<ChordMods, string, Action, bool> RegisterChord = Platform.X11SummonChord.Arm;
@@ -285,7 +296,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
                     return;
                 }
                 // X delivers the press on the listener thread: marshal before touching UI.
-                HotkeyArmed = RegisterChord(parsed.Mods, parsed.Key, () => Dispatcher.UIThread.Post(() => Toggle("hotkey")));
+                if (IsWindows())
+                {
+                    _winHotkey?.Dispose();
+                    _winHotkey = RegisterWindowsChord(parsed.Mods, parsed.Key, () => Dispatcher.UIThread.Post(() => Toggle("hotkey")));
+                    HotkeyArmed = _winHotkey != null;
+                }
+                else
+                    HotkeyArmed = RegisterChord(parsed.Mods, parsed.Key, () => Dispatcher.UIThread.Post(() => Toggle("hotkey")));
                 if (HotkeyArmed) Log.Information("[EmiDesk] summon hotkey armed: {Chord}", chord);
                 else Log.Warning("[EmiDesk] summon hotkey {Chord} could not be grabbed: another client holds it. " +
                                  "The dock chip in the nav rail still summons her.", chord);
@@ -298,6 +316,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
 
         private void Disarm()
         {
+            _winHotkey?.Dispose();
+            _winHotkey = null;
             UnregisterChord();
             HotkeyArmed = false;
         }

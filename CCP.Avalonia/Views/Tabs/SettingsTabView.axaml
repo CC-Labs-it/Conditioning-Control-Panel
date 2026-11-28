@@ -570,15 +570,15 @@
       <!-- Row 1: flash, the video pair, subliminals, bouncing text -->
       <features:FeatureCard Grid.Row="0" Grid.Column="0" x:Name="CardFlash" DashboardDepth="True" DimWhenInactive="True" Icon="/Resources/features/flash.png"
                             Title="Flash Images"
-                            HelpSectionId="FlashImages"/>
+                            HelpSectionId="FlashImages" Super="FlickerDeck"/>
       <features:SplitFeatureCard Grid.Row="0" Grid.Column="1" x:Name="ComboVideoBubble" IconB="/Resources/features/Bubble_count.png" IconA="/Resources/features/mandatory_videos.png"
-                                 TitleA="Mandatory Video" TitleB="Bubble Count" DashboardDepth="True" HelpSectionIdA="Video" HelpSectionIdB="BubbleCount"/>
+                                 TitleA="Mandatory Video" TitleB="Bubble Count" DashboardDepth="True" HelpSectionIdA="Video" HelpSectionIdB="BubbleCount" SuperA="LightsDown"/>
       <features:FeatureCard Grid.Row="0" Grid.Column="2" x:Name="CardSubliminal" DashboardDepth="True" DimWhenInactive="True" Icon="/Resources/features/subliminal.png"
                             Title="Subliminals"
-                            HelpSectionId="Subliminals"/>
+                            HelpSectionId="Subliminals" Super="Afterglow"/>
       <features:FeatureCard Grid.Row="0" Grid.Column="3" x:Name="CardBouncingText" DashboardDepth="True" DimWhenInactive="True" Icon="/Resources/features/bouncing_text.png"
                             Title="Bouncing Text"
-                            HelpSectionId="BouncingText"/>
+                            HelpSectionId="BouncingText" Super="Scrawl"/>
 
       <!-- Row 2: the Deeper editor (far left) + centre logo + spiral pair -->
       <!-- THE DEEPER EDITOR TILE (WPF SettingsTabView.xaml:601-636). It replaced the retired
@@ -804,7 +804,7 @@
       </Border>
 
       <features:SplitFeatureCard Grid.Row="1" Grid.Column="3" x:Name="ComboSpiralPink" IconB="/Resources/features/Pink_filter.png" IconA="/Resources/features/spiral_overlay.png"
-                                 TitleA="Spiral Overlay" TitleB="Pink Filter" DashboardDepth="True" HelpSectionIdA="SpiralOverlay" HelpSectionIdB="PinkFilter"/>
+                                 TitleA="Spiral Overlay" TitleB="Pink Filter" DashboardDepth="True" HelpSectionIdA="SpiralOverlay" HelpSectionIdB="PinkFilter" SuperA="Vortex" SuperB="Creep"/>
 
       <!-- Row 3: the ? box + the immersion pair -->
       <!-- The ? BOX: today's premium feature, free for the day (DailyFreeService). The title is
@@ -909,7 +909,7 @@
                    Foreground="#3A2A00" FontSize="10" FontWeight="Black"/>
       </Border>
       <features:SplitFeatureCard Grid.Row="2" Grid.Column="3" x:Name="ComboMindDrain" IconB="/Resources/features/brain_drain.png" IconA="/Resources/features/Mind_Wipers.png"
-                                 TitleA="Mind Wipe" TitleB="Brain Drain" DashboardDepth="True" HelpSectionIdA="MindWipe" HelpSectionIdB="BrainDrain"/>
+                                 TitleA="Mind Wipe" TitleB="Brain Drain" DashboardDepth="True" HelpSectionIdA="MindWipe" HelpSectionIdB="BrainDrain" SuperB="Undertow"/>
 
       <!-- Row 4: the vault (double-wide) + the two games -->
       <!-- THE VAULT: the Exclusives storefront (Velvet Vault + the premium T2 shelf).
@@ -941,7 +941,7 @@
       </TextBlock>
       <features:FeatureCard Grid.Row="3" Grid.Column="2" x:Name="CardBubblePop" DashboardDepth="True" DimWhenInactive="True" Icon="/Resources/features/Bubble_pop.png"
                             Title="Bubble Pop"
-                            HelpSectionId="BubblePop"/>
+                            HelpSectionId="BubblePop" Super="InnerBloom"/>
       <features:FeatureCard Grid.Row="3" Grid.Column="3" x:Name="CardLockCard" DashboardDepth="True" DimWhenInactive="True" Icon="/Resources/features/Phrase_Lock.png"
                             Title="Lock Card"
                             HelpSectionId="LockCard"/>

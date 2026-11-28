@@ -80,6 +80,17 @@ public sealed partial class GameWindowTests
             GameWindow.LaunchRaceShell = oldLaunch;
         }
     });
+    [Fact]   // WPF GlassroadHostService.cs:222 (#1543): a hung shell page is waited for, not closed after the ping
+    public void LinuxShell_UnresponsivePageGetsTheBusyWait() => RunShellRace((_, w, host, _, _) =>
+    {
+        host.Receive(new JObject { ["type"] = "shell-loaded", ["displayBackend"] = "x11" });
+        host.Receive(new JObject { ["type"] = "ready" });
+        host.Receive(new JObject { ["type"] = "shell-unresponsive" });
+        var now = DateTime.UtcNow;
+        Assert.Equal("ping", w.CheckGlassroadWatch(now.AddSeconds(25)));
+        Assert.Equal("ok", w.CheckGlassroadWatch(now.AddSeconds(60)));
+        Assert.True(GameWindow.IsAnyOpen());
+    });
     [Fact]
     public void LinuxShell_SessionRunsInTheUnshownWindow_RoomInitPipeAndExit() => RunShellRace((_, w, host, p, o) =>
     {

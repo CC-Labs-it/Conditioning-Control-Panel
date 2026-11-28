@@ -82,7 +82,7 @@ namespace ConditioningControlPanel.Controls.Preview.Scenes
             // Draw lists stepped by the preview host, never by a second compositor host (FirstShowEffects).
             _engine.Dispose();
             _layer = new BubbleLayer(_engine);
-            _fx = new ChaosFxLayer(_engine.Wake);
+            _fx = ChaosFxLayerWpf.Create(_engine);
         }
 
         public string[] Settings => Watched;

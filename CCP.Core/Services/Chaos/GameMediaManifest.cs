@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Serilog;
+using ConditioningControlPanel.Services.BackRoom;
 
 namespace ConditioningControlPanel.Services.Chaos
 {
@@ -130,8 +131,8 @@ namespace ConditioningControlPanel.Services.Chaos
 
         // WPF BackRoomMedia.cs:151-170, 275-311, 419-445. Remote clips are already
         // materialized on the head's asset origin; an empty remote pool falls back to local.
-        internal static object BreakoutDeal(Manifest library, string? reqId, int seed, int count,
-            string source, int ratio, IReadOnlyList<Entry> remote)
+        internal static BackRoomMediaDeal BreakoutMedia(Manifest library, int seed, int count,
+            string source, int ratio, IReadOnlyList<Entry> remote, IReadOnlyList<BackRoomWord> words)
         {
             var local = library.Images
                 .Where(e => e.Url.EndsWith(".gif", StringComparison.OrdinalIgnoreCase) || e.Url.EndsWith(".webp", StringComparison.OrdinalIgnoreCase))
@@ -153,9 +154,8 @@ namespace ConditioningControlPanel.Services.Chaos
                 else if (li < local.Count) picks.Add((local[li++], "pool"));
                 else if (ri < online.Count) picks.Add((online[ri++], "online"));
             }
-            return new { type = "media", reqId, seed, source,
-                gifs = picks.Select((p, i) => new { key = "g" + i, url = p.Entry.Url, w = 0, h = 0, src = p.Src }).ToArray(),
-                words = Array.Empty<object>() };
+            return new BackRoomMediaDeal(seed,
+                picks.Select((p, i) => new BackRoomGif("g" + i, p.Entry.Url, 0, 0, p.Src)).ToArray(), words, source);
         }
 
         private static IEnumerable<string> Walk(string dir, int depth)

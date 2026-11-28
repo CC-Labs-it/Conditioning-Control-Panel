@@ -46,6 +46,8 @@ internal sealed class EmergencyExitWindow : Window
         }
         try { lockdown.NotifyEscapeAttempt(EscapeKinds.EmergencyExit); } catch (Exception ex) { Log.Debug(ex, "EmergencyExit tripwire"); }
         try { ChasterHead.Service?.NoteSafetyExit(); } catch (Exception ex) { Log.Debug(ex, "EmergencyExit chaster hold"); }
+        // WPF EmergencyExitHostService.cs:181: the weekly free Super try ends at once, like panic.
+        try { global::ConditioningControlPanel.Avalonia.Controls.Super.SuperPreview.End(panic: true); } catch (Exception ex) { Log.Debug(ex, "EmergencyExit super preview"); }
         _attempt++;
         _last = EmergencyExitRules.Pick(_last, Random.Shared);
         var window = new EmergencyExitWindow(lockdown, _last);
