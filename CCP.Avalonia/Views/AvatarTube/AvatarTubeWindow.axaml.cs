@@ -280,11 +280,9 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // V1 emotes, portraits and non-awareness service reactions remain in the WPF reference.
             // V2 idle playback is in AvatarTubeWindow.RainPlayback.cs.
 
-            // ponytail: the WPF ctor also started four timers here - a 2s greeting, the idle-giggle,
-            // the trigger and the random-bubble loops. The trigger loop starts on open. The others
-            // are deliberately NOT started: every one of them
-            // calls into a partial this layer does not have, and --render-all constructs ~180 windows
-            // in one process, where a stray timer firing at a closed window is a flaky failure.
+            // The WPF ctor also started four timers here (xaml.cs:343-362). The idle loop, the trigger loop,
+            // the 2 s greeting (Greeting.cs) and the random-bubble loop (RandomBubble.cs) start on open and
+            // stop in OnClosed, so --render-all, which never opens a window, runs none of them.
 
             // WPF did this from Loaded on this window; same here. See ApplyChatShortcutTo for why
             // the binding on THIS window is the lesser half.
@@ -331,6 +329,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             InitTakeoverCountdownBar();
             StartFloatingAnimation(); // WPF xaml.cs:614 and Windowing.cs:1481
             // Part B: WPF StartFullscreenDetection.
+            ScheduleGreeting();         // WPF xaml.cs:343-353
+            if (_randomBubbleTimer == null) StartRandomBubbleTimer(); // WPF xaml.cs:362
         }
 
         protected override void OnClosed(EventArgs e)
@@ -363,6 +363,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             _poseTimer.Stop();
             _idleTimer?.Stop();
             _speechTimer?.Stop();
+            _greetingTimer?.Stop();
+            StopRandomBubbles();
             DetachTriggerSettings();
             ClearSpeechQueue();
             _cooldownTickTimer?.Stop();

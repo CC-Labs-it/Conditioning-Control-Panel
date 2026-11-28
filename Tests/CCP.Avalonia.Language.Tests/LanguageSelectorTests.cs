@@ -520,6 +520,10 @@ public sealed class LanguageSelectorTests
         // (a real save, WPF SeasonRecapService.cs:146-165); already so for this profile.
         ConditioningControlPanel.Services.SeasonActivity.MarkActiveToday(settings.Current, DateTime.UtcNow);
         ConditioningControlPanel.Services.SeasonActivity.TrackStreakPeak(settings.Current, 1);
+        // A shown tube greets 2 s after open and saves LastSeenUtc (always now) plus the AppOpened bark's
+        // rotation on every launch (WPF AvatarTubeWindow.Speech.cs:2581-2590), so no seed can make that
+        // launch write-free. This profile has dismissed her (#888); TubeGreetingBubbleTests owns the greeting.
+        settings.Current.AvatarEnabled = false;
         settings.SaveImmediate();
         return File.ReadAllText(settingsPath);
     }
