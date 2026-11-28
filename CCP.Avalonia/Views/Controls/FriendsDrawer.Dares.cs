@@ -238,12 +238,14 @@ public sealed partial class FriendsDrawer
         return box;
     }
 
-    private static Control BarRow(string? label, double fraction, string count, Color c)
+    internal static Control BarRow(string? label, double fraction, string count, Color c)
     {
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(0, 1) };
         if (label != null) g.Children.Add(new TextBlock { Text = label, FontSize = 10, Foreground = Muted, FontFamily = Mono, Width = 24 });
         // WPF DareLook.Bar: a rounded track with the kind's colour filled to the fraction.
-        var bar = new Grid { ColumnDefinitions = new ColumnDefinitions($"{fraction}*,{1 - fraction}*"), Height = 6, VerticalAlignment = VerticalAlignment.Center, Tag = "dares-bar" };
+        // WPF DareLook.cs:1033 sizes from the number (clamped), so no culture-formatted "0,5*" string here.
+        var f = Math.Clamp(fraction, 0, 1);
+        var bar = new Grid { ColumnDefinitions = { new ColumnDefinition(f, GridUnitType.Star), new ColumnDefinition(1 - f, GridUnitType.Star) }, Height = 6, VerticalAlignment = VerticalAlignment.Center, Tag = "dares-bar" };
         bar.Children.Add(new Border { CornerRadius = new CornerRadius(3), Background = new SolidColorBrush(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF)), [Grid.ColumnSpanProperty] = 2 });
         bar.Children.Add(new Border { CornerRadius = new CornerRadius(3), Background = new SolidColorBrush(c) });
         Grid.SetColumn(bar, 1);

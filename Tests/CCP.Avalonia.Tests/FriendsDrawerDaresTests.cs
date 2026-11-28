@@ -99,6 +99,23 @@ public sealed class FriendsDrawerDaresTests
     });
 
     [Fact]
+    public Task Strip_bar_splits_the_same_under_a_decimal_comma_culture() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var saved = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            // WPF DareLook.cs:1033 sizes the fill from the number, so a German locale must not read "0,5*".
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
+            var row = (Grid)FriendsDrawer.BarRow(null, 0.25, "1 / 4", global::Avalonia.Media.Colors.Pink);
+            var cols = Tagged<Grid>(row, "dares-bar").ColumnDefinitions;
+            Assert.Equal(new[] { 0.25, 0.75 }, cols.Select(c => c.Width.Value));
+            Assert.All(cols, c => Assert.True(c.Width.IsStar));
+        }
+        finally { System.Globalization.CultureInfo.CurrentCulture = saved; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task Pay_in_the_strip_opens_the_debt_card_beside_the_main_window_not_over_it() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         PanicSurfacesTests.EnsureApp();
