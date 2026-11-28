@@ -382,7 +382,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         public int PillAudioCount => CurrentPillCounts.Audio;
         public int PillHapticsCount => CurrentPillCounts.Haptics;
         public int PillWebcamCount => CurrentPillCounts.Webcam;
-        public bool ShowWelcomeCard => true;
         public IconKind SortDirectionGlyph => _descending ? IconKind.ChevronDown : IconKind.ChevronUp;
 
         private DeeperFilter.Criteria CurrentCriteria()
