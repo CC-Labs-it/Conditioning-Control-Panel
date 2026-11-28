@@ -310,6 +310,7 @@ public sealed class PanicSurfacesTests
         "engine",
         "bubble-host",
         "super-stage",
+        "brain-drain",
         "flash",
         "pink-rush",
         "corner-gif",

@@ -10165,5 +10165,6 @@
   "promo_hours": "ore",
   "promo_minutes": "min",
   "native_repair_title": "Conditioning Control Panel - avvio non riuscito",
-  "native_repair_message": "Conditioning Control Panel non può caricare le librerie grafiche e non può avviarsi.\n\nChiudi l'app, elimina questa cartella temporanea e riavvia:\n\n{0}\n\nLa cartella viene ricreata automaticamente. Se non basta, controlla se l'antivirus ha messo i file in quarantena.\n\nDettagli: {1}"
+  "native_repair_message": "Conditioning Control Panel non può caricare le librerie grafiche e non può avviarsi.\n\nChiudi l'app, elimina questa cartella temporanea e riavvia:\n\n{0}\n\nLa cartella viene ricreata automaticamente. Se non basta, controlla se l'antivirus ha messo i file in quarantena.\n\nDettagli: {1}",
+  "brain_drain_capture_failed": "Brain Drain non è riuscito a catturare lo schermo. Invia una segnalazione."
 }
