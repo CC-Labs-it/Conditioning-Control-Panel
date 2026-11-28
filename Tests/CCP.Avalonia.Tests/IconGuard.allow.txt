@@ -40,6 +40,10 @@ Views/Tabs/GradedIntakeTabView.axaml.cs :: TrendDirection.Down => "\u2193" :: tr
 Views/Tabs/GradedIntakeTabView.axaml.cs :: TrendDirection.Flat => "\u2192" :: trend arrow inside the "65% ↑5%" history line, typography (content (c).4)
 
 # --- content (c).3: emoji inside head-authored sentences ---
+Views/Games/GameWindow.ArcademyLexicon.cs :: ["share_hit"] = "\U0001F497" :: Arcademy page share-card copy, WPF ArcademyHostService.cs:1957 verbatim (content (c).3)
+Views/Games/GameWindow.ArcademyLexicon.cs :: ["share_near"] = "\U0001F300" :: Arcademy page share-card copy, WPF ArcademyHostService.cs:1958 verbatim (content (c).3)
+Views/Games/GameWindow.ArcademyLexicon.cs :: ["share_miss"] = "\U0001F5A4" :: Arcademy page share-card copy, WPF ArcademyHostService.cs:1959 verbatim (content (c).3)
+Views/Games/GameWindow.ArcademyLexicon.cs :: ["dt_gold_chip"] = "GOLD \u2728" :: Arcademy Detention chip label, WPF ArcademyHostService.cs:2212 verbatim (content (c).3)
 Views/Chaos/ChaosHudWindow.axaml.cs :: banks into emotes ✦. :: emoji at the end of a body sentence (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: ☠ RELAPSE — one more loop :: WPF ChaosModeService.cs:1083 announcer copy, the line itself is drawn as outlined text (content (c).3)
 Views/Chaos/ChaosRunHost.cs :: ⏳ ten seconds. make them count. :: WPF ChaosModeService.cs:1073 run event-feed sentence (content (c).3)
