@@ -19,15 +19,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     public partial class LauncherWindow
     {
         private readonly ScaleTransform UpdateChipScale = new(1, 1);
+        private readonly ScaleTransform UpdateChipPressScale = new(1, 1);
         private bool _updateChipShown;
         private int _updateChipGeneration;
 
         private void HookUpdateChip()
         {
             UpdateChip.RenderTransform = UpdateChipScale;
+            UpdateChipPressHost.RenderTransform = UpdateChipPressScale;
+            HookPress(UpdateChip, UpdateChipPressScale);
             AppUpdater.LatestChanged += OnLatestChanged;
             Closed += (_, _) => { AppUpdater.LatestChanged -= OnLatestChanged; _updateChipGeneration++; };
             RefreshUpdateChip();
+        }
+
+        internal static void StopUpdateChipPressForPanic()
+        {
+            if (_window is not { } w) return;
+            w.UpdateChipPressScale.Transitions = null;
+            w.UpdateChipPressScale.ScaleX = w.UpdateChipPressScale.ScaleY = 1;
         }
 
         private void OnLatestChanged()

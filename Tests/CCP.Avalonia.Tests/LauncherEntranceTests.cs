@@ -130,6 +130,32 @@ public sealed class LauncherEntranceTests
     });
 
     [Fact]
+    public void UpdateChip_PressReleaseAndPanicRestoreScale() => Run(MotionLevel.Off, (_, w, _) =>
+    {
+        var chip = w.FindControl<Button>("UpdateChip")!;
+        chip.IsVisible = true;
+        var entrance = Assert.IsType<ScaleTransform>(chip.RenderTransform);
+        var press = Assert.IsType<ScaleTransform>(w.FindControl<Border>("UpdateChipPressHost")!.RenderTransform);
+        var pointer = new Pointer(Pointer.GetNextFreeId(), PointerType.Mouse, true);
+        void Down() => chip.RaiseEvent(new PointerPressedEventArgs(chip, pointer, w, new Point(1, 1), 0,
+            new PointerPointProperties(RawInputModifiers.LeftMouseButton, PointerUpdateKind.LeftButtonPressed), KeyModifiers.None, 1));
+        void Up() => chip.RaiseEvent(new PointerReleasedEventArgs(chip, pointer, w, new Point(1, 1), 0,
+            new PointerPointProperties(RawInputModifiers.None, PointerUpdateKind.LeftButtonReleased), KeyModifiers.None, MouseButton.Left));
+        Down();
+        Assert.Equal(ConditioningControlPanel.Services.UI.InteractionPressMotion.ScaleFor(true), press.ScaleX);
+        Assert.Equal(1, entrance.ScaleX);
+        Up();
+        Assert.Equal(1, press.ScaleX);
+        Down();
+        PanicSurfaces.All.Single(s => s.Id == "launcher-update-press").Stop(null);
+        Assert.Equal(1, press.ScaleX);
+        Assert.Equal(1, press.ScaleY);
+        Assert.Null(press.Transitions);
+        Up();
+        Assert.Equal(1, press.ScaleX);
+    });
+
+    [Fact]
     public void TitleBar_DoublePressTogglesMaximise() => Run(MotionLevel.Off, (_, w, _) =>
     {
         var bar = w.FindControl<Border>("TitleBar")!;

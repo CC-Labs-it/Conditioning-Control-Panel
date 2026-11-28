@@ -195,6 +195,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             new("asset-preview", _ => MiniPlayerWindow.CloseAllForPanic()),  // Library local and encrypted-pack previews (P06; WPF left the preview open)
             new("input-popups", _ => global::ConditioningControlPanel.Avalonia.Controls.InputPopupFx.CloseAllForPanic()),
             new("help-tooltips", _ => global::ConditioningControlPanel.Avalonia.Controls.ToolTipLifetime.CloseAll()), // WPF help lifetime :750; stricter panic cleanup
+            new("launcher-update-press", _ => LauncherWindow.StopUpdateChipPressForPanic()),
             new("launcher-wordmark-sheen", _ => LauncherWindow.StopWordmarkSheenForPanic()),
             new("launcher-notes", _ => LauncherWindow.CloseNotesForPanic()),
             new("launcher-friends", _ => LauncherWindow.CloseFriendsForPanic()),

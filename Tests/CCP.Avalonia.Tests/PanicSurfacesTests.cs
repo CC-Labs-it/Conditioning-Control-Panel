@@ -206,6 +206,7 @@ public sealed class PanicSurfacesTests
         "companion-audio",
         "audio-playlist",
         "emi-ring",
+        "launcher-update-press",
         "launcher-notes",
         "launcher-friends",
         "launcher-lobby-claim",
