@@ -74,6 +74,10 @@ public sealed class DailyQuestCardMotionTests
             // The new "4 / 5" relays the row, and a resize re-seats the bar against the new track.
             Assert.Equal(Track() * 0.8, fill.Width, 1);
 
+            var hint = card.FindControl<Border>("GoHint");
+            Assert.NotNull(hint);
+            Assert.False(hint.IsVisible);
+            Assert.False(hint.IsHitTestVisible);
             var scale = (ScaleTransform)root.RenderTransform!;
             Assert.Equal(default, root.BoxShadow);                                  // nothing drawn at rest
             w.MouseMove(new Point(200, 100), RawInputModifiers.None);
@@ -81,6 +85,8 @@ public sealed class DailyQuestCardMotionTests
             if (on) Assert.True(scale.ScaleX < 1.02, "motion on should tween the lift, not snap it");
             else Assert.Equal(1.02, scale.ScaleX, 3);
             Frames(240);
+            Assert.True(hint.IsVisible);
+            Assert.Equal(1, hint.Opacity, 3);
             Assert.Equal(1.02, scale.ScaleX, 3);
             Assert.Equal(1.02, scale.ScaleY, 3);
             if (on)
@@ -97,6 +103,11 @@ public sealed class DailyQuestCardMotionTests
             Frames(240);
             Assert.Equal(1.0, scale.ScaleX, 3);
             Assert.Equal(default, root.BoxShadow);                                  // detached once faded
+            Assert.False(hint.IsVisible);
+            card.SetNavigable(false);
+            w.MouseMove(new Point(200, 100), RawInputModifiers.None);
+            Frames(240);
+            Assert.False(hint.IsVisible);
         }
         finally
         {
