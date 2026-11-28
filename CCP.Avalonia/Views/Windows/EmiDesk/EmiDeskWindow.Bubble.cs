@@ -30,8 +30,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows.EmiDesk
         private EmiLineEngine? _askEngine;
         internal bool AskLive => _ask != null;
         private DispatcherTimer? _askTimer;
-        internal TimeSpan? AskPendingHold => _askTimer?.Interval;
-        internal void AdvanceAsk() => AdvanceAskTimer();
+        internal TimeSpan? AskPendingHold => AskLive ? _askTimer?.Interval : null;
+        internal void AdvanceAsk() { if (AskLive) AdvanceAskTimer(); }
         private Action? _askTimerStep;
         private int _askStage;
         // The same one-shot timer is stepped by the headless tests.
