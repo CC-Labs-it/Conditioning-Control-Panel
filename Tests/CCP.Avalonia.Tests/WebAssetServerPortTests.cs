@@ -57,6 +57,47 @@ public class WebAssetServerPortTests
     }
 
     [Fact]
+    public void Saved_port_freed_during_the_retries_is_reused()
+    {
+        var dir = Directory.CreateTempSubdirectory("race-port-").FullName;
+        var held = new TcpListener(IPAddress.Loopback, 0);
+        try
+        {
+            var preference = Path.Combine(dir, "port");
+            held.Start();
+            int port = ((IPEndPoint)held.LocalEndpoint).Port;
+            File.WriteAllText(preference, port.ToString());
+            var release = Task.Delay(300).ContinueWith(_ => held.Stop());
+            using var server = new WebAssetServer(dir, preference);
+            release.Wait();
+            Assert.Equal(port, server.Port);
+            Assert.True(server.HasStableOrigin);
+            Assert.False(server.SavedPortTaken);
+        }
+        finally { held.Stop(); Directory.Delete(dir, true); }
+    }
+
+    [Fact]
+    public void Adopting_a_fallback_port_saves_it_as_the_origin()
+    {
+        var dir = Directory.CreateTempSubdirectory("race-port-").FullName;
+        var held = new TcpListener(IPAddress.Loopback, 0);
+        try
+        {
+            var preference = Path.Combine(dir, "port");
+            held.Start();
+            File.WriteAllText(preference, ((IPEndPoint)held.LocalEndpoint).Port.ToString());
+            using var server = new WebAssetServer(dir, preference);
+            Assert.True(server.SavedPortTaken);
+            Assert.False(server.HasStableOrigin);
+            Assert.True(server.AdoptOrigin());
+            Assert.True(server.HasStableOrigin);
+            Assert.Equal(server.Port.ToString(), File.ReadAllText(preference));
+        }
+        finally { held.Stop(); Directory.Delete(dir, true); }
+    }
+
+    [Fact]
     public void Cannot_save_preference_makes_origin_unstable()
     {
         var dir = Directory.CreateTempSubdirectory("race-port-").FullName;

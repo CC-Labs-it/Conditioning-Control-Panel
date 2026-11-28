@@ -991,40 +991,66 @@ public sealed partial class GameWindowTests
     });
 
     [Fact]
-    public void RaceDoorsRefuseFallbackOriginUntilRestart() => RunGlassroad((_, _, _) =>
+    public void RaceDoors_TakenSavedPort_AdoptTheNewOriginAfterTheNotice() => RunGlassroad((_, _, _) =>
     {
         var dir = Directory.CreateTempSubdirectory("race-origin-").FullName;
         var preference = Path.Combine(dir, "port");
         var held = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
         var (oldServer, oldNotice, oldOwns) = (GameWindow.Server, GameWindow.RaceOriginNotice, RacingAccess.IsGrantedProvider);
+        GameWindow? race = null;
         try
         {
             held.Start();
             var port = ((System.Net.IPEndPoint)held.LocalEndpoint).Port;
             File.WriteAllText(preference, port.ToString());
-            using (var fallback = new WebAssetServer(dir, preference))
-            {
-                GameWindow.Server = () => fallback;
-                var notices = new List<string>();
-                GameWindow.RaceOriginNotice = notices.Add;
-                RacingAccess.IsGrantedProvider = id => id == "rt.original.03";
-                Assert.Null(GameWindow.Launch("raceclassic"));
-                GameWindow.UseLinuxRaceCard = () => true;
-                Assert.Null(GameWindow.Launch(GameWindow.GlassroadId));
-                Assert.Equal(2, notices.Count);
-                Assert.DoesNotContain(GameWindow.OpenWindowsForTests(), w => w.Spec.Id is "raceclassic" or GameWindow.GlassroadId);
-            }
-            held.Stop();
-            using var restarted = new WebAssetServer(dir, preference);
-            Assert.Equal(port, restarted.Port);
-            GameWindow.Server = () => restarted;
-            var race = Assert.IsType<GameWindow>(GameWindow.Launch("raceclassic"));
-            Assert.Equal(port, race.PageUrl!.Port);
-            race.Close();
+            using var fallback = new WebAssetServer(dir, preference);
+            Assert.True(fallback.SavedPortTaken);
+            GameWindow.Server = () => fallback;
+            var notices = new List<(string Message, Action? Ok)>();
+            GameWindow.RaceOriginNotice = (_, message, ok) => notices.Add((message, ok));
+            RacingAccess.IsGrantedProvider = id => id == "rt.original.03";
+            Assert.Null(GameWindow.Launch(GameWindow.GlassroadId));
+            Assert.Null(GameWindow.Launch("raceclassic"));
+            Assert.Equal(2, notices.Count);
+            Assert.All(notices, n => Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("race_origin_moved"), n.Message));
+            Assert.Equal(port.ToString(), File.ReadAllText(preference));   // nothing adopted before OK
+            notices[1].Ok!();
+            race = Assert.Single(GameWindow.OpenWindowsForTests(), w => w.Spec.Id == "raceclassic");
+            Assert.Equal(fallback.Port, race.PageUrl!.Port);
+            Assert.Equal(fallback.Port.ToString(), File.ReadAllText(preference));
+            Assert.Equal(2, notices.Count);
         }
         finally
         {
+            race?.Close();
             held.Stop();
+            (GameWindow.Server, GameWindow.RaceOriginNotice, RacingAccess.IsGrantedProvider) = (oldServer, oldNotice, oldOwns);
+            Directory.Delete(dir, true);
+        }
+    });
+
+    [Fact]
+    public void RaceDoors_UnsavableOrigin_NoticeOnly() => RunGlassroad((_, _, _) =>
+    {
+        var dir = Directory.CreateTempSubdirectory("race-origin-").FullName;
+        var (oldServer, oldNotice, oldOwns) = (GameWindow.Server, GameWindow.RaceOriginNotice, RacingAccess.IsGrantedProvider);
+        try
+        {
+            var file = Path.Combine(dir, "not-a-directory");
+            File.WriteAllText(file, "x");
+            using var server = new WebAssetServer(dir, Path.Combine(file, "port"));
+            GameWindow.Server = () => server;
+            var notices = new List<(string Message, Action? Ok)>();
+            GameWindow.RaceOriginNotice = (_, message, ok) => notices.Add((message, ok));
+            RacingAccess.IsGrantedProvider = id => id == "rt.original.03";
+            Assert.Null(GameWindow.Launch("raceclassic"));
+            var notice = Assert.Single(notices);
+            Assert.Equal(ConditioningControlPanel.Localization.Loc.Get("race_origin_unavailable"), notice.Message);
+            Assert.Null(notice.Ok);
+            Assert.DoesNotContain(GameWindow.OpenWindowsForTests(), w => w.Spec.Id == "raceclassic");
+        }
+        finally
+        {
             (GameWindow.Server, GameWindow.RaceOriginNotice, RacingAccess.IsGrantedProvider) = (oldServer, oldNotice, oldOwns);
             Directory.Delete(dir, true);
         }

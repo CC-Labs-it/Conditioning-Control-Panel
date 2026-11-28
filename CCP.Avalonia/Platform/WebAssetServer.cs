@@ -87,6 +87,11 @@ public sealed class WebAssetServer : IDisposable
     /// <summary>True when a race can use the same origin again on a later launch.</summary>
     internal bool HasStableOrigin { get; private set; }
 
+    /// <summary>The saved port stayed taken through the retries, so this run serves from a fallback port.</summary>
+    internal bool SavedPortTaken { get; }
+
+    readonly string? _portFile;
+
     /// <summary>
     /// The Scrolller relay's OWN port. A web engine caps HTTP/1.1 connections per scheme+host+port (Chromium and libsoup:
     /// 6), every web view shares one profile, and a relay request holds its socket until the whole fetch lands; on the
@@ -114,7 +119,9 @@ public sealed class WebAssetServer : IDisposable
             catch (IOException) { preferenceReadable = false; }
             catch (UnauthorizedAccessException) { preferenceReadable = false; }
         }
+        _portFile = portFile;
         Port = Bind(ref _listener, preferred);
+        SavedPortTaken = portFile != null && preferenceReadable && preferred is > 0 and <= 65535 && Port != preferred;
         HasStableOrigin = portFile == null || (preferenceReadable && preferred is > 0 and <= 65535 && Port == preferred);
         // A temporary collision must not strand the browser storage at the original origin.
         if (portFile != null && preferenceReadable && preferred is not (> 0 and <= 65535))
@@ -137,10 +144,15 @@ public sealed class WebAssetServer : IDisposable
     {
         if (preferred is > 0 and <= 65535)
         {
-            var prefix = $"http://127.0.0.1:{preferred}/";
-            listener.Prefixes.Add(prefix);
-            try { listener.Start(); return preferred; }
-            catch (HttpListenerException) { listener.Close(); listener = new HttpListener(); }
+            // A just-closed earlier run can hold the saved port for a moment, so retry before falling back.
+            for (int attempt = 1; ; attempt++)
+            {
+                listener.Prefixes.Add($"http://127.0.0.1:{preferred}/");
+                try { listener.Start(); return preferred; }
+                catch (HttpListenerException) { listener.Close(); listener = new HttpListener(); }
+                if (attempt == 4) break;
+                System.Threading.Thread.Sleep(250);
+            }
         }
         // ponytail: probe-then-bind can lose the port to another process in between; retry if that ever shows up.
         var probe = new TcpListener(IPAddress.Loopback, 0);
@@ -150,6 +162,20 @@ public sealed class WebAssetServer : IDisposable
         listener.Prefixes.Add($"http://127.0.0.1:{port}/");
         listener.Start();
         return port;
+    }
+
+    /// <summary>Saves this run's port as the race origin, once the user has seen that the saved one is taken.</summary>
+    internal bool AdoptOrigin()
+    {
+        if (_portFile == null) return HasStableOrigin = true;
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(_portFile))!);
+            File.WriteAllText(_portFile, Port.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            return HasStableOrigin = true;
+        }
+        catch (IOException) { return false; }
+        catch (UnauthorizedAccessException) { return false; }
     }
 
     /// <summary>The relay url for one Scrolller media url (what a host frame carries after the rewrite), or null.</summary>
