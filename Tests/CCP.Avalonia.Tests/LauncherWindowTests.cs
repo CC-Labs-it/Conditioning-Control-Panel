@@ -77,6 +77,44 @@ public sealed class LauncherWindowTests
         (Button)((Grid)((Border)row.Header!).Child!).Children[2];
 
     [Fact]
+    public void ResizeEdgesReachTheWindowManagerOnlyForLeftPressesOnNormalResizableWindow() => Run(shell =>
+    {
+        var launcher = new LauncherWindow();
+        try
+        {
+            launcher.Show();
+            launcher.UpdateLayout();
+            var w = launcher.Bounds.Width;
+            var h = launcher.Bounds.Height;
+            foreach (var (point, edge) in new[]
+            {
+                (new Point(2, h / 2), WindowEdge.West), (new Point(w - 2, h / 2), WindowEdge.East),
+                (new Point(w / 2, 2), WindowEdge.North), (new Point(w / 2, h - 2), WindowEdge.South),
+                (new Point(2, 2), WindowEdge.NorthWest), (new Point(w - 2, 2), WindowEdge.NorthEast),
+                (new Point(2, h - 2), WindowEdge.SouthWest), (new Point(w - 2, h - 2), WindowEdge.SouthEast),
+            })
+            {
+                launcher.MouseDown(point, MouseButton.Left);
+                launcher.MouseUp(point, MouseButton.Left);
+                Assert.Equal(edge, launcher.LastResizeEdge);
+            }
+            launcher.MouseDown(new Point(2, h / 2), MouseButton.Right);
+            launcher.MouseUp(new Point(2, h / 2), MouseButton.Right);
+            Assert.Equal(WindowEdge.SouthEast, launcher.LastResizeEdge);
+            launcher.CanResize = false;
+            launcher.MouseDown(new Point(2, h / 2), MouseButton.Left);
+            launcher.MouseUp(new Point(2, h / 2), MouseButton.Left);
+            Assert.Equal(WindowEdge.SouthEast, launcher.LastResizeEdge);
+            launcher.CanResize = true;
+            launcher.WindowState = WindowState.Maximized;
+            launcher.MouseDown(new Point(2, h / 2), MouseButton.Left);
+            launcher.MouseUp(new Point(2, h / 2), MouseButton.Left);
+            Assert.Equal(WindowEdge.SouthEast, launcher.LastResizeEdge);
+        }
+        finally { launcher.Close(); }
+    });
+
+    [Fact]
     public void LobbyChipRefreshesOnShowAndOpensLobby() => Run(shell =>
     {
         var calls = 0;
