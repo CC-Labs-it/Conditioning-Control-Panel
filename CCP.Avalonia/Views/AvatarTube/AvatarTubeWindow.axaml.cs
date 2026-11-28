@@ -323,6 +323,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // chamber rather than on the stock one.
             RefreshTubeLayout();
 
+            if (_parentWindow is Windows.MainShellWindow shell) shell.EngineStopped += OnClickBounceEngineStopped;
             AttachCompanionLevels();
             AttachServiceReactions(App.Achievements, global::ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance.Scheduler); // WPF xaml.cs:302-306
             AttachAwareness();   // WPF xaml.cs:317-322 (Reactions.cs)
@@ -340,6 +341,8 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // ReferenceEquals would be false every time because the conversion allocates.
             if (OpenChatSink == (Action)OpenChatInput) OpenChatSink = null;
             StopAvatarGlow();
+            StopClickBounce();
+            if (_parentWindow is Windows.MainShellWindow shell) shell.EngineStopped -= OnClickBounceEngineStopped;
             _avatarSetsClosed = true;
             LockReactionGeneration++;
             if (_rainSettings != null) _rainSettings.PropertyChanged -= RainSettingsChanged;

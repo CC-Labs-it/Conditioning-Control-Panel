@@ -385,12 +385,13 @@
                         <MenuItem x:Name="MenuItemPauseBrowser" Header="{loc:Str section_pause_browser}"/>
                     </ContextMenu>
                 </Border.ContextMenu>
-                <!-- ponytail: AvatarBounceScale (click-squash), AvatarScale/AvatarRotate/AvatarTranslate
+                <!-- ponytail: AvatarScale/AvatarRotate/AvatarTranslate
                      and the B pair (60fps breathing / wobble / bob), MistScale (mist drift) and
                      AvatarAnimatedTranslate (GIF bob) were all x:Named transforms driven from
                      AvatarTubeWindow.Avatar.cs. Avalonia only name-scopes StyledElements (AVLN2000),
                      so transform drivers live in code. Floating.cs now bobs ImgAvatar independently
                      of the reply bounce; portrait breathing and animated layers remain part B. -->
+                <Grid x:Name="ClickBounceHost" RenderTransformOrigin="50%,100%">
                 <Grid x:Name="AvatarBounceHost" RenderTransformOrigin="50%,100%">
                     <!-- Static PNG avatar (default) / emotive-portrait crossfade layer A -->
                     <Image x:Name="ImgAvatar" Classes="avatar-layer"
@@ -458,6 +459,7 @@
                           IsHitTestVisible="False"
                           IsVisible="False"
                           ClipToBounds="False"/>
+                </Grid>
                 </Grid>
             </Border>
 

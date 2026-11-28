@@ -1,5 +1,8 @@
 using System;
 using System.IO;
+using System.Linq;
+using Avalonia.Media;
+using ConditioningControlPanel.Avalonia.Views.Windows;
 using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia;
@@ -148,6 +151,36 @@ public sealed class TubeAvatarClickTests
             tube.Close(); property.SetValue(null, previous);
             CoreSettings.Current.AvatarMuted = muted; loc.SetLanguage(oldLanguage);
         }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task ClickBounceSettlesAndPanicStopsIt() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var tube = new AvatarTubeWindow(null);
+        var old = AvatarTubeWindow.TestLive;
+        try
+        {
+            AvatarTubeWindow.TestLive = tube;
+            tube.Show();
+            tube.HandleAvatarClick();
+            var host = tube.FindControl<Grid>("ClickBounceHost")!;
+            var scale = Assert.IsType<ScaleTransform>(host.RenderTransform);
+            tube.StepClickBounce(80);
+            Assert.Equal(1.015, scale.ScaleX, 5);
+            Assert.Equal(scale.ScaleX, scale.ScaleY);
+            tube.PlayDoubleBounce();
+            Assert.NotNull(tube.FindControl<Grid>("AvatarBounceHost")!.RenderTransform);
+            tube.StepClickBounce(300);
+            Assert.Null(host.RenderTransform);
+            tube.HandleAvatarClick();
+            Assert.NotNull(host.RenderTransform);
+            PanicSurfaces.All.Single(x => x.Id == "tube-speech").Stop(null);
+            Assert.Null(host.RenderTransform);
+            tube.StepClickBounce(80);
+            Assert.Null(host.RenderTransform);
+        }
+        finally { AvatarTubeWindow.TestLive = old; tube.Close(); }
         return Task.CompletedTask;
     });
 
