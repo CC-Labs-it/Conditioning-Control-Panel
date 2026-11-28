@@ -273,7 +273,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             // WPF ChaosWebViewHost.cs:1520-1527: suppress browser chrome in game windows;
             // :1584: sink routing for local pages only (Just Drop is a remote site).
             Web = new WebHost { HostedPageMotion = true, HostedPageSink = spec.Id != JustDropId, ConfigureNative = Platform.SpiralWebView2Policy.Attach };
-            if (spec.Id == DtrhId) Web.BrowserProcessFailed += () => RecoverDtrh("process-failed");
+            if (spec.Id == DtrhId)
+            {
+                // WPF DtrhHostService.cs:199,213-214: the drone and drift voice start without a click.
+                Web.WindowsBrowserArguments = "--autoplay-policy=no-user-gesture-required";
+                var motion = CoreSettings.Current.MotionLevel == ConditioningControlPanel.Models.MotionLevel.Off ? "reduce" : "motion";
+                Web.WindowsUserDataFolder = System.IO.Path.Combine(CorePaths.UserData, "browser_data_avalonia_dtrh_" + motion);
+                Web.BrowserProcessFailed += () => RecoverDtrh("process-failed");
+            }
             // Glassroad speaks only chrome.webview (WebView2 native); WebKitGTK gets it from the shim.
             if (spec.Id == "goon" || IsGlassroad) Web.InjectCarrier = true; // before the native view or first navigation
             if (spec.Id == FypId || spec.Id == JustDropId || spec.Id == "loom" || IsRace || IsGlassroad) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };

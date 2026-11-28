@@ -53,9 +53,9 @@ public sealed partial class GameWindowTests
                 }
                 finally { intake.Close(); }
             }
-            // Own-profile games (Loom, Piece by Piece, Just Drop) keep their folder; the rest split by switch value.
-            Assert.Single(folders[MotionLevel.Off].Except(folders[MotionLevel.Full]));
-            Assert.Single(folders[MotionLevel.Full].Except(folders[MotionLevel.Off]));
+            // DtRH and the shared hosted profile split by motion; other own-profile games keep their folder.
+            Assert.Equal(2, folders[MotionLevel.Off].Except(folders[MotionLevel.Full]).Count());
+            Assert.Equal(2, folders[MotionLevel.Full].Except(folders[MotionLevel.Off]).Count());
         }
         finally { ConditioningControlPanel.CoreSettings.Current.MotionLevel = saved; }
     });
