@@ -136,7 +136,51 @@ namespace ConditioningControlPanel.Avalonia.Platform
             return info;
         }
 
-        private static async Task<UpdateInfo?> FetchLatestAsync(string api)
+        /// <summary>A beta install also takes pre-releases (the build's CcpReleaseChannel, CCP.Avalonia.csproj).</summary>
+        internal static Func<bool> BetaInstall = () => string.Equals(typeof(AppUpdater).Assembly
+            .GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
+            .OfType<System.Reflection.AssemblyMetadataAttribute>()
+            .FirstOrDefault(a => a.Key == "CcpReleaseChannel")?.Value, "beta", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>The page "Download" opens off Windows: the offered release's own page (ccp-bugs #1627).</summary>
+        internal static string? LinuxPage { get; private set; }
+
+        private static Task<UpdateInfo?> FetchLatestAsync(string api) =>
+            OperatingSystem.IsWindows() ? FetchWindowsAsync(api) : FetchLinuxAsync(api);
+
+        /// <summary>
+        /// ccp-bugs #1627: /releases/latest is the Windows installer, so off Windows the newest
+        /// release that carries the linux-x64 tarball is offered instead, and nothing when none is
+        /// newer than this build. Pre-releases count only on a beta install.
+        /// </summary>
+        private static async Task<UpdateInfo?> FetchLinuxAsync(string api)
+        {
+            LinuxPage = null;
+            try
+            {
+                using var client = Client(TimeSpan.FromSeconds(15));
+                var response = await client.GetStringAsync($"{api}/releases?per_page=50");
+                var beta = BetaInstall();
+                var pick = ReleaseFeed.PickLinuxRelease(response, includePrereleases: beta);
+                if (!Version.TryParse(CoreReleaseContent.AppVersion, out var current)) current = new Version(1, 0, 0);
+                Log.Information("Linux release check: newest Linux release={Latest} ({Tag}), current={Current}, beta={Beta}",
+                    pick?.Version, pick?.Tag, current, beta);
+                if (pick is null || pick.Version <= current) return null;
+                LinuxPage = pick.PageUrl;
+                return new UpdateInfo
+                {
+                    Version = pick.Version.ToString(), ReleaseDate = DateTime.Now, IsNewer = true, IsGitHubFallback = true,
+                    ReleaseNotes = pick.Notes, FileSizeBytes = pick.Size,
+                };
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "GitHub releases API check failed");
+                return null;
+            }
+        }
+
+        private static async Task<UpdateInfo?> FetchWindowsAsync(string api)
         {
             try
             {
@@ -340,7 +384,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         {
             if (!OperatingSystem.IsWindows())
             {
-                await OpenUrl(owner, ReleaseLinks.ReleasesPageUrl);
+                // The offered Linux release's page; never /releases/latest, the Windows build (ccp-bugs #1627).
+                await OpenUrl(owner, LinuxPage ?? ReleaseLinks.ReleasesListUrl);
                 return;
             }
             if (Latest is { } info) await DownloadAndRunAsync(owner, info);
@@ -471,7 +516,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 return false;
             }
             Log.Information("Exiting for silent update (helper will install + relaunch)");
-            (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Shutdown();
+            if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+                App.RequestDesktopShutdown(desktop);
             return true;
         }
 

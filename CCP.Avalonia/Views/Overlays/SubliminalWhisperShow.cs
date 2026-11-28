@@ -88,14 +88,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static Action<string, int?, int?> DrawWithDuration = (text, opacity, duration) =>
             PostOneShot(() => Present(text, opacity, duration));
 
-        private static void Present(string text, int? opacity, int? duration = null)
+        /// <summary>WPF FlashSubliminalCustom fadeInMs/fadeOutMs (SubliminalService.cs:311): a card with its own fades.</summary>
+        internal static Action<string, int?, int?, int?, int?> DrawWithFades = (text, opacity, duration, fadeIn, fadeOut) =>
+            PostOneShot(() => Present(text, opacity, duration, fadeIn, fadeOut));
+
+        private static void Present(string text, int? opacity, int? duration = null, int? fadeIn = null, int? fadeOut = null)
         {
             if ((global::Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow is { } host)
-                SubliminalOverlay.Show(host, text, opacity, duration);
+                SubliminalOverlay.Show(host, text, opacity, duration, fadeIn, fadeOut);
         }
 
         internal static Action<int, Action> After = (ms, then) => Task.Delay(ms).ContinueWith(_ => then());
         internal static Func<double> Roll = () => { lock (Rng) return Rng.NextDouble(); };
+
+        /// <summary>EMI Desk moments; a test swaps it.</summary>
+        internal static Action<string> EmiMoment = moment => Windows.EmiDesk.EmiDeskService.Instance.Fire(moment, null);
+
+        /// <summary>Core's run-state hook (WPF SubliminalService.OnRunStateChanged :134): starting fires the
+        /// EMI Desk moment (MOMENTS 4.B, :138); stopping tears down every card and the whisper.</summary>
+        internal static void RunStateChanged(bool running)
+        {
+            if (running)
+            {
+                try { EmiMoment("subliminalsStarted"); } catch (Exception ex) { Log.Debug("Subliminal: EMI moment failed: {E}", ex.Message); }
+                return;
+            }
+            StopAll();
+            Dispatcher.UIThread.Post(SubliminalOverlay.CloseAll);
+        }
 
         /// <summary>WPF TearDownSurfaces: silence the whisper and retire every pending card/Reset.</summary>
         internal static void StopAll()
@@ -138,7 +158,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>WPF FlashSubliminalCustom for the AI command: trim, cap, remove tags, then
         /// haptic anticipation and a silent card (10 XP), even when the ambient scheduler is off.</summary>
-        internal static void Custom(string text, int? opacity = null, int? durationMs = null, bool suppressHaptic = false)
+        internal static void Custom(string text, int? opacity = null, int? durationMs = null, bool suppressHaptic = false,
+            int? fadeInMs = null, int? fadeOutMs = null)
         {
             if (string.IsNullOrWhiteSpace(text)) return;
             text = text.Trim();
@@ -152,7 +173,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 lock (OneShotGate)
                 {
                     if (!ReferenceEquals(owner, Volatile.Read(ref _oneShotOwner))) return;
-                    if (durationMs.HasValue) DrawWithDuration(phrase, opacity, durationMs); else DrawWithOpacity(phrase, opacity);
+                    if (fadeInMs.HasValue || fadeOutMs.HasValue) DrawWithFades(phrase, opacity, durationMs, fadeInMs, fadeOutMs);
+                    else if (durationMs.HasValue) DrawWithDuration(phrase, opacity, durationMs); else DrawWithOpacity(phrase, opacity);
                 }
             };
             if (suppressHaptic) draw(); else HapticThenDraw(phrase, draw);

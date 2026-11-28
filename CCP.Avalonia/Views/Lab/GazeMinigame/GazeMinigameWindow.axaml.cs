@@ -553,10 +553,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             // WinForms' FolderBrowserDialog becomes the platform folder picker.
             try
             {
+                IStorageFolder? start = null;
+                try { start = await StorageProvider.TryGetFolderFromPathAsync(CorePaths.EffectiveAssets); }
+                catch (Exception ex) { Log.Debug(ex, "GazeMinigame: folder picker start location unavailable"); }
+                if (!IsVisible) return; // Panic or close may have ended the game during lookup.
                 var picked = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
                 {
                     Title = "Pick a folder of images and/or videos",
                     AllowMultiple = false,
+                    SuggestedStartLocation = start,
                 });
                 var folder = picked.Count > 0 ? picked[0].TryGetLocalPath() : null;
                 if (string.IsNullOrWhiteSpace(folder)) return;
@@ -1040,6 +1045,42 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             new(path, randomStart: true, loop: false) { Stretch = Stretch.Uniform };
 
         private readonly List<GazeRoundImage> _roundImages = new();
+        // UI-thread owned: keep old rounds alive after their window closes, until the sink is free.
+        private static readonly HashSet<Task> PendingRoundTeardowns = new();
+
+        private static async void TrackRoundTeardown(Task task)
+        {
+            PendingRoundTeardowns.Add(task);
+            try { await task; }
+            catch (Exception ex) { Log.Warning(ex, "GazeMinigame: round video cleanup failed"); }
+            finally { PendingRoundTeardowns.Remove(task); }
+        }
+
+        // App exit, UI thread: WPF Window_Closing disposes players synchronously before libvlc unloads
+        // (GazeMinigameWindow.xaml.cs:1661); here the native work still running gets a bounded wait.
+        internal static bool WaitForRoundCleanupOnExit(TimeSpan budget)
+        {
+            try
+            {
+                if (Task.WaitAll(PendingRoundTeardowns.ToArray(), budget)) return true;
+                Log.Warning("GazeMinigame: round video cleanup still running at exit");
+            }
+            catch (Exception ex) { Log.Warning(ex, "GazeMinigame: round video cleanup failed"); }
+            return false;
+        }
+
+        internal static async Task PrepareForShutdownAsync()
+        {
+            while (true)
+            {
+                CloseAllForPanic();
+                var pending = PendingRoundTeardowns.ToArray();
+                if (pending.Length == 0) return;
+                try { await Task.WhenAll(pending); }
+                catch (Exception ex) { Log.Warning(ex, "GazeMinigame: round video cleanup failed"); }
+                foreach (var task in pending) PendingRoundTeardowns.Remove(task);
+            }
+        }
 
         private Image BuildImageView(string path)
         {
@@ -1050,9 +1091,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
             return img;
         }
 
-        private void DisposeCurrentRoundPlayers()
+        internal void DisposeCurrentRoundPlayers(bool synchronous = false)
         {
-            // InlineLoopVideo detaches synchronously: stop decoder, dispose player, free sink.
+            // Start both stops before removing the panes. Detach remains synchronous for other hosts.
+            foreach (var video in _leftPane.Children.OfType<InlineLoopVideo>().Concat(_rightPane.Children.OfType<InlineLoopVideo>()))
+            {
+                var teardown = video.Teardown(synchronous);
+                if (!teardown.IsCompleted) TrackRoundTeardown(teardown);
+            }
             _leftPane.Children.Clear();
             _rightPane.Children.Clear();
             foreach (var image in _roundImages) image.Dispose();
@@ -1599,6 +1645,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame
                 }
                 else Log.Information("GazeMinigame: skipped FlashService resume — engine is no longer running");
             }
+
         }
 
         // ─────────────────────────────────────────────────────────────────────

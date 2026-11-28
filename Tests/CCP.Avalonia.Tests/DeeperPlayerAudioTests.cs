@@ -7,11 +7,13 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Input;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models.Deeper;
+using ConditioningControlPanel.Services.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Deeper;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using Xunit;
@@ -53,6 +55,108 @@ public sealed class DeeperPlayerAudioTests
         obj.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(obj, args);
     private static void Click(EnhancementPlayerWindow window, string name) =>
         window.FindControl<Button>(name)!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+    [Fact]
+    public Task PausedAudioEscapeRequiresHoldAndPanicStillPauses() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var open = DeeperLocalAudio.Open;
+        var strict = CoreSettings.Current.StrictLockEnabled;
+        CoreSettings.Current.StrictLockEnabled = false;
+        var audio = new Audio();
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
+        var now = DateTimeOffset.UtcNow;
+        var win = new EnhancementPlayerWindow(null, null) { LoadWaveformPeaks = NoPeaks, InputNow = () => now };
+        try
+        {
+            win.Show();
+            win.OpenLocalMediaFile("escape.mp3");
+            Assert.True(audio.Playing);
+            Click(win, "BtnPlayPause");
+            Assert.False(audio.Playing);
+            win.PlayerKey(Key.Escape);
+            Invoke(win, "EscapeUp");
+            Assert.True(win.IsVisible);
+            Assert.False(audio.Disposed);
+            win.PlayerKey(Key.Escape);
+            now = now.AddSeconds(2);
+            win.PlayerKey(Key.Escape, repeat: true);
+            now = now.AddSeconds(1.1);
+            win.TickPlayerInput();
+            Assert.True(audio.Disposed);
+            Assert.Equal(Loc.Get("deeper_player_status_escape_stopped"), win.FindControl<TextBlock>("TxtStatus")!.Text);
+            var resumed = new Audio();
+            DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(resumed);
+            win.OpenLocalMediaFile("panic.mp3");
+            Assert.True(resumed.Playing);
+            win.LoadEnhancementFromMemory(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*", Regions = { new Region { Id = "test", End = 200 } } }, "test");
+            Invoke(win, "UiTimer_Tick", null, EventArgs.Empty);
+            Assert.True(EnhancementPlayerWindow.IsAnyEnhancementRunning);
+            Click(win, "BtnPlayPause");
+            var audioField = typeof(EnhancementPlayerWindow).GetField("_localAudio", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            audioField.SetValue(win, null);
+            try
+            {
+                win.PlayerKey(Key.Escape);
+                Invoke(win, "EscapeUp");
+                Assert.True(win.IsVisible);
+            }
+            finally { audioField.SetValue(win, resumed); }
+            Click(win, "BtnPlayPause");
+            Assert.True(resumed.Playing);
+            PanicSurfaces.All.Single(s => s.Id == "deeper-player").Stop(null);
+            Assert.False(EnhancementPlayerWindow.IsAnyEnhancementRunning);
+            Assert.False(resumed.Playing);
+            win.PlayerKey(Key.Escape);
+            Invoke(win, "EscapeUp");
+            Assert.True(win.IsVisible);
+            CoreSettings.Current.StrictLockEnabled = true;
+            win.PlayerKey(Key.Escape);
+            now = now.AddSeconds(2);
+            win.PlayerKey(Key.Escape, repeat: true);
+            now = now.AddSeconds(1.1);
+            win.TickPlayerInput();
+            Invoke(win, "EscapeUp");
+            Assert.True(win.IsVisible);
+            Assert.False(resumed.Disposed);
+        }
+        finally { win.Close(); DeeperLocalAudio.Open = open; CoreSettings.Current.StrictLockEnabled = strict; }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task KeyboardSeekUpdatesAudioAndPanicKeepsItPaused() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var open = DeeperLocalAudio.Open;
+        var audio = new Audio();
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
+        var win = new EnhancementPlayerWindow(null, null) { LoadWaveformPeaks = NoPeaks };
+        try
+        {
+            win.Show();
+            win.OpenLocalMediaFile("seek.mp3");
+            Dispatcher.UIThread.RunJobs();
+            audio.PositionSeconds = 20;
+            Invoke(win, "UiTimer_Tick", null, EventArgs.Empty);
+            win.PlayerKey(Key.Right);
+            Assert.Equal(25, audio.PositionSeconds);
+            Invoke(win, "UiTimer_Tick", null, EventArgs.Empty);
+            Assert.Equal("0:25", win.FindControl<TextBlock>("TxtCurrent")!.Text);
+            win.PlayerKey(Key.Left, shift: true);
+            Assert.Equal(0, audio.PositionSeconds);
+            win.PlayerKey(Key.Right, shift: true);
+            Assert.Equal(30, audio.PositionSeconds);
+            PanicSurfaces.All.Single(s => s.Id == "deeper-player").Stop(null);
+            Assert.False(audio.Playing);
+            win.PlayerKey(Key.Right);
+            Invoke(win, "UiTimer_Tick", null, EventArgs.Empty);
+            Assert.False(audio.Playing);
+            Assert.Equal(35, audio.PositionSeconds);
+        }
+        finally { win.Close(); DeeperLocalAudio.Open = open; }
+        return Task.CompletedTask;
+    });
 
     [Theory]
     [InlineData(true)]
@@ -296,4 +400,42 @@ public sealed class DeeperPlayerAudioTests
         }
         finally { win.Close(); DeeperLocalAudio.Open = open; }
     });
+    [Fact]
+    public Task AudioEndPublishesTheLoadedPath() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var dir = Directory.CreateTempSubdirectory("deeper-finished-").FullName;
+        var media = Path.Combine(dir, "audio.mp3");
+        var path = Path.Combine(dir, "audio.ccpenh.json");
+        File.WriteAllBytes(media, new byte[16]);
+        var enh = new Enhancement { MediaType = MediaTypes.Audio, MediaSource = media };
+        enh.Metadata.Name = "Audio";
+        File.WriteAllText(path, EnhancementSerializer.Save(enh));
+        var oldOpen = DeeperLocalAudio.Open;
+        var audio = new Audio();
+        DeeperLocalAudio.Open = _ => Task.FromResult<IDeeperLocalAudio?>(audio);
+        var player = new EnhancementPlayerWindow(null, null) { LoadWaveformPeaks = NoPeaks };
+        string? finished = null;
+        void OnFinished(string? p) => finished = p;
+        EnhancementPlayerWindow.PlaybackFinished += OnFinished;
+        try
+        {
+            player.Show();
+            player.OpenLocalMediaFile(media);
+            Assert.Equal(path, player.LoadedFilePath);
+            Assert.True(audio.Playing);
+            audio.End();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(path, finished);
+        }
+        finally
+        {
+            EnhancementPlayerWindow.PlaybackFinished -= OnFinished;
+            player.Close();
+            DeeperLocalAudio.Open = oldOpen;
+            Directory.Delete(dir, true);
+        }
+        return Task.CompletedTask;
+    });
+
 }

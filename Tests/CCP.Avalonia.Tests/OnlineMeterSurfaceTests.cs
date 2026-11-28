@@ -41,6 +41,55 @@ public sealed class OnlineMeterSurfaceTests
         => OnlineMeterRules.For(source, consent, on, pct, spent, plan, official, seen);
 
     [Fact]
+    public Task Stamped_line_opens_once_and_refuses_locks() => Run(() =>
+    {
+        var tab = new AssetsTabView();
+        tab.PaintOnlineMeter(State(10, official: true), DateTime.Now, DateTime.Now.AddHours(1));
+        Assert.True(tab.OnlineMeterStamped.IsVisible);
+        var link = tab.FindControl<ConditioningControlPanel.Avalonia.Controls.SafeHyperlinkButton>("OnlineStampedLink");
+        Assert.NotNull(link);
+        Assert.Equal(Loc.Get("online_official_stamped_line"), Assert.IsType<TextBlock>(link.Content).Text);
+        var oldShell = ExternalOpener.Shell;
+        var oldStrict = CoreSettings.Current.StrictLockEnabled;
+        var oldLockdown = ConditioningControlPanel.Services.LockdownService.Current;
+        var chaos = typeof(ConditioningControlPanel.Avalonia.Views.Chaos.ChaosRunHost).GetField("_active", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var active = typeof(ConditioningControlPanel.Services.LockdownService).GetField("_isActive", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var sandbox = typeof(ConditioningControlPanel.Services.SandboxNet).GetProperty("Active")!;
+        var oldSandbox = (bool)sandbox.GetValue(null)!;
+        var oldChaos = (bool)chaos.GetValue(null)!;
+        var lockdown = new ConditioningControlPanel.Services.LockdownService();
+        var opened = new System.Collections.Generic.List<string>();
+        try
+        {
+            sandbox.SetValue(null, false);
+            ExternalOpener.Shell = target => { opened.Add(target); return true; };
+            ConditioningControlPanel.Services.LockdownService.Current = lockdown;
+            CoreSettings.Current.StrictLockEnabled = false;
+            chaos.SetValue(null, false);
+            link.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(new[] { ScrolllerCreditRules.HomeLink }, opened);
+            CoreSettings.Current.StrictLockEnabled = true;
+            link.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            CoreSettings.Current.StrictLockEnabled = false;
+            active.SetValue(lockdown, true);
+            link.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            active.SetValue(lockdown, false);
+            chaos.SetValue(null, true);
+            link.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Single(opened);
+        }
+        finally
+        {
+            ExternalOpener.Shell = oldShell;
+            CoreSettings.Current.StrictLockEnabled = oldStrict;
+            ConditioningControlPanel.Services.LockdownService.Current = oldLockdown;
+            chaos.SetValue(null, oldChaos);
+            sandbox.SetValue(null, oldSandbox);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task The_assets_card_paints_percent_only_and_the_note_follows_the_rules() => Run(() =>
     {
         var tab = new AssetsTabView();
@@ -75,6 +124,31 @@ public sealed class OnlineMeterSurfaceTests
         Assert.Equal("Media from Scrolller", ((global::Avalonia.Controls.TextBlock)tab.TxtScrolllerCredit.Link.Content!).Text);
         Assert.Contains(Loc.Get("label_online_media_credit"), tab.TxtScrolllerCredit.Inlines!.OfType<global::Avalonia.Controls.Documents.Run>().Select(r => r.Text));
         Assert.Equal(Loc.Get("online_cache_day_line"), tab.TxtOnlineCacheDay.Text);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task Assets_card_styles_spent_and_upsell_lines_and_resets_them() => Run(() =>
+    {
+        var tab = new AssetsTabView();
+        var now = new DateTime(2026, 10, 23, 12, 0, 0);
+        var reset = now.Date.AddDays(1);
+        var spent = State(100, spent: true);
+        tab.PaintOnlineMeter(spent, now, reset);
+        Assert.Equal(Color.Parse("#CCCCE0"), Assert.IsAssignableFrom<ISolidColorBrush>(tab.TxtOnlineMeterPct.Foreground).Color);
+        Assert.Equal(Color.Parse("#F0F0F5"), Assert.IsAssignableFrom<ISolidColorBrush>(tab.TxtOnlineMeterSummary.Foreground).Color);
+        Assert.Equal(12.5, tab.TxtOnlineMeterSummary.FontSize);
+        Assert.Contains(string.Format(Loc.Get("online_meter_hours"), 12), tab.TxtOnlineMeterSummary.Text);
+        Assert.Equal("   " + Loc.Get(spent.UpsellKey!), tab.TxtOnlineMeterUpsell.Text);
+        Assert.Equal(Color.Parse("#E0B0FF"), Assert.IsAssignableFrom<ISolidColorBrush>(tab.TxtOnlineMeterUpsell.Foreground).Color);
+
+        var available = State(42, plan: ScrolllerPlan.Prime);
+        tab.PaintOnlineMeter(available, now, reset);
+        Assert.Equal(AssetsTabView.ToneColor(available.Tone), Assert.IsAssignableFrom<ISolidColorBrush>(tab.TxtOnlineMeterPct.Foreground).Color);
+        Assert.Equal(Color.Parse("#A7A7C1"), Assert.IsAssignableFrom<ISolidColorBrush>(tab.TxtOnlineMeterSummary.Foreground).Color);
+        Assert.Equal(11.5, tab.TxtOnlineMeterSummary.FontSize);
+        Assert.Equal(Loc.Get(available.UnderKey), tab.TxtOnlineMeterSummary.Text);
+        Assert.Equal("", tab.TxtOnlineMeterUpsell.Text);
         return Task.CompletedTask;
     });
 
@@ -290,7 +364,7 @@ public sealed class OnlineMeterSurfaceTests
     [InlineData(false, true, false, false)]
     [InlineData(false, false, true, false)]
     public void The_scrolller_link_never_opens_under_a_lock(bool strict, bool lockdown, bool chaos, bool opens)
-        => Assert.Equal(opens, AssetsTabView.CanOpenScrolllerHome(strict, lockdown, chaos));
+        => Assert.Equal(opens, ScrolllerCreditRules.CanOpenLink(strict, lockdown, chaos));
 
     [Fact]
     public void The_help_names_every_paragraph_and_no_figure()

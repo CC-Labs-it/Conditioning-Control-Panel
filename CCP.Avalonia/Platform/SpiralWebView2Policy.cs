@@ -6,7 +6,7 @@ using Microsoft.Web.WebView2.Core;
 
 namespace ConditioningControlPanel.Avalonia.Platform;
 
-// WPF Controls/SpiralEmbedView.cs:178-190. Only Spiral opts into this policy (WebHost.ConfigureNative).
+// WPF Controls/SpiralEmbedView.cs:178-190 and Chaos/ChaosWebViewHost.cs:1520-1527 share these settings.
 // Process failure is the host's own watch (WebHost.BrowserProcessFailed, TrailerBrowserPolicy), not this class.
 internal static class SpiralWebView2Policy
 {

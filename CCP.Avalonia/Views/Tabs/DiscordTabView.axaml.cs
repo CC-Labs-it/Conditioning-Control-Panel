@@ -8,6 +8,8 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Input.Platform;
 using Avalonia.Media;
+using Avalonia.Threading;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Localization;
@@ -72,7 +74,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             InitializeComponent();
             PrivacyPanel = new ProfilePrivacyPanel();
             PrivacyPanel.PrivacyChanged += RefreshPrivacyActions;
-            AttachedToVisualTree += (_, _) => RefreshPrivacyActions();
+            AttachedToVisualTree += (_, _) => { RefreshPrivacyActions(); CoreMods.ModChanged += OnArtModChanged; PaintStatBadges(); };
+            DetachedFromVisualTree += (_, _) => CoreMods.ModChanged -= OnArtModChanged;
+            PaintStatBadges();
             ProfileAllAchievementsExpander.PropertyChanged += (_, e) =>
             {
                 if (e.Property == Expander.IsExpandedProperty && ProfileAllAchievementsExpander.IsExpanded)
@@ -83,10 +87,29 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         // ------------------------------------------------------------------
         // The card (read-only): WPF MainWindow.Browser.cs BtnViewMyProfile_Click, SearchAndDisplayProfile,
         // DisplayOwnProfile, DisplayProfileEntry and RefreshProfileViewerAsync, on the tab itself.
-        // ponytail: no avatar picture (no Discord avatar URL or remote image load on this head), no Patreon
-        // badge/banner art, no staff
-        // flag for your own card: each stays hidden rather than drawn wrong.
         // ------------------------------------------------------------------
+
+        private void OnArtModChanged(object? sender, ModPackage mod) => Dispatcher.UIThread.Post(PaintStatBadges);
+
+        private void PaintStatBadges()
+        {
+            foreach (var (image, path) in new[] {
+                (ImgStatXp, "lv_10.png"), (ImgStatBubbles, "pop_the_Thought.png"),
+                (ImgStatVideos, "10_hours_pink.png"), (ImgStatGifs, "retinal_burn.png"),
+                (ImgStatLockCards, "total_lockdown.png"), (ImgStatAchievements, "spiral_eyes.png") })
+                if (ModArt.TryLoad("achievements/" + path) is { } art) image.Source = art;
+        }
+
+        private void ApplyPatreon(int tier, bool access)
+        {
+            var badge = access ? ModArt.TryLoadBuiltIn($"Patreon tier{(tier is >= 1 and <= 3 ? tier : 1)}.png") : null;
+            ProfilePatreonBadge.Source = badge;
+            ProfilePatreonBadge.IsVisible = access && tier > 0;
+            ProfilePatreonTierBadge.Source = badge;
+            ProfilePatreonTierBadge.IsVisible = access;
+            ImgPatreonTierBanner.Source = access ? ModArt.TryLoadBuiltIn(tier >= 3 ? "prime subject.webp" : "Pink filter.webp") : null;
+            ProfilePatreonTierBanner.IsVisible = access && ImgPatreonTierBanner.Source != null;
+        }
 
         private LeaderboardPage<LeaderboardRow>? _board;
         private Task<LeaderboardPage<LeaderboardRow>?>? _boardFetch;
@@ -173,7 +196,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var s = CoreSettings.Current;
             var progress = App.Achievements?.Progress;
             ShowCard(s.IsSeason0Og);
-            ApplyIdentityBadges(false, null, CoreAccount.IsWhitelisted);
+            ApplyIdentityBadges(AccountSeed.Discord?.IsStaff == true, AccountSeed.Discord?.StaffRole, CoreAccount.IsWhitelisted);
+            ApplyPatreon(s.PatreonTier, s.PatreonTier >= 1 || CoreAccount.IsWhitelisted);
             // WPF MainWindow.Browser.cs:2014-2017: the signed-in no-name placeholder.
             TxtProfileViewerName.Text = NeedsDisplayNameRule.FirstName(s.UserDisplayName, AccountSeed.Discord?.CustomDisplayName, AccountSeed.Patreon?.DisplayName)
                 ?? (string.IsNullOrEmpty(s.UnifiedId) ? "You" : Loc.Get("account_name_not_set"));
@@ -210,7 +234,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var s = CoreSettings.Current;
             ShowCard(entry.IsSeason0Og);
             var isOwn = string.Equals(entry.DisplayName, s.UserDisplayName, StringComparison.OrdinalIgnoreCase);
-            ApplyIdentityBadges(false, null, isOwn && CoreAccount.IsWhitelisted);
+            ApplyIdentityBadges(isOwn && AccountSeed.Discord?.IsStaff == true, isOwn ? AccountSeed.Discord?.StaffRole : null, isOwn && CoreAccount.IsWhitelisted);
+            ApplyPatreon(isOwn ? s.PatreonTier : entry.PatreonTier,
+                isOwn ? s.PatreonTier >= 1 || CoreAccount.IsWhitelisted : entry.IsPatreon && entry.PatreonTier >= 1);
             TxtProfileViewerName.Text = entry.DisplayName;
             ShowOwnActions(isOwn, entry);
             // WPF MainWindow.Browser.cs:2263 uses the server identity for every leaderboard card.
@@ -255,7 +281,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             Host?.LoadProfilePicture(!string.IsNullOrEmpty(lookup.AvatarUrl) ? lookup.AvatarUrl : own ? OwnPictureUrl() : null);
             if (own)
             {
-                ApplyIdentityBadges(false, null, CoreAccount.IsWhitelisted);
+                ApplyIdentityBadges(AccountSeed.Discord?.IsStaff == true, AccountSeed.Discord?.StaffRole, CoreAccount.IsWhitelisted);
                 Host?.ApplyOwnProfileWardrobe();
             }
             else
@@ -332,7 +358,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             _achievementsDirty = false;
             var tiles = _achievementIds?.Select(id => id != null && Achievement.All.TryGetValue(id, out var a) ? a : null)
                 .OfType<Achievement>()
-                .Select(a => new ProfileAchievementTile(a.Id, CoreMods.MakeModAware(a.Name))).ToList();
+                .Select(a => new ProfileAchievementTile(a.Id, CoreMods.MakeModAware(a.Name), ModArt.TryLoad("achievements/" + a.ImageName)))
+                .Where(tile => tile.Image != null).ToList();
             var any = tiles is { Count: > 0 };
             ProfileAchievementGrid.ItemsSource = any ? tiles : null;
             TxtNoAchievements.Text = _achievementEmptyText;

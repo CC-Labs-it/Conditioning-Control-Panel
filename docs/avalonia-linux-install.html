@@ -178,6 +178,17 @@ sed -i &quot;s|^Exec=.*|Exec=$HOME/.local/bin/conditioning-control-panel|&quot; 
 <p>Remove: delete <code>opt/conditioning-control-panel</code>, <code>bin/conditioning-control-panel</code> and the
 <code>io.github.CodeBambi.ConditioningControlPanel.*</code> files under <code>share/applications</code>, <code>share/icons/hicolor/*/apps</code>,
 <code>share/metainfo</code>.</p>
+<h2 id="data-locations">Where your data lives (moving from the Windows build)</h2>
+<p>The Linux build keeps its files in two places (ccp-bugs#1734; <code>$XDG_CONFIG_HOME</code> and <code>$XDG_DATA_HOME</code> replace them when set):</p>
+<ul>
+<li><code>~/.config/ConditioningControlPanel/</code>: achievements and their progress (<code>achievements.json</code>, which also holds stats and the login streak), custom sessions and custom presets.</li>
+<li><code>~/.local/share/ConditioningControlPanel/</code>: settings (<code>settings.json</code>, which includes level and XP), logs, assets, caches and the bundled engines.</li>
+</ul>
+<p>If you ran the Windows build under Wine, its files are in the Wine prefix under <code>drive_c/users/&lt;you&gt;/AppData/</code>:
+copy <code>Roaming/ConditioningControlPanel/</code> into <code>~/.config/ConditioningControlPanel/</code> and
+<code>Local/ConditioningControlPanel/</code> into <code>~/.local/share/ConditioningControlPanel/</code> before the first start of the Linux build.
+A copied <code>settings.json</code> may still point at Windows paths (for example a custom assets folder); set them again in Settings.
+Signing in restores your level, XP, achievements and login streak from the cloud.</p>
 <h2 id="installed-run-avalonia-portlinux-package-wired-715">Installed run (avalonia-port/linux-package-wired, 7.1.5)</h2>
 <p>Evidence: ~/ccp-port/evidence/linux-package-wired/ (scripts <code>install-run.sh</code>, <code>window-run.sh</code>, <code>wmclose.py</code> alongside).
 The CI tarball built locally, installed as above into a temp prefix, the <code>.desktop</code> <code>Exec</code> resolved through <code>PATH</code>, then:

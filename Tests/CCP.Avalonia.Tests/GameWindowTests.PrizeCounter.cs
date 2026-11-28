@@ -21,11 +21,12 @@ public sealed partial class GameWindowTests
     private sealed class ShopWire : HttpMessageHandler
     {
         internal readonly List<string> Urls = new();
+        internal bool Ok = true;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
         {
             lock (Urls) Urls.Add(r.RequestUri!.ToString() + " " + string.Join(",", r.Headers.GetValues("X-Auth-Token")));
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(
-                "{\"ok\":true,\"tabs\":[{\"id\":\"rain-clothes\"},{\"id\":\"kart\",\"shelves\":[{\"rows\":[{\"id\":\"rain.x\"},{\"id\":\"kart.y\"}]}]}]}") });
+                (Ok ? "{\"ok\":true,\"tabs\":[{\"id\":\"rain-clothes\"},{\"id\":\"kart\",\"shelves\":[{\"rows\":[{\"id\":\"rain.x\"},{\"id\":\"kart.y\"}]}]}]}" : "{\"ok\":false,\"reason\":\"owned\"}")) });
         }
     }
 
@@ -68,6 +69,52 @@ public sealed partial class GameWindowTests
         w.HandleMessage("{\"type\":\"ready\",\"protocol\":1}");
         return w;
     }
+
+    [Fact]
+    public void PrizeCounter_ProfileWearSavesRefusesAndStopsOnPanic() => RunCounter((shell, _, sent) =>
+    {
+        var s = CoreSettings.Current;
+        var oldLook = s.ProfileCosmetics;
+        var oldAccount = CoreAccount.UnifiedUserId;
+        var oldWear = GameWindow.CounterWearProfile;
+        try
+        {
+            s.UnifiedId = "counter-profile";
+            GameWindow.CounterWearProfile = shell.WearProfileItemFromCounter;
+            CoreAccount.UnifiedUserId = s.UnifiedId;
+            s.ProfileCosmetics = new ConditioningControlPanel.Models.ProfileCosmetics();
+            PrizeOwnership.ResetHeld();
+            PrizeOwnership.ApplySnapshot(s.UnifiedId, 1, new[] { "cos.prime.frame.room-host", "cos.profile.avatar.emi-pixel", "cos.profile.frame.gilt" });
+            var w = OpenCounter(sent);
+            Assert.Equal(new[] { "profile" }, ((JArray)sent.Single(x => (string?)x["type"] == "init")["wears"]!).Values<string>());
+            w.HandleMessage("{\"type\":\"wear\",\"id\":\"prime.frame.room-host\"}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("prime.frame.room-host", s.ProfileCosmetics.FrameId);
+            Assert.True((bool)sent.Last(x => (string?)x["type"] == "worn")["ok"]!);
+            w.HandleMessage("{\"type\":\"wear\",\"id\":\"profile.frame.lace\"}");
+            Dispatcher.UIThread.RunJobs();
+            var refused = sent.Last(x => (string?)x["type"] == "worn");
+            Assert.Equal("profile.frame.lace", (string?)refused["id"]);
+            Assert.False((bool)refused["ok"]!);
+            Assert.Equal("prime.frame.room-host", s.ProfileCosmetics.FrameId);
+            w.HandleMessage("{\"type\":\"wear\",\"id\":\"profile.avatar.emi-pixel\"}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("profile.avatar.emi-pixel", s.ProfileCosmetics.AvatarId);
+            Assert.True((bool)sent.Last(x => (string?)x["type"] == "worn")["ok"]!);
+            w.HandleMessage("{\"type\":\"wear\",\"id\":\"profile.frame.gilt\"}");
+            GameWindow.CloseAllForPanic();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("prime.frame.room-host", s.ProfileCosmetics.FrameId);
+            Assert.False(w.IsVisible);
+        }
+        finally
+        {
+            s.ProfileCosmetics = oldLook;
+            CoreAccount.UnifiedUserId = oldAccount;
+            GameWindow.CounterWearProfile = oldWear;
+            PrizeOwnership.ResetHeld();
+        }
+    });
 
     /// <summary>WPF LauncherWindow WalletChip_Click (:250): the signed-in wallet opens the counter over the launcher
     /// (door "launcher"), the launcher stays up, a second click brings the same window forward, and panic closes it.</summary>
@@ -117,7 +164,7 @@ public sealed partial class GameWindowTests
         Assert.Equal("acct-1", (string?)init["identity"]!["unifiedId"]);
         Assert.Equal(("kart", "glassroad"), ((string?)init["tab"], (string?)init["from"]));
         Assert.Equal("Prize Counter", (string?)init["lexicon"]!["shop_title"]);
-        Assert.Empty((JArray)init["wears"]!); Assert.False((bool)init["reducedMotion"]!);
+        Assert.Equal(new[] { "profile" }, ((JArray)init["wears"]!).Values<string>()); Assert.False((bool)init["reducedMotion"]!);
         Assert.DoesNotContain("tok", init.ToString());
 
         w.HandleMessage("{\"type\":\"request\",\"reqId\":\"r1\",\"op\":\"shop-state\"}");
@@ -135,6 +182,27 @@ public sealed partial class GameWindowTests
         sent.Clear(); w.HandleMessage("{\"type\":\"ready\"}");
         var again = sent.Single(o => (string?)o["type"] == "init");
         Assert.Equal(("chess", "glassroad", true), ((string?)again["tab"], (string?)again["from"], (bool)again["reducedMotion"]!));
+    });
+
+    [Fact]
+    public void PrizeCounter_BuyReceiptNotesShopOnce() => RunCounter((_, wire, sent) =>
+    {
+        var old = GameWindow.CounterNoteEvent;
+        var events = new List<string>();
+        try
+        {
+            GameWindow.CounterNoteEvent = events.Add;
+            CoreSettings.Current.UnifiedId = "acct-1";
+            var w = OpenCounter(sent);
+            w.HandleMessage("{\"type\":\"request\",\"reqId\":\"b1\",\"op\":\"shop-buy\",\"idem\":\"i1\",\"body\":{\"itemId\":\"kart.y\"}}");
+            Assert.True((bool)AwaitReply(sent, "b1")["ok"]!);
+            Assert.Equal(new[] { "e_shop" }, events);
+            wire.Ok = false;
+            w.HandleMessage("{\"type\":\"request\",\"reqId\":\"b2\",\"op\":\"shop-buy\",\"idem\":\"i2\",\"body\":{\"itemId\":\"kart.y\"}}");
+            Assert.False((bool)AwaitReply(sent, "b2")["ok"]!);
+            Assert.Equal(new[] { "e_shop" }, events);
+        }
+        finally { GameWindow.CounterNoteEvent = old; }
     });
 
     /// <summary>WPF SignInFromPage: signed out answers signed_out; signin opens the sign-in, then pins and reloads.</summary>
