@@ -1030,7 +1030,6 @@
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="Auto"/>
               <ColumnDefinition Width="Auto"/>
-              <ColumnDefinition Width="Auto"/>
               <ColumnDefinition Width="*"/>
               <ColumnDefinition Width="Auto"/>
               <ColumnDefinition Width="Auto"/>
@@ -1063,7 +1062,7 @@
             <!-- Reload / Home button - sits just right of the site toggle. Reloads the current
                  site's homepage; gives a way out of a stuck/blank page, since re-clicking an
                  already-selected site radio won't reload. -->
-            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+            <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
             <Button x:Name="BtnReloadBrowser"
                     Theme="{StaticResource BrowserPillButton}"
                     HorizontalAlignment="Left" VerticalAlignment="Center"
@@ -1074,12 +1073,16 @@
             </Button>
             <StackPanel x:Name="BrowserZoomCluster" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
               <fx:IconGlyph Kind="Search" Size="13" VerticalAlignment="Center" Margin="0,0,4,0"/>
-              <Button x:Name="BtnBrowserZoomOut" Theme="{StaticResource BrowserPillButton}" Content="−"
+              <Button x:Name="BtnBrowserZoomOut" Theme="{StaticResource BrowserPillButton}"
                       Width="22" Height="22" Padding="0" ToolTip.Tip="{loc:Str deeper_editor_tip_zoom_out}"
-                      AutomationProperties.Name="{loc:Str deeper_editor_tip_zoom_out}"/>
-              <Button x:Name="BtnBrowserZoomIn" Theme="{StaticResource BrowserPillButton}" Content="+"
+                      AutomationProperties.Name="{loc:Str deeper_editor_tip_zoom_out}">
+                <fx:IconGlyph Kind="Subtract" Size="12"/>
+              </Button>
+              <Button x:Name="BtnBrowserZoomIn" Theme="{StaticResource BrowserPillButton}"
                       Width="22" Height="22" Padding="0" Margin="3,0,0,0" ToolTip.Tip="{loc:Str deeper_editor_tip_zoom_in}"
-                      AutomationProperties.Name="{loc:Str deeper_editor_tip_zoom_in}"/>
+                      AutomationProperties.Name="{loc:Str deeper_editor_tip_zoom_in}">
+                <fx:IconGlyph Kind="Add" Size="12"/>
+              </Button>
             </StackPanel>
             </StackPanel>
             <!-- The fold arrow (WPF 210e0e262: "an unmissable dropdown arrow"): a wide pill in the
@@ -1092,8 +1095,8 @@
             <!-- WPF clips the pill to its star column when the header is narrow; without a clip it overflowed
                  onto the status and webcam pills (parity VA). The clip sits on the COLUMN, not the pill's panel,
                  so the fold glow still draws in the margins around the pill (GlowRenderProofTests). -->
-            <Panel Grid.Column="3" ClipToBounds="True">
-            <Panel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="8,0,8,0">
+            <Panel Grid.Column="2" ClipToBounds="True" Margin="128,0,8,0">
+            <Panel HorizontalAlignment="Center" VerticalAlignment="Center">
             <Border x:Name="FoldGlow" CornerRadius="13" IsVisible="False" IsHitTestVisible="False"/>
             <Button x:Name="BtnFoldBrowser" Theme="{StaticResource FoldArrowButton}"
                     MinWidth="120" Height="26" Padding="12,0"
@@ -1113,12 +1116,12 @@
             </Panel>
             </Panel>
             <!-- Status indicator -->
-            <TextBlock Grid.Column="4" x:Name="TxtBrowserStatus" Text="{loc:Str label_loading}"
+            <TextBlock Grid.Column="3" x:Name="TxtBrowserStatus" Text="{loc:Str label_loading}"
                        Foreground="{DynamicResource PinkBrush}" FontSize="10"
                        VerticalAlignment="Center" Margin="0,0,8,0"/>
             <!-- Deeper auto-bind badge (Phase 9). Shows when an enhancement is active for the
                  current page. -->
-            <Border Grid.Column="4" x:Name="DeeperBrowserBadge" IsVisible="False"
+            <Border Grid.Column="3" x:Name="DeeperBrowserBadge" IsVisible="False"
                     Background="{DynamicResource DeeperAccentTransparent20Brush}"
                     BorderBrush="{DynamicResource DeeperAccentBrush}" BorderThickness="1"
                     CornerRadius="3" Padding="6,1" Margin="0,0,8,0"
@@ -1132,14 +1135,14 @@
                  Off: "📷 Webcam"  On: "📷 Webcam On" (label updated in code-behind from
                  OnTrackingStateChanged). Click runs the consent → calibrate → start flow if
                  needed; second click stops tracking. -->
-            <Button Grid.Column="5" x:Name="BtnWebcamTracking"
+            <Button Grid.Column="4" x:Name="BtnWebcamTracking"
                     Theme="{StaticResource BrowserPillButton}"
                     ToolTip.Tip="{loc:Str tooltip_browser_webcam_tracking_off}"
                     FontSize="9" Padding="6,3" Margin="0,0,6,0" VerticalAlignment="Center">
               <fx:IconLabel x:Name="TxtWebcamTracking" Key="btn_browser_webcam_tracking_off" Spacing="4"/>
             </Button>
             <!-- Mute browser audio toggle (BambiCloud / HypnoTube video) -->
-            <Button Grid.Column="6" x:Name="BtnMuteBrowser"
+            <Button Grid.Column="5" x:Name="BtnMuteBrowser"
                     Theme="{StaticResource BrowserMuteButton}"
                     ToolTip.Tip="Mute / unmute browser audio (BambiCloud / HypnoTube)"
                     AutomationProperties.Name="Mute / unmute browser audio (BambiCloud / HypnoTube)"
@@ -1148,7 +1151,7 @@
               <fx:IconGlyph x:Name="TxtBrowserMute" Kind="Speaker2" Size="14"/>
             </Button>
             <!-- Pop Out button -->
-            <Button Grid.Column="7" x:Name="BtnPopOutBrowser"
+            <Button Grid.Column="6" x:Name="BtnPopOutBrowser"
                     Theme="{StaticResource SolidPinkButton}"
                     ToolTip.Tip="{loc:Str tooltip_pop_out_browser_to_resizable_window}"
                     FontSize="9" Padding="6,3" VerticalAlignment="Center">

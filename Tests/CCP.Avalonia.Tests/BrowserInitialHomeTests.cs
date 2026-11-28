@@ -134,6 +134,24 @@ public sealed class BrowserInitialHomeTests
     }));
 
     [Fact]
+    public Task BrowserZoomAndFoldControlsHaveSeparateHitAreas() => Run((shell, page, host, mod) =>
+    {
+        shell.Width = 1600;
+        shell.CompleteTabTransition();
+        shell.UpdateLayout();
+        var minus = page.FindControl<Button>("BtnBrowserZoomOut")!;
+        var plus = page.FindControl<Button>("BtnBrowserZoomIn")!;
+        var fold = page.FindControl<Button>("BtnFoldBrowser")!;
+        Assert.IsType<IconGlyph>(minus.Content);
+        Assert.IsType<IconGlyph>(plus.Content);
+        Assert.True(plus.Bounds.Width > 0);
+        Assert.True(fold.Bounds.Width > 0);
+        var plusRight = plus.TranslatePoint(new Point(plus.Bounds.Width, 0), page)!.Value.X;
+        var foldLeft = fold.TranslatePoint(default, page)!.Value.X;
+        Assert.True(plusRight <= foldLeft, $"Zoom ends at {plusRight}, fold starts at {foldLeft}");
+    });
+
+    [Fact]
     public Task BrowserToolbarZoomStepsClampsAndPanicCancelsPendingWork() => Run((shell, page, host, mod) =>
     {
         var minus = page.FindControl<Button>("BtnBrowserZoomOut")!;
