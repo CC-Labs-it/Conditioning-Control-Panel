@@ -167,9 +167,9 @@ public sealed partial class FriendsDrawerTests
         await svc.RefreshAsync();
         d.Toggle("u_on");
         foreach (var act in new[] { "invite", "poke", "watch" }) Assert.NotNull(Tagged<Button>(d, "friends-action:" + act));
-        // WPF ActionButton's MDL2 glyphs (E8A7 / E7C9 / E714 / E712), restored as Fluent icons.
+        // WPF 67fadbf70f ActionMark: envelope, poke, video and dots blocks, as Fluent icons.
         IconKind glyph(string tag) => Tagged<Button>(d, tag)!.GetLogicalDescendants().OfType<IconGlyph>().Single().Kind;
-        Assert.Equal(new[] { IconKind.Open, IconKind.HandPoint, IconKind.Video, IconKind.MoreHorizontal },
+        Assert.Equal(new[] { IconKind.Mail, IconKind.HandPoint, IconKind.Video, IconKind.MoreHorizontal },
             new[] { "invite", "poke", "watch", "more" }.Select(a => glyph("friends-action:" + a)));
         Assert.Null(d.OpenPicker);
 

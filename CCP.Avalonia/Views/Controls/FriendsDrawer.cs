@@ -30,6 +30,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Views.Controls.Dares;
 using ConditioningControlPanel.Controls.Friends;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Friends;
@@ -216,6 +217,7 @@ public sealed partial class FriendsDrawer : Border
     {
         if (_subscribed && _svc != null) { _svc.SnapshotChanged -= OnSnapshot; _svc.SentTrailsChanged -= OnTrailsChanged; }
         _subscribed = false;
+        UnhookDares();
         StopTables();
     }
     private void OnSnapshot(FriendsSnapshot _) => Render();
@@ -331,6 +333,7 @@ public sealed partial class FriendsDrawer : Border
             return;
         }
         AddFeed();
+        AddDares();
         var (online, offline) = FriendsDrawerRules.Split(snap);
         (online, offline) = FriendsDrawerRules.HostingFirst(online, offline, f => TableFor(f) != null);
         if (_openId != null && !Contains(snap, _openId)) (_openId, _picker) = (null, null);
@@ -381,7 +384,10 @@ public sealed partial class FriendsDrawer : Border
     {
         bool open = _openId == f.Id;
         var table = TableFor(f);
-        var top = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto") };
+        var top = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto"), Background = Brushes.Transparent, Tag = "friends-row-head" };
+        // WPF e0065f6b76 FriendsDrawer.cs:535: the header (never the open card) says what a right-click holds.
+        // shortcut: always the no-dare words; friends_row_tip_dare comes with the menu's Dare door (s19-dares-slip-window).
+        ToolTip.SetTip(top, Loc.Get("friends_row_tip"));
         var avatar = Avatar(f.Name, 38, f.Online || table != null, f.Look);
         if (!f.Online && table == null) avatar.Opacity = 0.55;
         var mid = new StackPanel { Margin = new Thickness(10, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
@@ -473,11 +479,6 @@ public sealed partial class FriendsDrawer : Border
         // WPF FriendsDrawer.cs:668-695 keeps actions, the leash chip and More above the question.
         card.Children.Add(CardActions(f));
         if (FriendLeashOffer.Create(f, Render) is { } offer) card.Children.Add(offer);
-        var more = Pill(GlyphContent(IconKind.MoreHorizontal, Loc.Get("friends_action_more"), center: true, glyphFg: Lilac), Brushes.Transparent, Muted, "friends-action:more", Line2);   // WPF E712
-        more.HorizontalAlignment = HorizontalAlignment.Stretch;
-        more.HorizontalContentAlignment = HorizontalAlignment.Center;
-        more.Click += (_, _) => { FriendsSfx.Click(); Menu(f).Open(more); };   // WPF FriendsDrawer.cs:686
-        card.Children.Add(more);
         if (_confirm is { } c && c.Id == f.Id)
         {
             bool block = c.What == "block";
@@ -503,9 +504,10 @@ public sealed partial class FriendsDrawer : Border
         }
         else if (_picker != null)
         {
-            var picker = Picker(f);
-            picker.Margin = new Thickness(0, 8, 0, 0);
-            card.Children.Add(picker);
+            // WPF 67fadbf70f: the open picker lands in a tray labelled with its action.
+            var tray = DareLook.Tray(Loc.Get("friends_action_" + _picker), Picker(f), "friends-tray:" + _picker);
+            tray.Margin = new Thickness(0, 2, 0, 0);
+            card.Children.Add(tray);
         }
         return card;
     }
