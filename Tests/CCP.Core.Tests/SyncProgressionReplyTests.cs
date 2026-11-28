@@ -119,6 +119,40 @@ public class SyncProgressionReplyTests
         }
     }
 
+    [Fact]
+    public async Task SyncReconcilesTopLevelSpendBeforeStatsAndUnlocksAchievement()
+    {
+        var oldSettings = CoreSettings.ServiceProvider;
+        var oldLogin = CoreAccount.IsLoggedInProvider;
+        var oldPost = CoreDispatch.PostProvider;
+        var settings = new SettingsService { SaveDebounceDueTimeMilliseconds = Timeout.Infinite };
+        var s = settings.Current;
+        s.UnifiedId = "spend-test"; s.AuthToken = "fake"; s.OfflineMode = false;
+        s.PlayerLevel = 10; s.PlayerXP = 0; s.LastConfirmedServerXp = 0;
+        s.PendingDescentMigrationChoice = null;
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString(), "achievements.json");
+        System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
+        var engine = new AchievementEngine(new AchievementStore(path)) { SuppressPopups = true };
+        CoreSettings.ServiceProvider = () => settings;
+        CoreAccount.IsLoggedInProvider = () => true;
+        CoreDispatch.PostProvider = action => action();
+        var sync = new SyncPush(() => Array.Empty<string>(), () => false,
+            new Reply("{\"lifetime_points_spent\":100,\"user\":{\"stats\":{\"lifetime_points_spent\":100}}}")) { StatsEngine = () => engine };
+        sync.MarkLoaded(null);
+        try
+        {
+            Assert.True(await sync.PushAsync("test"));
+            Assert.Equal(100, engine.Progress.LifetimeSkillPointsSpent);
+            Assert.True(engine.Progress.IsUnlocked("window_shopping"));
+        }
+        finally
+        {
+            sync.Reset(); settings.SealForReset();
+            CoreSettings.ServiceProvider = oldSettings; CoreAccount.IsLoggedInProvider = oldLogin; CoreDispatch.PostProvider = oldPost;
+            System.IO.Directory.Delete(System.IO.Path.GetDirectoryName(path)!, true);
+        }
+    }
+
     private sealed class Reply(string? json = null) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token) =>
