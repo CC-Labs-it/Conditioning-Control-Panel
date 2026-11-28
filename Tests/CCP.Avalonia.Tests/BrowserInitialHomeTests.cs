@@ -142,6 +142,7 @@ public sealed class BrowserInitialHomeTests
         var minus = page.FindControl<Button>("BtnBrowserZoomOut")!;
         var plus = page.FindControl<Button>("BtnBrowserZoomIn")!;
         var fold = page.FindControl<Button>("BtnFoldBrowser")!;
+        var reload = page.FindControl<Button>("BtnReloadBrowser")!;
         Assert.IsType<IconGlyph>(minus.Content);
         Assert.IsType<IconGlyph>(plus.Content);
         Assert.True(plus.Bounds.Width > 0);
@@ -149,9 +150,24 @@ public sealed class BrowserInitialHomeTests
         var plusRight = plus.TranslatePoint(new Point(plus.Bounds.Width, 0), page)!.Value.X;
         var foldLeft = fold.TranslatePoint(default, page)!.Value.X;
         Assert.True(plusRight <= foldLeft, $"Zoom ends at {plusRight}, fold starts at {foldLeft}");
-        var plusTop = plus.TranslatePoint(default, page)!.Value.Y;
-        var foldBottom = fold.TranslatePoint(new Point(0, fold.Bounds.Height), page)!.Value.Y;
-        Assert.True(foldBottom <= plusTop, $"Fold ends at {foldBottom}, zoom starts at {plusTop}");
+        var foldRight = fold.TranslatePoint(new Point(fold.Bounds.Width, 0), page)!.Value.X;
+        var clip = (Control)((Control)fold.Parent!).Parent!;
+        Assert.True(clip.ClipToBounds);
+        var clipLeft = clip.TranslatePoint(default, page)!.Value.X;
+        var clipRight = clip.TranslatePoint(new Point(clip.Bounds.Width, 0), page)!.Value.X;
+        Assert.True(foldLeft - 4 >= clipLeft && foldRight + 4 <= clipRight,
+            $"Fold {foldLeft}..{foldRight} lacks halo space in clip {clipLeft}..{clipRight}");
+        var webcam = page.FindControl<Button>("BtnWebcamTracking")!;
+        var webcamLeft = webcam.TranslatePoint(default, page)!.Value.X;
+        Assert.True(foldRight <= webcamLeft, $"Fold ends at {foldRight}, webcam starts at {webcamLeft}");
+        var reloadRight = reload.TranslatePoint(new Point(reload.Bounds.Width, 0), page)!.Value.X;
+        var minusLeft = minus.TranslatePoint(default, page)!.Value.X;
+        Assert.True(reloadRight <= minusLeft, $"Reload ends at {reloadRight}, zoom starts at {minusLeft}");
+        var zoomCentre = plus.TranslatePoint(new Point(0, plus.Bounds.Height / 2), page)!.Value.Y;
+        var foldCentre = fold.TranslatePoint(new Point(0, fold.Bounds.Height / 2), page)!.Value.Y;
+        var reloadCentre = reload.TranslatePoint(new Point(0, reload.Bounds.Height / 2), page)!.Value.Y;
+        Assert.InRange(Math.Abs(zoomCentre - foldCentre), 0, 1);
+        Assert.InRange(Math.Abs(zoomCentre - reloadCentre), 0, 1);
     });
 
     [Fact]

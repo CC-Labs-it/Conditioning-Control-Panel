@@ -1025,8 +1025,8 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
           </Grid.RowDefinitions>
-          <!-- Browser header: controls above, page zoom below. -->
-          <Grid Grid.Row="0" Margin="0,0,0,4" RowDefinitions="Auto,Auto">
+          <!-- Browser header: site, page controls, fold, status and pop-out. -->
+          <Grid Grid.Row="0" Margin="0,0,0,4">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="Auto"/>
               <ColumnDefinition Width="Auto"/>
@@ -1062,7 +1062,9 @@
             <!-- Reload / Home button - sits just right of the site toggle. Reloads the current
                  site's homepage; gives a way out of a stuck/blank page, since re-clicking an
                  already-selected site radio won't reload. -->
-            <Button Grid.Column="2" x:Name="BtnReloadBrowser"
+            <Grid Grid.Column="2" ColumnDefinitions="Auto,8,*" MinWidth="256" ClipToBounds="True">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+            <Button x:Name="BtnReloadBrowser"
                     Theme="{StaticResource BrowserPillButton}"
                     HorizontalAlignment="Left" VerticalAlignment="Center"
                     ToolTip.Tip="{loc:Str tooltip_reload_browser}"
@@ -1070,8 +1072,7 @@
                     FontSize="11" Padding="6,3" Margin="8,0,0,0">
               <fx:IconGlyph Kind="ArrowSync" Size="13"/>
             </Button>
-            <StackPanel x:Name="BrowserZoomCluster" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
-                        Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="8,2,0,0">
+            <StackPanel x:Name="BrowserZoomCluster" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
               <fx:IconGlyph Kind="Search" Size="13" VerticalAlignment="Center" Margin="0,0,4,0"/>
               <Button x:Name="BtnBrowserZoomOut" Theme="{StaticResource BrowserPillButton}"
                       Width="22" Height="22" Padding="0" ToolTip.Tip="{loc:Str deeper_editor_tip_zoom_out}"
@@ -1084,6 +1085,7 @@
                 <fx:IconGlyph Kind="Add" Size="12"/>
               </Button>
             </StackPanel>
+            </StackPanel>
             <!-- The fold arrow (WPF 210e0e262: "an unmissable dropdown arrow"): a wide pill in the
                  header's empty star column, clear of the reload button. Hue, label, tooltip and
                  the breathing glow while folded are painted by SettingsTabView.PaintFoldArrow from
@@ -1095,7 +1097,7 @@
                  onto the status and webcam pills (parity VA). The clip sits on the COLUMN, not the pill's panel,
                  so the fold glow still draws in the margins around the pill (GlowRenderProofTests). -->
             <Panel Grid.Column="2" ClipToBounds="True">
-            <Panel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="48,0,8,0">
+            <Panel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="8,0,8,0">
             <Border x:Name="FoldGlow" CornerRadius="13" IsVisible="False" IsHitTestVisible="False"/>
             <Button x:Name="BtnFoldBrowser" Theme="{StaticResource FoldArrowButton}"
                     MinWidth="120" Height="26" Padding="12,0"
@@ -1114,6 +1116,7 @@
             </Button>
             </Panel>
             </Panel>
+            </Grid>
             <!-- Status indicator -->
             <TextBlock Grid.Column="3" x:Name="TxtBrowserStatus" Text="{loc:Str label_loading}"
                        Foreground="{DynamicResource PinkBrush}" FontSize="10"
