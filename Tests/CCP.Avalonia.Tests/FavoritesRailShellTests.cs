@@ -106,6 +106,10 @@ public sealed class FavoritesRailShellTests
                 Assert.Contains(recentChip, recent.Children);
                 Assert.Same(recentChip, recent.Children[0]);
 
+                s.RailFavorites.Add("tab.haptics");
+                w.RefreshNavPremiumTags();
+                Assert.False(HasPadlock((Button)favs.Children[1]), "free Haptics must not wear a padlock");
+
                 // A tier change repaints through RefreshNavPremiumTags (App.axaml.cs RepaintVeils),
                 // exactly as WPF NavPremiumTags.cs:158 repaints the chips.
                 premium = true;
