@@ -34,7 +34,8 @@ public partial class MainShellWindow
             // WPF DoseKeeper:246-247: switching Lockdown on is the user's own act, so an old panic no longer holds the engine.
             PanicAftermath.ReleaseEngineHold();
             _doseEngineKickoff?.Stop();
-            _doseEngineKickoff = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            // A background-priority timer can be starved by a busy UI after its deadline.
+            _doseEngineKickoff = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromSeconds(2) };
             _doseEngineKickoff.Tick += (_, _) =>
             {
                 _doseEngineKickoff?.Stop();

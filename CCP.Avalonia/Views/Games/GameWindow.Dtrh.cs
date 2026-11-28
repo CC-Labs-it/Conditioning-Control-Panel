@@ -9,8 +9,8 @@
 // copies land, loops lane, loops-dry back-off) and root-relative asset urls the page's WebGL layer may draw.
 // Slice C: heartbeat recovery (one relaunch per app session).
 // ponytail: slice game-dtrh-host-d, each its own unit (parity row game-dtrh): the meta bridge (DtrhMetaBridge:
-// meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.spirals / ccp.content / ccp.mod origins, bark routing, sfx,
-// fire-payload, mute (native video), payload-state, vn-speaking, session stats,
+// meta snapshot, meta-command, the Warren shelves), the ccp.art / ccp.spirals / ccp.content / ccp.mod origins,
+// fire-payload, mute (native video), payload-state, session stats,
 // achievements bubble credit, RevealService.Sync, tucking the panel to the tray. Browser failures and silent ready pages share recovery.
 // Slice D: favorites + asset-stats (engagement history, #3727), the saved Loom spirals (loom-list and loom-*, #3949).
 using System;
