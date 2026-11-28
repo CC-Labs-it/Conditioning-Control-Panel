@@ -28,8 +28,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// <see cref="Host"/>, and the host is <see cref="MainShellWindow"/>, so a handler whose WPF
     /// target has been restored on the shell is now a forward again rather than a no-op: Privacy
     /// and Clear. The card itself (own card, search, lookup) lives on this tab, not the shell, so it
-    /// reaches its controls through the generated fields. The vat, faucet, wardrobe and spiral map
-    /// handlers are still empty - each says which symbol it is waiting on.
+    /// reaches its controls through the generated fields.
     ///
     /// THE CTOR CALLS <c>InitializeComponent()</c>, NOT <c>AvaloniaXamlLoader.Load(this)</c>, and
     /// that is not cosmetic: the loader never assigns the generated <c>x:Name</c> fields, so under
@@ -455,6 +454,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal void RefreshPrivacyActions()
         {
             ProfileLinkNotice.IsVisible = !CoreSettings.Current.HasLinkedDiscord;
+            // WPF MainWindow.ProfileCard.cs:86-96 RefreshProfileLinkDiscord.
+            BtnProfileLinkDiscord.IsVisible = _viewingOwn && CoreAccount.IsLoggedIn && Platform.AccountSeed.Discord?.IsAuthenticated != true;
             if (_viewingOwn)
                 ShowDiscordAction(CoreSettings.Current.AllowDiscordDm
                     ? (_profileEntry != null ? _profileEntry.DiscordId : Platform.AccountSeed.Discord?.UserId) : null,
@@ -475,7 +476,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>The link-notice button reuses the Privacy panel's login/link flow verbatim on
         /// WPF — that handler drives BtnDiscordTabLogin on the long-lived panel instance.</summary>
-        private async void BtnDiscordTabLogin_Click(object? sender, RoutedEventArgs e) => await PrivacyPanel.LoginAsync(Host);
+        private async void BtnDiscordTabLogin_Click(object? sender, RoutedEventArgs e)
+        {
+            await PrivacyPanel.LoginAsync(Host);
+            RefreshPrivacyActions();   // WPF Browser.cs:1536 UpdateDiscordTabUI after the link attempt
+        }
 
         /// <summary>Opens the relocated sharing controls, exactly as the WPF handler does
         /// (<c>mw.OpenProfilePrivacyDialog()</c>). The dialog borrows <see cref="PrivacyPanel"/>,
