@@ -22,6 +22,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
         public const string UiSans = "avares://CCP.Avalonia/Resources/fonts/ccpsans#CCP Sans";    // Segoe UI: Selawik with Segoe UI line height (OFL-CCPSans.txt)
         public const string Anton = "avares://CCP.Avalonia/Resources/fonts/display#Anton";          // Impact
         public const string ComicNeue = "avares://CCP.Avalonia/Resources/fonts/display#Comic Neue"; // Comic Sans MS
+        public const string BarlowCondensed = "avares://CCP.Avalonia/Resources/fonts/dares#Barlow Condensed";
+        public const string Caveat = "avares://CCP.Avalonia/Resources/fonts/dares#Caveat";
 
         /// <summary>The never-empty default face: bundled Inter on Windows (2026-10-10), bundled Selawik elsewhere
         /// (WPF draws unstyled text in Segoe UI, which Linux lacks; 2026-11-06).</summary>

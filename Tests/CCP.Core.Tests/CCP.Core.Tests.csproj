@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <Compile Include="..\ConditioningControlPanel.Tests\Dares\DaresApiCoreTests.cs" Link="DaresApiCoreTests.cs" />
+    <Compile Include="..\ConditioningControlPanel.Tests\Dares\DaresServiceCoreTests.cs" Link="DaresServiceCoreTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\Dares\DareUiTestKit.cs" Link="DareUiTestKit.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\Dares\DareSlipUiTests.cs" Link="DareSlipUiTests.cs" />
     <Compile Include="..\ConditioningControlPanel.Tests\Dares\DareCardUiTests.cs" Link="DareCardUiTests.cs" />

@@ -5,21 +5,22 @@ using Avalonia.Input;
 using ConditioningControlPanel.Controls.Dares;
 using ConditioningControlPanel.Avalonia.Views.Controls.Dares;
 using Xunit;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
 public class DareLookTests
 {
     [Theory]
-    [InlineData(DareTone.Pics, 0xFF9A5C, "\uE8B9")]
-    [InlineData(DareTone.Lockdown, 0x9C7BFF, "\uEA18")]
-    [InlineData(DareTone.CameraOff, 0x6F629A, "\uED1A")]
-    [InlineData(DareTone.Who, 0xB99CFF, "\uE77B")]
-    [InlineData(DareTone.When, 0xA395C4, "\uE787")]
-    public void TonePaletteAndGlyphFollowWpf(DareTone tone, int rgb, string glyph)
+    [InlineData(DareTone.Pics, 0xFF9A5C, IconKind.Image)]
+    [InlineData(DareTone.Lockdown, 0x9C7BFF, IconKind.ShieldLock)]
+    [InlineData(DareTone.CameraOff, 0x6F629A, IconKind.EyeOff)]
+    [InlineData(DareTone.Who, 0xB99CFF, IconKind.Mail)]
+    [InlineData(DareTone.When, 0xA395C4, IconKind.Clock)]
+    public void TonePaletteAndIconFollowWpf(DareTone tone, int rgb, IconKind icon)
     {
         Assert.Equal(Color.FromRgb((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb), DareLook.ToneColor(tone));
-        Assert.Equal(glyph, DareLook.ToneGlyph(tone));
+        Assert.Equal(icon, DareLook.ToneIcon(tone));
     }
 
     [Fact]

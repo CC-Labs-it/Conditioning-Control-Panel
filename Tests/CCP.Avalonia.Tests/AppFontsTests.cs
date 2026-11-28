@@ -18,6 +18,25 @@ namespace CCP.Avalonia.Tests;
 public sealed class AppFontsTests
 {
     [Fact]
+    public Task DareSlipFontsAreBundledWithTheirWeights() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApplication();
+        foreach (var (uri, name, weight) in new[]
+        {
+            (AppFonts.BarlowCondensed, "Barlow Condensed Medium", FontWeight.Medium),
+            (AppFonts.BarlowCondensed, "Barlow Condensed", FontWeight.Bold),
+            (AppFonts.Caveat, "Caveat", FontWeight.Bold),
+        })
+        {
+            var family = new FontFamily(uri);
+            Assert.True(FontManager.Current.TryGetGlyphTypeface(new Typeface(family, FontStyle.Normal, weight), out var face));
+            Assert.Equal(name, face!.FamilyName);
+            Assert.Equal(weight, face.Weight);
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task SharedMonoResourceMatchesWpfApplication() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         EnsureApplication();

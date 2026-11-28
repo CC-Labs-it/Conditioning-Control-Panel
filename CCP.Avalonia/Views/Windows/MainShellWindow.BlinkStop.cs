@@ -33,7 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// the tube's voice); Autonomy.CancelActivePulses; the session PAUSE + StopEngine (StartStop.cs:443-516:
         /// SkillTree, LockCardWindow.ForceCloseAll). Run in registry order.</summary>
         internal static readonly HashSet<string> BlinkStopIds = new()
-            { "blink-trainer", "audio-playlist", "mantra-chant", "companion-audio", "mantra", "keyword-triggers", "takeover", "engine", "pink-rush", "lock-cards", "tube-speech" };
+            { "dares", "blink-trainer", "audio-playlist", "mantra-chant", "companion-audio", "mantra", "keyword-triggers", "takeover", "engine", "pink-rush", "lock-cards", "tube-speech" };
         // keyword-triggers: hard rule 6 (a stop gesture is never more permissive than the panic key) with the
         // owner call 2026-10-10 that panic switches keyword triggers off. The same registry row as the panic
         // pass (KeywordTriggerHead.SwitchOffForPanic, Awareness tab repaint), so there is one switch-off path.
