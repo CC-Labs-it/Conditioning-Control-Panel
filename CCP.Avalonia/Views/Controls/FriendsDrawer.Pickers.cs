@@ -67,10 +67,7 @@ public sealed partial class FriendsDrawer
         foreach (var id in PokeSet.Shipped)
         {
             var chip = Chip(Loc.Get("friends_poke_" + id), "friends-poke:" + id);
-            // WPF FriendsDrawer.Pickers.cs:31-45: compact word stamps on a pink edge.
-            chip.CornerRadius = new CornerRadius(3);
-            chip.BorderBrush = Pink;
-            // Fluent reads these per button on :pointerover / :pressed.
+            // WPF hover: pink pill, dark ink (Fluent reads these per button on :pointerover / :pressed).
             foreach (var state in new[] { "PointerOver", "Pressed" })
                 (chip.Resources["ButtonBackground" + state], chip.Resources["ButtonForeground" + state], chip.Resources["ButtonBorderBrush" + state]) = (Pink, PokeInk, Pink);
             chip.Click += async (_, _) => { PlayLinkFx(chip, false, Pink); await PokeAsync(f.Id, id); };
@@ -100,10 +97,9 @@ public sealed partial class FriendsDrawer
         var grid = new UniformGrid { Columns = 2, Tag = "friends-picker:invite" };
         foreach (var (id, art) in InviteTiles)
         {
-            var blocked = FriendsInviteCodes.BlockedKey(id);
-            var tile = InviteTile(id, art, blocked != null);
+            var tile = InviteTile(id, art);
             tile.Margin = grid.Children.Count % 2 == 0 ? new Thickness(0, 0, 3, 6) : new Thickness(3, 0, 0, 6);
-            if (blocked != null)
+            if (FriendsInviteCodes.BlockedKey(id) is { } blocked)
             {
                 tile.IsEnabled = false;
                 ToolTip.SetShowOnDisabled(tile, true);
@@ -121,17 +117,12 @@ public sealed partial class FriendsDrawer
         return grid;
     }
 
-    private static Button InviteTile(string id, string art, bool locked)
+    private static Button InviteTile(string id, string art)
     {
         var sp = new StackPanel();
-        var picture = new Grid { Height = 64, ClipToBounds = true };
         if (Art(art) is { } pic)
-            picture.Children.Add(new Image { Source = pic, Stretch = Stretch.UniformToFill, Height = 64 });
-        if (locked)
-            picture.Children.Add(new Border { Tag = "friends-invite-lock:" + id, Background = Brushes.Black,
-                Width = 24, Height = 24, Margin = new Thickness(4), HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Top, Child = new IconGlyph { Kind = IconKind.LockClosed, Size = 15, Foreground = Brushes.White } });
-        sp.Children.Add(picture);
+            sp.Children.Add(new Border { Height = 64, CornerRadius = new CornerRadius(9, 9, 0, 0), ClipToBounds = true,
+                Child = new Image { Source = pic, Stretch = Stretch.UniformToFill, Height = 64 } });
         var t = Label(Loc.Get("friends_invite_" + id), 12.5, Text, Display);
         t.Margin = new Thickness(8, 5, 8, 6);
         sp.Children.Add(t);
