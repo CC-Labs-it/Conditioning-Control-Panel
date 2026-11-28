@@ -1,5 +1,10 @@
 using System;
 using System.Threading.Tasks;
+using System.IO;
+using System.Threading;
+using Avalonia.Threading;
+using ConditioningControlPanel.Services.Video;
+using ConditioningControlPanel.Services.Safety;
 using System.Linq;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Dialogs;
@@ -27,6 +32,47 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
     /// </summary>
     public partial class AvatarTubeWindow
     {
+        private MandatoryVideoScheduler? _completionReactionVideo;
+        private int _videoReactionGeneration;
+
+        private void AttachVideoReaction()
+        {
+            DetachVideoReaction();
+            _completionReactionVideo = CoreEngine.Video;
+            if (_completionReactionVideo != null) { _completionReactionVideo.VideoFinished += OnVideoFinished; _completionReactionVideo.VideoCancelled += CancelVideoReaction; }
+        }
+
+        private void DetachVideoReaction()
+        {
+            CancelVideoReaction();
+            if (_completionReactionVideo != null) { _completionReactionVideo.VideoFinished -= OnVideoFinished; _completionReactionVideo.VideoCancelled -= CancelVideoReaction; }
+            _completionReactionVideo = null;
+        }
+
+        private void CancelVideoReaction() => Interlocked.Increment(ref _videoReactionGeneration);
+
+        // WPF AvatarTubeWindow.Reactions.cs:362-382 and VideoService.cs:724-725.
+        private void OnVideoFinished()
+        {
+            var title = Path.GetFileNameWithoutExtension(_completionReactionVideo?.LastVideoPath);
+            var generation = Volatile.Read(ref _videoReactionGeneration);
+            Dispatcher.UIThread.Post(async () => await ReactToVideoAsync(title, generation));
+        }
+
+        internal async Task ReactToVideoAsync(string? title, int generation)
+        {
+            if (generation != Volatile.Read(ref _videoReactionGeneration) || PanicAftermath.TriggersSilenced()
+                || string.IsNullOrEmpty(title) || !CoreSettings.Current.AiChatEnabled || App.Ai?.IsAvailable != true) return;
+            try
+            {
+                var reaction = await App.Ai.GetVideoDoneReaction(title);
+                if (generation == Volatile.Read(ref _videoReactionGeneration) && !PanicAftermath.TriggersSilenced()
+                    && !string.IsNullOrWhiteSpace(reaction)) GigglePriority(reaction);
+            }
+            catch (Exception ex) { Log.Warning(ex, "Failed to get AI video-done reaction"); }
+
+        }
+
         // WPF Reactions.cs:397-417. A generation invalidates late replies on panic and close.
         internal int LockReactionGeneration;
         internal Func<string, int, int, Task<string?>>? LockReactionRequest;

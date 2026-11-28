@@ -30,6 +30,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// </summary>
         public void PanicSilence()
         {
+            CancelVideoReaction();
             System.Threading.Interlocked.Increment(ref _levelReactionVersion);
             RunOnAvatar(() =>
             {

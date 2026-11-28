@@ -323,6 +323,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             // chamber rather than on the stock one.
             RefreshTubeLayout();
 
+            AttachVideoReaction();
             AttachCompanionLevels();
             AttachServiceReactions(App.Achievements, global::ConditioningControlPanel.Avalonia.Views.Overlays.MandatoryVideoOverlay.Instance.Scheduler); // WPF xaml.cs:302-306
             AttachAwareness();   // WPF xaml.cs:317-322 (Reactions.cs)
@@ -354,6 +355,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
             DetachCompanionLevels();
             DetachServiceReactions();
             DetachAwareness();
+            DetachVideoReaction();
             UnwireContentPolicyWarning();
 
             // Every timer this window starts is stopped here. --render-all constructs ~180 windows
