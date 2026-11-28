@@ -189,4 +189,41 @@ public sealed class SubliminalSolidHostTests
         }
     });
 
+    // WPF ChaosWindowZ.cs:41-52, ChaosBubbleHostOverlay.cs:183: pin-off chaos run demotes the stage.
+    [Fact]
+    public void Free_desktop_chaos_run_keeps_the_stage_out_of_the_topmost_band() => AvaloniaTestDispatcher.Run(() =>
+    {
+        SubliminalSilentHintTests.EnsureAvalonia();
+        var configure = SharedOverlayHost.Configure;
+        var raise = SharedOverlayHost.Raise;
+        var active = typeof(ChaosRunHost).GetField("_active", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!;
+        var oldActive = active.GetValue(null);
+        var pin = ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop;
+        Window? stage = null; var raised = 0;
+        SharedOverlayHost.Configure = (w, _) => { stage = w; w.Width = 300; w.Height = 200; return true; };
+        SharedOverlayHost.Raise = _ => { raised++; return true; };
+        try
+        {
+            active.SetValue(null, true);
+            ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop = false;
+            var lease = SharedOverlayHost.Acquire(new PixelRect(0, 0, 300, 200))!;
+            Assert.False(stage!.Topmost);
+            lease.Raise();
+            Assert.Equal(0, raised);
+            lease.Dispose();
+            ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop = true;
+            lease = SharedOverlayHost.Acquire(new PixelRect(0, 0, 300, 200))!;
+            Assert.True(stage!.Topmost);
+            lease.Raise();
+            Assert.Equal(1, raised);
+            lease.Dispose();
+        }
+        finally
+        {
+            active.SetValue(null, oldActive);
+            ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop = pin;
+            SharedOverlayHost.Configure = configure;
+            SharedOverlayHost.Raise = raise;
+        }
+    });
 }

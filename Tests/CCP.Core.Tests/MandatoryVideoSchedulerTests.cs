@@ -34,6 +34,9 @@ public sealed class MandatoryVideoSchedulerTests
         public bool ThrowOnClose;
         public readonly List<bool> FlashesAtShow = new();
         public Action<string>? OnShow;
+        public Action? PendingStart;
+        public bool DeferStart;
+        public void Show(string path, bool strict, Action started) { Show(path, strict); if (DeferStart) PendingStart = started; else started(); }
         public void Show(string path, bool strict)
         {
             FlashesAtShow.Add(CoreFlash.IsRunning);
@@ -45,6 +48,60 @@ public sealed class MandatoryVideoSchedulerTests
         public Action? Then;
         public void ShowMessage(AttentionVerdict verdict, int ms, Action then) { Messages.Add(verdict); Then = then; }
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void VideoAnnouncementPrecedesEveryClipAndStopCancelsThePendingClip(bool freeze) => With(20, false, () =>
+    {
+        var saved = CoreSubliminal.BambiFreezeProvider;
+        var attention = CoreSettings.Current.AttentionChecksEnabled;
+        CoreSubliminal.BambiFreezeProvider = freeze ? () => { } : null;
+        CoreSettings.Current.AttentionChecksEnabled = false;
+        var clock = new FakeClock(); var host = new Host();
+        var video = new MandatoryVideoScheduler(host, clock, () => Clips);
+        var announced = 0;
+        video.VideoAboutToStart += () => announced++;
+        try
+        {
+            Assert.True(video.Trigger());
+            Assert.Equal(freeze ? 0 : 1, announced);
+            if (freeze) clock.Advance(MandatoryVideoScheduler.FreezeLead);
+            Assert.Equal(1, announced);
+            clock.Advance(MandatoryVideoScheduler.PreRoll - TimeSpan.FromMilliseconds(1));
+            Assert.Empty(host.Shown);
+            clock.Advance(TimeSpan.FromMilliseconds(1));
+            Assert.Single(host.Shown);
+            video.End();
+            Assert.True(video.Trigger());
+            if (freeze) clock.Advance(MandatoryVideoScheduler.FreezeLead);
+            Assert.Equal(2, announced);
+            video.ForceCleanup();
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Single(host.Shown);
+        }
+        finally { video.ForceCleanup(); CoreSubliminal.BambiFreezeProvider = saved; CoreSettings.Current.AttentionChecksEnabled = attention; }
+    });
+
+    [Fact]
+    public void StopDuringAnnouncementCannotRearmFrozenPreroll() => With(20, false, () =>
+    {
+        var saved = CoreSubliminal.BambiFreezeProvider;
+        var attention = CoreSettings.Current.AttentionChecksEnabled;
+        CoreSubliminal.BambiFreezeProvider = () => { };
+        CoreSettings.Current.AttentionChecksEnabled = false;
+        var clock = new FakeClock(); var host = new Host();
+        var video = new MandatoryVideoScheduler(host, clock, () => Clips);
+        video.VideoAboutToStart += video.ForceCleanup;
+        try
+        {
+            Assert.True(video.Trigger());
+            clock.Advance(MandatoryVideoScheduler.FreezeLead + MandatoryVideoScheduler.PreRoll);
+            Assert.False(video.IsPlaying);
+            Assert.Empty(host.Shown);
+        }
+        finally { video.ForceCleanup(); CoreSubliminal.BambiFreezeProvider = saved; CoreSettings.Current.AttentionChecksEnabled = attention; }
+    });
 
     [Theory]
     [InlineData(true, false, false, 1)]
@@ -831,6 +888,45 @@ public sealed class MandatoryVideoSchedulerTests
         Assert.Equal(new[] { "/new.mp4" }, started); v.ForceCleanup();
     });
 
+    [Fact]
+    public void DeferredStartDoesNotAnnounceBeforeSuccessOrAfterCleanup() => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { DeferStart = true };
+        var video = new MandatoryVideoScheduler(host, clock, () => Clips); var starts = 0;
+        video.VideoStarted += () => starts++;
+        Assert.True(video.Trigger(path: "/first.mp4")); clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Null(video.LastVideoPath); Assert.Equal(0, starts);
+        host.PendingStart!(); Assert.Equal("/first.mp4", video.LastVideoPath); Assert.Equal(1, starts);
+        video.End(); Assert.True(video.Trigger(path: "/second.mp4")); clock.Advance(MandatoryVideoScheduler.PreRoll);
+        var stale = host.PendingStart!; video.ForceCleanup(); stale();
+        Assert.Equal("/first.mp4", video.LastVideoPath); Assert.Equal(1, starts);
+    });
+
+    [Fact]
+    public void DeferredStartKeepsVideoHapticsAndScriptStoppedUntilReady() => With(20, false, () =>
+    {
+        using var h = new HapticService(new ConditioningControlPanel.Models.HapticSettings { VideoEnabled = true, VideoIntensity = 0.8, FunScriptEnabled = true });
+        var old = CoreHaptics.Service; var oldPremium = CoreEntitlement.HasPremiumProvider;
+        CoreHaptics.Service = h; CoreEntitlement.HasPremiumProvider = () => true;
+        try
+        {
+            var seq = typeof(ConditioningControlPanel.Services.Haptics.FunScriptService).GetField("_loadSeq", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            var before = (long)seq.GetValue(h.FunScript)!;
+            var clock = new FakeClock(); var host = new Host { DeferStart = true };
+            var video = new MandatoryVideoScheduler(host, clock, () => Clips);
+            var starts = 0; video.VideoStarted += () => starts++;
+            Assert.True(video.Trigger(path: "/first.mp4")); clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal(0, h.GetLayer(HapticLayer.Video)); Assert.Equal(before, (long)seq.GetValue(h.FunScript)!);
+            Assert.True(video.IsPlaying); Assert.Same(h, CoreHaptics.Service); Assert.True(h.Settings.VideoEnabled); Assert.True(h.Mixer.IsGateOpen);
+            host.PendingStart!();
+            Assert.Equal(1, starts); Assert.True(video.IsPlaying); Assert.Same(h, CoreHaptics.Service);
+            Assert.True(h.GetLayer(HapticLayer.Video) > 0, "video background haptics did not start");
+            Assert.True((long)seq.GetValue(h.FunScript)! > before, "video script did not start");
+            video.ForceCleanup();
+        }
+        finally { CoreHaptics.Service = old; CoreEntitlement.HasPremiumProvider = oldPremium; }
+    });
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -1439,6 +1535,26 @@ public sealed class MandatoryVideoSchedulerTests
         clock.Advance(TimeSpan.FromSeconds(1.3));
         Assert.Equal(new[] { ("/ai/named.mp4", false) }, host.Shown);
         Assert.False(v.Trigger(path: "/ai/other.mp4"));      // one already playing
+    });
+
+    [Fact]   // WPF VideoService.cs:2948: an open browser media session skips the tick and retries in SkipRetrySeconds
+    public void Browser_media_session_holds_the_scheduled_clip() => With(60, false, () =>
+    {
+        var media = ConditioningControlPanel.Services.Browser.BrowserMediaSession.Shared;
+        try
+        {
+            media.OnMediaPlaying(0);
+            var clock = new FakeClock(); var host = new Host();
+            var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+            v.Start();
+            clock.Advance(TimeSpan.FromHours(2));
+            Assert.Empty(host.Shown);
+            media.OnMediaStopped("ended");
+            clock.Advance(TimeSpan.FromSeconds(MandatoryVideoScheduler.SkipRetrySeconds + 5));
+            Assert.Single(host.Shown);
+            v.Stop();
+        }
+        finally { media.OnMediaStopped("test"); }
     });
 
     [Fact]   // WPF VideoService :3007: a do-not-disturb app in front reschedules (SkipRetrySeconds), never drops

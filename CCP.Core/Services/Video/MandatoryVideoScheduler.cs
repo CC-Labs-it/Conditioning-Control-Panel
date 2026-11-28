@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Serilog;
 using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Fyp;
@@ -19,6 +20,7 @@ namespace ConditioningControlPanel.Services
         /// <see cref="MandatoryVideoScheduler.End"/> at the clip's end or on Esc, and
         /// <see cref="MandatoryVideoScheduler.ForceCleanup"/> on the in-window panic key.</summary>
         void Show(string path, bool strict);
+        void Show(string path, bool strict, Action started) { Show(path, strict); started(); }
         /// <summary>WPF VideoService.cs:1982: visible, non-ghosted For You feed.</summary>
         bool FeedOwnsTheScreen => false;
         /// <summary>WPF VideoService.cs:2948: browser media or an active web-video takeover.</summary>
@@ -102,12 +104,22 @@ namespace ConditioningControlPanel.Services
         /// guidance dialog). Raised on the UI thread.</summary>
         public event Action? NoVideos;
 
+        /// <summary>WPF VideoService.cs:3124: announce 1.3 seconds before playback.</summary>
+        public event Action? VideoAboutToStart;
+
         /// <summary>A clip is on screen (WPF VideoService.VideoStarted, VideoService.cs:3370).</summary>
         public event Action? VideoStarted;
+
+        /// <summary>Head preparation before a clip is shown. Called at pre-roll and again before Show;
+        /// a head must bound its own wait. No UI or platform types cross this seam.</summary>
+        public Func<Task>? PreparePlayback { get; set; }
 
         /// <summary>A playing clip has closed, including attention retries and forced cleanup.
         /// WPF VideoService.Cleanup:7950; fires once after the host closes and IsPlaying clears.</summary>
         public event Action? VideoEnded;
+
+        /// <summary>A force stop, including an idle stop after a natural end.</summary>
+        public event Action? VideoForceStopped;
 
         /// <summary>The clip <see cref="VideoStarted"/> announced (WPF VideoService.LastVideoPath).</summary>
         public string? LastVideoPath { get; private set; }
@@ -175,6 +187,8 @@ namespace ConditioningControlPanel.Services
         public bool IsRunning => _running;
         /// <summary>A video is in pre-roll or on screen (WPF <c>_videoPlaying</c>).</summary>
         public bool IsPlaying => _playing;
+        /// <summary>Identifies the current clip, including its pre-roll.</summary>
+        internal int PlaybackGeneration => _retryGeneration;
         /// <summary>True while a trigger asks the head's queue to ignore this run's own video claim.</summary>
         public bool IsRequestingFloatingJoin { get; private set; }
         public bool IsStrict { get; private set; }
@@ -376,7 +390,7 @@ namespace ConditioningControlPanel.Services
                 var floatingJoin = _playing && _host.FloatingRunOpen && _host.FloatingUp > 0
                     && _host.IsFloating(IsStrict) && _host.IsFloating(CoreSettings.Current.StrictLockEnabled)
                     && !CoreSettings.Current.MandatoryVideoFloatingTogether && _host.FloatingLimit > 1;
-                if ((!_playing || floatingJoin) && _host.BrowserMediaBlocksScheduledVideo)
+                if ((!_playing || floatingJoin) && (_host.BrowserMediaBlocksScheduledVideo || Services.Browser.BrowserMediaSession.Shared.HoldsScreen))
                 {
                     ScheduleNext(SkipRetrySeconds);
                     return;
@@ -394,7 +408,7 @@ namespace ConditioningControlPanel.Services
                     return;
                 }
                 // WPF VideoService :3007: a do-not-disturb app in front reschedules, never drops.
-                if (!_playing && Services.UI.DndGuard.ShouldSuppressVideos())
+                else if (!_playing && Services.UI.DndGuard.ShouldSuppressVideos())
                 {
                     Services.UI.DndGuard.LogSuppressionThrottled("scheduled video");
                     ScheduleNext(SkipRetrySeconds);
@@ -568,6 +582,13 @@ namespace ConditioningControlPanel.Services
             _playing = true;
             _playingChaosToken = chaosToken; _retryChaosToken = 0;
             _retryGeneration++;   // WPF PlayVideo CancelPendingRetry: a new clip retires any pending verdict replay
+            // Begin head preparation as soon as a clip is accepted, before the pre-roll.
+            Task Prepare()
+            {
+                try { return PreparePlayback?.Invoke() ?? Task.CompletedTask; }
+                catch (Exception ex) { Log.Warning(ex, "VideoService: preparation failed"); return Task.CompletedTask; }
+            }
+            _ = Prepare();
             AttentionSpawned = AttentionHits = 0;
             // WPF VideoService.cs:2587-2630: Freeze, 800 ms, then PlayVideo's 1.3 s pre-roll.
             _videoFreeze = freezeBeforePreroll;
@@ -580,6 +601,11 @@ namespace ConditioningControlPanel.Services
             // WPF b6ff63fbd: only full-screen playback clears flashes, including a Test press.
             else if (!_host.IsFloating(IsStrict)) CoreFlash.Stop();
             var strict = IsStrict;
+            void Announce()
+            {
+                try { VideoAboutToStart?.Invoke(); }
+                catch (Exception ex) { Log.Debug("VideoAboutToStart handler failed: {Error}", ex.Message); }
+            }
             Dispose(ref _preroll);
             ITimer? created = null;
             created = _time.CreateTimer(_ => { var mine = created; CoreDispatch.Post(() =>
@@ -591,9 +617,33 @@ namespace ConditioningControlPanel.Services
                     freezeBeforePreroll = false;
                     // WPF PlayVideo prologue (VideoService.cs:3127): the floating rule holds after the freeze too.
                     if (!_host.IsFloating(strict)) CoreFlash.Stop();
-                    mine!.Change(PreRoll, Timeout.InfiniteTimeSpan);
+                    Announce();
+                    if (ReferenceEquals(mine, _preroll) && _playing) mine!.Change(PreRoll, Timeout.InfiniteTimeSpan);
                     return;
                 }
+                // Recheck preparation at the end of pre-roll, including settings changes while it ran.
+                var ready = Prepare();
+                if (!ready.IsCompleted)
+                {
+                    _ = ready.ContinueWith(t => CoreDispatch.Post(() => ShowPrepared(mine, t)),
+                        CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+                    return;
+                }
+                ShowPrepared(mine, ready);
+            }); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+            void ShowPrepared(ITimer? mine, Task ready)
+            {
+                if (ready.IsFaulted) Log.Warning(ready.Exception, "VideoService: preparation failed");
+                if (!ReferenceEquals(mine, _preroll) || !_playing) return;
+                // A setting can change after an earlier task completed but before this UI callback.
+                var current = Prepare();
+                if (!current.IsCompleted)
+                {
+                    _ = current.ContinueWith(t => CoreDispatch.Post(() => ShowPrepared(mine, t)),
+                        CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+                    return;
+                }
+                if (current.IsFaulted) Log.Warning(current.Exception, "VideoService: preparation failed");
                 Dispose(ref _preroll);
                 var playbackPath = PlaybackPath(path);
                 if (playbackPath == null) { End(); return; }
@@ -604,8 +654,10 @@ namespace ConditioningControlPanel.Services
                 if (!_host.IsFloating(strict) && CoreFlash.IsRunning) CoreFlash.Stop();
                 var generation = _retryGeneration;
                 ShowingPath = path;   // the host keeps the source URL identity when it plays a cached file
-                try { _host.Show(playbackPath, strict); }
-                catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); if (_playing && generation == _retryGeneration) End(); return; }
+                try { _host.Show(playbackPath, strict, Started); }
+                catch (Exception ex) { Log.Error(ex, "VideoService: show failed"); if (_playing && generation == _retryGeneration) End(); }
+                void Started()
+                {
                 // WPF VideoService.cs:3218-3225,3404-3410: a refused or replaced clip never starts its hooks.
                 if (!_playing || generation != _retryGeneration) return;
                 _floatingRun = _host.FloatingRunOpen && _host.IsFloating(strict);
@@ -620,9 +672,15 @@ namespace ConditioningControlPanel.Services
                 if (!_playing || generation != _retryGeneration) return;
                 try { CoreHaptics.Service?.FunScript.OnVideoStarted(path); }
                 catch (Exception ex) { Log.Debug("FunScript start hook failed: {Error}", ex.Message); }
-            }); }, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+                }
+            }
             _preroll = created;
-            created.Change(freezeBeforePreroll ? FreezeLead : PreRoll, Timeout.InfiniteTimeSpan);
+            if (freezeBeforePreroll) created.Change(FreezeLead, Timeout.InfiniteTimeSpan);
+            else
+            {
+                Announce();
+                if (ReferenceEquals(created, _preroll) && _playing) created.Change(PreRoll, Timeout.InfiniteTimeSpan);
+            }
             Log.Information("VideoService: playing {File} (strict={Strict})", Path.GetFileName(path), strict);
             return true;
         }
@@ -772,10 +830,16 @@ namespace ConditioningControlPanel.Services
             _waitEndsRun = false;
             _bubbleChaosToken = 0;
             var heldReplay = DropDefer();
-            _retryGeneration++;
+            var generation = ++_retryGeneration;
             // Deviation: WPF leaves bubbles paused here (its panic stops the engine too); this head's
             // fall-open panic force-stops the clip alone, and must not leave the field held forever.
-            if (!Finish(cancelled: true))
+            var finished = Finish(cancelled: true);
+            if (generation == _retryGeneration)
+            {
+                try { VideoForceStopped?.Invoke(); }
+                catch (Exception ex) { Log.Debug("VideoForceStopped handler failed: {Error}", ex.Message); }
+            }
+            if (!finished)
             {
                 // Also drop a fading curtain while idle; a host failure must not interrupt panic.
                 try { _host.CloseAll(); }

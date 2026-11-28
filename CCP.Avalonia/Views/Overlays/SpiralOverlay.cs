@@ -15,6 +15,7 @@ using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Features;   // ScreenList
 using ConditioningControlPanel.Services;                  // SpiralFrames
+using ConditioningControlPanel.Services.Compositor;       // CompositorLayers
 using Serilog;
 using SkiaSharp;
 
@@ -40,6 +41,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static bool SkipPlatformChecksForTests;
 
         private static readonly List<SpiralOverlayWindow> Windows = new();
+        // WPF OverlayService.cs:1589 SpiralLayer: GIF spirals on the shared per-screen stage.
+        private static readonly List<(SharedOverlayHost.Lease Lease, Grid Root, Image Image)> Hosted = new();
+        private static bool _hostMode;
+        private static IDisposable? _hostFade;
         private static int[] _shownOn = Array.Empty<int>();
         private static List<Bitmap> _frames = new();
         private static string _framesKey = "";
@@ -56,10 +61,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>Refresh calls so far (tests: the session tick only refreshes on a change).</summary>
         internal static int Refreshes { get; private set; }
 
-        internal static bool IsShowing => Windows.Count > 0;
+        internal static bool IsShowing => Windows.Count > 0 || Hosted.Count > 0;
         internal static bool IsAnimating => _timer is { IsEnabled: true };
         internal static int FrameIndex => _index;
         internal static IReadOnlyList<SpiralOverlayWindow> Shown => Windows;
+        /// <summary>The window an overlay pulse beats on: a classic window, else the stage hosting the spiral.</summary>
+        internal static Window? PulseOwner => Windows.Count > 0 ? Windows[0]
+            : Hosted.Count > 0 ? TopLevel.GetTopLevel(Hosted[0].Root) as Window : null;
 
         private static readonly SpiralPool Pool = new();
         private static string? _sourcePath;
@@ -103,7 +111,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 _randomizeAtStart = null; // WPF OverlayService.cs:416 rereads policy on restart.
                 _repicked = false;
             }
+            bool was = IsShowing;
             Refresh(host);
+            // A refresh that ended with no window (a failed decode) tells the stage too. Only on a
+            // change: every sync restarts the stage clock, so a sync per tick would drop a step.
+            if (IsShowing != was) SyncSuper();
         }
 
         private static void StartReconciler(Visual host)
@@ -152,6 +164,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             return changed;
         }
         internal static void Stop() { VoiceOpacity = null; FadeOut(); }
+        // WPF OverlayService.cs:1129,1189: a Deeper band shares the sustained hold at its own opacity.
+        internal static void SetSustained(Visual host, double? opacity) { VoiceOpacity = opacity is { } o ? Math.Clamp(o, 0, 1) : null; Refresh(host); }
 
         /// <summary>The painted alpha: the slider through WPF's #722 curve. A ramping session's value
         /// holds it instead (WPF _rampSpiralOpacity; SetSustainedOverlayOpacity clamps to 0..1).</summary>
@@ -163,8 +177,54 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static double? _pulseWeight;
         private static double _pulseBase, _pulsePeak;
-        private static double PulseOpacity => _pulseWeight is { } k
-            ? Math.Clamp(_pulseBase + (_pulsePeak - _pulseBase) * k, 0, 1) : PaintedOpacity;
+        private static double PulseOpacity => (_pulseWeight is { } k
+            ? Math.Clamp(_pulseBase + (_pulsePeak - _pulseBase) * k, 0, 1) : PaintedOpacity)
+            * ConditioningControlPanel.Services.Super.SuperStepAside.Ease(Veil);
+
+        /// <summary>WPF <c>SpiralLayer</c>'s step-aside veil: 1 = the spiral fully drawn, 0 = stepped
+        /// aside for the Whirlpool (<see cref="WhirlpoolOverlay"/>).</summary>
+        internal static double Veil { get; private set; } = 1;
+        private static bool _stepAside;
+        internal static bool VeilSettled => Veil == (_stepAside ? 0 : 1);
+
+        /// <summary>WPF <c>OverlayService.PushStepAside</c>: the spiral steps aside while the Whirlpool
+        /// really replaces it, unless something else holds the overlay (a voice hold, a timed pop, a
+        /// session ramp). A spiral not on screen snaps, so a fresh show never flashes. UI thread.</summary>
+        internal static void PushStepAside()
+        {
+            bool held = VoiceOpacity.HasValue || HasTimedPayload || App.Sessions?.SpiralOpacity != null;
+            _stepAside = ConditioningControlPanel.Services.Super.SuperStepAside.Hides(
+                ConditioningControlPanel.Services.Super.SuperAccess.ReplacesBase(ConditioningControlPanel.Services.Super.SuperEffect.Vortex), held);
+            if (!IsShowing) Veil = _stepAside ? 0 : 1;
+            else if (!VeilSettled) WhirlpoolOverlay.Start();
+        }
+
+        internal static void SnapVeil()
+        {
+            _stepAside = false;
+            Veil = 1;
+            foreach (var w in Windows) w.Spiral.Opacity = PulseOpacity;
+            foreach (var h in Hosted) h.Image.Opacity = PulseOpacity;
+        }
+
+        /// <summary>One tick of the veil, on the Whirlpool's clock.</summary>
+        internal static void StepVeil(double dt)
+        {
+            if (VeilSettled) return;
+            Veil = ConditioningControlPanel.Services.Super.SuperStepAside.Step(Veil, _stepAside, dt,
+                ConditioningControlPanel.Services.Super.SuperStepAside.FadeSecondsFor(UiMotionPreference.ResolveLevel(
+                    CoreSettings.Current.MotionLevel, UiMotionPreference.AnimationsEnabled, GentleVisuals.On)));
+            foreach (var w in Windows) w.Spiral.Opacity = PulseOpacity;
+            foreach (var h in Hosted) h.Image.Opacity = PulseOpacity;
+        }
+
+        /// <summary>The Super stage follows these windows (the pool rides them): tell it whenever they
+        /// come, go or change. Never throws into a spiral refresh.</summary>
+        private static void SyncSuper()
+        {
+            try { ConditioningControlPanel.Services.Super.SuperStageHost.Sync(); }
+            catch (Exception ex) { Log.Debug("Spiral: Super sync failed: {E}", ex.Message); }
+        }
 
         internal static void SetPulse(double? weight)
         {
@@ -176,6 +236,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             _pulseWeight = weight;
             foreach (var w in Windows) w.Spiral.Opacity = PulseOpacity;
+            foreach (var h in Hosted) h.Image.Opacity = PulseOpacity;
         }
 
         internal static readonly TimedOverlayHold PayloadHold = new();
@@ -243,18 +304,35 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 foreach (var old in _frames) old.Dispose();
                 (_frames, _framesKey, _index) = (new List<Bitmap>(), path, 0);
             }
+            PushStepAside();
             var opacity = PulseOpacity;
+            // WPF OverlayService.cs:1581: only the GIF path uses the compositor; video keeps its windows.
+            var hostMode = s.UnifiedOverlayHost && !video
+                // The Whirlpool rides the classic spiral windows (WhirlpoolOverlay): while it may run, keep them.
+                // A star flip reseats on the next 500 ms reconcile (hostMode != _hostMode).
+                && !ConditioningControlPanel.Services.Super.SuperAccess.IsOn(ConditioningControlPanel.Services.Super.SuperEffect.Vortex);
 
-            if (Windows.Count > 0 && want.SequenceEqual(_shownOn))
+            if (IsShowing && hostMode == _hostMode && want.SequenceEqual(_shownOn))
             {
                 foreach (var w in Windows) w.Spiral.Opacity = opacity;   // WPF UpdateSpiralOpacity
+                foreach (var h in Hosted) h.Image.Opacity = opacity;
+                // WPF BaseLayer gentle fade: re-showing mid fade-out turns the same stage back up.
+                if (_hostFade != null)
+                {
+                    _hostFade.Dispose();
+                    _hostFade = null;
+                    foreach (var h in Hosted) h.Root.Opacity = 1;
+                }
                 return;
             }
 
             CloseWindows();
+            _hostMode = hostMode;
             foreach (var i in want)
             {
+                if (hostMode && ShowHosted(screens[i].Bounds, _frames[_index % _frames.Count])) continue;
                 var w = new SpiralOverlayWindow();
+                w.Place(screens[i].Bounds, screens[i].Scaling);
                 if (!video) w.Spiral.Source = _frames[_index % _frames.Count];
                 w.Spiral.Opacity = opacity;
                 // Click-through and override-redirect (with the geometry) before Show, the order
@@ -279,7 +357,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (GentleVisuals.On) w.Opacity = 1;
             }
             _shownOn = want;
-            QuestMinutes.Follow(Windows.Count > 0);
+            SyncSuper();
+            QuestMinutes.Follow(IsShowing);
             if (video && Windows.Count > 0)
             {
                 var version = FileVersion(path);
@@ -288,13 +367,31 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 catch (Exception ex) { Log.Warning(ex, "Spiral: video could not start"); }
                 if (_videoPlayer == null) { FailedSources[path] = version; CloseWindows(); return; }
             }
-            if (_frames.Count > 1 && Windows.Count > 0)
+            if (_frames.Count > 1 && IsShowing)
             {
                 _timer = new DispatcherTimer(DispatcherPriority.Render) { Interval = FrameDelay };
                 _timer.Tick += (_, _) => Tick();
                 _timer.Start();
             }
-            Log.Debug("Spiral showing on {Count} screen(s) at {Opacity}%", Windows.Count, s.SpiralOpacity);
+            Log.Debug("Spiral showing on {Count} screen(s) at {Opacity}%", Windows.Count + Hosted.Count, s.SpiralOpacity);
+        }
+
+        // WPF SpiralLayer.cs:31,130: ZIndex Spiral (above subliminals), UniformToFill. A refused stage falls back to a window.
+        private static bool ShowHosted(PixelRect bounds, Bitmap frame)
+        {
+            var lease = SharedOverlayHost.Acquire(bounds);
+            if (lease == null) return false;
+            var image = new Image { Source = frame, Opacity = PulseOpacity, Stretch = Stretch.UniformToFill };
+            var root = new Grid { ClipToBounds = true, IsHitTestVisible = false, ZIndex = CompositorLayers.Spiral, Children = { image } };
+            if (GentleVisuals.On)
+            {
+                root.Opacity = 0;
+                root.Transitions = new Transitions { new DoubleTransition { Property = Visual.OpacityProperty, Duration = TimeSpan.FromSeconds(GentleVisuals.FadeSeconds) } };
+            }
+            lease.Canvas.Children.Add(root);
+            Hosted.Add((lease, root, image));
+            root.Opacity = 1;
+            return true;
         }
 
         /// <summary>WPF GifFrameTimer_Tick: next frame on every window. Allocation-free.</summary>
@@ -303,23 +400,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         internal static void Tick()
         {
-            if (_frames.Count == 0 || Windows.Count == 0) return;
+            if (_frames.Count == 0 || !IsShowing) return;
             if (_timer != null) _timer.Interval = FrameDelay;
             _index = (_index + 1) % _frames.Count;
             var frame = _frames[_index];
             for (var i = 0; i < Windows.Count; i++) Windows[i].Spiral.Source = frame;
+            foreach (var h in Hosted) h.Image.Source = frame;
         }
 
         private static void FadeOut()
         {
-            if (Windows.Count == 0) { ResetRun(); return; } // do not cut an earlier fade
-            if (!GentleVisuals.On) { CloseAll(); return; }
+            if (Hosted.Count > 0 && Windows.Count == 0 && GentleVisuals.On)
+            {
+                // Keep frames, timer and run so a re-show reverses the fade (see Refresh).
+                if (_hostFade != null) return;
+                var fade = TimeSpan.FromSeconds(GentleVisuals.FadeSeconds);
+                foreach (var h in Hosted)
+                {
+                    h.Root.Transitions = new Transitions { new DoubleTransition { Property = Visual.OpacityProperty, Duration = fade } };
+                    h.Root.Opacity = 0;
+                }
+                _hostFade = DispatcherTimer.RunOnce(() => { _hostFade = null; CloseAll(); }, fade);
+                return;
+            }
+            if (Windows.Count == 0 && Hosted.Count == 0) { ResetRun(); return; } // do not cut an earlier fade
+            if (!GentleVisuals.On || Hosted.Count > 0) { CloseAll(); return; }
 
             _timer?.Stop();
             _timer = null;
             var windows = Windows.ToArray();
             Windows.Clear();
             _shownOn = Array.Empty<int>();
+            SyncSuper();
             var player = _videoPlayer;
             _videoPlayer = null;
             // A later decode must not dispose the last frame while the old windows use it.
@@ -365,6 +477,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             while (Fading.Count > 0) Fading[0]();
             ResetRun();
             CloseWindows();
+            SyncSuper();
         }
 
         private static void ResetRun()
@@ -397,6 +510,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 catch (Exception ex) { Log.Debug("Spiral: failed to close a window: {E}", ex.Message); }
             }
             Windows.Clear();
+            _hostFade?.Dispose();
+            _hostFade = null;
+            foreach (var h in Hosted) { h.Lease.Canvas.Children.Remove(h.Root); h.Lease.Dispose(); }
+            Hosted.Clear();
             _shownOn = Array.Empty<int>();
             // Rebuilding windows keeps the logical run and minute clock (WPF AchievementService.cs:203,246-253).
             // WPF OverlayService.cs:2094: the fullscreen spiral left, so a session may raise its corner GIF again.
@@ -410,9 +527,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             () => App.Achievements?.ResetContinuousSpiral());
 
         /// <summary>Same gate as the pink tint (WPF RefreshOverlays returns early unless the engine runs):
-        /// a running engine or session, not paused. Unseeded (renders, tests) means the card owns it.</summary>
+        /// an AI overlay start, or an unpaused engine or session. Unseeded means the card owns it.</summary>
         private static bool ShouldShow()
-            => !RemoteCommands.OverlaysStopped && (RemoteCommands.OverlayRunning || (App.Sessions?.IsPaused != true
+            => !RemoteCommands.OverlaysStopped && (PinkFilterOverlay.AiHold || RemoteCommands.OverlayRunning || (App.Sessions?.IsPaused != true
                && (CoreSession.IsEngineRunningProvider is null || CoreSession.IsEngineRunning || App.Sessions?.IsRunning == true)));
 
         private static void BeginDecode(Visual host, string path)
@@ -589,6 +706,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// Win32 style mapping is <see cref="TintOverlayWindow"/>'s.</summary>
     internal sealed class SpiralOverlayWindow : Window
     {
+        private readonly Panel _layers;
+        private WhirlpoolCanvas? _pool;
+        private PixelRect _px;
+        private double _scale = 1;
+
         internal readonly Image Spiral = new()
         {
             Stretch = Stretch.UniformToFill,
@@ -610,7 +732,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             WindowStartupLocation = WindowStartupLocation.Manual;
             Width = 640;
             Height = 400;
-            Content = new Panel { ClipToBounds = true, Children = { Spiral } };
+            Content = _layers = new Panel { ClipToBounds = true, Children = { Spiral } };
         }
+
+        /// <summary>The monitor this window covers, in device pixels, for the pool.</summary>
+        internal void Place(PixelRect px, double scale)
+        {
+            _px = px;
+            _scale = scale > 0 ? scale : 1;
+        }
+
+        internal WhirlpoolCanvas? Pool => _pool;
+
+        /// <summary>The Whirlpool over the picture, or gone.</summary>
+        internal void SetPool(bool on)
+        {
+            if (on == (_pool != null)) return;
+            if (on) _layers.Children.Add(_pool = new WhirlpoolCanvas(_px, _scale));
+            else { _layers.Children.Remove(_pool!); _pool = null; }
+        }
+
+        internal void InvalidatePool() => _pool?.InvalidateVisual();
     }
 }

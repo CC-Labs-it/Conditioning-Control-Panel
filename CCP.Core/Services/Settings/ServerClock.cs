@@ -118,6 +118,9 @@ namespace ConditioningControlPanel.Services
     {
         public ServerClockHandler() : base(new HttpClientHandler()) { }
 
+        /// <summary>Wraps a given handler (a test's fake proxy) instead of a real network one.</summary>
+        public ServerClockHandler(HttpMessageHandler inner) : base(inner) { }
+
         protected override async System.Threading.Tasks.Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {

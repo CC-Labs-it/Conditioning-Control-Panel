@@ -24,7 +24,8 @@ public class ChaosBenchCueTests
     [InlineData("hazy", "", false)]
     [InlineData("gift", "pocket_sewn", true)]
     [InlineData("pocket", "pocket_sewn", false)]
-    [InlineData("ordinary", "ui_unlock", false)]
+    // WPF Bench.cs:220 then :231: the stats panel buy unlocks, then chimes the surface it revealed.
+    [InlineData("ordinary", "ui_unlock,reveal_chime", false)]
     public void Purchase_feedback_matches_wpf(string scenario, string expected, bool gift) => AvaloniaTestDispatcher.Run(() =>
     {
         if (Application.Current is null)
@@ -59,9 +60,12 @@ public class ChaosBenchCueTests
             ChaosMetaStore.Save(state, 1);
             ChaosMetaStore.SetActiveSlot(1);
             hub = new ChaosHubWindow();
+            hub.RunRevealFlashes();   // the hub-open flashes (WPF Reveals.cs:172), settled before the buy
+            hub.AdvanceRevealFlashes(100);
+            sounds.Clear();
             string id = scenario switch { "gift" or "pocket" => BenchIds.ToyPocket1, "rank" => BenchIds.ToyPocket2, "ordinary" => BenchIds.StatsPanel, _ => BenchIds.AccPocket1 };
             typeof(ChaosHubWindow).GetMethod("BenchBuy", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(hub, new object[] { id });
-            Assert.Equal(expected == "" ? Array.Empty<string>() : new[] { expected }, sounds);
+            Assert.Equal(expected == "" ? Array.Empty<string>() : expected.Split(','), sounds);
             Assert.Equal(gift ? 1 : 0, notifications);
         }
         finally

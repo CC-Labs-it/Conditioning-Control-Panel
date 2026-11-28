@@ -104,7 +104,6 @@ public sealed class BrainDrainLayer : BaseLayer
     private GlobalMouseHook? _undertowHook;
     private readonly System.Collections.Concurrent.ConcurrentQueue<System.Windows.Point> _undertowClicks = new();
     private double _undertowScreenWidth = 1920;
-    private SKPaint? _maskPaint;                // DstOut, unit radial gradient scaled by the canvas
     // (click waves: see BeginWaves)
 
     public BrainDrainLayer(CompositorEngine engine) : base(engine.Wake)
@@ -495,182 +494,21 @@ public sealed class BrainDrainLayer : BaseLayer
         _undertow.Reset();
         _undertowOn = false;
         _undertowStale = true;
-        _lensSmall?.Dispose(); _lensSmall = null; _lensSmallW = _lensSmallH = 0;
+        _undertowDraw.Release();
     }
 
-    /// <summary>Draws the blur with the feathered lens left out, then the click ripples. The
-    /// outside of the lens box draws straight; only the lens box goes through an offscreen layer
-    /// (bounded, so a DstOut can never erase layers below this one).</summary>
+    /// <summary>Draws the blur with the feathered lens left out, then the rim and the drops: the
+    /// picture is Core's <see cref="Super.Draw.UndertowDraw"/> (shared with the Avalonia head). Click
+    /// waves bend the image itself (a runtime shader), so they ripple the lens and the blur alike; no
+    /// live wave, or no shader support (SkiaSharp 2.88 refuses its src.eval): the plain image.</summary>
     private void RenderUndertow(SKCanvas canvas, SKImage image, SKRect dest, double dpiScale)
     {
-        var motion = UndertowMotionNow();
-        float r = (float)Super.UndertowLens.DrawnRadius(_undertow, _undertowScreenWidth, motion);
-        float x = (float)_undertow.X, y = (float)_undertow.Y;
-        // Cosmetic stretch along cursor motion: only ever LONGER along the motion, never narrower
-        // across it, so the minimum clear area around the mouse holds.
-        float stretch = (float)Super.UndertowLens.Stretch(_undertow.Vx, _undertow.Vy, _undertowScreenWidth, motion);
-        float angle = stretch > 0 ? (float)Math.Atan2(_undertow.Vy, _undertow.Vx) : 0f;
-        float box = r * (1f + stretch);
-        var lens = new SKRect(x - box, y - box, x + box, y + box);
-
-        // Click waves bend the image itself (a runtime shader), so they ripple the lens and the blur
-        // alike. No live wave, or no shader support: the plain image, byte-identical to before.
         var wave = BeginWaves(image, dest, dpiScale);
-
-        if (r < 1f || !lens.IntersectsWith(dest))
-        {
-            DrawBase(canvas, image, dest, wave);
-        }
-        else
-        {
-            canvas.Save();
-            canvas.ClipRect(lens, SKClipOperation.Difference);
-            DrawBase(canvas, image, dest, wave);
-            canvas.Restore();
-
-            if (wave != null || !DrawLensSmall(canvas, image, dest, lens, x, y, r, stretch, angle))
-            {
-                canvas.SaveLayer(lens, null);
-                canvas.ClipRect(lens);
-                DrawBase(canvas, image, dest, wave);
-                canvas.Translate(x, y);
-                canvas.RotateRadians(angle);
-                canvas.Scale(r * (1f + stretch), r);
-                canvas.DrawCircle(0, 0, 1, MaskPaint());
-                canvas.Restore();
-            }
-
-            DrawRim(canvas, x, y, r, stretch, angle, motion);
-        }
+        _undertowDraw.Draw(canvas, _undertow, image, dest, _drawPaint, _undertowScreenWidth, UndertowMotionNow(), dpiScale, wave);
         EndWaves();
-        DrawDrops(canvas, dpiScale);
     }
 
-    // The lens box without a screen-sized offscreen layer (measured 2026-11-17: the layer cost up to
-    // 16 ms a frame at 1440p with a wide lens, this costs under 2). The blurred capture is small, so the
-    // hole is cut out of the box's share of it at ITS size, on a small kept surface, and the result is
-    // stretched over the box exactly as the whole image would be: same texels, same filter.
-    private SKSurface? _lensSmall;
-
-    private bool DrawLensSmall(SKCanvas canvas, SKImage image, SKRect dest, SKRect lens, float x, float y, float r, float stretch, float angle)
-    {
-        if (image.Width <= 0 || image.Height <= 0 || dest.Width <= 0 || dest.Height <= 0) return false;
-        float sx = dest.Width / image.Width, sy = dest.Height / image.Height;
-        // The box in the capture's own pixels, one pixel wider all round so the stretch filters the
-        // same neighbours the whole image would; the extra is clipped away below.
-        int tx0 = Math.Max(0, (int)Math.Floor((lens.Left - dest.Left) / sx) - 1), ty0 = Math.Max(0, (int)Math.Floor((lens.Top - dest.Top) / sy) - 1);
-        int tx1 = Math.Min(image.Width, (int)Math.Ceiling((lens.Right - dest.Left) / sx) + 1), ty1 = Math.Min(image.Height, (int)Math.Ceiling((lens.Bottom - dest.Top) / sy) + 1);
-        int tw = tx1 - tx0, th = ty1 - ty0;
-        if (tw <= 0 || th <= 0) return true;   // the box misses this capture: nothing to draw
-        if (_lensSmall == null || _lensSmallW < tw || _lensSmallH < th)
-        {
-            _lensSmall?.Dispose();
-            _lensSmallW = Math.Max(_lensSmallW, tw); _lensSmallH = Math.Max(_lensSmallH, th);
-            _lensSmall = SKSurface.Create(new SKImageInfo(_lensSmallW, _lensSmallH, SKColorType.Bgra8888, SKAlphaType.Premul));
-            if (_lensSmall == null) { _lensSmallW = _lensSmallH = 0; return false; }
-        }
-        var sc = _lensSmall.Canvas;
-        sc.Save();
-        sc.ClipRect(new SKRect(0, 0, tw, th));
-        sc.Clear(SKColors.Transparent);
-        sc.DrawImage(image, -tx0, -ty0);
-        sc.Scale(1 / sx, 1 / sy);
-        sc.Translate(-(dest.Left + tx0 * sx), -(dest.Top + ty0 * sy));
-        sc.Translate(x, y);
-        sc.RotateRadians(angle);
-        sc.Scale(r * (1f + stretch), r);
-        sc.DrawCircle(0, 0, 1, MaskPaint());
-        sc.Restore();
-        using var holed = _lensSmall.Snapshot(new SKRectI(0, 0, tw, th));
-        if (holed == null) return false;
-        canvas.Save();
-        canvas.ClipRect(lens);
-        canvas.DrawImage(holed, new SKRect(dest.Left + tx0 * sx, dest.Top + ty0 * sy, dest.Left + tx1 * sx, dest.Top + ty1 * sy), _drawPaint);
-        canvas.Restore();
-        return true;
-    }
-    private int _lensSmallW, _lensSmallH;
-
-    // ---- Undertow juice: rim glow and droplet sparks. Reused paints, no per-frame allocations. ----
-    private static readonly SKColor UndertowTint = new(0xFF, 0xA8, 0xDC);   // soft pink, screened at low alpha
-    private SKPaint? _rimPaint, _dropPaint;
-
-    private void DrawRim(SKCanvas canvas, float x, float y, float r, float stretch, float angle, Super.UndertowMotion motion)
-    {
-        double a = Super.UndertowLens.RimAlpha(_undertow, _undertowScreenWidth, motion) * (_drawAlpha / 255.0);
-        byte alpha = (byte)Math.Clamp(Math.Round(a * 255), 0, 255);
-        if (alpha == 0) return;
-        _rimPaint ??= new SKPaint
-        {
-            IsAntialias = true,
-            BlendMode = SKBlendMode.Screen,   // tinted and low: it can only lift the feather, never wash it white
-            Shader = SKShader.CreateRadialGradient(new SKPoint(0, 0), 1f,
-                new[] { UndertowTint.WithAlpha(0), UndertowTint.WithAlpha(0), UndertowTint, UndertowTint.WithAlpha(0) },
-                new[] { 0f, 0.58f, 0.8f, 1f }, SKShaderTileMode.Clamp),
-        };
-        _rimPaint.Color = SKColors.White.WithAlpha(alpha);
-        canvas.Save();
-        canvas.Translate(x, y);
-        canvas.RotateRadians(angle);
-        canvas.Scale(r * (1f + stretch), r);
-        canvas.DrawCircle(0, 0, 1, _rimPaint);
-        canvas.Restore();
-    }
-
-    private void DrawDrops(SKCanvas canvas, double dpiScale)
-    {
-        _dropPaint ??= new SKPaint { IsAntialias = true, BlendMode = SKBlendMode.Screen };
-        float px = (float)(dpiScale > 0 ? dpiScale : 1.0);
-        foreach (var d in _undertow.Drops)
-        {
-            if (!d.Live) continue;
-            double u = Math.Clamp(d.Age / Super.UndertowLens.DropLife, 0, 1);
-            double fadeIn = Math.Min(1, d.Age / 0.06);   // grows in over a few frames, never pops
-            byte a = (byte)Math.Clamp(Math.Round(200 * fadeIn * (1 - u) * (1 - u) * (_drawAlpha / 255.0)), 0, 255);
-            if (a == 0) continue;
-            _dropPaint.Color = new SKColor(0xFF, 0xE4, 0xF4, a);
-            canvas.DrawCircle((float)d.X, (float)d.Y, 2.4f * px * (float)(1 - 0.5 * u), _dropPaint);
-        }
-    }
-
-    private void DrawBase(SKCanvas canvas, SKImage image, SKRect dest, SKPaint? wave)
-    {
-        if (wave != null) canvas.DrawRect(dest, wave);
-        else canvas.DrawImage(image, dest, _drawPaint);
-    }
-
-    // SkSL: displace the sample point along the radial direction by a sine train that is sharp at the
-    // front and fades behind it, plus a little crest lighting so the water reads as water.
-    private const string WaveSksl = @"
-uniform shader src;
-uniform float4 w[6];   // x, y, front radius, amplitude (px)
-uniform float3 p;      // wavelength, trailing band, amplitude reference
-uniform float4 k[6];   // x = specular crest strength (one fade from the click, photosafe-capped)
-half4 main(float2 c) {
-    float2 off = float2(0.0);
-    float hi = 0.0;
-    float spec = 0.0;
-    for (int i = 0; i < 6; i++) {
-        float amp = w[i].w;
-        if (amp > 0.0) {
-            float2 d = c - w[i].xy;
-            float dist = length(d);
-            if (dist > 0.5) {
-                float x = dist - w[i].z;
-                float env = x > 0.0 ? exp(-pow(x / (p.x * 0.5), 2.0)) : exp(x / p.y);
-                float ph = x * 6.2831853 / p.x;
-                off += (d / dist) * sin(ph) * amp * env;
-                hi += cos(ph) * env * (amp / p.z);
-                float lead = exp(-pow(x / (p.x * 0.6), 2.0));
-                spec += k[i].x * lead * pow(max(cos(ph), 0.0), 6.0);
-            }
-        }
-    }
-    half4 col = src.eval(c + off);
-    col.rgb *= half(1.0 + 0.12 * clamp(hi, -1.0, 1.0));
-    col.rgb += half3(1.0, 0.86, 0.95) * half(clamp(spec, 0.0, 0.3)) * col.a;
-    return col;
-}";
+    private readonly Super.Draw.UndertowDraw _undertowDraw = new();
 
     private static SKRuntimeEffect? _waveEffect;
     private static bool _waveEffectTried;
@@ -687,38 +525,20 @@ half4 main(float2 c) {
             _waveEffectTried = true;
             try
             {
-                _waveEffect = SKRuntimeEffect.Create(WaveSksl, out var err);
+                _waveEffect = SKRuntimeEffect.Create(Super.Draw.UndertowDraw.WaveSksl, out var err);
                 if (_waveEffect == null) App.Logger?.Debug("Undertow wave shader: {E}", err);
             }
             catch (Exception ex) { App.Logger?.Debug("Undertow wave shader: {E}", ex.Message); }
         }
         if (_waveEffect == null) return null;
-
-        var motion = UndertowMotionNow();
-        Array.Clear(_waveData);
-        Array.Clear(_waveCrest);
-        double maxAmp = 0, wl = 0, band = 0;
-        bool any = false;
-        int n = 0;
-        foreach (var rp in _undertow.Ripples)
-        {
-            if (!rp.Live || n >= 6) continue;
-            if (!Super.UndertowLens.WaveAt(rp.Age, _undertowScreenWidth, motion, dpiScale,
-                                           out double front, out double amp, out wl, out band)) continue;
-            _waveData[n * 4] = (float)rp.X; _waveData[n * 4 + 1] = (float)rp.Y;
-            _waveData[n * 4 + 2] = (float)front; _waveData[n * 4 + 3] = (float)amp;
-            _waveCrest[n * 4] = (float)Super.UndertowLens.CrestAt(rp.Age, rp.Crest, motion);
-            if (amp > maxAmp) maxAmp = amp;
-            n++; any = true;
-        }
-        if (!any) return null;
+        if (!Super.Draw.UndertowDraw.FillWaves(_undertow, _undertowScreenWidth, UndertowMotionNow(), dpiScale,
+                                               _waveData, _waveCrest, _waveP)) return null;
 
         try
         {
             var m = SKMatrix.CreateScale(dest.Width / image.Width, dest.Height / image.Height);
             m = m.PostConcat(SKMatrix.CreateTranslation(dest.Left, dest.Top));
             _waveSrc = image.ToShader(SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, m);
-            _waveP[0] = (float)wl; _waveP[1] = (float)band; _waveP[2] = (float)Math.Max(1, maxAmp);
             var uniforms = new SKRuntimeEffectUniforms(_waveEffect) { ["w"] = _waveData, ["p"] = _waveP, ["k"] = _waveCrest };
             var children = new SKRuntimeEffectChildren(_waveEffect) { ["src"] = _waveSrc };
             _waveShader = _waveEffect.ToShader(false, uniforms, children);
@@ -740,22 +560,6 @@ half4 main(float2 c) {
         if (_wavePaint != null) _wavePaint.Shader = null;
         _waveShader?.Dispose(); _waveShader = null;
         _waveSrc?.Dispose(); _waveSrc = null;
-    }
-
-    private SKPaint MaskPaint()
-    {
-        if (_maskPaint != null) return _maskPaint;
-        var colors = new SKColor[Super.UndertowLens.MaskAlpha.Length];
-        for (int i = 0; i < colors.Length; i++)
-            colors[i] = SKColors.Black.WithAlpha((byte)Math.Round(Super.UndertowLens.MaskAlpha[i] * 255));
-        _maskPaint = new SKPaint
-        {
-            IsAntialias = true,
-            BlendMode = SKBlendMode.DstOut,
-            Shader = SKShader.CreateRadialGradient(new SKPoint(0, 0), 1f, colors,
-                                                    Super.UndertowLens.MaskPositions, SKShaderTileMode.Clamp),
-        };
-        return _maskPaint;
     }
 
     [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]

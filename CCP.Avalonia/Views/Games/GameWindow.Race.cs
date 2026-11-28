@@ -59,6 +59,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (_raceStarted) return;
             _raceStarted = true;
+            QueueRaceFocus();
             try { RaceNoteUsage("race"); } catch (Exception ex) { Log.Debug("RaceHost: usage: {E}", ex.Message); }
             try { RaceRequestPack("audio-web"); } catch (Exception ex) { Log.Debug("RaceHost: audio pack: {E}", ex.Message); }
             _raceOwnedTracks = RacingAccess.OwnedTracks;
@@ -168,11 +169,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             _raceLastHeartbeatUtc = RaceUtcNow();
             _racePinged = false;
+            QueueRaceFocus();
             Post(RaceInitMessage());
             try
             {
-                var server = _server;
-                var m = (_library ??= new(() => server == null ? new() : GameMediaManifest.BuildLocal(server.AssetUrl))).Value;
+                // Root-relative like DtRH (WebAssetServer.AssetPath): hostMedia.js treats http://127.0.0.1 as remote, never drawn by WebGL.
+                var m = (_library ??= new(() => _server == null ? new() : GameMediaManifest.BuildLocal(ConditioningControlPanel.Avalonia.Platform.WebAssetServer.AssetPath))).Value;
                 Post(GameMediaManifest.Frame(m));
                 var favorites = DtrhAssetStatsStore.TopAssets(12);
                 if (favorites.Count > 0) Post(new { type = "favorites", names = favorites });
@@ -287,6 +289,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             }
             App.Quests?.TrackBubblesPopped(count);
         }
+
+        // WPF CaucusHostService.cs:131,219,263: give steering to the page after launch and ready.
+        private void QueueRaceFocus() => Dispatcher.UIThread.Post(() =>
+        {
+            if (_raceDisposed || _closing || _raceExiting) return;
+            try { Web.FocusPage(); }
+            catch (Exception ex) { Log.Debug("RaceHost: focus: {E}", ex.Message); }
+        }, DispatcherPriority.Loaded);
 
         private void RaceQueue(Action action) => Dispatcher.UIThread.Post(() =>
         {

@@ -146,7 +146,10 @@ public class SuperOptionBoxLaneCTests
     {
         var src = File.ReadAllText(Path.Combine(Root(), "ConditioningControlPanel", "Services", "Compositor", "AfterglowLineLayer.cs"));
         Assert.Contains("ApplyOptions();", Body(src, "public override void Update(TimeSpan delta)"));
-        Assert.Contains("AfterglowLineOptions.ClampWords(s.AfterglowLineWords)", src);
+        Assert.Contains("AfterglowLineRules.Apply(_line,", src);
+        // The read itself is Core's, shared with the Avalonia head.
+        var rule = File.ReadAllText(Path.Combine(Root(), "CCP.Core", "Super", "AfterglowLineRules.cs"));
+        Assert.Contains("AfterglowLineOptions.ClampWords(s.AfterglowLineWords)", rule);
     }
 
     // ---- Froth ----

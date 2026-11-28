@@ -19,7 +19,7 @@ using AvApp = global::ConditioningControlPanel.Avalonia.App;
 namespace CCP.Avalonia.Tests;
 
 /// <summary>WPF StudioTabView.xaml.cs + .Haptics.cs: the Haptics row's right-click flips the
-/// page's own master box (premium gate included) and its dot follows the box live; the flash and
+/// page's own master box (open to free accounts since toys went free) and its dot follows the box live; the flash and
 /// bubbles rows wear the v2 pill from prize ownership, beside the dot, never under it.</summary>
 public sealed class StudioRackWireTests
 {
@@ -51,11 +51,11 @@ public sealed class StudioRackWireTests
             Assert.False(s.Enabled);
             Assert.True(IsRing(dot));
 
-            CoreEntitlement.HasPremiumProvider = () => false;   // the page's premium gate refuses
+            CoreEntitlement.HasPremiumProvider = () => false;   // toys are free (HapticsAccess.IsOpen, 2026-11-11)
             RightClick(shell, rack, "haptics");
-            Assert.False(s.Enabled);
-            Assert.False(box.IsChecked);
-            Assert.True(IsRing(dot));
+            Assert.True(s.Enabled);
+            Assert.True(box.IsChecked);
+            Assert.False(IsRing(dot));
         }
         finally
         {
@@ -89,7 +89,8 @@ public sealed class StudioRackWireTests
                     if (worn) Assert.True(label!.Margin.Right > StudioTabView.TilePillInset + StudioTabView.TileLabelGap);
                     else Assert.Equal(StudioTabView.TileLabelInset, label!.Margin.Right);
                 }
-                Assert.Null(rack.V2PillsFor("video").Strip);   // only the two v2 families carry one
+                // Only the two v2 families and the hosted Super rows carry one; Undertow is not hosted here.
+                Assert.Null(rack.V2PillsFor("braindrain").Strip);
             }
             finally { PrizeOwnership.IsGranted = old; }
         });
@@ -120,6 +121,38 @@ public sealed class StudioRackWireTests
             CoreAccount.UnifiedUserId = user;
             PrizeOwnership.IsGranted = previous;
             Dispatcher.UIThread.RunJobs();
+        }
+    });
+
+    /// <summary>WPF 7.4.1 RefreshV2Pills: a row whose V2 is hosted here wears the pill while that V2 is lit.</summary>
+    [Fact]
+    public Task V2PillFollowsALitSuper() => Run((shell, rack) =>
+    {
+        var fx = ConditioningControlPanel.Services.Super.SuperEffect.Afterglow;
+        var provider = CoreSettings.ServiceProvider;
+        var service = new ConditioningControlPanel.Services.SettingsService();
+        try
+        {
+            CoreSettings.ServiceProvider = () => service;   // the shell test runs without a service, so SetMode would not stick
+            var (strip, tile, _) = rack.V2PillsFor("subliminal");
+            Assert.NotNull(strip);
+            Assert.NotNull(tile);
+            ConditioningControlPanel.Services.Super.SuperAccess.Set(fx, true);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(strip!.IsVisible);                    // free account: locked, so not lit
+            CoreEntitlement.HasPremiumProvider = () => true;
+            ConditioningControlPanel.Services.Super.SuperAccess.RaiseChanged(fx);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(strip.IsVisible);
+            Assert.True(tile!.IsVisible);
+            ConditioningControlPanel.Services.Super.SuperAccess.Set(fx, false);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(strip.IsVisible);
+        }
+        finally
+        {
+            CoreSettings.ServiceProvider = provider;
+            service.SealForReset();
         }
     });
 
@@ -219,15 +252,24 @@ public sealed class StudioRackWireTests
             global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
                 .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .SetupWithoutStarting();
+        // Pills also light from a lit Super (WPF 7.4.1): pin a free account so ownership alone decides.
+        var (premium, trying) = (CoreEntitlement.HasPremiumProvider, ConditioningControlPanel.Services.Super.SuperAccess.TryingProvider);
         var shell = new MainShellWindow();
         try
         {
             shell.Show();
             shell.ShowTab("studio");
             HeadlessFrame.Publish(shell);
+            CoreEntitlement.HasPremiumProvider = () => false;   // after the shell, which seeds the account
+            ConditioningControlPanel.Services.Super.SuperAccess.TryingProvider = () => null;
+            shell.StudioRack!.RefreshV2Pills();
             body(shell, shell.StudioRack!);
         }
-        finally { shell.Close(); }
+        finally
+        {
+            shell.Close();
+            (CoreEntitlement.HasPremiumProvider, ConditioningControlPanel.Services.Super.SuperAccess.TryingProvider) = (premium, trying);
+        }
         return Task.CompletedTask;
     });
 }
