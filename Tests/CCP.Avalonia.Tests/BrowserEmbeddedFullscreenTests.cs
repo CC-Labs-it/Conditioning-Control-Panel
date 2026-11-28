@@ -228,4 +228,67 @@ public sealed class BrowserEmbeddedFullscreenTests
         }
         finally { overlay.IsVisible = false; }
     });
+    [Fact]
+    public Task WebKitDeniedTakeoverUsesFullscreenHostAndRestoresPageOnExit() => WithShell(false, (shell, page, host, _) =>
+    {
+        var scripts = new List<string>();
+        host.TakeoverFullscreenFallbackOverride = true;
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(script == WebHostTakeover.FullscreenFallbackScript ? "true" : null); };
+        shell.TakeoverFocusForTest = _ => { };
+        shell.TakeoverFocusDelay = () => Task.CompletedTask;
+        shell.ArmTakeoverGestureRetry(host);
+        shell.OnBrowserMediaMessage("{\"type\":\"fsAsk\"}");
+        shell.OnBrowserMediaMessage("{\"type\":\"fsDenied\",\"activation\":false}");
+        Dispatcher.UIThread.RunJobs();
+        Assert.NotNull(shell.BrowserTakeoverWindow);
+        Assert.Single(scripts, s => s == WebHostTakeover.FullscreenFallbackScript);
+        host.OnWebMessage("ccp_browser_fullscreen_off");
+        Assert.Null(shell.BrowserTakeoverWindow);
+        Assert.Contains(host, page.BrowserContainer.Children);
+        Assert.Contains(scripts, s => s.Contains("__ccpTakeoverFallbackExit"));
+    });
+
+    [Fact]
+    public Task WebKitStopDuringPageSetupRestoresPageAndNeverEnters() => WithShell(false, (shell, page, host, _) =>
+    {
+        var scripts = new List<string>();
+        var setup = new TaskCompletionSource<string?>();
+        host.TakeoverFullscreenFallbackOverride = true;
+        host.ScriptInvoker = script => { scripts.Add(script); return script == WebHostTakeover.FullscreenFallbackScript ? setup.Task : Task.FromResult<string?>(null); };
+        shell.TakeoverFocusForTest = _ => { };
+        shell.TakeoverFocusDelay = () => Task.CompletedTask;
+        shell.ArmTakeoverGestureRetry(host);
+        shell.OnBrowserMediaMessage("{\"type\":\"fsAsk\"}");
+        shell.OnBrowserMediaMessage("{\"type\":\"fsDenied\",\"activation\":false}");
+        shell.OnBrowserMediaMessage("{\"type\":\"fsDenied\",\"activation\":false}");
+        Assert.Single(scripts, s => s == WebHostTakeover.FullscreenFallbackScript);
+        shell.EndWebVideoTakeover();
+        setup.SetResult("true");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Null(shell.BrowserTakeoverWindow);
+        Assert.Contains(host, page.BrowserContainer.Children);
+        Assert.Contains(WebHostTakeover.FullscreenFallbackCleanupScript, scripts);
+    });
+
+    [Fact]
+    public Task WebKitNavigationDuringFocusDelayCancelsRetry() => WithShell(false, (shell, _, host, _) =>
+    {
+        var scripts = new List<string>();
+        var delay = new TaskCompletionSource();
+        host.TakeoverFullscreenFallbackOverride = true;
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>("true"); };
+        shell.TakeoverFocusForTest = _ => { };
+        shell.TakeoverFocusDelay = () => delay.Task;
+        shell.ArmTakeoverGestureRetry(host);
+        shell.OnBrowserMediaMessage("{\"type\":\"fsAsk\"}");
+        shell.OnBrowserMediaMessage("{\"type\":\"fsDenied\",\"activation\":false}");
+        host.NewScrolllerEngine()(true);
+        var navigation = new WebViewNavigationStartingEventArgs { Request = new Uri("https://127.0.0.1/next") };
+        host.OnNavigationStarted(null, navigation);
+        Assert.False(navigation.Cancel);
+        delay.SetResult();
+        Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain(WebHostTakeover.FullscreenFallbackScript, scripts);
+        Assert.Null(shell.BrowserTakeoverWindow);
+    });
 }

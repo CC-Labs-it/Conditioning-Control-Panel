@@ -29,7 +29,7 @@ public partial class MainShellWindow
     private double? _browserPreFullscreenZoom;
     private DisplayMirror? _browserMirror;
 
-    // A page may report exit, but only the native engine signal can enter fullscreen.
+    // A page may report exit; native signals and the guarded takeover fallback can enter.
     private const string BrowserFullscreenExitScript = @"(function(){
         if(window.__ccpBrowserFsExit)return;
         function changed(){if(document.fullscreenElement||document.webkitFullscreenElement)return;
@@ -47,7 +47,7 @@ public partial class MainShellWindow
         document.addEventListener('dblclick',dbl,true);
     })();";
 
-    private const string BrowserFullscreenCleanupScript = "try { var f=window.__ccpBrowserFsExit; if(f){ document.removeEventListener('fullscreenchange',f.changed); document.removeEventListener('webkitfullscreenchange',f.changed); window.removeEventListener('dblclick',f.dbl,true); document.removeEventListener('dblclick',f.dbl,true); delete window.__ccpBrowserFsExit; } if (document.fullscreenElement) document.exitFullscreen(); else if (document.webkitFullscreenElement) document.webkitExitFullscreen(); } catch (_) {}";
+    private const string BrowserFullscreenCleanupScript = "try { if (window.__ccpTakeoverFallbackExit) window.__ccpTakeoverFallbackExit(); var f=window.__ccpBrowserFsExit; if(f){ document.removeEventListener('fullscreenchange',f.changed); document.removeEventListener('webkitfullscreenchange',f.changed); window.removeEventListener('dblclick',f.dbl,true); document.removeEventListener('dblclick',f.dbl,true); delete window.__ccpBrowserFsExit; } if (document.fullscreenElement) document.exitFullscreen(); else if (document.webkitFullscreenElement) document.webkitExitFullscreen(); } catch (_) {}";
 
     // An engine may complete a queued install after panic, native exit, or navigation.
     private async Task InstallBrowserFullscreenExitScriptAsync(WebHost host)

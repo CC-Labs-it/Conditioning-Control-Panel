@@ -52,10 +52,14 @@ public partial class WebHost
         };
         await core.AddScriptToExecuteOnDocumentCreatedAsync(script);
     }
-    // DevTools gesture execution is provided by WebView2; WebKit has no equivalent here.
+    // DevTools gesture execution is provided by WebView2.
     internal Func<string, Task>? FullscreenGestureInvoker { get; set; }
     internal bool CanRetryFullscreenGesture => FullscreenGestureInvoker != null ||
         (OperatingSystem.IsWindows() && _web?.TryGetPlatformHandle() is IWindowsWebView2PlatformHandle w && w.CoreWebView2 != IntPtr.Zero);
+
+    internal bool? TakeoverFullscreenFallbackOverride { get; set; }
+    internal bool CanUseTakeoverFullscreenFallback => TakeoverFullscreenFallbackOverride ??
+        (OperatingSystem.IsLinux() && _web?.TryGetPlatformHandle() is IGtkWebViewPlatformHandle or ILinuxWpePlatformHandle);
 
     internal Task RetryFullscreenWithGesture(string parameters)
     {

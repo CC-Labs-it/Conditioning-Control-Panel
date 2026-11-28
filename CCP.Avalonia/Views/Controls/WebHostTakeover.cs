@@ -98,6 +98,41 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
             })();
             """;
 
+        // WebKit has no gesture-evaluation API. Present the same video in the fullscreen host.
+        // The marker restores its position and inline style when fullscreen ends.
+        internal const string FullscreenFallbackScript = """
+            (function() {
+                if (window._ccpTakeoverStopped !== false || document.fullscreenElement || document.webkitFullscreenElement || window.__ccpTakeoverFallbackExit) return false;
+                var v = document.querySelector('video');
+                if (!v || !v.isConnected || v.ended || !v.parentNode || !document.body) return false;
+                var parent = v.parentNode, marker = document.createComment('ccp video');
+                var style = v.getAttribute('style'), playing = !v.paused;
+                var overlay = document.createElement('div');
+                overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:black;display:flex;align-items:center;justify-content:center';
+                var restore = function() {
+                    if (!window.__ccpTakeoverFallbackExit) return;
+                    delete window.__ccpTakeoverFallbackExit;
+                    if (marker.parentNode) marker.parentNode.replaceChild(v, marker);
+                    else if (parent.isConnected) parent.appendChild(v);
+                    if (style === null) v.removeAttribute('style'); else v.setAttribute('style', style);
+                    overlay.remove();
+                };
+                try {
+                    parent.insertBefore(marker, v);
+                    document.body.appendChild(overlay);
+                    window.__ccpTakeoverFallbackExit = restore;
+                    overlay.appendChild(v);
+                    ['position','inset','width','height','max-width','max-height','object-fit','transform','z-index'].forEach(function(k, i) {
+                        v.style.setProperty(k, ['relative','auto','100%','100%','100%','100%','contain','none','auto'][i], 'important');
+                    });
+                    if (playing && v.paused) { var p = v.play(); if (p && p.catch) p.catch(function() {}); }
+                    return true;
+                } catch (_) { restore(); if (marker.parentNode) marker.remove(); overlay.remove(); return false; }
+            })();
+            """;
+
+        internal const string FullscreenFallbackCleanupScript = "if (window.__ccpTakeoverFallbackExit) window.__ccpTakeoverFallbackExit();";
+
         // WPF MainWindow.Browser.cs:1017-1072. Panic also cancels polling and late callbacks.
         internal const string PlaylistAutoPlayScript = """
             (async function() {

@@ -50,7 +50,8 @@ public partial class MainShellWindow
     {
         try
         {
-            if (!host.CanRetryFullscreenGesture) { Log.Debug("Takeover fullscreen gesture retry unavailable"); return; }
+            bool gesture = host.CanRetryFullscreenGesture;
+            if (!gesture && !host.CanUseTakeoverFullscreenFallback) { Log.Debug("Takeover fullscreen retry unavailable"); return; }
             if (TakeoverFocusForTest is { } focus) focus(host);
             else
             {
@@ -65,7 +66,22 @@ public partial class MainShellWindow
             await TakeoverFocusDelay();
             if (generation != _takeoverRetryGeneration || !ReferenceEquals(host, _takeoverRetryHost) ||
                 !_takeoverAsked || Environment.TickCount64 > _takeoverAskUntil) return;
-            await host.RetryFullscreenWithGesture(TakeoverFullscreenRetry.EvaluateParams(WebHostTakeover.FullscreenRecheckScript));
+            if (gesture)
+            {
+                await host.RetryFullscreenWithGesture(TakeoverFullscreenRetry.EvaluateParams(WebHostTakeover.FullscreenRecheckScript));
+                return;
+            }
+            if (_browserFullscreenWindow != null || !ReferenceEquals(host, _browserFullscreenHost)) return;
+            var result = await host.InvokeScriptAsync(WebHostTakeover.FullscreenFallbackScript);
+            if (!string.Equals(result?.Trim().Trim('"'), "true", StringComparison.OrdinalIgnoreCase)) return;
+            if (generation != _takeoverRetryGeneration || !ReferenceEquals(host, _takeoverRetryHost) ||
+                !_takeoverAsked || Environment.TickCount64 > _takeoverAskUntil || _browserFullscreenWindow != null)
+            {
+                await host.InvokeScriptAsync(WebHostTakeover.FullscreenFallbackCleanupScript);
+                return;
+            }
+            EnterBrowserFullscreen();
+            if (_browserFullscreenWindow == null) await host.InvokeScriptAsync(WebHostTakeover.FullscreenFallbackCleanupScript);
         }
         catch (Exception ex) { Log.Debug("Takeover fullscreen gesture retry failed: {Error}", ex.Message); }
     }
