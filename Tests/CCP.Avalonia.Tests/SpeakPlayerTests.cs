@@ -81,14 +81,100 @@ public class SpeakPlayerTests
                 new EnhancementRule { Trigger = new TimeReachedTrigger { Time = 1 }, Action = new TriggerEffectAction { EffectType = EffectTypes.Overlay, OverlayKind = OverlayKinds.PinkFilter } }
             } }, "test");
             Tick(player); media.Audio.PositionSeconds = 1.2; Tick(player);
-            Assert.Equal(1, actions.Calls);
-            Tick(player); Assert.Equal(1, actions.Calls);
+            Assert.Equal(2, actions.Calls);
+            Tick(player); Assert.Equal(2, actions.Calls);
             player.LoadEnhancementFromMemory(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*" }, "replacement");
             Assert.Equal(1, actions.Resets);
             media.Audio.PositionSeconds = 2; Tick(player);
-            Assert.Equal(1, actions.Calls);
+            Assert.Equal(2, actions.Calls);
         }
         finally { player.Close(); }
+    });
+
+    [Fact]
+    public Task PlayerDispatchesOverlayTimelineAndStopsItOnReplacement() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        using var media = new Media();
+        var actions = new Actions();
+        var player = new EnhancementPlayerWindow(null, null) { PlayerDispatcherFactory = () => actions };
+        try
+        {
+            player.Show(); player.OpenLocalMediaFile(media.Path);
+            for (int i = 0; i < 500 && !media.Audio.Playing; i++) { await Task.Delay(10); Dispatcher.UIThread.RunJobs(); }
+            Assert.True(media.Audio.Playing);
+            player.LoadEnhancementFromMemory(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*", TimelineItems = {
+                new TimelineItem { Kind = TimelineItemKind.Effect, Start = 1, Duration = 4, EffectType = EffectTypes.Overlay,
+                    EffectOverlayKind = OverlayKinds.Spiral, EffectActivation = EffectActivation.Region }
+            } }, "test");
+            Tick(player); media.Audio.PositionSeconds = 1.2; Tick(player);
+            Assert.True(actions.Calls > 0);
+            player.LoadEnhancementFromMemory(new Enhancement { MediaType = MediaTypes.Audio, MediaSource = "*" }, "replacement");
+            Assert.Equal(1, actions.Resets);
+        }
+        finally { player.Close(); }
+    });
+
+    [Fact]
+    public void OverlayBandsKeepVoiceAndOtherRuns() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var host = new global::Avalonia.Controls.Window();
+        var first = new object(); var second = new object();
+        try
+        {
+            SpiralOverlay.SetVoiceHold(host, true);
+            PinkFilterOverlay.SetVoiceHold(host, true);
+            var spiralVoice = SpiralOverlay.VoiceOpacity;
+            var pinkVoice = PinkFilterOverlay.VoiceOpacity;
+            SpiralOverlay.SetSustained(null, first, "a", 0.8);
+            SpiralOverlay.SetSustained(null, second, "b", 0.4);
+            PinkFilterOverlay.SetSustained(null, first, "a", 0.8);
+            PinkFilterOverlay.SetSustained(null, second, "b", 0.4);
+            SpiralOverlay.SetSustained(null, first, "a", 0.2);
+            PinkFilterOverlay.SetSustained(null, first, "a", 0.2);
+            Assert.Equal(0.4, SpiralOverlay.DeeperOpacity);
+            Assert.Equal(0.4, PinkFilterOverlay.DeeperOpacity);
+            SpiralOverlay.SetSustained(null, second, "b", null);
+            PinkFilterOverlay.SetSustained(null, second, "b", null);
+            Assert.Equal(0.2, SpiralOverlay.DeeperOpacity);
+            Assert.Equal(0.2, PinkFilterOverlay.DeeperOpacity);
+            SpiralOverlay.SetSustained(null, first, "a", null);
+            PinkFilterOverlay.SetSustained(null, first, "a", null);
+            Assert.Null(SpiralOverlay.DeeperOpacity);
+            Assert.Null(PinkFilterOverlay.DeeperOpacity);
+            Assert.Equal(spiralVoice, SpiralOverlay.VoiceOpacity);
+            Assert.Equal(pinkVoice, PinkFilterOverlay.VoiceOpacity);
+            SpiralOverlay.SetSustained(null, first, "a", 0.3);
+            PinkFilterOverlay.SetSustained(null, first, "a", 0.3);
+            SpiralOverlay.Stop(); PinkFilterOverlay.Stop();
+            Assert.Null(SpiralOverlay.DeeperOpacity);
+            Assert.Null(PinkFilterOverlay.DeeperOpacity);
+        }
+        finally { SpiralOverlay.Stop(); PinkFilterOverlay.Stop(); host.Close(); }
+    });
+
+    [Fact]
+    public void DispatcherRampAndCleanupReleaseOnlyItsOwnBand() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var host = new global::Avalonia.Controls.Window();
+        var first = new BrowserEnhancementDispatcher { OverlayHost = host };
+        var second = new BrowserEnhancementDispatcher { OverlayHost = host };
+        var effect = new TriggerEffectAction { EffectType = EffectTypes.Overlay, OverlayKind = OverlayKinds.Spiral,
+            EffectId = "band", Phase = EffectPhase.Start, Opacity = 0.7 };
+        try
+        {
+            first.Overlay(effect, CancellationToken.None);
+            effect.Opacity = 0.4; second.Overlay(effect, CancellationToken.None);
+            effect.Phase = EffectPhase.Update; effect.Opacity = 0.2;
+            first.Overlay(effect, CancellationToken.None);
+            Assert.Equal(0.4, SpiralOverlay.DeeperOpacity);
+            second.ResetOverlayBands();
+            Assert.Equal(0.2, SpiralOverlay.DeeperOpacity);
+            first.ResetOverlayBands();
+            Assert.Null(SpiralOverlay.DeeperOpacity);
+            effect.Phase = EffectPhase.Start; first.Overlay(effect, CancellationToken.None);
+            Assert.Null(SpiralOverlay.DeeperOpacity);
+        }
+        finally { first.ResetOverlayBands(); second.ResetOverlayBands(); SpiralOverlay.Stop(); host.Close(); }
     });
 
     private sealed class Camera : IEnhancementWebcam

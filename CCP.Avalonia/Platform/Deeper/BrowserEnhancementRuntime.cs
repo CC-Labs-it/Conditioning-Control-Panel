@@ -29,9 +29,9 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
         // A band whose Stop was dropped must not keep its overlay hold (WPF OverlayService.cs:95 safety belt).
         OnUi(() =>
         {
-            string[] kinds;
-            lock (_overlayBands) { kinds = _overlayBands.Values.Distinct().ToArray(); _overlayBands.Clear(); }
-            foreach (var kind in kinds) if (Host is { } h) Sustain(h, kind, null);
+            KeyValuePair<string, string>[] bands;
+            lock (_overlayBands) { bands = _overlayBands.ToArray(); _overlayBands.Clear(); }
+            foreach (var band in bands) Sustain(OverlayHost ?? Host, band.Value, band.Key, null);
         });
     }
     public void StopOneShotFlashes() => Views.Overlays.FlashOverlay.StopOwned(FlashOwner);
@@ -131,35 +131,35 @@ internal sealed class BrowserEnhancementDispatcher : IActionDispatcher, IEnhance
     }
 
     private static void OnUi(Action action) { if (Dispatcher.UIThread.CheckAccess()) action(); else Dispatcher.UIThread.Post(action); }
-    private static void Sustain(global::Avalonia.Visual host, string kind, double? opacity)
+    private void Sustain(global::Avalonia.Visual? host, string kind, string key, double? opacity)
     {
-        if (kind == OverlayKinds.PinkFilter) Views.Overlays.PinkFilterOverlay.SetSustained(host, opacity);
-        else if (kind == OverlayKinds.Spiral) Views.Overlays.SpiralOverlay.SetSustained(host, opacity);
+        if (kind == OverlayKinds.PinkFilter) Views.Overlays.PinkFilterOverlay.SetSustained(host, this, key, opacity);
+        else if (kind == OverlayKinds.Spiral) Views.Overlays.SpiralOverlay.SetSustained(host, this, key, opacity);
     }
 
     // WPF RealActionDispatcher.cs:222-273 -> OverlayService.cs:924 (timed), :1129 (show), :1189 (hide), :1247 (ramp).
-    private void Overlay(TriggerEffectAction effect, CancellationToken ct)
+    internal global::Avalonia.Visual? OverlayHost;
+    internal void Overlay(TriggerEffectAction effect, CancellationToken ct)
     {
         var kind = effect.OverlayKind ?? OverlayKinds.PinkFilter;
         var key = effect.EffectId ?? kind;
-        if (Host is not { } host) return;
+        var host = OverlayHost ?? Host;
         if (effect.Phase == EffectPhase.Stop)
         {
             lock (_overlayBands) { if (_overlayBands.Remove(key, out var remembered)) kind = remembered; }
-            Sustain(host, kind, null);
+            Sustain(host, kind, key, null);
             return;
         }
-        if (_retired || ct.IsCancellationRequested) return;
+        if (host == null || _retired || ct.IsCancellationRequested) return;
         switch (effect.Phase)
         {
             case EffectPhase.Start:
                 lock (_overlayBands) _overlayBands[key] = kind;
-                Sustain(host, kind, effect.Opacity);
+                Sustain(host, kind, key, effect.Opacity);
                 break;
             case EffectPhase.Update:
-                if (kind == OverlayKinds.PinkFilter ? Views.Overlays.PinkFilterOverlay.ApplySessionOpacity(effect.Opacity * 100)
-                    : kind == OverlayKinds.Spiral && Views.Overlays.SpiralOverlay.ApplySessionOpacity(effect.Opacity * 100))
-                    Sustain(host, kind, effect.Opacity);
+                lock (_overlayBands)
+                    if (_overlayBands.TryGetValue(key, out var activeKind)) Sustain(host, activeKind, key, effect.Opacity);
                 break;
             case EffectPhase.Restart: break; // WPF :258 no remaining time to recompute
             default:
