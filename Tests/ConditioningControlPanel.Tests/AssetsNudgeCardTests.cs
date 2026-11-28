@@ -17,6 +17,7 @@ namespace ConditioningControlPanel.Tests;
 /// upgrades only with an empty library; still arrow under reduced motion; Help replays it; every
 /// language file carries its words; each card realizes offscreen.
 /// </summary>
+[Collection(CompanionWpfRenderCollection.Name)]
 public class AssetsNudgeCardTests
 {
     private static string RepoRoot()

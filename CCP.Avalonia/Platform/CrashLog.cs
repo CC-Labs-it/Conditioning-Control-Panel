@@ -111,8 +111,7 @@ internal sealed class CrashLog
     {
         var dialog = new MessageDialog(Loc.Get("title_unexpected_error"), Loc.GetF("msg_unexpected_error", e.Message), false);
         var owner = (global::Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
-        if (owner is { IsVisible: true }) _ = dialog.ShowDialog(owner);
-        else dialog.Show();
+        _ = dialog.ShowDialogSafe(owner);
     }
 
     internal void DomainFault(UnhandledExceptionEventArgs e, Action flush)
