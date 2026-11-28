@@ -72,7 +72,7 @@ internal static class SharedOverlayHost
     internal static void RaiseLive()
     {
         if (!Pinned) return;
-        foreach (var stage in Stages.Values) Seat(stage.Window, raise: true);
+        foreach (var stage in Stages.Values) Raise(stage.Window);
     }
 
     internal static Lease? Acquire(PixelRect bounds)
