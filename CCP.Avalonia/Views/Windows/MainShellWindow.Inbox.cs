@@ -35,6 +35,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             inbox.CollectionChanged += OnInboxCollectionChanged;
             Closed += (_, _) => inbox.CollectionChanged -= OnInboxCollectionChanged;
             RefreshInboxBadge();
+            // WPF MainWindow.Inbox.cs:29-33: Dares offers and debts reach the player through the same presenter.
+            DaresLanding.Start();
+            Closed += (_, _) => DaresLanding.Stop();
         }
 
         private readonly PostCodeFlow _postCodeFlow = new();

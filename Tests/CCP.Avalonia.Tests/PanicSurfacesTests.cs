@@ -84,7 +84,7 @@ public sealed class PanicSurfacesTests
         }
     });
 
-    private static void EnsureApp()
+    internal static void EnsureApp()
     {
         if (Application.Current is null)
             // Use the shipped bootstrap, including Inter and AppFonts: the first app setup
@@ -167,6 +167,7 @@ public sealed class PanicSurfacesTests
     private static readonly string[] SafetyCritical =
     {
         "emergency-exit",
+        "dares-cards",
         "dares",
         "companion-audio",
         "audio-playlist",
