@@ -120,9 +120,9 @@ namespace ConditioningControlPanel.Services.Chaos
                 {
                     var json = Path.Combine(root, "dtrh.json");
                     if (File.Exists(json))
-                        replace = string.Equals((string?)Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(json))["imageMode"]?.ToString().Trim(), "replace", StringComparison.OrdinalIgnoreCase);
+                        replace = string.Equals((string?)Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(json)).GetValue("imageMode", StringComparison.OrdinalIgnoreCase)?.ToString().Trim(), "replace", StringComparison.OrdinalIgnoreCase);
                 }
-                catch { } // malformed optional manifest uses mix
+                catch { } // malformed optional manifest uses mix; key match is case-insensitive like WPF DtrhModContent.cs:160 JsonConvert
                 foreach (bool image in new[] { true, false })
                 {
                     var folder = image ? "images" : "videos";

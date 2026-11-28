@@ -11,10 +11,11 @@ namespace CCP.Core.Tests;
 public sealed class RaceModMediaTests
 {
     [Theory]
-    [InlineData("mix", 2)]
-    [InlineData("replace", 1)]
-    [InlineData("bad", 2)]
-    public void ModVisualsMergeOrReplaceOnlyPopulatedKinds(string mode, int images)
+    [InlineData("imageMode", "mix", 2)]
+    [InlineData("imageMode", "replace", 1)]
+    [InlineData("ImageMode", "replace", 1)]
+    [InlineData("imageMode", "bad", 2)]
+    public void ModVisualsMergeOrReplaceOnlyPopulatedKinds(string key, string mode, int images)
     {
         var dir = Directory.CreateTempSubdirectory("race-mod-").FullName;
         var old = CoreMods.ActiveModPackageProvider;
@@ -23,7 +24,7 @@ public sealed class RaceModMediaTests
             var root = Path.Combine(dir, "resources", "dtrh");
             Directory.CreateDirectory(Path.Combine(root, "images"));
             Directory.CreateDirectory(Path.Combine(root, "videos"));
-            File.WriteAllText(Path.Combine(root, "dtrh.json"), "{\"imageMode\":\"" + mode + "\"}");
+            File.WriteAllText(Path.Combine(root, "dtrh.json"), "{\"" + key + "\":\"" + mode + "\"}");
             File.WriteAllText(Path.Combine(root, "images", "mod pic.png"), "image");
             File.WriteAllText(Path.Combine(root, "images", "empty.jpg"), "");
             File.WriteAllText(Path.Combine(root, "videos", "ignore.txt"), "text");
