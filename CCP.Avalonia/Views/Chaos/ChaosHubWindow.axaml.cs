@@ -680,6 +680,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             // ---- icon: a branch-tinted square with the glyph (ChaosArt sprites are head-side) ----
             var icon = GlyphIcon(u.Glyph, 72, 14, accent, owned ? 1.0 : 0.5);
+            ChaosOverlayWindow.ChaosTips.Attach(icon, u.Name, u.Desc, accent: accent, flavor: u.Flavor);
+            AttachLessonTip(icon, (StackPanel)ToolTip.GetTip(icon)!); // WPF tip chrome + 250 ms/30 s
             Grid.SetColumn(icon, 0);
             grid.Children.Add(icon);
 
