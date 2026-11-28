@@ -1,0 +1,21 @@
+/* The sealed notice (ui/seal.js). It wears the legal window from ui/legal.css; only its own parts are here. */
+
+.tc.seal { background: rgba(40, 38, 32, .5); }
+.tc.seal .body { gap: 12px; }
+.tc.seal .intro { font-size: 14px; }
+
+.tc .seal-paper { position: relative; display: grid; gap: 7px; padding: 14px 16px; background: var(--tc-paper); border: 1px solid var(--tc-edge); }
+.tc .seal-paper i { display: block; height: 9px; background: #111; }
+.tc .seal-stamp { position: absolute; right: 14px; top: 50%; padding: 3px 10px; border: 3px double #a3232b; color: #a3232b; font: 700 20px/1.1 var(--tc-legal); letter-spacing: .14em; background: rgba(247, 245, 239, .86); transform: translateY(-50%) rotate(-9deg); }
+
+.tc .seal-clock { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.tc .seal-clock div { display: grid; justify-items: center; gap: 2px; padding: 8px 2px; background: var(--tc-paper); border: 1px solid var(--tc-edge); }
+.tc .seal-clock b { font: 700 26px/1 var(--tc-legal); font-variant-numeric: tabular-nums; }
+.tc .seal-clock span { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--tc-mute); }
+
+.tc .seal-go { display: inline-block; padding: 8px 18px; background: var(--tc-paper); border: 1px solid #111; box-shadow: 2px 2px 0 #111; color: var(--tc-ink); font-weight: 700; text-decoration: none; }
+.tc .seal-go:hover { background: #fff; }
+.tc .seal-go:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 #111; }
+.tc .seal-link { color: var(--tc-ink); font-weight: 600; }
+.tc .seal-go:focus-visible, .tc .seal-link:focus-visible { outline: 2px solid var(--tc-pink); outline-offset: 2px; }
+.tc .seal-fine { margin: 0; font-size: 12px; color: var(--tc-mute); }

@@ -1076,7 +1076,13 @@ namespace ConditioningControlPanel
                 var files = (string[])e.Data.GetData(DataFormats.FileDrop);
                 var dropType = DetectDropType(files);
 
-                if (dropType == DropType.Unrecognised)
+                if (_dropImportBusy)
+                {
+                    // Refused while a dropped pack imports: a no-drop cursor and one line saying why.
+                    e.Effects = DragDropEffects.None;
+                    SayDropImportBusy();
+                }
+                else if (dropType == DropType.Unrecognised)
                 {
                     // Accept it (the drop explains itself in a toast), no overlay.
                     e.Effects = DragDropEffects.Copy;
@@ -1433,7 +1439,11 @@ namespace ConditioningControlPanel
 
         private void Window_DragOver(object sender, DragEventArgs e)
         {
-            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            if (_dropImportBusy)
+            {
+                e.Effects = DragDropEffects.None;
+            }
+            else if (e.Data.GetDataPresent(DataFormats.FileDrop))
             {
                 var files = (string[])e.Data.GetData(DataFormats.FileDrop);
                 var dropType = DetectDropType(files);
@@ -1448,12 +1458,14 @@ namespace ConditioningControlPanel
 
         private void Window_DragLeave(object sender, DragEventArgs e)
         {
+            if (_dropImportBusy) return;
             GlobalDropOverlay.Visibility = Visibility.Collapsed;
             SettingsTab.BrowserContainer.Visibility = Visibility.Visible;
         }
 
         private async void Window_Drop(object sender, DragEventArgs e)
         {
+            if (_dropImportBusy) { e.Handled = true; SayDropImportBusy(); return; }
             GlobalDropOverlay.Visibility = Visibility.Collapsed;
             SettingsTab.BrowserContainer.Visibility = Visibility.Visible;
 
@@ -1470,6 +1482,7 @@ namespace ConditioningControlPanel
         internal async Task ImportDroppedFilesAsync(string[]? files)
         {
             if (files == null || files.Length == 0) return;
+            if (_dropImportBusy) { SayDropImportBusy(); return; }
 
             // Single-file media drop: prompt Play / Edit / Add-to-Library.
             // Multi-file, folder, and .zip drops fall through to the existing flow.
@@ -1614,19 +1627,61 @@ namespace ConditioningControlPanel
             }
         }
 
+        private readonly Services.DropImportGate _dropImport = new();
+        private bool _dropImportBusy => _dropImport.Busy;
+
+        private void SayDropImportBusy()
+        {
+            if (_dropImport.ShouldSayBusy(DateTime.UtcNow))
+                App.Notifications?.Show(Loc.Get("drop_import_refused"), Services.NotificationType.Info);
+        }
+
+        /// <summary>Keeps the drop overlay up as a progress card while a dropped pack unpacks (ccp-bugs #1706).</summary>
+        private void ShowDropImportProgress(Services.ImportProgress? p)
+        {
+            DropOverlayPrompt.Visibility = Visibility.Collapsed;
+            DropImportProgress.Visibility = Visibility.Visible;
+            SettingsTab.BrowserContainer.Visibility = Visibility.Hidden;
+            GlobalDropOverlay.Visibility = Visibility.Visible;
+
+            var indeterminate = Services.ImportProgressText.IsIndeterminate(p);
+            DropImportBar.IsIndeterminate = indeterminate;
+            if (!indeterminate) DropImportBar.Value = Services.ImportProgressText.Percent(p);
+            DropImportCount.Text = Services.ImportProgressText.CountLine(p,
+                (c, t, f) => $"{c} / {t} - {f}");
+        }
+
+        private void HideDropImportProgress()
+        {
+            DropImportProgress.Visibility = Visibility.Collapsed;
+            DropOverlayPrompt.Visibility = Visibility.Visible;
+            DropImportBar.IsIndeterminate = true;
+            DropImportCount.Text = "";
+            GlobalDropOverlay.Visibility = Visibility.Collapsed;
+            SettingsTab.BrowserContainer.Visibility = Visibility.Visible;
+        }
+
         private async Task HandleAssetDropAsync(string[] paths)
         {
             try
             {
                 _assetImportService ??= new Services.AssetImportService();
 
-                var progress = new Progress<Services.ImportProgress>(p =>
-                {
-                    // Could update a progress indicator here if needed
-                    App.Logger?.Debug("Import progress: {Current}/{Total} - {File}", p.Current, p.Total, p.CurrentFile);
-                });
+                var run = _dropImport.Begin();
+                ShowDropImportProgress(null);
+                // A report posted before the end can land after it: only this run's live reports draw.
+                var progress = new Progress<Services.ImportProgress>(p => { if (_dropImport.Accepts(run)) ShowDropImportProgress(p); });
 
-                var result = await Task.Run(() => _assetImportService.ImportAsync(paths, progress));
+                Services.ImportResult result;
+                try
+                {
+                    result = await Task.Run(() => _assetImportService.ImportAsync(paths, progress));
+                }
+                finally
+                {
+                    _dropImport.End(run);
+                    HideDropImportProgress();
+                }
 
                 // Refresh the asset lists if any were imported
                 if (result.ImagesImported > 0)

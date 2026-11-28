@@ -38,6 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             panel.Child = stack;
             stack.Children.Add(CreateSectionHeader(Loc.Get("mod_art_title")));
             stack.Children.Add(CreateSectionDescription(Loc.Get("mod_art_intro")));
+            stack.Children.Add(CreateSectionDescription(Loc.Get("mod_art_frame_intro")));
             stack.Children.Add(CreateSubHeader(Loc.Get("mod_art_nav_title")));
             stack.Children.Add(CreateSectionDescription(Loc.Get("mod_art_nav_help")));
             stack.Children.Add(BuildUiArtSlotWrap(NavDoorSlots, 100, 100));

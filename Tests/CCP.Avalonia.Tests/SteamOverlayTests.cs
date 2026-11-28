@@ -85,4 +85,28 @@ public class SteamOverlayTests
         }
         return Task.CompletedTask;
     });
+
+    [Fact]
+    public void TheSeedHandsTheMotionLevelAndTheBundledFace() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var provider = CoreSettings.ServiceProvider;
+        var settings = new ConditioningControlPanel.Services.SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        try
+        {
+            SteamOverlay.Seed();
+            var s = settings.Current;
+            s.GentleVisuals = false;
+            s.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Off;
+            Assert.Equal(ConditioningControlPanel.Models.MotionLevel.Off, SuperStepAside.LevelProvider());
+            s.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+            s.GentleVisuals = true;   // Gentle visuals caps the level, as WPF MotionFx.Level
+            Assert.Equal(ConditioningControlPanel.Models.MotionLevel.Reduced, SuperStepAside.LevelProvider());
+
+            Assert.NotNull(ConditioningControlPanel.Services.Compositor.SubliminalLayer.BundledFaceStream);
+            using (var face = SteamOverlay.BundledFace("Fredoka (bundled)")) Assert.NotNull(face);
+            Assert.Null(SteamOverlay.BundledFace("Arial"));
+        }
+        finally { CoreSettings.ServiceProvider = provider; }
+    });
 }

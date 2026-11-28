@@ -41,6 +41,12 @@ public static class LauncherGridLayout
     public const double PlayHeight = 40;
     public const double TextPadBottom = 12;
 
+    /// <summary>The text block's inset from each side of the card. The blurb wraps inside what
+    /// is left, so <see cref="BlurbWidth"/> is the width its two lines have.</summary>
+    public const double TextPadSide = 16;
+    public const double BlurbFontSize = 14;
+    public const int BlurbMaxLines = 2;
+
     /// <summary>The whole text block under the art, margins included.</summary>
     public const double TextHeight =
         TextPadTop + TitleHeight + BlurbGap + BlurbHeight + PlayGap + PlayHeight + TextPadBottom;
@@ -74,6 +80,9 @@ public static class LauncherGridLayout
         if (columnWidth <= 0 || columns <= 0) return 0;
         return Math.Max(0, columnWidth / columns - 2 * TileMargin - 2 * TileBorder);
     }
+
+    /// <summary>The width a card's blurb wraps in: the card less the text block's side insets.</summary>
+    public static double BlurbWidth(double tileWidth) => Math.Max(0, tileWidth - 2 * TextPadSide);
 
     /// <summary>The art plate at that width: 16:9, floored so a narrow column still shows a picture.</summary>
     public static double ArtHeight(double tileWidth)
