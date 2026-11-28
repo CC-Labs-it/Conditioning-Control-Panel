@@ -152,6 +152,43 @@ public sealed class LeashIncomingAskTests
         });
 
     [Fact]
+    public void QueuedOffersAreDiscardedWhenServiceIsRemoved() =>
+        LeashGateCardTests.Run(false, (shell, _, service) =>
+        {
+            service.ApplyBlock(Block((First, "juno")));
+            LeashHead.Service = null;
+            shell.RebindLeashAsks();
+            shell.Show();
+            shell.RebindLeashAsks();
+            Assert.Null(LeashAskWindow.Current);
+        });
+
+    [Fact]
+    public void ManualLookBeforeServiceRebindDoesNotReopenTheSameOffer() =>
+        LeashGateCardTests.Run(false, (shell, _, _) =>
+        {
+            var replacement = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            replacement.ApplyBlock(Block((First, "juno")));
+            LeashHead.Service = replacement;
+            shell.Show();
+            try
+            {
+                var ask = LeashAskWindow.Open(replacement.Snapshot.Offers.Single(), () => replacement, shell)!;
+                shell.RebindLeashAsks();
+                ask.Card.Dismiss();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Null(LeashAskWindow.Current);
+            }
+            finally
+            {
+                LeashHead.Service = null;
+                shell.RebindLeashAsks();
+                LeashAskWindow.CloseCurrent();
+                Dispatcher.UIThread.RunJobs();
+            }
+        });
+
+    [Fact]
     public void GateTimerPicksUpAReplacementServiceAndItsWaitingOffer() =>
         LeashGateCardTests.Run(false, (shell, _, _) =>
         {
