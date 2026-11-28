@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -131,6 +132,39 @@ public sealed class BrowserInitialHomeTests
         shell.PanicPauseBrowserMedia();
         Report(panic);
         Assert.Equal(0, Seeks());
+    }));
+
+    [Fact]
+    public Task AppTakeoverCutSeeksOnceAndPanicCancelsPendingSeek() => Run((shell, page, host, mod) =>
+        WithVideoSettings(() =>
+    {
+        var media = ConditioningControlPanel.Services.Browser.BrowserMediaSession.Shared;
+        var scripts = new System.Collections.Generic.List<string>();
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(null); };
+        host.NavigationInvoker = _ => true;
+        shell.BrowserAutoPlayDelay = () => Task.CompletedTask;
+        CoreSettings.Current.VideoMaxDurationSeconds = 30;
+        CoreSettings.Current.VideoCutRandomStart = true;
+        string Start()
+        {
+            media.ReplaceSession(ConditioningControlPanel.Services.Browser.BrowserMediaSession.MediaOwner.Remote, true);
+            Assert.True(shell.NavigateToUrlInBrowser("http://127.0.0.1:9/video", true, false));
+            host.OnNavigationCompleted(new Uri("http://127.0.0.1:9/video"));
+            return scripts.FindLast(x => x.Contains("const cutRequest ="))!.Split("const cutRequest = '")[1].Split("'")[0];
+        }
+        void Report(string token) => host.OnWebMessage("{\"type\":\"ccpCutMetadata\",\"request\":\"" + token + "\",\"dur\":120}");
+        int Seeks() => scripts.FindAll(x => x.Contains("if(window.__ccpCutRequest===")).Count;
+        try
+        {
+            var first = Start();
+            Report(first); Report(first);
+            Assert.Equal(1, Seeks());
+            var pending = Start();
+            PanicSurfaces.All.Single(s => s.Id == "browser-media").Stop(shell);
+            Report(pending);
+            Assert.Equal(1, Seeks());
+        }
+        finally { media.OnMediaStopped("test"); }
     }));
 
     private static void WithVideoSettings(Action check)
