@@ -68,6 +68,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             [GlassroadId] = new(GlassroadId, "launcher_game_race_title", "glassroad/index.html", GlassroadGate),
             // WPF PrizeCounterHostService.cs:28 StartUrl; no tile, its doors call LaunchPrizeCounter (GameWindow.PrizeCounter.cs).
             [PrizeCounterId] = new(PrizeCounterId, "shop_title", "prizecounter/index.html"),
+            // WPF TcHostService.cs StartUrl; never tier-locked (the edition picks the game), shown only with the tree (GameWindow.Tc.cs).
+            [TcId] = new(TcId, "launcher_game_tc_title", "fuzz/index.html", TcGate),
         };
 
             RegisterGoon(games);
@@ -275,8 +277,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             Web = new WebHost { HostedPageMotion = true, HostedPageSink = spec.Id != JustDropId, ConfigureNative = Platform.SpiralWebView2Policy.Attach };
             if (spec.Id == DtrhId) Web.BrowserProcessFailed += () => RecoverDtrh("process-failed");
             // Glassroad speaks only chrome.webview (WebView2 native); WebKitGTK gets it from the shim.
-            if (spec.Id == "goon" || IsGlassroad) Web.InjectCarrier = true; // before the native view or first navigation
-            if (spec.Id == FypId || spec.Id == JustDropId || spec.Id == "loom" || IsRace || IsGlassroad) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
+            if (spec.Id == "goon" || IsGlassroad || IsTc) Web.InjectCarrier = true; // before the native view or first navigation
+            if (spec.Id == FypId || spec.Id == JustDropId || spec.Id == "loom" || IsRace || IsGlassroad || IsTc) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
             if (IsGlassroad) Web.BrowserProcessUnresponsive += () => _grUnresponsive = true;
             // WPF ChaosWebViewHost.cs:1645: Just Drop owns its window mode.
             if (spec.Id != JustDropId)
@@ -350,6 +352,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Closed += (_, _) => { StopGoonWatch(); CloseGoonInbox(); };
             }
             if (spec.Id == PbpId) Opened += (_, _) => OpenPbp();
+            if (IsTc) Opened += (_, _) => OpenTc();
             if (spec.Id == FypId)
             {
                 // WPF FypHostService.cs:99,108-112: own profile; the parked ghost source must keep rendering.
@@ -484,6 +487,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             try { o = JObject.Parse(Unwrap(json)); }
             catch (Exception ex) { Log.Debug("[Game] {Id}: unreadable page message: {E}", Spec.Id, ex.Message); return; }
             if (WebHost.HandlePageLog(o, Spec.Id)) return;
+            if (IsTc && HandleTc(o)) return;   // every frame through Core TcFrameGate (GameWindow.Tc.cs)
             bool handled = false;
             if (Spec.Id == "goon") HandleGoonMessage(o, ref handled);
             if (Spec.Id == "backroom") HandleBackRoomMessage(o, ref handled);

@@ -691,11 +691,11 @@ public sealed class LauncherWindowTests
         Assert.False(shell.IsVisible);
 
         // Declutter 2026-11-15: the launcher opens on its two doors and no tiles; the Games door's page holds
-        // the destinations this head has: the one Breakout card, Piece by Piece, Racing Thoughts and Down the
-        // Rabbit Hole game hosts, then the intake tab.
+        // the destinations this head has: Terms & Conditioning, the one Breakout card, Piece by Piece, Racing
+        // Thoughts and Down the Rabbit Hole game hosts, then the intake tab.
         Assert.Empty(Tiles(launcher));
         Seat(launcher);
-        Assert.Equal(new[] { "breakout", "piecebypiece", "race", "raceclassic", "dtrh", "intake" }, Tiles(launcher));
+        Assert.Equal(new[] { "tc", "breakout", "piecebypiece", "race", "raceclassic", "dtrh", "intake" }, Tiles(launcher));
         var tile = launcher.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
         Assert.Contains(Loc.Get("launcher_game_intake_title"), Texts(tile));
         Assert.Contains(Loc.Get("launcher_play"), Texts(tile));
@@ -743,20 +743,23 @@ public sealed class LauncherWindowTests
         CoreAccount.IsLoggedInProvider = () => true;
         LauncherWindow.BackToLauncher(shell);
         Dispatcher.UIThread.RunJobs();
+        double old = LauncherWindow.Instance!.Bounds.Height;
+        // s20-tc-host: the Games door's seven real tiles (T&C joined) overflow the 800 px window, so seating it
+        // is the one grow; after it the block fits and sits centred (WPF FitTiles).
         var w = Seat(LauncherWindow.Instance!);
         var grid = w.FindControl<UniformGrid>("GamesGrid")!;
-        // One tile fits: the block sits centred (WPF FitTiles).
-        Assert.Equal(global::Avalonia.Layout.VerticalAlignment.Center, grid.VerticalAlignment);
-        for (int i = 0; i < 8; i++) grid.Children.Add(new Border());
-        double old = w.Bounds.Height;
-        w.SeatGrid();
         double grown = w.Height;
         Assert.True(grown > old + 1, $"{old} -> {grown}");
         var wa = w.Screens.ScreenFromWindow(w)!;
         Assert.True(grown <= wa.WorkingArea.Height / wa.Scaling + 0.5);
         Assert.InRange(w.Position.Y, wa.WorkingArea.Y, wa.WorkingArea.Bottom - (int)Math.Ceiling(grown * wa.Scaling));
-        Assert.Equal(global::Avalonia.Layout.VerticalAlignment.Top, grid.VerticalAlignment);
+        Assert.Equal(global::Avalonia.Layout.VerticalAlignment.Center, grid.VerticalAlignment);
 
+        // Once: more overflow scrolls rather than growing again, and a hand resize is never fought.
+        for (int i = 0; i < 8; i++) grid.Children.Add(new Border());
+        w.SeatGrid();
+        Assert.Equal(grown, w.Height);
+        Assert.Equal(global::Avalonia.Layout.VerticalAlignment.Top, grid.VerticalAlignment);
         w.Height = old;
         Dispatcher.UIThread.RunJobs();
         w.SeatGrid();

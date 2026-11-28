@@ -64,10 +64,12 @@ public partial class LauncherWindow
 
     // ------------------------------------------------------------------ rules in, cards out
 
-    /// <summary>WPF LauncherEntry.Available: this head can open it (Just Drop also asks its door).</summary>
+    /// <summary>WPF LauncherEntry.Available: this head can open it (Just Drop also asks its door; T&amp;C needs
+    /// its game tree on disk, WPF LauncherCatalogue.cs:250).</summary>
     internal static bool Available(LauncherCard card)
     {
         if (!Destinations.ContainsKey(card.Id)) return false;
+        if (string.Equals(card.Id, Games.GameWindow.TcId, StringComparison.OrdinalIgnoreCase)) return Games.GameWindow.TcTreePresent();
         if (!string.Equals(card.Id, Games.GameWindow.JustDropId, StringComparison.OrdinalIgnoreCase)) return true;
         try { return JustDropService.DoorAvailable; }
         catch (Exception ex) { Log.Debug(ex, "[Launcher] just drop door probe failed"); return false; }

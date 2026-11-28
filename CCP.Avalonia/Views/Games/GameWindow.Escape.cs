@@ -28,6 +28,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             DtrhId => PanicPolicy.KeptEscapePage.Dtrh,
             GlassroadId => PanicPolicy.KeptEscapePage.Glassroad,
             PrizeCounterId => PanicPolicy.KeptEscapePage.Counter,   // its Esc ladder's back (Core PanicPolicy.cs:139)
+            TcId => PanicPolicy.KeptEscapePage.Tc,   // WPF MainWindow.xaml.cs:1561 (876b22252d)
             _ => PanicPolicy.KeptEscapePage.None,
         };
 
