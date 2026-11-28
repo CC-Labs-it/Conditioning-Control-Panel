@@ -30,7 +30,7 @@ public sealed class Sync7HistoryGentleTests
     }
 
     [Fact]
-    public Task AiTubeLinesReachThePageWithoutEnteringPromptsOrPersistence() => AvaloniaTestDispatcher.RunAsync(() =>
+    public Task AiTubeLinesReachThePageAndThePromptHistory() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         EnsureApp();
         var dir = Directory.CreateTempSubdirectory("tube-history-").FullName;
@@ -47,7 +47,10 @@ public sealed class Sync7HistoryGentleTests
             var turn = Assert.Single(brain.Session.Turns);
             Assert.Equal(TurnKind.TubeLine, turn.Kind);
             Assert.True(ConditioningControlPanel.Services.Companion.ConversationRules.Shows(turn.Kind));
-            Assert.Empty(ChatSession.ToMessages(brain.Session.Turns));
+            // WPF c30f42edfb (ccp-bugs #1717): a tube line rides the next prompt as an assistant line
+            // (CCP.Core/Services/Companion/Brain/ChatSession.cs:329-333, CompanionTurn.cs:125).
+            var sent = Assert.Single(ChatSession.ToMessages(brain.Session.Turns));
+            Assert.Equal(("assistant", "new thought"), (sent.Role, sent.Content));
             Assert.False(turn.IsDialogue);
             tube.GigglePriority("new thought", playSound: false, aiGenerated: true);
             tube.GigglePriority("preset words", playSound: false, aiGenerated: false);
