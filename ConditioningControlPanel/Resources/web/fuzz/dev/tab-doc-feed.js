@@ -16,6 +16,7 @@ export function createPreviewFeed({ onStatus = () => {}, location = globalThis.l
   function failure(reason) {
     const text = reason === 'sign-in' ? 'Sign in to CCP, then retry Scrolller.' :
       reason === 'allowance-used' ? 'The current Scrolller allowance has been used.' :
+      reason === 'offline' ? 'Offline Mode is on in the desktop app.' :
       reason === 'disabled' ? 'Scrolller is disabled in the current desktop profile.' :
       'The Scrolller connection is unavailable. Retry the connection.';
     status(text,'error');

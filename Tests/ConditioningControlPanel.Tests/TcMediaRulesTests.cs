@@ -56,9 +56,9 @@ public class TcMediaRulesTests
     [Theory]
     [InlineData(false, false, "declined")]
     [InlineData(true, false, null)]
-    // Offline mode is "disabled" whatever the consent, never "declined". A local Library source is no refusal any more.
-    [InlineData(true, true, "disabled")]
-    [InlineData(false, true, "disabled")]
+    // Offline mode is "offline" whatever the consent, never "declined" (ccp-bugs 1771). A local Library source is no refusal any more.
+    [InlineData(true, true, "offline")]
+    [InlineData(false, true, "offline")]
     public void Refusal_reasons_use_the_contract_codes(bool consent, bool offline, string? expected)
         => Assert.Equal(expected, TcMediaRules.RefusalReason(consent, offline));
 
@@ -176,6 +176,31 @@ public class TcMediaRulesTests
         Assert.Contains("if (PicturesOnNow) StartPictures();", media);
         Assert.Contains("TcMediaRules.SubsFor(_pictureNiches)", media);
         Assert.Contains("DisposePictures();", Src("TcHostService.cs"));
+    }
+
+    /// <summary>ccp-bugs 1771: the Offline Mode refusal names Offline Mode and the place to switch it, with the
+    /// same words the Settings tab shows, and every code the host can send has its own line on the card.</summary>
+    [Fact]
+    public void The_offline_refusal_names_offline_mode_and_where_to_switch_it()
+    {
+        var root = FindRoot();
+        var terms = File.ReadAllText(Path.Combine(root, "ConditioningControlPanel", "Resources", "web", "fuzz", "data", "content", "terms.js"));
+        var lang = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(Path.Combine(root, "ConditioningControlPanel", "Localization", "Languages", "en.json")));
+        var line = System.Text.RegularExpressions.Regex.Match(terms, @"'offline': '([^']*)'").Groups[1].Value;
+        Assert.Contains((string)lang["setting_offline_mode"]!, line);
+        Assert.Contains("Settings > " + (string)lang["set2_section_data"]! + " > " + (string)lang["setting_offline_mode"]!, line);
+        Assert.DoesNotContain("profile", line);
+        foreach (var code in new[] { TcMediaRules.RefusalReason(false, true), TcMediaRules.RefusalReason(false, false) })
+            Assert.Contains("'" + code + "':", terms);
+    }
+
+    private static string FindRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "ConditioningControlPanel", "Services", "Tc")))
+            dir = dir.Parent;
+        Assert.NotNull(dir);
+        return dir!.FullName;
     }
 
     [Fact]
