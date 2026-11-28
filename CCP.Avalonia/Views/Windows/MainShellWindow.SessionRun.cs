@@ -63,6 +63,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (_pendingUserEngineGen == gen) _pendingUserEngineGen = null;
                 if (gen != _engineGen || App.Sessions is not { IsRunning: false } runner) return;
+                Platform.DareHead.Resume();
                 try
                 {
                     Named<Tabs.PresetsTabView>("PresetsTab")?.ApplyCornerGifOption(session);   // WPF StartSession :1588
@@ -91,6 +92,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
                 catch (Exception ex)
                 {
+                    Platform.DareHead.Interrupt();
                     Log.Error(ex, "Failed to start session");
                     _ = MessageDialog.ShowAsync(this, Loc.Get("title_error"), Loc.GetF("msg_failed_to_start_session", ex.Message));
                 }

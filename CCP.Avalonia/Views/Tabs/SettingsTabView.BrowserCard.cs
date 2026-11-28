@@ -31,6 +31,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private string? _browserCardModId;
 
         internal static volatile bool RemixBrowserMediaBusy, InterruptingBrowserMedia;
+        internal static volatile bool DareBrowserMediaPlaying;
+        internal static bool DareBrowserMediaActive => DareBrowserMediaPlaying && System.Diagnostics.Stopwatch.GetElapsedTime(
+            System.Threading.Interlocked.Read(ref RemixMediaTick)).TotalSeconds < 20;
         // A dead page reporter must not suppress scheduled videos forever (WPF BrowserMediaService heartbeat).
         internal static bool BrowserMediaRecent => System.Diagnostics.Stopwatch.GetElapsedTime(
             System.Threading.Interlocked.Read(ref RemixMediaTick)).TotalSeconds < 60;
@@ -113,6 +116,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void BeginRemixMediaWatch()
         {
             _remixMediaId = null;
+            DareBrowserMediaPlaying = false;
             _frameMedia.Clear(); _topMediaActive = _topMediaInterrupting = false;
             InterruptionAudioTick = 0;
             var hasEngine = BrowserWebHost.HasEngine;
@@ -124,7 +128,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         private void InstallRemixMediaWatch(Uri uri, bool success)
         {
             Views.Windows.LockCardWindow.CompleteWebVideoNavigation(success);
-            if (!BrowserWebHost.HasEngine) { Views.Windows.LockCardWindow.EndWebVideo(); _remixWatchActive = false; RemixBrowserMediaBusy = InterruptingBrowserMedia = false; return; }
+            if (!BrowserWebHost.HasEngine) { Views.Windows.LockCardWindow.EndWebVideo(); _remixWatchActive = false; RemixBrowserMediaBusy = InterruptingBrowserMedia = DareBrowserMediaPlaying = false; return; }
             BeginRemixMediaWatch();
             if (!success) { InterruptingBrowserMedia = false; return; } // No loaded page can interrupt scheduled video.
             _remixMediaId = Guid.NewGuid().ToString("N");
@@ -164,6 +168,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 }
                 Views.Windows.LockCardWindow.NoteWebVideo(interrupting);
                 InterruptingBrowserMedia = interrupting;
+                DareBrowserMediaPlaying = active;
                 if (active) RemixBrowserMediaBusy = true;
                 System.Threading.Interlocked.Exchange(ref RemixMediaTick, System.Diagnostics.Stopwatch.GetTimestamp());
                 if (!active) RemixBrowserMediaBusy = false;
@@ -192,7 +197,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             };
             BrowserWebHost.DetachedFromVisualTree += (_, _) => Dispatcher.UIThread.Post(() =>
             {
-                if (!BrowserWebHost.IsAttachedToVisualTree()) { Views.Windows.LockCardWindow.EndWebVideo(); _remixMediaId = null; _remixWatchActive = false; RemixBrowserMediaBusy = InterruptingBrowserMedia = false; }
+                if (!BrowserWebHost.IsAttachedToVisualTree()) { Views.Windows.LockCardWindow.EndWebVideo(); _remixMediaId = null; _remixWatchActive = false; RemixBrowserMediaBusy = InterruptingBrowserMedia = DareBrowserMediaPlaying = false; }
             });
             BrowserWebHost.NavigationFinished += (url, success) =>
                 _ = Browser.BrowserAdCss.ApplyAsync(url, success, BrowserWebHost.InvokeScriptAsync);

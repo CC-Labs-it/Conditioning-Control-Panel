@@ -59,6 +59,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             new(ConditioningControlPanel.Services.ContentPackStore.ImageType);
         // WPF FlashService.cs:1674: notify at display, after loading and the pre-display wait.
         internal static event Action? Displayed;
+        internal static event Action<int>? DareImagesDisplayed;
+        internal static void NoteDareImages(int count)
+        {
+            try { DareImagesDisplayed?.Invoke(count); }
+            catch (Exception ex) { Log.Debug("Dares flash count failed: {E}", ex.Message); }
+        }
         internal static event Action? Clicked;
         internal static Action<Action, TimeSpan> After = (then, delay) => DispatcherTimer.RunOnce(then, delay);
         // Test seam: headless has no click-through overlays, so the burst would stop before loading.
@@ -304,6 +310,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         {
             // WPF FlashService.cs:1674: FlashDisplayed once per batch, right after its spawns are queued.
             if (flashes.Count > 0) Platform.BarkHead.Engine?.Raise("FlashDisplayed");
+            NoteDareImages(flashes.Count);
             if (flashes.Count > 0)   // WPF RemoteControlService.Screen.cs:117-120: online when any picture came from Scrolller
                 ConditioningControlPanel.Services.Remote.RemoteScreenFeed.Flash(flashes.Any(f => ConditioningControlPanel.Services.Fyp.Online.ScrolllerCreditRules.IsScrolllerMedia(f.Path)));
             var refused = false;

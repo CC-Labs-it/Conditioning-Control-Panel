@@ -105,6 +105,7 @@ internal static partial class FlashOverlay
         Displayed?.Invoke();
         if (multiplier > 1) LuckyProc(App.Mods?.GetLuckyFlashLabel() ?? ConditioningControlPanel.Localization.Loc.Get("skill_lucky_flash"), multiplier);
         Paid(path, s, 0, multiplier); // Mirrors do not pay again.
+        NoteDareImages(1);
         var frame = 0;
         timer = new DispatcherTimer(GifFrameDelay(delay, s.FlashGifSpeedMultiplier), DispatcherPriority.Render, (_, _) =>
         {

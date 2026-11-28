@@ -15,6 +15,6 @@ public static class DareTaps
     public static void RaiseSessionFinished(SessionDifficulty difficulty)
     {
         try { SessionFinished?.Invoke(difficulty); }
-        catch (Exception ex) { App.Logger?.Debug("Dares session tap failed: {E}", ex.Message); }
+        catch (Exception ex) { Serilog.Log.Debug("Dares session tap failed: {E}", ex.Message); }
     }
 }

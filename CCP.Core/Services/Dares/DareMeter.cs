@@ -65,6 +65,7 @@ public sealed class DareMeter
     }
 
     private readonly object _gate = new();
+    private readonly object _saveGate = new();
     private readonly IDareMeterStore _store;
     private FileShape _data = new();
     private bool _dirty;
@@ -218,15 +219,23 @@ public sealed class DareMeter
     /// <summary>Writes the numbers when anything moved since the last save.</summary>
     public void Save()
     {
-        string text;
-        lock (_gate)
+        // One writer at a time, so an older snapshot can never land after a newer one (same temp file).
+        lock (_saveGate)
         {
-            if (!_dirty) return;
-            text = JsonConvert.SerializeObject(_data);
-            _dirty = false;
+            string text;
+            lock (_gate)
+            {
+                if (!_dirty) return;
+                text = JsonConvert.SerializeObject(_data);
+                _dirty = false;
+            }
+            try { _store.Write(text); }
+            catch (Exception ex)
+            {
+                lock (_gate) _dirty = true;   // the counts are still unsaved; the next Save retries
+                Log.Debug("Dares meter save failed: {E}", ex.Message);
+            }
         }
-        try { _store.Write(text); }
-        catch (Exception ex) { Log.Debug("Dares meter save failed: {E}", ex.Message); }
     }
 
     private void Add(DareKind kind, int n, DateTimeOffset now)

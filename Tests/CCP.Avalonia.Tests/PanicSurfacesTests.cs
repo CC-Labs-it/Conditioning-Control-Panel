@@ -167,6 +167,7 @@ public sealed class PanicSurfacesTests
     private static readonly string[] SafetyCritical =
     {
         "emergency-exit",
+        "dares",
         "companion-audio",
         "audio-playlist",
         "emi-ring",
