@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -19,9 +20,9 @@ namespace CCP.Avalonia.Tests;
 public sealed class AppSettingsRefreshTests
 {
     [Fact]
-    public void ReopeningSettingsRefreshesAttachedSectionsAndHotpluggedCameras()
+    public async Task ReopeningSettingsRefreshesAttachedSectionsAndHotpluggedCameras()
     {
-        AvaloniaTestDispatcher.Run(() =>
+        await AvaloniaTestDispatcher.RunAsync(async () =>
         {
             if (Application.Current is null)
                 global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
@@ -59,6 +60,7 @@ public sealed class AppSettingsRefreshTests
                 var performance = page.FindControl<PerformanceSettingsSection>("SectionPerformance")!;
                 var notifications = page.FindControl<NotificationsSettingsSection>("SectionNotifications")!;
                 var cameras = devices.FindControl<ComboBox>("CmbWebcamDevice")!;
+                for (int i = 0; i < 200 && cameras.Items.Count == 0; i++) await Task.Delay(10);
                 Assert.Equal("old.mp4", general.FindControl<TextBlock>("TxtStartupVideo")!.Text);
                 Assert.DoesNotContain(cameras.Items.Cast<ComboBoxItem>(), i => Equals(i.Content, "[4] New camera"));
 
@@ -83,6 +85,7 @@ public sealed class AppSettingsRefreshTests
                 Assert.True(s.RunOnStartup); // adopts external registration, as WPF does
                 Assert.True(performance.FindControl<CheckBox>("ChkPerformanceMode")!.IsChecked);
                 Assert.Equal((int)PerkEffectsMode.NoCards, notifications.FindControl<ComboBox>("CmbPerkEffects")!.SelectedIndex);
+                for (int i = 0; i < 200 && !cameras.Items.Cast<ComboBoxItem>().Any(x => Equals(x.Content, "[4] New camera")); i++) await Task.Delay(10);
                 Assert.Contains(cameras.Items.Cast<ComboBoxItem>(), i => Equals(i.Content, "[4] New camera"));
                 Assert.Contains(devices.FindControl<ComboBox>("CmbMicDevice")!.Items.Cast<ComboBoxItem>(),
                     i => Equals(i.Content, "New microphone"));
