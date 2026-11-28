@@ -35,7 +35,7 @@ internal sealed partial class MandatoryVideoOverlay
     /// <summary>WPF StartBrowserVideoPlayback (VideoService.Browser.cs:110): false leaves nothing to undo.</summary>
     private bool TryStartBrowser(string path)
     {
-        if (!BrowserFits() || _surfaces.Count == 0 || !BrowserVideoSurface.TryAcquire(this, path)) return false;
+        if (!BrowserFits() || HasCredit(_source, CreditLookup) || _surfaces.Count == 0 || !BrowserVideoSurface.TryAcquire(this, path)) return false;
         var url = BrowserVideoSurface.Map(path);
         var views = new List<BrowserVideoSurface>();
         foreach (var _ in _surfaces)

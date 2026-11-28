@@ -20,6 +20,7 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models.Deeper;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Deeper;
+using ConditioningControlPanel.Services.Fyp.Online;
 using ConditioningControlPanel.Services.Video.Browser;
 using Xunit;
 
@@ -29,6 +30,27 @@ namespace CCP.Avalonia.Tests;
 /// mandatory clip plays in the page player, LibVLC is the fallback, and panic closes the session.</summary>
 public sealed class MandatoryVideoBrowserTests
 {
+    [Fact]
+    public Task CreditedClipUsesVisibleBadgeAndPanicClosesIt() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        using var rig = new Rig();
+        var o = MandatoryVideoOverlay.Instance;
+        var lookup = o.CreditLookup;
+        o.CreditLookup = _ => new ScrolllerCacheMeta("video", "test");
+        o.RoutedPlaybackForTests = () => new FakePlayback();
+        try
+        {
+            await rig.Open(strict: false);
+            Assert.Null(o.Browser);
+            Assert.False(BrowserVideoSurface.SessionActive);
+            var button = Assert.Single(((Panel)o.Surfaces[0].Window.Content!).Children.OfType<Button>());
+            Assert.True(button.IsVisible);
+            PanicSurfaces.All.Single(s => s.Id == "engine").Stop(null);
+            Assert.Empty(o.Windows);
+        }
+        finally { o.CreditLookup = lookup; o.RoutedPlaybackForTests = null; }
+    });
+
     [Fact]
     public Task EligibleClipPlaysInTheBrowserAndPanicClosesIt() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
