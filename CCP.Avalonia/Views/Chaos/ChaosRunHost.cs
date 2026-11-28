@@ -51,7 +51,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// treat lessons, the announcer and the achievement credit; slow-mo,
     /// the perf backoff on the cadence; Gif Rain and bouncing text payloads fire; the
     /// first-time bonus pop text.
-    /// Defuse and detonation barks and the last breath announcer caller remain missing.
+    /// Defuse and detonation barks remain missing.
     /// The FX window receives pop, defuse, combo and detonation pulses plus heat tint (also
     /// mirrored to <see cref="PulseFx"/>); screen shake keeps WPF's values through the unseeded
     /// <see cref="ShakeFx"/> hook (chaos-payout-fallin-d). Periodic
@@ -738,6 +738,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (lastBreath > 1)
             {
                 _state.PushEvent($"⏱ last breath! x{lastBreath:0}");
+                ChaosAnnouncerOverlay.Announce(Loc.GetF("chaos_last_breath_announce", lastBreath), ChaosAnnounceKind.PowerUp);
                 Pulse(Color.FromRgb(255, 215, 0), 0.40);   // gold flash (WPF :2045)
             }
             else Pulse(Color.FromRgb(90, 255, 150), 0.16);   // soft green confirm
