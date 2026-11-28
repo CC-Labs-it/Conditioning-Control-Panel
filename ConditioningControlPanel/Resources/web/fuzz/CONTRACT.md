@@ -96,7 +96,7 @@ sections 1 and 2; only the transport differs (`bridge.js`, transport `web`):
   a clip, `{url, kind:'video', mime:'video/mp4'}` (one mp4 rendition, short side at most 720, served from Scrolller's rotating
   CDN shards, so the stage CSP's media-src is `https://*.scrolller.com`); stills stay on `images.scrolller.com`. Remote rows need
   no `clips` (the page accepts a remote video row either way); the web host sends `clips:true` to say it may send them. A refused
-  `set-setting` echo may carry `reason` (`sign-in`, `allowance-used`, `disabled`, `declined`); the picture card says it plainly.
+  `set-setting` echo may carry `reason` (`sign-in`, `allowance-used`, `offline`, `disabled`, `declined`; the desktop answers `offline` for its Offline Mode); the picture card says it plainly.
 - `exit` (the Leave button, hosted only) and `open-url` are the host's to act on. The save stays in this origin's
   localStorage, so a standalone player who signs in on the site keeps their run.
 - Standalone, the picture card's first choice is "Sign in with your CC Labs account": a real press sends the same tab to
