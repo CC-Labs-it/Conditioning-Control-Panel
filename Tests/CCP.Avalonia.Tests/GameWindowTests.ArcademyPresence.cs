@@ -18,11 +18,15 @@ public sealed partial class GameWindowTests
 {
     private sealed class PresenceFeed : HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct) =>
-            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        internal readonly ManualResetEventSlim Served = new();
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage r, CancellationToken ct)
+        {
+            Served.Set();
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("{\"v\":1,\"now\":5,\"students\":[{\"id\":\"x\"}]}"),
             });
+        }
     }
 
     /// <summary>WPF ArcademyHostService.cs:262,4361,6106: the open campus gets the snapshot as a presence
@@ -33,16 +37,22 @@ public sealed partial class GameWindowTests
     public void Arcademy_PresenceFrameReachesPageAndStopsOnClose(bool panic) => Run((shell, _) =>
     {
         var oldHttp = ArcademyPresenceService.Http;
-        ArcademyPresenceService.Http = new HttpClient(new PresenceFeed());
+        var feed = new PresenceFeed();
+        ArcademyPresenceService.Http = new HttpClient(feed);
         var w = new GameWindow(GameWindow.ArcademySpec);
         var frames = new List<JObject>();
-        w.Posted += json => { var o = JObject.Parse(json); if ((string?)o["type"] == "presence") frames.Add(o); };
+        var order = new List<string?>();
+        w.Posted += json => { var o = JObject.Parse(json); order.Add((string?)o["type"]); if ((string?)o["type"] == "presence") frames.Add(o); };
         try
         {
             w.Show();
-            var end = DateTime.UtcNow.AddSeconds(5);
-            while (frames.Count == 0 && DateTime.UtcNow < end) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(10); }
+            // The first snapshot lands before the page listens: held, not dropped (WPF ChaosWebViewHost.Post).
+            Assert.True(feed.Served.Wait(TimeSpan.FromSeconds(5)));
+            for (var i = 0; i < 20; i++) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(10); }
+            Assert.Empty(frames);
+            w.HandleMessage("{\"type\":\"ready\"}");
             var frame = Assert.Single(frames);
+            Assert.InRange(order.IndexOf("init"), 0, order.IndexOf("presence") - 1);
             Assert.Equal("x", (string?)frame["snapshot"]?["students"]?[0]?["id"]);
             Assert.True(ArcademyPresenceService.Attached);
 
