@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using ConditioningControlPanel.Localization;
@@ -98,6 +99,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                 PnlGentleChoices.IsVisible = s.GentleVisuals;
                 CmbGentleFade.SelectedIndex = NearestIndex(GentleVisuals.FadeChoices, s.GentleFadeSeconds);
                 CmbGentleSpeed.SelectedIndex = NearestIndex(GentleVisuals.SpeedChoices, s.GentleSpeed);
+                ChkPinkComfortLimit.IsChecked = s.PinkComfortLimitOn;
+                PnlPinkComfortLimit.IsVisible = s.PinkComfortLimitOn;
+                SliderPinkComfortLimit.Value = s.PinkComfortLimitPct;
+                TxtPinkComfortLimit.Text = $"{s.PinkComfortLimitPct}%";
                 // MotionLevel's ordinal IS the item index (Full=0, Reduced=1, Off=2). Clamped rather
                 // than trusted so a settings file from a future build cannot throw here.
                 var index = (int)s.MotionLevel;
@@ -156,6 +161,40 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             if (CmbGentleSpeed.SelectedIndex >= 0)
                 s.GentleSpeed = GentleVisuals.SpeedChoices[CmbGentleSpeed.SelectedIndex];
             CoreSettings.Save();
+        }
+
+        /// <summary>
+        /// Accessibility, "Limit pink filter to" (WPF 91938be4d0). The Super fog picks a change up on
+        /// its next tick by itself; the tint windows are steady, so they are repainted here.
+        /// </summary>
+        private void ChkPinkComfortLimit_Changed(object? sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = CoreSettings.Current;
+            if (s == null) return;
+            s.PinkComfortLimitOn = ChkPinkComfortLimit.IsChecked == true;
+            PnlPinkComfortLimit.IsVisible = s.PinkComfortLimitOn;
+            Log.Information("Pink filter limit set to {On} at {Pct}%", s.PinkComfortLimitOn, s.PinkComfortLimitPct);
+            CoreSettings.Save();
+            RepaintPinkTint();
+        }
+
+        private void SliderPinkComfortLimit_Changed(object? sender, RangeBaseValueChangedEventArgs e)
+        {
+            int v = ConditioningControlPanel.Looks.PinkComfort.ClampPct((int)Math.Round(e.NewValue));
+            if (TxtPinkComfortLimit != null) TxtPinkComfortLimit.Text = $"{v}%";
+            if (_isLoading) return;
+            var s = CoreSettings.Current;
+            if (s == null || s.PinkComfortLimitPct == v) return;
+            s.PinkComfortLimitPct = v;
+            CoreSettings.Save();
+            RepaintPinkTint();
+        }
+
+        private void RepaintPinkTint()
+        {
+            try { global::ConditioningControlPanel.Avalonia.Views.Overlays.PinkFilterOverlay.Refresh(this); }
+            catch (Exception ex) { Log.Debug("Pink filter limit: repaint failed: {Error}", ex.Message); }
         }
 
         private void ChkPerformanceMode_Changed(object? sender, RoutedEventArgs e)
