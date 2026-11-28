@@ -45,8 +45,7 @@ internal sealed class XpDrainEffect : PossessionEffectBase
     protected override bool CanApplyCore(PossessionContext ctx, PossessionTarget? target)
     {
         if (ctx.Host is not IAvaloniaPossessionHost { GhostLayer: not null } host ||
-            target?.Visual is not Control selected ||
-            (target.Role == PossessionRole.Label && selected.Name != "TxtLevelLabel")) return false;
+            target?.Visual is not Control) return false;
         var bar = Bar(host, target);
         return bar != null && bar.IsEffectivelyVisible && !PossessionTree.IsOffLimits(bar) &&
             !PossessionLease.IsLeased(bar) && host.BoundsOnGhostLayer(bar) is { Width: >= 6, Height: >= 2 };

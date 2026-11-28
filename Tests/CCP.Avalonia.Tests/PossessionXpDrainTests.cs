@@ -41,17 +41,20 @@ public sealed class PossessionXpDrainTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public Task DrainsAndPanicRestoresWithoutOverwritingRealLevelChange(bool levelChanged) => AvaloniaTestDispatcher.RunAsync(async () =>
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public Task DrainsAndPanicRestoresWithoutOverwritingRealLevelChange(bool levelChanged, bool otherLabel) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var bar = new Border { Name = "XPBar", Width = 100, Height = 10, Background = Brushes.Red, Opacity = 0.7 };
         var chip = new TextBlock { Name = "TxtLevelLabel", Text = "LVL 5" };
+        // WPF XpDrainEffect.cs:62-72 accepts any Label pick and still rewrites only the level chip.
+        var settings = new TextBlock { Text = "Settings" };
         var layer = new Canvas { IsHitTestVisible = false };
-        var window = new Window { Width = 300, Height = 150, Content = new Grid { Children = { bar, chip, layer } } };
+        var window = new Window { Width = 300, Height = 150, Content = new Grid { Children = { bar, chip, settings, layer } } };
         var frames = new FakeFrames();
         var host = new Host(window, layer, frames);
-        var target = new PossessionTarget { Visual = chip, Role = PossessionRole.Label, Key = "level", DisplayName = "level" };
+        var target = new PossessionTarget { Visual = otherLabel ? settings : chip, Role = PossessionRole.Label, Key = "level", DisplayName = "level" };
         var context = new PossessionContext { Host = host, Attribution = new Attribution(), Rung = PossessionRung.Melt,
             Intensity = PossessionIntensity.Eerie, Photosafe = false, Rng = new Random(1), ElapsedFraction = 0,
             Remaining = TimeSpan.Zero, Name = (_, _) => { } };
@@ -66,6 +69,7 @@ public sealed class PossessionXpDrainTests
             Assert.False(apply.IsCompleted);
             Assert.Equal(0, bar.Opacity);
             Assert.Equal("LVL 0", chip.Text);
+            Assert.Equal("Settings", settings.Text);
             var ghost = Assert.IsType<Border>(Assert.Single(layer.Children));
             Assert.False(ghost.IsHitTestVisible);
             frames.Frame(TimeSpan.FromMilliseconds(1000));
