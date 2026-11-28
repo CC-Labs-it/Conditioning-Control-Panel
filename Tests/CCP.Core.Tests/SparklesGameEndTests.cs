@@ -14,6 +14,61 @@ namespace CCP.Core.Tests;
 public class SparklesGameEndTests
 {
     [Theory]
+    [InlineData("S+", "gold")]
+    [InlineData("s", "gold")]
+    [InlineData("A", "silver")]
+    [InlineData("B", "bronze")]
+    [InlineData("C", "none")]
+    [InlineData("pass", "none")]
+    [InlineData(null, "none")]
+    public void ArcademyGradesMapToMedals(string? grade, string medal) =>
+        Assert.Equal(medal, SparklesGameEnd.ArcademyMedal(grade));
+
+    private static JObject Goon(string result, bool practice = false, string code = "ABCD12") => JObject.Parse(
+        "{\"type\":\"match-result\",\"practice\":" + (practice ? "true" : "false") + ",\"code\":\"" + code + "\",\"result\":" + result + "}");
+
+    [Fact]
+    public void GoonDuelClaimsOnlineWithTheRoomCode()
+    {
+        var c = SparklesPageResults.Goon(Goon("{\"endReason\":1,\"winnerIsHost\":false,\"localIsHost\":false,\"survivedMs\":240000}"));
+        Assert.Equal(("goon", "online", "win"), (c!.Game, c.Mode, c.Result.Outcome));
+        Assert.Equal("ABCD12", (string?)c.Proof!["goonMatchId"]);
+        Assert.Equal(240, c.Duration.TotalSeconds);
+        var lost = SparklesPageResults.Goon(Goon("{\"endReason\":1,\"winnerIsHost\":true,\"localIsHost\":false}"));
+        Assert.Equal("loss", lost!.Result.Outcome);
+        var draw = SparklesPageResults.Goon(Goon("{\"endReason\":3,\"winnerIsHost\":null,\"localIsHost\":true}"));
+        Assert.Equal("draw", draw!.Result.Outcome);
+    }
+
+    [Fact]
+    public void GoonPracticeClaimsPracticeWithNoProof()
+    {
+        var c = SparklesPageResults.Goon(Goon("{\"endReason\":1,\"winnerIsHost\":true,\"localIsHost\":true}", practice: true, code: ""));
+        Assert.Equal(("practice", "win"), (c!.Mode, c.Result.Outcome));
+        Assert.Null(c.Proof);
+    }
+
+    [Theory]
+    [InlineData("{\"endReason\":0,\"winnerIsHost\":true,\"localIsHost\":true}", false)]   // mercy
+    [InlineData("{\"endReason\":2,\"winnerIsHost\":true,\"localIsHost\":true}", false)]   // abandon
+    [InlineData("{\"endReason\":1,\"winnerIsHost\":true,\"localIsHost\":true,\"countsForLedger\":false}", false)]
+    [InlineData("{\"endReason\":1,\"winnerIsHost\":null,\"localIsHost\":true}", false)]
+    [InlineData("{\"endReason\":1,\"winnerIsHost\":true,\"localIsHost\":true,\"disputed\":true}", true)]
+    public void GoonClaimsNothingForTheseResults(string result, bool practice) =>
+        Assert.Null(SparklesPageResults.Goon(Goon(result, practice)));
+
+    [Fact]
+    public void GoonWithoutAResultClaimsNothing() =>
+        Assert.Null(SparklesPageResults.Goon(JObject.Parse("{practice:false}")));
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("abcd")]
+    [InlineData("ABC")]
+    public void AGoonDuelWithoutARoomCodeClaimsNothing(string code) =>
+        Assert.Null(SparklesPageResults.Goon(Goon("{\"endReason\":3,\"localIsHost\":true}", code: code)));
+
+    [Theory]
     [InlineData("race", "solo", null)]
     [InlineData("trial", "trial", "gold")]
     [InlineData("ghost", "ghost", null)]
