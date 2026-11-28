@@ -500,6 +500,34 @@ public sealed class TakeoverTests
     });
 
     [Fact]
+    public Task AskCardsWaitForTakeoverActionAndPanicClearsIt() => WithArmedShell((shell, _) =>
+    {
+        var flash = CoreFlash.ShowProvider;
+        var restore = CompanionBrainHostTests.SaveAskSeams();
+        try
+        {
+            global::ConditioningControlPanel.Avalonia.Platform.StartupLadder.ResetForTests();
+            global::ConditioningControlPanel.Avalonia.App.SeedCompanionTubeSeams();
+            var probe = ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.BusyProvider!;
+            Assert.False(probe());
+            CoreFlash.ShowProvider = () =>
+            {
+                Assert.True(probe());
+                Assert.False(ConditioningControlPanel.Services.Companion.Asks.CompanionAskService.Instance.CanOfferFor("what can I do"));
+                PanicSurfaces.StopAll("test", shell);
+                Assert.False(probe());
+            };
+            shell.PerformAutonomy(AutonomyActionType.Flash);
+            Assert.False(probe());
+        }
+        finally
+        {
+            CoreFlash.ShowProvider = flash;
+            restore();
+        }
+    });
+
+    [Fact]
     public Task CompanionBonusOnlyDuringTakeoverDispatchAndStopsOnPanic() => WithArmedShell((shell, _) =>
     {
         var s = CoreSettings.Current;
