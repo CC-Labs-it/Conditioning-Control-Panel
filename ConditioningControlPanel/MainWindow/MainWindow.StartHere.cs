@@ -42,7 +42,8 @@ namespace ConditioningControlPanel
                                 live.StartHereShown = true;
                                 App.Settings?.Save();
                             }
-                            ShowStartHereCard();
+                            // The assets nudge follows Start here, never on top of it.
+                            ShowStartHereCard(() => OfferAssetsNudgeIfNeeded(freshInstall: true));
                         },
                     })));
             }
@@ -53,11 +54,12 @@ namespace ConditioningControlPanel
         }
 
         /// <summary>Opens the card (owned, non-modal).</summary>
-        internal void ShowStartHereCard()
+        internal void ShowStartHereCard(Action? onClosed = null)
         {
             try
             {
                 var card = new StartHereCard(StartHereGo) { Owner = this };
+                if (onClosed != null) card.Closed += (_, _) => onClosed();
                 card.Show();
             }
             catch (Exception ex)

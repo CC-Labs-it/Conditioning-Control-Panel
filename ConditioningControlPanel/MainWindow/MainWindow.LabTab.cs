@@ -1350,18 +1350,45 @@ namespace ConditioningControlPanel
         // couldn't trip the save path mid-loop; there is one combo now, in Settings → Devices.
         private bool _webcamDevicePopulating;
 
+        // One camera scan at a time, off the UI thread (see PopulateWebcamDeviceCombos).
+        private readonly Services.WebcamDeviceScan _webcamDeviceScan = new();
+
         /// <summary>
         /// Rebuild the camera picker in Settings → Devices from a live enumeration.
         /// Safe before the Settings view is realized (null check inside PopulateWebcamCombo).
+        ///
+        /// 7.4.2 (ccp-bugs #1718): the enumeration is DirectShow COM plus a WinRT fallback with a 5 s
+        /// wait, and it ran on the UI thread from ShowTab (Blink Trainer, Settings → Devices), where
+        /// one hang report's stack sat. It now runs on its own thread and the picker is filled when
+        /// it answers. A call while a scan runs joins that scan rather than starting a second. The
+        /// picker lives in Settings → Devices, so leaving the tab meanwhile changes nothing: the fill
+        /// lands on the same combo, and the saved camera (which a pick made meanwhile also writes)
+        /// is what gets selected. Returns the scan's answer for callers that report a count.
         /// </summary>
-        private void PopulateWebcamDeviceCombos()
+        private Task<IReadOnlyList<Services.WebcamDeviceEnumerator.WebcamDevice>> PopulateWebcamDeviceCombos()
         {
-            if (App.Webcam == null) return;
-            var devices = App.Webcam.EnumerateDevices();
-            _webcamDevicePopulating = true;
+            var webcam = App.Webcam;
+            if (webcam == null)
+                return Task.FromResult<IReadOnlyList<Services.WebcamDeviceEnumerator.WebcamDevice>>(
+                    Array.Empty<Services.WebcamDeviceEnumerator.WebcamDevice>());
+            var scan = _webcamDeviceScan.Run(webcam.EnumerateDevices, out bool started);
+            if (started) _ = FillWebcamComboWhenScanned(scan);
+            return scan;
+        }
+
+        private async Task FillWebcamComboWhenScanned(Task<IReadOnlyList<Services.WebcamDeviceEnumerator.WebcamDevice>> scan)
+        {
+            var devices = await scan;
+            // Back on the UI thread (the caller's context). A window shutting down has no picker left.
+            if (Dispatcher.HasShutdownStarted) return;
             try
             {
+                _webcamDevicePopulating = true;
                 PopulateWebcamCombo(AppSettingsTab?.CmbWebcamDevice, devices);
+            }
+            catch (Exception ex)
+            {
+                App.Logger?.Warning(ex, "Devices: filling the camera picker failed");
             }
             finally
             {
@@ -1423,13 +1450,16 @@ namespace ConditioningControlPanel
             AppendWebcamDebugLog($"Camera set to {item.Content}. {(App.Webcam?.IsRunning == true ? "Stop and Start tracking to apply." : "Will be used on next Start.")}");
         }
 
-        internal void BtnWebcamDeviceRefresh_Click(object sender, RoutedEventArgs e)
+        internal async void BtnWebcamDeviceRefresh_Click(object sender, RoutedEventArgs e)
         {
-            PopulateWebcamDeviceCombos();
             // Report the count of actually-enumerated devices, NOT AppSettingsTab.CmbWebcamDevice.Items.Count
             // — when zero cameras are found the combo holds a single "(no cameras detected)"
-            // placeholder item, which made the message falsely say "1 found" (#291).
-            int found = App.Webcam?.EnumerateDevices().Count ?? 0;
+            // placeholder item, which made the message falsely say "1 found" (#291). The count is
+            // the scan's own answer (7.4.2): this used to enumerate a second time, on the UI thread.
+            int found;
+            try { found = (await PopulateWebcamDeviceCombos()).Count; }
+            catch (Exception ex) { App.Logger?.Warning(ex, "Devices: camera re-scan failed"); return; }
+            if (Dispatcher.HasShutdownStarted) return;
             AppendWebcamDebugLog(found == 0
                 ? "Re-scanned cameras: none detected."
                 : $"Re-scanned cameras: {found} found.");

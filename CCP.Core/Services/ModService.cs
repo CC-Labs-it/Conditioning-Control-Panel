@@ -1254,18 +1254,26 @@ namespace ConditioningControlPanel.Services
             return _baseMod.Manifest.Browser?.DefaultUrl ?? "https://hypnotube.com/";
         }
 
-        public Dictionary<string, string>? GetVideoLinks()
-        {
-            // A per-mod user override (edited in Settings → Hypnotube Links) wins over the
-            // shipped pool, so the user fully controls what the companion may suggest for THIS
-            // mod. Falls back to the mod's DefaultVideoLinks, then the base mod's.
-            if (CoreSettings.Current?.VideoLinksByMod?.TryGetValue(_activeMod.Id, out var userLinks) == true
-                && userLinks != null && userLinks.Count > 0)
-                return userLinks;
+        public Dictionary<string, string>? GetVideoLinks() =>
+            ResolveVideoLinks(CoreSettings.Current?.VideoLinksByMod, _activeMod.Id,
+                _activeMod.Manifest.Browser?.DefaultVideoLinks, _baseMod.Manifest.Browser?.DefaultVideoLinks);
 
-            var links = _activeMod.Manifest.Browser?.DefaultVideoLinks;
-            if (links != null && links.Count > 0) return links;
-            return _baseMod.Manifest.Browser?.DefaultVideoLinks;
+        /// <summary>
+        /// The pool rule, pure so tests can drive it without the app. A per-mod user override
+        /// (Companion → Links) wins over the shipped pool, so the user fully controls what the
+        /// companion may suggest for THIS mod, and that includes an EMPTY override: a user who
+        /// bins every row gets no videos, not the shipped list back (ccp-bugs #1754, 7.4.1: the
+        /// old "Count > 0" test here made the shipped list win again). "Never set" (no key) falls
+        /// back to the mod's DefaultVideoLinks, then the base mod's.
+        /// </summary>
+        internal static Dictionary<string, string>? ResolveVideoLinks(
+            IReadOnlyDictionary<string, Dictionary<string, string>>? byMod, string modId,
+            Dictionary<string, string>? modDefaults, Dictionary<string, string>? baseDefaults)
+        {
+            if (byMod != null && byMod.TryGetValue(modId, out var userLinks) && userLinks != null)
+                return userLinks;
+            if (modDefaults != null && modDefaults.Count > 0) return modDefaults;
+            return baseDefaults;
         }
 
         /// <summary>
@@ -1277,19 +1285,36 @@ namespace ConditioningControlPanel.Services
             CoreSettings.Current?.VideoLinksByMod?.ContainsKey(_activeMod.Id) == true;
 
         /// <summary>
-        /// Persists the user's edited video link pool for the active mod, or clears the override
-        /// (reverting to the mod's shipped links) when <paramref name="links"/> is null/empty.
+        /// True when the user emptied the active mod's pool on purpose (an override with no
+        /// entries). Callers that used to fall back to a built-in title list on an empty pool
+        /// ask this so an emptied pool means "name no video" (ccp-bugs #1754).
+        /// </summary>
+        public bool UserEmptiedVideoLinks() =>
+            App.Settings?.Current?.VideoLinksByMod?.TryGetValue(_activeMod.Id, out var links) == true
+            && links != null && links.Count == 0;
+
+        /// <summary>
+        /// Persists the user's edited video link pool for the active mod. An EMPTY pool is kept
+        /// as an explicit "no videos" override; only null clears the override (reverting to the
+        /// mod's shipped links).
         /// </summary>
         public void SetUserVideoLinks(Dictionary<string, string>? links)
         {
             var settings = CoreSettings.Current;
             if (settings == null) return;
             settings.VideoLinksByMod ??= new Dictionary<string, Dictionary<string, string>>();
-            if (links == null || links.Count == 0)
-                settings.VideoLinksByMod.Remove(_activeMod.Id);
-            else
-                settings.VideoLinksByMod[_activeMod.Id] = new Dictionary<string, string>(links);
+            StoreUserVideoLinks(settings.VideoLinksByMod, _activeMod.Id, links);
             _log?.Information("Saved {Count} user video link(s) for mod {ModId}", links?.Count ?? 0, _activeMod.Id);
+        }
+
+        /// <summary>The store half of <see cref="SetUserVideoLinks"/>, pure for tests.</summary>
+        internal static void StoreUserVideoLinks(Dictionary<string, Dictionary<string, string>> byMod,
+            string modId, Dictionary<string, string>? links)
+        {
+            if (links == null)
+                byMod.Remove(modId);
+            else
+                byMod[modId] = new Dictionary<string, string>(links);
         }
 
         public bool ShowBambiCloudOption() =>

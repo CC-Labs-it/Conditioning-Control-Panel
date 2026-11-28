@@ -6,6 +6,7 @@ import { PORTRAITS, SPRITES } from '../ui/adcard/portraits.js';
 import { ADCARD_LINES, ADCARD_COPY } from '../data/content/adcard.js';
 import { THEME_IDS } from '../ui/palette.js';
 import { createLife, serialize, parse } from '../sim/save.js';
+import { statusLine, gifWriter } from '../ui/adcard/export.js';
 
 const asset = (name) => new URL('../assets/adcard/' + name, import.meta.url);
 
@@ -100,4 +101,47 @@ test('the card stylesheet stays scoped under .adc', () => {
   const css = readFileSync(new URL('../ui/adcard/card.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
   const selectors = [...css.matchAll(/(^|\})\s*([^{}@]+)\{/g)].map((m) => m[2].trim()).filter((s) => !/^(from|to|\d+%)/.test(s));
   for (const sel of selectors) for (const part of sel.split(',')) assert.match(part.trim(), /^\.adc/, `unscoped selector: ${part.trim()}`);
+});
+
+test('a saved card says where the file went; the share sheet, copy and cancel keep their own lines', () => {
+  assert.equal(statusLine('saved'), ADCARD_COPY.savedDownloads);
+  assert.match(ADCARD_COPY.savedDownloads, /Downloads/);
+  assert.equal(statusLine('shared'), ADCARD_COPY.saved);
+  assert.equal(statusLine('shared', 'Shared.'), 'Shared.');
+  assert.equal(statusLine('copied'), ADCARD_COPY.copied);
+  assert.equal(statusLine('nocopy'), ADCARD_COPY.noCopy);
+  assert.equal(statusLine('cancelled'), '');
+  assert.doesNotMatch(ADCARD_COPY.savedDownloads, /[–—!]/);
+  for (const file of ['../ui/adcard/ending.js', '../ui/recap/recap.js']) {
+    const src = readFileSync(new URL(file, import.meta.url), 'utf8');
+    assert.match(src, /statusLine\(/, file + ' words its save line through statusLine');
+    assert.doesNotMatch(src, /ADCARD_COPY\.saved\b/, file + ' never shows the bare Saved. for a download');
+  }
+});
+
+test('the GIF encodes frame by frame as they are captured: same bytes as one batch at the end, a turn between frames', async () => {
+  const { GIFEncoder, quantize, applyPalette } = await import('../vendor/gifenc.esm.js');
+  const w = 8, h = 6;
+  const pixels = (seed) => { const d = new Uint8ClampedArray(w * h * 4); for (let i = 0; i < d.length; i++) d[i] = (i * 31 + seed * 97) & 255; return d; };
+  const frames = [1, 2, 3].map((seed) => {
+    const data = pixels(seed);
+    return { width: w, height: h, getContext: () => ({ getImageData: (x, y, gw, gh) => { assert.deepEqual([x, y, gw, gh], [0, 0, w, h]); return { data }; } }) };
+  });
+  let made = [];
+  const doc = { createElement: (tag) => { assert.equal(tag, 'canvas'); const c = { width: 0, height: 0, getContext: () => ({ drawImage() {}, getImageData: () => ({ data: pixels(1) }) }) }; made.push(c); return c; } };
+  const out = await gifWriter(doc, 12);
+  for (let i = 0; i < frames.length; i++) await out.add(frames[i], i === frames.length - 1);
+  assert.equal(made.length, 0, 'a frame of the first size is never redrawn');
+  // An odd first frame rounds down to even and is drawn to that size, as even() did for the batch.
+  const odd = await gifWriter(doc, 12);
+  await odd.add({ width: 9, height: 7, getContext: () => ({}) }, true);
+  assert.deepEqual(made.map((c) => [c.width, c.height]), [[8, 6]]);
+  const blob = out.finish();
+  const enc = GIFEncoder();
+  frames.forEach((c, i) => { const data = c.getContext().getImageData(0, 0, w, h).data, palette = quantize(data, 256); enc.writeFrame(applyPalette(data, palette), w, h, { palette, delay: i === 2 ? 2500 : Math.round(1000 / 12) }); });
+  enc.finish();
+  assert.equal(blob.type, 'image/gif');
+  assert.deepEqual(new Uint8Array(await blob.arrayBuffer()), enc.bytes());
+  const src = readFileSync(new URL('../ui/adcard/export.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /i % 3/, 'no frame waits for a third one to yield');
 });

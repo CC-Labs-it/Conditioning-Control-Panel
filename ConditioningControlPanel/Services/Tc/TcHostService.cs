@@ -17,7 +17,7 @@ namespace ConditioningControlPanel.Services.Tc;
 /// is never locked. Every page frame passes <see cref="TcFrameGate"/> first. Hard exits (panic, the
 /// title-bar X, a dead page, the watchdog) go through <see cref="Close"/>; the page's own exit ends on
 /// its <c>exit-done</c> or at 800 ms. Scrolller pictures and the Sparkles medal live in
-/// <c>TcHostService.Media.cs</c>; toy pulses and live settings in <c>TcHostService.Feel.cs</c>; save carry in <c>TcHostService.Save.cs</c>; the Llama Expo download in
+/// <c>TcHostService.Media.cs</c>; toy pulses and live settings in <c>TcHostService.Feel.cs</c>; save carry in <c>TcHostService.Save.cs</c>; sticker Sparkles in <c>TcHostService.Stickers.cs</c>; the Llama Expo download in
 /// <c>TcHostService.Expo.cs</c>.
 /// </summary>
 internal static partial class TcHostService
@@ -101,6 +101,7 @@ internal static partial class TcHostService
         try
         {
             _edition = ReadEdition();
+            ResetStickers();
             var expoFolder = ExpoOnLaunch();
             _closeAskedUtc = null;
             _focusHeld = false;
@@ -287,6 +288,9 @@ internal static partial class TcHostService
                     break;
                 case "fuzz-ended":
                     OnRunEnded(f);
+                    break;
+                case "achievement":
+                    OnAchievement(f);   // sticker Sparkles (TcHostService.Stickers.cs)
                     break;
                 case "own-media-list":
                     RunOnUi(OnOwnMediaList);   // the app's own pictures for "Use local files" (caps.ownMedia.library)

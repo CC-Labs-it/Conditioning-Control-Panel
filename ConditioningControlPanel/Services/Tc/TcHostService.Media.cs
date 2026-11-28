@@ -15,8 +15,8 @@ namespace ConditioningControlPanel.Services.Tc;
 // Pictures follow the Glassroad host (device origin): caps.scrolller, set-setting, setting, scrolller-niches,
 // scrolller-feed. The fetch is the shared pool (GoonOnlineMedia, own "tc" tenants), so the daily share, the
 // 24 h rule, the off switch and temp-file ownership are the ones every game uses; each file is a plain
-// https://ccp.assets/.temp/... url. Nothing is fetched before TcMediaRules.PicturesOn (app online source,
-// app consent, not offline). This host does not advertise sessionOptIn or playWarmup, so scrolller-release,
+// https://ccp.assets/.temp/... url. Nothing is fetched before TcMediaRules.PicturesOn (app consent, not offline,
+// and the app's online source or the player's own yes in this game, AppSettings.TcPictures). This host does not advertise sessionOptIn or playWarmup, so scrolller-release,
 // scrolller-play and scrolller-view are only logged. Every exit runs DisposePictures through Close.
 internal static partial class TcHostService
 {
@@ -36,12 +36,14 @@ internal static partial class TcHostService
         get
         {
             var s = App.Settings?.Current;
-            return s != null && TcMediaRules.PicturesOn(s.MediaSource, s.HasRemoteMediaConsent, s.OfflineMode, _picturesOffInWindow);
+            return s != null && TcMediaRules.PicturesOn(s.TcPictures, s.MediaSource, s.HasRemoteMediaConsent, s.OfflineMode, _picturesOffInWindow);
         }
     }
 
     /// <summary>page -&gt; host <c>set-setting media.remoteConsent</c>. Only a player's press (<c>ask</c>) can turn
-    /// pictures on, and then only through the app's own consent; off always works and only for this window.</summary>
+    /// pictures on, and then only through the app's own consent; that press is also the game's own yes
+    /// (<c>TcPictures</c>), so a local Library source no longer refuses it. Off always works: it hides pictures
+    /// for this window and clears the game's yes; the Library's source is never touched.</summary>
     private static void OnPictureSetting(TcPageFrame f)
     {
         var s = App.Settings?.Current;
@@ -49,35 +51,36 @@ internal static partial class TcHostService
         if (f.Value && f.Ask)
         {
             _picturesOffInWindow = false;
-            // The question is asked only when its answer can matter (never on a local source or offline).
-            if (!s.HasRemoteMediaConsent && TcMediaRules.ConsentAskMatters(s.MediaSource, s.OfflineMode)
+            // The question is asked only when its answer can matter (never offline).
+            if (!s.HasRemoteMediaConsent && TcMediaRules.ConsentAskMatters(s.OfflineMode)
                 && AskPictureConsent())
             {
                 s.RemoteMediaConsented = true;
-                try { App.Settings?.Save(); } catch (Exception ex) { App.Logger?.Debug("Tc: consent save: {E}", ex.Message); }
             }
+            if (s.HasRemoteMediaConsent && !s.OfflineMode) s.TcPictures = true;
+            try { App.Settings?.Save(); } catch (Exception ex) { App.Logger?.Debug("Tc: consent save: {E}", ex.Message); }
         }
         else if (!f.Value)
         {
             _picturesOffInWindow = true;
+            if (s.TcPictures != null)
+            {
+                s.TcPictures = null;
+                try { App.Settings?.Save(); } catch (Exception ex) { App.Logger?.Debug("Tc: pictures save: {E}", ex.Message); }
+            }
         }
         bool on = PicturesOnNow;
         if (on) StartPictures();
         else StopPictures();
-        var reason = on || !f.Value ? null : TcMediaRules.RefusalReason(s.MediaSource, s.HasRemoteMediaConsent, s.OfflineMode);
+        var reason = on || !f.Value ? null : TcMediaRules.RefusalReason(s.HasRemoteMediaConsent, s.OfflineMode);
         try { _host?.Post(TcMediaRules.SettingEcho(on, reason)); } catch (Exception ex) { Diag.Swallowed(ex); }
     }
 
     /// <summary>The app's own consent question, the same words as every other picture door.</summary>
     private static bool AskPictureConsent()
     {
-        var message = LocOr("msg_remote_media_consent",
-            "Pull media from Reddit?\n\n" +
-            "The app will stream images and clips from the subreddits you pick, straight from your own machine. " +
-            "Nothing is saved to your disk, nothing is uploaded, and none of it goes through our servers.\n\n" +
-            "It is adult content and it is not curated by us - you choose the niches and subreddits, and only those are ever fetched.\n\n" +
-            "Turn it on?");
-        var title = LocOr("title_remote_media_consent", "Use Reddit media?");
+        var message = LocOr(Services.Fyp.Online.RemoteMediaConsentCopy.MessageKey, Services.Fyp.Online.RemoteMediaConsentCopy.Message);
+        var title = LocOr(Services.Fyp.Online.RemoteMediaConsentCopy.TitleKey, Services.Fyp.Online.RemoteMediaConsentCopy.Title);
         var owner = _host?.Window;
         var answer = owner != null
             ? MessageBox.Show(owner, message, title, MessageBoxButton.YesNo, MessageBoxImage.Question)

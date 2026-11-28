@@ -233,8 +233,10 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             Func<DateTime?>? personaFence = null,
             Func<string?>? lockdownContext = null,
             Func<DateTime?>? identityFence = null, Func<bool>? preview = null,
-            Func<bool>? chatMemoryEnabled = null, Func<string?>? rollingContext = null)
+            Func<bool>? chatMemoryEnabled = null, Func<string?>? rollingContext = null,
+            Func<IReadOnlyList<string>>? poolTitles = null)
         {
+            _poolTitles = poolTitles ?? DefaultPoolTitles;
             // Deliberately NOT `?? new MemoryStore()`. The production MemoryStore constructor is not
             // inert — it loads memory.json, starts a MemorySignalWriter and registers a shutdown
             // save — so a silent fallback here would give the process a SECOND store racing the
@@ -263,6 +265,29 @@ namespace ConditioningControlPanel.Services.Companion.Brain
         {
             try { return CoreSettings.Current.PersonaIdentityFenceUtc; }
             catch { return null; }
+        }
+
+        /// <summary>The user's video pool titles (what the prompt lists), for the anti-repeat line:
+        /// when all of them are banned, it lets the oldest pick repeat instead of leaving the model
+        /// nothing in-pool to name (ccp-bugs #1757). Injectable for tests.</summary>
+        private readonly Func<IReadOnlyList<string>> _poolTitles;
+
+        private static IReadOnlyList<string> DefaultPoolTitles()
+        {
+            try { return BambiSprite.StableMediaTitles(); }
+            catch (Exception ex)
+            {
+                App.Logger?.Debug("PromptAssembler: pool titles unavailable: {Error}", ex.Message);
+                return Array.Empty<string>();
+            }
+        }
+
+        private string? ExclusionLine()
+        {
+            IReadOnlyList<string>? listed;
+            try { listed = _poolTitles(); }
+            catch { listed = null; }
+            return _recommendations.BuildExclusionLine(listed);
         }
 
         private static IReadOnlyList<(string Title, string Url)> DefaultLinkPool()
@@ -308,7 +333,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             // Pin BOTH anti-fixation lines through the hard-cap floor branch: with a fat preset
             // the prefix alone busts the soft cap on every call, and losing vary+exclusion is
             // how one invented title became the whole evening's suggestion (0807).
-            var pinnedLines = _recommendations.BuildExclusionLine();
+            var pinnedLines = ExclusionLine();
             if (!_preview() && (purpose == AiPurpose.Chat || purpose == AiPurpose.Reaction))
                 pinnedLines = pinnedLines == null ? VaryPicksRule : pinnedLines + "\n" + VaryPicksRule;
             var repeat = purpose == AiPurpose.Chat ? RepeatHint(window) : null;
@@ -802,7 +827,7 @@ namespace ConditioningControlPanel.Services.Companion.Brain
             // they were the first casualties of a fat prompt, which is exactly when the model
             // needs them most (observed 2026-08-07: four chat calls ran with no exclusion set
             // and no vary rule, and the same invented titles came back all day).
-            var exclusion = _recommendations.BuildExclusionLine();
+            var exclusion = ExclusionLine();
             if (exclusion != null) lines.Add(exclusion);
             if (purpose == AiPurpose.Chat)
             {
