@@ -53,6 +53,18 @@ public class BrowserSinkLabelTests
     }
 
     [Fact]
+    public void RoutingScript_EmbedsTheLabelAsAStringLiteralAndPatchesBothAudioPaths()
+    {
+        // WPF ChaosWebViewHost.cs:1257-1350: quotes in a device name can never break out of the script.
+        var script = BrowserSinkLabel.RoutingScript("Speakers \"x\"; alert(1); //");
+        Assert.DoesNotContain("__CCP_SINK_LABEL__", script);
+        Assert.Contains("var WANTED = \"Speakers \\u0022x\\u0022; alert(1); //\";", script);
+        Assert.Contains("HTMLMediaElement.prototype.play", script);
+        Assert.Contains("AudioContext.prototype.setSinkId", script);
+        Assert.Contains("getUserMedia({ audio: true })", script);
+    }
+
+    [Fact]
     public void Resolve_BlankTestOverride_DoesNotShadowSettings()
     {
         Assert.Equal("Speakers", BrowserSinkLabel.Resolve("{guid}", "Speakers", "   "));

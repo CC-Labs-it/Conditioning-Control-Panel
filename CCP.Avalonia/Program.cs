@@ -41,6 +41,12 @@ namespace ConditioningControlPanel.Avalonia
         [STAThread]
         public static int Main(string[] args)
         {
+            try { return Run(args); }
+            finally { Serilog.Log.CloseAndFlush(); }
+        }
+
+        private static int Run(string[] args)
+        {
             PerfBench.SinceMain.Start();   // --perf-bench startup clock: the first line of Main, by definition
             if (OperatingSystem.IsLinux())
             {
@@ -67,6 +73,9 @@ namespace ConditioningControlPanel.Avalonia
                     fileSizeLimitBytes: 10_000_000, rollOnFileSizeLimit: true,
                     flushToDiskInterval: TimeSpan.FromSeconds(1), hooks: reportLog)
                 .CreateLogger();
+            Platform.CrashLog.Install();
+            // WPF App.xaml.cs:2395: repair a damaged Windows bundle before opening any window.
+            if (OperatingSystem.IsWindows() && !Platform.NativeBundleGuard.VerifyOrRepair()) return 1;
             var audioTrace = new ConditioningControlPanel.Services.Audio.AudioDiagnosticTrace(
                 System.IO.Path.Combine(ConditioningControlPanel.CorePaths.UserData, "logs", "audio-diag.log"));
             ConditioningControlPanel.Services.Audio.RecentSounds.Shared.TraceSink = audioTrace.Note;
@@ -301,7 +310,7 @@ namespace ConditioningControlPanel.Avalonia
             // WPF App.xaml.cs:4069: end protection after initialization, not an intermediate splash frame.
             App.DesktopStartupCompleted = instance.EndStartupPhase;
             App.Handoffs = handoffs;
-            var app = BuildAvaloniaApp();
+            var app = BuildAvaloniaApp().AfterPlatformServicesSetup(_ => Platform.CrashLog.RegisterDispatcherLast());
 #if DEBUG
             // Keincheck MCP server on http://127.0.0.1:3001, Debug builds only. Kept out of
             // BuildAvaloniaApp so the XAML previewer does not start a second server.
@@ -310,13 +319,7 @@ namespace ConditioningControlPanel.Avalonia
             // SIGTERM (logout, systemd, kill) is not handled by Avalonia's X11 backend: the app ignored it and needed kill -9.
             // Shut down through the lifetime instead, so settings flush exactly as on tray Exit.
             using var term = System.Runtime.InteropServices.PosixSignalRegistration.Create(
-                System.Runtime.InteropServices.PosixSignal.SIGTERM, ctx =>
-                {
-                    ctx.Cancel = true;
-                    global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                        (global::Avalonia.Application.Current?.ApplicationLifetime
-                            as global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.Shutdown());
-                });
+                System.Runtime.InteropServices.PosixSignal.SIGTERM, OnSigterm);
             // A cold WSLg / on-demand Xwayland first reports a 640x480 placeholder screen; Avalonia would keep it all run.
             Platform.X11ScreenSettle.WaitForRealMonitors();
             App.SplashOnStartup = true;
@@ -324,6 +327,23 @@ namespace ConditioningControlPanel.Avalonia
             app.StartWithClassicDesktopLifetime(args);
             App.StartupFailure?.Throw();   // a failed startup crashes non-zero, as it did before the splash
             return Views.Windows.MainShellWindow.TrayCheck ? Views.Windows.MainShellWindow.TrayCheckExit : 0;
+        }
+
+        private static int _sigterms;
+        internal static void ResetSigterm() => _sigterms = 0;
+
+        /// <summary>ccp-bugs #1704: the first SIGTERM shuts down through the lifetime; a second one (that exit is
+        /// stuck) is left to the runtime's default termination, so "terminate" works without kill -9.</summary>
+        internal static void OnSigterm(System.Runtime.InteropServices.PosixSignalContext ctx)
+        {
+            if (System.Threading.Interlocked.Increment(ref _sigterms) > 1) return;
+            ctx.Cancel = true;
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                // Gaze round videos stop off the dispatcher before the lifetime ends (#5174).
+                if (global::Avalonia.Application.Current?.ApplicationLifetime is global::Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime desktop)
+                    App.RequestDesktopShutdown(desktop);
+            });
         }
 
         public static AppBuilder BuildAvaloniaApp()

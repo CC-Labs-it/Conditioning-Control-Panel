@@ -21,6 +21,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
         public BrainDrainFeatureControl()
         {
             AvaloniaXamlLoader.Load(this);
+            // Owner call 2026-11-25: Undertow is not hosted here, so its rows stay folded behind "coming soon".
+            this.FindControl<global::ConditioningControlPanel.Avalonia.Controls.Super.SuperBox>("SuperBoxMain")!.Body = global::ConditioningControlPanel.Avalonia.Controls.Super.SuperPageRows.Undertow();
 
             ModArt.BindFeaturePlates(this, "features/brain_drain.png",
                 this.FindControl<Border>("HeroArt"), this.FindControl<Border>("SideArt"));

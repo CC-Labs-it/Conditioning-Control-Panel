@@ -241,9 +241,12 @@ namespace ConditioningControlPanel.Avalonia
                 visual.SetFrame(2.5, 2.5);
                 return visual;
             }) != 0) failed.Add(firstLight);
+            // The Super Deck card is a flash window grown round its picture: render one mid-lift, cracks showing.
+            const string deckCard = "FlashDeckCard";
+            if (Run(Path.Combine(dir, deckCard + ".png"), global::ConditioningControlPanel.Avalonia.Views.Overlays.FlashOverlayWindow.DeckSample) != 0) failed.Add(deckCard);
             // Before the summary: the gate reads the LAST line as "N/N views rendered".
             Console.WriteLine($"icon-census: {CensusTexts} icon-led texts, {CensusUnnamed} unnamed icon-only buttons");
-            Console.WriteLine($"{views.Count + 1 - failed.Count}/{views.Count + 1} views rendered to {dir}");
+            Console.WriteLine($"{views.Count + 2 - failed.Count}/{views.Count + 2} views rendered to {dir}");
             foreach (var f in failed) Console.Error.WriteLine("  FAILED " + f);
             return failed.Count == 0 ? 0 : 1;
         }

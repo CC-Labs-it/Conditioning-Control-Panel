@@ -36,6 +36,39 @@ public sealed class DeeperEditorParityTests
     private static void Click(MenuItem item) => item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
 
     [Fact]
+    public Task HelpButtonsOpenAnchoredDismissibleReference() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var editor = new DeeperEditorWindow(new Enhancement { MediaSource = "*" }, null);
+        try
+        {
+            editor.Show();
+            editor.UpdateLayout();
+            foreach (var (button, title) in new[]
+            {
+                (editor.BtnTriggerHelp, "deeper_editor_help_browse_triggers"),
+                (editor.BtnActionHelp, "deeper_editor_help_browse_actions"),
+                (editor.BtnRegionHelp, "deeper_editor_help_region"),
+            })
+            {
+                Click(button);
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(editor.EditorHelpPopup.IsOpen);
+                Assert.True(editor.EditorHelpPopup.IsLightDismissEnabled);
+                Assert.Same(button, editor.EditorHelpPopup.PlacementTarget);
+                Assert.Equal(ConditioningControlPanel.Localization.Loc.Get(title), editor.TxtEditorHelpTitle.Text);
+                Assert.False(string.IsNullOrWhiteSpace(editor.TxtEditorHelpBody.Text));
+            }
+            editor.MouseDown(new Point(5, 5), MouseButton.Left);
+            editor.MouseUp(new Point(5, 5), MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(editor.EditorHelpPopup.IsOpen);
+        }
+        finally { editor.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task InspectorTypingIsOneUndoSessionAndFocusChangeStartsAnother() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();

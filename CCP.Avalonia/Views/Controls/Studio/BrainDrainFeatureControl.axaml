@@ -17,6 +17,7 @@
      the hosting content, and into a Grid it would overlap the settings instead of stacking. -->
 <UserControl xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers" xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:super="using:ConditioningControlPanel.Avalonia.Controls.Super"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              x:Class="ConditioningControlPanel.Avalonia.Views.Controls.Studio.BrainDrainFeatureControl">
@@ -308,6 +309,9 @@
                         </Button>
                     </Grid>
                 </Border>
+
+                <!-- The gold V2 box (WPF Controls/SuperBox): Super switch, BASIC sign, weekly try. -->
+                <super:SuperBox x:Name="SuperBoxMain" Kind="Undertow"/>
             </StackPanel>
 
             <!-- SIDE ART. On WPF the art is the Border's BACKGROUND (an ImageBrush) so the rounded
