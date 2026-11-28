@@ -96,6 +96,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static double? _pulseWeight;
         private static double _pulseBase, _pulsePeak;
 
+        /// <summary>THE one place this head paints the pink tint's strength (WPF PinkTintLayer.Render and
+        /// OverlayService.PinkAlpha): the Accessibility limit (<see cref="PinkComfortLimit"/>) clips here,
+        /// so no slider, preset, session, mod, ramp, pulse, voice hold or Deeper band upstream can paint
+        /// past it. Other TintOverlayWindow users (bubble payload wash, Pink Rush) are not the filter.</summary>
+        internal static void Paint(TintOverlayWindow w, byte r, byte g, byte b, double opacity)
+            => w.SetTint(r, g, b, PinkComfortLimit.Apply(opacity));
+
         // The voice hold (WPF "go pink" 40% floor) is the steady level while it lasts; a Takeover pulse
         // still interpolates from its captured endpoints.
         internal static double PaintedOpacity
@@ -118,7 +125,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             _pulseWeight = weight;
             var (r, g, b) = EffectiveColor();
-            foreach (var w in Windows) w.SetTint(r, g, b, PaintedOpacity);
+            foreach (var w in Windows) Paint(w, r, g, b, PaintedOpacity);
         }
 
         /// <summary>Whether a tint can actually reach the screen: X11 with click-through, a
@@ -196,7 +203,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             // the whole reason the slider does not tear down a full-screen window per tick.
             if (Windows.Count > 0 && layout.SequenceEqual(_shownOn))
             {
-                foreach (var w in Windows) w.SetTint(r, g, b, opacity);
+                foreach (var w in Windows) Paint(w, r, g, b, opacity);
                 SyncSuper();
                 return;
             }
@@ -220,7 +227,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             {
                 var w = new TintOverlayWindow();
                 w.PlaceOn(screens[i]);
-                w.SetTint(r, g, b, opacity);
+                Paint(w, r, g, b, opacity);
                 if (GentleWindows) w.Opacity = 0;
                 w.Show();                       // Position -> Show -> click-through, the order
                                                 // BubbleCountWindow uses; there is no XID before Show

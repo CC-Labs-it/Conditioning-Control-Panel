@@ -141,6 +141,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 SpiralOverlay.Refresh(this);
                 CornerGifOverlay.Refresh(this);
                 EmiEngineStarted(systemInitiated); // WPF StartStop.cs:420-421
+                BrainDrainOverlay.Start(this);
                 StartConditioningTimeTracker();    // WPF StartEngine :423
                 UpdateStartButton();
                 if (!systemInitiated) _ = MaybePromptMandatoryVideoEnhancement(this, () => CoreEngine.IsRunning,   // WPF StartStop.cs:443
