@@ -117,6 +117,51 @@ public sealed class InvitePanelTests
     }
 
     [Fact]
+    public Task ResetDateUsesAppLanguage() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        var language = LocalizationManager.Instance.CurrentLanguage;
+        var (oldUnlocked, oldUnlock) = (InviteRewards.UnlockedProvider, InviteRewards.TryUnlockProvider);
+        try
+        {
+            InviteRewards.UnlockedProvider = () => new HashSet<string>();
+            InviteRewards.TryUnlockProvider = _ => true;
+            LocalizationManager.Instance.SetLanguage("en");
+            System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("it-IT");
+            var panel = Panel(new Wire(Mine, "{}"));
+            await panel.RefreshAsync(force: true);
+            var date = DateTime.Parse("2026-11-01T00:00:00Z", null, System.Globalization.DateTimeStyles.AdjustToUniversal).ToLocalTime();
+            Assert.Contains(Loc.GetF("invites_resets", date.ToString("d MMM", System.Globalization.CultureInfo.GetCultureInfo("en"))), All<TextBlock>(panel).Select(t => t.Text));
+        }
+        finally { (InviteRewards.UnlockedProvider, InviteRewards.TryUnlockProvider) = (oldUnlocked, oldUnlock); System.Globalization.CultureInfo.CurrentCulture = culture; LocalizationManager.Instance.SetLanguage(language); }
+    });
+
+    [Fact]
+    public Task RedeemDateUsesAppLanguage() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+        var language = LocalizationManager.Instance.CurrentLanguage;
+        var settings = CoreSettings.Current;
+        var until = settings.InviteGrantUntil;
+        try
+        {
+            LocalizationManager.Instance.SetLanguage("en");
+            System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("it-IT");
+            settings.InviteGrantUntil = null;
+            var grant = DateTime.UtcNow.AddDays(7);
+            var wire = new Wire("""{"ok":false,"reason":"not_subscribed"}""", $$"""{"ok":true,"grant_until":"{{grant:O}}"}""");
+            var panel = Panel(wire);
+            await panel.RefreshAsync(force: true);
+            Tagged<TextBox>(panel, "invite-code")!.Text = "BAMBI-CCCC";
+            Tagged<Button>(panel, "invite-redeem")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            await panel.Redeeming!;
+            var date = settings.InviteGrantUntil!.Value.ToLocalTime();
+            Assert.Equal(Loc.GetF("invites_redeem_ok", date.ToString("d MMM, HH:mm", System.Globalization.CultureInfo.GetCultureInfo("en"))), Tagged<TextBlock>(panel, "invite-result")!.Text);
+        }
+        finally { settings.InviteGrantUntil = until; InvitePanel.CancelExpiry(); System.Globalization.CultureInfo.CurrentCulture = culture; LocalizationManager.Instance.SetLanguage(language); }
+    });
+
+    [Fact]
     public Task SignedOutOrPremiumWithoutCodesShowsNothing() => AvaloniaTestDispatcher.RunAsync(async () =>
     {
         var wire = new Wire("""{"ok":false,"reason":"not_subscribed"}""", "{}");
@@ -162,7 +207,7 @@ public sealed class InvitePanelTests
             await panel.Redeeming!;
             Assert.True(s.HasInviteGrant);
             Assert.True(InvitePanel.ExpiryArmed); // the end of the week will repaint the gates
-            Assert.Equal(Loc.GetF("invites_redeem_ok", s.InviteGrantUntil!.Value.ToLocalTime().ToString("d MMM, HH:mm")),
+            Assert.Equal(Loc.GetF("invites_redeem_ok", Loc.Date(s.InviteGrantUntil!.Value.ToLocalTime(), "d MMM, HH:mm")),
                 Tagged<TextBlock>(panel, "invite-result")!.Text);
         }
         finally { s.InviteGrantUntil = until; InvitePanel.CancelExpiry(); }

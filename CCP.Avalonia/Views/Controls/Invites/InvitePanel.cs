@@ -105,7 +105,7 @@ public sealed class InvitePanel : Border
         _body.Children.Clear();
         var open = 0;
         foreach (var s in snap.Slots) if (s.State == InviteSlotState.Open) open++;
-        var right = snap.ResetsAtUtc is DateTime r ? Loc.GetF("invites_resets", r.ToLocalTime().ToString("d MMM")) : null;
+        var right = snap.ResetsAtUtc is DateTime r ? Loc.GetF("invites_resets", Loc.Date(r.ToLocalTime(), "d MMM")) : null;
         _body.Children.Add(Header(Loc.Get("invites_inviter_title"), right));
         _body.Children.Add(Para(Loc.Get("invites_inviter_body")));
         _body.Children.Add(Para(Loc.GetF("invites_left", open, snap.Slots.Count), Text, 13, new Thickness(0, 6, 0, 10)));
@@ -362,7 +362,7 @@ public sealed class InvitePanel : Border
             ((Control)_box.Parent!).IsVisible = false;
             var s = CoreSettings.Current;
             if (s.HasInviteGrant && s.InviteGrantUntil is DateTime until)
-                Say(Loc.GetF("invites_redeem_ok", until.ToLocalTime().ToString("d MMM, HH:mm")), Good);
+                Say(Loc.GetF("invites_redeem_ok", Loc.Date(until.ToLocalTime(), "d MMM, HH:mm")), Good);
             else
             {
                 Log.Warning("[Invites] code accepted but no usable end date yet (sent: {Sent})", outcome.GrantUntilUtc.HasValue);
