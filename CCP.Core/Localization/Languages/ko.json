@@ -6487,6 +6487,7 @@
   "emi_desk_hotkey_err_hook": "그 키는 이미 {0} 키({1})예요. 다른 걸 고르거나, 그쪽을 먼저 바꿔요.",
   "emi_desk_hotkey_err_quickrecal": "Ctrl+Alt+G는 이미 빠른 재보정을 열어요. 다른 조합을 골라요.",
   "emi_desk_hotkey_err_taken": "Windows가 {0}을(를) 안 내줘요. 다른 앱이 잡고 있어요. 다른 조합을 골라요.",
+  "emi_desk_hotkey_err_portal": "{0}을 등록할 수 없습니다. 데스크톱 단축키 설정을 확인하세요.",
   "emi_desk_mute_prompt_title": "EMI가 나왔어요",
   "emi_desk_mute_prompt_body": "그동안 아바타를 음소거할까요? 목소리 둘이 겹치면 시끄러워요. 패닉 안내는 언제나 들려요.",
   "emi_desk_mute_prompt_mute": "음소거",

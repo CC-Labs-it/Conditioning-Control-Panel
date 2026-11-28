@@ -7064,6 +7064,7 @@
   "emi_desk_hotkey_err_hook": "That key is already the {0} key ({1}). Pick another one, or rebind that first.",
   "emi_desk_hotkey_err_quickrecal": "Ctrl+Alt+G already opens Quick Recal. Pick another combination.",
   "emi_desk_hotkey_err_taken": "Windows would not give us {0}. Another app is holding it. Pick another combination.",
+  "emi_desk_hotkey_err_portal": "Could not register {0}. Check your desktop shortcut settings.",
   "emi_desk_mute_prompt_title": "EMI is out",
   "emi_desk_mute_prompt_body": "Mute the avatar while she is? Two voices at once gets noisy. Panic lines always come through.",
   "emi_desk_mute_prompt_mute": "Mute",

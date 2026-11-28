@@ -6487,6 +6487,7 @@
   "emi_desk_hotkey_err_hook": "そのキーはすでに{0}キー（{1}）です。別のキーを選ぶか、先にそちらを変更してください。",
   "emi_desk_hotkey_err_quickrecal": "Ctrl+Alt+Gはすでにクイック再調整を開きます。別の組み合わせを選んでください。",
   "emi_desk_hotkey_err_taken": "Windowsが{0}を渡してくれません。ほかのアプリが押さえています。別の組み合わせを選んでください。",
+  "emi_desk_hotkey_err_portal": "{0}を登録できませんでした。デスクトップのショートカット設定を確認してください。",
   "emi_desk_mute_prompt_title": "EMIが出てきました",
   "emi_desk_mute_prompt_body": "その間、アバターをミュートしますか？声がふたつ重なるとうるさくなります。パニックの通知はいつでも通ります。",
   "emi_desk_mute_prompt_mute": "ミュート",

@@ -6487,6 +6487,7 @@
   "emi_desk_hotkey_err_hook": "Esa tecla ya es la tecla de {0} ({1}). Elige otra, o cambia esa primero.",
   "emi_desk_hotkey_err_quickrecal": "Ctrl+Alt+G ya abre la Recalibración rápida. Elige otra combinación.",
   "emi_desk_hotkey_err_taken": "Windows no nos da {0}. Otra app la tiene cogida. Elige otra combinación.",
+  "emi_desk_hotkey_err_portal": "No se pudo registrar {0}. Revisa los atajos del escritorio.",
   "emi_desk_mute_prompt_title": "EMI está fuera",
   "emi_desk_mute_prompt_body": "¿Silencio el avatar mientras ella está? Dos voces a la vez se hace ruidoso. Los avisos de pánico siempre pasan.",
   "emi_desk_mute_prompt_mute": "Silenciar",

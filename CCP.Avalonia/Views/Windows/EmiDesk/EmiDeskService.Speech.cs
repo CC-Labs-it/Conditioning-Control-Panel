@@ -167,6 +167,7 @@ internal sealed partial class EmiDeskService
     }
     internal void PanicSilence()
     {
+        CancelQueuedHotkey();
         _window?.CloseGlassForPanic();
         ++_summonGen;
         _pendingMuteMoment = null;
