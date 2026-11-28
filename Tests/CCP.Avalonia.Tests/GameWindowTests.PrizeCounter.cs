@@ -153,6 +153,19 @@ public sealed partial class GameWindowTests
         }
     });
 
+    [Fact]
+    public void PrizeCounter_ShellWalletOpensAndPanicClosesIt() => RunCounter((shell, wire, sent) =>
+    {
+        var wallet = shell.FindControl<ConditioningControlPanel.Avalonia.Views.Controls.SparkleWallet>("HeaderSparkleWallet")!;
+        wallet.FindControl<Button>("WalletButton")!.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        var w = Assert.Single(GameWindow.OpenWindowsForTests());
+        w.Posted += json => sent.Add(JObject.Parse(json));
+        w.HandleMessage("{\"type\":\"ready\",\"protocol\":1}");
+        Assert.Equal("wallet", (string?)sent.Single(o => (string?)o["type"] == "init")["from"]);
+        GameWindow.CloseAllForPanic();
+        Assert.False(w.IsVisible);
+    });
+
     /// <summary>WPF BuildInit / OnPageMessage: init never carries the token; a state read goes out with the door and
     /// comes back with Rain hidden (RainV2Gate off); a Rain buy is refused and never relayed.</summary>
     [Fact]
