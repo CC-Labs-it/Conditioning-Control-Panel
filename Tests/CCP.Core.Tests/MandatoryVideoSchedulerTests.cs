@@ -1044,11 +1044,21 @@ public sealed class MandatoryVideoSchedulerTests
     });
 
     [Fact]
+    public void Attention_plan_fits_the_full_default_lifespan()
+    {
+        var times = MandatoryVideoScheduler.AttentionSpawnTimes(8, 30, new Random(1));
+        Assert.NotEmpty(times);
+        Assert.All(times, t => Assert.InRange(t, 3, 17));
+        Assert.Empty(MandatoryVideoScheduler.AttentionSpawnTimes(8, 10, new Random(1)));
+        Assert.Empty(MandatoryVideoScheduler.AttentionSpawnTimes(8, 30, new Random(1), 27));
+    }
+
+    [Fact]
     public void Attention_rules_match_WPF()
     {
         var r = new Random(1);
         var t = MandatoryVideoScheduler.AttentionSpawnTimes(8, 30, r);
-        Assert.Equal(8, t.Count);
+        Assert.InRange(t.Count, 1, 8);
         Assert.True(t[0] >= 3);
         for (var i = 1; i < t.Count; i++) Assert.True(t[i] - t[i - 1] >= 3 - 1e-9, "3 s apart");
         Assert.Equal(3, MandatoryVideoScheduler.AttentionTargetCount(3, false, r));

@@ -214,15 +214,10 @@ namespace ConditioningControlPanel.Services
             return randomize ? r.Next(1, max + 1) : max;
         }
 
-        /// <summary>WPF SetupAttention: spawn seconds in [3, 3 + max(1, dur-8)], sorted, at least 3 s apart
-        /// (a 0-length clip counts as 60 s).</summary>
-        public static List<double> AttentionSpawnTimes(int total, double durationSeconds, Random r)
-        {
-            var window = Math.Max(1, (durationSeconds > 0 ? durationSeconds : 60) - 8);
-            var t = Enumerable.Range(0, total).Select(_ => 3 + r.NextDouble() * window).OrderBy(x => x).ToList();
-            for (var i = 1; i < t.Count; i++) if (t[i] - t[i - 1] < 3) t[i] = t[i - 1] + 3;
-            return t;
-        }
+        /// <summary>WPF SetupAttention: fit each target's full lifespan before the clip ends.
+        /// An unknown duration uses the WPF 60 second fallback.</summary>
+        public static List<double> AttentionSpawnTimes(int total, double durationSeconds, Random r, double lifespanSeconds = 12) =>
+            Video.CoreAttentionSchedule.Plan(durationSeconds > 0 ? durationSeconds : 60, total, lifespanSeconds, r.NextDouble);
 
         /// <summary>WPF EndCurrentVideo: every spawn caught passes (1 in 10 passes is trolled into a
         /// replay); any miss fails; with no spawn there is no verdict.</summary>
@@ -722,20 +717,21 @@ namespace ConditioningControlPanel.Services
         /// Pass/fail reach achievements (and the head's Chaster "attention" note) through
         /// <see cref="CoreProgression.TrackAttentionCheck"/> (the head's provider also takes the
         /// Trainer's -25 XP); the Chaster "video" note is the head's, it knows whether a frame showed.</summary>
-        public void Ended(bool renderedFrame = false)
+        public void Ended(bool renderedFrame = false, int cutShort = 0)
         {
             NaturalEnding = true;
-            try { EndedCore(renderedFrame); }
+            try { EndedCore(renderedFrame, cutShort); }
             finally { NaturalEnding = false; }
         }
 
-        private void EndedCore(bool renderedFrame)
+        private void EndedCore(bool renderedFrame, int cutShort)
         {
             if (!_playing) return;
             var s = CoreSettings.Current;
-            var verdict = Evaluate(s.AttentionChecksEnabled, AttentionSpawned, AttentionHits, _random.NextDouble());
+            var judged = Video.CoreAttentionSchedule.Judged(AttentionSpawned, cutShort);
+            var verdict = Evaluate(s.AttentionChecksEnabled, judged, AttentionHits, _random.NextDouble());
             if (verdict != AttentionVerdict.None)
-                Log.Information("Attention result: {Hits}/{Spawned} = {Verdict} (replays {Penalties})", AttentionHits, AttentionSpawned, verdict, Penalties);
+                Log.Information("Attention result: {Hits}/{Judged} ({Spawned} spawned, {CutShort} cut short) = {Verdict} (replays {Penalties})", AttentionHits, judged, AttentionSpawned, cutShort, verdict, Penalties);
             if (verdict is AttentionVerdict.Pass or AttentionVerdict.Troll)
             {
                 CoreProgression.AddXP(AttentionPassXp(Penalties), "Video");

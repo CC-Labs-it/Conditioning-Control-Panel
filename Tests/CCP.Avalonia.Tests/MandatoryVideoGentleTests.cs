@@ -254,6 +254,81 @@ public sealed class MandatoryVideoGentleTests
         });
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Natural_end_excludes_each_unanswered_cut_short_batch(bool caught)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureApp();
+            var previousSettings = CoreSettings.ServiceProvider;
+            var previousTracker = CoreProgression.TrackAttentionCheckProvider;
+            var previousXp = CoreProgression.AddXPProvider;
+            var previousHaptics = CoreHaptics.Service;
+            var settings = new SettingsService();
+            settings.Current.AttentionChecksEnabled = true;
+            settings.Current.AttentionLifespan = 12;
+            settings.Current.MandatoryVideoReplayAfterFailedCheck = false;
+            settings.Current.GentleVisuals = false;
+            CoreSettings.ServiceProvider = () => settings;
+            var checks = new List<bool>();
+            CoreProgression.TrackAttentionCheckProvider = checks.Add;
+            CoreProgression.AddXPProvider = (_, _) => { };
+            CoreHaptics.Service = null;
+            var o = MandatoryVideoOverlay.Instance;
+            var oldScheduler = o.Scheduler;
+            var host = new VerdictHost(o);
+            o.Scheduler = new MandatoryVideoScheduler(host, new StillTime(), () => Array.Empty<string>());
+            try
+            {
+                Assert.True(o.Scheduler.Trigger(false, "/test/early.mp4"));
+                ((List<MandatoryVideoOverlay.Surface>)o.Surfaces).Add(o.Build(null, false));
+                ((List<MandatoryVideoOverlay.Surface>)o.Surfaces).Add(o.Build(null, false));
+                if (caught)
+                {
+                    o.Spawn(o.Elapsed);
+                    o.GazeTargets.First().Hit();
+                    Assert.Equal(1, o.Scheduler.AttentionHits);
+                }
+                o.Spawn(o.Elapsed);
+                Assert.Equal(2, o.LiveTargets);
+                o.OnNaturalVideoEnd();
+                Assert.Equal(caught ? new[] { true } : Array.Empty<bool>(), checks);
+                if (caught) Assert.DoesNotContain(AttentionVerdict.Fail, host.Verdicts);
+                else Assert.Empty(host.Verdicts);
+                Assert.False(o.Scheduler.IsPlaying);
+                Assert.Equal(0, o.LiveTargets);
+
+                checks.Clear();
+                Assert.True(o.Scheduler.Trigger(false, "/test/expired.mp4"));
+                ((List<MandatoryVideoOverlay.Surface>)o.Surfaces).Add(o.Build(null, false));
+                o.Spawn(o.Elapsed - 100);
+                o.Spawn(o.Elapsed);
+                o.OnNaturalVideoEnd();
+                Assert.Equal(new[] { false }, checks);
+
+                checks.Clear();
+                Assert.True(o.Scheduler.Trigger(false, "/test/stop.mp4"));
+                ((List<MandatoryVideoOverlay.Surface>)o.Surfaces).Add(o.Build(null, false));
+                o.Spawn(o.Elapsed);
+                Assert.Equal(1, o.CutShortAttentionBatches(o.Elapsed));
+                o.Scheduler.Stop();
+                Assert.Equal(0, o.CutShortAttentionBatches(o.Elapsed));
+                Assert.Empty(checks);
+            }
+            finally
+            {
+                o.Scheduler.ForceCleanup(); o.CloseAll(); o.Scheduler = oldScheduler;
+                CoreSettings.ServiceProvider = previousSettings;
+                CoreProgression.TrackAttentionCheckProvider = previousTracker;
+                CoreProgression.AddXPProvider = previousXp;
+                CoreHaptics.Service = previousHaptics;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     private sealed class Backstop(Action fire, TimeSpan delay) : IDisposable
     {
         public bool Disposed;
