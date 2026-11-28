@@ -64,7 +64,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             Width = 640;
             Height = 400;
             var (r, g, b) = PinkFilterOverlay.EffectiveColor();
-            SetTint(r, g, b, CoreSettings.Current.PinkFilterOpacity / 100.0);
+            SetTint(r, g, b, ConditioningControlPanel.Services.Safety.PinkComfortLimit.Apply(CoreSettings.Current.PinkFilterOpacity / 100.0));
         }
 
         /// <summary>Repaints in place, the way <c>UpdatePinkFilterOpacity</c> mutates the existing
