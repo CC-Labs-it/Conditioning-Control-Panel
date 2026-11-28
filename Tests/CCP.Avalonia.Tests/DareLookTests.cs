@@ -74,4 +74,33 @@ public class DareLookTests
         choice.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Assert.Equal(1, clicks);
     }
+
+    // WPF DareLook.Bare :311-338: no chrome (the content is the look), Big/Quiet sit left, disabled fades to 0.45.
+    [Fact]
+    public void ActIsBareLeftAlignedAndFadesWhenDisabled() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        PanicSurfacesTests.EnsureApp();
+        var act = DareLook.Act("Accept", null, true, () => { }, "dares-accept");
+        var w = new Window { Content = act };
+        w.Show();
+        try
+        {
+            // Fluent's root is PART_ContentPresenter, painting the hover/press box; the bare one is unnamed and unpainted.
+            var root = Assert.IsType<global::Avalonia.Controls.Presenters.ContentPresenter>(Assert.Single(global::Avalonia.VisualTree.VisualExtensions.GetVisualChildren(act)));
+            Assert.Null(root.Name);
+            Assert.Null(root.Background);
+            var pseudo = (global::Avalonia.Controls.IPseudoClasses)typeof(StyledElement).GetProperty("PseudoClasses",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(act)!;
+            pseudo.Add(":pressed");
+            Assert.Null(act.RenderTransform); // Fluent shrinks a pressed button to 0.98
+            pseudo.Remove(":pressed");
+            Assert.Equal(global::Avalonia.Layout.HorizontalAlignment.Left, act.HorizontalAlignment);
+            Assert.Equal(1, act.Opacity);
+            act.IsEnabled = false;
+            Assert.Equal(0.45, act.Opacity);
+            act.IsEnabled = true;
+            Assert.Equal(1, act.Opacity);
+        }
+        finally { w.Close(); }
+    });
 }

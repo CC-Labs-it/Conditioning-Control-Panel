@@ -4,6 +4,8 @@ using Avalonia.Animation;
 using Avalonia.Animation.Easings;
 using Avalonia.Automation;
 using Avalonia.Controls.Documents;
+using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Templates;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -171,11 +173,20 @@ internal static class DareLook
         return b;
     }
 
-    private static Button Bare(Control content, string tag) => new()
+    // WPF :311-338: no chrome, the content is the look. An empty theme keeps Fluent's hover box and press scale off.
+    private static readonly ControlTheme BareTheme = new(typeof(Button));
+
+    private static Button Bare(Control content, string tag)
     {
-        Content = content, Tag = tag, Background = Brushes.Transparent, BorderThickness = new Thickness(0), Padding = new Thickness(0),
-        Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-    };
+        var b = new Button
+        {
+            Content = content, Tag = tag, Theme = BareTheme, Background = Brushes.Transparent, BorderThickness = new Thickness(0),
+            Padding = new Thickness(0), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
+            Template = new FuncControlTemplate<Button>((btn, _) => new ContentPresenter { Content = btn.Content }),
+        };
+        b.PropertyChanged += (_, e) => { if (e.Property == InputElement.IsEffectivelyEnabledProperty) b.Opacity = b.IsEffectivelyEnabled ? 1 : 0.45; };
+        return b;
+    }
 
     /// <summary>WPF :577: the slip's head, the title in spaced capitals over a rule, its (?) and close cross.</summary>
     public static Control SlipHead(string title, string? helpKey, Action? onClose)
@@ -263,6 +274,7 @@ internal static class DareLook
                 BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(8), Padding = new Thickness(20, 8) };
         var button = Bare(face, tag);
         button.VerticalAlignment = VerticalAlignment.Top;
+        button.HorizontalAlignment = HorizontalAlignment.Left;
         button.Margin = new Thickness(0, 0, 12, 10);
         AutomationProperties.SetName(button, sub == null ? label : label + ", " + sub);
         button.Click += (_, _) => onClick();
