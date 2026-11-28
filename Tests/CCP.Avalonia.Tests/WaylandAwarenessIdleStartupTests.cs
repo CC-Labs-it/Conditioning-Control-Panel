@@ -107,11 +107,10 @@ public sealed class WaylandAwarenessIdleStartupTests
         }
     }
 
-    [Theory]
-    [InlineData(1u, 1u)]
-    [InlineData(2u, 2u)]
-    public async Task ContinuousActivityIsConfirmedWithoutWaitingForTheThirtySecondIdle(uint version, uint request)
+    [Fact]
+    public async Task ContinuousActivityIsConfirmedWithoutWaitingForTheThirtySecondIdle()
     {
+        const uint version = 2, request = 2;
         var oldSettings = CoreSettings.ServiceProvider;
         var oldEntitlement = AwarenessObserver.EntitlementProvider;
         var oldPost = AwarenessObserver.PostToUi;
@@ -198,6 +197,50 @@ public sealed class WaylandAwarenessIdleStartupTests
             if (oldPause is { } until) AwarenessPause.Pause(TimeSpan.FromTicks(1), until.AddTicks(-1));
             try { Directory.Delete(directory, true); } catch { }
         }
+    }
+
+    [Fact]
+    public async Task InhibitorBoundV1NotifierIsUnavailableSoAwarenessFailsClosed()
+    {
+        var w = WaylandIdleNotify.Message;
+        var notify = new WaylandIdleNotify(30_000, observeInitialActivity: true);
+        // v1 events would arrive if bound; a held inhibitor keeps them from ever idling or confirming input.
+        using var rx = new MemoryStream(new[] { w(2, 0, new object[] { 7u, "wl_seat", 7u }), w(2, 0, new object[] { 9u, "ext_idle_notifier_v1", 1u }),
+            w(3, 0, new object[] { 1u }), w(6, 1, Array.Empty<object>()), w(7, 0, Array.Empty<object>()), w(7, 1, Array.Empty<object>()) }.SelectMany(x => x).ToArray());
+        using var tx = new MemoryStream();
+        notify.Run(rx, tx);
+        Assert.False(notify.Live);
+        Assert.DoesNotContain(Convert.ToHexString(w(2, 0, new object[] { 9u, "ext_idle_notifier_v1", 1u, 5u })), Convert.ToHexString(tx.ToArray()));
+        Assert.False(notify.ActivityObserved);
+        notify.Done = true; // the connection thread ends after Run returns
+        Assert.Null(await WaylandAwarenessInputProbe.ReadCompositor(notify, () => Task.FromResult<int?>(null)));
+        // The preview's shared notifier keeps v1 unchanged.
+        var preview = new WaylandIdleNotify();
+        rx.Position = 0;
+        preview.Run(rx, new MemoryStream());
+        Assert.True(preview.Live);
+    }
+
+    [Fact]
+    public void StopReleasesTheNotifierAndIgnoresLaterEvents()
+    {
+        using var probe = new WaylandAwarenessInputProbe(new Input());
+        Assert.Null(probe.Notifier);
+        probe.Start();
+        var first = Assert.IsType<WaylandIdleNotify>(probe.Notifier);
+        probe.Stop();
+        Assert.Null(probe.Notifier);
+        first.OnEvent(1);
+        Assert.False(first.ActivityObserved);
+        first.OnEvent(0);
+        Assert.Equal(0, first.Seconds);
+        probe.Start();
+        Assert.NotSame(first, probe.Notifier);
+        var second = probe.Notifier!;
+        probe.Dispose();
+        Assert.Null(probe.Notifier);
+        second.OnEvent(1);
+        Assert.False(second.ActivityObserved);
     }
 
     [Fact]

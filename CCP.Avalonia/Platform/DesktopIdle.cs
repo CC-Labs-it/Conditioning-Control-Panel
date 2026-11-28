@@ -128,6 +128,9 @@ internal sealed class WaylandIdleNotify
     private readonly bool _observeInitialActivity;
     private long _idledAt = -1;
     private int _started, _activityObserved;
+    private volatile bool _stopped;
+    private readonly object _gate = new();
+    private Socket? _socket;
     internal volatile bool Live, Done;
 
     internal WaylandIdleNotify(uint timeoutMs = TimeoutMs, bool observeInitialActivity = false)
@@ -140,6 +143,7 @@ internal sealed class WaylandIdleNotify
     internal bool ActivityObserved => Volatile.Read(ref _activityObserved) != 0;
     internal void OnEvent(uint opcode)
     {
+        if (_stopped) return;
         Interlocked.Exchange(ref _idledAt, opcode == 0 ? Now() : -1);
         if (opcode == 1) Volatile.Write(ref _activityObserved, 1);
     }
@@ -153,13 +157,22 @@ internal sealed class WaylandIdleNotify
             {
                 var name = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY") ?? "wayland-0";
                 using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+                lock (_gate) { if (_stopped) return; _socket = socket; }
                 socket.Connect(new UnixDomainSocketEndPoint(Path.Combine(Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR") ?? "/", name)));
                 using var stream = new NetworkStream(socket);
                 Run(stream, stream);
             }
-            catch (Exception ex) { Serilog.Log.Debug(ex, "[EmiDesk] Wayland idle notify unavailable"); }
+            catch (Exception ex) when (!_stopped) { Serilog.Log.Debug(ex, "[EmiDesk] Wayland idle notify unavailable"); }
+            catch { }
             finally { Live = false; Done = true; }
         }) { IsBackground = true, Name = "wayland-idle" }.Start();
+    }
+
+    // Closes the compositor connection; later events are ignored and the thread ends.
+    internal void Stop()
+    {
+        lock (_gate) { _stopped = true; _socket?.Dispose(); }
+        Live = false;
     }
 
     // Minimal wire client: display 1, registry 2, sync 3, seat 4, notifier 5, notification 6.
@@ -177,7 +190,9 @@ internal sealed class WaylandIdleNotify
             else if (iface == "ext_idle_notifier_v1")
                 (notifier, version) = (BitConverter.ToUInt32(body, 0), BitConverter.ToUInt32(body, 8 + ((len + 3) & ~3)));
         }
-        if (seat == 0 || notifier == 0) return;
+        // v1 notifications honour idle inhibitors (video, presentation), so they can neither confirm
+        // input nor reach idle while one is held. Awareness needs WPF's input age: treat v1 as unavailable.
+        if (seat == 0 || notifier == 0 || (_observeInitialActivity && version < 2)) return;
         // v2's input notification ignores idle inhibitors, as WPF's GetLastInputInfo does.
         uint request = version >= 2 ? 2u : 1u;
         var bind = Message(2, 0, seat, "wl_seat", 1u, 4u).Concat(Message(2, 0, notifier, "ext_idle_notifier_v1", Math.Min(version, 2), 5u))
@@ -187,8 +202,8 @@ internal sealed class WaylandIdleNotify
         bool witness = _observeInitialActivity, witnessIdle = false;
         if (witness) bind = bind.Concat(Message(5, request, 7u, 0u, 4u));
         tx.Write(bind.ToArray());
-        Live = true;
-        while (Read(rx, out obj, out op, out _))
+        Live = !_stopped;
+        while (!_stopped && Read(rx, out obj, out op, out _))
         {
             if (obj == 6) OnEvent(op);
             else if (obj == 7 && witness)

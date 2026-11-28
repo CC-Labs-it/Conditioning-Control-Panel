@@ -10,14 +10,14 @@ namespace ConditioningControlPanel.Avalonia.Platform;
 // foreground the observer can read there is an X11 window (X11ForegroundProbe), whose input XWayland sees.
 internal sealed class WaylandAwarenessInputProbe : IInputProbe
 {
-    // Idle reads exact from this threshold and 0 below it; 30 s is the lowest gate the observer applies.
-    private static readonly WaylandIdleNotify Notify = new(AwarenessObserverPolicy.FullscreenRecentInputSeconds * 1000, observeInitialActivity: true);
     private readonly IInputProbe _burst;
     private readonly Func<Task<int?>> _read;
     private readonly object _gate = new();
     private int _last = -1, _generation; // _last < 0: idle age is unknown
     private bool _reading;
     private Task? _pending;
+    private WaylandIdleNotify? _notify; // exists only while awareness runs, as WPF AwarenessProbes.cs:241 stops its sampler
+    internal WaylandIdleNotify? Notifier { get { lock (_gate) return _notify; } }
     internal Task? PendingRead { get { lock (_gate) return _pending; } }
 
     internal WaylandAwarenessInputProbe(IInputProbe burst, Func<Task<int?>>? read = null)
@@ -58,21 +58,28 @@ internal sealed class WaylandAwarenessInputProbe : IInputProbe
     }
 
     public bool IsTypingBurst => _burst.IsTypingBurst;
-    private void ResetIdle()
+    private void ResetIdle(bool run)
     {
-        lock (_gate) { _generation++; _last = -1; _reading = false; }
+        lock (_gate)
+        {
+            _generation++; _last = -1; _reading = false;
+            _notify?.Stop();
+            // Idle reads exact from this threshold and 0 below it; 30 s is the lowest gate the observer applies.
+            _notify = run ? new(AwarenessObserverPolicy.FullscreenRecentInputSeconds * 1000, observeInitialActivity: true) : null;
+        }
     }
-    public void Start() { ResetIdle(); _burst.Start(); }
-    public void Stop() { ResetIdle(); _burst.Stop(); }
-    public void Dispose() { ResetIdle(); _burst.Dispose(); }
+    public void Start() { ResetIdle(true); _burst.Start(); }
+    public void Stop() { ResetIdle(false); _burst.Stop(); }
+    public void Dispose() { ResetIdle(false); _burst.Dispose(); }
 
     // ext-idle-notify (KDE, wlroots), else Mutter (GNOME). A new notification cannot report
     // pre-existing idle age; a short-lived witness confirms real input without waiting 30 seconds.
-    private static Task<int?> ReadCompositor()
+    private Task<int?> ReadCompositor()
     {
-        if (X11ActiveWindow.Disabled) return Task.FromResult<int?>(null);
-        Notify.Start();
-        return ReadCompositor(Notify, static () => DesktopIdle.ReadWaylandAsync(DesktopIdle.ReadMutterMillisecondsAsync));
+        var notify = Notifier;
+        if (X11ActiveWindow.Disabled || notify is null) return Task.FromResult<int?>(null);
+        notify.Start();
+        return ReadCompositor(notify, static () => DesktopIdle.ReadWaylandAsync(DesktopIdle.ReadMutterMillisecondsAsync));
     }
 
     internal static Task<int?> ReadCompositor(WaylandIdleNotify notify, Func<Task<int?>> fallback)
