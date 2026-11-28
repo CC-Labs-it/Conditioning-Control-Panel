@@ -9430,5 +9430,6 @@
   "promo_hours": "horas",
   "promo_minutes": "min",
   "native_repair_title": "Conditioning Control Panel - error de inicio",
-  "native_repair_message": "Conditioning Control Panel no puede cargar sus bibliotecas gráficas y no puede iniciarse.\n\nCierra la aplicación, elimina esta carpeta temporal y vuelve a abrirla:\n\n{0}\n\nLa carpeta se crea de nuevo automáticamente. Si no funciona, comprueba si el antivirus puso archivos en cuarentena.\n\nDetalles: {1}"
+  "native_repair_message": "Conditioning Control Panel no puede cargar sus bibliotecas gráficas y no puede iniciarse.\n\nCierra la aplicación, elimina esta carpeta temporal y vuelve a abrirla:\n\n{0}\n\nLa carpeta se crea de nuevo automáticamente. Si no funciona, comprueba si el antivirus puso archivos en cuarentena.\n\nDetalles: {1}",
+  "brain_drain_capture_failed": "Brain Drain no pudo capturar la pantalla. Envía un informe de error."
 }

@@ -62,6 +62,9 @@ internal sealed partial class FirstShowDesktopWindow : Window
     private static readonly double[] Beats = FirstShowScript.Beats;
     private static readonly string[] Cues = FirstShowScript.Cues;
     internal static string Text(string key) => Loc.Get("first_show_" + key);
+    /// <summary>Test seam: the show runs with no sound and builds no media player.</summary>
+    internal bool Silent { get => _audio.Muted; init => _audio.Muted = value; }
+    internal bool AudioHasPlayer => _audio.HasPlayer;
 
     public FirstShowDesktopWindow(bool preview, EmiDeskWindow emi, MainWindow? main)
     {
