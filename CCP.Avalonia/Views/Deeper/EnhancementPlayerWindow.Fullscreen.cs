@@ -32,6 +32,7 @@ public partial class EnhancementPlayerWindow {
         if(k==='F'&&!e.repeat&&!any()&&enter()){e.preventDefault();return;}
         post('ccp_key:'+k+':'+(e.shiftKey?1:0)+':'+(e.repeat?1:0));if(k!=='Escape'&&document.querySelector('video')){e.preventDefault();e.stopImmediatePropagation();}},true);
     window.addEventListener('keyup',function(e){if(key(e)==='Escape')post('ccp_keyup:Escape');},true);
+    window.addEventListener('wheel',function(e){if(!e.ctrlKey)return;e.preventDefault();if(e.deltaY<0)post('ccp_zoom_in');else if(e.deltaY>0)post('ccp_zoom_out');},{capture:true,passive:false});
     window.addEventListener('mousemove',function(){if(window._ccpForcedFs)post('ccp_pointer');},true);
 })();";
     private static readonly HashSet<EnhancementPlayerWindow> FullscreenPlayers = new();
@@ -57,6 +58,8 @@ public partial class EnhancementPlayerWindow {
         if (message == "ccp_keyup:Escape") EscapeUp();
         if (message == "ccp_pointer") ArmCursor();
         switch (message) {
+            case "ccp_zoom_in": AdjustVideoZoom(0.10); break;
+            case "ccp_zoom_out": AdjustVideoZoom(-0.10); break;
             case BrowserFullscreenOffMessage:
                 if (!_videoTransition) ExitVideoFullscreen();
                 break;
@@ -108,9 +111,11 @@ public partial class EnhancementPlayerWindow {
         e.Handled = PlayerKey(e.Key, e.KeyModifiers.HasFlag(KeyModifiers.Shift), !_pressed.Add(e.Key));
     }
     private void OnPlayerKeyUp(object? sender, KeyEventArgs e) { if ((sender as Window)?.FocusManager?.GetFocusedElement() is TextBox) return; _pressed.Remove(e.Key); if (e.Key == Key.Escape) { EscapeUp(); e.Handled = true; } }
+    // WPF EnhancementPlayerWindow.xaml.cs:2964-2968: paused audio and a running engine remain active sessions.
+    private bool IsSessionActive => _videoNavigated || _isPlaying || _localAudio != null || _deeperEngine?.IsRunning == true;
     private void EscapeUp() {
         CancelEscHold(); _pressed.Remove(Key.Escape);
-        if (!_escapeConsumed && !StrictInput && !_videoNavigated && !_isPlaying) Close();
+        if (!_escapeConsumed && !StrictInput && !IsSessionActive) Close();
         _escapeConsumed = false;
     }
     internal bool PlayerKey(Key key, bool shift = false, bool repeat = false) {
@@ -119,7 +124,7 @@ public partial class EnhancementPlayerWindow {
                 _lastEscape = InputNow();
                 if (!repeat && _changePopup.IsOpen) { _changePopup.IsOpen = false; _escapeConsumed = true; return true; }
                 if (!repeat) { _escapeConsumed = _videoFullscreenWindow != null; ExitVideoFullscreen();
-                    if (!StrictInput && (_videoNavigated || _isPlaying)) { _escapeStart = InputNow(); ShowHoldEscHint(0); } }
+                    if (!StrictInput && IsSessionActive) { _escapeStart = InputNow(); ShowHoldEscHint(0); } }
                 return true;
             case Key.F11: ExitVideoFullscreen(); return true;
             case Key.F: if (!repeat) { if (_videoFullscreenWindow != null) ExitVideoFullscreen(); else if (_isVideoMode && _videoNavigated) EnterVideoFullscreen(); } return true;
