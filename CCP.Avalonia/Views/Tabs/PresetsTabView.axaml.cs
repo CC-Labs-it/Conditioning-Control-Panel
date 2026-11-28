@@ -33,7 +33,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
     /// (WPF MainWindow.Presets.cs:515-636, applied at start :1586 and live during a run, #474), and
     /// so are the focal tab FX in PresetsTabView.Fx.cs (selected-card sheen, entrances, press scale;
     /// WPF MainWindow.TabFxPresetsQuestsAchievements.cs, OnPresetsTabVisibilityChanged / RefreshCardSheen).
-    /// ponytail: the Takeaway shelf needs JustDropOrdersService (row shell-takeaway).
     /// </summary>
     public partial class PresetsTabView : UserControl
     {
@@ -375,6 +374,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var lib = SessionLibrary();
             if (lib.GetSession(session.Id) == null) lib.AddNewSession(session, filePath);
             UseSessionManager(lib);
+            SelectSession(lib.GetSession(session.Id) ?? session);
+            ShowDropZoneStatus($"Session loaded: {session.Name}", isError: false);
+        }
+
+        internal void SaveEditorSession(Session session, string filePath)
+        {
+            var lib = SessionLibrary();
+            lib.AddNewSession(session, filePath);
+            UseSessionManager(lib);
+            SelectSession(session);
+            ShowDropZoneStatus($"Session loaded: {session.Name}", isError: false);
         }
 
         /// <summary>WPF MainWindow/MainWindow.CompanionAsks.cs:14-30: preserve order and recheck the live rack.</summary>
@@ -392,7 +402,36 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
         internal Session? RevealSession(string sessionId)
         {
             var found = _availableSessions.FirstOrDefault(s => s.Id == sessionId);
-            if (found != null) SelectSession(found);
+            if (found != null)
+            {
+                if (!SessionRackPanel.Children.OfType<Border>().Any(row => (row.Tag as Session)?.Id == sessionId))
+                {
+                    _rackToolbarSyncing = true;
+                    try
+                    {
+                        _rackSourceFilter = RackSourceAll;
+                        _rackDifficulties.Clear();
+                        foreach (SessionDifficulty difficulty in Enum.GetValues<SessionDifficulty>())
+                            _rackDifficulties.Add(difficulty);
+                        _rackSearch = "";
+                        TxtRackSearch.Text = "";
+                        foreach (var chip in RackSourceChips.Children.OfType<ToggleButton>())
+                            chip.IsChecked = (chip.Tag as string) == RackSourceAll;
+                        foreach (var dot in RackDifficultyChips.Children.OfType<ToggleButton>())
+                            dot.IsChecked = true;
+                    }
+                    finally { _rackToolbarSyncing = false; }
+                    if (CoreSettings.HasProvider)
+                    {
+                        CoreSettings.Current.SessionRackSourceFilter = RackSourceAll;
+                        CoreSettings.Save();
+                    }
+                    RepaintSessionRack();
+                }
+                SelectSession(found);
+                SessionRackPanel.Children.OfType<Border>()
+                    .FirstOrDefault(row => (row.Tag as Session)?.Id == sessionId)?.BringIntoView();
+            }
             return found;
         }
 
@@ -412,8 +451,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         // ---- Takeaway empty state + Core-backed session rack --------------------
         //
-        // The Takeaway strip paints WPF's empty state until the order drawer moves. The preset rail and
-        // the session rack read Core (Preset, AppSettings.UserPresets, Session).
+        // The preset rail and session rack read Core; the shell wires the Takeaway shelf.
 
         private void SeedRailRackAndTakeaway()
         {
@@ -518,6 +556,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             ConditioningControlPanel.Services.LockdownPanicHold.RestoreAfterApply(cur, panicBefore);
             CoreSettings.Save();
             CoreEngine.Reconcile();
+            Controls.AppSettings.AudioSettingsBinder.RaiseChanged(); // WPF LoadSettings mirrors audio to Home.
             RefreshPresetsList();
             Serilog.Log.Information("Loaded preset: {Name}", preset.Name);
             return true;
@@ -1215,7 +1254,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 (global::Avalonia.Data.Binding)new global::ConditioningControlPanel.Avalonia.Localization.StrExtension(key).ProvideValue(null!));
 
         /// <summary>WPF BtnRevealSpoilers_Click (MainWindow.Presets.cs:641): hide at once, or three
-        /// sequential warnings before the spoilers show. Enter keeps the mystery (safe answer).</summary>
+        /// sequential warnings before the spoilers show.</summary>
         private async void BtnRevealSpoilers_Click(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
         {
             if (SessionSpoilerPanel.IsVisible)
@@ -1227,10 +1266,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             if (TopLevel.GetTopLevel(this) is not Window owner) return;
             for (var i = 1; i <= 3; i++)
             {
-                if (!await Dialogs.MessageDialog.ConfirmAsync(owner, Loc.Get($"spoiler_warning{i}_title"),
-                        Loc.Get($"spoiler_warning{i}_body"), defaultToCancel: true,
-                        okText: Loc.Get($"spoiler_warning{i}_yes"), cancelText: Loc.Get($"spoiler_warning{i}_no")))
-                    return;
+                var dialog = new Dialogs.MessageDialog(Loc.Get($"spoiler_warning{i}_title"),
+                    Loc.Get($"spoiler_warning{i}_body"), showCancel: true,
+                    okText: Loc.Get($"spoiler_warning{i}_yes"), cancelText: Loc.Get($"spoiler_warning{i}_no"));
+                dialog.UseStyledYesNoOrder();
+                if (await dialog.ShowDialogSafe<bool?>(owner) != true) return;
             }
             SessionSpoilerPanel.IsVisible = true;
             SetRevealLabel("btn_hide_details");
@@ -1297,9 +1337,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
             try
             {
-                var lib = SessionLibrary();
-                lib.AddNewSession(session, path);
-                UseSessionManager(lib);
+                SaveEditorSession(session, path);
             }
             catch (Exception ex)
             {
@@ -1325,9 +1363,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (await PickSessionSavePath(owner, "title_save_as_new_custom_session", edited) is not { } path) return;
                 try
                 {
-                    var lib = SessionLibrary();
-                    lib.AddNewSession(edited, path);
-                    UseSessionManager(lib);
+                    SaveEditorSession(edited, path);
                 }
                 catch (Exception ex)
                 {
@@ -1422,6 +1458,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var (success, message, session) = lib.ImportSession(filePath);
             if (!success) { ShowDropZoneStatus($"Failed: {message}", isError: true); return; }
             UseSessionManager(lib);
+            if (session != null) SelectSession(session);
             ShowDropZoneStatus($"Session loaded: {session?.Name}", isError: false);
             Serilog.Log.Information("Session imported via drag-drop: {Name}", session?.Name);
         }

@@ -33,6 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal static TimeSpan LeashHoldClockInterval = TimeSpan.FromMilliseconds(250);
 
         private readonly LeashHoldFlow _leashHold = new();
+        internal bool LeashHoldHeld => _leashHold.Held;
         private DispatcherTimer? _leashHoldClock;
         private bool _leashHoldFromPortal;
         private static bool _portalHoldLive;
@@ -56,8 +57,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             Action<int, string?> winDown = (vk, _) => { if (vk != 0 && vk == Win32PanicKey.BoundVirtualKey) Dispatcher.UIThread.Post(LeashHoldPressed); };
             Action<int, string?> winUp = (vk, _) => { if (vk != 0 && vk == Win32PanicKey.BoundVirtualKey) released(); };
             if (OperatingSystem.IsWindows()) { Win32PanicKey.KeyDown += winDown; Win32PanicKey.KeyUp += winUp; }
+            bool closed = false;
+            Action<bool> leashedChanged = on =>
+            {
+                if (!on) Dispatcher.UIThread.Post(() => { if (!closed) LeashHoldReleased(); });
+            };
+            LeashHead.LeashedChanged += leashedChanged;
             Closed += (_, _) =>
             {
+                closed = true;
+                LeashHead.LeashedChanged -= leashedChanged;
                 _leashHoldClock.Stop();
                 if (X11PanicKey.PanicReleased == released) X11PanicKey.PanicReleased = null;
                 if (OperatingSystem.IsWindows()) { Win32PanicKey.KeyDown -= winDown; Win32PanicKey.KeyUp -= winUp; }

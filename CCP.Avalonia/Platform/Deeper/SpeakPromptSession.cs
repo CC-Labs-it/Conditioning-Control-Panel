@@ -19,7 +19,7 @@ internal sealed class SpeakPromptSession
     private readonly Action<string> _show;
     private readonly Action<string, bool> _feedback;
     private readonly Action? _stopCapture;
-    private int _stopRequested;
+    private int _stopRequested, _paused; // _paused: this session issued Pause and owes one Play
     private readonly CancellationTokenSource _stop = new();
     private bool _started;
     private readonly bool _intermittentCues; // only when show/hide flash the cue on a timer themselves
@@ -59,15 +59,19 @@ internal sealed class SpeakPromptSession
     {
         if (Interlocked.Exchange(ref _stopRequested, 1) != 0) return;
         try { _stopCapture?.Invoke(); }
-        finally { _stop.Cancel(); }
+        finally { _stop.Cancel(); ReleaseHold(); }
     }
+
+    // WPF SpeakPromptSession.Stop -> ReleaseHold (Services/Deeper/SpeakPromptSession.cs:334-344): the hold
+    // is released at stop, so a late cleanup cannot resume a video a newer session has paused.
+    private void ReleaseHold() { if (Interlocked.Exchange(ref _paused, 0) != 0) _source?.Play(); }
 
     internal async Task RunAsync()
     {
         if (_started) throw new InvalidOperationException("Session already started");
         _started = true;
         var ct = _stop.Token;
-        bool borrowed = false, shown = false, paused = false;
+        bool borrowed = false, shown = false;
         using var holdStop = CancellationTokenSource.CreateLinkedTokenSource(ct);
         Task? hold = null;
         try
@@ -79,7 +83,7 @@ internal sealed class SpeakPromptSession
             if (ct.IsCancellationRequested) return;
             shown = true;
             _show(_plan.Cue);
-            if (_plan.PausesAtCue && _source != null) { _source.Pause(); paused = true; }
+            if (_plan.PausesAtCue && _source != null) { _source.Pause(); _paused = 1; }
             if (_plan.HasRegion && _plan.HoldsPlayback && _source != null)
                 hold = HoldAsync(holdStop.Token);
             int reps = 0, unavailable = 0;
@@ -129,7 +133,7 @@ internal sealed class SpeakPromptSession
                 try { if (shown) _hide(); }
                 finally
                 {
-                    try { if (paused) _source?.Play(); }
+                    try { ReleaseHold(); }
                     finally { if (borrowed) _restoreMic(); }
                 }
             }
@@ -140,9 +144,10 @@ internal sealed class SpeakPromptSession
             while (true)
             {
                 await Task.Delay(120, token);
-                switch (_plan.HoldStepAt(_source!.GetCurrentTimeSeconds(), paused))
+                token.ThrowIfCancellationRequested(); // a tick queued before Stop must not re-pause after release
+                switch (_plan.HoldStepAt(_source!.GetCurrentTimeSeconds(), Volatile.Read(ref _paused) != 0))
                 {
-                    case SpeakHoldStep.Pause: _source.Pause(); paused = true; break;
+                    case SpeakHoldStep.Pause: _source.Pause(); _paused = 1; break;
                     case SpeakHoldStep.SeekToRegionStart: _source.Seek(_plan.RegionStart!.Value); break;
                 }
             }

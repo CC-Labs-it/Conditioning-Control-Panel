@@ -1,4 +1,4 @@
-// B2 section 4: Linux first race card and the owned shell launch (LinuxRaceHost). The fetch arrives in a separate lane.
+// B2 section 4: Linux first race card and the owned shell launch (LinuxRaceHost).
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -83,9 +83,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             {
                 var result = await fetch.FetchAsync(progress, cancel.Token);
                 if (_raceFetch != cancel || cancel.IsCancellationRequested || _closing) return;
+                if (result == RaceEngineFetchResult.Installed)
+                {
+                    // The card is a shown window; the shell needs its own unshown session so closing the card
+                    // does not dispose the newly launched process. The first queued invite rides the launch URL
+                    // (as LaunchWindow does) and stays queued here until the shell is known to run.
+                    var session = new GameWindow(Spec);
+                    if (session.StartRaceShell(_raceRooms.TryPeek(out var first) ? first : null) == true)
+                    {
+                        if (first != null) _raceRooms.Dequeue();
+                        while (_raceRooms.TryDequeue(out var room)) session.HandoffRaceRoom(room);
+                        Close();
+                        return;
+                    }
+                }
                 RaceStatus.Text = Loc.Get(result switch
                 {
-                    RaceEngineFetchResult.Installed => "rt_engine_start_failed", // owned host is a separate lane
+                    RaceEngineFetchResult.Installed => "rt_engine_start_failed",
                     RaceEngineFetchResult.Network => "rt_engine_network",
                     RaceEngineFetchResult.Checksum => "rt_engine_checksum",
                     RaceEngineFetchResult.Storage => "rt_engine_storage",
@@ -116,7 +130,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             catch (Exception ex) { Serilog.Log.Warning(ex, "Glassroad: race shell did not start"); return false; }
             if (shell == null) return null;
             (RaceShell, PageUrl, _shellRoom) = (shell, url, room);
-            Closed += (_, _) => shell.Dispose();
+            Closed += (_, _) => { GameActivity.Unregister(this); shell.Dispose(); };
+            // The shell owns the visible window, so this session never raises Opened.
+            GameActivity.Register(this);
             lock (Open) Open.Add(this);   // what Opened does for a shown window
             OpenGlassroad();
             return true;
@@ -124,9 +140,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>The shell died before loading a page: close this session and show the card saying so.</summary>
         internal void RaceShellFailed()
         {
+            var pending = _raceRooms.ToArray();   // Close clears the queue; invites not yet joined go to the card
             Close();
             var card = new GameWindow(Spec);
             card.ShowRaceCard(_shellRoom, failed: true);
+            foreach (var room in pending) card.HandoffRaceRoom(room);
             card.Show();
         }
         private void ShowRaceCard(string? room, bool failed)

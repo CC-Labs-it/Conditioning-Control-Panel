@@ -280,7 +280,7 @@ public sealed partial class GameWindowTests
             var ack = sent.Last();
             Assert.Equal("fx-ack", (string?)ack["type"]);
             Assert.Equal("t7", (string?)ack["token"]);
-            Assert.Equal("gif-rain", (string?)ack["fired"]!.Single());
+            Assert.Equal(new[] { "gif-rain", "glitch-bubbles" }, ack["fired"]!.Select(x => (string?)x));
             Assert.All(ack["skipped"]!, skip => Assert.Equal("unknown", (string?)skip["why"]));
             w.Web.OnWebMessage("{\"type\":\"fx\",\"token\":\"t8\",\"fxId\":\"fx.unknown\",\"station\":\"breakout\"}");
             var unknown = sent.Last();
@@ -575,7 +575,7 @@ public sealed partial class GameWindowTests
         {
             case WindowsWebView2EnvironmentRequestedEventArgs windows:
                 Assert.Equal(folder, windows.UserDataFolder);
-                Assert.Equal("--autoplay-policy=no-user-gesture-required", windows.AdditionalBrowserArguments);
+                Assert.Equal("--autoplay-policy=no-user-gesture-required --force-prefers-no-reduced-motion", windows.AdditionalBrowserArguments);
                 break;
             case GtkWebViewEnvironmentRequestedEventArgs gtk:
                 Assert.Equal(folder, gtk.BaseDataDirectory);
@@ -594,7 +594,7 @@ public sealed partial class GameWindowTests
         {
             case WindowsWebView2EnvironmentRequestedEventArgs windows:
                 Assert.Null(windows.UserDataFolder);
-                Assert.Null(windows.AdditionalBrowserArguments);
+                Assert.Equal("--force-prefers-no-reduced-motion", windows.AdditionalBrowserArguments);
                 break;
             case GtkWebViewEnvironmentRequestedEventArgs gtk: Assert.Null(gtk.BaseDataDirectory); break;
             case LinuxWpeWebViewEnvironmentRequestedEventArgs wpe: Assert.Null(wpe.DataDirectory); break;
@@ -697,7 +697,7 @@ public sealed partial class GameWindowTests
         w.HandleMessage("{\"type\":\"ready\"}");
         w.HandleMessage("{\"type\":\"ready\"}");
         Assert.Equal(new[] { "pbp:settings", "pbp:identity", "pbp:media-state", "owned", "pbp:look" }, sent.Select(o => (string?)o["type"]));
-        Assert.Equal(false, (bool?)sent[0]["prizeCounter"]);
+        Assert.Null(sent[0]["prizeCounter"]);
         Assert.Equal(reduced, (bool)sent[0]["reducedMotion"]!);
         Assert.Equal(speed, (double)sent[0]["gentleIntroSpeed"]!);
     });
@@ -953,6 +953,43 @@ public sealed partial class GameWindowTests
         return w;
     }
 
+    // WPF CaucusHostService.cs:131,219,263: launch, ready and relaunch return steering to the page.
+    [Theory]
+    [InlineData("open")]
+    [InlineData("ready")]
+    [InlineData("reopen")]
+    public void ClassicRace_ReturnsKeyboardToPage(string path) => RunRace("rt.original.03", (_, _, _) =>
+    {
+        var race = new GameWindow(GameWindow.Games["raceclassic"]);
+        race.Web.Focusable = true;
+        race.Load(GameWindow.Server());
+        race.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            if (path != "open")
+            {
+                var other = new global::Avalonia.Controls.Button { Content = "Focus probe" };
+                var panel = new global::Avalonia.Controls.StackPanel();
+                race.Content = null;
+                panel.Children.Add(race.Web);
+                panel.Children.Add(other);
+                race.Content = panel;
+                Assert.True(other.Focus());
+                Assert.False(race.Web.IsFocused);
+                if (path == "ready") race.HandleMessage("{\"type\":\"ready\"}");
+                else Assert.Same(race, GameWindow.Launch("raceclassic"));
+                Dispatcher.UIThread.RunJobs();
+            }
+            Assert.True(race.Web.IsFocused);
+            GameWindow.CloseAllForPanic();
+            race.HandleMessage("{\"type\":\"exit-done\"}");
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(race.IsVisible);
+        }
+        finally { race.Close(); }
+    });
+
     [Fact]
     public void ClassicDoor_OpensThe2DHostAndLauncherTile() => RunRace("rt.original.03", (launcher, _, _) =>
     {
@@ -1034,12 +1071,16 @@ public sealed partial class GameWindowTests
     [Fact]
     public void Race_BootAndOnePayoutPerRun() => RunRace("rt.original.03", (_, xp, sparks) =>
     {
+        Directory.CreateDirectory(Path.Combine(CorePaths.EffectiveAssets, "images"));
+        File.WriteAllBytes(Path.Combine(CorePaths.EffectiveAssets, "images", "pic.png"), new byte[] { 1 });
         var w = OpenRetiredRace();
         Assert.Contains("dtrh/race.html", w.PageUrl!.AbsolutePath);
         var sent = new List<JObject>();
         w.Posted += json => sent.Add(JObject.Parse(json));
         w.HandleMessage("{\"type\":\"ready\"}");
         Assert.Equal(new[] { "init", "manifest", "loom-list" }, sent.Select(o => (string?)o["type"]));
+        // Root-relative, the shape dtrh/hostMedia.js counts as local (WebGL draws it), as GameWindow.Dtrh sends.
+        Assert.Equal("/ccp.assets/images/pic.png", (string?)sent[1]["images"]!.Single()["url"]);
         // WPF 7.2.3: the door is open, so init hands every track, not just the one owned.
         Assert.Equal(Enumerable.Range(0, ConditioningControlPanel.Services.Prizes.PrizeGrants.RacingTrackMax + 1), sent[0]["settings"]!["racingTracks"]!.Values<int>());
         Assert.False((bool)sent[0]["settings"]!["cloud"]!);
@@ -1555,6 +1596,47 @@ public sealed partial class GameWindowTests
         {
             global::ConditioningControlPanel.Avalonia.App.ResetReleaseContent();
             CoreSettings.ServiceProvider = oldSettings;
+        }
+    });
+
+    [Fact]
+    public void Dtrh_ActiveRunRefusesStampedLineLink() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var tab = new global::ConditioningControlPanel.Avalonia.Views.Tabs.AssetsTabView();
+        var state = global::ConditioningControlPanel.Services.Fyp.Online.OnlineMeterRules.For(
+            "mixed", true, true, 10, false, global::ConditioningControlPanel.Services.Fyp.Online.ScrolllerPlan.Free, true, true);
+        tab.PaintOnlineMeter(state, DateTime.Now, DateTime.Now.AddHours(1));
+        Assert.True(tab.OnlineMeterStamped.IsVisible);
+        var link = tab.FindControl<Button>("OnlineStampedLink")!;
+        Assert.NotNull(link);
+        var sandbox = typeof(SandboxNet).GetProperty("Active")!;
+        var oldSandbox = (bool)sandbox.GetValue(null)!;
+        var oldShell = ExternalOpener.Shell;
+        var oldStrict = CoreSettings.Current.StrictLockEnabled;
+        var opened = new List<string>();
+        try
+        {
+            sandbox.SetValue(null, false);
+            CoreSettings.Current.StrictLockEnabled = false;
+            ExternalOpener.Shell = target => { opened.Add(target); return true; };
+            var w = GameWindow.Launch("dtrh")!;
+            link.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Single(opened);
+            w.HandleMessage("{\"type\":\"run-started\"}");
+            Assert.True(GameWindow.IsDtrhRunning);
+            link.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Single(opened);
+            w.HandleMessage("{\"type\":\"run-ended\",\"score\":0,\"durationSec\":1}");
+            Assert.False(GameWindow.IsDtrhRunning);
+            link.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(2, opened.Count);
+            Assert.All(opened, target => Assert.Equal(global::ConditioningControlPanel.Services.Fyp.Online.ScrolllerCreditRules.HomeLink, target));
+        }
+        finally
+        {
+            ExternalOpener.Shell = oldShell;
+            CoreSettings.Current.StrictLockEnabled = oldStrict;
+            sandbox.SetValue(null, oldSandbox);
         }
     });
 
@@ -2185,6 +2267,29 @@ public sealed partial class GameWindowTests
         }
         finally { w.Close(); }
     });
+    [Fact]
+    public void Dtrh_BrowserFailure_RecoversOnceAndPanicCancelsQueuedRecovery() => RunDtrh(lab: true, (_, _, _, _) =>
+    {
+        var w = GameWindow.Launch("dtrh")!;
+        w.Web.OnBrowserProcessFailed(); // before ready
+        w.Web.OnBrowserProcessFailed();
+        Dispatcher.UIThread.RunJobs();
+        var replacement = GameWindow.OpenForTests("dtrh");
+        Assert.NotNull(replacement);
+        Assert.NotSame(w, replacement);
+        replacement.Web.OnBrowserProcessFailed();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+
+        GameWindow.DtrhRelaunchedOnce = false;
+        w = GameWindow.Launch("dtrh")!;
+        w.Web.OnBrowserProcessFailed();
+        PanicSurfaces.All.Single(x => x.Id == "games").Stop(MainShellWindow.Current!);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(GameWindow.IsAnyOpen());
+        Assert.False(GameWindow.DtrhRelaunchedOnce);
+    });
+
     [Fact]
     public void Dtrh_Heartbeat_RelaunchesOnceAndStopsWatching() => RunDtrh(lab: true, (_, xp, _, _) =>
     {

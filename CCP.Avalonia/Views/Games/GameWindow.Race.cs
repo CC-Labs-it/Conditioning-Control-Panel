@@ -32,6 +32,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             return false;
         }
 
+        internal static bool RaceCloudOffered;
+        internal static Action<string> RaceRequestPack = id => { _ = App.ReleaseContent?.RequestPackAsync(id); };
+        internal static Action<string> RaceNoteUsage = id => ConditioningControlPanel.Services.EmiDesk.EmiState.NoteUsage(id);
+
         /// <summary>Spark banking (WPF DtrhMetaBridge.AwardRun, real state: ChaosMeta.AwardRunRewards); tests swap it.</summary>
         internal static Func<ChaosMeta.ChaosRunRewardInput, int> RaceBankSparks = input => ChaosMeta.AwardRunRewards(input);
 
@@ -55,6 +59,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             if (_raceStarted) return;
             _raceStarted = true;
+            QueueRaceFocus();
+            try { RaceNoteUsage("race"); } catch (Exception ex) { Log.Debug("RaceHost: usage: {E}", ex.Message); }
+            try { RaceRequestPack("audio-web"); } catch (Exception ex) { Log.Debug("RaceHost: audio pack: {E}", ex.Message); }
             _raceOwnedTracks = RacingAccess.OwnedTracks;
             PrizeGrants.GrantsChanged += OnRaceGrantsChanged;
             _raceRun.Reset();
@@ -162,11 +169,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             _raceLastHeartbeatUtc = RaceUtcNow();
             _racePinged = false;
+            QueueRaceFocus();
             Post(RaceInitMessage());
             try
             {
-                var server = _server;
-                var m = (_library ??= new(() => server == null ? new() : GameMediaManifest.BuildLocal(server.AssetUrl))).Value;
+                // Root-relative like DtRH (WebAssetServer.AssetPath): hostMedia.js treats http://127.0.0.1 as remote, never drawn by WebGL.
+                var m = (_library ??= new(() => _server == null ? new() : GameMediaManifest.BuildLocal(ConditioningControlPanel.Avalonia.Platform.WebAssetServer.AssetPath))).Value;
                 Post(GameMediaManifest.Frame(m));
                 var favorites = DtrhAssetStatsStore.TopAssets(12);
                 if (favorites.Count > 0) Post(new { type = "favorites", names = favorites });
@@ -188,8 +196,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 reducedMotion = RaceSafe(() => CoreSettings.Current.MotionLevel != MotionLevel.Full, false),
                 // The page plays the bundled host cues when this host does not handle sfx.
                 hostSfx = false,
-                // WPF sends true (:278): only a host that owns the levels browser offers it; not yet here.
-                cloud = false,
+                // WPF sends true (:278); the levels host seeds this offer when available.
+                cloud = RaceCloudOffered,
                 racingTracks = RacingAccess.OwnedTracks,
                 returnToCasino = false,   // no Back Room cabinet on this head
             },
@@ -281,6 +289,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             }
             App.Quests?.TrackBubblesPopped(count);
         }
+
+        // WPF CaucusHostService.cs:131,219,263: give steering to the page after launch and ready.
+        private void QueueRaceFocus() => Dispatcher.UIThread.Post(() =>
+        {
+            if (_raceDisposed || _closing || _raceExiting) return;
+            try { Web.FocusPage(); }
+            catch (Exception ex) { Log.Debug("RaceHost: focus: {E}", ex.Message); }
+        }, DispatcherPriority.Loaded);
 
         private void RaceQueue(Action action) => Dispatcher.UIThread.Post(() =>
         {
