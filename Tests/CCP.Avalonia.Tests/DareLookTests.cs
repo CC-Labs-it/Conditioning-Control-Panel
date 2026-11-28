@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Media;
 using ConditioningControlPanel.Controls.Dares;
 using ConditioningControlPanel.Avalonia.Views.Controls.Dares;
@@ -85,10 +86,10 @@ public class DareLookTests
         w.Show();
         try
         {
-            // Fluent's root is PART_ContentPresenter, painting the hover/press box; the bare one is unnamed and unpainted.
-            var root = Assert.IsType<global::Avalonia.Controls.Presenters.ContentPresenter>(Assert.Single(global::Avalonia.VisualTree.VisualExtensions.GetVisualChildren(act)));
+            // Fluent's root is PART_ContentPresenter, painting the hover/press box; the bare one is unnamed and stays transparent.
+            var root = Assert.IsType<Border>(Assert.Single(global::Avalonia.VisualTree.VisualExtensions.GetVisualChildren(act)));
             Assert.Null(root.Name);
-            Assert.Null(root.Background);
+            Assert.Equal(Brushes.Transparent, root.Background);
             var pseudo = (global::Avalonia.Controls.IPseudoClasses)typeof(StyledElement).GetProperty("PseudoClasses",
                 System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(act)!;
             pseudo.Add(":pressed");
@@ -100,6 +101,63 @@ public class DareLookTests
             Assert.Equal(0.45, act.Opacity);
             act.IsEnabled = true;
             Assert.Equal(1, act.Opacity);
+        }
+        finally { w.Close(); }
+    });
+
+    // WPF DareLook.cs:965: the outlined face has a Transparent background, so its padding takes the click.
+    [Fact]
+    public void OutlinedActTakesAClickInItsPadding() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        PanicSurfacesTests.EnsureApp();
+        var clicks = 0;
+        var act = DareLook.Act("Pass", null, false, () => clicks++, "dares-pass");
+        var w = new Window { Content = act, Width = 400, Height = 200 };
+        w.Show();
+        try
+        {
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            // Left padding is 20 px inside a 1.5 px outline: its centre is clear of the words.
+            var at = act.TranslatePoint(new Point(11.5, act.Bounds.Height / 2), w)!.Value;
+            w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
+            w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, clicks);
+        }
+        finally { w.Close(); }
+    });
+
+    // WPF DareLook.cs:940-942 (Big face presses 4 px onto its ledge), :977-978 (Quiet tints on hover).
+    [Fact]
+    public void BigActPressesAndOutlinedActTintsOnHover() => CCP.Avalonia.Testing.AvaloniaTestDispatcher.Run(() =>
+    {
+        PanicSurfacesTests.EnsureApp();
+        var big = DareLook.Act("Accept", null, true, () => { }, "dares-accept");
+        var quiet = DareLook.Act("Pass", null, false, () => { }, "dares-pass");
+        var row = new StackPanel { Children = { big, quiet } };
+        var w = new Window { Content = row, Width = 400, Height = 300 };
+        w.Show();
+        try
+        {
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.True(big.Focusable);
+            var face = ((Panel)big.Content!).Children[1];
+            double Y() => face.GetBaseValue(Visual.RenderTransformProperty).GetValueOrDefault() is global::Avalonia.Media.Transformation.TransformOperations t ? t.Value.M32 : 0;
+            var at = big.TranslatePoint(new Point(big.Bounds.Width / 2, 10), w)!.Value;
+            w.MouseDown(at, global::Avalonia.Input.MouseButton.Left);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(4, Y());
+            w.MouseUp(at, global::Avalonia.Input.MouseButton.Left);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, Y());
+
+            var outline = (Border)quiet.Content!;
+            w.MouseMove(quiet.TranslatePoint(new Point(11.5, quiet.Bounds.Height / 2), w)!.Value);
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(Color.FromArgb(0x14, 255, 255, 255), Assert.IsAssignableFrom<ISolidColorBrush>(outline.Background).Color);
+            w.MouseMove(new Point(390, 290));
+            global::Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal(Colors.Transparent, Assert.IsAssignableFrom<ISolidColorBrush>(outline.Background).Color);
         }
         finally { w.Close(); }
     });

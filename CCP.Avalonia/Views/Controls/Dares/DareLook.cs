@@ -17,6 +17,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Transformation;
 using ConditioningControlPanel.Controls.Dares;
 
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Dares;
@@ -303,7 +304,8 @@ internal static class DareLook
         {
             Content = content, Tag = tag, Theme = BareTheme, Background = Brushes.Transparent, BorderThickness = new Thickness(0),
             Padding = new Thickness(0), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-            Template = new FuncControlTemplate<Button>((btn, _) => new ContentPresenter { Content = btn.Content }),
+            // WPF's ContentPresenter root hit-tests its whole box; Avalonia's only where something paints.
+            Template = new FuncControlTemplate<Button>((btn, _) => new Border { Background = Brushes.Transparent, Child = new ContentPresenter { Content = btn.Content } }),
         };
         b.PropertyChanged += (_, e) => { if (e.Property == InputElement.IsEffectivelyEnabledProperty) b.Opacity = b.IsEffectivelyEnabled ? 1 : 0.45; };
         return b;
@@ -390,10 +392,33 @@ internal static class DareLook
         if (sub != null) words.Children.Add(new TextBlock { Text = sub, FontFamily = PrintFont, FontSize = 13, Foreground = fg, Opacity = 0.75 });
         var face = big
             ? new Border { Child = words, Background = new SolidColorBrush(Color.FromRgb(0x2F, 0xD3, 0x9A)), CornerRadius = new CornerRadius(8),
-                Padding = new Thickness(30, 9, 30, 10), BorderBrush = new SolidColorBrush(Color.FromRgb(0x17, 0x80, 0x5A)), BorderThickness = new Thickness(0, 0, 0, 6) }
+                Padding = new Thickness(30, 9, 30, 10), Margin = new Thickness(0, 0, 0, 6) }
             : new Border { Child = words, BorderBrush = onCard ? new SolidColorBrush(Color.FromRgb(0xC9, 0xAF, 0xCC)) : MutedBrush,
-                BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(8), Padding = new Thickness(20, 8) };
-        var button = Bare(face, tag);
+                BorderThickness = new Thickness(1.5), CornerRadius = new CornerRadius(8), Padding = new Thickness(20, 8), Background = Brushes.Transparent };
+        Button button;
+        if (big)
+        {
+            var g = new Grid();
+            g.Children.Add(new Border { Background = new SolidColorBrush(Color.FromRgb(0x17, 0x80, 0x5A)), CornerRadius = new CornerRadius(8), Margin = new Thickness(0, 6, 0, 0) });
+            g.Children.Add(face);
+            button = Bare(g, tag);
+            // WPF :940-942,1146: the face presses 4 px onto its ledge (70 ms ease-out); a Transition on the face, no per-frame effect.
+            var press = new TransformOperationsTransition { Property = Visual.RenderTransformProperty, Easing = new QuadraticEaseOut() };
+            face.Transitions = new Transitions { press };
+            button.PropertyChanged += (_, e) =>
+            {
+                if (e.Property != Button.IsPressedProperty && e.Property != InputElement.IsPointerOverProperty) return;
+                press.Duration = TimeSpan.FromMilliseconds(Amount > 0 ? GentleVisuals.RiseMs(70) : 0);
+                face.RenderTransform = TransformOperations.Parse(button.IsPressed && button.IsPointerOver ? "translateY(4px)" : "translateY(0px)");
+            };
+        }
+        else
+        {
+            button = Bare(face, tag);
+            // WPF :976-978: the outline tints on hover.
+            IBrush hover = onCard ? Brushes.White : new SolidColorBrush(Color.FromArgb(0x14, 255, 255, 255));
+            button.PropertyChanged += (_, e) => { if (e.Property == InputElement.IsPointerOverProperty) face.Background = button.IsPointerOver ? hover : Brushes.Transparent; };
+        }
         button.VerticalAlignment = VerticalAlignment.Top;
         button.HorizontalAlignment = HorizontalAlignment.Left;
         button.Margin = new Thickness(0, 0, 12, 10);
