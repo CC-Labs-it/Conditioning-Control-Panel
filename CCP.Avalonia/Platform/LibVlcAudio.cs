@@ -1,3 +1,4 @@
+using ConditioningControlPanel.Services.Audio;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -592,10 +593,10 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 _duckCount++;
                 if (_isDucked) return;
                 _isDucked = true;
-                _duckWatchdog = new Timer(_ => ForceUnduck(), null, 300_000, Timeout.Infinite);
+                var epoch = ++_duckEpoch;
+                _duckWatchdog = new Timer(_ => WatchdogTick(epoch), null, 300_000, 300_000);
                 var keep = 1 - Math.Clamp(strength, 0, 100) / 100.0;
                 _duckKeep = keep;
-                var epoch = ++_duckEpoch;
                 var interval = TimeSpan.FromMilliseconds(CoreAudio.DuckRescanIntervalMs);
                 _duckRescan = _duckClock.CreateTimer(_ => RescanForNewSessions(epoch), null, interval, interval);
                 // As WPF: our own layers are in-process, so the sweep skips them - duck them directly.
@@ -618,6 +619,28 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 _duckRescan = null;
                 LayeredAudio.Instance?.ReleaseDuck();
                 Enqueue(Restore);
+            }
+        }
+
+        internal Func<bool> DuckOwnerAlive { get; set; } = () => Views.Overlays.MandatoryVideoOverlay.Instance.HoldsAudioDuck;
+
+        private bool OwnerAlive()
+        {
+            try { return DuckOwnerAlive(); }
+            catch (Exception ex) { Log.Debug("[Ducking] Owner check failed: {E}", ex.Message); return false; }
+        }
+
+        internal void WatchdogTick() => WatchdogTick(_duckEpoch);
+
+        private void WatchdogTick(long epoch)
+        {
+            lock (_duckLock)
+            {
+                if (epoch != _duckEpoch) return;
+                var step = DuckWatchdogRule.Decide(_isDucked, OwnerAlive());
+                if (step == DuckWatchdogStep.Retire) { _duckWatchdog?.Dispose(); _duckWatchdog = null; return; }
+                if (step == DuckWatchdogStep.Rearm) return;
+                ForceUnduck();
             }
         }
 
