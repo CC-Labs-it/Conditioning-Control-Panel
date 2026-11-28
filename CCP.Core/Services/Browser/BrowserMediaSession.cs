@@ -14,7 +14,7 @@ public sealed class BrowserMediaSession
 {
     public enum MediaOwner { Autonomy, User, AvatarLink, Chaos, Remote }
 
-    public static BrowserMediaSession Shared { get; } = new();
+    public static BrowserMediaSession Shared { get; internal set; } = new();
 
     // WPF BrowserMediaService.cs:72-84.
     private const double HeartbeatTimeoutSeconds = 20, LoadWindowTimeoutSeconds = 60,
