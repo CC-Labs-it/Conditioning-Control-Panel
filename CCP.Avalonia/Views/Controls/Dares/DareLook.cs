@@ -1,6 +1,8 @@
 using System;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Layout;
 using Avalonia.Media;
 using ConditioningControlPanel.Controls.Dares;
 
@@ -70,4 +72,69 @@ internal static class DareLook
         button.Click += (_, _) => onClick();
         return button;
     }
+
+    // Card shell for the offer and debt cards. shortcut: plain print and flat desk, not WPF's slip
+    // paper, fonts and motion (Dialogs/Dares/*); upgrade when the slip-window lane lands its look.
+    public static readonly IBrush ChalkBrush = new SolidColorBrush(Color.FromRgb(0xF1, 0xEA, 0xFF));
+    public static readonly IBrush MutedBrush = new SolidColorBrush(Color.FromRgb(0xB8, 0xB1, 0xCC));
+    public static readonly IBrush WarnBrush = new SolidColorBrush(Color.FromRgb(0xFF, 0x9A, 0x8A));
+
+    // WPF Controls/Dares/DareLook.cs:1197-1229: borderless, sized to content, dragged by its desk.
+    public static StackPanel Shell(Window w, double width, string tag)
+    {
+        w.Title = "CC Labs";
+        w.Width = width;
+        w.SizeToContent = SizeToContent.Height;
+        w.WindowDecorations = WindowDecorations.None;
+        w.Background = Brushes.Transparent;
+        w.ShowInTaskbar = false;
+        w.CanResize = false;
+        w.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        w.PointerPressed += (_, e) =>
+        {
+            if (e.Source is not Button && e.GetCurrentPoint(w).Properties.IsLeftButtonPressed)
+                try { w.BeginMoveDrag(e); } catch (InvalidOperationException) { }
+        };
+        var body = new StackPanel();
+        w.Content = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0x1C, 0x12, 0x33)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x3D, 0x29, 0x6B)),
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(16),
+            Margin = new Thickness(14), Padding = new Thickness(22, 20), Tag = tag, Child = body,
+        };
+        return body;
+    }
+
+    public static TextBlock Words(string text, double size, IBrush? fg = null, string? tag = null) => new()
+    {
+        Text = text, FontSize = size, Foreground = fg ?? ChalkBrush, TextWrapping = TextWrapping.Wrap,
+        Margin = new Thickness(0, 8, 0, 0), Tag = tag,
+    };
+
+    /// <summary>WPF DareLook.Big (the go button) and Quiet (a word with an optional small line under it).</summary>
+    public static Button Act(string label, string? sub, bool big, Action onClick, string tag)
+    {
+        var words = new StackPanel();
+        words.Children.Add(new TextBlock { Text = label, FontSize = big ? 18 : 15, FontWeight = big ? FontWeight.Bold : FontWeight.Normal });
+        if (sub != null) words.Children.Add(new TextBlock { Text = sub, FontSize = 12, Foreground = MutedBrush });
+        var button = new Button
+        {
+            Content = words, Tag = tag, Cursor = new Cursor(StandardCursorType.Hand),
+            Foreground = big ? Brushes.White : ChalkBrush,
+            Background = big ? new SolidColorBrush(ToneColor(DareTone.Duel)) : Brushes.Transparent,
+            Padding = new Thickness(16, 8), Margin = new Thickness(0, 0, 10, 8), VerticalAlignment = VerticalAlignment.Top,
+        };
+        button.Click += (_, _) => onClick();
+        return button;
+    }
+
+    /// <summary>WPF DareLook.Stamp: the result word set at a slant over the slip.</summary>
+    public static Border Stamp(string word, bool grey) => new()
+    {
+        BorderBrush = grey ? MutedBrush : WarnBrush, BorderThickness = new Thickness(3), CornerRadius = new CornerRadius(6),
+        Padding = new Thickness(12, 2), Margin = new Thickness(0, 12, 0, 0), HorizontalAlignment = HorizontalAlignment.Left,
+        RenderTransform = new RotateTransform(-6), Tag = "dares-stamp",
+        Child = new TextBlock { Text = word.ToUpperInvariant(), FontSize = 22, FontWeight = FontWeight.Black, Foreground = grey ? MutedBrush : WarnBrush },
+    };
 }
