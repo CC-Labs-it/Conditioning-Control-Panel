@@ -16,6 +16,7 @@ using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
+using ConditioningControlPanel.Services;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -66,10 +67,7 @@ public sealed class ContentHitTestTests
                 {
                     // The previous probe can hover a help button. Its independent popup timer is not
                     // covered by ToolTip.SetServiceEnabled and can obscure the next control.
-                    w.MouseMove(new Point(0, 0));
-                    HelpPopover.CloseActive();
-                    // Hit testing reads the compositor's last frame: a tab shown (or a press drawn) since then is not in it yet.
-                    HeadlessRendering.RenderLiveTree(w);
+                    PrepareProbe(w);
                     // !IsHitTestVisible: inert until hovered by design (the privacy card's chip close, WPF the same).
                     if (!b.IsEffectivelyVisible || !b.IsEffectivelyEnabled || !b.IsHitTestVisible || b.Bounds.Width < 4 || b.TemplatedParent is ScrollBar) continue;
                     // Click-proof on purpose (WPF Hidden): only the Presets rack row actions at rest; their hover path has its own test.
@@ -97,6 +95,60 @@ public sealed class ContentHitTestTests
             Assert.True(misses.Count == 0, string.Join("\n", misses));
             return Task.CompletedTask;
         });
+    }
+
+    [Fact]
+    public async Task ProbeClearsAnOpenHelpPopoverBeforeHitTesting()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            var help = new Button { Width = 40, Height = 40, Content = "?" };
+            var target = new Button { Width = 80, Height = 30, Content = "Target" };
+            var canvas = new Canvas();
+            Canvas.SetLeft(help, 20); Canvas.SetTop(help, 40);
+            Canvas.SetLeft(target, 140); Canvas.SetTop(target, 45);
+            canvas.Children.Add(help); canvas.Children.Add(target);
+            var w = new Window { Width = 600, Height = 400, Content = canvas };
+            try
+            {
+                HelpPopover.Attach(help, HelpContentService.GetContent("Scheduler"));
+                w.Show();
+                HeadlessRendering.RenderLiveTree(w);
+                // Open deterministically, without waiting for the hover timer.
+                help.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.True(HelpPopover.IsOpen(help));
+                HeadlessRendering.RenderLiveTree(w);
+                var point = target.TranslatePoint(new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), w)!.Value;
+                var popup = HelpPopover.PopupContent(help)!;
+                var obscured = w.InputHitTest(point) as Visual;
+                Assert.True(obscured == popup || popup.IsVisualAncestorOf(obscured), $"expected popup, got {obscured}");
+
+                PrepareProbe(w);
+                Assert.False(HelpPopover.IsOpen(help));
+                var hit = w.InputHitTest(point) as Visual;
+                Assert.True(hit == target || target.IsVisualAncestorOf(hit), $"expected target, got {hit}");
+                bool pressed = false;
+                void Swallow(object? s, PointerPressedEventArgs e) { pressed = true; e.Handled = true; }
+                target.AddHandler(InputElement.PointerPressedEvent, Swallow, RoutingStrategies.Tunnel);
+                w.MouseDown(point, MouseButton.Left);
+                w.MouseUp(point, MouseButton.Left);
+                Assert.True(pressed);
+            }
+            finally
+            {
+                HelpPopover.Clear(help);
+                w.Close();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    private static void PrepareProbe(Window w)
+    {
+        w.MouseMove(new Point(0, 0));
+        HelpPopover.CloseActive();
+        // Hit testing reads the compositor's last frame, not the changed live tree.
+        HeadlessRendering.RenderLiveTree(w);
     }
 
     /// <summary>Kept for the ported tests that still call it here; the shared helper is
