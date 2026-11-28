@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Reflection;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using CCP.Avalonia.Testing;
@@ -26,6 +27,8 @@ public class ChaosBodyBuzzTests
         var zapField = typeof(ChaosRunHost).GetField("_lastBodyBuzzZap", BindingFlags.NonPublic | BindingFlags.Static)!;
         var previousZap = zapField.GetValue(null);
         var sentinel = new DateTime(2001, 2, 3, 4, 5, 6, DateTimeKind.Utc);
+        var existingBubble = new AmbientBubble { Popping = true };
+        BubbleOverlay.Field.Bubbles.Add(existingBubble);
         try
         {
             ChaosFieldFxOverlay.SkipPlatformChecksForTests = true;
@@ -33,9 +36,11 @@ public class ChaosBodyBuzzTests
             await ShockwaveSelectsRendererAndCancelsHops(false);
             Assert.True(ChaosFieldFxOverlay.SkipPlatformChecksForTests);
             Assert.Equal(sentinel, zapField.GetValue(null));
+            Assert.Contains(existingBubble, BubbleOverlay.Field.Bubbles);
         }
         finally
         {
+            BubbleOverlay.Field.Bubbles.Remove(existingBubble);
             ChaosFieldFxOverlay.SkipPlatformChecksForTests = previous;
             zapField.SetValue(null, previousZap);
         }

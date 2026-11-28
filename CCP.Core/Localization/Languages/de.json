@@ -8557,5 +8557,6 @@
   "remote_browser_screen_busy": "{0} ist auf dem Bildschirm",
   "chaos_camgirl_tip": "Trinkgeld +{0} Gold",
   "native_repair_title": "Conditioning Control Panel - Start fehlgeschlagen",
-  "native_repair_message": "Conditioning Control Panel kann seine Grafikbibliotheken nicht laden und nicht starten.\n\nSchließe die App, lösche diesen temporären Ordner und starte sie erneut:\n\n{0}\n\nDer Ordner wird automatisch neu erstellt. Falls das nicht hilft, prüfe, ob dein Virenschutz Dateien in Quarantäne verschoben hat.\n\nDetails: {1}"
+  "native_repair_message": "Conditioning Control Panel kann seine Grafikbibliotheken nicht laden und nicht starten.\n\nSchließe die App, lösche diesen temporären Ordner und starte sie erneut:\n\n{0}\n\nDer Ordner wird automatisch neu erstellt. Falls das nicht hilft, prüfe, ob dein Virenschutz Dateien in Quarantäne verschoben hat.\n\nDetails: {1}",
+  "bubble_avatar_pop_fallback": "Ooh, lass mich die hier für dich platzen lassen~"
 }

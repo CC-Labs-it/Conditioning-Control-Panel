@@ -26,6 +26,7 @@ using Xunit;
 namespace CCP.Avalonia.Tests;
 
 /// <summary>WPF LeashDrawerSection offer row -> LeashSurfaces.ShowAsk -> LeashAskCard, from the Leash page.</summary>
+[Collection(RunsAloneCollection.Name)]
 public sealed class LeashAskTests
 {
     private const string OfferId = "0123456789abcdef";
@@ -232,6 +233,9 @@ public sealed class LeashAskTests
                 ask.AdvanceThud(0);   // the landing starts from 1.08 (half under Reduced)
                 Assert.Equal(start, scale?.ScaleX ?? 1, 3);
                 Assert.Equal(start, scale?.ScaleY ?? 1, 3);
+                ask.AdvanceThud(170); // WPF cubic-bezier(.2, 1.5, .4, 1) overshoots at halfway.
+                Assert.Equal(1 - (start - 1) * 0.0765446964993992, scale?.ScaleX ?? 1, 6);
+                Assert.Equal(1 - (start - 1) * 0.0765446964993992, scale?.ScaleY ?? 1, 6);
                 ask.AdvanceThud(340);
                 Assert.Equal(1, scale?.ScaleX ?? 1, 3);
                 Assert.Equal(1, scale?.ScaleY ?? 1, 3);

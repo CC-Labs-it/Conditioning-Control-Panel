@@ -58,6 +58,22 @@ namespace ConditioningControlPanel.Services
         public bool Clickable, Popping, Lucky;
         public bool AmbientTrigger;
         private double _treatMs;
+        private readonly DateTime _eggBornUtc = DateTime.UtcNow;
+        private bool _eggRolled;
+        public bool ClaimedByAvatar { get; private set; }
+
+        // WPF BubbleService.cs:705-739, 2967-2989. Call only when the head gates allow an egg.
+        public bool TryClaimForAvatar(Random random, DateTime nowUtc = default)
+        {
+            if (ClaimedByAvatar || Popping || !AmbientTrigger || Spec is not { Payload: not null, IsLive: false, IsDarter: false, IsFreeze: false } ||
+                Spec.VariantId is "video" or "htlink" || _eggRolled || (nowUtc == default ? DateTime.UtcNow : nowUtc).Subtract(_eggBornUtc).TotalMilliseconds <= 4000) return false;
+            _eggRolled = true;
+            if (random.Next(100) >= 10) return false;
+            ClaimedByAvatar = true;
+            return true;
+        }
+
+        public void ReleaseAvatarClaim() => ClaimedByAvatar = false;
         /// <summary>A Chaos run's bubble (WPF Bubble with a spec); null for a plain ambient one.</summary>
         public Chaos.EffectBubbleSpec? Spec;
         private double _startX, _top, _bottom, _speed, _wobbleOffset, _timeAlive, _treatLifeMs;
@@ -448,6 +464,7 @@ namespace ConditioningControlPanel.Services
         /// it slows a chaos bubble's travel and fuse, never an ambient one.</summary>
         public Result Step(bool held = false, double cursorX = 0, double cursorY = 0, DateTime nowUtc = default, double timeScale = 1.0)
         {
+            if (ClaimedByAvatar) return Result.Alive;
             double ts = Spec == null ? 1.0 : Math.Max(0, timeScale);
             if (Popping)
             {
@@ -703,7 +720,7 @@ namespace ConditioningControlPanel.Services
         /// ordinary pop. Returns the XP to award; the head plays the sound and credits it.</summary>
         public int Pop(AmbientBubble b, AppSettings s)
         {
-            if (b.Popping) return 0;
+            if (b.Popping || b.ClaimedByAvatar) return 0;
             b.Popping = true;
             var multiplier = SkillTreeRules.HasSkill(s, "lucky_bubbles") && Random.NextDouble() < 0.05 ? 20 : 1;
             if (multiplier > 1) LuckyProc?.Invoke(multiplier);
@@ -722,7 +739,7 @@ namespace ConditioningControlPanel.Services
             for (var i = Bubbles.Count - 1; i >= 0; i--)
             {
                 var b = Bubbles[i];
-                if (b.Screen == screen && b.Clickable && !b.Popping && b.Contains(x, y)) return b;
+                if (b.Screen == screen && b.Clickable && !b.Popping && !b.ClaimedByAvatar && b.Contains(x, y)) return b;
             }
             return null;
         }

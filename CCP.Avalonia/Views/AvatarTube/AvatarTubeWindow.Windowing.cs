@@ -275,7 +275,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// WPF-written file and a mixed-DPI desk both read back right.</summary>
         internal void PersistTubePlacement()
         {
-            if (_possessionHome != null || _isAttached || _restoringPlacement || _restorePending || !IsVisible) return;
+            if (_possessionHome != null || _eggHome != null || _isAttached || _restoringPlacement || _restorePending || !IsVisible) return;
             var k = Screens.ScreenFromWindow(this)?.Scaling ?? DesktopScaling;
             var s = CoreSettings.Current;
             double left = Position.X / k, top = Position.Y / k;
@@ -307,7 +307,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         /// PositionChanged as before.</param>
         internal void UpdatePosition(PixelPoint? parentAt = null)
         {
-            if (_possessionHome != null || _applyingRoom || !_isAttached || _parentWindow is not { } p || p.WindowState == WindowState.Minimized) return;
+            if (_possessionHome != null || _eggHome != null || _applyingRoom || !_isAttached || _parentWindow is not { } p || p.WindowState == WindowState.Minimized) return;
             var pr = new PixelRect(parentAt ?? p.Position, PixelSize.FromSize(p.ClientSize, p.DesktopScaling));
             if (pr.Width <= 0 || pr.Height <= 0) return;
             var screen = parentAt != null ? p.Screens.ScreenFromBounds(pr) : p.Screens.ScreenFromWindow(p);

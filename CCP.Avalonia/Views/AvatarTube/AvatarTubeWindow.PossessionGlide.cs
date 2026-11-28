@@ -18,7 +18,7 @@ public partial class AvatarTubeWindow
 
     // Native Wayland does not allow clients to position their windows. Unknown backends are unsafe too.
     public bool CanPerformPossessionMove => IsVisible && CoreSettings.Current.AvatarEnabled
-        && !IsCompanionBusy(0)
+        && _eggHome == null && !IsCompanionBusy(0)
         && (PossessionMoveSupportedOverride ?? (X11Overlay.BackendOf(TryGetPlatformHandle()) is OverlayBackend.X11 or OverlayBackend.Win32));
 
     internal static PixelPoint ClampPossessionPoint(PixelPoint point, PixelSize size, PixelRect work) => new(

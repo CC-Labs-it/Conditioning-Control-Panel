@@ -19,6 +19,7 @@ using Xunit;
 
 namespace CCP.Avalonia.Tests;
 
+[Collection(RunsAloneCollection.Name)]
 public sealed class LeashIncomingAskTests
 {
     private const string First = "0123456789abcdef", Second = "fedcba9876543210";
@@ -71,6 +72,50 @@ public sealed class LeashIncomingAskTests
                 LeashAskWindow.CloseCurrent();
                 Dispatcher.UIThread.RunJobs();
             }
+        });
+
+    [Fact]
+    public void ManualAskBeforeServiceRebindDoesNotReplayOnDismiss() =>
+        LeashGateCardTests.Run(false, (shell, _, _) =>
+        {
+            shell.Show();
+            var next = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            next.ApplyBlock(Block((First, "juno")));
+            LeashHead.Service = next;
+            var ask = LeashAskWindow.Open(next.Snapshot.Offers[0], () => next, shell)!;
+            shell.RebindLeashAsks();
+            ask.Card.Dismiss();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
+        });
+
+    [Fact]
+    public void ManualAskBeforeSnapshotDoesNotReplayOnDismiss() =>
+        LeashGateCardTests.Run(false, (shell, _, _) =>
+        {
+            shell.Show();
+            var next = new LeashService(new LeashHeadTests.NoLeashWire(), () => "u_me");
+            LeashHead.Service = next;
+            shell.RebindLeashAsks();
+            var offer = new LeashOffer(new LeashPerson("juno", "juno", null), At, At.AddDays(7)) { Id = First };
+            var ask = LeashAskWindow.Open(offer, () => next, shell)!;
+            next.ApplyBlock(Block((First, "juno")));
+            ask.Card.Dismiss();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
+        });
+
+    [Fact]
+    public void ClearingTheServiceDiscardsItsWaitingOffers() =>
+        LeashGateCardTests.Run(false, (shell, _, oldService) =>
+        {
+            oldService.ApplyBlock(Block((First, "juno")));
+            shell.RebindLeashAsks();
+            LeashHead.Service = null;
+            shell.RebindLeashAsks();
+            shell.Show();
+            shell.RebindLeashAsks();
+            Assert.Null(LeashAskWindow.Current);
         });
 
     [Fact]
