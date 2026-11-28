@@ -32,12 +32,13 @@ public sealed class PossessionXpDrainTests
     }
     private sealed class Attribution : IPossessionAttribution
     {
+        public List<object> Active { get; } = new();
         public Task ChargeAsync(object target, CancellationToken ct, int durationMs = 400) => Task.CompletedTask;
-        public IDisposable Possess(object target) => new Release();
+        public IDisposable Possess(object target) { Active.Add(target); return new Release(() => Active.Remove(target)); }
         public void EdgePulse(double strength) { }
-        public bool AnyPossessed => false;
+        public bool AnyPossessed => Active.Count != 0;
         public void ReleaseAll() { }
-        private sealed class Release : IDisposable { public void Dispose() { } }
+        private sealed class Release(Action release) : IDisposable { public void Dispose() => release(); }
     }
 
     [Theory]
@@ -55,7 +56,8 @@ public sealed class PossessionXpDrainTests
         var frames = new FakeFrames();
         var host = new Host(window, layer, frames);
         var target = new PossessionTarget { Visual = otherLabel ? settings : chip, Role = PossessionRole.Label, Key = "level", DisplayName = "level" };
-        var context = new PossessionContext { Host = host, Attribution = new Attribution(), Rung = PossessionRung.Melt,
+        var attribution = new Attribution();
+        var context = new PossessionContext { Host = host, Attribution = attribution, Rung = PossessionRung.Melt,
             Intensity = PossessionIntensity.Eerie, Photosafe = false, Rng = new Random(1), ElapsedFraction = 0,
             Remaining = TimeSpan.Zero, Name = (_, _) => { } };
         var effect = new XpDrainEffect();
@@ -67,12 +69,20 @@ public sealed class PossessionXpDrainTests
             var watch = System.Diagnostics.Stopwatch.StartNew();
             var apply = effect.ApplyAsync(context, target, CancellationToken.None);
             Assert.False(apply.IsCompleted);
-            Assert.Equal(0, bar.Opacity);
+            Assert.Equal(0.7, bar.Opacity);
+            Assert.Contains(bar, attribution.Active);
+            Assert.Contains(chip, attribution.Active);
             Assert.Equal("LVL 0", chip.Text);
             Assert.Equal("Settings", settings.Text);
             var ghost = Assert.IsType<Border>(Assert.Single(layer.Children));
             Assert.False(ghost.IsHitTestVisible);
             frames.Frame(TimeSpan.FromMilliseconds(1000));
+            frames.Frame(TimeSpan.FromMilliseconds(1110));
+            Assert.InRange(bar.Opacity, 0.0874, 0.0876);
+            frames.Frame(TimeSpan.FromMilliseconds(1220));
+            Assert.Equal(0, bar.Opacity);
+            frames.Frame(TimeSpan.FromMilliseconds(1375));
+            Assert.Equal(93.75, ghost.Width);
             frames.Frame(TimeSpan.FromMilliseconds(1750));
             Assert.InRange(ghost.Width, 49, 51);
             frames.Frame(TimeSpan.FromMilliseconds(2500));
@@ -87,6 +97,7 @@ public sealed class PossessionXpDrainTests
             Assert.Equal(0, frames.Count);
             Assert.False(effect.IsLive);
             Assert.False(target.IsLive);
+            Assert.Empty(attribution.Active);
         }
         finally { await effect.UndoAsync(TimeSpan.Zero); window.Close(); }
     });
@@ -104,7 +115,8 @@ public sealed class PossessionXpDrainTests
         var frames = new FakeFrames();
         var host = new Host(window, layer, frames);
         var target = new PossessionTarget { Visual = chip, Role = PossessionRole.Label, Key = "level", DisplayName = "level" };
-        var context = new PossessionContext { Host = host, Attribution = new Attribution(), Rung = PossessionRung.Melt,
+        var attribution = new Attribution();
+        var context = new PossessionContext { Host = host, Attribution = attribution, Rung = PossessionRung.Melt,
             Intensity = PossessionIntensity.Eerie, Photosafe = true, Rng = new Random(1), ElapsedFraction = 0,
             Remaining = TimeSpan.Zero, Name = (_, _) => { } };
         var effect = new XpDrainEffect();
@@ -116,6 +128,9 @@ public sealed class PossessionXpDrainTests
             var ghost = Assert.IsType<Border>(Assert.Single(layer.Children));
             if (route == "during-drain")
             {
+                frames.Frame(TimeSpan.FromMilliseconds(1000));
+                frames.Frame(TimeSpan.FromMilliseconds(1110));
+                Assert.InRange(bar.Opacity, 0.0874, 0.0876);
                 PanicSurfaces.All.Single(s => s.Id == "possession").Stop(null);
                 Assert.Equal(0.7, bar.Opacity);
                 Assert.Empty(layer.Children);
@@ -144,6 +159,7 @@ public sealed class PossessionXpDrainTests
                 if (route != "normal")
                 {
                     Assert.Equal(0.7, bar.Opacity);
+                    Assert.DoesNotContain(chip, attribution.Active);
                     Assert.Empty(layer.Children);
                     Assert.Equal(0, frames.Count);
                 }
@@ -155,6 +171,56 @@ public sealed class PossessionXpDrainTests
             Assert.Equal(0, frames.Count);
             Assert.False(effect.IsLive);
             Assert.False(target.IsLive);
+            Assert.Empty(attribution.Active);
+        }
+        finally { await effect.UndoAsync(TimeSpan.Zero); window.Close(); }
+    });
+
+    [Theory]
+    [InlineData("curve")]
+    [InlineData("fade")]
+    [InlineData("outline")]
+    public Task CurveFadeAndChipOutlineRestoreOnCancellation(string check) => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        var bar = new Border { Name = "XPBar", Width = 100, Height = 10, Background = Brushes.Red, Opacity = 0.7 };
+        var chip = new TextBlock { Name = "TxtLevelLabel", Text = "LVL 5" };
+        var layer = new Canvas { IsHitTestVisible = false };
+        var window = new Window { Width = 300, Height = 150, Content = new Grid { Children = { bar, chip, layer } } };
+        var frames = new FakeFrames(); var attribution = new Attribution();
+        var host = new Host(window, layer, frames);
+        var target = new PossessionTarget { Visual = chip, Role = PossessionRole.Label, Key = "level", DisplayName = "level" };
+        var context = new PossessionContext { Host = host, Attribution = attribution, Rung = PossessionRung.Melt,
+            Intensity = PossessionIntensity.Eerie, Photosafe = false, Rng = new Random(1), ElapsedFraction = 0,
+            Remaining = TimeSpan.Zero, Name = (_, _) => { } };
+        var effect = new XpDrainEffect();
+        window.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var apply = effect.ApplyAsync(context, target, CancellationToken.None);
+            if (check == "outline") Assert.Contains(chip, attribution.Active);
+            if (check == "fade") Assert.Equal(0.7, bar.Opacity);
+            frames.Frame(TimeSpan.FromMilliseconds(1000));
+            if (check == "fade")
+            {
+                frames.Frame(TimeSpan.FromMilliseconds(1110));
+                Assert.InRange(bar.Opacity, 0.0874, 0.0876);
+                bar.Opacity = 0.4; // A local update underneath the temporary animation survives cancellation.
+                Assert.InRange(bar.Opacity, 0.0874, 0.0876);
+            }
+            if (check == "curve")
+            {
+                var ghost = Assert.IsType<Border>(Assert.Single(layer.Children));
+                frames.Frame(TimeSpan.FromMilliseconds(1375));
+                Assert.Equal(93.75, ghost.Width);
+                frames.Frame(TimeSpan.FromMilliseconds(2125));
+                Assert.Equal(6.25, ghost.Width);
+            }
+            await effect.UndoAsync(TimeSpan.Zero);
+            await apply;
+            Assert.Equal(check == "fade" ? 0.4 : 0.7, bar.Opacity);
+            Assert.Empty(attribution.Active);
+            Assert.Empty(layer.Children);
+            Assert.Equal(0, frames.Count);
         }
         finally { await effect.UndoAsync(TimeSpan.Zero); window.Close(); }
     });

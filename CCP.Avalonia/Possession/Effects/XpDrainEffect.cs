@@ -19,14 +19,14 @@ internal sealed class XpDrainEffect : PossessionEffectBase
     private static readonly PossessionRole[] TargetRoles = { PossessionRole.Progress, PossessionRole.Label };
     private static readonly List<XpDrainEffect> Live = new();
     private Canvas? _layer;
-    private Border? _ghost;
+    private Border? _ghost, _bar;
     private TextBlock? _chip;
     private string? _original, _fake;
-    private IDisposable? _barOpacity;
+    private IDisposable? _barOpacity, _chipOutline;
     private IFrameSource? _frames;
-    private TimeSpan? _start;
-    private double _width, _returnFrom, _returnMs;
-    private bool _returning;
+    private TimeSpan? _start, _fadeStart;
+    private double _width, _returnFrom, _returnMs, _originalOpacity;
+    private bool _returning, _fadeComplete;
     private CancellationTokenSource? _returnCts;
 
     public override string Id => "xpdrain";
@@ -64,8 +64,15 @@ internal sealed class XpDrainEffect : PossessionEffectBase
             CornerRadius = bar.CornerRadius, IsHitTestVisible = false };
         Canvas.SetLeft(_ghost, bounds.X); Canvas.SetTop(_ghost, bounds.Y);
         layer.Children.Add(_ghost);
-        _barOpacity = bar.SetValue(Visual.OpacityProperty, 0d, BindingPriority.Animation);
+        _bar = bar;
+        _originalOpacity = bar.Opacity;
+        _barOpacity = bar.SetValue(Visual.OpacityProperty, _originalOpacity, BindingPriority.Animation);
         _chip = host.PossessionWindow?.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(x => x.Name == "TxtLevelLabel");
+        if (_chip != null && !PossessionTree.IsOffLimits(_chip))
+        {
+            try { _chipOutline = ctx.Attribution.Possess(_chip); }
+            catch (Exception ex) { Serilog.Log.Warning("Possession xpdrain chip outline failed: {Error}", ex.Message); }
+        }
         if (_chip != null && !PossessionTree.IsOffLimits(_chip) && TypoHeadEffect.IsRewritable(_chip, 2))
         {
             _original = _chip.Text;
@@ -83,6 +90,15 @@ internal sealed class XpDrainEffect : PossessionEffectBase
     {
         if (_ghost == null) return;
         _start ??= now;
+        if (!_fadeComplete && _bar != null)
+        {
+            _fadeStart ??= now;
+            double fade = Math.Clamp((now - _fadeStart.Value).TotalMilliseconds / 220, 0, 1);
+            double opacity = _originalOpacity * (1 - HeadEffect.CubicOut(fade));
+            _barOpacity?.Dispose();
+            _barOpacity = _bar.SetValue(Visual.OpacityProperty, opacity, BindingPriority.Animation);
+            _fadeComplete = fade >= 1;
+        }
         double elapsed = (now - _start.Value).TotalMilliseconds;
         if (_returning)
         {
@@ -92,7 +108,7 @@ internal sealed class XpDrainEffect : PossessionEffectBase
         else
         {
             double t = Math.Clamp(elapsed / 1500, 0, 1);
-            _ghost.Width = _width * (1 - t * t * (3 - 2 * t));
+            _ghost.Width = _width * (1 - HeadEffect.CubicInOut(t));
         }
     }
 
@@ -122,8 +138,11 @@ internal sealed class XpDrainEffect : PossessionEffectBase
 
     private void Cleanup()
     {
-        _frames?.Unsubscribe(Frame); _frames = null; _start = null;
-        _barOpacity?.Dispose(); _barOpacity = null;
+        _frames?.Unsubscribe(Frame); _frames = null; _start = null; _fadeStart = null;
+        _barOpacity?.Dispose(); _barOpacity = null; _bar = null; _fadeComplete = false;
+        try { _chipOutline?.Dispose(); }
+        catch (Exception ex) { Serilog.Log.Warning("Possession xpdrain chip restore failed: {Error}", ex.Message); }
+        _chipOutline = null;
         if (_ghost != null) _layer?.Children.Remove(_ghost);
         _ghost = null; _layer = null;
         if (_chip != null && _original != null && _chip.Text == _fake) _chip.Text = _original;
