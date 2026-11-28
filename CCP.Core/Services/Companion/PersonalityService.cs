@@ -377,9 +377,17 @@ namespace ConditioningControlPanel.Services
         /// Migrates from legacy SlutModeEnabled setting to new preset system.
         /// Should be called once during app startup.
         /// </summary>
-        public void MigrateFromLegacy(AppSettings? settings)
+        public void MigrateFromLegacy(AppSettings? settings) => MigrateFromLegacy(settings, saveWhenUnchanged: true);
+
+        /// <summary>
+        /// Same migration; returns whether it changed anything. WPF saves on every eligible launch
+        /// (saveWhenUnchanged: true); the Avalonia head passes false so an unchanged profile's startup
+        /// leaves settings.json alone.
+        /// </summary>
+        public bool MigrateFromLegacy(AppSettings? settings, bool saveWhenUnchanged)
         {
-            if (settings == null) return;
+            if (settings == null) return false;
+            var changed = false;
 
             // Only migrate if not already using new system (i.e. still on a default).
             // If they've already changed to something else, they're using new system.
@@ -388,13 +396,14 @@ namespace ConditioningControlPanel.Services
             if (settings.ActivePersonalityPresetId != PersonalityPresets.NeutralDefaultId
                 && settings.ActivePersonalityPresetId != PersonalityPresets.BambiSpriteId)
             {
-                return; // Already migrated or using new system
+                return false; // Already migrated or using new system
             }
 
             // Check if SlutModeEnabled was true
             if (settings.SlutModeEnabled)
             {
                 settings.ActivePersonalityPresetId = PersonalityPresets.SlutModeId;
+                changed = true;
                 Log.Information("PersonalityService: Migrated SlutModeEnabled=true to Slut Mode preset");
             }
 
@@ -419,11 +428,13 @@ namespace ConditioningControlPanel.Services
 
                 // Clear the UseCustomPrompt flag
                 settings.CompanionPrompt.UseCustomPrompt = false;
+                changed = true;
 
                 Log.Information("PersonalityService: Migrated custom prompt to user preset: {Name}", customPreset.Name);
             }
 
-            CoreSettings.Service?.Save();
+            if (changed || saveWhenUnchanged) CoreSettings.Service?.Save();
+            return changed;
         }
     }
 }
