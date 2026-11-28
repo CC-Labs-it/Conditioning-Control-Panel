@@ -68,7 +68,9 @@ public sealed class DeeperEditorTestFireTests
     });
     [Theory]
     [InlineData(false, true, "deeper_editor_haptic_test_row_off")]
-    [InlineData(true, false, "deeper_editor_haptic_test_premium")]
+    // Toys are free for every account (CCP.Core/Services/Haptics/HapticsAccess.cs:13, HapticMixer.cs:198, WPF
+    // DeeperEditorWindow.xaml.cs:2775): a free account's test buzzes like a premium one.
+    [InlineData(true, false, null)]
     [InlineData(true, true, null)]
     public Task HapticTestHonoursRoutingAndPremium(bool routing, bool premium, string? message) => AvaloniaTestDispatcher.RunAsync(async () =>
     {
