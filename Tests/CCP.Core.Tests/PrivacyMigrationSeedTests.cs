@@ -35,13 +35,13 @@ public sealed class PrivacyMigrationSeedTests
     {
         Directory.CreateDirectory(CorePaths.UserData);
         // The profile is shared by the assembly: keep whatever settings files earlier tests left and put them back (P02).
-        var kept = Directory.GetFiles(CorePaths.UserData, "settings*").ToDictionary(f => f, File.ReadAllBytes);
+        var kept = RoadmapTestProfile.SettingsFiles(CorePaths.UserData).ToDictionary(f => f, File.ReadAllBytes);
         foreach (var f in kept.Keys) File.Delete(f);
         if (file != null) File.WriteAllText(Path.Combine(CorePaths.UserData, "settings.json"), file.ToString());
         try { return new SettingsService().Current; }
         finally
         {
-            foreach (var f in Directory.GetFiles(CorePaths.UserData, "settings*")) File.Delete(f);
+            foreach (var f in RoadmapTestProfile.SettingsFiles(CorePaths.UserData)) File.Delete(f);
             foreach (var (f, bytes) in kept) File.WriteAllBytes(f, bytes);
         }
     }

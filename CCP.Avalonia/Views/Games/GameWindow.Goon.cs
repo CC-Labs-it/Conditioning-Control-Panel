@@ -6,12 +6,17 @@
 // a connected device (:749-756, HookToys :2074-2099) and the practice Sparkles claim with its slip (:757-768).
 // Practice runs on the page's own loopback. Panic closes it with every other game (PanicSurfaces "games";
 // WPF GameSurfaces.cs:64).
-// Part B: the net-post proxy (:1008) is answered as unreachable (status 0, the page's offline path) until a
-// trusted sender-origin seam exists, so hosted and joined duels do not connect yet (and so no last-opponent
-// record, :767); cache and inbox verbs (:776-785), Discord verbs (:789-804), online media (:807-819),
-// share card (:835), main-window duck (:385) and the boot-error dialog (:1801).
+// The net-post proxy (:1008-1087) relays /v2/goon/ only, and only for the navigation-confirmed page; stake
+// frames reach the StakeBridge; cache URLs point at this head's token-gated loopback.
+// Not ported: the last-opponent record (:767), Discord verbs (:789-804), main-window duck (:385) and the
+// boot-error dialog (:1801).
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Net.Http;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
@@ -19,6 +24,9 @@ using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
 using ConditioningControlPanel.Services.GoonGame;
+using ConditioningControlPanel.Services.Safety;
+using ConditioningControlPanel.Services.Stakes;
+using ConditioningControlPanel.Services.Transfer;
 using Newtonsoft.Json.Linq;
 using Serilog;
 
@@ -29,7 +37,36 @@ internal sealed partial class GameWindow
     internal const string GoonId = "goon";
 
     /// <summary>WPF GoonHostService.cs:66 ProxyBaseUrl, sent so the page reads the same net block.</summary>
-    private const string GoonProxyBase = "https://codebambi-proxy.vercel.app";
+    private const string GoonProxyBase = GoonSignalingClient.ProxyBaseUrl;
+
+    // WPF GoonHostService.cs:210: one client, a 40 s ceiling for the page's long-polls.
+    private static readonly Lazy<HttpClient> GoonHttp = new(() =>
+    {
+        var client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromSeconds(40) };
+        try { client.DefaultRequestHeaders.UserAgent.ParseAdd("ConditioningControlPanel/" + CoreReleaseContent.AppVersion); }
+        catch (Exception ex) { Diag.Swallowed(ex); }
+        return client;
+    });
+    internal static Func<HttpClient> GoonHttpClient = () => GoonHttp.Value;
+    private CancellationTokenSource? _goonNet;   // in-flight relays; cancelled on close (panic closes too)
+
+    private static StakeBridge? _goonStakes;
+    private static Func<string, Action<JObject>, StakeBridge> _goonStakeBridge = StakeBridge.ForApp;
+    /// <summary>Test seam, as <see cref="PbpStakeBridge"/>: setting it drops the cached bridge.</summary>
+    internal static Func<string, Action<JObject>, StakeBridge> GoonStakeBridge
+    {
+        get => _goonStakeBridge;
+        set { _goonStakeBridge = value; _goonStakes = null; }
+    }
+    internal static Task GoonStakePending { get; private set; } = Task.CompletedTask;
+
+    /// <summary>WPF PostStake: a stake frame to the open Goon page; a closed one is a quiet no-op.</summary>
+    private static void PostGoonStake(JObject frame) => Dispatcher.UIThread.Post(() =>
+    {
+        GameWindow? w;
+        lock (Open) w = Open.FirstOrDefault(x => x.Spec.Id == GoonId && !x._closing);
+        w?.Post(frame);
+    });
 
     // WPF GoonHostService.cs:290: https://ccp.game/goon/index.html. The sign-in door runs first
     // (MainShellWindow.LaunchPlayGoon; WPF MainWindow.PlayTab.cs:60-64); Launch itself has no gate.
@@ -46,6 +83,7 @@ internal sealed partial class GameWindow
         // WPF :361,2110 UnhookToys: the toy first, and refused until a window is up again (panic included).
         Closing += (_, _) =>
         {
+            _goonNet?.Cancel();
             GoonToyCues.Close();
             if (_goonToys != null) _goonToys.ConnectionChanged -= OnGoonToys;
             _goonToys = null;
@@ -79,6 +117,7 @@ internal sealed partial class GameWindow
     private void StartGoonWatch()
     {
         _goonBeat = _goonPaintMove = _goonTick = GoonUtcNow();
+        GoonCacheBridge.Attach(PostGoonCache);
         _goonWatch = new DispatcherTimer { Interval = TimeSpan.FromSeconds(GoonHostRules.WatchIntervalSeconds) };
         _goonWatch.Tick += (_, _) => CheckGoonWatch(GoonUtcNow());
         _goonWatch.Start();
@@ -86,19 +125,29 @@ internal sealed partial class GameWindow
 
     partial void HandleGoonMessage(JObject message, ref bool handled)
     {
+        if (HandleGoonMedia(message) || HandleGoonInbox(message)) { handled = true; return; }
+        if (StakeBridge.Handles((string?)message["type"]))
+        {
+            if (!_closing) { _goonStakes ??= GoonStakeBridge(GoonId, PostGoonStake); GoonStakePending = _goonStakes.Handle(message); }
+            handled = true;
+            return;
+        }
         switch ((string?)message["type"])
         {
+            case "cache-req":
+            case "cache-put":
+            case "encode-done":
+                if (!_closing) GoonCacheBridge.OnMessage(message);
+                handled = true;
+                break;
             case "ready":
+                BootGoonInbox();
                 _goonBeat = _goonPaintMove = _goonTick = GoonUtcNow();
                 _goonPaint = null;
                 IsReady = true;
                 HookGoonToys();
                 try { Web.Focus(); } catch (Exception ex) { Log.Debug("[Game] goon focus: {E}", ex.Message); }
                 Post(GoonInitMessage());
-                var m = _server == null ? new GameMediaManifest.Manifest() : GameMediaManifest.BuildActive(WebAssetServer.AssetPath);
-                var manifest = JObject.FromObject(GameMediaManifest.Frame(m));
-                manifest["received"] = new JArray();   // WPF :519: the ephemeral inbox, empty here
-                Post(manifest);
                 Post(new { type = "fullscreen", on = WindowState == WindowState.FullScreen });
                 handled = true;
                 break;
@@ -127,9 +176,11 @@ internal sealed partial class GameWindow
                 handled = true;
                 break;
             case "net-post":
-                // Part B (WPF :1008). Status 0 is the page's "never got an answer" path, so it shows
-                // offline at once instead of waiting out its 45 s timeout. No request leaves the app.
-                Post(new { type = "net-post-result", id = (string?)message["id"] ?? "", status = 0, body = "" });
+                if (!_closing) RelayGoonPost(message);
+                handled = true;
+                break;
+            case "share-card":
+                if (!_closing) GoonSharePending = ShareGoonCard(message);
                 handled = true;
                 break;
             case "heartbeat":
@@ -146,6 +197,44 @@ internal sealed partial class GameWindow
                 handled = true;
                 break;
         }
+    }
+
+    // WPF GoonHostService.cs:1008-1087. The account token rides only to the proxy's /v2/goon/ routes, and
+    // only for a ready page on a navigation-confirmed Goon document (OnPageMessage already drops any
+    // other document). A reply reaches only the document that asked; close and panic cancel the request.
+    private void RelayGoonPost(JObject message)
+    {
+        if (!IsReady || !_goonNavigationConfirmed) return;
+        var id = (string?)message["id"] ?? "";
+        var generation = Volatile.Read(ref _goonInboxGeneration);
+        void Reply(int status, string body) => Dispatcher.UIThread.Post(() =>
+        {
+            if (!_closing && generation == Volatile.Read(ref _goonInboxGeneration))
+                Post(new { type = "net-post-result", id, status, body });
+        });
+        if (!HostNetPathRule.TryBuild(GoonSignalingClient.ProxyBaseUrl, (string?)message["path"], "/v2/goon/", out var target) || target == null)
+        {
+            Reply(0, "forbidden_path");
+            return;
+        }
+        var body = message["body"]?.Type == JTokenType.String ? (string?)message["body"] ?? ""
+            : message["body"]?.ToString(Newtonsoft.Json.Formatting.None) ?? "";
+        var token = PbpAuthToken();
+        var ct = (_goonNet ??= new CancellationTokenSource()).Token;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Post, target) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+                if (token.Length > 0) request.Headers.Add("X-Auth-Token", token);
+                request.Headers.Add("X-Client-Version", CoreReleaseContent.AppVersion);
+                using var response = await GoonHttpClient().SendAsync(request, ct).ConfigureAwait(false);
+                var result = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                MergedAccountRecovery.TryHandle((int)response.StatusCode, result);   // contract D
+                Reply((int)response.StatusCode, result);
+            }
+            catch (Exception ex) { Log.Debug("[Goon] net-post failed: {E}", ex.Message); Reply(0, ""); }
+        }, ct);
     }
 
     internal void CheckGoonWatch(DateTime now)
@@ -179,8 +268,28 @@ internal sealed partial class GameWindow
         if (next != null) _goonRetried = next._goonRetried = true;
     }
 
+    // WPF's ccp.assets and ccp.cache virtual hosts become this window's token-gated loopback URLs.
+    internal void PostGoonCache(object frame) => Dispatcher.UIThread.Post(() =>
+    {
+        if (_closing || _server == null) return;
+        var json = JObject.FromObject(frame);
+        foreach (var value in json.Descendants().OfType<JValue>())
+        {
+            if (value.Value is not string url) continue;
+            if (url.StartsWith("https://ccp.assets/", StringComparison.Ordinal))
+                value.Value = _server.Url(WebAssetServer.AssetsPrefix + url["https://ccp.assets/".Length..]);
+            else if (url.StartsWith("https://ccp.cache/", StringComparison.Ordinal))
+                value.Value = _server.Url("__goon_cache__/" + url["https://ccp.cache/".Length..]);
+        }
+        Post(json);
+    });
+
     private void StopGoonWatch()
     {
+        StopGoonMedia();
+        // WPF GoonHostService.cs:2113-2118: a closed match must not strand the queue.
+        try { GoonCacheBridge.Detach(); } catch (Exception ex) { Diag.Swallowed(ex); }
+        try { TransferCompressionService.Instance.ResumeAfterMatch(); } catch (Exception ex) { Diag.Swallowed(ex); }
         _goonWatch?.Stop();
         _goonWatch = null;
     }
@@ -197,7 +306,7 @@ internal sealed partial class GameWindow
         CoreSettings.Service?.Save();
     }
 
-    /// <summary>WPF OnPageReady (:443-504) with the fields this head can honour: no Discord or online-media block (the page reads null as none).</summary>
+    /// <summary>WPF OnPageReady (:443-504) with the fields this head can honour: no Discord block.</summary>
     internal object GoonInitMessage()
     {
         var settings = CoreSettings.Current;
@@ -214,8 +323,8 @@ internal sealed partial class GameWindow
                 displayName = string.IsNullOrWhiteSpace(settings.UserDisplayName) ? "Player" : settings.UserDisplayName,
                 appVersion = CoreReleaseContent.AppVersion,
             },
-            // The token stays in the app: no net-post proxy on this head yet (part B).
-            net = new { serverBase = GoonProxyBase, authToken = "", viaHost = true },
+            // WPF :463: the page needs the token for its own requests; only a navigation-confirmed Goon document gets it.
+            net = new { serverBase = GoonProxyBase, authToken = _goonNavigationConfirmed ? PbpAuthToken() : "", viaHost = true },
             caps = new
             {
                 haptics = GoonToyCues.ReadyNow,   // WPF :469
@@ -231,6 +340,7 @@ internal sealed partial class GameWindow
             autoHost = false,
             consent = new { liveDurationSec = consent.LiveDurationSec, toyCap = consent.ToyCap, payloadMinGapMs = consent.PayloadMinGapMs },
             fullscreen = WindowState == WindowState.FullScreen,
+            media = GoonMediaBlock(),
             plans = ConditioningControlPanel.Services.Vault.PlanCatalog.ToWire(ConditioningControlPanel.Services.Vault.PlanCatalog.Current),
         };
     }

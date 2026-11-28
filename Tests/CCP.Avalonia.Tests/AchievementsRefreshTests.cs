@@ -43,6 +43,7 @@ public sealed class AchievementsRefreshTests
                 CoreModArt.OverridePathProvider = p => p.StartsWith("achievements/", StringComparison.Ordinal) ? png : null;
                 var engine = new AchievementEngine(new AchievementStore(Path.Combine(dir.FullName, "achievements.json")));
                 var view = new AchievementsTabView(engine);
+                view.RefreshAll();   // a never-attached view paints on request, not in its constructor
                 var card = view.Cards.Single(c => (string)c.Tag! == "plastic_initiation");
                 var content = (Grid)card.Content!;
                 var badge = (Image)((Panel)content.Children[0]).Children[0];
@@ -64,6 +65,44 @@ public sealed class AchievementsRefreshTests
             return Task.CompletedTask;
         });
     }
+
+    [Fact]
+    public Task HiddenViewWarmsArtAfterTheFirstFrameAndPaintsOnFirstShow() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        if (Application.Current is null)
+            AppBuilder.Configure<global::ConditioningControlPanel.Avalonia.App>().UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
+        var dir = Directory.CreateTempSubdirectory("ccp-ach-defer-");
+        Window? host = null;
+        try
+        {
+            var engine = new AchievementEngine(new AchievementStore(Path.Combine(dir.FullName, "achievements.json")));
+            // Attached hidden, as the shell builds it: nothing paints or decodes before the window's first frame.
+            var view = new AchievementsTabView(engine) { IsVisible = false };
+            host = new Window { Content = view };
+            host.Show();
+            view.RefreshAll();   // the shell's login repaint on a hidden tab
+            Assert.Equal(0, view.TileApplies);
+            Assert.Null(view.ArtWarm);
+            for (var i = 0; i < 1000 && view.ArtWarm is null; i++)
+            {
+                AvaloniaHeadlessPlatform.ForceRenderTimerTick();
+                await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+            }
+            // After the frame the art decodes off the UI thread; still no tile is painted while hidden.
+            await view.ArtWarm!.WaitAsync(TimeSpan.FromSeconds(30));
+            Assert.Equal(0, view.TileApplies);
+            // The first show paints every tile, art included.
+            view.IsVisible = true;
+            Assert.Equal(view.Cards.Count(), view.TileApplies);
+            Assert.All(view.Cards, c => Assert.NotNull(((Image)((Panel)((Grid)c.Content!).Children[0]).Children[0]).Source));
+        }
+        finally
+        {
+            host?.Close();
+            dir.Delete(true);
+        }
+    });
 
     [Fact]
     public async Task ModAndLanguageRefreshVisibleTilesAndDetach()

@@ -124,6 +124,7 @@ public sealed partial class GameWindowTests
             var w = GameWindow.Launch(GameWindow.PbpId)!;
             w.PbpOsAnimations = () => Task.FromResult(true);
             var frames = new List<JObject>();
+            FinishEquip(w.PbpLocalProbe);
             w.Posted += json => frames.Add(JObject.Parse(json));
             w.HandleMessage("{\"type\":\"ready\"}");
             FinishEquip(w.PbpEquipPending);
@@ -149,6 +150,7 @@ public sealed partial class GameWindowTests
                 ["updatedAt"] = status == 404 ? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 100000 : 0 } }.ToString();
             w = GameWindow.Launch(GameWindow.PbpId)!;
             w.PbpOsAnimations = () => Task.FromResult(true);
+            FinishEquip(w.PbpLocalProbe);
             w.Posted += json => frames.Add(JObject.Parse(json));
             w.HandleMessage("{\"type\":\"ready\"}");
             FinishEquip(w.PbpEquipPending);

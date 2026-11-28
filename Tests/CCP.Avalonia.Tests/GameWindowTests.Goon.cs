@@ -120,9 +120,11 @@ public sealed partial class GameWindowTests
             var w = GameWindow.Launch(GameWindow.GoonId)!;
             w.Activate();
             Dispatcher.UIThread.RunJobs();
-            w.HandleMessage("{\"type\":\"ready\"}");
             var sent = new System.Collections.Generic.List<JObject>();
             w.Posted += json => sent.Add(JObject.Parse(json));
+            w.HandleMessage("{\"type\":\"ready\"}");
+            WaitGoonReplies(sent, 3);   // init, fullscreen and the off-thread manifest
+            sent.Clear();
             shell.HandlePanicKeyPress(t0);
             Dispatcher.UIThread.RunJobs();
             Assert.Contains(w, GameWindow.OpenWindowsForTests());
@@ -196,36 +198,54 @@ public sealed partial class GameWindowTests
         var frames = new System.Collections.Generic.List<JObject>();
         goon.Posted += json => frames.Add(JObject.Parse(json));
         goon.HandleMessage("{\"type\":\"ready\"}");
+        WaitGoonReplies(frames, 3);   // the inbox boot posts the manifest off the UI thread
 
-        Assert.Equal(new[] { "init", "manifest", "fullscreen" }, frames.Select(f => (string?)f["type"]));
+        Assert.Equal(new[] { "init", "fullscreen", "manifest" }, frames.Select(f => (string?)f["type"]));
         var init = frames[0];
         Assert.Equal(1, (int)init["protocol"]!);
         Assert.False((bool)init["solo"]!);
-        Assert.Equal("", (string?)init["net"]!["authToken"]);   // the token never reaches the page
+        Assert.Equal("", (string?)init["net"]!["authToken"]);   // no confirmed navigation, so no token
         Assert.True((bool)init["net"]!["viaHost"]!);
         Assert.False((bool)init["caps"]!["haptics"]!);   // no toy connected
         Assert.NotNull(init["consent"]!["liveDurationSec"]);
-        Assert.NotNull(frames[1]["images"]);
-        Assert.Empty((JArray)frames[1]["received"]!);
+        Assert.NotNull(frames[2]["images"]);
+        Assert.IsType<JArray>(frames[2]["received"]);
         Assert.True(goon.KeptEscapeReady);
         Assert.Equal(PanicPolicy.KeptEscapePage.Goon, goon.KeptEscapePage);
     });
 
     [Fact]
-    public void Goon_NetPostIsRefusedAtOnceAndFullscreenIsEchoedAndRemembered() => Run((_, _) =>
+    public void Goon_NonMediaFramesLeaveTheStaticMediaDelegatesAlone() => Run((_, _) =>
+    {
+        // r2 review: every Goon frame used to set these process-wide delegates and leak them into later tests.
+        var (materialize, release) = (ConditioningControlPanel.Services.GoonGame.GoonOnlineMedia.Materialize,
+            ConditioningControlPanel.Services.GoonGame.GoonOnlineMedia.ReleaseTempFile);
+        try
+        {
+            ConditioningControlPanel.Services.GoonGame.GoonOnlineMedia.Materialize = null;
+            ConditioningControlPanel.Services.GoonGame.GoonOnlineMedia.ReleaseTempFile = null;
+            CoreAccount.IsLoggedInProvider = () => true;
+            var goon = GameWindow.Launch(GameWindow.GoonId)!;
+            goon.HandleMessage("{\"type\":\"ready\"}");
+            goon.HandleMessage("{\"type\":\"heartbeat\"}");
+            Assert.Null(ConditioningControlPanel.Services.GoonGame.GoonOnlineMedia.Materialize);
+            Assert.Null(ConditioningControlPanel.Services.GoonGame.GoonOnlineMedia.ReleaseTempFile);
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.GoonGame.GoonOnlineMedia.Materialize = materialize;
+            ConditioningControlPanel.Services.GoonGame.GoonOnlineMedia.ReleaseTempFile = release;
+        }
+    });
+
+    [Fact]
+    public void Goon_FullscreenIsEchoedAndRemembered() => Run((_, _) =>
     {
         CoreAccount.IsLoggedInProvider = () => true;
         var goon = GameWindow.Launch(GameWindow.GoonId)!;
         var frames = new System.Collections.Generic.List<JObject>();
         goon.Posted += json => frames.Add(JObject.Parse(json));
 
-        goon.HandleMessage("{\"type\":\"net-post\",\"id\":\"n7\",\"path\":\"/v2/goon/invite\",\"body\":{}}");
-        var reply = Assert.Single(frames);
-        Assert.Equal("net-post-result", (string?)reply["type"]);
-        Assert.Equal("n7", (string?)reply["id"]);
-        Assert.Equal(0, (int)reply["status"]!);
-
-        frames.Clear();
         goon.HandleMessage("{\"type\":\"fullscreen-set\",\"on\":true}");
         Assert.Equal(WindowState.FullScreen, goon.WindowState);
         Assert.True((bool)Assert.Single(frames)["on"]!);
