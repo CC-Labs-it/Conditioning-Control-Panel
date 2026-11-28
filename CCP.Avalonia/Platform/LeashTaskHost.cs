@@ -70,6 +70,8 @@ internal sealed class LeashTaskHost : ILeashTaskHost, IDisposable
     /// #5: "red" under Lockdown with the palette open used to leave the leash task running).</summary>
     internal static void OnPanicPress(MainShellWindow? shell, bool panicRuns = true, bool fromKey = false)
     {
+        if (!PaletteTakesPress(fromKey, SettingsPaletteWindow.IsOpen, LockCardWindow.IsAnyOpen(), CoreSettings.Current?.PanicKey))
+            LeashHelpButton.CloseBadgedForPanic();
         var r = Runner;
         shell ??= MainShellWindow.Current;
         var gateUp = !panicRuns && shell?.LeashGate?.IsUp == true;

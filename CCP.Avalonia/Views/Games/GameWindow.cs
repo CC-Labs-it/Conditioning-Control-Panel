@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Avalonia;
 using Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Views.Features;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls;
@@ -137,7 +139,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 live.HandoffRaceRoom(room);
                 // #4286: a feed the WM hid (ghost restored on hide) comes back with its door.
                 if (live.Spec.Id == FypId && !live.IsVisible) live.Show();
-                if (live.RaceShell != null) live.RaceShell.Focus(); else live.Activate();   // the shell's window is never shown
+                // WPF JustDropHostService.cs:101: a live shop is refocused through FocusWeb.
+                if (live.RaceShell != null) live.RaceShell.Focus();
+                else if (live.Spec.Id == JustDropId) live.FocusJustDropPage();
+                else live.Activate();   // the shell's window is never shown
+                if (live.IsRace) live.QueueRaceFocus();
                 // WPF PieceByPieceHostService.cs:165: reopening a live board returns its keyboard too.
                 if (live.Spec.Id == PbpId)
                     Dispatcher.UIThread.Post(() => { if (!live._closing) live.Web.FocusPage(); }, DispatcherPriority.Loaded);
@@ -169,6 +175,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 }
                 else window.Load(Server(), room);
                 if (spec.Id == JustDropId) window.CenterJustDrop(panel ?? Windows.MainShellWindow.Current ?? (global::Avalonia.Visual)window);
+                else window.CenterDefaultFrame();
                 window.Show();
                 // WPF ChaosWebViewHost.cs:904-1013 AttachMainWindowGlue: the shop window is owned by the panel.
                 if ((panel ?? Windows.MainShellWindow.Current) is { } shell)
@@ -180,6 +187,54 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 if (spec.Id == FypId) CloseFypVisit();
                 throw;
             }
+        }
+
+        // WPF ChaosWebViewHost.cs:380-397: a windowed game starts on its launching screen.
+        internal void CenterDefaultFrame(bool onMain = false)
+        {
+            var main = Windows.MainShellWindow.Current;
+            var launcher = Windows.LauncherWindow.Instance;
+            Window source = launcher is { IsVisible: true } ? launcher
+                : main is { IsVisible: true } ? main : this;
+            var screens = ScreenList.Enumerate(source);
+            if (screens.Count == 0) return;
+            var size = source.FrameSize ?? source.ClientSize;
+            var sourceScale = source.RenderScaling > 0 ? source.RenderScaling : 1;
+            var x = source.Position.X + size.Width * sourceScale / 2;
+            var y = source.Position.Y + size.Height * sourceScale / 2;
+            global::Avalonia.Platform.Screen? screen = null;
+            if (ScreenList.QueryOverride == null && source.IsVisible)
+            {
+                try { screen = source.Screens.ScreenFromWindow(source); }
+                catch (Exception ex) { Log.Debug(ex, "[Game] screen lookup failed"); }
+            }
+            screen ??= screens.OrderBy(s =>
+            {
+                var b = s.Bounds;
+                var dx = Math.Max(0, Math.Max(b.X - x, x - b.Right));
+                var dy = Math.Max(0, Math.Max(b.Y - y, y - b.Bottom));
+                return dx * dx + dy * dy;
+            }).ThenByDescending(s => s.IsPrimary).First();
+            var scale = screen.Scaling > 0 ? screen.Scaling : 1;
+            var bounds = screen.Bounds;
+            Width = bounds.Width * .85 / scale;
+            Height = bounds.Height * .85 / scale;
+            double left = bounds.X + (bounds.Width - Width * scale) / 2;
+            double top = bounds.Y + (bounds.Height - Height * scale) / 2;
+            if (onMain && main is { IsVisible: true, WindowState: not WindowState.Minimized })
+            {
+                var mainSize = main.FrameSize ?? main.ClientSize;
+                if (mainSize.Width > 0 && mainSize.Height > 0)
+                {
+                    left = main.Position.X + (mainSize.Width * main.RenderScaling - Width * scale) / 2;
+                    top = main.Position.Y + (mainSize.Height * main.RenderScaling - Height * scale) / 2;
+                    var virtualBounds = screens.Select(s => s.Bounds).Aggregate((a, b) => a.Union(b));
+                    left = Math.Clamp(left, virtualBounds.X, Math.Max(virtualBounds.X, virtualBounds.Right - Width * scale));
+                    top = Math.Clamp(top, virtualBounds.Y, Math.Max(virtualBounds.Y, virtualBounds.Bottom - Height * scale));
+                }
+            }
+            Position = new PixelPoint((int)Math.Round(left), (int)Math.Round(top));
+            WindowStartupLocation = WindowStartupLocation.Manual;
         }
 
         /// <summary>--render-all's sample: the Breakout demo's frame with no page loaded.</summary>
@@ -215,9 +270,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         internal GameWindow(Game spec)
         {
             Spec = spec;
-            Web = new WebHost { HostedPageMotion = true };
+            // WPF ChaosWebViewHost.cs:1520-1527: suppress browser chrome in game windows;
+            // :1584: sink routing for local pages only (Just Drop is a remote site).
+            Web = new WebHost { HostedPageMotion = true, HostedPageSink = spec.Id != JustDropId, ConfigureNative = Platform.SpiralWebView2Policy.Attach };
             if (spec.Id == DtrhId) Web.BrowserProcessFailed += () => RecoverDtrh("process-failed");
-            if (spec.Id == "goon") Web.InjectCarrier = true; // before the native view or first navigation
+            // Glassroad speaks only chrome.webview (WebView2 native); WebKitGTK gets it from the shim.
+            if (spec.Id == "goon" || IsGlassroad) Web.InjectCarrier = true; // before the native view or first navigation
             if (spec.Id == FypId || spec.Id == JustDropId || spec.Id == "loom" || IsRace || IsGlassroad) Web.BrowserProcessFailed += () => { if (!_closing) Close(); };
             if (IsGlassroad) Web.BrowserProcessUnresponsive += () => _grUnresponsive = true;
             // WPF ChaosWebViewHost.cs:1645: Just Drop owns its window mode.
@@ -262,6 +320,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 Opened += (_, _) => FriendsHead.Service?.EnterActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);
                 Closed += (_, _) => FriendsHead.Service?.LeaveActivity(ConditioningControlPanel.Services.Friends.PresenceActivity.Breakout);
             }
+            if (spec.Id != "goon" && spec.Id != JustDropId)
+            {
+                Web.NavigationStarting += () => _earlyReady = null;
+                Web.NavigationFinished += (url, ok) =>
+                {
+                    // WebHost filters late failures from replaced loads. A failure of this page
+                    // clears its retained ready; only a successful completion may replay it.
+                    if (_earlyReady is not { } retained
+                        || !ConditioningControlPanel.Services.Quiz.IntakeRun.SameDocument(url, retained)) return;
+                    _earlyReady = null;
+                    if (ok && !_closing && PageUrl != null && ConditioningControlPanel.Services.Quiz.IntakeRun.SameDocument(url, PageUrl))
+                        HandleMessage("{\"type\":\"ready\"}");
+                };
+            }
             if (spec.Id == "goon")
             {
                 Web.NavigationStarting += () => _goonEarlyReady = false;
@@ -291,7 +363,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     if (!_fypGhosted) return;
                     if (e.Property == IsVisibleProperty && !IsVisible) ExitFypGhost();
                     else if (e.Property == WindowStateProperty && WindowState == WindowState.Minimized)
-                        Dispatcher.UIThread.Post(() => { if (_fypGhosted && WindowState == WindowState.Minimized) ExitFypGhost(); });
+                        Dispatcher.UIThread.Post(() =>
+                        {
+                            if (!_fypGhosted || WindowState != WindowState.Minimized) return;
+                            if (_fypMirrored) HealFypGhostSource(); else ExitFypGhost();
+                        });
+                };
+                // Windows mirror path: veto minimize and cascade hide on the parked source (WPF :695).
+                Opened += (_, _) =>
+                {
+                    if (OperatingSystem.IsWindows() && X11Overlay.BackendOf(TryGetPlatformHandle()) == OverlayBackend.Win32)
+                        Win32Properties.AddWndProcHookCallback(this, FypGhostWndProc);
                 };
                 Closed += (_, _) => ExitFypGhost();
             }
@@ -340,9 +422,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         /// <summary>WPF ChaosWebViewHost.cs:238,1704 fences transferred documents; JustDropHostService.cs:105-108
         /// keeps site navigation for the sign-in redirect. NativeWebView has no message source;
-        /// use its last completed top-level URL, as Intake does. Goon may retain ready during an
-        /// accepted navigation, but acts on it only after that document completes successfully.</summary>
+        /// use its last completed top-level URL, as Intake does. Retain ready during an accepted
+        /// navigation, but act on it only after that document completes successfully.</summary>
         private bool _goonEarlyReady, _goonNavigationConfirmed;
+        private Uri? _earlyReady;   // the accepted navigation a page ready arrived during
         private void OnPageMessage(string json)
         {
             if (PageUrl == null) return;
@@ -356,11 +439,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 return;
             }
             if (Spec.Id == "goon" && !_goonNavigationConfirmed) return;
+            if (Spec.Id != "goon" && Spec.Id != JustDropId && (Web.CurrentUrl == null || Web.ActiveNavigation != null))
+            {
+                // NativeWebView supplies no message source. Hold only ready for the accepted page,
+                // and discard it if another navigation starts or this one fails.
+                try
+                {
+                    var type = (string?)JObject.Parse(Unwrap(json))["type"];
+                    if (json.Length <= 1024 && type == "ready" && Web.ActiveNavigation is { } active
+                        && ConditioningControlPanel.Services.Quiz.IntakeRun.SameDocument(active, PageUrl))
+                        _earlyReady = active;
+                    else Log.Debug("[Game] {Id}: dropped {Type} before navigation completed", Spec.Id, type);
+                }
+                catch { }
+                return;
+            }
             if (Web.CurrentUrl == null)
             {
                 // The listener runs at document start. Before the first completion, accept only
                 // host Escape for an allowed Just Drop navigation, never a page business frame.
-                if (Spec.Id != JustDropId || !JustDropHandoff.IsSite(Web.ActiveNavigation)) return;
+                if (Spec.Id != JustDropId || !JustDropHandoff.IsSite(Web.ActiveNavigation))
+                {
+                    try { Log.Debug("[Game] {Id}: dropped {Type} before navigation completed", Spec.Id, (string?)JObject.Parse(Unwrap(json))["type"]); } catch { }
+                    return;
+                }
                 try
                 {
                     var early = JObject.Parse(Unwrap(json));

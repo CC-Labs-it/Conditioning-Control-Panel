@@ -25,8 +25,7 @@ internal sealed partial class GameWindow
             Dispatcher.UIThread.Post(() =>
             {
                 if (_closing || !IsVisible || WindowState == WindowState.Minimized) return;
-                if (RenderVisibilityResyncForTests is { } resync) resync();
-                else NativeWindowOwner.ResyncRenderVisibility(this, Web.NativeView?.TryGetPlatformHandle());
+                ResyncJustDropRender();
             }, DispatcherPriority.Background);
         }
         return IntPtr.Zero;
@@ -37,6 +36,12 @@ internal sealed partial class GameWindow
     {
         if (Spec.Id is JustDropId or DtrhId or PbpId)
             AttachJustDropOwner(shell);
+    }
+
+    private void ResyncJustDropRender()
+    {
+        if (RenderVisibilityResyncForTests is { } resync) resync();
+        else NativeWindowOwner.ResyncRenderVisibility(this, Web.NativeView?.TryGetPlatformHandle());
     }
 
     // WPF ChaosWebViewHost.AttachMainWindowGlue: ownership is useful only while main is up.
@@ -92,7 +97,9 @@ internal sealed partial class GameWindow
             Dispatcher.UIThread.Post(() =>
             {
                 if (_closing || !IsVisible || (shell.IsVisible && shell.WindowState != WindowState.Minimized)) return;
-                NativeWindowOwner.RepairVisibility(this);
+                // WPF ChaosWebViewHost.cs:1111-1118: a healed hide re-drives the WebView render chain.
+                if (NativeWindowOwner.RepairVisibility(this))
+                    Dispatcher.UIThread.Post(() => { if (!_closing && IsVisible) ResyncJustDropRender(); }, DispatcherPriority.Background);
             }, DispatcherPriority.Background);
         }
         void OwnerChanged(object? sender, AvaloniaPropertyChangedEventArgs e)

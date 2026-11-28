@@ -33,6 +33,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// </summary>
     internal sealed class FlashOverlayWindow : Window
     {
+        internal System.Threading.CancellationTokenSource? FlashOwner { get; set; }
         private readonly Image _image;
         internal IImageBrushSource? GazePreview => _image.Source as IImageBrushSource;
         private bool _closed;

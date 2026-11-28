@@ -51,6 +51,24 @@ public sealed class JustDropOwnerTests
             Assert.Equal(WindowState.Maximized, player.WindowState);
         });
 
+    // WPF ChaosWebViewHost.cs:1111-1118: only a healed cascade hide re-syncs WebView render visibility.
+    [Fact]
+    public Task HealedRepairQueuesOneRenderResync() => WithWindows((player, owner, shown) =>
+    {
+        int resyncs = 0;
+        player.RenderVisibilityResyncForTests = () => resyncs++;
+        NativeWindowOwner.NativeVisibleForTests = _ => true;
+        owner.Hide();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(0, resyncs);
+        NativeWindowOwner.NativeVisibleForTests = _ => false;
+        owner.Show();
+        owner.Hide();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Single(shown);
+        Assert.Equal(1, resyncs);
+    });
+
     [Theory]
     [InlineData("XID", 42, false)]
     [InlineData("NSWindow", 42, false)]
