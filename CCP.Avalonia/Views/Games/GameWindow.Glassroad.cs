@@ -16,6 +16,7 @@ using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.Haptics;
+using ConditioningControlPanel.Services.Glassroad;
 using ConditioningControlPanel.Services.PieceByPiece;
 using ConditioningControlPanel.Services.PrizeCounter;
 using ConditioningControlPanel.Services.Safety;
@@ -128,8 +129,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 var s = CoreSettings.Current;
                 var uid = CoreAccount.UnifiedUserId;
                 bool online = !string.IsNullOrEmpty(uid) && !string.IsNullOrEmpty(PbpAuthToken());
-                Post(GlassroadHostRules.InitFrame(online ? uid : null, s.UserDisplayName, GlassroadTier(),
-                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed, GlassroadPicturesOn(), PrizeOwnership.Grants, GlassroadToysConnected));
+                var init = GlassroadHostRules.InitFrame(online ? uid : null, s.UserDisplayName, GlassroadTier(),
+                    GentleVisuals.On, s.GentleFadeSeconds, s.GentleSpeed, GlassroadPicturesOn(), PrizeOwnership.Grants, GlassroadToysConnected);
+                if (_server != null && PageUrl != null)
+                    init["caps"]!["ownMedia"] = GlassroadOwnMediaSelection.Cap(PageUrl.GetLeftPart(UriPartial.Authority));
+                Post(init);
             }
             catch (Exception ex) { Log.Debug("Glassroad: init post failed: {E}", ex.Message); }
         }
@@ -184,6 +188,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                         return true;
                     case "set-setting":
                         _ = SetGlassroadPicturesAsync(o);
+                        return true;
+                    case "own-media-list":
+                        OnGlassroadOwnMediaList();
                         return true;
                     case "scrolller-niches":
                         SetGlassroadNiches(o);

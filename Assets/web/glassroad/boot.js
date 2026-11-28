@@ -26,7 +26,7 @@ import { createScrolllerFeed } from './host/scrolllerFeed.js';
 import { createDevicePictures, decodeClip, decodeInto } from './host/devicePictures.js';
 import { loadCustomization, saveCustomization, selectedSongCharts } from './host/courseCustomization.js';
 import { nichesFor, isDefault, savePick } from './host/scrolllerNiches.js';
-import { createLocalLibrary, pickFiles, feedSwitch, loadFilesChoice, saveFilesChoice, openFilePicker, libraryRows } from './host/localLibrary.js';
+import { createLocalLibrary, pickFiles, feedSwitch, loadFilesChoice, saveFilesChoice, openFilePicker, libraryRows, libraryOrigin } from './host/localLibrary.js';
 import { createSubliminalBurst } from './fx/subliminalBurst.js';
 import { loadFeel } from './core/feel.js';
 import { createBus, createQueue } from './core/events.js';
@@ -476,7 +476,7 @@ async function boot(course, options, lifetime, isCurrent) {
   // DESKTOP LIBRARY (caps.ownMedia.library): My files shows the app's own ticked pictures, asked once per page
   // (`own-media-list`, answered `own-media` on the host's media origin); a hand pick for a course still wins. A host
   // without the cap (web, phone) never gets the ask, so nothing changes there.
-  const ownOrigin = init.caps.ownMedia?.library === true && /^https:\/\/[a-z0-9.-]+$/.test(init.caps.ownMedia.mediaOrigin || '') ? init.caps.ownMedia.mediaOrigin : '';
+  const ownOrigin = init.caps.ownMedia?.library === true ? libraryOrigin(init.caps.ownMedia.mediaOrigin, location.origin) : '';
   const ownRows = () => (ownOrigin ? libraryRows(shared.ownMedia, ownOrigin) : []);
   if (ownOrigin && !shared.ownAsked) { shared.ownAsked = true; shared.bridge.send({ type: 'own-media-list' }); }
   const consentOn = () => scrolller?.consent ?? init.caps.scrolller?.consent === true;

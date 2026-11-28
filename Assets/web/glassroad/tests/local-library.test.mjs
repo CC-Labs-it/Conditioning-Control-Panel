@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { pickFiles, createLocalLibrary, feedSwitch, sourceMode, nextSource, sourceLabel, loadFilesChoice, saveFilesChoice,
-  MEDIA_SOURCE_KEY, MAX_LIBRARY_FILES, SOURCES, libraryRows } from '../host/localLibrary.js';
+  MEDIA_SOURCE_KEY, MAX_LIBRARY_FILES, SOURCES, libraryRows, libraryOrigin } from '../host/localLibrary.js';
 
 const src = (p) => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const file = (name, type, size = 10) => ({ name, type, size });
@@ -96,4 +96,20 @@ test('library rows show as elements and are never revoked (they are the host fil
   assert.equal(lib.setRows([{ url: 'https://ccp.assets/a.jpg', kind: 'image' }, { url: 'https://ccp.assets/b.mp4', kind: 'video' }, { url: 'x', kind: 'audio' }]), 2);
   assert.equal(lib.stillCount, 1); assert.equal(lib.sourceFor(1).src, 'https://ccp.assets/b.mp4');
   lib.clear(); assert.deepEqual(revoked, []); assert.equal(lib.count, 0);
+});
+
+
+test('Avalonia own media stays on the hosted loopback origin', () => {
+  const origin = 'http://127.0.0.1:43210';
+  const msg = { v: 1, rows: [
+    { url: origin + '/ccp.assets/images/a.jpg', kind: 'image' },
+    { url: 'http://127.0.0.1:43211/ccp.assets/images/b.jpg', kind: 'image' },
+    { url: 'http://user:pass@127.0.0.1:43210/a.jpg', kind: 'image' }
+  ] };
+  assert.equal(libraryOrigin(origin, origin), origin);
+  assert.deepEqual(libraryRows(msg, origin, { pageOrigin: origin }), [msg.rows[0]]);
+  assert.deepEqual(libraryRows(msg, origin, { pageOrigin: 'http://127.0.0.1:43211' }), []);
+  assert.equal(libraryOrigin('http://localhost:43210', 'http://localhost:43210'), '');
+  assert.equal(libraryOrigin('http://example.com:43210', 'http://example.com:43210'), '');
+  assert.match(src('boot.js'), /libraryOrigin\(init\.caps\.ownMedia\.mediaOrigin, location\.origin\)/);
 });

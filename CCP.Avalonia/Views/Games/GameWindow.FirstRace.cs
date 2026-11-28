@@ -124,12 +124,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         /// <summary>True = the shell runs; null = no engine or shell installed; false = installed and did not start.</summary>
         private bool? StartRaceShell(string? room)
         {
-            var url = new Uri(Server().Url(Spec.Page, RaceQuery(Spec, room)));
+            var server = Server();
+            var url = new Uri(server.Url(Spec.Page, RaceQuery(Spec, room)));
             LinuxRaceHost? shell;
             try { shell = LaunchRaceShell(this, url); }
             catch (Exception ex) { Serilog.Log.Warning(ex, "Glassroad: race shell did not start"); return false; }
             if (shell == null) return null;
-            (RaceShell, PageUrl, _shellRoom) = (shell, url, room);
+            (RaceShell, PageUrl, _shellRoom, _server) = (shell, url, room, server);
             Closed += (_, _) => { GameActivity.Unregister(this); shell.Dispose(); };
             // The shell owns the visible window, so this session never raises Opened.
             GameActivity.Register(this);

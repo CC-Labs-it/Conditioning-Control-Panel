@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
+import { libraryOrigin } from '../host/localLibrary.js';
 
 const boot = readFileSync(new URL('../boot.js', import.meta.url), 'utf8');
 const source = boot.slice(boot.indexOf('  const library = shared.library'), boot.indexOf("  lifetime.listen(cardEl, 'click'"));
@@ -10,7 +11,7 @@ function run({ saved, consent = false, available = true, files = [], deviceOrigi
   const feed = { consent, catalog: [], setConsent(on) { calls.push(['consent', on]); },
     setNiches(id, niches) { calls.push(['niches', id, niches]); }, subscribe(fn) { this.echo = fn; return () => {}; }, onDeclined() { return () => {}; } };
   const caps = own ? { scrolller: { consent }, ownMedia: { library: true, mediaOrigin: 'https://ccp.assets' } } : { scrolller: { consent } };
-  const context = { deviceOrigin, shared: { coursePicks: saved ? {keep:saved} : {}, courseFiles:{keep:files}, ownMedia: own === true ? null : own,
+  const context = { deviceOrigin, libraryOrigin, location: { origin: 'https://ccp.game' }, shared: { coursePicks: saved ? {keep:saved} : {}, courseFiles:{keep:files}, ownMedia: own === true ? null : own,
       bridge: { send(m) { calls.push(['send', m.type]); } } }, TRACK_ID:'keep',
     scrolller:available ? feed : null, init:{caps}, track:{id:'keep'}, trackName:'The Keep',
     createLocalLibrary:()=>({count:0,own:0,setFiles(rows){this.count=rows.length;this.own=0;},setRows(rows){this.count=rows.length;this.own=rows.length;},clear(){this.count=0;}}),

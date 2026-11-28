@@ -47,10 +47,14 @@ export function pickFiles(list, { max = MAX_LIBRARY_FILES, rng = Math.random } =
 
 /** DESKTOP LIBRARY (`caps.ownMedia.library`): the host's `own-media { v:1, rows:[{ url, kind }] }` answer to
  *  `own-media-list`, the app's own ticked pictures and clips served from its media origin. Only rows on exactly that
- *  one https origin pass (no credentials, no svg), deduped on the whole url, at most `max`, sampled at random like a
+ *  one host origin pass (no credentials, no svg), deduped on the whole url, at most `max`, sampled at random like a
  *  big pick. Nothing is fetched or sent here; a host without the cap never answers, so the web and phone are unchanged. */
-export function libraryRows(msg, origin, { max = MAX_LIBRARY_FILES, rng = Math.random } = {}) {
-  if (!msg || msg.v !== 1 || !Array.isArray(msg.rows) || !/^https:\/\/[a-z0-9.-]+$/.test(origin || '')) return [];
+export function libraryOrigin(origin, pageOrigin = globalThis.location?.origin) {
+  if (/^https:\/\/[a-z0-9.-]+$/.test(origin || '')) return origin;
+  return origin === pageOrigin && /^http:\/\/127\.0\.0\.1:[0-9]+$/.test(origin || '') ? origin : '';
+}
+export function libraryRows(msg, origin, { max = MAX_LIBRARY_FILES, rng = Math.random, pageOrigin = globalThis.location?.origin } = {}) {
+  if (!msg || msg.v !== 1 || !Array.isArray(msg.rows) || !libraryOrigin(origin, pageOrigin)) return [];
   const seen = new Set(), ok = [];
   for (const r of msg.rows) {
     if (ok.length >= 1000) break;

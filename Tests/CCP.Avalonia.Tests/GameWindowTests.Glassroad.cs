@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Avalonia.Threading;
 using Avalonia.Controls;
@@ -552,6 +553,54 @@ public sealed partial class GameWindowTests
             Assert.False(GameWindow.IsAnyOpen());
         });
     }
+
+    [Fact]
+    public void Glassroad_OwnMediaAdvertisesAndAnswersWithActiveLibrary() => RunGlassroad((_, _, fake) =>
+    {
+        var root = Directory.CreateTempSubdirectory("glassroad-own-").FullName;
+        var previousRoot = CorePaths.EffectiveAssetsProvider;
+        var settings = CoreSettings.Current;
+        var previousPaths = settings.DisabledAssetPaths.ToArray();
+        var previousFolders = settings.DisabledAssetFolders.ToArray();
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "images", "off"));
+            Directory.CreateDirectory(Path.Combine(root, "videos"));
+            File.WriteAllBytes(Path.Combine(root, "images", "a b.jpg"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(root, "images", "hidden.png"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(root, "images", "off", "hidden.png"), new byte[] { 1 });
+            File.WriteAllBytes(Path.Combine(root, "videos", "clip.mp4"), new byte[] { 1 });
+            CorePaths.EffectiveAssetsProvider = () => root;
+            settings.DisabledAssetPaths = new HashSet<string> { "images/hidden.png" };
+            settings.DisabledAssetFolders = new HashSet<string> { "images/off" };
+            var w = GameWindow.Launch(GameWindow.GlassroadId)!;
+            Dispatcher.UIThread.RunJobs();
+            var sent = new List<JObject>();
+            w.Posted += json => sent.Add(JObject.Parse(json));
+            w.Web.OnNavigationCompleted(w.PageUrl);
+            var cap = Assert.Single(sent)["caps"]!["ownMedia"]!;
+            var origin = w.PageUrl!.GetLeftPart(UriPartial.Authority);
+            Assert.True((bool)cap["library"]!);
+            Assert.Equal(origin, (string?)cap["mediaOrigin"]);
+            w.Web.OnWebMessage("{\"type\":\"own-media-list\"}");
+            Assert.True(w.GlassroadOwnPending.Wait(TimeSpan.FromSeconds(10)));
+            Dispatcher.UIThread.RunJobs();
+            var frame = Assert.Single(sent.Where(o => (string?)o["type"] == "own-media"));
+            Assert.Equal(1, (int?)frame["v"]);
+            var rows = (JArray)frame["rows"]!;
+            Assert.Equal(2, rows.Count);
+            Assert.Contains(rows, row => (string?)row["url"] == origin + "/ccp.assets/images/a%20b.jpg" && (string?)row["kind"] == "image");
+            Assert.Contains(rows, row => (string?)row["url"] == origin + "/ccp.assets/videos/clip.mp4" && (string?)row["kind"] == "video");
+            Assert.Empty(fake.Seen);
+        }
+        finally
+        {
+            CorePaths.EffectiveAssetsProvider = previousRoot;
+            settings.DisabledAssetPaths = new HashSet<string>(previousPaths);
+            settings.DisabledAssetFolders = new HashSet<string>(previousFolders);
+            Directory.Delete(root, true);
+        }
+    });
 
     /// <summary>Init goes out at load, on the first message and at ready; the relay signs as the host's player, sends
     /// only /v2/race/ (judged signed), never the room-signed result; exit and menu-back close; a silent page is pinged
