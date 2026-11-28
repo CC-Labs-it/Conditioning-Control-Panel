@@ -526,11 +526,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <param name="maxSourcePixels">When positive, reject larger source canvases before allocating them.</param>
         /// <param name="averageFrameDelay">Use WPF AnimatedWebp timing (average kept frame, times the stride).</param>
         /// <param name="cancellationToken">Cancel a removed cascade faller's pending decode.</param>
+        /// <param name="allFramesBudgetBytes">When positive, keep every frame if the scaled frames fit this many bytes.</param>
         internal static (List<Bitmap> Frames, TimeSpan Delay) Decode(string path, int fitLongSide = 0, int maxFrames = 0,
             List<TimeSpan>? frameDurations = null, bool flash = false, long maxMemoryBytes = 0, int maxDecodedFrames = 0,
-            long maxSourcePixels = 0, bool averageFrameDelay = false, CancellationToken cancellationToken = default, bool allFrames = false) =>
+            long maxSourcePixels = 0, bool averageFrameDelay = false, CancellationToken cancellationToken = default, long allFramesBudgetBytes = 0) =>
             RunGatedDecode(() => DecodeCore(path, fitLongSide, maxFrames, frameDurations, flash, maxMemoryBytes,
-                maxDecodedFrames, maxSourcePixels, averageFrameDelay, cancellationToken, allFrames), cancellationToken);
+                maxDecodedFrames, maxSourcePixels, averageFrameDelay, cancellationToken, allFramesBudgetBytes), cancellationToken);
 
         // WPF AnimatedWebp.cs:62-84: bound native decode memory across concurrent callers.
         private static readonly SemaphoreSlim DecodeGate = new(2, 2);
@@ -544,7 +545,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static (List<Bitmap> Frames, TimeSpan Delay) DecodeCore(string path, int fitLongSide, int maxFrames,
             List<TimeSpan>? frameDurations, bool flash, long maxMemoryBytes, int maxDecodedFrames, long maxSourcePixels,
-            bool averageFrameDelay, CancellationToken cancellationToken, bool allFrames)
+            bool averageFrameDelay, CancellationToken cancellationToken, long allFramesBudgetBytes)
         {
             var frames = new List<Bitmap>();
             try
@@ -560,7 +561,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var plan = SpiralFrames.Plan(codec.Info.Width, codec.Info.Height, count,
                     codec.FrameCount > 0 ? codec.FrameInfo[0].Duration : 50);
                 var decodeCount = count;
-                if (allFrames) (plan.Frames, plan.Step) = (count, 1);
                 if (flash)
                 {
                     var f = FlashFrames.Plan(codec.Info.Width, codec.Info.Height, count, fitLongSide);
@@ -572,6 +572,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     plan.Width = Math.Max(1, (int)Math.Round(plan.Width * k));
                     plan.Height = Math.Max(1, (int)Math.Round(plan.Height * k));
                 }
+                // Keep every frame only when the displayed frames fit the budget; else keep the stride above.
+                if (!flash && allFramesBudgetBytes > 0 && (long)count * plan.Width * plan.Height * 4 <= allFramesBudgetBytes)
+                    (plan.Frames, plan.Step) = (count, 1);
                 if (!flash && maxMemoryBytes > 0)
                 {
                     // Cascade frames are budgeted at their displayed size, not their source size.

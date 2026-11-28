@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
+using ConditioningControlPanel.Services;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Lab.GazeMinigame;
@@ -43,7 +44,10 @@ internal sealed class GazeRoundImage : Image, IDisposable
     private async Task Decode(string path, int fitLongSide)
     {
         // WPF GazeMinigameWindow.xaml.cs:935-939: animate GIFs with source timing and repeat forever.
-        var (frames, _) = await Task.Run(() => SpiralOverlay.Decode(path, fitLongSide, frameDurations: _durations, allFrames: true));
+        // shortcut: frames are cached, so a GIF over SpiralFrames.MaxCacheBytes keeps the 120-frame stride;
+        // decode on the tick like WPF's XamlAnimatedGif if long GIFs need every frame.
+        var (frames, _) = await Task.Run(() => SpiralOverlay.Decode(path, fitLongSide, frameDurations: _durations,
+            allFramesBudgetBytes: SpiralFrames.MaxCacheBytes));
         if (_disposed || frames.Count < 2)
         {
             foreach (var frame in frames) frame.Dispose();

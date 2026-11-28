@@ -864,15 +864,7 @@ public sealed class GazeMinigameTests
                     bytes[i + 5] = 0;
                 }
             Assert.Equal(3, frame);
-            if (repeats > 1)
-            {
-                // Skip the NETSCAPE loop extension; repeat just the three image/control blocks.
-                var firstFrame = Enumerable.Range(0, bytes.Length - 2).First(i =>
-                    bytes[i] == 0x21 && bytes[i + 1] == 0xF9 && bytes[i + 2] == 4);
-                bytes = bytes.Take(firstFrame).Concat(Enumerable.Range(0, repeats)
-                    .SelectMany(_ => bytes.Skip(firstFrame).Take(bytes.Length - firstFrame - 1)))
-                    .Append((byte)0x3B).ToArray();
-            }
+            if (repeats > 1) bytes = RepeatGif(bytes, repeats);
             var path = Path.Combine(dir.FullName, "timed.gif");
             File.WriteAllBytes(path, bytes);
             using var image = new GazeRoundImage(path);
@@ -913,6 +905,40 @@ public sealed class GazeMinigameTests
             GazeMinigameWindow.Clock = oldClock;
             dir.Delete(true);
         }
+    });
+
+    // Skip the NETSCAPE loop extension; repeat just the three image/control blocks.
+    private static byte[] RepeatGif(byte[] bytes, int repeats)
+    {
+        var firstFrame = Enumerable.Range(0, bytes.Length - 2).First(i =>
+            bytes[i] == 0x21 && bytes[i + 1] == 0xF9 && bytes[i + 2] == 4);
+        return bytes.Take(firstFrame).Concat(Enumerable.Range(0, repeats)
+            .SelectMany(_ => bytes.Skip(firstFrame).Take(bytes.Length - firstFrame - 1)))
+            .Append((byte)0x3B).ToArray();
+    }
+
+    [Fact]
+    public Task GifFrames_OverTheMemoryBudget_FallBackToStride_KeepingLoopTime() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        EnsureApp();
+        var dir = Directory.CreateTempSubdirectory("gaze-gif-budget-");
+        try
+        {
+            var path = Path.Combine(dir.FullName, "long.gif");
+            File.WriteAllBytes(path, RepeatGif(Convert.FromBase64String(Gif), 41)); // 123 frames, 4x4, 30 ms
+            var fits = new List<TimeSpan>();
+            var (all, _) = SpiralOverlay.Decode(path, frameDurations: fits, allFramesBudgetBytes: 123 * 64);
+            Assert.Equal(123, all.Count);
+            var over = new List<TimeSpan>();
+            var (strided, _) = SpiralOverlay.Decode(path, frameDurations: over, allFramesBudgetBytes: 123 * 64 - 1);
+            Assert.Equal(62, strided.Count); // the 120-frame plan's stride of two
+            Assert.Equal(over.Count, strided.Count);
+            Assert.Equal(TimeSpan.FromMilliseconds(123 * 30), over.Aggregate(TimeSpan.Zero, (a, b) => a + b));
+            Assert.Equal(fits.Aggregate(TimeSpan.Zero, (a, b) => a + b), over.Aggregate(TimeSpan.Zero, (a, b) => a + b));
+            foreach (var frame in all.Concat(strided)) frame.Dispose();
+        }
+        finally { dir.Delete(true); }
+        return Task.CompletedTask;
     });
 
 
