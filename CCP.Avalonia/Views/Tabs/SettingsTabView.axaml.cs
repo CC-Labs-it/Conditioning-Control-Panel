@@ -219,6 +219,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             BtnReloadBrowser.Click += BtnReloadBrowser_Click;
             BrowserWebHost.NavigationCompleted += url => Shell?.OnBrowserNavigationCompleted(url);
             BrowserWebHost.NavigationFinished += (url, success) => Shell?.OnBrowserHeaderFitNavigation(BrowserWebHost, url, success);
+            // WPF BrowserService.cs:337 always-on media reporter, and its messages (MainWindow.Browser.cs:1127).
+            BrowserWebHost.NavigationFinished += (_, ok) => { if (ok) BrowserWebHost.InvokeScriptAsync(Windows.MainShellWindow.BrowserMediaReporterScript); };
+            BrowserWebHost.WebMessage += body => Shell?.OnBrowserMediaMessage(body);
             InitializeDashboardDecoration();
             BtnWebcamTracking.Click += BtnWebcamTracking_Click;
             BtnMuteBrowser.Click += BtnMuteBrowser_Click;

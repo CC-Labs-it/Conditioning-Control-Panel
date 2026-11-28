@@ -50,6 +50,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var gen = Volatile.Read(ref _gen);
             Dispatcher.UIThread.Post(() => { if (Volatile.Read(ref _gen) == gen) DrawNow(text); });
         };
+        /// <summary>The card's rested twin (Afterglow runs alone): no card, the show still counts.</summary>
+        internal static Action<string> DrawRested = _ =>
+        {
+            var gen = Volatile.Read(ref _gen);
+            Dispatcher.UIThread.Post(() => { if (Volatile.Read(ref _gen) == gen) SubliminalOverlay.Rested(); });
+        };
         /// <summary>The AI command's card (WPF FlashSubliminalCustom) may carry its own opacity.</summary>
         internal static Action<string, int?> DrawWithOpacity = (text, opacity) =>
             PostOneShot(() => { if (opacity == null) DrawNow(text); else Present(text, opacity); });
@@ -144,14 +150,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF FlashPhrase: Core's ambient scheduler calls this for every show.</summary>
         public static void Phrase(string text)
         {
-            if (Whisper(text))
+            // Super Afterglow: the word leaves a ghost, and while Afterglow runs alone the card rests
+            // (WPF FlashAmbient -> FlashPhrase); the whisper, the haptic and the XP still follow the word.
+            bool rest = AfterglowLineOverlay.RestsCard();
+            AfterglowLineOverlay.WordShown(text);
+            if (Whisper(text, rest))
             {
                 if (SubliminalWhisper.IsFreezePhrase(text)) ScheduleReset();
                 CoreProgression.AddXP(20, "Subliminal");
             }
             else
             {
-                HapticThenDraw(text);
+                HapticThenDraw(text, rest ? () => DrawRested(text) : null);
                 CoreProgression.AddXP(10, "Subliminal");
             }
         }
@@ -227,14 +237,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         /// <summary>Duck, play the phrase's linked clip, then draw the card. False (nothing played) when
         /// there is no clip or whispers are muted: the caller then draws the card straight away.</summary>
-        internal static bool Whisper(string text)
+        internal static bool Whisper(string text, bool restCard = false)
         {
             var entry = Volatile.Read(ref _gen);   // a Stop after this drops this whisper and its card
             if (!PlayLinkedClip(text)) return false;
             Later(SubliminalWhisper.HapticLeadMs, () =>
             {
                 _ = CoreHaptics.Service?.TriggerSubliminalPatternAsync(text);
-                Later(SubliminalWhisper.VisualAfterHapticMs, () => Draw(text), entry);
+                Later(SubliminalWhisper.VisualAfterHapticMs, () => { if (restCard) DrawRested(text); else Draw(text); }, entry);
             }, entry);
             return true;
         }

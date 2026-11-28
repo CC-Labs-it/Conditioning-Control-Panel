@@ -4,6 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
              mc:Ignorable="d"
              d:DesignHeight="520" d:DesignWidth="900">
     <!--
@@ -67,7 +68,7 @@
                     <!-- Buffer timeout -->
                     <StackPanel Grid.Column="0"
                                 ToolTip="{loc:Str tooltip_how_long_to_wait_after_a_keystroke_before_che}">
-                        <TextBlock Text="{loc:Str label_buffer_timeout}" Foreground="#A0A0A0" FontSize="10"/>
+                        <rows:RowLabel Text="{loc:Str label_buffer_timeout}" Emblem="Long"/>
                         <Grid>
                             <Slider x:Name="SliderKeywordBufferTimeout" x:FieldModifier="internal"
                                     Minimum="1000" Maximum="10000"
@@ -82,7 +83,7 @@
                     <!-- Session XP boost -->
                     <StackPanel Grid.Column="2"
                                 ToolTip="{loc:Str tooltip_xp_multiplier_bonus_when_triggers_fire_during}">
-                        <TextBlock Text="{loc:Str label_session_xp_boost}" Foreground="#A0A0A0" FontSize="10"/>
+                        <rows:RowLabel Text="{loc:Str label_session_xp_boost}" Emblem="Much"/>
                         <Grid>
                             <Slider x:Name="SliderKeywordSessionMultiplier" x:FieldModifier="internal"
                                     Minimum="1.0" Maximum="3.0"
@@ -119,7 +120,7 @@
                                TextWrapping="Wrap" Visibility="Collapsed"/>
 
                     <StackPanel x:Name="ScreenOcrIntervalPanel" x:FieldModifier="internal" Visibility="Collapsed">
-                        <TextBlock Text="{loc:Str label_scan_interval}" Foreground="#A0A0A0" FontSize="10"/>
+                        <rows:RowLabel Text="{loc:Str label_scan_interval}" Emblem="Often"/>
                         <Grid ToolTip="{loc:Str tooltip_how_often_to_scan_your_screen_for_trigger_key}">
                             <Slider x:Name="SliderScreenOcrInterval" x:FieldModifier="internal"
                                     Minimum="2" Maximum="10"
@@ -130,10 +131,10 @@
                                        FontSize="10" HorizontalAlignment="Right" IsHitTestVisible="False"/>
                         </Grid>
                         <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                            <TextBlock Text="{loc:Str cp5_ocr_confirm_label}" Foreground="#A0A0A0" FontSize="10"
+                            <rows:RowLabel Text="{loc:Str cp5_ocr_confirm_label}" Emblem="Safe"
                                        VerticalAlignment="Center"/>
                             <ComboBox x:Name="CmbOcrConfirmation" x:FieldModifier="internal" Margin="6,0,0,0" MinWidth="150"
-                                      Style="{StaticResource DarkComboBoxStyle}" FontSize="10"
+                                      Style="{DynamicResource RowComboBoxStyle}"
                                       SelectionChanged="CmbOcrConfirmation_SelectionChanged"
                                       ToolTip="{loc:Str cp5_ocr_confirm_tip}">
                                 <ComboBoxItem Content="{loc:Str cp5_ocr_confirm_first}"/>
@@ -159,17 +160,17 @@
 
                     <StackPanel x:Name="HighlightDurationPanel" x:FieldModifier="internal" Visibility="Collapsed">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
-                            <TextBlock Text="{loc:Str label_highlight_mode}" Foreground="#A0A0A0" FontSize="10"
+                            <rows:RowLabel Text="{loc:Str label_highlight_mode}" Emblem="Random"
                                        VerticalAlignment="Center"/>
                             <ComboBox x:Name="CmbOcrHighlightMode" x:FieldModifier="internal" Margin="6,0,0,0" MinWidth="110"
-                                      Style="{StaticResource DarkComboBoxStyle}" FontSize="10"
+                                      Style="{DynamicResource RowComboBoxStyle}"
                                       SelectionChanged="CmbOcrHighlightMode_SelectionChanged"
                                       ToolTip="{loc:Str tooltip_all_matches_highlights_every_keyword_immediat}">
                                 <ComboBoxItem Content="{loc:Str btn_all_matches}"/>
                                 <ComboBoxItem Content="{loc:Str btn_random_subset}"/>
                             </ComboBox>
                         </StackPanel>
-                        <TextBlock Text="{loc:Str label_highlight_duration}" Foreground="#A0A0A0" FontSize="10"/>
+                        <rows:RowLabel Text="{loc:Str label_highlight_duration}" Emblem="Long"/>
                         <Grid ToolTip="{loc:Str tooltip_how_long_the_pink_highlight_stays_on_screen_0}">
                             <Slider x:Name="SliderKeywordHighlightDuration" x:FieldModifier="internal"
                                     Minimum="0.3" Maximum="5.0"

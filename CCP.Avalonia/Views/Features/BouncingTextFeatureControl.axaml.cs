@@ -38,6 +38,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Features
         public BouncingTextFeatureControl()
         {
             InitializeComponent(); // generated: loads the XAML and fills the x:Name fields
+            SuperBoxMain.Body = global::ConditioningControlPanel.Avalonia.Controls.Super.SuperPageRows.Scrawl();   // the gold box's own rows (WPF SuperRows)
 
             ChkEnable.IsCheckedChanged += ChkEnable_Changed;
             SliderSpeed.ValueChanged += SliderSpeed_Changed;

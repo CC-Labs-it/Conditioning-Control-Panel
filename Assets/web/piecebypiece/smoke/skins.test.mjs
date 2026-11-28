@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { SLOTS, CATALOG, normalLook, clampLook, ownedIds, wireLook, counterFrame, lookIds, grantOf } from '../skins/look.js';
 import { createWear } from '../skins/wear.js';
 import { FINISH_IDS, FINISH_NAMES, finishKey } from '../skins/finish-ids.js';
-import { readPick, wardrobeHtml, LOCKED_NOTE } from '../door/wardrobe.js';
+import { readPick, wardrobeHtml, LOCKED_NOTE, lockNote } from '../door/wardrobe.js';
 import * as api from '../net/api.js';
 
 const grantsFor = (...ids) => ids.map(grantOf);
@@ -195,6 +195,32 @@ test('wardrobe: owned pills pick, the rest stay visible and locked', () => {
   assert.deepEqual(readPick('banner:'), ['banner', null]);
   assert.equal(readPick('banner:chess.set.royal-capes'), null);
   assert.equal(readPick('hat:x'), null);
+});
+
+test('wardrobe: an item away from this week\'s counter says when it is back (ccp-bugs #1738)', () => {
+  const TUE = Date.UTC(2026, 10, 24, 10);
+  assert.equal(lockNote('2026-11-30', TUE), 'Back in the Prize Counter on Mon 30 Nov');
+  assert.equal(lockNote('2026-11-30', Date.UTC(2026, 10, 30)), LOCKED_NOTE, 'the day has come: plain note');
+  assert.equal(lockNote(null, TUE), LOCKED_NOTE);
+  assert.equal(lockNote('30 Nov', TUE), LOCKED_NOTE);
+  const pipe = hostPipe();
+  const w = createWear({ onHost: pipe.onHost, storage: fakeStorage(), hosted: true });
+  let changes = 0;
+  w.onChange(() => { changes++; });
+  pipe.send({ type: 'owned', grants: grantsFor('chess.set.velvet-court') });
+  pipe.send({ type: 'pbp:stock', later: [{ id: 'chess.banner.crest', from: '2026-11-30' }, { id: 'chess.banner.house-pink', from: 'soon' }, null] });
+  assert.equal(changes, 2);
+  assert.equal(w.backOn('chess.banner.crest'), '2026-11-30');
+  assert.equal(w.backOn('chess.banner.house-pink'), null, 'junk dates are dropped');
+  const kit = { esc: (s) => String(s), bar: () => '', bigBtn: () => '', hosted: true, now: TUE };
+  const crest = (html) => html.match(/<button[^>]*>Crest Banner<span class="ward-lock">([^<]*)<\/span>/);
+  const html = wardrobeHtml(w, kit);
+  assert.ok(crest(html), 'the Crest Banner pill is drawn locked');
+  assert.equal(crest(html)[1], 'Back in the Prize Counter on Mon 30 Nov');
+  assert.match(html, /House Banner<span class="ward-lock">In the Prize Counter</, 'in stock: today\'s text');
+  // A later frame without the row takes the date away.
+  pipe.send({ type: 'pbp:stock', later: [] });
+  assert.equal(crest(wardrobeHtml(w, kit))[1], LOCKED_NOTE);
 });
 
 test('api: every seat and join carries the look, a bare look carries nothing', async () => {

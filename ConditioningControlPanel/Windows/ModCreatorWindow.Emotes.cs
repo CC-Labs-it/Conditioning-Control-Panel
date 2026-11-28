@@ -484,10 +484,12 @@ namespace ConditioningControlPanel
         /// and clip_timing.json are copied; other junk in the source folder is skipped.
         /// No-op when there is nothing valid to write.
         /// </summary>
-        private void WriteEmotesTo(string resourcesDir)
+        /// <returns>False when a set failed to copy (logged, not thrown).</returns>
+        private bool WriteEmotesTo(string resourcesDir)
         {
             var valid = _emoteRows.Where(r => r.IsValid && !string.IsNullOrEmpty(r.FolderPath)).ToList();
-            if (valid.Count == 0) return;
+            if (valid.Count == 0) return true;
+            var complete = true;
 
             foreach (var row in valid)
             {
@@ -501,8 +503,10 @@ namespace ConditioningControlPanel
                 {
                     App.Logger?.Error(ex, "Mod editor: failed to copy emote set {Folder} -> {Dest}",
                         row.FolderPath, dest);
+                    complete = false;
                 }
             }
+            return complete;
         }
 
         /// <summary>Recursive filtered copy: keeps *.gif, emotes.json, clip_timing.json; prunes empty dirs.</summary>

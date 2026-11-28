@@ -16,6 +16,7 @@
        Checked/Unchecked/Click/...       -> wired in the constructor -->
 <UserControl xmlns:sideart="using:ConditioningControlPanel.Avalonia.Helpers" xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:super="using:ConditioningControlPanel.Avalonia.Controls.Super"
              xmlns:sessionLock="using:ConditioningControlPanel.Avalonia.Views.Features"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Avalonia.Localization"
              xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls"
@@ -132,6 +133,9 @@
                         </StackPanel>
                     </Grid>
                 </Border>
+
+                <!-- The gold V2 box (WPF Controls/SuperBox): Super switch, BASIC sign, weekly try. -->
+                <super:SuperBox x:Name="SuperBoxMain" Kind="Creep"/>
             </StackPanel>
 
             <!-- SIDE ART. Background painted from code (ModArt.BindFeaturePlates); scrim kept verbatim. -->

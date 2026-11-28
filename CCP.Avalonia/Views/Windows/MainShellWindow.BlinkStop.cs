@@ -5,8 +5,7 @@
 // The stop pass is exactly WPF StopAllForRecalibration's set (decision 2026-10-12 in
 // docs/avalonia-decisions.html): a recalibration stop, not a panic. It pauses the session (never ends
 // it) and leaves the camera, mic, haptics and program run alone. One addition to the WPF set: it switches
-// keyword triggers off through the panic pass's own row (hard rule 6, restack fixkwstop). No leash service, Focus Gaze, help
-// popover or interaction queue exists on this head, so those WPF steps have no target here.
+// keyword triggers off through the panic pass's own row (hard rule 6, restack fixkwstop).
 
 using System;
 using System.Collections.Generic;
@@ -33,7 +32,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// the tube's voice); Autonomy.CancelActivePulses; the session PAUSE + StopEngine (StartStop.cs:443-516:
         /// SkillTree, LockCardWindow.ForceCloseAll). Run in registry order.</summary>
         internal static readonly HashSet<string> BlinkStopIds = new()
-            { "blink-trainer", "audio-playlist", "mantra-chant", "companion-audio", "mantra", "keyword-triggers", "takeover", "engine", "pink-rush", "lock-cards", "tube-speech" };
+            { "leash-task", "gaze-refine", "blink-trainer", "audio-playlist", "mantra-chant", "companion-audio", "mantra", "keyword-triggers", "takeover", "engine", "pink-rush", "lock-cards", "tube-speech" };
         // keyword-triggers: hard rule 6 (a stop gesture is never more permissive than the panic key) with the
         // owner call 2026-10-10 that panic switches keyword triggers off. The same registry row as the panic
         // pass (KeywordTriggerHead.SwitchOffForPanic, Awareness tab repaint), so there is one switch-off path.
@@ -121,7 +120,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// One failing stop never skips the rest.</summary>
         internal static void StopAllForRecalibration(MainShellWindow? shell)
         {
-            foreach (var surface in PanicSurfaces.All.Where(x => BlinkStopIds.Contains(x.Id)))
+            // WPF LabTab.cs:229,270: park the task before closing the help card and the other stops.
+            var leash = PanicSurfaces.All.FirstOrDefault(x => x.Id == "leash-task");
+            try { leash?.Stop(shell); }
+            catch (Exception ex) { Log.Warning(ex, "Blink stop: leash-task failed"); }
+            try { global::ConditioningControlPanel.Avalonia.Controls.HelpPopover.CloseActive(); }
+            catch (Exception ex) { Log.Warning(ex, "Blink stop: help popover failed"); }
+            foreach (var surface in PanicSurfaces.All.Where(x => x.Id != "leash-task" && BlinkStopIds.Contains(x.Id)))
             {
                 try { surface.Stop(shell); }
                 catch (Exception ex) { Log.Warning(ex, "Blink stop: {Id} failed", surface.Id); }

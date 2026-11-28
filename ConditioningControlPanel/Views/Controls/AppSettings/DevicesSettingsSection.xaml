@@ -5,6 +5,8 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:helpers="clr-namespace:ConditioningControlPanel.Helpers"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.TintSliders="True"
              mc:Ignorable="d" d:DesignWidth="700">
 
     <!-- ================================================================
@@ -84,7 +86,7 @@
         </Style>
     </UserControl.Resources>
 
-    <StackPanel>
+    <StackPanel Grid.IsSharedSizeScope="True">
 
         <!-- ============================================================
              WEBCAM & EYE TRACKING
@@ -92,7 +94,7 @@
         <Border x:Name="WebcamCard" x:FieldModifier="internal"
                 CornerRadius="12" Padding="0" Margin="0,0,0,10"
                 Background="{DynamicResource ElevatedSurfaceBrush}"
-                BorderBrush="{StaticResource SectionHueDevicesBorderBrush}" BorderThickness="1">
+                BorderBrush="{StaticResource SectionHueDevicesBorderBrush}" BorderThickness="1" rows:RowHue.Hue="{StaticResource SectionHueDevices}">
             <Grid>
                 <Border CornerRadius="11" Background="{StaticResource SectionHueDevicesWashBrush}"/>
                 <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
@@ -108,7 +110,7 @@
                                    Source="{Binding Source='👁', Converter={StaticResource EmojiToImageSource}}"/>
                         </Border>
                         <StackPanel VerticalAlignment="Center">
-                            <helpers:EmojiTextBlock Style="{StaticResource SectionHeader}"
+                            <helpers:EmojiTextBlock Style="{StaticResource SettingsCardTitle}"
                                                     Foreground="{StaticResource SectionHueDevicesBrush}"
                                                     Text="{loc:Str set2_devices_webcam_title}" Margin="0"/>
                             <TextBlock Text="{loc:Str set2_devices_webcam_sub}"
@@ -131,15 +133,13 @@
                                     <CheckBox x:Name="ChkBlinkRecalWebcamBar" x:FieldModifier="internal"
                                               Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                               Checked="ChkBlinkRecalShortcut_Changed" Unchecked="ChkBlinkRecalShortcut_Changed"/>
-                                    <TextBlock Text="{loc:Str set2_devices_blink_recal}" Foreground="{DynamicResource TextSecondaryBrush}"
-                                               FontSize="11" VerticalAlignment="Center" Margin="7,0,0,0"/>
+                                    <rows:RowLabel Text="{loc:Str set2_devices_blink_recal}" Emblem="Eye" IsOn="{Binding IsChecked, ElementName=ChkBlinkRecalWebcamBar}" Margin="7,0,0,0"/>
                                 </StackPanel>
 
                                 <!-- camera -->
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,4,12,4">
-                                    <TextBlock Text="CAM" Foreground="{DynamicResource TextMutedBrush}" FontFamily="Consolas, Courier New"
-                                               FontSize="10.5" VerticalAlignment="Center" Margin="0,0,7,0"/>
-                                    <ComboBox x:Name="CmbWebcamDevice" x:FieldModifier="internal" Width="170"
+                                    <rows:RowLabel Text="CAM" Emblem="Cam" Margin="0,0,7,0"/>
+                                    <ComboBox x:Name="CmbWebcamDevice" Style="{DynamicResource RowComboBoxStyle}" x:FieldModifier="internal" Width="170"
                                               VerticalAlignment="Center"
                                               ToolTip="{loc:Str tooltip_devices_cam_pick}"
                                               SelectionChanged="CmbWebcamDevice_SelectionChanged"/>
@@ -156,9 +156,8 @@
 
                                 <!-- monitor -->
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,4,12,4">
-                                    <TextBlock Text="MON" Foreground="{DynamicResource TextMutedBrush}" FontFamily="Consolas, Courier New"
-                                               FontSize="10.5" VerticalAlignment="Center" Margin="0,0,7,0"/>
-                                    <ComboBox x:Name="CmbWebcamMonitor" x:FieldModifier="internal" Width="150"
+                                    <rows:RowLabel Text="MON" Emblem="Screens" Margin="0,0,7,0"/>
+                                    <ComboBox x:Name="CmbWebcamMonitor" Style="{DynamicResource RowComboBoxStyle}" x:FieldModifier="internal" Width="150"
                                               VerticalAlignment="Center"
                                               ToolTip="{loc:Str webcam_monitor_tooltip}"
                                               SelectionChanged="CmbWebcamMonitor_SelectionChanged"/>
@@ -239,70 +238,42 @@
                                     <!-- The three diagnostics switches: a cluster of >=3, so a 2-column chip
                                          grid. Same x:Names, same handlers; the old Content strings are the
                                          chip labels now. -->
-                                    <Grid Margin="0,2,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="6"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                        </Grid.RowDefinitions>
+                                    <StackPanel Margin="0,2,0,0">
 
-                                        <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource SettingChip}"
-                                                ToolTip="{loc:Str tooltip_webcam_show_debug_cursor}">
-                                            <Grid MinHeight="22">
+                                        <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_webcam_show_debug_cursor}">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{loc:Str set2_devices_debug_cursor}"
-                                                           Foreground="{DynamicResource TextLightBrush}"
-                                                           FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap"
-                                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str set2_devices_debug_cursor}" Emblem="Eye" IsOn="{Binding IsChecked, ElementName=ChkWebcamDebugCursor}" Margin="0,0,10,0"/>
                                                 <CheckBox Grid.Column="1" x:Name="ChkWebcamDebugCursor" x:FieldModifier="internal"
                                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                           Checked="ChkWebcamDebugCursor_Changed" Unchecked="ChkWebcamDebugCursor_Changed"/>
                                             </Grid>
-                                        </Border>
 
-                                        <Border Grid.Row="0" Grid.Column="2" Style="{StaticResource SettingChip}"
-                                                ToolTip="{loc:Str tooltip_devices_auto_drift}">
-                                            <Grid MinHeight="22">
+                                        <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_devices_auto_drift}">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{loc:Str set2_devices_auto_drift}"
-                                                           Foreground="{DynamicResource TextLightBrush}"
-                                                           FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap"
-                                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str set2_devices_auto_drift}" Emblem="Eye" IsOn="{Binding IsChecked, ElementName=ChkWebcamDriftCorrection}" Margin="0,0,10,0"/>
                                                 <CheckBox Grid.Column="1" x:Name="ChkWebcamDriftCorrection" x:FieldModifier="internal"
                                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                           Checked="ChkWebcamDriftCorrection_Changed" Unchecked="ChkWebcamDriftCorrection_Changed"/>
                                             </Grid>
-                                        </Border>
 
-                                        <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3"
-                                                Style="{StaticResource SettingChip}"
-                                                ToolTip="{loc:Str tooltip_devices_restrict_gaze}">
-                                            <Grid MinHeight="22">
+                                        <Grid Style="{StaticResource OptionRow}" Background="Transparent" ToolTip="{loc:Str tooltip_devices_restrict_gaze}">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{loc:Str set2_devices_restrict_gaze}"
-                                                           Foreground="{DynamicResource TextLightBrush}"
-                                                           FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap"
-                                                           VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                <rows:RowLabel Grid.Column="0" Text="{loc:Str set2_devices_restrict_gaze}" Emblem="Screens" IsOn="{Binding IsChecked, ElementName=ChkRestrictGazeToCalScreen}" Margin="0,0,10,0"/>
                                                 <CheckBox Grid.Column="1" x:Name="ChkRestrictGazeToCalScreen" x:FieldModifier="internal"
                                                           Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                                           Checked="ChkRestrictGazeToCalScreen_Changed"
                                                           Unchecked="ChkRestrictGazeToCalScreen_Changed"/>
                                             </Grid>
-                                        </Border>
-                                    </Grid>
+                                    </StackPanel>
 
                                     <TextBlock x:Name="TxtWebcamDebugCounters" x:FieldModifier="internal"
                                                Text="Face: — | Blinks: 0 | Gaze: —"
@@ -327,7 +298,7 @@
         <Border x:Name="MicrophoneCard" x:FieldModifier="internal"
                 CornerRadius="12" Padding="0" Margin="0,0,0,10"
                 Background="{DynamicResource ElevatedSurfaceBrush}"
-                BorderBrush="{StaticResource SectionHueDevicesBorderBrush}" BorderThickness="1">
+                BorderBrush="{StaticResource SectionHueDevicesBorderBrush}" BorderThickness="1" rows:RowHue.Hue="{StaticResource SectionHueDevices}">
             <Grid>
                 <Border CornerRadius="11" Background="{StaticResource SectionHueDevicesWashBrush}"/>
                 <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
@@ -342,7 +313,7 @@
                                    Source="{Binding Source='🎤', Converter={StaticResource EmojiToImageSource}}"/>
                         </Border>
                         <StackPanel VerticalAlignment="Center">
-                            <helpers:EmojiTextBlock Style="{StaticResource SectionHeader}"
+                            <helpers:EmojiTextBlock Style="{StaticResource SettingsCardTitle}"
                                                     Foreground="{StaticResource SectionHueDevicesBrush}"
                                                     Text="{loc:Str set2_devices_mic_title}" Margin="0"/>
                             <TextBlock Text="{loc:Str set2_devices_mic_sub}"
@@ -360,17 +331,16 @@
                                TextWrapping="Wrap" Margin="0,0,0,10"/>
 
                     <!-- Input device -->
-                    <Grid MinHeight="34" Margin="0,0,0,6"
+                    <Grid Style="{StaticResource OptionRow}" Margin="0,0,0,6"
                           ToolTip="{loc:Str tooltip_devices_mic_pick}">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="Auto" MinWidth="150" SharedSizeGroup="RowLabel"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Style="{StaticResource SettingLabel}" Text="{loc:Str set2_devices_mic_input}"
-                                   FontSize="12" VerticalAlignment="Center"/>
-                        <ComboBox Grid.Column="1" x:Name="CmbMicDevice" x:FieldModifier="internal"
-                                  Margin="6,0" FontSize="12" VerticalAlignment="Center"
+                        <rows:RowLabel Text="{loc:Str set2_devices_mic_input}" Emblem="Mic"/>
+                        <ComboBox Grid.Column="1" x:Name="CmbMicDevice" Style="{DynamicResource RowComboBoxStyle}" x:FieldModifier="internal"
+                                  Margin="6,0" VerticalAlignment="Center"
                                   SelectionChanged="CmbMicDevice_SelectionChanged"
                                   ToolTip="{loc:Str tooltip_devices_mic_pick}"/>
                         <Button Grid.Column="2" x:Name="BtnMicRefresh" x:FieldModifier="internal" Content="↻"
@@ -381,14 +351,12 @@
                     </Grid>
 
                     <!-- Wake word -->
-                    <Grid MinHeight="34" Margin="0,0,0,6" ToolTip="{loc:Str set2_devices_wake_word_hint}">
+                    <Grid Style="{StaticResource OptionRow}" Margin="0,0,0,6" ToolTip="{loc:Str set2_devices_wake_word_hint}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{loc:Str set2_devices_wake_word}"
-                                   Style="{StaticResource SettingLabel}" FontSize="12"
-                                   Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str set2_devices_wake_word}" Emblem="Mic" IsOn="{Binding IsChecked, ElementName=ChkSpeechWakeWord}" Margin="0,0,14,0"/>
                         <CheckBox Grid.Column="1" x:Name="ChkSpeechWakeWord" x:FieldModifier="internal"
                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                   Checked="ChkSpeechWakeWord_Changed" Unchecked="ChkSpeechWakeWord_Changed"/>
@@ -411,50 +379,42 @@
                     </Grid>
 
                     <!-- Wake sensitivity -->
-                    <Grid MinHeight="34" Margin="0,0,0,6" ToolTip="{loc:Str set2_devices_wake_sensitivity_hint}">
+                    <Grid Style="{StaticResource OptionRow}" Margin="0,0,0,6" ToolTip="{loc:Str set2_devices_wake_sensitivity_hint}">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="Auto" MinWidth="150" SharedSizeGroup="RowLabel"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="46"/>
+                            <ColumnDefinition Width="Auto" MinWidth="56"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Style="{StaticResource SettingLabel}" Text="{loc:Str set2_devices_wake_sensitivity}"
-                                   FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"
-                                   TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Text="{loc:Str set2_devices_wake_sensitivity}" Emblem="Much" Margin="0,0,6,0"/>
                         <Slider Grid.Column="1" x:Name="SliderWakePrecision" x:FieldModifier="internal"
                                 Minimum="0.3" Maximum="0.95" SmallChange="0.01" LargeChange="0.05"
                                 Margin="6,0" VerticalAlignment="Center"
                                 ValueChanged="SliderWakePrecision_ValueChanged"/>
-                        <TextBlock Grid.Column="2" x:Name="TxtWakeVal" x:FieldModifier="internal" Text="0.60"
-                                   Style="{StaticResource ValueLabel}" FontSize="12" VerticalAlignment="Center"/>
+                        <rows:RowValue Grid.Column="2" x:Name="TxtWakeVal" x:FieldModifier="internal" Text="0.60"/>
                     </Grid>
 
                     <!-- Command match precision -->
-                    <Grid MinHeight="34" Margin="0,0,0,6" ToolTip="{loc:Str set2_devices_cmd_precision_hint}">
+                    <Grid Style="{StaticResource OptionRow}" Margin="0,0,0,6" ToolTip="{loc:Str set2_devices_cmd_precision_hint}">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="Auto" MinWidth="150" SharedSizeGroup="RowLabel"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="46"/>
+                            <ColumnDefinition Width="Auto" MinWidth="56"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Style="{StaticResource SettingLabel}" Text="{loc:Str set2_devices_cmd_precision}"
-                                   FontSize="12" VerticalAlignment="Center" Margin="0,0,6,0"
-                                   TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Text="{loc:Str set2_devices_cmd_precision}" Emblem="Much" Margin="0,0,6,0"/>
                         <Slider Grid.Column="1" x:Name="SliderCmdPrecision" x:FieldModifier="internal"
                                 Minimum="0.3" Maximum="0.95" SmallChange="0.01" LargeChange="0.05"
                                 Margin="6,0" VerticalAlignment="Center"
                                 ValueChanged="SliderCmdPrecision_ValueChanged"/>
-                        <TextBlock Grid.Column="2" x:Name="TxtCmdVal" x:FieldModifier="internal" Text="0.50"
-                                   Style="{StaticResource ValueLabel}" FontSize="12" VerticalAlignment="Center"/>
+                        <rows:RowValue Grid.Column="2" x:Name="TxtCmdVal" x:FieldModifier="internal" Text="0.50"/>
                     </Grid>
 
                     <!-- Push-to-talk -->
-                    <Grid MinHeight="34" Margin="0,0,0,6" ToolTip="{loc:Str set2_devices_ptt_hint}">
+                    <Grid Style="{StaticResource OptionRow}" Margin="0,0,0,6" ToolTip="{loc:Str set2_devices_ptt_hint}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{loc:Str set2_devices_ptt}"
-                                   Style="{StaticResource SettingLabel}" FontSize="12"
-                                   Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str set2_devices_ptt}" Emblem="Click" IsOn="{Binding IsChecked, ElementName=ChkSpeechPushToTalk}" Margin="0,0,14,0"/>
                         <CheckBox Grid.Column="1" x:Name="ChkSpeechPushToTalk" x:FieldModifier="internal"
                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                   Checked="ChkSpeechPushToTalk_Changed" Unchecked="ChkSpeechPushToTalk_Changed"/>
@@ -480,14 +440,12 @@
                     </Grid>
 
                     <!-- Headphones / barge-in -->
-                    <Grid MinHeight="34" ToolTip="{loc:Str set2_devices_headphones_hint}">
+                    <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str set2_devices_headphones_hint}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{loc:Str set2_devices_headphones}"
-                                   Style="{StaticResource SettingLabel}" FontSize="12"
-                                   Margin="0,0,14,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str set2_devices_headphones}" Emblem="Mic" IsOn="{Binding IsChecked, ElementName=ChkHeadphones}" Margin="0,0,14,0"/>
                         <CheckBox Grid.Column="1" x:Name="ChkHeadphones" x:FieldModifier="internal"
                                   Style="{StaticResource ToggleStyle}" VerticalAlignment="Center"
                                   Checked="ChkHeadphones_Changed" Unchecked="ChkHeadphones_Changed"/>
@@ -502,7 +460,7 @@
         <Border x:Name="SafetyCard" x:FieldModifier="internal"
                 CornerRadius="12" Padding="0"
                 Background="{DynamicResource ElevatedSurfaceBrush}"
-                BorderBrush="{StaticResource SectionHueDevicesBorderBrush}" BorderThickness="1">
+                BorderBrush="{StaticResource SectionHueDevicesBorderBrush}" BorderThickness="1" rows:RowHue.Hue="{StaticResource SectionHueDevices}">
             <Grid>
                 <Border CornerRadius="11" Background="{StaticResource SectionHueDevicesWashBrush}"/>
                 <Border Width="3" HorizontalAlignment="Left" Margin="0,10" CornerRadius="0,2,2,0"
@@ -516,20 +474,18 @@
                             <Image Width="18" Height="18"
                                    Source="{Binding Source='⌨️', Converter={StaticResource EmojiToImageSource}}"/>
                         </Border>
-                        <helpers:EmojiTextBlock Style="{StaticResource SectionHeader}" VerticalAlignment="Center"
+                        <helpers:EmojiTextBlock Style="{StaticResource SettingsCardTitle}" VerticalAlignment="Center"
                                                 Foreground="{StaticResource SectionHueDevicesBrush}"
                                                 Text="{loc:Str set2_devices_safety_title}" Margin="0"/>
                     </StackPanel>
 
                     <!-- Panic key rebind. THE rebind surface; the System popup shows it read-only. -->
-                    <Grid MinHeight="34" Margin="0,0,0,6" ToolTip="{loc:Str tooltip_click_to_change_panic_key}">
+                    <Grid Style="{StaticResource OptionRow}" Margin="0,0,0,6" ToolTip="{loc:Str tooltip_click_to_change_panic_key}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <helpers:EmojiTextBlock Grid.Column="0" Text="{loc:Str btn_escape}"
-                                                Style="{StaticResource SettingLabel}" FontSize="12"
-                                                Margin="0,0,12,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str btn_escape}" Emblem="Safe" Margin="0,0,12,0"/>
                         <Button Grid.Column="1" x:Name="BtnPanicKey" x:FieldModifier="internal"
                                 Content="{loc:Str btn_escape}" Style="{StaticResource OutlineButton}"
                                 Padding="12,6" VerticalAlignment="Center"
@@ -538,14 +494,13 @@
 
                     <!-- v6.8.5: what ONE panic press means. On (default) = stop everything at
                          once. Off = the pre-6.8.5 hand-off ladder. -->
-                    <Grid Margin="0,0,0,6" ToolTip="{loc:Str tooltip_panic_overrides_all}">
+                    <Grid Style="{StaticResource OptionRow}" Margin="0,0,0,6" ToolTip="{loc:Str tooltip_panic_overrides_all}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,14,0">
-                            <helpers:EmojiTextBlock Text="{loc:Str setting_panic_overrides_all}"
-                                                    Style="{StaticResource SettingLabel}" FontSize="12"/>
+                            <rows:RowLabel Text="{loc:Str setting_panic_overrides_all}" Emblem="Safe" IsOn="{Binding IsChecked, ElementName=ChkPanicOverridesAll}"/>
                             <TextBlock Text="{loc:Str tooltip_panic_overrides_all}"
                                        Foreground="{DynamicResource TextMutedBrush}" FontSize="11"
                                        TextWrapping="Wrap" Margin="0,2,0,0"/>
@@ -557,14 +512,12 @@
 
                     <!-- Optional pause-key rebind. Same capture pattern as the panic key above;
                          unbound by default, and Escape during capture clears it again. -->
-                    <Grid MinHeight="34" Margin="0,0,0,6" ToolTip="{loc:Str tooltip_pause_key}">
+                    <Grid Style="{StaticResource OptionRow}" Margin="0,0,0,6" ToolTip="{loc:Str tooltip_pause_key}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <helpers:EmojiTextBlock Grid.Column="0" Text="{loc:Str setting_pause_key}"
-                                                Style="{StaticResource SettingLabel}" FontSize="12"
-                                                Margin="0,0,12,0" TextTrimming="CharacterEllipsis"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str setting_pause_key}" Emblem="Safe" Margin="0,0,12,0"/>
                         <Button Grid.Column="1" x:Name="BtnPauseKey" x:FieldModifier="internal"
                                 Content="{loc:Str btn_pause_key_unbound}" Style="{StaticResource OutlineButton}"
                                 Padding="12,6" VerticalAlignment="Center"
@@ -573,15 +526,13 @@
 
                     <!-- Disable the panic key entirely (double-confirmed in the handler).
                          DANGER ROW: the consequence line stays VISIBLE per the contract. -->
-                    <Grid Margin="0,0,0,10">
+                    <Grid Style="{StaticResource OptionRow}" Margin="0,0,0,10" rows:RowHue.Hue="{StaticResource Danger}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,14,0">
-                            <helpers:EmojiTextBlock Text="{loc:Str setting_no_panic}"
-                                                    Foreground="{DynamicResource DangerBrush}"
-                                                    FontSize="12" FontWeight="SemiBold"/>
+                            <rows:RowLabel Text="{loc:Str setting_no_panic}" Emblem="Safe"/>
                             <TextBlock Text="{loc:Str tooltip_danger_completely_disables_panic_key_you_won}"
                                        Foreground="{DynamicResource TextMutedBrush}" FontSize="11"
                                        TextWrapping="Wrap" Margin="0,2,0,0"/>
@@ -594,14 +545,12 @@
                     <!-- Global hotkeys. The editor is ChatShortcutCaptureDialog (which also carries the
                          global-vs-in-app switch); this is a second launcher for it, exactly like the
                          Companion Workshop pill. No setting is written here. -->
-                    <Grid MinHeight="34" Margin="0,0,0,6" ToolTip="{loc:Str tooltip_change_chat_shortcut}">
+                    <Grid Style="{StaticResource OptionRow}" Margin="0,0,0,6" ToolTip="{loc:Str tooltip_change_chat_shortcut}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{loc:Str tooltip_change_chat_shortcut}"
-                                   Style="{StaticResource SettingLabel}" FontSize="12" VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str tooltip_change_chat_shortcut}" Emblem="Click" Margin="0,0,10,0"/>
                         <Button Grid.Column="1" x:Name="BtnChatShortcutDevices" x:FieldModifier="internal"
                                 Style="{StaticResource OutlineButton}" Padding="12,5"
                                 Click="BtnChatShortcut_Click" ToolTip="{loc:Str tooltip_change_chat_shortcut}">
@@ -609,14 +558,12 @@
                                        Foreground="{DynamicResource PinkBrush}" FontWeight="SemiBold" FontSize="11"/>
                         </Button>
                     </Grid>
-                    <Grid MinHeight="34" ToolTip="{loc:Str tooltip_change_camera_shortcut}">
+                    <Grid Style="{StaticResource OptionRow}" ToolTip="{loc:Str tooltip_change_camera_shortcut}">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{loc:Str tooltip_change_camera_shortcut}"
-                                   Style="{StaticResource SettingLabel}" FontSize="12" VerticalAlignment="Center"
-                                   TextTrimming="CharacterEllipsis" Margin="0,0,10,0"/>
+                        <rows:RowLabel Grid.Column="0" Text="{loc:Str tooltip_change_camera_shortcut}" Emblem="Cam" Margin="0,0,10,0"/>
                         <Button Grid.Column="1" x:Name="BtnCameraShortcutDevices" x:FieldModifier="internal"
                                 Style="{StaticResource OutlineButton}" Padding="12,5"
                                 Click="BtnCameraShortcut_Click" ToolTip="{loc:Str tooltip_change_camera_shortcut}">

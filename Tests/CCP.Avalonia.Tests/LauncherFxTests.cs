@@ -78,6 +78,81 @@ public sealed class LauncherFxTests
         });
     }
 
+    // WPF LauncherWindow.Fx.cs:437-469 and xaml:372. The 25-40 s gap is a timer, not frames: it never holds
+    // the frame clock busy, and its tick (ElapseWordmarkSheenGap here) starts the pass.
+    private static void AssertGapArmed(LauncherWindow w) =>
+        Assert.InRange(w.WordmarkSheenGap!.Value, TimeSpan.FromSeconds(25), TimeSpan.FromSeconds(40));
+
+    [Fact]
+    public void WordmarkSheenPassesParksAndStopsOnPanic() => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        var sheen = w.FindControl<global::Avalonia.Controls.Shapes.Rectangle>("WordmarkSheen")!;
+        Assert.Equal(0, sheen.Opacity);
+        AssertGapArmed(w);
+        for (int i = 0; i < 240; i++) { Assert.False(w.StepWordmarkSheen(0.2)); Assert.Equal(0, sheen.Opacity); }
+        w.ElapseWordmarkSheenGap();
+        AssertGapArmed(w);   // the next gap counts from this pass, as WPF's repeating timer does
+        Assert.True(w.StepWordmarkSheen(0.2));
+        Assert.InRange(sheen.Opacity, 0.001, 0.3);
+        var slide = (TranslateTransform)((TransformGroup)sheen.RenderTransform!).Children[1];
+        double left = slide.X;
+        w.StepFx(0.2);
+        Assert.True(slide.X > left);
+        for (int i = 0; i < 10 && w.StepWordmarkSheen(0.2); i++) { }
+        Assert.Equal(0, sheen.Opacity);   // the 1.1 s pass ends and gives the clock back
+        Assert.False(w.StepWordmarkSheen(0.2));
+        w.ElapseWordmarkSheenGap();
+        w.StepFx(0.2);
+        Assert.True(sheen.Opacity > 0);
+        PanicSurfaces.All.Single(x => x.Id == "launcher-wordmark-sheen").Stop(null);
+        Assert.Equal(0, sheen.Opacity);
+        Assert.Null(w.WordmarkSheenGap);
+        w.ElapseWordmarkSheenGap();
+        for (int i = 0; i < 250; i++) { w.StepFx(0.2); Assert.Equal(0, sheen.Opacity); }
+        w.Hide();
+        Assert.Equal(0, sheen.Opacity);
+        Assert.Null(w.WordmarkSheenGap);
+    });
+
+    // WPF LauncherWindow.Fx.cs:192-230: deactivation parks; activation starts a fresh gap.
+    [Fact]
+    public void WordmarkSheenParksOnFocusLossAndRestartsItsGap() => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        var sheen = w.FindControl<global::Avalonia.Controls.Shapes.Rectangle>("WordmarkSheen")!;
+        w.OnFxActivated(false);
+        Assert.Null(w.WordmarkSheenGap);
+        w.OnFxActivated(true);
+        AssertGapArmed(w);
+        w.ElapseWordmarkSheenGap();
+        w.StepFx(0.2);
+        Assert.True(sheen.Opacity > 0);
+        w.OnFxActivated(false);
+        Assert.Equal(0, sheen.Opacity);
+        Assert.Null(w.WordmarkSheenGap);
+        w.ElapseWordmarkSheenGap();
+        for (int i = 0; i < 250; i++) { w.StepFx(0.2); Assert.Equal(0, sheen.Opacity); }
+        w.OnFxActivated(true);
+        AssertGapArmed(w);
+        for (int i = 0; i < 120; i++) { w.StepFx(0.2); Assert.Equal(0, sheen.Opacity); }
+        w.ElapseWordmarkSheenGap();
+        w.StepFx(0.2);
+        Assert.True(sheen.Opacity > 0);
+        PanicSurfaces.All.Single(x => x.Id == "launcher-wordmark-sheen").Stop(null);
+        w.OnFxActivated(false);
+        w.OnFxActivated(true);
+        Assert.Null(w.WordmarkSheenGap);
+        w.ElapseWordmarkSheenGap();
+        for (int i = 0; i < 250; i++) { w.StepFx(0.2); Assert.Equal(0, sheen.Opacity); }
+    });
+
+    [Fact]
+    public void WordmarkSheenStaysOffWithMotionOff() => Run(MotionLevel.Off, (_, w, _) =>
+    {
+        var sheen = w.FindControl<global::Avalonia.Controls.Shapes.Rectangle>("WordmarkSheen")!;
+        w.ElapseWordmarkSheenGap();   // a due gap with ambient loops refused runs no pass
+        for (int i = 0; i < 250; i++) { Assert.False(w.StepWordmarkSheen(0.2)); w.StepFx(0.2); Assert.Equal(0, sheen.Opacity); }
+    });
+
     /// <summary>The intake tile: the last card (LauncherCards order); game cards sit before it.</summary>
     private static Border Tile(LauncherWindow w) => (Border)w.FindControl<UniformGrid>("GamesGrid")!.Children[^1];
 

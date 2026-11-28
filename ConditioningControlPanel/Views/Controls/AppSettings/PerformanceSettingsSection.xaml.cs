@@ -113,6 +113,11 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
                 CmbGentleFade.SelectedIndex = NearestIndex(Services.Safety.GentleVisuals.FadeChoices, s.GentleFadeSeconds);
                 CmbGentleSpeed.SelectedIndex = NearestIndex(Services.Safety.GentleVisuals.SpeedChoices, s.GentleSpeed);
 
+                ChkPinkComfortLimit.IsChecked = s.PinkComfortLimitOn;
+                PnlPinkComfortLimit.Visibility = s.PinkComfortLimitOn ? Visibility.Visible : Visibility.Collapsed;
+                SliderPinkComfortLimit.Value = s.PinkComfortLimitPct;
+                TxtPinkComfortLimit.Text = $"{s.PinkComfortLimitPct}%";
+
                 // MotionLevel's ordinal IS the item index (Full=0, Reduced=1, Off=2) - the same
                 // contract MainWindow.Settings.cs:92 relies on. Clamped rather than trusted so a
                 // settings file from a future build with a fourth level cannot throw here.
@@ -362,6 +367,40 @@ namespace ConditioningControlPanel.Views.Controls.AppSettingsSections
             if (CmbGentleSpeed.SelectedIndex >= 0)
                 s.GentleSpeed = Services.Safety.GentleVisuals.SpeedChoices[CmbGentleSpeed.SelectedIndex];
             App.Settings?.Save();
+        }
+
+        /// <summary>
+        /// Accessibility, "Limit pink filter to". The compositor tint and the V2 fog pick a change up
+        /// on their next frame by themselves; the legacy tint windows (compositor off) are re-pushed.
+        /// </summary>
+        private void ChkPinkComfortLimit_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_isLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null) return;
+            s.PinkComfortLimitOn = ChkPinkComfortLimit.IsChecked == true;
+            PnlPinkComfortLimit.Visibility = s.PinkComfortLimitOn ? Visibility.Visible : Visibility.Collapsed;
+            App.Logger?.Information("Pink filter limit set to {On} at {Pct}%", s.PinkComfortLimitOn, s.PinkComfortLimitPct);
+            App.Settings?.Save();
+            RepushPinkTint();
+        }
+
+        private void SliderPinkComfortLimit_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            int v = Looks.PinkComfort.ClampPct((int)Math.Round(e.NewValue));
+            if (TxtPinkComfortLimit != null) TxtPinkComfortLimit.Text = $"{v}%";
+            if (_isLoading) return;
+            var s = App.Settings?.Current;
+            if (s == null || s.PinkComfortLimitPct == v) return;
+            s.PinkComfortLimitPct = v;
+            App.Settings?.Save();
+            RepushPinkTint();
+        }
+
+        private static void RepushPinkTint()
+        {
+            try { App.Overlay?.RefreshFilterColor(); }
+            catch (Exception ex) { App.Logger?.Debug("Pink filter limit: re-push failed: {Error}", ex.Message); }
         }
 
         /// <summary>

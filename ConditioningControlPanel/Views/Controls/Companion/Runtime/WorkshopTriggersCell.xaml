@@ -4,6 +4,8 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
+             rows:RowHue.TintSliders="True"
              mc:Ignorable="d" d:DesignWidth="312">
 
     <!-- ================================================================
@@ -24,7 +26,7 @@
     <StackPanel>
         <Grid Margin="0,0,0,4">
             <StackPanel Margin="0,0,44,0">
-                <TextBlock Text="{loc:Str label_trigger_mode}" Style="{StaticResource CmpCellLabelStyle}"/>
+                <rows:RowLabel Text="{loc:Str label_trigger_mode}" Emblem="Words" IsOn="{Binding IsChecked, ElementName=ChkTriggerModeCompanion}"/>
                 <TextBlock Text="{loc:Str label_random_conditioning_phrases_with_audio}" Style="{StaticResource CmpCellHintStyle}"/>
             </StackPanel>
             <CheckBox x:Name="ChkTriggerModeCompanion" x:FieldModifier="internal" Style="{DynamicResource ToggleStyle}"
@@ -33,10 +35,10 @@
         </Grid>
 
         <StackPanel x:Name="TriggerSettingsPanelCompanion" x:FieldModifier="internal" Visibility="Collapsed" Margin="0,0,0,9">
-            <Grid>
-                <TextBlock Text="{loc:Str label_interval}" Style="{StaticResource CmpCellLabelStyle}"/>
-                <TextBlock x:Name="TxtTriggerIntervalCompanion" x:FieldModifier="internal" Text="{loc:Str label_60s}"
-                           Style="{StaticResource CmpCellValueStyle}" Foreground="#9370DB"/>
+            <Grid Style="{StaticResource OptionRow}">
+                <rows:RowLabel Text="{loc:Str label_interval}" Emblem="Often" HorizontalAlignment="Left"/>
+                <rows:RowValue x:Name="TxtTriggerIntervalCompanion" x:FieldModifier="internal" Text="{loc:Str label_60s}"
+                           HorizontalAlignment="Right" VerticalAlignment="Center"/>
             </Grid>
             <Slider x:Name="SliderTriggerIntervalCompanion" x:FieldModifier="internal" Style="{DynamicResource PinkSlider}"
                     Minimum="10" Maximum="600" Value="60" Margin="0,4,0,6"

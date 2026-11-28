@@ -2,7 +2,7 @@
 // foot of the rail with a mint pill for friends online; a click opens the drawer upward over the rail.
 // The pink unread badge counts the friends feed (WPF UpdateBadge).
 // Count bumps run on Helpers/TransformTween (never Animation.RunAsync on a transform). The shell rail is fixed open.
-// ponytail: no inactive-owner code-box activation or face/pill border/glow; light-dismiss replaces WPF outside-click and host-move watchers.
+// Face/pill border and glow remain to be ported.
 using System;
 using Avalonia;
 using Avalonia.Animation;
@@ -11,6 +11,8 @@ using Avalonia.Styling;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Threading;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.VisualTree;
@@ -39,7 +41,13 @@ public sealed partial class FriendsRailChip : Grid
     {
         // WPF FriendsRailChip.cs:251-263: resolve afresh after account replacement.
         _resolve = service != null ? () => service : () => Platform.FriendsHead.Service;
-        Drawer = new FriendsDrawer(service);
+        Drawer = new FriendsDrawer(service) { Focusable = true };
+        Drawer.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == IsKeyboardFocusWithinProperty)
+                _popup.IsLightDismissEnabled = !Drawer.IsKeyboardFocusWithin;
+        };
+        Drawer.AddHandler(PointerPressedEvent, OnDrawerPressed, RoutingStrategies.Tunnel);
         (Height, Margin, Background, Cursor) = (48, new Thickness(0, 2, 0, 4), Brushes.Transparent, FriendsDrawer.Hand());
         ColumnDefinitions = new ColumnDefinitions("56,*");
         (_pillText.FontFamily, _pillText.FontWeight, _pillText.FontSize, _pillText.Foreground) = (FriendsDrawer.Display, FontWeight.SemiBold, 11, FriendsDrawer.MintInk);
@@ -190,6 +198,8 @@ public sealed partial class FriendsRailChip : Grid
         _host = TopLevel.GetTopLevel(this) as Window;
         if (_host == null) return;
         _host.Activated += OnHostActivated;
+        _host.Deactivated += OnHostDeactivated;
+        _host.AddHandler(PointerPressedEvent, OnHostPressed, RoutingStrategies.Tunnel);
         _host.PositionChanged += OnHostMoved;
         _host.PropertyChanged += OnHostProperty;
     }
@@ -197,12 +207,34 @@ public sealed partial class FriendsRailChip : Grid
     {
         if (_host == null) return;
         _host.Activated -= OnHostActivated;
+        _host.Deactivated -= OnHostDeactivated;
+        _host.RemoveHandler(PointerPressedEvent, OnHostPressed);
         _host.PositionChanged -= OnHostMoved;
         _host.PropertyChanged -= OnHostProperty;
         _host = null;
     }
     // One activation seam: rebind, repaint the face and tier (#3657, WPF FriendsRailChip.cs:224-228,279), drop topmost.
     private void OnHostActivated(object? sender, EventArgs e) { Rebind(); RefreshFace(); if (IsOpen) DropTopmost(); }
+    // WPF FriendsRailChip.cs:447-453,468-509.
+    private void OnHostDeactivated(object? sender, EventArgs e)
+    { if (!Drawer.IsKeyboardFocusWithin) _popup.IsOpen = false; }
+    private void OnHostPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!IsOpen || e.Source is not Visual source) return;
+        if (ReferenceEquals(source, this) || this.IsVisualAncestorOf(source) ||
+            ReferenceEquals(source, Drawer) || Drawer.IsVisualAncestorOf(source)) return;
+        _popup.IsOpen = false;
+    }
+    private void OnDrawerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (_host == null || _host.IsActive) return;
+        _host.Activate();
+        var source = e.Source as Visual;
+        while (source != null && source is not TextBox && !ReferenceEquals(source, Drawer))
+            source = source.GetVisualParent();
+        var target = source as TextBox;
+        Dispatcher.UIThread.Post(() => { if (target != null) target.Focus(); else Drawer.Focus(); }, DispatcherPriority.Input);
+    }
     private void OnHostMoved(object? sender, PixelPointEventArgs e) => _popup.IsOpen = false;
     private void OnHostProperty(object? sender, AvaloniaPropertyChangedEventArgs e)
     { if (e.Property == Window.WindowStateProperty) _popup.IsOpen = false; }

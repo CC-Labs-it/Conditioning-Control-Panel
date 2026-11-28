@@ -23,14 +23,15 @@ public sealed class WhirlpoolDraw : IDisposable
     /// <summary><paramref name="from"/> = the Loom spiral the pool wears (round, soft at the rim), melting
     /// into <paramref name="to"/> by <paramref name="mix"/>; with none, the three drawn arms stand in.
     /// <paramref name="phase"/> runs the spiral's pulse and wobble.</summary>
-    public void Draw(SKCanvas canvas, Whirlpool p, double strength, LoomSpec? from = null, LoomSpec? to = null, double mix = 0, double phase = 0)
+    /// <summary><paramref name="alpha"/> 0..1 fades the whole pool (a head's Gentle visuals fade in).</summary>
+    public void Draw(SKCanvas canvas, Whirlpool p, double strength, LoomSpec? from = null, LoomSpec? to = null, double mix = 0, double phase = 0, double alpha = 1)
     {
         if (p.Size <= 0.004) return;
         double e = p.Eased;
         float r = (float)p.Radius, cx = (float)p.X, cy = (float)p.Y, dip = (float)p.Dip;
         // Pink when small, warming toward amber as it grows.
         float hue = (float)(330 + (384 - 330) * e) % 360;
-        float master = (float)Math.Clamp(0.35 + 0.65 * strength, 0, 1) * (float)Math.Min(1, p.Size / 0.08);
+        float master = (float)Math.Clamp(0.35 + 0.65 * strength, 0, 1) * (float)Math.Min(1, p.Size / 0.08) * (float)Math.Clamp(alpha, 0, 1);
 
         int key = (int)(hue * 4) ^ ((int)(e * 64) << 12);
         bool rebuilt = _glowShader == null || Math.Abs(_glowR - r) > 1.5f || key != _glowKey;
