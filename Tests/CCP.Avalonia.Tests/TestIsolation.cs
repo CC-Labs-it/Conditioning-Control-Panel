@@ -250,6 +250,14 @@ internal sealed class ProcessStateSnapshot
         };
     }
 
+    // Capture the same private panic fields as the per-test snapshot without restoring unrelated state.
+    internal static Action CapturePanic()
+    {
+        var values = Members.Value.Where(m => m.DeclaringType == typeof(ConditioningControlPanel.Services.Safety.PanicAftermath))
+            .Select(m => (Member: m, Value: Get(m))).ToArray();
+        return () => { foreach (var (member, value) in values) Set(member, value); };
+    }
+
     internal static ProcessStateSnapshot Take(bool repairLateWrites = true)
     {
         var s = new ProcessStateSnapshot();

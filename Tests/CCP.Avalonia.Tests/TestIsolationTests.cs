@@ -483,6 +483,25 @@ public class TestIsolationTests
         });
 
     [Fact]
+    public void KeywordCommentVoiceTestRestoresPanicState()
+    {
+        var original = ProcessStateSnapshot.Take();
+        try
+        {
+            var now = System.Environment.TickCount64;
+            PanicAftermath.ArmQuiet(now);
+            var count = PanicAftermath.PanicCount;
+            new AwarenessFinishViewTests().KeywordCommentShowsButHoldsVoiceWhenIdle();
+            var deadline = now + (long)PanicAftermath.QuietWindow.TotalMilliseconds;
+            Assert.True(PanicAftermath.TriggersSilenced(deadline - 1));
+            Assert.False(PanicAftermath.TriggersSilenced(deadline));
+            Assert.True(PanicAftermath.HoldsEngineRestart);
+            Assert.Equal(count, PanicAftermath.PanicCount);
+        }
+        finally { original.Restore(); }
+    }
+
+    [Fact]
     public void RestorePutsPanicQuietEngineHoldAndCountBack()
     {
         var original = ProcessStateSnapshot.Take();
