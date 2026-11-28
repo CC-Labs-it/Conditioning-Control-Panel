@@ -133,6 +133,40 @@ public sealed partial class GameWindowTests
         }
         finally { w.Close(); (s.OfflineMode, s.RemoteMediaConsented, s.MediaSource) = old; }
     });
+    /// <summary>WPF ArcademyHostService.cs:4977-4980, 5034: a waiter stays behind the fetch it queued on, even when the pile moves to new subs mid-fetch.</summary>
+    [Fact]
+    public void Arcademy_PileChangeKeepsWaitersWithTheirFetch() => Run((_, _) =>
+    {
+        var s = CoreSettings.Current; var old = (s.OfflineMode, s.RemoteMediaConsented, s.MediaSource);
+        var w = new GameWindow(GameWindow.ArcademySpec); var frames = new List<JObject>();
+        var pending = new System.Collections.Concurrent.ConcurrentDictionary<string, TaskCompletionSource<List<FypAssetManifest.Entry>>>();
+        w.Posted += json => frames.Add(JObject.Parse(json));
+        w.ArcademyFetchForTests = (_, subs) => (pending[subs[0]] = new(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
+        void Land(string pile) => (SpinWait.SpinUntil(() => pending.ContainsKey(pile), TimeSpan.FromSeconds(10)) ? pending[pile] : throw new TimeoutException(pile)).SetResult(Enumerable.Range(1, 3).Select(i => new FypAssetManifest.Entry
+            { Id = "scrolller/" + pile + "/" + i, Url = $"https://example.com/{pile}{i}.jpg", Type = "image", Folder = "r/" + pile }).ToList());
+        string[] Final(string id)
+        {
+            Assert.True(SpinWait.SpinUntil(() => { Dispatcher.UIThread.RunJobs(); return frames.Any(f => (string?)f["reqId"] == id && (bool?)f["done"] == true); }, TimeSpan.FromSeconds(10)));
+            return ((JArray)frames.Last(f => (string?)f["reqId"] == id)["urls"]!).Select(u => (string)u["url"]!).ToArray();
+        }
+        void Ask(string id, string pile) => w.HandleMessage($"{{\"type\":\"assets-request\",\"reqId\":\"{id}\",\"count\":1,\"subs\":[\"{pile}\"],\"tag\":\"target\"}}");
+        try
+        {
+            (s.OfflineMode, s.RemoteMediaConsented, s.MediaSource) = (false, true, "online");
+            Ask("a", "cats"); Ask("b", "cats"); Ask("d", "dogs"); Ask("e", "dogs");
+            Land("dogs");
+            Assert.Equal(new[] { "https://example.com/dogs1.jpg" }, Final("d"));
+            Assert.Equal(new[] { "https://example.com/dogs2.jpg" }, Final("e"));
+            Assert.DoesNotContain(frames, f => (string?)f["reqId"] == "b" && (bool?)f["done"] == true);
+            Land("cats");
+            Assert.Equal(new[] { "https://example.com/cats1.jpg" }, Final("a"));
+            Assert.Equal(new[] { "https://example.com/cats2.jpg" }, Final("b"));
+            Ask("f", "dogs");   // the stale cats batch is not the dogs pile's stock
+            Assert.Equal(new[] { "https://example.com/dogs3.jpg" }, Final("f"));
+            Assert.Equal(2, pending.Count);
+        }
+        finally { w.Close(); (s.OfflineMode, s.RemoteMediaConsented, s.MediaSource) = old; }
+    });
     [Theory]
     [InlineData("samples")]
     [InlineData("settings")]
