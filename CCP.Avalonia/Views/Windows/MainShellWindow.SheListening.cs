@@ -8,8 +8,7 @@
 // The mic opens through MainShellWindow.VoiceCommands.cs (the wake loop / push-to-talk feeding
 // Core VoiceCommands) exactly under WPF's conditions; every repaint here reconciles it, so arm,
 // Stop, revoke and an entitlement lapse all open or close it. The title-bar mic pill (WPF
-// MainWindow.LabTab.cs UpdateMicPill) lives here too. ponytail: not here - sherpa wake engine
-// (calibration shows WPF's "not installed" notice).
+// MainWindow.LabTab.cs UpdateMicPill) lives here too. Calibration is not yet ported.
 //
 // _slLoading, not _isLoading: a partial-class field is declared once, and Avalonia's CheckBox
 // raises IsCheckedChanged on a programmatic set, so seeding needs its own guard.
@@ -160,6 +159,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void RefreshSheListeningStatus()
         {
             UpdateMicPill(); // WPF SheListening.cs:423: every arm/disarm flows through here
+            RefreshWakeEngineStatus();
             var tab = SheListeningPage;
             if (tab == null) return;
 
@@ -285,18 +285,24 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             if (Named<Border>("MicActivePill") is not { } pill) return;
             var s = CoreSettings.Current;
-            pill.IsVisible = (s.MicConsentGiven && s.SpeechWakeWordEnabled) || VoiceSpeech?.IsListening == true;
+            pill.IsVisible = (s.MicConsentGiven && s.SpeechWakeWordEnabled) || VoiceSpeech?.IsListening == true || Platform.PulseMicSource.Wake?.IsListening == true;
         }
 
         private Services.Speech.SpeechEngine? _micPillEngine;
+        private Platform.SherpaWakeSpotter? _micPillWake;
 
         /// <summary>WPF WireMicActivePill (MainWindow.xaml.cs:3594): repaint the pill on every capture
         /// change. The event fires off the capture thread, so it is posted.</summary>
         private void InitializeMicActivePill()
         {
+            void LanguageChanged(object? sender, EventArgs e) => global::Avalonia.Threading.Dispatcher.UIThread.Post(RefreshWakeEngineStatus);
+            LocalizationManager.Instance.LanguageChanged += LanguageChanged;
+            Closed += (_, _) => LocalizationManager.Instance.LanguageChanged -= LanguageChanged;
             _micPillEngine = VoiceSpeech;
             if (_micPillEngine != null) _micPillEngine.ListeningChanged += OnMicListeningChanged;
-            Closed += (_, _) => { if (_micPillEngine != null) _micPillEngine.ListeningChanged -= OnMicListeningChanged; };
+            _micPillWake = Platform.PulseMicSource.Wake;
+            if (_micPillWake != null) _micPillWake.ListeningChanged += OnMicListeningChanged;
+            Closed += (_, _) => { if (_micPillEngine != null) _micPillEngine.ListeningChanged -= OnMicListeningChanged; if (_micPillWake != null) _micPillWake.ListeningChanged -= OnMicListeningChanged; };
             if (Named<Border>("MicActivePill") is { } pill)
                 pill.KeyDown += (_, e) =>   // P17: the privacy stop is keyboard-reachable
                 {
@@ -310,10 +316,27 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void OnMicListeningChanged(object? sender, bool listening) =>
             global::Avalonia.Threading.Dispatcher.UIThread.Post(UpdateMicPill);
 
-        /// <summary>WPF SL_Calibrate_Click's first branch: this head has no sherpa wake engine
-        /// (App.WakeWord), so it is never configured and WPF's notice is the whole answer.</summary>
+        internal void RefreshWakeEngineStatus()
+        {
+            var tab = SheListeningPage;
+            if (tab == null) return;
+            var wake = WakeSpotterOverride ?? Platform.PulseMicSource.Wake;
+            var mic = WakeMicOverride ?? Platform.PulseMicSource.Mic;
+            var settings = CoreSettings.Current;
+            var key = wake?.IsConfigured != true ? "she_wake_model_missing"
+                : mic != null && wake.IsAvailable(mic.HasDevice, settings.SpeechWakeThreshold, settings.SpeechWakeBoost)
+                    ? "she_wake_model_active" : "she_wake_model_failed";
+            var text = Loc.Get(key);
+            tab.TxtSL_WakeEngineStatus.Text = text;
+            if (tab.TxtSL_WakeEngineStatus.Parent?.Parent is Control row) ToolTip.SetTip(row, text);
+        }
+
+        /// <summary>WPF SheListening.cs:90-95: explain when the model is missing.</summary>
         internal void SL_Calibrate_Click()
-            => _ = Dialogs.MessageDialog.ShowAsync(this, "Calibrate wake word",
-                Loc.Get("she_wake_calibration_unavailable"));
+        {
+            var wake = WakeSpotterOverride ?? Platform.PulseMicSource.Wake;
+            var key = wake?.IsConfigured == true ? "she_wake_calibration_unavailable" : "she_wake_model_missing";
+            _ = Dialogs.MessageDialog.ShowAsync(this, "Calibrate wake word", Loc.Get(key));
+        }
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -13,6 +14,7 @@ using ConditioningControlPanel.Avalonia.Views.Windows;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
+using ConditioningControlPanel.Avalonia.Platform;
 using Xunit;
 
 namespace CCP.Avalonia.Tests;
@@ -55,7 +57,13 @@ public sealed class SheListeningCommandRowsTests
             loc.SetLanguage("en");
             var tab = new SheListeningTabView();
             var grid = Assert.IsAssignableFrom<Control>(tab.TxtSL_WakeEngineStatus.Parent!.Parent);
-            var shell = new MainShellWindow();
+            var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
+            Directory.CreateDirectory(root);
+            foreach (var name in new[] { "encoder.onnx", "decoder.onnx", "joiner.onnx", "tokens.txt", "keywords.txt" })
+                File.WriteAllText(Path.Combine(root, name), "");
+            using var configured = new SherpaWakeSpotter(root);
+            using var missing = new SherpaWakeSpotter(Path.Combine(root, "missing"));
+            var shell = new MainShellWindow { WakeSpotterOverride = configured };
             shell.Show();
             try
             {
@@ -85,12 +93,19 @@ public sealed class SheListeningCommandRowsTests
                     var dialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
                     Assert.Equal(calibration, dialog.FindControl<TextBlock>("TxtMessage")!.Text);
                     dialog.Close();
+                    shell.WakeSpotterOverride = missing;
+                    shell.SL_Calibrate_Click();
+                    var missingDialog = Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
+                    Assert.Equal(Loc.Get("she_wake_model_missing"), missingDialog.FindControl<TextBlock>("TxtMessage")!.Text);
+                    missingDialog.Close();
+                    shell.WakeSpotterOverride = configured;
                 }
             }
             finally
             {
                 foreach (var dialog in shell.OwnedWindows.ToList()) dialog.Close();
                 shell.RequestExit();
+                Directory.Delete(root, true);
                 loc.SetLanguage(saved);
             }
         });

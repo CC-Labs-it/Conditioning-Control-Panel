@@ -4,8 +4,7 @@
 //
 // The mic opens only under WPF's conditions: VoiceInputRules.ModesToRun (consent + an armed mode +
 // premium or the "voice" free day + an available engine), re-read at every reconcile.
-// ponytail: no sherpa KWS spotter (the Vosk wake grammar is WPF's fallback path). Intents with no
-// seam here are left out of the grammar.
+// Intents with no seam here are left out of the grammar.
 
 using System;
 using System.Linq;
@@ -206,7 +205,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void CancelVoicePrompt()
         {
             Interlocked.Increment(ref _voiceConfirmationGeneration);
-            try { _voicePromptCts?.Cancel(); } catch { }
+            try { _voicePromptCts?.Cancel(); _wakeWaitCts?.Cancel(); } catch { }
             try { VoiceSpeech?.StopListening(); } catch { }
         }
 
@@ -274,7 +273,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             try
             {
                 _wakeWaitCts?.Cancel();
-                for (int i = 0; i < 24 && sp.IsListening; i++) await Task.Delay(25).ConfigureAwait(false);
+                for (int i = 0; i < 24 && (sp.IsListening || Platform.PulseMicSource.Wake?.IsListening == true); i++) await Task.Delay(25).ConfigureAwait(false);
                 if (allowCommands)
                 {
                     if (await VoiceCmds.TryHandleVoiceCommandAsync(cts.Token).ConfigureAwait(false)) return;
@@ -396,7 +395,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         internal void PostWakeWordHeard(string? heard, CancellationToken loopCt) =>
             Dispatcher.UIThread.Post(() =>
             {
-                if (!loopCt.IsCancellationRequested && !_windowClosed) OnWakeWordHeard(heard);
+                if (!loopCt.IsCancellationRequested && !_windowClosed)
+                {
+                    if (WakeHeardOverride is { } hook) hook(heard); else OnWakeWordHeard(heard);
+                }
             });
 
         private void StopWakeLoop()
@@ -407,14 +409,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         /// <summary>WPF WakeLoopAsync, Vosk branch: wake variants plus the command grammar, so a
         /// one-breath "hey bambi &lt;command&gt;" is transcribed by this listen.</summary>
-        private async Task WakeLoopAsync(CancellationToken loopCt)
+        internal SpeechEngine? WakeSpeechOverride;
+        internal Func<bool>? WakeSpeechReadyOverride;
+        internal Platform.SherpaWakeSpotter? WakeSpotterOverride;
+        internal IMicSource? WakeMicOverride;
+        internal Func<System.Collections.Generic.IEnumerable<string>, CancellationToken, Task<string?>>? WakeVoskOverride;
+        internal Action<string?>? WakeHeardOverride;
+
+        internal async Task WakeLoopAsync(CancellationToken loopCt)
         {
             try
             {
                 while (!loopCt.IsCancellationRequested)
                 {
-                    var sp = VoiceSpeech;
-                    if (Volatile.Read(ref _voiceBusyFlag) != 0 || sp == null || sp.IsListening || !sp.IsAvailable)
+                    var sp = WakeSpeechOverride ?? VoiceSpeech;
+                    if (Volatile.Read(ref _voiceBusyFlag) != 0 || sp == null || sp.IsListening || !(WakeSpeechReadyOverride?.Invoke() ?? sp.IsAvailable))
                     {
                         await Task.Delay(350, loopCt).ConfigureAwait(false);
                         continue;
@@ -425,15 +434,25 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         await Task.Delay(500, loopCt).ConfigureAwait(false);
                         continue;
                     }
+                    var kws = WakeSpotterOverride ?? Platform.PulseMicSource.Wake;
+                    var mic = WakeMicOverride ?? Platform.PulseMicSource.Mic;
+                    var settings = CoreSettings.Current;
+                    bool useKws = mic != null && kws?.IsAvailable(mic.HasDevice, settings.SpeechWakeThreshold, settings.SpeechWakeBoost) == true;
                     var grammar = VoiceInputRules.ExpandWakeVariants(words);
-                    foreach (var alias in VoiceCmds.Grammar())
-                        if (!grammar.Contains(alias, StringComparer.OrdinalIgnoreCase)) grammar.Add(alias);
+                    if (!useKws)
+                        foreach (var alias in VoiceCmds.Grammar())
+                            if (!grammar.Contains(alias, StringComparer.OrdinalIgnoreCase)) grammar.Add(alias);
 
                     string? heard = null;
+                    bool kwsHit = false;
                     using (var waitCts = CancellationTokenSource.CreateLinkedTokenSource(loopCt))
                     {
                         _wakeWaitCts = waitCts;
-                        try { heard = await sp.WaitForWakeWordAsync(grammar, waitCts.Token).ConfigureAwait(false); }
+                        try
+                        {
+                            if (useKws) kwsHit = await kws!.WaitForWakeAsync(mic!, settings.SpeechWakeThreshold, settings.SpeechWakeBoost, waitCts.Token, settings.SpeechNoiseSuppression, settings.SpeechNoiseGateFactor).ConfigureAwait(false);
+                            else heard = await (WakeVoskOverride?.Invoke(grammar, waitCts.Token) ?? sp.WaitForWakeWordAsync(grammar, waitCts.Token)).ConfigureAwait(false);
+                        }
                         catch (OperationCanceledException) { }
                         catch (Exception ex)
                         {
@@ -443,8 +462,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         finally { _wakeWaitCts = null; }
                     }
                     if (loopCt.IsCancellationRequested) break;
-                    if (string.IsNullOrWhiteSpace(heard)) continue;
-                    Log.Information("Wake word heard ({Chars} chars of transcript)", heard.Length);
+                    if (!kwsHit && string.IsNullOrWhiteSpace(heard)) continue;
+                    Log.Information("Wake word heard ({Chars} chars of transcript)", heard?.Length ?? 0);
                     PostWakeWordHeard(heard, loopCt);
                     await Task.Delay(400, loopCt).ConfigureAwait(false);   // let the prompt claim the mic
                 }
