@@ -254,7 +254,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _openDwell?.Stop();
             };
 
-            Opened += (_, _) => UpdateInputRegion();
+            Opened += (_, _) => { SetPassive(this); UpdateInputRegion(); };
             SizeChanged += (_, _) => UpdateInputRegion();
             ScalingChanged += (_, _) => UpdateInputRegion();
 
@@ -702,6 +702,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             return new PixelRect(panel ? 0 : right ? w - strip : 0, 0, panel ? w : strip, h);
         }
 
+        internal Action<global::Avalonia.Controls.TopLevel> SetPassive = X11Overlay.SetPassive;
         internal Action<PixelRect[]>? InputRegionOverride;
         private void UpdateInputRegion()
         {
@@ -887,6 +888,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     _expanded = true;
                     _panel.IsVisible = true;
                     _strip.IsVisible = false;
+                    UpdateInputRegion();
                     Animate(0);
                 }
                 else if (!_panel.IsPointerOver)
