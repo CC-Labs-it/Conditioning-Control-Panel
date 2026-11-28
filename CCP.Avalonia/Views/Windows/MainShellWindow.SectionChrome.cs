@@ -380,6 +380,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             AddHandler(KeyDownEvent, (_, e) =>
             {
                 if (e.Key != global::Avalonia.Input.Key.K || e.KeyModifiers != global::Avalonia.Input.KeyModifiers.Control) return;
+                // WPF MainWindow.TabNavigation.cs:1115: leave a rebound camera chord to its handler.
+                if (CameraChord() == (ConditioningControlPanel.Services.EmiDesk.ChordMods.Ctrl, "K")) return;
                 e.Handled = true;
                 if (SettingsPaletteWindow.FirstChordPress()) SettingsPaletteWindow.Toggle(this);
             }, RoutingStrategies.Tunnel, handledEventsToo: true);

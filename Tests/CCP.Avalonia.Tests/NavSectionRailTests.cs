@@ -208,6 +208,40 @@ public sealed class NavSectionRailTests
 
     private const double play_ZoneTopGap = ConditioningControlPanel.Avalonia.Views.Tabs.PlayTabView.ZoneTopGap;
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CameraCtrlKTakesPriorityOverPalette(bool global) => Run(w =>
+    {
+        var settings = CoreSettings.Current;
+        var prompt = settings.CompanionPrompt;
+        var old = (prompt.CameraShortcutKey, prompt.CameraShortcutModifiers, prompt.CameraShortcutGlobal,
+            settings.WebcamConsentGiven, settings.WebcamConsentVersion);
+        var consentRequests = 0;
+        try
+        {
+            (prompt.CameraShortcutKey, prompt.CameraShortcutModifiers, prompt.CameraShortcutGlobal) = ("K", "Control", global);
+            settings.WebcamConsentGiven = false;
+            w.QuickRecalPlatformSupported = true;
+            w.QuickRecalWayland = false;
+            w.CameraHotkeyWayland = () => false;
+            w.RegisterQuickRecal = (_, _) => null;
+            w.RegisterCameraHotkey = (_, _, _, _) => null;
+            w.ShowCameraConsent = _ => { consentRequests++; return Task.FromResult(false); };
+            w.StartQuickRecalHotkey();
+            w.RaiseEvent(new KeyEventArgs
+                { RoutedEvent = InputElement.KeyDownEvent, Key = Key.K, KeyModifiers = KeyModifiers.Control });
+            Assert.Equal(1, consentRequests);
+            Assert.False(SettingsPaletteWindow.IsOpen);
+        }
+        finally
+        {
+            w.StopQuickRecalHotkey();
+            (prompt.CameraShortcutKey, prompt.CameraShortcutModifiers, prompt.CameraShortcutGlobal,
+                settings.WebcamConsentGiven, settings.WebcamConsentVersion) = old;
+        }
+    });
+
     [Fact]
     public void CtrlKHeldTogglesOnce_AFreshPressCloses() => Run(w =>
     {
