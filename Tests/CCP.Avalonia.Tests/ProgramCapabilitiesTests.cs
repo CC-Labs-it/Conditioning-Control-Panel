@@ -182,10 +182,10 @@ public sealed class ProgramCapabilitiesTests
     public void OverlayAndLockdownHooksAreWired()
     {
         string Src(params string[] p) => Code(File.ReadAllText(Path.Combine(new[] { RepoRoot(), "CCP.Avalonia" }.Concat(p).ToArray())));
-        foreach (var overlay in new[] { "PinkFilterOverlay.cs", "SpiralOverlay.cs" })
+        foreach (var (overlay, showing) in new[] { ("PinkFilterOverlay.cs", @"Windows\.Count > 0"), ("SpiralOverlay.cs", "IsShowing") })   // the spiral also counts shared-stage hosted cards
         {
             var src = Src("Views", "Overlays", overlay);
-            Assert.Matches(@"QuestMinutes\.Follow\(Windows\.Count > 0\)", src);
+            Assert.Matches($@"QuestMinutes\.Follow\({showing}\)", src);
             Assert.Matches(@"QuestMinutes\.Follow\(false\)", src);
         }
         Assert.Matches(@"LockdownDeactivated \+=[^;]*?TrackLockdownCompleted\(", Src("App.axaml.cs"));

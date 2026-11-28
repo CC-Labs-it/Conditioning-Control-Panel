@@ -17,8 +17,8 @@ using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Chaos;
-using ConditioningControlPanel.Services.Fyp.Online;
 using ConditioningControlPanel.Services.Flash;
+using ConditioningControlPanel.Services.Fyp.Online;
 using ConditioningControlPanel.Services.UI;
 using Serilog;
 
@@ -83,6 +83,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             return PickFiles(batch, files, FlashOverlay.PackImages, s, RemoteFlashSource.ReadyCount,
                 () => RemoteFlashSource.TryTake(FlashOverlay.Rng));
         }
+
+        internal static List<string> PickFiles(int batch, IReadOnlyList<string> files, PackMediaPool packs, AppSettings s)
+            => PickFiles(batch, files, packs, s, RemoteFlashSource.ReadyCount, () => RemoteFlashSource.TryTake(FlashOverlay.Rng));
 
         internal static List<string> PickFiles(int batch, IReadOnlyList<string> files, PackMediaPool packs)
             => PickFiles(batch, files, packs, null, 0, () => null);
@@ -328,7 +331,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             long len = 0;
             if (animatedFormat) { try { len = new FileInfo(path).Length; } catch { } }
             f.Animated = remote
-                ? _cascade.AnimatedAlive < GifCascade.MaxAnimated && CoreSettings.Current.MotionLevel != MotionLevel.Off
+                ? !string.IsNullOrEmpty(clipPath) && _cascade.AnimatedAlive < GifCascade.MaxAnimated && CoreSettings.Current.MotionLevel != MotionLevel.Off
                 : _cascade.CanAnimate(animatedFormat, len);
 
             double size = _cascade.Size;
