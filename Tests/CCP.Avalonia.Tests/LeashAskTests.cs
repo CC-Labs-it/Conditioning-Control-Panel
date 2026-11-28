@@ -253,7 +253,7 @@ public sealed class LeashAskTests
         });
 
     [Fact]
-    public void ManualLookBeforeServiceRebindDoesNotQueueTheSameOfferAgain() =>
+    public void ManualLookBeforeServiceRebindDoesNotQueueTheSameOfferAfterDismissal() =>
         Run((shell, page, _, _) =>
         {
             var service = LeashHead.Service;
