@@ -477,7 +477,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
         }
 
         private void RefreshWebcamStartLabel()
-            => BtnWebcamDebugStart.Content = Platform.WebcamTracker.Instance.IsRunning ? "Stop tracking" : "Start tracking";
+            => BtnWebcamDebugStart.Content = IsWebcamRunning() ? "Stop tracking" : "Start tracking";
 
         /// <summary>WPF BtnWebcamReviewPrivacy_Click: the consent dialog as review; Cancel changes nothing.</summary>
         private async void BtnWebcamReviewPrivacy_Click(object? sender, RoutedEventArgs e)
@@ -542,9 +542,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
             catch (Exception ex) { Log.Warning(ex, "Webcam tracker test failed"); }
         }
 
-        /// <summary>WPF BtnWebcamDebugCalibrate_Click (MainWindow.LabTab.cs:754): consent when stale,
-        /// start tracking if off (left running, as WPF), then the 16-point window.</summary>
-        private async void BtnWebcamDebugCalibrate_Click(object? sender, RoutedEventArgs e)
+        internal Func<bool> IsWebcamRunning { get; set; } = () => Platform.WebcamTracker.Instance.IsRunning;
+        internal Func<Task> StopWebcamDebug { get; set; } = () => Platform.WebcamTracker.Instance.StopAsync();
+        internal Func<Window, Task<bool?>> ShowCalibration { get; set; } = WebcamCalibrationWindow.ShowDialogWithRecalibrate;
+        internal Task? WebcamCalibrateTask { get; private set; }
+
+        /// <summary>WPF MainWindow.LabTab.cs:766: stop an auto-started camera if calibration fails.</summary>
+        private void BtnWebcamDebugCalibrate_Click(object? sender, RoutedEventArgs e) =>
+            WebcamCalibrateTask = CalibrateAsync();
+
+        private async Task CalibrateAsync()
         {
             try
             {
@@ -556,14 +563,28 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.AppSettings
                     await new WebcamConsentDialog().ShowDialogSafe(owner);
                     if (!Services.Webcam.WebcamConsent.IsCurrent(CoreSettings.Current)) { AppendWebcamDebugLog("Consent declined."); return; }
                 }
-                if (!tracker.IsRunning)
+                var startedHere = false;
+                if (!IsWebcamRunning())
                 {
-                    if (!await tracker.StartAsync()) { AppendWebcamDebugLog($"Couldn't start tracking. {tracker.LastError}"); return; }
+                    if (!await StartWebcamDebug()) { AppendWebcamDebugLog($"Couldn't start tracking. {tracker.LastError}"); return; }
+                    startedHere = true;
                     RefreshWebcamStartLabel();
                 }
-                AppendWebcamDebugLog("Opening calibration window…");
-                var result = await WebcamCalibrationWindow.ShowDialogWithRecalibrate(owner);
-                AppendWebcamDebugLog(result == true ? "Calibration applied. Gaze classification should now be much more accurate." : "Calibration cancelled or failed.");
+                bool? result = null;
+                try
+                {
+                    AppendWebcamDebugLog("Opening calibration window…");
+                    result = await ShowCalibration(owner);
+                    AppendWebcamDebugLog(result == true ? "Calibration applied. Gaze classification should now be much more accurate." : "Calibration cancelled or failed.");
+                }
+                finally
+                {
+                    if (startedHere && result != true)
+                    {
+                        await StopWebcamDebug();
+                        RefreshWebcamStartLabel();
+                    }
+                }
             }
             catch (Exception ex) { Log.Warning(ex, "Webcam calibrate failed"); }
         }

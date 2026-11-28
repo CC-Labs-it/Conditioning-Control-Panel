@@ -13,8 +13,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
     ///
     /// <para>A release that moves things around can also hand the dialog a secondary CTA
     /// (<paramref name="tourAction"/>) - v6.8's "Show me around (60s)" upgrade tour. The button
-    /// is hidden whenever no action is passed, so every other caller gets the dialog it
-    /// always got. Copy is hardcoded English by repo convention (Windows/FeatureIntroPopup).</para>
+    /// is hidden while the upgrade tour offer is retired. The caller may still supply its
+    /// action and label for a future release.</para>
     ///
     /// <para>PORTED from ConditioningControlPanel/Dialogs/WhatsNewDialog.xaml.cs. Deviations:
     ///  - <c>DialogResult = true</c> becomes <c>Close(true)</c>; Avalonia carries the result
@@ -28,10 +28,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
     /// </summary>
     public partial class WhatsNewDialog : Window
     {
+        // WPF retired the upgrade tour offer in 6.11.0.
+        private const bool UpgradeTourOffered = false;
         private readonly Action? _tourAction;
 
         /// <summary>Render/design constructor: sample data so --render-view can draw the dialog,
-        /// with a tour action so the optional CTA is drawn too.</summary>
+        /// with a sample tour action.</summary>
         internal WhatsNewDialog() : this(
             "v7.0.0 — The Spiral",
             "• The Avalonia head now renders every ported view headless on Linux.\n" +
@@ -55,13 +57,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             var btnTour = this.FindControl<Button>("BtnTour")!;
             btnTour.Click += (_, _) => BtnTour_Click();
 
-            _tourAction = tourAction;
+            _tourAction = UpgradeTourOffered ? tourAction : null;
             if (tourAction != null)
             {
                 this.FindControl<TextBlock>("TourLabel")!.Text = string.IsNullOrWhiteSpace(tourButtonText)
                     ? "Show me around (60s)"
                     : tourButtonText;
-                btnTour.IsVisible = true;
+                btnTour.IsVisible = _tourAction != null;
             }
         }
 

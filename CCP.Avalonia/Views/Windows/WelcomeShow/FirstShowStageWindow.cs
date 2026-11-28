@@ -292,7 +292,8 @@ internal sealed partial class FirstShowStageWindow : Window
             if (!yes) { await Bundled(); return; }
             FirstShowPresets.AcceptRemoteMedia(s);
             FypOnlineCoordinator.ResetAllChannels();   // as the source chip does
-            CoreSettings.Save();
+            ConditioningControlPanel.Avalonia.Views.Tabs.AssetsTabView.InvalidateAssetPoolsAfterSelectionChange();
+            _main?.Named<ConditioningControlPanel.Avalonia.Views.Tabs.AssetsTabView>("AssetsTab")?.RefreshRemoteMediaPicker();
             OnlineMeterHead.Poke();
             Log.Information("[remote media] first show: consent given, source -> {Source}", s.MediaSource);
         }

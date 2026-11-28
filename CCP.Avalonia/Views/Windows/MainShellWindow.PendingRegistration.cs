@@ -175,7 +175,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         {
             while (true)
             {
-                var dialog = new DisplayNameDialog();
+                var dialog = new DisplayNameDialog { Topmost = true };
+                dialog.Activated += (_, _) => dialog.Topmost = false;
                 if (!await dialog.ShowDialogSafe<bool>(this) || string.IsNullOrWhiteSpace(dialog.DisplayName))
                 {
                     Log.Information("AccountService: User cancelled registration, logging out {Provider}", provider);

@@ -128,7 +128,10 @@ namespace ConditioningControlPanel.Localization
         /// (<see cref="VocabTokens"/>, e.g. <c>{companion}</c>) answer differently per mod. UI thread.
         /// </summary>
         public void NotifyVocabChanged()
-            => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Item[]"));
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Item[]"));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Item"));
+        }
 
         /// <summary>
         /// Get a localized string by key. Falls back to English, then to the key itself.

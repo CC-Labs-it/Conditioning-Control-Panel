@@ -50,7 +50,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 {
                     ["platform"] = "desktop", ["net"] = true, ["relayBase"] = null, ["texturableRemote"] = false,
                     ["gamepad"] = true, ["touch"] = false, ["forceRenderer"] = null, ["hostSfx"] = false,
-                    ["toys"] = true, ["toysConnected"] = toysConnected, ["prizeCounter"] = false,
+                    ["toys"] = true, ["toysConnected"] = toysConnected, ["prizeCounter"] = true,
                     ["trackPick"] = false, ["canSurface"] = false, ["mediaControls"] = false, ["songs"] = new JArray(),
                     ["friendInvite"] = true,
                     // B2: a host that offers no Scrolller pictures says so outright (boot.js: `init.caps.scrolller ? feed : null`,
