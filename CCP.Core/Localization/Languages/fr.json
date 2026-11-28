@@ -8833,8 +8833,8 @@
   "label_active_phrase_count": "{0} actives",
   "remote_media_offer_title": "Des médias sans téléchargement",
   "remote_media_offer_summary": "Tes dossiers sont vides - elle peut diffuser les médias en ligne à la place.",
-  "title_remote_media_consent": "Utiliser les médias de Reddit ?",
-  "msg_remote_media_consent": "Récupérer des médias depuis Reddit ?\n\nL'appli diffusera des images et des clips des subreddits que tu choisis, directement sur ta propre machine. Rien n'est enregistré sur ton disque, rien n'est envoyé et rien ne passe par nos serveurs.\n\nC'est du contenu pour adultes et nous ne le sélectionnons pas - tu choisis les niches et les subreddits, et seuls ceux-là sont récupérés.\n\nL'activer ?",
+  "title_remote_media_consent": "Utiliser les médias de Scrolller ?",
+  "msg_remote_media_consent": "Récupérer des médias depuis Scrolller ?\n\nL'appli diffusera des images et des clips des subreddits que tu choisis, directement sur ta propre machine. Des copies restent brièvement sur ton propre disque, rien n'est envoyé et rien ne passe par nos serveurs.\n\nC'est du contenu pour adultes et nous ne le sélectionnons pas - tu choisis les niches et les subreddits, et seuls ceux-là sont récupérés.\n\nL'activer ?",
   "lucky_xp_multiplier": "{0}x XP",
   "chaos_dvd_title": "DVD porno",
   "chaos_dvd_loading": "chargement",
@@ -9444,5 +9444,6 @@
   "promo_hours": "heures",
   "promo_minutes": "min",
   "native_repair_title": "Conditioning Control Panel - échec du démarrage",
-  "native_repair_message": "Conditioning Control Panel ne peut pas charger ses bibliothèques graphiques et ne peut pas démarrer.\n\nFermez l'application, supprimez ce dossier temporaire, puis relancez-la :\n\n{0}\n\nIl sera recréé automatiquement. Si le problème persiste, vérifiez si votre antivirus a mis des fichiers en quarantaine.\n\nDétails : {1}"
+  "native_repair_message": "Conditioning Control Panel ne peut pas charger ses bibliothèques graphiques et ne peut pas démarrer.\n\nFermez l'application, supprimez ce dossier temporaire, puis relancez-la :\n\n{0}\n\nIl sera recréé automatiquement. Si le problème persiste, vérifiez si votre antivirus a mis des fichiers en quarantaine.\n\nDétails : {1}",
+  "brain_drain_capture_failed": "Brain Drain ne peut pas capturer l’écran. Envoyez un rapport de bug."
 }
