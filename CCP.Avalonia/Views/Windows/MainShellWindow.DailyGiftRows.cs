@@ -20,7 +20,12 @@ public partial class MainShellWindow
         // WPF MaybePostConversionRows also runs after a server reading: the focus read's member flag lands late.
         void Extras() { if (IsVisible) DailyGiftFocus(); }
         Platform.AccountSeed.ProfileExtrasApplied += Extras;
-        Closed += (_, _) => Platform.AccountSeed.ProfileExtrasApplied -= Extras;
+        Platform.AccountSeed.TierReadingApplied += DailyGiftFocus;
+        Closed += (_, _) =>
+        {
+            Platform.AccountSeed.ProfileExtrasApplied -= Extras;
+            Platform.AccountSeed.TierReadingApplied -= DailyGiftFocus;
+        };
     }
 
     internal void DailyGiftFocus()

@@ -25,6 +25,23 @@ internal static class DesktopIdle
         return ReadX11(null);
     }
 
+    // The remote preview polls off the UI thread and must never wait on DBus or the X server, so it
+    // gets the last finished read and starts the next one (Wayland included, unlike ReadSeconds).
+    internal static Func<Task<int?>> Reader = ReadSecondsAsync;
+    internal static int Last;
+    private static int _reading;
+
+    internal static int LastSeconds()
+    {
+        if (Interlocked.Exchange(ref _reading, 1) == 0)
+            Task.Run(Reader).ContinueWith(t =>
+            {
+                Volatile.Write(ref Last, t.IsCompletedSuccessfully ? t.Result ?? 0 : 0);
+                Volatile.Write(ref _reading, 0);
+            }, TaskScheduler.Default);
+        return Volatile.Read(ref Last);
+    }
+
     internal static Task<int?> ReadSecondsAsync()
     {
         if (OperatingSystem.IsLinux() && (string.Equals(Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"), "wayland", StringComparison.OrdinalIgnoreCase)

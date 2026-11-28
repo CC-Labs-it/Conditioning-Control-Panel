@@ -170,6 +170,7 @@ internal sealed class LinuxRaceHost : IDisposable
                 if (!InFront && _escapeHeld) { _escapeHeld = false; Shell()?.OnRaceEscape(null); }
                 break;
             case RaceShellProtocol.Escape: ReadFrame(frame); break;
+            case RaceShellProtocol.Unresponsive: _window.MarkGlassroadUnresponsive(); break;
             case RaceShellProtocol.EscapeUp: if (_escapeHeld) { _escapeHeld = false; Shell()?.OnRaceEscape(false); } break;
             default:
                 _window.HandleMessage(frame.ToString(Formatting.None));   // the window's own Glassroad and shell frames
