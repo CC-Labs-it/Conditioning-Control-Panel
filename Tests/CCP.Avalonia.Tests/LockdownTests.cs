@@ -35,6 +35,21 @@ public sealed class LockdownTests
     }
 
     [Fact]
+    public async Task DurationPickerIncludesFortyAndFiftyMinutesInOrder()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureApp();
+            var tab = new LockdownTabView();
+            var picker = tab.FindControl<ComboBox>("CmbLockdownDuration")!;
+            Assert.Equal(new[] { "5", "10", "15", "20", "30", "40", "50", "60", "120", "240" },
+                picker.Items.OfType<ComboBoxItem>().Select(item => item.Tag?.ToString()).ToArray());
+            Assert.Equal("20", ((ComboBoxItem)picker.SelectedItem!).Tag?.ToString());
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
     public async Task LockdownArtworkUsesTheShippedSideHeroAndEmergencyPlates()
     {
         await AvaloniaTestDispatcher.RunAsync(() =>
