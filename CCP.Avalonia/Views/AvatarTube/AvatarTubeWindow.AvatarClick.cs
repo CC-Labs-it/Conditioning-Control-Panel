@@ -36,7 +36,7 @@ namespace ConditioningControlPanel.Avalonia.Views.AvatarTube
         {
             StopClickBounce();
             var host = this.FindControl<global::Avalonia.Controls.Grid>("ClickBounceHost");
-            if (host == null || ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced()) return;
+            if (host == null) return;
             _clickBounceScale = new ScaleTransform(1, 1);
             host.RenderTransform = _clickBounceScale;
             _clickBounceLoop = new BeatLoop(host, seconds => StepClickBounce(seconds * 1000)) { OnParked = StopClickBounce };

@@ -185,6 +185,36 @@ public sealed class TubeAvatarClickTests
     });
 
     [Fact]
+    public Task ClickBouncesDuringPanicQuietAndPanicStillStopsIt() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        var tube = new AvatarTubeWindow(null);
+        var old = AvatarTubeWindow.TestLive;
+        try
+        {
+            AvatarTubeWindow.TestLive = tube;
+            tube.Show();
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            Assert.True(ConditioningControlPanel.Services.Safety.PanicAftermath.TriggersSilenced());
+            tube.HandleAvatarClick();
+            var host = tube.FindControl<Grid>("ClickBounceHost")!;
+            var scale = Assert.IsType<ScaleTransform>(host.RenderTransform);
+            tube.StepClickBounce(80);
+            Assert.Equal(1.015, scale.ScaleX, 5);
+            PanicSurfaces.All.Single(x => x.Id == "tube-speech").Stop(null);
+            Assert.Null(host.RenderTransform);
+            tube.StepClickBounce(80);
+            Assert.Null(host.RenderTransform);
+        }
+        finally
+        {
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            AvatarTubeWindow.TestLive = old;
+            tube.Close();
+        }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task TwentyClicksReachAchievementEngine() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         var property = typeof(AvApp).GetProperty("Achievements", BindingFlags.Static | BindingFlags.NonPublic)!;
