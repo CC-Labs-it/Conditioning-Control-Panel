@@ -38,15 +38,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///  - The window binds the real Core <see cref="ChaosRunState"/> (CCP.Core/Services/Chaos/
     ///    ChaosModels.cs) exactly as WPF does; the render proof feeds it <see cref="ChaosHudSample"/>.
     ///    Tile brushes come from ChaosBoonColors.AccentOf/BackOf. ChaosRunHost owns the live
-    ///    run and pause lifecycle. The Warren-phase sidebar commands remain unported.
+    ///    run and pause lifecycle. The Warren-phase commands route through its preview host.
     ///  - <b>Win32.</b> The WPF window P/Invoked <c>GetWindowLong</c>/<c>SetWindowLong</c> to add
     ///    <c>WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE</c>, and <c>SetWindowPos(HWND_TOPMOST)</c> via
     ///    <c>ChaosWindowZ</c>. Both map without a shim: the ex-styles are
     ///    <c>ShowInTaskbar="False"</c> + <c>ShowActivated="False"</c> in the XAML, and the
     ///    topmost re-assert is <c>Topmost</c>. No <c>DllImport</c> survives - a net10.0 head has
-    ///    no user32. <c>X11Overlay.SetClickThrough</c> is deliberately NOT called: this HUD is
-    ///    interactive, and WPF never set <c>WS_EX_TRANSPARENT</c> on it either (the unpainted
-    ///    alpha-0 region is click-through by itself on both platforms).
+    ///    no user32. A native input region keeps the unpainted margin click-through.
     ///  - <b>Animation.</b> Every <c>DoubleAnimation</c>/<c>ColorAnimation</c> here is transient
     ///    juice (streak punch and shake, score pop, shield flash and pop, focus breath and blink,
     ///    the ready-glow breath, the clock's end-rush blink, the multiplier punch, the 180ms panel
@@ -255,6 +253,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _collapseRecheck?.Stop();
                 _openDwell?.Stop();
             };
+
+            Opened += (_, _) => UpdateInputRegion();
+            SizeChanged += (_, _) => UpdateInputRegion();
+            ScalingChanged += (_, _) => UpdateInputRegion();
 
             // Top-anchored and ~60% of the work-area height, so it doesn't span the whole
             // screen (shrinks from the bottom up). Left/right edge is chosen by ApplySide.
@@ -487,6 +489,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _expandedAt = DateTime.UtcNow;
             _panel.IsVisible = true;
             _strip.IsVisible = false;   // the panel is translucent — don't let the strip bleed through
+            UpdateInputRegion();
             Animate(0);
         }
 
@@ -637,6 +640,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 if (_expanded) return;
                 _panel.IsVisible = false;
                 _strip.IsVisible = true;
+                UpdateInputRegion();
             });
         }
 
@@ -685,6 +689,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             // Both switches (strip + expanded-header) stay in sync — whichever is visible reads right.
             StyleSwitch(_sideLeftBtn, _sideRightBtn, _sideLeftGlyph, _sideRightGlyph, onRight);
             StyleSwitch(_sideLeftBtn2, _sideRightBtn2, _sideLeftGlyph2, _sideRightGlyph2, onRight);
+            UpdateInputRegion();
+        }
+
+        // The panel remains interactive until its closing slide finishes. Coordinates are physical
+        // pixels relative to the window, as required by XFixes and the Win32 window region.
+        internal static PixelRect InputRect(double width, double height, double scale, bool right, bool panel)
+        {
+            int w = (int)Math.Ceiling(width * scale);
+            int h = (int)Math.Ceiling(height * scale);
+            int strip = Math.Min(w, (int)Math.Ceiling(116 * scale));
+            return new PixelRect(panel ? 0 : right ? w - strip : 0, 0, panel ? w : strip, h);
+        }
+
+        internal Action<PixelRect[]>? InputRegionOverride;
+        private void UpdateInputRegion()
+        {
+            if (!IsVisible || _closed || Bounds.Width <= 0 || Bounds.Height <= 0) return;
+            var rects = new[] { InputRect(Bounds.Width, Bounds.Height, RenderScaling, _onRight, _panel.IsVisible) };
+            if (InputRegionOverride is { } apply) apply(rects);
+            else X11Overlay.SetWindowInputRegion(this, rects);
         }
 
         private void StyleSwitch(Border leftBtn, Border rightBtn, IconGlyph leftGlyph, IconGlyph rightGlyph, bool onRight)
@@ -736,6 +760,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 _expanded = true;
                 _panel.IsVisible = true;
                 _strip.IsVisible = false;
+                UpdateInputRegion();
                 Animate(0);
             }
             else if (!_panel.IsPointerOver)
@@ -886,14 +911,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _pauseChoiceRow.IsVisible = false;
         }
 
-        /// <summary>A pocket tile was clicked: a filled tile unequips its boon (the service ignores
-        /// it once SINK has fired); an empty "+" tile brings the Warren forward on Enhancements.
-        /// ponytail: needs ChaosModeService (UnequipFromSidebar / OpenWarrenAt), wired when the
-        /// Chaos services move to Core. The tile id is already carried on Tag, as in WPF.</summary>
+        // WPF ChaosHudWindow.xaml.cs:621-627: equipped tiles leave the loadout; + opens the shop.
         private void PocketTile_Click(object? sender, PointerPressedEventArgs e)
         {
-            var id = (sender as Control)?.Tag as string;
-            Log.Debug("ChaosHud pocket tile clicked: {Id}", string.IsNullOrEmpty(id) ? "(empty slot)" : id);
+            if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+                ChaosRunHost.SidebarPocketClicked(this, (sender as Control)?.Tag as string);
         }
 
         /// <summary>Slide the panel to <paramref name="toX"/> over 180ms, eased out.</summary>
@@ -1198,10 +1220,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         /// <summary>WPF ChaosHudWindow.xaml.cs:949. In-run: pause via the run host.
-        /// ponytail: pre-run StartRunFromSidebar needs the Warren sidebar phase, not ported.</summary>
+        /// Pre-run starts through the Warren so its settings are saved.</summary>
         private void BtnHero_Click(object? sender, RoutedEventArgs e)
         {
-            if (_preRunMode) { Log.Debug("ChaosHud hero button: fall in (no sidebar phase on this head)"); return; }
+            if (_preRunMode) { ChaosRunHost.SidebarFallIn(this); return; }
             if (!ChaosRunHost.IsManuallyPaused) ChaosRunHost.ToggleManualPause();
         }
 
@@ -1221,8 +1243,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         }
 
         /// <summary>Pre-run ✖ beside FALL IN: leave the rabbit hole entirely (Warren + sidebar).
-        /// ponytail: needs ChaosModeService (CloseWarrenPhase).</summary>
-        private void BtnCloseMode_Click(object? sender, RoutedEventArgs e) => Close();
+        /// WPF ChaosModeService.cs:645-651 closes the Warren too.</summary>
+        private void BtnCloseMode_Click(object? sender, RoutedEventArgs e) => ChaosRunHost.SidebarClose(this);
 
         /// <summary>Re-assert the HUD to the top of the topmost band without stealing focus, so it
         /// stays visible over a mandatory video that a chaos payload raised mid-run.

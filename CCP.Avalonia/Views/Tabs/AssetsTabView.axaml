@@ -312,7 +312,7 @@
                             </Border>
                         </DockPanel>
                         <TextBlock x:Name="TxtOnlineMeterLine" Margin="0,5,0,0" FontSize="11.5" TextWrapping="Wrap" Foreground="#A7A7C1">
-                            <Run x:Name="TxtOnlineMeterSummary"/><Run x:Name="OnlinePlansSpace"/>
+                            <Run x:Name="TxtOnlineMeterSummary"/><Run x:Name="TxtOnlineMeterUpsell" Foreground="#E0B0FF"/><Run x:Name="OnlinePlansSpace"/>
                             <InlineUIContainer>
                                 <Button x:Name="BtnOnlineSeePlans" Content="{loc:Str online_see_plans}" Cursor="Hand"
                                         Padding="0" MinHeight="0" MinWidth="0" FontSize="11.5" FontWeight="SemiBold"
@@ -327,8 +327,10 @@
                                 <TextBlock Text="{loc:Str online_official_stamp}" FontSize="9" FontWeight="ExtraBold"
                                            Foreground="{DynamicResource PinkBrush}"/>
                             </Border>
-                            <TextBlock Text="{loc:Str online_official_stamped_line}" FontSize="11.5" Foreground="#CCCCE0"
-                                       VerticalAlignment="Center" TextWrapping="Wrap"/>
+                            <fx:SafeHyperlinkButton x:Name="OnlineStampedLink" Click="ScrolllerLink_Click" Padding="0"
+                                                    Foreground="#CCCCE0" VerticalAlignment="Center">
+                                <TextBlock Text="{loc:Str online_official_stamped_line}" FontSize="11.5" TextWrapping="Wrap"/>
+                            </fx:SafeHyperlinkButton>
                         </StackPanel>
                     </StackPanel>
                 </Border>

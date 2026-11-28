@@ -46,7 +46,9 @@ public class LockdownDoseEngineTests
                 Assert.Contains("starts or restarts the engine", LockdownTabView.LockdownWarning(20, s, false));
                 ld.Activate(TimeSpan.FromMinutes(20));
                 Assert.False(CoreEngine.IsRunning);
-                await Task.Delay(TimeSpan.FromSeconds(3)); // the real 2 second kickoff
+                var elapsed = System.Diagnostics.Stopwatch.StartNew();
+                while (!CoreEngine.IsRunning && elapsed.Elapsed < TimeSpan.FromSeconds(15))
+                    await Task.Delay(50); // Wait for the real 2 second dispatcher kickoff under load.
                 Assert.True(CoreEngine.IsRunning);
                 Assert.Equal(count, s.TotalSessions); // system starts are not user sessions
                 ld.Deactivate();
@@ -126,7 +128,7 @@ public class LockdownDoseEngineTests
                 for (var i = 0; i < 5; i++) shell.EnforceLockdownDoseEngine(false);
                 Assert.False(CoreEngine.IsRunning);
                 if (exitBeforePortal) ld.Deactivate();   // the user's start is not the keeper's to take back
-                bound.TrySetResult("F8");
+                bound.TrySetResult(MainShellWindow.PortalKeyForTest);   // the desktop bound the asked key (#1752)
                 var until = System.Diagnostics.Stopwatch.StartNew();
                 while (!CoreEngine.IsRunning && until.Elapsed < TimeSpan.FromSeconds(5)) await Task.Delay(20);
                 Assert.True(CoreEngine.IsRunning);
@@ -136,12 +138,13 @@ public class LockdownDoseEngineTests
             }
             finally
             {
-                bound.TrySetResult("F8");
+                bound.TrySetResult(MainShellWindow.PortalKeyForTest);   // the desktop bound the asked key (#1752)
                 PortalPanicShortcut.BindForTests = null;
                 ld.Dispose(); MainShellWindow.StopEngine(); LockdownService.Current = null; shell.RequestExit();
                 MainShellWindow.ReleasePortalWhenUnused();
                 await PortalPanicShortcut.UnbindAsync();
                 Dispatcher.UIThread.RunJobs();
+                MainShellWindow.ResetPortalForTests();   // no portal static outlives the test (#1752 CI)
             }
         });
     }

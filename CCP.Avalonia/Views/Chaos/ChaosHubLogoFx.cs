@@ -62,7 +62,50 @@ internal sealed class ChaosHubLogoFx : Control
         base.OnDetachedFromVisualTree(e);
     }
 
-    private static SKColorFilter Channel(int channel)
+    // Green-channel twinkle anchors: the brightest cells of a 96 px wide copy (WPF ChaosBackdropService.cs:436-466).
+    internal static (float x, float y, float weight)[] Spots(SKBitmap raw)
+    {
+        int h = Math.Max(1, raw.Height * 96 / Math.Max(1, raw.Width));
+        using var small = raw.Resize(new SKImageInfo(96, h), SKFilterQuality.Medium);
+        if (small != null)
+        {
+            int cols = Math.Max(1, small.Width / 8), rows = Math.Max(1, small.Height / 8);
+            var best = new (float v, int x, int y)[cols * rows];
+            float max = .001f;
+            for (int y = 0; y < small.Height; y++) for (int x = 0; x < small.Width; x++)
+            {
+                float v = small.GetPixel(x, y).Green / 255f;
+                int i = Math.Min(rows - 1, y * rows / small.Height) * cols + Math.Min(cols - 1, x * cols / small.Width);
+                if (v > best[i].v) best[i] = (v, x, y);
+                max = Math.Max(max, v);
+            }
+            return best.Where(b => b.v > max * .5f)
+                .OrderByDescending(b => b.v).Take(10)
+                .Select(b => ((b.x + .5f) / small.Width, (b.y + .5f) / small.Height, b.v / max)).ToArray();
+        }
+        return Array.Empty<(float, float, float)>();
+    }
+
+    // The art's glow pixels (art x red mask), blurred (WPF ChaosBackdropService.cs:378-401).
+    internal static SKImage Bloom(SKImage source, SKImage mask)
+    {
+        int w = Math.Min(source.Width, 540), bh = Math.Max(1, source.Height * w / source.Width);
+        var info = new SKImageInfo(w, bh, SKColorType.Rgba8888, SKAlphaType.Premul);
+        var rect = new SKRect(0, 0, w, bh);
+        using var s1 = SKSurface.Create(info);
+        s1.Canvas.Clear(SKColors.Transparent);
+        using (var p = new SKPaint { FilterQuality = SKFilterQuality.Medium }) s1.Canvas.DrawImage(source, rect, p);
+        using (var filter = Channel(0))
+        using (var p = new SKPaint { BlendMode = SKBlendMode.DstIn, ColorFilter = filter, FilterQuality = SKFilterQuality.Medium }) s1.Canvas.DrawImage(mask, rect, p);
+        using var masked = s1.Snapshot();
+        using var s2 = SKSurface.Create(info);
+        s2.Canvas.Clear(SKColors.Transparent);
+        using (var blur = SKImageFilter.CreateBlur(w * .013f, w * .013f))
+        using (var p = new SKPaint { ImageFilter = blur }) s2.Canvas.DrawImage(masked, rect, p);
+        return s2.Snapshot();
+    }
+
+    internal static SKColorFilter Channel(int channel)
     {
         var m = new float[20];
         m[4] = m[9] = m[14] = 1;
@@ -84,38 +127,8 @@ internal sealed class ChaosHubLogoFx : Control
             if (raw == null || source == null) return;
             _logoWidth = source.Width; _logoHeight = source.Height;
             _mask = SKImage.FromBitmap(raw);
-            int h = Math.Max(1, raw.Height * 96 / Math.Max(1, raw.Width));
-            using var small = raw.Resize(new SKImageInfo(96, h), SKFilterQuality.Medium);
-            if (small != null)
-            {
-                int cols = Math.Max(1, small.Width / 8), rows = Math.Max(1, small.Height / 8);
-                var best = new (float v, int x, int y)[cols * rows];
-                float max = .001f;
-                for (int y = 0; y < small.Height; y++) for (int x = 0; x < small.Width; x++)
-                {
-                    float v = small.GetPixel(x, y).Green / 255f;
-                    int i = Math.Min(rows - 1, y * rows / small.Height) * cols + Math.Min(cols - 1, x * cols / small.Width);
-                    if (v > best[i].v) best[i] = (v, x, y);
-                    max = Math.Max(max, v);
-                }
-                _spots = best.Where(b => b.v > max * .5f)
-                    .OrderByDescending(b => b.v).Take(10)
-                    .Select(b => ((b.x + .5f) / small.Width, (b.y + .5f) / small.Height, b.v / max)).ToArray();
-            }
-            int w = Math.Min(source.Width, 540), bh = Math.Max(1, source.Height * w / source.Width);
-            var info = new SKImageInfo(w, bh, SKColorType.Rgba8888, SKAlphaType.Premul);
-            var rect = new SKRect(0, 0, w, bh);
-            using var s1 = SKSurface.Create(info);
-            s1.Canvas.Clear(SKColors.Transparent);
-            using (var p = new SKPaint { FilterQuality = SKFilterQuality.Medium }) s1.Canvas.DrawImage(source, rect, p);
-            using (var filter = Channel(0))
-            using (var p = new SKPaint { BlendMode = SKBlendMode.DstIn, ColorFilter = filter, FilterQuality = SKFilterQuality.Medium }) s1.Canvas.DrawImage(_mask, rect, p);
-            using var masked = s1.Snapshot();
-            using var s2 = SKSurface.Create(info);
-            s2.Canvas.Clear(SKColors.Transparent);
-            using (var blur = SKImageFilter.CreateBlur(w * .013f, w * .013f))
-            using (var p = new SKPaint { ImageFilter = blur }) s2.Canvas.DrawImage(masked, rect, p);
-            _bloom = s2.Snapshot();
+            _spots = Spots(raw);
+            _bloom = Bloom(source, _mask);
             var json = ChaosArt.FilePath("menu_logo_fx.json");
             if (json == null) return;
             using var doc = JsonDocument.Parse(File.ReadAllText(json));
@@ -206,7 +219,7 @@ internal sealed class ChaosHubLogoFx : Control
         context.Custom(new PictureOp(recorder.EndRecording(), bounds));
     }
 
-    private sealed class PictureOp : ICustomDrawOperation
+    internal sealed class PictureOp : ICustomDrawOperation
     {
         private readonly SKPicture _picture;
         public PictureOp(SKPicture picture, Rect bounds) { _picture = picture; Bounds = bounds; }

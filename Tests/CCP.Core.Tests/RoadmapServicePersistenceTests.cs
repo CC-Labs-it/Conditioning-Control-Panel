@@ -10,6 +10,9 @@ using ConditioningControlPanel.Services;
 using Serilog;
 using Serilog.Events;
 using Xunit;
+using Xunit.v3;
+
+[assembly: CCP.Core.Tests.DrainSettingsSaves]
 
 [assembly: CollectionBehavior(DisableTestParallelization = true)]
 
@@ -20,12 +23,25 @@ internal static class RoadmapTestProfile
     internal static string DirectoryPath { get; } = Path.Combine(
         Path.GetTempPath(), "ccp-roadmap-tests-" + Guid.NewGuid().ToString("N"));
 
+    // Atomic save files belong to their writer, not to a test snapshot or cleanup.
+    internal static string[] SettingsFiles(string root) => Directory.GetFiles(root, "settings*")
+        .Where(f => !f.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase)).ToArray();
+
     [ModuleInitializer]
     internal static void Initialize()
     {
         Environment.SetEnvironmentVariable("CCP_USERDATA_DIR", DirectoryPath);
         _ = ConditioningControlPanel.CorePaths.UserData;   // installs the SandboxNet guard before any test runs
     }
+}
+
+// xUnit runs this assembly serially, but a test's debounce timer can outlive its body.
+// Drain before and after every test so its writer cannot enter the next test's profile.
+[AttributeUsage(AttributeTargets.Assembly)]
+internal sealed class DrainSettingsSavesAttribute : BeforeAfterTestAttribute
+{
+    public override void Before(MethodInfo methodUnderTest, IXunitTest test) => SettingsService.DisarmAllPendingSaves();
+    public override void After(MethodInfo methodUnderTest, IXunitTest test) => SettingsService.DisarmAllPendingSaves();
 }
 
 public sealed class RoadmapServicePersistenceTests

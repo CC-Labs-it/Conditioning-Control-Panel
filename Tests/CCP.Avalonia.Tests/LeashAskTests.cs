@@ -14,6 +14,7 @@ using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
 using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
@@ -28,6 +29,10 @@ namespace CCP.Avalonia.Tests;
 public sealed class LeashAskTests
 {
     private const string OfferId = "0123456789abcdef";
+    private sealed class FrozenClock : TimeProvider
+    {
+        public override long GetTimestamp() => 0;
+    }
 
     private sealed class Wire : ILeashApi
     {
@@ -62,6 +67,7 @@ public sealed class LeashAskTests
                     } },
                 });
                 LeashHead.Service = svc;
+                shell.RebindLeashAsks(); // The shell was built with the gate test's service.
                 CoreSettings.Current.LeashIntroSeenLeashed = false;
                 var display = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY");
                 var session = Environment.GetEnvironmentVariable("XDG_SESSION_TYPE");
@@ -136,9 +142,44 @@ public sealed class LeashAskTests
         });
 
     [Fact]
+    public void AskHelpOpensTheLeashedExplainer() =>
+        Run((_, page, _, _) =>
+        {
+            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            var ask = LeashAskWindow.Current!;
+            LeashGateCardTests.Click(Tagged<Button>(ask.Card, "leash-help:ask"));
+            var explain = Assert.Single(ask.OwnedWindows.OfType<LeashExplainWindow>());
+            try
+            {
+                Assert.True(explain.IsVisible);
+                Assert.Equal(4, explain.GetLogicalDescendants().OfType<Border>().Count(b => (b.Tag as string)?.StartsWith("leash-explain-panel:") == true));
+            }
+            finally { explain.Close(); }
+        });
+
+    [Fact]
+    public void ManualLookBeforeServiceRebindDoesNotReopenTheSameOffer() =>
+        Run((shell, page, wire, _) =>
+        {
+            var service = LeashHead.Service;
+            LeashHead.Service = null;
+            shell.RebindLeashAsks();
+            LeashHead.Service = service;
+            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            var ask = LeashAskWindow.Current!;
+            shell.RebindLeashAsks(); // the timer binds after the manual Look
+            wire.Reply = new JObject { ["ok"] = true, ["status"] = "gone" };
+            LeashGateCardTests.Click(Tagged<Button>(ask.Card, "leash-ask-no"));
+            Assert.NotNull(LeashAskWindow.Current);
+            LeashGateCardTests.Click(Tagged<Button>(ask.Card, "leash-ask-no"));
+            Assert.Null(LeashAskWindow.Current);
+        });
+
+    [Fact]
     public void AnAnswerThatDidNotGoThroughKeepsTheCardOpenAndSaysWhy() =>
         Run((shell, page, wire, _) =>
         {
+            shell.RebindLeashAsks();
             CoreSettings.Current.LeashIntroSeenLeashed = true;
             LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
             var card = LeashAskWindow.Current!.Card;
@@ -174,17 +215,19 @@ public sealed class LeashAskTests
         {
             var settings = CoreSettings.Current;
             var old = (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals);
+            var oldClock = BeatLoop.Time;
             try
             {
+                BeatLoop.Time = new FrozenClock();
                 settings.MotionLevel = motion; settings.AutoPerformanceMode = false; settings.GentleVisuals = false;
                 settings.PerformanceMode = false;
                 var look = Tagged<Button>(page, "leash-offer-look");
                 Assert.True(look.IsEffectivelyEnabled);
-                // Open synchronously: pumping the live beat can advance past the initial scale.
+                // Inspect the initial frame before the real-time thud reaches its overshoot.
                 look.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
                 var ask = LeashAskWindow.Current!;
                 var scale = ask.Card.RenderTransform as ScaleTransform;
-                Assert.Equal(motion != MotionLevel.Off, scale != null);   // the open started it (its beat may already have moved on)
+                Assert.Equal(motion != MotionLevel.Off, scale != null);   // the open started it; the clock is held at the first frame
                 Assert.InRange(scale?.ScaleX ?? 1, 1, start + 1e-9);
                 ask.AdvanceThud(0);   // the landing starts from 1.08 (half under Reduced)
                 Assert.Equal(start, scale?.ScaleX ?? 1, 3);
@@ -194,7 +237,35 @@ public sealed class LeashAskTests
                 Assert.Equal(1, scale?.ScaleY ?? 1, 3);
                 Assert.False(ask.ThudActive);
             }
-            finally { (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals) = old; }
+            finally { BeatLoop.Time = oldClock; (settings.MotionLevel, settings.PerformanceMode, settings.AutoPerformanceMode, settings.GentleVisuals) = old; }
+        });
+
+    [Fact]
+    public void ManualLookBeforeServiceRebindDoesNotQueueTheSameOffer() =>
+        Run((shell, page, _, _) =>
+        {
+            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            var ask = LeashAskWindow.Current!;
+            shell.RebindLeashAsks(); // The shell's periodic bind arrives after the manual Look.
+            ask.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
+        });
+
+    [Fact]
+    public void ManualLookBeforeServiceRebindDoesNotQueueTheSameOfferAgain() =>
+        Run((shell, page, _, _) =>
+        {
+            var service = LeashHead.Service;
+            LeashHead.Service = null;
+            shell.RebindLeashAsks();
+            LeashHead.Service = service;
+            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            var ask = LeashAskWindow.Current!;
+            shell.RebindLeashAsks();
+            ask.Card.Dismiss();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
         });
 
     [Fact]
@@ -220,6 +291,8 @@ public sealed class LeashAskTests
     public void EscapeClosesTheAskAndTheOfferStays() =>
         Run((shell, page, wire, _) =>
         {
+            // Bind before Look so the timer cannot enqueue this offer after the card opens.
+            shell.RebindLeashAsks();
             LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
             var previous = LeashAskWindow.Current!;
             LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
@@ -232,10 +305,97 @@ public sealed class LeashAskTests
             Assert.DoesNotContain(wire.Calls, c => c.Op == "answer");
             Tagged<Border>(page, "leash-offer-row:u_juno");
         });
+    // WPF consumes a shown offer: a rebind while it is open must not queue it again (Escape: #5368's
+    // ManualLookBeforeServiceRebindDoesNotReopenTheOffer).
+    [Fact]
+    public void RebindingWhileAnOfferIsOpenDoesNotReopenItAfterDecline() =>
+        Run((shell, page, wire, _) =>
+        {
+            var service = LeashHead.Service;
+            LeashHead.Service = null;
+            shell.RebindLeashAsks();
+            LeashHead.Service = service;
+            page.OnShown();
+            wire.Reply = new JObject { ["ok"] = true, ["status"] = "declined" };
+            var look = Tagged<Button>(page, "leash-offer-look");
+            Assert.True(look.IsEffectivelyEnabled);
+            look.RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            var ask = LeashAskWindow.Current!;
+            shell.RebindLeashAsks();
+            LeashGateCardTests.Click(Tagged<Button>(ask.Card, "leash-ask-no"));
+            Assert.False(ask.IsVisible);
+            Assert.False((bool?)wire.Calls.Last().Body["accept"]);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
+            Assert.Single(wire.Calls.Where(c => c.Op == "answer"));
+        });
+
+    // Look can open the offer before the shell's two-second rebind binds the service; that rebind (or a late
+    // snapshot) must not queue the offer again, or it reopens as soon as Escape closes it.
+    [Fact]
+    public void ManualLookBeforeServiceRebindDoesNotReopenTheOffer() =>
+        Run((shell, page, wire, _) =>
+        {
+            var service = LeashHead.Service!;
+            LeashHead.Service = null;
+            shell.RebindLeashAsks();
+            LeashHead.Service = service;
+            var offer = Assert.Single(service.Snapshot.Offers);
+            var ask = Assert.IsType<LeashAskWindow>(LeashAskWindow.Open(offer, () => service, shell)); // no jobs run: the timer cannot bind first
+            shell.RebindLeashAsks(); // the periodic rebind lands while the ask is open
+            ask.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
+            Assert.DoesNotContain(wire.Calls, c => c.Op == "answer");
+            Tagged<Border>(page, "leash-offer-row:u_juno");
+        });
+
+    [Fact]
+    public void SnapshotArrivingAfterManualAskDoesNotRequeueIt() =>
+        LeashGateCardTests.Run(false, (shell, _, svc) =>
+        {
+            var at = DateTimeOffset.UtcNow.AddMinutes(-5);
+            var offer = new LeashOffer(new LeashPerson("u_juno", "Juno", null), at, at.AddDays(7));
+            shell.Show();
+            var ask = Assert.IsType<LeashAskWindow>(LeashAskWindow.Open(offer, () => svc, shell));
+            svc.ApplyBlock(new JObject
+            {
+                ["me"] = null, ["holding"] = new JArray(), ["events"] = new JArray(),
+                ["offers"] = new JArray { new JObject
+                {
+                    ["id"] = OfferId, ["from"] = new JObject { ["id"] = "u_juno", ["name"] = "Juno" },
+                    ["at"] = at.ToString("o"), ["expires_at"] = at.AddDays(7).ToString("o"),
+                } },
+            });
+            ask.Card.Dismiss();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(LeashAskWindow.Current);
+        });
+
+    [Fact]
+    public void ManualAskIsNotRequeuedWhenServiceBindsAfterLook() =>
+        Run((shell, page, wire, _) =>
+        {
+            var service = LeashHead.Service;
+            LeashHead.Service = null;
+            shell.RebindLeashAsks();
+            LeashHead.Service = service;
+            LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
+            var ask = LeashAskWindow.Current!;
+            shell.RebindLeashAsks(); // The timer binds the service after the manual Look.
+            ask.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+            Dispatcher.UIThread.RunJobs();
+            Assert.False(ask.IsVisible);
+            Assert.Null(LeashAskWindow.Current);
+            Assert.DoesNotContain(wire.Calls, c => c.Op == "answer");
+            Tagged<Border>(page, "leash-offer-row:u_juno");
+        });
+
     [Fact]
     public void NotNowDeclinesWithoutWaitingForTheReadClock() =>
-        Run((_, page, wire, _) =>
+        Run((shell, page, wire, _) =>
         {
+            shell.RebindLeashAsks();
             wire.Reply = new JObject { ["ok"] = true, ["status"] = "declined" };
             LeashGateCardTests.Click(Tagged<Button>(page, "leash-offer-look"));
             var card = LeashAskWindow.Current!.Card;

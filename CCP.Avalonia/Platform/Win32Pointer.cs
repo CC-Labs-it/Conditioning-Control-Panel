@@ -17,16 +17,16 @@ internal static class Win32Pointer
 
     internal delegate bool CursorReader(out Point point);
 
-    internal static (PixelPoint At, bool Pressed, bool Escape)? Read()
+    internal static (PixelPoint At, bool Pressed, bool Escape)? Read(bool leftOnly = false)
     {
-        try { return Read(GetCursorPos, GetAsyncKeyState); }
+        try { return Read(GetCursorPos, GetAsyncKeyState, leftOnly); }
         catch (Exception) { return null; }
     }
 
-    internal static (PixelPoint At, bool Pressed, bool Escape)? Read(CursorReader cursor, Func<int, short> key)
+    internal static (PixelPoint At, bool Pressed, bool Escape)? Read(CursorReader cursor, Func<int, short> key, bool leftOnly = false)
     {
         if (!cursor(out var point)) return null;
         return (new PixelPoint(point.X, point.Y),
-            ((key(1) | key(2)) & 0x8000) != 0, (key(0x1b) & 0x8000) != 0);
+            ((key(1) | (leftOnly ? 0 : key(2))) & 0x8000) != 0, (key(0x1b) & 0x8000) != 0);
     }
 }

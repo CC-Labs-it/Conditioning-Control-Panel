@@ -10,6 +10,7 @@
 Views/Windows/EmiDesk/EmiFace.cs :: "Noto Sans Symbols 2, Segoe UI Symbol, Segoe UI Emoji, Nirmala UI, MS Gothic, Courier New, monospace" :: font: content - Emi's kaomoji mood text (chat content, not an icon); WPF EmiFace.cs fallback chain for its glyphs
 
 Views/Overlays/GazeRefineOverlay.cs :: new Path { Stroke = Brushes.HotPink :: path: animated gaze dwell progress ring, not an icon
+Views/Tabs/ChasterTabView.axaml :: <Path x:Name="SpiralPath" :: path: decorative rotating spiral watermark, not an icon (WPF ChasterTabView.xaml:276)
 # --- content (c).1: companion/chat text ---
 Views/Controls/Companion/ChatThresholdView.axaml.cs :: good. it should~ 💕 :: chat sample bubble, companion text (content (c).1)
 
@@ -20,6 +21,7 @@ Views/Dialogs/AwarenessPresetDetailDialog.axaml :: (e.g. 🎯) :: example of a u
 Views/Tabs/AwarenessTabView.Presets.cs :: Icon = "✨", :: seed icon of a new user preset; the user edits it, so it is preset data (content (c).2)
 
 # --- content (c).4: typography ---
+Views/Windows/ModCreatorWindow.ArtFramingEditor.cs :: −   15m   + :: static 15-minute preview text from WPF ModCreatorWindow.ArtFraming.cs:569, not a control
 Views/Windows/ProgramsIntroPopup.axaml :: Text="●" :: list bullets beside prose rows, typography (content (c).4)
 Views/Dialogs/LoginDialog.axaml :: PasswordChar="●" :: PasswordChar mask, typography (content (c).4)
 
@@ -76,6 +78,7 @@ Controls/Icons/ :: * :: path: IconGlyph's spiral extension glyph (decisions 2026
 Controls/PremiumSpark.cs :: * :: path: D6 art - animated sparkle/particle effect, not an icon slot
 
 # --- art, D6 "keep as art" inside files that also hold icon Paths ---
+Possession/Effects/GhostCursorEffect.cs :: _arrow = new Path { Data = Geometry.Parse( :: path: animated ghost cursor silhouette, not a control icon (WPF GhostCursorEffect.cs:36,122)
 Controls/Billboard/QuestsArtView.cs :: private static readonly Geometry Check = Geometry.Parse( :: path: D6 art - completed-slip ink mark painted inside the WPF quest clipboard illustration, not a control icon
 Controls/Billboard/QuestsArtView.cs :: private static readonly Geometry Gem = Geometry.Parse( :: path: D6 art - reward gem painted on the WPF quest paper slips, not a control icon
 Controls/Billboard/QuestsArtView.cs :: private static readonly Geometry SparkShape = Geometry.Parse( :: path: D6 art - twinkle and ink-burst particle geometry in the WPF clipboard scene, not a control icon

@@ -15,6 +15,7 @@ for (const native of [false, true]) test(`browser playback monitor ${native ? 'W
     };
     const window = native ? { chrome: { webview: { postMessage: m => messages.push(JSON.parse(m)) } } }
         : { invokeCSharpAction: m => messages.push(JSON.parse(m)) };
+    window.addEventListener = () => {}; // DOM window also receives frame messages.
     vm.runInNewContext(source, { window, document, AbortController,
         setInterval: fn => { tick = fn; return 1; }, clearInterval() {}, Date: { now: () => now } });
     const last = () => messages.at(-1);

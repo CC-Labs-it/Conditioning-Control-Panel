@@ -486,7 +486,17 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             (TopLevel.GetTopLevel(this) as Windows.MainShellWindow)?.UpdateDirectoryListingStatus(r.IsActive, r.DirectoryOptedIn, r.ControllerConnected);
         }
 
-        private void OnModChanged(object? sender, ModPackage? mod) => Dispatcher.UIThread.Post(() => QueueFeatureArt(force: true));
+        private void OnModChanged(object? sender, ModPackage? mod)
+        {
+            var panicGeneration = RemoteCommands.PanicGeneration;
+            Dispatcher.UIThread.Post(() =>
+            {
+                QueueFeatureArt(force: true);
+                var relay = Relay.Value;
+                if (panicGeneration == RemoteCommands.PanicGeneration && relay.SessionCode is { } code)
+                    ImgRemoteQrCode.Source = QrCode(RemoteRelay.PairingUrl(code, relay.ConnectPin));
+            });
+        }
 
         private int _artRequest;
         private string? _artMod;
