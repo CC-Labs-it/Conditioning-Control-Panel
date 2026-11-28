@@ -1,15 +1,13 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Reflection;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using ConditioningControlPanel;
-using ConditioningControlPanel.Models;
+using CCP.Tests.Shared;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Arcademy;
 using Newtonsoft.Json.Linq;
@@ -57,7 +55,7 @@ public sealed class ArcademyPresenceServiceTests
         var (oldGet, oldSet, oldHttp) = (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, ArcademyPresenceService.Http);
         var (oldId, oldShare, oldOffline) = (s.UnifiedId, s.ArcademyPresenceShare, s.OfflineMode);
         var fake = new Fake();
-        var saved = SavedStatics();
+        var saved = ArcademyPresenceStatics.Save();
         CoreSecrets.RetrieveProvider = n => secrets.GetValueOrDefault(n);
         CoreSecrets.StoreProvider = (n, v) => secrets[n] = v;
         ArcademyPresenceService.Http = new HttpClient(fake);
@@ -75,52 +73,30 @@ public sealed class ArcademyPresenceServiceTests
             s.UnifiedId = null; s.AuthToken = null;
             s.ArcademyPresenceShare = oldShare;
             (s.UnifiedId, s.OfflineMode) = (oldId, oldOffline);
-            // A leave still on the wire must reach the fake, not the restored client.
-            var end = DateTime.UtcNow.AddSeconds(5);
-            while (ArcademyPresenceService.Pending > 0 && DateTime.UtcNow < end) Thread.Sleep(10);
-            Assert.Equal(0, ArcademyPresenceService.Pending);
-            RestoreStatics(saved);
+            ArcademyPresenceStatics.WaitIdle();
+            ArcademyPresenceStatics.Restore(saved);
             (CoreSecrets.RetrieveProvider, CoreSecrets.StoreProvider, ArcademyPresenceService.Http) = (oldGet, oldSet, oldHttp);
         }
-    }
-
-    private static readonly string[] StaticNames = { "_self", "_lastShare", "_hookedSettings" };
-    private static FieldInfo Field(string name) =>
-        typeof(ArcademyPresenceService).GetField(name, BindingFlags.Static | BindingFlags.NonPublic)!;
-    private static object?[] SavedStatics() => StaticNames.Select(n => Field(n).GetValue(null)).ToArray();
-
-    /// <summary>Puts back the fake self id, the rung and the settings subscription the service keeps forever.</summary>
-    private static void RestoreStatics(object?[] saved)
-    {
-        var handler = (PropertyChangedEventHandler)Delegate.CreateDelegate(typeof(PropertyChangedEventHandler),
-            typeof(ArcademyPresenceService).GetMethod("OnSettingChanged", BindingFlags.Static | BindingFlags.NonPublic)!);
-        var (now, was) = (Field("_hookedSettings").GetValue(null) as AppSettings, saved[2] as AppSettings);
-        if (!ReferenceEquals(now, was))
-        {
-            if (now != null) now.PropertyChanged -= handler;
-            if (was != null) was.PropertyChanged += handler;
-        }
-        for (var i = 0; i < StaticNames.Length; i++) Field(StaticNames[i]).SetValue(null, saved[i]);
     }
 
     /// <summary>The cleanup leaves no fake self id and no settings subscription behind.</summary>
     [Fact]
     public void CleanupRestoresTheServiceStatics()
     {
-        var real = SavedStatics();
+        var real = ArcademyPresenceStatics.Save();
         var known = new object?[] { "before", "off", null };   // not what any test leaves behind
-        RestoreStatics(known);
+        ArcademyPresenceStatics.Restore(known);
         try
         {
             With("anon", signedIn: true, offline: false, fake =>
             {
                 ArcademyPresenceService.Attach((_, _) => { });
                 Until(() => fake.Posts().Count >= 1);
-                Assert.Equal("me", Field("_self").GetValue(null));
+                Assert.Equal("me", ArcademyPresenceStatics.Get("_self"));
             });
-            Assert.Equal(known, SavedStatics());
+            Assert.Equal(known, ArcademyPresenceStatics.Save());
         }
-        finally { RestoreStatics(real); }
+        finally { ArcademyPresenceStatics.Restore(real); }
     }
 
     /// <summary>WPF PostEventAsync: every presence reply goes to contract D.</summary>

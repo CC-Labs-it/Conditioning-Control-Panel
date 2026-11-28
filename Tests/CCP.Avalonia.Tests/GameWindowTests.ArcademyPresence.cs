@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia.Threading;
 using ConditioningControlPanel.Avalonia.Views.Games;
 using ConditioningControlPanel.Avalonia.Views.Windows;
+using CCP.Tests.Shared;
 using ConditioningControlPanel.Services.Arcademy;
 using Newtonsoft.Json.Linq;
 using Xunit;
@@ -34,9 +35,27 @@ public sealed partial class GameWindowTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void Arcademy_PresenceFrameReachesPageAndStopsOnClose(bool panic) => Run((shell, _) =>
+    public void Arcademy_PresenceFrameReachesPageAndStopsOnClose(bool panic) => PresenceRoundTrip(panic);
+
+    /// <summary>The round trip leaves the service's self id, rung and settings subscription as it found them.</summary>
+    [Fact]
+    public void Arcademy_PresenceTestRestoresServiceStatics()
+    {
+        var real = ArcademyPresenceStatics.Save();
+        var known = new object?[] { "before", "off", null };   // not what the round trip leaves behind
+        ArcademyPresenceStatics.Restore(known);
+        try
+        {
+            PresenceRoundTrip(panic: false);
+            Assert.Equal(known, ArcademyPresenceStatics.Save());
+        }
+        finally { ArcademyPresenceStatics.Restore(real); }
+    }
+
+    private static void PresenceRoundTrip(bool panic) => Run((shell, _) =>
     {
         var oldHttp = ArcademyPresenceService.Http;
+        var saved = ArcademyPresenceStatics.Save();
         var feed = new PresenceFeed();
         ArcademyPresenceService.Http = new HttpClient(feed);
         var w = new GameWindow(GameWindow.ArcademySpec);
@@ -64,6 +83,12 @@ public sealed partial class GameWindowTests
             Dispatcher.UIThread.RunJobs();
             Assert.Single(frames);
         }
-        finally { w.Close(); ArcademyPresenceService.Http = oldHttp; }
+        finally
+        {
+            w.Close();
+            ArcademyPresenceStatics.WaitIdle();
+            ArcademyPresenceStatics.Restore(saved);
+            ArcademyPresenceService.Http = oldHttp;
+        }
     });
 }
