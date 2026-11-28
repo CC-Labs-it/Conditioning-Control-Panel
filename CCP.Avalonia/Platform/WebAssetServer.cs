@@ -223,7 +223,7 @@ public sealed class WebAssetServer : IDisposable
     void Serve(HttpListenerContext ctx)
     {
         if (!Admit(ctx, out _)) return;
-        var path = ResolveFile(ctx.Request.Url!.AbsolutePath);
+        var path = ResolveFile(ctx.Request.Url!.AbsolutePath, ctx.Request.QueryString[PresetQuery]);
         if (path == null) { ctx.Response.StatusCode = 404; return; }
         // A Scrolller copy (DtRH's .temp/ccp_temp_remote_*) is no-store: the engine's disk cache must never keep a
         // second copy that outlives the copy's 24 h or the off switch (licence 3.4).
@@ -379,7 +379,7 @@ public sealed class WebAssetServer : IDisposable
     public Func<string?>? ContentRoot { get; init; }
 
     /// <summary>The file a URL path names, or null if it is missing or lies outside its root, symlinks followed.</summary>
-    internal string? ResolveFile(string urlPath)
+    internal string? ResolveFile(string urlPath, string? presetId = null)
     {
         var rel = Uri.UnescapeDataString(urlPath).TrimStart('/');
         var root = _root;
@@ -452,7 +452,9 @@ public sealed class WebAssetServer : IDisposable
         }
         if (!LinksStayInside(full, root)) return null;
         // Brain-drain whisper clips pass this too; GameWindow.PbpWhispers leaves unchecked ones out of the offer.
-        if (asset && !IntakeRun.IsAssetActive(IntakeRun.DisabledAssetSet(DisabledAssets()), root, full)) return null;
+        // An Arcademy preset sample (?ccp_preset=) is held to that preset's selection; WPF's ccp.assets serves the whole folder.
+        var preset = string.IsNullOrEmpty(presetId) ? null : CoreSettings.Current.AssetPresets?.FirstOrDefault(p => p != null && p.Id == presetId);
+        if (asset && !IntakeRun.IsAssetActive(IntakeRun.DisabledAssetSet(preset != null ? preset.DisabledAssetPaths : DisabledAssets()), root, full)) return null;
         return full;
     }
 
@@ -463,6 +465,9 @@ public sealed class WebAssetServer : IDisposable
         var seg = rel.Split('/', '\\');
         return seg.Length == 2 && seg[0] == ".temp" && DtrhRemoteMedia.IsCopyFile(seg[1]);
     }
+
+    /// <summary>Query naming the asset preset whose selection serves a library file (GameWindow.ArcademyBridge).</summary>
+    public const string PresetQuery = "ccp_preset";
 
     /// <summary>The user's unchecked assets (Settings DisabledAssetPaths), never served.</summary>
     public Func<IEnumerable<string>?> DisabledAssets { get; init; } = () => CoreSettings.Current.DisabledAssetPaths;

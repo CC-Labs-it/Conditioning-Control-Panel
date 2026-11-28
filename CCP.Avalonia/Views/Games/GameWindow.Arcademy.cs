@@ -365,6 +365,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             _arcademyWatch?.Stop();
             _arcademyWatch = null;
+            _arcademyAssetsClosed.Cancel();
             if (_arcademySettings != null) _arcademySettings.PropertyChanged -= ArcademySettingChanged;
             if (_arcademySettingsService != null) _arcademySettingsService.CurrentReplaced -= ArcademySettingsReplaced;
             if (_arcademyVideo != null) { _arcademyVideo.VideoStarted -= ArcademyVideoChanged; _arcademyVideo.VideoEnded -= ArcademyVideoChanged; }
