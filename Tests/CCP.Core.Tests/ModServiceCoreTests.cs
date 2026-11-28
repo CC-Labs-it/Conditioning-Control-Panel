@@ -60,8 +60,12 @@ public sealed class ModServiceCoreTests
         // mid-write; it would hold its .tmp open (Windows CI: IOException on File.Delete) or land after this.
         SettingsService.DisarmAllPendingSaves();
         Directory.CreateDirectory(Root);
-        // A .tmp still held by its writer is skipped: it is never read as settings.json.
-        foreach (var f in RoadmapTestProfile.SettingsFiles(Root)) File.Delete(f);
+        // A .tmp still held by its writer may be skipped; remove stale files when possible.
+        foreach (var f in Directory.GetFiles(Root, "settings*"))
+        {
+            try { File.Delete(f); }
+            catch (IOException) when (f.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase)) { }
+        }
         foreach (var dir in new[] { "mods", "builtin_mods", "content" })
             if (Directory.Exists(Path.Combine(Root, dir))) Directory.Delete(Path.Combine(Root, dir), recursive: true);
     }
