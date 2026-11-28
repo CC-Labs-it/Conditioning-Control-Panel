@@ -5,7 +5,10 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Automation;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Controls;
@@ -25,6 +28,8 @@ internal sealed class FriendLeashOffer : StackPanel
     private readonly HashSet<string> _pending;
     private readonly Action? _refresh;
     private bool _sending;
+    private static readonly HashSet<FriendLeashOffer> Popping = new();
+    internal static void StopForPanic() { foreach (var offer in Popping.ToArray()) offer.StopPop(); }
     private BeatLoop? _pop;
     private ScaleTransform? _popScale;
     internal ScaleTransform? PopScale => _popScale;
@@ -33,6 +38,7 @@ internal sealed class FriendLeashOffer : StackPanel
     {
         _pop?.Stop(); _pop = null;
         if (_popScale != null) _popScale.ScaleX = _popScale.ScaleY = 1;
+        _popScale = null; Popping.Remove(this);
     }
     internal void Pop(Button chip)
     {
@@ -43,6 +49,7 @@ internal sealed class FriendLeashOffer : StackPanel
         chip.RenderTransform = _popScale = new ScaleTransform(1, 1);
         _pop = new BeatLoop(chip, seconds => AdvancePop(seconds * 1000));
         _pop.OnParked = StopPop;
+        Popping.Add(this);
         _pop.Start();
     }
     internal void AdvancePop(double ms)
@@ -122,29 +129,37 @@ internal sealed class FriendLeashOffer : StackPanel
             LeashUiRules.OfferChip.Holding => "leash_offer_holding",
             _ => "leash_offer",
         });
-        var accent = state switch
+        // WPF #5650 LeashDrawerSection.cs:210-265: the offer is a pressed paper tile.
+        var edge = new SolidColorBrush(state switch
         {
-            LeashUiRules.OfferChip.Sent => FriendsDrawer.Mint,
-            LeashUiRules.OfferChip.Greyed => FriendsDrawer.Dim,
-            _ => FriendsDrawer.Gold,
-        };
-        var content = FriendsDrawer.GlyphContent(IconKind.Link, _error ?? word, center: true, glyphFg: accent);
-        ((TextBlock)content.Children[1]).Foreground = accent;
+            LeashUiRules.OfferChip.Sent => Color.Parse("#1FA877"),
+            LeashUiRules.OfferChip.Greyed => Color.Parse("#7A6A8F"),
+            _ => Color.Parse("#B07A00"),
+        });
+        bool done = state is LeashUiRules.OfferChip.Sent or LeashUiRules.OfferChip.Holding;
+        var content = FriendsDrawer.GlyphContent(IconKind.Link, _error ?? word, glyphFg: Brushes.White);
+        var glyph = content.Children[0];
+        content.Children.RemoveAt(0);
+        glyph.Margin = new Thickness(0);
+        content.Children.Insert(0, new Border { Width = 26, Height = 26, CornerRadius = new CornerRadius(5),
+            Background = edge, Margin = new Thickness(0, 0, 8, 0), Child = glyph });
+        var label = (TextBlock)content.Children[1];
+        label.Foreground = new SolidColorBrush(Color.Parse("#2E183A"));
+        label.FontWeight = FontWeight.Bold; label.FontSize = 16;
         if (state == LeashUiRules.OfferChip.Sent)
         {
             try
             {
                 if (LeashUiRules.OfferStep(_service.ReceiptsSupported, _service.SentTo(_friend.Id)) is { } step)
                     content.Children.Add(new TextBlock { Text = "  ·  " + Loc.Get(LeashUiRules.StepKey(step)),
-                        Tag = "leash-offer-step:" + step.ToString().ToLowerInvariant(), FontFamily = FriendsDrawer.Mono,
-                        FontSize = 11, Foreground = FriendsDrawer.Lilac, VerticalAlignment = VerticalAlignment.Center });
+                        Tag = "leash-offer-step:" + step.ToString().ToLowerInvariant(),
+                        FontSize = 14, Foreground = new SolidColorBrush(Color.Parse("#4B1F45")), VerticalAlignment = VerticalAlignment.Center });
             }
             catch { }
         }
-        var chip = FriendsDrawer.Pill(content, new SolidColorBrush(Color.FromArgb(0x22, 0xff, 0xcf, 0x6b)), accent,
-            "leash-offer", new SolidColorBrush(state == LeashUiRules.OfferChip.Sent
-                ? Color.FromRgb(0x28, 0x5d, 0x4f) : Color.FromRgb(0x6b, 0x53, 0x20)));
-        chip.CornerRadius = new CornerRadius(999); chip.Padding = new Thickness(10, 6, 10, 6);
+        // The face moves onto the coloured ledge when pressed or already sent/held.
+        var chip = Tile(content, edge, done, "leash-offer", word);
+        chip.Opacity = state == LeashUiRules.OfferChip.Greyed ? 0.5 : 1;
         chip.IsEnabled = !_sending && !_pending.Contains(_friend.Id) && _error == null && state == LeashUiRules.OfferChip.Offer;
         if (state == LeashUiRules.OfferChip.Greyed) ToolTip.SetTip(chip, Loc.Get("leash_offer_greyed"));
         chip.Click += async (_, _) =>
@@ -153,16 +168,35 @@ internal sealed class FriendLeashOffer : StackPanel
             if (LeashIntroRule.ShouldExplain(CoreSettings.Current, LeashIntroSide.Holder)) ShowIntro(true);
             else await Send();
         };
-        var help = FriendsDrawer.Pill("?", new SolidColorBrush(Color.FromArgb(0x22, 0xb9, 0x9c, 0xff)), FriendsDrawer.Lilac,
-            "leash-offer-help", new SolidColorBrush(Color.FromArgb(0x66, 0xb9, 0x9c, 0xff)));
-        help.Width = 22; help.Height = 22; help.CornerRadius = new CornerRadius(11); help.Padding = new Thickness(0); help.Margin = new Thickness(6, 0, 0, 0);
-        ((TextBlock)help.Content!).FontWeight = FontWeight.Bold;
+        var helpText = new TextBlock { Text = "?", FontSize = 18, FontWeight = FontWeight.Bold,
+            Foreground = new SolidColorBrush(Color.Parse("#2E183A")), HorizontalAlignment = HorizontalAlignment.Center };
+        var help = Tile(helpText, edge, false, "leash-offer-help", Loc.Get("leash_help"));
+        help.Width = 40; help.Margin = new Thickness(3, 0, 0, 0);
+        help.VerticalAlignment = VerticalAlignment.Stretch;
         ToolTip.SetTip(help, Loc.Get("leash_help"));
         help.Click += (_, _) => ShowIntro(false);
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Tag = "leash-offer-chip:" + state.ToString().ToLowerInvariant() };
         row.Children.Add(chip); Grid.SetColumn(help, 1); row.Children.Add(help); Children.Add(row);
         if (popping) Pop(chip);
     }
+    private static Button Tile(Control content, IBrush edge, bool done, string tag, string name)
+    {
+        var move = new TranslateTransform(0, done ? 3 : 0);
+        var face = new Border { Tag = "leash-tile-face", Background = done ? Brushes.White : new SolidColorBrush(Color.Parse("#F7EEF8")),
+            BorderBrush = new SolidColorBrush(Color.Parse(done ? "#3A1D78" : "#DCC6DD")), BorderThickness = new Thickness(1.5),
+            CornerRadius = new CornerRadius(7), Padding = new Thickness(6, 5, 7, 5), Margin = new Thickness(0, 0, 0, 4), Child = content, RenderTransform = move };
+        var grid = new Grid();
+        grid.Children.Add(new Border { Background = edge, CornerRadius = new CornerRadius(7), Margin = new Thickness(0, 4, 0, 0) });
+        grid.Children.Add(face);
+        var button = FriendsDrawer.Pill(grid, Brushes.Transparent, Brushes.Transparent, tag);
+        button.Padding = new Thickness(0); button.BorderThickness = new Thickness(0); button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        AutomationProperties.SetName(button, name);
+        button.AddHandler(InputElement.PointerPressedEvent, (_, e) => { if (button.IsEnabled && e.GetCurrentPoint(button).Properties.IsLeftButtonPressed) move.Y = 3; }, RoutingStrategies.Tunnel, handledEventsToo: true);
+        button.AddHandler(InputElement.PointerReleasedEvent, (_, _) => move.Y = done ? 3 : 0, RoutingStrategies.Tunnel, handledEventsToo: true);
+        button.PointerExited += (_, _) => move.Y = done ? 3 : 0;
+        return button;
+    }
+
     private void ShowIntro(bool offer)
     {
         if (Intro != null) { Intro.Activate(); return; }
