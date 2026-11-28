@@ -22,15 +22,21 @@ public sealed partial class GameWindowTests
     public void DtrhVoice_BarkAndSfxRespectSpeakingAndRunClearsGate(bool sound, int state, bool expected) => RunDtrh(true, (_, _, _, _) =>
     {
         var oldEngine = BarkHead.Engine;
+        var oldHaptic = GameWindow.DtrhHapticEvent;
         var settings = CoreSettings.Current;
         var old = (settings.AvatarEnabled, settings.MasterVolume, settings.BarkChatSuppressionMs);
         var spoken = new List<BarkSpeech>();
         var sounds = new List<(string, float)>();
+        var order = new List<string>();
         try
         {
             (settings.AvatarEnabled, settings.MasterVolume, settings.BarkChatSuppressionMs) = (true, 50, 0);
             var rule = new BarkRule { Id = "voice-test", Trigger = "ChaosBubbleDetonated", VariantPool = new() { new BarkVariant("hit {payload}") } };
-            var engine = new BarkEngine(() => new BarkRuleSet(new[] { rule })) { Speak = spoken.Add };
+            var engine = new BarkEngine(() => new BarkRuleSet(new[] { rule }))
+            {
+                Speak = line => { order.Add("voice"); spoken.Add(line); },
+            };
+            GameWindow.DtrhHapticEvent = _ => order.Add("haptic");
             engine.Start();
             BarkHead.Engine = engine;
             var w = GameWindow.Launch("dtrh")!;
@@ -43,11 +49,18 @@ public sealed partial class GameWindowTests
             else Assert.Empty(sounds);
             if (!sound && expected) Assert.Equal("hit test", Assert.Single(spoken).Text);
             else Assert.Empty(spoken);
+            Assert.Equal(sound ? Array.Empty<string>() : expected ? new[] { "haptic", "voice" } : new[] { "haptic" }, order);
+            if (!sound)
+            {
+                w.HandleMessage("{\"type\":\"bark\",\"event\":\"effect-fired\",\"kind\":\"flash\"}");
+                Assert.Equal(expected ? new[] { "haptic", "voice", "haptic" } : new[] { "haptic", "haptic" }, order);
+            }
             w.Close();
         }
         finally
         {
             BarkHead.Engine = oldEngine;
+            GameWindow.DtrhHapticEvent = oldHaptic;
             (settings.AvatarEnabled, settings.MasterVolume, settings.BarkChatSuppressionMs) = old;
         }
     });

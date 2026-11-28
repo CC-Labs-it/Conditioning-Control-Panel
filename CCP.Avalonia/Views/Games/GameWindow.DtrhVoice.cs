@@ -30,6 +30,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     case "run-started": _dtrhVnSpeaking = false; return false;
                     case "vn-speaking": _dtrhVnSpeaking = (bool?)o["on"] ?? false; return true;
                     case "bark":
+                        // The host taps haptics before the VN gate, even for haptics-only events.
+                        if (HandleDtrh(o)) return true;
                         if (!_dtrhVnSpeaking && DtrhBarkRoute.Route(o) is { } context)
                             BarkHead.Engine?.Raise(context.Trigger, c => { foreach (var pair in context.Values) c.Set(pair.Key, pair.Value); });
                         return true;
