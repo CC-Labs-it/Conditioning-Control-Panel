@@ -78,7 +78,7 @@ public class DeeperPlayerZoomDurationTests
         Call(player, "LoadVideoUrl", "https://hypnotube.com/video/example");
         await (Task)Call(player, "PollVideoTimeAsync")!;
         Assert.NotNull(script);
-        Assert.Contains("scrollIntoView({block:'center'})", script);
+        Assert.Contains("scrollIntoView({behavior:'smooth',block:'center',inline:'center'})", script);
         Assert.Contains("if(!l._ccpScrolled)", script);
         Assert.Contains("r.width>0&&r.height>0", script);
         Assert.Contains("querySelectorAll('iframe')", script);
@@ -87,5 +87,15 @@ public class DeeperPlayerZoomDurationTests
         ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(s => s.Id == "deeper-player").Stop(null);
         Assert.False(EnhancementPlayerWindow.IsAnyEnhancementRunning);
     });
+
+    [Fact]
+    public void EditorCenteringTargetsOnlyItsSelectedVideo()
+    {
+        var script = DeeperPreview.ReadTime(scrollIntoView: true);
+        Assert.Contains("l.scrollIntoView({block:'center',behavior:'auto'})", script);
+        Assert.DoesNotContain("querySelectorAll('iframe')", script);
+        Assert.True(script.IndexOf("if(!l)return", StringComparison.Ordinal)
+            < script.IndexOf("l.scrollIntoView", StringComparison.Ordinal));
+    }
 
 }
