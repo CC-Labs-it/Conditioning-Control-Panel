@@ -202,6 +202,8 @@ public sealed class VoiceCommandsTests
         }
     });
 
+    // A silent room: with the WAV, the live wake loop wakes on it and the command listen can match a
+    // Lockdown-guarded intent ("one [unk]" -> pause), whose refusal is a second "stop" escape below.
     [Fact]
     public Task TheSpokenSafeWordReachesAsFarAsThePanicKeyUnderLockdown() => Run(Array.Empty<byte>(), async (shell, mic, engine) =>
     {
