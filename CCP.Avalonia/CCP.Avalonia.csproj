@@ -31,7 +31,16 @@
     <Description>A professional visual conditioning application with gamification features.</Description>
     <Copyright>Copyright © 2024-2026 CodeBambi</Copyright>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <!-- Which releases the Linux updater may offer (AppUpdater.BetaInstall, ccp-bugs #1627): "beta" also
+         takes pre-releases. Every Linux build is a beta today; cut the first stable one with -p:CcpReleaseChannel=stable. -->
+    <CcpReleaseChannel Condition="'$(CcpReleaseChannel)' == ''">beta</CcpReleaseChannel>
+    <!-- Hot ReadyToRun code goes straight to tier 1: with PGO it first ran instrumented, which put the tab switches
+         right after a fast startup ~30% behind (docs/avalonia-perf.html, 2026-11-15 startup ledger line). -->
+    <TieredPGO>false</TieredPGO>
   </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="CcpReleaseChannel" Value="$(CcpReleaseChannel)" />
+  </ItemGroup>
 
   <ItemGroup>
     <Compile Include="..\ConditioningControlPanel\Services\Speech\SileroVadGate.cs" Link="Platform\SileroVadGate.cs" />
@@ -39,26 +48,26 @@
     <!-- Where a subliminal card sits while a mandatory video is up (ccp-bugs #1422): pure z-order rule, one source for both heads. -->
     <Compile Include="..\ConditioningControlPanel\Services\Subliminal\SubliminalOverVideo.cs" Link="Services\Subliminal\SubliminalOverVideo.cs" />
     <Compile Include="..\ConditioningControlPanel\Services\Deeper\PlayheadExtrapolator.cs" Link="Services\Deeper\PlayheadExtrapolator.cs" />
-    <PackageReference Include="Avalonia" Version="12.1.6" />
-    <PackageReference Include="Avalonia.Desktop" Version="12.1.6" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.6" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.6" />
+    <PackageReference Include="Avalonia" Version="12.2.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.2.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.2.0" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.2.0" />
     <!-- Renders the real window offscreen so CI can prove the Linux head DRAWS, not just boots.
          A desktop screenshot cannot run on a headless runner; this can. -->
-    <PackageReference Include="Avalonia.Headless" Version="12.1.6" />
-    <PackageReference Include="Avalonia.Skia" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Headless" Version="12.2.0" />
+    <PackageReference Include="Avalonia.Skia" Version="12.2.0" />
     <!-- The Linux/Windows web view. Wraps WebKitGTK on Linux and WebView2 on Windows, so the
          WPF head's Microsoft.Web.WebView2 dependency does not follow us across. Only Views/Controls/WebHost
          touches it, and that control draws a fallback panel wherever no web view exists. -->
     <PackageReference Include="Avalonia.Controls.WebView" Version="12.1.1" />
     <!-- ColorView, the inline colour panel behind ColorPickerDialog. WPF opened
          System.Windows.Forms.ColorDialog; this is the cross-platform twin. PINNED to the same
-         12.1.6 as Avalonia itself - a control package built against a different Avalonia minor
+         12.2.0 as Avalonia itself - a control package built against a different Avalonia minor
          throws at attach, which no compiler catches. -->
-    <PackageReference Include="Avalonia.Controls.ColorPicker" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Controls.ColorPicker" Version="12.2.0" />
     <!-- Fluent UI System Icons (docs/avalonia-decisions.html, 2026-10-10). Only Controls/Icons/* may
          name FluentIcons.*: every view draws icons through fx:IconGlyph. Built against Avalonia 12.0;
-         IconGlyphRenderTests proves it draws on 12.1.6 headless. MIT: ThirdPartyNotices/FluentIcons.txt. -->
+         IconGlyphRenderTests proves it draws on 12.2.0 headless. MIT: ThirdPartyNotices/FluentIcons.txt. -->
     <PackageReference Include="FluentIcons.Avalonia" Version="2.1.343" />
     <Content Include="ThirdPartyNotices\FluentIcons.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <!-- Audio (and later video) on both OSes; see docs/avalonia-decisions.html. Linux loads the
@@ -106,6 +115,8 @@
     <Content Include="..\ConditioningControlPanel\assets\Chaos\menu.png;..\ConditioningControlPanel\assets\Chaos\menu_1.png;..\ConditioningControlPanel\assets\Chaos\menu_2.png;..\ConditioningControlPanel\assets\Chaos\menu_3.png;..\ConditioningControlPanel\assets\Chaos\menu_4.png;..\ConditioningControlPanel\assets\Chaos\menu_5.png;..\ConditioningControlPanel\assets\Chaos\menu_6.png;..\ConditioningControlPanel\assets\Chaos\banner.png"
              Link="assets\Chaos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <Content Include="..\ConditioningControlPanel\assets\Chaos\bubbles\tease.png" Link="assets\Chaos\bubbles\tease.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <!-- ChaosHubMenuFx: the menu art masks and tuning (WPF ChaosHubWindow.xaml.cs:2155). -->
+    <Content Include="..\ConditioningControlPanel\assets\Chaos\menu_1_fx.png;..\ConditioningControlPanel\assets\Chaos\menu_2_fx.png;..\ConditioningControlPanel\assets\Chaos\menu_3_fx.png;..\ConditioningControlPanel\assets\Chaos\menu_4_fx.png;..\ConditioningControlPanel\assets\Chaos\menu_5_fx.png;..\ConditioningControlPanel\assets\Chaos\menu_6_fx.png;..\ConditioningControlPanel\assets\Chaos\menu_fx.json" Link="assets\Chaos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <Content Include="..\ConditioningControlPanel\assets\Chaos\menu_logo_fx.png;..\ConditioningControlPanel\assets\Chaos\menu_logo_fx.json" Link="assets\Chaos\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <Content Include="..\ConditioningControlPanel\assets\Chaos\menu_logo.png" Link="assets\Chaos\menu_logo.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
     <Content Include="..\ConditioningControlPanel\assets\Chaos\recap.png" Link="assets\Chaos\recap.png"
@@ -309,6 +320,7 @@
     <AvaloniaResource Include="..\Assets\circe_emotes_p4\idle.gif" Link="Resources\circe_emotes_p4\idle.gif" />
     <AvaloniaResource Include="..\Assets\rain_emotes\*.webp;..\Assets\rain_emotes\*.json;..\Assets\rain_emotes\ATTRIBUTION.txt" Link="Resources\rain_emotes\%(Filename)%(Extension)" />
     <AvaloniaResource Include="..\Assets\avatar_emotes_registry.json" Link="Resources\avatar_emotes_registry.json" />
+    <AvaloniaResource Include="..\Assets\Pink filter.webp;..\Assets\prime subject.webp" Link="Resources\%(Filename)%(Extension)" />
     <AvaloniaResource Include="..\Assets\*.png"
                       Link="Resources\%(Filename)%(Extension)" />
     <!-- The animated dashboard logo (WPF ConditioningControlPanel.csproj:272) and its renderer, one
@@ -542,5 +554,11 @@
       <LibVLCFiles Include="$(NuGetPackageRoot)videolan.libvlc.windows\3.0.24\build\x64\**\*" />
     </ItemGroup>
     <Copy SourceFiles="@(LibVLCFiles)" DestinationFolder="$(PublishDir)libvlc\%(RecursiveDir)" SkipUnchangedFiles="true" />
+  </Target>
+  <!-- WinRT OCR is Windows-only; ship the self-contained helper beside the single-file head. -->
+  <Target Name="PublishWindowsOcrHelper" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' == 'win-x64'">
+    <MSBuild Projects="..\CCP.Ocr.Windows\CCP.Ocr.Windows.csproj" Targets="Restore;Publish"
+             RemoveProperties="PublishProfile;TargetFramework"
+             Properties="Configuration=$(Configuration);RuntimeIdentifier=win-x64;SelfContained=true;PublishSingleFile=true;PublishReadyToRun=false;PublishDir=$([System.IO.Path]::GetFullPath('$(PublishDir)', '$(MSBuildProjectDirectory)'))\" />
   </Target>
 </Project>

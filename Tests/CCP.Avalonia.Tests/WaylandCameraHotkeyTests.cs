@@ -53,6 +53,24 @@ public sealed class WaylandCameraHotkeyTests
     }
 
     [Fact]
+    public void ShortcutChanged_TracksOnlyTheOwnedSessionAndClearsUnknownTrigger()
+    {
+        using var portal = new PortalCameraHotkey(() => { });
+        portal.SetSessionForTests("/camera", "Ctrl+Alt+K");
+        portal.ShortcutChanged("/other", "Ctrl+Alt+X");
+        Assert.Equal("Ctrl+Alt+K", portal.BoundTrigger);
+        portal.ShortcutChanged("/camera", "Meta+J");
+        Assert.Equal("Meta+J", portal.BoundTrigger);
+        portal.ShortcutChanged("/camera", null);
+        Assert.Null(portal.BoundTrigger);
+        portal.ShortcutChanged("/camera", "  ");
+        Assert.Null(portal.BoundTrigger);
+        portal.Dispose();
+        portal.ShortcutChanged("/camera", "Meta+J");
+        Assert.Null(portal.BoundTrigger);
+    }
+
+    [Fact]
     public async Task Sandbox_NeverOpensSessionBus()
     {
         var old = PortalCameraHotkey.OpenConnection;

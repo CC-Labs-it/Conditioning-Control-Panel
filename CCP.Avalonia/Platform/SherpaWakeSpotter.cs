@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using ConditioningControlPanel.Localization;
 using ConditioningControlPanel.Services.Speech;
 using SherpaOnnx;
 
@@ -109,9 +112,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
                 {
                     try
                     {
-                        var samples = new float[Math.Min(count, bytes.Length) / 2];
-                        for (int i = 0; i < samples.Length; i++)
-                            samples[i] = (short)(bytes[2 * i] | bytes[2 * i + 1] << 8) / 32768f;
+                        var samples = Pcm(bytes, count);
                         lock (_gate)
                         {
                             if (done.Task.IsCompleted) return;
@@ -151,6 +152,116 @@ namespace ConditioningControlPanel.Avalonia.Platform
                     if (_disposed) { _spotter?.Dispose(); _spotter = null; }
                 }
                 try { ListeningChanged?.Invoke(this, false); } catch { }
+            }
+        }
+
+        private static float[] Pcm(byte[] bytes, int count)
+        {
+            var samples = new float[Math.Min(count, bytes.Length) / 2];
+            for (int i = 0; i < samples.Length; i++) samples[i] = (short)(bytes[2 * i] | bytes[2 * i + 1] << 8) / 32768f;
+            return samples;
+        }
+
+        // WPF SherpaWakeService.CalibrateAsync (SherpaWakeService.cs:394-635): record says endpointed on
+        // silence plus room tone, sweep the thresholds, and return the pick. The caller frees the mic first.
+        internal async Task<(double? Threshold, string Message)> CalibrateAsync(IMicSource mic, double boost, bool highPass,
+            IProgress<(bool Analyze, int Captured)>? progress, CancellationToken ct, int target = 5)
+        {
+            SherpaWakeService.ModelFiles m;
+            lock (_gate)
+            {
+                if (_disposed || SherpaWakeService.FindModel(_root) is not { } model) return (null, Loc.Get("she_wake_cal_no_model"));
+                if (_active || !mic.HasDevice) return (null, Loc.Get("she_wake_cal_busy"));
+                (m, _active) = (model, true);
+            }
+            var says = new List<float[]>(); var ambient = new List<float>(); var cur = new List<float>();
+            var preRoll = new PreRollBuffer(16000); var filter = highPass ? new HighPassFilter(16000) : null;
+            double floor = double.MaxValue; int seeded = 0, silentMs = 0, held = 0; bool speaking = false;
+            var done = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var cap = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cap.CancelAfter(TimeSpan.FromSeconds(40)); // a silent user must not hang the flow
+            IDisposable? capture = null;
+            void Release()
+            {
+                try { Interlocked.Exchange(ref capture, null)?.Dispose(); } catch { }
+                bool was;
+                lock (_gate) { was = _listening; _listening = false; }
+                if (was) try { ListeningChanged?.Invoke(this, false); } catch { }
+            }
+            // A borrower's StopVoiceInput cancels on its own thread: the mic is free when Cancel returns,
+            // so cancel waits out an in-flight mic.Start before releasing its handle.
+            var starting = new object();
+            using var registration = cap.Token.Register(() => { lock (starting) { done.TrySetResult(false); Release(); } });
+            try
+            {
+                lock (starting) if (!done.Task.IsCompleted) capture = mic.Start((bytes, count) => { lock (says) {
+                    if (done.Task.IsCompleted) return;
+                    var buf = Pcm(bytes, count); filter?.ProcessInPlace(buf, buf.Length);
+                    double sum = 0; foreach (var x in buf) sum += x * x;
+                    double rms = buf.Length == 0 ? 0 : Math.Sqrt(sum / buf.Length);
+                    if (seeded < 4800)
+                    {
+                        floor = Math.Min(floor, rms); seeded += buf.Length; preRoll.Push(buf);
+                        if (seeded >= 4800) floor = Math.Clamp(floor, .0005, .05);
+                        return;
+                    }
+                    // WPF SherpaWakeService.cs:485-486: the floor drifts with the room between says.
+                    if (!speaking) floor = Math.Min(floor * 1.02 + 1e-5, Math.Max(floor, rms));
+                    if (rms < floor * 1.5) floor = .9 * floor + .1 * rms;
+                    double onset = Math.Clamp(floor * 4, .006, .08);
+                    if (!speaking)
+                    {
+                        if (rms < onset * .6 && ambient.Count < 32000) ambient.AddRange(buf);
+                        if (rms < onset) { preRoll.Push(buf); return; }
+                        (speaking, silentMs) = (true, 0); cur.Clear();
+                        foreach (var h in preRoll.Drain()) cur.AddRange(h);
+                        held = cur.Count;
+                    }
+                    cur.AddRange(buf);
+                    silentMs = rms < onset * .6 ? silentMs + buf.Length / 16 : 0;
+                    int spokenMs = (cur.Count - held) / 16;
+                    if (silentMs < 480 && spokenMs < 2500) return;
+                    speaking = false;
+                    if (spokenMs - silentMs >= 250) { says.Add(cur.ToArray()); progress?.Report((false, says.Count)); }
+                    if (says.Count >= target) done.TrySetResult(true);
+                } });
+                lock (_gate) _listening = capture != null; // WPF SherpaWakeService.cs:541-547: the mic pill stays lit while calibration holds the mic
+                if (capture != null) try { ListeningChanged?.Invoke(this, true); } catch { }
+                await done.Task.ConfigureAwait(false);
+                Release();
+                lock (says) done.TrySetResult(false); // waits out an in-flight frame before the lists are read
+                if (ct.IsCancellationRequested) return (null, Loc.Get("she_wake_cal_cancelled"));
+                if (says.Count < 2) return (null, Loc.GetF("she_wake_cal_few_heard", says.Count));
+                progress?.Report((true, says.Count));
+                var amb = ambient.Count > 8000 ? ambient.ToArray() : null; // ~0.5s+ of room tone to judge
+                var caught = new int[SherpaWakeService.CalibrationCandidates.Length]; var fired = new bool[caught.Length];
+                await Task.Run(() =>
+                {
+                    bool Fires(IDisposable spk, float[] audio)
+                    {
+                        using var stream = _createStream(spk);
+                        return _decode(spk, stream, audio) || _decode(spk, stream, new float[16000 / 3]); // trailing silence flushes
+                    }
+                    for (int k = 0; k < caught.Length && !ct.IsCancellationRequested; k++)
+                    {
+                        using var spk = _factory(m, (float)SherpaWakeService.CalibrationCandidates[k], (float)Math.Clamp(boost, 0.0, 5.0));
+                        fired[k] = amb != null && Fires(spk, amb);
+                        foreach (var say in says) if (!ct.IsCancellationRequested && Fires(spk, say)) caught[k]++;
+                    }
+                }).ConfigureAwait(false);
+                // Stop or panic during the sweep: a half-swept table must not be saved as the sensitivity.
+                if (ct.IsCancellationRequested) return (null, Loc.Get("she_wake_cal_cancelled"));
+                if (SherpaWakeService.SelectCalibrationThreshold(says.Count, caught, fired) is not { } pick)
+                    return (null, Loc.GetF("she_wake_cal_few_caught", caught.Max(), says.Count));
+                var (t, c, risk) = pick;
+                // WPF SherpaWakeService.cs:625-629: below 70% of the says is a partial fit, not a calibration.
+                bool fit = c >= Math.Max(2, (int)Math.Ceiling(says.Count * 0.7));
+                return (t, Loc.GetF(risk ? "she_wake_cal_done_noisy" : fit ? "she_wake_cal_done" : "she_wake_cal_partial", c, says.Count, t));
+            }
+            finally
+            {
+                Release();
+                lock (_gate) { _active = false; if (_disposed) { _spotter?.Dispose(); _spotter = null; } }
             }
         }
 

@@ -85,12 +85,19 @@ public sealed class SplashStartupTests
         using var blocked = new ManualResetEventSlim();
         using var release = new ManualResetEventSlim();
         var suffix = "_test_" + Guid.NewGuid().ToString("N");
-        using var primary = SingleInstance.Claim(suffix, _ => Dispatcher.UIThread.InvokeAsync(() => { }).GetTask());
+        int shows = 0;   // the primary's show runs on the UI thread, like App's real handoff
+        using var primary = SingleInstance.Claim(suffix,
+            _ => Dispatcher.UIThread.InvokeAsync(() => { Interlocked.Increment(ref shows); }).GetTask());
         Task<bool>? relaunch = null;
         try
         {
-            int kills = 0;
-            SingleInstance.ShowAckTimeoutMs = 100;
+            int kills = 0, showsWhenAcked = -1;
+            // No wall-clock race: the UI thread stays blocked until this launch's Claim has returned
+            // (release is only set after it), so an ack that needed the UI thread can never arrive and
+            // the deadline is only a hang guard for that regression. The product's own timeout
+            // (WPF App.xaml.cs:68) keeps a healthy listener that a busy runner schedules late from
+            // reading as wedged, which a 100 ms deadline did.
+            SingleInstance.ShowAckTimeoutMs = 10000;
             SingleInstance.StaleTakeoverWait = TimeSpan.FromMilliseconds(10);
             SingleInstance.KillStale = () => { Interlocked.Increment(ref kills); return 0; };
             bool pumped = false, completed = false;
@@ -107,7 +114,9 @@ public sealed class SplashStartupTests
                 {
                     Assert.True(blocked.Wait(TimeSpan.FromSeconds(10)));
                     using var second = SingleInstance.Claim(suffix, _ => Task.CompletedTask);
-                    Thread.Sleep(300); // Keep the UI blocked beyond the 100 ms acknowledgement timeout.
+                    // The UI thread is still blocked here, so the show cannot have run yet: the ack
+                    // was given without the dispatcher, which is what startup protection means.
+                    showsWhenAcked = Volatile.Read(ref shows);
                     exited = second is null;
                 }
                 catch (Exception ex) { failure = ex; }
@@ -122,13 +131,17 @@ public sealed class SplashStartupTests
                 await Dispatcher.Yield(DispatcherPriority.Background); // Model a splash frame without creating fonts.
                 Assert.True(pumped);
                 blocked.Set();
-                Assert.True(release.Wait(TimeSpan.FromSeconds(10)));
+                // Hang guard only; longer than the ack timeout so a missing ack reports as a takeover.
+                Assert.True(release.Wait(TimeSpan.FromSeconds(30)));
             }, () => null, () => { completed = true; primary!.EndStartupPhase(); });
             Dispatcher.UIThread.RunJobs();
             await start;
             Assert.True(await relaunch, $"Second launch did not exit; stale takeover attempted {Volatile.Read(ref kills)} times.");
+            Assert.Equal(0, showsWhenAcked);   // acknowledged while startup held the UI thread
             Assert.True(completed);
             Assert.Equal(0, Volatile.Read(ref kills));
+            // The acknowledged relaunch is still delivered once the dispatcher pumps again.
+            await LifecycleTestPump.UntilAsync(() => Volatile.Read(ref shows) == 1, "The acknowledged relaunch was never shown.");
         }
         finally
         {
