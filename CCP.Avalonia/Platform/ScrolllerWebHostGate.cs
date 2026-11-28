@@ -105,7 +105,8 @@ internal static class ScrolllerWebHostGate
     private static void AttachWindows(IPlatformHandle? handle, Func<IPlatformHandle?> handleAgain, Action<bool> ready, int left, bool blockAds, Func<string?, string?, bool>? shouldBlockAds)
     {
         var core = handle is IWindowsWebView2PlatformHandle w ? w.CoreWebView2 : IntPtr.Zero;
-        if (core != IntPtr.Zero) { ready(AttachWebView2(core) && (!blockAds || AttachAdWebView2(core, shouldBlockAds!))); return; }
+        // Not &&: a failed Scrolller hook must not leave the Home browser without its ad filter.
+        if (core != IntPtr.Zero) { ready(AttachWebView2(core) & (!blockAds || AttachAdWebView2(core, shouldBlockAds!))); return; }
         if (left == CoreRetries) Log.Warning("ScrolllerWebHostGate: the adapter has no CoreWebView2 yet; waiting for it");
         if (left <= 0)
         {
