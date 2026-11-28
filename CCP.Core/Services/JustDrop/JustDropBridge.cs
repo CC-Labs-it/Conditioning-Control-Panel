@@ -13,7 +13,7 @@ namespace ConditioningControlPanel.Services.JustDrop
         public const string PageSource = "justdrop";
         public const string HostSource = "ccp-host";
         public const int Version = 1;
-        public const string SiteOrigin = "https://" + JustDropHostService.SiteHost;
+        public const string SiteOrigin = "https://" + JustDropHandoff.SiteHost;
 
         public const int MinHapticMs = 50, MaxHapticMs = 10000;
         public const int MinAssets = 1, MaxAssets = 300;
@@ -30,7 +30,7 @@ namespace ConditioningControlPanel.Services.JustDrop
         {
             if (!Uri.TryCreate(source, UriKind.Absolute, out var u)) return false;
             return u.Scheme == Uri.UriSchemeHttps
-                && string.Equals(u.Host, JustDropHostService.SiteHost, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(u.Host, JustDropHandoff.SiteHost, StringComparison.OrdinalIgnoreCase)
                 && u.IsDefaultPort
                 && u.UserInfo.Length == 0;
         }
