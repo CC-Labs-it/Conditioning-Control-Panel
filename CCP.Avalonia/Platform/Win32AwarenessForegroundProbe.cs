@@ -68,6 +68,41 @@ internal sealed class Win32AwarenessForegroundProbe : IForegroundProbe
         return GetMonitorInfoW(monitor, ref info) && Covers(window, info.Monitor);
     }
 
+    // WPF AvatarTubeWindow.Windowing.cs:367-462: external exclusive-style fullscreen only.
+    private static readonly string[] TubeSafeClasses = { "Chrome_WidgetWin", "MozillaWindowClass", "ApplicationFrameWindow",
+        "Windows.UI.Core", "CabinetWClass", "Shell_TrayWnd", "Progman", "WorkerW", "XLMAIN", "OpusApp",
+        "PPTFrameClass", "VLC", "mpv", "MediaPlayerClassicW" };
+
+    internal static bool TubeFullscreen(uint pid, uint ownPid, string cls, int style, int exStyle, Rect window, Rect screen)
+    {
+        if (pid == 0 || pid == ownPid) return false;
+        foreach (var safe in TubeSafeClasses)
+            if (cls.StartsWith(safe, StringComparison.OrdinalIgnoreCase)) return false;
+        const int caption = 0x00c00000, popup = unchecked((int)0x80000000), topmost = 8;
+        return (style & caption) != caption && (style & popup) == popup && (exStyle & topmost) == topmost &&
+            window.Left <= screen.Left + 5 && window.Top <= screen.Top + 5 &&
+            window.Right >= screen.Right - 5 && window.Bottom >= screen.Bottom - 5;
+    }
+
+    internal static bool ReadTubeFullscreen()
+    {
+        if (!OperatingSystem.IsWindows()) return false;
+        try
+        {
+            var hwnd = GetForegroundWindow();
+            if (hwnd == IntPtr.Zero || !GetWindowRect(hwnd, out var rect)) return false;
+            GetWindowThreadProcessId(hwnd, out uint pid);
+            var cls = new StringBuilder(256);
+            GetClassName(hwnd, cls, cls.Capacity);
+            var monitor = MonitorFromWindow(hwnd, 2);
+            var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
+            return monitor != IntPtr.Zero && GetMonitorInfoW(monitor, ref info) && TubeFullscreen(pid,
+                (uint)Environment.ProcessId, cls.ToString(), GetWindowLong(hwnd, -16), GetWindowLong(hwnd, -20), rect, info.Monitor);
+        }
+        catch { return false; }
+    }
+
+    [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hwnd, int index);
     [StructLayout(LayoutKind.Sequential)]
     internal struct Rect { internal int Left, Top, Right, Bottom; }
     [StructLayout(LayoutKind.Sequential)]
