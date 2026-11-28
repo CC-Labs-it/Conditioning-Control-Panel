@@ -28,6 +28,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
     // Inside our own window the dim still absorbs clicks outside the hole and the card, as WPF's does
     // (TutorialStep.BlockBackgroundClicks).
     //
+    // Exception: on Windows/X11 a dimmed step also opens the owned monitor satellite (Monitor partial),
+    // which dims and blocks the rest of the main window's monitor as WPF did.
+    //
     // The parameterless render constructor still shows the real window (RenderProof needs a Window).
     public partial class TutorialOverlay
     {
@@ -54,10 +57,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         // on a dialog. This in-window portion also works on Wayland without taking focus.
         private void UpdateMainWindowDim(bool blockClicks)
         {
-            if (!_live || !IsOnStage || !blockClicks || _tutorialMainWindow == null ||
-                ReferenceEquals(_tutorialMainWindow, _targetWindow))
+            if (!_live || !IsOnStage || !blockClicks)
             {
                 RemoveMainWindowDim();
+                return;
+            }
+            UpdateMonitorDim();
+            // The monitor satellite already dims and blocks the main window when it is not the host.
+            if (_monitorDim != null || _tutorialMainWindow == null || ReferenceEquals(_tutorialMainWindow, _targetWindow))
+            {
+                RemoveInWindowDim();
                 return;
             }
             if (_mainDim != null) return;
@@ -69,7 +78,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Width = layer.Bounds.Width, Height = layer.Bounds.Height };
             layer.Children.Add(_mainDim);
             _mainDimBoundsSub = layer.GetObservable(BoundsProperty).Subscribe(new MainDimBoundsObserver(this));
-            _tutorialMainWindow.Closed += OnMainWindowClosed;
         }
 
         private sealed class MainDimBoundsObserver(TutorialOverlay overlay) : IObserver<Rect>
@@ -86,15 +94,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
 
         private void OnMainWindowClosed(object? sender, EventArgs e)
         {
-            RemoveMainWindowDim();
-            _tutorialMainWindow = null;
+            // WPF TutorialOverlay.xaml.cs:154-165 shuts down the tour on shell close.
+            Teardown();
         }
 
         private void RemoveMainWindowDim()
         {
+            RemoveMonitorDim();
+            RemoveInWindowDim();
+        }
+
+        private void RemoveInWindowDim()
+        {
             _mainDimBoundsSub?.Dispose();
             _mainDimBoundsSub = null;
-            if (_tutorialMainWindow != null) _tutorialMainWindow.Closed -= OnMainWindowClosed;
             if (_mainDimLayer != null && _mainDim != null) _mainDimLayer.Children.Remove(_mainDim);
             _mainDimLayer = null;
             _mainDim = null;
@@ -135,6 +148,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 return;
             }
             Live.Add(this);
+            if (_tutorialMainWindow != null)
+            {
+                _tutorialMainWindow.Closed -= OnMainWindowClosed;
+                _tutorialMainWindow.Closed += OnMainWindowClosed;
+            }
             _loaded = true;
             if (CoreTutorial.CurrentStep is { } first) UpdateStep(first);
         }
@@ -151,6 +169,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_tornDown) return;
             _tornDown = true;
             Live.Remove(this);
+            if (_tutorialMainWindow != null) _tutorialMainWindow.Closed -= OnMainWindowClosed;
             _closed = true;
             try { _spotlightDelayTimer?.Stop(); } catch { /* already stopped */ }
             _spotlightDelayTimer = null;
@@ -226,7 +245,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _fadingOut = true;
             _closed = true;
             // The tour has ended: hand the main window its input back now, not after the card's fade.
-            RemoveMainWindowDim();
+            // The monitor satellite fades with the card and closes in Teardown, as WPF's window does.
+            RemoveInWindowDim();
+            FadeOutMonitorDim();
             try { _spotlightDelayTimer?.Stop(); } catch { /* already stopped */ }
             _spotlightDelayTimer = null;
             UnsubscribeAdvanceTrigger();
@@ -244,6 +265,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             if (_stage == null || _tornDown) return;
             _stage.Width = b.Width;
             _stage.Height = b.Height;
+            if (_monitorDim != null) UpdateMonitorDim();   // the host resized: move the satellite's hole
             // Re-measure after this layout pass: the target moved with the window's size.
             Dispatcher.UIThread.Post(() =>
             {

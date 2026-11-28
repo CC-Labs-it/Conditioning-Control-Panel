@@ -81,8 +81,28 @@ internal static class Win32Overlay
             0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
     }
 
+    // Win32 inserts BELOW hWndInsertAfter; a topmost anchor keeps the window in the topmost band.
+    internal static bool StackBelow(IntPtr hwnd, IntPtr anchor) =>
+        PositionWindow(hwnd, anchor, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+
     /// <summary>The Windows half of <see cref="X11Overlay.RestackAbove"/>: z-order only, no activation, no
     /// geometry, no owner moves. Styles, click-through and focus are untouched.</summary>
+    internal static bool Sink(IntPtr hwnd, Func<IntPtr, IntPtr, int, int, int, int, uint, bool>? position = null)
+        => (position ?? SetWindowPos)(hwnd, new IntPtr(1), 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
+
+    // WPF ChaosTunnelService.EnforceBelowTunnel: move only a main window above the tunnel.
+    internal static bool RestackBelow(IntPtr hwnd, IntPtr sibling) =>
+        OperatingSystem.IsWindows() && IsWindow(hwnd) && IsWindow(sibling) && RestackBelow(hwnd, sibling,
+            h => GetWindow(h, 3), (h, after, flags) => SetWindowPos(h, after, 0, 0, 0, 0, flags));
+
+    internal static bool RestackBelow(IntPtr hwnd, IntPtr sibling, Func<IntPtr, IntPtr> previous, Func<IntPtr, IntPtr, uint, bool> position)
+    {
+        var h = sibling;
+        for (int i = 0; i < 512 && (h = previous(h)) != IntPtr.Zero; i++)
+            if (h == hwnd) return position(hwnd, sibling, SwpNoMove | SwpNoSize | SwpNoActivate | 0x200);
+        return true;
+    }
+
     internal static bool RestackAbove(IntPtr hwnd, IntPtr sibling)
     {
         if (!OperatingSystem.IsWindows() || !IsWindow(hwnd) || !IsWindow(sibling)) return false;
@@ -309,6 +329,30 @@ internal static class Win32Overlay
         public IntPtr Hwnd, InsertAfter;
         public int X, Y, Cx, Cy;
         public uint Flags;
+    }
+
+    // WPF ChaosTunnelService.cs:476-502: intercept ordinary raises before they paint.
+    internal static void RewriteTunnelRaise(uint msg, IntPtr data, IntPtr tunnel)
+    {
+        if (msg != WmWindowPosChanging || data == IntPtr.Zero || tunnel == IntPtr.Zero) return;
+        var pos = Marshal.PtrToStructure<WindowPos>(data);
+        if ((pos.Flags & SwpNoZOrder) != 0 || pos.InsertAfter != IntPtr.Zero) return;
+        pos.InsertAfter = tunnel;
+        Marshal.StructureToPtr(pos, data, false);
+    }
+
+    internal static Action HookTunnelRaises(TopLevel main, TopLevel tunnel)
+    {
+        if (!OperatingSystem.IsWindows()) return () => { };
+        IntPtr Hook(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            var handle = tunnel.TryGetPlatformHandle();
+            if (handle?.HandleDescriptor == "HWND" && IsWindow(handle.Handle))
+                RewriteTunnelRaise(msg, lParam, handle.Handle);
+            return IntPtr.Zero;
+        }
+        Win32Properties.AddWndProcHookCallback(main, Hook);
+        return () => Win32Properties.RemoveWndProcHookCallback(main, Hook);
     }
 
     /// <summary>WPF BubbleWndProc (Speech.cs:1122-1137): a plain show puts the window on top of the

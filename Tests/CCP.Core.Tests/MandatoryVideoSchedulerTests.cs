@@ -17,6 +17,7 @@ public sealed class MandatoryVideoSchedulerTests
 {
     private sealed class Host : IMandatoryVideoHost
     {
+        public int FloatingLimit => 1; public int FloatingUp => 0;
         public readonly List<(string Path, bool Strict)> Shown = new();
         public bool Floating;
         public bool Lockdown;
@@ -33,6 +34,9 @@ public sealed class MandatoryVideoSchedulerTests
         public bool ThrowOnClose;
         public readonly List<bool> FlashesAtShow = new();
         public Action<string>? OnShow;
+        public Action? PendingStart;
+        public bool DeferStart;
+        public void Show(string path, bool strict, Action started) { Show(path, strict); if (DeferStart) PendingStart = started; else started(); }
         public void Show(string path, bool strict)
         {
             FlashesAtShow.Add(CoreFlash.IsRunning);
@@ -44,6 +48,60 @@ public sealed class MandatoryVideoSchedulerTests
         public Action? Then;
         public void ShowMessage(AttentionVerdict verdict, int ms, Action then) { Messages.Add(verdict); Then = then; }
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void VideoAnnouncementPrecedesEveryClipAndStopCancelsThePendingClip(bool freeze) => With(20, false, () =>
+    {
+        var saved = CoreSubliminal.BambiFreezeProvider;
+        var attention = CoreSettings.Current.AttentionChecksEnabled;
+        CoreSubliminal.BambiFreezeProvider = freeze ? () => { } : null;
+        CoreSettings.Current.AttentionChecksEnabled = false;
+        var clock = new FakeClock(); var host = new Host();
+        var video = new MandatoryVideoScheduler(host, clock, () => Clips);
+        var announced = 0;
+        video.VideoAboutToStart += () => announced++;
+        try
+        {
+            Assert.True(video.Trigger());
+            Assert.Equal(freeze ? 0 : 1, announced);
+            if (freeze) clock.Advance(MandatoryVideoScheduler.FreezeLead);
+            Assert.Equal(1, announced);
+            clock.Advance(MandatoryVideoScheduler.PreRoll - TimeSpan.FromMilliseconds(1));
+            Assert.Empty(host.Shown);
+            clock.Advance(TimeSpan.FromMilliseconds(1));
+            Assert.Single(host.Shown);
+            video.End();
+            Assert.True(video.Trigger());
+            if (freeze) clock.Advance(MandatoryVideoScheduler.FreezeLead);
+            Assert.Equal(2, announced);
+            video.ForceCleanup();
+            clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Single(host.Shown);
+        }
+        finally { video.ForceCleanup(); CoreSubliminal.BambiFreezeProvider = saved; CoreSettings.Current.AttentionChecksEnabled = attention; }
+    });
+
+    [Fact]
+    public void StopDuringAnnouncementCannotRearmFrozenPreroll() => With(20, false, () =>
+    {
+        var saved = CoreSubliminal.BambiFreezeProvider;
+        var attention = CoreSettings.Current.AttentionChecksEnabled;
+        CoreSubliminal.BambiFreezeProvider = () => { };
+        CoreSettings.Current.AttentionChecksEnabled = false;
+        var clock = new FakeClock(); var host = new Host();
+        var video = new MandatoryVideoScheduler(host, clock, () => Clips);
+        video.VideoAboutToStart += video.ForceCleanup;
+        try
+        {
+            Assert.True(video.Trigger());
+            clock.Advance(MandatoryVideoScheduler.FreezeLead + MandatoryVideoScheduler.PreRoll);
+            Assert.False(video.IsPlaying);
+            Assert.Empty(host.Shown);
+        }
+        finally { video.ForceCleanup(); CoreSubliminal.BambiFreezeProvider = saved; CoreSettings.Current.AttentionChecksEnabled = attention; }
+    });
 
     [Theory]
     [InlineData(true, false, false, 1)]
@@ -399,6 +457,123 @@ public sealed class MandatoryVideoSchedulerTests
     });
 
     [Fact]
+    public void ChaosSegmentIsBoundToItsTokenAndLeavesFifteenSeconds() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        int token = v.ClaimChaosVideoToken();
+        v.ArmRandomSegment(token, 15);
+        Assert.True(v.Trigger(userEarned: true, chaosToken: token));
+        Assert.Equal(15, v.RandomSegmentSeconds);
+        var random = new Random(41);
+        for (int i = 0; i < 100; i++)
+            Assert.InRange(ConditioningControlPanel.Services.Video.VideoLengthCapRules.StartOffsetMs(v.RandomSegmentSeconds, 120000, random), 0, 105000);
+        v.CancelChaosVideo(token);
+        Assert.True(v.Trigger(path: Clips[0]));
+        Assert.Equal(0, v.RandomSegmentSeconds);
+        v.ForceCleanup();
+        host.BubbleCountActive = true; int notices = 0; var empty = new MandatoryVideoScheduler(host, clock, () => Array.Empty<string>()); empty.NoVideos += () => notices++;
+        int nextToken = empty.ClaimChaosVideoToken(); Assert.True(empty.Trigger(userEarned: true, silentIfEmpty: true, chaosToken: nextToken));
+        host.BubbleCountActive = false; clock.Advance(BubbleCountScheduler.QueuePoll); Assert.Equal(0, notices); empty.ForceCleanup();
+    });
+    [Theory]
+    [InlineData("preroll")] [InlineData("cascade")] [InlineData("cascade-preroll")] [InlineData("bubble")] [InlineData("lock")]
+    public void CancelledChaosRequestCannotPlayAfterADefer(string stage) => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { BubbleCountActive = stage == "bubble" };
+        bool rain = stage is "cascade" or "cascade-preroll";
+        Action? held = null;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips)
+        {
+            CascadeIsRaining = () => rain,
+            DeferTrigger = action => { if (stage != "lock") return false; held = action; return true; }
+        };
+        int token = v.ClaimChaosVideoToken();
+        Assert.True(v.Trigger(userEarned: true, chaosToken: token));
+        if (stage == "cascade-preroll")
+        {
+            rain = false; clock.Advance(TimeSpan.FromMilliseconds(250));
+            Assert.True(v.IsPlaying);
+        }
+        v.CancelChaosVideo(token);
+        rain = false; host.BubbleCountActive = false;
+        v.DeferTrigger = null;
+        held?.Invoke();
+        clock.Advance(TimeSpan.FromSeconds(5));
+        Assert.False(v.IsPlaying);
+        Assert.Empty(host.Shown);
+        v.ForceCleanup();
+    });
+    [Theory]
+    [InlineData("cascade")] [InlineData("bubble")]
+    public void CancelledChaosReleasesTheDeferredSlot(string stage) => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { BubbleCountActive = stage == "bubble" };
+        bool rain = stage == "cascade";
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips) { CascadeIsRaining = () => rain };
+        int token = v.ClaimChaosVideoToken();
+        Assert.True(v.Trigger(userEarned: true, chaosToken: token));
+        v.CancelChaosVideo(token);
+        rain = false; host.BubbleCountActive = false;
+        Assert.True(v.Trigger(path: Clips[1]));
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Equal(Clips[1], Assert.Single(host.Shown).Path);
+        v.ForceCleanup();
+    });
+    [Fact]
+    public void CancellingOwnedTapeStopsItOnlyOnce() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host();
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+        int token = v.ClaimChaosVideoToken();
+        Assert.True(v.Trigger(userEarned: true, chaosToken: token));
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Single(host.Shown);
+        v.CancelChaosVideo(token);
+        Assert.False(v.IsPlaying);
+        Assert.Equal(1, host.Closes);
+        Assert.True(v.Trigger(path: Clips[1]));
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        v.CancelChaosVideo(token);
+        Assert.True(v.IsPlaying);
+        Assert.Equal(1, host.Closes);
+        v.ForceCleanup();
+    });
+    [Fact]
+    public void CancellingChaosDoesNotCloseAnUnrelatedVideo() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); Action? held = null;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips)
+        { DeferTrigger = action => { held = action; return true; } };
+        int token = v.ClaimChaosVideoToken();
+        Assert.True(v.Trigger(userEarned: true, chaosToken: token));
+        v.DeferTrigger = null;
+        Assert.True(v.Trigger(path: Clips[0]));
+        clock.Advance(MandatoryVideoScheduler.PreRoll);
+        v.CancelChaosVideo(token);
+        held!();
+        Assert.True(v.IsPlaying);
+        Assert.Single(host.Shown);
+        Assert.Equal(0, host.Closes);
+        v.ForceCleanup();
+    });
+    [Fact]
+    public void ForceCleanupInvalidatesChaosRequestHeldByAnotherSurface() => With(6, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host(); Action? held = null;
+        var v = new MandatoryVideoScheduler(host, clock, () => Clips)
+        { DeferTrigger = action => { held = action; return true; } };
+        int token = v.ClaimChaosVideoToken();
+        Assert.True(v.Trigger(userEarned: true, chaosToken: token));
+        v.ForceCleanup();
+        v.DeferTrigger = null;
+        held!();
+        clock.Advance(TimeSpan.FromSeconds(5));
+        Assert.Empty(host.Shown);
+        Assert.False(v.IsPlaying);
+    });
+
+    [Fact]
     public void CascadeHoldsAndCoalescesEarnedClipThenReplaysWithOriginalStrictness() => With(6, false, () =>
     {
         var clock = new FakeClock(); var host = new Host(); var rain = true;
@@ -711,6 +886,45 @@ public sealed class MandatoryVideoSchedulerTests
         Assert.True(v.IsPlaying); Assert.Null(v.LastVideoPath); Assert.Empty(started);
         clock.Advance(MandatoryVideoScheduler.PreRoll);
         Assert.Equal(new[] { "/new.mp4" }, started); v.ForceCleanup();
+    });
+
+    [Fact]
+    public void DeferredStartDoesNotAnnounceBeforeSuccessOrAfterCleanup() => With(20, false, () =>
+    {
+        var clock = new FakeClock(); var host = new Host { DeferStart = true };
+        var video = new MandatoryVideoScheduler(host, clock, () => Clips); var starts = 0;
+        video.VideoStarted += () => starts++;
+        Assert.True(video.Trigger(path: "/first.mp4")); clock.Advance(MandatoryVideoScheduler.PreRoll);
+        Assert.Null(video.LastVideoPath); Assert.Equal(0, starts);
+        host.PendingStart!(); Assert.Equal("/first.mp4", video.LastVideoPath); Assert.Equal(1, starts);
+        video.End(); Assert.True(video.Trigger(path: "/second.mp4")); clock.Advance(MandatoryVideoScheduler.PreRoll);
+        var stale = host.PendingStart!; video.ForceCleanup(); stale();
+        Assert.Equal("/first.mp4", video.LastVideoPath); Assert.Equal(1, starts);
+    });
+
+    [Fact]
+    public void DeferredStartKeepsVideoHapticsAndScriptStoppedUntilReady() => With(20, false, () =>
+    {
+        using var h = new HapticService(new ConditioningControlPanel.Models.HapticSettings { VideoEnabled = true, VideoIntensity = 0.8, FunScriptEnabled = true });
+        var old = CoreHaptics.Service; var oldPremium = CoreEntitlement.HasPremiumProvider;
+        CoreHaptics.Service = h; CoreEntitlement.HasPremiumProvider = () => true;
+        try
+        {
+            var seq = typeof(ConditioningControlPanel.Services.Haptics.FunScriptService).GetField("_loadSeq", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            var before = (long)seq.GetValue(h.FunScript)!;
+            var clock = new FakeClock(); var host = new Host { DeferStart = true };
+            var video = new MandatoryVideoScheduler(host, clock, () => Clips);
+            var starts = 0; video.VideoStarted += () => starts++;
+            Assert.True(video.Trigger(path: "/first.mp4")); clock.Advance(MandatoryVideoScheduler.PreRoll);
+            Assert.Equal(0, h.GetLayer(HapticLayer.Video)); Assert.Equal(before, (long)seq.GetValue(h.FunScript)!);
+            Assert.True(video.IsPlaying); Assert.Same(h, CoreHaptics.Service); Assert.True(h.Settings.VideoEnabled); Assert.True(h.Mixer.IsGateOpen);
+            host.PendingStart!();
+            Assert.Equal(1, starts); Assert.True(video.IsPlaying); Assert.Same(h, CoreHaptics.Service);
+            Assert.True(h.GetLayer(HapticLayer.Video) > 0, "video background haptics did not start");
+            Assert.True((long)seq.GetValue(h.FunScript)! > before, "video script did not start");
+            video.ForceCleanup();
+        }
+        finally { CoreHaptics.Service = old; CoreEntitlement.HasPremiumProvider = oldPremium; }
     });
 
     [Theory]
@@ -1311,6 +1525,26 @@ public sealed class MandatoryVideoSchedulerTests
         clock.Advance(TimeSpan.FromSeconds(1.3));
         Assert.Equal(new[] { ("/ai/named.mp4", false) }, host.Shown);
         Assert.False(v.Trigger(path: "/ai/other.mp4"));      // one already playing
+    });
+
+    [Fact]   // WPF VideoService.cs:2948: an open browser media session skips the tick and retries in SkipRetrySeconds
+    public void Browser_media_session_holds_the_scheduled_clip() => With(60, false, () =>
+    {
+        var media = ConditioningControlPanel.Services.Browser.BrowserMediaSession.Shared;
+        try
+        {
+            media.OnMediaPlaying(0);
+            var clock = new FakeClock(); var host = new Host();
+            var v = new MandatoryVideoScheduler(host, clock, () => Clips);
+            v.Start();
+            clock.Advance(TimeSpan.FromHours(2));
+            Assert.Empty(host.Shown);
+            media.OnMediaStopped("ended");
+            clock.Advance(TimeSpan.FromSeconds(MandatoryVideoScheduler.SkipRetrySeconds + 5));
+            Assert.Single(host.Shown);
+            v.Stop();
+        }
+        finally { media.OnMediaStopped("test"); }
     });
 
     [Fact]   // WPF VideoService :3007: a do-not-disturb app in front reschedules (SkipRetrySeconds), never drops

@@ -55,7 +55,7 @@ internal static partial class FlashOverlay
         _remixBuilder?.Dispose(); _remixBuilder = null;
     }
 
-    internal static async Task<bool> TryShowRemix(AppSettings s, IReadOnlyList<Screen> screens, int? durationMs, bool ambient, int generation)
+    internal static async Task<bool> TryShowRemix(AppSettings s, IReadOnlyList<Screen> screens, int? durationMs, bool ambient, int generation, bool suppressHaptic = false)
     {
         if (!ambient) return false;
         var director = EnsureRemix();
@@ -83,7 +83,7 @@ internal static partial class FlashOverlay
         }
         try { foreach (var index in targets)
         {
-            if (Active.Count >= Cap(CoreSettings.Current, ambient)) { capped = true; break; }
+            if (OnScreen >= Cap(CoreSettings.Current, ambient)) { capped = true; break; }
             var screen = screens[index];
             var b = screen.Bounds;
             var (x, y, w, h) = JackpotRemixRoll.CentredGeometry(b.X, b.Y, b.Width, b.Height, frames[0].PixelSize.Width, frames[0].PixelSize.Height);
@@ -92,9 +92,11 @@ internal static partial class FlashOverlay
                 multiplier > 1 && windows.Count == 0, SkillTreeRules.GetSparkleBoostTier(s), natasha: false);
             windows.Add(win);
             win.Closed += (_, _) => { windows.Remove(win); Cleanup(); };
+            var lifetime = Lifetime(s, ambient, durationMs);
             if (!Spawn(win, new PixelRect(x, y, w, h), b, screen.Scaling, glow,
                 Math.Clamp(s.FlashOpacity / 100.0, 0, 1), TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent),
-                Lifetime(s, ambient, durationMs), s.FlashClickable)) windows.Remove(win);
+                lifetime, s.FlashClickable)) windows.Remove(win);
+            else if (!suppressHaptic) ApplyLuminance(frames[0], path, lifetime); // WPF FlashService.cs:2152-2155
         }
         } catch { foreach (var win in windows.ToArray()) win.Close(); creating = false; Cleanup(); throw; }
         creating = false;

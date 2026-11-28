@@ -39,7 +39,7 @@ public sealed class ChaosToyEffectsTests
 
     // #4225: a toy this head cannot run spends no charge or cooldown and never earns first_play.
     [Theory]
-    [InlineData("rabbit_caller")]   // freeze_trigger runs since restack b145 (ChaosSlowMotionTests)
+    // freeze_trigger runs since restack b145 (ChaosSlowMotionTests); rabbit_caller since RabbitCallerDriverTests.
     [InlineData("unknown")]
     public async Task Unavailable_toys_do_not_spend_or_award(string id)
     {

@@ -10,6 +10,7 @@ using Avalonia.Input;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.AvatarTube;
 using ConditioningControlPanel.Avalonia.Views.Controls.Companion;
@@ -309,6 +310,319 @@ public sealed class AvatarTubeFinishTests
         }
         finally { Directory.Delete(root, recursive: true); }
     }, savedSet: 4);
+
+    [Fact]
+    public Task DiskPortraitSkinsReplacePosesAndEmotesTakePrecedence() => Run((_, tube, change) =>
+    {
+        var (root, audio, mod) = PortraitFixture("portrait-test", """
+            {"idleEmotion":"neutral","skins":[{"id":"a","dir":"a","title":"First"},{"id":"b","dir":"b","title":"Second"}],"emotions":{"neutral":{"portraits":[{"file":"idle.png"}]}}}
+            """, new string[0]);
+        try
+        {
+            change(mod);
+            Assert.False(tube.IsPortraitMode); // manifest without images keeps the ordinary avatar
+            Assert.Equal(7, tube.PickableAvatarSets().Length);
+            foreach (var skin in new[] { "a", "b" }) CopyPose(audio, skin, "idle.png");
+            change(mod);
+            Assert.True(tube.IsPortraitMode); Assert.False(tube.IsPoseRotating);
+            Assert.True(tube.RefreshRainPlayback().IsCompletedSuccessfully); Assert.False(tube.IsPoseRotating);
+            Assert.Equal(new[] { 1, 2 }, tube.PickableAvatarSets());
+            Assert.Equal("First", tube.FindControl<TextBlock>("TxtAvatarTitle")!.Text);
+            SelectNow(tube, 2);
+            Assert.Equal("Second", tube.FindControl<TextBlock>("TxtAvatarTitle")!.Text);
+            Assert.False(tube.IsPoseRotating);
+            File.WriteAllText(Path.Combine(Directory.CreateDirectory(Path.Combine(root, "resources", "emotes", "set1")).FullName, "emotes.json"), "{}");
+            change(mod);
+            Assert.False(tube.IsPortraitMode); Assert.Equal(new[] { 1 }, tube.PickableAvatarSets());
+            change(new ModPackage(new ModManifest { Id = "other" }, null, false)); Assert.False(tube.IsPortraitMode);
+        }
+        finally { Directory.Delete(root, true); }
+    });
+
+    [Fact]
+    public Task PortraitAllowsSelectedSkinWhenFirstSkinHasNoIdle() => Run((_, tube, change) =>
+    {
+        var (root, audio, mod) = PortraitFixture("missing-first", """
+            {"idleEmotion":"neutral","skins":[{"id":"a","dir":"a"},{"id":"b","dir":"b","title":"Second"}],"emotions":{"neutral":{"portraits":[{"file":"idle.png"},{"file":"two.png"},{"file":"three.png"},{"file":"four.png"}]}}}
+            """, new[] { "b" }, "idle.png", "two.png", "three.png", "four.png");
+        try
+        {
+            change(mod);
+            Assert.Equal(new[] { 1, 2 }, tube.PickableAvatarSets()); Assert.True(tube.IsPortraitMode);
+            SelectNow(tube, 2);
+            Assert.True(tube.IsPortraitMode); Assert.Equal("Second", tube.FindControl<TextBlock>("TxtAvatarTitle")!.Text);
+            Assert.Equal(Path.Combine(audio, "b", "idle.png"), tube.PortraitPath);
+        }
+        finally { Directory.Delete(root, true); }
+    });
+
+    [Fact]
+    public Task PortraitSpeechUsesLineAndMoodCrossfadesAndReturnsToIdle() => Run((_, tube, change) =>
+    {
+        var (root, audio, mod) = PortraitFixture("portrait-speech", """
+            {"idleEmotion":"neutral","director":{"crossfadeFrames":4},"skins":[{"id":"a","dir":"a"},{"id":"b","dir":"b"}],"emotions":{"neutral":{"portraits":[{"file":"idle.png"}]},"happy":{"portraits":[{"file":"happy1.png"},{"file":"happy2.png"}]},"tender":{"portraits":[{"file":"tender.png"}]},"other":{"portraits":[{"file":"happy3.png"}]}},"lines":{"mapped":{"emotion":"happy"}}}
+            """, new[] { "a", "b" }, "idle.png", "happy1.png", "happy2.png", "happy3.png", "tender.png");
+        try
+        {
+            using (var wave = new NAudio.Wave.WaveFileWriter(Path.Combine(audio, "mapped.wav"), new NAudio.Wave.WaveFormat(8000, 16, 1)))
+                wave.Write(new byte[64000], 0, 64000); // four seconds
+            change(mod);
+            List<(TimeSpan Delay, Action Fire)> steps = new(), fades = new();
+            tube.PortraitStepScheduler = (delay, fire) => { steps.Add((delay, fire)); return () => { }; };
+            tube.PortraitFadeScheduler = (delay, fire) => { fades.Add((delay, fire)); return () => { }; };
+            tube.SpeechAudioPlayer = (_, _, _, done) => done?.Invoke();
+            tube.GigglePriority("voiced line", phraseAudioPath: Path.Combine(audio, "mapped.wav"), barkVoice: true, mood: "soft");
+            Assert.Contains(Path.GetFileName(tube.PortraitPath), new[] { "happy1.png", "happy2.png" });
+            Assert.Equal(TimeSpan.FromMilliseconds(152), Assert.Single(fades).Delay);
+            Assert.NotNull(tube.FindControl<Image>("ImgAvatar")!.Source); Assert.NotNull(tube.FindControl<Image>("ImgAvatarB")!.Source);
+            var first = tube.PortraitPath;
+            Assert.Equal(TimeSpan.FromSeconds(1), Assert.Single(steps).Delay);
+            SelectNow(tube, 2); Assert.Equal(Path.Combine(audio, "b", Path.GetFileName(first)), tube.PortraitPath);
+            steps[0].Fire(); Assert.Equal(Path.Combine(audio, "b"), Path.GetDirectoryName(tube.PortraitPath));
+            Assert.NotEqual(Path.GetFileName(first), Path.GetFileName(tube.PortraitPath));
+            Assert.Equal(TimeSpan.FromSeconds(1), steps[1].Delay);
+            steps[1].Fire();
+            Assert.Equal(Path.Combine(audio, "b", Path.GetFileName(first)), tube.PortraitPath);
+            Assert.Equal(TimeSpan.FromSeconds(2), steps[2].Delay);
+            steps[2].Fire();
+            Assert.Equal("idle.png", Path.GetFileName(tube.PortraitPath));
+            tube.EndSpeechBubble();
+            Action? queued = null;
+            tube.SpeechDelayScheduler = (_, fire) => { queued = fire; return () => { }; };
+            tube.Giggle("queued", phraseAudioPath: Path.Combine(audio, "mapped.mp3"), barkVoice: true, mood: "soft");
+            queued!();
+            Assert.Contains(Path.GetFileName(tube.PortraitPath), new[] { "happy1.png", "happy2.png" });
+            tube.GigglePriority("mood", playSound: false, aiGenerated: false, mood: "unknown, soft");
+            Assert.Equal("tender.png", Path.GetFileName(tube.PortraitPath));
+            var (staleStep, staleFade) = (steps[^1].Fire, fades[^1].Fire);
+            change(new ModPackage(new ModManifest { Id = "other" }, null, false));
+            staleStep(); staleFade();
+            Assert.False(tube.IsPortraitMode); Assert.Null(tube.FindControl<Image>("ImgAvatarB")!.Source);
+            File.Delete(Path.Combine(audio, "a", "idle.png")); File.Delete(Path.Combine(audio, "b", "idle.png"));
+            var previous = tube.FindControl<Image>("ImgAvatar")!.Source; Assert.NotNull(previous); Assert.True(tube.IsPoseRotating);
+            change(new ModPackage(new ModManifest { Id = "portrait-no-idle" }, root, false));
+            Assert.True(tube.IsPortraitMode); Assert.Null(tube.PortraitPath); Assert.False(tube.IsPoseRotating);
+            Assert.Same(previous, tube.FindControl<Image>("ImgAvatar")!.Source);
+            Assert.True(tube.RefreshRainPlayback().IsCompletedSuccessfully); Assert.False(tube.IsPoseRotating);
+            tube.GigglePriority("mood", playSound: false, aiGenerated: false, mood: "soft");
+            Assert.Equal("tender.png", Path.GetFileName(tube.PortraitPath));
+            var emotionSource = tube.FindControl<Image>("ImgAvatarB")!.Source; Assert.NotNull(emotionSource); change(new ModPackage(new ModManifest { Id = "portrait-no-idle" }, root, false)); Assert.Same(emotionSource, tube.FindControl<Image>("ImgAvatar")!.Source);
+        }
+        finally { Directory.Delete(root, true); }
+    });
+
+    // A temp mod folder with the portrait manifest and a pose copy for every skin and file.
+    private static (string Root, string Audio, ModPackage Mod) PortraitFixture(string id, string manifest, string[] skins, params string[] files)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "ccp-" + id + "-" + Guid.NewGuid().ToString("N"));
+        var audio = Path.Combine(root, "resources", "sounds", "companion_audio");
+        Directory.CreateDirectory(audio);
+        File.WriteAllText(Path.Combine(audio, "avatar_manifest.json"), manifest);
+        foreach (var skin in skins) foreach (var name in files) CopyPose(audio, skin, name);
+        return (root, audio, new ModPackage(new ModManifest { Id = id }, root, false));
+    }
+
+    private static void CopyPose(string audio, string skin, string name) => File.Copy(Path.Combine(ConditioningControlPanel.Tests.SourceRoots.RepoRoot,
+        "Assets", "avatar_pose1.png"), Path.Combine(Directory.CreateDirectory(Path.Combine(audio, skin)).FullName, name));
+
+    private static (string Root, string Audio, ModPackage Mod) PortraitReviewFixture() => PortraitFixture("portrait-review", """
+        {"idleEmotion":"neutral","skins":[{"id":"a","dir":"a"},{"id":"b","dir":"b"}],"emotions":{"neutral":{"portraits":[{"file":"idle.png"}]},"happy":{"portraits":[{"file":"happy.png"}]}}}
+        """, new[] { "a", "b" }, "idle.png", "happy.png");
+
+    private static void SelectNow(AvatarTubeWindow tube, int set)
+    {
+        Action? finish = null;
+        tube.AvatarSwitchScheduler = (_, fire) => { finish = fire; return () => { }; };
+        Assert.True(tube.SelectAvatarSet(set)); finish!();
+    }
+
+    [Fact]
+    public Task TriggerDoesNotChangePortraitExpression() => Run((_, tube, change) =>
+    {
+        var (root, audio, mod) = PortraitReviewFixture();
+        File.WriteAllText(Path.Combine(audio, "avatar_manifest.json"), """
+            {"idleEmotion":"neutral","skins":[{"id":"a","dir":"a"},{"id":"b","dir":"b"}],"emotions":{"neutral":{"portraits":[{"file":"idle.png"}]},"alluring":{"portraits":[{"file":"happy.png"}]},"entrancing":{"portraits":[{"file":"happy.png"}]},"dreamy":{"portraits":[{"file":"happy.png"}]},"teasing":{"portraits":[{"file":"happy.png"}]}}}
+            """);
+        try
+        {
+            ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet();
+            change(mod);
+            var idle = tube.PortraitPath; var steps = new List<Action>(); Action? show = null;
+            tube.PortraitStepScheduler = (_, fire) => { steps.Add(fire); return () => { }; };
+            tube.SpeechDelayScheduler = (delay, fire) => { if (delay == TimeSpan.FromSeconds(0.6)) show = fire; return () => { }; };
+            CoreSettings.Current.SubAudioEnabled = false; CoreSettings.Current.CustomTriggers = new() { "freeze" }; CoreSettings.Current.TriggerModeEnabled = true;
+            tube.OnTriggerTick(); Assert.NotNull(show); show!();
+            Assert.True(tube.IsSpeaking); Assert.Equal(idle, tube.PortraitPath); Assert.Empty(steps);
+        }
+        finally { Directory.Delete(root, true); }
+    });
+
+    [Fact]
+    public Task PortraitChromeShowsMistAndRestoresEffects() => Run((_, tube, change) =>
+    {
+        var (root, unusedAudio, mod) = PortraitReviewFixture();
+        try
+        {
+            var a = tube.FindControl<Image>("ImgAvatar")!;
+            var b = tube.FindControl<Image>("ImgAvatarB")!;
+            var mist = tube.FindControl<Control>("MistOverlay")!;
+            var effectA = a.Effect; var effectB = b.Effect;
+            Assert.NotNull(effectA); Assert.NotNull(effectB); Assert.False(mist.IsVisible);
+            change(mod);
+            Assert.Null(a.Effect); Assert.Null(b.Effect); Assert.True(mist.IsVisible);
+            SelectNow(tube, 2);
+            Assert.Null(a.Effect); Assert.Null(b.Effect); Assert.True(mist.IsVisible);
+            // WPF Windowing.cs:753-799: breath, wobble and mist; a playing clip adds shimmer and thicker mist.
+            var tick = Assert.IsType<Action<double>>(tube.FloatingFrame);
+            var motion = (global::Avalonia.Media.TransformGroup)((global::Avalonia.Media.TransformGroup)b.RenderTransform!).Children[0];
+            var breath = (global::Avalonia.Media.ScaleTransform)motion.Children[2]; var wobble = (global::Avalonia.Media.RotateTransform)motion.Children[3];
+            tick(100 * 0.016);
+            Assert.Equal(1 + Math.Sin(1.3) * 0.01, breath.ScaleX, 8);
+            // WPF xaml:511: about the portrait's centre; the feet-based layout scale still lands it there.
+            var layer = (global::Avalonia.Media.TransformGroup)((global::Avalonia.Media.TransformGroup)a.RenderTransform!).Children[0];
+            var s = ((global::Avalonia.Media.ScaleTransform)layer.Children[0]).ScaleX; Assert.True(a.Bounds.Height > 0);
+            var centre = layer.Value.Transform(new global::Avalonia.Point(0, -a.Bounds.Height / 2));
+            Assert.Equal(0, centre.X, 6); Assert.Equal(-a.Bounds.Height * s / 2, centre.Y, 6); Assert.Equal(Math.Sin(1.7) * 0.4, wobble.Angle, 8); Assert.Equal(0.15 + (Math.Sin(0.9) + 1) * 0.03, mist.Opacity, 8);
+            tube.SpeechAudioPlayer = (_, _, _, _) => { }; // the clip keeps playing
+            tube.GigglePriority("voiced", phraseAudioPath: Path.Combine(root, "missing.wav"), barkVoice: true); tick(40 * 0.016);
+            Assert.Equal(Math.Sin(0.68) * 0.4 + Math.Sin(18) * Math.Pow(Math.Sin(1.4), 3) * 0.175, wobble.Angle, 8); Assert.Equal(0.26 + (Math.Sin(0.36) + 1) * 0.05, mist.Opacity, 8);
+            change(new ModPackage(new ModManifest { Id = "other" }, null, false));
+            Assert.Same(effectA, a.Effect); Assert.Same(effectB, b.Effect); Assert.False(mist.IsVisible);
+            Assert.Equal(1, breath.ScaleX); Assert.Equal(0, wobble.Angle); // WPF Avatar.cs:1117-1119
+        }
+        finally { Directory.Delete(root, true); }
+    });
+
+    [Fact]
+    public Task PortraitCorruptImagesFallBackToSkinZeroThenIdle() => Run((_, tube, change) =>
+    {
+        var (root, audio, mod) = PortraitReviewFixture();
+        try
+        {
+            foreach (var name in new[] { "idle.png", "happy.png" }) File.WriteAllText(Path.Combine(audio, "b", name), "corrupt");
+            change(mod); SelectNow(tube, 2);
+            Assert.Equal(Path.Combine(audio, "a", "idle.png"), tube.PortraitPath); tube.GigglePriority("line", playSound: false, aiGenerated: false, mood: "happy");
+            Assert.Equal(Path.Combine(audio, "a", "happy.png"), tube.PortraitPath);
+            File.WriteAllText(Path.Combine(audio, "a", "happy.png"), "corrupt"); change(mod); // reload the verified image cache
+            tube.GigglePriority("line", playSound: false, aiGenerated: false, mood: "happy");
+            Assert.Equal(Path.Combine(audio, "a", "idle.png"), tube.PortraitPath);
+            File.Copy(Path.Combine(audio, "a", "idle.png"), Path.Combine(audio, "b", "idle.png"), true); change(mod);
+            Assert.Equal(Path.Combine(audio, "b", "idle.png"), tube.PortraitPath); tube.GigglePriority("line", playSound: false, aiGenerated: false, mood: "happy");
+            Assert.Equal(Path.Combine(audio, "a", "idle.png"), tube.PortraitPath);
+        }
+        finally { Directory.Delete(root, true); }
+    });
+
+    [Fact]
+    public Task PortraitHeldIdleUsesTwoPosesAtNormalCadence() => Run((_, tube, change) =>
+    {
+        var (root, unusedAudio, mod) = PortraitReviewFixture();
+        try
+        {
+            change(mod);
+            var steps = new List<(TimeSpan Delay, Action Fire)>();
+            tube.PortraitStepScheduler = (delay, fire) => { steps.Add((delay, fire)); return () => { }; };
+            tube.PortraitFadeScheduler = (_, _) => () => { };
+            ConditioningControlPanel.Services.Safety.PanicAftermath.ArmQuiet();
+            Assert.False(AvatarTubeWindow.MayVoice(true));
+            foreach (var text in new[] { "short", new string('a', 200).Replace("a", "a ") })
+            {
+                steps.Clear();
+                tube.GigglePriority(text, playSound: false, aiGenerated: false, mood: "happy", unprompted: true);
+                Assert.Equal(TimeSpan.FromSeconds(1), Assert.Single(steps).Delay);
+                steps[0].Fire();
+                Assert.Equal(TimeSpan.FromSeconds(2), steps[1].Delay);
+                steps[1].Fire();
+                Assert.Equal(2, steps.Count);
+                Assert.Equal("idle.png", Path.GetFileName(tube.PortraitPath));
+            }
+            steps.Clear();
+            tube.GigglePriority("short", playSound: false, aiGenerated: false, mood: "happy");
+            Assert.Equal(TimeSpan.FromMilliseconds(500), Assert.Single(steps).Delay);
+        }
+        finally { ConditioningControlPanel.Services.Safety.PanicAftermath.EndQuiet(); Directory.Delete(root, true); }
+    });
+
+    [Fact]   // WPF Speech.cs:114,646-661: a preset line's expression leads its bubble and voice by 0.6 s.
+    public Task PortraitPresetExpressionLeadsBubbleAndVoice() => Run((_, tube, change) =>
+    {
+        var (root, unusedAudio, mod) = PortraitReviewFixture();
+        try
+        {
+            change(mod);
+            var leads = new List<(TimeSpan Delay, Action Fire)>(); var voiced = 0;
+            tube.PortraitStepScheduler = tube.PortraitFadeScheduler = (_, _) => () => { };
+            tube.SpeechDelayScheduler = (delay, fire) => { leads.Add((delay, fire)); return () => { }; };
+            tube.SpeechAudioPlayer = (_, _, _, _) => voiced++; // the clip keeps playing
+            var bubble = tube.FindControl<Border>("SpeechBubble")!; var mist = tube.FindControl<Control>("MistOverlay")!;
+            Action Lead()
+            {
+                tube.PanicSilence(); leads.Clear(); voiced = 0;
+                tube.Giggle("preset", mood: "happy");
+                foreach (var gap in leads.ToList()) if (gap.Delay != TimeSpan.FromSeconds(0.6)) gap.Fire(); // a queued line's gap
+                Assert.Equal("happy.png", Path.GetFileName(tube.PortraitPath)); Assert.True(tube.IsSpeaking);
+                Assert.False(bubble.IsVisible); Assert.Equal(0, voiced); Assert.False(tube.SpokenAudioDone.IsCompleted);
+                tube.FloatingFrame!(40 * 0.016); // WPF Windowing.cs:769: no shimmer or thick mist before the clip plays
+                Assert.Equal(0.15 + (Math.Sin(0.36) + 1) * 0.03, mist.Opacity, 8);
+                return Assert.Single(leads, l => l.Delay == TimeSpan.FromSeconds(0.6)).Fire;
+            }
+            var fire = Lead(); var done = tube.SpokenAudioDone;
+            tube.GigglePriority("newer", aiGenerated: false); Assert.True(done.IsCompleted); Assert.Equal(1, voiced);
+            fire(); Assert.Equal(1, voiced); // the superseded line never speaks
+            fire = Lead(); done = tube.SpokenAudioDone;
+            tube.PanicSilence(); Assert.True(done.IsCompleted);
+            fire(); Assert.Equal(0, voiced); Assert.False(bubble.IsVisible);
+            Lead()(); Assert.Equal(1, voiced); Assert.True(bubble.IsVisible); // not superseded: speaks after the lead-in
+        }
+        finally { Directory.Delete(root, true); }
+    });
+
+    [Fact]   // WPF Windowing.cs:765-776 animates speech on an ungated timer: the CPU-path idle hold keeps it.
+    public Task PortraitSpeechStillMovesWhileTheIdleBobIsHeld() => Run((_, tube, change) =>
+    {
+        var (root, unusedAudio, mod) = PortraitReviewFixture();
+        var s = CoreSettings.Current; var previousTime = BeatLoop.Time; var time = new SteppedTime();
+        try
+        {
+            change(mod);
+            BeatLoop.Time = time;
+            s.LighterEffects = LighterEffectsMode.On;
+            global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.False(tube.IsFloating); Assert.DoesNotContain(BeatLoop.Running, l => l.Owner == tube);
+            var wobble = (global::Avalonia.Media.RotateTransform)((global::Avalonia.Media.TransformGroup)((global::Avalonia.Media.TransformGroup)
+                tube.FindControl<Image>("ImgAvatar")!.RenderTransform!).Children[0]).Children[3];
+            Action? end = null;
+            tube.SpeechAudioPlayer = (_, _, _, done) => end = done; // the clip keeps playing
+            tube.GigglePriority("voiced", phraseAudioPath: Path.Combine(root, "missing.wav"), barkVoice: true);
+            Assert.Single(BeatLoop.Running, l => l.Owner == tube);
+            time.Advance(TimeSpan.FromSeconds(40 * 0.016)); BeatLoop.StepAll();
+            Assert.Equal(Math.Sin(0.68) * 0.4 + Math.Sin(18) * Math.Pow(Math.Sin(1.4), 3) * 0.175, wobble.Angle, 8);
+            end!(); BeatLoop.StepAll();
+            Assert.DoesNotContain(BeatLoop.Running, l => l.Owner == tube); Assert.Equal(0, wobble.Angle);
+
+            // Lighter effects switched on mid-clip: the bob holds, the speech keeps moving.
+            s.LighterEffects = LighterEffectsMode.Off;
+            global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.True(tube.IsFloating);
+            tube.PanicSilence(); end = null;
+            tube.GigglePriority("voiced", phraseAudioPath: Path.Combine(root, "missing.wav"), barkVoice: true);
+            Assert.NotNull(end);
+            s.LighterEffects = LighterEffectsMode.On;
+            global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.False(tube.IsFloating); Assert.Single(BeatLoop.Running, l => l.Owner == tube);
+            time.Advance(TimeSpan.FromSeconds(40 * 0.016)); BeatLoop.StepAll(); Assert.NotEqual(0, wobble.Angle);
+
+            // Leaving portrait mode mid-clip ends the speech loop instead of ticking until close.
+            change(new ModPackage(new ModManifest { Id = "other" }, null, false)); Assert.False(tube.IsPortraitMode);
+            BeatLoop.StepAll(); Assert.DoesNotContain(BeatLoop.Running, l => l.Owner == tube);
+        }
+        finally
+        {
+            BeatLoop.Time = previousTime; s.LighterEffects = LighterEffectsMode.Auto;
+            global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Directory.Delete(root, true);
+        }
+    });
 
     [Fact]
     public Task AttachedTubeMakesRoomAndDetachRestoresTheShell() => Run((shell, tube, _) =>
