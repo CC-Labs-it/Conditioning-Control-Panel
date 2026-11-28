@@ -9444,5 +9444,6 @@
   "promo_hours": "時間",
   "promo_minutes": "分",
   "native_repair_title": "Conditioning Control Panel - 起動に失敗しました",
-  "native_repair_message": "グラフィックライブラリを読み込めないため、Conditioning Control Panel を起動できません。\n\nアプリを閉じ、この一時フォルダーを削除してから、もう一度起動してください。\n\n{0}\n\nフォルダーは自動的に再作成されます。解決しない場合は、ウイルス対策ソフトがファイルを隔離していないか確認してください。\n\n詳細: {1}"
+  "native_repair_message": "グラフィックライブラリを読み込めないため、Conditioning Control Panel を起動できません。\n\nアプリを閉じ、この一時フォルダーを削除してから、もう一度起動してください。\n\n{0}\n\nフォルダーは自動的に再作成されます。解決しない場合は、ウイルス対策ソフトがファイルを隔離していないか確認してください。\n\n詳細: {1}",
+  "brain_drain_capture_failed": "Brain Drain は画面をキャプチャできませんでした。バグを報告してください。"
 }
