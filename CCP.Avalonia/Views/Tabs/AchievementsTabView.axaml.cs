@@ -57,6 +57,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         /// <summary>Decoded badges keyed by resolved path, so a mod switch re-resolves and a refresh costs a lookup.</summary>
         private static readonly Dictionary<string, global::Avalonia.Media.Imaging.Bitmap?> ArtCache = new();
+        // A detached view misses mod events: a mod change since the cache filled discards it (was cleared on every attach,
+        // which re-decoded every badge at startup).
+        private static long _artRevision = -1;
 
         /// <summary>Test hooks: how many cards have been redrawn, and in how many UI passes.</summary>
         internal int TileApplies { get; private set; }
@@ -87,9 +90,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 if (substar != null) substar.TierChanged += tier;
                 Platform.AccountSeed.GraceClosed += PostEntitlement;
                 LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
-                // A detached view misses mod events. Discard its old art before it is shown again.
-                lock (ArtCache) ArtCache.Clear();
-                if (IsEffectivelyVisible) RefreshAll();
+                if (IsVisible) RefreshAll();
+                else
+                {
+                    AfterApply();
+                    // Hidden (the shell's startup): the first show paints. Decode its art off the UI thread once the
+                    // window has drawn, so that show is still a cache hit.
+                    if (!_artWarmed && TopLevel.GetTopLevel(this) is Window w)
+                    {
+                        _artWarmed = true;
+                        var tiles = _tiles.Values.ToArray();
+                        Platform.AfterFirstFrame.Schedule(w, () => ArtWarm = System.Threading.Tasks.Task.Run(() => WarmArt(tiles)));
+                    }
+                }
             };
             DetachedFromVisualTree += (_, _) =>
             {
@@ -131,7 +144,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
 
         internal IEnumerable<ToggleButton> Cards => _tiles.Values.Select(t => t.Card);
 
-        /// <summary>WPF PopulateAchievementGrid. Runs once.</summary>
+        private bool _artWarmed;
+        /// <summary>The after-first-frame art decode, once it has started. Test seam.</summary>
+        internal System.Threading.Tasks.Task? ArtWarm { get; private set; }
+
+        private static void WarmArt(Tile[] tiles)
+        {
+            foreach (var t in tiles)
+            {
+                Art(t.A.ImageName);
+                if (t.Reward != null) Helpers.ModArt.Wardrobe(t.Reward.Id);
+            }
+        }
+
+        /// <summary>WPF PopulateAchievementGrid. Runs once; the tiles paint on attach (or the first RefreshAll).</summary>
         private void Build()
         {
             var rewards = WardrobeCatalog.AchievementRewards();
@@ -149,7 +175,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
                 (a.IsExclusive ? patron : free).Children.Add(tile.Card);
             }
             BuildFilters();
-            RefreshAll();
         }
 
         private void Flush()
@@ -161,9 +186,11 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             foreach (var id in ids) if (_tiles.TryGetValue(id, out var t) && IsUnlocked(id)) Celebrate(t);
         }
 
-        /// <summary>WPF RefreshAllAchievementTiles: in place, never a rebuild.</summary>
+        /// <summary>WPF RefreshAllAchievementTiles: in place, never a rebuild. A hidden attached view only updates its
+        /// view model: showing it repaints every tile (IsVisible handler).</summary>
         internal void RefreshAll()
         {
+            if (VisualRoot != null && !IsVisible) { AfterApply(); return; }
             foreach (var t in _tiles.Values) Apply(t);
             AfterApply();
         }
@@ -193,6 +220,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Tabs
             var key = (CoreModArt.OverridePath(name) ?? "") + "|" + name;
             lock (ArtCache)
             {
+                if (_artRevision != CoreMods.ModRevision) { ArtCache.Clear(); _artRevision = CoreMods.ModRevision; }
                 if (!ArtCache.TryGetValue(key, out var art)) ArtCache[key] = art = Helpers.ModArt.TryLoad(name, decodeWidth: 150);
                 return art;
             }

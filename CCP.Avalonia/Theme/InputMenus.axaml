@@ -1,8 +1,14 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:fx="clr-namespace:ConditioningControlPanel.Avalonia.Controls">
+  <Style Selector="MenuItem[IsVisible=True] /template/ Popup#PART_Popup">
+    <Setter Property="fx:InputPopupFx.Animation" Value="Fade"/>
+    <Setter Property="fx:InputPopupFx.OpenRequested" Value="{Binding IsSubMenuOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"/>
+    <Setter Property="IsOpen" Value="{Binding (fx:InputPopupFx.IsPresented), RelativeSource={RelativeSource Self}}"/>
+  </Style>
   <!-- Inputs.xaml:476: context-menu rows. Keep Fluent's popup and part names so local
        view styles and submenu behavior continue to work. -->
-  <Style Selector="ContextMenu MenuItem">
+  <Style Selector="ContextMenu MenuItem, MenuItem MenuItem">
     <Setter Property="Foreground" Value="{DynamicResource TextLightBrush}"/>
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="Padding" Value="10,6"/>
@@ -10,11 +16,25 @@
     <Setter Property="CornerRadius" Value="6"/>
     <Setter Property="Cursor" Value="Hand"/>
   </Style>
-  <Style Selector="ContextMenu MenuItem:selected /template/ Border#PART_LayoutRoot">
+  <Style Selector="ContextMenu MenuItem:selected /template/ Border#PART_LayoutRoot, MenuItem MenuItem:selected /template/ Border#PART_LayoutRoot">
     <Setter Property="Background" Value="{DynamicResource TransparentPink20Brush}"/>
   </Style>
-  <Style Selector="ContextMenu MenuItem:disabled">
+  <Style Selector="ContextMenu MenuItem:disabled, MenuItem MenuItem:disabled">
     <Setter Property="Opacity" Value="0.45"/>
     <Setter Property="Cursor" Value="Arrow"/>
+  </Style>
+  <!-- Inputs.xaml:501: a checked row replaces its icon with a pink check. -->
+  <Style Selector="ContextMenu MenuItem:checked /template/ ContentControl#PART_IconPresenter">
+    <Setter Property="IsVisible" Value="False"/>
+  </Style>
+  <Style Selector="ContextMenu MenuItem:checked /template/ ContentControl#PART_ToggleIconPresenter">
+    <Setter Property="Width" Value="10"/>
+    <Setter Property="Height" Value="10"/>
+    <Setter Property="Margin" Value="0,0,8,0"/>
+    <Setter Property="Content">
+      <Template>
+        <fx:IconGlyph Kind="Checkmark" Size="10" Foreground="{DynamicResource PinkBrush}"/>
+      </Template>
+    </Setter>
   </Style>
 </Styles>

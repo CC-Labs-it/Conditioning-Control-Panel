@@ -17,6 +17,74 @@ namespace CCP.Avalonia.Tests;
 /// capture, a player or a host is in that registry (or allowlisted with the reason it needs no entry).</summary>
 public sealed class PanicSurfacesTests
 {
+    internal sealed class CountHost : ConditioningControlPanel.Services.IBubbleCountHost
+    {
+        public Action<bool>? Done;
+        public double LastVideoDurationSeconds => 60;
+        public void Show(string path, int difficulty, bool strict, Action<bool> done) => Done = done;
+        public void ShowMessage(string text, int ms, Action then) { }
+        public void CloseAll() { }
+    }
+
+    [Fact]
+    public void EnginePanicSuppressesLateBubbleCountResults() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var clock = new BubbleCountQueueTests.Clock(); var host = new CountHost();
+        var previous = CoreEngine.BubbleCount;
+        using var game = new ConditioningControlPanel.Services.BubbleCountScheduler(host, clock, () => new[] { "/test.mp4" });
+        int events = 0; game.GameCompleted += () => events++; game.GameFailed += () => events++;
+        CoreEngine.BubbleCount = game;
+        try
+        {
+            game.Trigger(true); clock.Advance(ConditioningControlPanel.Services.BubbleCountScheduler.LeadIn);
+            Assert.NotNull(host.Done);
+            PanicSurfaces.All.Single(s => s.Id == "engine").Stop(null!);
+            host.Done!(true); host.Done!(false);
+            Assert.False(game.IsBusy); Assert.Equal(0, events);
+        }
+        finally { game.ForceCleanup(); CoreEngine.BubbleCount = previous; }
+    });
+
+    [Fact]
+    public void Remote_haptics_panic_surface_invalidates_pending_remote_commands()
+    {
+        var generation = ConditioningControlPanel.Services.RemoteCommands.PanicGeneration;
+        PanicSurfaces.All.Single(s => s.Id == "remote-haptics").Stop(null);
+        Assert.NotEqual(generation, ConditioningControlPanel.Services.RemoteCommands.PanicGeneration);
+    }
+
+    [Fact]
+    public void Bubble_surface_clears_variant_bubbles_on_panic() => AvaloniaTestDispatcher.Run(() =>
+    {
+        var overlay = typeof(ConditioningControlPanel.Avalonia.Views.Overlays.BubbleOverlay);
+        var field = ConditioningControlPanel.Avalonia.Views.Overlays.BubbleOverlay.Field;
+        var faces = ConditioningControlPanel.Avalonia.Views.Overlays.BubbleOverlay.TeaseFaces;
+        // Stop on an idle overlay only clears these; a live overlay belongs to another test.
+        Assert.Equal(0, ConditioningControlPanel.Avalonia.Views.Overlays.BubbleOverlay.WindowCount);
+        var lists = new[] { "ChaosRipples", "ChaosResidues" }
+            .Select(n => (System.Collections.IList)overlay.GetField(n, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!.GetValue(null)!)
+            .Select(l => (List: l, Items: l.Cast<object>().ToArray())).ToArray();
+        var (savedBubbles, savedFaces) = (field.Bubbles.ToArray(), faces.ToArray());
+        faces.Clear();   // held aside so Stop's prune cannot dispose their frames
+        field.Bubbles.Clear();
+        field.Bubbles.Add(new ConditioningControlPanel.Services.AmbientBubble
+        {
+            Spec = new ConditioningControlPanel.Services.Chaos.EffectBubbleSpec { VariantId = "pink" }
+        });
+        try
+        {
+            PanicSurfaces.All.Single(s => s.Id == "bubble-host").Stop(null!);
+            Assert.Empty(field.Bubbles);
+        }
+        finally
+        {
+            field.Bubbles.Clear();
+            field.Bubbles.AddRange(savedBubbles);
+            foreach (var (key, value) in savedFaces) faces[key] = value;
+            foreach (var (list, items) in lists) { list.Clear(); foreach (var item in items) list.Add(item); }
+        }
+    });
+
     [Fact]
     public void EachPanicRouteCallsStopAllExactlyOnce() => AvaloniaTestDispatcher.Run(() =>
     {
@@ -148,9 +216,11 @@ public sealed class PanicSurfacesTests
         "intake",
         "leash-task",
         "personality-studio",
+        "deeper-editor-error",
         "deeper-tutorial",
         "workshop-trigger-editor",
         "awareness-companion",
+        "awareness-observer",
         "tour",
         "games",
         "upgrade-intro",
@@ -180,6 +250,7 @@ public sealed class PanicSurfacesTests
         "settings-palette",
         "perfect-week-bonus",
         "keyword-triggers",
+        "keyword-highlights",
         "audio-sync",
         "haptics",
         "help-video",
@@ -368,6 +439,7 @@ public sealed class PanicSurfacesTests
         ["BlinkTrainerTabView"] = "camera: the 'camera' and 'blink-trainer' surfaces",
         ["VideoThumbnail"] = "WPF MainWindow.Assets.cs:799-807,910-948: off-screen poster extraction, no sound or window; 5 s deadline, joined Stop and disposal (VideoThumbnailTests pins silence, no opened windows and cleanup)",
         ["LibVlcAudio"] = "the CoreAudio sink: Core services stop their clips on the 'engine' surface",
+        ["FlashClipPlayer"] = "owned by flash windows: the 'flash' surface closes them and releases leases, verified by FlashClipPlayerTests.CloseAllAndStopReleaseLeases",
         ["SharedOverlayHost"] = "subliminal leases: engine StopDesktopOverlays calls SubliminalOverlay.CloseAll; tested by SubliminalSolidHostTests",
         ["MandatoryVideoOverlay"] = "Core video sink: the 'engine' surface (CoreEngine.Stop) closes it",
         ["BubbleCountWindow"] = "Core bubble-count sink: the 'engine' surface closes it",

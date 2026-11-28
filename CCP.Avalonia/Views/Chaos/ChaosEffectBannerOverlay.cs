@@ -34,9 +34,6 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     /// over the primary screen's work area (WPF Left/Top+6/Width, Height 80). A platform that
     /// refuses either gets no banner rather than a strip that eats clicks.</para>
     ///
-    /// <para>ponytail: nothing calls <see cref="Show"/> on this head yet - the slowmo / vibe / dvd /
-    /// estim / rabbits / freeze effects (WPF ChaosModeService :2417-3063) and the hub run start are
-    /// not ported.</para>
     /// </summary>
     internal sealed class ChaosEffectBannerOverlay : Window
     {
@@ -63,7 +60,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var w = Create();
             if (w == null) return;
             w.AddEntry(id, text, ChaosBoonColors.ForOrDefault(id, accent), artKey);
-            if (!SkipPlatformChecksForTests) X11Overlay.Raise(w);   // WPF ChaosWindowZ.RaiseAboveVideo
+            if (RaisesOnShow && !SkipPlatformChecksForTests) X11Overlay.Raise(w);   // WPF :70, ChaosWindowZ.cs:62-66
         });
 
         /// <summary>Fade out + remove the banner for an effect (no-op if it isn't showing).</summary>
@@ -72,8 +69,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         /// <summary>Re-stack the live window on top (WPF ChaosWindowZ.RaiseTopmost). UI thread only.</summary>
         public static void RaiseActive()
         {
-            if (_active != null && !SkipPlatformChecksForTests) X11Overlay.Raise(_active);
+            if (_active == null) return;
+            if (!CoreSettings.Current.ChaosPinOnTop) { _active.Topmost = false; return; }   // WPF ChaosWindowZ.cs:47-51
+            if (!SkipPlatformChecksForTests) X11Overlay.Raise(_active);
         }
+
+        /// <summary>WPF ChaosWindowZ.RaiseAboveVideo: Show re-stacks only while pinned and a video plays.</summary>
+        internal static bool RaisesOnShow => CoreSettings.Current.ChaosPinOnTop && CoreEngine.Video?.IsPlaying == true;
 
         /// <summary>Instant teardown (run end / shutdown).</summary>
         public static void CloseActive()
@@ -105,7 +107,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 return null;
             }
             var w = new ChaosEffectBannerOverlay();
-            if ((!X11Overlay.SetClickThrough(w, true) | !X11Overlay.SetOverrideRedirect(w, w.StripBounds())) && !SkipPlatformChecksForTests)
+            // Unpinned: no override-redirect, so the WM may stack other apps above it (WPF ChaosWindowZ.cs:35).
+            var placed = w.Topmost ? X11Overlay.SetOverrideRedirect(w, w.StripBounds(), topmost: true) : w.Place(w.StripBounds());
+            if ((!X11Overlay.SetClickThrough(w, true) | !placed) && !SkipPlatformChecksForTests)
             {
                 Log.Warning("ChaosEffectBanner: the platform refused a click-through topmost window, so no effect banners");
                 Refused = true;
@@ -131,7 +135,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             SystemDecorations = WindowDecorations.None;
             TransparencyLevelHint = new[] { WindowTransparencyLevel.Transparent };
             Background = Brushes.Transparent;
-            Topmost = true;
+            Topmost = CoreSettings.Current.ChaosPinOnTop;   // WPF :107, ChaosWindowZ.BornTopmost
             ShowInTaskbar = false;
             ShowActivated = false;
             CanResize = false;
@@ -168,6 +172,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var scale = screen.Scaling > 0 ? screen.Scaling : 1;
             var wa = screen.WorkingArea;
             return new PixelRect(wa.X, wa.Y + (int)Math.Round(6 * scale), wa.Width, (int)Math.Round(STRIP_HEIGHT_DIP * scale));
+        }
+
+        private bool Place(PixelRect b)
+        {
+            Position = b.Position;
+            Width = b.Width / DesktopScaling;
+            Height = b.Height / DesktopScaling;
+            return true;
         }
 
         private void AddEntry(string id, string text, Color accent, string? artKey)
