@@ -20,9 +20,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 {
     internal sealed partial class GameWindow
     {
-        // The door, the launcher card and the EMI ring open only once a class can be banked: WPF
-        // OnClassEnded (ArcademyHostService.cs:3735) lands in #5772, which flips this to true.
-        internal static bool ArcademyExposed => false;
+        // The door, the launcher card and the EMI ring open only once a class can be banked
+        // (WPF OnClassEnded, ArcademyHostService.cs:3735; GameWindow.ArcademyResults.cs).
+        internal static bool ArcademyExposed => true;
         internal static Game ArcademySpec => new("arcademy", "launcher_game_arcademy_title", "arcademy/index.html", ArcademyGate);
 
         static partial void RegisterArcademy(Dictionary<string, Game> games)
@@ -360,6 +360,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             if (_arcademySettings != null) _arcademySettings.PropertyChanged -= ArcademySettingChanged;
             if (_arcademySettingsService != null) _arcademySettingsService.CurrentReplaced -= ArcademySettingsReplaced;
             if (_arcademyVideo != null) { _arcademyVideo.VideoStarted -= ArcademyVideoChanged; _arcademyVideo.VideoEnded -= ArcademyVideoChanged; }
+            ArcademyClassLeft();
             ArcademySyncService.Detach();
             ArcademyWalletSyncService.Detach();
             _arcademyMeta?.FlushSave();
@@ -447,12 +448,26 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     Post(new { type = "library", subLibrary = FypRules.BuildLibraryPayload(CoreSettings.Current) });
                     handled = true;
                     break;
+                case "enrollment-done":
+                    ArcademyEnroll(message);
+                    handled = true;
+                    break;
+                case "prize-buy":
+                    ArcademyBuy(message);
+                    handled = true;
+                    break;
                 case "class-started":
+                    ArcademyClassStarted(message);
                     _arcademyClassActive = true;
                     handled = true;
                     break;
                 case "class-left":
+                    ArcademyClassLeft();
+                    _arcademyClassActive = false;
+                    handled = true;
+                    break;
                 case "class-ended":
+                    ArcademyClassEnded(message);
                     _arcademyClassActive = false;
                     handled = true;
                     break;

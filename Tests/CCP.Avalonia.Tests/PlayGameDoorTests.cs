@@ -23,14 +23,16 @@ public sealed class PlayGameDoorTests
     [InlineData("goon", "BtnPlayGoon")]
     [InlineData("backroom", "BtnPlayBackRoom")]
     [InlineData("arcademy", "BtnPlayArcademy")]
-    public void UnregisteredDoorIsDisabled(string id, string name) => AvaloniaTestDispatcher.Run(() =>
+    public void DoorAvailabilityMatchesRegistration(string id, string name) => AvaloniaTestDispatcher.Run(() =>
     {
         Setup();
-        Assert.False(GameWindow.Games.ContainsKey(id));
+        bool registered = id == "arcademy";
+        Assert.Equal(registered, GameWindow.Games.ContainsKey(id));
         var view = new PlayTabView();
         var button = view.FindControl<Button>(name)!;
-        Assert.False(button.IsEnabled);
-        Assert.Equal(Loc.Get("exclusives_not_on_this_build"), ToolTip.GetTip(button));
+        Assert.Equal(registered, button.IsEnabled);
+        if (registered) Assert.Null(ToolTip.GetTip(button));
+        else Assert.Equal(Loc.Get("exclusives_not_on_this_build"), ToolTip.GetTip(button));
     });
 
     [Theory]
@@ -91,7 +93,8 @@ public sealed class PlayGameDoorTests
             var oldLogin = CoreAccount.IsLoggedInProvider;
             var oldLaunch = PlayTabView.LaunchGame;
             CoreAccount.IsLoggedInProvider = () => false;
-            GameWindow.Games.Add(id, new(id, "launcher_game_" + id + "_title", ""));
+            GameWindow.Games.TryGetValue(id, out var oldSpec);
+            GameWindow.Games[id] = new(id, "launcher_game_" + id + "_title", "");
             var calls = new System.Collections.Generic.List<string>();
             PlayTabView.LaunchGame = calls.Add;
             var shell = new MainShellWindow();
@@ -109,7 +112,8 @@ public sealed class PlayGameDoorTests
             {
                 foreach (var window in shell.OwnedWindows.ToArray()) window.Close();
                 shell.Close();
-                GameWindow.Games.Remove(id);
+                if (oldSpec == null) GameWindow.Games.Remove(id);
+                else GameWindow.Games[id] = oldSpec;
                 CoreAccount.IsLoggedInProvider = oldLogin;
                 PlayTabView.LaunchGame = oldLaunch;
             }

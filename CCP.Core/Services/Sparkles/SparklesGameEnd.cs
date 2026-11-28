@@ -14,6 +14,15 @@ namespace ConditioningControlPanel.Services.Sparkles.Claims;
 /// </summary>
 public static class SparklesGameEnd
 {
+    /// <summary>Arcademy class grade: S+ and S gold, A silver, B bronze, C and pass (zen) finished.</summary>
+    public static string ArcademyMedal(string? grade) => (grade ?? "").Trim().ToUpperInvariant() switch
+    {
+        "S+" or "S" => "gold",
+        "A" => "silver",
+        "B" => "bronze",
+        _ => "none",
+    };
+
     /// <summary>A score against the game's own ceiling for that run (the DtRH and Caucus XP caps):
     /// at the cap gold, 60% silver, 30% bronze.</summary>
     public static string RatioMedal(double score, double cap)
