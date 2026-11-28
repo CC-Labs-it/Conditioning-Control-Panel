@@ -554,8 +554,11 @@ public partial class LauncherWindow
     private Button BuildContinueButton(LauncherCard last, Color hue)
     {
         var text = Loc.GetF("launcher_door_continue", Loc.Get(last.TitleKey));
-        var label = new StackPanel { Orientation = Orientation.Horizontal };
-        label.Children.Add(new TextBlock { Text = "▶", FontSize = 11, Margin = new Thickness(0, 0, 9, 0), VerticalAlignment = VerticalAlignment.Center });
+        // WPF LauncherWindow.Doors.cs:323: constrain the words so they trim inside the pill.
+        var label = new DockPanel { LastChildFill = true, Margin = new Thickness(18, 0, 20, 0) };
+        var glyph = new TextBlock { Text = "▶", FontSize = 11, Margin = new Thickness(0, 0, 9, 0), VerticalAlignment = VerticalAlignment.Center };
+        DockPanel.SetDock(glyph, Dock.Left);
+        label.Children.Add(glyph);
         label.Children.Add(new TextBlock
         {
             Text = text, FontFamily = DoorFont, FontSize = 16, FontWeight = FontWeight.SemiBold,
@@ -565,8 +568,8 @@ public partial class LauncherWindow
         {
             Content = label,
             Theme = (ControlTheme)this.FindResource("LauncherPlay")!,
-            Height = LauncherGridLayout.PlayHeight + 6, Padding = new Thickness(18, 0, 20, 0),
-            MinWidth = 220, MaxWidth = 380, HorizontalAlignment = HorizontalAlignment.Left,
+            Height = LauncherGridLayout.PlayHeight + 6,
+            MinWidth = 220, MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(0, 22, 0, 0),
             Background = new LinearGradientBrush
             {

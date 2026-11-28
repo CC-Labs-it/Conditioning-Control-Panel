@@ -190,6 +190,32 @@ public sealed class LauncherDoorsTests
     });
 
     [Fact]
+    public void Continue_label_fits_the_pill_and_constrains_long_words()
+    {
+        var oldProvider = CoreSettings.ServiceProvider;
+        try
+        {
+            Run(shell =>
+            {
+                var w = OpenLauncher(shell);
+                CoreSettings.Current.LauncherLastPlayedId = "breakoutdemo";
+                w.SeatDoorPage(null);
+                var button = Assert.IsType<Button>(w.ContinueButton);
+                Assert.Equal(560, button.MaxWidth);
+                var label = Assert.IsType<DockPanel>(button.Content);
+                Assert.Equal(new Thickness(18, 0, 20, 0), label.Margin);
+                var words = Assert.IsType<TextBlock>(label.Children[1]);
+                words.Text = "Continue: Terms & Conditioning with a very long title";
+                label.Measure(new Size(200, 46));
+                label.Arrange(new Rect(0, 0, 200, 46));
+                Assert.True(words.Bounds.Right <= label.Bounds.Width, $"Words end at {words.Bounds.Right}, width {label.Bounds.Width}");
+                Assert.Equal(global::Avalonia.Media.TextTrimming.CharacterEllipsis, words.TextTrimming);
+            });
+        }
+        finally { CoreSettings.ServiceProvider = oldProvider; }
+    }
+
+    [Fact]
     public void A_launch_from_a_page_is_remembered_and_Continue_opens_it() => Run(shell =>
     {
         var w = OpenLauncher(shell);
