@@ -71,6 +71,15 @@ public sealed class RemoteMediaOfferModalTests
     });
 
     [Fact]
+    public Task MixedWithoutConsentStillOffersTheRescue() => WithOffer(opened =>
+    {
+        CoreSettings.Current.MediaSource = "mixed";
+        CoreSettings.Current.RemoteMediaConsented = false;
+        RemoteMediaOffer.Offer("video");
+        Assert.Equal(1, opened());
+    });
+
+    [Fact]
     public Task An_Inbox_row_opened_during_an_update_is_parked_and_retried() => WithOffer(opened =>
     {
         MainShellWindow.IsStartupDialogShowing = true;
@@ -301,6 +310,8 @@ public sealed class RemoteMediaOfferModalTests
     private static Task WithOffer(Action<Func<int>> body) => AvaloniaTestDispatcher.RunAsync(() =>
     {
         var oldSource = CoreSettings.Current.MediaSource;
+        var oldConsent = CoreSettings.Current.RemoteMediaConsented;
+        var oldFypConsent = CoreSettings.Current.FypOnlineConsented;
         var oldShow = RemoteMediaOffer.ShowCard;
         var oldBusy = AppUpdater.IsUpdateDialogActive;
         var oldStartup = MainShellWindow.IsStartupDialogShowing;
@@ -309,6 +320,8 @@ public sealed class RemoteMediaOfferModalTests
         var opened = 0;
         RemoteMediaOffer.ShowCard = _ => opened++;
         CoreSettings.Current.MediaSource = "local";
+        CoreSettings.Current.RemoteMediaConsented = true;
+        CoreSettings.Current.FypOnlineConsented = false;
         Busy.SetValue(null, false);
         MainShellWindow.IsStartupDialogShowing = false;
         try { body(() => opened); }
@@ -317,6 +330,8 @@ public sealed class RemoteMediaOfferModalTests
             Busy.SetValue(null, oldBusy);
             MainShellWindow.IsStartupDialogShowing = oldStartup;
             CoreSettings.Current.MediaSource = oldSource;
+            CoreSettings.Current.RemoteMediaConsented = oldConsent;
+            CoreSettings.Current.FypOnlineConsented = oldFypConsent;
             RemoteMediaOffer.ShowCard = oldShow;
             RemoteMediaOffer.ResetForTests();
             StartupLadder.ResetForTests();

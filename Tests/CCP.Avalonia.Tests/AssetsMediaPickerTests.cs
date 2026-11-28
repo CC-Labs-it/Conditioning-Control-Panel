@@ -36,6 +36,7 @@ public sealed class AssetsMediaPickerTests
         Setup();
         var oldProvider = CoreSettings.ServiceProvider;
         var oldProbe = AssetsTabView.ProbeSub;
+        var oldConsent = AssetsTabView.ConsentOverride;
         var service = new SettingsService();
         CoreSettings.ServiceProvider = () => service;
         Window? w = null;
@@ -57,7 +58,7 @@ public sealed class AssetsMediaPickerTests
         finally
         {
             w?.Close();
-            AssetsTabView.ConsentOverride = null;
+            AssetsTabView.ConsentOverride = oldConsent;
             AssetsTabView.ProbeSub = oldProbe;
             CoreSettings.ServiceProvider = oldProvider;
         }
@@ -97,6 +98,26 @@ public sealed class AssetsMediaPickerTests
         await view.LastPickerTask;
         Assert.Equal("mixed", s.MediaSource);
         Assert.True(view.FindControl<StackPanel>("RemoteRatioRow")!.IsVisible);
+    }));
+
+    [Fact]
+    public Task LiveBothAsksForConsentWithoutChangingTheSource() => AvaloniaTestDispatcher.RunAsync(() => WithView(async (view, s) =>
+    {
+        s.MediaSource = "mixed";
+        view.RefreshRemoteMediaPicker();
+        int asks = 0;
+        AssetsTabView.ConsentOverride = (_, _) => { asks++; return Task.FromResult(false); };
+        Chip(view, "mixed").IsChecked = false;
+        await view.LastPickerTask;
+        Assert.Equal(1, asks);
+        Assert.Equal("mixed", s.MediaSource);
+        Assert.False(s.HasRemoteMediaConsent);
+        Assert.True(Chip(view, "mixed").IsChecked);
+        AssetsTabView.ConsentOverride = (_, _) => { asks++; return Task.FromResult(true); };
+        Chip(view, "mixed").IsChecked = false;
+        await view.LastPickerTask;
+        Assert.Equal(2, asks);
+        Assert.True(s.HasRemoteMediaConsent);
     }));
 
     [Fact]

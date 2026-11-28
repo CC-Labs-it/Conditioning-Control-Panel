@@ -17,7 +17,7 @@ public partial class MainShellWindow
     private void WarnIfLibraryEmpty(bool wallpaper)
     {
         var s = CoreSettings.Current;
-        if ((!wallpaper && !s.FlashEnabled) || !string.Equals(s.MediaSource, "local", StringComparison.OrdinalIgnoreCase)) return;
+        if ((!wallpaper && !s.FlashEnabled) || s.UsesRemoteMedia) return;
         var folder = wallpaper && !string.IsNullOrWhiteSpace(s.WallpaperSourceFolder) && Directory.Exists(s.WallpaperSourceFolder)
             ? s.WallpaperSourceFolder : Path.Combine(CorePaths.EffectiveAssets, wallpaper ? "wallpapers" : "images");
         if (NotificationLibrary.HasMedia(folder, wallpaper)) return;
