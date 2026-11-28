@@ -7,6 +7,8 @@ using Avalonia.Controls;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
+using CCP.Avalonia.Testing;
+using ConditioningControlPanel.Avalonia.Helpers;
 using ConditioningControlPanel;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Controls.Leash;
@@ -148,31 +150,40 @@ public sealed class LeashEventsTests
     // there only with motion on; the prior transform comes back after 520 ms.
     [Fact]
     public void ATugWobblesTheLauncherOnlyWithMotionOn() =>
-        LeashGateCardTests.Run(false, (shell, launcher, _) =>
+        AvaloniaTestDispatcher.Run(() =>
         {
-            var seen = new List<string>();
-            var service = new LeashService(new Wire(), () => "u_me", cutSafety: () => { }, reportSeen: seen.Add);
-            LeashHead.Service = service;
-            var s = CoreSettings.Current;
-            (s.MotionLevel, s.GentleVisuals) = (MotionLevel.Full, false);
-            launcher.Show(); shell.RebindLeashAsks();
-            var target = Assert.IsAssignableFrom<Control>(launcher.Content);
-            var prior = new ScaleTransform(0.9, 0.9);
-            target.RenderTransform = prior;
-            service.ApplyBlock(Event("abcdef0123456789", "tug")); Dispatcher.UIThread.RunJobs();
-            Assert.Contains("abcdef0123456789", seen);
-            var group = Assert.IsType<TransformGroup>(target.RenderTransform);
-            Assert.Same(prior, group.Children[0]);
-            shell.StepLeashTug(156);
-            Assert.Equal(-9.6, Assert.IsType<TranslateTransform>(group.Children[2]).X, 5);
-            Assert.Equal(-1.76, Assert.IsType<RotateTransform>(group.Children[1]).Angle, 5);
-            shell.StepLeashTug(520);
-            Assert.Same(prior, target.RenderTransform);
-            Assert.False(shell.LeashTugRunning);
-            s.MotionLevel = MotionLevel.Off;
-            service.ApplyBlock(Event("0123456789abcdef", "tug")); Dispatcher.UIThread.RunJobs();
-            Assert.DoesNotContain("0123456789abcdef", seen);
-            Assert.Same(prior, target.RenderTransform);
+            var oldTime = BeatLoop.Time;
+            BeatLoop.Time = new SteppedTime(); // Keep the one-shot at its first frame until stepped below.
+            try
+            {
+                LeashGateCardTests.Run(false, (shell, launcher, _) =>
+                {
+                    var seen = new List<string>();
+                    var service = new LeashService(new Wire(), () => "u_me", cutSafety: () => { }, reportSeen: seen.Add);
+                    LeashHead.Service = service;
+                    var s = CoreSettings.Current;
+                    (s.MotionLevel, s.GentleVisuals) = (MotionLevel.Full, false);
+                    launcher.Show(); shell.RebindLeashAsks();
+                    var target = Assert.IsAssignableFrom<Control>(launcher.Content);
+                    var prior = new ScaleTransform(0.9, 0.9);
+                    target.RenderTransform = prior;
+                    service.ApplyBlock(Event("abcdef0123456789", "tug")); Dispatcher.UIThread.RunJobs();
+                    Assert.Contains("abcdef0123456789", seen);
+                    var group = Assert.IsType<TransformGroup>(target.RenderTransform);
+                    Assert.Same(prior, group.Children[0]);
+                    shell.StepLeashTug(156);
+                    Assert.Equal(-9.6, Assert.IsType<TranslateTransform>(group.Children[2]).X, 5);
+                    Assert.Equal(-1.76, Assert.IsType<RotateTransform>(group.Children[1]).Angle, 5);
+                    shell.StepLeashTug(520);
+                    Assert.Same(prior, target.RenderTransform);
+                    Assert.False(shell.LeashTugRunning);
+                    s.MotionLevel = MotionLevel.Off;
+                    service.ApplyBlock(Event("0123456789abcdef", "tug")); Dispatcher.UIThread.RunJobs();
+                    Assert.DoesNotContain("0123456789abcdef", seen);
+                    Assert.Same(prior, target.RenderTransform);
+                });
+            }
+            finally { BeatLoop.Time = oldTime; }
         });
 
     // WPF LeashSurfaces.cs:213 (LeashFx.Ask) and LeashSnapCard.Play (LeashFx.Snap).

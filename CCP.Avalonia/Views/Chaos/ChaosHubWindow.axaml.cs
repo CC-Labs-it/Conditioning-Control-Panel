@@ -35,8 +35,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
     ///    switch / bench buy spend and save it with WPF's prices and gates (see <c>Shelf</c>).
     ///    The constructor reloads the save via <c>ChaosMeta.Init</c>, except under
     ///    <c>RenderProof.Rendering</c>, where it draws the in-memory state and writes nothing.
-    ///    Mantras and the codex read Core discovery state and catalogues. ponytail: <c>ChaosArt</c> returns
-    ///    <c>System.Windows.Media.ImageSource</c>, so only its path half can ever move; the bench's
+    ///    Mantras and the codex read Core discovery state and catalogues; the bench's
     ///    remaining ChaosSfx cues are not ported. Lesson/script locks and unlock cards are
     ///    (<see cref="ChaosUnlockCardLayer"/>).
     ///  - <c>BuildBench</c> is inlined over Core <c>ChaosBench</c>; first-open reveal flashes
@@ -678,8 +677,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
             grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
 
-            // ---- icon: a branch-tinted square with the glyph (ChaosArt sprites are head-side) ----
-            var icon = GlyphIcon(u.Glyph, 72, 14, accent, owned ? 1.0 : 0.5);
+            // ---- icon: shipped art, or a branch-tinted glyph ----
+            var icon = ArtIcon(UpgradeArt(u), u.Glyph, 72, 14, accent, owned ? 1.0 : 0.5);
             Grid.SetColumn(icon, 0);
             grid.Children.Add(icon);
 
@@ -870,9 +869,20 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             return row;
         }
 
-        /// <summary>WPF resolved real art through ChaosArt and fell back to this tinted glyph
-        /// square. Only the fallback exists on this head.
-        /// ponytail: needs ChaosArt, wired when it moves to Core.</summary>
+        private static IImage? UpgradeArt(SampleHabit u) => u.IconPath != null
+            ? ChaosArt.TryLoad(u.IconPath) : ChaosArt.Resolve("upgrades", u.Id);
+
+        // WPF xaml.cs:1434-1455: clip full-bleed art and draw the accent ring over it.
+        private static Border ArtIcon(IImage? art, string glyph, double size, double radius, Color accent, double opacity, double ring = 3)
+        {
+            if (art == null) return GlyphIcon(glyph, size, radius, accent, opacity);
+            var content = new Grid { Clip = new RectangleGeometry(new Rect(0, 0, size, size)) { RadiusX = radius, RadiusY = radius } };
+            content.Children.Add(new Image { Source = art, Stretch = Stretch.UniformToFill });
+            content.Children.Add(new Border { CornerRadius = new CornerRadius(radius), BorderBrush = new SolidColorBrush(accent), BorderThickness = new Thickness(ring), IsHitTestVisible = false });
+            return new Border { Width = size, Height = size, Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Top, Opacity = opacity, Child = content };
+        }
+
+        /// <summary>Tinted glyph fallback when art is unavailable.</summary>
         private static Border GlyphIcon(string glyph, double size, double radius, Color accent, double opacity) => new()
         {
             Width = size, Height = size, CornerRadius = new CornerRadius(radius),
@@ -959,7 +969,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
             grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
 
-            var icon = GlyphIcon(rankLocked ? "?" : b.Glyph, 72, 14, BoonAccent,
+            var icon = ArtIcon(ChaosArt.Resolve(rankLocked ? "hub" : "boons", rankLocked ? "tile_unknown" : b.Id), rankLocked ? "?" : b.Glyph, 72, 14, BoonAccent,
                                  unlocked ? 1.0 : (rankLocked ? 0.6 : 0.5));
             ToolTip.SetTip(icon, rankLocked ? RankLockedTip : b.Desc);
             Grid.SetColumn(icon, 0);
@@ -1269,7 +1279,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     on ? TileState.Equipped : owned ? TileState.Owned : TileState.Locked,
                     onClick,
                     cornerBadge: on ? IconKind.Checkmark : null,
-                    flavor: u.Flavor));
+                    art: UpgradeArt(u), flavor: u.Flavor));
             }
             // Charms live with the habits: leveled, always-on once worn, toggled like a habit.
             foreach (var b in Shelf.Charms)
@@ -1290,6 +1300,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     active ? TileState.Equipped : unlocked ? TileState.Owned : TileState.Locked,
                     onClick,
                     cornerBadge: active ? IconKind.Checkmark : null,
+                    art: ChaosArt.Resolve(charmRankLocked ? "hub" : "boons", charmRankLocked ? "tile_unknown" : bid),
                     flavor: charmRankLocked ? null : b.Flavor));
             }
             int shown = Shelf.Habits.Count + Shelf.Charms.Count;
@@ -1320,8 +1331,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 string id = b.Id;
                 var cell = LoadoutTile(b.Glyph, $"{b.Name} · L{b.Level}", b.Desc,
                     "click to unequip", BoonAccent, TileState.Equipped,
-                    () => { Shelf.ToggleBoon(id); EquipCue(id); AfterBoonChange(); },   // WPF xaml.cs:1072
-                    size: 114, flavor: b.Flavor);
+                    () => { Shelf.ToggleBoon(id); EquipCue(id); AfterBoonChange(); },
+                    size: 114, art: ChaosArt.Resolve("boons", id), flavor: b.Flavor);
                 cell.Margin = new Thickness(0, 0, 24, 0);
                 row.Children.Add(cell);
             }
@@ -1362,6 +1373,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     rankLocked ? "? ? ?" : unlocked ? $"{b.Name} · L{b.Level}" : b.Name,
                     rankLocked ? RankLockedTip : b.Desc, extra, BoonAccent, state, onClick,
                     cornerBadge: active ? IconKind.Star : null,
+                    art: ChaosArt.Resolve(rankLocked ? "hub" : "boons", rankLocked ? "tile_unknown" : id),
                     flavor: rankLocked ? null : b.Flavor));
             }
             int target = Math.Max(padTo, ((boons.Count + 3) / 4) * 4);
@@ -1374,7 +1386,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
         private Control LoadoutTile(string glyph, string title, string? desc, string? extra, Color accent,
                                     TileState state, Action? onClick, IconKind? cornerBadge = null,
-                                    double size = TILE, string? caption = null, string? flavor = null)
+                                    double size = TILE, string? caption = null, IImage? art = null, string? flavor = null)
         {
             // Rounded clip so the square art can't poke past the ring corners (Border doesn't
             // clip children to its CornerRadius; the tile is fixed-size so a geometry works).
@@ -1382,7 +1394,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             {
                 Clip = new RectangleGeometry(new Rect(0, 0, size, size)) { RadiusX = 12, RadiusY = 12 }
             };
-            content.Children.Add(new TextBlock
+            var keyhole = state == TileState.Empty && caption == null ? ChaosArt.Resolve("hub", "tile_unknown") : null;
+            if (art != null && state != TileState.Empty)
+                content.Children.Add(new Image { Source = art, Stretch = Stretch.UniformToFill, Opacity = state == TileState.Locked ? 0.35 : 1.0 });
+            else if (keyhole != null)
+                content.Children.Add(new Image { Source = keyhole, Width = size * 0.5, Height = size * 0.5, Stretch = Stretch.Uniform, Opacity = 0.45, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+            else content.Children.Add(new TextBlock
             {
                 Text = glyph,
                 FontSize = size >= 114 ? 46 : 36,
@@ -1850,7 +1867,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         {
             bool seen = ChaosMeta.IsDiscovered(codexId);
             var row = new StackPanel { Orientation = Orientation.Horizontal };
-            var icon = new Border
+            var art = seen ? ChaosArt.Resolve("bubbles", codexId.Substring("bubble:".Length)) : null;
+            var icon = art != null ? ArtIcon(art, glyph, 39, 9, accent, 1, 2.5) : new Border
             {
                 Width = 39, Height = 39, CornerRadius = new CornerRadius(9),
                 Background = new SolidColorBrush(seen ? Color.FromArgb(60, accent.R, accent.G, accent.B) : Color.FromArgb(40, 120, 120, 140)),
@@ -1860,6 +1878,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                     ? new IconGlyph { Emoji = glyph, Foreground = new SolidColorBrush(accent), Size = 19, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
                     : SlotGlyph(null, new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0xA0)), 19)
             };
+            icon.VerticalAlignment = VerticalAlignment.Center;
             if (seen) ToolTip.SetTip(icon, name + "\n" + desc);
             row.Children.Add(icon);
 
@@ -2232,10 +2251,10 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _howToStep.Text = $"STEP {_howToIdx + 1} / {_howToCards.Length}";
             _howToTitle.Text = card.Title;
 
-            // Card art comes from ChaosArt.Resolve("howto", …) in the head; with no art the box
-            // collapses, exactly as it does in WPF when no screenshot has been dropped in.
-            // ponytail: needs ChaosArt, wired when it moves to Core.
-            _howToImageBox.IsVisible = false;
+            var art = ChaosArt.Resolve("howto", card.Image);
+            var imageLayer = (Border)((Grid)_howToImageBox.Child!).Children[0];
+            ((ImageBrush)imageLayer.Background!).Source = art;
+            _howToImageBox.IsVisible = art != null;
 
             // body lines
             _howToBody.Children.Clear();
@@ -2391,7 +2410,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
 
             public static List<SampleHabit> Habits => ChaosUpgrades.All.Where(u => OnShelfNow(u.Id))
                 .Select(u => new SampleHabit(u.Id, u.Glyph, u.Name, u.Desc, u.Flavor, u.Branch.ToString(), u.Cost,
-                                             ChaosMeta.IsOwned(u.Id), ChaosMeta.IsUpgradeActive(u.Id))).ToList();
+                                             ChaosMeta.IsOwned(u.Id), ChaosMeta.IsUpgradeActive(u.Id), u.IconPath)).ToList();
 
             public static List<SampleBoon> Boons => ChaosLifetimeBoons.LegacyAll
                 .Where(b => b.Category != ChaosBoonCategory.Utility).Select(Row).ToList();
@@ -2435,7 +2454,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         // ============================ shelf row snapshots ============================
 
         private sealed record SampleHabit(string Id, string Glyph, string Name, string Desc, string Flavor,
-                                          string Branch, int Cost, bool Owned, bool On);
+                                          string Branch, int Cost, bool Owned, bool On, string? IconPath);
 
         private sealed record SampleBoon(string Id, string Glyph, string Name, string Desc, string Flavor,
                                          string Category, string ValueLabel, int Level, int MaxLevel,

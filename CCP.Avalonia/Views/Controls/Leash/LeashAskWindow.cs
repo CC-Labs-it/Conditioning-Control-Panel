@@ -111,10 +111,11 @@ public sealed class LeashAskWindow : Window
         }
         catch (Exception ex)
         {
-            Serilog.Log.Debug("[Leash] overlay window failed: {E}", ex.Message);
             if (ReferenceEquals(Current, w)) Current = null;
+            Serilog.Log.Debug("[Leash] overlay window failed: {E}", ex.Message);
             return false;
         }
+        if (!ReferenceEquals(Current, w) || !w.IsVisible) return false;
         w.PlayThud();
         return true;
     }
