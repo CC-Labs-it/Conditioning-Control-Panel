@@ -51,4 +51,8 @@ public partial class PresetsTabView
 
     private static void SetModLabel(IconLabel label, string english, string key) =>
         label.Text = ModLabel(english, Loc.Get(key));
+
+    // The 7.4.1 detail rows are RowLabels: the emblem stands in for the loc value's leading icon.
+    private static void SetModLabel(ConditioningControlPanel.Avalonia.Controls.Rows.RowLabel label, string english, string key) =>
+        label.Text = ModLabel(english, Loc.Get(key));
 }
