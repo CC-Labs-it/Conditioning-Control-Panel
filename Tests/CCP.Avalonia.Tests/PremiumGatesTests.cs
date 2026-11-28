@@ -54,9 +54,11 @@ public sealed class PremiumGatesTests
                 service.Current.AutonomyModeEnabled = true;
                 // Opening Play notes it in the dashboard's RECENT rail, a real save (WPF
                 // NoteDestinationOpened); already at the head, so this measures the lapse pass alone.
-                service.Current.RailRecent.Insert(0, "tab.play");
+                // Play lands on its Eyes pill since declutter wave 2 ("play" opens the launcher's Games door).
+                service.Current.RailRecent.Insert(0, ConditioningControlPanel.Services.FavoritesRailRule.DestinationIdForTab(
+                    "playeyes", ConditioningControlPanel.Services.SettingsPaletteIndex.All)!);
                 // Opening a section page remembers its last tab (WPF SyncSectionChrome); already so.
-                service.Current.NavLastTabBySection = "{\"play\":\"play\"}";
+                service.Current.NavLastTabBySection = "{\"play\":\"playeyes\"}";
                 service.SaveImmediate();
                 var before = System.IO.File.ReadAllText(path);
                 (CoreEntitlement.HasPremiumProvider, CoreEntitlement.IsFreeTodayProvider) = (() => false, null);
@@ -173,9 +175,9 @@ public sealed class PremiumGatesTests
 
                 // Free: every veil and band up.
                 (CoreEntitlement.HasPremiumProvider, CoreEntitlement.HasLabProvider, CoreEntitlement.IsFreeTodayProvider) = (null, null, null);
-                Show("play");
+                Show("playeyes");
                 foreach (var (t, g) in Veils) Assert.True(Veiled(t, g), g);
-                Assert.True(HapticsVeiled());
+                Assert.False(HapticsVeiled());   // toys are free since 2026-11-11 (HapticsAccess.IsOpen): never veiled
                 foreach (var b in Bands) Assert.True(Banded(b), b);
 
                 // The free day lifts its own veil and band, nothing else.
@@ -193,18 +195,18 @@ public sealed class PremiumGatesTests
 
                 // DtRH is a Basic gift (port/7.2 DtrhLocked/DtrhGate), independent of the Remote/For You gifts.
                 CoreEntitlement.IsFreeTodayProvider = k => k == "dtrh";
-                Show("play");
+                Show("playeyes");
                 Assert.False(Banded("PlayLockDtrh"));
                 Assert.True(Banded("PlayLockArcademy"));
                 Assert.True(Stamped("PlayBadgeDtrh"));
                 CoreEntitlement.HasPremiumProvider = () => true;
-                Show("play");
+                Show("playeyes");
                 Assert.False(Stamped("PlayBadgeDtrh"));
                 CoreEntitlement.HasPremiumProvider = null;
 
                 // The other three pool keys lift their own veils (WPF RefreshEntitlementVeils).
                 CoreEntitlement.IsFreeTodayProvider = k => k is "takeover" or "voice" or "haptics";
-                Show("play");
+                Show("playeyes");
                 Assert.False(Veiled("BambiTakeoverTab", "BambiTakeoverGate"));
                 Assert.False(Veiled("SheListeningTab", "SheListeningGate"));
                 Assert.False(HapticsVeiled());
@@ -217,19 +219,19 @@ public sealed class PremiumGatesTests
                 Assert.False(Veiled("LockdownTab", "LockdownGate"));
 
                 // Tier 1: every premium veil and band down, the Lab bands stay up.
-                Show("play");
+                Show("playeyes");
                 foreach (var (t, g) in Veils) Assert.False(Veiled(t, g), g);
                 Assert.False(HapticsVeiled());
                 foreach (var b in new[] { "PlayLockRemote", "PlayLockLockdown", "PlayLockBlink", "PlayLockFyp" }) Assert.False(Banded(b), b);
                 // An owner gets no gift: a free day on a door already open stamps nothing.
                 CoreEntitlement.IsFreeTodayProvider = k => k == "remote";
-                Show("play");
+                Show("playeyes");
                 Assert.False(Stamped("PlayBadgeRemote"));
                 foreach (var b in new[] { "PlayLockGaze", "PlayLockFocusGaze", "PlayLockBreakout" }) Assert.True(Banded(b), b);
 
                 // Tier 2: every band down.
                 CoreEntitlement.HasLabProvider = () => true;
-                Show("play");
+                Show("playeyes");
                 foreach (var b in Bands) Assert.False(Banded(b), b);
 
                 // Lapse (WPF EnforceEntitlementLapse): a free account's premium flag goes off on the
