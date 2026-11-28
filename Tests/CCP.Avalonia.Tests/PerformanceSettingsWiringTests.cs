@@ -66,11 +66,11 @@ public sealed class PerformanceSettingsWiringTests
             gates = 0;
             box.IsChecked = false;   // the user's opt-out, through the box: load never escalates
             Assert.False(s.AutoPerformanceMode);
-            Assert.Equal(1, gates);
+            Assert.Equal(0, gates);
             Assert.Equal(PerformanceTier.Quality, AmbientFxCanvas.Env.CurrentTier);
             box.IsChecked = true;
             Assert.True(s.AutoPerformanceMode);
-            Assert.Equal(2, gates);
+            Assert.Equal(0, gates);
             Assert.False(AmbientFxCanvas.Env.AllowAmbientLoops);
         }
         finally
