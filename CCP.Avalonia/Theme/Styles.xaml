@@ -1307,12 +1307,14 @@
 
   <!-- MainWindow.xaml:1366. Gradient-border card with a left accent strip and a chevron that
        rotates on expand. Expander's IsExpanded drives the content; the chevron rotation is a
-       :expanded selector rather than a Storyboard. DropShadowEffect dropped. -->
+       :expanded selector rather than a Storyboard. The outer border holds the accent glow. -->
   <ControlTheme x:Key="CollapsibleCard" TargetType="Expander">
     <Setter Property="IsExpanded" Value="True"/>
     <Setter Property="Template">
       <ControlTemplate TargetType="Expander">
-        <Border CornerRadius="10" Margin="0,0,0,10" BorderThickness="1" ClipToBounds="True">
+        <Border x:Name="CardGlow" CornerRadius="10" Margin="0,0,0,10"
+                fx:InputFx.GlowColor="{DynamicResource PinkColor}" fx:InputFx.GlowBlur="15" fx:InputFx.GlowOpacity="0.15">
+        <Border CornerRadius="10" BorderThickness="1" ClipToBounds="True">
           <Border.Background>
             <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
               <GradientStop Color="{DynamicResource SurfaceBg}" Offset="0"/>
@@ -1368,6 +1370,7 @@
                               ContentTemplate="{TemplateBinding ContentTemplate}"
                               IsVisible="{TemplateBinding IsExpanded}"/>
           </Grid>
+        </Border>
         </Border>
       </ControlTemplate>
     </Setter>

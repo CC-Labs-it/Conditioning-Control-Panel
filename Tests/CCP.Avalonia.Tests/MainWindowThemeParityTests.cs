@@ -28,6 +28,30 @@ public sealed class MainWindowThemeParityTests
     }
 
     [Fact]
+    public Task CollapsibleCardGlowFollowsAccentOutsideClippedCard() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Setup();
+        var card = new Expander { Theme = (ControlTheme)Application.Current!.FindResource("CollapsibleCard")!, Header = "Header", Content = "Content" };
+        var host = new Window { Width = 300, Height = 200, Content = card };
+        host.Resources["PinkColor"] = Colors.Cyan;
+        host.Show();
+        Dispatcher.UIThread.RunJobs();
+        try
+        {
+            var glow = card.GetVisualDescendants().OfType<Border>().Single(b => b.Name == "CardGlow");
+            Assert.False(glow.ClipToBounds);
+            Assert.True(Assert.IsType<Border>(glow.Child).ClipToBounds);
+            Assert.Equal(15, glow.BoxShadow[0].Blur);
+            Assert.Equal(Color.FromArgb(38, 0, 255, 255), glow.BoxShadow[0].Color);
+            host.Resources["PinkColor"] = Colors.Red;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(Color.FromArgb(38, 255, 0, 0), glow.BoxShadow[0].Color);
+        }
+        finally { host.Close(); }
+        return Task.CompletedTask;
+    });
+
+    [Fact]
     public Task CollapsibleCardChevronUsesExpandAndCollapseTransition() => AvaloniaTestDispatcher.RunAsync(() =>
     {
         Setup();
