@@ -89,14 +89,17 @@ coverage is in <code>TabFirstShowWorkTests</code>; the directory test awaits art
 <p>No Windows median or p95 improvement is claimed from headless tests. Each must satisfy
 Avalonia ≤ WPF × 1.10 + 20 ms when measured on the same Windows runner (job <code>perf-bench-windows</code>).</p>
 <h2 id="results">Results</h2>
-
+<p>2026-11-24 re-measure (run <a href="https://github.com/CC-Labs-it/Conditioning-Control-Panel/actions/runs/45321626917">45321626917</a>, job <code>perf-bench-windows</code>, windows-latest, 5 back-to-back WPF/Avalonia pairs) on port/7.2 7db2f34ded (after the restack) plus #5199 (startup read at the same frame), #5723 (re-cut of #5202, tab entrance on compositor animations) and #5337 (startup); these numbers hold once those land. All 51 rows pass the rule above and Avalonia is below WPF on all 51, startup included (2743.9 vs 4709.4 ms).</p>
+<p>History: 2026-11-15 (rgate <a href="https://github.com/CC-Labs-it/Conditioning-Control-Panel/actions/runs/43712013418">43712013418</a>, port/7.2 669eb1b72b + #5199 + #5202): 51/51 pass, Avalonia at or below WPF on 49 of 51; startup 3841.3 vs 3792.8 ms and since-process 3924.0 vs 3910.6 ms, inside noise and the rule.</p>
 <table>
 <tr><th>metric</th><th>Linux Avalonia</th><th>Windows Avalonia</th><th>Windows WPF</th><th>verdict</th></tr>
-<tr><td>startup (ms)</td><td>see ledger</td><td>5124 (info: scope differs)</td><td>4268</td><td>info</td></tr>
-<tr><td>tab switch median, worst tab (ms)</td><td>see ledger</td><td>423.0 (ExclusivesTab)</td><td>171.4 (AchievementsTab; ExclusivesTab 108.7)</td><td>FAIL</td></tr>
-<tr><td>tab switch p95, worst tab (ms)</td><td>see ledger</td><td>492.6 (ExclusivesTab)</td><td>223.5 (AchievementsTab; ExclusivesTab 123.8)</td><td>FAIL</td></tr>
-<tr><td>working set after GC (MB)</td><td>see ledger</td><td>1172.4</td><td>1030.8</td><td>FAIL (limit 1133.9)</td></tr>
-<tr><td>AvailableSubjectsTab switch median / p95 (ms)</td><td>LOCAL HEADLESS, not <code>--perf-bench</code>: 1.68 / 52.87 before, 1.61 / 5.72 after the card-reuse change (see ledger 2026-11-11)</td><td>2.49 / 26.08 at the handoff point (2026-11-11, before the card-reuse change; rerun pending)</td><td>15.96 / 23.38</td><td>PASS (p95 above WPF, inside the rule)</td></tr>
+<tr><td>startup to first frame (ms)</td><td>see ledger</td><td>2743.9</td><td>4709.4</td><td>PASS (limit 5200.3)</td></tr>
+<tr><td>startup since process start (ms)</td><td>see ledger</td><td>2845.4</td><td>4847.8</td><td>PASS (limit 5352.6)</td></tr>
+<tr><td>tab switch median, worst tab (ms)</td><td>see ledger</td><td>85.0 (AchievementsTab; ExclusivesTab 77.0)</td><td>183.6 (AchievementsTab; ExclusivesTab 120.2)</td><td>PASS</td></tr>
+<tr><td>tab switch p95, worst tab (ms)</td><td>see ledger</td><td>117.3 (AchievementsTab; ExclusivesTab 86.6)</td><td>255.3 (AchievementsTab; ExclusivesTab 161.1)</td><td>PASS</td></tr>
+<tr><td>working set after GC (MB)</td><td>see ledger</td><td>853.2</td><td>1040.0</td><td>PASS (limit 1144.0)</td></tr>
+<tr><td>AvailableSubjectsTab switch median / p95 (ms)</td><td>see ledger</td><td>4.89 / 25.92</td><td>14.47 / 26.25</td><td>PASS</td></tr>
+<tr><td>ProgramsTab switch median / p95 (ms)</td><td>see ledger</td><td>4.88 / 19.75</td><td>33.88 / 62.19</td><td>PASS</td></tr>
 </table>
 <h2 id="render-path">Render path on a GPU-less Windows machine</h2>
 <p>When every DXGI adapter is the Microsoft Basic Render Driver (WARP: vendor <code>0x1414</code> device <code>0x8C</code>, or
@@ -136,6 +139,7 @@ No new Windows parity result is claimed by this review fix.</p>
 <ul>
 <li>2026-11-24, startup recut on port/7.2: deferred Achievements art, direct pixel blur, Play hero reuse and TieredPGO disabled. Performance on this base is not verified; historical measurements on the original branch do not establish a result for this recut.</li>
 <li>2026-11-24, cloud Linux, PR #5202 recut on base <code>7db2f34de</code>: tab entrance tracks run on the compositor; the outgoing visibility track holds its first key frame at the initial sample. The focused first-frame test failed before the visibility fix and passed afterward. No new p95 benchmark or Windows parity result was measured here.</li>
+<li>2026-11-15, windows-latest, rgate 43712013418 on snapshot 780b71bc6 = port/7.2 669eb1b72b + #5199 + #5202 (branch avalonia-port/perf-measure-1115, never a PR): 51/51 PASS, 49/51 at or below WPF; startup 3841.3 vs 3792.8 ms, worst tab median 83.0 vs 143.0 ms, worst p95 111.8 vs 221.9 ms, working set 858.2 vs 1026.7 MB. Previous run 2026-11-14 (43595478555): 49/51, AvailableSubjects p95 and startup failed; both fixed by #5202 and #5199.</li>
 <li>2026-11-11, cloud Linux, test syntax correction on parent <code>217dae076</code>, base
 <code>e62cb9ecd005</code>: Core, Avalonia and Avalonia test projects built in Release;
 Core tests 4650 passed / 5 skipped; 21 focused headless tests passed. Fail-proof: disabling the mod-revision check made the same-ID
