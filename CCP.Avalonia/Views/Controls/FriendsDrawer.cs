@@ -27,6 +27,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using ConditioningControlPanel.Avalonia.Controls;
 using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Controls.Friends;
@@ -94,7 +95,11 @@ public sealed partial class FriendsDrawer : Border
             catch { return false; }
         };
         if (asPage) (MaxWidth, CornerRadius) = (PageMaxWidth, new CornerRadius(16));
-        else (Width, MaxHeight, CornerRadius) = (DrawerWidth, DrawerMaxHeight, new CornerRadius(16));
+        else
+        {
+            (Width, MaxHeight, CornerRadius) = (DrawerWidth, DrawerMaxHeight, new CornerRadius(16));
+            EscapeClaim.Mark(this); // WPF FriendsDrawer.cs:163-175: only the popup folds on Escape.
+        }
         Background = new LinearGradientBrush
         {
             StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative), EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
@@ -367,11 +372,10 @@ public sealed partial class FriendsDrawer : Border
     }
     private void Section(string key, int count)
     {
-        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(8, 10, 8, 4) };
-        var t = Label(Loc.Get(key).ToUpperInvariant(), 10.5, Dim, Mono, FontWeight.SemiBold);
-        var n = Label(count.ToString(), 10.5, Dim, Mono);
-        n.Margin = new Thickness(6, 0, 0, 0);
-        Grid.SetColumn(n, 1);
+        var g = new Grid { Margin = new Thickness(8, 10, 8, 4) };
+        var t = Label(Loc.Get(key).ToUpperInvariant(), 10, Dim, Mono);
+        var n = Label(count.ToString(), 10, Dim, Mono);
+        n.HorizontalAlignment = HorizontalAlignment.Right;
         g.Children.Add(t);
         g.Children.Add(n);
         _list.Children.Add(g);
@@ -381,7 +385,7 @@ public sealed partial class FriendsDrawer : Border
         bool open = _openId == f.Id;
         var table = TableFor(f);
         var top = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto") };
-        var avatar = Avatar(f.Name, 38, f.Online || table != null, f.Look);
+        var avatar = Avatar(f.Name, 38, f.Online || table != null, f.Look, f.AvatarUrl);   // WPF FriendsDrawer.cs:538
         if (!f.Online && table == null) avatar.Opacity = 0.55;
         var mid = new StackPanel { Margin = new Thickness(10, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
         var nameLine = new StackPanel { Orientation = Orientation.Horizontal };
@@ -426,7 +430,12 @@ public sealed partial class FriendsDrawer : Border
         if (table != null && !open) DressHostingRow(row);
         AttachHover(row, open);
         // A click on the row (not inside the open card) opens or folds its card.
-        top.PointerReleased += (_, e) => { if (e.InitialPressMouseButton == MouseButton.Left) { Toggle(f.Id); e.Handled = true; } };
+        row.PointerReleased += (_, e) =>
+        {
+            if (e.InitialPressMouseButton != MouseButton.Left) return;
+            if (e.Source is Visual source && source.GetSelfAndVisualAncestors().OfType<Control>().Any(c => Equals(c.Tag, "friends-card"))) return;
+            Toggle(f.Id); e.Handled = true;
+        };
         return row;
     }
     private TextBlock ActivityLine(Friend f)
@@ -463,7 +472,7 @@ public sealed partial class FriendsDrawer : Border
     /// <summary>The open card: the menu one press away, or the Remove / Block question.</summary>
     private Control Card(Friend f)
     {
-        var card = new StackPanel { Margin = new Thickness(0, 8, 0, 2), Tag = "friends-card" };
+        var card = new StackPanel { Margin = new Thickness(0, 8, 0, 2), Background = Brushes.Transparent, Tag = "friends-card" };
         // WPF FriendsDrawer.cs:668-695 keeps actions, the leash chip and More above the question.
         card.Children.Add(CardActions(f));
         if (FriendLeashOffer.Create(f, Render) is { } offer) card.Children.Add(offer);
@@ -658,7 +667,7 @@ public sealed partial class FriendsDrawer : Border
             Background = Brushes.Transparent, // WPF FriendsDrawer.cs:752: padding participates in hit testing.
             CornerRadius = new CornerRadius(10), Padding = new Thickness(8, 6, 8, 6), Margin = new Thickness(0, 1),
             Tag = (incoming ? "friends-request-in:" : "friends-request-out:") + r.Id,
-            Child = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto"), Children = { Avatar(r.Name, 38, null, r.Look), mid, buttons } },
+            Child = new Grid { ColumnDefinitions = new ColumnDefinitions("38,*,Auto"), Children = { Avatar(r.Name, 38, null, r.Look, r.AvatarUrl), mid, buttons } },
         };
         AttachHover(row, false);
         return row;
@@ -985,8 +994,8 @@ public sealed partial class FriendsDrawer : Border
     }
 
     /// <summary>Initials on the roster's per-name gradient (WPF FriendsLook.Avatar), with a presence dot
-    /// (mint on, grey off, none for null).</summary>
-    internal static Control Avatar(string name, double size, bool? dot, ConditioningControlPanel.Services.PlayerLook? look = null)
+    /// (mint on, grey off, none for null). A proxy picture replaces the initials once it loads (Parity.cs).</summary>
+    internal static Control Avatar(string name, double size, bool? dot, ConditioningControlPanel.Services.PlayerLook? look = null, string? url = null)
     {
         var g = new Grid { Width = size, Height = size };
         g.Children.Add(new Border
@@ -1000,7 +1009,8 @@ public sealed partial class FriendsDrawer : Border
         });
         if (look is { IsEmpty: false })
         {
-            if (Helpers.ModArt.AvatarPreset(look.AvatarId) is { } art && g.Children[0] is Border disc)
+            // WPF FriendsLook.cs:204: the preset only stands in when there is no picture.
+            if (string.IsNullOrEmpty(url) && Helpers.ModArt.AvatarPreset(look.AvatarId) is { } art && g.Children[0] is Border disc)
             {
                 disc.Background = new ImageBrush(art) { Stretch = Stretch.UniformToFill };
                 disc.Child = null;
@@ -1018,6 +1028,7 @@ public sealed partial class FriendsDrawer : Border
                 Width = size * 0.3, Height = size * 0.3, Fill = on ? Mint : OfflineDot, Stroke = Foot, StrokeThickness = 2,
                 HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom,
             });
+        if (!string.IsNullOrEmpty(url) && g.Children[0] is Border face) _ = PaintPhotoAsync(face, url);
         return g;
     }
 

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 const source = readFileSync(process.env.CCP_BROWSER_SCRIPT_SOURCE || new URL('../../CCP.Avalonia/Platform/BrowserVideoSurface.cs', import.meta.url), 'utf8');
 const script = source.slice(source.indexOf('"""') + 3, source.lastIndexOf('"""'));
-function page(play = () => Promise.resolve(), primary = true) {
+function page(play = () => Promise.resolve(), primary = true, paused = false) {
   let now = 0, nextId = 0;
   const timers = new Map(), messages = [], listeners = new Map();
   const video = { paused: false, ended: false, currentTime: 0, play, pause() { this.paused = true; } };
@@ -14,7 +14,7 @@ function page(play = () => Promise.resolve(), primary = true) {
     return id;
   };
   new Function('c', 'document', 'window', 'performance', 'setTimeout', 'setInterval', 'clearInterval', script)(
-    { url: 'http://localhost/video.mp4', volume: primary ? 0.5 : 0, id: 'test', primary },
+    { url: 'http://localhost/video.mp4', volume: primary ? 0.5 : 0, id: 'test', primary, paused },
     { body: { replaceChildren() {} }, createElement: () => video },
     window,
     { now: () => now }, (f, ms) => schedule(f, ms, false), (f, ms) => schedule(f, ms, true), id => timers.delete(id));
@@ -122,4 +122,39 @@ test('pointerdown reports one click in capture phase without cancelling it', () 
   handler.listener({ preventDefault() { cancelled = true; } });
   assert.deepEqual(p.messages, [{ type: 'click', session: 'test' }]);
   assert.equal(cancelled, false);
+});
+
+test('time messages include position, played ranges and pause state', () => {
+  const p = page();
+  p.video.currentTime = 8.25;
+  p.video.paused = true;
+  p.video.played = { length: 2, start: i => [1, 7][i], end: i => [3, 8.25][i] };
+  p.video.ontimeupdate();
+  assert.deepEqual(p.messages.at(-1), { type: 'time', ms: 8250, playedMs: 3250, paused: true, session: 'test' });
+});
+
+test('a host pause before the first frame holds the start clock and its AbortError is not a failure', async () => {
+  let plays = 0;
+  const abort = Object.assign(new Error('interrupted by pause'), { name: 'AbortError' });
+  const p = page(() => ++plays === 1 ? Promise.reject(abort) : Promise.resolve());
+  p.controls.pause();
+  await Promise.resolve();
+  p.advance(60000);
+  assert.deepEqual(p.messages, []);
+  p.controls.resume();
+  assert.equal(plays, 2);
+  p.advance(9999);
+  assert.deepEqual(p.messages, []);
+  p.advance(1);
+  assert.deepEqual(p.messages, [{ type: 'error', code: 101, session: 'test' }]);
+});
+
+test('a page loaded under a host pause stays paused until resumed', () => {
+  let plays = 0;
+  const p = page(() => { plays++; return Promise.resolve(); }, true, true);
+  p.advance(60000);
+  assert.equal(plays, 0);
+  assert.deepEqual(p.messages, []);
+  p.controls.resume();
+  assert.equal(plays, 1);
 });

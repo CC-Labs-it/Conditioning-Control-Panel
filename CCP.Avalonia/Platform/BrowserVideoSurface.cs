@@ -49,7 +49,7 @@ internal sealed class BrowserVideoSurface : IDisposable
     private readonly Func<string, Task<string?>> _execute;
     private readonly string _id = Guid.NewGuid().ToString("N");
     private DispatcherTimer? _startup;
-    private bool _closed, _loaded, _primary;
+    private bool _closed, _loaded, _primary, _paused, _failed;
     private string _url = "";
     internal BrowserVideoSurface(Func<string, Task<string?>>? execute = null) {
         _execute = execute ?? View.InvokeScriptAsync;
@@ -63,21 +63,21 @@ internal sealed class BrowserVideoSurface : IDisposable
         Volume = primary ? Math.Clamp(masterVolume / 100.0, 0, 1) : 0;
         _startup = new DispatcherTimer { Interval = TimeSpan.FromSeconds(20) };
         _startup.Tick += (_, _) => Fail();
-        _startup.Start();
+        if (!_paused) _startup.Start();
         View.Navigate(new Uri("about:blank"));
     }
     private async void Navigated(Uri uri) {
         if (_closed || _loaded || uri.ToString() != "about:blank") return;
         _loaded = true;
         try {
-            var result = await _execute(BuildScript(_url, Volume, _id, _primary));
+            var result = await _execute(BuildScript(_url, Volume, _id, _primary, _paused));
             if (_closed) return;
             if (result != "true") { Fail(); return; }
         }
         catch { if (!_closed) Fail(); }
     }
     internal void Receive(string body) {
-        if (_closed || !_loaded) return;
+        if (_closed || _failed || !_loaded) return;
         try {
             using var json = JsonDocument.Parse(body);
             var message = json.RootElement;
@@ -85,8 +85,8 @@ internal sealed class BrowserVideoSurface : IDisposable
             switch (message.GetProperty("type").GetString())
             {
                 case "playing": Playing = true; _startup?.Stop(); break;
-                case "error": Message?.Invoke(message);
-                    Fail(message.TryGetProperty("code", out var e) && e.TryGetInt32(out var code) && code is >= 1 and <= 4 or 100 or 101); return;
+                case "error":
+                    FailWithMessage(message.TryGetProperty("code", out var e) && e.TryGetInt32(out var code) && code is >= 1 and <= 4 or 100 or 101, message); return;
             }
             Message?.Invoke(message);
         }
@@ -95,15 +95,31 @@ internal sealed class BrowserVideoSurface : IDisposable
         catch (System.Collections.Generic.KeyNotFoundException) { }
     }
     internal string SessionId => _id;
-    private void Fail(bool mediaFailure = false) {
-        if (_closed) return;
+    internal bool StartupArmed => _startup?.IsEnabled == true;
+    private void Fail(bool mediaFailure = false) => FailWithMessage(mediaFailure, null);
+    private void FailWithMessage(bool mediaFailure, JsonElement? message) {
+        if (_closed || _failed) return;
+        _failed = true;
         _startup?.Stop();
+        if (message is { } error) Message?.Invoke(error);
         Failed?.Invoke(mediaFailure);
     }
-    // WPF BrowserVideoEngine.cs:652-669: mirrors always stay muted, including after volume changes.
-    internal void Pause() => Control("window.ccpVideo?.pause();");
-    internal void Resume() => Control("window.ccpVideo?.resume();");
+    // WPF BrowserVideoEngine.cs:960-971 and player.js doPause/doResume: a host pause before the first frame is
+    // remembered for a page not yet loaded and stops the start deadline; resume gives a fresh one.
+    internal void Pause()
+    {
+        _paused = true;
+        _startup?.Stop();
+        Control("window.ccpVideo?.pause();");
+    }
+    internal void Resume()
+    {
+        _paused = false;
+        if (!Playing && !_closed && !_failed) _startup?.Start();
+        Control("window.ccpVideo?.resume();");
+    }
     internal void Seek(long milliseconds) => Control($"window.ccpVideo?.seek({Math.Max(0, milliseconds)});");
+    // WPF BrowserVideoEngine.cs:652-669: mirrors always stay muted, including after volume changes.
     internal void SetVolume(int volume)
     {
         if (_closed) return;
@@ -129,7 +145,7 @@ internal sealed class BrowserVideoSurface : IDisposable
         Failed = null;
         View.Content = null;
     }
-    internal static string BuildScript(string url, double volume, string id, bool primary) =>
+    internal static string BuildScript(string url, double volume, string id, bool primary, bool paused = false) =>
         "(function(c){" + """
         const send=m=>{m.session=c.id; const s=JSON.stringify(m);
           if(typeof window.invokeCSharpAction==='function') window.invokeCSharpAction(s);
@@ -138,21 +154,31 @@ internal sealed class BrowserVideoSurface : IDisposable
         const v=document.createElement('video'); v.playsInline=true; v.preload='auto';
         v.style='width:100vw;height:100vh;object-fit:contain';
         v.muted=c.volume===0; v.volume=c.volume; document.body.replaceChildren(v);
+        let started=false, hostPaused=!!c.paused, lastTime=0, lastAdvance=performance.now(), startAt=lastAdvance;
+        // A host pause cancels a pending play() with AbortError; that is the host's choice, not a failure.
+        const play=()=>{if(!hostPaused) v.play().catch(e=>{if(e?.name!=='AbortError') send({type:'error',code:v.error?.code||0});});};
         window.ccpVideo={
-          pause:()=>v.pause(),
-          resume:()=>v.play().catch(()=>send({type:'error',code:v.error?.code||0})),
+          pause:()=>{hostPaused=true; v.pause();},
+          resume:()=>{hostPaused=false; lastAdvance=startAt=performance.now(); play();},
           seek:ms=>{v.currentTime=Math.max(0,ms)/1000;},
           volume:value=>{v.volume=c.primary?Math.max(0,Math.min(1,value)):0; v.muted=v.volume===0;}
         };
         const meta=()=>send({type:'meta',durationMs:Number.isFinite(v.duration)?v.duration*1000:0});
         v.onloadedmetadata=meta; v.ondurationchange=meta;
-        let started=false, lastTime=0, lastAdvance=performance.now();
         v.onplaying=()=>{started=true; lastAdvance=performance.now(); send({type:'playing'});};
+        // WPF player.js:445: played ranges exclude seeks and pauses from watch credit.
+        v.ontimeupdate=()=>{
+          let played=0;
+          for(let i=0;i<v.played.length;i++) played+=v.played.end(i)-v.played.start(i);
+          send({type:'time',ms:Math.round((v.currentTime||0)*1000),playedMs:Math.round(played*1000),paused:v.paused});
+        };
         v.onended=()=>send({type:'ended'});
         v.onerror=()=>send({type:'error',code:v.error?.code||0});
-        setTimeout(()=>{if(!started) send({type:'error',code:101});},10000);
+        // WPF player.js:486-493: the start and stall clocks are suspended while the host holds a pause.
         const watchdog=setInterval(()=>{
-          if(!started||v.paused||v.ended) return;
+          if(hostPaused||v.ended) return;
+          if(!started){if(performance.now()-startAt>=10000){clearInterval(watchdog); send({type:'error',code:101});} return;}
+          if(v.paused) return;
           if(v.currentTime!==lastTime){lastTime=v.currentTime; lastAdvance=performance.now();}
           else if(performance.now()-lastAdvance>=10000){clearInterval(watchdog); send({type:'error',code:100});}
         },1000);
@@ -160,6 +186,6 @@ internal sealed class BrowserVideoSurface : IDisposable
         window.addEventListener('contextmenu',e=>e.preventDefault());
         window.addEventListener('keydown',e=>{e.preventDefault(); if(!e.repeat)
           send({type:'key',key:e.key,alt:e.altKey});},true);
-        v.src=c.url; v.play().catch(()=>send({type:'error',code:v.error?.code||0})); return true;
-        """ + "})(" + JsonSerializer.Serialize(new { url, volume, id, primary }) + ");";
+        v.src=c.url; play(); return true;
+        """ + "})(" + JsonSerializer.Serialize(new { url, volume, id, primary, paused }) + ");";
 }

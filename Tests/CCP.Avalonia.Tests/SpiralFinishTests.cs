@@ -143,6 +143,48 @@ public sealed class SpiralFinishTests
             }
         });
 
+    [Fact]
+    public Task Loom_browser_failure_closes_and_allows_a_fresh_window()
+        => Run(() =>
+        {
+            var card = new SpiralFeatureControl();
+            var host = new Window { Content = card };
+            host.Show();
+            try
+            {
+                var button = card.FindControl<Button>("BtnOpenLoom")!;
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var loom = Assert.IsType<GameWindow>(GameWindow.OpenForTests("loom"));
+                var closed = false;
+                loom.Closed += (_, _) => closed = true;
+                loom.Web.OnBrowserProcessFailed();
+                Assert.True(closed);
+                Assert.Null(GameWindow.OpenForTests("loom"));
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var fresh = Assert.IsType<GameWindow>(GameWindow.OpenForTests("loom"));
+                Assert.NotSame(loom, fresh);
+                return Task.CompletedTask;
+            }
+            finally { GameWindow.CloseAllForPanic(); host.Close(); }
+        });
+
+    [Fact]
+    public Task Other_game_stays_open_after_browser_failure()
+        => Run(() =>
+        {
+            var game = GameWindow.Launch("breakoutdemo")!;
+            try
+            {
+                var closed = false;
+                game.Closed += (_, _) => closed = true;
+                game.Web.OnBrowserProcessFailed();
+                Assert.False(closed);
+                Assert.Same(game, GameWindow.OpenForTests("breakoutdemo"));
+                return Task.CompletedTask;
+            }
+            finally { GameWindow.CloseAllForPanic(); }
+        });
+
     [Theory]
     [InlineData("windows")]
     [InlineData("gtk")]
@@ -182,7 +224,15 @@ public sealed class SpiralFinishTests
                         Assert.Equal(Path.Combine(folder, "cache"), wpe.CacheDirectory);
                         break;
                 }
-                Assert.Null(field.GetValue(game.Web));
+                // Every game now carries the hosted page motion hook; the Loom profile must not reach another game.
+                var untouched = (WebViewEnvironmentRequestedEventArgs)RuntimeHelpers.GetUninitializedObject(type);
+                game.Web.OnEnvironmentRequested(untouched);
+                switch (untouched)
+                {
+                    case WindowsWebView2EnvironmentRequestedEventArgs win: Assert.Null(win.UserDataFolder); break;
+                    case GtkWebViewEnvironmentRequestedEventArgs gtk: Assert.Null(gtk.BaseDataDirectory); Assert.Null(gtk.BaseCacheDirectory); break;
+                    case LinuxWpeWebViewEnvironmentRequestedEventArgs wpe: Assert.Null(wpe.DataDirectory); Assert.Null(wpe.CacheDirectory); break;
+                }
             }
             finally { loom.Close(); game.Close(); }
             return Task.CompletedTask;

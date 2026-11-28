@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Platform;
 using ConditioningControlPanel.Avalonia.Views.Overlays;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Models;
@@ -25,15 +26,37 @@ public sealed class BubblePayloadHostTests
     }
 
     [Theory]
-    [InlineData(false), InlineData(true)]
-    public void DashboardBoostReachesPlainAndTriggerButNotChaos(bool trigger) => AvaloniaTestDispatcher.Run(() =>
+    [InlineData(false, "flash"), InlineData(true, "flash"), InlineData(true, "glitch")]
+    public void DashboardBoostReachesPlainAndTriggerButNotChaos(bool trigger, string variant) => AvaloniaTestDispatcher.Run(() =>
     {
-        var s = new AppSettings { BubbleTriggersEnabled = trigger, BubbleTriggerChance = 50, BubbleTriggerVariants = new() { "flash" } };
-        AmbientBubble Spawn(int boost) { s.BubbleSpeedBoost = boost; return BubbleOverlay.CreateAmbient(0, new PixelRect(0, 0, 1920, 1080), 1, s, null, true, new Random(1)); }
-        var normal = Spawn(0); var fast = Spawn(500);
+        var s = new AppSettings { BubbleTriggersEnabled = trigger, BubbleTriggerChance = 50, BubbleTriggerVariants = new() { variant } };
+        // CreateAmbient reads more than its Random: the trigger spec's size comes from ChaosBubbleVariants'
+        // shared unseeded roll (a draw above ~0.997 unclamps the size factor, ~0.5% of runs), and the
+        // trigger cap and Brain Drain pool from the live field and v2 grants. Pin all three so both
+        // spawns differ only by the boost.
+        var (granted, rng, field) = (PrizeOwnership.IsGranted, ChaosBubbleVariants.Rng, BubbleOverlay.Field.Bubbles.ToArray());
+        AmbientBubble normal, fast;
+        try
+        {
+            PrizeOwnership.IsGranted = _ => false;
+            BubbleOverlay.Field.Bubbles.Clear();
+            AmbientBubble Spawn(int boost)
+            {
+                s.BubbleSpeedBoost = boost; ChaosBubbleVariants.Rng = new Random(2);
+                return BubbleOverlay.CreateAmbient(0, new PixelRect(0, 0, 1920, 1080), 1, s, null, true, new Random(1));
+            }
+            normal = Spawn(0); fast = Spawn(500);
+        }
+        finally
+        {
+            PrizeOwnership.IsGranted = granted; ChaosBubbleVariants.Rng = rng;
+            BubbleOverlay.Field.Bubbles.Clear(); BubbleOverlay.Field.Bubbles.AddRange(field);
+        }
         Assert.Equal(trigger, fast.AmbientTrigger);
         var y = normal.Y; normal.Step(); var fy = fast.Y; fast.Step();
-        Assert.Equal(6 * (y - normal.Y), fy - fast.Y, 6);
+        // Trigger specs independently roll a size, and larger chaos bubbles move more slowly.
+        // Normalize that size factor while still checking the exact sixfold dashboard boost.
+        Assert.Equal(6 * (y - normal.Y) / SizeFactor(normal), (fy - fast.Y) / SizeFactor(fast), 6);
         var spec = AmbientBubblePayloads.Build("flash")!;
         var settings = CoreSettings.Current; var saved = settings.BubbleSpeedBoost;
         try
@@ -46,6 +69,18 @@ public sealed class BubblePayloadHostTests
         }
         finally { settings.BubbleSpeedBoost = saved; BubbleOverlay.Stop(); }
     });
+
+    private static double SizeFactor(AmbientBubble b) => b.Spec == null ? 1 : Math.Clamp(1.4 - (b.Size - 150) / 220.0, 0.6, 1.4);
+
+    [Fact]
+    public void SpeedBoostComparisonAccountsForDifferentTriggerSizes()
+    {
+        var normal = AmbientBubble.SpawnChaos(new Random(4), 0, 0, 0, 1920, 1080, 1, new EffectBubbleSpec { SizePx = 130 });
+        var fast = AmbientBubble.SpawnChaos(new Random(4), 0, 0, 0, 1920, 1080, 1, new EffectBubbleSpec { SizePx = 156 }, ambientSpeedBoost: 500);
+        var y = normal.Y; normal.Step(); var fy = fast.Y; fast.Step();
+        Assert.NotEqual(SizeFactor(normal), SizeFactor(fast));
+        Assert.Equal(6 * (y - normal.Y) / SizeFactor(normal), (fy - fast.Y) / SizeFactor(fast), 6);
+    }
 
     [Theory]
     [InlineData(false), InlineData(true)]
@@ -90,6 +125,7 @@ public sealed class BubblePayloadHostTests
 
     private sealed class FeedHost : IMandatoryVideoHost
     {
+        public int FloatingLimit => 1; public int FloatingUp => 0;
         public bool FeedOwnsTheScreen => true;
         public void Show(string path, bool strict) { }
         public double CloseAll() => 0;
