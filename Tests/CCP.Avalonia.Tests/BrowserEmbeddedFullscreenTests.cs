@@ -228,4 +228,111 @@ public sealed class BrowserEmbeddedFullscreenTests
         }
         finally { overlay.IsVisible = false; }
     });
+    // WPF MainWindow.Browser.cs:906-916, 1199: a user exit releases the takeover and the video keeps playing.
+    [Theory]
+    [InlineData("dblclick")]
+    [InlineData("escape")]
+    [InlineData("page-escape")]
+    [InlineData("close")]
+    public Task WebKitDeniedTakeoverUsesFullscreenHostAndRestoresPageOnExit(string exit) => WithShell(false, (shell, page, host, _) =>
+    {
+        var media = ConditioningControlPanel.Services.Browser.BrowserMediaSession.Shared;
+        try
+        {
+            media.ReplaceSession(ConditioningControlPanel.Services.Browser.BrowserMediaSession.MediaOwner.Autonomy, takeover: true);
+            media.OnMediaPlaying(60);
+            var scripts = new List<string>();
+            host.TakeoverFullscreenFallbackOverride = true;
+            host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>(script == WebHostTakeover.FullscreenFallbackScript ? "true" : null); };
+            shell.TakeoverFocusForTest = _ => { };
+            shell.TakeoverFocusDelay = () => Task.CompletedTask;
+            shell.ArmTakeoverGestureRetry(host);
+            shell.OnBrowserMediaMessage("{\"type\":\"fsAsk\"}");
+            shell.OnBrowserMediaMessage("{\"type\":\"fsDenied\",\"activation\":false}");
+            Dispatcher.UIThread.RunJobs();
+            var window = shell.BrowserTakeoverWindow;
+            Assert.NotNull(window);
+            Assert.Single(scripts, s => s == WebHostTakeover.FullscreenFallbackScript);
+            Assert.True(media.IsTakeover);
+            if (exit == "dblclick") host.OnWebMessage("ccp_browser_fullscreen_off");
+            // GameWindow.JustDrop.cs:157-160: the focused page relays Esc/F11 itself (TakeoverFullscreenFallback.test.mjs runs it).
+            else if (exit == "page-escape")
+            {
+                Assert.Contains("'Escape'", WebHostTakeover.FullscreenFallbackScript);
+                Assert.Contains("'F11'", WebHostTakeover.FullscreenFallbackScript);
+                Assert.Contains("ccp_browser_fullscreen_off", WebHostTakeover.FullscreenFallbackScript);
+                host.OnWebMessage("ccp_browser_fullscreen_off");
+            }
+            else if (exit == "escape") window!.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+            else window!.Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(shell.BrowserTakeoverWindow);
+            Assert.Contains(host, page.BrowserContainer.Children);
+            Assert.Contains(scripts, s => s.Contains("__ccpTakeoverFallbackExit"));
+            Assert.False(media.IsTakeover);
+            Assert.True(media.IsPlaying);
+            Assert.Equal(ConditioningControlPanel.Services.Browser.BrowserMediaSession.MediaOwner.User, media.Owner);
+        }
+        finally { media.OnMediaStopped("test"); }
+    });
+
+    [Fact]
+    public Task NativeFullscreenExitLeavesTakeoverToThePage() => WithShell(false, (shell, _, host, _) =>
+    {
+        var media = ConditioningControlPanel.Services.Browser.BrowserMediaSession.Shared;
+        try
+        {
+            media.ReplaceSession(ConditioningControlPanel.Services.Browser.BrowserMediaSession.MediaOwner.Autonomy, takeover: true);
+            host.OnNativeFullscreenEntered();
+            Assert.NotNull(shell.BrowserTakeoverWindow);
+            host.OnWebMessage("ccp_browser_fullscreen_off");
+            Assert.Null(shell.BrowserTakeoverWindow);
+            Assert.True(media.IsTakeover); // the page's own fsExit reports a real fullscreen exit
+        }
+        finally { media.OnMediaStopped("test"); }
+    });
+
+    [Fact]
+    public Task WebKitStopDuringPageSetupRestoresPageAndNeverEnters() => WithShell(false, (shell, page, host, _) =>
+    {
+        var scripts = new List<string>();
+        var setup = new TaskCompletionSource<string?>();
+        host.TakeoverFullscreenFallbackOverride = true;
+        host.ScriptInvoker = script => { scripts.Add(script); return script == WebHostTakeover.FullscreenFallbackScript ? setup.Task : Task.FromResult<string?>(null); };
+        shell.TakeoverFocusForTest = _ => { };
+        shell.TakeoverFocusDelay = () => Task.CompletedTask;
+        shell.ArmTakeoverGestureRetry(host);
+        shell.OnBrowserMediaMessage("{\"type\":\"fsAsk\"}");
+        shell.OnBrowserMediaMessage("{\"type\":\"fsDenied\",\"activation\":false}");
+        shell.OnBrowserMediaMessage("{\"type\":\"fsDenied\",\"activation\":false}");
+        Assert.Single(scripts, s => s == WebHostTakeover.FullscreenFallbackScript);
+        shell.EndWebVideoTakeover();
+        setup.SetResult("true");
+        Dispatcher.UIThread.RunJobs();
+        Assert.Null(shell.BrowserTakeoverWindow);
+        Assert.Contains(host, page.BrowserContainer.Children);
+        Assert.Contains(WebHostTakeover.FullscreenFallbackCleanupScript, scripts);
+    });
+
+    [Fact]
+    public Task WebKitNavigationDuringFocusDelayCancelsRetry() => WithShell(false, (shell, _, host, _) =>
+    {
+        var scripts = new List<string>();
+        var delay = new TaskCompletionSource();
+        host.TakeoverFullscreenFallbackOverride = true;
+        host.ScriptInvoker = script => { scripts.Add(script); return Task.FromResult<string?>("true"); };
+        shell.TakeoverFocusForTest = _ => { };
+        shell.TakeoverFocusDelay = () => delay.Task;
+        shell.ArmTakeoverGestureRetry(host);
+        shell.OnBrowserMediaMessage("{\"type\":\"fsAsk\"}");
+        shell.OnBrowserMediaMessage("{\"type\":\"fsDenied\",\"activation\":false}");
+        host.NewScrolllerEngine()(true);
+        var navigation = new WebViewNavigationStartingEventArgs { Request = new Uri("https://127.0.0.1/next") };
+        host.OnNavigationStarted(null, navigation);
+        Assert.False(navigation.Cancel);
+        delay.SetResult();
+        Dispatcher.UIThread.RunJobs();
+        Assert.DoesNotContain(WebHostTakeover.FullscreenFallbackScript, scripts);
+        Assert.Null(shell.BrowserTakeoverWindow);
+    });
 }

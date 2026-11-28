@@ -29,7 +29,7 @@ public partial class MainShellWindow
     private double? _browserPreFullscreenZoom;
     private DisplayMirror? _browserMirror;
 
-    // A page may report exit, but only the native engine signal can enter fullscreen.
+    // A page may report exit; native signals and the guarded takeover fallback can enter.
     private const string BrowserFullscreenExitScript = @"(function(){
         if(window.__ccpBrowserFsExit)return;
         function changed(){if(document.fullscreenElement||document.webkitFullscreenElement)return;
@@ -47,7 +47,7 @@ public partial class MainShellWindow
         document.addEventListener('dblclick',dbl,true);
     })();";
 
-    private const string BrowserFullscreenCleanupScript = "try { var f=window.__ccpBrowserFsExit; if(f){ document.removeEventListener('fullscreenchange',f.changed); document.removeEventListener('webkitfullscreenchange',f.changed); window.removeEventListener('dblclick',f.dbl,true); document.removeEventListener('dblclick',f.dbl,true); delete window.__ccpBrowserFsExit; } if (document.fullscreenElement) document.exitFullscreen(); else if (document.webkitFullscreenElement) document.webkitExitFullscreen(); } catch (_) {}";
+    private const string BrowserFullscreenCleanupScript = "try { if (window.__ccpTakeoverFallbackExit) window.__ccpTakeoverFallbackExit(); var f=window.__ccpBrowserFsExit; if(f){ document.removeEventListener('fullscreenchange',f.changed); document.removeEventListener('webkitfullscreenchange',f.changed); window.removeEventListener('dblclick',f.dbl,true); document.removeEventListener('dblclick',f.dbl,true); delete window.__ccpBrowserFsExit; } if (document.fullscreenElement) document.exitFullscreen(); else if (document.webkitFullscreenElement) document.webkitExitFullscreen(); } catch (_) {}";
 
     // An engine may complete a queued install after panic, native exit, or navigation.
     private async Task InstallBrowserFullscreenExitScriptAsync(WebHost host)
@@ -69,6 +69,7 @@ public partial class MainShellWindow
 
     private void BrowserFullscreenNavigationStarted()
     {
+        CancelTakeoverGestureRetry();
         _browserNavigationFullscreenSession = _browserFullscreenWindow == null ? null : _browserFullscreenSession;
         ExitBrowserPopoutFullscreen();
     }
@@ -82,12 +83,13 @@ public partial class MainShellWindow
     }
     private void BrowserFullscreenMessage(string message)
     {
-        if (message.Trim().Trim('"') == "ccp_browser_fullscreen_off") ExitBrowserPopoutFullscreen();
+        if (message.Trim().Trim('"') == "ccp_browser_fullscreen_off") ExitBrowserFullscreenByUser();
     }
 
     private void EnterBrowserFullscreen()
     {
         if (_browserFullscreenWindow != null || _browserFullscreenHost is not { } host) return;
+        CancelTakeoverGestureRetry();
         // WPF :2821-2828 RemoteBrowserStopRule.HideBrowser: the remote card refuses page fullscreen unless the
         // page is the controller's own video (#4423).
         if (Named<Border>("RemoteControlOverlay")?.IsVisible == true && !_remoteBrowserVideoActive)
@@ -168,7 +170,7 @@ public partial class MainShellWindow
     {
         if (sender != _browserTakeoverWindow) return;
         _browserTakeoverClosing = true;
-        try { ExitBrowserPopoutFullscreen(); }
+        try { ExitBrowserFullscreenByUser(); }
         finally { _browserTakeoverClosing = false; }
     }
 
@@ -184,7 +186,7 @@ public partial class MainShellWindow
     {
         if (e.Key != Key.Escape && e.Key != Key.F11) return;
         e.Handled = true;
-        ExitBrowserPopoutFullscreen();
+        ExitBrowserFullscreenByUser();
     }
 
     internal void ExitBrowserPopoutFullscreen()
@@ -226,6 +228,7 @@ public partial class MainShellWindow
 
     private void DisposeBrowserFullscreen()
     {
+        CancelTakeoverGestureRetry();
         ExitBrowserPopoutFullscreen();
         if (_browserFullscreenHost is not { } host) return;
         host.NativeFullscreenEntered -= EnterBrowserFullscreen;

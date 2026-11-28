@@ -121,13 +121,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                         break;
                     case "videoStarted": media.OnMediaPlaying(0); break;
                     case "videoEnded":
+                        CancelTakeoverGestureRetry();
                         media.OnMediaStopped("takeover-injection");
                         ExitBrowserPopoutFullscreen();
                         break;
                     case "videoDuration": media.OnMediaPlaying(Num("seconds")); break;
-                    case "fsDenied": Log.Warning("Web takeover fullscreen refused by the page: {Reason}", Str("reason")); break;
+                    case "fsAsk": NoteTakeoverFullscreenAsk(); break;
+                    case "fsDenied":
+                        Log.Warning("Web takeover fullscreen refused by the page: {Reason}", Str("reason"));
+                        HandleTakeoverFullscreenDenied(JsonSerializer.Serialize(o));
+                        break;
                     // Ends the takeover only; the page may keep playing for the user.
                     case "fsExit":
+                        CancelTakeoverGestureRetry();
                         media.OnFullscreenExited();
                         ExitBrowserPopoutFullscreen();
                         break;

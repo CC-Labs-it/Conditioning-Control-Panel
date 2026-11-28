@@ -61,10 +61,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 if (!window.__ccpMuted) video.muted = false;
                 const goFullscreen = () => {
                     if (window._ccpTakeoverStopped) return;
+                    post({ type: 'fsAsk' });
                     if (video.requestFullscreen) {
                         const request = video.requestFullscreen();
                         if (request && request.catch) request.catch(err => post({ type: 'fsDenied',
-                            reason: String((err && (err.name || err.message)) || err).slice(0, 60) }));
+                            reason: String((err && ((err.name || '') + ': ' + (err.message || ''))) || err).slice(0, 90),
+                            connected: video.isConnected, visibility: document.visibilityState,
+                            activation: !!(navigator.userActivation && navigator.userActivation.isActive) }));
                     } else if (video.webkitRequestFullscreen) video.webkitRequestFullscreen();
                     else if (video.msRequestFullscreen) video.msRequestFullscreen();
                 };
@@ -73,6 +76,73 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 });
             })();
             """;
+
+        // WPF MainWindow.Browser.cs:2999-3018. Never restart a stopped or ended video.
+        internal const string FullscreenRecheckScript = """
+            (function() {
+                if (window._ccpTakeoverStopped || document.fullscreenElement || document.webkitFullscreenElement) return;
+                var v = document.querySelector('video');
+                if (!v || v.ended || !v.requestFullscreen) return;
+                try {
+                    var p = v.requestFullscreen();
+                    if (p && p.catch) p.catch(function(err) {
+                        try {
+                            var message = JSON.stringify({ type: 'fsDenied',
+                                reason: 'recheck ' + String((err && ((err.name || '') + ': ' + (err.message || ''))) || err).slice(0, 80),
+                                activation: !!(navigator.userActivation && navigator.userActivation.isActive), focus: document.hasFocus() });
+                            if (typeof window.invokeCSharpAction === 'function') window.invokeCSharpAction(message);
+                            else window.chrome.webview.postMessage(message);
+                        } catch (_) {}
+                    });
+                } catch (_) {}
+            })();
+            """;
+
+        // WebKit has no gesture-evaluation API. Present the same video in the fullscreen host.
+        // The marker restores its position and inline style when fullscreen ends.
+        internal const string FullscreenFallbackScript = """
+            (function() {
+                if (window._ccpTakeoverStopped !== false || document.fullscreenElement || document.webkitFullscreenElement || window.__ccpTakeoverFallbackExit) return false;
+                var v = document.querySelector('video');
+                if (!v || !v.isConnected || v.ended || !v.parentNode || !document.body) return false;
+                var parent = v.parentNode, marker = document.createComment('ccp video');
+                var style = v.getAttribute('style'), playing = !v.paused;
+                var overlay = document.createElement('div');
+                overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:black;display:flex;align-items:center;justify-content:center';
+                // The page holds focus here, so the window never sees Esc/F11 (as GameWindow.JustDrop.cs:157-160).
+                var key = function(e) {
+                    if (e.key !== 'Escape' && e.key !== 'F11' && e.keyCode !== 27) return;
+                    e.preventDefault(); e.stopImmediatePropagation();
+                    try {
+                        if (typeof window.invokeCSharpAction === 'function') window.invokeCSharpAction('ccp_browser_fullscreen_off');
+                        else window.chrome.webview.postMessage('ccp_browser_fullscreen_off');
+                    } catch (_) {}
+                };
+                var restore = function() {
+                    if (!window.__ccpTakeoverFallbackExit) return;
+                    delete window.__ccpTakeoverFallbackExit;
+                    window.removeEventListener('keydown', key, true);
+                    if (marker.parentNode) marker.parentNode.replaceChild(v, marker);
+                    else if (parent.isConnected) parent.appendChild(v);
+                    if (style === null) v.removeAttribute('style'); else v.setAttribute('style', style);
+                    overlay.remove();
+                };
+                try {
+                    parent.insertBefore(marker, v);
+                    document.body.appendChild(overlay);
+                    window.__ccpTakeoverFallbackExit = restore;
+                    window.addEventListener('keydown', key, true);
+                    overlay.appendChild(v);
+                    ['position','inset','width','height','max-width','max-height','object-fit','transform','z-index'].forEach(function(k, i) {
+                        v.style.setProperty(k, ['relative','auto','100%','100%','100%','100%','contain','none','auto'][i], 'important');
+                    });
+                    if (playing && v.paused) { var p = v.play(); if (p && p.catch) p.catch(function() {}); }
+                    return true;
+                } catch (_) { restore(); if (marker.parentNode) marker.remove(); overlay.remove(); return false; }
+            })();
+            """;
+
+        internal const string FullscreenFallbackCleanupScript = "if (window.__ccpTakeoverFallbackExit) window.__ccpTakeoverFallbackExit();";
 
         // WPF MainWindow.Browser.cs:1017-1072. Panic also cancels polling and late callbacks.
         internal const string PlaylistAutoPlayScript = """

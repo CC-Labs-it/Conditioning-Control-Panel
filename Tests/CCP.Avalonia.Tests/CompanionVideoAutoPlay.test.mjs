@@ -60,15 +60,15 @@ test('Esc or F11 leaving fullscreen posts fsExit once, only after fullscreen was
     p.document.fullscreenElement = null;
     await p.run();
     p.fire('fullscreenchange');
-    assert.deepEqual(p.posts, []);
+    assert.deepEqual(p.posts, ['fsAsk']);
     p.document.fullscreenElement = p.video;
     p.fire('fullscreenchange');
     p.document.fullscreenElement = null;
     p.fire('webkitfullscreenchange');
-    assert.deepEqual(p.posts, ['fsExit']);
+    assert.deepEqual(p.posts, ['fsAsk', 'fsExit']);
     p.fire('fullscreenchange');
     p.listeners.ended();
-    assert.deepEqual(p.posts, ['fsExit']);
+    assert.deepEqual(p.posts, ['fsAsk', 'fsExit']);
 });
 
 test('blocked playback requests fullscreen once the user starts it and keeps the saved mute', async () => {
