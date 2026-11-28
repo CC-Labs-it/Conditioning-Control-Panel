@@ -11,8 +11,12 @@ function page() {
     video.isConnected = true; video.ended = false; video.paused = false;
     video.attributes.style = 'color:red';
     const document = { body, querySelector: () => video, createComment: () => node(), createElement: () => node() };
-    const window = { _ccpTakeoverStopped: false };
-    return { body, parent, video, window, document, run: () => runInNewContext(script, { window, document }) };
+    const listeners = {}, posts = [];
+    const window = { _ccpTakeoverStopped: false, invokeCSharpAction: m => posts.push(m),
+        addEventListener(t, f, c) { if (c === true) listeners[t] = f; },
+        removeEventListener(t, f, c) { if (c === true && listeners[t] === f) delete listeners[t]; } };
+    const key = k => { let stopped = false; listeners.keydown?.({ key: k, preventDefault() {}, stopImmediatePropagation() { stopped = true; } }); return stopped; };
+    return { body, parent, video, window, document, posts, key, run: () => runInNewContext(script, { window, document }) };
 }
 function node() {
     return {
@@ -47,4 +51,15 @@ test('fallback refuses stopped, ended, disconnected, and already fullscreen page
         assert.equal(p.run(), false);
         assert.equal(p.video.parentNode, p.parent);
     }
+});
+test('Esc and F11 inside the page leave the fallback, which the page keeps focused', () => {
+    const p = page();
+    assert.equal(p.run(), true);
+    assert.equal(p.key('a'), false);
+    assert.equal(p.key('Escape'), true);
+    assert.equal(p.key('F11'), true);
+    assert.deepEqual(p.posts, ['ccp_browser_fullscreen_off', 'ccp_browser_fullscreen_off']);
+    p.window.__ccpTakeoverFallbackExit();
+    assert.equal(p.key('Escape'), false);
+    assert.equal(p.posts.length, 2);
 });

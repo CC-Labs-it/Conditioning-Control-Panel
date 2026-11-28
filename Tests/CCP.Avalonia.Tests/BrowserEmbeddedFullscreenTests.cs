@@ -232,6 +232,7 @@ public sealed class BrowserEmbeddedFullscreenTests
     [Theory]
     [InlineData("dblclick")]
     [InlineData("escape")]
+    [InlineData("page-escape")]
     [InlineData("close")]
     public Task WebKitDeniedTakeoverUsesFullscreenHostAndRestoresPageOnExit(string exit) => WithShell(false, (shell, page, host, _) =>
     {
@@ -254,6 +255,14 @@ public sealed class BrowserEmbeddedFullscreenTests
             Assert.Single(scripts, s => s == WebHostTakeover.FullscreenFallbackScript);
             Assert.True(media.IsTakeover);
             if (exit == "dblclick") host.OnWebMessage("ccp_browser_fullscreen_off");
+            // GameWindow.JustDrop.cs:157-160: the focused page relays Esc/F11 itself (TakeoverFullscreenFallback.test.mjs runs it).
+            else if (exit == "page-escape")
+            {
+                Assert.Contains("'Escape'", WebHostTakeover.FullscreenFallbackScript);
+                Assert.Contains("'F11'", WebHostTakeover.FullscreenFallbackScript);
+                Assert.Contains("ccp_browser_fullscreen_off", WebHostTakeover.FullscreenFallbackScript);
+                host.OnWebMessage("ccp_browser_fullscreen_off");
+            }
             else if (exit == "escape") window!.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
             else window!.Close();
             Dispatcher.UIThread.RunJobs();

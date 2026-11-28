@@ -109,9 +109,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                 var style = v.getAttribute('style'), playing = !v.paused;
                 var overlay = document.createElement('div');
                 overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:black;display:flex;align-items:center;justify-content:center';
+                // The page holds focus here, so the window never sees Esc/F11 (as GameWindow.JustDrop.cs:157-160).
+                var key = function(e) {
+                    if (e.key !== 'Escape' && e.key !== 'F11' && e.keyCode !== 27) return;
+                    e.preventDefault(); e.stopImmediatePropagation();
+                    try {
+                        if (typeof window.invokeCSharpAction === 'function') window.invokeCSharpAction('ccp_browser_fullscreen_off');
+                        else window.chrome.webview.postMessage('ccp_browser_fullscreen_off');
+                    } catch (_) {}
+                };
                 var restore = function() {
                     if (!window.__ccpTakeoverFallbackExit) return;
                     delete window.__ccpTakeoverFallbackExit;
+                    window.removeEventListener('keydown', key, true);
                     if (marker.parentNode) marker.parentNode.replaceChild(v, marker);
                     else if (parent.isConnected) parent.appendChild(v);
                     if (style === null) v.removeAttribute('style'); else v.setAttribute('style', style);
@@ -121,6 +131,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls
                     parent.insertBefore(marker, v);
                     document.body.appendChild(overlay);
                     window.__ccpTakeoverFallbackExit = restore;
+                    window.addEventListener('keydown', key, true);
                     overlay.appendChild(v);
                     ['position','inset','width','height','max-width','max-height','object-fit','transform','z-index'].forEach(function(k, i) {
                         v.style.setProperty(k, ['relative','auto','100%','100%','100%','100%','contain','none','auto'][i], 'important');
