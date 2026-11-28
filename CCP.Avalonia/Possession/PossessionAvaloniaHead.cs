@@ -162,6 +162,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             list.Add(new DropEffect());
             list.Add(new ToggleLieEffect());
             list.Add(new CrackEffect());
+            list.Add(new XpDrainEffect());
             list.Add(new RelabelEffect());
             list.Add(new MisrouteEffect());
             list.Add(new ReorderDoorsEffect());
@@ -192,7 +193,7 @@ namespace ConditioningControlPanel.Avalonia.Possession
             Settings = () => CoreSettings.Service?.Current,
             MainHost = () => (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow as IPossessionHost,
             Attribution = AttributionFor,
-            StopReleasedEffects = host => DokiDialogEffect.StopFades(host),
+            StopReleasedEffects = host => { try { DokiDialogEffect.StopFades(host); } finally { XpDrainEffect.StopForHost(host); } },
             Pointer = () => LastPointer(),
             BoundsOf = (host, el) => host is IAvaloniaPossessionHost h && el is Control c && h.BoundsOnGhostLayer(c) is { } r
                 ? (r.X, r.Y, r.Width, r.Height)
