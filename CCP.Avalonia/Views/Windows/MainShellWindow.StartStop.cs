@@ -152,6 +152,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF MainWindow.StartStop.cs:365-367: Audio Only forces the existing layered bed.</summary>
         internal void OnEngineStarted()
         {
+            Possession.PossessionAvaloniaHead.Warden?.ResumeForEngineStart();
             var settings = CoreSettings.Current;
             Services.EngineCrashSentinel.Mark(
                 $"started {System.DateTime.Now:yyyy-MM-dd HH:mm:ss} | flash {settings.FlashFrequency}/min x{settings.SimultaneousImages}" +
@@ -173,10 +174,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary><see cref="CoreEngine.StoppedHook"/>: the head half of StopEngineCore.</summary>
         internal void OnEngineStopped()
         {
+            StopVideoEnhanceNudgeForPanic(this);
             // Direct Core stops (a remote panic) also freeze the session clock. A session's own Stop
             // has already cleared IsRunning by the time it stops the engine, so this is a no-op there.
             App.Sessions?.Pause();
-            Named<Views.Tabs.SettingsTabView>("SettingsTab")?.StopBrowserEnhancement();
+            CloseDeeperEditorErrors();
+            if (Named<Views.Tabs.SettingsTabView>("SettingsTab") is { } settingsTab) { settingsTab.StopBrowserDiscovery(); settingsTab.StopBrowserEnhancement(); }
             // WPF StartStop.cs:577-580 ExitBrowserFullscreenForTeardown (#952): a topmost fullscreen browser
             // left up by a session's end hides the completion dialog behind it (#4423).
             ExitBrowserPopoutFullscreen();

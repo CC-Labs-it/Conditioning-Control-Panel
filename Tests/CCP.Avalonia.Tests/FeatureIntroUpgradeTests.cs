@@ -119,7 +119,7 @@ public sealed class FeatureIntroUpgradeTests
         Assert.False(string.IsNullOrWhiteSpace(notes));
         Assert.Contains(CoreReleaseContent.AppVersion, notes);
         Assert.Equal(CoreReleaseContent.PatchNotes, notes);
-        Assert.True(news.FindControl<Button>("BtnTour")!.IsVisible);
+        Assert.False(news.FindControl<Button>("BtnTour")!.IsVisible);
         Assert.Equal("Show me around (60s)", news.FindControl<TextBlock>("TourLabel")!.Text);
         FeatureIntroPopup.ShowWhenStartupSettles("lockdown", shell, "play");
         Assert.True(StartupLadder.Inbox.Contains("intro:lockdown"));
@@ -346,7 +346,7 @@ public sealed class FeatureIntroUpgradeTests
         Assert.False(LadderBusy());
     });
     [Fact]
-    public Task TourButtonStartsUpgradeTourAfterModalCloses() => Run("old-version", async shell =>
+    public Task RetiredTourButtonDoesNotStartUpgradeTour() => Run("old-version", async shell =>
     {
         global::ConditioningControlPanel.Avalonia.Tours.TutorialHead.Seed();
         global::ConditioningControlPanel.Avalonia.Tours.TutorialHead.ResetForTests();
@@ -358,7 +358,7 @@ public sealed class FeatureIntroUpgradeTests
         await showing;
         await Step();
         Assert.False(MainShellWindow.IsStartupDialogShowing);
-        Assert.NotNull(global::ConditioningControlPanel.Avalonia.Tours.TutorialHead.ShellOverlay);
+        Assert.Null(global::ConditioningControlPanel.Avalonia.Tours.TutorialHead.ShellOverlay);
         global::ConditioningControlPanel.Avalonia.Tours.TutorialHead.OnPanic();
     });
     [Theory]

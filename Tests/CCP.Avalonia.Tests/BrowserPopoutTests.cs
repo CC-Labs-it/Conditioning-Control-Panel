@@ -235,6 +235,30 @@ public sealed class BrowserPopoutTests
         Assert.Same(host, popout.Content);
     });
 
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public Task RemoteVideoStopReturnsPopoutOnlyWhenCardIsVisible(bool cardVisible, bool panic) => WithShell((shell, page, host) =>
+    {
+        host.ScriptInvoker = _ => Task.FromResult<string?>(null);
+        host.NewScrolllerEngine()(true);
+        host.NavigationInvoker = _ => true;
+        var overlay = shell.Named<Border>("RemoteControlOverlay")!;
+        overlay.IsVisible = cardVisible;
+        Click(page, "BtnPopOutBrowser");
+        var popout = shell.BrowserPopoutWindow!;
+        Assert.Null(shell.PlayHypnotubeFromRemote("https://127.0.0.1/video/example.html"));
+        if (panic) PanicSurfaces.All.Single(x => x.Id == "browser-media").Stop(shell);
+        else shell.StopBrowserVideoFromRemote();
+        if (cardVisible)
+        {
+            Assert.Null(shell.BrowserPopoutWindow);
+            Assert.Contains(host, page.FindControl<Grid>("BrowserContainer")!.Children);
+        }
+        else Assert.Same(popout, shell.BrowserPopoutWindow);
+    });
+
     // WPF MainWindow.Browser.cs:2870-2877 RemoteBrowserStopRule: the remote card refuses page fullscreen (#4423).
     [Fact]
     public Task RemoteControlCardRefusesPopoutFullscreen() => WithShell((shell, page, host) =>
