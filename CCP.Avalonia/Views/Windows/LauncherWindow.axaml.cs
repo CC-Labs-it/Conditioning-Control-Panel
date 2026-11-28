@@ -103,6 +103,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             HookUpdateChip();
             HookVeil();
             HookFx();
+            HookResizeEdges();
             HookPress(PanelCta);
             HookPress(SpChip);
             HookLinks();
@@ -323,6 +324,32 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 Dispatcher.UIThread.Post(RequestClose);
             }
             base.OnClosing(e);
+        }
+
+        // WPF LauncherWindow.xaml:29: the undecorated launcher has a five-pixel resize border.
+        // Hand the gesture to the window manager, as the main shell does.
+        internal WindowEdge? LastResizeEdge { get; private set; }
+        private WindowEdge? _resizeCursorEdge;
+
+        private WindowEdge? ResizeEdgeFor(PointerEventArgs e) =>
+            WindowState == WindowState.Normal && CanResize ? MainShellWindow.EdgeAt(e.GetPosition(this), Bounds.Size) : null;
+
+        private void HookResizeEdges()
+        {
+            AddHandler(PointerMovedEvent, (_, e) =>
+            {
+                var edge = ResizeEdgeFor(e);
+                if (edge == _resizeCursorEdge) return;
+                _resizeCursorEdge = edge;
+                Cursor = edge is { } x ? new Cursor(MainShellWindow.CursorFor(x)) : null;
+            }, RoutingStrategies.Tunnel);
+            AddHandler(PointerPressedEvent, (_, e) =>
+            {
+                if (ResizeEdgeFor(e) is not { } edge || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+                LastResizeEdge = edge;
+                e.Handled = true;
+                BeginResizeDrag(edge, e);
+            }, RoutingStrategies.Tunnel);
         }
 
         private void TitleBar_PointerPressed(object? sender, PointerPressedEventArgs e)
