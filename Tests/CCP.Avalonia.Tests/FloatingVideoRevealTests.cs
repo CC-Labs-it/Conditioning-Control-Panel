@@ -17,6 +17,52 @@ public class FloatingVideoRevealTests
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).SetupWithoutStarting();
     }
 
+    [Theory]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Full, true)]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Reduced, false)]
+    [InlineData(ConditioningControlPanel.Models.MotionLevel.Off, false)]
+    public async Task Added_window_reveals_from_its_centre_only_at_full_motion(ConditioningControlPanel.Models.MotionLevel level, bool animates)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            EnsureApp();
+            var settings = ConditioningControlPanel.CoreSettings.Current;
+            var saved = (settings.MotionLevel, settings.GentleVisuals);
+            var probe = ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe;
+            settings.MotionLevel = level;
+            settings.GentleVisuals = false;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = () => true;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+            var window = new Window { Width = 400, Height = 200, Position = new PixelPoint(100, 200), ShowActivated = false };
+            var reveal = new FloatingVideoReveal(window, animate: true);
+            try
+            {
+                reveal.Present();
+                Assert.Equal(animates, reveal.IsAnimating);
+                Assert.Equal(animates ? 280 : 400, window.Width, 3);
+                Assert.Equal(animates ? 140 : 200, window.Height, 3);
+                if (animates)
+                {
+                    Assert.Equal(new PixelPoint(160, 230), window.Position);
+                    reveal.RevealAt(130);
+                    Assert.Equal(385, window.Width, 3);
+                    reveal.RevealAt(260);
+                    Assert.Equal(400, window.Width, 3);
+                    Assert.Equal(new PixelPoint(100, 200), window.Position);
+                    Assert.False(reveal.IsAnimating);
+                }
+            }
+            finally
+            {
+                reveal.Close();
+                (settings.MotionLevel, settings.GentleVisuals) = saved;
+                ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = probe;
+                ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+            }
+            return Task.CompletedTask;
+        });
+    }
+
     [Fact]
     public async Task No_pixels_or_clicks_until_a_frame_and_stop_cannot_be_undone_by_a_late_frame()
     {

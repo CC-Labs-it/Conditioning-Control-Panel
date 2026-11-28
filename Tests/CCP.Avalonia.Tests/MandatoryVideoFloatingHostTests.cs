@@ -44,9 +44,10 @@ public sealed class MandatoryVideoFloatingHostTests
         public bool IsSeekable => true;
         public bool HasVideo => true;
         public bool Paused, Stopped;
+        public Action? BeforeStop;
         public bool? AudioOff;
         public void SetPause(bool paused) => Paused = paused;
-        public void Stop() => Stopped = true;
+        public void Stop() { BeforeStop?.Invoke(); Stopped = true; }
         public void Dispose() { }
         public readonly List<bool> AudioCalls = new();
         public void SetAudioOff(bool off) { AudioOff = off; AudioCalls.Add(off); }
@@ -96,6 +97,41 @@ public sealed class MandatoryVideoFloatingHostTests
             }
             return Task.CompletedTask;
         });
+
+    [Fact]
+    public Task Panic_stops_an_added_window_reveal_on_the_same_tick() => Run((o, decoders) =>
+    {
+        var settings = CoreSettings.Current;
+        var oldLevel = settings.MotionLevel;
+        var oldProbe = ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe;
+        var previous = CoreEngine.Video;
+        try
+        {
+            settings.MotionLevel = ConditioningControlPanel.Models.MotionLevel.Full;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = () => true;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+            CoreEngine.Video = o.Scheduler;
+            Assert.True(o.TryFloatingTrigger(userInitiated: true));
+            var joined = Assert.Single(o.Floaters);
+            var reveal = Assert.IsType<FloatingVideoReveal>(joined.Surface.Reveal);
+            Assert.True(reveal.IsAnimating);
+            var stoppedBeforeDecoder = false;
+            decoders[^1].BeforeStop = () => stoppedBeforeDecoder = !reveal.IsAnimating;
+            PanicSurfaces.All.Single(s => s.Id == "engine").Stop(null);
+            Assert.True(stoppedBeforeDecoder);
+            Assert.False(reveal.IsAnimating);
+            Assert.False(joined.Window.IsVisible);
+            reveal.RevealAt(260);
+            Assert.False(joined.Window.IsVisible);
+        }
+        finally
+        {
+            CoreEngine.Video = previous;
+            settings.MotionLevel = oldLevel;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.OsProbe = oldProbe;
+            ConditioningControlPanel.Avalonia.Platform.UiMotionPreference.CacheStamp = long.MinValue;
+        }
+    });
 
     [Fact]
     public Task Joined_blur_uses_its_own_frames_and_panic_releases_it() => Run((o, decoders) =>

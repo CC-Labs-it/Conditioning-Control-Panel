@@ -607,7 +607,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 // WPF: a floating window never takes focus from what is under it (panic and Esc reach
                 // it through the global hooks), and it moves with the mouse.
                 w.ShowActivated = false;
-                PlaceFloating(w, screen, _random, AllSurfaces.Select(x => x.Window).ToList());
+                PlaceFloating(w, screen, _random, AllSurfaces.ToList(), inst != null);
                 var frame = DecorateFloating(w);
                 // WPF FloatingInstances.cs:258: a press on a window takes the sound.
                 w.AddHandler(InputElement.PointerPressedEvent, (_, _) => TouchFloating(w),
@@ -681,7 +681,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 else if (!_closing) EndPrimary("window closed");
             };
             WireChaosTimerStacking(w);
-            var reveal = floating ? new FloatingVideoReveal(w, inst == null ? HoldRevealAudio : held => { inst.Held = held; ApplyInstanceVolume(inst); }) : null;
+            var reveal = floating ? new FloatingVideoReveal(w, inst == null ? HoldRevealAudio : held => { inst.Held = held; ApplyInstanceVolume(inst); }, animate: inst != null) : null;
             if (!floating)
             {
                 w.Show();
@@ -1054,16 +1054,34 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF FloatRectOn: MandatoryVideoFloatingSizePercent of the work area's width, 16:9, at a
         /// random spot wholly on it (Core FloatingRect, in the area's DIPs). No screen known (headless):
         /// the window's primary screen.</summary>
-        internal static void PlaceFloating(Window w, global::Avalonia.Platform.Screen? screen, Random random, IReadOnlyList<Window>? others = null)
+        internal static void PlaceFloating(Window w, global::Avalonia.Platform.Screen? screen, Random random, IReadOnlyList<Surface>? others = null, bool joining = false)
         {
             screen ??= w.Screens.Primary ?? w.Screens.All.FirstOrDefault();
             if (screen == null) return;
             var area = screen.WorkingArea;
             var scale = screen.Scaling > 0 ? screen.Scaling : 1;
-            // WPF FloatingInstances.cs:519: never exactly on a window already up (its current spot, in this area's DIPs).
-            var taken = others?.Select(o => ((int)((o.Position.X - area.X) / scale), (int)((o.Position.Y - area.Y) / scale), (int)o.Width, (int)o.Height)).ToList();
+            // Avoid both a revealing window's present position and its final position. Also reserve
+            // the new window's initial inset, so two quick joins do not start at the same spot.
+            var areaW = (int)(area.Width / scale);
+            var areaH = (int)(area.Height / scale);
+            var taken = new List<(int X, int Y, int W, int H)>();
+            var size = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.ClampSizePercent(CoreSettings.Current.MandatoryVideoFloatingSizePercent);
+            var plannedW = Math.Min(areaW, Math.Max(ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.MinWidth, areaW * size / 100));
+            var plannedH = plannedW * 9 / 16;
+            if (plannedH > areaH) { plannedH = areaH; plannedW = Math.Min(areaW, plannedH * 16 / 9); }
+            var insetX = joining && global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level == ConditioningControlPanel.Models.MotionLevel.Full ? (int)Math.Round(plannedW * .15) : 0;
+            var insetY = joining && global::ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.Level == ConditioningControlPanel.Models.MotionLevel.Full ? (int)Math.Round(plannedH * .15) : 0;
+            if (others != null) foreach (var other in others)
+            {
+                var pos = other.Window.Position;
+                var target = other.Reveal?.TargetPosition ?? pos;
+                int px = (int)((pos.X - area.X) / scale), py = (int)((pos.Y - area.Y) / scale);
+                taken.Add((px, py, 0, 0));
+                taken.Add((px - insetX, py - insetY, 0, 0));
+                taken.Add(((int)((target.X - area.X) / scale), (int)((target.Y - area.Y) / scale), 0, 0));
+            }
             var (x, y, width, height) = ConditioningControlPanel.Services.Video.MandatoryVideoPresentation.FloatingRect(
-                (int)(area.Width / scale), (int)(area.Height / scale), random, CoreSettings.Current.MandatoryVideoFloatingSizePercent, taken);
+                areaW, areaH, random, CoreSettings.Current.MandatoryVideoFloatingSizePercent, taken);
             w.WindowStartupLocation = WindowStartupLocation.Manual;
             w.Position = new PixelPoint(area.X + (int)Math.Round(x * scale), area.Y + (int)Math.Round(y * scale));
             w.Width = width;

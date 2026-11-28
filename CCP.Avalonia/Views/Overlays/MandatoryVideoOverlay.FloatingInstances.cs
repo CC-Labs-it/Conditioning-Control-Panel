@@ -375,6 +375,8 @@ internal sealed partial class MandatoryVideoOverlay
     {
         if (f.Closed) return;
         f.Closed = true;
+        try { f.Surface?.Reveal?.Cancel(); } // stop animation before joining a decoder thread
+        catch (Exception ex) { Log.Debug("VideoService: floating reveal cancel failed - {Error}", ex.Message); }
         _floaters.Remove(f);
         f.Watch?.Stop();
         f.Fade?.Dispose();
@@ -402,7 +404,6 @@ internal sealed partial class MandatoryVideoOverlay
             x.Video.Source = null;
             x.Fill.Source = null;
             x.Fill.IsVisible = x.Scrim.IsVisible = false;
-            x.Reveal?.Cancel();
             x.Window.Close();
         }
         f.Sink?.Free();
