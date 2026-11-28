@@ -1,5 +1,5 @@
 {
-  "chaos_last_breath_announce": "⏱ last breath x{0:0}",
+  "chaos_last_breath_announce": "last breath x{0:0}",
   "chaos_no_focus_announce": "NO FOCUS TO DEFUSE",
   "chaos_unleashed_announce": "UNLEASHED",
   "mod_art_frame_surface_railChip": "Rail chip", "mod_art_frame_surface_railCard": "Rail launcher", "mod_art_frame_surface_playCard": "Play card header", "mod_art_frame_surface_playCardTall": "Play card header (tall)", "mod_art_frame_surface_loomStrip": "Loom strip", "mod_art_frame_surface_playHero": "Play hero banner", "mod_art_frame_surface_pageHeader": "Page header", "mod_art_frame_surface_intakeStrip": "Intake strip",

@@ -775,16 +775,16 @@ public sealed class ChaosRunHostTests
     });
 
     [Theory]
-    [InlineData("en", "⏱ last breath x3")]
-    [InlineData("de", "⏱ letzter Atemzug x3")]
-    [InlineData("es", "⏱ último aliento x3")]
-    [InlineData("fr", "⏱ dernier souffle x3")]
-    [InlineData("it", "⏱ ultimo respiro x3")]
-    [InlineData("ja", "⏱ 最後のひと息 x3")]
-    [InlineData("ko", "⏱ 마지막 숨결 x3")]
-    [InlineData("pt-BR", "⏱ último suspiro x3")]
-    [InlineData("ru", "⏱ последнее дыхание x3")]
-    [InlineData("zh-CN", "⏱ 最后一息 x3")]
+    [InlineData("en", "last breath x3")]
+    [InlineData("de", "letzter Atemzug x3")]
+    [InlineData("es", "último aliento x3")]
+    [InlineData("fr", "dernier souffle x3")]
+    [InlineData("it", "ultimo respiro x3")]
+    [InlineData("ja", "最後のひと息 x3")]
+    [InlineData("ko", "마지막 숨결 x3")]
+    [InlineData("pt-BR", "último suspiro x3")]
+    [InlineData("ru", "последнее дыхание x3")]
+    [InlineData("zh-CN", "最后一息 x3")]
     public Task Last_breath_announces_and_panic_clears_it(string language, string expected) => WithFreshRun(() =>
     {
         bool enabled = CoreSettings.Current.ChaosAnnouncerEnabled;

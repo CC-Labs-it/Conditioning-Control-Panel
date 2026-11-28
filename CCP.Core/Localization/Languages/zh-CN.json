@@ -1,5 +1,5 @@
 {
-  "chaos_last_breath_announce": "⏱ 最后一息 x{0:0}",
+  "chaos_last_breath_announce": "最后一息 x{0:0}",
   "chaos_no_focus_announce": "专注不足，无法拆除",
   "chaos_unleashed_announce": "释放",
   "mod_art_frame_surface_railChip": "侧栏卡片", "mod_art_frame_surface_railCard": "侧栏启动器", "mod_art_frame_surface_playCard": "游戏卡片标题", "mod_art_frame_surface_playCardTall": "游戏卡片标题（高）", "mod_art_frame_surface_loomStrip": "Loom横幅", "mod_art_frame_surface_playHero": "游戏主横幅", "mod_art_frame_surface_pageHeader": "页面标题", "mod_art_frame_surface_intakeStrip": "入门横幅",
