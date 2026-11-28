@@ -107,6 +107,44 @@ public sealed class TubePriorityTypewriterTests
         return Task.CompletedTask;
     });
 
+    // WPF Speech.cs:728-742: the microphone prompt takes over from a typing line.
+    [Fact]
+    public Task ListeningBubbleCancelsPriorityTypingAndStaleFrames() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        ChatThresholdLinksTests.Setup();
+        var previous = CoreSettings.ServiceProvider;
+        var settings = new SettingsService();
+        CoreSettings.ServiceProvider = () => settings;
+        AvatarTubeWindow? tube = null;
+        try
+        {
+            settings.Current.AvatarEnabled = true;
+            settings.Current.AvatarMuted = false;
+            tube = new AvatarTubeWindow(null);
+            tube.Show();
+            var text = tube.FindControl<TextBlock>("TxtSpeech")!;
+            tube.GigglePriority("wake acknowledgement", playSound: false);
+            var staleFrame = Assert.IsType<Action>(tube.TypewriterFrame);
+            staleFrame();
+            Assert.Equal("w", text.Text);
+
+            tube.ShowListeningBubble("listening");
+            Assert.True(tube.HasBubbleUp);
+            Assert.Null(tube.TypewriterFrame);
+            Assert.Equal("listening", text.Text);
+            for (var i = 0; i < 30; i++) staleFrame();
+            Assert.Equal("listening", text.Text);
+            tube.HideListeningBubble();
+            Assert.False(tube.HasBubbleUp);
+        }
+        finally
+        {
+            try { tube?.Close(); }
+            finally { CoreSettings.ServiceProvider = previous; }
+        }
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task PriorityTypingRestoresLinksAndPanicCancelsStaleFrames() => AvaloniaTestDispatcher.RunAsync(() =>
     {
