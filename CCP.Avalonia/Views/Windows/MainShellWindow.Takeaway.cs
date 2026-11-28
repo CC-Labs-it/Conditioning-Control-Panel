@@ -85,7 +85,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             _takeawayMoreCount = Math.Max(0, tray.Children.Count - pinned);
             if (_takeawayMoreCount > 0)
             {
-                _takeawayMoreLabel = new TextBlock { Text = TakeawayText.More(_takeawayMoreCount, false), VerticalAlignment = VerticalAlignment.Center };
+                _takeawayMoreLabel = new TextBlock { Text = TakeawayText.More(_takeawayMoreCount, false), FontSize = 11.5, FontWeight = FontWeight.Bold, VerticalAlignment = VerticalAlignment.Center };
+                _takeawayMoreLabel.Bind(TextBlock.ForegroundProperty, _takeawayMoreLabel.GetResourceObservable("PinkBrush"));
                 var more = TakeawayChip("SdTakeawayChipAccent", () => SetTakeawayTrayOpen(!_takeawayTrayOpen));
                 more.Name = "TakeawayMore"; more.Classes.Add("takeaway-affordance"); more.Child = _takeawayMoreLabel;
                 ToolTip.SetTip(more, Loc.Get("tooltip_takeaway_more"));
@@ -97,8 +98,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 var door = TakeawayChip("SdTakeawayChipDoor", () => { if (JustDropService.DoorAvailable) OpenJustDrop(); });
                 TakeawayTab?.PrepareChipFx(door); // WPF MainWindow.Takeaway.cs:499
                 door.Name = "TakeawayDoor"; door.Classes.Add("takeaway-affordance");
-                var line = Line(); var plus = IconGlyph.Of(IconKind.Add, size: 15); plus.Margin = new Thickness(0, 0, 6, 0); line.Children.Add(plus);
-                line.Children.Add(new TextBlock { Text = Loc.Get("sd_takeaway_order"), FontWeight = FontWeight.Bold, FontSize = 11.5 });
+                var line = Line(); var plus = IconGlyph.Of(IconKind.Add, brush: "PinkBrush", size: 15); plus.Margin = new Thickness(0, 0, 6, 0); line.Children.Add(plus);
+                var label = new TextBlock { Text = Loc.Get("sd_takeaway_order"), FontWeight = FontWeight.Bold, FontSize = 11.5 };
+                label.Bind(TextBlock.ForegroundProperty, label.GetResourceObservable("PinkBrush")); line.Children.Add(label);
                 door.Child = line; ToolTip.SetTip(door, Loc.Get("tooltip_takeaway_order_drop")); shelf.Children.Add(door);
             }
             Takeaway<TextBlock>("TxtTakeawayCount")!.Text = orders.Count > 0 ? Loc.GetF("sd_takeaway_kept", orders.Count) : "";
@@ -126,7 +128,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             copy.Name = "TakeawayCopy";
             copy.Child = IconGlyph.Of(IconKind.Link, size: 10);
             ToolTip.SetTip(copy, Loc.Get("tooltip_takeaway_copy_link"));
-            var icon = IconGlyph.Of(IconKind.Box, size: row ? 13 : 12);
+            var icon = IconGlyph.Of(row ? IconKind.Options : IconKind.Box, size: row ? 13 : 12);
             if (row)
             {
                 var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto,Auto,Auto") };

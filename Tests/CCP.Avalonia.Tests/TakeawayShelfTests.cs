@@ -30,11 +30,46 @@ using ConditioningControlPanel.Avalonia.Views.Tabs;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.JustDrop;
 using Xunit;
+using IconKind = FluentIcons.Common.Symbol;
 
 namespace CCP.Avalonia.Tests;
 
 public sealed class TakeawayShelfTests
 {
+    [Fact]
+    public Task MoreLabelUsesPinkBoldText() => InShell(async shell =>
+    {
+        shell.ShowTab("presets"); await shell.TakeawayLoad;
+        var shelf = shell.Named<PresetsTabView>("PresetsTab")!.FindControl<StackPanel>("TakeawayShelf")!;
+        var label = Assert.IsType<TextBlock>(((Border)shelf.Children[3]).Child);
+        Assert.True(shell.TryFindResource("PinkBrush", out var pink));
+        Assert.Equal(pink, label.Foreground);
+        Assert.Equal(FontWeight.Bold, label.FontWeight);
+        Assert.Equal(11.5, label.FontSize);
+    });
+
+    [Fact]
+    public Task ShopDoorUsesPinkForIconAndLabel() => InShell(async shell =>
+    {
+        shell.ShowTab("presets"); await shell.TakeawayLoad;
+        var shelf = shell.Named<PresetsTabView>("PresetsTab")!.FindControl<StackPanel>("TakeawayShelf")!;
+        var line = Assert.IsType<StackPanel>(((Border)shelf.Children[^1]).Child);
+        Assert.True(shell.TryFindResource("PinkBrush", out var pink));
+        Assert.Equal(pink, Assert.IsType<IconGlyph>(line.Children[0]).Foreground);
+        Assert.Equal(pink, Assert.IsType<TextBlock>(line.Children[1]).Foreground);
+    });
+
+    [Fact]
+    public Task TrayRowsUseOptionsIconWhileStripUsesBox() => InShell(async shell =>
+    {
+        shell.ShowTab("presets"); await shell.TakeawayLoad;
+        var tab = shell.Named<PresetsTabView>("PresetsTab")!;
+        var row = (Border)tab.FindControl<StackPanel>("TakeawayTray")!.Children[0];
+        var strip = (Border)tab.FindControl<StackPanel>("TakeawayShelf")!.Children[0];
+        Assert.Equal(IconKind.Options, Assert.IsType<IconGlyph>(((Grid)row.Child!).Children[0]).Kind);
+        Assert.Equal(IconKind.Box, Assert.IsType<IconGlyph>(((StackPanel)strip.Child!).Children[0]).Kind);
+    });
+
     [Fact]
     public Task ReceiptAndShopHoverUseTheSharedMotionAwareLift() => InShell(async shell =>
     {
