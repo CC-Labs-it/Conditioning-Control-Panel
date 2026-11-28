@@ -123,6 +123,12 @@ public class FirstShowRemoteConsentTests
             Assert.Equal(RemoteMediaConsentCopy.Title, (string?)file["title_remote_media_consent"]);
             Assert.Equal(RemoteMediaConsentCopy.Message, (string?)file["msg_remote_media_consent"]);
         }
+        // Each head's helper must fall back to those constants: the title pair first, then the message pair.
+        const string Shared = @"RemoteMediaConsentText\(\)\s*=>\s*\(\s*"
+            + @"LocOr\([\w.]*RemoteMediaConsentCopy\.TitleKey,\s*[\w.]*RemoteMediaConsentCopy\.Title\),\s*"
+            + @"LocOr\([\w.]*RemoteMediaConsentCopy\.MessageKey,\s*[\w.]*RemoteMediaConsentCopy\.Message\)\);";
+        foreach (var head in new[] { "ConditioningControlPanel/MainWindow/MainWindow.Assets.cs", "CCP.Avalonia/Views/Tabs/AssetsTabView.MediaPicker.cs" })
+            Assert.Matches(Shared, System.IO.File.ReadAllText(System.IO.Path.Combine(SourceRoots.RepoRoot, head)));
     }
 
     /// <summary>Not consent, so not asked: the licence switch off, a spent share or Offline mode load as before
