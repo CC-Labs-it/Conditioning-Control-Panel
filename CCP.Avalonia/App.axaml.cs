@@ -700,6 +700,7 @@ namespace ConditioningControlPanel.Avalonia
                 || (Views.Tabs.RemoteControlTabView.Relay.IsValueCreated && Views.Tabs.RemoteControlTabView.Relay.Value.ControllerConnected)
                 || Views.Overlays.MandatoryVideoOverlay.Instance.GracePaused
                 || CoreEngine.Video?.IsPlaying == true || Views.Deeper.EnhancementPlayerWindow.IsAnyEnhancementRunning
+                || ConditioningControlPanel.Services.Companion.CompanionCore.AutonomyActionInProgress?.Invoke() == true
                 || Views.Windows.MainShellWindow.Current?.SettingsPage?.BrowserEnhanceHost.IsRunning == true
                 || Views.Windows.LockCardWindow.IsAnyOpen()
                 || Views.Windows.BubbleCountWindow.IsAnyOpen() || Views.Windows.PopQuizWindow.IsAnyOpen()

@@ -257,7 +257,7 @@ public sealed class CompanionBrainHostTests
         }
         return Task.CompletedTask;
     });
-    private static Action SaveAskSeams()
+    internal static Action SaveAskSeams()
     {
         var saved = (CompanionAskService.BrainProvider, CompanionAskService.ShowCardSurface, CompanionAskService.SaySurface,
             CompanionAskService.BusyProvider, CompanionAskService.SessionOptions, CompanionAskService.StartSession,
