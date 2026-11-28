@@ -27,6 +27,7 @@ internal sealed partial class GameWindow
 
     partial void HandleGoonMessage(JObject message, ref bool handled)
     {
+        if (HandleGoonMedia(message)) { handled = true; return; }
         if (HandleGoonInbox(message)) { handled = true; return; }
         switch ((string?)message["type"])
         {
@@ -95,5 +96,6 @@ internal sealed partial class GameWindow
         try { TransferCompressionService.Instance.ResumeAfterMatch(); } catch (Exception ex) { Diag.Swallowed(ex); }
         _goonWatch?.Stop();
         _goonWatch = null;
+        DisposeGoonMedia();
     }
 }

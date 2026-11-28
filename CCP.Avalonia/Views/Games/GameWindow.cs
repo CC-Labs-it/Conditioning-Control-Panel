@@ -608,6 +608,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 breakout = BreakoutEntitlementFor(Spec.Id),
                 breakoutStandalone = Spec.Id.StartsWith("breakout", StringComparison.OrdinalIgnoreCase),
             };
+            if (Spec.Id == "goon")
+            {
+                var goon = JObject.FromObject(init);
+                goon["identity"]!["displayName"] = CoreSettings.Current.UserDisplayName ?? "";
+                goon["media"] = JObject.FromObject(GoonMediaBlock());
+                return goon;
+            }
             if (!IsBreakout) return init;
             // WPF BackRoomHostService.cs:589-607: the page must know Off before it starts.
             var frame = JObject.FromObject(init);
