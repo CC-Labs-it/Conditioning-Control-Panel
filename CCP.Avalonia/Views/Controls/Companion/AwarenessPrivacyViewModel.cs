@@ -161,7 +161,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Companion
         public string LegacyHead => Loc.Get("companion_awareness_legacy_head");
         public string LegacyBody => Loc.Get("companion_awareness_legacy_body");
         public string LegacyAction => Loc.Get("companion_awareness_legacy_action");
-        // WPF AwarenessPrivacyView.xaml:189 shows it with the band; it needs an observer to switch on.
+        // The review action requires a real observer and is unavailable in preview.
         public bool CanReviewConsent => !_preview && AvApp.AwarenessObserverHost != null;
 
         // ------------------------------- the wire -------------------------------

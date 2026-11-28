@@ -62,7 +62,7 @@ internal static class DesktopIdle
         catch { return null; }
     }
 
-    private static async Task<ulong> ReadMutterMillisecondsAsync()
+    internal static async Task<ulong> ReadMutterMillisecondsAsync()
     {
         using var bus = new DBusConnection(DBusAddress.Session!);
         // Disposing this connection on timeout also ends any outstanding call.
@@ -124,12 +124,30 @@ internal sealed class WaylandIdleNotify
     internal static readonly WaylandIdleNotify Shared = new();
     internal const uint TimeoutMs = 300_000;
     internal Func<long> Now = () => Environment.TickCount64;
+    private readonly uint _timeoutMs;
+    private readonly bool _observeInitialActivity;
     private long _idledAt = -1;
-    private int _started;
-    internal volatile bool Live;
+    private int _started, _activityObserved;
+    private volatile bool _stopped;
+    private readonly object _gate = new();
+    private Socket? _socket;
+    internal volatile bool Live, Done;
 
-    internal void OnEvent(uint opcode) => Interlocked.Exchange(ref _idledAt, opcode == 0 ? Now() : -1);
-    internal int Seconds => Interlocked.Read(ref _idledAt) is var at && at < 0 ? 0 : (int)((Now() - at + TimeoutMs) / 1000);
+    internal WaylandIdleNotify(uint timeoutMs = TimeoutMs, bool observeInitialActivity = false)
+    {
+        _timeoutMs = timeoutMs;
+        _observeInitialActivity = observeInitialActivity;
+    }
+
+    // A newly created notification has no knowledge of activity before its creation.
+    internal bool ActivityObserved => Volatile.Read(ref _activityObserved) != 0;
+    internal void OnEvent(uint opcode)
+    {
+        if (_stopped) return;
+        Interlocked.Exchange(ref _idledAt, opcode == 0 ? Now() : -1);
+        if (opcode == 1) Volatile.Write(ref _activityObserved, 1);
+    }
+    internal int Seconds => Interlocked.Read(ref _idledAt) is var at && at < 0 ? 0 : (int)((Now() - at + _timeoutMs) / 1000);
 
     internal void Start()
     {
@@ -139,13 +157,22 @@ internal sealed class WaylandIdleNotify
             {
                 var name = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY") ?? "wayland-0";
                 using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+                lock (_gate) { if (_stopped) return; _socket = socket; }
                 socket.Connect(new UnixDomainSocketEndPoint(Path.Combine(Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR") ?? "/", name)));
                 using var stream = new NetworkStream(socket);
                 Run(stream, stream);
             }
-            catch (Exception ex) { Serilog.Log.Debug(ex, "[EmiDesk] Wayland idle notify unavailable"); }
-            finally { Live = false; }
+            catch (Exception ex) when (!_stopped) { Serilog.Log.Debug(ex, "[EmiDesk] Wayland idle notify unavailable"); }
+            catch { }
+            finally { Live = false; Done = true; }
         }) { IsBackground = true, Name = "wayland-idle" }.Start();
+    }
+
+    // Closes the compositor connection; later events are ignored and the thread ends.
+    internal void Stop()
+    {
+        lock (_gate) { _stopped = true; _socket?.Dispose(); }
+        Live = false;
     }
 
     // Minimal wire client: display 1, registry 2, sync 3, seat 4, notifier 5, notification 6.
@@ -163,12 +190,31 @@ internal sealed class WaylandIdleNotify
             else if (iface == "ext_idle_notifier_v1")
                 (notifier, version) = (BitConverter.ToUInt32(body, 0), BitConverter.ToUInt32(body, 8 + ((len + 3) & ~3)));
         }
-        if (seat == 0 || notifier == 0) return;
+        // v1 notifications honour idle inhibitors (video, presentation), so they can neither confirm
+        // input nor reach idle while one is held. Awareness needs WPF's input age: treat v1 as unavailable.
+        if (seat == 0 || notifier == 0 || (_observeInitialActivity && version < 2)) return;
         // v2's input notification ignores idle inhibitors, as WPF's GetLastInputInfo does.
-        tx.Write(Message(2, 0, seat, "wl_seat", 1u, 4u).Concat(Message(2, 0, notifier, "ext_idle_notifier_v1", Math.Min(version, 2), 5u))
-            .Concat(Message(5, version >= 2 ? 2u : 1u, 6u, TimeoutMs, 4u)).ToArray());
-        Live = true;
-        while (Read(rx, out obj, out op, out _)) if (obj == 6) OnEvent(op);
+        uint request = version >= 2 ? 2u : 1u;
+        var bind = Message(2, 0, seat, "wl_seat", 1u, 4u).Concat(Message(2, 0, notifier, "ext_idle_notifier_v1", Math.Min(version, 2), 5u))
+            .Concat(Message(5, request, 6u, _timeoutMs, 4u));
+        // A zero timeout is valid: arm a one-shot witness, then destroy it after real activity.
+        // It must not be treated as activity merely because the new notification became idle.
+        bool witness = _observeInitialActivity, witnessIdle = false;
+        if (witness) bind = bind.Concat(Message(5, request, 7u, 0u, 4u));
+        tx.Write(bind.ToArray());
+        Live = !_stopped;
+        while (!_stopped && Read(rx, out obj, out op, out _))
+        {
+            if (obj == 6) OnEvent(op);
+            else if (obj == 7 && witness)
+            {
+                if (op == 0) { witnessIdle = true; continue; }
+                if (op != 1 || !witnessIdle) continue;
+                OnEvent(1);
+            }
+            else continue;
+            if (witness && op == 1) { tx.Write(Message(7, 0)); witness = false; }
+        }
     }
 
     // Arguments are uint or string; strings carry length with NUL and pad to four bytes.

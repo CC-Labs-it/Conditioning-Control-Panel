@@ -160,6 +160,7 @@ namespace ConditioningControlPanel.Avalonia
         {
             if (AwarenessObserverHost is not { } observer) return;
             observer.Stop();
+            ConditioningControlPanel.Services.Awareness.AwarenessV2Routing.Detach();
             ConditioningControlPanel.Services.Awareness.AwarenessLive.ObserverEnabled = false;
         }
 
@@ -1115,14 +1116,14 @@ namespace ConditioningControlPanel.Avalonia
                 InitializeChaos();
                 Platform.WallpaperHead.Initialize();
                 // WPF App.xaml.cs:2928: launch only sweeps retention on disk (creates nothing, arms no timer);
-                // the ledger starts when awareness turns on, through the v2 observer when it may run (WPF :3046-3099).
-                ConditioningControlPanel.Services.Awareness.AwarenessObserver.EntitlementProvider = () => WindowAwarenessService.HasEntitlement;
-                ConditioningControlPanel.Services.Awareness.AwarenessObserver.PostToUi = a => Dispatcher.UIThread.Post(a);
+                // The observer starts from the awareness switch after consent.
                 var awarenessLedger = new ConditioningControlPanel.Services.Awareness.ActivityLedger();
-                InstallPrivacyLedger(awarenessLedger, CreateAwarenessObserver(awarenessLedger,
-                    OperatingSystem.IsWindows() ? new Platform.Win32AwarenessForegroundProbe() : new Platform.X11ForegroundProbe(),
-                    OperatingSystem.IsWindows() ? new Platform.Win32AwarenessInputProbe() : new Platform.X11AwarenessInputProbe(),
-                    OperatingSystem.IsWindows() ? new Platform.Win32AwarenessMicrophoneProbe() : new Platform.AwarenessMicrophoneProbe()));
+                try { InstallAwarenessObserver(awarenessLedger); }
+                catch (Exception ex)
+                {
+                    Serilog.Log.Warning(ex, "Awareness: observer unavailable; using legacy pipeline");
+                    InstallPrivacyLedger(awarenessLedger);
+                }
 
                 // WPF App.xaml.cs:2582-2624: scaffold and the Flash decoupling migration run before the heal
                 // below (2630), so the migration reads the profile's saved FlashClickable, not the journal's.
@@ -2165,6 +2166,7 @@ namespace ConditioningControlPanel.Avalonia
             try { DiscordRpc?.Dispose(); } catch { /* WPF App.OnExit:6296 */ }
             try { Platform.FriendsLanding.Stop(); } catch { /* WPF FriendsLanding.Stop on the panel's Closed: no card outlives the app */ }
             try { (Platform.FriendsHead.Service as IDisposable)?.Dispose(); } catch { /* WPF App.OnExit: the friends poll stops */ }
+            ReleaseAwarenessObserver();
             ReleasePrivacyLedger();
             ExitStep("companion, AI and Ollama");
             try { Brain?.Dispose(); } catch { /* WPF App.OnExit:6121; flushes the turn log */ }

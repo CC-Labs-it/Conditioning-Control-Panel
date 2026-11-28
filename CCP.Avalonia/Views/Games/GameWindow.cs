@@ -654,6 +654,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         // ---- panic (PanicSurfaces "games", WPF GameSurfaces.cs:53-55 -> CloseActive("panic")) ----
 
         internal static bool IsAnyOpen() { lock (Open) return Open.Count > 0; }
+        // WPF AwarenessProbes.cs:491-492: only DtRH and Arcademy suppress awareness.
+        internal static bool IsAwarenessBlockingGameOpen() { lock (Open) return Open.Any(w => w.IsDtrh || w.Spec.Id.Equals("arcademy", StringComparison.OrdinalIgnoreCase)); }
         internal static bool IsAnyStartupGameOpen() { lock (Open) return Open.Any(w => w.Spec.Id != FypId && w.Spec.Id != "loom"); }
 
         internal static GameWindow[] OpenWindowsForTests() { lock (Open) return Open.ToArray(); }
