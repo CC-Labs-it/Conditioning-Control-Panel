@@ -176,6 +176,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
         internal static double PendulumMultiplier =>
             _pendulumSlowActive && _state?.PendulumPayMult > 1 ? _state.PendulumPayMult : 1.0;
         private static double SpawnSlowFactor => _slowMoRemainingSec > 0 ? SlowMoFactor : 1.0;
+        private static DateTime _lessonBusyUntilUtc;
         private static bool _active, _spawning, _manualPaused, _endingSoonFired, _lessonCardPaused, _draftPaused;
         private static int _pendingWave, _runsAtStart, _draftsThisRun;
         private static bool _scriptThreat, _scriptSnapped, _scriptDraft, _sinRigged, _sinPending;
@@ -291,6 +292,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             _lastNoFocusAnnounceUtc = DateTime.MinValue;
             _invulnUntilUtc = DateTime.MinValue;
             _regenPopCount = 0;
+            _lessonBusyUntilUtc = DateTime.MinValue;
             ChaosRunLessons.OnRunStarted();   // WPF :399
             BarkHead.Engine?.Raise("ChaosRunStarted", c => c.Set("difficulty", _state.Config.Difficulty.ToString()));
             _spawning = true;
@@ -628,6 +630,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
                 CheckComboMilestone();
                 return;
             }
+            RegisterLessonPayload(spec.Payload.Kind);
             spec.Payload.Fire();   // benign pop = a treat
             FirstTime(ChaosFirstTimes.Taste);   // WPF ChaosModeService :1844
             if (spec.VariantId == "subliminal") ChaosLessons.Tick("intrusive_thoughts");   // WPF OnTreatPopped
@@ -715,7 +718,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             var (pts, lastBreath, slowburn) = ChaosFieldMath.ApplyDefuse(_state, spec, fuseSecLeft,
                 b.DefusedViaChannel, free: _freezeRemainingSec > 0, pendulum: PendulumMultiplier, ChaosFieldMath.ChanceFlip(_state, Rng));
             // WPF ChaosLessonHooks.cs:161, 250: live rain remains busy after its spawn window.
-            if (ChaosGifCascadeOverlay.IsRaining) ChaosLessons.Tick("blindfold");
+            if (LessonScreenBusy()) ChaosLessons.Tick("blindfold");
             ShowPopScore(pts);
             CreditPop();   // WPF ChaosModeService.cs:2025
             RollCamGirlTip();
@@ -744,8 +747,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             if (slowburn > 1) _state.PushEvent("🐌 slow burn! x3");
             _state.PushEvent($"✔ snapped {spec.Payload.DisplayName}");
             CheckComboMilestone();
-            // ponytail: blindfold lesson and
-            // the brink narrative -> chaos-payout-fallin-d.
+            // ponytail: the brink narrative -> chaos-payout-fallin-d.
         }
 
         /// <summary>WPF OnDetonated (:2055) + OnChannelBroken's feed line: the payload fires, the loop
@@ -1070,9 +1072,30 @@ namespace ConditioningControlPanel.Avalonia.Views.Chaos
             FireScaledPayload(payload);
         }
 
-        /// <summary>WPF FireScaledPayload (:2267) minus the lesson hook.</summary>
+        // WPF ChaosLessonHooks.cs:228-255: retain the longest visible payload window.
+        internal static void RegisterLessonPayload(EffectBubblePayloadKind kind)
+        {
+            if (ChaosLessons.IsComplete("blindfold")) return;
+            double seconds = kind switch
+            {
+                EffectBubblePayloadKind.Flash => 1.5,
+                EffectBubblePayloadKind.Subliminal => 1.2,
+                EffectBubblePayloadKind.Overlay or EffectBubblePayloadKind.BambiFreeze or EffectBubblePayloadKind.BouncingText => 3,
+                EffectBubblePayloadKind.Video => 15,
+                EffectBubblePayloadKind.GifCascade or EffectBubblePayloadKind.HtLink => 8,
+                _ => 0
+            };
+            var until = BubbleOverlay.Field.Clock().AddSeconds(seconds);
+            if (seconds > 0 && until > _lessonBusyUntilUtc) _lessonBusyUntilUtc = until;
+        }
+
+        internal static bool LessonScreenBusy() => BubbleOverlay.Field.Clock() < _lessonBusyUntilUtc
+            || CoreEngine.Video?.IsPlaying == true || ChaosGifCascadeOverlay.IsRaining || ChaosDvdOverlay.AnyActive;
+
+        /// <summary>WPF FireScaledPayload (:2267).</summary>
         private static void FireScaledPayload(EffectPayload payload)
         {
+            RegisterLessonPayload(payload.Kind);
             double m = _state?.DetonationDurationMult ?? 1.0;
             if (m == 1.0) { payload.Fire(); return; }
             EffectPayload.GlobalDurationMult *= m;

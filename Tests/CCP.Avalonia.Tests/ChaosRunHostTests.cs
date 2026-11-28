@@ -2445,4 +2445,110 @@ public sealed class ChaosRunHostTests
             return Task.CompletedTask;
         });
     }
+    [Fact]
+    public async Task Blindfold_counts_snaps_during_payload_windows_and_resets_on_new_run()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            var now = DateTime.UtcNow;
+            var oldFirer = EffectPayload.Firer;
+            try
+            {
+                EffectPayload.Firer = null;
+                BubbleOverlay.Field.Clock = () => now;
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                var bubble = new AmbientBubble { Spec = new EffectBubbleSpec { Payload = new FlashPayload() } };
+                ChaosRunHost.OnBubblePopped(bubble);
+                ChaosRunHost.OnDefused(bubble);
+                Assert.Equal(1, ChaosLessons.Progress("blindfold"));
+                now = now.AddSeconds(2);
+                ChaosRunHost.OnDefused(bubble);
+                Assert.Equal(1, ChaosLessons.Progress("blindfold"));
+                ChaosRunHost.RegisterLessonPayload(EffectBubblePayloadKind.Video);
+                ChaosRunHost.RegisterLessonPayload(EffectBubblePayloadKind.Flash);
+                now = now.AddSeconds(3);
+                Assert.True(ChaosRunHost.LessonScreenBusy());
+                ChaosRunHost.ForceShutdown();
+                ChaosRunHost.StartRun(Cfg());
+                ChaosRunHost.Overlay!.FinishCountdown();
+                ChaosRunHost.StopTimerForTests();
+                Assert.False(ChaosRunHost.LessonScreenBusy());
+            }
+            finally
+            {
+                ChaosRunHost.ForceShutdown();
+                BubbleOverlay.Field.Clock = () => DateTime.UtcNow;
+                EffectPayload.Firer = oldFirer;
+                FreshMeta();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Fact]
+    public async Task Blindfold_payload_windows_match_wpf_and_audio_is_not_visual()
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            var now = DateTime.UtcNow;
+            try
+            {
+                BubbleOverlay.Field.Clock = () => now;
+                ChaosRunHost.StartRun(Cfg()); ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+                foreach (var (kind, duration) in new[] {
+                    (EffectBubblePayloadKind.Flash, 1.5), (EffectBubblePayloadKind.Subliminal, 1.2),
+                    (EffectBubblePayloadKind.Overlay, 3.0), (EffectBubblePayloadKind.BambiFreeze, 3.0),
+                    (EffectBubblePayloadKind.BouncingText, 3.0), (EffectBubblePayloadKind.Video, 15.0),
+                    (EffectBubblePayloadKind.GifCascade, 8.0), (EffectBubblePayloadKind.HtLink, 8.0) })
+                {
+                    ChaosRunHost.RegisterLessonPayload(kind);
+                    now = now.AddSeconds(duration - 0.01);
+                    Assert.True(ChaosRunHost.LessonScreenBusy());
+                    now = now.AddSeconds(0.02);
+                    Assert.False(ChaosRunHost.LessonScreenBusy());
+                }
+                ChaosRunHost.RegisterLessonPayload(EffectBubblePayloadKind.Audio);
+                Assert.False(ChaosRunHost.LessonScreenBusy());
+            }
+            finally { ChaosRunHost.ForceShutdown(); BubbleOverlay.Field.Clock = () => DateTime.UtcNow; FreshMeta(); }
+            return Task.CompletedTask;
+        });
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Blindfold_checks_live_video_and_dvd_after_windows_expire(bool useVideo)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            Setup(); FreshMeta();
+            var oldVideo = CoreEngine.Video;
+            var video = MandatoryVideoOverlay.Instance.Scheduler;
+            var playing = video.GetType().GetField("_playing", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            var oldPlaying = playing.GetValue(video);
+            try
+            {
+                ChaosRunHost.StartRun(Cfg()); ChaosRunHost.Overlay!.FinishCountdown(); ChaosRunHost.StopTimerForTests();
+                Assert.False(ChaosRunHost.LessonScreenBusy());
+                if (useVideo) { CoreEngine.Video = video; playing.SetValue(video, true); }
+                else ChaosDvdOverlay.Flock.Launch(10, 1, 1);
+                Assert.True(ChaosRunHost.LessonScreenBusy());
+                playing.SetValue(video, false);
+                ChaosDvdOverlay.Flock.Clear();
+                Assert.False(ChaosRunHost.LessonScreenBusy());
+            }
+            finally
+            {
+                ChaosDvdOverlay.Flock.Clear(); playing.SetValue(video, oldPlaying); CoreEngine.Video = oldVideo;
+                ChaosRunHost.ForceShutdown(); FreshMeta();
+            }
+            return Task.CompletedTask;
+        });
+    }
+
 }
