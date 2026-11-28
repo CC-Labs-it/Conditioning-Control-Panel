@@ -730,9 +730,59 @@ internal static class X11Overlay
                 if (type != (IntPtr)33 || format != 32 || remaining != 0) return false;
                 var stacking = new IntPtr[(int)count];
                 for (int i = 0; i < stacking.Length; i++) stacking[i] = Marshal.ReadIntPtr(data, i * IntPtr.Size);
-                return RestackAboveIfBelow(stacking, xid, target, () => RestackXid(xid, target));
+                return RestackAboveIfBelow(stacking, xid, target, () =>
+                    UsesNetRestack(SupportedAtoms(), XInternAtom(_display, "_NET_RESTACK_WINDOW", false))
+                        ? RestackXid(xid, target) : ConfigureAboveXid(xid, target));
             }
             finally { XFree(data); }
+        }
+    }
+
+    // xfwm4 neither lists nor handles _NET_RESTACK_WINDOW (src/events.c), but applies a sibling
+    // ConfigureRequest (handleConfigureRequest -> clientConfigure -> clientRaise(c, sibling)).
+    internal static bool UsesNetRestack(IReadOnlyList<IntPtr> supported, IntPtr restackAtom) =>
+        supported.Contains(restackAtom);
+
+    private static IntPtr[] SupportedAtoms()
+    {
+        var atom = XInternAtom(_display, "_NET_SUPPORTED", false);
+        if (XGetWindowProperty(_display, XDefaultRootWindow(_display), atom, 0L, 4096L, false, (IntPtr)4 /* XA_ATOM */,
+                out _, out var format, out ulong count, out _, out var data) != 0 || data == IntPtr.Zero) return [];
+        try
+        {
+            if (format != 32) return [];
+            var atoms = new IntPtr[(int)count];
+            for (int i = 0; i < atoms.Length; i++) atoms[i] = Marshal.ReadIntPtr(data, i * IntPtr.Size);
+            return atoms;
+        }
+        finally { XFree(data); }
+    }
+
+    // ICCCM 4.1.5: a reparented client restacks with a synthetic ConfigureRequest sent to the root.
+    // XConfigureRequestEvent offsets from offsetof() on LP64: parent 32, window 40, above 72,
+    // detail 80, value_mask 88.
+    private static bool ConfigureAboveXid(IntPtr xid, IntPtr siblingXid)
+    {
+        lock (Gate)
+        {
+            if (!EnsureDisplay()) return false;
+            var e = Marshal.AllocHGlobal(XEventSize);
+            try
+            {
+                for (var i = 0; i < XEventSize; i += IntPtr.Size) Marshal.WriteIntPtr(e, i, IntPtr.Zero);
+                var root = XDefaultRootWindow(_display);
+                Marshal.WriteInt32(e, 0, 23);                          // ConfigureRequest
+                Marshal.WriteIntPtr(e, 24, _display);
+                Marshal.WriteIntPtr(e, 32, root);
+                Marshal.WriteIntPtr(e, 40, xid);
+                Marshal.WriteIntPtr(e, 72, siblingXid);
+                Marshal.WriteInt32(e, 80, Above);
+                Marshal.WriteIntPtr(e, 88, new IntPtr(0x60));          // CWSibling | CWStackMode
+                XSendEvent(_display, root, false, SubstructureMask, e);
+                XFlush(_display);
+                return true;
+            }
+            finally { Marshal.FreeHGlobal(e); }
         }
     }
 

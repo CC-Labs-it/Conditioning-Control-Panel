@@ -223,6 +223,15 @@ public sealed class JustDropOwnerTests
     }
 
     [Fact]
+    public void X11RestackFallsBackToConfigureRequestWithoutNetRestack()
+    {
+        var restack = new IntPtr(7);
+        Assert.True(X11Overlay.UsesNetRestack(new[] { new IntPtr(5), restack }, restack));   // KWin
+        Assert.False(X11Overlay.UsesNetRestack(new[] { new IntPtr(5), new IntPtr(6) }, restack)); // xfwm4
+        Assert.False(X11Overlay.UsesNetRestack(Array.Empty<IntPtr>(), restack));           // no EWMH list
+    }
+
+    [Fact]
     public Task X11WatchCorrectsAnAlreadyActivePanelRaiseAndStopsOnClose() =>
         AvaloniaTestDispatcher.RunAsync(async () =>
         {
