@@ -38,8 +38,7 @@ internal sealed partial class GameWindow
         try { count = message["count"]?.Type == JTokenType.Integer ? Math.Clamp((int)message["count"]!, 1, 24) : 8; }
         catch { count = 8; }
         bool tagged = message["subs"] != null && message["subs"]!.Type != JTokenType.Null;
-        string tag = new string((message["tag"]?.Type == JTokenType.String ? (string?)message["tag"] ?? "" : "").Trim().ToLowerInvariant().Where(c => char.IsLetterOrDigit(c) || c is '_' or '-').Take(24).ToArray());
-        if (tag.Length == 0) tag = "untagged";
+        string tag = ArcademyTag(message);
         var subs = tagged ? (message["subs"] as JArray ?? new JArray()).Where(t => t.Type == JTokenType.String)
             .Select(t => FypOnlineCoordinator.SanitizeSub((string?)t)).Where(x => x != null).Select(x => x!)
             .Distinct(StringComparer.OrdinalIgnoreCase).Take(64).ToArray()

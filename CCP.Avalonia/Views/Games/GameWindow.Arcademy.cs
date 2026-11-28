@@ -212,7 +212,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 motionLevel = ArcademyMotion(), reducedMotion = ArcademyMotion() != 2,
                 utcDateSeed = DateTime.UtcNow.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
                 localDate = DateTime.Now.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
-                settings = Parse(s.ArcademySettingsJson), keybinds = Parse(s.ArcademyKeybindsJson),
+                settings = ArcademySettingsBag(Parse(s.ArcademySettingsJson)), keybinds = Parse(s.ArcademyKeybindsJson),
                 hideTutorial = s.ArcademyHideTutorial, meta = _arcademyMeta?.Snapshot() ?? new JObject(),
                 panicKey = s.PanicKey, panicKeyEnabled = s.PanicKeyEnabled,
             };
@@ -441,6 +441,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     break;
                 case "assets-request":
                     PostArcademyAssetsUnavailable(message);
+                    handled = true;
+                    break;
+                case "local-sample-request":
+                    ArcademyLocalSample(message);
+                    handled = true;
+                    break;
+                case "probe-sub":
+                    ArcademyProbeSub(message);
+                    handled = true;
+                    break;
+                case "share-image":
+                    ArcademyShareImage((string?)message["png"]);
                     handled = true;
                     break;
                 case "library-remove":
