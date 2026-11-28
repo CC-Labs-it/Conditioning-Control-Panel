@@ -58,8 +58,8 @@ public sealed partial class FriendsDrawer : Border
     internal bool AsPage { get; }
 
     internal static Cursor? Hand() { try { return new Cursor(StandardCursorType.Hand); } catch { return null; } }
-    // WPF FriendsDrawer.Dares.cs:27-65. The host remains null until its port starts.
-    internal Func<IDaresService?> DaresSource { get; set; } = () => DaresHead.Service;
+    // WPF FriendsDrawer.Dares.cs:27-65: the live service DareHead starts.
+    internal Func<IDaresService?> DaresSource { get; set; } = () => ConditioningControlPanel.Avalonia.App.Dares;
     private IDaresService? _daresLive;
     private DaresSnapshot DaresSnap() { try { return DaresSource()?.Snapshot ?? DaresSnapshot.Dark; } catch { return DaresSnapshot.Dark; } }
     private void RebindDares()
@@ -70,7 +70,14 @@ public sealed partial class FriendsDrawer : Border
         _daresLive = next;
         if (_daresLive != null) _daresLive.Changed += OnDaresChanged;
     }
-    private void OnDaresChanged() { if (_isOpen) Render(); }
+    // WPF FriendsDrawer.Dares.cs:78-82 repaints only the Dares parts: swap each row's menu, keep the list and any typing.
+    private void OnDaresChanged()
+    {
+        if (!_isOpen) return;
+        var friends = _svc?.Snapshot?.Friends ?? Array.Empty<Friend>();
+        foreach (var row in _list.Children.OfType<Border>())
+            if (friends.FirstOrDefault(f => Equals(row.Tag, "friends-row:" + f.Id)) is { } f) row.ContextMenu = Menu(f);
+    }
     private void OpenDare(Friend friend)
     {
         IDaresService? service; DaresSnapshot snapshot;

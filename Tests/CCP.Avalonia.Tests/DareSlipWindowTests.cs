@@ -312,12 +312,83 @@ public sealed class DareSlipWindowTests
         }
     });
 
+    // WPF FriendsDrawer.Dares.cs:78-82: a Dares change repaints the Dares parts, never the friend list.
+    [Fact]
+    public Task DaresChangeKeepsTheHtEntryAndRefreshesTheMenu() => AvaloniaTestDispatcher.RunAsync(async () =>
+    {
+        Init();
+        var (friends, _) = FriendsDrawerTests.Service();
+        var service = new FakeService { Available = false };
+        var drawer = new FriendsDrawer(friends) { DaresSource = () => service };
+        try
+        {
+            await friends.RefreshAsync();
+            drawer.OnOpened();
+            drawer.Toggle("u_on");
+            Click(drawer, "friends-action:watch");
+            Click(drawer, "friends-watch-tab:ht");
+            var box = Assert.IsType<TextBox>(Find(drawer, "friends-ht-box"));
+            box.Text = "1234";
+            MenuItem? Dare() => Assert.IsType<Border>(Find(drawer, "friends-row:u_on")).ContextMenu!.ItemsSource!
+                .OfType<MenuItem>().FirstOrDefault(item => Equals(item.Tag, "friends-menu-item:dare"));
+            Assert.Null(Dare());
+            service.Available = true; service.Raise();
+            Assert.Same(box, Find(drawer, "friends-ht-box"));
+            Assert.Equal("1234", box.Text);
+            Assert.NotNull(Dare());
+        }
+        finally { drawer.OnClosed(); friends.Dispose(); }
+    });
+
+    // WPF FriendsDrawer.Dares.cs:27: the drawer reads the service the app started (App.Dares, DareHead.Service).
+    [Fact]
+    public Task DrawerReadsTheLiveDareHeadService() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Init();
+        Assert.Null(DareHead.Service);
+        var (friends, _) = FriendsDrawerTests.Service();
+        using var host = new DareHead.Host(() => "u_me");
+        using var live = new DaresService(new NoApi(), host, new DareMeter(), new DareLockdownKeeper(host, new DareLockdownKeeper.MemoryStore()));
+        DareHead.Service = live;
+        try { Assert.Same(live, new FriendsDrawer(friends).DaresSource()); }
+        finally { DareHead.Service = null; friends.Dispose(); }
+        return Task.CompletedTask;
+    });
+
+    private sealed class NoApi : IDaresApi
+    {
+        public Task<Newtonsoft.Json.Linq.JObject?> CallAsync(string op, Newtonsoft.Json.Linq.JObject body, CancellationToken ct = default) =>
+            Task.FromResult<Newtonsoft.Json.Linq.JObject?>(null);
+    }
+
+    // Stricter than WPF: the panic surface shuts an unsent slip in the same call, no fade.
+    [Fact]
+    public Task PanicClosesAnOpenSlipAtOnce() => AvaloniaTestDispatcher.RunAsync(() =>
+    {
+        Init();
+        var openField = typeof(DareSlipWindow).GetField("_open", BindingFlags.Static | BindingFlags.NonPublic)!;
+        Assert.Null(openField.GetValue(null));
+        Assert.Null(DareHead.Service);
+        try
+        {
+            DareSlipWindow.Open(null, new FakeService(), null, Array.Empty<DareFriend>());
+            var slip = Assert.IsType<DareSlipWindow>(openField.GetValue(null));
+            var closed = false; slip.Closed += (_, _) => closed = true;
+            ConditioningControlPanel.Avalonia.Views.Windows.PanicSurfaces.All.Single(x => x.Id == "dares").Stop(null);
+            Assert.True(closed);
+            Assert.Null(openField.GetValue(null));
+        }
+        finally { (openField.GetValue(null) as DareSlipWindow)?.Close(); DareHead.Resume(); }
+        return Task.CompletedTask;
+    });
+
     private sealed class FakeService : IDaresService
     {
         public int? Sparkles { get; init; }
         public bool Available { get; set; } = true;
         public DateTimeOffset? BannedUntil { get; set; }
-        public event Action? Changed { add { } remove { } }
+        public event Action? Changed;
+        public void Raise() => Changed?.Invoke();
         public DaresSnapshot Snapshot => new(Available, new DaresMe(BannedUntil, true, true, 0), Array.Empty<DareBet>());
         public bool IsPreview => false;
         public string? To { get; private set; }

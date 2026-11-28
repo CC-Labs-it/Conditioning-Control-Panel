@@ -72,6 +72,8 @@ public sealed class DareSlipWindow : Window
         if (owner is { IsVisible: true }) window.Show(owner); else window.Show();
     }
 
+    internal static void CloseForPanic() { try { _open?.Close(); } catch (InvalidOperationException) { } }
+
     // WPF DareSlipWindow.cs:89: both closes fade out first.
     private void Leave() => _ = FadeOutThen(this, Close);
 
