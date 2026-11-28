@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
@@ -15,6 +17,7 @@ using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Services;
 using ConditioningControlPanel.Services.Flash;
 using ConditioningControlPanel.Services.Companion;
+using ConditioningControlPanel.Services.Compositor;
 using Serilog;
 
 namespace ConditioningControlPanel.Avalonia.Views.Overlays
@@ -34,8 +37,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
     /// <para>The ambient rhythm is Core <c>CoreFlash</c>, which calls this.</para>
     ///
     /// <para>ponytail: not here yet, each a later branch - the subliminal whisper source,
-    /// the lucky glow pulse, Natasha's favourite,
-    /// gaze pop/linger, solid hosting and avatar pre-announce.</para>
+    /// the lucky glow pulse, Natasha's favourite, gaze pop/linger, shared-stage hosting of clickable,
+    /// gazed, moving or glowing flashes and avatar pre-announce.</para>
     /// </summary>
     internal static partial class FlashOverlay
     {
@@ -44,6 +47,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private const int StaggerMs = 300;
 
         internal static readonly List<(FlashOverlayWindow Window, PixelRect Rect)> Active = new();
+        /// <summary>Passive flashes on the shared stage, each with its own lifetime and Stop handle.</summary>
+        internal static readonly List<(Control Item, PixelRect Rect, Action Stop)> Hosted = new();
+        internal static int OnScreen => Active.Count + Hosted.Count;
 
         internal static void RaiseAll(Action<Window> raise)
         {
@@ -66,6 +72,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         private static bool _busy, _warnedUnavailable, _warnedEmpty, _closed;
         private static readonly object BurstGate = new();
         private static int _generation;
+        private static CancellationTokenSource? _burstOwner;
         private static int _voiceAttempted;
 
         /// <summary>Bumped by every CloseAll; a burst scheduled under an older one never spawns.</summary>
@@ -74,15 +81,23 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>A burst is still spawning (WPF <c>_isBusy</c>); the ambient tick skips.</summary>
         public static bool IsBusy { get { lock (BurstGate) return _busy; } }
         internal static int BeginBurst() { lock (BurstGate) { _busy = true; Volatile.Write(ref _voiceAttempted, 0); return _generation; } }
-        internal static void FinishBurst(int generation) { lock (BurstGate) if (generation == _generation) _busy = false; }
+        internal static void FinishBurst(int generation) => FinishOwnedBurst(generation, null);
+        private static void FinishOwnedBurst(int generation, CancellationTokenSource? owner)
+        {
+            lock (BurstGate)
+                if (generation == _generation && ReferenceEquals(_burstOwner, owner)) { _busy = false; _burstOwner = null; }
+        }
 
         /// <summary>Fire one burst. Any attached visual works as <paramref name="host"/>; it only
         /// reaches <c>Screens</c>. Like WPF's _isBusy, a second press is ignored from the click
         /// until the burst's last flash has spawned. The overrides are WPF TriggerFlashOnce's
         /// (amount, duration ms, size %); null keeps the user's setting.</summary>
-        public static async void TriggerOnce(Visual host, int? amount = null, int? durationMs = null, int? size = null, bool ambient = false, bool suppressHaptic = false)
+        public static void TriggerOnce(Visual host, int? amount = null, int? durationMs = null, int? size = null, bool ambient = false, bool suppressHaptic = false)
+            => TriggerOwned(host, amount, durationMs, size, ambient, null, suppressHaptic);
+
+        internal static async void TriggerOwned(Visual host, int? amount, int? durationMs, int? size, bool ambient, CancellationTokenSource? owner, bool suppressHaptic = false)
         {
-            if (IsBusy) return;
+            if (owner?.IsCancellationRequested == true || IsBusy) return;
             if (!OverlaysAvailable())
             {
                 if (!_warnedUnavailable) Log.Warning("Flash: this platform cannot show click-through overlays, so flashes are skipped");
@@ -93,18 +108,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var screens = ScreenList.Enumerate(host);
             if (screens.Count == 0) return;
             var generation = BeginBurst();
+            lock (BurstGate) _burstOwner = owner;
             var scheduled = false;
             try
             {
                 var s = CoreSettings.Current;
                 if (await TryShowRemix(s, screens, durationMs, ambient && amount == null, generation, suppressHaptic)) return;
-                if (generation != _generation || _closed) return;
+                if (generation != _generation || _closed || owner?.IsCancellationRequested == true) return;
                 var primary = Math.Max(0, screens.ToList().FindIndex(x => x.IsPrimary));
                 var targets = PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary);
-                var occupied = Active.Select(a => a.Rect).ToList();
+                var occupied = Active.Select(a => a.Rect).Concat(Hosted.Select(h => h.Rect)).ToList();
                 RemoteFlashSource.EnsurePrefetch();
-                var flashes = await Task.Run(() => LoadPictures(BurstCount(amount, s, Rng), screens, targets, s, occupied, size));
-                if (generation != _generation || _closed)
+                var flashes = await LoadPicturesAsync(BurstCount(amount, s, Rng), screens, targets, s, occupied, size);
+                if (generation != _generation || _closed || owner?.IsCancellationRequested == true)
                 {
                     foreach (var f in flashes) Drop(f.Bitmap);
                     return;
@@ -122,9 +138,9 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 var timing = new BurstLifetime(s, ambient, durationMs);
                 await VoiceAfterLead(s, generation, durationChanged: seconds => Dispatcher.UIThread.Post(() =>
                 {
-                    if (!_closed && generation == _generation) timing.Report(seconds);
-                }));
-                if (_closed || generation != _generation) { foreach (var f in flashes) Drop(f.Bitmap); return; }
+                    if (!_closed && generation == _generation && owner?.IsCancellationRequested != true) timing.Report(seconds);
+                }), owner: owner);
+                if (_closed || generation != _generation || owner?.IsCancellationRequested == true) { foreach (var f in flashes) Drop(f.Bitmap); return; }
                 var clickable = s.FlashClickable;
                 var lifetime = timing.Current;
                 var fade = TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent);
@@ -132,12 +148,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
                 // WPF waits 1 s after FlashAboutToDisplay so the avatar's line lands first, then
                 // staggers 300 ms per image.
-                Schedule(flashes, 0, StaggerMs, generation, alpha, fade, lifetime, clickable, ambient, hydraGeneration: 0,
-                    done: () => FinishBurst(generation), timing: timing, suppressHaptic: suppressHaptic);
+                ScheduleOwned(flashes, 0, StaggerMs, generation, alpha, fade, lifetime, clickable, ambient, hydraGeneration: 0,
+                    done: () => FinishOwnedBurst(generation, owner), inheritMotion: null, timing: timing, owner: owner, suppressHaptic: suppressHaptic);
                 scheduled = true;
             }
             catch (Exception ex) { Log.Error(ex, "Flash: burst failed"); }
-            finally { if (!scheduled) FinishBurst(generation); }
+            finally { if (!scheduled) FinishOwnedBurst(generation, owner); }
         }
         internal static TimeSpan VoiceLifetime(AppSettings s, bool ambient, int? durationMs, double? voiceSeconds) =>
             Lifetime(s, ambient, voiceSeconds is > 0 ? (int)(voiceSeconds.Value * 1000) : durationMs);
@@ -187,6 +203,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         private static readonly Queue<string> VoiceQueue = new();
         private static Action? _stopFlashVoice;
+        private static CancellationTokenSource? _voiceOwner;
         private static object? _voiceStarting;
         internal static bool VoiceStarting => Volatile.Read(ref _voiceStarting) != null;
         internal static Func<Task> VoiceLead = () => Task.Delay(1000);
@@ -201,16 +218,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 foreach (var file in enabled.OrderBy(_ => Rng.Next())) VoiceQueue.Enqueue(file);
             return VoiceQueue.Count == 0 ? null : VoiceQueue.Dequeue();
         }
-        internal static async Task<double?> VoiceAfterLead(AppSettings s, int generation, string? path = null, Action<double>? durationChanged = null)
+        internal static async Task<double?> VoiceAfterLead(AppSettings s, int generation, string? path = null, Action<double>? durationChanged = null, CancellationTokenSource? owner = null)
         {
             await VoiceLead();
-            return generation == Volatile.Read(ref _generation) && !_closed
-                ? await PlayFlashVoice(s, path, generation, durationChanged) : null;
+            return generation == Volatile.Read(ref _generation) && !_closed && owner?.IsCancellationRequested != true
+                ? await PlayFlashVoice(s, path, generation, durationChanged, owner) : null;
         }
 
         /// <summary>WPF ShowImages/PlaySound: one voice per burst, respect voice mutes, use the
         /// clip length for images, and return the generation-guarded duck 1.5 s after its duration.</summary>
-        internal static async Task<double?> PlayFlashVoice(AppSettings s, string? path = null, int? generation = null, Action<double>? durationChanged = null)
+        internal static async Task<double?> PlayFlashVoice(AppSettings s, string? path = null, int? generation = null, Action<double>? durationChanged = null, CancellationTokenSource? owner = null)
         {
             path ??= NextVoice(s);
             if (!s.FlashAudioEnabled || s.MasterVolume <= 0 || s.AvatarMuted || s.CompanionVoiceLinesMuted
@@ -223,6 +240,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             long startedAt = -1;
             var pending = new object();
             Interlocked.Exchange(ref _stopFlashVoice, null)?.Invoke();
+            _voiceOwner = owner;
             Interlocked.Exchange(ref _voiceStarting, pending);
             void ClearPending() => Interlocked.CompareExchange(ref _voiceStarting, null, pending);
             var sync = new object();
@@ -275,7 +293,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 started.TrySetResult(null); ClearPending(); stop();
             };
             _stopFlashVoice = cancel;
-            if (generation.HasValue && generation.Value != Volatile.Read(ref _generation)) cancel();
+            if ((generation.HasValue && generation.Value != Volatile.Read(ref _generation)) || owner?.IsCancellationRequested == true) cancel();
             var length = await started.Task;
             if (generation.HasValue && generation.Value != Volatile.Read(ref _generation))
             {
@@ -302,6 +320,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             int generation, double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, Action? done,
             FlashMotionStyle? inheritMotion = null, BurstLifetime? timing = null, bool suppressHaptic = false)
         {
+            ScheduleOwned(flashes, firstMs, staggerMs, generation, alpha, fade, lifetime, clickable, ambient,
+                hydraGeneration, done, inheritMotion, timing, null, suppressHaptic);
+        }
+
+        private static void ScheduleOwned(List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> flashes, int firstMs, int staggerMs,
+            int generation, double alpha, TimeSpan fade, TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, Action? done,
+            FlashMotionStyle? inheritMotion, BurstLifetime? timing, CancellationTokenSource? owner, bool suppressHaptic = false)
+        {
             // WPF FlashService.cs:1674: FlashDisplayed once per batch, right after its spawns are queued.
             if (flashes.Count > 0) Platform.BarkHead.Engine?.Raise("FlashDisplayed");
             if (flashes.Count > 0)   // WPF RemoteControlService.Screen.cs:117-120: online when any picture came from Scrolller
@@ -317,8 +343,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                     try
                     {
                         // WPF FlashService.cs:1705-1711 reads the current cap at each spawn.
-                        if (refused || _closed || generation != _generation || Active.Count >= Cap(CoreSettings.Current, ambient)) { Drop(bmp); return; }
-                        refused = !Show(bmp, rect, path, screen, alpha, fade, timing?.Current ?? lifetime, clickable, ambient, hydraGeneration, inheritMotion, notify: !notified, timing: timing, suppressHaptic: suppressHaptic);
+                        if (refused || _closed || generation != _generation || owner?.IsCancellationRequested == true || OnScreen >= Cap(CoreSettings.Current, ambient)) { Drop(bmp); return; }
+                        refused = !ShowOwned(bmp, rect, path, screen, alpha, fade, timing?.Current ?? lifetime, clickable, ambient, hydraGeneration, inheritMotion, !notified, timing, owner, suppressHaptic);
                         notified |= !refused;
                     }
                     catch (Exception ex) { refused = true; Log.Error(ex, "Flash: spawn failed"); }
@@ -332,17 +358,37 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static bool Show(Bitmap bmp, PixelRect rect, string path, Screen screen, double alpha, TimeSpan fade,
             TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, FlashMotionStyle? inheritMotion = null, bool notify = true, BurstLifetime? timing = null, bool suppressHaptic = false)
         {
+            return ShowOwned(bmp, rect, path, screen, alpha, fade, lifetime, clickable, ambient, hydraGeneration, inheritMotion, notify, timing, null, suppressHaptic);
+        }
+
+        private static bool ShowOwned(Bitmap bmp, PixelRect rect, string path, Screen screen, double alpha, TimeSpan fade,
+            TimeSpan lifetime, bool clickable, bool ambient, int hydraGeneration, FlashMotionStyle? inheritMotion, bool notify, BurstLifetime? timing, CancellationTokenSource? owner, bool suppressHaptic)
+        {
             var s = CoreSettings.Current;
-            if (Active.Count >= Cap(s, ambient)) { Drop(bmp); return false; }
+            if (OnScreen >= Cap(s, ambient)) { Drop(bmp); return false; }
             var multiplier = FlashFxRules.RollLucky(SkillTreeRules.HasSkill(s, FlashFxRules.LuckySkillId), hydraGeneration, remixMirror: false, Rng);
             if (multiplier > 1) LuckyProc(App.Mods?.GetLuckyFlashLabel() ?? ConditioningControlPanel.Localization.Loc.Get("skill_lucky_flash"), multiplier);
             // Perk effects Off (WPF 7.2.3 FlashService :1895): no lucky gold, no Sparkle Boost pink; XP is paid either way.
             var perkFx = PerkEffectsRules.ShowsVisuals(s.PerkEffects);
             var glow = FlashFxRules.ResolveGlow(s.FlashGlowEnabled, ConditioningControlPanel.Avalonia.Controls.AmbientFxCanvas.Env.CurrentTier,
                 multiplier > 1 && perkFx, perkFx ? SkillTreeRules.GetSparkleBoostTier(s) : 0, natasha: false);
+            // An owned burst (Deeper one-shot) stays a window so StopOwned can close it; hosted items carry no owner.
+            // A lit Whirlpool drags every still flash (FlashOverlay.Stage rides the windows): those stay windows too.
+            if (owner == null && !PoolOn() && CanHost(s, clickable, glow.HasGlow, inheritMotion, path, GazeFocus.Instance.IsActive) && !GifFrames.TryGetValue(bmp, out _)
+                && ShowHosted(bmp, rect, screen, lifetime, timing))
+            {
+                if (!suppressHaptic)
+                {
+                    ApplyLuminance(bmp, path, lifetime);
+                    _ = CoreHaptics.Service?.FlashDecayVibeAsync();
+                }
+                if (notify) Displayed?.Invoke();
+                Paid(path, s, hydraGeneration, multiplier);
+                return true;
+            }
             var w = new FlashOverlayWindow(bmp, path)
             {
-                HydraGeneration = hydraGeneration, Ambient = ambient, Lifetime = lifetime,
+                HydraGeneration = hydraGeneration, Ambient = ambient, Lifetime = lifetime, FlashOwner = owner,
                 SpawnedAt = Clock.GetTimestamp(), SpawnScreen = screen, InheritMotion = inheritMotion,
             };
             // WPF FlashService.cs:1774-1776 + heartbeat :3328-3340: an animated flash plays at the GIF speed slider.
@@ -361,6 +407,88 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             timing?.Track(w.SetVoiceLifetime);
             if (notify) Displayed?.Invoke();
             Paid(path, s, hydraGeneration, multiplier);
+            return true;
+        }
+
+        /// <summary>WPF FlashService.cs:1697: the compositor (or solid host) takes the flash unless it needs
+        /// input, gaze, motion, glow or a credit badge, which still ride the classic window.
+        /// The gaze settings default on, so they only count while the gaze tracker runs.</summary>
+        internal static bool CanHost(AppSettings s, bool clickable, bool glow, FlashMotionStyle? inheritMotion, string path, bool gazeActive) =>
+            (s.UnifiedOverlayHost || s.FlashSolidMode) && !MouseClickable(s, clickable) && !glow
+            && !(gazeActive && (s.FlashGazePopEnabled || s.FlashGazeLingerEnabled))
+            && (inheritMotion ?? s.FlashMotionStyle) == FlashMotionStyle.Still && !Services.Fyp.Online.ScrolllerCreditRules.IsScrolllerMedia(path);
+
+        private static readonly TimeSpan HostedFrame = TimeSpan.FromMilliseconds(16);
+        internal static Func<Action, TimeSpan, IDisposable> HostedTimer = (action, delay) => DispatcherTimer.RunOnce(action, delay);
+
+        /// <summary>WPF FlashService.cs:2485 SpawnLayerVisual + FlashLayer.cs:395-470: the picture on the screen's
+        /// shared stage at <see cref="CompositorLayers.Flash"/> (under subliminal cards), its black backing and
+        /// the picture fading together, corners from the fitted picture. False when the stage is refused.</summary>
+        internal static bool ShowHosted(Bitmap bmp, PixelRect rect, Screen screen, TimeSpan lifetime, BurstLifetime? timing = null)
+        {
+            var lease = SharedOverlayHost.Acquire(screen.Bounds);
+            if (lease == null) return false;
+            var k = screen.Scaling > 0 ? screen.Scaling : 1;
+            var box = new Size(rect.Width / k, rect.Height / k);
+            var fit = Stretch.Uniform.CalculateSize(box, bmp.Size);
+            var r = FlashCorners.Resolve(CoreSettings.Current.FlashRoundedCorners, PrizeOwnership.OwnsFlashV2(), false,
+                Math.Min(fit.Width, fit.Height), 1.0);
+            var item = new Border
+            {
+                Background = Brushes.Black, CornerRadius = new CornerRadius(r), IsHitTestVisible = false, Opacity = 0,
+                Width = box.Width, Height = box.Height, ZIndex = CompositorLayers.Flash,
+                HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness((rect.X - screen.Bounds.X) / k, (rect.Y - screen.Bounds.Y) / k, 0, 0),
+                Child = new Image
+                {
+                    Source = bmp, Stretch = Stretch.Uniform,
+                    Clip = r > 0 ? new RectangleGeometry(new Rect((box.Width - fit.Width) / 2, (box.Height - fit.Height) / 2,
+                        fit.Width, fit.Height), r, r) : null,
+                },
+            };
+            IDisposable? tick = null;
+            var stopped = false;
+            var fadingOut = false;
+            var last = Clock.GetTimestamp();
+            var spawnedAt = last;
+            long ExpiresAt(TimeSpan life) => spawnedAt + (long)(life.TotalSeconds * Clock.TimestampFrequency);
+            var expiresAt = ExpiresAt(lifetime);
+            (Control, PixelRect, Action) entry = default;
+            void Stop()
+            {
+                if (stopped) return;
+                stopped = true;
+                tick?.Dispose();
+                Hosted.Remove(entry);
+                lease.Canvas.Children.Remove(item);
+                lease.Dispose();
+                bmp.Dispose();
+            }
+            // WPF Heartbeat_Tick (FlashService.cs:3199-3206, 3238-3290): Opacity and Fade are read live every
+            // frame, alpha moves dt/fadeSeconds towards the target, and expiry turns the ramp around from wherever it is.
+            void Tick()
+            {
+                tick = null;
+                if (stopped) return;
+                var now = Clock.GetTimestamp();
+                var dt = Clock.GetElapsedTime(last, now).TotalSeconds;
+                last = now;
+                var s = CoreSettings.Current;
+                fadingOut |= now >= expiresAt;
+                var target = fadingOut ? 0 : Math.Clamp(s.FlashOpacity / 100.0, 0, 1);
+                var fadeSeconds = ConditioningControlPanel.Services.Safety.GentleVisuals.Fade(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent);
+                var step = fadeSeconds > 0 ? dt / fadeSeconds : 1.0;
+                var from = item.Opacity;
+                item.Opacity = target > from ? Math.Min(target, from + step) : Math.Max(target, from - step);
+                if (item.Opacity < from && item.Opacity <= 0) { Stop(); return; }
+                tick = HostedTimer(Tick, HostedFrame);
+            }
+            entry = (item, rect, Stop);
+            lease.Canvas.Children.Add(item);
+            Hosted.Add(entry);
+            lease.Raise();
+            tick = HostedTimer(Tick, HostedFrame);
+            timing?.Track(life => { if (!stopped && !fadingOut) expiresAt = ExpiresAt(life); });
             return true;
         }
 
@@ -402,14 +530,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         }
 
         /// <summary>WPF FlashService.ScaleFrameDelay (:119-126) then the gentle-visuals slow-down
-        /// (:1775-1776): 2x plays twice as fast, never under 10 ms a frame.</summary>
-        internal static TimeSpan GifFrameDelay(TimeSpan sourceDelay, double multiplier)
+        /// (:1775-1776): 2x plays twice as fast, never under 10 ms a frame. A deck face skips the
+        /// slow-down, as WPF ApplyDeckSwap (:2930) does.</summary>
+        internal static TimeSpan GifFrameDelay(TimeSpan sourceDelay, double multiplier, bool gentle = true)
         {
             var ms = sourceDelay.TotalMilliseconds;
             if (double.IsNaN(ms) || double.IsInfinity(ms) || ms <= 0) ms = 100.0;
             if (double.IsNaN(multiplier) || double.IsInfinity(multiplier) || multiplier <= 0) multiplier = 1.0;
             ms = Math.Max(10.0, ms / Math.Clamp(multiplier, 0.25, 4.0));
-            if (ConditioningControlPanel.Services.Safety.GentleVisuals.On)
+            if (gentle && ConditioningControlPanel.Services.Safety.GentleVisuals.On)
                 ms = ConditioningControlPanel.Services.Safety.GentleVisuals.ScaleDelayMs(ms);
             return TimeSpan.FromMilliseconds(ms);
         }
@@ -473,10 +602,12 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var pad = w.ApplyGlow(glow, scaling);
             w.ApplyCorners(FlashCorners.Resolve(CoreSettings.Current.FlashRoundedCorners, PrizeOwnership.OwnsFlashV2(), glow.HasGlow,
                 Math.Min(rect.Width, rect.Height) / (scaling > 0 ? scaling : 1), dpiScale: 1.0));
-            var winRect = new PixelRect(rect.X - pad, rect.Y - pad, rect.Width + 2 * pad, rect.Height + 2 * pad);
             // Click on (WPF FlashService.cs:1765): the window keeps its input and never takes focus
             // (passive); off: exactly the click-through recipe above.
-            if (clickable) w.MakeClickable(() => Pop(w));
+            if (clickable) w.MakeClickable(() => Pop(w), () => DeckPress(w));
+            AttachDeck(w, rect, scaling, clickable);
+            pad = w.GlowPadPx;
+            var winRect = new PixelRect(rect.X - pad, rect.Y - pad, rect.Width + 2 * pad, rect.Height + 2 * pad);
             if (!Present(w, winRect, clickable))
             {
                 if (!_warnedUnavailable) Log.Warning("Flash: the platform refused a click-through topmost overlay window; flashes skipped");
@@ -484,9 +615,13 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 w.Close();
                 return false;
             }
+            // A card's grown margin stays click-through: only the picture and its glow take the mouse.
+            // Windows: polled by the deck tick (DeckInput).
+            if (w.DeckInputPx is { } input) X11Overlay.SetInputRect(w, input[0]);
             var entry = (w, rect);
             w.Closed += (_, _) => Active.RemoveAll(e => e.Window == w);
             Active.Add(entry);
+            EnsurePoolTick();
             w.ApplyCorners(CoreSettings.Current.FlashRoundedCorners, OwnsMotion, glow.HasGlow,
                 rect.Width / scaling, rect.Height / scaling);
             w.Show();
@@ -577,6 +712,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             _lastDriftTick = now;
             foreach (var (w, m) in Drifting)
                 if (w is not FlashOverlayWindow { Exit: not null } && w is not FlashOverlayWindow { Shatter: not null }
+                    && w is not FlashOverlayWindow { DeckShatter: not null }
                     && FlashMotion.Step(m, dt))   // a leaving flash holds still
                 {
                     var p = new PixelPoint((int)Math.Round(m.X), (int)Math.Round(m.Y));
@@ -603,13 +739,41 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         // The burst generation and the voice stop at once; windows close on the UI thread.
         private static void RetireBurst()
         {
-            lock (BurstGate) { Interlocked.Increment(ref _generation); _busy = false; Volatile.Write(ref _voiceAttempted, 0); }   // WPF FlashService.cs:5118
+            lock (BurstGate) { Interlocked.Increment(ref _generation); _burstOwner = null; _busy = false; Volatile.Write(ref _voiceAttempted, 0); }   // WPF FlashService.cs:5118
             Interlocked.Exchange(ref _stopFlashVoice, null)?.Invoke();
         }
+
+        internal static void StopOwned(CancellationTokenSource owner)
+        {
+            owner.Cancel();
+            void Close()
+            {
+                lock (BurstGate)
+                    if (ReferenceEquals(_burstOwner, owner)) { _burstOwner = null; _busy = false; }
+                if (ReferenceEquals(_voiceOwner, owner))
+                {
+                    _voiceOwner = null;
+                    Interlocked.Exchange(ref _stopFlashVoice, null)?.Invoke();
+                }
+                foreach (var (window, _) in Active.ToList())
+                    if (ReferenceEquals(window.FlashOwner, owner)) window.Close();
+                foreach (var window in Exiting.ToList())
+                    if (ReferenceEquals(window.FlashOwner, owner)) window.Close();
+            }
+            if (Dispatcher.UIThread.CheckAccess()) Close(); else Dispatcher.UIThread.Post(Close);
+        }
+
+        /// <summary>Tests only: the shell's Closed handler latches <c>_closed</c> for the process, which
+        /// in the app is exiting (ShutdownMode.OnMainWindowClose; the tray X only hides). A test host
+        /// outlives its shells, so test isolation clears the latch before each test.</summary>
+        internal static void ResetClosedForTests() => _closed = false;
 
         private static void CloseWindows(bool final)
         {
             _closed |= final;
+            StopDeckTick();
+            StopPoolTick();
+            foreach (var (_, _, stop) in Hosted.ToList()) stop();
             foreach (var (w, _) in Active.ToList()) w.Close();
             foreach (var w in Exiting.ToList()) w.Close();
             PackImages.CleanupTemps();
@@ -681,20 +845,38 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// <summary>WPF FlashService.cs:696-706: with stay on and the screen full, the ambient tick
         /// skips whole (picture and whisper) and waits for a pop.</summary>
         internal static bool StayScreenFull(AppSettings s) =>
-            FlashStayRule.ScreenFull(Stays(s, ambient: true), Active.Count, Cap(s, ambient: true));
+            FlashStayRule.ScreenFull(Stays(s, ambient: true), OnScreen, Cap(s, ambient: true));
 
         /// <summary>WPF OnFlashClicked: off the active list (cap, overlap), then the leave animation
         /// (BuildExit, FlashService.cs:2334) or the plain cut for None.</summary>
         internal static void Pop(FlashOverlayWindow w, bool fromGaze = false)
         {
-            if (w.IsFadingOut || w.Exit != null || w.Shatter != null || !Active.Any(e => e.Window == w)) return;
+            if (w.IsFadingOut || w.Exit != null || w.Shatter != null || w.DeckShatter != null || !Active.Any(e => e.Window == w)) return;
+            var rect = Active.Find(e => e.Window == w).Rect;
             Active.RemoveAll(e => e.Window == w);
             _ = CoreHaptics.Service?.FlashClickVibeAsync();   // WPF FlashService.cs:2945
             var s = CoreSettings.Current;
             // WPF OnFlashClicked hydra (FlashService.cs:2956-2970): Corruption mode, up to two more.
-            var n = FlashFxRules.HydraSpawnCount(s.CorruptionMode, s.HydraLimit, isRemix: w.IsRemix, fromGaze: fromGaze, w.HydraGeneration, Active.Count);
+            var n = FlashFxRules.HydraSpawnCount(s.CorruptionMode, s.HydraLimit, isRemix: w.IsRemix, fromGaze: fromGaze, w.HydraGeneration, OnScreen);
             if (n > 0) Multiply(w, n, ChildLifetime(w, s), w.HydraGeneration + 1);
             Clicked?.Invoke(); // WPF FlashService.cs:2986
+            Leave(w, rect, s);
+        }
+
+        /// <summary>A flash off the active list leaves: a card's break, the gentle fade, the owned shatter, the
+        /// exit picker or the plain cut (WPF SafeCloseFlashWindow :5300-5350). A pop and the pool's eye share it.</summary>
+        private static void Leave(FlashOverlayWindow w, PixelRect rect, AppSettings s)
+        {
+            // WPF FlashService.cs:5225-5240: the click that reached BreakAt breaks the card, ahead of Gentle and the exit picker.
+            if (w.DeckBreak)
+            {
+                w.DeckBreak = false;
+                DeckBreakBlast(w, rect);
+                if (!w.TryBeginDeckShatter(FlashOverlayWindow.DeckLevel, Rng)) { w.Close(); return; }
+                Exiting.Add(w);
+                w.Closed += (_, _) => Exiting.Remove(w);
+                return;
+            }
             if (s.GentleVisuals)
             {
                 Exiting.Add(w);
@@ -737,18 +919,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
 
         internal static async Task SpawnChildrenAsync(FlashOverlayWindow parent, int count, TimeSpan lifetime, int hydraGeneration)
         {
-            if (_closed || parent.SpawnScreen is not { } screen) return;
+            if (_closed || parent.FlashOwner?.IsCancellationRequested == true || parent.SpawnScreen is not { } screen) return;
             var generation = _generation;
             try
             {
                 var s = CoreSettings.Current;
-                var occupied = Active.Select(a => a.Rect).ToList();
+                var occupied = Active.Select(a => a.Rect).Concat(Hosted.Select(h => h.Rect)).ToList();
                 RemoteFlashSource.EnsurePrefetch();
                 var flashes = await Task.Run(() => LoadPictures(count, new[] { screen }, new[] { 0 }, s, occupied, null));
-                if (generation != _generation) { foreach (var f in flashes) Drop(f.Bitmap); return; }
-                Schedule(flashes, 0, 100, generation, Math.Clamp(s.FlashOpacity / 100.0, 0, 1),
+                if (generation != _generation || parent.FlashOwner?.IsCancellationRequested == true) { foreach (var f in flashes) Drop(f.Bitmap); return; }
+                ScheduleOwned(flashes, 0, 100, generation, Math.Clamp(s.FlashOpacity / 100.0, 0, 1),
                     TimeSpan.FromSeconds(s.FadeDuration * FlashPlacement.FadeSecondsPerPercent), lifetime, s.FlashClickable,
-                    parent.Ambient, hydraGeneration, done: null, parent.MotionStyle);
+                    parent.Ambient, hydraGeneration, done: null, parent.MotionStyle, timing: null, owner: parent.FlashOwner);
             }
             catch (Exception ex) { Log.Error(ex, "Flash: hydra spawn failed"); }
         }
@@ -781,19 +963,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         /// from the header size alone, so each picture is decoded AT its display size like WPF's
         /// decode-at-display-size - never a full-resolution source held per window.
         /// </summary>
+        internal static Func<int, IReadOnlyList<Screen>, int[], AppSettings, List<PixelRect>, int?, Task<List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)>>> LoadPicturesAsync =
+            (count, screens, targets, settings, occupied, size) => Task.Run(() => LoadPictures(count, screens, targets, settings, occupied, size));
+
         private static List<(Bitmap Bitmap, PixelRect Rect, string Path, Screen Screen)> LoadPictures(int count, IReadOnlyList<Screen> screens,
             int[] targets, AppSettings s, List<PixelRect> occupied, int? size)
         {
-            var root = CorePaths.EffectiveAssets;
-            var dir = Path.Combine(root, "images");
             var result = new List<(Bitmap, PixelRect, string, Screen)>(count);
             if (targets.Length == 0) return result;
-
-            var files = Directory.Exists(dir)
-                ? AssetFolderExclusion.Enabled(Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
-                    .Where(f => FlashPlacement.ImageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
-                    .ToList(), root, s)
-                : new List<string>();
+            var files = FlashFiles(s);
 
             for (var tries = Math.Max(count * 5, 20); result.Count < count && tries > 0; tries--)
             {
@@ -827,6 +1005,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 catch (Exception ex) { Log.Debug("Flash: could not decode {Path}: {E}", path, ex.Message); }
             }
             return result;
+        }
+
+        /// <summary>The enabled images under the assets folder (WPF GetMediaFiles).</summary>
+        private static List<string> FlashFiles(AppSettings s)
+        {
+            var root = CorePaths.EffectiveAssets;
+            var dir = Path.Combine(root, "images");
+            return Directory.Exists(dir)
+                ? AssetFolderExclusion.Enabled(Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories)
+                    .Where(f => FlashPlacement.ImageExtensions.Contains(Path.GetExtension(f).ToLowerInvariant()))
+                    .ToList(), root, s)
+                : new List<string>();
         }
 
         /// <summary>An animated GIF/WebP decoded at its display size (at most 2048 px), under WPF's flash

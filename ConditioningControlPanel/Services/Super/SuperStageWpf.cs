@@ -19,6 +19,12 @@ internal static class SuperStageWpf
         SuperStageHost.PostToUi = a => DispatcherHelper.RunOnUI(a);
         SuperStageHost.EngineUp = () => App.Overlay?.IsRunning == true && App.CompositorEnabled && App.Compositor != null;
         SuperStageHost.CursorProvider = () => GetCursorPos(out var p) ? (p.X, p.Y) : null;
+        // The restless pool's click read: held bit and the "pressed since the last call" bit, left or right.
+        SuperStageHost.ClickProvider = () =>
+        {
+            short l = GetAsyncKeyState(VK_LBUTTON), r = GetAsyncKeyState(VK_RBUTTON);
+            return (((l | r) & 0x8000) != 0, ((l | r) & 0x0001) != 0);
+        };
         SuperStageHost.SteamSurface = on =>
         {
             if (on)
@@ -43,4 +49,7 @@ internal static class SuperStageWpf
     private struct POINT { public int X, Y; }
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT point);
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
+    private const int VK_LBUTTON = 0x01, VK_RBUTTON = 0x02;
 }

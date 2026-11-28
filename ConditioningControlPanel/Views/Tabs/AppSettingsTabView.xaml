@@ -5,6 +5,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:loc="clr-namespace:ConditioningControlPanel.Localization"
              xmlns:appset="clr-namespace:ConditioningControlPanel.Views.Controls.AppSettingsSections"
+             xmlns:rows="clr-namespace:ConditioningControlPanel.Controls.Rows"
              mc:Ignorable="d"
              d:DesignHeight="700" d:DesignWidth="1100">
 
@@ -39,7 +40,10 @@
         <!-- Mini-rail pill. A RadioButton so the group gives us single-selection
              for free: the scroll-spy re-checks the pill the reader is looking at,
              and a click scrolls. Deliberately calm - opacity and a 3px bar, the
-             same visual grammar as the nav rail's active indicator, no clock. -->
+             same visual grammar as the nav rail's active indicator, no clock.
+             READABLE ROWS REACH (owner 2026-11-25): each pill's caption is a DoorLabel, 16 Bold
+             Nunito tinted with the pill's own section hue (the dot's brush), and it wraps rather
+             than trims; MinHeight lets a two-line label grow its pill. -->
         <Style x:Key="SectionPill" TargetType="RadioButton">
             <Setter Property="GroupName" Value="AppSettingsSections"/>
             <Setter Property="MinHeight" Value="30"/>
@@ -106,8 +110,10 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- Table of contents. Fixed width, does not scroll with the body. -->
-            <Border Grid.Column="0" Width="186" Margin="0,0,16,0" VerticalAlignment="Top"
+            <!-- Table of contents. Fixed width, does not scroll with the body. 206 since the
+                 pills took the 16 px row label look (was 186): the longest English pill,
+                 "Account & Plans", stays on one line; longer languages wrap. -->
+            <Border Grid.Column="0" Width="206" Margin="0,0,16,0" VerticalAlignment="Top"
                     Background="{DynamicResource SurfaceBgBrush}" BorderBrush="#2A2A46"
                     BorderThickness="1" CornerRadius="12" Padding="8,10">
                 <StackPanel>
@@ -127,8 +133,7 @@
                                      Fill="{StaticResource SectionHueGeneralBrush}"/>
                             <Image Grid.Column="1" Width="14" Height="14" Margin="0,0,7,0" VerticalAlignment="Center"
                                    Source="{Binding Source='🎀', Converter={StaticResource EmojiToImageSource}}"/>
-                            <TextBlock Grid.Column="2" Text="{loc:Str set2_section_general}" VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"/>
+                            <rows:DoorLabel Grid.Column="2" HueKey="SectionHueGeneralBrush" Text="{loc:Str set2_section_general}"/>
                         </Grid>
                     </RadioButton>
 
@@ -144,8 +149,7 @@
                                      Fill="{StaticResource SectionHueAudioBrush}"/>
                             <Image Grid.Column="1" Width="14" Height="14" Margin="0,0,7,0" VerticalAlignment="Center"
                                    Source="{Binding Source='🔊', Converter={StaticResource EmojiToImageSource}}"/>
-                            <TextBlock Grid.Column="2" Text="{loc:Str set2_section_audio}" VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"/>
+                            <rows:DoorLabel Grid.Column="2" HueKey="SectionHueAudioBrush" Text="{loc:Str set2_section_audio}"/>
                         </Grid>
                     </RadioButton>
 
@@ -161,8 +165,7 @@
                                      Fill="{StaticResource SectionHueDevicesBrush}"/>
                             <Image Grid.Column="1" Width="14" Height="14" Margin="0,0,7,0" VerticalAlignment="Center"
                                    Source="{Binding Source='📷', Converter={StaticResource EmojiToImageSource}}"/>
-                            <TextBlock Grid.Column="2" Text="{loc:Str set2_section_devices}" VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"/>
+                            <rows:DoorLabel Grid.Column="2" HueKey="SectionHueDevicesBrush" Text="{loc:Str set2_section_devices}"/>
                         </Grid>
                     </RadioButton>
 
@@ -178,8 +181,7 @@
                                      Fill="{StaticResource SectionHueDevicesBrush}"/>
                             <Image Grid.Column="1" Width="14" Height="14" Margin="0,0,7,0" VerticalAlignment="Center"
                                    Source="{Binding Source='🖥', Converter={StaticResource EmojiToImageSource}}"/>
-                            <TextBlock Grid.Column="2" Text="{loc:Str settings_section_monitors}" VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"/>
+                            <rows:DoorLabel Grid.Column="2" HueKey="SectionHueDevicesBrush" Text="{loc:Str settings_section_monitors}"/>
                         </Grid>
                     </RadioButton>
 
@@ -195,8 +197,7 @@
                                      Fill="{StaticResource SectionHuePerformanceBrush}"/>
                             <Image Grid.Column="1" Width="14" Height="14" Margin="0,0,7,0" VerticalAlignment="Center"
                                    Source="{Binding Source='⚡', Converter={StaticResource EmojiToImageSource}}"/>
-                            <TextBlock Grid.Column="2" Text="{loc:Str set2_section_performance}" VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"/>
+                            <rows:DoorLabel Grid.Column="2" HueKey="SectionHuePerformanceBrush" Text="{loc:Str set2_section_performance}"/>
                         </Grid>
                     </RadioButton>
 
@@ -212,8 +213,7 @@
                                      Fill="{StaticResource SectionHueNotificationsBrush}"/>
                             <Image Grid.Column="1" Width="14" Height="14" Margin="0,0,7,0" VerticalAlignment="Center"
                                    Source="{Binding Source='🔔', Converter={StaticResource EmojiToImageSource}}"/>
-                            <TextBlock Grid.Column="2" Text="{loc:Str set2_section_notifications}" VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"/>
+                            <rows:DoorLabel Grid.Column="2" HueKey="SectionHueNotificationsBrush" Text="{loc:Str set2_section_notifications}"/>
                         </Grid>
                     </RadioButton>
 
@@ -235,8 +235,7 @@
                                      Fill="{StaticResource SectionHueEmiDeskBrush}"/>
                             <Image Grid.Column="1" Width="14" Height="14" Margin="0,0,7,0" VerticalAlignment="Center"
                                    Source="{Binding Source='📺', Converter={StaticResource EmojiToImageSource}}"/>
-                            <TextBlock Grid.Column="2" Text="{loc:Str set2_section_emidesk}" VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"/>
+                            <rows:DoorLabel Grid.Column="2" HueKey="SectionHueEmiDeskBrush" Text="{loc:Str set2_section_emidesk}"/>
                         </Grid>
                     </RadioButton>
                     <RadioButton x:Name="SectionPillAccount" Tag="account"
@@ -251,8 +250,7 @@
                                      Fill="{StaticResource SectionHueAccountBrush}"/>
                             <Image Grid.Column="1" Width="14" Height="14" Margin="0,0,7,0" VerticalAlignment="Center"
                                    Source="{Binding Source='💖', Converter={StaticResource EmojiToImageSource}}"/>
-                            <TextBlock Grid.Column="2" Text="{loc:Str settings_section_plans}" VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"/>
+                            <rows:DoorLabel Grid.Column="2" HueKey="SectionHueAccountBrush" Text="{loc:Str settings_section_plans}"/>
                         </Grid>
                     </RadioButton>
 
@@ -268,8 +266,7 @@
                                      Fill="{StaticResource SectionHueDataBrush}"/>
                             <Image Grid.Column="1" Width="14" Height="14" Margin="0,0,7,0" VerticalAlignment="Center"
                                    Source="{Binding Source='💾', Converter={StaticResource EmojiToImageSource}}"/>
-                            <TextBlock Grid.Column="2" Text="{loc:Str set2_section_data}" VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"/>
+                            <rows:DoorLabel Grid.Column="2" HueKey="SectionHueDataBrush" Text="{loc:Str set2_section_data}"/>
                         </Grid>
                     </RadioButton>
 
@@ -285,8 +282,7 @@
                                      Fill="{StaticResource SectionHueUpdatesBrush}"/>
                             <Image Grid.Column="1" Width="14" Height="14" Margin="0,0,7,0" VerticalAlignment="Center"
                                    Source="{Binding Source='⬆️', Converter={StaticResource EmojiToImageSource}}"/>
-                            <TextBlock Grid.Column="2" Text="{loc:Str set2_section_updates}" VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"/>
+                            <rows:DoorLabel Grid.Column="2" HueKey="SectionHueUpdatesBrush" Text="{loc:Str set2_section_updates}"/>
                         </Grid>
                     </RadioButton>
                 </StackPanel>

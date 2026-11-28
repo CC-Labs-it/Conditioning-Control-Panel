@@ -36,6 +36,7 @@ internal sealed partial class EmiDeskService
     {
         if (_eventsWired) return;
         _eventsWired = true;
+        HapticService.EmiDeskFire = Moment;
         _momentAutonomy = autonomy;
         _momentSpeech = speech;
         _momentDailyFree = dailyFree;
@@ -50,6 +51,7 @@ internal sealed partial class EmiDeskService
     {
         StopClock();
         if (!_eventsWired) return;
+        HapticService.EmiDeskFire = null;
         ProgressionBank.XPAwarded -= OnXpAwarded;
         if (_momentAutonomy != null) _momentAutonomy.EnabledChanged -= OnAutonomyEnabled;
         if (_momentSpeech != null) _momentSpeech.ListeningChanged -= OnListeningChanged;

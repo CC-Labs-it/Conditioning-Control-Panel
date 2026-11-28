@@ -39,7 +39,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             var previous = _drawingOwner;
             try { _drawingOwner = owner; draw(); } finally { _drawingOwner = previous; }
         }
-        internal static void CloseOwned(object owner) { if (ReferenceEquals(_visibleOwner, owner)) CloseAll(); }
+        // A retired one-shot only blanks the cards (WPF BlankCards); the Afterglow line stays.
+        internal static void CloseOwned(object owner) { if (ReferenceEquals(_visibleOwner, owner)) { ClearCards(); ReleaseHosts(); } }
         // WPF SubliminalService.cs:609-629: notify only after the delayed show is admitted.
         internal static event Action? Displayed;
         private static bool _warnedUnavailable;
@@ -63,7 +64,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             }
             var card = SubliminalOverlayWindow.Build(text, CoreSettings.Current);
             card.Opacity = 0;
-            card.ZIndex = 1200; // WPF: above hosted image flashes
+            // WPF: legacy host above hosted image flashes (1000); the compositor's SubliminalLayer sits under SpiralLayer.
+            card.ZIndex = CoreSettings.Current.UnifiedOverlayHost ? Services.Compositor.CompositorLayers.Subliminal : 1200;
             lease.Canvas.Children.Add(card);
             HostedCards.Add(card);
             lease.Raise();
@@ -121,6 +123,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
                 if (w.IsVisible && w.IsFlashing && w.Content is Grid grid) AddText(rects, grid);
             foreach (var card in HostedCards)
                 if (card.Opacity > 0.01) AddText(rects, card);
+            rects.AddRange(AfterglowLineOverlay.ActiveTextRects());   // the Afterglow line is drawn text too
             return rects;
         }
 
@@ -165,7 +168,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
             bool barkRaised = false;
             foreach (var i in PinkFilterOverlay.ResolveScreenIndices(Services.UI.MonitorTarget.FollowGlobal, s.GlobalTargetMonitor, s.DualMonitorEnabled, screens.Count, primary))
             {
-                if (UseSolidHost(s.SubliminalSolidMode, s.SubliminalStealsFocus, MandatoryVideoOverlay.Instance.Windows.Count) &&
+                // WPF SubliminalService.cs:659 UsesCompositorCard: the unified host takes every non-focus card.
+                if (UseSolidHost(s.SubliminalSolidMode || s.UnifiedOverlayHost, s.SubliminalStealsFocus, MandatoryVideoOverlay.Instance.Windows.Count) &&
                     ShowHosted(screens[i].Bounds, text, alpha, hold, null, fadeIn, fadeOut))
                 {
                     // WPF raises the bark and Displayed on every path; Present (which does it) is skipped here.
@@ -251,11 +255,21 @@ namespace ConditioningControlPanel.Avalonia.Views.Overlays
         internal static Action<Window> StackOverVideo = card =>
             X11Overlay.SlotAboveVideo(card, MandatoryVideoOverlay.Instance.Windows);
 
-        /// <summary>Take every card off screen now (WPF <c>TearDownSurfaces</c> on Stop).</summary>
+        /// <summary>Take every card off screen now (WPF <c>TearDownSurfaces</c> on Stop); every Afterglow ghost goes with them.</summary>
         public static void CloseAll()
         {
             ClearCards();
             ReleaseHosts();
+            AfterglowLineOverlay.StopAll();
+        }
+
+        /// <summary>WPF ShowSubliminalVisuals with restCard: Afterglow runs alone and the word is up as its
+        /// ghost, so no card is drawn; the show still counts (bark, Displayed, the remote screen feed).</summary>
+        internal static void Rested()
+        {
+            Platform.BarkHead.Engine?.Raise("SubliminalDisplayed");
+            Displayed?.Invoke();
+            ConditioningControlPanel.Services.Remote.RemoteScreenFeed.Word();
         }
     }
 

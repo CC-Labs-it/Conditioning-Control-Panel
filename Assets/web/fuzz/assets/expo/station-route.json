@@ -1,0 +1,2269 @@
+{
+  "version": 2,
+  "start": {
+    "id": "atrium",
+    "at": [
+      0.54,
+      0,
+      35.96
+    ],
+    "yaw": -0.922942
+  },
+  "zoneNames": {
+    "atrium": "Admission atrium",
+    "chronology": "Archive gallery",
+    "forum": "Technical forum",
+    "commons": "Garden commons",
+    "aquarium": "Aquarium promenade",
+    "service": "Staff canteen",
+    "hall": "Grand hall",
+    "hoof": "Applied Hoof Sciences",
+    "habitat": "Conservation habitat",
+    "shop": "Gift shop"
+  },
+  "slots": [
+    {
+      "id": "slot_01",
+      "order": 1,
+      "zone": "atrium",
+      "zoneName": "Admission atrium",
+      "landmark": "Admission carousel",
+      "screen": [
+        4.57,
+        1.84,
+        32.91
+      ],
+      "front": [
+        -0.673866,
+        0,
+        0.738853
+      ],
+      "standing": [
+        3.0336,
+        0,
+        34.5946
+      ],
+      "width": 1.76,
+      "height": 1.32,
+      "freestanding": true,
+      "side": null,
+      "next": "slot_02",
+      "directions": [
+        {
+          "zone": "atrium",
+          "text": "Take the east doors marked Archive Gallery.",
+          "via": [
+            7.8,
+            0,
+            41.0
+          ]
+        },
+        {
+          "zone": "chronology",
+          "text": "Follow the line to the oak reading bays.",
+          "via": [
+            8.63,
+            0,
+            57.75
+          ]
+        }
+      ]
+    },
+    {
+      "id": "slot_02",
+      "order": 2,
+      "zone": "chronology",
+      "zoneName": "Archive gallery",
+      "landmark": "Oak reading bays",
+      "screen": [
+        10.91,
+        1.93,
+        57.75
+      ],
+      "front": [
+        -1.0,
+        0,
+        0.0
+      ],
+      "standing": [
+        8.63,
+        0,
+        57.75
+      ],
+      "width": 2.1,
+      "height": 1.5750000000000002,
+      "freestanding": false,
+      "side": "left",
+      "next": "slot_03",
+      "directions": [
+        {
+          "zone": "chronology",
+          "text": "Follow the line to the archive return wall.",
+          "via": [
+            6.97,
+            0,
+            85.0
+          ]
+        }
+      ]
+    },
+    {
+      "id": "slot_03",
+      "order": 3,
+      "zone": "chronology",
+      "zoneName": "Archive gallery",
+      "landmark": "Archive return wall",
+      "screen": [
+        4.69,
+        1.93,
+        85.0
+      ],
+      "front": [
+        1.0,
+        0,
+        0.0
+      ],
+      "standing": [
+        6.97,
+        0,
+        85.0
+      ],
+      "width": 2.1,
+      "height": 1.5750000000000002,
+      "freestanding": false,
+      "side": "right",
+      "next": "slot_04",
+      "directions": [
+        {
+          "zone": "chronology",
+          "text": "Follow the oak bays around the bend into the steel-framed Forum.",
+          "via": [
+            3.4,
+            0,
+            103.0
+          ]
+        },
+        {
+          "zone": "forum",
+          "text": "Follow the line to the delegate gallery.",
+          "via": [
+            -13.08,
+            0,
+            103.83
+          ]
+        }
+      ]
+    },
+    {
+      "id": "slot_04",
+      "order": 4,
+      "zone": "forum",
+      "zoneName": "Technical forum",
+      "landmark": "Delegate gallery",
+      "screen": [
+        -13.08,
+        1.93,
+        106.11
+      ],
+      "front": [
+        0.0,
+        0,
+        -1.0
+      ],
+      "standing": [
+        -13.08,
+        0,
+        103.83
+      ],
+      "width": 2.1,
+      "height": 1.5750000000000002,
+      "freestanding": false,
+      "side": "left",
+      "next": "slot_05",
+      "directions": [
+        {
+          "zone": "forum",
+          "text": "Follow the line to the instrument gallery.",
+          "via": [
+            -46.13,
+            0,
+            102.17
+          ]
+        }
+      ]
+    },
+    {
+      "id": "slot_05",
+      "order": 5,
+      "zone": "forum",
+      "zoneName": "Technical forum",
+      "landmark": "Instrument gallery",
+      "screen": [
+        -46.13,
+        1.93,
+        99.89
+      ],
+      "front": [
+        0.0,
+        0,
+        1.0
+      ],
+      "standing": [
+        -46.13,
+        0,
+        102.17
+      ],
+      "width": 2.1,
+      "height": 1.5750000000000002,
+      "freestanding": false,
+      "side": "right",
+      "next": "slot_06",
+      "directions": [
+        {
+          "zone": "forum",
+          "text": "At the end of the delegate desks, turn toward the planted Garden Commons.",
+          "via": [
+            -66.2,
+            0,
+            98.6
+          ]
+        },
+        {
+          "zone": "commons",
+          "text": "Follow the line to the espalier walk.",
+          "via": [
+            -67.03,
+            0,
+            86.4
+          ]
+        }
+      ]
+    },
+    {
+      "id": "slot_06",
+      "order": 6,
+      "zone": "commons",
+      "zoneName": "Garden commons",
+      "landmark": "Espalier walk",
+      "screen": [
+        -69.31,
+        1.93,
+        86.4
+      ],
+      "front": [
+        1.0,
+        0,
+        0.0
+      ],
+      "standing": [
+        -67.03,
+        0,
+        86.4
+      ],
+      "width": 2.1,
+      "height": 1.5750000000000002,
+      "freestanding": false,
+      "side": "left",
+      "next": "slot_07",
+      "directions": [
+        {
+          "zone": "commons",
+          "text": "Follow the line to the propagation walk.",
+          "via": [
+            -65.37,
+            0,
+            62.1
+          ]
+        }
+      ]
+    },
+    {
+      "id": "slot_07",
+      "order": 7,
+      "zone": "commons",
+      "zoneName": "Garden commons",
+      "landmark": "Propagation walk",
+      "screen": [
+        -63.09,
+        1.93,
+        62.1
+      ],
+      "front": [
+        -1.0,
+        0,
+        0.0
+      ],
+      "standing": [
+        -65.37,
+        0,
+        62.1
+      ],
+      "width": 2.1,
+      "height": 1.5750000000000002,
+      "freestanding": false,
+      "side": "right",
+      "next": "slot_08",
+      "directions": [
+        {
+          "zone": "commons",
+          "text": "Pass the propagation benches and follow the glass vault.",
+          "via": [
+            -61.8,
+            0,
+            45.5
+          ]
+        },
+        {
+          "zone": "aquarium",
+          "text": "Follow the line to the pressure vault.",
+          "via": [
+            -49.31,
+            0,
+            45.69
+          ]
+        }
+      ]
+    },
+    {
+      "id": "slot_08",
+      "order": 8,
+      "zone": "aquarium",
+      "zoneName": "Aquarium promenade",
+      "landmark": "Pressure vault",
+      "screen": [
+        -49.31,
+        1.86,
+        43.41
+      ],
+      "front": [
+        0.0,
+        0,
+        1.0
+      ],
+      "standing": [
+        -49.31,
+        0,
+        45.69
+      ],
+      "width": 1.92,
+      "height": 1.44,
+      "freestanding": false,
+      "side": "left",
+      "next": "slot_09",
+      "directions": [
+        {
+          "zone": "aquarium",
+          "text": "Follow the line to the ocean return gallery.",
+          "via": [
+            -24.21,
+            0,
+            46.33
+          ]
+        }
+      ]
+    },
+    {
+      "id": "slot_09",
+      "order": 9,
+      "zone": "aquarium",
+      "zoneName": "Aquarium promenade",
+      "landmark": "Ocean return gallery",
+      "screen": [
+        -24.21,
+        1.93,
+        48.61
+      ],
+      "front": [
+        0.0,
+        0,
+        -1.0
+      ],
+      "standing": [
+        -24.21,
+        0,
+        46.33
+      ],
+      "width": 2.1,
+      "height": 1.5750000000000002,
+      "freestanding": false,
+      "side": "right",
+      "next": "slot_10",
+      "directions": [
+        {
+          "zone": "aquarium",
+          "text": "At the dry end of the tank, turn through the west atrium door.",
+          "via": [
+            -7.8,
+            0,
+            41.0
+          ]
+        },
+        {
+          "zone": "atrium",
+          "text": "Enter the staff door beside the east gallery, then the canteen marked 014.",
+          "via": [
+            12.0,
+            0,
+            32.0
+          ]
+        },
+        {
+          "zone": "service",
+          "text": "Follow the line to the staff canteen.",
+          "via": [
+            17.27,
+            0,
+            28.4
+          ]
+        }
+      ]
+    },
+    {
+      "id": "slot_10",
+      "order": 10,
+      "zone": "service",
+      "zoneName": "Staff canteen",
+      "landmark": "Staff canteen",
+      "screen": [
+        14.99,
+        1.67,
+        28.4
+      ],
+      "front": [
+        1.0,
+        0,
+        0.0
+      ],
+      "standing": [
+        17.27,
+        0,
+        28.4
+      ],
+      "width": 1.55,
+      "height": 1.1625,
+      "freestanding": true,
+      "side": null,
+      "next": "slot_11",
+      "directions": [
+        {
+          "zone": "service",
+          "text": "Leave the canteen and turn west along the staff corridor.",
+          "via": [
+            12.0,
+            0,
+            32.0
+          ]
+        },
+        {
+          "zone": "atrium",
+          "text": "Walk past the founding statue to the Grand Hall.",
+          "via": [
+            0.0,
+            0,
+            16.0
+          ]
+        },
+        {
+          "zone": "hall",
+          "text": "Follow the line to the west arcade.",
+          "via": [
+            -9.38,
+            0,
+            2.15
+          ]
+        }
+      ]
+    },
+    {
+      "id": "slot_11",
+      "order": 11,
+      "zone": "hall",
+      "zoneName": "Grand hall",
+      "landmark": "West arcade",
+      "screen": [
+        -11.66,
+        1.82,
+        2.15
+      ],
+      "front": [
+        1.0,
+        0,
+        0.0
+      ],
+      "standing": [
+        -9.38,
+        0,
+        2.15
+      ],
+      "width": 1.76,
+      "height": 1.32,
+      "freestanding": true,
+      "side": null,
+      "next": "slot_12",
+      "directions": [
+        {
+          "zone": "hall",
+          "text": "Take the west door marked Applied Hoof Sciences.",
+          "via": [
+            -12.0,
+            0,
+            7.0
+          ]
+        },
+        {
+          "zone": "hoof",
+          "text": "Follow the line to the calibration bay.",
+          "via": [
+            -22.36,
+            0,
+            11.15
+          ]
+        }
+      ]
+    },
+    {
+      "id": "slot_12",
+      "order": 12,
+      "zone": "hoof",
+      "zoneName": "Applied Hoof Sciences",
+      "landmark": "Calibration bay",
+      "screen": [
+        -24.64,
+        1.82,
+        11.15
+      ],
+      "front": [
+        1.0,
+        0,
+        0.0
+      ],
+      "standing": [
+        -22.36,
+        0,
+        11.15
+      ],
+      "width": 1.74,
+      "height": 1.305,
+      "freestanding": true,
+      "side": null,
+      "next": "slot_13",
+      "directions": [
+        {
+          "zone": "hoof",
+          "text": "Return through the teaching booth door to the Grand Hall.",
+          "via": [
+            -12.0,
+            0,
+            7.0
+          ]
+        },
+        {
+          "zone": "hall",
+          "text": "Cross the hall to the Conservation Habitat door.",
+          "via": [
+            12.0,
+            0,
+            7.0
+          ]
+        },
+        {
+          "zone": "habitat",
+          "text": "Follow the line to the observation gallery.",
+          "via": [
+            17.78,
+            0,
+            4.64
+          ]
+        }
+      ]
+    },
+    {
+      "id": "slot_13",
+      "order": 13,
+      "zone": "habitat",
+      "zoneName": "Conservation habitat",
+      "landmark": "Observation gallery",
+      "screen": [
+        17.78,
+        1.82,
+        2.36
+      ],
+      "front": [
+        0.0,
+        0,
+        1.0
+      ],
+      "standing": [
+        17.78,
+        0,
+        4.64
+      ],
+      "width": 1.7,
+      "height": 1.275,
+      "freestanding": true,
+      "side": null,
+      "next": "slot_14",
+      "directions": [
+        {
+          "zone": "habitat",
+          "text": "Leave the observation room through the west door.",
+          "via": [
+            12.0,
+            0,
+            7.0
+          ]
+        },
+        {
+          "zone": "hall",
+          "text": "Follow the east arcade to the Gift Shop.",
+          "via": [
+            12.0,
+            0,
+            -5.0
+          ]
+        },
+        {
+          "zone": "shop",
+          "text": "Follow the line to the print and postcard room.",
+          "via": [
+            14.64,
+            0,
+            -11.95
+          ]
+        }
+      ]
+    },
+    {
+      "id": "slot_14",
+      "order": 14,
+      "zone": "shop",
+      "zoneName": "Gift shop",
+      "landmark": "Print and postcard room",
+      "screen": [
+        12.36,
+        1.82,
+        -11.95
+      ],
+      "front": [
+        1.0,
+        0,
+        0.0
+      ],
+      "standing": [
+        14.64,
+        0,
+        -11.95
+      ],
+      "width": 1.68,
+      "height": 1.26,
+      "freestanding": true,
+      "side": null,
+      "next": "slot_01",
+      "directions": [
+        {
+          "zone": "shop",
+          "text": "Return to the Grand Hall through the shop entrance.",
+          "via": [
+            12.0,
+            0,
+            -5.0
+          ]
+        },
+        {
+          "zone": "hall",
+          "text": "Return past the front desk to the atrium carousel.",
+          "via": [
+            0.0,
+            0,
+            16.0
+          ]
+        },
+        {
+          "zone": "atrium",
+          "text": "Follow the line to the admission carousel.",
+          "via": [
+            3.0336,
+            0,
+            34.5946
+          ]
+        }
+      ]
+    },
+    {
+      "id": "slot_15",
+      "zone": "atrium",
+      "zoneName": "Admission atrium",
+      "landmark": "West lobby",
+      "screen": [
+        -10.8,
+        1.6192,
+        35.25
+      ],
+      "front": [
+        1,
+        0,
+        0
+      ],
+      "standing": [
+        -8.934,
+        0,
+        35.25
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_01",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_16",
+      "zone": "atrium",
+      "zoneName": "Admission atrium",
+      "landmark": "Monument court",
+      "screen": [
+        8.8,
+        1.6192,
+        20.0
+      ],
+      "front": [
+        0,
+        0,
+        1
+      ],
+      "standing": [
+        8.8,
+        0,
+        21.866
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_01",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_17",
+      "zone": "atrium",
+      "zoneName": "Admission atrium",
+      "landmark": "West mezzanine",
+      "screen": [
+        -11.4,
+        5.0192,
+        37.75
+      ],
+      "front": [
+        1,
+        0,
+        0
+      ],
+      "standing": [
+        -9.534,
+        3.4,
+        37.75
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_01",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_18",
+      "zone": "atrium",
+      "zoneName": "Admission atrium",
+      "landmark": "East mezzanine",
+      "screen": [
+        11.4,
+        5.0192,
+        23.75
+      ],
+      "front": [
+        -1,
+        0,
+        0
+      ],
+      "standing": [
+        9.534,
+        3.4,
+        23.75
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_01",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_19",
+      "zone": "atrium",
+      "zoneName": "Admission atrium",
+      "landmark": "Clerestory overlook",
+      "screen": [
+        10.65,
+        8.4192,
+        37.05
+      ],
+      "front": [
+        0,
+        0,
+        -1
+      ],
+      "standing": [
+        10.65,
+        6.8,
+        35.184
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_01",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_20",
+      "zone": "atrium",
+      "zoneName": "Admission atrium",
+      "landmark": "West clerestory",
+      "screen": [
+        -10.95,
+        8.4192,
+        27.75
+      ],
+      "front": [
+        1,
+        0,
+        0
+      ],
+      "standing": [
+        -9.084,
+        6.8,
+        27.75
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_01",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_21",
+      "zone": "atrium",
+      "zoneName": "Admission atrium",
+      "landmark": "Upper bridge",
+      "screen": [
+        9.85,
+        8.4192,
+        19.25
+      ],
+      "front": [
+        0,
+        0,
+        1
+      ],
+      "standing": [
+        9.85,
+        6.8,
+        21.116
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_01",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_22",
+      "zone": "atrium",
+      "zoneName": "Admission atrium",
+      "landmark": "Conservatory court",
+      "screen": [
+        -8.7,
+        1.6192,
+        19.8
+      ],
+      "front": [
+        1,
+        0,
+        0
+      ],
+      "standing": [
+        -6.834,
+        0,
+        19.8
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_01",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_23",
+      "zone": "atrium",
+      "zoneName": "Admission atrium",
+      "landmark": "Mezzanine crossing",
+      "screen": [
+        10.8,
+        5.0192,
+        35.8
+      ],
+      "front": [
+        0,
+        0,
+        -1
+      ],
+      "standing": [
+        10.8,
+        3.4,
+        33.934
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_01",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_24",
+      "zone": "hall",
+      "zoneName": "Grand hall",
+      "landmark": "Entrance loggia",
+      "screen": [
+        6.8,
+        1.6016,
+        14.5
+      ],
+      "front": [
+        0,
+        0,
+        -1
+      ],
+      "standing": [
+        6.8,
+        0,
+        12.634
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_11",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_25",
+      "zone": "hall",
+      "zoneName": "Grand hall",
+      "landmark": "East arcade",
+      "screen": [
+        10.35,
+        1.6016,
+        -10.5
+      ],
+      "front": [
+        -1,
+        0,
+        0
+      ],
+      "standing": [
+        8.484,
+        0,
+        -10.5
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_11",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_26",
+      "zone": "hall",
+      "zoneName": "Grand hall",
+      "landmark": "Portrait approach",
+      "screen": [
+        -10.3,
+        1.6016,
+        -14.5
+      ],
+      "front": [
+        0,
+        0,
+        1
+      ],
+      "standing": [
+        -10.3,
+        0,
+        -12.634
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_11",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_27",
+      "zone": "hall",
+      "zoneName": "Grand hall",
+      "landmark": "East balcony",
+      "screen": [
+        9.55,
+        5.0016,
+        6.75
+      ],
+      "front": [
+        1,
+        0,
+        0
+      ],
+      "standing": [
+        11.416,
+        3.4,
+        6.75
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_11",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_28",
+      "zone": "hall",
+      "zoneName": "Grand hall",
+      "landmark": "Clerestory windows",
+      "screen": [
+        9.55,
+        5.0016,
+        -9.75
+      ],
+      "front": [
+        1,
+        0,
+        0
+      ],
+      "standing": [
+        11.416,
+        3.4,
+        -9.75
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_11",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_29",
+      "zone": "hall",
+      "zoneName": "Grand hall",
+      "landmark": "West loggia",
+      "screen": [
+        -5.6,
+        1.6016,
+        12.75
+      ],
+      "front": [
+        0,
+        0,
+        -1
+      ],
+      "standing": [
+        -5.6,
+        0,
+        10.884
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_11",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_30",
+      "zone": "hall",
+      "zoneName": "Grand hall",
+      "landmark": "Founders court",
+      "screen": [
+        5.65,
+        1.6016,
+        -14.55
+      ],
+      "front": [
+        0,
+        0,
+        1
+      ],
+      "standing": [
+        5.65,
+        0,
+        -12.684
+      ],
+      "width": 1.5488,
+      "height": 1.1616,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_11",
+      "scale": 0.88
+    },
+    {
+      "id": "slot_31",
+      "zone": "service",
+      "zoneName": "Staff canteen",
+      "landmark": "Exhibit stores",
+      "screen": [
+        24.45,
+        1.4028,
+        37.85
+      ],
+      "front": [
+        0,
+        0,
+        -1
+      ],
+      "standing": [
+        24.45,
+        0,
+        36.069
+      ],
+      "width": 1.302,
+      "height": 0.9765,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_10",
+      "scale": 0.84
+    },
+    {
+      "id": "slot_32",
+      "zone": "service",
+      "zoneName": "Staff canteen",
+      "landmark": "Stair hall",
+      "screen": [
+        29.8,
+        1.4028,
+        19.35
+      ],
+      "front": [
+        0,
+        0,
+        1
+      ],
+      "standing": [
+        29.8,
+        0,
+        21.131
+      ],
+      "width": 1.302,
+      "height": 0.9765,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_10",
+      "scale": 0.84
+    },
+    {
+      "id": "slot_33",
+      "zone": "service",
+      "zoneName": "Staff canteen",
+      "landmark": "Upper stair landing",
+      "screen": [
+        30.0,
+        8.2028,
+        19.9
+      ],
+      "front": [
+        0,
+        0,
+        1
+      ],
+      "standing": [
+        30.0,
+        6.8,
+        21.681
+      ],
+      "width": 1.302,
+      "height": 0.9765,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_10",
+      "scale": 0.84
+    },
+    {
+      "id": "slot_34",
+      "zone": "hoof",
+      "zoneName": "Applied Hoof Sciences",
+      "landmark": "Teaching booth",
+      "screen": [
+        -14.1,
+        1.5288,
+        12.35
+      ],
+      "front": [
+        0,
+        0,
+        -1
+      ],
+      "standing": [
+        -14.1,
+        0,
+        10.569
+      ],
+      "width": 1.4616,
+      "height": 1.0962,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_12",
+      "scale": 0.84
+    },
+    {
+      "id": "slot_35",
+      "zone": "hoof",
+      "zoneName": "Applied Hoof Sciences",
+      "landmark": "Supply bay",
+      "screen": [
+        -21.15,
+        1.5288,
+        4.6
+      ],
+      "front": [
+        0,
+        0,
+        1
+      ],
+      "standing": [
+        -21.15,
+        0,
+        6.381
+      ],
+      "width": 1.4616,
+      "height": 1.0962,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_12",
+      "scale": 0.84
+    },
+    {
+      "id": "slot_36",
+      "zone": "habitat",
+      "zoneName": "Conservation habitat",
+      "landmark": "East observation wall",
+      "screen": [
+        22.1,
+        1.5288,
+        4.25
+      ],
+      "front": [
+        -1,
+        0,
+        0
+      ],
+      "standing": [
+        20.319,
+        0,
+        4.25
+      ],
+      "width": 1.428,
+      "height": 1.071,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_13",
+      "scale": 0.84
+    },
+    {
+      "id": "slot_37",
+      "zone": "habitat",
+      "zoneName": "Conservation habitat",
+      "landmark": "Research entrance",
+      "screen": [
+        13.9,
+        1.5288,
+        4.85
+      ],
+      "front": [
+        1,
+        0,
+        0
+      ],
+      "standing": [
+        15.681,
+        0,
+        4.85
+      ],
+      "width": 1.428,
+      "height": 1.071,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_13",
+      "scale": 0.84
+    },
+    {
+      "id": "slot_38",
+      "zone": "shop",
+      "zoneName": "Gift shop",
+      "landmark": "Souvenir editions",
+      "screen": [
+        14.15,
+        1.5288,
+        -1.4
+      ],
+      "front": [
+        1,
+        0,
+        0
+      ],
+      "standing": [
+        15.931,
+        0,
+        -1.4
+      ],
+      "width": 1.4112,
+      "height": 1.0584,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_14",
+      "scale": 0.84
+    },
+    {
+      "id": "slot_39",
+      "zone": "shop",
+      "zoneName": "Gift shop",
+      "landmark": "Shop window",
+      "screen": [
+        22.8,
+        1.5288,
+        -1.0
+      ],
+      "front": [
+        0,
+        0,
+        -1
+      ],
+      "standing": [
+        22.8,
+        0,
+        -2.781
+      ],
+      "width": 1.4112,
+      "height": 1.0584,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_14",
+      "scale": 0.84
+    },
+    {
+      "id": "slot_40",
+      "zone": "shop",
+      "zoneName": "Gift shop",
+      "landmark": "Postcard counter",
+      "screen": [
+        17.4,
+        1.5288,
+        -12.75
+      ],
+      "front": [
+        0,
+        0,
+        1
+      ],
+      "standing": [
+        17.4,
+        0,
+        -10.969
+      ],
+      "width": 1.4112,
+      "height": 1.0584,
+      "freestanding": true,
+      "side": null,
+      "template": "slot_14",
+      "scale": 0.84
+    }
+  ],
+  "route": [
+    {
+      "zone": "atrium",
+      "from": "admission",
+      "to": "slot_01",
+      "points": [
+        [
+          0.54,
+          0,
+          35.96
+        ],
+        [
+          0.6,
+          0,
+          35.1
+        ],
+        [
+          0.8,
+          0,
+          34.6
+        ],
+        [
+          3.0336,
+          0,
+          34.5946
+        ]
+      ]
+    },
+    {
+      "zone": "atrium",
+      "from": "slot_01",
+      "to": "slot_02",
+      "points": [
+        [
+          3.0336,
+          0,
+          34.5946
+        ],
+        [
+          7.8,
+          0,
+          38.8
+        ],
+        [
+          7.8,
+          0,
+          41.0
+        ]
+      ]
+    },
+    {
+      "zone": "chronology",
+      "from": "slot_01",
+      "to": "slot_02",
+      "points": [
+        [
+          7.8,
+          0,
+          41.0
+        ],
+        [
+          8.63,
+          0,
+          57.75
+        ]
+      ]
+    },
+    {
+      "zone": "chronology",
+      "from": "slot_02",
+      "to": "slot_03",
+      "points": [
+        [
+          8.63,
+          0,
+          57.75
+        ],
+        [
+          6.97,
+          0,
+          85.0
+        ]
+      ]
+    },
+    {
+      "zone": "chronology",
+      "from": "slot_03",
+      "to": "slot_04",
+      "points": [
+        [
+          6.97,
+          0,
+          85.0
+        ],
+        [
+          7.8,
+          0,
+          98.6
+        ],
+        [
+          7.6,
+          0,
+          99.9
+        ],
+        [
+          7.1,
+          0,
+          101.0
+        ],
+        [
+          6.2,
+          0,
+          102.0
+        ],
+        [
+          5.1,
+          0,
+          102.7
+        ],
+        [
+          3.8,
+          0,
+          103.0
+        ],
+        [
+          3.4,
+          0,
+          103.0
+        ]
+      ]
+    },
+    {
+      "zone": "forum",
+      "from": "slot_03",
+      "to": "slot_04",
+      "points": [
+        [
+          3.4,
+          0,
+          103.0
+        ],
+        [
+          -13.08,
+          0,
+          103.83
+        ]
+      ]
+    },
+    {
+      "zone": "forum",
+      "from": "slot_04",
+      "to": "slot_05",
+      "points": [
+        [
+          -13.08,
+          0,
+          103.83
+        ],
+        [
+          -46.13,
+          0,
+          102.17
+        ]
+      ]
+    },
+    {
+      "zone": "forum",
+      "from": "slot_05",
+      "to": "slot_06",
+      "points": [
+        [
+          -46.13,
+          0,
+          102.17
+        ],
+        [
+          -61.8,
+          0,
+          103.0
+        ],
+        [
+          -63.1,
+          0,
+          102.8
+        ],
+        [
+          -64.2,
+          0,
+          102.3
+        ],
+        [
+          -65.2,
+          0,
+          101.4
+        ],
+        [
+          -65.9,
+          0,
+          100.3
+        ],
+        [
+          -66.2,
+          0,
+          99.0
+        ],
+        [
+          -66.2,
+          0,
+          98.6
+        ]
+      ]
+    },
+    {
+      "zone": "commons",
+      "from": "slot_05",
+      "to": "slot_06",
+      "points": [
+        [
+          -66.2,
+          0,
+          98.6
+        ],
+        [
+          -67.03,
+          0,
+          86.4
+        ]
+      ]
+    },
+    {
+      "zone": "commons",
+      "from": "slot_06",
+      "to": "slot_07",
+      "points": [
+        [
+          -67.03,
+          0,
+          86.4
+        ],
+        [
+          -65.37,
+          0,
+          62.1
+        ]
+      ]
+    },
+    {
+      "zone": "commons",
+      "from": "slot_07",
+      "to": "slot_08",
+      "points": [
+        [
+          -65.37,
+          0,
+          62.1
+        ],
+        [
+          -66.2,
+          0,
+          49.9
+        ],
+        [
+          -66.0,
+          0,
+          48.6
+        ],
+        [
+          -65.5,
+          0,
+          47.5
+        ],
+        [
+          -64.6,
+          0,
+          46.5
+        ],
+        [
+          -63.5,
+          0,
+          45.8
+        ],
+        [
+          -62.2,
+          0,
+          45.5
+        ],
+        [
+          -61.8,
+          0,
+          45.5
+        ]
+      ]
+    },
+    {
+      "zone": "aquarium",
+      "from": "slot_07",
+      "to": "slot_08",
+      "points": [
+        [
+          -61.8,
+          0,
+          45.5
+        ],
+        [
+          -49.31,
+          0,
+          45.69
+        ]
+      ]
+    },
+    {
+      "zone": "aquarium",
+      "from": "slot_08",
+      "to": "slot_09",
+      "points": [
+        [
+          -49.31,
+          0,
+          45.69
+        ],
+        [
+          -24.21,
+          0,
+          46.33
+        ]
+      ]
+    },
+    {
+      "zone": "aquarium",
+      "from": "slot_09",
+      "to": "slot_10",
+      "points": [
+        [
+          -24.21,
+          0,
+          46.33
+        ],
+        [
+          -12.2,
+          0,
+          45.5
+        ],
+        [
+          -10.9,
+          0,
+          45.3
+        ],
+        [
+          -9.8,
+          0,
+          44.8
+        ],
+        [
+          -8.8,
+          0,
+          43.9
+        ],
+        [
+          -8.1,
+          0,
+          42.8
+        ],
+        [
+          -7.8,
+          0,
+          41.5
+        ],
+        [
+          -7.8,
+          0,
+          41.0
+        ]
+      ]
+    },
+    {
+      "zone": "atrium",
+      "from": "slot_09",
+      "to": "slot_10",
+      "points": [
+        [
+          -7.8,
+          0,
+          41.0
+        ],
+        [
+          -7.8,
+          0,
+          38.7
+        ],
+        [
+          -2.2,
+          0,
+          37.4
+        ],
+        [
+          6.5,
+          0,
+          35.7
+        ],
+        [
+          8.6,
+          0,
+          33.2
+        ],
+        [
+          9.3,
+          0,
+          32.0
+        ],
+        [
+          10.2,
+          0,
+          32.0
+        ],
+        [
+          12.0,
+          0,
+          32.0
+        ]
+      ]
+    },
+    {
+      "zone": "service",
+      "from": "slot_09",
+      "to": "slot_10",
+      "points": [
+        [
+          12.0,
+          0,
+          32.0
+        ],
+        [
+          18.0,
+          0,
+          32.0
+        ],
+        [
+          18.0,
+          0,
+          30.8
+        ],
+        [
+          17.27,
+          0,
+          28.4
+        ]
+      ]
+    },
+    {
+      "zone": "service",
+      "from": "slot_10",
+      "to": "slot_11",
+      "points": [
+        [
+          17.27,
+          0,
+          28.4
+        ],
+        [
+          18.0,
+          0,
+          30.8
+        ],
+        [
+          18.0,
+          0,
+          32.0
+        ],
+        [
+          12.0,
+          0,
+          32.0
+        ]
+      ]
+    },
+    {
+      "zone": "atrium",
+      "from": "slot_10",
+      "to": "slot_11",
+      "points": [
+        [
+          12.0,
+          0,
+          32.0
+        ],
+        [
+          10.2,
+          0,
+          32.0
+        ],
+        [
+          7.2,
+          0,
+          22.6
+        ],
+        [
+          0.0,
+          0,
+          18.1
+        ],
+        [
+          0.0,
+          0,
+          16.0
+        ]
+      ]
+    },
+    {
+      "zone": "hall",
+      "from": "slot_10",
+      "to": "slot_11",
+      "points": [
+        [
+          0.0,
+          0,
+          16.0
+        ],
+        [
+          0.0,
+          0,
+          13.9
+        ],
+        [
+          -5.4,
+          0,
+          2.8
+        ],
+        [
+          -9.38,
+          0,
+          2.15
+        ]
+      ]
+    },
+    {
+      "zone": "hall",
+      "from": "slot_11",
+      "to": "slot_12",
+      "points": [
+        [
+          -9.38,
+          0,
+          2.15
+        ],
+        [
+          -10.2,
+          0,
+          7.0
+        ],
+        [
+          -12.0,
+          0,
+          7.0
+        ]
+      ]
+    },
+    {
+      "zone": "hoof",
+      "from": "slot_11",
+      "to": "slot_12",
+      "points": [
+        [
+          -12.0,
+          0,
+          7.0
+        ],
+        [
+          -13.8,
+          0,
+          7.0
+        ],
+        [
+          -16.9,
+          0,
+          7.1
+        ],
+        [
+          -21.6,
+          0,
+          10.3
+        ],
+        [
+          -22.36,
+          0,
+          11.15
+        ]
+      ]
+    },
+    {
+      "zone": "hoof",
+      "from": "slot_12",
+      "to": "slot_13",
+      "points": [
+        [
+          -22.36,
+          0,
+          11.15
+        ],
+        [
+          -17.7,
+          0,
+          7.2
+        ],
+        [
+          -13.8,
+          0,
+          7.0
+        ],
+        [
+          -12.0,
+          0,
+          7.0
+        ]
+      ]
+    },
+    {
+      "zone": "hall",
+      "from": "slot_12",
+      "to": "slot_13",
+      "points": [
+        [
+          -12.0,
+          0,
+          7.0
+        ],
+        [
+          -10.2,
+          0,
+          7.0
+        ],
+        [
+          -4.7,
+          0,
+          8.6
+        ],
+        [
+          10.2,
+          0,
+          7.0
+        ],
+        [
+          12.0,
+          0,
+          7.0
+        ]
+      ]
+    },
+    {
+      "zone": "habitat",
+      "from": "slot_12",
+      "to": "slot_13",
+      "points": [
+        [
+          12.0,
+          0,
+          7.0
+        ],
+        [
+          13.7,
+          0,
+          7.0
+        ],
+        [
+          13.8,
+          0,
+          6.7
+        ],
+        [
+          17.78,
+          0,
+          4.64
+        ]
+      ]
+    },
+    {
+      "zone": "habitat",
+      "from": "slot_13",
+      "to": "slot_14",
+      "points": [
+        [
+          17.78,
+          0,
+          4.64
+        ],
+        [
+          13.7,
+          0,
+          6.8
+        ],
+        [
+          13.7,
+          0,
+          7.0
+        ],
+        [
+          12.0,
+          0,
+          7.0
+        ]
+      ]
+    },
+    {
+      "zone": "hall",
+      "from": "slot_13",
+      "to": "slot_14",
+      "points": [
+        [
+          12.0,
+          0,
+          7.0
+        ],
+        [
+          10.2,
+          0,
+          7.0
+        ],
+        [
+          10.2,
+          0,
+          -5.0
+        ],
+        [
+          12.0,
+          0,
+          -5.0
+        ]
+      ]
+    },
+    {
+      "zone": "shop",
+      "from": "slot_13",
+      "to": "slot_14",
+      "points": [
+        [
+          12.0,
+          0,
+          -5.0
+        ],
+        [
+          13.8,
+          0,
+          -5.0
+        ],
+        [
+          14.64,
+          0,
+          -11.95
+        ]
+      ]
+    },
+    {
+      "zone": "shop",
+      "from": "slot_14",
+      "to": "slot_01",
+      "points": [
+        [
+          14.64,
+          0,
+          -11.95
+        ],
+        [
+          13.8,
+          0,
+          -5.0
+        ],
+        [
+          12.0,
+          0,
+          -5.0
+        ]
+      ]
+    },
+    {
+      "zone": "hall",
+      "from": "slot_14",
+      "to": "slot_01",
+      "points": [
+        [
+          12.0,
+          0,
+          -5.0
+        ],
+        [
+          10.2,
+          0,
+          -5.0
+        ],
+        [
+          0.0,
+          0,
+          13.9
+        ],
+        [
+          0.0,
+          0,
+          16.0
+        ]
+      ]
+    },
+    {
+      "zone": "atrium",
+      "from": "slot_14",
+      "to": "slot_01",
+      "points": [
+        [
+          0.0,
+          0,
+          16.0
+        ],
+        [
+          0.0,
+          0,
+          18.1
+        ],
+        [
+          -0.7,
+          0,
+          28.1
+        ],
+        [
+          3.0,
+          0,
+          33.1
+        ],
+        [
+          3.0336,
+          0,
+          34.5946
+        ]
+      ]
+    }
+  ],
+  "tour": [
+    "slot_01",
+    "slot_02",
+    "slot_03",
+    "slot_04",
+    "slot_05",
+    "slot_06",
+    "slot_07",
+    "slot_08",
+    "slot_09",
+    "slot_15",
+    "slot_17",
+    "slot_23",
+    "slot_18",
+    "slot_19",
+    "slot_21",
+    "slot_20",
+    "slot_22",
+    "slot_16",
+    "slot_10",
+    "slot_31",
+    "slot_32",
+    "slot_33",
+    "slot_24",
+    "slot_29",
+    "slot_11",
+    "slot_12",
+    "slot_34",
+    "slot_35",
+    "slot_26",
+    "slot_30",
+    "slot_27",
+    "slot_28",
+    "slot_25",
+    "slot_13",
+    "slot_37",
+    "slot_36",
+    "slot_14",
+    "slot_38",
+    "slot_39",
+    "slot_40"
+  ]
+}

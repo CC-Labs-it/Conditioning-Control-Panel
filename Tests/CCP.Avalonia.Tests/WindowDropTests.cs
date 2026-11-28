@@ -456,6 +456,34 @@ public sealed class WindowDropTests
         await WaitFor(() => Toast(shell, Loc.Get("drop_not_recognised")));
     });
 
+    // WPF MainWindow.SessionIO.cs:1090-1092, 1451-1458: the native browser yields to the drop overlay.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public Task DropOverlayCoversBrowserUntilLeaveOrDrop(bool drop) => Run((shell, root, _) =>
+    {
+        var zip = Path.Combine(root, "pack.zip");
+        File.WriteAllBytes(zip, Array.Empty<byte>());
+        var browser = shell.LeashBrowser!;
+        browser.IsVisible = true;
+        Drop(shell, zip, RawDragEventType.DragEnter);
+        Assert.True(shell.Named<Border>("GlobalDropOverlay")!.IsVisible);
+        Assert.False(browser.IsVisible);
+        Assert.True(shell.BrowserCovered);
+        shell.RestoreBrowser();
+        Assert.False(browser.IsVisible);
+
+        var remote = shell.Named<Border>("RemoteControlOverlay")!;
+        remote.IsVisible = true;
+        Drop(shell, zip, drop ? RawDragEventType.Drop : RawDragEventType.DragLeave);
+        Assert.False(shell.Named<Border>("GlobalDropOverlay")!.IsVisible);
+        Assert.False(browser.IsVisible); // Another cover still owns the browser.
+        remote.IsVisible = false;
+        shell.RestoreBrowser();
+        Assert.True(browser.IsVisible);
+        return Task.CompletedTask;
+    });
+
     [Fact]
     public Task AZipDragShowsTheExtractOverlayAndTheDropHidesIt() => Run((shell, root, _) =>
     {

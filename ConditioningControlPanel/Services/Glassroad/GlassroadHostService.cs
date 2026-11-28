@@ -289,6 +289,9 @@ internal static partial class GlassroadHostService
                 case "scrolller-niches":
                     RunOnUi(() => OnPictureNiches(o));
                     break;
+                case "own-media-list":
+                    RunOnUi(OnOwnMediaList);
+                    break;
                 case "open-prize-counter":
                     RunOnUi(OpenPrizeCounter);
                     break;
