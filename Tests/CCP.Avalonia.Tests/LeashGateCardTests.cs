@@ -104,6 +104,16 @@ public sealed class LeashGateCardTests
         Dispatcher.UIThread.RunJobs();
     }
 
+    [Fact]
+    public void GateHelp_OpensLeashedExplainer() => Run(true, (shell, launcher, _) =>
+    {
+        PressTile(launcher);
+        Click(Find(shell, "leash-help:gate"));
+        var explainer = Assert.Single(shell.OwnedWindows.OfType<ConditioningControlPanel.Avalonia.Views.Controls.Leash.LeashExplainWindow>());
+        Assert.True(explainer.IsVisible);
+        explainer.Close();
+    });
+
     [Theory]
     [InlineData("tutorial")]
     [InlineData("startup")]

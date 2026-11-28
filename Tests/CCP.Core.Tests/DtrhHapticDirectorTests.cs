@@ -126,4 +126,84 @@ public class DtrhHapticDirectorTests
             haptics.Dispose();
         }
     }
+
+    /// <summary>Review P1 (s10-game-dtrh-1): a panic close that banks the run must leave nothing queued on
+    /// the toy. The farewell wave is skipped when asked and cut by CancelFarewell, so it cannot start
+    /// after the mixer's 400 ms panic mute (HapticMixer.PanicMuteMs) has run out.</summary>
+    [Fact]
+    public void CloseCancelsTheFarewellAndATeardownEndSkipsIt()
+    {
+        var settings = new AppSettings();
+        settings.Haptics.Enabled = true;
+        settings.Haptics.DtrhEnabled = true;
+        var service = (SettingsService)RuntimeHelpers.GetUninitializedObject(typeof(SettingsService));
+        typeof(SettingsService).GetField("<Current>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(service, settings);
+        var oldProvider = CoreSettings.ServiceProvider;
+        var oldHaptics = CoreHaptics.Service;
+        var oldPremium = CoreEntitlement.HasPremiumProvider;
+        CoreEntitlement.HasPremiumProvider = () => true;   // before the mixer's first tick
+        var haptics = new HapticService(settings.Haptics);
+        haptics.DeviceManager.Register(new ConnectedProvider());
+        CoreSettings.ServiceProvider = () => service;
+        CoreHaptics.Service = haptics;
+        var sequences = (System.Collections.ICollection)typeof(HapticMixer)
+            .GetField("_sequences", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(haptics.Mixer)!;
+        int Live() => sequences.Count;   // a racy read is fine: the test polls
+        bool WaitLive(int n) { var until = DateTime.UtcNow.AddSeconds(5); while (Live() != n && DateTime.UtcNow < until) Thread.Sleep(10); return Live() == n; }
+        try
+        {
+            DtrhHapticDirector.OnLaunch(testMode: false);
+            Assert.True(DtrhHapticDirector.IsReady);
+
+            // Teardown end (panic watchdog, window closed mid-run): no wave at all.
+            DtrhHapticDirector.OnRunStarted();
+            var before = DtrhHapticDirector.FarewellTask;
+            DtrhHapticDirector.OnRunEnded(farewell: false);
+            Assert.Same(before, DtrhHapticDirector.FarewellTask);
+            Assert.True(WaitLive(0));                                             // the run-started accent was cancelled too
+
+            // An ordinary end plays the wave; WPF's plain close keeps it, CancelFarewell cuts it.
+            DtrhHapticDirector.OnRunStarted();
+            DtrhHapticDirector.OnRunEnded();
+            var farewell = DtrhHapticDirector.FarewellTask!;
+            Assert.True(WaitLive(1));                                             // the wave is on the mixer
+            var cts = (CancellationTokenSource)typeof(DtrhHapticDirector)
+                .GetField("_farewellCts", BindingFlags.Static | BindingFlags.NonPublic)!.GetValue(null)!;
+            DtrhHapticDirector.OnClosed();
+            Assert.False(cts.IsCancellationRequested);                            // WPF DtrhHostService.cs:1071 unchanged
+            DtrhHapticDirector.CancelFarewell();
+            Assert.True(cts.IsCancellationRequested);
+            Assert.True(WaitLive(0));                                             // nothing left to play
+            Assert.True(farewell.Wait(TimeSpan.FromSeconds(5)));
+        }
+        finally
+        {
+            DtrhHapticDirector.CancelFarewell();
+            DtrhHapticDirector.OnClosed();
+            CoreHaptics.Service = oldHaptics;
+            CoreSettings.ServiceProvider = oldProvider;
+            CoreEntitlement.HasPremiumProvider = oldPremium;
+            haptics.Dispose();
+        }
+    }
+
+    private sealed class ConnectedProvider : IHapticProviderV2
+    {
+        public string Key => "test-connected";
+        public string DisplayName => Key;
+        public bool IsConnected => true;
+        public System.Collections.Generic.IReadOnlyList<HapticDevice> Devices => Array.Empty<HapticDevice>();
+#pragma warning disable CS0067
+        public event EventHandler<HapticToyEvent>? ToyEvent;
+        public event EventHandler? DevicesChanged;
+        public event EventHandler<string>? Error;
+#pragma warning restore CS0067
+        public System.Threading.Tasks.Task<bool> ConnectAsync(CancellationToken ct) => System.Threading.Tasks.Task.FromResult(true);
+        public System.Threading.Tasks.Task DisconnectAsync() => System.Threading.Tasks.Task.CompletedTask;
+        public System.Threading.Tasks.Task SetOutputsAsync(string id, System.Collections.Generic.IReadOnlyList<ActuatorOutput> outputs, CancellationToken ct) => System.Threading.Tasks.Task.CompletedTask;
+        public System.Threading.Tasks.Task StopAllAsync() => System.Threading.Tasks.Task.CompletedTask;
+        public System.Threading.Tasks.Task<bool> PingAsync() => System.Threading.Tasks.Task.FromResult(true);
+        public void Dispose() { }
+    }
 }

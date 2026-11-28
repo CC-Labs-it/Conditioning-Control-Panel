@@ -19,7 +19,7 @@ public sealed class SettingsActiveSaveTests
             var writer = new SettingsService(path);
             if (existingFile) Assert.True(writer.TrySaveImmediate(suppressCloudBackup: true));
             writer.Current.DeeperEditorTimelineHeight = 225;
-            writer.BeforePublishForTest = () => _ = new SettingsService(path);
+            writer.BeforeAtomicPublishForTests = tempPath => _ = new SettingsService(path);
             Assert.True(writer.TrySaveImmediate(suppressCloudBackup: true));
             Assert.Equal(225, new SettingsService(path).Current.DeeperEditorTimelineHeight);
         }

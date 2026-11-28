@@ -260,6 +260,7 @@ namespace ConditioningControlPanel.Avalonia.Platform
 
         internal static void SetCursorLock(Rect? bounds)
         {
+            GazeDebugCursor.Active?.SetLocked(bounds is { Width: > 0, Height: > 0 });
             // Calibration's bubble test owns the same tracker attractor (WPF :574).
             if (Views.Windows.WebcamCalibrationWindow.IsShowing) return;
             var tracker = WebcamTracker.Instance;
