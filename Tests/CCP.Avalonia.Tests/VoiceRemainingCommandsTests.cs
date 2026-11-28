@@ -133,6 +133,15 @@ public sealed class VoiceRemainingCommandsTests
                         Assert.True(scheduler.Trigger(strict));
                         // The pre-roll (and the freeze lead before it when a Freeze surface is seeded).
                         while (!started.Task.IsCompleted && preroll.FireArmed()) { }
+                        // When Prepare() is still running at the end of the pre-roll, the show arrives through a
+                        // posted continuation (MandatoryVideoScheduler.ShowPrepared): pump the dispatcher for it
+                        // instead of asserting on the first pass (failed twice on a loaded Windows shard).
+                        var deadline = Stopwatch.GetTimestamp() + 10 * Stopwatch.Frequency;
+                        while (!started.Task.IsCompleted && Stopwatch.GetTimestamp() < deadline)
+                        {
+                            Dispatcher.UIThread.RunJobs();
+                            if (!preroll.FireArmed()) System.Threading.Thread.Sleep(10);
+                        }
                         Assert.True(started.Task.IsCompletedSuccessfully, "the pre-roll showed the clip"); // Sink exists
                     }
                     finally { scheduler.VideoStarted -= onStarted; }
