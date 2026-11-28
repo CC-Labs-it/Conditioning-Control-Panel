@@ -29,7 +29,8 @@ public sealed class WindowConfirmationParityTests
         LocalizationManager.Instance.SetLanguage("en");
         var host = new Window { Content = strip, Width = 1400, Height = 180 };
         host.Show();
-        strip.Show(NavSections.Studio, "presets");
+        // Play's Games pill is the window pill left on any strip: declutter wave 2 took Just Drop off Studio's.
+        strip.Show(NavSections.Play, "playeyes");
         host.UpdateLayout();
         return host;
     }
@@ -47,8 +48,8 @@ public sealed class WindowConfirmationParityTests
 
     private static Border Open(SectionTabStrip strip)
     {
-        Click(strip.PillFor("justdrop")!);
-        Assert.Equal("justdrop", strip.ConfirmingKey);
+        Click(strip.PillFor("play")!);
+        Assert.Equal("play", strip.ConfirmingKey);
         var card = Assert.IsType<Border>(strip.ConfirmationPopup!.Child);
         TopLevel.GetTopLevel(card)!.UpdateLayout();
         return card;
@@ -78,7 +79,7 @@ public sealed class WindowConfirmationParityTests
         var card = Open(strip);
         var buttons = Buttons(card);
         Assert.Equal(2, buttons.Length);
-        var hue = NavStripRules.Accent(NavSections.Studio);
+        var hue = NavStripRules.Accent(NavSections.Play);
         using (var frame = new RenderTargetBitmap(PixelSize.FromSize(card.Bounds.Size, 1), new Vector(96, 96)))
         {
             frame.Render(card);
@@ -117,7 +118,7 @@ public sealed class WindowConfirmationParityTests
         Click(Buttons(card)[0]);
         Assert.Null(strip.ConfirmationPopup);
         Assert.Equal(1, requests);
-        Assert.Equal("presets", strip.ActivePillKey);
+        Assert.Equal("playeyes", strip.ActivePillKey);
         return Task.CompletedTask;
     });
 

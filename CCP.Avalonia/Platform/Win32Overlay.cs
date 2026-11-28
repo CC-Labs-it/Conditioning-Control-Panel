@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using ConditioningControlPanel.Services;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -45,6 +46,15 @@ internal static class Win32Overlay
 
     [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
     [DllImport("user32.dll")] private static extern bool ShowWindowAsync(IntPtr hwnd, int command);
+    // WPF Compositor/OverlayCaptureAffinity.cs:48-59; unavailable exclusion fails closed.
+    internal static uint CaptureAffinity(bool allowCapture) => allowCapture ? 0u : ExcludeFromCapture;
+    internal static bool SetCaptureAffinity(TopLevel window, uint affinity)
+    {
+        if (!OperatingSystem.IsWindows() || window.TryGetPlatformHandle() is not { HandleDescriptor: "HWND" } h || h.Handle == IntPtr.Zero) return affinity == 0;
+        try { return SetWindowDisplayAffinity(h.Handle, affinity) || affinity == 0; }
+        catch (Exception ex) { Serilog.Log.Debug(ex, "Brain Drain capture affinity failed"); return affinity == 0; }
+    }
+
 
     // DWM can cloak our window without waiting for its owner to process a window message.
     // The async requests finish the normal hide and unpin if the dispatcher recovers.
@@ -80,6 +90,10 @@ internal static class Win32Overlay
             slot.Kind == SubliminalOverVideo.SlotKind.Below ? slot.InsertAfter : new IntPtr(-1),
             0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
     }
+
+    // Win32 inserts BELOW hWndInsertAfter; a topmost anchor keeps the window in the topmost band.
+    internal static bool StackBelow(IntPtr hwnd, IntPtr anchor) =>
+        PositionWindow(hwnd, anchor, 0, 0, 0, 0, SwpNoMove | SwpNoSize | SwpNoActivate);
 
     /// <summary>The Windows half of <see cref="X11Overlay.RestackAbove"/>: z-order only, no activation, no
     /// geometry, no owner moves. Styles, click-through and focus are untouched.</summary>
@@ -181,6 +195,19 @@ internal static class Win32Overlay
         }
     }
 
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+    internal static IReadOnlyList<BrainDrainKeepClear.BandEntry> VisibleOwnBand(IReadOnlyList<Window> windows)
+    {
+        var own = windows.Select(w => w.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero).ToHashSet();
+        var band = new List<BrainDrainKeepClear.BandEntry>();
+        int steps = 0;
+        for (var h = GetTopWindow(IntPtr.Zero); h != IntPtr.Zero && steps++ < 1024; h = GetWindow(h, 2))
+        {
+            if ((GetWindowLong(h, GwlExStyle) & WsExTopmost) == 0) break;
+            if (IsWindowVisible(h)) band.Add(new(h, own.Contains(h), false));
+        }
+        return band;
+    }
     // Per window: whether it should currently be click-through, read by the style callback.
     private static readonly ConditionalWeakTable<TopLevel, StrongBox<bool>> Wanted = new();
 

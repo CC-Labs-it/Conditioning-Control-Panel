@@ -231,6 +231,77 @@ public sealed class TakeoverTests
             return Task.CompletedTask;
         });
 
+    [Theory]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, true)]
+    [InlineData(false, false, false)]
+    public Task PinkPulseReturnsOnlyTheOverlayItStarted(bool aiFirst, bool cancel, bool remoteJoins) => WithArmedShell((shell, timers) =>
+    {
+        var s = CoreSettings.Current;
+        var saved = (s.PinkFilterEnabled, s.PinkFilterOpacity, s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize,
+            s.GentleVisuals, s.CompanionPrompt.AllowAiToControlEffects);
+        var lab = CoreAccount.HasLabAccessProvider;
+        var engine = CoreSession.IsEngineRunningProvider;
+        var query = ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride;
+        var (pinkChecks, spiralChecks, start, video) = (PinkFilterOverlay.SkipPlatformChecksForTests,
+            SpiralOverlay.SkipPlatformChecksForTests, global::ConditioningControlPanel.Avalonia.CompanionEffects.StartEffect, SpiralOverlay.VideoStart);
+        var dir = Directory.CreateTempSubdirectory("ccp-ai-pulse-");
+        var path = Path.Combine(dir.FullName, "spiral.mp4");
+        File.WriteAllBytes(path, new byte[] { 1 });
+        try
+        {
+            CoreEngine.Stop();
+            PinkFilterOverlay.Stop(); SpiralOverlay.CloseAll();
+            CoreSession.IsEngineRunningProvider = () => false;
+            CoreAccount.HasLabAccessProvider = () => true;
+            s.CompanionPrompt.AllowAiToControlEffects = true;
+            (s.PinkFilterEnabled, s.PinkFilterOpacity, s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize, s.GentleVisuals)
+                = (false, 10, true, path, false, false);
+            PinkFilterOverlay.SkipPlatformChecksForTests = true;
+            SpiralOverlay.SkipPlatformChecksForTests = true;
+            global::ConditioningControlPanel.Avalonia.CompanionEffects.StartEffect = action => action();
+            SpiralOverlay.VideoStart = (_, _) => new MemoryStream();
+            var screen = (global::Avalonia.Platform.Screen)Activator.CreateInstance(typeof(global::Avalonia.Platform.PlatformScreen),
+                new object[] { new global::Avalonia.Platform.PlatformHandle(new IntPtr(1), "headless-test") })!;
+            typeof(global::Avalonia.Platform.Screen).GetProperty("Scaling")!.SetValue(screen, 1.0);
+            typeof(global::Avalonia.Platform.Screen).GetProperty("Bounds")!.SetValue(screen, new PixelRect(0, 0, 800, 600));
+            typeof(global::Avalonia.Platform.Screen).GetProperty("WorkingArea")!.SetValue(screen, new PixelRect(0, 0, 800, 600));
+            typeof(global::Avalonia.Platform.Screen).GetProperty("IsPrimary")!.SetValue(screen, true);
+            ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = _ => new[] { screen };
+            if (aiFirst) Assert.True(global::ConditioningControlPanel.Avalonia.CompanionEffects.ApplyPink(shell, true, 25));
+            var count = timers.Count;
+            shell.PerformAutonomy(AutonomyActionType.PinkFilterPulse);
+            Assert.Equal(count + 1, timers.Count);
+            Assert.True(PinkFilterOverlay.PulseHold);
+            if (!aiFirst) Assert.True(global::ConditioningControlPanel.Avalonia.CompanionEffects.ApplyPink(shell, true, 25));
+            Assert.True(PinkFilterOverlay.IsShowing && SpiralOverlay.IsShowing);
+            if (remoteJoins) RemoteCommands.EnsureOverlayRunning();
+            if (cancel) shell.CancelAutonomyPulses(); else timers.Last()();
+            Assert.False(PinkFilterOverlay.PulseHold);
+            Assert.Equal(aiFirst, PinkFilterOverlay.AiHold);
+            Assert.Equal(aiFirst, PinkFilterOverlay.IsShowing);
+            Assert.Equal(aiFirst, SpiralOverlay.IsShowing);
+            if (remoteJoins) Assert.True(RemoteCommands.OverlayRunning);
+            PanicSurfaces.All.Single(x => x.Id == "voice-overlays").Stop(shell);
+            Assert.False(PinkFilterOverlay.AiHold || PinkFilterOverlay.IsShowing || SpiralOverlay.IsShowing);
+        }
+        finally
+        {
+            shell.CancelAutonomyPulses();
+            PinkFilterOverlay.PulseHold = false;
+            PinkFilterOverlay.Stop(); SpiralOverlay.CloseAll();
+            RemoteCommands.StopOverlays(); RemoteCommands.ReleaseOverlayStop();
+            (s.PinkFilterEnabled, s.PinkFilterOpacity, s.SpiralEnabled, s.SpiralPath, s.SpiralRandomize,
+                s.GentleVisuals, s.CompanionPrompt.AllowAiToControlEffects) = saved;
+            CoreAccount.HasLabAccessProvider = lab; CoreSession.IsEngineRunningProvider = engine;
+            ConditioningControlPanel.Avalonia.Views.Features.ScreenList.QueryOverride = query;
+            (PinkFilterOverlay.SkipPlatformChecksForTests, SpiralOverlay.SkipPlatformChecksForTests,
+                global::ConditioningControlPanel.Avalonia.CompanionEffects.StartEffect, SpiralOverlay.VideoStart)
+                = (pinkChecks, spiralChecks, start, video);
+            dir.Delete(true);
+        }
+    });
+
     [Fact]
     // The "switched off during the announcement" recheck is Core's (AutonomySchedulerTests.MindWipeDisabledDuringAnnouncementDoesNotRun).
     public Task PopQuizDefersTakeoverAndShellPerformsMindWipe() => WithArmedShell((shell, _) =>

@@ -56,6 +56,12 @@ public sealed class PresetsTabSessionDetailTests
         MessageDialog Dialog() => Assert.Single(shell.OwnedWindows.OfType<MessageDialog>());
         void Answer(bool ok)
         {
+            var dialog = Dialog();
+            var yes = dialog.FindControl<Button>("BtnOk")!;
+            var no = dialog.FindControl<Button>("BtnCancel")!;
+            Assert.True(Grid.GetColumn(yes) < Grid.GetColumn(no));
+            Assert.False(yes.IsDefault);
+            Assert.False(no.IsDefault);
             Dialog().FindControl<Button>(ok ? "BtnOk" : "BtnCancel")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
         }

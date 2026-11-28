@@ -331,6 +331,7 @@ public sealed class MandatoryVideoOverlayTests
                     w = await Open(strict: false);
                     o.FrameTs -= System.Diagnostics.Stopwatch.Frequency * 6;
                     o.GuardTick();
+                    await Until(() => o.Windows.Count == 1 && o.Windows[0] != w);
                     Assert.True(v.IsPlaying && o.Windows.Count == 1 && o.Windows[0] != w, "lost output replays the clip once");
                     await Framed();
                     o.FrameTs -= System.Diagnostics.Stopwatch.Frequency * 6;
@@ -346,6 +347,7 @@ public sealed class MandatoryVideoOverlayTests
                     o.PlayedSkew = 9;
                     o.FrameTs -= System.Diagnostics.Stopwatch.Frequency * 6;
                     o.GuardTick();
+                    await Until(() => o.Windows.Count == 1 && o.Windows[0] != w);
                     Assert.True(v.IsPlaying && o.Windows.Count == 1 && o.Windows[0] != w, "lost output at 9 s replays the clip");
                     await Framed();
                     o.GuardTick();
@@ -493,7 +495,7 @@ public sealed class MandatoryVideoOverlayTests
                     // The output heal replays the same clip: still muted.
                     o.FrameTs -= Stopwatch.Frequency * 6;
                     o.GuardTick();
-                    await Until(() => o.FirstFrameMs >= 0);
+                    await Until(() => o.Windows.Count == 1 && o.FirstFrameMs >= 0);
                     Assert.True(v.IsPlaying && o.UserMuted && o.PlayerVolume == 0, "the heal replay stays muted");
                     Assert.Equal(IconKind.SpeakerMute, o.Surfaces[0].Buttons.MuteGlyph.Kind);
 

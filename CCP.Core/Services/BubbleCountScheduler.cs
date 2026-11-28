@@ -83,6 +83,9 @@ namespace ConditioningControlPanel.Services
             _library = library ?? MandatoryVideoScheduler.LocalLibrary;
         }
 
+        // WPF BubbleCountService.cs:64-65: only terminal game outcomes are announced.
+        public event Action? GameCompleted, GameFailed;
+
         public bool IsRunning { get; private set; }
         /// <summary>A game (lead-in, clip, answer or retry message) is in progress.</summary>
         public bool IsBusy { get; private set; }
@@ -281,40 +284,48 @@ namespace ConditioningControlPanel.Services
             else Trigger(forceTest);
         });
 
-        private bool Play(bool strict)
+        private bool Play(bool strict, bool retry = false)
         {
-            var path = PickNext();
-            if (path == null) return false;
-            if (!_host.CanPlayPath(path))
-            {
-                // WPF's skip: not a loss - a failed count would start the strict WRONG! WATCH AGAIN loop.
-                Log.Warning("BubbleCountService: skipping game - video playback is not available");
-                _retryCount = 0;
-                Idle();
-                return true;
-            }
-            CoreProgression.TrackBubbleCountGameStarted();
-            var generation = ++_generation;
+            var generation = _generation;
             try
             {
-                _host.Show(path, CoreSettings.Current.BubbleCountDifficulty, strict,
-                    success => { if (generation == _generation) OnComplete(success); },
-                    () => { if (generation == _generation) OnSkipped(); },
-                    duration => { if (IsBusy && generation == _generation) ExtendStuck(duration); });
-                if (IsBusy && generation == _generation)
+                var path = PickNext();
+                if (!IsBusy || generation != _generation) return true;
+                if (path == null) return false;
+                var canPlay = _host.CanPlayPath(path);
+                if (!IsBusy || generation != _generation) return true;
+                if (!canPlay)
                 {
-                    ExtendStuck(_host.LastVideoDurationSeconds);
+                    Log.Warning("BubbleCountService: skipping game - video playback is not available");
+                    OnSkipped(retry);
+                    return true;
                 }
+                CoreProgression.TrackBubbleCountGameStarted();
+                if (!IsBusy || generation != _generation) return true;
+                generation = ++_generation;
+                var current = generation;
+                _host.Show(path, CoreSettings.Current.BubbleCountDifficulty, strict,
+                    success => { if (current == _generation) OnComplete(success); },
+                    () => { if (current == _generation) OnSkipped(retry); },
+                    duration => { if (IsBusy && current == _generation) ExtendStuck(duration); });
+                if (IsBusy && current == _generation)
+                    ExtendStuck(_host.LastVideoDurationSeconds);
             }
-            catch (Exception ex) { Log.Error(ex, "Failed to start bubble count game"); Idle(); _retryCount = 0; }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to start bubble count game");
+                if (generation == _generation) OnSkipped(retry);
+            }
             return true;
         }
 
-        private void OnSkipped()
+        // WPF BubbleCountService.cs:644-703: an initial skip is silent; a failed retry ends the round.
+        private void OnSkipped(bool retry)
         {
             if (!IsBusy) return;
             _retryCount = 0;
             Idle();
+            if (retry) GameFailed?.Invoke();
         }
 
         /// <summary>WPF OnGameComplete.</summary>
@@ -336,6 +347,7 @@ namespace ConditioningControlPanel.Services
                     Log.Information("Bubble count game completed! +{Xp} XP", xp);
                 }
                 CoreProgression.TrackBubbleCountCompleted();
+                GameCompleted?.Invoke();
                 return;
             }
             var s = CoreSettings.Current;
@@ -343,6 +355,7 @@ namespace ConditioningControlPanel.Services
             {
                 _retryCount = 0;
                 Idle();
+                GameFailed?.Invoke();
                 Log.Information("Bubble count game failed");
                 return;
             }
@@ -350,7 +363,7 @@ namespace ConditioningControlPanel.Services
             if (_retryCount >= s.MercyAfterFails && s.MercySystemEnabled)   // #1145: 2..10, default 3
             {
                 Log.Information("Bubble count mercy after {Retries} retries", _retryCount);
-                _host.ShowMessage(CoreMods.AttentionCheckMercyMessage ?? "BAMBI GETS MERCY", 2500, () => { if (generation != _generation) return; _retryCount = 0; Idle(); });
+                _host.ShowMessage(CoreMods.AttentionCheckMercyMessage ?? "BAMBI GETS MERCY", 2500, () => { if (generation != _generation || !IsBusy) return; _retryCount = 0; Idle(); GameFailed?.Invoke(); });
                 return;
             }
             Log.Information("Bubble count retry {Count} (mercy at {Mercy})", _retryCount, s.MercyAfterFails);
@@ -358,7 +371,7 @@ namespace ConditioningControlPanel.Services
             {
                 if (!IsBusy || generation != _generation) return;   // panic or replacement during the message
                 ArmStuck(TimeSpan.FromMinutes(5));
-                if (!Play(true)) { Log.Warning("BubbleCountService: No videos for retry, granting mercy"); _retryCount = 0; Idle(); }
+                if (!Play(true, retry: true) && IsBusy && generation == _generation) { Log.Warning("BubbleCountService: No videos for retry, granting mercy"); _retryCount = 0; Idle(); GameFailed?.Invoke(); }
             });
         }
 
