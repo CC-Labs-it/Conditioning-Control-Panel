@@ -42,6 +42,9 @@ public sealed class PerformanceSettingsWiringTests
         var bubbles = BubbleOverlay.Field.Bubbles;
         var savedBubbles = bubbles.ToArray();
         Window? w = null;
+        int gates = 0;
+        void OnGate() => gates++;
+        AmbientFxCanvas.Env.MotionGateChanged += OnGate;
         try
         {
             (s.PerformanceMode, s.AutoPerformanceMode, s.MotionLevel) = (false, true, MotionLevel.Full);
@@ -60,12 +63,19 @@ public sealed class PerformanceSettingsWiringTests
             Assert.Equal(PerformanceTier.Performance, AmbientFxCanvas.Env.CurrentTier);
             Assert.False(AmbientFxCanvas.Env.AllowAmbientLoops);   // the heavy screen sheds the ambient loops
 
+            gates = 0;
             box.IsChecked = false;   // the user's opt-out, through the box: load never escalates
             Assert.False(s.AutoPerformanceMode);
+            Assert.Equal(0, gates);
             Assert.Equal(PerformanceTier.Quality, AmbientFxCanvas.Env.CurrentTier);
+            box.IsChecked = true;
+            Assert.True(s.AutoPerformanceMode);
+            Assert.Equal(0, gates);
+            Assert.False(AmbientFxCanvas.Env.AllowAmbientLoops);
         }
         finally
         {
+            AmbientFxCanvas.Env.MotionGateChanged -= OnGate;
             w?.Close();
             bubbles.Clear();
             foreach (var b in savedBubbles) bubbles.Add(b);
