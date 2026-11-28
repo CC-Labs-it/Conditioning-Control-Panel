@@ -5,10 +5,14 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Skia;
 using Avalonia.Threading;
 using CCP.Avalonia.Testing;
 using ConditioningControlPanel;
+using ConditioningControlPanel.Avalonia.Controls;
+using ConditioningControlPanel.Avalonia.Helpers;
+using ConditioningControlPanel.Models;
 using ConditioningControlPanel.Avalonia.Views.Windows;
 using ConditioningControlPanel.Services.Announcements;
 using Xunit;
@@ -57,6 +61,62 @@ public sealed class PromoCardWindowTests
         Assert.False(Named<TextBlock>(bare, "HookText").IsVisible);
         Assert.False(Named<Border>(bare, "TagStamp").IsVisible);
         Assert.False(Named<ScrollViewer>(bare, "MessageScroll").IsVisible);
+        return Task.CompletedTask;
+    });
+
+    [Fact]
+    public Task StickersInHandAreDiecutAndTheArtLayersAreDrawn() => Run(() =>
+    {
+        IImage pic = new DrawingImage(new GeometryDrawing { Brush = Brushes.HotPink, Geometry = new RectangleGeometry(new Rect(0, 0, 64, 40)) });
+        var card = new PromoCardWindow("a4", "For you", "Message", Promo(false), () => Now, new IImage?[] { pic, null, pic });
+        Assert.Equal(2, Named<Canvas>(card, "HeroBox").Children.Count); // the one that failed does not draw
+        Assert.True(Named<StackPanel>(card, "HeroRow").IsVisible);
+        Assert.NotNull(Named<Image>(card, "SpiralImage").Source);
+        Assert.Equal(3, Named<Canvas>(card, "SparkleLayer").Children.Count);
+        var none = new PromoCardWindow("a4", "For you", "Message", Promo(false), () => Now, new IImage?[] { null });
+        Assert.False(Named<StackPanel>(none, "HeroRow").IsVisible);
+        return Task.CompletedTask;
+    });
+
+    /// <summary>WPF PromoCardWindow.Art.cs ApplyAmbient: the spiral turns on the beat, and with Gentle visuals on
+    /// the loop stops (no ticks) and the art holds where it is.</summary>
+    [Fact]
+    public Task TheSpiralTurnsOnTheBeatAndStopsForGentleVisuals() => Run(() =>
+    {
+        var s = CoreSettings.Current;
+        var old = (s.MotionLevel, s.PerformanceMode, s.GentleVisuals);
+        var time = new SteppedTime();
+        BeatLoop.Time = time;
+        try
+        {
+            (s.MotionLevel, s.PerformanceMode, s.GentleVisuals) = (MotionLevel.Full, false, false);
+            var card = new PromoCardWindow("a5", "For you", "Message", Promo(false), () => Now);
+            card.Show();
+            Dispatcher.UIThread.RunJobs();
+            var spiral = Named<Image>(card, "SpiralImage");
+            var spin = Assert.IsType<RotateTransform>(spiral.RenderTransform);
+            bool Ticking() => BeatLoop.Running.Any(l => l.Owner == spiral);
+            void Beat() { time.Advance(TimeSpan.FromSeconds(14)); BeatLoop.StepAll(); }
+            Assert.True(Ticking());
+            Beat();
+            Assert.Equal(36, spin.Angle, 3); // one turn per 140 s
+            s.GentleVisuals = true;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Assert.False(Ticking());
+            Beat();
+            Assert.Equal(36, spin.Angle, 3);
+            s.GentleVisuals = false;
+            AmbientFxCanvas.Env.RaiseMotionGateChanged();
+            Beat();
+            Assert.Equal(72, spin.Angle, 3); // resumes where it held
+            PromoCardWindow.CloseForPanic();
+            Assert.False(Ticking());
+        }
+        finally
+        {
+            BeatLoop.Time = TimeProvider.System;
+            (s.MotionLevel, s.PerformanceMode, s.GentleVisuals) = old;
+        }
         return Task.CompletedTask;
     });
 
