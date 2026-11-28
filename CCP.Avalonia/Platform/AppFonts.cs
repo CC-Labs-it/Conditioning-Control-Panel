@@ -16,6 +16,8 @@ namespace ConditioningControlPanel.Avalonia.Platform
     {
         public const string Inter = "fonts:Inter#Inter";
         public const string Fredoka = "avares://CCP.Avalonia/Resources/fonts/fredoka#Fredoka";
+        public const string PromoRound = "avares://CCP.Avalonia/Resources/fonts/promo#Fredoka";
+        public const string PromoMono = "avares://CCP.Avalonia/Resources/fonts/promo#Courier Prime";
         public const string NotoEmoji = "avares://CCP.Avalonia/Resources/fonts#Noto Emoji";
         public const string Mono = "avares://CCP.Avalonia/Resources/emi/fonts#Noto Sans Mono";
         // Off-Windows stand-ins for the Windows faces WPF names (2026-11-06, owner: "bundle free look-alikes").

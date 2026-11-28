@@ -234,6 +234,7 @@ public sealed class PanicSurfacesTests
     {
         "lights-down",
         "emergency-exit",
+        "promo-card",
         "companion-audio",
         "audio-playlist",
         "emi-ring",

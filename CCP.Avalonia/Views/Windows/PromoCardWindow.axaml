@@ -1,0 +1,80 @@
+<!-- PORTED from ConditioningControlPanel/Windows/PromoCardWindow.xaml (a59e74ee7e): the paper promo card. Pills and
+     countdown cells are built in code; the IN settle is a transition, the short-screen shrink a LayoutTransformControl. -->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="ConditioningControlPanel.Avalonia.Views.Windows.PromoCardWindow"
+        Title="CC Labs"
+        SizeToContent="WidthAndHeight"
+        SystemDecorations="None"
+        TransparencyLevelHint="Transparent"
+        Background="Transparent"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        CanResize="False"
+        WindowStartupLocation="CenterScreen">
+    <Window.Resources>
+        <!-- A button that is only its content: the pill it holds draws everything. -->
+        <ControlTheme x:Key="PromoBareButton" TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <ContentPresenter Content="{TemplateBinding Content}" Background="Transparent"/>
+                </ControlTemplate>
+            </Setter>
+        </ControlTheme>
+    </Window.Resources>
+    <LayoutTransformControl x:Name="Fit">
+        <!-- Room around the card for its hard shadow and the IN settle. -->
+        <Grid x:Name="Root" Margin="14,10,24,26" RenderTransformOrigin="50%,40%">
+            <!-- The hard offset shadow (no blur): 8, 11 like the concept's box-shadow. -->
+            <Border CornerRadius="25" Background="#66000000" Margin="-3" RenderTransform="translate(8px, 11px)"/>
+            <Border x:Name="Card" Width="580" CornerRadius="25" BorderThickness="3" BorderBrush="#1B1A17"
+                    Background="#F7F5EF" ClipToBounds="True">
+                <Grid x:Name="Sheet">
+                    <StackPanel x:Name="Body" Margin="22,18,22,22">
+                        <!-- The hook: the big line at the top, its last word under a pink highlighter. -->
+                        <TextBlock x:Name="HookText" Margin="34,2,34,0" TextAlignment="Center" TextWrapping="Wrap"
+                                   FontWeight="SemiBold" FontSize="35" LineHeight="39" Foreground="#1B1A17"/>
+                        <!-- Stickers on the left, the countdown on the right. -->
+                        <StackPanel x:Name="HeroRow" Margin="0,10,0,0" Orientation="Horizontal" HorizontalAlignment="Center">
+                            <Canvas x:Name="HeroBox" Width="300" Height="200" RenderTransformOrigin="50%,50%"/>
+                            <StackPanel x:Name="CountdownPanel" Margin="22,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <!-- The personal line and the message, on a paper plate over the spiral. -->
+                        <Border Margin="0,14,0,0" CornerRadius="14" Padding="16,11,16,12" Background="#E6F7F5EF">
+                            <StackPanel>
+                                <TextBlock x:Name="TitleText" TextAlignment="Center" TextWrapping="Wrap"
+                                           FontWeight="SemiBold" FontSize="18" LineHeight="23" Foreground="#B4226F"/>
+                                <ScrollViewer x:Name="MessageScroll" MaxHeight="132" Margin="0,5,0,0"
+                                              HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                                    <TextBlock x:Name="MessageText" TextAlignment="Center" TextWrapping="Wrap"
+                                               FontWeight="Medium" FontSize="15" LineHeight="22" Foreground="#1B1A17"/>
+                                </ScrollViewer>
+                            </StackPanel>
+                        </Border>
+                        <!-- The menu: the code row, the offer rows, the button, Not now. -->
+                        <StackPanel x:Name="MenuStack" Margin="0,18,0,0" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                    <!-- The end tag, bottom left, stamped on like the cards'. -->
+                    <Border x:Name="TagStamp" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="18,0,0,20"
+                            Padding="8,3,8,2" CornerRadius="4" Background="#1B1A17" IsVisible="False" IsHitTestVisible="False"
+                            RenderTransformOrigin="0%,100%" RenderTransform="rotate(-4deg)">
+                        <TextBlock x:Name="TagText" FontWeight="Bold" FontSize="12" Foreground="#FFD23F"/>
+                    </Border>
+                    <!-- Close: a paper coin with an ink ring, top right. -->
+                    <Button x:Name="BtnClose" Theme="{StaticResource PromoBareButton}"
+                            HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,14,14,0">
+                        <Grid Width="32" Height="32">
+                            <Ellipse Fill="#33000000" Margin="2,3,-2,-3"/>
+                            <Ellipse Fill="#FFFDF7" Stroke="#1B1A17" StrokeThickness="2"/>
+                            <Path Data="M 11,11 L 21,21 M 21,11 L 11,21" Stroke="#1B1A17" StrokeThickness="2.6" StrokeLineCap="Round"/>
+                        </Grid>
+                    </Button>
+                </Grid>
+            </Border>
+        </Grid>
+    </LayoutTransformControl>
+</Window>
