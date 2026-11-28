@@ -74,6 +74,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         public LauncherWindow()
         {
             InitializeComponent();
+            RefreshEyebrows();
+            LocalizationManager.Instance.LanguageChanged += OnEyebrowLanguageChanged;
             AddHandler(DragDrop.DragOverEvent, Launcher_DragOver);
             AddHandler(DragDrop.DropEvent, Launcher_Drop);
             GamesColumn.SizeChanged += (_, _) => SeatGrid();
@@ -85,6 +87,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             {
                 if (ReferenceEquals(_window, this)) _window = null;
                 _statusTimer.Stop();
+                LocalizationManager.Instance.LanguageChanged -= OnEyebrowLanguageChanged;
                 StopLobby();
                 CancelLobbyClaim();
                 _lobby?.Dispose();
@@ -108,6 +111,16 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
             HookLinks();
             PaintSoundButton();
         }
+
+        // WPF LauncherWindow.xaml.cs:83-90, also reapplied when the language changes.
+        private void RefreshEyebrows()
+        {
+            PanelEyebrow.Text = Loc.Get("launcher_section_panel").ToUpperInvariant();
+            GamesEyebrow.Text = Loc.Get("launcher_section_games").ToUpperInvariant();
+        }
+
+        private void OnEyebrowLanguageChanged(object? sender, EventArgs e) =>
+            Dispatcher.UIThread.Post(RefreshEyebrows);
 
         /// <summary>WPF OnShown; its FX half is FxOnShown (LauncherWindow.Fx.cs).</summary>
         private void OnShown()

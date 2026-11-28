@@ -159,6 +159,25 @@ public sealed class LauncherFxTests
         for (double t = 0; t < seconds; t += 0.02) w.StepFx(0.02);
     }
 
+    [Fact]
+    public void SectionEyebrowsStayUppercaseAfterLanguageSwitch() => Run(MotionLevel.Full, (_, w, _) =>
+    {
+        var loc = LocalizationManager.Instance;
+        var previous = loc.CurrentLanguage;
+        try
+        {
+            loc.SetLanguage("en");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("THE PANEL", w.FindControl<TextBlock>("PanelEyebrow")!.Text);
+            Assert.Equal("GAMES", w.FindControl<TextBlock>("GamesEyebrow")!.Text);
+            loc.SetLanguage("fr");
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(Loc.Get("launcher_section_panel").ToUpperInvariant(), w.FindControl<TextBlock>("PanelEyebrow")!.Text);
+            Assert.Equal(Loc.Get("launcher_section_games").ToUpperInvariant(), w.FindControl<TextBlock>("GamesEyebrow")!.Text);
+        }
+        finally { loc.SetLanguage(previous); Dispatcher.UIThread.RunJobs(); }
+    });
+
     // WPF LauncherWindow.Fx.cs:258-268: the shown launcher starts all four ambient layers.
     [Fact]
     public void Ambient_IncludesEmbers() => Run(MotionLevel.Full, (_, w, _) =>
