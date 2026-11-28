@@ -205,9 +205,18 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
                 }
             }
 
-            primaryWindow.Activate();   // WPF SetForegroundWindow equivalent
+            primaryWindow.TakeKeyboard();
             Platform.KeyboardReclaim.Start(primaryWindow, () => !primaryWindow._isCompleted,
                 () => primaryWindow._txtAnswer.Focus(), "Bubble count answer");
+        }
+
+        private void TakeKeyboard()
+        {
+            Platform.ForegroundGrab.Take(Platform.ForegroundGrab.Handle(this));
+            Activate();
+            _txtAnswer.Focus();
+            Platform.ForegroundGrab.RecheckSoon(this, () => _isPrimary && !_isCompleted && IsVisible,
+                () => _txtAnswer.Focus(), "BubbleCountResultWindow");
         }
 
         private void PositionOnScreen(Screen? target)
