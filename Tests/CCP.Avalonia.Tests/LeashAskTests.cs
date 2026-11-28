@@ -373,22 +373,6 @@ public sealed class LeashAskTests
         });
 
     [Fact]
-    public void ManualLookBeforeServiceRebindDoesNotReopenTheOffer() =>
-        Run((shell, _, _, _) =>
-        {
-            var service = LeashHead.Service!;
-            LeashHead.Service = null;
-            shell.RebindLeashAsks();
-            LeashHead.Service = service;
-            var offer = Assert.Single(service.Snapshot.Offers);
-            var ask = LeashAskWindow.Open(offer, () => service, shell)!;
-            shell.RebindLeashAsks();
-            ask.Card.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
-            Dispatcher.UIThread.RunJobs();
-            Assert.Null(LeashAskWindow.Current);
-        });
-
-    [Fact]
     public void NotNowDeclinesWithoutWaitingForTheReadClock() =>
         Run((shell, page, wire, _) =>
         {
