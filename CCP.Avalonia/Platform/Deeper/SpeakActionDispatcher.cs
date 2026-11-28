@@ -13,6 +13,7 @@ internal sealed class SpeakActionDispatcher : IActionDispatcher, IEnhancementRun
 {
     private readonly Func<TriggerEffectAction, IPlaybackTimeSource, SpeakPromptSession> _create;
     private readonly IActionDispatcher _other;
+    private bool _otherSubliminal;
     private readonly Dictionary<string, (SpeakPromptSession Session, Task Run)> _bands = new();
     private readonly HashSet<SpeakPromptSession> _active = new();
 
@@ -22,7 +23,10 @@ internal sealed class SpeakActionDispatcher : IActionDispatcher, IEnhancementRun
     public Task DispatchAsync(EnhancementAction action, EnhancementDispatchContext ctx, CancellationToken ct = default)
     {
         if (action is not TriggerEffectAction { EffectType: EffectTypes.Speak } effect)
+        {
+            if (action is TriggerEffectAction { EffectType: EffectTypes.Subliminal }) _otherSubliminal = true;
             return _other.DispatchAsync(action, ctx, ct);
+        }
         if (effect.Phase is EffectPhase.Restart or EffectPhase.Update) return Task.CompletedTask;
         lock (_bands)
         {
@@ -45,9 +49,13 @@ internal sealed class SpeakActionDispatcher : IActionDispatcher, IEnhancementRun
         }
     }
 
-    public void ResetOverlayBands() { }
-    public void StopOneShotFlashes() { }
-    public void StopOneShotSubliminals() => Views.Overlays.SubliminalWhisperShow.StopSpeak();
+    public void ResetOverlayBands() { StopAll(); (_other as IEnhancementRunCleanup)?.ResetOverlayBands(); }
+    public void StopOneShotFlashes() => (_other as IEnhancementRunCleanup)?.StopOneShotFlashes();
+    public void StopOneShotSubliminals()
+    {
+        Views.Overlays.SubliminalWhisperShow.StopSpeak();
+        if (_otherSubliminal) (_other as IEnhancementRunCleanup)?.StopOneShotSubliminals();
+    }
 
     internal void StopAll()
     {

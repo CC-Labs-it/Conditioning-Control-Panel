@@ -58,6 +58,19 @@ namespace ConditioningControlPanel.Avalonia.Views.Dialogs
             }
         }
 
+        // WPF ShowStyledDialog places Yes before No and assigns neither default.
+        internal void UseStyledYesNoOrder()
+        {
+            var yes = this.FindControl<Button>("BtnOk")!;
+            var no = this.FindControl<Button>("BtnCancel")!;
+            Grid.SetColumn(yes, 1);
+            Grid.SetColumn(no, 3);
+            yes.Margin = new Thickness(0, 0, 10, 0);
+            no.Margin = default;
+            yes.IsDefault = false;
+            no.IsDefault = false;
+        }
+
         /// <summary>Tells the user something. One OK button, so the result is true unless they
         /// dismissed the window with the X; a caller of this form normally ignores it.</summary>
         public static async Task<bool> ShowAsync(Window owner, string title, string message)

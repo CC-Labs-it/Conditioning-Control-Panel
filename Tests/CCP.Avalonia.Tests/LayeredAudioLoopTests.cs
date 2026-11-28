@@ -14,6 +14,20 @@ namespace CCP.Avalonia.Tests;
 public sealed class LayeredAudioLoopTests
 {
     [Fact]
+    public void UnavailableEngineRetriesUntilStopped()
+    {
+        var clock = new Clock(); var attempts = 0;
+        var player = new LayeredAudio.VlcLayerPlayer(() => { attempts++; throw new InvalidOperationException(); }, "ignored", time: clock);
+        try
+        {
+            Assert.Equal(1, attempts); clock.Advance(TimeSpan.FromMilliseconds(999)); Assert.Equal(1, attempts);
+            clock.Advance(TimeSpan.FromMilliseconds(1)); Assert.Equal(2, attempts);
+        }
+        finally { player.Dispose(); Assert.True(player.Closing.Wait(5000)); }
+        clock.Advance(TimeSpan.FromSeconds(2)); Assert.Equal(2, attempts);
+    }
+
+    [Fact]
     public void NextPassStartsBeforeTheCurrentOneEnds()
     {
         try { _ = new LibVlcAudio("--aout=dummy"); }
@@ -26,13 +40,17 @@ public sealed class LayeredAudioLoopTests
         var wav = Path.Combine(dir, "drone.wav");
         WriteSilentWav(wav, ms: 6000);
         var clock = new Clock();
-        var player = new LayeredAudio.VlcLayerPlayer(LibVlcAudio.Shared!, wav, time: clock) { Volume = 50 };
+        var acquired = 0;
+        // Each pass reacquires the engine, so a retired shared engine is never reused.
+        var player = new LayeredAudio.VlcLayerPlayer(() => { if (Interlocked.Increment(ref acquired) == 1) throw new InvalidOperationException(); return LibVlcAudio.Shared!; }, wav, time: clock) { Volume = 50 };
         try
         {
+            Assert.Equal(0, player.Copies); clock.Advance(TimeSpan.FromSeconds(1));
             Assert.True(SpinWait.SpinUntil(() => player.Armed, 10_000), "next pass armed once the first plays");
             Assert.Equal(1, player.Copies);
             clock.Advance(TimeSpan.FromMilliseconds(6000 - 120));   // 120 ms before the first pass ends
             Assert.Equal(2, player.Copies);
+            Assert.Equal(3, Volatile.Read(ref acquired));
             Assert.Equal(0, player.GapStarts);                       // the first pass was still live
         }
         finally

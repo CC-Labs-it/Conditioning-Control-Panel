@@ -37,8 +37,8 @@ public partial class App
         BrainDrainCredit.Sample(false, TimeSpan.Zero);
     }
 
-    private static bool OverlayRunningWithoutPulse => !RemoteCommands.OverlaysStopped &&
-        (RemoteCommands.OverlayRunning || (Sessions?.IsPaused != true &&
+    internal static bool OverlayRunningWithoutPulse => !RemoteCommands.OverlaysStopped &&
+        (PinkFilterOverlay.AiHold || RemoteCommands.OverlayRunning || (Sessions?.IsPaused != true &&
          (CoreEngine.IsVisualRun || Sessions?.IsRunning == true)));
 
     private static bool _pulseStartedOverlay;
