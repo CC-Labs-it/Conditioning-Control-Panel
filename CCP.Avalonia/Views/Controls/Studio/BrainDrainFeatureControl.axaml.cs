@@ -15,7 +15,7 @@ using SettingsModel = ConditioningControlPanel.Models.AppSettings;
 namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
 {
     // WPF BrainDrainFeatureControl.xaml.cs:37-48,88-106,121-198,200-380,417-429.
-    // Clip library, art and every editor are live. The desktop blur and melt visual remains unported.
+    // Clip library, art and every editor are live. The blur draws in Overlays/BrainDrainOverlay; the melt visual remains unported.
     public partial class BrainDrainFeatureControl : UserControl
     {
         public BrainDrainFeatureControl()
@@ -62,8 +62,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
                 CoreSettings.Save();
             };
             // WPF SliderBlurStrength_Changed / ChkMelt_Changed / ChkAllowCapture_Changed
-            // (.xaml.cs:291-319,346-357): saved preferences. The desktop blur and melt visual has
-            // not landed on this head, so nothing reads these three here yet.
+            // (.xaml.cs:291-319,346-357): saved preferences. BrainDrainOverlay reads blur strength and capture
+            // visibility on its reconcile tick; the melt visual has not landed on this head.
             _blur.ValueChanged += (_, e) =>
             { if (!_loading && CoreSettings.Current.BrainDrainBlurStrength != (int)e.NewValue) { CoreSettings.Current.BrainDrainBlurStrength = (int)e.NewValue; CoreSettings.Save(); } };
             _melt.IsCheckedChanged += (_, _) =>
@@ -96,10 +96,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Controls.Studio
             };
             this.FindControl<Button>("BtnRefreshAudio")!.Click += (_, _) => RefreshClipCount();
 
+            // WPF .xaml.cs:106,346-355: "Show in screenshots" maps to WDA_EXCLUDEFROMCAPTURE.
+            // X11 has no capture-exclusion equivalent (Win32Overlay.SetCaptureAffinity), so the
+            // row shows on Windows only rather than offering a switch that does nothing.
+            this.FindControl<Grid>("CaptureRow")!.IsVisible = System.OperatingSystem.IsWindows();
+            this.FindControl<Border>("CaptureDivider")!.IsVisible = System.OperatingSystem.IsWindows();
+
             // Keep pictures clear is a pure preference (WPF ChkKeepClear_Changed writes and saves;
-            // OverlayService re-sorts on the settings hook), so unlike the rows above it shows no
-            // false "running" state and is wired now. This head has no Brain Drain blur overlay
-            // yet, so the z-order rule (Core BrainDrainKeepClear) has nothing to act on here.
+            // OverlayService re-sorts on the settings hook): BrainDrainOverlay reads it on its
+            // reconcile tick and sinks the blur under our sharp windows (Core BrainDrainKeepClear).
             _keepClear = this.FindControl<CheckBox>("ChkKeepClear")!;
             LoadKeepClear();
             _keepClear.IsCheckedChanged += (_, _) =>

@@ -1543,6 +1543,21 @@ public sealed class KeywordAudioRuntimeTests
         finally { (CoreFlash.ShowProvider, CoreSubliminal.ShowProvider, s.SubliminalPool) = (oldFlash, oldSub, pool); }
     });
 
+    [Fact]   // WPF KeywordTriggerService.cs:1872-1876: the Brain Drain visual fires one melt payload per match
+    public void BrainDrainActionFiresTheMeltPayload() => Run((engine, s, _) =>
+    {
+        var fired = new List<ConditioningControlPanel.Services.Chaos.EffectPayload>();
+        var old = ConditioningControlPanel.Services.Chaos.EffectPayload.Firer;
+        try
+        {
+            ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = fired.Add;
+            s.KeywordTriggers[0].Actions = new() { new VisualEffectAction { Effect = KeywordVisualEffect.BrainDrain } };
+            Type(engine, "sit");
+            Assert.IsType<ConditioningControlPanel.Services.Chaos.BrainDrainMeltPayload>(Assert.Single(fired));
+        }
+        finally { ConditioningControlPanel.Services.Chaos.EffectPayload.Firer = old; }
+    });
+
     [Fact]   // WPF FireVisualEffect ExactSubliminal: FlashSubliminalCustom(keyword upper) + ForceMuteKeyword(3000)
     public void ExactSubliminalEchoesTheKeywordAndMutesItForThreeSeconds() => Run((engine, s, _) =>
     {
