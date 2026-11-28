@@ -68,6 +68,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
             }
             w._arcademyPanicSuspended = true;
             w._arcademyPanicTime = now;
+            w.ArcademyCancelLink(tellPage: true);   // WPF ArcademyHostService.cs:4516-4525
+            w.ArcademyCancelNet();
             w.Post(new { type = "suspend", on = true, reason = "panic" });
             return true;
         }
@@ -145,6 +147,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
 
         private void ArcademySettingChanged(object? sender, PropertyChangedEventArgs e)
         {
+            // WPF ArcademyHostService.cs:5857: the card follows the rung from every surface, the page's own write included.
+            if (e.PropertyName == nameof(AppSettings.ArcademyPresenceShare))
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (!IsReady || _closing) return;
+                    ArcademyPushProfile();
+                    if (string.Equals(CoreSettings.Current.ArcademyPresenceShare?.Trim(), "discord", StringComparison.OrdinalIgnoreCase))
+                        ArcademyKickAvatar();   // WPF :5858-5860
+                });
             if (_arcademyWriting) return;
             Dispatcher.UIThread.Post(() =>
             {
@@ -214,7 +225,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                 localDate = DateTime.Now.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture),
                 settings = ArcademySettingsBag(Parse(s.ArcademySettingsJson)), keybinds = Parse(s.ArcademyKeybindsJson),
                 hideTutorial = s.ArcademyHideTutorial, meta = _arcademyMeta?.Snapshot() ?? new JObject(),
-                panicKey = s.PanicKey, panicKeyEnabled = s.PanicKeyEnabled,
+                panicKey = s.PanicKey, panicKeyEnabled = s.PanicKeyEnabled, profile = ArcademyProfile(s),
             };
         }
 
@@ -356,6 +367,8 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
         {
             _arcademyWatch?.Stop();
             _arcademyWatch = null;
+            ArcademyCancelLink(tellPage: false);
+            ArcademyCancelNet();
             _arcademyAssetsClosed.Cancel();
             if (_arcademySettings != null) _arcademySettings.PropertyChanged -= ArcademySettingChanged;
             if (_arcademySettingsService != null) _arcademySettingsService.CurrentReplaced -= ArcademySettingsReplaced;
@@ -421,6 +434,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     Post(new { type = "fullscreen", on = WindowState == WindowState.FullScreen });
                     ArcademyPushSuspension();
                     Web.FocusPage();
+                    ArcademyKickAvatar();   // WPF ArcademyHostService.cs:529-532
                     break;
                 case "resume-request":
                     ArcademyResume(message);
@@ -453,6 +467,14 @@ namespace ConditioningControlPanel.Avalonia.Views.Games
                     break;
                 case "share-image":
                     ArcademyShareImage((string?)message["png"]);
+                    handled = true;
+                    break;
+                case "annex-stats":
+                    ArcademyAnnexStats();   // WPF ArcademyHostService.cs:663-667
+                    handled = true;
+                    break;
+                case "link-discord":
+                    ArcademyLinkDiscord();   // WPF ArcademyHostService.cs:652-657
                     handled = true;
                     break;
                 case "library-remove":
