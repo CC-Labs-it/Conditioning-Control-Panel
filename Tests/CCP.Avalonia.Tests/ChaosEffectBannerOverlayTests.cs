@@ -113,4 +113,41 @@ public sealed class ChaosEffectBannerOverlayTests
             return Task.CompletedTask;
         });
     }
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task The_strip_follows_pin_chaos_on_top(bool pin)
+    {
+        await AvaloniaTestDispatcher.RunAsync(() =>
+        {
+            if (Application.Current is null)
+                global::ConditioningControlPanel.Avalonia.Program.BuildAvaloniaApp()
+                    .UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+                    .SetupWithoutStarting();
+            var oldPin = global::ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop;
+            ChaosEffectBannerOverlay.SkipPlatformChecksForTests = true;
+            try
+            {
+                ChaosEffectBannerOverlay.CloseActive();
+                global::ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop = pin;
+                ChaosEffectBannerOverlay.Show("vibe", "VibePopping", Colors.Orange);
+                var w = ChaosEffectBannerOverlay.Active;
+                Assert.NotNull(w);
+                Assert.Equal(pin, w!.Topmost);   // WPF ChaosWindowZ.BornTopmost
+                Assert.False(ChaosEffectBannerOverlay.RaisesOnShow);   // no video playing: no re-stack
+
+                w.Topmost = true;
+                global::ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop = false;
+                ChaosEffectBannerOverlay.RaiseActive();
+                Assert.False(w.Topmost);   // unpinned: demoted out of the topmost band
+            }
+            finally
+            {
+                ChaosEffectBannerOverlay.CloseActive();
+                global::ConditioningControlPanel.CoreSettings.Current.ChaosPinOnTop = oldPin;
+                ChaosEffectBannerOverlay.SkipPlatformChecksForTests = false;
+            }
+            return Task.CompletedTask;
+        });
+    }
 }

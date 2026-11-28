@@ -5,6 +5,7 @@ using ConditioningControlPanel.Services.Friends;
 using ConditioningControlPanel.Services.GoonGame;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Input;
@@ -104,6 +105,35 @@ public sealed class LobbyPageTests
             Assert.Equal(2, Assert.IsType<TranslateTransform>(root.RenderTransform).Y);
             window.MouseMove(new Point(1, 1), RawInputModifiers.LeftMouseButton);
             window.MouseUp(new Point(1, 1), MouseButton.Left);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(0, sheen.Opacity);
+        }
+        finally { window.Close(); }
+    });
+
+    [Fact]
+    public void LobbyCardHoverShowsSheenAndPinkRim() => Run(() =>
+    {
+        var page = new AvailableSubjectsTabView();
+        var window = new Window { Width = 900, Height = 700, Content = page };
+        window.Show();
+        try
+        {
+            Dispatcher.UIThread.RunJobs();
+            page.PaintSnapshot(new LobbySnapshot(new[] { new LobbyRow { Game = LobbyGame.Race, Key = "aaaaaaaaaaaa", HostName = "Host" } }, Array.Empty<LobbyRow>(), Array.Empty<LobbyRow>(), true), LobbyGates.From(true, false, false));
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            HeadlessInput.RenderLiveTree(window);
+            var item = Named<ItemsControl>(page, "AvailableSubjectsList").ContainerFromIndex(0)!;
+            var card = item.GetVisualDescendants().OfType<Border>().Single(x => x.Classes.Contains("card"));
+            var sheen = item.GetVisualDescendants().OfType<Rectangle>().Single(x => Equals(x.Tag, "lobby-sheen"));
+            Assert.Equal(0, sheen.Opacity);
+            var at = card.TranslatePoint(new Point(15, 15), window)!.Value;
+            window.MouseMove(at);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(1, sheen.Opacity);
+            Assert.Equal(Color.Parse("#66FF8CC0"), Assert.IsAssignableFrom<ISolidColorBrush>(card.BorderBrush).Color);
+            window.MouseMove(new Point(1, 1));
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(0, sheen.Opacity);
         }

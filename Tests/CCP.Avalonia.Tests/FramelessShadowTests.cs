@@ -45,6 +45,22 @@ public sealed class FramelessShadowTests
     public void OnlyWestonsShadowIsStripped(string? wm, string? env, bool expected)
         => Assert.Equal(expected, FramelessShadow.WmDrawsGhostShadow(wm, env));
 
+    /// <summary>ccp-bugs#1609: under KWin, Better Blur DX force blur and KDE-Rounded-Corners blurred and outlined
+    /// every override-redirect overlay, because Avalonia types it NORMAL. Overlays become tooltips there (a
+    /// popup to both effects) and carry their own WM_CLASS; other WMs keep the type (picom dims tooltips).</summary>
+    [Theory]
+    [InlineData("KWin", "_NET_WM_WINDOW_TYPE_TOOLTIP")]
+    [InlineData("Weston WM", null)]
+    [InlineData("Openbox", null)]
+    [InlineData("Xfwm4", null)]
+    [InlineData(null, null)]
+    public void OverlaysAreTooltipsOnlyUnderKWin(string? wm, string? expected)
+    {
+        Assert.Equal(expected, X11Overlay.OverlayWindowType(wm));
+        // Not the app id: an exclude list naming the overlays must not also catch the shell.
+        Assert.NotEqual(ConditioningControlPanel.Avalonia.Program.AppId, X11Overlay.OverlayWmClass);
+    }
+
     [Fact]
     public Task OnlyFramelessTransparentWindowsQualify() => AvaloniaTestDispatcher.RunAsync(() =>
     {

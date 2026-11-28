@@ -19,12 +19,15 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         private void InitializeBrowserSurfaceLifecycle()
         {
             InitializeBrowserFullscreen();
+            InitializeBrowserAudioSync();
             Closed += (_, _) => CloseBrowserSurfaces();
         }
 
         internal void BtnPopOutBrowser_Click(object? sender, RoutedEventArgs e)
         {
             if (BrowserBlockedOffline()) return;
+            // WPF :2723-2727: the fullscreen window stands in for the pop-out, so the button focuses it.
+            if (_browserTakeoverWindow is { } fullscreen) { fullscreen.Activate(); return; }
             if (_browserPopoutWindow != null)
             {
                 FocusBrowserSurface();
@@ -80,6 +83,7 @@ namespace ConditioningControlPanel.Avalonia.Views.Windows
         /// <summary>WPF MainWindow.xaml.cs:1987 disposes the browser on shell close; unload the page and close its unowned window.</summary>
         private void CloseBrowserSurfaces()
         {
+            DisposeBrowserAudioSync();
             DisposeBrowserFullscreen();
             if (BrowserView is { } host)
             {

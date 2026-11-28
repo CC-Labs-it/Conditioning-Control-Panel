@@ -139,9 +139,58 @@ internal sealed partial class GameWindow
                 if (_closing) return;
                 var currentSource = BreakoutSource(requested); // consent may have changed during the wait
                 var currentClips = BreakoutClips(currentSource, start: false);
-                Post(GameMediaManifest.BreakoutDeal(local, reqId, seed, count, currentSource, CoreSettings.Current.RemoteMediaRatio, currentClips));
+                var deal = GameMediaManifest.BreakoutMedia(local, seed, count, currentSource,
+                    CoreSettings.Current.RemoteMediaRatio, currentClips, BreakoutWords(seed));
+                // WPF BackRoomMedia.cs:295-306: bundled loops are the final rung, not an empty deal.
+                if (deal.Gifs.Count == 0 && server != null)
+                    deal = deal with { Gifs = Enumerable.Range(0, 4).Select(i => new BackRoomGif(
+                        "g" + i, server.Url($"backroom/stations/slot/fallback/gif{i}.webp"), 180, 180, "fallback")).ToArray() };
+                // WPF BackRoomBridge.cs:445,503-505: retain exactly what the station received.
+                RoomFxDeals[station] = deal;
+                Post(new { type = "media", reqId, seed = deal.Seed, source = deal.Source,
+                    gifs = deal.Gifs.Select(g => new { key = g.Key, url = g.Url, w = g.W, h = g.H, src = g.Src }),
+                    words = deal.Words.Select(w => new { key = w.Key, text = w.Text, src = w.Src }) });
             });
         });
+    }
+
+    // WPF BackRoomMedia.cs:444-520: active words first, then localized presets.
+    private static IReadOnlyList<BackRoomWord> BreakoutWords(int seed)
+    {
+        var settings = CoreSettings.Current;
+        var pool = settings.SubliminalPool.Where(kv => kv.Value).Select(kv => kv.Key)
+            .Concat(settings.KeywordTriggers.Where(t => t.Enabled && t.MatchType != KeywordMatchType.Regex).Select(t => t.Keyword))
+            .Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => t.Trim())
+            .OrderBy(t => t, StringComparer.Ordinal).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var dealt = new List<BackRoomWord>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var rng = new Random(unchecked(seed * 31 + 7));
+        for (int i = 0; i < pool.Count && dealt.Count < 4; i++)
+        {
+            int j = rng.Next(i, pool.Count);
+            (pool[i], pool[j]) = (pool[j], pool[i]);
+            if (seen.Add(pool[i])) dealt.Add(new BackRoomWord("s" + dealt.Count, pool[i], "pool"));
+        }
+        foreach (var (key, fallback) in new[] { ("br_word_drop", "Drop"), ("br_word_relax", "Relax"),
+                     ("br_word_let_go", "Let Go"), ("br_word_sink", "Sink") })
+        {
+            if (dealt.Count >= 4) break;
+            var text = Loc.Get(key);
+            if (string.IsNullOrWhiteSpace(text) || text == key) text = fallback;
+            text = text.Trim();
+            if (seen.Add(text)) dealt.Add(new BackRoomWord("s" + dealt.Count, text, "preset"));
+        }
+        return dealt;
+    }
+
+    // WPF BackRoomHostService.cs:434 and BackRoomBridge.cs:204-208.
+    internal Action<ConditioningControlPanel.Services.BackRoom.BackRoomHaptic> BreakoutHaptic = ConditioningControlPanel.Services.Haptics.BackRoomHapticDirector.OnHaptic;
+    private void StopBreakoutHaptic() => BreakoutHaptic(new("breakout", 0, 0, "host"));
+    private void HandleBreakoutHaptic(Newtonsoft.Json.Linq.JObject message)
+    {
+        var pulse = ConditioningControlPanel.Services.BackRoom.BackRoomBridge.ReadHaptic(message);
+        if (pulse == null || pulse.Station != "breakout") return;
+        if (pulse.IsStop || (!_closing && !_shellExiting && !_roomMinimized && !_breakoutPanicSuspended)) BreakoutHaptic(pulse);
     }
 
     private bool IsBreakout => Spec.Id is "breakout" or "breakoutdemo";

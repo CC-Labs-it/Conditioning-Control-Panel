@@ -46,6 +46,14 @@ internal sealed class Win32QuickRecalHotkey : IDisposable
         return vk == 0 ? null : Register(owner, CameraSlot, m, (uint)vk, pressed);
     }
 
+    internal static IDisposable? RegisterEmi(Window owner, ChordMods mods, string key, Action pressed)
+    {
+        uint m = 0x4000 | ((mods & ChordMods.Alt) != 0 ? 1u : 0) | ((mods & ChordMods.Ctrl) != 0 ? 2u : 0)
+               | ((mods & ChordMods.Shift) != 0 ? 4u : 0) | ((mods & ChordMods.Win) != 0 ? 8u : 0);
+        int vk = VirtualKeys.Of(key);
+        return vk == 0 ? null : Register(owner, 0xB1B4, m, (uint)vk, pressed);
+    }
+
     private static IDisposable? Register(Window owner, int slot, uint mods, uint vk, Action pressed)
     {
         if (!OperatingSystem.IsWindows() || owner.TryGetPlatformHandle()?.Handle is not { } hwnd || hwnd == IntPtr.Zero)
