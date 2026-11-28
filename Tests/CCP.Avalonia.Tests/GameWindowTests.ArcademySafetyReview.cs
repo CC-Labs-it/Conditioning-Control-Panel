@@ -133,7 +133,7 @@ public sealed partial class GameWindowTests
         }
         finally { w.Close(); (s.OfflineMode, s.RemoteMediaConsented, s.MediaSource) = old; }
     });
-    /// <summary>WPF ArcademyHostService.cs:4977-4980, 5034: a waiter stays behind the fetch it queued on, even when the pile moves to new subs mid-fetch.</summary>
+    /// <summary>WPF ArcademyHostService.cs:4971-4981, 5034: a waiter stays behind the fetch it queued on, and a fetch for new subs waits for the one in the air.</summary>
     [Fact]
     public void Arcademy_PileChangeKeepsWaitersWithTheirFetch() => Run((_, _) =>
     {
@@ -153,14 +153,18 @@ public sealed partial class GameWindowTests
         try
         {
             (s.OfflineMode, s.RemoteMediaConsented, s.MediaSource) = (false, true, "online");
-            Ask("a", "cats"); Ask("b", "cats"); Ask("d", "dogs"); Ask("e", "dogs");
-            Land("dogs");
-            Assert.Equal(new[] { "https://example.com/dogs1.jpg" }, Final("d"));
-            Assert.Equal(new[] { "https://example.com/dogs2.jpg" }, Final("e"));
-            Assert.DoesNotContain(frames, f => (string?)f["reqId"] == "b" && (bool?)f["done"] == true);
+            Ask("a", "cats"); Ask("b", "cats");
+            Assert.True(SpinWait.SpinUntil(() => pending.ContainsKey("cats"), TimeSpan.FromSeconds(10)));
+            Ask("d", "dogs"); Ask("e", "dogs");
+            // The pile's coordinator reads one shared sub list: the dogs fetch waits until the cats one has its rows (WPF :4971-4981).
+            Assert.False(SpinWait.SpinUntil(() => pending.ContainsKey("dogs"), TimeSpan.FromMilliseconds(300)));
+            Assert.DoesNotContain(frames, f => (string?)f["reqId"] is "b" or "e" && (bool?)f["done"] == true);
             Land("cats");
             Assert.Equal(new[] { "https://example.com/cats1.jpg" }, Final("a"));
             Assert.Equal(new[] { "https://example.com/cats2.jpg" }, Final("b"));
+            Land("dogs");
+            Assert.Equal(new[] { "https://example.com/dogs1.jpg" }, Final("d"));
+            Assert.Equal(new[] { "https://example.com/dogs2.jpg" }, Final("e"));
             Ask("f", "dogs");   // the stale cats batch is not the dogs pile's stock
             Assert.Equal(new[] { "https://example.com/dogs3.jpg" }, Final("f"));
             Assert.Equal(2, pending.Count);
